@@ -1,0 +1,16 @@
+{
+  "name": "@lifecycle/cli",
+  "version": "0.0.0",
+  "private": true,
+  "bin": {
+    "lifecycle": "./dist/index.js"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "format": "oxfmt src",
+    "lint": "oxlint src",
+    "test": "bun test src",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

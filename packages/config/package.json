@@ -1,0 +1,9 @@
+{
+  "name": "@lifecycle/config",
+  "version": "0.0.0",
+  "private": true,
+  "files": [
+    "*.json"
+  ],
+  "type": "module"
+}

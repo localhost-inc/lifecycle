@@ -4,30 +4,52 @@
 
 This document is the product narrative — the "why" and "what" of Lifecycle V1. It should read as a story in about 15 minutes.
 
-- **`v1.md`** (this file): product vision, entity model, user journeys, desktop app plan, delivery plan overview
-- **`milestones/`**: per-milestone implementation docs with the "how" — entity contracts, interfaces, test scenarios
-- **`reference/`**: shared contracts referenced across milestones — state machines, errors, SLOs, etc.
-- **`expansion/`**: post-wedge features (threads, images, billing, testing)
+- **`README.md`** (this file): product vision, entity model, user journeys, desktop app plan, delivery plan overview
+- **`docs/milestones/`**: per-milestone implementation docs with the "how" — entity contracts, interfaces, test scenarios
+- **`docs/reference/`**: shared contracts referenced across milestones — state machines, errors, SLOs, etc.
+- **`docs/expansion/`**: post-wedge features (threads, images, billing, testing)
 
 ## Document Map
 
-| File | Description |
-|------|-------------|
-| [`milestones/m1.md`](milestones/m1.md) | "I can open the app and see my project" — project entity, lifecycle.json parsing, Tauri shell |
-| [`milestones/m2.md`](milestones/m2.md) | "I can start a workspace and it reaches ready" — workspace/service entities, LocalWorkspaceProvider |
-| [`milestones/m3.md`](milestones/m3.md) | "I can run an agent in a terminal" — terminal entity, PTY architecture, harness integration |
-| [`milestones/m4.md`](milestones/m4.md) | "I can sign in and go cloud" — auth, org/repo/activity entities, CloudWorkspaceProvider, fork-to-cloud |
-| [`milestones/m5.md`](milestones/m5.md) | "I can share a preview and create a PR" — preview lifecycle, Cloudflare routing, PR creation |
-| [`milestones/m6.md`](milestones/m6.md) | "Full lifecycle" — run/reset, sleep/wake, destroy, TTL enforcement |
-| [`milestones/m7.md`](milestones/m7.md) | "The CLI is a first-class interface" — context auto-detection, observability, agent surface |
-| [`reference/state-machines.md`](reference/state-machines.md) | Canonical transition rules for workspace, terminal, and preview state machines |
-| [`reference/workspace-provider.md`](reference/workspace-provider.md) | WorkspaceProvider interface + provider summaries |
-| [`reference/lifecycle-json.md`](reference/lifecycle-json.md) | lifecycle.json config spec + canonical example |
-| [`reference/convex-api.md`](reference/convex-api.md) | Convex function contracts + error model + streaming |
-| [`reference/errors.md`](reference/errors.md) | Typed error catalog + failure reason enums + mutation concurrency |
-| [`reference/slos.md`](reference/slos.md) | SLOs + cold-start budget |
-| [`expansion/billing.md`](expansion/billing.md) | Usage tracking and billing |
-| [`expansion/slo.md`](expansion/slo.md) | (Deprecated — see [`reference/slos.md`](reference/slos.md)) |
+| File                                                                      | Description                                                                                            |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| [`execution-plan.md`](docs/execution-plan.md)                             | Execution tracker with milestone-level task checklists and status board                                |
+| [`milestones/m0.md`](docs/milestones/m0.md)                               | "I can clone, install, and run the monorepo in under 10 minutes" — Bun monorepo bootstrap              |
+| [`milestones/m1.md`](docs/milestones/m1.md)                               | "I can open the app and see my project" — project entity, lifecycle.json parsing, Tauri shell          |
+| [`milestones/m2.md`](docs/milestones/m2.md)                               | "I can start a workspace and it reaches ready" — workspace/service entities, LocalWorkspaceProvider    |
+| [`milestones/m3.md`](docs/milestones/m3.md)                               | "I can run an agent in a terminal" — terminal entity, PTY architecture, harness integration            |
+| [`milestones/m4.md`](docs/milestones/m4.md)                               | "I can sign in and go cloud" — auth, org/repo/activity entities, CloudWorkspaceProvider, fork-to-cloud |
+| [`milestones/m5.md`](docs/milestones/m5.md)                               | "I can share a preview and create a PR" — preview lifecycle, Cloudflare routing, PR creation           |
+| [`milestones/m6.md`](docs/milestones/m6.md)                               | "Full lifecycle" — run/reset, sleep/wake, destroy, TTL enforcement                                     |
+| [`milestones/m7.md`](docs/milestones/m7.md)                               | "The CLI is a first-class interface" — context auto-detection, observability, agent surface            |
+| [`reference/state-machines.md`](docs/reference/state-machines.md)         | Canonical transition rules for workspace, terminal, and preview state machines                         |
+| [`reference/workspace-provider.md`](docs/reference/workspace-provider.md) | WorkspaceProvider interface + provider summaries                                                       |
+| [`reference/lifecycle-json.md`](docs/reference/lifecycle-json.md)         | lifecycle.json config spec + canonical example                                                         |
+| [`reference/convex-api.md`](docs/reference/convex-api.md)                 | Convex function contracts + error model + streaming                                                    |
+| [`reference/errors.md`](docs/reference/errors.md)                         | Typed error catalog + failure reason enums + mutation concurrency                                      |
+| [`reference/slos.md`](docs/reference/slos.md)                             | SLOs + cold-start budget                                                                               |
+| [`expansion/billing.md`](docs/expansion/billing.md)                       | Usage tracking and billing                                                                             |
+| [`expansion/slo.md`](docs/expansion/slo.md)                               | (Deprecated — see [`reference/slos.md`](docs/reference/slos.md))                                       |
+
+## Quick Start (M0)
+
+Clone and run the monorepo bootstrap quality gates:
+
+```bash
+git clone <repo-url>
+cd lifecycle
+bun install
+bun run lint
+bun run typecheck
+bun run test
+bun run dev
+```
+
+Optional pre-commit hook:
+
+```bash
+git config core.hooksPath .githooks
+```
 
 ## Product Vision
 
@@ -68,7 +90,7 @@ The control plane is split into two layers: a local layer that requires no netwo
 
 The execution plane is the adapter layer between the control plane and the environment where workspaces actually run. It is modeled as a `WorkspaceProvider` interface — the primary extensibility seam for workspace lifecycle operations. Workspace mode is selected **per-workspace** at creation time and stored as `workspace.mode`.
 
-Full interface and provider details: [`reference/workspace-provider.md`](reference/workspace-provider.md)
+Full interface and provider details: [`reference/workspace-provider.md`](docs/reference/workspace-provider.md)
 
 ## Project and Workspace Model
 
@@ -112,7 +134,7 @@ Full interface and provider details: [`reference/workspace-provider.md`](referen
    - `project -> repository?` (optional VCS link)
    - `project -> workspace[*]`
    - `workspace -> terminal[*]`
-8. Expansion-scope entities (see `docs/plans/lifecycle/expansion/`):
+8. Expansion-scope entities (see `docs/expansion/`):
    - `thread` + `message`: conversation continuity for Slack/Linear/CLI prompts
    - `organization_image`: custom sandbox base image registry
 
@@ -129,7 +151,7 @@ Full interface and provider details: [`reference/workspace-provider.md`](referen
 
 A terminal session is a PTY process running inside a workspace execution environment. It may optionally run a coding agent harness (Claude Code, Codex, etc.) or be a plain shell. The desktop app terminal panel is a terminal client connected to the workspace PTY; the process runs inside the execution environment.
 
-Full terminal model, agent CLI integration, and PTY architecture: [`milestones/m3.md`](milestones/m3.md)
+Full terminal model, agent CLI integration, and PTY architecture: [`milestones/m3.md`](docs/milestones/m3.md)
 
 ## Cross-Mode Collaboration
 
@@ -164,7 +186,7 @@ Four guarantees that define preview behavior:
 3. Route updates are near-real-time so teammates can watch endpoint changes while development is in progress.
 4. HTTP/HTTPS and WebSocket (`ws/wss`) upgrade are supported; long polling and SSE pass through without gateway buffering breakage.
 
-Full preview lifecycle, Cloudflare routing model, and auth details: [`milestones/m5.md`](milestones/m5.md)
+Full preview lifecycle, Cloudflare routing model, and auth details: [`milestones/m5.md`](docs/milestones/m5.md)
 
 ## Core User Journeys (V1)
 
@@ -268,7 +290,7 @@ Full preview lifecycle, Cloudflare routing model, and auth details: [`milestones
 4. UX outcome:
    - fast local iteration → one-click cloud handoff → teammate has live preview + terminal access
 
-### Expansion-scope journeys (see `docs/plans/lifecycle/expansion/`)
+### Expansion-scope journeys (see `docs/expansion/`)
 
 - **Issue-driven workspace from Slack/Linear** (threads.md)
 - **Business/user prompt loop** (threads.md)
@@ -366,7 +388,7 @@ Full preview lifecycle, Cloudflare routing model, and auth details: [`milestones
 
 ### Auth in Desktop App
 
-> Full auth spec in [`milestones/m4.md`](milestones/m4.md).
+> Full auth spec in [`milestones/m4.md`](docs/milestones/m4.md).
 
 1. Auth provider: WorkOS AuthKit via Device Authorization Flow.
 2. Sign-in: device flow opens system browser for WorkOS-hosted AuthKit page (GitHub OAuth primary, SSO for enterprise orgs). User confirms in browser; app receives tokens.
@@ -379,18 +401,12 @@ Full preview lifecycle, Cloudflare routing model, and auth details: [`milestones
 ### Data and Transport Bindings
 
 **Local mode (no auth required):**
+
 1. Local project, workspace, and terminal state is stored in Tauri SQLite and accessed via Tauri IPC commands from the React webview.
 2. Workspace status updates are pushed from Rust backend to webview via Tauri events (no polling).
 3. Terminal: xterm.js in Tauri webview, connected via Tauri IPC to Rust-managed PTY. No WebSocket needed.
 
-**Cloud mode (signed in):**
-4. Desktop app uses Convex SDK directly — React hooks (`useQuery`, `useMutation`) in the Tauri webview, no server routes in between.
-5. Cloud workspace/session summary state uses Convex reactive queries with incremental refresh.
-6. Organization switcher updates active `organizationId` applied to all subsequent Convex queries.
-7. Activity feed reads from the `activity` table via a Convex reactive query on `workspace_id` — new events appear in real-time without polling.
-8. Terminal (cloud): xterm.js in Tauri webview, connected via WebSocket to Cloudflare Sandbox. WebSocket client is [`partysocket`](https://docs.partykit.io/reference/partysocket-api/) — auto-reconnect with exponential backoff, event buffering during disconnection. No PartyKit server dependency; `partysocket` is used as a standalone WebSocket client.
-9. Service list in right panel reads from `workspaceServices.list(workspaceId)` reactive query (cloud) or Tauri IPC (local). Share toggles and port overrides call `workspaceServices.update()` mutation (cloud) or Tauri command (local).
-10. Workspace status is reactive via Convex subscriptions (cloud) or Tauri events (local).
+**Cloud mode (signed in):** 4. Desktop app uses Convex SDK directly — React hooks (`useQuery`, `useMutation`) in the Tauri webview, no server routes in between. 5. Cloud workspace/session summary state uses Convex reactive queries with incremental refresh. 6. Organization switcher updates active `organizationId` applied to all subsequent Convex queries. 7. Activity feed reads from the `activity` table via a Convex reactive query on `workspace_id` — new events appear in real-time without polling. 8. Terminal (cloud): xterm.js in Tauri webview, connected via WebSocket to Cloudflare Sandbox. WebSocket client is [`partysocket`](https://docs.partykit.io/reference/partysocket-api/) — auto-reconnect with exponential backoff, event buffering during disconnection. No PartyKit server dependency; `partysocket` is used as a standalone WebSocket client. 9. Service list in right panel reads from `workspaceServices.list(workspaceId)` reactive query (cloud) or Tauri IPC (local). Share toggles and port overrides call `workspaceServices.update()` mutation (cloud) or Tauri command (local). 10. Workspace status is reactive via Convex subscriptions (cloud) or Tauri events (local).
 
 ### Non-Goals (V1)
 
@@ -399,11 +415,26 @@ Full preview lifecycle, Cloudflare routing model, and auth details: [`milestones
 
 ## Delivery Plan
 
-Build order is value-first: local workspaces work immediately with no auth or network. Each milestone is independently demo-able and testable. Milestones 1-3 are local-only (no Convex, no auth, no network). Milestone 4 introduces auth and cloud. Milestones 5-6 complete sharing and full lifecycle. Expansion-scope features (threads, images, mobile app, tunnel sharing) follow after wedge acceptance.
+Build order is value-first: local workspaces work immediately with no auth or network. Each milestone is independently demo-able and testable. Milestone 0 establishes the Bun monorepo/tooling baseline. Milestones 1-3 are local-only product slices (no Convex, no auth, no network). Milestone 4 introduces auth and cloud. Milestones 5-6 complete sharing and full lifecycle. Expansion-scope features (threads, images, mobile app, tunnel sharing) follow after wedge acceptance.
+
+### Milestone 0: "I can clone, install, and run the monorepo in under 10 minutes"
+
+**What you build:**
+
+1. Bun workspaces monorepo structure (`apps/*`, `packages/*`) with root scripts.
+2. Shared TypeScript config + strict type checking.
+3. Lint/format/test baseline and root quality gates.
+4. CI workflow mirroring local quality checks.
+5. Starter app/package scaffolds for desktop, worker, CLI, contracts, and runtime primitives.
+
+**Exit gate:** Fresh clone → `bun install` + `bun run lint` + `bun run typecheck` + `bun run test` + `bun run dev` succeeds.
+
+> Full details: [`milestones/m0.md`](docs/milestones/m0.md) and [`execution-plan.md`](docs/execution-plan.md)
 
 ### Milestone 1: "I can open the app and see my project"
 
 **What you build:**
+
 1. Tauri app shell (Rust backend + React webview).
 2. "Add project" flow — pick a directory from filesystem.
 3. `lifecycle.json` JSONC parser + JSON Schema validator with field-level errors.
@@ -412,11 +443,12 @@ Build order is value-first: local workspaces work immediately with no auth or ne
 
 **Exit gate:** App opens instantly. You add a project directory and see config status in the sidebar.
 
-> Full details: [`milestones/m1.md`](milestones/m1.md)
+> Full details: [`milestones/m1.md`](docs/milestones/m1.md)
 
 ### Milestone 2: "I can start a workspace and it reaches ready"
 
 **What you build:**
+
 1. Local workspace creation (git worktree checkout).
 2. Tauri Rust backend: process supervisor for service lifecycle.
 3. Docker Desktop integration for `image` runtime services.
@@ -426,11 +458,12 @@ Build order is value-first: local workspaces work immediately with no auth or ne
 
 **Exit gate:** Click "Start" → watch creating → starting → ready with per-service health indicators.
 
-> Full details: [`milestones/m2.md`](milestones/m2.md)
+> Full details: [`milestones/m2.md`](docs/milestones/m2.md)
 
 ### Milestone 3: "I can run an agent in a terminal"
 
 **What you build:**
+
 1. xterm.js in Tauri webview, connected via Tauri IPC to `portable-pty`.
 2. Terminal entity: start, detach, attach, finish lifecycle.
 3. Harness support (Claude Code, Codex, etc.).
@@ -439,11 +472,12 @@ Build order is value-first: local workspaces work immediately with no auth or ne
 
 **Exit gate:** Open terminal tab, choose harness, stream output, switch tabs without killing process.
 
-> Full details: [`milestones/m3.md`](milestones/m3.md)
+> Full details: [`milestones/m3.md`](docs/milestones/m3.md)
 
 ### Milestone 4: "I can sign in and go cloud"
 
 **What you build:**
+
 1. WorkOS auth flow (device authorization, opens system browser).
 2. Convex connection from Tauri webview.
 3. GitHub App installation flow.
@@ -454,11 +488,12 @@ Build order is value-first: local workspaces work immediately with no auth or ne
 
 **Exit gate:** Sign in → install GitHub App → fork local workspace to cloud → cloud workspace reaches ready and is visible to teammates.
 
-> Full details: [`milestones/m4.md`](milestones/m4.md)
+> Full details: [`milestones/m4.md`](docs/milestones/m4.md)
 
 ### Milestone 5: "I can share a preview and create a PR"
 
 **What you build:**
+
 1. Preview state machine (`disabled → provisioning → ready`).
 2. `exposePort()` with deterministic tokens (cloud).
 3. Preview URL routing via Cloudflare Worker + `proxyToSandbox()`.
@@ -467,11 +502,12 @@ Build order is value-first: local workspaces work immediately with no auth or ne
 
 **Exit gate:** Toggle "Share" → get stable preview URL → teammate opens it → create PR from app.
 
-> Full details: [`milestones/m5.md`](milestones/m5.md)
+> Full details: [`milestones/m5.md`](docs/milestones/m5.md)
 
 ### Milestone 6: "Full lifecycle"
 
 **What you build:**
+
 1. `run` (restart services) and `reset` (restore post-setup baseline).
 2. Sleep/wake for both local (SIGTERM/restart) and cloud (R2 backup/restore).
 3. Destroy flow for both providers.
@@ -481,11 +517,12 @@ Build order is value-first: local workspaces work immediately with no auth or ne
 
 **Exit gate:** Full lifecycle loop: create → run → terminal → reset → sleep → wake → share → destroy. Stale cloud workspaces auto-cleaned.
 
-> Full details: [`milestones/m6.md`](milestones/m6.md)
+> Full details: [`milestones/m6.md`](docs/milestones/m6.md)
 
 ### Milestone 7: "The CLI is a first-class interface"
 
 **What you build:**
+
 1. Workspace context auto-detection from cwd.
 2. Observability: `status`, `logs`, `health` commands.
 3. `lifecycle context` — one-shot structured dump for agents.
@@ -493,7 +530,7 @@ Build order is value-first: local workspaces work immediately with no auth or ne
 
 **Exit gate:** `cd` into worktree → `lifecycle workspace status` → full dashboard without IDs. `lifecycle context` → structured dump an agent can parse.
 
-> Full details: [`milestones/m7.md`](milestones/m7.md)
+> Full details: [`milestones/m7.md`](docs/milestones/m7.md)
 
 ### Expansion Milestones (post-wedge)
 
@@ -506,7 +543,7 @@ Build order is value-first: local workspaces work immediately with no auth or ne
 
 ## Acceptance Criteria
 
-### Wedge Acceptance (Milestones 1-6 exit gate — must pass before expansion)
+### Wedge Acceptance (Milestones 0-6 exit gate — must pass before expansion)
 
 1. A net-new user can add a local project and reach a running workspace with terminal in under 5 minutes — no account required.
 2. `lifecycle workspace create` reaches `ready` in under 60 seconds (p95, cloud) and under 30 seconds (p95, local).

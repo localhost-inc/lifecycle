@@ -1,0 +1,14 @@
+{
+  "name": "@lifecycle/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "bun run src/dev.ts",
+    "format": "oxfmt src",
+    "lint": "oxlint src",
+    "test": "bun test src",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}
