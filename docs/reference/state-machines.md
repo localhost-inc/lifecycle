@@ -4,7 +4,7 @@ Canonical transition rules for all Lifecycle state machines. This is the single 
 
 ## Workspace `status` Allowed Transitions
 
-- `creating -> starting|failed`
+- `creating -> starting|sleeping|failed`
 - `starting -> ready|failed`
 - `ready -> starting|resetting|sleeping|destroying|failed` (`ready -> sleeping` only for idle-timeout cause)
 - `resetting -> starting|failed`
@@ -23,8 +23,8 @@ Canonical transition rules for all Lifecycle state machines. This is the single 
 
 | State | `CloudWorkspaceProvider` | `LocalWorkspaceProvider` |
 |-------|-------------------|-------------------|
-| `creating` | Provisioning sandbox + clone + setup | Creating git worktree + running setup |
-| `starting` | Starting services in sandbox | Starting local processes + containers |
+| `creating` | Provisioning sandbox + clone + setup | Creating git worktree and persisting workspace metadata |
+| `starting` | Starting services in sandbox | Running first-boot setup (if needed) and starting local processes + containers |
 | `ready` | Health checks pass in sandbox | Health checks pass on localhost |
 | `sleeping` | R2 backup, sandbox terminated | Processes stopped, worktree preserved |
 | `destroying` | Sandbox terminated, metadata cleaned | Processes killed, worktree pruned |

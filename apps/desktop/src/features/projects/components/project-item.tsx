@@ -43,7 +43,7 @@ export function ProjectItem({
               onCreateWorkspace();
             }
           }}
-          className="flex h-5 w-5 items-center justify-center rounded text-stone-400 opacity-0 transition-opacity hover:bg-stone-300 hover:text-stone-700 group-hover:opacity-100"
+          className="flex h-5 w-5 items-center justify-center text-[var(--muted-foreground)] opacity-0 transition-opacity hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] group-hover:opacity-100"
           title="New workspace"
         >
           +

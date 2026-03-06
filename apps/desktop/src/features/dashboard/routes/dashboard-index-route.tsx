@@ -1,18 +1,24 @@
-import { useRouteLoaderData } from "react-router-dom";
-import { ROUTE_IDS } from "../../../app/route-types";
-import type { DashboardLoaderData } from "../../../components/layout/dashboard-layout";
+import { useSearchParams } from "react-router-dom";
+import { useProjectCatalog } from "../../projects/hooks";
 
 export function DashboardIndexRoute() {
-  const data = useRouteLoaderData(ROUTE_IDS.root) as DashboardLoaderData | undefined;
+  const [searchParams] = useSearchParams();
+  const projectCatalogQuery = useProjectCatalog();
+  const projects = projectCatalogQuery.data?.projects ?? [];
+  const selectedProjectId = searchParams.get("project");
 
-  if (!data) {
-    return null;
-  }
-
-  if (data.projects.length === 0) {
+  if (projectCatalogQuery.isLoading) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
-        <div className="w-full max-w-xl rounded-md border border-[var(--border)] bg-[var(--card)] p-6 text-center">
+        <p className="text-sm text-[var(--muted-foreground)]">Loading projects...</p>
+      </div>
+    );
+  }
+
+  if (projects.length === 0) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <div className="text-center">
           <h2 className="text-lg font-semibold text-[var(--foreground)]">No projects yet</h2>
           <p className="mt-2 text-sm text-[var(--muted-foreground)]">
             Add a project from the sidebar to get started.
@@ -22,11 +28,11 @@ export function DashboardIndexRoute() {
     );
   }
 
-  if (data.selectedProjectId) {
-    const selectedProject = data.projects.find((project) => project.id === data.selectedProjectId);
+  if (selectedProjectId) {
+    const selectedProject = projects.find((project) => project.id === selectedProjectId);
     return (
       <div className="flex flex-1 items-center justify-center p-8">
-        <div className="w-full max-w-xl rounded-md border border-[var(--border)] bg-[var(--card)] p-6 text-center">
+        <div className="text-center">
           <h2 className="text-lg font-semibold text-[var(--foreground)]">No workspace selected</h2>
           <p className="mt-2 text-sm text-[var(--muted-foreground)]">
             {selectedProject
@@ -43,7 +49,7 @@ export function DashboardIndexRoute() {
 
   return (
     <div className="flex flex-1 items-center justify-center p-8">
-      <div className="w-full max-w-xl rounded-md border border-[var(--border)] bg-[var(--card)] p-6 text-center">
+      <div className="text-center">
         <h2 className="text-lg font-semibold text-[var(--foreground)]">Select a workspace</h2>
         <p className="mt-2 text-sm text-[var(--muted-foreground)]">
           Choose a workspace from the sidebar to view status, setup output, and services.

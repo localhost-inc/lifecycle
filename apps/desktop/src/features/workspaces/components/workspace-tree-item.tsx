@@ -1,5 +1,5 @@
 import type { WorkspaceStatus } from "@lifecycle/contracts";
-import type { WorkspaceRow } from "../api/workspaces";
+import type { WorkspaceRow } from "../api";
 import { WorkspaceBadge } from "./workspace-badge";
 
 interface WorkspaceTreeItemProps {

@@ -1,10 +1,31 @@
 import type { WorkspaceRecord, WorkspaceServiceRecord } from "@lifecycle/contracts";
 
+export interface LocalWorkspaceProviderCreateContext {
+  mode: "local";
+  projectId: string;
+  projectPath: string;
+  workspaceName?: string;
+  baseRef?: string;
+  worktreeRoot?: string;
+}
+
+export interface CloudWorkspaceProviderCreateContext {
+  mode: "cloud";
+  organizationId: string;
+  repositoryId: string;
+  projectId: string;
+}
+
+export type WorkspaceProviderCreateContext =
+  | LocalWorkspaceProviderCreateContext
+  | CloudWorkspaceProviderCreateContext;
+
 export interface WorkspaceProviderCreateInput {
   workspaceId: string;
   sourceRef: string;
   manifestPath: string;
   resolvedSecrets: Record<string, string>;
+  context: WorkspaceProviderCreateContext;
 }
 
 export interface WorkspaceProviderCreateResult {

@@ -1,17 +1,24 @@
 use crate::shared::errors::LifecycleError;
+use std::path::{Path, PathBuf};
 use tokio::process::Command;
 
-const WORKTREE_DIR: &str = ".lifecycle/worktrees";
+const DEFAULT_WORKTREE_ROOT: &str = "~/.lifecycle/worktrees";
 
 pub async fn create_worktree(
     repo_path: &str,
+    base_ref: &str,
     source_ref: &str,
+    workspace_name: &str,
     workspace_id: &str,
+    configured_worktree_root: Option<&str>,
 ) -> Result<String, LifecycleError> {
-    let worktree_path = format!("{}/{}/{}", repo_path, WORKTREE_DIR, workspace_id);
+    let worktree_root = resolve_worktree_root(repo_path, configured_worktree_root)?;
+    std::fs::create_dir_all(&worktree_root).map_err(|e| LifecycleError::Io(e.to_string()))?;
+    let worktree_path = worktree_root.join(worktree_directory_name(workspace_name, workspace_id));
+    let worktree_path_str = worktree_path.to_string_lossy().into_owned();
 
     let output = Command::new("git")
-        .args(["worktree", "add", &worktree_path, source_ref])
+        .args(["worktree", "add", "--detach", &worktree_path_str, base_ref])
         .current_dir(repo_path)
         .output()
         .await
@@ -24,7 +31,21 @@ pub async fn create_worktree(
         )));
     }
 
-    Ok(worktree_path)
+    let checkout_output = Command::new("git")
+        .args(["-C", &worktree_path_str, "checkout", "-b", source_ref])
+        .output()
+        .await
+        .map_err(|e| LifecycleError::RepoCloneFailed(e.to_string()))?;
+
+    if !checkout_output.status.success() {
+        let stderr = String::from_utf8_lossy(&checkout_output.stderr);
+        let _ = remove_worktree(repo_path, &worktree_path_str).await;
+        return Err(LifecycleError::RepoCloneFailed(format!(
+            "git checkout -b failed: {stderr}"
+        )));
+    }
+
+    Ok(worktree_path_str)
 }
 
 pub async fn remove_worktree(repo_path: &str, worktree_path: &str) -> Result<(), LifecycleError> {
@@ -71,4 +92,195 @@ pub async fn get_current_branch(repo_path: &str) -> Result<String, LifecycleErro
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+pub fn slugify_workspace_name(value: &str) -> String {
+    let mut slug = String::new();
+    let mut previous_dash = false;
+
+    for ch in value.chars() {
+        if ch.is_ascii_alphanumeric() {
+            slug.push(ch.to_ascii_lowercase());
+            previous_dash = false;
+            continue;
+        }
+
+        if matches!(ch, ' ' | '-' | '_' | '/' | '.') {
+            if !slug.is_empty() && !previous_dash {
+                slug.push('-');
+                previous_dash = true;
+            }
+        }
+    }
+
+    while slug.ends_with('-') {
+        slug.pop();
+    }
+
+    if slug.is_empty() {
+        "workspace".to_string()
+    } else {
+        slug
+    }
+}
+
+fn short_workspace_id(workspace_id: &str) -> String {
+    let short: String = workspace_id
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .take(8)
+        .collect();
+
+    if short.is_empty() {
+        "workspace".to_string()
+    } else {
+        short
+    }
+}
+
+fn worktree_directory_name(workspace_name: &str, workspace_id: &str) -> String {
+    format!(
+        "{}--{}",
+        slugify_workspace_name(workspace_name),
+        short_workspace_id(workspace_id)
+    )
+}
+
+fn expand_tilde(path: &str) -> Result<PathBuf, LifecycleError> {
+    if path == "~" {
+        let home = std::env::var("HOME")
+            .map_err(|_| LifecycleError::Io("HOME environment variable is not set".to_string()))?;
+        return Ok(PathBuf::from(home));
+    }
+
+    if let Some(rest) = path.strip_prefix("~/") {
+        let home = std::env::var("HOME")
+            .map_err(|_| LifecycleError::Io("HOME environment variable is not set".to_string()))?;
+        return Ok(Path::new(&home).join(rest));
+    }
+
+    Ok(PathBuf::from(path))
+}
+
+fn resolve_worktree_root(
+    repo_path: &str,
+    configured_worktree_root: Option<&str>,
+) -> Result<PathBuf, LifecycleError> {
+    let raw_root = configured_worktree_root
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(DEFAULT_WORKTREE_ROOT);
+
+    let expanded = expand_tilde(raw_root)?;
+    if expanded.is_absolute() {
+        Ok(expanded)
+    } else {
+        Ok(Path::new(repo_path).join(expanded))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::Path;
+    use std::process::Command as StdCommand;
+
+    fn temp_repo_path() -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("lifecycle-worktree-{}", uuid::Uuid::new_v4()))
+    }
+
+    fn run_git(repo_path: &Path, args: &[&str]) {
+        let output = StdCommand::new("git")
+            .args(args)
+            .current_dir(repo_path)
+            .output()
+            .expect("git command should run");
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            panic!("git {:?} failed: {stderr}", args);
+        }
+    }
+
+    fn init_repo(repo_path: &Path) {
+        fs::create_dir_all(repo_path).expect("create temp repo path");
+        run_git(repo_path, &["init"]);
+        run_git(repo_path, &["config", "user.email", "test@example.com"]);
+        run_git(repo_path, &["config", "user.name", "Lifecycle Test"]);
+        fs::write(repo_path.join("README.md"), "seed\n").expect("write seed file");
+        run_git(repo_path, &["add", "README.md"]);
+        run_git(repo_path, &["commit", "-m", "init"]);
+    }
+
+    fn git_output(repo_path: &Path, args: &[&str]) -> String {
+        let output = StdCommand::new("git")
+            .args(args)
+            .current_dir(repo_path)
+            .output()
+            .expect("git command should run");
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            panic!("git {:?} failed: {stderr}", args);
+        }
+
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    }
+
+    #[test]
+    fn slugify_workspace_name_normalizes_and_trims() {
+        assert_eq!(slugify_workspace_name("Sydney"), "sydney");
+        assert_eq!(
+            slugify_workspace_name("Sydney / Debug Build"),
+            "sydney-debug-build"
+        );
+        assert_eq!(slugify_workspace_name("___"), "workspace");
+    }
+
+    #[tokio::test]
+    async fn create_worktree_allows_checked_out_source_ref() {
+        let repo_path = temp_repo_path();
+        init_repo(&repo_path);
+        let repo_path_str = repo_path.to_str().expect("repo path is utf8");
+        let base_ref = get_current_branch(repo_path_str)
+            .await
+            .expect("get current branch");
+        let source_ref = "lifecycle/sydney-branch";
+        let configured_root =
+            std::env::temp_dir().join(format!("lifecycle-worktree-root-{}", uuid::Uuid::new_v4()));
+        let configured_root_str = configured_root
+            .to_str()
+            .expect("configured root path is utf8");
+
+        let worktree_path = create_worktree(
+            repo_path_str,
+            &base_ref,
+            source_ref,
+            "Sydney",
+            "ws-checked-out-ref",
+            Some(configured_root_str),
+        )
+        .await
+        .expect("worktree should be created from checked-out branch");
+
+        assert!(
+            Path::new(&worktree_path).exists(),
+            "worktree path should exist: {worktree_path}"
+        );
+        assert!(
+            worktree_path.starts_with(configured_root_str),
+            "worktree path should use configured root: {worktree_path}"
+        );
+
+        let checked_out_branch = git_output(
+            Path::new(&worktree_path),
+            &["rev-parse", "--abbrev-ref", "HEAD"],
+        );
+        assert_eq!(checked_out_branch, source_ref);
+
+        remove_worktree(repo_path_str, &worktree_path)
+            .await
+            .expect("worktree cleanup should succeed");
+        fs::remove_dir_all(repo_path).expect("remove temp repo");
+        fs::remove_dir_all(configured_root).expect("remove configured root");
+    }
 }

@@ -1,8 +1,12 @@
 export type {
+  CloudWorkspaceProviderCreateContext,
+  LocalWorkspaceProviderCreateContext,
   WorkspaceProvider,
+  WorkspaceProviderCreateContext,
   WorkspaceProviderCreateInput,
   WorkspaceProviderCreateResult,
   WorkspaceProviderHealthResult,
   WorkspaceProviderStartInput,
 } from "./provider";
-export { LocalWorkspaceProvider } from "./local-provider";
+export { LocalWorkspaceProvider } from "./workspaces/providers/local";
+export { CloudWorkspaceProvider, type CloudWorkspaceClient } from "./workspaces/providers/cloud";

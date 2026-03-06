@@ -13,10 +13,11 @@ This file defines engineering execution standards for agents working in this rep
 Use these as external contracts, without duplicating their full detail here:
 
 1. `README.md`
-2. `docs/execution-plan.md`
-3. `docs/reference/*.md`
-4. `docs/milestones/*.md`
-5. `docs/BRAND.md`
+2. `docs/vision.md`
+3. `docs/plan.md`
+4. `docs/reference/*.md`
+5. `docs/milestones/*.md`
+6. `docs/BRAND.md`
 
 When behavior changes and docs are now wrong, update docs in the same change.
 
@@ -25,7 +26,7 @@ When behavior changes and docs are now wrong, update docs in the same change.
 Use this section to route work before implementation.
 
 1. Anchor UI decisions to the destination design and map them to the active milestone contract.
-2. Compare current implementation against `docs/execution-plan.md` before starting broad UI changes.
+2. Compare current implementation against `docs/plan.md` before starting broad UI changes.
 3. If destination and milestone text diverge, update docs first, then implement.
 
 ### Destination-to-Milestone Mapping
@@ -80,9 +81,10 @@ Use this section to route work before implementation.
 
 1. Prefer explicit code over implicit magic.
 2. Keep modules focused; avoid broad cross-cutting edits without need.
-3. Preserve backwards compatibility unless the request explicitly permits breaking changes.
-4. Make failure handling first-class: clear error type, message, and recovery path.
-5. Keep naming consistent with existing contracts and domain language.
+3. Default to forward-only changes: do not add legacy code paths, compatibility wrappers, re-export shims, or duplicate APIs unless the request explicitly requires them.
+4. If compatibility is explicitly required, document the scope and planned removal conditions in the same change.
+5. Make failure handling first-class: clear error type, message, and recovery path.
+6. Keep naming consistent with existing contracts and domain language.
 
 ## Testing and Verification
 

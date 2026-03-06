@@ -9,10 +9,21 @@ pub async fn create_workspace(
     app: AppHandle,
     db_path: State<'_, DbPath>,
     project_id: String,
-    source_ref: String,
     project_path: String,
+    workspace_name: Option<String>,
+    base_ref: Option<String>,
+    worktree_root: Option<String>,
 ) -> Result<String, LifecycleError> {
-    super::create::create_workspace(app, db_path, project_id, source_ref, project_path).await
+    super::create::create_workspace(
+        app,
+        db_path,
+        project_id,
+        project_path,
+        workspace_name,
+        base_ref,
+        worktree_root,
+    )
+    .await
 }
 
 #[tauri::command]

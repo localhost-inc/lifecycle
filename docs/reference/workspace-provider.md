@@ -6,18 +6,20 @@ The `WorkspaceProvider` is the primary extensibility seam for workspace lifecycl
 
 ```typescript
 interface WorkspaceProvider {
-  createWorkspace(manifest, ref, secrets) → { mode_state, worktree_path }
+  createWorkspace(input) → { workspace, worktree_path }
   startServices(manifest.services, env, secrets) → service_statuses
   healthCheck(manifest.services[].health_check) → pass/fail per service
   stopServices(service_names[]) → void
-  runSetup(manifest.setup.steps, env, secrets) → step_results[]
-  sleep(workspace_id) → backup_metadata
-  wake(workspace_id, backup_metadata) → mode_state
+  runSetup(workspace_id) → void
+  sleep(workspace_id) → void
+  wake(workspace_id) → void
   destroy(workspace_id) → void
   openTerminal(workspace_id, cols, rows) → terminal_connection
   exposePort(workspace_id, service, port) → access_url | null
 }
 ```
+
+Provider-specific runtime detail should not be stuffed into a generic `mode_state` field. If a field materially affects product behavior, model it explicitly on `workspace`; otherwise keep it inside the provider implementation.
 
 ## Execution Model
 
@@ -29,6 +31,18 @@ interface WorkspaceProvider {
 4. If the target provider's capacity is unavailable, create request is rejected with actionable error.
 5. V1 ships both `CloudWorkspaceProvider` and `LocalWorkspaceProvider`. Both are implemented against the `WorkspaceProvider` interface and validated in parallel from Milestone 3 onward.
 6. Platform stance is Cloudflare-first for cloud execution, edge routing, and storage integration.
+
+## Mode, Authority, and Aggregation
+
+`workspace.mode` is the authority boundary for workspace lifecycle data.
+
+1. `workspace.mode=local` means the local provider is authoritative for that workspace's runtime state, persistence, and lifecycle operations.
+2. `workspace.mode=cloud` means the cloud provider and control plane are authoritative for that workspace's runtime state, persistence, and lifecycle operations.
+3. Signing in enables cloud-mode workspaces and sync flows; it does not change the authority of existing local-mode workspaces.
+4. Desktop surfaces may present local and cloud workspaces together in one list, but each workspace still has exactly one authoritative provider selected by `workspace.mode`.
+5. Mixed-mode workspace lists must be aggregated from normalized domain records, not by composing raw storage-specific rows directly in UI code.
+6. Mutations issued from aggregated views must dispatch back to the authoritative provider for the selected workspace.
+7. `mode` is a workspace concern. Do not apply it broadly to unrelated entities unless a concrete execution-boundary need emerges.
 
 ## `CloudWorkspaceProvider` (V1)
 

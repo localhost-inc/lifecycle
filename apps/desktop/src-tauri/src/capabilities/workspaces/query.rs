@@ -13,10 +13,11 @@ pub struct WorkspaceRow {
     pub git_sha: Option<String>,
     pub worktree_path: Option<String>,
     pub mode: String,
-    pub mode_state: Option<String>,
     pub status: String,
     pub failure_reason: Option<String>,
     pub failed_at: Option<String>,
+    pub created_by: Option<String>,
+    pub source_workspace_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
     pub last_active_at: String,
@@ -49,14 +50,15 @@ fn map_workspace_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRow> 
         git_sha: row.get(3)?,
         worktree_path: row.get(4)?,
         mode: row.get(5)?,
-        mode_state: row.get(6)?,
-        status: row.get(7)?,
-        failure_reason: row.get(8)?,
-        failed_at: row.get(9)?,
-        created_at: row.get(10)?,
-        updated_at: row.get(11)?,
-        last_active_at: row.get(12)?,
-        expires_at: row.get(13)?,
+        status: row.get(6)?,
+        failure_reason: row.get(7)?,
+        failed_at: row.get(8)?,
+        created_by: row.get(9)?,
+        source_workspace_id: row.get(10)?,
+        created_at: row.get(11)?,
+        updated_at: row.get(12)?,
+        last_active_at: row.get(13)?,
+        expires_at: row.get(14)?,
     })
 }
 
@@ -66,7 +68,7 @@ pub async fn get_workspace(
 ) -> Result<Option<WorkspaceRow>, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, source_ref, git_sha, worktree_path, mode, mode_state, status, failure_reason, failed_at, created_at, updated_at, last_active_at, expires_at FROM workspaces WHERE project_id = ?1 ORDER BY created_at DESC LIMIT 1"
+        "SELECT id, project_id, source_ref, git_sha, worktree_path, mode, status, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at FROM workspaces WHERE project_id = ?1 ORDER BY created_at DESC LIMIT 1"
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     let row = stmt.query_row(params![project_id], map_workspace_row);
@@ -84,7 +86,7 @@ pub async fn get_workspace_by_id(
 ) -> Result<Option<WorkspaceRow>, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, source_ref, git_sha, worktree_path, mode, mode_state, status, failure_reason, failed_at, created_at, updated_at, last_active_at, expires_at FROM workspaces WHERE id = ?1 LIMIT 1"
+        "SELECT id, project_id, source_ref, git_sha, worktree_path, mode, status, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at FROM workspaces WHERE id = ?1 LIMIT 1"
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     let row = stmt.query_row(params![workspace_id], map_workspace_row);
@@ -99,7 +101,7 @@ pub async fn get_workspace_by_id(
 pub async fn list_workspaces(db_path: &str) -> Result<Vec<WorkspaceRow>, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, source_ref, git_sha, worktree_path, mode, mode_state, status, failure_reason, failed_at, created_at, updated_at, last_active_at, expires_at FROM workspaces WHERE status != 'destroying' ORDER BY created_at DESC"
+        "SELECT id, project_id, source_ref, git_sha, worktree_path, mode, status, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at FROM workspaces WHERE status != 'destroying' ORDER BY created_at DESC"
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     let rows = stmt

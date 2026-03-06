@@ -31,7 +31,7 @@ interface ThemeContextValue extends ThemePreference {
 const THEME_STORAGE_KEY = "lifecycle.desktop.theme.v1";
 
 const defaultPreference: ThemePreference = {
-  appearance: "system",
+  appearance: "dark",
   preset: "lifecycle",
 };
 

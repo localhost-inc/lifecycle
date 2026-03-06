@@ -1,4 +1,4 @@
-import type { ServiceRow } from "../api/workspaces";
+import type { ServiceRow } from "../api";
 
 const statusIcon: Record<string, string> = {
   stopped: "○",

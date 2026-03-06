@@ -23,7 +23,7 @@ This backend follows a capability + platform layout.
   - `workspaces/manifest.rs`: workspace manifest model/serde contracts.
   - `workspaces/state_machine.rs`: allowed workspace transitions.
 - `src/platform/`
-  - `db.rs`: SQLite open + FK policy + migrations.
+  - `db.rs`: SQLite open + FK policy + ordered schema migrations (`schema_migrations` + SQL files under `platform/migrations`).
   - `git/worktree.rs`: git worktree/branch/SHA adapters.
   - `runtime/supervisor.rs`: process/container lifecycle.
   - `runtime/setup.rs`: setup step execution + event streaming.

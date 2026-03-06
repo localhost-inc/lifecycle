@@ -1,11 +1,11 @@
 import type { ProjectRecord } from "@lifecycle/contracts";
 import type { ManifestStatus } from "../../features/projects/api/projects";
 import { ProjectItem } from "../../features/projects/components/project-item";
-import type { WorkspaceRow } from "../../features/workspaces/api/workspaces";
+import type { WorkspaceRow } from "../../features/workspaces/api";
 import { WorkspaceTreeItem } from "../../features/workspaces/components/workspace-tree-item";
-import { ThemeSelector } from "../theme-selector";
 
 interface SidebarProps {
+  isLoading?: boolean;
   projects: ProjectRecord[];
   manifestStates: Record<string, ManifestStatus["state"]>;
   workspacesByProjectId: Record<string, WorkspaceRow[]>;
@@ -15,9 +15,11 @@ interface SidebarProps {
   onSelectWorkspace: (workspaceId: string) => void;
   onAddProject: () => void;
   onCreateWorkspace: (projectId: string) => void;
+  onOpenSettings: () => void;
 }
 
 export function Sidebar({
+  isLoading = false,
   projects,
   manifestStates,
   workspacesByProjectId,
@@ -27,6 +29,7 @@ export function Sidebar({
   onSelectWorkspace,
   onAddProject,
   onCreateWorkspace,
+  onOpenSettings,
 }: SidebarProps) {
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--panel)]">
@@ -35,7 +38,11 @@ export function Sidebar({
       </div>
 
       <nav className="flex-1 overflow-y-auto p-2">
-        {projects.length === 0 ? (
+        {isLoading && projects.length === 0 ? (
+          <p className="px-3 py-8 text-center text-xs text-[var(--muted-foreground)]">
+            Loading projects...
+          </p>
+        ) : projects.length === 0 ? (
           <p className="px-3 py-8 text-center text-xs text-[var(--muted-foreground)]">
             No projects yet
           </p>
@@ -81,7 +88,13 @@ export function Sidebar({
         >
           Add project
         </button>
-        <ThemeSelector />
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className="mt-2 flex w-full items-center justify-center rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--surface-hover)]"
+        >
+          Settings
+        </button>
       </div>
     </aside>
   );

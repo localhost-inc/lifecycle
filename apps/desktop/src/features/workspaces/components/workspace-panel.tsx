@@ -1,22 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
 import type { WorkspaceStatus } from "@lifecycle/contracts";
 import type { ManifestStatus } from "../../projects/api/projects";
 import { WorkspaceBadge } from "./workspace-badge";
 import { ServiceIndicator } from "./service-indicator";
-import { SetupProgress, type StepState } from "./setup-progress";
-import type {
-  WorkspaceRow,
-  ServiceRow,
-  WorkspaceStatusEvent,
-  ServiceStatusEvent,
-  SetupStepEvent,
-} from "../api/workspaces";
-import {
-  startServices,
-  stopWorkspace,
-  getWorkspaceServices,
-  subscribeToWorkspaceEvents,
-} from "../api/workspaces";
+import { SetupProgress } from "./setup-progress";
+import type { WorkspaceRow } from "../api";
+import { startServices, stopWorkspace } from "../api";
+import { useWorkspaceServices, useWorkspaceSetup } from "../hooks";
 
 interface WorkspacePanelProps {
   workspace: WorkspaceRow;
@@ -24,113 +14,19 @@ interface WorkspacePanelProps {
 }
 
 export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProps) {
-  const [status, setStatus] = useState<WorkspaceStatus>(workspace.status as WorkspaceStatus);
-  const [failureReason, setFailureReason] = useState<string | null>(workspace.failure_reason);
-  const [services, setServices] = useState<ServiceRow[]>([]);
-  const [setupSteps, setSetupSteps] = useState<StepState[]>([]);
-
   const hasManifest = manifestStatus?.state === "valid";
   const config = hasManifest ? manifestStatus.result.config : null;
-
-  useEffect(() => {
-    setStatus(workspace.status as WorkspaceStatus);
-    setFailureReason(workspace.failure_reason);
-    setSetupSteps([]);
-  }, [workspace.failure_reason, workspace.id, workspace.status]);
-
-  // Load services on mount
-  useEffect(() => {
-    getWorkspaceServices(workspace.id).then(setServices).catch(console.error);
-  }, [workspace.id]);
-
-  // Subscribe to events
-  useEffect(() => {
-    let cleanup: (() => void) | undefined;
-
-    subscribeToWorkspaceEvents(workspace.id, {
-      onWorkspaceStatus: (e: WorkspaceStatusEvent) => {
-        setStatus(e.status);
-        setFailureReason(e.failure_reason);
-      },
-      onServiceStatus: (e: ServiceStatusEvent) => {
-        setServices((prev) => {
-          const exists = prev.some((s) => s.service_name === e.service_name);
-          if (exists) {
-            return prev.map((s) =>
-              s.service_name === e.service_name
-                ? { ...s, status: e.status, status_reason: e.status_reason }
-                : s,
-            );
-          }
-          // New service appeared (inserted during start_services)
-          return [
-            ...prev,
-            {
-              id: "",
-              workspace_id: workspace.id,
-              service_name: e.service_name,
-              exposure: "local",
-              port_override: null,
-              status: e.status,
-              status_reason: e.status_reason,
-              default_port: null,
-              effective_port: null,
-              preview_state: "disabled",
-              preview_failure_reason: null,
-              preview_url: null,
-              created_at: "",
-              updated_at: "",
-            },
-          ];
-        });
-      },
-      onSetupProgress: (e: SetupStepEvent) => {
-        setSetupSteps((prev) => {
-          const exists = prev.some((s) => s.name === e.step_name);
-          const updated = exists
-            ? prev
-            : [...prev, { name: e.step_name, status: "pending" as const, output: [] }];
-          return updated.map((step) => {
-            if (step.name !== e.step_name) return step;
-            switch (e.event_type) {
-              case "started":
-                return { ...step, status: "running" as const };
-              case "stdout":
-              case "stderr":
-                return {
-                  ...step,
-                  output: [...step.output, e.data ?? ""],
-                };
-              case "completed":
-                return { ...step, status: "completed" as const };
-              case "failed":
-                return {
-                  ...step,
-                  status: "failed" as const,
-                  output: [...step.output, e.data ?? ""],
-                };
-              case "timeout":
-                return { ...step, status: "timeout" as const };
-              default:
-                return step;
-            }
-          });
-        });
-      },
-    }).then((unsub) => {
-      cleanup = unsub;
-    });
-
-    return () => cleanup?.();
-  }, [workspace.id]);
+  const servicesQuery = useWorkspaceServices(workspace.id);
+  const setupQuery = useWorkspaceSetup(workspace.id);
+  const status = workspace.status as WorkspaceStatus;
+  const failureReason = workspace.failure_reason;
+  const services = servicesQuery.data ?? [];
+  const setupSteps = setupQuery.data ?? [];
 
   const handleRun = useCallback(async () => {
     if (!config) return;
     try {
       const manifestJson = JSON.stringify(config);
-      setSetupSteps(
-        config.setup.steps.map((s) => ({ name: s.name, status: "pending" as const, output: [] })),
-      );
       await startServices(workspace.id, manifestJson);
     } catch (err) {
       console.error("Failed to start services:", err);
@@ -146,7 +42,7 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
   }, [workspace.id]);
 
   const canRun = (status === "sleeping" || status === "failed") && hasManifest;
-  const canStop = status === "ready" || status === "starting";
+  const canStop = status === "ready";
   const showSetup = setupSteps.length > 0 && (status === "starting" || status === "failed");
   const showServices =
     services.length > 0 && (status === "starting" || status === "ready" || status === "failed");

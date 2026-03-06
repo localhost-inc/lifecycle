@@ -43,18 +43,39 @@ async fn start_services_lifecycle(
         }
     }
 
-    // Run setup steps
-    if let Err(e) =
-        setup::run_setup_steps(app, workspace_id, worktree_path, &config.setup.steps).await
-    {
-        update_workspace_status_db(
-            db_path,
-            workspace_id,
-            &WorkspaceStatus::Failed,
-            Some(&WorkspaceFailureReason::SetupStepFailed),
-        )?;
-        emit_workspace_status(app, workspace_id, "failed", Some("setup_step_failed"));
-        return Err(e);
+    // Setup runs exactly once per workspace creation.
+    let setup_completed = {
+        let conn = open_db(db_path)?;
+        let setup_completed_at: Option<String> = conn
+            .query_row(
+                "SELECT setup_completed_at FROM workspaces WHERE id = ?1",
+                params![workspace_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| LifecycleError::Database(e.to_string()))?;
+        setup_completed_at.is_some()
+    };
+
+    if !setup_completed {
+        if let Err(e) =
+            setup::run_setup_steps(app, workspace_id, worktree_path, &config.setup.steps).await
+        {
+            update_workspace_status_db(
+                db_path,
+                workspace_id,
+                &WorkspaceStatus::Failed,
+                Some(&WorkspaceFailureReason::SetupStepFailed),
+            )?;
+            emit_workspace_status(app, workspace_id, "failed", Some("setup_step_failed"));
+            return Err(e);
+        }
+
+        let conn = open_db(db_path)?;
+        conn.execute(
+            "UPDATE workspaces SET setup_completed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?1",
+            params![workspace_id],
+        )
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
     }
 
     // Start services (topologically sorted)
@@ -288,7 +309,7 @@ pub async fn start_services(
     let config: LifecycleConfig = serde_json::from_str(&manifest_json)
         .map_err(|e| LifecycleError::ManifestInvalid(e.to_string()))?;
 
-    // Read workspace row — validate worktree_path is set
+    // Read workspace row — validate worktree_path is set.
     let worktree_path = {
         let conn = open_db(&db_path.0)?;
         let path: Option<String> = conn

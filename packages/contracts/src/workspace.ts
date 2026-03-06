@@ -32,10 +32,11 @@ export interface WorkspaceRecord {
   sourceRef: string;
   gitSha?: string;
   worktreePath?: string;
-  modeState?: string;
   status: WorkspaceStatus;
   failureReason?: WorkspaceFailureReason;
   failedAt?: string;
+  createdBy?: string;
+  sourceWorkspaceId?: string;
   createdAt: string;
   updatedAt: string;
   lastActiveAt: string;
