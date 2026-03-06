@@ -18,7 +18,7 @@ pub async fn stop_workspace(
     let service_names = {
         let conn = open_db(&db)?;
         let mut stmt = conn
-            .prepare("SELECT service_name FROM workspace_services WHERE workspace_id = ?1")
+            .prepare("SELECT service_name FROM workspace_service WHERE workspace_id = ?1")
             .map_err(|e| LifecycleError::Database(e.to_string()))?;
         let rows = stmt
             .query_map(params![workspace_id.clone()], |row| row.get::<_, String>(0))
@@ -35,7 +35,7 @@ pub async fn stop_workspace(
         let conn = open_db(&db)?;
         let status: String = conn
             .query_row(
-                "SELECT status FROM workspaces WHERE id = ?1",
+                "SELECT status FROM workspace WHERE id = ?1",
                 params![workspace_id.clone()],
                 |row| row.get(0),
             )
@@ -56,7 +56,7 @@ pub async fn stop_workspace(
     {
         let conn = open_db(&db)?;
         conn.execute(
-            "UPDATE workspace_services SET status = 'stopped', status_reason = NULL, updated_at = datetime('now') WHERE workspace_id = ?1",
+            "UPDATE workspace_service SET status = 'stopped', status_reason = NULL, updated_at = datetime('now') WHERE workspace_id = ?1",
             params![workspace_id.clone()],
         ).map_err(|e| LifecycleError::Database(e.to_string()))?;
     }

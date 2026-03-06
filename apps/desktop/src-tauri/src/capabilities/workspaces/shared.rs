@@ -68,12 +68,12 @@ pub(super) fn update_workspace_status_db(
 
     if *status == WorkspaceStatus::Failed {
         conn.execute(
-            "UPDATE workspaces SET status = ?1, failure_reason = ?2, failed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?3",
+            "UPDATE workspace SET status = ?1, failure_reason = ?2, failed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?3",
             params![status.as_str(), failure_str, workspace_id],
         ).map_err(|e| LifecycleError::Database(e.to_string()))?;
     } else {
         conn.execute(
-            "UPDATE workspaces SET status = ?1, failure_reason = NULL, failed_at = NULL, updated_at = datetime('now') WHERE id = ?2",
+            "UPDATE workspace SET status = ?1, failure_reason = NULL, failed_at = NULL, updated_at = datetime('now') WHERE id = ?2",
             params![status.as_str(), workspace_id],
         ).map_err(|e| LifecycleError::Database(e.to_string()))?;
     }
@@ -89,7 +89,7 @@ pub(super) fn update_service_status_db(
 ) -> Result<(), LifecycleError> {
     let conn = open_db(db_path)?;
     conn.execute(
-        "UPDATE workspace_services SET status = ?1, status_reason = ?2, updated_at = datetime('now') WHERE workspace_id = ?3 AND service_name = ?4",
+        "UPDATE workspace_service SET status = ?1, status_reason = ?2, updated_at = datetime('now') WHERE workspace_id = ?3 AND service_name = ?4",
         params![status.as_str(), reason, workspace_id, service_name],
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;
     Ok(())
@@ -106,7 +106,7 @@ pub(super) fn transition_workspace_to_starting(
     let result = (|| -> Result<(), LifecycleError> {
         let status: String = conn
             .query_row(
-                "SELECT status FROM workspaces WHERE id = ?1",
+                "SELECT status FROM workspace WHERE id = ?1",
                 params![workspace_id],
                 |row| row.get(0),
             )
@@ -120,7 +120,7 @@ pub(super) fn transition_workspace_to_starting(
         validate_workspace_transition(&current_status, &WorkspaceStatus::Starting)?;
 
         conn.execute(
-            "UPDATE workspaces SET status = 'starting', failure_reason = NULL, failed_at = NULL, updated_at = datetime('now') WHERE id = ?1",
+            "UPDATE workspace SET status = 'starting', failure_reason = NULL, failed_at = NULL, updated_at = datetime('now') WHERE id = ?1",
             params![workspace_id],
         ).map_err(|e| LifecycleError::Database(e.to_string()))?;
 
@@ -188,7 +188,7 @@ pub(super) fn mark_nonfailed_services_stopped(
     let conn = open_db(db_path)?;
     let mut stmt = conn
         .prepare(
-            "SELECT service_name FROM workspace_services WHERE workspace_id = ?1 AND status != 'failed'",
+            "SELECT service_name FROM workspace_service WHERE workspace_id = ?1 AND status != 'failed'",
         )
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
     let rows = stmt
@@ -201,7 +201,7 @@ pub(super) fn mark_nonfailed_services_stopped(
     }
 
     conn.execute(
-        "UPDATE workspace_services SET status = 'stopped', status_reason = NULL, updated_at = datetime('now') WHERE workspace_id = ?1 AND status != 'failed'",
+        "UPDATE workspace_service SET status = 'stopped', status_reason = NULL, updated_at = datetime('now') WHERE workspace_id = ?1 AND status != 'failed'",
         params![workspace_id],
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;
 
@@ -303,16 +303,16 @@ mod tests {
     fn init_workspace_tables(db_path: &str) {
         let conn = open_db(db_path).expect("open db");
         conn.execute_batch(
-            "CREATE TABLE workspaces (
+            "CREATE TABLE workspace (
                 id TEXT PRIMARY KEY NOT NULL,
                 status TEXT NOT NULL,
                 failure_reason TEXT,
                 failed_at TEXT,
                 updated_at TEXT
             );
-            CREATE TABLE workspace_services (
+            CREATE TABLE workspace_service (
                 id TEXT PRIMARY KEY NOT NULL,
-                workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+                workspace_id TEXT NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
                 service_name TEXT NOT NULL,
                 status TEXT NOT NULL,
                 status_reason TEXT,
@@ -332,18 +332,18 @@ mod tests {
         let db_path = temp_db_path();
         let conn = open_db(&db_path).expect("open db");
         conn.execute_batch(
-            "CREATE TABLE projects (id TEXT PRIMARY KEY NOT NULL);
-             CREATE TABLE workspaces (
+            "CREATE TABLE project (id TEXT PRIMARY KEY NOT NULL);
+             CREATE TABLE workspace (
                  id TEXT PRIMARY KEY NOT NULL,
-                 project_id TEXT NOT NULL REFERENCES projects(id)
+                 project_id TEXT NOT NULL REFERENCES project(id)
              );
-             INSERT INTO projects (id) VALUES ('p1');
-             INSERT INTO workspaces (id, project_id) VALUES ('w1', 'p1');",
+             INSERT INTO project (id) VALUES ('p1');
+             INSERT INTO workspace (id, project_id) VALUES ('w1', 'p1');",
         )
         .expect("seed rows");
 
         let err = conn
-            .execute("DELETE FROM projects WHERE id = 'p1'", [])
+            .execute("DELETE FROM project WHERE id = 'p1'", [])
             .expect_err("fk should block orphaning workspace");
         assert!(
             err.to_string().contains("FOREIGN KEY constraint failed"),
@@ -361,7 +361,7 @@ mod tests {
 
         let conn = open_db(&db_path).expect("open db");
         conn.execute(
-            "INSERT INTO workspaces (id, status, failure_reason, failed_at, updated_at) VALUES (?1, ?2, ?3, ?4, datetime('now'))",
+            "INSERT INTO workspace (id, status, failure_reason, failed_at, updated_at) VALUES (?1, ?2, ?3, ?4, datetime('now'))",
             rusqlite::params!["ws_1", "sleeping", "service_start_failed", "2026-03-04T00:00:00Z"],
         )
         .expect("insert workspace");
@@ -372,7 +372,7 @@ mod tests {
         let conn = open_db(&db_path).expect("re-open db");
         let (status, failure_reason, failed_at): (String, Option<String>, Option<String>) = conn
             .query_row(
-                "SELECT status, failure_reason, failed_at FROM workspaces WHERE id = ?1",
+                "SELECT status, failure_reason, failed_at FROM workspace WHERE id = ?1",
                 rusqlite::params!["ws_1"],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
@@ -392,7 +392,7 @@ mod tests {
 
         let conn = open_db(&db_path).expect("open db");
         conn.execute(
-            "INSERT INTO workspaces (id, status, updated_at) VALUES (?1, ?2, datetime('now'))",
+            "INSERT INTO workspace (id, status, updated_at) VALUES (?1, ?2, datetime('now'))",
             rusqlite::params!["ws_2", "starting"],
         )
         .expect("insert workspace");
@@ -417,22 +417,22 @@ mod tests {
 
         let conn = open_db(&db_path).expect("open db");
         conn.execute(
-            "INSERT INTO workspaces (id, status, updated_at) VALUES (?1, ?2, datetime('now'))",
+            "INSERT INTO workspace (id, status, updated_at) VALUES (?1, ?2, datetime('now'))",
             rusqlite::params!["ws_3", "failed"],
         )
         .expect("insert workspace");
         conn.execute(
-            "INSERT INTO workspace_services (id, workspace_id, service_name, status, status_reason, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
+            "INSERT INTO workspace_service (id, workspace_id, service_name, status, status_reason, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
             rusqlite::params!["svc_1", "ws_3", "api", "ready", Option::<String>::None],
         )
         .expect("insert api");
         conn.execute(
-            "INSERT INTO workspace_services (id, workspace_id, service_name, status, status_reason, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
+            "INSERT INTO workspace_service (id, workspace_id, service_name, status, status_reason, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
             rusqlite::params!["svc_2", "ws_3", "db", "failed", Some("service_port_unreachable")],
         )
         .expect("insert db");
         conn.execute(
-            "INSERT INTO workspace_services (id, workspace_id, service_name, status, status_reason, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
+            "INSERT INTO workspace_service (id, workspace_id, service_name, status, status_reason, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
             rusqlite::params!["svc_3", "ws_3", "worker", "starting", Option::<String>::None],
         )
         .expect("insert worker");
@@ -446,7 +446,7 @@ mod tests {
             let conn = open_db(&db_path).expect("re-open db");
             let mut stmt = conn
                 .prepare(
-                    "SELECT service_name, status, status_reason FROM workspace_services WHERE workspace_id = ?1 ORDER BY service_name",
+                    "SELECT service_name, status, status_reason FROM workspace_service WHERE workspace_id = ?1 ORDER BY service_name",
                 )
                 .expect("prepare");
             let rows = stmt

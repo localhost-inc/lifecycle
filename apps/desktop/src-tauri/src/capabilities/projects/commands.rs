@@ -21,7 +21,7 @@ pub struct ProjectRow {
 pub async fn list_projects(db_path: State<'_, DbPath>) -> Result<Vec<ProjectRow>, LifecycleError> {
     let conn = open_db(&db_path.0)?;
     let mut stmt = conn
-        .prepare("SELECT id, path, name, manifest_path, manifest_valid, organization_id, repository_id, created_at, updated_at FROM projects ORDER BY created_at DESC")
+        .prepare("SELECT id, path, name, manifest_path, manifest_valid, organization_id, repository_id, created_at, updated_at FROM project ORDER BY created_at DESC")
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     let rows = stmt
@@ -58,13 +58,13 @@ pub async fn add_project(
 ) -> Result<ProjectRow, LifecycleError> {
     let conn = open_db(&db_path.0)?;
     conn.execute(
-        "INSERT INTO projects (id, path, name, manifest_valid) VALUES (?1, ?2, ?3, ?4)",
+        "INSERT INTO project (id, path, name, manifest_valid) VALUES (?1, ?2, ?3, ?4)",
         params![id, path, name, manifest_valid as i64],
     )
     .map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     let mut stmt = conn
-        .prepare("SELECT id, path, name, manifest_path, manifest_valid, organization_id, repository_id, created_at, updated_at FROM projects WHERE id = ?1")
+        .prepare("SELECT id, path, name, manifest_path, manifest_valid, organization_id, repository_id, created_at, updated_at FROM project WHERE id = ?1")
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     stmt.query_row(params![id], |row| {
@@ -87,7 +87,7 @@ pub async fn add_project(
 #[tauri::command]
 pub async fn remove_project(db_path: State<'_, DbPath>, id: String) -> Result<(), LifecycleError> {
     let conn = open_db(&db_path.0)?;
-    conn.execute("DELETE FROM projects WHERE id = ?1", params![id])
+    conn.execute("DELETE FROM project WHERE id = ?1", params![id])
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
     Ok(())
 }
@@ -100,7 +100,7 @@ pub async fn update_manifest_status(
 ) -> Result<(), LifecycleError> {
     let conn = open_db(&db_path.0)?;
     conn.execute(
-        "UPDATE projects SET manifest_valid = ?1, updated_at = datetime('now') WHERE id = ?2",
+        "UPDATE project SET manifest_valid = ?1, updated_at = datetime('now') WHERE id = ?2",
         params![valid as i64, id],
     )
     .map_err(|e| LifecycleError::Database(e.to_string()))?;

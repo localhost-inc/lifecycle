@@ -50,10 +50,10 @@ mod tests {
         run_migrations(&db_path).expect("second migration run succeeds");
 
         let conn = open_db(&db_path).expect("open db");
-        assert!(column_exists(&conn, "workspaces", "created_by"));
-        assert!(column_exists(&conn, "workspaces", "source_workspace_id"));
-        assert!(column_exists(&conn, "workspaces", "setup_completed_at"));
-        assert!(!column_exists(&conn, "workspaces", "mode_state"));
+        assert!(column_exists(&conn, "workspace", "created_by"));
+        assert!(column_exists(&conn, "workspace", "source_workspace_id"));
+        assert!(column_exists(&conn, "workspace", "setup_completed_at"));
+        assert!(!column_exists(&conn, "workspace", "mode_state"));
 
         drop(conn);
         let _ = std::fs::remove_file(db_path);

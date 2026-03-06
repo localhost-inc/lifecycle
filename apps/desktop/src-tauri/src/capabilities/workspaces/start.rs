@@ -28,7 +28,7 @@ async fn start_services_lifecycle(
         let conn = open_db(db_path)?;
         // Remove stale services not in current config
         conn.execute(
-            "DELETE FROM workspace_services WHERE workspace_id = ?1",
+            "DELETE FROM workspace_service WHERE workspace_id = ?1",
             params![workspace_id],
         )
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
@@ -37,7 +37,7 @@ async fn start_services_lifecycle(
             let svc_id = uuid::Uuid::new_v4().to_string();
             let port = svc.port().map(|p| p as i64);
             conn.execute(
-                "INSERT INTO workspace_services (id, workspace_id, service_name, default_port, effective_port) VALUES (?1, ?2, ?3, ?4, ?5)",
+                "INSERT INTO workspace_service (id, workspace_id, service_name, default_port, effective_port) VALUES (?1, ?2, ?3, ?4, ?5)",
                 params![svc_id, workspace_id, name, port, port],
             ).map_err(|e| LifecycleError::Database(e.to_string()))?;
         }
@@ -48,7 +48,7 @@ async fn start_services_lifecycle(
         let conn = open_db(db_path)?;
         let setup_completed_at: Option<String> = conn
             .query_row(
-                "SELECT setup_completed_at FROM workspaces WHERE id = ?1",
+                "SELECT setup_completed_at FROM workspace WHERE id = ?1",
                 params![workspace_id],
                 |row| row.get(0),
             )
@@ -72,7 +72,7 @@ async fn start_services_lifecycle(
 
         let conn = open_db(db_path)?;
         conn.execute(
-            "UPDATE workspaces SET setup_completed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?1",
+            "UPDATE workspace SET setup_completed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?1",
             params![workspace_id],
         )
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
@@ -314,7 +314,7 @@ pub async fn start_services(
         let conn = open_db(&db_path.0)?;
         let path: Option<String> = conn
             .query_row(
-                "SELECT worktree_path FROM workspaces WHERE id = ?1",
+                "SELECT worktree_path FROM workspace WHERE id = ?1",
                 params![workspace_id],
                 |row| row.get(0),
             )

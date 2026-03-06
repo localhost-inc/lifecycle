@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS projects (
+CREATE TABLE IF NOT EXISTS project (
     id TEXT PRIMARY KEY NOT NULL,
     path TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
@@ -10,9 +10,9 @@ CREATE TABLE IF NOT EXISTS projects (
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE TABLE IF NOT EXISTS workspaces (
+CREATE TABLE IF NOT EXISTS workspace (
     id TEXT PRIMARY KEY NOT NULL,
-    project_id TEXT NOT NULL REFERENCES projects(id),
+    project_id TEXT NOT NULL REFERENCES project(id),
     source_ref TEXT NOT NULL,
     git_sha TEXT,
     worktree_path TEXT,
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
     failure_reason TEXT,
     failed_at TEXT,
     created_by TEXT,
-    source_workspace_id TEXT REFERENCES workspaces(id),
+    source_workspace_id TEXT REFERENCES workspace(id),
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     last_active_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -29,9 +29,9 @@ CREATE TABLE IF NOT EXISTS workspaces (
     setup_completed_at TEXT
 );
 
-CREATE TABLE IF NOT EXISTS workspace_services (
+CREATE TABLE IF NOT EXISTS workspace_service (
     id TEXT PRIMARY KEY NOT NULL,
-    workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    workspace_id TEXT NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
     service_name TEXT NOT NULL,
     exposure TEXT NOT NULL DEFAULT 'local',
     port_override INTEGER,

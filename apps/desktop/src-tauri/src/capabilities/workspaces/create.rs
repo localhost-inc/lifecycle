@@ -26,7 +26,7 @@ pub async fn create_workspace(
     {
         let conn = open_db(&db)?;
         conn.execute(
-            "INSERT INTO workspaces (id, project_id, source_ref, status, mode) VALUES (?1, ?2, ?3, 'creating', 'local')",
+            "INSERT INTO workspace (id, project_id, source_ref, status, mode) VALUES (?1, ?2, ?3, 'creating', 'local')",
             params![workspace_id, project_id, source_ref],
         ).map_err(|e| LifecycleError::Database(e.to_string()))?;
     }
@@ -106,7 +106,7 @@ async fn run_workspace_creation(
     {
         let conn = open_db(db_path)?;
         conn.execute(
-            "UPDATE workspaces SET worktree_path = ?1, git_sha = ?2, updated_at = datetime('now') WHERE id = ?3",
+            "UPDATE workspace SET worktree_path = ?1, git_sha = ?2, updated_at = datetime('now') WHERE id = ?3",
             params![worktree_path, git_sha, workspace_id],
         ).map_err(|e| LifecycleError::Database(e.to_string()))?;
     }
