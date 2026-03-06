@@ -178,6 +178,7 @@ export class StoreClient {
         notify(entry);
       })
       .catch((error: unknown) => {
+        console.error("Store query failed:", entry.descriptor.key, error);
         entry.snapshot = {
           ...entry.snapshot,
           error,

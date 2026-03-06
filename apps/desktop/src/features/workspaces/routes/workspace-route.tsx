@@ -8,6 +8,16 @@ export function WorkspaceRoute() {
   const workspaceQuery = useWorkspace(workspaceId ?? null);
   const manifestQuery = useProjectManifest(workspaceQuery.data?.project_id ?? null);
 
+  if (workspaceQuery.error) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <p className="text-sm text-red-600">
+          Failed to load workspace: {String(workspaceQuery.error)}
+        </p>
+      </div>
+    );
+  }
+
   if (workspaceQuery.isLoading) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
@@ -28,6 +38,16 @@ export function WorkspaceRoute() {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-sm text-[var(--muted-foreground)]">Loading workspace...</p>
+      </div>
+    );
+  }
+
+  if (manifestQuery.error) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <p className="text-sm text-red-600">
+          Failed to load manifest: {String(manifestQuery.error)}
+        </p>
       </div>
     );
   }
