@@ -14,7 +14,12 @@ interface WorkspaceProvider {
   sleep(workspace_id) → void
   wake(workspace_id) → void
   destroy(workspace_id) → void
-  openTerminal(workspace_id, cols, rows) → terminal_connection
+  createTerminal(workspace_id, harness, cols, rows) → { terminal, attachment? }
+  attachTerminal(terminal_id, cols, rows) → terminal_connection
+  writeTerminal(terminal_id, data) → void
+  resizeTerminal(terminal_id, cols, rows) → void
+  detachTerminal(terminal_id) → void
+  killTerminal(terminal_id) → void
   exposePort(workspace_id, service, port) → access_url | null
 }
 ```
@@ -31,6 +36,16 @@ Provider-specific runtime detail should not be stuffed into a generic `mode_stat
 4. If the target provider's capacity is unavailable, create request is rejected with actionable error.
 5. V1 ships both `CloudWorkspaceProvider` and `LocalWorkspaceProvider`. Both are implemented against the `WorkspaceProvider` interface and validated in parallel from Milestone 3 onward.
 6. Platform stance is Cloudflare-first for cloud execution, edge routing, and storage integration.
+
+## Terminal Stream Contract (M3+)
+
+Terminal transport is split between control-plane mutations and ordered data streaming.
+
+1. Control-plane operations stay typed and imperative (`create`, `attach`, `write`, `resize`, `detach`, `kill`).
+2. Terminal output is an ordered chunk stream, not a coarse app event.
+3. Local mode should use Tauri `Channel` for PTY output streaming.
+4. Generic app events remain appropriate for terminal metadata/status changes, not high-frequency byte output.
+5. Replay buffers are provider-owned implementation detail as long as attach/replay ordering is preserved.
 
 ## Mode, Authority, and Aggregation
 
