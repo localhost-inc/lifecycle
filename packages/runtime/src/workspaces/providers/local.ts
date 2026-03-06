@@ -1,7 +1,10 @@
 import type { WorkspaceServiceRecord } from "@lifecycle/contracts";
 import type {
   LocalWorkspaceProviderCreateContext,
+  WorkspaceProviderAttachTerminalInput,
+  WorkspaceProviderAttachTerminalResult,
   WorkspaceProvider,
+  WorkspaceProviderCreateTerminalInput,
   WorkspaceProviderCreateInput,
   WorkspaceProviderCreateResult,
   WorkspaceProviderHealthResult,
@@ -82,13 +85,43 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
     // TODO: M4 — stop + remove worktree + delete records.
   }
 
-  async openTerminal(
-    _workspaceId: string,
-    _cols: number,
-    _rows: number,
-  ): Promise<{ terminalId: string }> {
-    // TODO: M3.
-    throw new Error("Not implemented");
+  async createTerminal(
+    input: WorkspaceProviderCreateTerminalInput,
+  ): Promise<WorkspaceProviderAttachTerminalResult> {
+    return this.invoke("create_terminal", {
+      workspaceId: input.workspaceId,
+      launchType: input.launchType,
+      harnessProvider: input.harnessProvider,
+      harnessSessionId: input.harnessSessionId,
+      cols: input.cols,
+      rows: input.rows,
+    }) as Promise<WorkspaceProviderAttachTerminalResult>;
+  }
+
+  async attachTerminal(
+    input: WorkspaceProviderAttachTerminalInput,
+  ): Promise<WorkspaceProviderAttachTerminalResult> {
+    return this.invoke("attach_terminal", {
+      terminalId: input.terminalId,
+      cols: input.cols,
+      rows: input.rows,
+    }) as Promise<WorkspaceProviderAttachTerminalResult>;
+  }
+
+  async writeTerminal(terminalId: string, data: string): Promise<void> {
+    await this.invoke("write_terminal", { terminalId, data });
+  }
+
+  async resizeTerminal(terminalId: string, cols: number, rows: number): Promise<void> {
+    await this.invoke("resize_terminal", { terminalId, cols, rows });
+  }
+
+  async detachTerminal(terminalId: string): Promise<void> {
+    await this.invoke("detach_terminal", { terminalId });
+  }
+
+  async killTerminal(terminalId: string): Promise<void> {
+    await this.invoke("kill_terminal", { terminalId });
   }
 
   async exposePort(

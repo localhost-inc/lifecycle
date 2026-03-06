@@ -29,3 +29,4 @@ reqwest = { version = "0.12", features = ["rustls-tls"], default-features = fals
 rusqlite = { version = "0.32", features = ["bundled"] }
 futures-util = "0.3"
 libc = "0.2"
+portable-pty = "0.9"

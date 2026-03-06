@@ -3,6 +3,12 @@ export type { FieldError, LifecycleConfig, ManifestParseResult } from "./manifes
 export { LifecycleConfigSchema, parseManifest } from "./manifest";
 export type { ProjectRecord } from "./project";
 export type {
+  TerminalFailureReason,
+  TerminalRecord,
+  TerminalStatus,
+  TerminalType,
+} from "./terminal";
+export type {
   WorkspaceFailureReason,
   WorkspaceMode,
   WorkspaceRecord,

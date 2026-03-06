@@ -4,6 +4,7 @@ mod shared;
 
 use crate::platform::db::{run_migrations, DbPath};
 use crate::platform::runtime::supervisor::Supervisor;
+use crate::platform::runtime::terminal::TerminalSupervisor;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::Manager;
@@ -12,10 +13,12 @@ use tokio::sync::Mutex;
 pub use shared::errors::LifecycleError;
 
 pub type SupervisorMap = Arc<Mutex<HashMap<String, Supervisor>>>;
+pub type TerminalSupervisorMap = Arc<Mutex<HashMap<String, TerminalSupervisor>>>;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let supervisors: SupervisorMap = Arc::new(Mutex::new(HashMap::new()));
+    let terminal_supervisors: TerminalSupervisorMap = Arc::new(Mutex::new(HashMap::new()));
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -39,6 +42,7 @@ pub fn run() {
             Ok(())
         })
         .manage(supervisors)
+        .manage(terminal_supervisors)
         .invoke_handler(tauri::generate_handler![
             capabilities::projects::commands::list_projects,
             capabilities::projects::commands::add_project,
@@ -53,6 +57,14 @@ pub fn run() {
             capabilities::workspaces::commands::list_workspaces_by_project,
             capabilities::workspaces::commands::get_workspace_services,
             capabilities::workspaces::commands::get_current_branch,
+            capabilities::workspaces::commands::list_workspace_terminals,
+            capabilities::workspaces::commands::get_terminal,
+            capabilities::workspaces::commands::create_terminal,
+            capabilities::workspaces::commands::attach_terminal,
+            capabilities::workspaces::commands::write_terminal,
+            capabilities::workspaces::commands::resize_terminal,
+            capabilities::workspaces::commands::detach_terminal,
+            capabilities::workspaces::commands::kill_terminal,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

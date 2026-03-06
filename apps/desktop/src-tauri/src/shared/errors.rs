@@ -114,6 +114,111 @@ impl std::fmt::Display for ServiceStatus {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TerminalType {
+    Shell,
+    Harness,
+    Preset,
+    Command,
+}
+
+impl TerminalType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Shell => "shell",
+            Self::Harness => "harness",
+            Self::Preset => "preset",
+            Self::Command => "command",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Result<Self, LifecycleError> {
+        match s {
+            "shell" => Ok(Self::Shell),
+            "harness" => Ok(Self::Harness),
+            "preset" => Ok(Self::Preset),
+            "command" => Ok(Self::Command),
+            _ => Err(LifecycleError::InvalidStateTransition {
+                from: s.to_string(),
+                to: "unknown".to_string(),
+            }),
+        }
+    }
+}
+
+impl std::fmt::Display for TerminalType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TerminalStatus {
+    Active,
+    Detached,
+    Sleeping,
+    Finished,
+    Failed,
+}
+
+impl TerminalStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Active => "active",
+            Self::Detached => "detached",
+            Self::Sleeping => "sleeping",
+            Self::Finished => "finished",
+            Self::Failed => "failed",
+        }
+    }
+
+    pub fn from_str(s: &str) -> Result<Self, LifecycleError> {
+        match s {
+            "active" => Ok(Self::Active),
+            "detached" => Ok(Self::Detached),
+            "sleeping" => Ok(Self::Sleeping),
+            "finished" => Ok(Self::Finished),
+            "failed" => Ok(Self::Failed),
+            _ => Err(LifecycleError::InvalidStateTransition {
+                from: s.to_string(),
+                to: "unknown".to_string(),
+            }),
+        }
+    }
+}
+
+impl std::fmt::Display for TerminalStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum TerminalFailureReason {
+    PtySpawnFailed,
+    LocalPtySpawnFailed,
+    HarnessProcessExitNonzero,
+    AttachFailed,
+    WorkspaceDestroyed,
+    Unknown,
+}
+
+impl TerminalFailureReason {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::PtySpawnFailed => "pty_spawn_failed",
+            Self::LocalPtySpawnFailed => "local_pty_spawn_failed",
+            Self::HarnessProcessExitNonzero => "harness_process_exit_nonzero",
+            Self::AttachFailed => "attach_failed",
+            Self::WorkspaceDestroyed => "workspace_destroyed",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum LifecycleError {
     #[error("Invalid state transition from '{from}' to '{to}'")]
@@ -148,6 +253,12 @@ pub enum LifecycleError {
 
     #[error("Database error: {0}")]
     Database(String),
+
+    #[error("Local PTY spawn failed: {0}")]
+    LocalPtySpawnFailed(String),
+
+    #[error("Terminal attach failed: {0}")]
+    AttachFailed(String),
 
     #[error("IO error: {0}")]
     Io(String),
@@ -196,5 +307,21 @@ mod tests {
         assert_eq!(ServiceStatus::Starting.as_str(), "starting");
         assert_eq!(ServiceStatus::Ready.as_str(), "ready");
         assert_eq!(ServiceStatus::Failed.as_str(), "failed");
+    }
+
+    #[test]
+    fn terminal_status_roundtrip() {
+        let statuses = vec![
+            TerminalStatus::Active,
+            TerminalStatus::Detached,
+            TerminalStatus::Sleeping,
+            TerminalStatus::Finished,
+            TerminalStatus::Failed,
+        ];
+        for status in statuses {
+            let s = status.as_str();
+            let parsed = TerminalStatus::from_str(s).unwrap();
+            assert_eq!(status, parsed);
+        }
     }
 }

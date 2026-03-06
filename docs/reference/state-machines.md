@@ -15,7 +15,7 @@ Canonical transition rules for all Lifecycle state machines. This is the single 
 ### Workspace State Invariants
 
 1. Allowed states: `creating`, `starting`, `ready`, `resetting`, `sleeping`, `destroying`, `failed`
-2. Transitional status acts as implicit mutation lock (`creating|starting|resetting|sleeping|destroying`)
+2. Transitional status acts as implicit mutation lock for workspace/service mutations (`creating|starting|resetting|sleeping|destroying`). Terminal create/attach is governed by interactive workspace context instead of service readiness.
 3. Project `setup` executes exactly once per workspace create
 4. All defined services must pass health checks before transition to `ready`
 
@@ -42,8 +42,8 @@ Canonical transition rules for all Lifecycle state machines. This is the single 
 ### Terminal State Invariants
 
 1. Allowed states: `active`, `detached`, `sleeping`, `finished`, `failed`
-2. `attach` is rejected unless workspace state is `ready`; client may offer wake-and-attach path.
-3. `sleeping` terminals must not accept input.
+2. `create` and `attach` are allowed whenever the workspace has interactive context (worktree exists and the workspace is not `creating` or `destroying`); terminal access is not gated on service readiness.
+3. `sleeping` terminals must not accept input when the terminal itself is suspended.
 4. Workspace `destroy` hard-terminates any non-finished/non-failed terminal.
 
 ## Preview `preview_state` Allowed Transitions

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import type { TerminalRow } from "../features/terminals/api";
 import { StoreClient, type QueryDescriptor } from "./client";
 import type { StoreEvent } from "./events";
 import type { StoreSource } from "./source";
@@ -10,8 +11,14 @@ function createMockSource() {
     async getWorkspace() {
       return null;
     },
+    async getTerminal() {
+      return null;
+    },
     async getWorkspaceServices() {
       return [];
+    },
+    async listWorkspaceTerminals() {
+      return [] satisfies TerminalRow[];
     },
     async listProjects() {
       return [];

@@ -1,5 +1,13 @@
 import type { ProjectRecord } from "@lifecycle/contracts";
 import type { ManifestStatus } from "../features/projects/api/projects";
+import type { TerminalRow } from "../features/terminals/api";
+import {
+  getTerminal,
+  listWorkspaceTerminals,
+  subscribeToTerminalCreatedEvents,
+  subscribeToTerminalRemovedEvents,
+  subscribeToTerminalStatusEvents,
+} from "../features/terminals/api";
 import { listProjects, readManifest } from "../features/projects/api/projects";
 import type { ServiceRow, WorkspaceRow } from "../features/workspaces/api";
 import {
@@ -18,6 +26,8 @@ export interface StoreSource {
   listWorkspacesByProject(): Promise<Record<string, WorkspaceRow[]>>;
   getWorkspace(workspaceId: string): Promise<WorkspaceRow | null>;
   getWorkspaceServices(workspaceId: string): Promise<ServiceRow[]>;
+  listWorkspaceTerminals(workspaceId: string): Promise<TerminalRow[]>;
+  getTerminal(terminalId: string): Promise<TerminalRow | null>;
   subscribe(listener: (event: StoreEvent) => void): Promise<() => void>;
 }
 
@@ -28,6 +38,8 @@ export function createSource(): StoreSource {
     listWorkspacesByProject,
     getWorkspace: getWorkspaceById,
     getWorkspaceServices,
+    getTerminal,
+    listWorkspaceTerminals,
     async subscribe(listener) {
       const unlisten = await Promise.all([
         subscribeToWorkspaceStatusEvents((event) => {
@@ -54,6 +66,31 @@ export function createSource(): StoreSource {
             stepName: event.step_name,
             eventType: event.event_type,
             data: event.data,
+          });
+        }),
+        subscribeToTerminalCreatedEvents((event) => {
+          listener({
+            kind: "terminal-created",
+            terminal: event.terminal,
+            workspaceId: event.workspace_id,
+          });
+        }),
+        subscribeToTerminalStatusEvents((event) => {
+          listener({
+            endedAt: event.ended_at,
+            exitCode: event.exit_code,
+            failureReason: event.failure_reason,
+            kind: "terminal-status-changed",
+            status: event.status,
+            terminalId: event.terminal_id,
+            workspaceId: event.workspace_id,
+          });
+        }),
+        subscribeToTerminalRemovedEvents((event) => {
+          listener({
+            kind: "terminal-removed",
+            terminalId: event.terminal_id,
+            workspaceId: event.workspace_id,
           });
         }),
       ]);

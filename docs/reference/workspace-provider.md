@@ -14,7 +14,7 @@ interface WorkspaceProvider {
   sleep(workspace_id) → void
   wake(workspace_id) → void
   destroy(workspace_id) → void
-  createTerminal(workspace_id, harness, cols, rows) → { terminal, attachment? }
+  createTerminal(workspace_id, launch_type, cols, rows, harness_provider?, harness_session_id?) → { terminal, attachment? }
   attachTerminal(terminal_id, cols, rows) → terminal_connection
   writeTerminal(terminal_id, data) → void
   resizeTerminal(terminal_id, cols, rows) → void

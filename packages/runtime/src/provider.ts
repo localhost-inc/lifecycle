@@ -1,4 +1,4 @@
-import type { WorkspaceRecord, WorkspaceServiceRecord } from "@lifecycle/contracts";
+import type { TerminalRecord, WorkspaceRecord, WorkspaceServiceRecord } from "@lifecycle/contracts";
 
 export interface LocalWorkspaceProviderCreateContext {
   mode: "local";
@@ -44,6 +44,26 @@ export interface WorkspaceProviderHealthResult {
   services: WorkspaceServiceRecord[];
 }
 
+export interface WorkspaceProviderCreateTerminalInput {
+  workspaceId: string;
+  launchType: "shell" | "harness";
+  harnessProvider?: string | null;
+  harnessSessionId?: string | null;
+  cols: number;
+  rows: number;
+}
+
+export interface WorkspaceProviderAttachTerminalInput {
+  terminalId: string;
+  cols: number;
+  rows: number;
+}
+
+export interface WorkspaceProviderAttachTerminalResult {
+  terminal: TerminalRecord;
+  replayCursor: string | null;
+}
+
 export interface WorkspaceProvider {
   createWorkspace(input: WorkspaceProviderCreateInput): Promise<WorkspaceProviderCreateResult>;
   startServices(input: WorkspaceProviderStartInput): Promise<WorkspaceServiceRecord[]>;
@@ -53,6 +73,15 @@ export interface WorkspaceProvider {
   sleep(workspaceId: string): Promise<void>;
   wake(workspaceId: string): Promise<void>;
   destroy(workspaceId: string): Promise<void>;
-  openTerminal(workspaceId: string, cols: number, rows: number): Promise<{ terminalId: string }>;
+  createTerminal(
+    input: WorkspaceProviderCreateTerminalInput,
+  ): Promise<WorkspaceProviderAttachTerminalResult>;
+  attachTerminal(
+    input: WorkspaceProviderAttachTerminalInput,
+  ): Promise<WorkspaceProviderAttachTerminalResult>;
+  writeTerminal(terminalId: string, data: string): Promise<void>;
+  resizeTerminal(terminalId: string, cols: number, rows: number): Promise<void>;
+  detachTerminal(terminalId: string): Promise<void>;
+  killTerminal(terminalId: string): Promise<void>;
   exposePort(workspaceId: string, serviceName: string, port: number): Promise<string | null>;
 }

@@ -6,3 +6,4 @@ mod shared;
 pub mod start;
 pub mod state_machine;
 pub mod stop;
+pub mod terminal;

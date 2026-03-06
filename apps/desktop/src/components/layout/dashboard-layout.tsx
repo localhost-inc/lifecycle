@@ -4,16 +4,17 @@ import { addProjectFromDirectory } from "../../features/projects/api/projects";
 import { projectKeys, useProjectCatalog } from "../../features/projects/hooks";
 import { useSettings } from "../../features/settings/state/app-settings-provider";
 import {
-  createWorkspace,
-  getCurrentBranch,
-} from "../../features/workspaces/api";
-import {
-  useWorkspace,
-  useWorkspacesByProject,
-  workspaceKeys,
-} from "../../features/workspaces/hooks";
+  createTerminal,
+  DEFAULT_HARNESS_PROVIDER,
+  DEFAULT_TERMINAL_COLS,
+  DEFAULT_TERMINAL_ROWS,
+} from "../../features/terminals/api";
+import { terminalKeys } from "../../features/terminals/hooks";
+import { createWorkspace, getCurrentBranch } from "../../features/workspaces/api";
+import { useWorkspacesByProject, workspaceKeys } from "../../features/workspaces/hooks";
 import { useStoreClient } from "../../store";
 import { Sidebar } from "./sidebar";
+import { AppStatusBar } from "./app-status-bar";
 import { TitleBar } from "./title-bar";
 
 export function DashboardLayout() {
@@ -24,8 +25,6 @@ export function DashboardLayout() {
   const { worktreeRoot } = useSettings();
   const projectCatalogQuery = useProjectCatalog();
   const workspacesByProjectQuery = useWorkspacesByProject();
-  const workspaceQuery = useWorkspace(workspaceId ?? null);
-
   const projects = projectCatalogQuery.data?.projects ?? [];
   const manifestStates = useMemo(
     () =>
@@ -39,14 +38,24 @@ export function DashboardLayout() {
     [projectCatalogQuery.data],
   );
   const workspacesByProjectId = workspacesByProjectQuery.data ?? {};
+  const workspaces = useMemo(
+    () => Object.values(workspacesByProjectId).flat(),
+    [workspacesByProjectId],
+  );
   const selectedWorkspaceId = workspaceId ?? null;
-  const selectedProjectId = workspaceQuery.data?.project_id ?? null;
+  const selectedWorkspace = useMemo(
+    () =>
+      selectedWorkspaceId
+        ? (workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null)
+        : null,
+    [selectedWorkspaceId, workspaces],
+  );
   const selectedProjectFromQuery = searchParams.get("project");
   const fallbackSelectedProjectId =
     selectedProjectFromQuery && projects.some((project) => project.id === selectedProjectFromQuery)
       ? selectedProjectFromQuery
       : null;
-  const activeProjectId = selectedProjectId ?? fallbackSelectedProjectId;
+  const activeProjectId = selectedWorkspaceId ? null : fallbackSelectedProjectId;
 
   const handleSelectWorkspace = useCallback(
     (workspaceId: string) => {
@@ -94,6 +103,25 @@ export function DashboardLayout() {
           projectPath: project.path,
           worktreeRoot,
         });
+
+        void (async () => {
+          try {
+            await createTerminal({
+              cols: DEFAULT_TERMINAL_COLS,
+              harnessProvider: DEFAULT_HARNESS_PROVIDER,
+              launchType: "harness",
+              rows: DEFAULT_TERMINAL_ROWS,
+              workspaceId,
+            });
+            client.invalidate(terminalKeys.byWorkspace(workspaceId));
+          } catch (terminalError) {
+            console.error("Failed to create initial harness terminal:", terminalError);
+            alert(
+              `Workspace created, but failed to start the initial ${DEFAULT_HARNESS_PROVIDER} harness: ${terminalError}`,
+            );
+          }
+        })();
+
         client.invalidate(workspaceKeys.byProject());
         client.invalidate(workspaceKeys.detail(workspaceId));
         void navigate(`/workspaces/${workspaceId}`);
@@ -111,7 +139,7 @@ export function DashboardLayout() {
 
   return (
     <div className="flex h-screen w-screen flex-col bg-[var(--background)] text-[var(--foreground)]">
-      <TitleBar />
+      <TitleBar selectedWorkspace={selectedWorkspace} />
       <div className="flex min-h-0 flex-1">
         <Sidebar
           isLoading={projectCatalogQuery.isLoading || workspacesByProjectQuery.isLoading}
@@ -126,10 +154,11 @@ export function DashboardLayout() {
           onCreateWorkspace={handleCreateWorkspace}
           onOpenSettings={handleOpenSettings}
         />
-        <main className="flex min-w-0 flex-1">
+        <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
           <Outlet />
         </main>
       </div>
+      <AppStatusBar />
     </div>
   );
 }

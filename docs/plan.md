@@ -36,7 +36,7 @@ Those belong in milestone or reference docs.
 | M0        | done    | none       | Monorepo/tooling baseline                               | [m0](./milestones/m0.md) |
 | M1        | done    | M0         | Desktop shell + project import + manifest validation    | [m1](./milestones/m1.md) |
 | M2        | done    | M1         | Local workspace create/start/health to `ready`          | [m2](./milestones/m2.md) |
-| M3        | planned | M2         | Terminal and harness runtime in workspace               | [m3](./milestones/m3.md) |
+| M3        | in_progress | M2     | Terminal and harness runtime in workspace               | [m3](./milestones/m3.md) |
 | M4        | planned | M3         | Full local lifecycle controls                           | [m4](./milestones/m4.md) |
 | M5        | planned | M4         | First-class local CLI                                   | [m5](./milestones/m5.md) |
 | M6        | planned | M5         | Auth, cloud workspaces, previews, PR flow               | [m6](./milestones/m6.md) |
@@ -75,11 +75,11 @@ Detail spec: [docs/milestones/m2.md](./milestones/m2.md)
 
 Detail spec: [docs/milestones/m3.md](./milestones/m3.md)
 
-- [ ] Terminal entity and lifecycle states are implemented
+- [x] Terminal entity and lifecycle states are implemented
 - [ ] Local PTY architecture (Tauri IPC + xterm.js) is operational
-- [ ] Harness launch/resume flows are integrated
-- [ ] Terminal tabs support attach/detach/reattach and replay
-- [ ] Terminal lifecycle coverage is tested
+- [x] Harness launch/resume flows are integrated
+- [x] Terminal tabs support attach/detach/reattach and replay
+- [x] Terminal lifecycle coverage is tested
 
 ### M4 - Full Local Lifecycle
 
@@ -87,7 +87,7 @@ Detail spec: [docs/milestones/m4.md](./milestones/m4.md)
 
 - [ ] `run`, `reset`, `sleep`, `wake`, and `destroy` flows are complete for local mode
 - [ ] Local preview and service exposure controls are wired
-- [ ] Mutation locking and terminal sleep/wake behavior are enforced
+- [ ] Mutation locking and terminal/service interaction boundaries are enforced
 - [ ] Desktop operations panel supports full local lifecycle controls
 - [ ] Local lifecycle round-trip behavior is tested
 

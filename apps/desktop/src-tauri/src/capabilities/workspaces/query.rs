@@ -42,6 +42,41 @@ pub struct ServiceRow {
     pub updated_at: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TerminalRow {
+    pub id: String,
+    pub workspace_id: String,
+    pub launch_type: String,
+    pub harness_provider: Option<String>,
+    pub harness_session_id: Option<String>,
+    pub created_by: Option<String>,
+    pub label: String,
+    pub status: String,
+    pub failure_reason: Option<String>,
+    pub exit_code: Option<i64>,
+    pub started_at: String,
+    pub last_active_at: String,
+    pub ended_at: Option<String>,
+}
+
+fn map_terminal_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<TerminalRow> {
+    Ok(TerminalRow {
+        id: row.get(0)?,
+        workspace_id: row.get(1)?,
+        launch_type: row.get(2)?,
+        harness_provider: row.get(3)?,
+        harness_session_id: row.get(4)?,
+        created_by: row.get(5)?,
+        label: row.get(6)?,
+        status: row.get(7)?,
+        failure_reason: row.get(8)?,
+        exit_code: row.get(9)?,
+        started_at: row.get(10)?,
+        last_active_at: row.get(11)?,
+        ended_at: row.get(12)?,
+    })
+}
+
 fn map_workspace_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRow> {
     Ok(WorkspaceRow {
         id: row.get(0)?,
@@ -170,4 +205,52 @@ pub async fn get_workspace_services(
 
 pub async fn get_current_branch(project_path: String) -> Result<String, LifecycleError> {
     worktree::get_current_branch(&project_path).await
+}
+
+pub async fn list_workspace_terminals(
+    db_path: &str,
+    workspace_id: String,
+) -> Result<Vec<TerminalRow>, LifecycleError> {
+    let conn = open_db(db_path)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, created_by, label, status, failure_reason, exit_code, started_at, last_active_at, ended_at
+             FROM terminal
+             WHERE workspace_id = ?1
+             ORDER BY started_at DESC, id DESC",
+        )
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+
+    let rows = stmt
+        .query_map(params![workspace_id], map_terminal_row)
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row.map_err(|e| LifecycleError::Database(e.to_string()))?);
+    }
+
+    Ok(result)
+}
+
+pub async fn get_terminal_by_id(
+    db_path: &str,
+    terminal_id: String,
+) -> Result<Option<TerminalRow>, LifecycleError> {
+    let conn = open_db(db_path)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, created_by, label, status, failure_reason, exit_code, started_at, last_active_at, ended_at
+             FROM terminal
+             WHERE id = ?1
+             LIMIT 1",
+        )
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+
+    let row = stmt.query_row(params![terminal_id], map_terminal_row);
+    match row {
+        Ok(row) => Ok(Some(row)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(error) => Err(LifecycleError::Database(error.to_string())),
+    }
 }

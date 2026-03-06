@@ -1,6 +1,9 @@
 export type {
   CloudWorkspaceProviderCreateContext,
   LocalWorkspaceProviderCreateContext,
+  WorkspaceProviderAttachTerminalInput,
+  WorkspaceProviderAttachTerminalResult,
+  WorkspaceProviderCreateTerminalInput,
   WorkspaceProvider,
   WorkspaceProviderCreateContext,
   WorkspaceProviderCreateInput,

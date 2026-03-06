@@ -1,8 +1,24 @@
+@font-face {
+  font-family: "Lifecycle Mono";
+  src: url("./fonts/lifecycle-mono-regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Lifecycle Mono";
+  src: url("./fonts/lifecycle-mono-bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
 @theme {
   --font-heading: "Geist", "Inter", system-ui, sans-serif;
   --font-body: "Geist", "Inter", system-ui, sans-serif;
   --font-sans: var(--font-body);
-  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+  --font-mono: "Lifecycle Mono", "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
 
   --radius-xs: 0px;
   --radius-sm: 0px;

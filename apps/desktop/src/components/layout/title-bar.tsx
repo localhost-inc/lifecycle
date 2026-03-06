@@ -1,3 +1,4 @@
+import type { WorkspaceStatus } from "@lifecycle/contracts";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
@@ -8,8 +9,14 @@ import {
 } from "react";
 import { useNavigate } from "react-router-dom";
 import { useHistoryAvailability } from "../../app/history-stack";
+import { WorkspaceBadge } from "../../features/workspaces/components/workspace-badge";
+import type { WorkspaceRow } from "../../features/workspaces/api";
 
 const SIDEBAR_WIDTH_CLASS = "w-64";
+
+interface TitleBarProps {
+  selectedWorkspace?: WorkspaceRow | null;
+}
 
 function shouldSkipDrag(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
@@ -30,7 +37,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
   );
 }
 
-export function TitleBar() {
+export function TitleBar({ selectedWorkspace }: TitleBarProps) {
   const navigate = useNavigate();
   const { canGoBack, canGoForward } = useHistoryAvailability();
 
@@ -101,11 +108,7 @@ export function TitleBar() {
     >
       <div
         data-tauri-drag-region
-        className={`${SIDEBAR_WIDTH_CLASS} border-r border-[var(--border)] bg-[var(--panel)]`}
-      />
-      <div
-        data-tauri-drag-region
-        className="flex flex-1 items-center justify-end bg-[var(--background)] px-4 text-[11px] text-[var(--muted-foreground)]"
+        className={`${SIDEBAR_WIDTH_CLASS} flex items-center justify-end border-r border-[var(--border)] bg-[var(--panel)] pr-3`}
       >
         <div data-no-drag className="flex items-center gap-1">
           <button
@@ -129,6 +132,24 @@ export function TitleBar() {
             →
           </button>
         </div>
+      </div>
+      <div
+        data-tauri-drag-region
+        className="flex flex-1 items-center gap-3 bg-[var(--background)] px-4 text-[11px] text-[var(--muted-foreground)]"
+      >
+        {selectedWorkspace && (
+          <div data-no-drag className="flex min-w-0 items-center gap-2.5">
+            <span className="font-mono text-[12px] font-medium text-[var(--foreground)]">
+              {selectedWorkspace.source_ref}
+            </span>
+            {selectedWorkspace.git_sha && (
+              <span className="font-mono text-[11px] text-[var(--muted-foreground)]">
+                {selectedWorkspace.git_sha.slice(0, 8)}
+              </span>
+            )}
+            <WorkspaceBadge status={selectedWorkspace.status as WorkspaceStatus} />
+          </div>
+        )}
       </div>
     </header>
   );
