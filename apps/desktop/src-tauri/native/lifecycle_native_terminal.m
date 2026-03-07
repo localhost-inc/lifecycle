@@ -157,6 +157,54 @@ static const char *lifecycleGhosttyTextForEvent(NSEvent *event, NSString **stora
   return (*storage).UTF8String;
 }
 
+static BOOL lifecycleGhosttyTextIsPrintable(NSString *text) {
+  if (text.length == 0) {
+    return NO;
+  }
+
+  if (text.length == 1) {
+    unichar scalar = [text characterAtIndex:0];
+    if (scalar < 0x20) {
+      return NO;
+    }
+
+    if (scalar >= 0xF700 && scalar <= 0xF8FF) {
+      return NO;
+    }
+  }
+
+  return YES;
+}
+
+static void lifecycleGhosttySendText(ghostty_surface_t surface, NSString *text) {
+  if (surface == NULL || text.length == 0) {
+    return;
+  }
+
+  const char *utf8 = text.UTF8String;
+  if (utf8 == NULL) {
+    return;
+  }
+
+  ghostty_surface_text(surface, utf8, strlen(utf8));
+}
+
+static void lifecycleGhosttyDispatchKeyEvent(ghostty_surface_t surface,
+                                             ghostty_input_key_s keyEvent,
+                                             NSString *text) {
+  const BOOL printableText = lifecycleGhosttyTextIsPrintable(text);
+  if (printableText) {
+    keyEvent.text = text.UTF8String;
+  }
+
+  if (!ghostty_surface_key(surface, keyEvent) && printableText) {
+    // Ghostty's full key event path is preferred because it preserves
+    // modifier-aware encodings. If the event is ignored, fall back to raw text
+    // injection so canonical shell input still receives printable characters.
+    lifecycleGhosttySendText(surface, text);
+  }
+}
+
 static ghostty_input_key_s lifecycleGhosttyKeyEvent(NSEvent *event,
                                                     ghostty_input_action_e action,
                                                     NSEventModifierFlags translationFlags) {
@@ -671,8 +719,7 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
       ghostty_input_key_s keyEvent =
           lifecycleGhosttyKeyEvent(event, action, translationEvent.modifierFlags);
       keyEvent.composing = false;
-      keyEvent.text = text.UTF8String;
-      ghostty_surface_key(self.surface, keyEvent);
+      lifecycleGhosttyDispatchKeyEvent(self.surface, keyEvent, text);
     }
     return;
   }
@@ -682,7 +729,9 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
       lifecycleGhosttyKeyEvent(event, action, translationEvent.modifierFlags);
   keyEvent.composing = self.hasMarkedText;
   keyEvent.text = lifecycleGhosttyTextForEvent(translationEvent, &textStorage);
-  ghostty_surface_key(self.surface, keyEvent);
+  if (!ghostty_surface_key(self.surface, keyEvent) && lifecycleGhosttyTextIsPrintable(textStorage)) {
+    lifecycleGhosttySendText(self.surface, textStorage);
+  }
 }
 
 - (void)keyUp:(NSEvent *)event {
@@ -716,9 +765,7 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return;
   }
 
-  if (self.surface != NULL) {
-    ghostty_surface_text(self.surface, text.UTF8String, strlen(text.UTF8String));
-  }
+  lifecycleGhosttySendText(self.surface, text);
 }
 
 - (void)doCommandBySelector:(SEL)selector {
@@ -824,7 +871,7 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return;
   }
 
-  ghostty_surface_text(self.surface, string.UTF8String, strlen(string.UTF8String));
+  lifecycleGhosttySendText(self.surface, string);
 }
 
 - (void)copy:(id)sender {

@@ -19,11 +19,14 @@ Embedded Ghostty's `command` surface option is not a generic argv launch path. T
 
 For keyboard input, the embedded bridge also needs to honor `ghostty_surface_key_translation_mods(...)` before it calls `interpretKeyEvents`. Raw AppKit modifier flags are not always the same modifiers Ghostty expects for text translation, and that mismatch can show up first in plain shells where normal echoed printable input is the primary interaction mode.
 
+Even after modifier translation is correct, a hand-built key event can still be "good enough" for raw-mode TUIs while failing plain shell line input. If Ghostty ignores a printable key event, the bridge needs a direct `ghostty_surface_text(...)` fallback for the printable text so canonical shell input still arrives.
+
 ## Impact
 
 - Native terminal sync/hide/close failures should degrade into actionable errors instead of process exits.
 - Crash investigations need to distinguish process death from native view failures that can now be reported through the command path.
 - Native shell launch regressions should be evaluated against Ghostty's embedded command semantics first, not against our PTY launch helpers.
+- Native keyboard regressions need to be checked against both raw-mode TUIs and canonical shell echo, because one can pass while the other is still broken.
 
 ## Follow-Up
 
