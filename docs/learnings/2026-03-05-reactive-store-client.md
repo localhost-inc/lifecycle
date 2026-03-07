@@ -18,7 +18,7 @@ This keeps reactivity implicit at the hook layer while leaving source authority 
 
 1. M2: removes loader-owned runtime state for current project/workspace surfaces.
 2. M3: creates a reusable event-driven substrate for terminal and harness runtime state.
-3. M6: preserves a clean insertion point for Convex-backed remote sources without rewriting UI call sites.
+3. M7: preserves a clean insertion point for Convex-backed remote sources without rewriting UI call sites.
 
 ## Follow-Up Actions
 

@@ -72,6 +72,19 @@ export interface AttachTerminalResult {
   terminal: TerminalRow;
 }
 
+export interface SaveTerminalAttachmentInput {
+  base64Data: string;
+  fileName: string;
+  mediaType?: string | null;
+  workspaceId: string;
+}
+
+export interface SavedTerminalAttachment {
+  absolutePath: string;
+  fileName: string;
+  relativePath: string;
+}
+
 interface BrowserTerminalState {
   nextSequence: number;
   inputByTerminalId: Record<string, string>;
@@ -583,6 +596,21 @@ export async function writeTerminal(terminalId: string, data: string): Promise<v
   }
 
   await invoke<void>("write_terminal", { data, terminalId });
+}
+
+export async function saveTerminalAttachment(
+  input: SaveTerminalAttachmentInput,
+): Promise<SavedTerminalAttachment> {
+  if (!isTauri()) {
+    throw new Error("Image paste and drop are only available in the desktop app.");
+  }
+
+  return invoke<SavedTerminalAttachment>("save_terminal_attachment", {
+    base64Data: input.base64Data,
+    fileName: input.fileName,
+    mediaType: input.mediaType ?? null,
+    workspaceId: input.workspaceId,
+  });
 }
 
 export async function resizeTerminal(

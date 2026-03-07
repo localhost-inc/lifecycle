@@ -31,7 +31,7 @@ The useful patterns are:
 
 1. M3: confirms the local-first terminal design should use a dedicated stream channel plus explicit lifecycle commands.
 2. M3: confirms that tab close, tab switch, app quit, and app restart must be treated as distinct terminal behaviors.
-3. M6: keeps cloud terminal work compatible with the same domain model by avoiding local-only reconnect assumptions.
+3. M7: keeps cloud terminal work compatible with the same domain model by avoiding local-only reconnect assumptions.
 
 ## Follow-Up Actions
 

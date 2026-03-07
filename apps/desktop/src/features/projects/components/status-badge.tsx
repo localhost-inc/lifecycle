@@ -13,6 +13,8 @@ const labels = {
 } as const;
 
 export function StatusBadge({ state }: { state: ManifestStatus["state"] }) {
+  if (state === "missing") return null;
+
   return (
     <span
       className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${styles[state]}`}

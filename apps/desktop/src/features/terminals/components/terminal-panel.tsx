@@ -10,6 +10,7 @@ import {
   attachTerminalStream,
   detachTerminal,
   resizeTerminal,
+  saveTerminalAttachment,
   terminalHasLiveSession,
   type TerminalRow,
   writeTerminal,
@@ -32,6 +33,23 @@ interface TerminalPanelProps {
 }
 
 const TERMINAL_WRITE_IMMEDIATE_THRESHOLD = 16 * 1024;
+const BRACKETED_PASTE_START = "\u001b[200~";
+const BRACKETED_PASTE_END = "\u001b[201~";
+const IMAGE_ATTACHMENT_EXTENSIONS = new Set([
+  "avif",
+  "bmp",
+  "gif",
+  "heic",
+  "heif",
+  "jpeg",
+  "jpg",
+  "png",
+  "svg",
+  "svgz",
+  "tif",
+  "tiff",
+  "webp",
+]);
 
 function resolveTerminalTheme(element: HTMLElement): ITheme {
   const styles = getComputedStyle(element);
@@ -61,6 +79,113 @@ function resolveTerminalTheme(element: HTMLElement): ITheme {
       ? "rgba(9, 9, 11, 0.12)"
       : "rgba(89, 193, 255, 0.24)",
   };
+}
+
+function inferImageAttachmentExtension(mediaType: string | null | undefined): string {
+  switch (mediaType?.trim().toLowerCase()) {
+    case "image/avif":
+      return "avif";
+    case "image/bmp":
+      return "bmp";
+    case "image/gif":
+      return "gif";
+    case "image/heic":
+      return "heic";
+    case "image/heif":
+      return "heif";
+    case "image/jpeg":
+      return "jpg";
+    case "image/png":
+      return "png";
+    case "image/svg+xml":
+      return "svg";
+    case "image/tiff":
+      return "tiff";
+    case "image/webp":
+      return "webp";
+    default:
+      return "png";
+  }
+}
+
+export function isImageAttachmentFile(file: Pick<File, "name" | "type">): boolean {
+  if (file.type.toLowerCase().startsWith("image/")) {
+    return true;
+  }
+
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  return extension !== undefined && IMAGE_ATTACHMENT_EXTENSIONS.has(extension);
+}
+
+function collectImageAttachmentFiles(
+  transfer: Pick<DataTransfer, "files" | "items"> | null | undefined,
+): File[] {
+  if (!transfer) {
+    return [];
+  }
+
+  const directFiles = Array.from(transfer.files ?? []).filter(isImageAttachmentFile);
+  if (directFiles.length > 0) {
+    return directFiles;
+  }
+
+  return Array.from(transfer.items ?? [])
+    .filter((item) => item.kind === "file" && item.type.toLowerCase().startsWith("image/"))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file !== null)
+    .filter(isImageAttachmentFile);
+}
+
+function createImageAttachmentFileName(file: Pick<File, "name" | "type">, index: number): string {
+  const trimmed = file.name.trim();
+  if (trimmed.length > 0) {
+    return trimmed;
+  }
+
+  return `pasted-image-${index + 1}.${inferImageAttachmentExtension(file.type)}`;
+}
+
+function readFileAsBase64(file: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => {
+      reject(reader.error ?? new Error("Failed to read image attachment."));
+    };
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        reject(new Error("Image attachment payload was not readable."));
+        return;
+      }
+
+      const separatorIndex = reader.result.indexOf(",");
+      resolve(
+        separatorIndex >= 0 ? reader.result.slice(separatorIndex + 1) : reader.result,
+      );
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+export function formatTerminalAttachmentInsertion(paths: readonly string[]): string {
+  return paths.map((path) => JSON.stringify(path)).join(" ");
+}
+
+export function buildTerminalAttachmentWritePayloads(
+  harnessProvider: string | null,
+  paths: readonly string[],
+): string[] {
+  if (paths.length === 0) {
+    return [];
+  }
+
+  if (harnessProvider === "codex") {
+    return paths.map((path) => {
+      const quotedPath = JSON.stringify(path);
+      return `${BRACKETED_PASTE_START}${quotedPath}${BRACKETED_PASTE_END}`;
+    });
+  }
+
+  return [`${formatTerminalAttachmentInsertion(paths)} `];
 }
 
 export function isBenignTerminalIoError(error: unknown): boolean {
@@ -203,8 +328,52 @@ export function buildTerminalRuntimeDiagnostics(
   };
 }
 
+interface TerminalAppearanceHost {
+  dataset: Record<string, string | undefined>;
+  style: {
+    backgroundColor: string;
+    setProperty: (name: string, value: string) => void;
+  };
+}
+
+interface TerminalAppearanceTarget {
+  clearTextureAtlas: () => void;
+  options: {
+    theme?: ITheme;
+  };
+  refresh: (start: number, end: number) => void;
+  rows: number;
+}
+
+export function applyTerminalAppearance({
+  host,
+  theme,
+  xterm,
+}: {
+  host: TerminalAppearanceHost;
+  theme: ITheme;
+  xterm?: TerminalAppearanceTarget | null;
+}): string {
+  const background = theme.background ?? "#0a0f16";
+  host.style.backgroundColor = background;
+  host.style.setProperty("--terminal-surface-background", background);
+
+  if (!xterm) {
+    return background;
+  }
+
+  xterm.options.theme = { ...theme };
+  xterm.clearTextureAtlas();
+  if (xterm.rows > 0) {
+    xterm.refresh(0, xterm.rows - 1);
+  }
+
+  return background;
+}
+
 export function TerminalPanel({ terminal }: TerminalPanelProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const xtermRef = useRef<Terminal | null>(null);
   const [error, setError] = useState<string | null>(null);
   const {
     reportTerminalDiagnostics,
@@ -234,21 +403,15 @@ export function TerminalPanel({ terminal }: TerminalPanelProps) {
     let xterm: Terminal | null = null;
     let fitAddon: FitAddon | null = null;
     const platformHint = detectPlatformHint();
-    const terminalTheme = resolveTerminalTheme(host);
-    const runtimeOptions = resolveTerminalRuntimeOptions({
-      backgroundColor: terminalTheme.background,
-      platformHint,
-      renderer: terminalRenderer,
-    });
     let diagnostics = buildTerminalRuntimeDiagnostics({
       activeRenderer: "dom",
-      allowTransparency: runtimeOptions.allowTransparency,
+      allowTransparency: false,
       bundledFontReady: false,
       configuredFontFamily: terminalFontFamily,
       devicePixelRatio: window.devicePixelRatio,
       platformHint,
-      requestedRenderer: runtimeOptions.requestedRenderer,
-      resolvedRenderer: runtimeOptions.resolvedRenderer,
+      requestedRenderer: terminalRenderer,
+      resolvedRenderer: "dom",
       webglStatus: "not-requested",
     });
 
@@ -271,9 +434,44 @@ export function TerminalPanel({ terminal }: TerminalPanelProps) {
       setError(String(nextError));
     };
 
+    const attachImagesToTerminal = async (files: readonly File[]) => {
+      try {
+        const savedAttachments = await Promise.all(
+          files.map(async (file, index) =>
+            saveTerminalAttachment({
+              base64Data: await readFileAsBase64(file),
+              fileName: createImageAttachmentFileName(file, index),
+              mediaType: file.type,
+              workspaceId: terminal.workspace_id,
+            }),
+          ),
+        );
+        if (disposed || savedAttachments.length === 0) {
+          return;
+        }
+
+        const payloads = buildTerminalAttachmentWritePayloads(
+          terminal.harness_provider,
+          savedAttachments.map((attachment) => attachment.absolutePath),
+        );
+        for (const payload of payloads) {
+          await writeTerminal(terminal.id, payload);
+        }
+        setError(null);
+      } catch (attachmentError) {
+        handleTerminalError(attachmentError);
+      }
+    };
+
     const syncTerminalSize = () => {
       resizeFrameId = null;
       if (disposed || !xterm) {
+        return;
+      }
+
+      // Skip resize when hidden (display: none) to avoid reflowing
+      // content into tiny dimensions and losing scrollback.
+      if (!host.offsetWidth && !host.offsetHeight) {
         return;
       }
 
@@ -324,6 +522,29 @@ export function TerminalPanel({ terminal }: TerminalPanelProps) {
         return;
       }
 
+      const terminalTheme = resolveTerminalTheme(host);
+      const terminalBackground = applyTerminalAppearance({
+        host,
+        theme: terminalTheme,
+      });
+      const runtimeOptions = resolveTerminalRuntimeOptions({
+        backgroundColor: terminalBackground,
+        platformHint,
+        renderer: terminalRenderer,
+      });
+      host.dataset.terminalRenderer = runtimeOptions.resolvedRenderer;
+      diagnostics = buildTerminalRuntimeDiagnostics({
+        activeRenderer: "dom",
+        allowTransparency: runtimeOptions.allowTransparency,
+        bundledFontReady: false,
+        configuredFontFamily: terminalFontFamily,
+        devicePixelRatio: window.devicePixelRatio,
+        platformHint,
+        requestedRenderer: runtimeOptions.requestedRenderer,
+        resolvedRenderer: runtimeOptions.resolvedRenderer,
+        webglStatus: "not-requested",
+      });
+
       xterm = new Terminal({
         // Official xterm addons like unicode11/webgl still use this gate.
         allowProposedApi: true,
@@ -345,6 +566,7 @@ export function TerminalPanel({ terminal }: TerminalPanelProps) {
       xterm.loadAddon(fitAddon);
       xterm.loadAddon(webLinksAddon);
       xterm.open(host);
+      xtermRef.current = xterm;
       try {
         xterm.loadAddon(unicode11Addon);
         xterm.unicode.activeVersion = "11";
@@ -393,11 +615,43 @@ export function TerminalPanel({ terminal }: TerminalPanelProps) {
         scheduleTerminalResize();
       });
       resizeObserver.observe(host);
+      host.addEventListener("paste", handleTerminalPaste);
+      host.addEventListener("dragover", handleTerminalDragOver);
+      host.addEventListener("drop", handleTerminalDrop);
       host.addEventListener("mousedown", focusTerminal);
     };
 
     const focusTerminal = () => {
       xterm?.focus();
+    };
+    const handleTerminalPaste = (event: ClipboardEvent) => {
+      const imageFiles = collectImageAttachmentFiles(event.clipboardData);
+      if (imageFiles.length === 0) {
+        return;
+      }
+
+      event.preventDefault();
+      void attachImagesToTerminal(imageFiles);
+    };
+    const handleTerminalDragOver = (event: DragEvent) => {
+      const imageFiles = collectImageAttachmentFiles(event.dataTransfer);
+      if (imageFiles.length === 0) {
+        return;
+      }
+
+      event.preventDefault();
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = "copy";
+      }
+    };
+    const handleTerminalDrop = (event: DragEvent) => {
+      const imageFiles = collectImageAttachmentFiles(event.dataTransfer);
+      if (imageFiles.length === 0) {
+        return;
+      }
+
+      event.preventDefault();
+      void attachImagesToTerminal(imageFiles);
     };
     setError(null);
     void initializeTerminal();
@@ -407,7 +661,13 @@ export function TerminalPanel({ terminal }: TerminalPanelProps) {
       if (resizeFrameId !== null) {
         window.cancelAnimationFrame(resizeFrameId);
       }
+      host.style.removeProperty("--terminal-surface-background");
+      host.style.removeProperty("background-color");
       delete host.dataset.terminalRenderer;
+      xtermRef.current = null;
+      host.removeEventListener("paste", handleTerminalPaste);
+      host.removeEventListener("dragover", handleTerminalDragOver);
+      host.removeEventListener("drop", handleTerminalDrop);
       host.removeEventListener("mousedown", focusTerminal);
       resizeObserver?.disconnect();
       disposeData?.dispose();
@@ -420,13 +680,26 @@ export function TerminalPanel({ terminal }: TerminalPanelProps) {
   }, [
     hasLiveSession,
     reportTerminalDiagnostics,
-    resolvedAppearance,
     terminal.id,
+    terminal.workspace_id,
     terminalFontFamily,
     terminalFontSize,
     terminalLineHeight,
     terminalRenderer,
   ]);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host || !hasLiveSession) {
+      return;
+    }
+
+    applyTerminalAppearance({
+      host,
+      theme: resolveTerminalTheme(host),
+      xterm: xtermRef.current,
+    });
+  }, [hasLiveSession, resolvedAppearance]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[var(--background)]">

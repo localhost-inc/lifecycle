@@ -62,6 +62,7 @@ pub fn run() {
             capabilities::workspaces::commands::create_terminal,
             capabilities::workspaces::commands::attach_terminal,
             capabilities::workspaces::commands::write_terminal,
+            capabilities::workspaces::commands::save_terminal_attachment,
             capabilities::workspaces::commands::resize_terminal,
             capabilities::workspaces::commands::detach_terminal,
             capabilities::workspaces::commands::kill_terminal,

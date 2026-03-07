@@ -6,9 +6,11 @@ use crate::shared::errors::{
     LifecycleError, TerminalFailureReason, TerminalStatus, TerminalType, WorkspaceStatus,
 };
 use crate::TerminalSupervisorMap;
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use portable_pty::CommandBuilder;
 use rusqlite::params;
 use serde::Serialize;
+use std::path::Path;
 use std::sync::Arc;
 use tauri::{ipc::Channel, AppHandle, Emitter, State};
 
@@ -35,6 +37,14 @@ struct TerminalStatusEvent {
     failure_reason: Option<String>,
     exit_code: Option<i64>,
     ended_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedTerminalAttachment {
+    pub absolute_path: String,
+    pub file_name: String,
+    pub relative_path: String,
 }
 
 pub async fn create_terminal(
@@ -200,6 +210,48 @@ pub async fn write_terminal(
     supervisor.write(&data)?;
     touch_terminal(&db, &terminal_id)?;
     Ok(())
+}
+
+pub async fn save_terminal_attachment(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    file_name: String,
+    media_type: Option<String>,
+    base64_data: String,
+) -> Result<SavedTerminalAttachment, LifecycleError> {
+    let workspace = load_workspace_runtime(&db_path.0, &workspace_id)?;
+    if !workspace_has_interactive_terminal_context(&workspace) {
+        return Err(LifecycleError::InvalidStateTransition {
+            from: workspace.status.as_str().to_string(),
+            to: "terminal_attachment".to_string(),
+        });
+    }
+
+    let bytes = STANDARD
+        .decode(base64_data)
+        .map_err(|error| LifecycleError::AttachmentPersistenceFailed(error.to_string()))?;
+    let attachment_dir = Path::new(&workspace.worktree_path)
+        .join(".lifecycle")
+        .join("attachments");
+    std::fs::create_dir_all(&attachment_dir).map_err(|error| {
+        LifecycleError::AttachmentPersistenceFailed(format!(
+            "failed to create attachment directory: {error}"
+        ))
+    })?;
+
+    let stored_file_name = build_terminal_attachment_file_name(&file_name, media_type.as_deref());
+    let attachment_path = attachment_dir.join(&stored_file_name);
+    std::fs::write(&attachment_path, bytes).map_err(|error| {
+        LifecycleError::AttachmentPersistenceFailed(format!(
+            "failed to persist attachment: {error}"
+        ))
+    })?;
+
+    Ok(SavedTerminalAttachment {
+        absolute_path: attachment_path.to_string_lossy().to_string(),
+        file_name: stored_file_name.clone(),
+        relative_path: format!(".lifecycle/attachments/{stored_file_name}"),
+    })
 }
 
 pub async fn resize_terminal(
@@ -394,6 +446,76 @@ fn touch_terminal(db_path: &str, terminal_id: &str) -> Result<(), LifecycleError
     )
     .map_err(|e| LifecycleError::Database(e.to_string()))?;
     Ok(())
+}
+
+fn build_terminal_attachment_file_name(file_name: &str, media_type: Option<&str>) -> String {
+    let stem = sanitize_attachment_stem(
+        Path::new(file_name)
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .unwrap_or("pasted-image"),
+    );
+    let extension = infer_attachment_extension(file_name, media_type);
+    let unique_id = uuid::Uuid::new_v4().simple().to_string();
+    format!("{stem}-{}.{}", &unique_id[..8], extension)
+}
+
+fn sanitize_attachment_stem(value: &str) -> String {
+    let sanitized = value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                ch.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    let trimmed = sanitized.trim_matches('-');
+    if trimmed.is_empty() {
+        "pasted-image".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn infer_attachment_extension(file_name: &str, media_type: Option<&str>) -> &'static str {
+    if let Some(extension) = Path::new(file_name)
+        .extension()
+        .and_then(|value| value.to_str())
+    {
+        return match extension.to_ascii_lowercase().as_str() {
+            "avif" => "avif",
+            "bmp" => "bmp",
+            "gif" => "gif",
+            "heic" => "heic",
+            "heif" => "heif",
+            "jpeg" | "jpg" => "jpg",
+            "png" => "png",
+            "svg" | "svgz" => "svg",
+            "tif" | "tiff" => "tiff",
+            "webp" => "webp",
+            _ => infer_attachment_extension_from_media_type(media_type),
+        };
+    }
+
+    infer_attachment_extension_from_media_type(media_type)
+}
+
+fn infer_attachment_extension_from_media_type(media_type: Option<&str>) -> &'static str {
+    match media_type.map(str::trim).unwrap_or_default() {
+        "image/avif" => "avif",
+        "image/bmp" => "bmp",
+        "image/gif" => "gif",
+        "image/heic" => "heic",
+        "image/heif" => "heif",
+        "image/jpeg" => "jpg",
+        "image/png" => "png",
+        "image/svg+xml" => "svg",
+        "image/tiff" => "tiff",
+        "image/webp" => "webp",
+        _ => "png",
+    }
 }
 
 fn insert_terminal_row(
@@ -632,5 +754,24 @@ mod tests {
                 worktree_path: "/tmp/worktree".to_string(),
             }
         ));
+    }
+
+    #[test]
+    fn build_terminal_attachment_file_name_sanitizes_the_stem() {
+        let file_name = build_terminal_attachment_file_name(
+            "Screenshot 2026-03-06 11.22.33.PNG",
+            Some("image/png"),
+        );
+
+        assert!(file_name.starts_with("screenshot-2026-03-06-11-22-33-"));
+        assert!(file_name.ends_with(".png"));
+    }
+
+    #[test]
+    fn build_terminal_attachment_file_name_infers_extension_from_media_type() {
+        let file_name = build_terminal_attachment_file_name("clipboard-image", Some("image/webp"));
+
+        assert!(file_name.starts_with("clipboard-image-"));
+        assert!(file_name.ends_with(".webp"));
     }
 }

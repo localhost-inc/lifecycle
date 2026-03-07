@@ -37,10 +37,10 @@ Those belong in milestone or reference docs.
 | M1        | done    | M0         | Desktop shell + project import + manifest validation    | [m1](./milestones/m1.md) |
 | M2        | done    | M1         | Local workspace create/start/health to `ready`          | [m2](./milestones/m2.md) |
 | M3        | in_progress | M2     | Terminal and harness runtime in workspace               | [m3](./milestones/m3.md) |
-| M4        | planned | M3         | Full local lifecycle controls                           | [m4](./milestones/m4.md) |
-| M5        | planned | M4         | First-class local CLI                                   | [m5](./milestones/m5.md) |
-| M6        | planned | M5         | Auth, cloud workspaces, previews, PR flow               | [m6](./milestones/m6.md) |
-| M7        | planned | M6         | Cloud lifecycle hardening (sleep/wake, TTL, quotas)     | [m7](./milestones/m7.md) |
+| M5        | planned | M3         | Full local lifecycle controls                           | [m5](./milestones/m5.md) |
+| M6        | planned | M5         | First-class local CLI                                   | [m6](./milestones/m6.md) |
+| M7        | planned | M6         | Auth, cloud workspaces, previews, PR flow               | [m7](./milestones/m7.md) |
+| M8        | planned | M7         | Cloud lifecycle hardening (sleep/wake, TTL, quotas)     | [m8](./milestones/m8.md) |
 
 ## Milestone Checklists (High-Level Only)
 
@@ -81,9 +81,9 @@ Detail spec: [docs/milestones/m3.md](./milestones/m3.md)
 - [x] Terminal tabs support attach/detach/reattach and replay
 - [x] Terminal lifecycle coverage is tested
 
-### M4 - Full Local Lifecycle
+### M5 - Full Local Lifecycle
 
-Detail spec: [docs/milestones/m4.md](./milestones/m4.md)
+Detail spec: [docs/milestones/m5.md](./milestones/m5.md)
 
 - [ ] `run`, `reset`, `sleep`, `wake`, and `destroy` flows are complete for local mode
 - [ ] Local preview and service exposure controls are wired
@@ -91,9 +91,9 @@ Detail spec: [docs/milestones/m4.md](./milestones/m4.md)
 - [ ] Desktop operations panel supports full local lifecycle controls
 - [ ] Local lifecycle round-trip behavior is tested
 
-### M5 - First-Class CLI (Local)
+### M6 - First-Class CLI (Local)
 
-Detail spec: [docs/milestones/m5.md](./milestones/m5.md)
+Detail spec: [docs/milestones/m6.md](./milestones/m6.md)
 
 - [ ] CLI workspace context auto-detection is implemented
 - [ ] Status/logs/health/context observability commands are operational
@@ -101,9 +101,9 @@ Detail spec: [docs/milestones/m5.md](./milestones/m5.md)
 - [ ] `--json` output contracts are stable for machine consumption
 - [ ] CLI flows are covered by command-surface tests
 
-### M6 - Auth, Cloud, Preview, and PR
+### M7 - Auth, Cloud, Preview, and PR
 
-Detail spec: [docs/milestones/m6.md](./milestones/m6.md)
+Detail spec: [docs/milestones/m7.md](./milestones/m7.md)
 
 - [ ] Auth and organization-aware cloud data flow are implemented
 - [ ] Repository linking and GitHub App integration are operational
@@ -112,14 +112,20 @@ Detail spec: [docs/milestones/m6.md](./milestones/m6.md)
 - [ ] PR creation path works from desktop and CLI surfaces
 - [ ] RBAC and cloud flow tests pass
 
-### M7 - Cloud Lifecycle Production-Ready
+### M8 - Cloud Lifecycle Production-Ready
 
-Detail spec: [docs/milestones/m7.md](./milestones/m7.md)
+Detail spec: [docs/milestones/m8.md](./milestones/m8.md)
 
 - [ ] Cloud sleep/wake lifecycle is implemented with restore semantics
 - [ ] Cloud destroy guarantees cleanup and revocation
 - [ ] TTL sweeper and org quota enforcement are active
 - [ ] Cloud lifecycle reliability and policy tests pass
+
+## Backlog
+
+Backlog items are intentionally out of milestone sequencing and should not block active milestone work.
+
+- Lifecycle-native agent workspace, native runtime/tool architecture, and attachment-first center panel: [agent-workspace.md](./backlog/agent-workspace.md)
 
 ## Cross-Milestone Standards (Always On)
 

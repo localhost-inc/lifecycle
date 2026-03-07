@@ -260,6 +260,9 @@ pub enum LifecycleError {
     #[error("Terminal attach failed: {0}")]
     AttachFailed(String),
 
+    #[error("Attachment persistence failed: {0}")]
+    AttachmentPersistenceFailed(String),
+
     #[error("IO error: {0}")]
     Io(String),
 }

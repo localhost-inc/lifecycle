@@ -1,6 +1,6 @@
 # Lifecycle Vision
 
-Lifecycle is the control plane for development workspace lifecycle.
+Lifecycle is the control plane for development workspace lifecycle and collaborative agent work.
 
 It gives developers a fast path from repository to running workspace, then from local iteration to shareable cloud collaboration, without changing the runtime contract.
 
@@ -24,6 +24,7 @@ Lifecycle should make workspace operations boring:
 3. Local-first operation should work without auth or network.
 4. Cloud collaboration should be an upgrade path, not a prerequisite.
 5. The system should be agent-agnostic infrastructure: where agents run, not which agent to use.
+6. Agent-agnostic does not mean terminal-only: Lifecycle can provide its own collaborative agent surface while keeping runtimes pluggable.
 
 ## Product Promise
 
@@ -39,7 +40,7 @@ Lifecycle aims to deliver calm velocity:
 1. Open desktop app.
 2. Add project.
 3. Start workspace.
-4. Attach terminal and run an agent.
+4. Open the workspace surface and, when needed, drop into a raw terminal.
 5. Optionally sign in and fork to cloud.
 6. Share preview.
 7. Create PR.
@@ -73,7 +74,7 @@ A successful V1 means:
 
 1. Net-new users can reach a running local workspace quickly.
 2. Workspace lifecycle transitions are explicit, tested, and observable.
-3. Terminal sessions are first-class in the desktop app.
+3. Workspace-native controls and raw terminal sessions are both first-class in the desktop app.
 4. Cloud sharing and PR handoff work without breaking local-first flows.
 5. Failures are typed with clear recovery guidance.
 
@@ -89,7 +90,7 @@ A successful V1 means:
 
 1. Full IDE replacement.
 2. Forcing cloud auth for local workflows.
-3. Building an opinionated coding-agent product.
+3. Replacing every external agent runtime with a single Lifecycle-only engine in V1.
 
 ## Delivery Alignment
 

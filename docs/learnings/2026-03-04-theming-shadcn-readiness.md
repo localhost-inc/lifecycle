@@ -21,10 +21,10 @@ We need frontend foundations that scale beyond `dark/light/system` into named ID
 ## Impact on milestones
 
 - M3 now includes UI foundation readiness tasks for theme architecture and shared UI packaging.
-- M4/M6 can build operations and cloud UI on semantic tokens instead of one-off palette choices.
+- Deferred agent workspace work plus M5/M7 can build operations and cloud UI on semantic tokens instead of one-off palette choices.
 
 ## Follow-up actions
 
 1. Add initial shadcn primitives to `packages/ui` (`button`, `tabs`, `dialog`, `scroll-area`, `tooltip`).
 2. Move remaining desktop hardcoded color utilities toward semantic token usage.
-3. Add persisted organization-level theme preference in cloud mode (M6+).
+3. Add persisted organization-level theme preference in cloud mode (M7+).

@@ -20,7 +20,8 @@ Using default decorated windows keeps native titlebar styling separate from app 
 ## Impact on milestones
 
 - M3 desktop shell now has theme-aware top chrome structure that can host terminal-level navigation controls.
-- M6 org theming can extend into top chrome by changing semantic tokens only.
+- Deferred agent workspace navigation can extend into the same top chrome without reworking the window model.
+- M7 org theming can extend into top chrome by changing semantic tokens only.
 
 ## Follow-up actions
 

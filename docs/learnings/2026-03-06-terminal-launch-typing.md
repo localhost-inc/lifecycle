@@ -22,7 +22,7 @@ Use an explicit terminal launch discriminator plus optional harness metadata:
 ## Milestone Impact
 
 1. M3: terminal creation is cleaner and easier to extend beyond shell-vs-harness without changing attach/write/resize semantics.
-2. M6: cloud terminals can reuse the same launch identity while resolving provider-specific process details inside the cloud provider.
+2. M7: cloud terminals can reuse the same launch identity while resolving provider-specific process details inside the cloud provider.
 
 ## Follow-Up Actions
 

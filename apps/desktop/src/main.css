@@ -17,3 +17,22 @@ body {
 * {
   border-color: var(--border);
 }
+
+.terminal-host {
+  background-color: var(--terminal-surface-background, var(--background));
+  contain: paint;
+  isolation: isolate;
+}
+
+.terminal-host .xterm,
+.terminal-host .xterm .xterm-screen,
+.terminal-host .xterm .xterm-viewport {
+  background-color: var(--terminal-surface-background, var(--background));
+}
+
+.terminal-host[data-terminal-renderer="dom"] .xterm,
+.terminal-host[data-terminal-renderer="dom"] .xterm .xterm-screen,
+.terminal-host[data-terminal-renderer="dom"] .xterm .xterm-rows {
+  -webkit-font-smoothing: antialiased;
+  backface-visibility: hidden;
+}

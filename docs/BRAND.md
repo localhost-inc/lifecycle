@@ -78,6 +78,10 @@
 - Prefer asymmetry and scale contrast over grid-like sameness
 - Information on surfaces > boxing everything in cards
 
+### Component Language
+
+See [DESIGN_LANGUAGE.md](./DESIGN_LANGUAGE.md) for concrete component-level rules (surfaces, buttons, forms, data display, interaction states).
+
 ### Design Principles
 
 1. Restraint over decoration -- when choosing between adding and removing, remove

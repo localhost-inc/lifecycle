@@ -165,6 +165,24 @@ pub async fn write_terminal(
 }
 
 #[tauri::command]
+pub async fn save_terminal_attachment(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    file_name: String,
+    media_type: Option<String>,
+    base64_data: String,
+) -> Result<super::terminal::SavedTerminalAttachment, LifecycleError> {
+    super::terminal::save_terminal_attachment(
+        db_path,
+        workspace_id,
+        file_name,
+        media_type,
+        base64_data,
+    )
+    .await
+}
+
+#[tauri::command]
 pub async fn resize_terminal(
     terminal_supervisors: State<'_, TerminalSupervisorMap>,
     terminal_id: String,
