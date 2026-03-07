@@ -1,10 +1,9 @@
 import type { ProjectRecord } from "@lifecycle/contracts";
-import type { ManifestStatus } from "../api/projects";
-import { StatusBadge } from "./status-badge";
+import { CollapsibleTrigger } from "@lifecycle/ui";
+import { FolderClosed, FolderOpen, Plus } from "lucide-react";
 
 interface ProjectItemProps {
   project: ProjectRecord;
-  manifestState: ManifestStatus["state"];
   selected: boolean;
   onSelect: () => void;
   onCreateWorkspace: () => void;
@@ -12,43 +11,42 @@ interface ProjectItemProps {
 
 export function ProjectItem({
   project,
-  manifestState,
   selected,
   onSelect,
   onCreateWorkspace,
 }: ProjectItemProps) {
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className={`group flex w-full items-center justify-between rounded-md px-3 py-2 text-left transition-colors ${
-        selected
-          ? "bg-[var(--surface-selected)] text-[var(--foreground)]"
-          : "text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)]"
-      }`}
-    >
-      <span className="truncate text-sm font-medium">{project.name}</span>
-      <div className="flex items-center gap-1.5">
-        <StatusBadge state={manifestState} />
-        <span
-          role="button"
-          tabIndex={0}
-          onClick={(e) => {
+    <div className="group flex w-full items-center">
+      <CollapsibleTrigger
+        onClick={onSelect}
+        className={`flex flex-1 items-center gap-2 px-2 py-1 text-left transition-colors ${
+          selected
+            ? "text-[var(--foreground)]"
+            : "text-[var(--sidebar-muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
+        }`}
+      >
+        <FolderClosed size={14} className="shrink-0 group-data-[state=open]/project:hidden" />
+        <FolderOpen size={14} className="hidden shrink-0 group-data-[state=open]/project:block" />
+        <span className="truncate text-[13px] font-medium">{project.name}</span>
+      </CollapsibleTrigger>
+      <span
+        role="button"
+        tabIndex={0}
+        onClick={(e) => {
+          e.stopPropagation();
+          onCreateWorkspace();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
             e.stopPropagation();
             onCreateWorkspace();
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.stopPropagation();
-              onCreateWorkspace();
-            }
-          }}
-          className="flex h-5 w-5 items-center justify-center text-[var(--muted-foreground)] opacity-0 transition-opacity hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] group-hover:opacity-100"
-          title="New workspace"
-        >
-          +
-        </span>
-      </div>
-    </button>
+          }
+        }}
+        className="mr-2 flex h-5 w-5 items-center justify-center text-[var(--muted-foreground)] opacity-0 transition-all hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] group-hover:opacity-100"
+        title="New workspace"
+      >
+        <Plus size={12} />
+      </span>
+    </div>
   );
 }

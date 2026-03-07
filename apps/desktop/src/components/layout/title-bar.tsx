@@ -1,18 +1,11 @@
 import type { WorkspaceStatus } from "@lifecycle/contracts";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import {
-  useCallback,
-  useEffect,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent,
-} from "react";
+import { useCallback, useEffect, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useHistoryAvailability } from "../../app/history-stack";
 import { WorkspaceBadge } from "../../features/workspaces/components/workspace-badge";
 import type { WorkspaceRow } from "../../features/workspaces/api";
-
-const SIDEBAR_WIDTH_CLASS = "w-64";
 
 interface TitleBarProps {
   selectedWorkspace?: WorkspaceRow | null;
@@ -86,57 +79,13 @@ export function TitleBar({ selectedWorkspace }: TitleBarProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [goBack, goForward]);
 
-  const onBackKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      goBack();
-    }
-  };
-
-  const onForwardKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      goForward();
-    }
-  };
-
   return (
     <header
       data-tauri-drag-region
       onMouseDown={handleMouseDown}
-      className="flex h-11 shrink-0 border-b border-[var(--border)]"
+      className="flex h-11 shrink-0 items-center border-b border-[var(--border)] bg-[var(--background)] px-4 text-[11px] text-[var(--muted-foreground)]"
     >
-      <div
-        data-tauri-drag-region
-        className={`${SIDEBAR_WIDTH_CLASS} flex items-center justify-end border-r border-[var(--border)] bg-[var(--panel)] pr-3`}
-      >
-        <div data-no-drag className="flex items-center gap-1">
-          <button
-            type="button"
-            aria-label="Go back"
-            onClick={goBack}
-            onKeyDown={onBackKeyDown}
-            disabled={!canGoBack}
-            className="h-6 w-6 rounded text-sm text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            ←
-          </button>
-          <button
-            type="button"
-            aria-label="Go forward"
-            onClick={goForward}
-            onKeyDown={onForwardKeyDown}
-            disabled={!canGoForward}
-            className="h-6 w-6 rounded text-sm text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            →
-          </button>
-        </div>
-      </div>
-      <div
-        data-tauri-drag-region
-        className="flex flex-1 items-center gap-3 bg-[var(--background)] px-4 text-[11px] text-[var(--muted-foreground)]"
-      >
+      <div data-tauri-drag-region className="flex min-w-0 flex-1 items-center gap-3">
         {selectedWorkspace && (
           <div data-no-drag className="flex min-w-0 items-center gap-2.5">
             <span className="font-mono text-[12px] font-medium text-[var(--foreground)]">

@@ -2,6 +2,7 @@ import type {
   TerminalFailureReason,
   TerminalStatus,
   WorkspaceFailureReason,
+  WorkspaceServiceStatusReason,
   WorkspaceServiceStatus,
   WorkspaceStatus,
 } from "@lifecycle/contracts";
@@ -33,7 +34,7 @@ export type StoreEvent =
       workspaceId: string;
       serviceName: string;
       status: WorkspaceServiceStatus;
-      statusReason: string | null;
+      statusReason: WorkspaceServiceStatusReason | null;
     }
   | {
       kind: "workspace-setup-progress";

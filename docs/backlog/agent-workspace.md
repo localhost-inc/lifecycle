@@ -37,6 +37,7 @@ The workspace center panel becomes a Lifecycle-native agent workspace instead of
 1. Lifecycle owns the primary agent workspace UI, session model, attachment model, task model, approvals, artifacts, and persistence.
 2. Terminal sessions remain available as shell/debug surfaces, but are not the source of truth for the center panel.
 3. `workspace` remains the root execution noun. The agent domain is namespaced as `agent_*` at database/API/event boundaries and always references `workspace_id`.
+4. The center panel should sit on the shared workspace-surface contract: provider-backed runtime tabs plus client-owned document tabs.
 
 ### Core data flow
 
@@ -113,7 +114,7 @@ user input
    - `message-mapper.ts`: persisted record -> UI message mapping
    - `components/*`: center panel, composer, attachment tray, screenshot action, task pane, approval cards, artifact pane, session switcher
    - `transport.ts`: `LifecycleChatTransport`
-3. `WorkspacePanel` should compose `AgentWorkspaceSurface` as the main center surface and keep terminal entry points visible but secondary.
+3. `WorkspacePanel` should compose `AgentWorkspaceSurface` as the main center surface and keep terminal entry points visible but secondary through the shared workspace-surface tab model.
 4. The store layer should extend the existing `StoreClient` pattern rather than introducing a second query/cache system.
 
 ### Surface shape

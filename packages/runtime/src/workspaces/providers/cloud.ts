@@ -1,4 +1,11 @@
-import type { WorkspaceServiceRecord } from "@lifecycle/contracts";
+import type {
+  GitCommitResult,
+  GitDiffResult,
+  GitLogEntry,
+  GitPushResult,
+  GitStatusResult,
+  WorkspaceServiceRecord,
+} from "@lifecycle/contracts";
 import type {
   WorkspaceProviderAttachTerminalInput,
   WorkspaceProviderAttachTerminalResult,
@@ -6,6 +13,7 @@ import type {
   WorkspaceProviderCreateTerminalInput,
   WorkspaceProviderCreateInput,
   WorkspaceProviderCreateResult,
+  WorkspaceProviderGitDiffInput,
   WorkspaceProviderHealthResult,
   WorkspaceProviderStartInput,
 } from "../../provider";
@@ -30,6 +38,13 @@ export interface CloudWorkspaceClient {
   detachTerminal(terminalId: string): Promise<void>;
   killTerminal(terminalId: string): Promise<void>;
   exposePort(workspaceId: string, serviceName: string, port: number): Promise<string | null>;
+  getGitStatus(workspaceId: string): Promise<GitStatusResult>;
+  getGitDiff(input: WorkspaceProviderGitDiffInput): Promise<GitDiffResult>;
+  listGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]>;
+  stageGitFiles(workspaceId: string, filePaths: string[]): Promise<void>;
+  unstageGitFiles(workspaceId: string, filePaths: string[]): Promise<void>;
+  commitGit(workspaceId: string, message: string): Promise<GitCommitResult>;
+  pushGit(workspaceId: string): Promise<GitPushResult>;
 }
 
 export class CloudWorkspaceProvider implements WorkspaceProvider {
@@ -101,5 +116,33 @@ export class CloudWorkspaceProvider implements WorkspaceProvider {
 
   exposePort(workspaceId: string, serviceName: string, port: number): Promise<string | null> {
     return this.client.exposePort(workspaceId, serviceName, port);
+  }
+
+  getGitStatus(workspaceId: string): Promise<GitStatusResult> {
+    return this.client.getGitStatus(workspaceId);
+  }
+
+  getGitDiff(input: WorkspaceProviderGitDiffInput): Promise<GitDiffResult> {
+    return this.client.getGitDiff(input);
+  }
+
+  listGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]> {
+    return this.client.listGitLog(workspaceId, limit);
+  }
+
+  stageGitFiles(workspaceId: string, filePaths: string[]): Promise<void> {
+    return this.client.stageGitFiles(workspaceId, filePaths);
+  }
+
+  unstageGitFiles(workspaceId: string, filePaths: string[]): Promise<void> {
+    return this.client.unstageGitFiles(workspaceId, filePaths);
+  }
+
+  commitGit(workspaceId: string, message: string): Promise<GitCommitResult> {
+    return this.client.commitGit(workspaceId, message);
+  }
+
+  pushGit(workspaceId: string): Promise<GitPushResult> {
+    return this.client.pushGit(workspaceId);
   }
 }

@@ -17,6 +17,19 @@ function createMockSource() {
     async getWorkspaceServices() {
       return [];
     },
+    async getWorkspaceGitLog() {
+      return [];
+    },
+    async getWorkspaceGitStatus() {
+      return {
+        ahead: 0,
+        behind: 0,
+        branch: null,
+        files: [],
+        headSha: null,
+        upstream: null,
+      };
+    },
     async listWorkspaceTerminals() {
       return [] satisfies TerminalRow[];
     },

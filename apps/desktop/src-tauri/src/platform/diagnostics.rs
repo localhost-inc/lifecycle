@@ -29,7 +29,14 @@ pub fn initialize(app_data_dir: &Path) -> PathBuf {
         std::panic::set_hook(Box::new(move |panic_info| {
             let location = panic_info
                 .location()
-                .map(|location| format!("{}:{}:{}", location.file(), location.line(), location.column()))
+                .map(|location| {
+                    format!(
+                        "{}:{}:{}",
+                        location.file(),
+                        location.line(),
+                        location.column()
+                    )
+                })
                 .unwrap_or_else(|| "unknown".to_string());
             let payload = panic_info
                 .payload()

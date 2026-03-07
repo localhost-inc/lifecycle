@@ -185,10 +185,8 @@ pub async fn save_terminal_attachment(
 }
 
 #[tauri::command]
-pub async fn native_terminal_capabilities() -> Result<
-    super::terminal::NativeTerminalCapabilities,
-    LifecycleError,
-> {
+pub async fn native_terminal_capabilities(
+) -> Result<super::terminal::NativeTerminalCapabilities, LifecycleError> {
     Ok(super::terminal::native_terminal_capabilities())
 }
 
@@ -263,4 +261,93 @@ pub async fn kill_terminal(
     terminal_id: String,
 ) -> Result<(), LifecycleError> {
     super::terminal::kill_terminal(app, db_path, terminal_supervisors, terminal_id).await
+}
+
+#[tauri::command]
+pub async fn get_workspace_git_status(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+) -> Result<crate::platform::git::status::GitStatusResult, LifecycleError> {
+    super::git::get_workspace_git_status(&db_path.0, workspace_id).await
+}
+
+#[tauri::command]
+pub async fn get_workspace_git_diff(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    file_path: String,
+    scope: String,
+) -> Result<crate::platform::git::status::GitDiffResult, LifecycleError> {
+    super::git::get_workspace_git_diff(&db_path.0, workspace_id, file_path, scope).await
+}
+
+#[tauri::command]
+pub async fn list_workspace_git_log(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    limit: u32,
+) -> Result<Vec<crate::platform::git::status::GitLogEntry>, LifecycleError> {
+    super::git::list_workspace_git_log(&db_path.0, workspace_id, limit).await
+}
+
+#[tauri::command]
+pub async fn get_workspace_git_base_ref(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+) -> Result<Option<String>, LifecycleError> {
+    super::git::get_workspace_git_base_ref(&db_path.0, workspace_id).await
+}
+
+#[tauri::command]
+pub async fn get_workspace_git_commit_patch(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    sha: String,
+) -> Result<crate::platform::git::status::GitCommitDiffResult, LifecycleError> {
+    super::git::get_workspace_git_commit_patch(&db_path.0, workspace_id, sha).await
+}
+
+#[tauri::command]
+pub fn open_workspace_file(
+    app: AppHandle,
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    file_path: String,
+) -> Result<(), LifecycleError> {
+    super::git::open_workspace_file(&app, &db_path.0, workspace_id, file_path)
+}
+
+#[tauri::command]
+pub async fn stage_workspace_git_files(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    file_paths: Vec<String>,
+) -> Result<(), LifecycleError> {
+    super::git::stage_workspace_git_files(&db_path.0, workspace_id, file_paths).await
+}
+
+#[tauri::command]
+pub async fn unstage_workspace_git_files(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    file_paths: Vec<String>,
+) -> Result<(), LifecycleError> {
+    super::git::unstage_workspace_git_files(&db_path.0, workspace_id, file_paths).await
+}
+
+#[tauri::command]
+pub async fn commit_workspace_git(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    message: String,
+) -> Result<crate::platform::git::status::GitCommitResult, LifecycleError> {
+    super::git::commit_workspace_git(&db_path.0, workspace_id, message).await
+}
+
+#[tauri::command]
+pub async fn push_workspace_git(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+) -> Result<crate::platform::git::status::GitPushResult, LifecycleError> {
+    super::git::push_workspace_git(&db_path.0, workspace_id).await
 }

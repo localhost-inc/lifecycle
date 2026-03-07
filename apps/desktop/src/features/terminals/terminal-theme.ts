@@ -248,7 +248,7 @@ export function readTerminalThemeTokens(
     background: readToken(
       styles,
       "--terminal-surface-background",
-      readToken(styles, "--panel", fallback.background),
+      readToken(styles, "--background", fallback.background),
     ),
     foreground: readToken(
       styles,

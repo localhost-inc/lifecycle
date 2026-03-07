@@ -263,6 +263,9 @@ pub enum LifecycleError {
     #[error("Attachment persistence failed: {0}")]
     AttachmentPersistenceFailed(String),
 
+    #[error("Git operation failed during {operation}: {reason}")]
+    GitOperationFailed { operation: String, reason: String },
+
     #[error("IO error: {0}")]
     Io(String),
 }

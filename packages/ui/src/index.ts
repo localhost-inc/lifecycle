@@ -1,4 +1,5 @@
 export { cn } from "./lib/cn";
+export { Collapsible, CollapsibleTrigger, CollapsibleContent } from "./components/collapsible";
 export {
   themePresetOptions,
   themeAppearanceOptions,

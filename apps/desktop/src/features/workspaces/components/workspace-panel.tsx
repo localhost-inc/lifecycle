@@ -1,10 +1,11 @@
-import { useCallback } from "react";
-import type { WorkspaceStatus } from "@lifecycle/contracts";
-import { TerminalWorkspaceSurface } from "../../terminals/components/terminal-workspace-surface";
+import type { GitDiffScope, GitLogEntry } from "@lifecycle/contracts";
+import { createPortal } from "react-dom";
+import { useCallback, useState } from "react";
 import type { ManifestStatus } from "../../projects/api/projects";
-import { WorkspaceSidePanel } from "./workspace-side-panel";
 import { ServiceIndicator } from "./service-indicator";
 import { SetupProgress } from "./setup-progress";
+import { WorkspaceSidebar } from "./workspace-sidebar";
+import { WorkspaceSurface } from "./workspace-surface";
 import type { WorkspaceRow } from "../api";
 import { startServices, stopWorkspace } from "../api";
 import { useWorkspaceServices, useWorkspaceSetup } from "../hooks";
@@ -25,11 +26,25 @@ export function workspaceSupportsTerminalInteraction(
 }
 
 export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProps) {
+  const [openDocumentRequest, setOpenDocumentRequest] = useState<
+    | {
+        filePath: string;
+        id: string;
+        kind: "file-diff";
+        scope: GitDiffScope;
+      }
+    | {
+        commit: GitLogEntry;
+        id: string;
+        kind: "commit-diff";
+      }
+    | null
+  >(null);
   const hasManifest = manifestStatus?.state === "valid";
   const config = hasManifest ? manifestStatus.result.config : null;
   const servicesQuery = useWorkspaceServices(workspace.id);
   const setupQuery = useWorkspaceSetup(workspace.id);
-  const status = workspace.status as WorkspaceStatus;
+  const status = workspace.status;
   const failureReason = workspace.failure_reason;
   const services = servicesQuery.data ?? [];
   const setupSteps = setupQuery.data ?? [];
@@ -83,6 +98,23 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
   );
 
   const hasNotices = showSetup || showServices || (status === "failed" && Boolean(failureReason));
+  const handleOpenDiff = useCallback((filePath: string, scope: GitDiffScope) => {
+    setOpenDocumentRequest({
+      filePath,
+      id: crypto.randomUUID(),
+      kind: "file-diff",
+      scope,
+    });
+  }, []);
+  const handleOpenCommitDiff = useCallback((entry: GitLogEntry) => {
+    setOpenDocumentRequest({
+      commit: entry,
+      id: crypto.randomUUID(),
+      kind: "commit-diff",
+    });
+  }, []);
+  const rightRailRoot =
+    typeof document === "undefined" ? null : document.getElementById("workspace-right-rail");
 
   const mainContent = supportsTerminalInteraction ? (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -121,7 +153,11 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
         </div>
       )}
       <div className="flex min-h-0 flex-1 flex-col">
-        <TerminalWorkspaceSurface workspaceId={workspace.id} />
+        <WorkspaceSurface
+          key={workspace.id}
+          openDocumentRequest={openDocumentRequest}
+          workspaceId={workspace.id}
+        />
       </div>
     </div>
   ) : (
@@ -176,7 +212,26 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden">
       <div className="flex min-w-0 flex-1 flex-col">{mainContent}</div>
-      <WorkspaceSidePanel hasManifest={hasManifest} services={services} workspace={workspace} />
+      {rightRailRoot ? (
+        createPortal(
+          <WorkspaceSidebar
+            hasManifest={hasManifest}
+            onOpenDiff={handleOpenDiff}
+            onOpenCommitDiff={handleOpenCommitDiff}
+            services={services}
+            workspace={workspace}
+          />,
+          rightRailRoot,
+        )
+      ) : (
+        <WorkspaceSidebar
+          hasManifest={hasManifest}
+          onOpenDiff={handleOpenDiff}
+          onOpenCommitDiff={handleOpenCommitDiff}
+          services={services}
+          workspace={workspace}
+        />
+      )}
     </div>
   );
 }

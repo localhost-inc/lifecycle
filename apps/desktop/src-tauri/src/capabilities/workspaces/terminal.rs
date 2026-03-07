@@ -1,7 +1,5 @@
 use crate::platform::db::{open_db, DbPath};
-use crate::platform::native_terminal::{
-    self, NativeTerminalColorScheme, NativeTerminalFrame,
-};
+use crate::platform::native_terminal::{self, NativeTerminalColorScheme, NativeTerminalFrame};
 use crate::platform::runtime::terminal::{
     TerminalExitOutcome, TerminalStreamChunk, TerminalSupervisor,
 };
@@ -209,8 +207,14 @@ pub async fn attach_terminal(
         if terminal.status != TerminalStatus::Finished.as_str()
             && terminal.status != TerminalStatus::Failed.as_str()
         {
-            terminal =
-                update_terminal_state(&db, &terminal_id, TerminalStatus::Active, None, None, false)?;
+            terminal = update_terminal_state(
+                &db,
+                &terminal_id,
+                TerminalStatus::Active,
+                None,
+                None,
+                false,
+            )?;
             emit_terminal_status(&app, &terminal);
         }
 
@@ -334,16 +338,11 @@ fn build_native_terminal_theme_config(
 
     let background = validate_native_terminal_theme_value("background", &theme.background)?;
     let foreground = validate_native_terminal_theme_value("foreground", &theme.foreground)?;
-    let cursor_color =
-        validate_native_terminal_theme_value("cursorColor", &theme.cursor_color)?;
-    let selection_background = validate_native_terminal_theme_value(
-        "selectionBackground",
-        &theme.selection_background,
-    )?;
-    let selection_foreground = validate_native_terminal_theme_value(
-        "selectionForeground",
-        &theme.selection_foreground,
-    )?;
+    let cursor_color = validate_native_terminal_theme_value("cursorColor", &theme.cursor_color)?;
+    let selection_background =
+        validate_native_terminal_theme_value("selectionBackground", &theme.selection_background)?;
+    let selection_foreground =
+        validate_native_terminal_theme_value("selectionForeground", &theme.selection_foreground)?;
 
     let mut config_lines = Vec::with_capacity(theme.palette.len() + 8);
     for (index, color) in theme.palette.iter().enumerate() {
@@ -495,8 +494,14 @@ pub async fn hide_native_terminal_surface(
         return Ok(());
     };
     if terminal.status == TerminalStatus::Active.as_str() {
-        let terminal =
-            update_terminal_state(&db, &terminal_id, TerminalStatus::Detached, None, None, false)?;
+        let terminal = update_terminal_state(
+            &db,
+            &terminal_id,
+            TerminalStatus::Detached,
+            None,
+            None,
+            false,
+        )?;
         emit_terminal_status(&app, &terminal);
     }
 
@@ -709,9 +714,7 @@ fn sync_native_terminal_in_webview<T: Send + 'static>(
         .map_err(|error| LifecycleError::AttachFailed(error.to_string()))?;
 
     receiver.recv().map_err(|_| {
-        LifecycleError::AttachFailed(
-            "native terminal webview task did not complete".to_string(),
-        )
+        LifecycleError::AttachFailed("native terminal webview task did not complete".to_string())
     })?
 }
 

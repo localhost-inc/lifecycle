@@ -1,4 +1,11 @@
-import type { WorkspaceServiceRecord } from "@lifecycle/contracts";
+import type {
+  GitCommitResult,
+  GitDiffResult,
+  GitLogEntry,
+  GitPushResult,
+  GitStatusResult,
+  WorkspaceServiceRecord,
+} from "@lifecycle/contracts";
 import type {
   LocalWorkspaceProviderCreateContext,
   WorkspaceProviderAttachTerminalInput,
@@ -7,6 +14,7 @@ import type {
   WorkspaceProviderCreateTerminalInput,
   WorkspaceProviderCreateInput,
   WorkspaceProviderCreateResult,
+  WorkspaceProviderGitDiffInput,
   WorkspaceProviderHealthResult,
   WorkspaceProviderStartInput,
 } from "../../provider";
@@ -131,6 +139,44 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
   ): Promise<string | null> {
     // TODO: M6.
     return null;
+  }
+
+  async getGitStatus(workspaceId: string): Promise<GitStatusResult> {
+    return this.invoke("get_workspace_git_status", { workspaceId }) as Promise<GitStatusResult>;
+  }
+
+  async getGitDiff(input: WorkspaceProviderGitDiffInput): Promise<GitDiffResult> {
+    return this.invoke("get_workspace_git_diff", {
+      workspaceId: input.workspaceId,
+      filePath: input.filePath,
+      scope: input.scope,
+    }) as Promise<GitDiffResult>;
+  }
+
+  async listGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]> {
+    return this.invoke("list_workspace_git_log", {
+      workspaceId,
+      limit,
+    }) as Promise<GitLogEntry[]>;
+  }
+
+  async stageGitFiles(workspaceId: string, filePaths: string[]): Promise<void> {
+    await this.invoke("stage_workspace_git_files", { workspaceId, filePaths });
+  }
+
+  async unstageGitFiles(workspaceId: string, filePaths: string[]): Promise<void> {
+    await this.invoke("unstage_workspace_git_files", { workspaceId, filePaths });
+  }
+
+  async commitGit(workspaceId: string, message: string): Promise<GitCommitResult> {
+    return this.invoke("commit_workspace_git", {
+      workspaceId,
+      message,
+    }) as Promise<GitCommitResult>;
+  }
+
+  async pushGit(workspaceId: string): Promise<GitPushResult> {
+    return this.invoke("push_workspace_git", { workspaceId }) as Promise<GitPushResult>;
   }
 }
 

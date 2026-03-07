@@ -1,4 +1,5 @@
-import type { ProjectRecord } from "@lifecycle/contracts";
+import type { GitLogEntry, GitStatusResult, ProjectRecord } from "@lifecycle/contracts";
+import { getGitLog, getGitStatus } from "../features/git/api";
 import type { ManifestStatus } from "../features/projects/api/projects";
 import type { TerminalRow } from "../features/terminals/api";
 import {
@@ -26,6 +27,8 @@ export interface StoreSource {
   listWorkspacesByProject(): Promise<Record<string, WorkspaceRow[]>>;
   getWorkspace(workspaceId: string): Promise<WorkspaceRow | null>;
   getWorkspaceServices(workspaceId: string): Promise<ServiceRow[]>;
+  getWorkspaceGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]>;
+  getWorkspaceGitStatus(workspaceId: string): Promise<GitStatusResult>;
   listWorkspaceTerminals(workspaceId: string): Promise<TerminalRow[]>;
   getTerminal(terminalId: string): Promise<TerminalRow | null>;
   subscribe(listener: (event: StoreEvent) => void): Promise<() => void>;
@@ -37,6 +40,8 @@ export function createSource(): StoreSource {
     readManifest,
     listWorkspacesByProject,
     getWorkspace: getWorkspaceById,
+    getWorkspaceGitLog: getGitLog,
+    getWorkspaceGitStatus: getGitStatus,
     getWorkspaceServices,
     getTerminal,
     listWorkspaceTerminals,

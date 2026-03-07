@@ -14,7 +14,7 @@ describe("buildTerminalTheme", () => {
         getPropertyValue(name: string) {
           switch (name) {
             case "--terminal-surface-background":
-              return "#111113";
+              return "#09090b";
             case "--terminal-foreground":
               return "#f4f4f5";
             case "--panel":
@@ -31,7 +31,7 @@ describe("buildTerminalTheme", () => {
 
     const tokens = readTerminalThemeTokens({} as HTMLElement, "dark");
 
-    expect(tokens.background).toBe("#111113");
+    expect(tokens.background).toBe("#09090b");
     expect(tokens.foreground).toBe("#f4f4f5");
     expect(tokens.selectionBackground).toBe("#27272a");
   });

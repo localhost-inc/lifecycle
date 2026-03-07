@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod create;
+pub mod git;
 pub mod manifest;
 pub mod query;
 mod shared;

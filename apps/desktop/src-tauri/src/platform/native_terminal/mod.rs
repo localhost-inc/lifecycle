@@ -65,7 +65,10 @@ mod imp {
         fn lifecycle_native_terminal_close(terminal_id: *const c_char) -> bool;
     }
 
-    fn with_error(invoke: impl FnOnce() -> bool, fallback: &'static str) -> Result<(), LifecycleError> {
+    fn with_error(
+        invoke: impl FnOnce() -> bool,
+        fallback: &'static str,
+    ) -> Result<(), LifecycleError> {
         if invoke() {
             return Ok(());
         }
@@ -74,7 +77,9 @@ mod imp {
         let message = if error.is_null() {
             fallback.to_string()
         } else {
-            unsafe { CStr::from_ptr(error) }.to_string_lossy().to_string()
+            unsafe { CStr::from_ptr(error) }
+                .to_string_lossy()
+                .to_string()
         };
 
         Err(LifecycleError::AttachFailed(message))
@@ -194,7 +199,9 @@ mod imp {
         let config = LifecycleNativeTerminalConfig {
             terminal_id: terminal_id.as_ptr(),
             working_directory: working_directory.as_ptr(),
-            command: command.as_ref().map_or(std::ptr::null(), |value| value.as_ptr()),
+            command: command
+                .as_ref()
+                .map_or(std::ptr::null(), |value| value.as_ptr()),
             background_color: background_color.as_ptr(),
             theme_config_path: theme_config_path.as_ptr(),
             x: frame.x,
@@ -216,12 +223,18 @@ mod imp {
 
     pub fn hide_surface(terminal_id: &str) -> Result<(), LifecycleError> {
         let terminal_id = cstring(terminal_id, "terminal id")?;
-        with_error(|| unsafe { lifecycle_native_terminal_hide(terminal_id.as_ptr()) }, "failed to hide native terminal surface")
+        with_error(
+            || unsafe { lifecycle_native_terminal_hide(terminal_id.as_ptr()) },
+            "failed to hide native terminal surface",
+        )
     }
 
     pub fn destroy_surface(terminal_id: &str) -> Result<(), LifecycleError> {
         let terminal_id = cstring(terminal_id, "terminal id")?;
-        with_error(|| unsafe { lifecycle_native_terminal_close(terminal_id.as_ptr()) }, "failed to destroy native terminal surface")
+        with_error(
+            || unsafe { lifecycle_native_terminal_close(terminal_id.as_ptr()) },
+            "failed to destroy native terminal surface",
+        )
     }
 }
 
@@ -274,7 +287,11 @@ pub fn is_available() -> bool {
 }
 
 pub fn initialize(app: tauri::AppHandle, db_path: String) -> Result<(), LifecycleError> {
-    imp::initialize(app, db_path, crate::platform::diagnostics::diagnostic_log_path())
+    imp::initialize(
+        app,
+        db_path,
+        crate::platform::diagnostics::diagnostic_log_path(),
+    )
 }
 
 #[allow(clippy::too_many_arguments)]

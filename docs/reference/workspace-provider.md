@@ -21,6 +21,13 @@ interface WorkspaceProvider {
   detachTerminal(terminal_id) → void
   killTerminal(terminal_id) → void
   exposePort(workspace_id, service, port) → access_url | null
+  getGitStatus(workspace_id) → git_status
+  getGitDiff(workspace_id, file_path, scope) → unified_diff
+  listGitLog(workspace_id, limit) → git_log_entries
+  stageGitFiles(workspace_id, file_paths[]) → void
+  unstageGitFiles(workspace_id, file_paths[]) → void
+  commitGit(workspace_id, message) → commit_result
+  pushGit(workspace_id) → push_result
 }
 ```
 
@@ -42,10 +49,14 @@ Provider-specific runtime detail should not be stuffed into a generic `mode_stat
 Terminal transport is split between control-plane mutations and ordered data streaming.
 
 1. Control-plane operations stay typed and imperative (`create`, `attach`, `write`, `resize`, `detach`, `kill`).
-2. Terminal output is an ordered chunk stream, not a coarse app event.
-3. Local mode should use Tauri `Channel` for PTY output streaming.
-4. Generic app events remain appropriate for terminal metadata/status changes, not high-frequency byte output.
-5. Replay buffers are provider-owned implementation detail as long as attach/replay ordering is preserved.
+2. `writeTerminal(terminal_id, data)` transports terminal input data that has already been encoded by the active terminal surface. Providers should treat it as terminal input bytes/data, not as abstract key events to reinterpret.
+3. Terminal output is an ordered PTY data stream exposed as ordered chunks, not a coarse app event.
+4. Local mode should use Tauri `Channel` for PTY output streaming.
+5. Generic app events remain appropriate for terminal metadata/status changes, not high-frequency byte output.
+6. Replay buffers are provider-owned implementation detail as long as attach/replay ordering is preserved.
+7. Collaborative terminal viewing should attach multiple clients to the same authoritative PTY output stream. Viewer/watch mode consumes output plus replay, while control mode additionally sends input through `writeTerminal`.
+8. Providers must not try to reconstruct remote terminal state by mirroring another user's key events into a separate terminal instance. Shared terminal state comes from the authoritative PTY output stream.
+9. Native terminal renderers that require a locally-owned child process may bridge remote PTYs through a local attach/proxy command, but the authoritative terminal state still belongs to the remote PTY.
 
 ## Mode, Authority, and Aggregation
 
@@ -58,6 +69,23 @@ Terminal transport is split between control-plane mutations and ordered data str
 5. Mixed-mode workspace lists must be aggregated from normalized domain records, not by composing raw storage-specific rows directly in UI code.
 6. Mutations issued from aggregated views must dispatch back to the authoritative provider for the selected workspace.
 7. `mode` is a workspace concern. Do not apply it broadly to unrelated entities unless a concrete execution-boundary need emerges.
+
+## Git Operations Contract
+
+Git operations follow the same authority rule as terminals and lifecycle mutations.
+
+1. Git reads and writes are workspace-scoped provider operations, not raw host-path operations issued from React.
+2. Frontend callers should key git operations by `workspace_id`; the provider resolves the authoritative execution context.
+3. `workspace.mode=local`:
+   - local provider resolves the workspace worktree on the host filesystem and executes git locally
+4. `workspace.mode=cloud`:
+   - cloud provider resolves git state from the cloud sandbox/control plane
+   - local filesystem assumptions do not apply
+5. The public git result types must stay provider-agnostic:
+   - status includes current branch/head plus split index/worktree file state
+   - diff uses explicit `scope` (`working|staged`)
+   - log entries and commit/push results use normalized typed payloads
+6. UI surfaces may hide unsupported git actions per mode until the authoritative provider exists, but the contract shape should not fork.
 
 ## `CloudWorkspaceProvider` (V1)
 

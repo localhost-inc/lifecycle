@@ -4,6 +4,7 @@ import type {
   WorkspaceProvider,
   WorkspaceProviderAttachTerminalResult,
   WorkspaceProviderCreateInput,
+  WorkspaceProviderGitDiffInput,
 } from "./provider";
 import { CloudWorkspaceProvider, type CloudWorkspaceClient } from "./workspaces/providers/cloud";
 import { LocalWorkspaceProvider } from "./workspaces/providers/local";
@@ -26,9 +27,16 @@ describe("workspace provider interface", () => {
       "detachTerminal",
       "killTerminal",
       "exposePort",
+      "getGitStatus",
+      "getGitDiff",
+      "listGitLog",
+      "stageGitFiles",
+      "unstageGitFiles",
+      "commitGit",
+      "pushGit",
     ];
 
-    expect(requiredMethods).toHaveLength(15);
+    expect(requiredMethods).toHaveLength(22);
   });
 
   test("local provider exposes the full contract surface", () => {
@@ -49,6 +57,13 @@ describe("workspace provider interface", () => {
     expect(typeof provider.detachTerminal).toBe("function");
     expect(typeof provider.killTerminal).toBe("function");
     expect(typeof provider.exposePort).toBe("function");
+    expect(typeof provider.getGitStatus).toBe("function");
+    expect(typeof provider.getGitDiff).toBe("function");
+    expect(typeof provider.listGitLog).toBe("function");
+    expect(typeof provider.stageGitFiles).toBe("function");
+    expect(typeof provider.unstageGitFiles).toBe("function");
+    expect(typeof provider.commitGit).toBe("function");
+    expect(typeof provider.pushGit).toBe("function");
   });
 
   test("cloud provider delegates the full contract surface", () => {
@@ -82,6 +97,34 @@ describe("workspace provider interface", () => {
       detachTerminal: async () => {},
       killTerminal: async () => {},
       exposePort: async () => null,
+      getGitStatus: async () => ({
+        branch: "feature/version-control",
+        headSha: "abcdef1234567890",
+        upstream: "origin/feature/version-control",
+        ahead: 1,
+        behind: 0,
+        files: [],
+      }),
+      getGitDiff: async (input: WorkspaceProviderGitDiffInput) => ({
+        scope: input.scope,
+        filePath: input.filePath,
+        patch: "",
+        isBinary: false,
+      }),
+      listGitLog: async () => [],
+      stageGitFiles: async () => {},
+      unstageGitFiles: async () => {},
+      commitGit: async (_workspaceId, message) => ({
+        sha: "abcdef1234567890",
+        shortSha: "abcdef12",
+        message,
+      }),
+      pushGit: async () => ({
+        branch: "feature/version-control",
+        remote: "origin",
+        ahead: 0,
+        behind: 0,
+      }),
     };
     const provider = new CloudWorkspaceProvider(client);
     expect(typeof provider.createWorkspace).toBe("function");
@@ -99,6 +142,13 @@ describe("workspace provider interface", () => {
     expect(typeof provider.detachTerminal).toBe("function");
     expect(typeof provider.killTerminal).toBe("function");
     expect(typeof provider.exposePort).toBe("function");
+    expect(typeof provider.getGitStatus).toBe("function");
+    expect(typeof provider.getGitDiff).toBe("function");
+    expect(typeof provider.listGitLog).toBe("function");
+    expect(typeof provider.stageGitFiles).toBe("function");
+    expect(typeof provider.unstageGitFiles).toBe("function");
+    expect(typeof provider.commitGit).toBe("function");
+    expect(typeof provider.pushGit).toBe("function");
   });
 
   test("create input supports provider-specific context via mode discriminator", () => {
@@ -195,6 +245,117 @@ describe("workspace provider interface", () => {
           harnessSessionId: "session-123",
           cols: 120,
           rows: 32,
+        },
+      },
+    ]);
+  });
+
+  test("local provider forwards git operations by workspace id", async () => {
+    const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
+    const invoke = async (cmd: string, args?: Record<string, unknown>) => {
+      if (args) {
+        calls.push({ cmd, args });
+      } else {
+        calls.push({ cmd });
+      }
+
+      switch (cmd) {
+        case "get_workspace_git_status":
+          return {
+            branch: "feature/version-control",
+            headSha: "abcdef1234567890",
+            upstream: "origin/feature/version-control",
+            ahead: 1,
+            behind: 0,
+            files: [],
+          };
+        case "get_workspace_git_diff":
+          return {
+            scope: String(args?.scope ?? "working"),
+            filePath: String(args?.filePath ?? "src/app.ts"),
+            patch: "",
+            isBinary: false,
+          };
+        case "list_workspace_git_log":
+          return [];
+        case "commit_workspace_git":
+          return {
+            sha: "abcdef1234567890",
+            shortSha: "abcdef12",
+            message: String(args?.message ?? ""),
+          };
+        case "push_workspace_git":
+          return {
+            branch: "feature/version-control",
+            remote: "origin",
+            ahead: 0,
+            behind: 0,
+          };
+        default:
+          return undefined;
+      }
+    };
+    const provider = new LocalWorkspaceProvider(invoke);
+
+    await provider.getGitStatus("ws_1");
+    await provider.getGitDiff({
+      workspaceId: "ws_1",
+      filePath: "src/app.ts",
+      scope: "working",
+    });
+    await provider.listGitLog("ws_1", 25);
+    await provider.stageGitFiles("ws_1", ["src/app.ts"]);
+    await provider.unstageGitFiles("ws_1", ["src/app.ts"]);
+    await provider.commitGit("ws_1", "feat: add version control");
+    await provider.pushGit("ws_1");
+
+    expect(calls).toEqual([
+      {
+        cmd: "get_workspace_git_status",
+        args: {
+          workspaceId: "ws_1",
+        },
+      },
+      {
+        cmd: "get_workspace_git_diff",
+        args: {
+          workspaceId: "ws_1",
+          filePath: "src/app.ts",
+          scope: "working",
+        },
+      },
+      {
+        cmd: "list_workspace_git_log",
+        args: {
+          workspaceId: "ws_1",
+          limit: 25,
+        },
+      },
+      {
+        cmd: "stage_workspace_git_files",
+        args: {
+          workspaceId: "ws_1",
+          filePaths: ["src/app.ts"],
+        },
+      },
+      {
+        cmd: "unstage_workspace_git_files",
+        args: {
+          workspaceId: "ws_1",
+          filePaths: ["src/app.ts"],
+        },
+      },
+      {
+        cmd: "commit_workspace_git",
+        args: {
+          workspaceId: "ws_1",
+          message: "feat: add version control",
+        },
+      },
+      {
+        cmd: "push_workspace_git",
+        args: {
+          workspaceId: "ws_1",
         },
       },
     ]);

@@ -73,6 +73,16 @@ pub fn run() {
             capabilities::workspaces::commands::resize_terminal,
             capabilities::workspaces::commands::detach_terminal,
             capabilities::workspaces::commands::kill_terminal,
+            capabilities::workspaces::commands::get_workspace_git_status,
+            capabilities::workspaces::commands::get_workspace_git_diff,
+            capabilities::workspaces::commands::list_workspace_git_log,
+            capabilities::workspaces::commands::get_workspace_git_base_ref,
+            capabilities::workspaces::commands::get_workspace_git_commit_patch,
+            capabilities::workspaces::commands::open_workspace_file,
+            capabilities::workspaces::commands::stage_workspace_git_files,
+            capabilities::workspaces::commands::unstage_workspace_git_files,
+            capabilities::workspaces::commands::commit_workspace_git,
+            capabilities::workspaces::commands::push_workspace_git,
         ])
         .run(tauri::generate_context!());
 

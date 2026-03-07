@@ -1,4 +1,14 @@
-import type { TerminalRecord, WorkspaceRecord, WorkspaceServiceRecord } from "@lifecycle/contracts";
+import type {
+  GitCommitResult,
+  GitDiffResult,
+  GitDiffScope,
+  GitLogEntry,
+  GitPushResult,
+  GitStatusResult,
+  TerminalRecord,
+  WorkspaceRecord,
+  WorkspaceServiceRecord,
+} from "@lifecycle/contracts";
 
 export interface LocalWorkspaceProviderCreateContext {
   mode: "local";
@@ -64,6 +74,12 @@ export interface WorkspaceProviderAttachTerminalResult {
   replayCursor: string | null;
 }
 
+export interface WorkspaceProviderGitDiffInput {
+  workspaceId: string;
+  filePath: string;
+  scope: GitDiffScope;
+}
+
 export interface WorkspaceProvider {
   createWorkspace(input: WorkspaceProviderCreateInput): Promise<WorkspaceProviderCreateResult>;
   startServices(input: WorkspaceProviderStartInput): Promise<WorkspaceServiceRecord[]>;
@@ -84,4 +100,11 @@ export interface WorkspaceProvider {
   detachTerminal(terminalId: string): Promise<void>;
   killTerminal(terminalId: string): Promise<void>;
   exposePort(workspaceId: string, serviceName: string, port: number): Promise<string | null>;
+  getGitStatus(workspaceId: string): Promise<GitStatusResult>;
+  getGitDiff(input: WorkspaceProviderGitDiffInput): Promise<GitDiffResult>;
+  listGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]>;
+  stageGitFiles(workspaceId: string, filePaths: string[]): Promise<void>;
+  unstageGitFiles(workspaceId: string, filePaths: string[]): Promise<void>;
+  commitGit(workspaceId: string, message: string): Promise<GitCommitResult>;
+  pushGit(workspaceId: string): Promise<GitPushResult>;
 }

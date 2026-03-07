@@ -72,9 +72,10 @@ fn column_exists(conn: &rusqlite::Connection, table: &str, column: &str) -> bool
 fn reconcile_ephemeral_terminals(conn: &rusqlite::Connection) -> Result<(), LifecycleError> {
     conn.execute(
         "UPDATE terminal
-         SET status = 'failed',
-             failure_reason = COALESCE(failure_reason, 'unknown'),
-             ended_at = COALESCE(ended_at, datetime('now')),
+         SET status = 'sleeping',
+             failure_reason = NULL,
+             exit_code = NULL,
+             ended_at = NULL,
              last_active_at = datetime('now')
          WHERE status IN ('active', 'detached', 'sleeping')",
         [],
@@ -189,14 +190,14 @@ mod tests {
 
         assert_eq!(values.len(), 3);
         assert_eq!(values[0].0, "terminal_active");
-        assert_eq!(values[0].1, "failed");
-        assert_eq!(values[0].2.as_deref(), Some("unknown"));
-        assert!(values[0].3.is_some());
+        assert_eq!(values[0].1, "sleeping");
+        assert!(values[0].2.is_none());
+        assert!(values[0].3.is_none());
 
         assert_eq!(values[1].0, "terminal_detached");
-        assert_eq!(values[1].1, "failed");
-        assert_eq!(values[1].2.as_deref(), Some("unknown"));
-        assert!(values[1].3.is_some());
+        assert_eq!(values[1].1, "sleeping");
+        assert!(values[1].2.is_none());
+        assert!(values[1].3.is_none());
 
         assert_eq!(values[2].0, "terminal_finished");
         assert_eq!(values[2].1, "finished");

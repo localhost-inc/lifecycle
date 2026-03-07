@@ -22,3 +22,22 @@ export function formatRelativeTime(iso: string): string {
   const d = new Date(iso);
   return `${shortMonth[d.getMonth()]} ${d.getDate()}`;
 }
+
+export function formatCompactRelativeTime(iso: string): string {
+  if (!iso) return "";
+
+  const diff = Date.now() - new Date(iso).getTime();
+
+  if (diff < 0) {
+    const d = new Date(iso);
+    return `${shortMonth[d.getMonth()]} ${d.getDate()}`;
+  }
+
+  if (diff < MINUTE) return "now";
+  if (diff < HOUR) return `${Math.floor(diff / MINUTE)}m`;
+  if (diff < DAY) return `${Math.floor(diff / HOUR)}h`;
+  if (diff < 7 * DAY) return `${Math.floor(diff / DAY)}d`;
+
+  const d = new Date(iso);
+  return `${shortMonth[d.getMonth()]} ${d.getDate()}`;
+}

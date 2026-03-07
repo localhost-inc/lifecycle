@@ -21,6 +21,10 @@ For keyboard input, the embedded bridge also needs to honor `ghostty_surface_key
 
 The bigger keyboard regression was architectural: ordinary printable typing was being routed through `ghostty_surface_text(...)`. Embedded Ghostty treats that API like clipboard paste input, not like a normal keystroke. Raw-mode TUIs can sometimes appear to tolerate that, but canonical shell echo depends on ordinary printable keys flowing through `ghostty_surface_key(...)` with the translated `NSEvent` text attached. `ghostty_surface_text(...)` should stay reserved for actual paste-style input paths.
 
+This also affects any future remote terminal transport. Terminal input should be encoded at the active terminal surface and sent onward as terminal input data, not reconstructed remotely from abstract key events. For shared sessions, the authoritative state is the PTY output stream. A collaborator watching a remote terminal should see the remote PTY's output and replay stream, not a second local terminal trying to imitate another user's keystrokes.
+
+For native Ghostty specifically, the embedding contract is process-oriented today: Lifecycle mounts a Ghostty surface by giving it a working directory and command to run. That makes remote watch/control viable through a local attach/proxy command inside the native surface, but not through a direct "feed arbitrary remote PTY output bytes into this NSView" API.
+
 `tauri dev` does not preserve useful context when the desktop child exits from native code. If the app aborts or dies from an uncaught native exception, the dev loop usually only reports that `target/debug/Lifecycle` exited with status `1`. Native desktop work therefore needs a durable diagnostics file plus panic/exception/signal hooks in the app process itself.
 
 ## Impact
@@ -30,6 +34,8 @@ The bigger keyboard regression was architectural: ordinary printable typing was 
 - Crash investigations need an app-owned diagnostics file, because the dev runner and unified log often only show `appDeath` without a usable stack or exception reason.
 - Native shell launch regressions should be evaluated against Ghostty's embedded command semantics first, not against our PTY launch helpers.
 - Native keyboard regressions need to be checked against both raw-mode TUIs and canonical shell echo, because one can pass while the other is still broken and can hide that the bridge is incorrectly using paste-style text injection for ordinary typing.
+- Remote terminal collaboration should replicate the authoritative PTY output stream to all viewers and reserve input authority for the controlling client, rather than replaying one collaborator's abstract keystrokes into another renderer.
+- Native Ghostty can still participate in remote collaboration, but likely via a local attach/proxy process launched in the native surface instead of a direct app-owned render/feed loop.
 
 ## Follow-Up
 
@@ -37,3 +43,4 @@ The bigger keyboard regression was architectural: ordinary printable typing was 
 - If a caught native exception still appears during terminal sync, log the full exception name/reason with terminal ID and sync context.
 - If shell tabs still need a Lifecycle-controlled shell executable, add that through a dedicated native-shell startup contract rather than passing an interactive shell string via `surfaceConfig.command`.
 - Keep the macOS bridge aligned with upstream Ghostty's `keyDown`, `performKeyEquivalent`, `doCommand`, and preedit flows; avoid local "send raw text if it seems printable" heuristics unless the upstream embed contract changes.
+- Keep the provider contract explicit that terminal input is surface-encoded data and that collaborative watch mode is PTY-output fanout, not key-event mirroring.

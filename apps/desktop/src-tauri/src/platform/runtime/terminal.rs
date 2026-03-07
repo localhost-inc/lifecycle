@@ -104,7 +104,9 @@ impl TerminalSupervisor {
                 match reader.read(&mut buffer) {
                     Ok(0) => break,
                     Ok(read) => {
-                        if let Some(data) = decode_terminal_output(&mut pending_utf8, &buffer[..read]) {
+                        if let Some(data) =
+                            decode_terminal_output(&mut pending_utf8, &buffer[..read])
+                        {
                             let chunk = read_inner.push_replay(data);
                             read_inner.send_live(chunk);
                         }

@@ -8,6 +8,7 @@ export type {
   WorkspaceProviderCreateContext,
   WorkspaceProviderCreateInput,
   WorkspaceProviderCreateResult,
+  WorkspaceProviderGitDiffInput,
   WorkspaceProviderHealthResult,
   WorkspaceProviderStartInput,
 } from "./provider";

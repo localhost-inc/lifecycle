@@ -1,9 +1,14 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  WorkspaceMode,
   WorkspaceStatus,
   WorkspaceFailureReason,
+  WorkspaceServiceExposure,
+  WorkspaceServicePreviewFailureReason,
+  WorkspaceServicePreviewState,
   WorkspaceServiceStatus,
+  WorkspaceServiceStatusReason,
 } from "@lifecycle/contracts";
 
 export interface WorkspaceRow {
@@ -12,9 +17,9 @@ export interface WorkspaceRow {
   source_ref: string;
   git_sha: string | null;
   worktree_path: string | null;
-  mode: string;
-  status: string;
-  failure_reason: string | null;
+  mode: WorkspaceMode;
+  status: WorkspaceStatus;
+  failure_reason: WorkspaceFailureReason | null;
   failed_at: string | null;
   created_by: string | null;
   source_workspace_id: string | null;
@@ -28,14 +33,14 @@ export interface ServiceRow {
   id: string;
   workspace_id: string;
   service_name: string;
-  exposure: string;
+  exposure: WorkspaceServiceExposure;
   port_override: number | null;
-  status: string;
-  status_reason: string | null;
+  status: WorkspaceServiceStatus;
+  status_reason: WorkspaceServiceStatusReason | null;
   default_port: number | null;
   effective_port: number | null;
-  preview_state: string;
-  preview_failure_reason: string | null;
+  preview_state: WorkspaceServicePreviewState;
+  preview_failure_reason: WorkspaceServicePreviewFailureReason | null;
   preview_url: string | null;
   created_at: string;
   updated_at: string;
@@ -51,7 +56,7 @@ export interface ServiceStatusEvent {
   workspace_id: string;
   service_name: string;
   status: WorkspaceServiceStatus;
-  status_reason: string | null;
+  status_reason: WorkspaceServiceStatusReason | null;
 }
 
 export interface SetupStepEvent {
