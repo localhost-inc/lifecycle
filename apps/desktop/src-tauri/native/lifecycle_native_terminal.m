@@ -176,6 +176,12 @@ static BOOL lifecycleGhosttyTextIsPrintable(NSString *text) {
   return YES;
 }
 
+static BOOL lifecycleGhosttyRequiresKeyEncoding(NSEventModifierFlags flags) {
+  const NSEventModifierFlags specialFlags =
+      NSEventModifierFlagControl | NSEventModifierFlagCommand | NSEventModifierFlagOption;
+  return (flags & specialFlags) != 0;
+}
+
 static void lifecycleGhosttySendText(ghostty_surface_t surface, NSString *text) {
   if (surface == NULL || text.length == 0) {
     return;
@@ -716,6 +722,12 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
 
   if (pendingText.count > 0) {
     for (NSString *text in pendingText) {
+      if (lifecycleGhosttyTextIsPrintable(text) &&
+          !lifecycleGhosttyRequiresKeyEncoding(translationEvent.modifierFlags)) {
+        lifecycleGhosttySendText(self.surface, text);
+        continue;
+      }
+
       ghostty_input_key_s keyEvent =
           lifecycleGhosttyKeyEvent(event, action, translationEvent.modifierFlags);
       keyEvent.composing = false;
@@ -729,6 +741,12 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
       lifecycleGhosttyKeyEvent(event, action, translationEvent.modifierFlags);
   keyEvent.composing = self.hasMarkedText;
   keyEvent.text = lifecycleGhosttyTextForEvent(translationEvent, &textStorage);
+  if (lifecycleGhosttyTextIsPrintable(textStorage) &&
+      !lifecycleGhosttyRequiresKeyEncoding(translationEvent.modifierFlags)) {
+    lifecycleGhosttySendText(self.surface, textStorage);
+    return;
+  }
+
   if (!ghostty_surface_key(self.surface, keyEvent) && lifecycleGhosttyTextIsPrintable(textStorage)) {
     lifecycleGhosttySendText(self.surface, textStorage);
   }
