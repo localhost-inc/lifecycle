@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { evaluateBrowserTerminalCommand, terminalHasLiveSession } from "./api";
+import {
+  attachTerminalStream,
+  createTerminal,
+  detachTerminal,
+  evaluateBrowserTerminalCommand,
+  terminalHasLiveSession,
+  type TerminalStreamChunk,
+} from "./api";
 
 describe("terminal browser simulator", () => {
   test("echoes help output with a prompt", () => {
@@ -31,5 +38,47 @@ describe("terminal browser simulator", () => {
     expect(terminalHasLiveSession("sleeping")).toBeTrue();
     expect(terminalHasLiveSession("failed")).toBeFalse();
     expect(terminalHasLiveSession("finished")).toBeFalse();
+  });
+
+  test("reattach only replays unseen browser chunks when given a replay cursor", async () => {
+    const terminal = await createTerminal({
+      cols: 120,
+      launchType: "shell",
+      rows: 32,
+      workspaceId: `ws_${crypto.randomUUID()}`,
+    });
+
+    const initialReplay: TerminalStreamChunk[] = [];
+    const disposeInitialReplay = await attachTerminalStream(
+      terminal.id,
+      120,
+      32,
+      null,
+      (chunk) => {
+        initialReplay.push(chunk);
+      },
+    );
+    expect(initialReplay.length).toBeGreaterThan(0);
+    const lastSeenCursor = initialReplay.at(-1)?.cursor ?? null;
+    expect(lastSeenCursor).not.toBeNull();
+
+    disposeInitialReplay();
+    await detachTerminal(terminal.id);
+
+    const nextReplay: TerminalStreamChunk[] = [];
+    const disposeNextReplay = await attachTerminalStream(
+      terminal.id,
+      120,
+      32,
+      lastSeenCursor,
+      (chunk) => {
+        nextReplay.push(chunk);
+      },
+    );
+
+    expect(nextReplay).toHaveLength(0);
+
+    disposeNextReplay();
+    await detachTerminal(terminal.id);
   });
 });

@@ -10,6 +10,7 @@ export const TERMINAL_RENDERER_VALUES = ["system", "dom", "webgl"] as const;
 
 export type TerminalRenderer = (typeof TERMINAL_RENDERER_VALUES)[number];
 export type ResolvedTerminalRenderer = Exclude<TerminalRenderer, "system">;
+export type ActiveTerminalRenderer = ResolvedTerminalRenderer | "canvas";
 export type TerminalPlatform = "linux" | "macos" | "unknown" | "windows";
 export type TerminalWebglStatus = "active" | "context-lost" | "failed" | "not-requested";
 
@@ -27,14 +28,14 @@ export interface TerminalRendererOption {
 }
 
 export interface TerminalRuntimeDiagnostics {
-  activeRenderer: ResolvedTerminalRenderer;
+  activeRenderer: ActiveTerminalRenderer;
   allowTransparency: boolean;
   bundledFontReady: boolean;
   configuredFontFamily: string;
   devicePixelRatio: number;
   platform: TerminalPlatform;
   requestedRenderer: TerminalRenderer;
-  resolvedRenderer: ResolvedTerminalRenderer;
+  resolvedRenderer: ActiveTerminalRenderer;
   webglStatus: TerminalWebglStatus;
 }
 
@@ -113,41 +114,43 @@ function buildFontStack(families: readonly string[]): string {
   return [...families, "monospace"].join(", ");
 }
 
-export function getDefaultTerminalFontFamily(platformHint = detectPlatformHint()): string {
+function getSystemTerminalFontFamilies(platformHint = detectPlatformHint()): readonly string[] {
   const platform = getTerminalPlatform(platformHint);
 
   if (platform === "macos") {
-    return buildFontStack([
-      QUOTED_LIFECYCLE_MONO_FONT_FAMILY,
-      '"Geist Mono"',
+    return [
       '"SF Mono"',
       '"SFMono-Regular"',
       "Menlo",
       "Monaco",
       '"Apple Symbols"',
       ...TERMINAL_SYMBOL_FALLBACKS,
-    ]);
+    ];
   }
 
   if (platform === "windows") {
-    return buildFontStack([
-      QUOTED_LIFECYCLE_MONO_FONT_FAMILY,
-      '"Geist Mono"',
+    return [
       '"Cascadia Mono"',
       '"Cascadia Code"',
       "Consolas",
       '"Segoe UI Symbol"',
       ...TERMINAL_SYMBOL_FALLBACKS,
-    ]);
+    ];
   }
 
-  return buildFontStack([
-    QUOTED_LIFECYCLE_MONO_FONT_FAMILY,
-    '"Geist Mono"',
+  return [
     '"DejaVu Sans Mono"',
     '"Liberation Mono"',
     '"Noto Sans Mono"',
     ...TERMINAL_SYMBOL_FALLBACKS,
+  ];
+}
+
+export function getDefaultTerminalFontFamily(platformHint = detectPlatformHint()): string {
+  return buildFontStack([
+    ...getSystemTerminalFontFamilies(platformHint),
+    QUOTED_LIFECYCLE_MONO_FONT_FAMILY,
+    '"Geist Mono"',
   ]);
 }
 
@@ -155,27 +158,22 @@ export function getTerminalFontPresets(
   platformHint = detectPlatformHint(),
 ): readonly TerminalFontPreset[] {
   const platform = getTerminalPlatform(platformHint);
-  const systemFontFamily =
-    platform === "macos"
-      ? buildFontStack(['"SF Mono"', '"SFMono-Regular"', "Menlo", "Monaco"])
-      : platform === "windows"
-        ? buildFontStack(['"Cascadia Mono"', '"Cascadia Code"', "Consolas"])
-        : buildFontStack(['"DejaVu Sans Mono"', '"Liberation Mono"', '"Noto Sans Mono"']);
+  const systemFontFamily = buildFontStack(getSystemTerminalFontFamilies(platformHint));
   const systemLabel =
     platform === "macos" ? "SF Mono" : platform === "windows" ? "Cascadia Mono" : "System Mono";
 
   return [
     {
-      id: "lifecycle-mono",
-      label: "Lifecycle Mono",
-      description: "Bundled Geist Mono with platform-native fallbacks.",
-      fontFamily: getDefaultTerminalFontFamily(platformHint),
-    },
-    {
       id: "system-mono",
       label: systemLabel,
-      description: "Prefer the platform default mono stack first.",
+      description: "Prefer the platform terminal stack first. Recommended for Ghostty Web.",
       fontFamily: systemFontFamily,
+    },
+    {
+      id: "lifecycle-mono",
+      label: "Lifecycle Mono",
+      description: "Use the bundled terminal font first, then fall back to the platform stack.",
+      fontFamily: getDefaultTerminalFontFamily(platformHint),
     },
     {
       id: "geist-mono",

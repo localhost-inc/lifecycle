@@ -22,17 +22,16 @@ body {
   background-color: var(--terminal-surface-background, var(--background));
   contain: paint;
   isolation: isolate;
+  overflow: hidden;
+  position: relative;
 }
 
-.terminal-host .xterm,
-.terminal-host .xterm .xterm-screen,
-.terminal-host .xterm .xterm-viewport {
+.terminal-host canvas {
   background-color: var(--terminal-surface-background, var(--background));
+  display: block;
 }
 
-.terminal-host[data-terminal-renderer="dom"] .xterm,
-.terminal-host[data-terminal-renderer="dom"] .xterm .xterm-screen,
-.terminal-host[data-terminal-renderer="dom"] .xterm .xterm-rows {
+.terminal-host[data-terminal-renderer="canvas"] canvas {
   -webkit-font-smoothing: antialiased;
   backface-visibility: hidden;
 }

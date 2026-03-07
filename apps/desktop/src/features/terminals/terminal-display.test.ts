@@ -17,11 +17,11 @@ import {
 } from "./terminal-display";
 
 describe("terminal display defaults", () => {
-  test("starts with the bundled mono family on macOS", () => {
+  test("prefers the platform terminal stack on macOS", () => {
     const family = getDefaultTerminalFontFamily("macOS");
 
+    expect(family.startsWith('"SF Mono"')).toBeTrue();
     expect(family).toContain(`"${LIFECYCLE_MONO_FONT_FAMILY}"`);
-    expect(family).toContain('"SF Mono"');
     expect(family).toContain('"Symbols Nerd Font Mono"');
   });
 
@@ -32,10 +32,11 @@ describe("terminal display defaults", () => {
     expect(family).toContain('"Segoe UI Symbol"');
   });
 
-  test("offers a bundled preset first", () => {
+  test("offers the system preset first", () => {
     const presets = getTerminalFontPresets("macOS");
-    expect(presets[0]?.id).toBe("lifecycle-mono");
-    expect(presets[0]?.fontFamily).toBe(getDefaultTerminalFontFamily("macOS"));
+    expect(presets[0]?.id).toBe("system-mono");
+    expect(presets[1]?.id).toBe("lifecycle-mono");
+    expect(presets[1]?.fontFamily).toBe(getDefaultTerminalFontFamily("macOS"));
   });
 });
 

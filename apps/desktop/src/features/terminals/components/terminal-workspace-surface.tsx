@@ -107,7 +107,7 @@ export function TerminalWorkspaceSurface({ workspaceId }: TerminalWorkspaceSurfa
                 : "hidden"
             }
           >
-            <TerminalPanel terminal={terminal} />
+            <TerminalPanel active={terminal.id === activeTerminal?.id} terminal={terminal} />
           </div>
         ))
       ) : (

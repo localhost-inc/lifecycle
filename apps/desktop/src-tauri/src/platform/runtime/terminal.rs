@@ -12,6 +12,7 @@ const READ_BUFFER_SIZE: usize = 4096;
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub struct TerminalStreamChunk {
+    pub cursor: String,
     pub data: String,
     pub kind: TerminalStreamChunkKind,
 }
@@ -42,8 +43,15 @@ struct TerminalSupervisorInner {
     exited: Mutex<Option<TerminalExitOutcome>>,
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
     master: Mutex<Box<dyn MasterPty + Send>>,
-    replay: Mutex<VecDeque<String>>,
+    next_cursor: Mutex<u64>,
+    replay: Mutex<VecDeque<ReplayChunk>>,
     writer: Mutex<Box<dyn Write + Send>>,
+}
+
+#[derive(Debug, Clone)]
+struct ReplayChunk {
+    cursor: u64,
+    data: String,
 }
 
 impl TerminalSupervisor {
@@ -83,6 +91,7 @@ impl TerminalSupervisor {
             exited: Mutex::new(None),
             killer: Mutex::new(killer),
             master: Mutex::new(pair.master),
+            next_cursor: Mutex::new(0),
             replay: Mutex::new(VecDeque::with_capacity(REPLAY_LIMIT)),
             writer: Mutex::new(writer),
         });
@@ -90,18 +99,28 @@ impl TerminalSupervisor {
         let read_inner = inner.clone();
         std::thread::spawn(move || {
             let mut buffer = vec![0_u8; READ_BUFFER_SIZE];
+            let mut pending_utf8 = Vec::new();
             loop {
                 match reader.read(&mut buffer) {
                     Ok(0) => break,
                     Ok(read) => {
-                        let data = String::from_utf8_lossy(&buffer[..read]).to_string();
-                        read_inner.push_replay(data.clone());
-                        read_inner.send_live(data);
+                        if let Some(data) = decode_terminal_output(&mut pending_utf8, &buffer[..read]) {
+                            let chunk = read_inner.push_replay(data);
+                            read_inner.send_live(chunk);
+                        }
                     }
                     Err(error) => {
                         tracing::debug!("terminal reader closed: {error}");
                         break;
                     }
+                }
+            }
+
+            if !pending_utf8.is_empty() {
+                let data = String::from_utf8_lossy(&pending_utf8).to_string();
+                if !data.is_empty() {
+                    let chunk = read_inner.push_replay(data);
+                    read_inner.send_live(chunk);
                 }
             }
         });
@@ -148,8 +167,13 @@ impl TerminalSupervisor {
         Ok(Self { inner })
     }
 
-    pub fn attach(&self, channel: Channel<TerminalStreamChunk>) -> Result<(), LifecycleError> {
+    pub fn attach(
+        &self,
+        channel: Channel<TerminalStreamChunk>,
+        replay_cursor: Option<&str>,
+    ) -> Result<Option<String>, LifecycleError> {
         let mut attachment = self.inner.attachment.lock().unwrap();
+        let replay_cursor = parse_replay_cursor(replay_cursor);
         let replay = self
             .inner
             .replay
@@ -157,12 +181,17 @@ impl TerminalSupervisor {
             .unwrap()
             .iter()
             .cloned()
+            .filter(|chunk| match replay_cursor {
+                Some(cursor) => chunk.cursor > cursor,
+                None => true,
+            })
             .collect::<Vec<_>>();
 
         for chunk in replay {
             channel
                 .send(TerminalStreamChunk {
-                    data: chunk,
+                    cursor: chunk.cursor.to_string(),
+                    data: chunk.data,
                     kind: TerminalStreamChunkKind::Replay,
                 })
                 .map_err(|e| LifecycleError::AttachFailed(e.to_string()))?;
@@ -172,7 +201,7 @@ impl TerminalSupervisor {
             *attachment = Some(channel);
         }
 
-        Ok(())
+        Ok(self.replay_cursor())
     }
 
     pub fn detach(&self) {
@@ -208,23 +237,40 @@ impl TerminalSupervisor {
     pub fn exit_outcome(&self) -> Option<TerminalExitOutcome> {
         self.inner.exited.lock().unwrap().clone()
     }
+
+    pub fn replay_cursor(&self) -> Option<String> {
+        self.inner
+            .replay
+            .lock()
+            .unwrap()
+            .back()
+            .map(|chunk| chunk.cursor.to_string())
+    }
 }
 
 impl TerminalSupervisorInner {
-    fn push_replay(&self, data: String) {
+    fn push_replay(&self, data: String) -> ReplayChunk {
+        let cursor = {
+            let mut next_cursor = self.next_cursor.lock().unwrap();
+            *next_cursor += 1;
+            *next_cursor
+        };
+        let chunk = ReplayChunk { cursor, data };
         let mut replay = self.replay.lock().unwrap();
-        replay.push_back(data);
+        replay.push_back(chunk.clone());
         while replay.len() > REPLAY_LIMIT {
             replay.pop_front();
         }
+        chunk
     }
 
-    fn send_live(&self, data: String) {
+    fn send_live(&self, chunk: ReplayChunk) {
         let mut attachment = self.attachment.lock().unwrap();
         if let Some(channel) = attachment.as_ref() {
             if channel
                 .send(TerminalStreamChunk {
-                    data,
+                    cursor: chunk.cursor.to_string(),
+                    data: chunk.data,
                     kind: TerminalStreamChunkKind::Live,
                 })
                 .is_err()
@@ -232,6 +278,54 @@ impl TerminalSupervisorInner {
                 *attachment = None;
             }
         }
+    }
+}
+
+fn parse_replay_cursor(value: Option<&str>) -> Option<u64> {
+    value.and_then(|cursor| cursor.parse::<u64>().ok())
+}
+
+fn decode_terminal_output(pending_utf8: &mut Vec<u8>, incoming: &[u8]) -> Option<String> {
+    pending_utf8.extend_from_slice(incoming);
+    let mut output = String::new();
+
+    loop {
+        match std::str::from_utf8(pending_utf8) {
+            Ok(decoded) => {
+                output.push_str(decoded);
+                pending_utf8.clear();
+                break;
+            }
+            Err(error) => {
+                let valid_up_to = error.valid_up_to();
+                if valid_up_to > 0 {
+                    output.push_str(
+                        std::str::from_utf8(&pending_utf8[..valid_up_to])
+                            .expect("utf8 prefix should already be validated"),
+                    );
+                }
+
+                match error.error_len() {
+                    Some(error_len) => {
+                        output.push('\u{FFFD}');
+                        pending_utf8.drain(..valid_up_to + error_len);
+                        if pending_utf8.is_empty() {
+                            break;
+                        }
+                    }
+                    None => {
+                        pending_utf8.drain(..valid_up_to);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    if output.is_empty() {
+        None
+    } else {
+        Some(output)
     }
 }
 
@@ -334,7 +428,7 @@ mod tests {
 
         let live_chunks = Arc::new(Mutex::new(Vec::new()));
         supervisor
-            .attach(recording_channel(live_chunks.clone()))
+            .attach(recording_channel(live_chunks.clone()), None)
             .expect("attach live channel");
         wait_until("initial live output", || {
             joined_output(&live_chunks).contains("alpha")
@@ -352,7 +446,7 @@ mod tests {
 
         let replay_chunks = Arc::new(Mutex::new(Vec::new()));
         supervisor
-            .attach(recording_channel(replay_chunks.clone()))
+            .attach(recording_channel(replay_chunks.clone()), None)
             .expect("reattach replay channel");
         wait_until("replayed detached output", || {
             joined_output(&replay_chunks).contains("beta")
@@ -366,6 +460,68 @@ mod tests {
             .unwrap()
             .iter()
             .all(|chunk| chunk.kind == TerminalStreamChunkKind::Replay));
+    }
+
+    #[test]
+    fn attach_with_replay_cursor_skips_already_rendered_output() {
+        let (_outcomes, on_exit) = test_exit_callback();
+        let supervisor =
+            TerminalSupervisor::spawn(command_for_script(replay_script()), 120, 32, false, on_exit)
+                .expect("spawn terminal");
+
+        let initial_chunks = Arc::new(Mutex::new(Vec::new()));
+        supervisor
+            .attach(recording_channel(initial_chunks.clone()), None)
+            .expect("attach initial channel");
+        wait_until("initial live output", || {
+            joined_output(&initial_chunks).contains("alpha")
+        });
+
+        let last_seen_cursor = initial_chunks
+            .lock()
+            .unwrap()
+            .last()
+            .map(|chunk| chunk.cursor.clone())
+            .expect("initial cursor");
+
+        supervisor.detach();
+        std::thread::sleep(Duration::from_millis(650));
+
+        let replay_chunks = Arc::new(Mutex::new(Vec::new()));
+        supervisor
+            .attach(
+                recording_channel(replay_chunks.clone()),
+                Some(last_seen_cursor.as_str()),
+            )
+            .expect("reattach replay channel");
+        wait_until("replayed unseen output", || {
+            joined_output(&replay_chunks).contains("beta")
+        });
+
+        let replay_output = joined_output(&replay_chunks);
+        assert!(
+            !replay_output.contains("alpha"),
+            "replay should skip previously rendered output: {replay_output:?}"
+        );
+        assert!(replay_output.contains("beta"));
+        assert!(replay_chunks
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|chunk| chunk.kind == TerminalStreamChunkKind::Replay));
+    }
+
+    #[test]
+    fn decode_terminal_output_preserves_split_utf8_sequences() {
+        let mut pending_utf8 = Vec::new();
+
+        let first = decode_terminal_output(&mut pending_utf8, &[0xE2, 0x94]);
+        assert_eq!(first, None);
+        assert_eq!(pending_utf8, vec![0xE2, 0x94]);
+
+        let second = decode_terminal_output(&mut pending_utf8, &[0x80, b'\n']);
+        assert_eq!(second, Some("─\n".to_string()));
+        assert!(pending_utf8.is_empty());
     }
 
     #[test]

@@ -9,7 +9,6 @@ import {
   getTerminalFontPresets,
   getTerminalPlatform,
   resolveTerminalRenderer,
-  terminalRendererOptions,
 } from "../../terminals/terminal-display";
 import { useSettings } from "../state/app-settings-provider";
 
@@ -19,7 +18,6 @@ export function SettingsPersonalizationRoute() {
     setTerminalFontFamily,
     setTerminalFontSize,
     setTerminalLineHeight,
-    setTerminalRenderer,
     terminalDiagnostics,
     terminalFontFamily,
     terminalFontSize,
@@ -91,8 +89,9 @@ export function SettingsPersonalizationRoute() {
             <div>
               <h2 className="text-base font-medium text-[var(--foreground)]">Terminal display</h2>
               <p className="mt-1 max-w-2xl text-sm text-[var(--muted-foreground)]">
-                Tune renderer choice and terminal typography for Claude and other full-screen TUIs.
-                Lifecycle Mono is bundled so the default stack is reproducible on every install.
+                Ghostty Web currently renders terminals through its own canvas surface. Font
+                family and size apply directly, and Ghostty Web does not expose a matching
+                line-height control yet.
               </p>
             </div>
             <button
@@ -105,26 +104,15 @@ export function SettingsPersonalizationRoute() {
           </div>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <label className="flex flex-col gap-2">
-              <span className="text-sm font-medium text-[var(--foreground)]">Renderer</span>
-              <select
-                value={terminalRenderer}
-                onChange={(event) => setTerminalRenderer(event.target.value)}
-                className="rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--primary)]"
-              >
-                {terminalRendererOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+            <div className="flex flex-col gap-2">
+              <span className="text-sm font-medium text-[var(--foreground)]">Engine</span>
+              <div className="rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--foreground)]">
+                Ghostty Web
+              </div>
               <span className="text-xs text-[var(--muted-foreground)]">
-                {
-                  terminalRendererOptions.find((option) => option.value === terminalRenderer)
-                    ?.description
-                }
+                The desktop terminal currently renders through Ghostty Web&apos;s canvas surface.
               </span>
-            </label>
+            </div>
 
             <label className="flex flex-col gap-2">
               <span className="text-sm font-medium text-[var(--foreground)]">Font preset</span>
@@ -180,14 +168,18 @@ export function SettingsPersonalizationRoute() {
             <label className="flex flex-col gap-2">
               <span className="text-sm font-medium text-[var(--foreground)]">Line height</span>
               <input
+                disabled
                 type="number"
                 min={TERMINAL_LINE_HEIGHT_MIN}
                 max={TERMINAL_LINE_HEIGHT_MAX}
                 step={0.05}
                 value={terminalLineHeight}
                 onChange={(event) => setTerminalLineHeight(event.target.value)}
-                className="rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--foreground)] outline-none transition focus:border-[var(--primary)]"
+                className="rounded-md border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--foreground)] opacity-60 outline-none transition disabled:cursor-not-allowed"
               />
+              <span className="text-xs text-[var(--muted-foreground)]">
+                Ghostty Web does not currently expose a line-height setting.
+              </span>
             </label>
           </div>
 
@@ -219,27 +211,9 @@ export function SettingsPersonalizationRoute() {
               </div>
               <div className="rounded border border-[var(--border)] bg-[var(--card)] px-3 py-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
-                  Requested renderer
-                </p>
-                <p className="mt-1 text-[var(--foreground)]">{diagnostics.requestedRenderer}</p>
-              </div>
-              <div className="rounded border border-[var(--border)] bg-[var(--card)] px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
-                  Resolved renderer
-                </p>
-                <p className="mt-1 text-[var(--foreground)]">{diagnostics.resolvedRenderer}</p>
-              </div>
-              <div className="rounded border border-[var(--border)] bg-[var(--card)] px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
                   Active renderer
                 </p>
                 <p className="mt-1 text-[var(--foreground)]">{diagnostics.activeRenderer}</p>
-              </div>
-              <div className="rounded border border-[var(--border)] bg-[var(--card)] px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
-                  WebGL status
-                </p>
-                <p className="mt-1 text-[var(--foreground)]">{diagnostics.webglStatus}</p>
               </div>
               <div className="rounded border border-[var(--border)] bg-[var(--card)] px-3 py-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">

@@ -81,7 +81,7 @@ github.handleWebhook(payload, signature) # HTTP action for Worker
 
 - **Cloud (solo)**: Convex action mints attach token → desktop app connects WebSocket directly to Cloudflare Sandbox PTY
 - **Cloud (shared)**: Convex action mints attach token with role → desktop app connects WebSocket to Durable Object session multiplexer → multiplexer fans in stdin from `editor` clients to PTY, fans out stdout to all clients. Viewer stdin is rejected at protocol level.
-- **Local**: Tauri Rust backend spawns PTY directly, pipes to xterm.js via Tauri IPC (no HTTP/WS endpoint). Shared sessions are not supported in local mode.
+- **Local**: Tauri Rust backend spawns PTY directly and pipes terminal bytes to the browser terminal surface via Tauri IPC (no HTTP/WS endpoint). Shared sessions are not supported in local mode.
 
 ## Terminal Auth (Cloud Only)
 

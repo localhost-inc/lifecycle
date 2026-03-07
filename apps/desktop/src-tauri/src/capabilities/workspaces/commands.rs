@@ -140,6 +140,7 @@ pub async fn attach_terminal(
     terminal_id: String,
     cols: u16,
     rows: u16,
+    replay_cursor: Option<String>,
     handler: tauri::ipc::Channel<crate::platform::runtime::terminal::TerminalStreamChunk>,
 ) -> Result<super::terminal::TerminalAttachResult, LifecycleError> {
     super::terminal::attach_terminal(
@@ -149,6 +150,7 @@ pub async fn attach_terminal(
         terminal_id,
         cols,
         rows,
+        replay_cursor,
         handler,
     )
     .await

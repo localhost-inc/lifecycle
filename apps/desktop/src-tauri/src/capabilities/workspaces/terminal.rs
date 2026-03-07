@@ -109,6 +109,7 @@ pub async fn create_terminal(
             }
         }),
     )?;
+    let replay_cursor = supervisor.replay_cursor();
 
     let terminal = insert_terminal_row(
         &db,
@@ -129,7 +130,7 @@ pub async fn create_terminal(
     emit_terminal_created(&app, &terminal);
 
     Ok(TerminalAttachResult {
-        replay_cursor: None,
+        replay_cursor,
         terminal,
     })
 }
@@ -141,6 +142,7 @@ pub async fn attach_terminal(
     terminal_id: String,
     cols: u16,
     rows: u16,
+    replay_cursor: Option<String>,
     handler: Channel<TerminalStreamChunk>,
 ) -> Result<TerminalAttachResult, LifecycleError> {
     let db = db_path.0.clone();
@@ -161,7 +163,19 @@ pub async fn attach_terminal(
 
     if let Some(supervisor) = supervisor {
         supervisor.resize(cols, rows)?;
-        supervisor.attach(handler)?;
+        let next_replay_cursor = supervisor.attach(handler, replay_cursor.as_deref())?;
+        if terminal.status != TerminalStatus::Finished.as_str()
+            && terminal.status != TerminalStatus::Failed.as_str()
+        {
+            terminal =
+                update_terminal_state(&db, &terminal_id, TerminalStatus::Active, None, None, false)?;
+            emit_terminal_status(&app, &terminal);
+        }
+
+        return Ok(TerminalAttachResult {
+            replay_cursor: next_replay_cursor,
+            terminal,
+        });
     } else if terminal.status != TerminalStatus::Finished.as_str()
         && terminal.status != TerminalStatus::Failed.as_str()
     {
@@ -178,14 +192,6 @@ pub async fn attach_terminal(
             replay_cursor: None,
             terminal,
         });
-    }
-
-    if terminal.status != TerminalStatus::Finished.as_str()
-        && terminal.status != TerminalStatus::Failed.as_str()
-    {
-        terminal =
-            update_terminal_state(&db, &terminal_id, TerminalStatus::Active, None, None, false)?;
-        emit_terminal_status(&app, &terminal);
     }
 
     Ok(TerminalAttachResult {

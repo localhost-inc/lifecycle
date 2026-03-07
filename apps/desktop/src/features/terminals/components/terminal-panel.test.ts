@@ -64,21 +64,15 @@ describe("applyTerminalAppearance", () => {
         },
       },
     };
-    const refreshCalls: Array<[number, number]> = [];
     const theme = {
       background: "#101418",
       cursor: "#59c1ff",
       foreground: "#f7fbff",
     };
     const xterm = {
-      clearTextureAtlas() {},
       options: {
         theme: undefined as typeof theme | undefined,
       },
-      refresh(start: number, end: number) {
-        refreshCalls.push([start, end]);
-      },
-      rows: 4,
     };
 
     const background = applyTerminalAppearance({
@@ -91,7 +85,6 @@ describe("applyTerminalAppearance", () => {
     expect(host.style.backgroundColor).toBe("#101418");
     expect(properties.get("--terminal-surface-background")).toBe("#101418");
     expect(xterm.options.theme).toEqual(theme);
-    expect(refreshCalls).toEqual([[0, 3]]);
   });
 });
 

@@ -1,11 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { FitAddon } from "@xterm/addon-fit";
-import { Unicode11Addon } from "@xterm/addon-unicode11";
-import { WebLinksAddon } from "@xterm/addon-web-links";
-import { WebglAddon } from "@xterm/addon-webgl";
-import { Terminal } from "@xterm/xterm";
-import type { ITheme } from "@xterm/xterm";
-import "@xterm/xterm/css/xterm.css";
+import { FitAddon, Terminal } from "ghostty-web";
+import type { ITheme } from "ghostty-web";
 import {
   attachTerminalStream,
   detachTerminal,
@@ -21,14 +16,14 @@ import {
   getPrimaryTerminalFontFamily,
   getTerminalPlatform,
   resolveTerminalRuntimeOptions,
-  type ResolvedTerminalRenderer,
   type TerminalRuntimeDiagnostics,
-  type TerminalWebglStatus,
 } from "../terminal-display";
+import { getGhosttyRuntime } from "../ghostty-runtime";
 import { useSettings } from "../../settings/state/app-settings-provider";
 import { useTheme } from "../../../theme/theme-provider";
 
 interface TerminalPanelProps {
+  active: boolean;
   terminal: TerminalRow;
 }
 
@@ -261,16 +256,6 @@ function createTerminalWriteScheduler(xterm: Terminal) {
   };
 }
 
-class SafeWebglAddon extends WebglAddon {
-  override dispose(): void {
-    try {
-      super.dispose();
-    } catch (error) {
-      console.warn("Ignoring xterm WebGL teardown error:", error);
-    }
-  }
-}
-
 const GENERIC_FONT_FAMILIES = new Set([
   "cursive",
   "emoji",
@@ -337,12 +322,9 @@ interface TerminalAppearanceHost {
 }
 
 interface TerminalAppearanceTarget {
-  clearTextureAtlas: () => void;
   options: {
     theme?: ITheme;
   };
-  refresh: (start: number, end: number) => void;
-  rows: number;
 }
 
 export function applyTerminalAppearance({
@@ -363,27 +345,107 @@ export function applyTerminalAppearance({
   }
 
   xterm.options.theme = { ...theme };
-  xterm.clearTextureAtlas();
-  if (xterm.rows > 0) {
-    xterm.refresh(0, xterm.rows - 1);
-  }
-
   return background;
 }
 
-export function TerminalPanel({ terminal }: TerminalPanelProps) {
+export function TerminalPanel({ active, terminal }: TerminalPanelProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const xtermRef = useRef<Terminal | null>(null);
+  const disposeStreamRef = useRef<(() => void) | null>(null);
+  const fitAddonRef = useRef<FitAddon | null>(null);
+  const replayCursorRef = useRef<string | null>(null);
+  const resizeFrameIdRef = useRef<number | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const terminalSizeRef = useRef({ cols: 0, rows: 0 });
+  const writeSchedulerRef = useRef<ReturnType<typeof createTerminalWriteScheduler> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const {
     reportTerminalDiagnostics,
     terminalFontFamily,
     terminalFontSize,
-    terminalLineHeight,
     terminalRenderer,
   } = useSettings();
   const { resolvedAppearance } = useTheme();
   const hasLiveSession = terminalHasLiveSession(terminal.status);
+
+  const handleTerminalError = (nextError: unknown) => {
+    if (isBenignTerminalIoError(nextError)) {
+      return;
+    }
+
+    setError(String(nextError));
+  };
+
+  const syncTerminalSize = () => {
+    resizeFrameIdRef.current = null;
+    const host = hostRef.current;
+    const xterm = xtermRef.current;
+    if (!host || !xterm) {
+      return;
+    }
+
+    // Skip resize when hidden (display: none) to avoid reflowing
+    // content into tiny dimensions and losing scrollback.
+    if (!host.offsetWidth && !host.offsetHeight) {
+      return;
+    }
+
+    fitAddonRef.current?.fit();
+    if (xterm.cols <= 0 || xterm.rows <= 0) {
+      return;
+    }
+
+    if (
+      xterm.cols === terminalSizeRef.current.cols &&
+      xterm.rows === terminalSizeRef.current.rows
+    ) {
+      return;
+    }
+
+    terminalSizeRef.current = {
+      cols: xterm.cols,
+      rows: xterm.rows,
+    };
+    void resizeTerminal(terminal.id, xterm.cols, xterm.rows).catch(handleTerminalError);
+  };
+
+  const scheduleTerminalResize = () => {
+    if (resizeFrameIdRef.current !== null) {
+      return;
+    }
+
+    resizeFrameIdRef.current = window.requestAnimationFrame(syncTerminalSize);
+  };
+
+  const detachCurrentStream = () => {
+    disposeStreamRef.current?.();
+    disposeStreamRef.current = null;
+    void detachTerminal(terminal.id);
+  };
+
+  const connect = async () => {
+    const xterm = xtermRef.current;
+    if (!xterm) {
+      return;
+    }
+
+    try {
+      scheduleTerminalResize();
+      disposeStreamRef.current?.();
+      disposeStreamRef.current = await attachTerminalStream(
+        terminal.id,
+        Math.max(xterm.cols, 1),
+        Math.max(xterm.rows, 1),
+        replayCursorRef.current,
+        (chunk) => {
+          replayCursorRef.current = chunk.cursor;
+          writeSchedulerRef.current?.push(chunk.data);
+        },
+      );
+    } catch (attachError) {
+      handleTerminalError(attachError);
+    }
+  };
 
   useEffect(() => {
     if (!hostRef.current || !hasLiveSession) {
@@ -393,15 +455,7 @@ export function TerminalPanel({ terminal }: TerminalPanelProps) {
     const host = hostRef.current;
     let disposed = false;
     let disposeData: { dispose(): void } | null = null;
-    let disposeStream: (() => void) | null = null;
-    let resizeFrameId: number | null = null;
-    let lastCols = 0;
-    let lastRows = 0;
-    let resizeObserver: ResizeObserver | null = null;
-    let writeScheduler: ReturnType<typeof createTerminalWriteScheduler> | null = null;
-    let webglAddon: SafeWebglAddon | null = null;
     let xterm: Terminal | null = null;
-    let fitAddon: FitAddon | null = null;
     const platformHint = detectPlatformHint();
     let diagnostics = buildTerminalRuntimeDiagnostics({
       activeRenderer: "dom",
@@ -411,12 +465,14 @@ export function TerminalPanel({ terminal }: TerminalPanelProps) {
       devicePixelRatio: window.devicePixelRatio,
       platformHint,
       requestedRenderer: terminalRenderer,
-      resolvedRenderer: "dom",
+      resolvedRenderer: "canvas",
       webglStatus: "not-requested",
     });
 
     const reportDiagnostics = (
-      next: Partial<Pick<TerminalRuntimeDiagnostics, "activeRenderer" | "bundledFontReady" | "webglStatus">>,
+      next: Partial<
+        Pick<TerminalRuntimeDiagnostics, "activeRenderer" | "bundledFontReady" | "webglStatus">
+      >,
     ) => {
       diagnostics = {
         ...diagnostics,
@@ -424,14 +480,6 @@ export function TerminalPanel({ terminal }: TerminalPanelProps) {
       };
       host.dataset.terminalRenderer = diagnostics.activeRenderer;
       reportTerminalDiagnostics(diagnostics);
-    };
-
-    const handleTerminalError = (nextError: unknown) => {
-      if (disposed || isBenignTerminalIoError(nextError)) {
-        return;
-      }
-
-      setError(String(nextError));
     };
 
     const attachImagesToTerminal = async (files: readonly File[]) => {
@@ -463,59 +511,6 @@ export function TerminalPanel({ terminal }: TerminalPanelProps) {
       }
     };
 
-    const syncTerminalSize = () => {
-      resizeFrameId = null;
-      if (disposed || !xterm) {
-        return;
-      }
-
-      // Skip resize when hidden (display: none) to avoid reflowing
-      // content into tiny dimensions and losing scrollback.
-      if (!host.offsetWidth && !host.offsetHeight) {
-        return;
-      }
-
-      fitAddon?.fit();
-      if (xterm.cols <= 0 || xterm.rows <= 0) {
-        return;
-      }
-
-      if (xterm.cols === lastCols && xterm.rows === lastRows) {
-        return;
-      }
-
-      lastCols = xterm.cols;
-      lastRows = xterm.rows;
-      void resizeTerminal(terminal.id, xterm.cols, xterm.rows).catch(handleTerminalError);
-    };
-
-    const scheduleTerminalResize = () => {
-      if (disposed || resizeFrameId !== null) {
-        return;
-      }
-
-      resizeFrameId = window.requestAnimationFrame(syncTerminalSize);
-    };
-
-    const connect = async () => {
-      try {
-        scheduleTerminalResize();
-        if (!xterm) {
-          return;
-        }
-        disposeStream = await attachTerminalStream(
-          terminal.id,
-          Math.max(xterm.cols, 1),
-          Math.max(xterm.rows, 1),
-          (chunk) => {
-            writeScheduler?.push(chunk.data);
-          },
-        );
-      } catch (attachError) {
-        handleTerminalError(attachError);
-      }
-    };
-
     const initializeTerminal = async () => {
       const bundledFontReady = await waitForTerminalFonts(terminalFontFamily, terminalFontSize);
       if (disposed) {
@@ -534,87 +529,52 @@ export function TerminalPanel({ terminal }: TerminalPanelProps) {
       });
       host.dataset.terminalRenderer = runtimeOptions.resolvedRenderer;
       diagnostics = buildTerminalRuntimeDiagnostics({
-        activeRenderer: "dom",
+        activeRenderer: "canvas",
         allowTransparency: runtimeOptions.allowTransparency,
         bundledFontReady: false,
         configuredFontFamily: terminalFontFamily,
         devicePixelRatio: window.devicePixelRatio,
         platformHint,
         requestedRenderer: runtimeOptions.requestedRenderer,
-        resolvedRenderer: runtimeOptions.resolvedRenderer,
+        resolvedRenderer: "canvas",
         webglStatus: "not-requested",
       });
 
+      const ghostty = await getGhosttyRuntime();
       xterm = new Terminal({
-        // Official xterm addons like unicode11/webgl still use this gate.
-        allowProposedApi: true,
         allowTransparency: runtimeOptions.allowTransparency,
-        customGlyphs: true,
         cursorBlink: true,
         fontFamily: terminalFontFamily,
         fontSize: terminalFontSize,
-        letterSpacing: 0,
-        lineHeight: terminalLineHeight,
-        rescaleOverlappingGlyphs: true,
+        ghostty,
         scrollback: 5000,
         theme: terminalTheme,
       });
-      fitAddon = new FitAddon();
-      const unicode11Addon = new Unicode11Addon();
-      const webLinksAddon = new WebLinksAddon();
-      writeScheduler = createTerminalWriteScheduler(xterm);
-      xterm.loadAddon(fitAddon);
-      xterm.loadAddon(webLinksAddon);
+      fitAddonRef.current = new FitAddon();
+      writeSchedulerRef.current = createTerminalWriteScheduler(xterm);
+      xterm.loadAddon(fitAddonRef.current);
       xterm.open(host);
       xtermRef.current = xterm;
-      try {
-        xterm.loadAddon(unicode11Addon);
-        xterm.unicode.activeVersion = "11";
-      } catch (unicodeError) {
-        console.warn("Failed to enable Unicode 11 terminal support:", unicodeError);
-      }
-
-      let activeRenderer: ResolvedTerminalRenderer = "dom";
-      let webglStatus: TerminalWebglStatus = "not-requested";
-      if (runtimeOptions.resolvedRenderer === "webgl") {
-        try {
-          webglAddon = new SafeWebglAddon();
-          webglAddon.onContextLoss(() => {
-            webglAddon?.dispose();
-            webglAddon = null;
-            reportDiagnostics({
-              activeRenderer: "dom",
-              webglStatus: "context-lost",
-            });
-            console.warn("WebGL terminal renderer lost context; falling back to DOM.");
-          });
-          xterm.loadAddon(webglAddon);
-          activeRenderer = "webgl";
-          webglStatus = "active";
-        } catch (webglError) {
-          webglAddon = null;
-          webglStatus = "failed";
-          console.warn("Failed to enable WebGL terminal renderer; falling back to DOM:", webglError);
-        }
-      }
 
       reportDiagnostics({
-        activeRenderer,
+        activeRenderer: "canvas",
         bundledFontReady,
-        webglStatus,
+        webglStatus: "not-requested",
       });
 
-      xterm.focus();
-      void connect();
+      if (active) {
+        xterm.focus();
+        void connect();
+      }
 
       disposeData = xterm.onData((data) => {
         void writeTerminal(terminal.id, data).catch(handleTerminalError);
       });
 
-      resizeObserver = new ResizeObserver(() => {
+      resizeObserverRef.current = new ResizeObserver(() => {
         scheduleTerminalResize();
       });
-      resizeObserver.observe(host);
+      resizeObserverRef.current.observe(host);
       host.addEventListener("paste", handleTerminalPaste);
       host.addEventListener("dragover", handleTerminalDragOver);
       host.addEventListener("drop", handleTerminalDrop);
@@ -654,27 +614,30 @@ export function TerminalPanel({ terminal }: TerminalPanelProps) {
       void attachImagesToTerminal(imageFiles);
     };
     setError(null);
+    replayCursorRef.current = null;
     void initializeTerminal();
 
     return () => {
       disposed = true;
-      if (resizeFrameId !== null) {
-        window.cancelAnimationFrame(resizeFrameId);
+      if (resizeFrameIdRef.current !== null) {
+        window.cancelAnimationFrame(resizeFrameIdRef.current);
+        resizeFrameIdRef.current = null;
       }
       host.style.removeProperty("--terminal-surface-background");
       host.style.removeProperty("background-color");
       delete host.dataset.terminalRenderer;
       xtermRef.current = null;
+      fitAddonRef.current = null;
       host.removeEventListener("paste", handleTerminalPaste);
       host.removeEventListener("dragover", handleTerminalDragOver);
       host.removeEventListener("drop", handleTerminalDrop);
       host.removeEventListener("mousedown", focusTerminal);
-      resizeObserver?.disconnect();
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
       disposeData?.dispose();
-      disposeStream?.();
-      writeScheduler?.dispose();
-      void detachTerminal(terminal.id);
-      webglAddon?.dispose();
+      detachCurrentStream();
+      writeSchedulerRef.current?.dispose();
+      writeSchedulerRef.current = null;
       xterm?.dispose();
     };
   }, [
@@ -684,9 +647,27 @@ export function TerminalPanel({ terminal }: TerminalPanelProps) {
     terminal.workspace_id,
     terminalFontFamily,
     terminalFontSize,
-    terminalLineHeight,
     terminalRenderer,
   ]);
+
+  useEffect(() => {
+    if (!hasLiveSession || !xtermRef.current) {
+      return;
+    }
+
+    if (!active) {
+      detachCurrentStream();
+      xtermRef.current.blur();
+      return;
+    }
+
+    xtermRef.current.focus();
+    void connect();
+
+    return () => {
+      detachCurrentStream();
+    };
+  }, [active, hasLiveSession, terminal.id]);
 
   useEffect(() => {
     const host = hostRef.current;

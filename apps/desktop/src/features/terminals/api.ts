@@ -47,6 +47,7 @@ export interface TerminalRemovedEvent {
 }
 
 export interface TerminalStreamChunk {
+  cursor: string;
   data: string;
   kind: "replay" | "live";
 }
@@ -85,10 +86,16 @@ export interface SavedTerminalAttachment {
   relativePath: string;
 }
 
+interface BrowserReplayChunk {
+  cursor: string;
+  data: string;
+}
+
 interface BrowserTerminalState {
+  nextReplayCursor: number;
   nextSequence: number;
   inputByTerminalId: Record<string, string>;
-  replayByTerminalId: Record<string, string[]>;
+  replayByTerminalId: Record<string, BrowserReplayChunk[]>;
   terminals: TerminalRow[];
 }
 
@@ -122,6 +129,7 @@ function readBrowserTerminalState(): BrowserTerminalState {
   if (typeof window === "undefined") {
     return {
       inputByTerminalId: {},
+      nextReplayCursor: 1,
       nextSequence: 1,
       replayByTerminalId: {},
       terminals: [],
@@ -132,6 +140,7 @@ function readBrowserTerminalState(): BrowserTerminalState {
   if (!raw) {
     return {
       inputByTerminalId: {},
+      nextReplayCursor: 1,
       nextSequence: 1,
       replayByTerminalId: {},
       terminals: [],
@@ -140,21 +149,24 @@ function readBrowserTerminalState(): BrowserTerminalState {
 
   try {
     const parsed = JSON.parse(raw) as Partial<BrowserTerminalState>;
+    const normalizedReplay = normalizeBrowserReplayState(
+      parsed.replayByTerminalId,
+      typeof parsed.nextReplayCursor === "number" ? parsed.nextReplayCursor : 1,
+    );
     return {
       inputByTerminalId:
         parsed.inputByTerminalId && typeof parsed.inputByTerminalId === "object"
           ? parsed.inputByTerminalId
           : {},
+      nextReplayCursor: normalizedReplay.nextReplayCursor,
       nextSequence: typeof parsed.nextSequence === "number" ? parsed.nextSequence : 1,
-      replayByTerminalId:
-        parsed.replayByTerminalId && typeof parsed.replayByTerminalId === "object"
-          ? parsed.replayByTerminalId
-          : {},
+      replayByTerminalId: normalizedReplay.replayByTerminalId,
       terminals: Array.isArray(parsed.terminals) ? parsed.terminals : [],
     };
   } catch {
     return {
       inputByTerminalId: {},
+      nextReplayCursor: 1,
       nextSequence: 1,
       replayByTerminalId: {},
       terminals: [],
@@ -172,6 +184,78 @@ function persistBrowserTerminalState(): void {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function parseReplayCursor(value: string | null | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeBrowserReplayState(
+  replayByTerminalId: unknown,
+  initialReplayCursor: number,
+): Pick<BrowserTerminalState, "nextReplayCursor" | "replayByTerminalId"> {
+  let nextReplayCursor =
+    Number.isFinite(initialReplayCursor) && initialReplayCursor > 0 ? initialReplayCursor : 1;
+  const normalizedReplayByTerminalId: Record<string, BrowserReplayChunk[]> = {};
+
+  if (!replayByTerminalId || typeof replayByTerminalId !== "object") {
+    return {
+      nextReplayCursor,
+      replayByTerminalId: normalizedReplayByTerminalId,
+    };
+  }
+
+  for (const [terminalId, rawChunks] of Object.entries(
+    replayByTerminalId as Record<string, unknown>,
+  )) {
+    if (!Array.isArray(rawChunks)) {
+      continue;
+    }
+
+    const normalizedChunks: BrowserReplayChunk[] = [];
+    for (const rawChunk of rawChunks.slice(-BROWSER_TERMINAL_REPLAY_LIMIT)) {
+      if (typeof rawChunk === "string") {
+        normalizedChunks.push({
+          cursor: String(nextReplayCursor),
+          data: rawChunk,
+        });
+        nextReplayCursor += 1;
+        continue;
+      }
+
+      if (!rawChunk || typeof rawChunk !== "object") {
+        continue;
+      }
+
+      const data =
+        "data" in rawChunk && typeof rawChunk.data === "string" ? rawChunk.data : null;
+      if (data === null) {
+        continue;
+      }
+
+      const rawCursor =
+        "cursor" in rawChunk && typeof rawChunk.cursor === "string" ? rawChunk.cursor : null;
+      const parsedCursor = parseReplayCursor(rawCursor);
+      const cursor = parsedCursor === null ? nextReplayCursor : parsedCursor;
+      normalizedChunks.push({
+        cursor: String(cursor),
+        data,
+      });
+      nextReplayCursor = Math.max(nextReplayCursor, cursor + 1);
+    }
+
+    normalizedReplayByTerminalId[terminalId] = normalizedChunks;
+  }
+
+  return {
+    nextReplayCursor,
+    replayByTerminalId: normalizedReplayByTerminalId,
+  };
 }
 
 function buildHarnessPrompt(harnessProvider: string | null): string {
@@ -287,17 +371,22 @@ function appendBrowserTerminalOutput(
   data: string,
   kind: "replay" | "live",
 ): void {
+  const chunk: BrowserReplayChunk = {
+    cursor: String(browserTerminalState.nextReplayCursor),
+    data,
+  };
   const existingReplay = browserTerminalState.replayByTerminalId[terminalId] ?? [];
-  const nextReplay = [...existingReplay, data].slice(-BROWSER_TERMINAL_REPLAY_LIMIT);
+  const nextReplay = [...existingReplay, chunk].slice(-BROWSER_TERMINAL_REPLAY_LIMIT);
   browserTerminalState = {
     ...browserTerminalState,
+    nextReplayCursor: browserTerminalState.nextReplayCursor + 1,
     replayByTerminalId: {
       ...browserTerminalState.replayByTerminalId,
       [terminalId]: nextReplay,
     },
   };
   persistBrowserTerminalState();
-  emitTerminalChunk(terminalId, { data, kind });
+  emitTerminalChunk(terminalId, { ...chunk, kind });
 }
 
 function buildTerminalBanner(terminal: TerminalRow): string {
@@ -488,6 +577,7 @@ export async function attachTerminalStream(
   terminalId: string,
   cols: number,
   rows: number,
+  replayCursor: string | null,
   callback: (chunk: TerminalStreamChunk) => void,
 ): Promise<UnlistenFn> {
   if (!isTauri()) {
@@ -501,8 +591,14 @@ export async function attachTerminalStream(
     }
 
     const replay = browserTerminalState.replayByTerminalId[terminalId] ?? [];
-    for (const data of replay) {
-      callback({ data, kind: "replay" });
+    const parsedReplayCursor = parseReplayCursor(replayCursor);
+    for (const chunk of replay) {
+      const chunkCursor = parseReplayCursor(chunk.cursor);
+      if (parsedReplayCursor !== null && chunkCursor !== null && chunkCursor <= parsedReplayCursor) {
+        continue;
+      }
+
+      callback({ ...chunk, kind: "replay" });
     }
 
     const listeners = browserStreamListeners.get(terminalId) ?? new Set();
@@ -523,6 +619,7 @@ export async function attachTerminalStream(
   await invoke<AttachTerminalResult>("attach_terminal", {
     cols,
     handler: channel,
+    replayCursor,
     rows,
     terminalId,
   });
