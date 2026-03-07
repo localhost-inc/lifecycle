@@ -2,7 +2,7 @@ use crate::platform::db::DbPath;
 use crate::shared::errors::LifecycleError;
 use crate::{SupervisorMap, TerminalSupervisorMap};
 use std::collections::HashMap;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, State, WebviewWindow};
 
 #[tauri::command]
 pub async fn create_workspace(
@@ -185,6 +185,57 @@ pub async fn save_terminal_attachment(
 }
 
 #[tauri::command]
+pub async fn native_terminal_capabilities() -> Result<
+    super::terminal::NativeTerminalCapabilities,
+    LifecycleError,
+> {
+    Ok(super::terminal::native_terminal_capabilities())
+}
+
+#[tauri::command]
+pub async fn sync_native_terminal_surface(
+    window: WebviewWindow,
+    db_path: State<'_, DbPath>,
+    terminal_id: String,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    visible: bool,
+    focused: bool,
+    appearance: String,
+    theme: super::terminal::NativeTerminalTheme,
+    font_size: f64,
+    scale_factor: f64,
+) -> Result<(), LifecycleError> {
+    super::terminal::sync_native_terminal_surface(
+        window,
+        db_path,
+        terminal_id,
+        x,
+        y,
+        width,
+        height,
+        visible,
+        focused,
+        appearance,
+        theme,
+        font_size,
+        scale_factor,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn hide_native_terminal_surface(
+    app: AppHandle,
+    db_path: State<'_, DbPath>,
+    terminal_id: String,
+) -> Result<(), LifecycleError> {
+    super::terminal::hide_native_terminal_surface(app, db_path, terminal_id).await
+}
+
+#[tauri::command]
 pub async fn resize_terminal(
     terminal_supervisors: State<'_, TerminalSupervisorMap>,
     terminal_id: String,
@@ -206,8 +257,10 @@ pub async fn detach_terminal(
 
 #[tauri::command]
 pub async fn kill_terminal(
+    app: AppHandle,
+    db_path: State<'_, DbPath>,
     terminal_supervisors: State<'_, TerminalSupervisorMap>,
     terminal_id: String,
 ) -> Result<(), LifecycleError> {
-    super::terminal::kill_terminal(terminal_supervisors, terminal_id).await
+    super::terminal::kill_terminal(app, db_path, terminal_supervisors, terminal_id).await
 }

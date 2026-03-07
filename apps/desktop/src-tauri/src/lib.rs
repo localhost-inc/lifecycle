@@ -3,6 +3,7 @@ mod platform;
 mod shared;
 
 use crate::platform::db::{run_migrations, DbPath};
+use crate::platform::native_terminal;
 use crate::platform::runtime::supervisor::Supervisor;
 use crate::platform::runtime::terminal::TerminalSupervisor;
 use std::collections::HashMap;
@@ -34,7 +35,12 @@ pub fn run() {
             let db_path_str = db_path.to_string_lossy().to_string();
 
             run_migrations(&db_path_str).expect("failed to run migrations");
-            app.manage(DbPath(db_path_str));
+            app.manage(DbPath(db_path_str.clone()));
+
+            if native_terminal::is_available() {
+                native_terminal::initialize(app.handle().clone(), db_path_str.clone())
+                    .expect("failed to initialize native terminal runtime");
+            }
 
             // Initialize tracing
             tracing_subscriber::fmt::init();
@@ -63,6 +69,9 @@ pub fn run() {
             capabilities::workspaces::commands::attach_terminal,
             capabilities::workspaces::commands::write_terminal,
             capabilities::workspaces::commands::save_terminal_attachment,
+            capabilities::workspaces::commands::native_terminal_capabilities,
+            capabilities::workspaces::commands::sync_native_terminal_surface,
+            capabilities::workspaces::commands::hide_native_terminal_surface,
             capabilities::workspaces::commands::resize_terminal,
             capabilities::workspaces::commands::detach_terminal,
             capabilities::workspaces::commands::kill_terminal,

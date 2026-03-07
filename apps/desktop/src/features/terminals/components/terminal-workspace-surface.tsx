@@ -32,6 +32,12 @@ export function TerminalWorkspaceSurface({ workspaceId }: TerminalWorkspaceSurfa
   const activeTerminal =
     terminals.find((terminal) => terminal.id === activeTerminalId) ?? terminals[0] ?? null;
 
+  const releaseWebviewFocus = () => {
+    if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
+      document.activeElement.blur();
+    }
+  };
+
   useEffect(() => {
     if (!activeTerminalId && terminals[0]) {
       setActiveTerminalId(terminals[0].id);
@@ -55,6 +61,7 @@ export function TerminalWorkspaceSurface({ workspaceId }: TerminalWorkspaceSurfa
   const handleCreateTerminal = async (input: CreateTerminalRequest) => {
     setCreatingSelection(input.launchType === "harness" ? input.harnessProvider : "shell");
     setError(null);
+    releaseWebviewFocus();
 
     try {
       const terminal = await createTerminal({
@@ -84,7 +91,10 @@ export function TerminalWorkspaceSurface({ workspaceId }: TerminalWorkspaceSurfa
         onCreateTerminal={(input) => {
           void handleCreateTerminal(input);
         }}
-        onSelectTerminal={setActiveTerminalId}
+        onSelectTerminal={(terminalId) => {
+          releaseWebviewFocus();
+          setActiveTerminalId(terminalId);
+        }}
         terminals={terminals}
       />
       {Boolean(terminalsQuery.error) && (

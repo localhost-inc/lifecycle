@@ -1,9 +1,11 @@
+import { isTauri } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import { FitAddon, Terminal } from "ghostty-web";
 import type { ITheme } from "ghostty-web";
 import {
   attachTerminalStream,
   detachTerminal,
+  getNativeTerminalCapabilities,
   resizeTerminal,
   saveTerminalAttachment,
   terminalHasLiveSession,
@@ -18,9 +20,11 @@ import {
   resolveTerminalRuntimeOptions,
   type TerminalRuntimeDiagnostics,
 } from "../terminal-display";
+import { resolveTerminalTheme } from "../terminal-theme";
 import { getGhosttyRuntime } from "../ghostty-runtime";
 import { useSettings } from "../../settings/state/app-settings-provider";
 import { useTheme } from "../../../theme/theme-provider";
+import { NativeTerminalPanel } from "./native-terminal-panel";
 
 interface TerminalPanelProps {
   active: boolean;
@@ -45,36 +49,6 @@ const IMAGE_ATTACHMENT_EXTENSIONS = new Set([
   "tiff",
   "webp",
 ]);
-
-function resolveTerminalTheme(element: HTMLElement): ITheme {
-  const styles = getComputedStyle(element);
-  const appearance = element.ownerDocument.documentElement.dataset.themeAppearance;
-  const isLightAppearance = appearance === "light";
-  const readToken = (token: string, fallback: string) => {
-    const value = styles.getPropertyValue(token).trim();
-    return value || fallback;
-  };
-
-  return {
-    background: readToken("--background", isLightAppearance ? "#fafaf9" : "#0a0f16"),
-    brightBlack: isLightAppearance
-      ? readToken("--ring", "#5b5b66")
-      : readToken("--muted-foreground", "#8291a7"),
-    brightBlue: readToken("--primary", "#59c1ff"),
-    brightCyan: readToken("--primary", "#59c1ff"),
-    brightGreen: isLightAppearance ? "#166534" : "#85d6a3",
-    brightMagenta: isLightAppearance ? "#7c3aed" : "#d7b5ff",
-    brightRed: isLightAppearance ? "#b91c1c" : "#ff7f8d",
-    brightWhite: readToken("--foreground", isLightAppearance ? "#09090b" : "#f7fbff"),
-    brightYellow: isLightAppearance ? "#a16207" : "#f0c674",
-    cursor: readToken("--primary", "#59c1ff"),
-    cursorAccent: readToken("--background", isLightAppearance ? "#fafaf9" : "#0a0f16"),
-    foreground: readToken("--foreground", isLightAppearance ? "#09090b" : "#dbe6f5"),
-    selectionBackground: isLightAppearance
-      ? "rgba(9, 9, 11, 0.12)"
-      : "rgba(89, 193, 255, 0.24)",
-  };
-}
 
 function inferImageAttachmentExtension(mediaType: string | null | undefined): string {
   switch (mediaType?.trim().toLowerCase()) {
@@ -348,7 +322,7 @@ export function applyTerminalAppearance({
   return background;
 }
 
-export function TerminalPanel({ active, terminal }: TerminalPanelProps) {
+function BrowserTerminalPanel({ active, terminal }: TerminalPanelProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const disposeStreamRef = useRef<(() => void) | null>(null);
@@ -365,7 +339,7 @@ export function TerminalPanel({ active, terminal }: TerminalPanelProps) {
     terminalFontSize,
     terminalRenderer,
   } = useSettings();
-  const { resolvedAppearance } = useTheme();
+  const { preset, resolvedAppearance } = useTheme();
   const hasLiveSession = terminalHasLiveSession(terminal.status);
 
   const handleTerminalError = (nextError: unknown) => {
@@ -517,7 +491,7 @@ export function TerminalPanel({ active, terminal }: TerminalPanelProps) {
         return;
       }
 
-      const terminalTheme = resolveTerminalTheme(host);
+      const terminalTheme = resolveTerminalTheme(host, preset, resolvedAppearance).webTheme;
       const terminalBackground = applyTerminalAppearance({
         host,
         theme: terminalTheme,
@@ -677,13 +651,13 @@ export function TerminalPanel({ active, terminal }: TerminalPanelProps) {
 
     applyTerminalAppearance({
       host,
-      theme: resolveTerminalTheme(host),
+      theme: resolveTerminalTheme(host, preset, resolvedAppearance).webTheme,
       xterm: xtermRef.current,
     });
-  }, [hasLiveSession, resolvedAppearance]);
+  }, [hasLiveSession, preset, resolvedAppearance]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-[var(--background)]">
+    <div className="flex min-h-0 flex-1 flex-col bg-[var(--terminal-surface-background)]">
       {error && (
         <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
           {error}
@@ -691,9 +665,7 @@ export function TerminalPanel({ active, terminal }: TerminalPanelProps) {
       )}
       <div className="min-h-0 flex-1 overflow-hidden">
         {hasLiveSession ? (
-          <div className="h-full w-full p-3">
-            <div ref={hostRef} className="terminal-host h-full w-full" />
-          </div>
+          <div ref={hostRef} className="terminal-host h-full w-full" />
         ) : (
           <div className="flex h-full items-center justify-center px-8 text-center">
             <div>
@@ -709,5 +681,42 @@ export function TerminalPanel({ active, terminal }: TerminalPanelProps) {
         )}
       </div>
     </div>
+  );
+}
+
+export function TerminalPanel(props: TerminalPanelProps) {
+  const [nativeTerminalAvailable, setNativeTerminalAvailable] = useState<boolean | null>(() =>
+    isTauri() ? null : false,
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    void getNativeTerminalCapabilities()
+      .then(({ available }) => {
+        if (!cancelled) {
+          setNativeTerminalAvailable(available);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setNativeTerminalAvailable(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (nativeTerminalAvailable === null) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col bg-[var(--terminal-surface-background)]" />
+    );
+  }
+
+  return nativeTerminalAvailable ? (
+    <NativeTerminalPanel {...props} />
+  ) : (
+    <BrowserTerminalPanel {...props} />
   );
 }

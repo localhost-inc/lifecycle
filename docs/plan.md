@@ -76,7 +76,7 @@ Detail spec: [docs/milestones/m2.md](./milestones/m2.md)
 Detail spec: [docs/milestones/m3.md](./milestones/m3.md)
 
 - [x] Terminal entity and lifecycle states are implemented
-- [ ] Local PTY architecture (Tauri IPC + browser terminal surface) is operational
+- [x] Local terminal architecture (native Ghostty on macOS, browser fallback elsewhere) is operational
 - [x] Harness launch/resume flows are integrated
 - [x] Terminal tabs support attach/detach/reattach and replay
 - [x] Terminal lifecycle coverage is tested

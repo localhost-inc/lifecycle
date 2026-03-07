@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
+    "icon:generate": "bun run scripts/generate-icons.ts",
     "vite:dev": "vite",
     "vite:build": "vite build",
     "lint": "oxlint src",

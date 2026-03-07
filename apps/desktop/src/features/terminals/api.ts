@@ -86,6 +86,33 @@ export interface SavedTerminalAttachment {
   relativePath: string;
 }
 
+export interface NativeTerminalCapabilities {
+  available: boolean;
+}
+
+export interface NativeTerminalTheme {
+  background: string;
+  cursorColor: string;
+  foreground: string;
+  palette: string[];
+  selectionBackground: string;
+  selectionForeground: string;
+}
+
+export interface SyncNativeTerminalSurfaceInput {
+  appearance: "dark" | "light";
+  focused: boolean;
+  fontSize: number;
+  height: number;
+  scaleFactor: number;
+  terminalId: string;
+  theme: NativeTerminalTheme;
+  visible: boolean;
+  width: number;
+  x: number;
+  y: number;
+}
+
 interface BrowserReplayChunk {
   cursor: string;
   data: string;
@@ -114,6 +141,8 @@ interface BrowserTerminalCommandResult {
 
 const BROWSER_TERMINALS_STORAGE_KEY = "lifecycle.desktop.browser.terminals.v1";
 const BROWSER_TERMINAL_REPLAY_LIMIT = 400;
+
+let nativeTerminalCapabilitiesPromise: Promise<NativeTerminalCapabilities> | null = null;
 
 let browserTerminalState = readBrowserTerminalState();
 
@@ -571,6 +600,50 @@ export async function createTerminal(input: CreateTerminalInput): Promise<Termin
     workspaceId: input.workspaceId,
   });
   return result.terminal;
+}
+
+export async function getNativeTerminalCapabilities(): Promise<NativeTerminalCapabilities> {
+  if (!isTauri()) {
+    return { available: false };
+  }
+
+  if (!nativeTerminalCapabilitiesPromise) {
+    nativeTerminalCapabilitiesPromise = invoke<NativeTerminalCapabilities>(
+      "native_terminal_capabilities",
+    );
+  }
+
+  return nativeTerminalCapabilitiesPromise;
+}
+
+export async function syncNativeTerminalSurface(
+  input: SyncNativeTerminalSurfaceInput,
+): Promise<void> {
+  if (!isTauri()) {
+    return;
+  }
+
+  await invoke<void>("sync_native_terminal_surface", {
+    appearance: input.appearance,
+    focused: input.focused,
+    fontSize: input.fontSize,
+    height: input.height,
+    scaleFactor: input.scaleFactor,
+    terminalId: input.terminalId,
+    theme: input.theme,
+    visible: input.visible,
+    width: input.width,
+    x: input.x,
+    y: input.y,
+  });
+}
+
+export async function hideNativeTerminalSurface(terminalId: string): Promise<void> {
+  if (!isTauri()) {
+    return;
+  }
+
+  await invoke<void>("hide_native_terminal_surface", { terminalId });
 }
 
 export async function attachTerminalStream(

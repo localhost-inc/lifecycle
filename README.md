@@ -45,6 +45,8 @@ packages/
   contracts/    Shared domain contracts and manifest parsing/validation
   runtime/      WorkspaceProvider interfaces and local provider stubs
   ui/           Shared UI primitives and theme tokens
+vendor/
+  ghostty.lock  Pinned upstream Ghostty revision used for native desktop embedding
 docs/
   vision.md             Product vision and direction
   plan.md     Milestone status and task checklists
@@ -64,6 +66,18 @@ From repo root:
 5. `bun run test:rust` - run desktop Rust tests
 6. `bun run qa` - run default quality gate (`qa:js` + Rust tests)
 7. `bun run build` - run workspace builds
+
+## Desktop App Icon
+
+The desktop app icon source of truth lives at `apps/desktop/src-tauri/app-icon.svg`.
+
+Regenerate the checked-in Tauri icon bundle with:
+
+```bash
+bun --filter @lifecycle/desktop run icon:generate
+```
+
+This refreshes the generated files under `apps/desktop/src-tauri/icons`, which `apps/desktop/src-tauri/tauri.conf.json` uses for desktop bundling.
 
 ## Package Scripts
 

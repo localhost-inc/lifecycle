@@ -138,7 +138,7 @@ export function DashboardLayout() {
   }, [navigate]);
 
   return (
-    <div className="flex h-screen w-screen flex-col bg-[var(--background)] text-[var(--foreground)]">
+    <div className="flex h-full w-full flex-col bg-[var(--background)] text-[var(--foreground)]">
       <TitleBar selectedWorkspace={selectedWorkspace} />
       <div className="flex min-h-0 flex-1">
         <Sidebar
