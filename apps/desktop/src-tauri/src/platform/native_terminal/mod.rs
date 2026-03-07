@@ -18,6 +18,7 @@ pub enum NativeTerminalColorScheme {
 mod imp {
     use super::{NativeTerminalColorScheme, NativeTerminalFrame};
     use crate::capabilities::workspaces::terminal::complete_native_terminal_exit;
+    use crate::platform::diagnostics;
     use crate::shared::errors::LifecycleError;
     use std::ffi::{c_char, c_int, c_void, CStr, CString};
     use std::path::Path;
@@ -59,6 +60,7 @@ mod imp {
             webview_view: *mut c_void,
             config: *const LifecycleNativeTerminalConfig,
         ) -> bool;
+        fn lifecycle_native_terminal_install_diagnostics(log_path: *const c_char);
         fn lifecycle_native_terminal_hide(terminal_id: *const c_char) -> bool;
         fn lifecycle_native_terminal_close(terminal_id: *const c_char) -> bool;
     }
@@ -141,9 +143,24 @@ mod imp {
         }
     }
 
-    pub fn initialize(app: AppHandle, db_path: String) -> Result<(), LifecycleError> {
+    pub fn initialize(
+        app: AppHandle,
+        db_path: String,
+        diagnostics_log_path: Option<&Path>,
+    ) -> Result<(), LifecycleError> {
         let _ = RUNTIME_CONTEXT.set(NativeTerminalRuntimeContext { app, db_path });
         configure_process_environment();
+
+        if let Some(path) = diagnostics_log_path.and_then(|value| value.to_str()) {
+            if let Ok(log_path) = CString::new(path) {
+                unsafe { lifecycle_native_terminal_install_diagnostics(log_path.as_ptr()) };
+            } else {
+                diagnostics::append_diagnostic(
+                    "native-terminal",
+                    "skipped native diagnostics install because the log path contained a NUL byte",
+                );
+            }
+        }
 
         with_error(
             || unsafe { lifecycle_native_terminal_initialize(native_terminal_exit_callback) },
@@ -215,7 +232,11 @@ mod imp {
     use std::ffi::c_void;
     use tauri::AppHandle;
 
-    pub fn initialize(_app: AppHandle, _db_path: String) -> Result<(), LifecycleError> {
+    pub fn initialize(
+        _app: AppHandle,
+        _db_path: String,
+        _diagnostics_log_path: Option<&std::path::Path>,
+    ) -> Result<(), LifecycleError> {
         Ok(())
     }
 
@@ -253,7 +274,7 @@ pub fn is_available() -> bool {
 }
 
 pub fn initialize(app: tauri::AppHandle, db_path: String) -> Result<(), LifecycleError> {
-    imp::initialize(app, db_path)
+    imp::initialize(app, db_path, crate::platform::diagnostics::diagnostic_log_path())
 }
 
 #[allow(clippy::too_many_arguments)]

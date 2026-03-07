@@ -19,17 +19,21 @@ Embedded Ghostty's `command` surface option is not a generic argv launch path. T
 
 For keyboard input, the embedded bridge also needs to honor `ghostty_surface_key_translation_mods(...)` before it calls `interpretKeyEvents`. Raw AppKit modifier flags are not always the same modifiers Ghostty expects for text translation, and that mismatch can show up first in plain shells where normal echoed printable input is the primary interaction mode.
 
-Even after modifier translation is correct, a hand-built key event can still be "good enough" for raw-mode TUIs while failing plain shell line input. If Ghostty ignores a printable key event, the bridge needs a direct `ghostty_surface_text(...)` fallback for the printable text so canonical shell input still arrives.
+The bigger keyboard regression was architectural: ordinary printable typing was being routed through `ghostty_surface_text(...)`. Embedded Ghostty treats that API like clipboard paste input, not like a normal keystroke. Raw-mode TUIs can sometimes appear to tolerate that, but canonical shell echo depends on ordinary printable keys flowing through `ghostty_surface_key(...)` with the translated `NSEvent` text attached. `ghostty_surface_text(...)` should stay reserved for actual paste-style input paths.
+
+`tauri dev` does not preserve useful context when the desktop child exits from native code. If the app aborts or dies from an uncaught native exception, the dev loop usually only reports that `target/debug/Lifecycle` exited with status `1`. Native desktop work therefore needs a durable diagnostics file plus panic/exception/signal hooks in the app process itself.
 
 ## Impact
 
 - Native terminal sync/hide/close failures should degrade into actionable errors instead of process exits.
 - Crash investigations need to distinguish process death from native view failures that can now be reported through the command path.
+- Crash investigations need an app-owned diagnostics file, because the dev runner and unified log often only show `appDeath` without a usable stack or exception reason.
 - Native shell launch regressions should be evaluated against Ghostty's embedded command semantics first, not against our PTY launch helpers.
-- Native keyboard regressions need to be checked against both raw-mode TUIs and canonical shell echo, because one can pass while the other is still broken.
+- Native keyboard regressions need to be checked against both raw-mode TUIs and canonical shell echo, because one can pass while the other is still broken and can hide that the bridge is incorrectly using paste-style text injection for ordinary typing.
 
 ## Follow-Up
 
 - Add persistent panic/error logging for the desktop app so future silent exits leave breadcrumbs even when they are not hard macOS crashes.
 - If a caught native exception still appears during terminal sync, log the full exception name/reason with terminal ID and sync context.
 - If shell tabs still need a Lifecycle-controlled shell executable, add that through a dedicated native-shell startup contract rather than passing an interactive shell string via `surfaceConfig.command`.
+- Keep the macOS bridge aligned with upstream Ghostty's `keyDown`, `performKeyEquivalent`, `doCommand`, and preedit flows; avoid local "send raw text if it seems printable" heuristics unless the upstream embed contract changes.

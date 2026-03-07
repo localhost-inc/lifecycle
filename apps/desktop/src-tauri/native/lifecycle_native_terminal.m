@@ -3,6 +3,11 @@
 #import <QuartzCore/QuartzCore.h>
 #import <stdbool.h>
 
+#include <fcntl.h>
+#include <signal.h>
+#include <string.h>
+#include <unistd.h>
+
 #include "ghostty.h"
 
 typedef void (*LifecycleNativeTerminalExitCallback)(const char *terminal_id, int32_t exit_code);
@@ -24,11 +29,108 @@ typedef struct {
   bool dark;
 } LifecycleNativeTerminalConfig;
 
+@class LifecycleNativeTerminalView;
+static LifecycleNativeTerminalView *lifecycleTerminalViewForSurface(ghostty_surface_t surface);
+
 static ghostty_app_t gGhosttyApp = NULL;
 static ghostty_config_t gGhosttyConfig = NULL;
 static LifecycleNativeTerminalExitCallback gExitCallback = NULL;
 static NSMutableDictionary<NSString *, NSView *> *gTerminalViews;
 static NSString *gLastError;
+static NSString *gDiagnosticsLogPath;
+static int gDiagnosticsLogFd = -1;
+
+static void lifecycleWriteDiagnosticUTF8(const char *value, size_t length) {
+  if (value == NULL || length == 0) {
+    return;
+  }
+
+  if (gDiagnosticsLogFd >= 0) {
+    (void)write(gDiagnosticsLogFd, value, length);
+  }
+  (void)write(STDERR_FILENO, value, length);
+}
+
+static void lifecycleAppendDiagnosticLine(NSString *message) {
+  if (message.length == 0) {
+    return;
+  }
+
+  NSString *line = [NSString stringWithFormat:@"%@\n", message];
+  const char *utf8 = line.UTF8String;
+  if (utf8 == NULL) {
+    return;
+  }
+
+  lifecycleWriteDiagnosticUTF8(utf8, strlen(utf8));
+}
+
+static NSString *lifecycleDebugString(NSString *value) {
+  if (value == nil) {
+    return @"<nil>";
+  }
+
+  return [[[value stringByReplacingOccurrencesOfString:@"\\" withString:@"\\\\"]
+      stringByReplacingOccurrencesOfString:@"\n" withString:@"\\n"]
+      stringByReplacingOccurrencesOfString:@"\r" withString:@"\\r"];
+}
+
+static size_t lifecycleWriteSignalNumber(char *buffer, size_t capacity, int signalNumber) {
+  if (capacity == 0) {
+    return 0;
+  }
+
+  if (signalNumber == 0) {
+    buffer[0] = '0';
+    return 1;
+  }
+
+  char reversed[32];
+  size_t reversedLength = 0;
+  int value = signalNumber;
+  while (value > 0 && reversedLength < sizeof(reversed)) {
+    reversed[reversedLength++] = (char)('0' + (value % 10));
+    value /= 10;
+  }
+
+  size_t length = 0;
+  while (length < reversedLength && length < capacity) {
+    buffer[length] = reversed[reversedLength - length - 1];
+    length += 1;
+  }
+
+  return length;
+}
+
+static void lifecycleNativeTerminalSignalHandler(int signalNumber) {
+  static const char prefix[] = "[signal] Lifecycle received fatal signal ";
+  static const char suffix[] = "\n";
+  lifecycleWriteDiagnosticUTF8(prefix, sizeof(prefix) - 1);
+
+  char numberBuffer[32];
+  size_t numberLength = lifecycleWriteSignalNumber(numberBuffer, sizeof(numberBuffer), signalNumber);
+  lifecycleWriteDiagnosticUTF8(numberBuffer, numberLength);
+  lifecycleWriteDiagnosticUTF8(suffix, sizeof(suffix) - 1);
+
+  signal(signalNumber, SIG_DFL);
+  kill(getpid(), signalNumber);
+}
+
+static void lifecycleInstallSignalHandler(int signalNumber) {
+  struct sigaction action;
+  memset(&action, 0, sizeof(action));
+  action.sa_handler = lifecycleNativeTerminalSignalHandler;
+  sigemptyset(&action.sa_mask);
+  action.sa_flags = SA_RESETHAND;
+  sigaction(signalNumber, &action, NULL);
+}
+
+static void lifecycleNativeTerminalUncaughtExceptionHandler(NSException *exception) {
+  NSString *name = exception.name ?: @"NSException";
+  NSString *reason = exception.reason ?: @"(no reason provided)";
+  lifecycleAppendDiagnosticLine(
+      [NSString stringWithFormat:@"[exception] %@ (%@)", reason, name]);
+}
 
 static void lifecycleSetLastError(NSString *error) {
   gLastError = [error copy];
@@ -176,12 +278,6 @@ static BOOL lifecycleGhosttyTextIsPrintable(NSString *text) {
   return YES;
 }
 
-static BOOL lifecycleGhosttyRequiresKeyEncoding(NSEventModifierFlags flags) {
-  const NSEventModifierFlags specialFlags =
-      NSEventModifierFlagControl | NSEventModifierFlagCommand | NSEventModifierFlagOption;
-  return (flags & specialFlags) != 0;
-}
-
 static void lifecycleGhosttySendText(ghostty_surface_t surface, NSString *text) {
   if (surface == NULL || text.length == 0) {
     return;
@@ -193,22 +289,6 @@ static void lifecycleGhosttySendText(ghostty_surface_t surface, NSString *text) 
   }
 
   ghostty_surface_text(surface, utf8, strlen(utf8));
-}
-
-static void lifecycleGhosttyDispatchKeyEvent(ghostty_surface_t surface,
-                                             ghostty_input_key_s keyEvent,
-                                             NSString *text) {
-  const BOOL printableText = lifecycleGhosttyTextIsPrintable(text);
-  if (printableText) {
-    keyEvent.text = text.UTF8String;
-  }
-
-  if (!ghostty_surface_key(surface, keyEvent) && printableText) {
-    // Ghostty's full key event path is preferred because it preserves
-    // modifier-aware encodings. If the event is ignored, fall back to raw text
-    // injection so canonical shell input still receives printable characters.
-    lifecycleGhosttySendText(surface, text);
-  }
 }
 
 static ghostty_input_key_s lifecycleGhosttyKeyEvent(NSEvent *event,
@@ -234,6 +314,64 @@ static ghostty_input_key_s lifecycleGhosttyKeyEvent(NSEvent *event,
   return keyEvent;
 }
 
+static BOOL lifecycleGhosttyKeyAction(ghostty_surface_t surface,
+                                      ghostty_input_action_e action,
+                                      NSEvent *event,
+                                      NSEvent *translationEvent,
+                                      NSString *text,
+                                      BOOL composing) {
+  if (surface == NULL || event == nil) {
+    return NO;
+  }
+
+  id view = lifecycleTerminalViewForSurface(surface);
+  NSString *terminalId = @"<unknown>";
+  if (view != nil) {
+    NSString *viewTerminalId = [view valueForKey:@"terminalId"];
+    if (viewTerminalId.length > 0) {
+      terminalId = viewTerminalId;
+    }
+  }
+  ghostty_input_key_s keyEvent =
+      lifecycleGhosttyKeyEvent(event, action,
+                               translationEvent == nil ? event.modifierFlags
+                                                       : translationEvent.modifierFlags);
+  keyEvent.composing = composing;
+
+  NSData *utf8Data = nil;
+  NSUInteger textLength = text.length;
+  NSUInteger utf8Length = 0;
+  unsigned int firstByte = 0;
+  if (textLength > 0) {
+    utf8Data = [text dataUsingEncoding:NSUTF8StringEncoding allowLossyConversion:NO];
+    utf8Length = utf8Data.length;
+    if (utf8Length > 0) {
+      const unsigned char *bytes = (const unsigned char *)utf8Data.bytes;
+      firstByte = bytes[0];
+      if (firstByte >= 0x20 && lifecycleGhosttyTextIsPrintable(text)) {
+        keyEvent.text = (const char *)bytes;
+      }
+    }
+  }
+
+  lifecycleAppendDiagnosticLine([NSString
+      stringWithFormat:
+          @"[key-action] terminal=%@ action=%d keycode=%hu mods=0x%lx consumed=0x%x "
+          @"textLen=%lu utf8Len=%lu firstByte=0x%02x text=%@ composing=%d before-call",
+          terminalId, action, (unsigned short)event.keyCode, (unsigned long)event.modifierFlags,
+          keyEvent.consumed_mods, (unsigned long)textLength,
+          (unsigned long)utf8Length, firstByte, lifecycleDebugString(text), composing]);
+  BOOL handled = ghostty_surface_key(surface, keyEvent);
+  lifecycleAppendDiagnosticLine([NSString
+      stringWithFormat:
+          @"[key-action] terminal=%@ action=%d keycode=%hu mods=0x%lx consumed=0x%x "
+          @"textLen=%lu utf8Len=%lu firstByte=0x%02x text=%@ composing=%d handled=%d",
+          terminalId, action, (unsigned short)event.keyCode, (unsigned long)event.modifierFlags,
+          keyEvent.consumed_mods, (unsigned long)textLength,
+          (unsigned long)utf8Length, firstByte, lifecycleDebugString(text), composing, handled]);
+  return handled;
+}
+
 @interface LifecycleNativeTerminalView : NSView <NSTextInputClient>
 @property(nonatomic, readonly) NSString *terminalId;
 @property(nonatomic, assign) ghostty_surface_t surface;
@@ -241,6 +379,7 @@ static ghostty_input_key_s lifecycleGhosttyKeyEvent(NSEvent *event,
 @property(nonatomic, copy) NSString *appliedThemeConfigPath;
 @property(nonatomic, strong) NSMutableAttributedString *markedText;
 @property(nonatomic, strong) NSMutableArray<NSString *> *keyTextAccumulator;
+@property(nonatomic, strong) NSNumber *lastPerformKeyEvent;
 @property(nonatomic, assign) BOOL reportedExit;
 @property(nonatomic, assign) BOOL wantsFocus;
 @property(nonatomic, assign) NSUInteger focusRequestGeneration;
@@ -297,6 +436,7 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   _appliedThemeConfigPath = nil;
   _markedText = [[NSMutableAttributedString alloc] init];
   _keyTextAccumulator = nil;
+  _lastPerformKeyEvent = nil;
   _reportedExit = NO;
   _wantsFocus = NO;
   _focusRequestGeneration = 0;
@@ -654,15 +794,88 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
 }
 
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
-  if (self.window.firstResponder != self) {
+  if (event.type != NSEventTypeKeyDown) {
     return NO;
   }
 
-  if ((event.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagControl)) == 0) {
+  BOOL focused = self.window != nil && self.window.isKeyWindow &&
+                 lifecycleWindowFirstResponderBelongsToView(self.window, self);
+  if (!focused || self.surface == NULL) {
     return NO;
   }
 
-  [self keyDown:event];
+  ghostty_input_key_s bindingEvent =
+      lifecycleGhosttyKeyEvent(event, GHOSTTY_ACTION_PRESS, event.modifierFlags);
+  NSString *bindingText = event.characters ?: @"";
+  if (bindingText.length > 0) {
+    bindingEvent.text = bindingText.UTF8String;
+  }
+
+  ghostty_binding_flags_e bindingFlags = 0;
+  if (ghostty_surface_key_is_binding(self.surface, bindingEvent, &bindingFlags)) {
+    BOOL consumed = (bindingFlags & GHOSTTY_BINDING_FLAGS_CONSUMED) != 0;
+    BOOL all = (bindingFlags & GHOSTTY_BINDING_FLAGS_ALL) != 0;
+    BOOL performable = (bindingFlags & GHOSTTY_BINDING_FLAGS_PERFORMABLE) != 0;
+    if (consumed && !all && !performable && NSApp.mainMenu != nil &&
+        [NSApp.mainMenu performKeyEquivalent:event]) {
+      return YES;
+    }
+
+    [self keyDown:event];
+    return YES;
+  }
+
+  NSString *equivalent = nil;
+  NSString *charactersIgnoringModifiers = event.charactersIgnoringModifiers;
+  if ([charactersIgnoringModifiers isEqualToString:@"\r"]) {
+    if ((event.modifierFlags & NSEventModifierFlagControl) == 0) {
+      return NO;
+    }
+    equivalent = @"\r";
+  } else if ([charactersIgnoringModifiers isEqualToString:@"/"]) {
+    const NSEventModifierFlags disallowed =
+        NSEventModifierFlagShift | NSEventModifierFlagCommand | NSEventModifierFlagOption;
+    if ((event.modifierFlags & NSEventModifierFlagControl) == 0 ||
+        (event.modifierFlags & disallowed) != 0) {
+      return NO;
+    }
+    equivalent = @"_";
+  } else {
+    if (event.timestamp == 0) {
+      return NO;
+    }
+
+    if ((event.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagControl)) == 0) {
+      self.lastPerformKeyEvent = nil;
+      return NO;
+    }
+
+    if (self.lastPerformKeyEvent != nil &&
+        self.lastPerformKeyEvent.doubleValue == event.timestamp) {
+      self.lastPerformKeyEvent = nil;
+      equivalent = event.characters ?: @"";
+    } else {
+      self.lastPerformKeyEvent = @(event.timestamp);
+      return NO;
+    }
+  }
+
+  NSEvent *finalEvent =
+      [NSEvent keyEventWithType:NSEventTypeKeyDown
+                       location:event.locationInWindow
+                  modifierFlags:event.modifierFlags
+                      timestamp:event.timestamp
+                   windowNumber:event.windowNumber
+                        context:nil
+                     characters:equivalent
+    charactersIgnoringModifiers:equivalent
+                      isARepeat:event.isARepeat
+                        keyCode:event.keyCode];
+  if (finalEvent == nil) {
+    return NO;
+  }
+
+  [self keyDown:finalEvent];
   return YES;
 }
 
@@ -705,6 +918,22 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   ghostty_surface_key(self.surface, keyEvent);
 }
 
+- (void)syncPreeditClearIfNeeded:(BOOL)clearIfNeeded {
+  if (self.surface == NULL) {
+    return;
+  }
+
+  if (self.markedText.length > 0) {
+    NSString *text = self.markedText.string;
+    const char *utf8 = text.UTF8String;
+    if (utf8 != NULL) {
+      ghostty_surface_preedit(self.surface, utf8, strlen(utf8));
+    }
+  } else if (clearIfNeeded) {
+    ghostty_surface_preedit(self.surface, NULL, 0);
+  }
+}
+
 - (void)keyDown:(NSEvent *)event {
   if (self.surface == NULL) {
     [super keyDown:event];
@@ -714,42 +943,53 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   ghostty_input_action_e action =
       event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS;
   NSEvent *translationEvent = lifecycleGhosttyTranslationEvent(self.surface, event);
+  lifecycleAppendDiagnosticLine([NSString
+      stringWithFormat:
+          @"[keyDown] terminal=%@ keycode=%hu mods=0x%lx chars=%@ charsIgnoring=%@ translated=%@",
+          self.terminalId, (unsigned short)event.keyCode, (unsigned long)event.modifierFlags,
+          lifecycleDebugString(event.characters), lifecycleDebugString(event.charactersIgnoringModifiers),
+          lifecycleDebugString(translationEvent.characters)]);
 
   self.keyTextAccumulator = [[NSMutableArray alloc] init];
+  BOOL markedTextBefore = self.markedText.length > 0;
+  self.lastPerformKeyEvent = nil;
   [self interpretKeyEvents:@[ translationEvent ]];
   NSArray<NSString *> *pendingText = [self.keyTextAccumulator copy];
   self.keyTextAccumulator = nil;
+  [self syncPreeditClearIfNeeded:markedTextBefore];
+  lifecycleAppendDiagnosticLine([NSString
+      stringWithFormat:@"[keyDown] terminal=%@ pendingTextCount=%lu markedBefore=%d markedAfter=%d",
+                       self.terminalId, (unsigned long)pendingText.count, markedTextBefore,
+                       self.markedText.length > 0]);
 
   if (pendingText.count > 0) {
+    NSString *translationTextStorage = nil;
+    (void)lifecycleGhosttyTextForEvent(translationEvent, &translationTextStorage);
+    NSUInteger pendingIndex = 0;
     for (NSString *text in pendingText) {
-      if (lifecycleGhosttyTextIsPrintable(text) &&
-          !lifecycleGhosttyRequiresKeyEncoding(translationEvent.modifierFlags)) {
-        lifecycleGhosttySendText(self.surface, text);
-        continue;
+      NSString *effectiveText = text;
+      if (effectiveText.length == 0 && translationTextStorage.length > 0 && pendingText.count == 1 &&
+          !markedTextBefore && self.markedText.length == 0) {
+        effectiveText = translationTextStorage;
       }
 
-      ghostty_input_key_s keyEvent =
-          lifecycleGhosttyKeyEvent(event, action, translationEvent.modifierFlags);
-      keyEvent.composing = false;
-      lifecycleGhosttyDispatchKeyEvent(self.surface, keyEvent, text);
+      lifecycleAppendDiagnosticLine([NSString
+          stringWithFormat:@"[keyDown] terminal=%@ pendingText[%lu]=%@ effective=%@",
+                           self.terminalId, (unsigned long)pendingIndex,
+                           lifecycleDebugString(text), lifecycleDebugString(effectiveText)]);
+      lifecycleGhosttyKeyAction(self.surface, action, event, translationEvent, effectiveText, NO);
+      pendingIndex += 1;
     }
     return;
   }
 
   NSString *textStorage = nil;
-  ghostty_input_key_s keyEvent =
-      lifecycleGhosttyKeyEvent(event, action, translationEvent.modifierFlags);
-  keyEvent.composing = self.hasMarkedText;
-  keyEvent.text = lifecycleGhosttyTextForEvent(translationEvent, &textStorage);
-  if (lifecycleGhosttyTextIsPrintable(textStorage) &&
-      !lifecycleGhosttyRequiresKeyEncoding(translationEvent.modifierFlags)) {
-    lifecycleGhosttySendText(self.surface, textStorage);
-    return;
-  }
-
-  if (!ghostty_surface_key(self.surface, keyEvent) && lifecycleGhosttyTextIsPrintable(textStorage)) {
-    lifecycleGhosttySendText(self.surface, textStorage);
-  }
+  (void)lifecycleGhosttyTextForEvent(translationEvent, &textStorage);
+  lifecycleAppendDiagnosticLine([NSString
+      stringWithFormat:@"[keyDown] terminal=%@ fallbackText=%@", self.terminalId,
+                       lifecycleDebugString(textStorage)]);
+  lifecycleGhosttyKeyAction(self.surface, action, event, translationEvent, textStorage,
+                            self.markedText.length > 0 || markedTextBefore);
 }
 
 - (void)keyUp:(NSEvent *)event {
@@ -765,6 +1005,13 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
 
 - (void)insertText:(id)string replacementRange:(NSRange)replacementRange {
   (void)replacementRange;
+  if (NSApp.currentEvent == nil) {
+    lifecycleAppendDiagnosticLine([NSString
+        stringWithFormat:@"[insertText] terminal=%@ skipped because currentEvent is nil",
+                         self.terminalId]);
+    return;
+  }
+
   NSString *text = nil;
   if ([string isKindOfClass:[NSAttributedString class]]) {
     text = ((NSAttributedString *)string).string;
@@ -775,6 +1022,10 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   if (text.length == 0) {
     return;
   }
+
+  lifecycleAppendDiagnosticLine([NSString
+      stringWithFormat:@"[insertText] terminal=%@ text=%@ accumulating=%d", self.terminalId,
+                       lifecycleDebugString(text), self.keyTextAccumulator != nil]);
 
   [self unmarkText];
 
@@ -787,6 +1038,12 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
 }
 
 - (void)doCommandBySelector:(SEL)selector {
+  if (self.lastPerformKeyEvent != nil && NSApp.currentEvent != nil &&
+      self.lastPerformKeyEvent.doubleValue == NSApp.currentEvent.timestamp) {
+    [NSApp sendEvent:NSApp.currentEvent];
+    return;
+  }
+
   (void)selector;
 }
 
@@ -805,15 +1062,15 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
 
   if (text == nil) {
     [self.markedText replaceCharactersInRange:NSMakeRange(0, self.markedText.length) withString:@""];
-    if (self.surface != NULL) {
-      ghostty_surface_preedit(self.surface, NULL, 0);
+    if (self.keyTextAccumulator == nil) {
+      [self syncPreeditClearIfNeeded:YES];
     }
     return;
   }
 
   [self.markedText replaceCharactersInRange:NSMakeRange(0, self.markedText.length) withString:text];
-  if (self.surface != NULL) {
-    ghostty_surface_preedit(self.surface, text.UTF8String, strlen(text.UTF8String));
+  if (self.keyTextAccumulator == nil) {
+    [self syncPreeditClearIfNeeded:YES];
   }
 }
 
@@ -823,9 +1080,7 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   }
 
   [self.markedText replaceCharactersInRange:NSMakeRange(0, self.markedText.length) withString:@""];
-  if (self.surface != NULL) {
-    ghostty_surface_preedit(self.surface, NULL, 0);
-  }
+  [self syncPreeditClearIfNeeded:YES];
 }
 
 - (BOOL)hasMarkedText {
@@ -889,6 +1144,9 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return;
   }
 
+  lifecycleAppendDiagnosticLine([NSString
+      stringWithFormat:@"[paste] terminal=%@ text=%@", self.terminalId,
+                       lifecycleDebugString(string)]);
   lifecycleGhosttySendText(self.surface, string);
 }
 
@@ -1052,6 +1310,39 @@ bool lifecycle_native_terminal_initialize(LifecycleNativeTerminalExitCallback ca
 
 const char *lifecycle_native_terminal_last_error(void) {
   return gLastError.UTF8String;
+}
+
+void lifecycle_native_terminal_install_diagnostics(const char *log_path) {
+  @autoreleasepool {
+    if (log_path == NULL) {
+      return;
+    }
+
+    NSString *resolvedPath = [NSString stringWithUTF8String:log_path];
+    if (resolvedPath.length == 0) {
+      return;
+    }
+
+    gDiagnosticsLogPath = [resolvedPath copy];
+    if (gDiagnosticsLogFd >= 0) {
+      close(gDiagnosticsLogFd);
+      gDiagnosticsLogFd = -1;
+    }
+
+    gDiagnosticsLogFd =
+        open(gDiagnosticsLogPath.fileSystemRepresentation, O_WRONLY | O_CREAT | O_APPEND, 0644);
+
+    NSSetUncaughtExceptionHandler(&lifecycleNativeTerminalUncaughtExceptionHandler);
+    lifecycleInstallSignalHandler(SIGABRT);
+    lifecycleInstallSignalHandler(SIGSEGV);
+    lifecycleInstallSignalHandler(SIGBUS);
+    lifecycleInstallSignalHandler(SIGILL);
+    lifecycleInstallSignalHandler(SIGTRAP);
+
+    lifecycleAppendDiagnosticLine(
+        [NSString stringWithFormat:@"[native-terminal] diagnostics installed at %@",
+                                   gDiagnosticsLogPath]);
+  }
 }
 
 static BOOL lifecycleApplySurfaceTheme(LifecycleNativeTerminalView *view,

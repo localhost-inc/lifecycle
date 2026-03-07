@@ -21,7 +21,7 @@ pub fn run() {
     let supervisors: SupervisorMap = Arc::new(Mutex::new(HashMap::new()));
     let terminal_supervisors: TerminalSupervisorMap = Arc::new(Mutex::new(HashMap::new()));
 
-    tauri::Builder::default()
+    let run_result = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -31,6 +31,7 @@ pub fn run() {
                 .app_data_dir()
                 .expect("failed to resolve app data dir");
             std::fs::create_dir_all(&app_data_dir).ok();
+            crate::platform::diagnostics::initialize(&app_data_dir);
             let db_path = app_data_dir.join("lifecycle.db");
             let db_path_str = db_path.to_string_lossy().to_string();
 
@@ -41,9 +42,6 @@ pub fn run() {
                 native_terminal::initialize(app.handle().clone(), db_path_str.clone())
                     .expect("failed to initialize native terminal runtime");
             }
-
-            // Initialize tracing
-            tracing_subscriber::fmt::init();
 
             Ok(())
         })
@@ -76,6 +74,13 @@ pub fn run() {
             capabilities::workspaces::commands::detach_terminal,
             capabilities::workspaces::commands::kill_terminal,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .run(tauri::generate_context!());
+
+    if let Err(error) = run_result {
+        crate::platform::diagnostics::append_error(
+            "tauri-run",
+            format!("error while running tauri application: {error}"),
+        );
+        panic!("error while running tauri application: {error}");
+    }
 }
