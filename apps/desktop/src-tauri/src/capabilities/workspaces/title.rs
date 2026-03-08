@@ -1,120 +1,286 @@
+use crate::platform::db::open_db;
 use crate::shared::errors::LifecycleError;
+use rusqlite::params;
 use serde_json::Value;
-use std::collections::HashMap;
-use std::path::PathBuf;
+use std::collections::HashSet;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::AppHandle;
 use tokio::process::Command;
 use tokio::time::timeout;
 
-use super::query::TerminalRow;
-use super::rename;
+use super::rename::{self, TitleOrigin};
 
 const TITLE_GENERATION_TIMEOUT: Duration = Duration::from_secs(8);
 
-#[derive(Debug, Default)]
-struct PromptCaptureState {
-    buffer: String,
-    captured: bool,
-    in_escape_sequence: bool,
+fn auto_title_registry() -> &'static Mutex<HashSet<String>> {
+    static REGISTRY: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+    REGISTRY.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
-fn prompt_capture_registry() -> &'static Mutex<HashMap<String, PromptCaptureState>> {
-    static REGISTRY: OnceLock<Mutex<HashMap<String, PromptCaptureState>>> = OnceLock::new();
-    REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-pub fn maybe_schedule_terminal_auto_title(
+pub fn maybe_schedule_terminal_auto_title_from_harness_completion(
     app: &AppHandle,
     db_path: &str,
-    terminal: &TerminalRow,
-    data: &str,
+    terminal_id: &str,
+    workspace_id: &str,
+    harness_provider: &str,
+    session_log_path: &Path,
 ) {
-    if terminal.launch_type != "harness" {
-        clear_prompt_capture(&terminal.id);
+    let should_generate = match should_generate_title(db_path, terminal_id, workspace_id) {
+        Ok(value) => value,
+        Err(error) => {
+            tracing::warn!(
+                "failed to determine title generation eligibility for terminal {}: {error}",
+                terminal_id
+            );
+            return;
+        }
+    };
+    if !should_generate {
         return;
     }
 
-    let Some(prompt) = capture_first_prompt(&terminal.id, data) else {
+    let Some(prompt) = read_first_prompt_from_session_log(harness_provider, session_log_path)
+    else {
         return;
     };
 
+    {
+        let mut registry = auto_title_registry().lock().unwrap();
+        if !registry.insert(terminal_id.to_string()) {
+            return;
+        }
+    }
+
     let app = app.clone();
     let db_path = db_path.to_string();
-    let terminal_id = terminal.id.clone();
-    let workspace_id = terminal.workspace_id.clone();
+    let terminal_id = terminal_id.to_string();
+    let workspace_id = workspace_id.to_string();
+
     tauri::async_runtime::spawn(async move {
         let title = generate_title(&prompt)
             .await
             .unwrap_or_else(|_| fallback_title(&prompt));
-        if title.is_empty() {
-            return;
+        if !title.is_empty() {
+            if let Err(error) =
+                rename::maybe_apply_generated_terminal_label(&app, &db_path, &terminal_id, &title)
+            {
+                tracing::warn!(
+                    "failed to apply generated terminal label {}: {error}",
+                    terminal_id
+                );
+            }
+
+            if let Err(error) = rename::maybe_apply_generated_workspace_name(
+                app.clone(),
+                &db_path,
+                &workspace_id,
+                &title,
+            )
+            .await
+            {
+                tracing::warn!(
+                    "failed to apply generated workspace name {}: {error}",
+                    workspace_id
+                );
+            }
         }
 
-        if let Err(error) =
-            rename::maybe_apply_generated_terminal_label(&app, &db_path, &terminal_id, &title)
-        {
-            tracing::warn!("failed to apply generated terminal label {}: {error}", terminal_id);
-        }
-
-        if let Err(error) =
-            rename::maybe_apply_generated_workspace_name(app.clone(), &db_path, &workspace_id, &title)
-                .await
-        {
-            tracing::warn!(
-                "failed to apply generated workspace name {}: {error}",
-                workspace_id
-            );
-        }
+        let mut registry = auto_title_registry().lock().unwrap();
+        registry.remove(&terminal_id);
     });
 }
 
-fn clear_prompt_capture(terminal_id: &str) {
-    let mut registry = prompt_capture_registry().lock().unwrap();
-    registry.remove(terminal_id);
+fn should_generate_title(
+    db_path: &str,
+    terminal_id: &str,
+    workspace_id: &str,
+) -> Result<bool, LifecycleError> {
+    let conn = open_db(db_path)?;
+    conn.query_row(
+        "SELECT terminal.label_origin, workspace.name_origin
+         FROM terminal
+         INNER JOIN workspace ON workspace.id = terminal.workspace_id
+         WHERE terminal.id = ?1
+           AND workspace.id = ?2
+         LIMIT 1",
+        params![terminal_id, workspace_id],
+        |row| {
+            let terminal_origin: String = row.get(0)?;
+            let workspace_origin: String = row.get(1)?;
+            Ok(terminal_origin == TitleOrigin::Default.as_str()
+                || workspace_origin == TitleOrigin::Default.as_str())
+        },
+    )
+    .map_err(|error| match error {
+        rusqlite::Error::QueryReturnedNoRows => {
+            LifecycleError::WorkspaceNotFound(terminal_id.to_string())
+        }
+        _ => LifecycleError::Database(error.to_string()),
+    })
 }
 
-fn capture_first_prompt(terminal_id: &str, data: &str) -> Option<String> {
-    let mut registry = prompt_capture_registry().lock().unwrap();
-    let state = registry.entry(terminal_id.to_string()).or_default();
-    if state.captured {
-        return None;
-    }
+fn read_first_prompt_from_session_log(
+    harness_provider: &str,
+    session_log_path: &Path,
+) -> Option<String> {
+    let file = File::open(session_log_path).ok()?;
+    read_first_prompt_from_session_reader(harness_provider, BufReader::new(file))
+}
 
-    for ch in data.chars() {
-        if state.in_escape_sequence {
-            if ('@'..='~').contains(&ch) {
-                state.in_escape_sequence = false;
-            }
+fn read_first_prompt_from_session_reader<R: BufRead>(
+    harness_provider: &str,
+    reader: R,
+) -> Option<String> {
+    for line in reader.lines().map_while(Result::ok) {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
             continue;
         }
 
-        match ch {
-            '\u{1b}' => {
-                state.in_escape_sequence = true;
-            }
-            '\u{3}' => {
-                state.buffer.clear();
-            }
-            '\u{8}' | '\u{7f}' => {
-                state.buffer.pop();
-            }
-            '\r' | '\n' => {
-                let prompt = state.buffer.trim().to_string();
-                state.buffer.clear();
-                if prompt.is_empty() {
-                    continue;
-                }
-                state.captured = true;
-                return Some(prompt);
-            }
-            _ if ch.is_control() => {}
-            _ => state.buffer.push(ch),
+        let Ok(value) = serde_json::from_str::<Value>(trimmed) else {
+            continue;
+        };
+
+        let prompt = match harness_provider {
+            "claude" => extract_claude_prompt(&value),
+            "codex" => extract_codex_prompt(&value),
+            _ => None,
+        };
+
+        if let Some(normalized_prompt) = prompt.and_then(|prompt| normalize_prompt_text(&prompt)) {
+            return Some(normalized_prompt);
         }
     }
 
     None
+}
+
+fn extract_claude_prompt(value: &Value) -> Option<String> {
+    if json_string_at_path(value, &["type"]) != Some("user") {
+        return None;
+    }
+    if value
+        .get("isMeta")
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return None;
+    }
+
+    let message = value.get("message")?;
+    if json_string_at_path(message, &["role"]) != Some("user") {
+        return None;
+    }
+
+    extract_text_from_message_content(message)
+}
+
+fn extract_codex_prompt(value: &Value) -> Option<String> {
+    if json_string_at_path(value, &["type"]) == Some("event_msg")
+        && json_string_at_path(value, &["payload", "type"]) == Some("user_message")
+    {
+        return value
+            .get("payload")
+            .and_then(|payload| payload.get("message"))
+            .and_then(Value::as_str)
+            .map(str::to_string);
+    }
+
+    if json_string_at_path(value, &["type"]) == Some("response_item")
+        && json_string_at_path(value, &["payload", "type"]) == Some("message")
+        && json_string_at_path(value, &["payload", "role"]) == Some("user")
+    {
+        return value
+            .get("payload")
+            .and_then(extract_text_from_message_content);
+    }
+
+    if json_string_at_path(value, &["type"]) == Some("message")
+        && json_string_at_path(value, &["role"]) == Some("user")
+    {
+        return extract_text_from_message_content(value);
+    }
+
+    None
+}
+
+fn extract_text_from_message_content(message: &Value) -> Option<String> {
+    let content = message.get("content")?;
+
+    if let Some(text) = content.as_str() {
+        return Some(text.to_string());
+    }
+
+    let items = content.as_array()?;
+    let mut fragments = Vec::new();
+
+    for item in items {
+        match item.get("type").and_then(Value::as_str) {
+            Some("text") | Some("input_text") => {
+                if let Some(text) = item.get("text").and_then(Value::as_str) {
+                    fragments.push(text.to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if fragments.is_empty() {
+        None
+    } else {
+        Some(fragments.join("\n"))
+    }
+}
+
+fn normalize_prompt_text(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let mut lines = Vec::new();
+    for line in trimmed.lines() {
+        let next = line.trim();
+        if lines.is_empty() && next.eq_ignore_ascii_case("## My request for Codex:") {
+            continue;
+        }
+        if next.is_empty() {
+            continue;
+        }
+        lines.push(next);
+    }
+
+    let collapsed = lines.join(" ");
+    let normalized = collapsed.split_whitespace().collect::<Vec<_>>().join(" ");
+    if normalized.is_empty() || is_scaffolding_prompt(&normalized) {
+        return None;
+    }
+
+    Some(normalized)
+}
+
+fn is_scaffolding_prompt(value: &str) -> bool {
+    let lowercase = value.to_ascii_lowercase();
+    lowercase.starts_with("<environment_context>")
+        || lowercase.starts_with("<local-command-caveat>")
+        || lowercase.starts_with("<command-name>")
+        || lowercase.starts_with("<command-message>")
+        || lowercase.starts_with("<command-args>")
+        || lowercase.starts_with("<local-command-stdout>")
+        || lowercase.starts_with("[request interrupted by user]")
+        || lowercase.starts_with("[image:")
+}
+
+fn json_string_at_path<'a>(value: &'a Value, path: &[&str]) -> Option<&'a str> {
+    let mut current = value;
+    for segment in path {
+        current = current.get(*segment)?;
+    }
+    current.as_str()
 }
 
 async fn generate_title(prompt: &str) -> Result<String, LifecycleError> {
@@ -298,27 +464,42 @@ fn capitalize(value: &str) -> String {
 }
 
 fn temp_file_path(prefix: &str, extension: &str) -> PathBuf {
-    std::env::temp_dir().join(format!(
-        "{prefix}-{}.{extension}",
-        uuid::Uuid::new_v4()
-    ))
+    std::env::temp_dir().join(format!("{prefix}-{}.{extension}", uuid::Uuid::new_v4()))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Cursor;
 
     #[test]
-    fn capture_first_prompt_accumulates_until_submit() {
-        let terminal_id = format!("title-test-{}", uuid::Uuid::new_v4());
-        clear_prompt_capture(&terminal_id);
+    fn codex_prompt_extraction_prefers_submitted_user_message() {
+        let log = concat!(
+            r#"{"timestamp":"2025-11-07T17:57:22.109Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<environment_context>\n  <cwd>/Users/kyle/dev/lifecycle</cwd>\n</environment_context>"}]}}"#,
+            "\n",
+            r#"{"timestamp":"2025-11-07T17:57:22.118Z","type":"event_msg","payload":{"type":"user_message","message":"\n## My request for Codex:\nfix workspace rename flow\n","images":[]}}"#
+        );
 
-        assert_eq!(capture_first_prompt(&terminal_id, "fix workspace "), None);
         assert_eq!(
-            capture_first_prompt(&terminal_id, "rename flow\r"),
+            read_first_prompt_from_session_reader("codex", Cursor::new(log)),
             Some("fix workspace rename flow".to_string())
         );
-        assert_eq!(capture_first_prompt(&terminal_id, "ignored\r"), None);
+    }
+
+    #[test]
+    fn claude_prompt_extraction_skips_meta_and_tool_results() {
+        let log = concat!(
+            r#"{"type":"user","isMeta":true,"message":{"role":"user","content":"<local-command-caveat>ignore this</local-command-caveat>"}}"#,
+            "\n",
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"ignored"}]}}"#,
+            "\n",
+            r#"{"type":"user","message":{"role":"user","content":[{"type":"text","text":"rename workspace and session tabs"}]}}"#
+        );
+
+        assert_eq!(
+            read_first_prompt_from_session_reader("claude", Cursor::new(log)),
+            Some("rename workspace and session tabs".to_string())
+        );
     }
 
     #[test]

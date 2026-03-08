@@ -121,6 +121,7 @@ interface CommandHookContext<TInput = unknown, TResult = unknown> {
   - `terminal.status_changed`
   - `terminal.renamed`
   - `terminal.removed`
+  - `terminal.harness_prompt_submitted`
   - `terminal.harness_turn_completed`
 
 ### Hooks
@@ -141,6 +142,31 @@ interface CommandHookContext<TInput = unknown, TResult = unknown> {
 3. Do not promise one global total order across the whole app.
 4. Use `correlation_id` and `causation_id` to connect command execution to resulting events.
 5. Consumers must tolerate duplicate delivery and should dedupe by `id` where replay or fanout paths exist.
+
+## Harness Turn Semantics
+
+Harness turn facts are semantic lifecycle events, not transport streams.
+
+1. `terminal.harness_prompt_submitted` means the harness accepted a submitted user prompt as a turn boundary.
+2. `terminal.harness_prompt_submitted` is emitted once per submitted turn, not per keystroke, PTY input chunk, or renderer-local input change.
+3. `terminal.harness_prompt_submitted` must be emitted by authoritative provider/runtime/backend code after the submit boundary is known.
+4. `terminal.harness_turn_completed` is a separate fact that means the harness finished responding for a turn.
+5. Auto-title logic that wants immediate first-prompt titles should listen to `terminal.harness_prompt_submitted`, not `terminal.harness_turn_completed`.
+6. Until `terminal.harness_prompt_submitted` exists, the backend may temporarily recover the first prompt from the authoritative harness session log when the first `terminal.harness_turn_completed` fact arrives.
+7. When `terminal.label_origin == default` and `workspace.name_origin == default`, the first submitted harness prompt may trigger title derivation followed by `terminal.renamed` and `workspace.renamed`.
+
+Suggested normalized payload for `terminal.harness_prompt_submitted`:
+
+```ts
+interface TerminalHarnessPromptSubmittedPayload {
+  terminal_id: string;
+  workspace_id: string;
+  harness_provider?: string;
+  harness_session_id?: string;
+  prompt_text: string;
+  turn_id?: string;
+}
+```
 
 ## What Belongs on the Kernel
 
@@ -212,6 +238,7 @@ Current runtime signals should normalize into kernel events along these lines:
 | terminal rename | `terminal.renamed` |
 | terminal status change | `terminal.status_changed` |
 | terminal removal | `terminal.removed` |
+| harness prompt submission | `terminal.harness_prompt_submitted` |
 | harness response completion | `terminal.harness_turn_completed` |
 
 The desktop store may continue to use narrower in-process event types, but those should be adapters over this kernel, not an independent contract.
@@ -264,6 +291,7 @@ Scope:
    - status changes
    - rename
    - removal
+   - semantic harness prompt submission
    - semantic completion events such as harness turn completion
 4. Keep temporary adapters for existing Tauri event names only where needed for rollout.
 

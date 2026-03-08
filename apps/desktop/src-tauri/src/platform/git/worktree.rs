@@ -65,10 +65,12 @@ pub async fn move_worktree(
     workspace_id: &str,
 ) -> Result<String, LifecycleError> {
     let current_path = Path::new(current_worktree_path);
-    let parent = current_path.parent().ok_or_else(|| LifecycleError::GitOperationFailed {
-        operation: "move worktree".to_string(),
-        reason: "worktree path has no parent directory".to_string(),
-    })?;
+    let parent = current_path
+        .parent()
+        .ok_or_else(|| LifecycleError::GitOperationFailed {
+            operation: "move worktree".to_string(),
+            reason: "worktree path has no parent directory".to_string(),
+        })?;
     let next_path = parent.join(worktree_directory_name(workspace_name, workspace_id));
     let next_path_str = next_path.to_string_lossy().into_owned();
 
@@ -365,7 +367,10 @@ mod tests {
         .expect("worktree should move");
 
         assert_ne!(initial_path, moved_path);
-        assert!(!Path::new(&initial_path).exists(), "old path should be removed");
+        assert!(
+            !Path::new(&initial_path).exists(),
+            "old path should be removed"
+        );
         assert!(Path::new(&moved_path).exists(), "new path should exist");
 
         let worktree_list = git_output(&repo_path, &["worktree", "list"]);

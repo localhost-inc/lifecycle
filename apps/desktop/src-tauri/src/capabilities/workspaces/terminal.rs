@@ -375,14 +375,14 @@ pub async fn attach_terminal(
 }
 
 pub async fn write_terminal(
-    app: AppHandle,
+    _app: AppHandle,
     db_path: State<'_, DbPath>,
     terminal_supervisors: State<'_, TerminalSupervisorMap>,
     terminal_id: String,
     data: String,
 ) -> Result<(), LifecycleError> {
     let db = db_path.0.clone();
-    let terminal = load_terminal_row(&db, &terminal_id)?
+    load_terminal_row(&db, &terminal_id)?
         .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.clone()))?;
     let supervisor = {
         let terminals = terminal_supervisors.lock().await;
@@ -392,7 +392,6 @@ pub async fn write_terminal(
 
     supervisor.write(&data)?;
     touch_terminal(&db, &terminal_id)?;
-    super::title::maybe_schedule_terminal_auto_title(&app, &db, &terminal, &data);
     Ok(())
 }
 
@@ -824,6 +823,14 @@ fn watch_harness_turn_completions(
                         harness_session_id,
                         &completion.completion_key,
                         completion.turn_id.as_deref(),
+                    );
+                    super::title::maybe_schedule_terminal_auto_title_from_harness_completion(
+                        app,
+                        db_path,
+                        terminal_id,
+                        workspace_id,
+                        provider.name,
+                        path,
                     );
                 }
             }

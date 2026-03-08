@@ -89,8 +89,11 @@ fn ensure_terminal_launch_columns(conn: &rusqlite::Connection) -> Result<(), Lif
 
 fn ensure_terminal_metadata_columns(conn: &rusqlite::Connection) -> Result<(), LifecycleError> {
     if !column_exists(conn, "terminal", "launch_worktree_path") {
-        conn.execute("ALTER TABLE terminal ADD COLUMN launch_worktree_path TEXT", [])
-            .map_err(|e| LifecycleError::Database(e.to_string()))?;
+        conn.execute(
+            "ALTER TABLE terminal ADD COLUMN launch_worktree_path TEXT",
+            [],
+        )
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
     }
 
     if !column_exists(conn, "terminal", "label_origin") {
