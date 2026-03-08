@@ -7,8 +7,9 @@ import {
   useRef,
   useState,
 } from "react";
-import { SidebarInset, SidebarProvider } from "@lifecycle/ui";
+import { SidebarInset } from "@lifecycle/ui";
 import { Outlet, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { AppHotkeyListener } from "../../app/app-hotkey-listener";
 import { addProjectFromDirectory } from "../../features/projects/api/projects";
 import { projectKeys, useProjectCatalog } from "../../features/projects/hooks";
 import { useSettings } from "../../features/settings/state/app-settings-provider";
@@ -43,6 +44,25 @@ import { AppStatusBar } from "./app-status-bar";
 import { TitleBar } from "./title-bar";
 
 const SIDEBAR_RESIZE_STEP = 16;
+const LEFT_SIDEBAR_RAIL_CLASS_NAME =
+  "flex min-h-0 shrink-0 overflow-hidden bg-[var(--sidebar-background)]";
+const LEFT_SIDEBAR_RAIL_TRANSITION_CLASS_NAME = "transition-[width] duration-200 ease-linear";
+
+export function getLeftSidebarRailClassName(resizing: boolean): string {
+  return resizing
+    ? LEFT_SIDEBAR_RAIL_CLASS_NAME
+    : `${LEFT_SIDEBAR_RAIL_CLASS_NAME} ${LEFT_SIDEBAR_RAIL_TRANSITION_CLASS_NAME}`;
+}
+
+export function getLeftSidebarRailWidth({
+  collapsed,
+  width,
+}: {
+  collapsed: boolean;
+  width: number;
+}): string {
+  return collapsed ? "0px" : `${width}px`;
+}
 
 export function DashboardLayout() {
   const client = useStoreClient();
@@ -241,11 +261,7 @@ export function DashboardLayout() {
       }
 
       setRightSidebarWidth(
-        getRightSidebarWidthFromPointer(
-          event.clientX,
-          bounds.right,
-          rightSidebarBoundsRef.current,
-        ),
+        getRightSidebarWidthFromPointer(event.clientX, bounds.right, rightSidebarBoundsRef.current),
       );
     };
 
@@ -430,27 +446,32 @@ export function DashboardLayout() {
 
   return (
     <div className="flex h-full w-full flex-col bg-[var(--background)] text-[var(--foreground)]">
+      <AppHotkeyListener />
       <div ref={layoutRowRef} className="flex min-h-0 flex-1">
         <ShellResizeProvider resizing={activeSidebarResize !== null}>
-          <SidebarProvider
-            className="min-h-0 flex-1"
-            open={!leftSidebarCollapsed}
-            onOpenChange={(open) => setLeftSidebarCollapsed(!open)}
-            sidebarWidth={`${leftSidebarWidth}px`}
-            sidebarWidthIcon="0px"
-          >
-            <Sidebar
-              isLoading={projectCatalogQuery.isLoading || workspacesByProjectQuery.isLoading}
-              projects={projects}
-              workspacesByProjectId={workspacesByProjectId}
-              selectedProjectId={activeProjectId}
-              selectedWorkspaceId={selectedWorkspaceId}
-              onSelectProject={handleSelectProject}
-              onSelectWorkspace={handleSelectWorkspace}
-              onAddProject={handleAddProject}
-              onCreateWorkspace={handleCreateWorkspace}
-              onOpenSettings={handleOpenSettings}
-            />
+          <div className="flex min-h-0 w-full flex-1">
+            <div
+              className={getLeftSidebarRailClassName(activeSidebarResize === "left")}
+              style={{
+                width: getLeftSidebarRailWidth({
+                  collapsed: leftSidebarCollapsed,
+                  width: leftSidebarWidth,
+                }),
+              }}
+            >
+              <Sidebar
+                isLoading={projectCatalogQuery.isLoading || workspacesByProjectQuery.isLoading}
+                projects={projects}
+                workspacesByProjectId={workspacesByProjectId}
+                selectedProjectId={activeProjectId}
+                selectedWorkspaceId={selectedWorkspaceId}
+                onSelectProject={handleSelectProject}
+                onSelectWorkspace={handleSelectWorkspace}
+                onAddProject={handleAddProject}
+                onCreateWorkspace={handleCreateWorkspace}
+                onOpenSettings={handleOpenSettings}
+              />
+            </div>
             <div className="relative w-px shrink-0">
               <div
                 role="separator"
@@ -501,7 +522,7 @@ export function DashboardLayout() {
                 />
               </>
             )}
-          </SidebarProvider>
+          </div>
         </ShellResizeProvider>
       </div>
       <AppStatusBar />

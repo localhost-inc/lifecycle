@@ -34,11 +34,9 @@ function LauncherActionCard({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="flex min-h-28 flex-col items-start gap-3 rounded-3xl border border-[var(--border)] bg-[var(--panel)] px-4 py-4 text-left transition hover:border-[var(--foreground)]/30 hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+      className="flex flex-col items-start gap-3 rounded-3xl border border-[var(--border)] bg-[var(--panel)] px-4 py-4 text-left transition hover:border-[var(--foreground)]/30 hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
     >
-      <span className="text-[#b8b0a8]">
-        {icon}
-      </span>
+      <span className="text-[#b8b0a8]">{icon}</span>
       <div>
         <p className="text-sm font-medium text-[var(--foreground)]">{label}</p>
         <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{description}</p>
@@ -101,10 +99,10 @@ export function WorkspaceLauncherSurface({
         </div>
 
         <div className="mt-8 flex flex-col gap-3">
-          <p className="font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-[var(--muted-foreground)]/40">
+          <p className="font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-[var(--muted-foreground)]">
             Recent sessions
           </p>
-          <div className="max-h-60 overflow-y-auto rounded-3xl border border-[var(--border)] bg-[var(--panel)]">
+          <div className="overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--panel)]">
             {terminals.length > 0 ? (
               <TerminalSessionHistory
                 activeTerminalId={activeTerminalId}

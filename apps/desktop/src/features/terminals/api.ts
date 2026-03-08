@@ -113,6 +113,7 @@ export interface SyncNativeTerminalSurfaceInput {
   focused: boolean;
   fontSize: number;
   height: number;
+  pointerPassthrough: boolean;
   scaleFactor: number;
   terminalId: string;
   theme: NativeTerminalTheme;
@@ -666,6 +667,7 @@ export async function syncNativeTerminalSurface(
     focused: input.focused,
     fontSize: input.fontSize,
     height: input.height,
+    pointerPassthrough: input.pointerPassthrough,
     scaleFactor: input.scaleFactor,
     terminalId: input.terminalId,
     theme: input.theme,

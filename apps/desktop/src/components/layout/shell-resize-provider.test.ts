@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  notifyShellResizeListeners,
-  subscribeToShellResize,
-} from "./shell-resize-provider";
+import { notifyShellResizeListeners, subscribeToShellResize } from "./shell-resize-provider";
 
 describe("shell resize notifications", () => {
   test("replays the current resize state to late subscribers", () => {

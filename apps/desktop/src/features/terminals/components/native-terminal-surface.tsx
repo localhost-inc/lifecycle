@@ -1,10 +1,7 @@
 import { Alert, AlertDescription, EmptyState, useTheme } from "@lifecycle/ui";
 import { TerminalSquare } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import {
-  subscribeToShellResize,
-  useShellResizeInProgress,
-} from "../../../components/layout/shell-resize-provider";
+import { subscribeToShellResize } from "../../../components/layout/shell-resize-provider";
 import {
   hideNativeTerminalSurface,
   syncNativeTerminalSurface,
@@ -19,35 +16,46 @@ interface NativeTerminalSurfaceProps {
   terminal: TerminalRow;
 }
 
-const NATIVE_TERMINAL_RESUME_DELAY_MS = 120;
+// DOM splitters cannot stack above the sibling native NSView, so keep the
+// embedded surface slightly inset from the shell seams.
+const NATIVE_TERMINAL_EDGE_GUTTER_PX = 6;
 
 export function shouldShowNativeTerminalSurface({
   active,
   hasLiveSession,
-  isShellResizeInProgress,
   height,
   width,
 }: {
   active: boolean;
   hasLiveSession: boolean;
-  isShellResizeInProgress: boolean;
   height: number;
   width: number;
 }): boolean {
-  return active && hasLiveSession && !isShellResizeInProgress && width > 1 && height > 1;
+  return active && hasLiveSession && width > 1 && height > 1;
+}
+
+export function resolveNativeTerminalSurfaceInteraction({
+  shellResizeInProgress,
+  visible,
+}: {
+  shellResizeInProgress: boolean;
+  visible: boolean;
+}): { focused: boolean; pointerPassthrough: boolean } {
+  return {
+    focused: visible && !shellResizeInProgress,
+    pointerPassthrough: shellResizeInProgress,
+  };
 }
 
 export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfaceProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const frameIdRef = useRef<number | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
-  const resumeTimeoutRef = useRef<number | null>(null);
+  const shellResizeInProgressRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const { terminalFontSize } = useSettings();
   const { preset, resolvedAppearance } = useTheme();
   const hasLiveSession = terminalHasLiveSession(terminal.status);
-  const isShellResizeInProgress = useShellResizeInProgress();
-  const shellResizeHoldRef = useRef(isShellResizeInProgress);
 
   const cancelScheduledSync = () => {
     if (frameIdRef.current === null) {
@@ -56,15 +64,6 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
 
     window.cancelAnimationFrame(frameIdRef.current);
     frameIdRef.current = null;
-  };
-
-  const clearResumeTimeout = () => {
-    if (resumeTimeoutRef.current === null) {
-      return;
-    }
-
-    window.clearTimeout(resumeTimeoutRef.current);
-    resumeTimeoutRef.current = null;
   };
 
   const hideSurface = async () => {
@@ -83,12 +82,10 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
     }
 
     const rect = host.getBoundingClientRect();
-    const shellResizeBlocked = shellResizeHoldRef.current || isShellResizeInProgress;
     const visible = shouldShowNativeTerminalSurface({
       active,
       hasLiveSession,
       height: rect.height,
-      isShellResizeInProgress: shellResizeBlocked,
       width: rect.width,
     });
     if (!visible) {
@@ -97,7 +94,13 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
     }
 
     try {
+      const interaction = resolveNativeTerminalSurfaceInteraction({
+        shellResizeInProgress: shellResizeInProgressRef.current,
+        visible,
+      });
+
       if (
+        interaction.focused &&
         document.activeElement instanceof HTMLElement &&
         document.activeElement !== document.body
       ) {
@@ -105,9 +108,10 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
       }
       await syncNativeTerminalSurface({
         appearance: resolvedAppearance,
-        focused: visible,
+        focused: interaction.focused,
         fontSize: terminalFontSize,
         height: rect.height,
+        pointerPassthrough: interaction.pointerPassthrough,
         scaleFactor: window.devicePixelRatio,
         terminalId: terminal.id,
         theme: resolveTerminalTheme(host, preset, resolvedAppearance).nativeTheme,
@@ -123,11 +127,6 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
   };
 
   const scheduleSync = () => {
-    if (shellResizeHoldRef.current || isShellResizeInProgress) {
-      cancelScheduledSync();
-      return;
-    }
-
     if (frameIdRef.current !== null) {
       return;
     }
@@ -139,43 +138,16 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
   };
 
   useEffect(() => {
-    if (!isShellResizeInProgress) {
-      return;
-    }
-
-    shellResizeHoldRef.current = true;
-    clearResumeTimeout();
-    cancelScheduledSync();
-    void hideSurface();
-  }, [isShellResizeInProgress, terminal.id]);
-
-  useEffect(() => {
     const unsubscribe = subscribeToShellResize((resizing) => {
-      if (resizing) {
-        shellResizeHoldRef.current = true;
-        clearResumeTimeout();
-        cancelScheduledSync();
-        void hideSurface();
-        return;
-      }
-
-      if (!shellResizeHoldRef.current) {
-        return;
-      }
-
-      clearResumeTimeout();
-      resumeTimeoutRef.current = window.setTimeout(() => {
-        resumeTimeoutRef.current = null;
-        shellResizeHoldRef.current = false;
-        scheduleSync();
-      }, NATIVE_TERMINAL_RESUME_DELAY_MS);
+      shellResizeInProgressRef.current = resizing;
+      cancelScheduledSync();
+      void syncSurface();
     });
 
     return () => {
       unsubscribe();
-      clearResumeTimeout();
     };
-  }, [scheduleSync, terminal.id]);
+  }, [active, hasLiveSession, preset, resolvedAppearance, terminal.id, terminalFontSize]);
 
   useEffect(() => {
     if (!hostRef.current) {
@@ -193,7 +165,6 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
     document.addEventListener("visibilitychange", scheduleSync);
 
     return () => {
-      clearResumeTimeout();
       cancelScheduledSync();
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
@@ -202,15 +173,7 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
       document.removeEventListener("visibilitychange", scheduleSync);
       void hideSurface();
     };
-  }, [
-    active,
-    hasLiveSession,
-    isShellResizeInProgress,
-    preset,
-    resolvedAppearance,
-    terminal.id,
-    terminalFontSize,
-  ]);
+  }, [active, hasLiveSession, preset, resolvedAppearance, terminal.id, terminalFontSize]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[var(--terminal-surface-background)]">
@@ -219,9 +182,14 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-hidden bg-[var(--terminal-surface-background)]">
         {hasLiveSession ? (
-          <div ref={hostRef} className="h-full w-full bg-[var(--terminal-surface-background)]" />
+          <div
+            className="h-full w-full"
+            style={{ paddingInline: `${NATIVE_TERMINAL_EDGE_GUTTER_PX}px` }}
+          >
+            <div ref={hostRef} className="h-full w-full bg-[var(--terminal-surface-background)]" />
+          </div>
         ) : (
           <EmptyState
             className="h-full"

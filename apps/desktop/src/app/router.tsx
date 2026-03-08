@@ -1,6 +1,5 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { DashboardLayout } from "../components/layout/dashboard-layout";
-import { RootShellLayout } from "../components/layout/root-shell-layout";
 import { DashboardIndexRoute } from "../features/dashboard/routes/dashboard-index-route";
 import { ProjectSettingsRoute } from "../features/projects/routes/project-settings-route";
 import { SettingsShellLayout } from "../features/settings/layout/settings-shell-layout";
@@ -35,77 +34,72 @@ export const router = createBrowserRouter([
   },
   {
     path: "/settings",
-    element: <RootShellLayout />,
+    element: <SettingsShellLayout />,
     children: [
       {
-        element: <SettingsShellLayout />,
-        children: [
-          {
-            index: true,
-            element: <Navigate to="general" replace />,
-          },
-          {
-            path: "general",
-            element: <SettingsGeneralRoute />,
-          },
-          {
-            path: "configuration",
-            element: (
-              <SettingsSectionPlaceholderRoute
-                title="Configuration"
-                description="Configuration settings are coming soon."
-              />
-            ),
-          },
-          {
-            path: "personalization",
-            element: <SettingsPersonalizationRoute />,
-          },
-          {
-            path: "mcp-servers",
-            element: (
-              <SettingsSectionPlaceholderRoute
-                title="MCP servers"
-                description="MCP server settings are coming soon."
-              />
-            ),
-          },
-          {
-            path: "git",
-            element: (
-              <SettingsSectionPlaceholderRoute
-                title="Git"
-                description="Git settings are coming soon."
-              />
-            ),
-          },
-          {
-            path: "environments",
-            element: (
-              <SettingsSectionPlaceholderRoute
-                title="Environments"
-                description="Environment settings are coming soon."
-              />
-            ),
-          },
-          {
-            path: "worktrees",
-            element: <SettingsWorktreesRoute />,
-          },
-          {
-            path: "archived-threads",
-            element: (
-              <SettingsSectionPlaceholderRoute
-                title="Archived threads"
-                description="Archived threads are coming soon."
-              />
-            ),
-          },
-          {
-            path: "*",
-            element: <Navigate to="/settings/general" replace />,
-          },
-        ],
+        index: true,
+        element: <Navigate to="general" replace />,
+      },
+      {
+        path: "general",
+        element: <SettingsGeneralRoute />,
+      },
+      {
+        path: "configuration",
+        element: (
+          <SettingsSectionPlaceholderRoute
+            title="Configuration"
+            description="Configuration settings are coming soon."
+          />
+        ),
+      },
+      {
+        path: "personalization",
+        element: <SettingsPersonalizationRoute />,
+      },
+      {
+        path: "mcp-servers",
+        element: (
+          <SettingsSectionPlaceholderRoute
+            title="MCP servers"
+            description="MCP server settings are coming soon."
+          />
+        ),
+      },
+      {
+        path: "git",
+        element: (
+          <SettingsSectionPlaceholderRoute
+            title="Git"
+            description="Git settings are coming soon."
+          />
+        ),
+      },
+      {
+        path: "environments",
+        element: (
+          <SettingsSectionPlaceholderRoute
+            title="Environments"
+            description="Environment settings are coming soon."
+          />
+        ),
+      },
+      {
+        path: "worktrees",
+        element: <SettingsWorktreesRoute />,
+      },
+      {
+        path: "archived-threads",
+        element: (
+          <SettingsSectionPlaceholderRoute
+            title="Archived threads"
+            description="Archived threads are coming soon."
+          />
+        ),
+      },
+      {
+        path: "*",
+        element: <Navigate to="/settings/general" replace />,
       },
     ],
   },

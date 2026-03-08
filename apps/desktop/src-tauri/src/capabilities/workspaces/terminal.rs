@@ -520,6 +520,7 @@ pub async fn sync_native_terminal_surface(
     height: f64,
     visible: bool,
     focused: bool,
+    pointer_passthrough: bool,
     appearance: String,
     theme: NativeTerminalTheme,
     font_size: f64,
@@ -575,6 +576,7 @@ pub async fn sync_native_terminal_surface(
             },
             visible,
             focused,
+            pointer_passthrough,
             &theme.background,
             &theme_override_path,
             font_size,
@@ -956,10 +958,9 @@ fn parse_harness_turn_completion(
 
             let turn_id = json_string_at_path(&value, &["payload", "turn_id"]);
             let last_agent_message_id =
-                json_string_at_path(&value, &["payload", "last_agent_message", "id"])
-                    .or_else(|| {
-                        json_string_at_path(&value, &["payload", "last_agent_message", "uuid"])
-                    });
+                json_string_at_path(&value, &["payload", "last_agent_message", "id"]).or_else(
+                    || json_string_at_path(&value, &["payload", "last_agent_message", "uuid"]),
+                );
 
             Some(HarnessTurnCompletion {
                 completion_key: build_harness_completion_key(

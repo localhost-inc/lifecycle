@@ -6,8 +6,12 @@ use crate::platform::db::{run_migrations, DbPath};
 use crate::platform::native_terminal;
 use crate::platform::runtime::supervisor::Supervisor;
 use crate::platform::runtime::terminal::TerminalSupervisor;
+#[cfg(target_os = "macos")]
+use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
+#[cfg(target_os = "macos")]
+use tauri::Emitter;
 use tauri::Manager;
 use tokio::sync::Mutex;
 
@@ -15,6 +19,19 @@ pub use shared::errors::LifecycleError;
 
 pub type SupervisorMap = Arc<Mutex<HashMap<String, Supervisor>>>;
 pub type TerminalSupervisorMap = Arc<Mutex<HashMap<String, TerminalSupervisor>>>;
+
+#[cfg(target_os = "macos")]
+const APP_HOTKEY_EVENT_NAME: &str = "app:shortcut";
+
+#[cfg(target_os = "macos")]
+const APP_MENU_ITEM_OPEN_SETTINGS: &str = "app.open-settings";
+
+#[cfg(target_os = "macos")]
+#[derive(Clone, Serialize)]
+struct AppShortcutEvent {
+    action: &'static str,
+    source: &'static str,
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -47,7 +64,22 @@ pub fn run() {
                     .expect("failed to initialize native terminal runtime");
             }
 
+            #[cfg(target_os = "macos")]
+            setup_app_menu(&app.handle()).expect("failed to initialize application menu");
+
             Ok(())
+        })
+        .on_menu_event(|app, event| {
+            #[cfg(target_os = "macos")]
+            if event.id() == APP_MENU_ITEM_OPEN_SETTINGS {
+                let _ = app.emit(
+                    APP_HOTKEY_EVENT_NAME,
+                    AppShortcutEvent {
+                        action: "open-settings",
+                        source: "menu",
+                    },
+                );
+            }
         })
         .manage(supervisors)
         .manage(terminal_supervisors)
@@ -120,5 +152,46 @@ fn disable_main_webview_scroll_elasticity(app: &tauri::AppHandle) -> Result<(), 
 
 #[cfg(not(target_os = "macos"))]
 fn disable_main_webview_scroll_elasticity(_app: &tauri::AppHandle) -> Result<(), LifecycleError> {
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn setup_app_menu(app: &tauri::AppHandle) -> Result<(), LifecycleError> {
+    use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+
+    let settings_item = MenuItemBuilder::with_id(APP_MENU_ITEM_OPEN_SETTINGS, "Settings...")
+        .accelerator("CmdOrCtrl+,")
+        .build(app)
+        .map_err(|error| {
+            LifecycleError::AttachFailed(format!("failed to build app menu: {error}"))
+        })?;
+
+    let lifecycle_menu = SubmenuBuilder::new(app, "Lifecycle")
+        .about(None)
+        .separator()
+        .item(&settings_item)
+        .separator()
+        .services()
+        .separator()
+        .hide()
+        .hide_others()
+        .separator()
+        .quit()
+        .build()
+        .map_err(|error| {
+            LifecycleError::AttachFailed(format!("failed to build app menu: {error}"))
+        })?;
+
+    let menu = MenuBuilder::new(app)
+        .item(&lifecycle_menu)
+        .build()
+        .map_err(|error| {
+            LifecycleError::AttachFailed(format!("failed to build root menu: {error}"))
+        })?;
+
+    menu.set_as_app_menu().map_err(|error| {
+        LifecycleError::AttachFailed(format!("failed to install app menu: {error}"))
+    })?;
+
     Ok(())
 }

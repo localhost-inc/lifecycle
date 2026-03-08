@@ -103,9 +103,7 @@ export function terminalResponseReadyReducer(
       for (const [terminalId, readyState] of Object.entries(state.readyStateByTerminalId)) {
         if (readyState.workspaceId === action.workspaceId) {
           changed = true;
-          if (
-            nextAcknowledgedCompletionKeyByTerminalId[terminalId] !== readyState.completionKey
-          ) {
+          if (nextAcknowledgedCompletionKeyByTerminalId[terminalId] !== readyState.completionKey) {
             nextAcknowledgedCompletionKeyByTerminalId = {
               ...nextAcknowledgedCompletionKeyByTerminalId,
               [terminalId]: readyState.completionKey,
@@ -177,7 +175,11 @@ export function terminalResponseReadyReducer(
 }
 
 export function getResponseReadyWorkspaceIds(state: TerminalResponseReadyState): string[] {
-  return [...new Set(Object.values(state.readyStateByTerminalId).map((readyState) => readyState.workspaceId))];
+  return [
+    ...new Set(
+      Object.values(state.readyStateByTerminalId).map((readyState) => readyState.workspaceId),
+    ),
+  ];
 }
 
 export function TerminalResponseReadyProvider({ children }: { children: ReactNode }) {

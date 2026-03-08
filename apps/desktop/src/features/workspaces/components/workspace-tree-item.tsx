@@ -58,18 +58,13 @@ export function WorkspaceTreeItem({
     <button
       className={cn(
         sidebarMenuSubButtonVariants({ active: selected }),
-        "relative gap-1.5 border-l-2 pl-[16px] pr-2",
-        selected
-          ? "border-l-[var(--sidebar-foreground)]"
-          : "border-l-[var(--sidebar-foreground)]/20",
+        "relative gap-1.5 pl-[16px] pr-2",
       )}
       onClick={onSelect}
       title={workspace.source_ref}
       type="button"
     >
-      {responseReady && (
-        <ResponseReadyDot className="absolute left-1 top-1/2 -translate-y-1/2" />
-      )}
+      {responseReady && <ResponseReadyDot className="absolute left-1 top-1/2 -translate-y-1/2" />}
       <StatusDot
         className={dotClassName[status]}
         pulse={dotPulse[status]}

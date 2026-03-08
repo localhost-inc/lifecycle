@@ -19,7 +19,7 @@ interface VersionControlPanelProps {
 export function getVersionControlTabClassName(active: boolean): string {
   return `rounded-[18px] px-4 py-1.5 text-sm font-semibold transition-all duration-200 ease-out ${
     active
-      ? "bg-[var(--surface-selected)] text-[var(--foreground)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_12px_30px_rgba(0,0,0,0.22)]"
+      ? "bg-[var(--surface-selected)] text-[var(--foreground)] shadow-[var(--tab-shadow)]"
       : "text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
   }`;
 }
@@ -29,7 +29,7 @@ export const VERSION_CONTROL_PANEL_BODY_CLASS_NAME = "px-2.5 pb-4 pt-1";
 export const VERSION_CONTROL_PANEL_EMPTY_STATE_CLASS_NAME = "px-2.5 py-4";
 const VERSION_CONTROL_PANEL_TABS_CLASS_NAME = cn(
   getVersionControlTabClassName(false),
-  "data-[state=active]:bg-[var(--surface-selected)] data-[state=active]:text-[var(--foreground)] data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_12px_30px_rgba(0,0,0,0.22)]",
+  "data-[state=active]:bg-[var(--surface-selected)] data-[state=active]:text-[var(--foreground)] data-[state=active]:shadow-[var(--tab-shadow)]",
 );
 
 export function VersionControlPanel({
@@ -74,8 +74,8 @@ export function VersionControlPanel({
           </TabsList>
         </Tabs>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className={VERSION_CONTROL_PANEL_BODY_CLASS_NAME}>
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className={cn("flex min-h-0 flex-1 flex-col", VERSION_CONTROL_PANEL_BODY_CLASS_NAME)}>
           {activeTab === "changes" ? (
             <ChangesTab
               error={gitStatusQuery.error}

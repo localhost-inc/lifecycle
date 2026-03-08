@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   ClaudeIcon,
   CodexIcon,
+  resolveSurfaceLaunchTooltipAlign,
   ShellIcon,
   SurfaceLaunchActions,
   type SurfaceLaunchAction,
@@ -31,6 +32,12 @@ const actions: SurfaceLaunchAction[] = [
 ];
 
 describe("SurfaceLaunchActions", () => {
+  test("right-aligns action tooltips away from the resize rail", () => {
+    expect(resolveSurfaceLaunchTooltipAlign(0, actions.length)).toBe("end");
+    expect(resolveSurfaceLaunchTooltipAlign(1, actions.length)).toBe("end");
+    expect(resolveSurfaceLaunchTooltipAlign(2, actions.length)).toBe("end");
+  });
+
   test("renders all action buttons with titles", () => {
     const markup = renderToStaticMarkup(
       createElement(SurfaceLaunchActions, {
@@ -43,13 +50,11 @@ describe("SurfaceLaunchActions", () => {
     expect(markup).toContain('title="New Claude session"');
     expect(markup).toContain('title="New Codex session"');
     expect(markup).toContain("rounded-lg");
-    expect(markup).toContain("gap-1.5");
+    expect(markup).toContain("gap-1");
   });
 
   test("renders loading dot when action is loading", () => {
-    const loadingActions = actions.map((a) =>
-      a.key === "shell" ? { ...a, loading: true } : a,
-    );
+    const loadingActions = actions.map((a) => (a.key === "shell" ? { ...a, loading: true } : a));
 
     const markup = renderToStaticMarkup(
       createElement(SurfaceLaunchActions, {

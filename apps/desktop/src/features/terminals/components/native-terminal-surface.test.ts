@@ -1,26 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { shouldShowNativeTerminalSurface } from "./native-terminal-surface";
+import {
+  resolveNativeTerminalSurfaceInteraction,
+  shouldShowNativeTerminalSurface,
+} from "./native-terminal-surface";
 
 describe("shouldShowNativeTerminalSurface", () => {
-  test("hides the native surface while shell sidebar resizing is in progress", () => {
-    expect(
-      shouldShowNativeTerminalSurface({
-        active: true,
-        hasLiveSession: true,
-        height: 640,
-        isShellResizeInProgress: true,
-        width: 960,
-      }),
-    ).toBeFalse();
-  });
-
   test("requires an active live session with measurable bounds", () => {
     expect(
       shouldShowNativeTerminalSurface({
         active: true,
         hasLiveSession: true,
         height: 640,
-        isShellResizeInProgress: false,
         width: 960,
       }),
     ).toBeTrue();
@@ -29,7 +19,6 @@ describe("shouldShowNativeTerminalSurface", () => {
         active: false,
         hasLiveSession: true,
         height: 640,
-        isShellResizeInProgress: false,
         width: 960,
       }),
     ).toBeFalse();
@@ -38,7 +27,6 @@ describe("shouldShowNativeTerminalSurface", () => {
         active: true,
         hasLiveSession: false,
         height: 640,
-        isShellResizeInProgress: false,
         width: 960,
       }),
     ).toBeFalse();
@@ -47,9 +35,34 @@ describe("shouldShowNativeTerminalSurface", () => {
         active: true,
         hasLiveSession: true,
         height: 1,
-        isShellResizeInProgress: false,
         width: 960,
       }),
     ).toBeFalse();
+  });
+});
+
+describe("resolveNativeTerminalSurfaceInteraction", () => {
+  test("keeps the native surface visible but non-interactive during shell drags", () => {
+    expect(
+      resolveNativeTerminalSurfaceInteraction({
+        shellResizeInProgress: true,
+        visible: true,
+      }),
+    ).toEqual({
+      focused: false,
+      pointerPassthrough: true,
+    });
+  });
+
+  test("restores focus when shell dragging is inactive", () => {
+    expect(
+      resolveNativeTerminalSurfaceInteraction({
+        shellResizeInProgress: false,
+        visible: true,
+      }),
+    ).toEqual({
+      focused: true,
+      pointerPassthrough: false,
+    });
   });
 });

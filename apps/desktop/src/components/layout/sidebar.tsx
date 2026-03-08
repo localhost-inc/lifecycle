@@ -4,7 +4,6 @@ import {
   Button,
   Collapsible,
   CollapsibleContent,
-  Sidebar as UiSidebar,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
@@ -47,7 +46,7 @@ export function createWorkspaceSelectionHandler(
   };
 }
 
-function detectPlatformHint(): string {
+export function detectPlatformHint(): string {
   if (typeof navigator === "undefined") {
     return "";
   }
@@ -146,7 +145,7 @@ export function Sidebar({
   );
 
   return (
-    <UiSidebar collapsible="icon">
+    <aside className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--sidebar-background)] text-[var(--sidebar-foreground)]">
       <SidebarHeader
         className={getSidebarHeaderClassName(shouldInsetSidebarHeader)}
         data-tauri-drag-region
@@ -195,7 +194,7 @@ export function Sidebar({
                   const workspaces = workspacesByProjectId[project.id] ?? [];
                   return (
                     <SidebarMenuItem key={project.id}>
-                      <Collapsible defaultOpen className="group/project">
+                      <Collapsible defaultOpen className="group/project w-full">
                         <ProjectItem
                           project={project}
                           selected={project.id === selectedProjectId}
@@ -242,6 +241,6 @@ export function Sidebar({
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
-    </UiSidebar>
+    </aside>
   );
 }

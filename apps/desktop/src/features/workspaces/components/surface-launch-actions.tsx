@@ -22,13 +22,26 @@ interface SurfaceLaunchActionsProps {
   onOpenLauncher?: () => void;
 }
 
+export function resolveSurfaceLaunchTooltipAlign(
+  index: number,
+  actionCount: number,
+): "center" | "end" {
+  void index;
+  void actionCount;
+  return "end";
+}
+
 function LoadingDot() {
   return (
     <span className="block h-[14px] w-[14px] animate-pulse rounded-full bg-current opacity-50" />
   );
 }
 
-export function SurfaceLaunchActions({ actions, onLaunch, onOpenLauncher }: SurfaceLaunchActionsProps) {
+export function SurfaceLaunchActions({
+  actions,
+  onLaunch,
+  onOpenLauncher,
+}: SurfaceLaunchActionsProps) {
   return (
     <TooltipProvider>
       <div className="flex shrink-0 items-center gap-1 px-0 py-0">
@@ -40,7 +53,15 @@ export function SurfaceLaunchActions({ actions, onLaunch, onOpenLauncher }: Surf
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted-foreground)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
                 onClick={onOpenLauncher}
               >
-                <svg fill="none" height="16" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" viewBox="0 0 16 16" width="16">
+                <svg
+                  fill="none"
+                  height="16"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeWidth="1.5"
+                  viewBox="0 0 16 16"
+                  width="16"
+                >
                   <path d="M8 3v10M3 8h10" />
                 </svg>
               </button>
@@ -48,7 +69,7 @@ export function SurfaceLaunchActions({ actions, onLaunch, onOpenLauncher }: Surf
             <TooltipContent>New Tab</TooltipContent>
           </Tooltip>
         )}
-        {actions.map((action) => (
+        {actions.map((action, index) => (
           <Tooltip key={action.key}>
             <TooltipTrigger asChild>
               <button
@@ -61,7 +82,9 @@ export function SurfaceLaunchActions({ actions, onLaunch, onOpenLauncher }: Surf
                 {action.loading ? <LoadingDot /> : action.icon}
               </button>
             </TooltipTrigger>
-            <TooltipContent>{action.title}</TooltipContent>
+            <TooltipContent align={resolveSurfaceLaunchTooltipAlign(index, actions.length)}>
+              {action.title}
+            </TooltipContent>
           </Tooltip>
         ))}
       </div>

@@ -78,13 +78,7 @@ function tabIconName(tab: WorkspaceSurfaceTab): string {
   return "file-diff";
 }
 
-function SurfaceBubble({
-  children,
-  tab,
-}: {
-  children: ReactNode;
-  tab: WorkspaceSurfaceTab;
-}) {
+function SurfaceBubble({ children, tab }: { children: ReactNode; tab: WorkspaceSurfaceTab }) {
   return (
     <span
       className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--background)]/70 text-current"
@@ -105,10 +99,7 @@ export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceSurfaceTab }
         {tab.responseReady ? (
           <ResponseReadyDot />
         ) : (
-          <TerminalProviderIcon
-            harnessProvider={tab.harnessProvider}
-            launchType={tab.launchType}
-          />
+          <TerminalProviderIcon harnessProvider={tab.harnessProvider} launchType={tab.launchType} />
         )}
         <TerminalStatusDot
           className="absolute -bottom-0.5 -right-0.5 ring-2 ring-[var(--background)]"

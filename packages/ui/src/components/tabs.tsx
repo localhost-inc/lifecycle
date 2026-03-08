@@ -8,10 +8,7 @@ function Tabs(props: TabsPrimitive.Root.Props) {
 function TabsList({ className, ...props }: TabsPrimitive.List.Props) {
   return (
     <TabsPrimitive.List
-      className={cn(
-        "inline-flex items-center gap-1 p-1",
-        className,
-      )}
+      className={cn("inline-flex items-center gap-1 p-1", className)}
       data-slot="tabs-list"
       {...props}
     />
@@ -22,7 +19,7 @@ function TabsTrigger({ className, ...props }: TabsPrimitive.Tab.Props) {
   return (
     <TabsPrimitive.Tab
       className={cn(
-        "inline-flex cursor-pointer items-center justify-center whitespace-nowrap rounded-[16px] px-4 py-2 text-sm font-semibold text-[var(--muted-foreground)] transition-all outline-none hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50 data-active:bg-[var(--surface-selected)] data-active:text-[var(--foreground)] data-active:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_24px_rgba(0,0,0,0.24)]",
+        "inline-flex cursor-pointer items-center justify-center whitespace-nowrap rounded-[8px] px-2.5 py-0.5 text-xs font-medium text-[var(--muted-foreground)] transition-all outline-none hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50 data-active:bg-[var(--surface-selected)] data-active:text-[var(--foreground)] data-active:shadow-[var(--tab-shadow)]",
         className,
       )}
       data-slot="tabs-trigger"

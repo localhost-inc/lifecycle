@@ -28,6 +28,7 @@ typedef struct {
   double font_size;
   double scale_factor;
   bool focused;
+  bool pointer_passthrough;
   bool hidden;
   bool dark;
 } LifecycleNativeTerminalConfig;
@@ -394,7 +395,10 @@ static BOOL lifecycleGhosttyKeyAction(ghostty_surface_t surface,
 @property(nonatomic, strong) NSNumber *lastPerformKeyEvent;
 @property(nonatomic, assign) BOOL reportedExit;
 @property(nonatomic, assign) BOOL wantsFocus;
+@property(nonatomic, assign) BOOL pointerPassthrough;
 @property(nonatomic, assign) NSUInteger focusRequestGeneration;
+@property(nonatomic, assign) NSUInteger lastSurfaceWidth;
+@property(nonatomic, assign) NSUInteger lastSurfaceHeight;
 @property(nonatomic, weak) NSWindow *observedWindow;
 @end
 
@@ -451,7 +455,10 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   _lastPerformKeyEvent = nil;
   _reportedExit = NO;
   _wantsFocus = NO;
+  _pointerPassthrough = NO;
   _focusRequestGeneration = 0;
+  _lastSurfaceWidth = 0;
+  _lastSurfaceHeight = 0;
 
   self.wantsLayer = YES;
   self.layer = [CAMetalLayer layer];
@@ -482,6 +489,14 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   return NO;
 }
 
+- (NSView *)hitTest:(NSPoint)point {
+  if (self.pointerPassthrough) {
+    return nil;
+  }
+
+  return [super hitTest:point];
+}
+
 - (void)dealloc {
   [self unregisterWindowNotifications];
   if (_surface != NULL) {
@@ -501,8 +516,15 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   }
 
   NSSize backingSize = [self convertSizeToBacking:bounds.size];
-  ghostty_surface_set_size(self.surface, (uint32_t)llround(backingSize.width),
-                           (uint32_t)llround(backingSize.height));
+  NSUInteger width = (NSUInteger)llround(backingSize.width);
+  NSUInteger height = (NSUInteger)llround(backingSize.height);
+  if (width == self.lastSurfaceWidth && height == self.lastSurfaceHeight) {
+    return;
+  }
+
+  ghostty_surface_set_size(self.surface, (uint32_t)width, (uint32_t)height);
+  self.lastSurfaceWidth = width;
+  self.lastSurfaceHeight = height;
 }
 
 - (void)syncContentScale {
@@ -606,7 +628,8 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
 
 - (void)syncGhosttyFocusState {
   BOOL windowFocused = self.window != nil && self.window.isKeyWindow;
-  BOOL wantsSurfaceFocus = self.wantsFocus && !self.hidden && windowFocused;
+  BOOL wantsSurfaceFocus = self.wantsFocus && !self.hidden && !self.pointerPassthrough &&
+                           windowFocused;
   BOOL surfaceFocused =
       wantsSurfaceFocus && lifecycleWindowFirstResponderBelongsToView(self.window, self);
 
@@ -619,8 +642,12 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
 }
 
 - (void)requestFocusIfNeeded {
-  if (!self.wantsFocus || self.hidden) {
+  if (!self.wantsFocus || self.hidden || self.pointerPassthrough) {
     self.focusRequestGeneration += 1;
+    NSWindow *window = self.window;
+    if (window != nil && window.firstResponder == self) {
+      [window makeFirstResponder:nil];
+    }
     [self syncGhosttyFocusState];
     return;
   }
@@ -1491,8 +1518,8 @@ static NSRect lifecycleFrameForConfig(NSView *webview, const LifecycleNativeTerm
                     config->width, config->height);
 }
 
-static LifecycleNativeTerminalView *lifecycleCreateTerminalView(NSView *webview,
-                                                                const LifecycleNativeTerminalConfig *config) {
+static LifecycleNativeTerminalView *lifecycleCreateTerminalView(
+    const LifecycleNativeTerminalConfig *config) {
   NSString *terminalId = [NSString stringWithUTF8String:config->terminal_id];
   LifecycleNativeTerminalView *view =
       [[LifecycleNativeTerminalView alloc] initWithTerminalId:terminalId];
@@ -1521,9 +1548,6 @@ static LifecycleNativeTerminalView *lifecycleCreateTerminalView(NSView *webview,
     view.surface = NULL;
     return nil;
   }
-  [view setFrame:lifecycleFrameForConfig(webview, config)];
-  [view syncContentScale];
-  [view syncSurfaceGeometry];
   return view;
 }
 
@@ -1552,7 +1576,7 @@ bool lifecycle_native_terminal_sync(void *webview_view,
       NSString *terminalId = [NSString stringWithUTF8String:config->terminal_id];
       LifecycleNativeTerminalView *view = (LifecycleNativeTerminalView *)gTerminalViews[terminalId];
       if (view == nil) {
-        view = lifecycleCreateTerminalView(webview, config);
+        view = lifecycleCreateTerminalView(config);
         if (view == nil) {
           return false;
         }
@@ -1564,9 +1588,9 @@ bool lifecycle_native_terminal_sync(void *webview_view,
         [container addSubview:view positioned:NSWindowAbove relativeTo:webview];
       }
 
-      [view setFrame:lifecycleFrameForConfig(webview, config)];
+      NSRect targetFrame = lifecycleFrameForConfig(webview, config);
+      [view setFrame:targetFrame];
       [view syncContentScale];
-      [view syncSurfaceGeometry];
 
       if (view.surface != NULL) {
         ghostty_surface_set_color_scheme(view.surface,
@@ -1578,6 +1602,7 @@ bool lifecycle_native_terminal_sync(void *webview_view,
         ghostty_surface_set_occlusion(view.surface, !config->hidden);
       }
 
+      view.pointerPassthrough = config->pointer_passthrough;
       view.wantsFocus = config->focused && !config->hidden;
       view.hidden = config->hidden;
       [view syncGhosttyFocusState];

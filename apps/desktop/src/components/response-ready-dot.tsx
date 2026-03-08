@@ -8,10 +8,7 @@ export function ResponseReadyDot({ className }: ResponseReadyDotProps) {
   return (
     <span
       aria-label="Response ready"
-      className={cn(
-        "relative inline-flex h-3 w-3 shrink-0 items-center justify-center",
-        className,
-      )}
+      className={cn("relative inline-flex h-3 w-3 shrink-0 items-center justify-center", className)}
       role="img"
       title="Response ready"
     >

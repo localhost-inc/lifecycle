@@ -15,10 +15,6 @@ interface TerminalStatusDotProps {
   status: TerminalStatus;
 }
 
-export function TerminalStatusDot({
-  className,
-  size = "default",
-  status,
-}: TerminalStatusDotProps) {
+export function TerminalStatusDot({ className, size = "default", status }: TerminalStatusDotProps) {
   return <StatusDot className={className} size={size} title={status} tone={STATUS_TONES[status]} />;
 }

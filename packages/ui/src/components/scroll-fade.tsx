@@ -22,11 +22,7 @@ function ScrollFade({
   const showRight = direction === "right" || direction === "both";
 
   return (
-    <div
-      className={cn("relative", className)}
-      style={style}
-      {...props}
-    >
+    <div className={cn("relative", className)} style={style} {...props}>
       {showLeft && (
         <div
           aria-hidden

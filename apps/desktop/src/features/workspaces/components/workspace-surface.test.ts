@@ -231,13 +231,7 @@ describe("workspace tab helpers", () => {
   });
 
   test("plans a launcher fallback when closing the final visible tab", () => {
-    expect(
-      getWorkspaceTabClosePlan(
-        ["terminal:1"],
-        "terminal:1",
-        "launcher:replacement",
-      ),
-    ).toEqual({
+    expect(getWorkspaceTabClosePlan(["terminal:1"], "terminal:1", "launcher:replacement")).toEqual({
       nextActiveKey: "launcher:replacement",
       openLauncher: true,
     });
@@ -261,9 +255,10 @@ describe("workspace tab helpers", () => {
   });
 
   test("preserves hidden runtime tabs until terminal queries finish loading", () => {
-    expect(
-      reconcileHiddenRuntimeTabKeys(["terminal:1", "terminal:2"], [], false),
-    ).toEqual(["terminal:1", "terminal:2"]);
+    expect(reconcileHiddenRuntimeTabKeys(["terminal:1", "terminal:2"], [], false)).toEqual([
+      "terminal:1",
+      "terminal:2",
+    ]);
 
     expect(
       reconcileHiddenRuntimeTabKeys(

@@ -254,7 +254,7 @@ export function WorkspaceSurfaceTabBar({
       />
       <div
         aria-label="Workspace tabs"
-        className="flex items-center gap-0.5 overflow-x-auto"
+        className="flex items-center gap-0.5 overflow-x-auto py-1"
         role="tablist"
       >
         {visibleTabs.map((tab) => {
@@ -289,11 +289,11 @@ export function WorkspaceSurfaceTabBar({
               aria-selected={active}
               className={`group relative flex max-w-[300px] shrink-0 touch-none select-none items-center gap-1.5 rounded-[18px] px-4 py-1.5 text-left text-sm font-semibold will-change-transform ${
                 active
-                  ? "bg-[var(--surface-selected)] text-[var(--foreground)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_12px_30px_rgba(0,0,0,0.22)]"
+                  ? "bg-[var(--surface-selected)] text-[var(--foreground)] shadow-[var(--tab-shadow)]"
                   : "text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
               } ${
                 isDraggedTab
-                  ? "pointer-events-none z-20 cursor-grabbing opacity-90 shadow-[0_16px_36px_rgba(0,0,0,0.28)] transition-none"
+                  ? "pointer-events-none z-20 cursor-grabbing opacity-90 shadow-[var(--tab-shadow-drag)] transition-none"
                   : "cursor-grab transition-[background-color,color,box-shadow,opacity,transform] duration-200 ease-out"
               } ${isDropTarget ? "ring-1 ring-[var(--foreground)]/35" : ""}`}
               onClick={() => handleTabClick(tab.key)}

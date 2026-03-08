@@ -562,7 +562,11 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
           renderTabLeading={(tab) => <WorkspaceSurfaceTabLeading tab={tab} />}
           visibleTabs={visibleTabs}
         />
-        <SurfaceLaunchActions actions={surfaceActions} onLaunch={handleLaunchSurface} onOpenLauncher={handleOpenLauncher} />
+        <SurfaceLaunchActions
+          actions={surfaceActions}
+          onLaunch={handleLaunchSurface}
+          onOpenLauncher={handleOpenLauncher}
+        />
       </div>
 
       {Boolean(terminalsQuery.error) && (

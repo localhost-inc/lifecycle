@@ -16,6 +16,6 @@ describe("theme.css", () => {
     const css = readFileSync(new URL("./theme.css", import.meta.url), "utf8");
 
     expect(css).toContain(':where(button, [role="button"])');
-    expect(css).toContain('cursor: pointer;');
+    expect(css).toContain("cursor: pointer;");
   });
 });

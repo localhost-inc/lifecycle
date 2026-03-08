@@ -1,4 +1,3 @@
-import { ScrollArea } from "@lifecycle/ui";
 import { formatCompactRelativeTime } from "../../../lib/format";
 import {
   terminalHasLiveSession,
@@ -52,69 +51,67 @@ export function TerminalSessionHistory({
   terminals,
 }: TerminalSessionHistoryProps) {
   return (
-    <ScrollArea className="max-h-80">
-      <div>
-        {terminals.map((terminal, index) => {
-          const hasLiveSession = terminalHasLiveSession(terminal.status);
-          const isCurrent = terminal.id === activeTerminalId;
-          const canResume =
-            !hasLiveSession &&
-            terminal.launch_type === "harness" &&
-            isHarnessProvider(terminal.harness_provider) &&
-            typeof terminal.harness_session_id === "string" &&
-            terminal.harness_session_id.length > 0;
-          const isLast = index === terminals.length - 1;
+    <div>
+      {terminals.map((terminal, index) => {
+        const hasLiveSession = terminalHasLiveSession(terminal.status);
+        const isCurrent = terminal.id === activeTerminalId;
+        const canResume =
+          !hasLiveSession &&
+          terminal.launch_type === "harness" &&
+          isHarnessProvider(terminal.harness_provider) &&
+          typeof terminal.harness_session_id === "string" &&
+          terminal.harness_session_id.length > 0;
+        const isLast = index === terminals.length - 1;
 
-          function handleClick() {
-            if (hasLiveSession) {
-              onOpenTerminal(terminal.id);
-            } else if (canResume) {
-              onResumeTerminal({
-                harnessProvider: terminal.harness_provider as HarnessProvider,
-                harnessSessionId: terminal.harness_session_id as string,
-                launchType: "harness",
-              });
-            }
+        function handleClick() {
+          if (hasLiveSession) {
+            onOpenTerminal(terminal.id);
+          } else if (canResume) {
+            onResumeTerminal({
+              harnessProvider: terminal.harness_provider as HarnessProvider,
+              harnessSessionId: terminal.harness_session_id as string,
+              launchType: "harness",
+            });
           }
+        }
 
-          const isClickable =
-            (hasLiveSession || canResume) && creatingSelection === null;
+        const isClickable = (hasLiveSession || canResume) && creatingSelection === null;
 
-          return (
-            <button
-              type="button"
-              key={terminal.id}
-              disabled={!isClickable}
-              onClick={handleClick}
-              className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[var(--surface-hover)] disabled:opacity-50 ${!isLast ? "border-b border-[var(--border)]/50" : ""}`}
-            >
-              <TerminalStatusDot status={terminal.status} />
+        return (
+          <button
+            type="button"
+            key={terminal.id}
+            disabled={!isClickable}
+            onClick={handleClick}
+            className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--surface-hover)] disabled:opacity-50 ${!isLast ? "border-b border-[var(--border)]/50" : ""}`}
+          >
+            <p className="flex min-w-0 flex-1 items-center gap-2 truncate text-xs font-medium text-[var(--foreground)]">
+              {hasLiveSession && (
+                <TerminalStatusDot className="shrink-0" size="sm" status={terminal.status} />
+              )}
+              {sessionLabel(terminal)}
+            </p>
 
-              <p className="min-w-0 flex-1 truncate text-xs font-medium text-[var(--muted-foreground)]">
-                {sessionLabel(terminal)}
-              </p>
+            <span className="shrink-0 font-mono text-[10px] text-[var(--muted-foreground)]/40">
+              {sessionMeta(terminal)}
+            </span>
 
-              <span className="shrink-0 font-mono text-[10px] text-[var(--muted-foreground)]/40">
-                {sessionMeta(terminal)}
+            {isCurrent ? (
+              <span className="shrink-0 rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--foreground)]/70">
+                Current
               </span>
-
-              {isCurrent ? (
-                <span className="shrink-0 rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--foreground)]/70">
-                  Current
-                </span>
-              ) : canResume ? (
-                <span className="shrink-0 rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--foreground)]/70">
-                  Resume
-                </span>
-              ) : null}
-
-              <span className="w-14 shrink-0 text-right text-[11px] text-[var(--muted-foreground)]/40">
-                {activityTime(terminal)}
+            ) : canResume ? (
+              <span className="shrink-0 rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--foreground)]/70">
+                Resume
               </span>
-            </button>
-          );
-        })}
-      </div>
-    </ScrollArea>
+            ) : null}
+
+            <span className="w-14 shrink-0 text-right text-[11px] text-[var(--muted-foreground)]">
+              {activityTime(terminal)}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }

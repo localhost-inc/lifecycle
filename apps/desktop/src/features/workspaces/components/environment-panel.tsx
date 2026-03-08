@@ -24,8 +24,8 @@ export function EnvironmentPanel({ hasManifest, services }: EnvironmentPanelProp
           )}
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="px-5 py-4">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        <div className="flex min-h-0 flex-1 flex-col px-5 py-4">
           <ServicesTab hasManifest={hasManifest} services={services} />
         </div>
       </div>
