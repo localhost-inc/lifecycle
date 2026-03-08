@@ -11,11 +11,15 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use portable_pty::CommandBuilder;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
-use std::collections::hash_map::DefaultHasher;
-use std::fs;
+use serde_json::Value;
+use std::collections::{hash_map::DefaultHasher, HashSet};
+use std::fs::{self, File};
 use std::hash::{Hash, Hasher};
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
+use std::thread;
+use std::time::{Duration, SystemTime};
 use tauri::{ipc::Channel, AppHandle, Emitter, Manager, State, WebviewWindow};
 
 use super::query::TerminalRow;
@@ -66,6 +70,98 @@ pub struct NativeTerminalTheme {
     pub palette: Vec<String>,
     pub selection_background: String,
     pub selection_foreground: String,
+}
+
+const HARNESS_SESSION_CAPTURE_GRACE: Duration = Duration::from_secs(5);
+const HARNESS_SESSION_CAPTURE_POLL_INTERVAL: Duration = Duration::from_millis(500);
+const HARNESS_SESSION_CAPTURE_TIMEOUT: Duration = Duration::from_secs(15);
+
+static HARNESS_SESSION_CAPTURE_INFLIGHT: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+
+#[derive(Clone, Copy)]
+struct HarnessProviderConfig {
+    name: &'static str,
+    program: &'static str,
+    new_session_args: &'static [&'static str],
+    resume_args: fn(&str) -> Vec<String>,
+    session_store: Option<SessionStoreConfig>,
+}
+
+#[derive(Debug)]
+struct HarnessSessionCandidate {
+    modified_at: SystemTime,
+    session_id: String,
+}
+
+#[derive(Clone, Copy)]
+struct SessionStoreConfig {
+    root_subdir: &'static str,
+    scope: SessionStoreScope,
+    metadata_line_limit: usize,
+    required_type: Option<(&'static [&'static str], &'static str)>,
+    cwd_path: &'static [&'static str],
+    session_id_path: Option<&'static [&'static str]>,
+    session_id_from_file_stem: bool,
+}
+
+#[derive(Clone, Copy)]
+enum SessionStoreScope {
+    ExactWorkspaceDir {
+        workspace_dir_name: fn(&str) -> String,
+    },
+    Recursive,
+}
+
+fn harness_session_capture_registry() -> &'static Mutex<HashSet<String>> {
+    HARNESS_SESSION_CAPTURE_INFLIGHT.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+fn claude_resume_args(session_id: &str) -> Vec<String> {
+    vec!["--resume".to_string(), session_id.to_string()]
+}
+
+fn codex_resume_args(session_id: &str) -> Vec<String> {
+    vec!["resume".to_string(), session_id.to_string()]
+}
+
+// Keep harness-specific launch and session-store details behind one boundary so
+// adding a new provider does not leak provider conditionals across the terminal lifecycle.
+fn resolve_harness_provider(provider: Option<&str>) -> Option<HarnessProviderConfig> {
+    match provider {
+        Some("claude") => Some(HarnessProviderConfig {
+            name: "claude",
+            program: "claude",
+            new_session_args: &[],
+            resume_args: claude_resume_args,
+            session_store: Some(SessionStoreConfig {
+                root_subdir: ".claude/projects",
+                scope: SessionStoreScope::ExactWorkspaceDir {
+                    workspace_dir_name: claude_project_directory_name,
+                },
+                metadata_line_limit: 10,
+                required_type: None,
+                cwd_path: &["cwd"],
+                session_id_path: Some(&["sessionId"]),
+                session_id_from_file_stem: true,
+            }),
+        }),
+        Some("codex") => Some(HarnessProviderConfig {
+            name: "codex",
+            program: "codex",
+            new_session_args: &[],
+            resume_args: codex_resume_args,
+            session_store: Some(SessionStoreConfig {
+                root_subdir: ".codex/sessions",
+                scope: SessionStoreScope::Recursive,
+                metadata_line_limit: 1,
+                required_type: Some((&["type"], "session_meta")),
+                cwd_path: &["payload", "cwd"],
+                session_id_path: Some(&["payload", "id"]),
+                session_id_from_file_stem: false,
+            }),
+        }),
+        _ => None,
+    }
 }
 
 pub async fn create_terminal(
@@ -124,6 +220,7 @@ pub async fn create_terminal(
     command.cwd(&workspace.worktree_path);
     command.env("TERM", "xterm-256color");
     command.env("COLORTERM", "truecolor");
+    let launch_started_at = SystemTime::now();
 
     let app_for_exit = app.clone();
     let db_for_exit = db.clone();
@@ -168,6 +265,12 @@ pub async fn create_terminal(
     }
 
     emit_terminal_created(&app, &terminal);
+    maybe_schedule_harness_session_capture(
+        &db,
+        &terminal,
+        &workspace.worktree_path,
+        launch_started_at,
+    );
 
     Ok(TerminalAttachResult {
         replay_cursor,
@@ -462,6 +565,12 @@ pub async fn sync_native_terminal_surface(
             color_scheme,
         )
     })?;
+    maybe_schedule_harness_session_capture(
+        &db,
+        &terminal,
+        &workspace.worktree_path,
+        SystemTime::now(),
+    );
 
     let target_status = if visible {
         TerminalStatus::Active
@@ -474,6 +583,354 @@ pub async fn sync_native_terminal_surface(
     }
 
     Ok(())
+}
+
+fn maybe_schedule_harness_session_capture(
+    db_path: &str,
+    terminal: &TerminalRow,
+    worktree_path: &str,
+    launched_after: SystemTime,
+) {
+    let Some(provider) = resolve_harness_provider(terminal.harness_provider.as_deref()) else {
+        return;
+    };
+    if terminal.harness_session_id.is_some() {
+        return;
+    }
+
+    let registry = harness_session_capture_registry();
+    {
+        let mut inflight = registry.lock().unwrap();
+        if !inflight.insert(terminal.id.clone()) {
+            return;
+        }
+    }
+
+    let db_path = db_path.to_string();
+    let terminal_id = terminal.id.clone();
+    let workspace_id = terminal.workspace_id.clone();
+    let worktree_path = worktree_path.to_string();
+
+    thread::spawn(move || {
+        let capture_result = wait_for_harness_session_id(
+            &db_path,
+            &terminal_id,
+            &workspace_id,
+            provider,
+            &worktree_path,
+            launched_after,
+        );
+
+        if let Some(session_id) = capture_result {
+            if let Err(error) = update_terminal_harness_session_id(&db_path, &terminal_id, &session_id)
+            {
+                tracing::warn!(
+                    "failed to persist {} harness session id for terminal {}: {error}",
+                    provider.name,
+                    terminal_id
+                );
+            }
+        }
+
+        let mut inflight = harness_session_capture_registry().lock().unwrap();
+        inflight.remove(&terminal_id);
+    });
+}
+
+fn wait_for_harness_session_id(
+    db_path: &str,
+    terminal_id: &str,
+    workspace_id: &str,
+    provider: HarnessProviderConfig,
+    worktree_path: &str,
+    launched_after: SystemTime,
+) -> Option<String> {
+    let deadline = SystemTime::now()
+        .checked_add(HARNESS_SESSION_CAPTURE_TIMEOUT)
+        .unwrap_or_else(SystemTime::now);
+
+    loop {
+        if SystemTime::now() > deadline {
+            return None;
+        }
+
+        match load_terminal_row(db_path, terminal_id) {
+            Ok(Some(terminal)) => {
+                if let Some(session_id) = terminal.harness_session_id {
+                    return Some(session_id);
+                }
+                if terminal.status == TerminalStatus::Finished.as_str()
+                    || terminal.status == TerminalStatus::Failed.as_str()
+                {
+                    return None;
+                }
+            }
+            Ok(None) | Err(_) => return None,
+        }
+
+        let claimed_session_ids =
+            load_claimed_harness_session_ids(db_path, workspace_id, provider.name, terminal_id)
+                .unwrap_or_default();
+
+        if let Some(session_id) =
+            discover_harness_session_id(provider, worktree_path, launched_after, &claimed_session_ids)
+        {
+            return Some(session_id);
+        }
+
+        thread::sleep(HARNESS_SESSION_CAPTURE_POLL_INTERVAL);
+    }
+}
+
+fn discover_harness_session_id(
+    provider: HarnessProviderConfig,
+    worktree_path: &str,
+    launched_after: SystemTime,
+    claimed_session_ids: &HashSet<String>,
+) -> Option<String> {
+    let modified_after = launched_after
+        .checked_sub(HARNESS_SESSION_CAPTURE_GRACE)
+        .unwrap_or(SystemTime::UNIX_EPOCH);
+
+    let store = provider.session_store?;
+    discover_session_id_from_store(&store, worktree_path, modified_after, claimed_session_ids)
+}
+
+fn harness_home_subdir(subdir: &str) -> Option<PathBuf> {
+    std::env::var_os("HOME").map(|home| PathBuf::from(home).join(subdir))
+}
+
+fn claude_project_directory_name(worktree_path: &str) -> String {
+    worktree_path
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
+        .collect()
+}
+
+fn discover_session_id_from_store(
+    store: &SessionStoreConfig,
+    worktree_path: &str,
+    modified_after: SystemTime,
+    claimed_session_ids: &HashSet<String>,
+) -> Option<String> {
+    let root = harness_home_subdir(store.root_subdir)?;
+    match store.scope {
+        SessionStoreScope::ExactWorkspaceDir { workspace_dir_name } => {
+            discover_session_id_from_directory(
+                &root.join(workspace_dir_name(worktree_path)),
+                store,
+                worktree_path,
+                modified_after,
+                claimed_session_ids,
+            )
+        }
+        SessionStoreScope::Recursive => discover_session_id_from_tree(
+            &root,
+            store,
+            worktree_path,
+            modified_after,
+            claimed_session_ids,
+        ),
+    }
+}
+
+fn discover_session_id_from_directory(
+    dir: &Path,
+    store: &SessionStoreConfig,
+    worktree_path: &str,
+    modified_after: SystemTime,
+    claimed_session_ids: &HashSet<String>,
+) -> Option<String> {
+    let entries = fs::read_dir(dir).ok()?;
+    let mut candidates = Vec::new();
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|extension| extension.to_str()) != Some("jsonl") {
+            continue;
+        }
+
+        let Some(modified_at) = entry
+            .metadata()
+            .ok()
+            .and_then(|metadata| metadata.modified().ok())
+        else {
+            continue;
+        };
+        if modified_at < modified_after {
+            continue;
+        }
+
+        let Some((cwd, session_id)) = read_session_metadata(&path, store) else {
+            continue;
+        };
+        if cwd != worktree_path || claimed_session_ids.contains(&session_id) {
+            continue;
+        }
+
+        candidates.push(HarnessSessionCandidate {
+            modified_at,
+            session_id,
+        });
+    }
+
+    candidates.sort_by(|left, right| right.modified_at.cmp(&left.modified_at));
+    candidates.into_iter().next().map(|candidate| candidate.session_id)
+}
+
+fn discover_session_id_from_tree(
+    root: &Path,
+    store: &SessionStoreConfig,
+    worktree_path: &str,
+    modified_after: SystemTime,
+    claimed_session_ids: &HashSet<String>,
+) -> Option<String> {
+    let mut pending = vec![root.to_path_buf()];
+    let mut candidates = Vec::new();
+
+    while let Some(dir) = pending.pop() {
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if file_type.is_dir() {
+                pending.push(path);
+                continue;
+            }
+            if path.extension().and_then(|extension| extension.to_str()) != Some("jsonl") {
+                continue;
+            }
+
+            let Some(modified_at) = entry
+                .metadata()
+                .ok()
+                .and_then(|metadata| metadata.modified().ok())
+            else {
+                continue;
+            };
+            if modified_at < modified_after {
+                continue;
+            }
+
+            let Some((cwd, session_id)) = read_session_metadata(&path, store) else {
+                continue;
+            };
+            if cwd != worktree_path || claimed_session_ids.contains(&session_id) {
+                continue;
+            }
+
+            candidates.push(HarnessSessionCandidate {
+                modified_at,
+                session_id,
+            });
+        }
+    }
+
+    candidates.sort_by(|left, right| right.modified_at.cmp(&left.modified_at));
+    candidates.into_iter().next().map(|candidate| candidate.session_id)
+}
+
+fn read_session_metadata(path: &Path, store: &SessionStoreConfig) -> Option<(String, String)> {
+    let file = File::open(path).ok()?;
+    for line in BufReader::new(file).lines().take(store.metadata_line_limit) {
+        let Ok(line) = line else {
+            continue;
+        };
+        let Ok(value) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
+        if let Some((type_path, expected_type)) = store.required_type {
+            if json_string_at_path(&value, type_path) != Some(expected_type) {
+                continue;
+            }
+        }
+
+        let Some(cwd) = json_string_at_path(&value, store.cwd_path) else {
+            continue;
+        };
+        let Some(session_id) = store
+            .session_id_path
+            .and_then(|path| json_string_at_path(&value, path))
+            .or_else(|| {
+                if store.session_id_from_file_stem {
+                    path.file_stem().and_then(|stem| stem.to_str())
+                } else {
+                    None
+                }
+            })
+        else {
+            continue;
+        };
+
+        return Some((cwd.to_string(), session_id.to_string()));
+    }
+
+    None
+}
+
+fn json_string_at_path<'a>(value: &'a Value, path: &[&str]) -> Option<&'a str> {
+    let mut current = value;
+    for key in path {
+        current = current.get(*key)?;
+    }
+    current.as_str()
+}
+
+fn load_claimed_harness_session_ids(
+    db_path: &str,
+    workspace_id: &str,
+    harness_provider: &str,
+    exclude_terminal_id: &str,
+) -> Result<HashSet<String>, LifecycleError> {
+    let conn = open_db(db_path)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT harness_session_id
+             FROM terminal
+             WHERE workspace_id = ?1
+               AND harness_provider = ?2
+               AND id != ?3
+               AND harness_session_id IS NOT NULL
+               AND harness_session_id != ''",
+        )
+        .map_err(|error| LifecycleError::Database(error.to_string()))?;
+    let rows = stmt
+        .query_map(
+            params![workspace_id, harness_provider, exclude_terminal_id],
+            |row| row.get::<_, String>(0),
+        )
+        .map_err(|error| LifecycleError::Database(error.to_string()))?;
+
+    let mut claimed = HashSet::new();
+    for row in rows {
+        claimed.insert(row.map_err(|error| LifecycleError::Database(error.to_string()))?);
+    }
+
+    Ok(claimed)
+}
+
+fn update_terminal_harness_session_id(
+    db_path: &str,
+    terminal_id: &str,
+    harness_session_id: &str,
+) -> Result<TerminalRow, LifecycleError> {
+    let conn = open_db(db_path)?;
+    conn.execute(
+        "UPDATE terminal
+         SET harness_session_id = ?1
+         WHERE id = ?2
+           AND (harness_session_id IS NULL OR harness_session_id = '')",
+        params![harness_session_id, terminal_id],
+    )
+    .map_err(|error| LifecycleError::Database(error.to_string()))?;
+
+    load_terminal_row(db_path, terminal_id)?
+        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()))
 }
 
 pub async fn hide_native_terminal_surface(
@@ -755,29 +1212,25 @@ fn resolve_terminal_launch(
         (TerminalType::Harness, None, _) => Err(LifecycleError::LocalPtySpawnFailed(
             "harness terminals require a harness provider".to_string(),
         )),
-        (TerminalType::Harness, Some("claude"), Some(session_id)) => Ok(TerminalLaunchSpec {
-            program: "claude".to_string(),
-            args: vec!["--resume".to_string(), session_id.to_string()],
-            treat_nonzero_as_failure: true,
-        }),
-        (TerminalType::Harness, Some("claude"), None) => Ok(TerminalLaunchSpec {
-            program: "claude".to_string(),
-            args: Vec::new(),
-            treat_nonzero_as_failure: true,
-        }),
-        (TerminalType::Harness, Some("codex"), Some(session_id)) => Ok(TerminalLaunchSpec {
-            program: "codex".to_string(),
-            args: vec!["resume".to_string(), session_id.to_string()],
-            treat_nonzero_as_failure: true,
-        }),
-        (TerminalType::Harness, Some("codex"), None) => Ok(TerminalLaunchSpec {
-            program: "codex".to_string(),
-            args: Vec::new(),
-            treat_nonzero_as_failure: true,
-        }),
-        (TerminalType::Harness, Some(other), _) => Err(LifecycleError::LocalPtySpawnFailed(
-            format!("unsupported harness provider: {other}"),
-        )),
+        (TerminalType::Harness, Some(provider), harness_session_id) => {
+            let provider = resolve_harness_provider(Some(provider)).ok_or_else(|| {
+                LifecycleError::LocalPtySpawnFailed(format!(
+                    "unsupported harness provider: {provider}"
+                ))
+            })?;
+            Ok(TerminalLaunchSpec {
+                program: provider.program.to_string(),
+                args: match harness_session_id {
+                    Some(session_id) => (provider.resume_args)(session_id),
+                    None => provider
+                        .new_session_args
+                        .iter()
+                        .map(|value| (*value).to_string())
+                        .collect(),
+                },
+                treat_nonzero_as_failure: true,
+            })
+        }
         (other, _, _) => Err(LifecycleError::LocalPtySpawnFailed(format!(
             "unsupported terminal type: {}",
             other.as_str()
@@ -1101,6 +1554,20 @@ pub(crate) fn complete_native_terminal_exit(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::UNIX_EPOCH;
+
+    fn create_test_temp_dir(name: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "lifecycle-terminal-{name}-{}",
+            uuid::Uuid::new_v4()
+        ));
+        fs::create_dir_all(&path).expect("create temp dir");
+        path
+    }
+
+    fn write_test_file(path: &Path, contents: &str) {
+        fs::write(path, contents).expect("write test file");
+    }
 
     #[test]
     fn resolve_terminal_launch_rejects_unsupported_harness() {
@@ -1216,6 +1683,102 @@ mod tests {
 
         assert!(file_name.starts_with("clipboard-image-"));
         assert!(file_name.ends_with(".webp"));
+    }
+
+    #[test]
+    fn claude_project_directory_name_matches_cli_workspace_encoding() {
+        assert_eq!(
+            claude_project_directory_name("/Users/kyle/.lifecycle/worktrees/frost-harbor--57f59253"),
+            "-Users-kyle--lifecycle-worktrees-frost-harbor--57f59253"
+        );
+    }
+
+    #[test]
+    fn discovers_claude_session_ids_for_the_matching_workspace() {
+        let project_dir = create_test_temp_dir("claude-session");
+        let matching_path = project_dir.join("session-a.jsonl");
+        let ignored_path = project_dir.join("session-b.jsonl");
+        let store = resolve_harness_provider(Some("claude"))
+            .and_then(|provider| provider.session_store)
+            .expect("claude session store");
+        write_test_file(
+            &matching_path,
+            concat!(
+                "{\"type\":\"file-history-snapshot\"}\n",
+                "{\"cwd\":\"/tmp/worktree-a\",\"sessionId\":\"session-a\"}\n"
+            ),
+        );
+        write_test_file(
+            &ignored_path,
+            "{\"cwd\":\"/tmp/worktree-b\",\"sessionId\":\"session-b\"}\n",
+        );
+
+        let discovered = discover_session_id_from_directory(
+            &project_dir,
+            &store,
+            "/tmp/worktree-a",
+            UNIX_EPOCH,
+            &HashSet::new(),
+        );
+
+        assert_eq!(discovered.as_deref(), Some("session-a"));
+    }
+
+    #[test]
+    fn discovers_codex_session_ids_for_the_matching_workspace() {
+        let root = create_test_temp_dir("codex-session");
+        let session_dir = root.join("2026/03/07");
+        let store = resolve_harness_provider(Some("codex"))
+            .and_then(|provider| provider.session_store)
+            .expect("codex session store");
+        fs::create_dir_all(&session_dir).expect("create nested codex dir");
+        let matching_path = session_dir.join("rollout-a.jsonl");
+        let ignored_path = session_dir.join("rollout-b.jsonl");
+        write_test_file(
+            &matching_path,
+            concat!(
+                "{\"type\":\"session_meta\",\"payload\":{\"id\":\"session-a\",\"cwd\":\"/tmp/worktree-a\"}}\n",
+                "{\"type\":\"event_msg\"}\n"
+            ),
+        );
+        write_test_file(
+            &ignored_path,
+            "{\"type\":\"session_meta\",\"payload\":{\"id\":\"session-b\",\"cwd\":\"/tmp/worktree-b\"}}\n",
+        );
+
+        let discovered = discover_session_id_from_tree(
+            &root,
+            &store,
+            "/tmp/worktree-a",
+            UNIX_EPOCH,
+            &HashSet::new(),
+        );
+
+        assert_eq!(discovered.as_deref(), Some("session-a"));
+    }
+
+    #[test]
+    fn skips_harness_session_ids_already_claimed_by_another_terminal() {
+        let project_dir = create_test_temp_dir("claimed-session");
+        let matching_path = project_dir.join("session-a.jsonl");
+        let store = resolve_harness_provider(Some("claude"))
+            .and_then(|provider| provider.session_store)
+            .expect("claude session store");
+        write_test_file(
+            &matching_path,
+            "{\"cwd\":\"/tmp/worktree-a\",\"sessionId\":\"session-a\"}\n",
+        );
+        let claimed = HashSet::from([String::from("session-a")]);
+
+        let discovered = discover_session_id_from_directory(
+            &project_dir,
+            &store,
+            "/tmp/worktree-a",
+            UNIX_EPOCH,
+            &claimed,
+        );
+
+        assert_eq!(discovered, None);
     }
 
     #[test]
