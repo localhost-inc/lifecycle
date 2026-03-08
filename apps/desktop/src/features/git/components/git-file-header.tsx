@@ -79,7 +79,7 @@ export function GitFileHeader({
 
   return (
     <div
-      className={`group/file-header flex w-full items-center gap-3 border-b border-[var(--border)] px-4 py-3 text-left ${collapsed ? "border-b-transparent" : ""}`}
+      className={`group/file-header flex w-full items-center gap-3 px-4 py-3 text-left ${collapsed ? "" : "border-b border-[var(--border)]"}`}
     >
       <button
         type="button"
