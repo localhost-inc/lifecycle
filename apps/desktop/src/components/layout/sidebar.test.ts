@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { SidebarProvider } from "@lifecycle/ui";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
@@ -38,19 +39,24 @@ describe("Sidebar", () => {
       createElement(
         MemoryRouter,
         null,
-        createElement(Sidebar, {
-          isLoading: false,
-          projects: [],
-          workspacesByProjectId: {},
-          selectedProjectId: null,
-          selectedWorkspaceId: null,
-          width: 256,
-          onSelectProject: () => {},
-          onSelectWorkspace: () => {},
-          onAddProject: () => {},
-          onCreateWorkspace: () => {},
-          onOpenSettings: () => {},
-        }),
+        createElement(
+          SidebarProvider,
+          {
+            sidebarWidth: "256px",
+          },
+          createElement(Sidebar, {
+            isLoading: false,
+            projects: [],
+            workspacesByProjectId: {},
+            selectedProjectId: null,
+            selectedWorkspaceId: null,
+            onSelectProject: () => {},
+            onSelectWorkspace: () => {},
+            onAddProject: () => {},
+            onCreateWorkspace: () => {},
+            onOpenSettings: () => {},
+          }),
+        ),
       ),
     );
 
@@ -63,28 +69,33 @@ describe("Sidebar", () => {
     expect(addProjectIndex).toBeGreaterThan(forwardIndex);
   });
 
-  test("uses the standard panel surface token for the left rail", () => {
+  test("uses the shared sidebar token surface for the left rail", () => {
     const markup = renderToStaticMarkup(
       createElement(
         MemoryRouter,
         null,
-        createElement(Sidebar, {
-          isLoading: false,
-          projects: [],
-          workspacesByProjectId: {},
-          selectedProjectId: null,
-          selectedWorkspaceId: null,
-          width: 256,
-          onSelectProject: () => {},
-          onSelectWorkspace: () => {},
-          onAddProject: () => {},
-          onCreateWorkspace: () => {},
-          onOpenSettings: () => {},
-        }),
+        createElement(
+          SidebarProvider,
+          {
+            sidebarWidth: "256px",
+          },
+          createElement(Sidebar, {
+            isLoading: false,
+            projects: [],
+            workspacesByProjectId: {},
+            selectedProjectId: null,
+            selectedWorkspaceId: null,
+            onSelectProject: () => {},
+            onSelectWorkspace: () => {},
+            onAddProject: () => {},
+            onCreateWorkspace: () => {},
+            onOpenSettings: () => {},
+          }),
+        ),
       ),
     );
 
-    expect(markup).toContain("bg-[var(--panel)]");
-    expect(markup).toContain("text-[var(--foreground)]");
+    expect(markup).toContain("bg-[var(--sidebar-background)]");
+    expect(markup).toContain("text-[var(--sidebar-foreground)]");
   });
 });

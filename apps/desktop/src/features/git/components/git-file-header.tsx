@@ -40,7 +40,10 @@ function dirname(path: string): string {
   return idx === -1 ? "" : path.slice(0, idx + 1);
 }
 
-export function summarizeChanges(fileDiff: FileDiffMetadata): { additions: number; deletions: number } {
+export function summarizeChanges(fileDiff: FileDiffMetadata): {
+  additions: number;
+  deletions: number;
+} {
   let additions = 0;
   let deletions = 0;
 
@@ -87,9 +90,7 @@ export function GitFileHeader({ fileDiff, onOpenFile, openable }: GitFileHeaderP
             {changeTypeLabel(fileDiff.type)}
           </span>
           <span className="truncate font-mono text-sm">
-            {dir && (
-              <span className="text-[var(--muted-foreground)]">{dir}</span>
-            )}
+            {dir && <span className="text-[var(--muted-foreground)]">{dir}</span>}
             <span className="text-[var(--foreground)]">{file}</span>
           </span>
         </div>

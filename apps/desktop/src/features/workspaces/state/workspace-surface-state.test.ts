@@ -291,7 +291,14 @@ describe("workspace surface state persistence", () => {
       JSON.stringify({
         "ws-1": {
           activeTabKey: "terminal:term-42",
-          documents: [{ activeScope: "working", filePath: "src/ignored.ts", initialScope: "invalid", kind: "file-diff" }],
+          documents: [
+            {
+              activeScope: "working",
+              filePath: "src/ignored.ts",
+              initialScope: "invalid",
+              kind: "file-diff",
+            },
+          ],
         },
       }),
     );

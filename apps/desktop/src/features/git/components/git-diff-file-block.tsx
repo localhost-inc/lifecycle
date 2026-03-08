@@ -16,11 +16,7 @@ interface GitDiffFileBlockProps {
   themeType: ThemeResolvedAppearance;
 }
 
-export function GitDiffFileBlock({
-  fileDiff,
-  onOpenFile,
-  themeType,
-}: GitDiffFileBlockProps) {
+export function GitDiffFileBlock({ fileDiff, onOpenFile, themeType }: GitDiffFileBlockProps) {
   const openablePath = getOpenableDiffFilePath(fileDiff);
 
   return (

@@ -1,8 +1,8 @@
+import { Alert, AlertDescription, useTheme } from "@lifecycle/ui";
 import { parsePatchFiles } from "@pierre/diffs";
 import type { GitLogEntry } from "@lifecycle/contracts";
 import { useEffect, useMemo, useState } from "react";
 import { formatRelativeTime } from "../../../lib/format";
-import { useTheme } from "../../../theme/theme-provider";
 import { getGitCommitPatch, openWorkspaceFile } from "../api";
 import { GitDiffFileBlock } from "./git-diff-file-block";
 import { summarizeChanges } from "./git-file-header";
@@ -12,10 +12,7 @@ interface CommitDiffViewerPanelProps {
   workspaceId: string;
 }
 
-export function CommitDiffViewerPanel({
-  commit,
-  workspaceId,
-}: CommitDiffViewerPanelProps) {
+export function CommitDiffViewerPanel({ commit, workspaceId }: CommitDiffViewerPanelProps) {
   const { resolvedAppearance } = useTheme();
   const [patch, setPatch] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -100,10 +97,20 @@ export function CommitDiffViewerPanel({
         <div className="border-b border-[var(--border)] px-4 py-2 text-xs text-[var(--muted-foreground)]">
           {files.length} {files.length === 1 ? "file" : "files"} changed
           {totalAdditions > 0 && (
-            <>, <span className="text-emerald-400">{totalAdditions} insertion{totalAdditions === 1 ? "" : "s"}(+)</span></>
+            <>
+              ,{" "}
+              <span className="text-emerald-400">
+                {totalAdditions} insertion{totalAdditions === 1 ? "" : "s"}(+)
+              </span>
+            </>
           )}
           {totalDeletions > 0 && (
-            <>, <span className="text-red-400">{totalDeletions} deletion{totalDeletions === 1 ? "" : "s"}(-)</span></>
+            <>
+              ,{" "}
+              <span className="text-red-400">
+                {totalDeletions} deletion{totalDeletions === 1 ? "" : "s"}(-)
+              </span>
+            </>
           )}
         </div>
       )}
@@ -113,9 +120,9 @@ export function CommitDiffViewerPanel({
           Loading commit diff...
         </div>
       ) : error ? (
-        <div className="m-5 rounded-md border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          Failed to load commit diff: {error}
-        </div>
+        <Alert className="m-5" variant="destructive">
+          <AlertDescription>Failed to load commit diff: {error}</AlertDescription>
+        </Alert>
       ) : files.length === 0 ? (
         <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
           No diff to display.

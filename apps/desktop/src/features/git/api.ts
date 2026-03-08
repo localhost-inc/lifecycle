@@ -96,10 +96,7 @@ export async function getGitCommitPatch(
   });
 }
 
-export async function openWorkspaceFile(
-  workspaceId: string,
-  filePath: string,
-): Promise<void> {
+export async function openWorkspaceFile(workspaceId: string, filePath: string): Promise<void> {
   if (!isTauri()) {
     return;
   }

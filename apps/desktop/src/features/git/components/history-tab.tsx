@@ -1,4 +1,6 @@
 import type { GitLogEntry } from "@lifecycle/contracts";
+import { EmptyState } from "@lifecycle/ui";
+import { History } from "lucide-react";
 import { useCallback, useState } from "react";
 import { formatRelativeTime } from "../../../lib/format";
 
@@ -12,8 +14,18 @@ interface HistoryTabProps {
 // --- helpers (local) ---
 
 const shortMonth = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
 ];
 
 function getDateGroupLabel(iso: string): string {
@@ -163,7 +175,14 @@ export function HistoryTab({ error, isLoading, entries, onOpenCommit }: HistoryT
   }
 
   if (entries.length === 0) {
-    return <p className="text-xs text-[var(--muted-foreground)]">No commits yet.</p>;
+    return (
+      <EmptyState
+        description="Commits will appear here once you start committing."
+        icon={<History />}
+        size="sm"
+        title="No commits yet"
+      />
+    );
   }
 
   const groups = groupEntriesByDate(entries);

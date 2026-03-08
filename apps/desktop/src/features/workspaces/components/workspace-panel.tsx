@@ -1,9 +1,17 @@
 import type { GitDiffScope, GitLogEntry } from "@lifecycle/contracts";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  Button,
+  EmptyState,
+  SetupProgress,
+} from "@lifecycle/ui";
+import { FileJson } from "lucide-react";
 import { createPortal } from "react-dom";
-import { useCallback, useState } from "react";
+import { useCallback, useLayoutEffect, useState } from "react";
 import type { ManifestStatus } from "../../projects/api/projects";
 import { ServiceIndicator } from "./service-indicator";
-import { SetupProgress } from "./setup-progress";
 import { WorkspaceSidebar } from "./workspace-sidebar";
 import { WorkspaceSurface } from "./workspace-surface";
 import type { WorkspaceRow } from "../api";
@@ -26,6 +34,7 @@ export function workspaceSupportsTerminalInteraction(
 }
 
 export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProps) {
+  const [rightRailRoot, setRightRailRoot] = useState<HTMLElement | null>(null);
   const [openDocumentRequest, setOpenDocumentRequest] = useState<
     | {
         filePath: string;
@@ -77,22 +86,14 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
   const actionButtons = (
     <div className="flex items-center gap-2">
       {canRun && (
-        <button
-          type="button"
-          onClick={handleRun}
-          className="rounded-md bg-[var(--primary)] px-3 py-1.5 text-sm font-medium text-[var(--primary-foreground)] hover:brightness-110"
-        >
+        <Button className="px-3 py-1.5" onClick={handleRun}>
           Run
-        </button>
+        </Button>
       )}
       {canStop && (
-        <button
-          type="button"
-          onClick={handleStop}
-          className="rounded-md border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)]"
-        >
+        <Button className="px-3 py-1.5" onClick={handleStop} variant="outline">
           Stop
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -113,8 +114,14 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
       kind: "commit-diff",
     });
   }, []);
-  const rightRailRoot =
-    typeof document === "undefined" ? null : document.getElementById("workspace-right-rail");
+
+  useLayoutEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    setRightRailRoot(document.getElementById("workspace-right-rail"));
+  }, [workspace.id]);
 
   const mainContent = supportsTerminalInteraction ? (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -144,10 +151,10 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
 
           {status === "failed" && failureReason && (
             <div className={showSetup || showServices ? "mt-6" : ""}>
-              <div className="rounded-md border border-red-200 bg-red-50 p-4">
-                <h3 className="text-sm font-semibold text-red-800">Workspace failed</h3>
-                <p className="mt-1 text-sm text-red-700">{failureReason}</p>
-              </div>
+              <Alert variant="destructive">
+                <AlertTitle>Workspace failed</AlertTitle>
+                <AlertDescription>{failureReason}</AlertDescription>
+              </Alert>
             </div>
           )}
         </div>
@@ -166,12 +173,12 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
         {actionButtons}
 
         {showMissingManifest && (
-          <div className="mt-8 rounded-md border border-[var(--border)] bg-[var(--card)] p-6 text-center">
-            <p className="text-sm font-medium text-[var(--foreground)]">No lifecycle.json found</p>
-            <p className="mt-2 text-xs text-[var(--muted-foreground)]">
-              Add a <code className="font-mono">lifecycle.json</code> file to the project root to
-              configure services and setup steps.
-            </p>
+          <div className="mt-8">
+            <EmptyState
+              description="Add a lifecycle.json file to the project root to configure services and setup steps."
+              icon={<FileJson />}
+              title="No lifecycle.json found"
+            />
           </div>
         )}
 
@@ -199,10 +206,10 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
 
         {status === "failed" && failureReason && (
           <div className="mt-8">
-            <div className="rounded-md border border-red-200 bg-red-50 p-4">
-              <h3 className="text-sm font-semibold text-red-800">Workspace failed</h3>
-              <p className="mt-1 text-sm text-red-700">{failureReason}</p>
-            </div>
+            <Alert variant="destructive">
+              <AlertTitle>Workspace failed</AlertTitle>
+              <AlertDescription>{failureReason}</AlertDescription>
+            </Alert>
           </div>
         )}
       </div>

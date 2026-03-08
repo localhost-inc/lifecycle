@@ -50,10 +50,7 @@ const TOKEN_FALLBACKS: Record<ThemeResolvedAppearance, TerminalThemeTokens> = {
   },
 };
 
-const ANSI_PALETTES: Record<
-  ThemePreset,
-  Record<ThemeResolvedAppearance, TerminalAnsiPalette>
-> = {
+const ANSI_PALETTES: Record<ThemePreset, Record<ThemeResolvedAppearance, TerminalAnsiPalette>> = {
   lifecycle: {
     dark: {
       black: "#27272a",
@@ -255,16 +252,8 @@ export function readTerminalThemeTokens(
       "--terminal-foreground",
       readToken(styles, "--foreground", fallback.foreground),
     ),
-    selectionBackground: readToken(
-      styles,
-      "--surface-selected",
-      fallback.selectionBackground,
-    ),
-    selectionForeground: readToken(
-      styles,
-      "--foreground",
-      fallback.selectionForeground,
-    ),
+    selectionBackground: readToken(styles, "--surface-selected", fallback.selectionBackground),
+    selectionForeground: readToken(styles, "--foreground", fallback.selectionForeground),
     paletteOverrides: readTerminalPaletteOverrides(styles),
   };
 }
@@ -318,9 +307,5 @@ export function resolveTerminalTheme(
   preset: ThemePreset,
   appearance: ThemeResolvedAppearance,
 ): ResolvedTerminalTheme {
-  return buildTerminalTheme(
-    preset,
-    appearance,
-    readTerminalThemeTokens(element, appearance),
-  );
+  return buildTerminalTheme(preset, appearance, readTerminalThemeTokens(element, appearance));
 }

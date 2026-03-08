@@ -1,3 +1,5 @@
+import { EmptyState, useTheme } from "@lifecycle/ui";
+import { TerminalSquare } from "lucide-react";
 import { isTauri } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 import { FitAddon, Terminal } from "ghostty-web";
@@ -23,7 +25,6 @@ import {
 import { resolveTerminalTheme } from "../terminal-theme";
 import { getGhosttyRuntime } from "../ghostty-runtime";
 import { useSettings } from "../../settings/state/app-settings-provider";
-import { useTheme } from "../../../theme/theme-provider";
 import { NativeTerminalPanel } from "./native-terminal-panel";
 
 interface TerminalPanelProps {
@@ -127,9 +128,7 @@ function readFileAsBase64(file: Blob): Promise<string> {
       }
 
       const separatorIndex = reader.result.indexOf(",");
-      resolve(
-        separatorIndex >= 0 ? reader.result.slice(separatorIndex + 1) : reader.result,
-      );
+      resolve(separatorIndex >= 0 ? reader.result.slice(separatorIndex + 1) : reader.result);
     };
     reader.readAsDataURL(file);
   });
@@ -252,7 +251,9 @@ function quoteFontFamily(family: string): string {
 }
 
 function createFontLoadDescriptors(fontFamily: string, fontSize: number): string[] {
-  const descriptors = new Set<string>([`${fontSize}px ${quoteFontFamily(LIFECYCLE_MONO_FONT_FAMILY)}`]);
+  const descriptors = new Set<string>([
+    `${fontSize}px ${quoteFontFamily(LIFECYCLE_MONO_FONT_FAMILY)}`,
+  ]);
   const primaryFontFamily = getPrimaryTerminalFontFamily(fontFamily);
   if (primaryFontFamily && !GENERIC_FONT_FAMILIES.has(primaryFontFamily.toLowerCase())) {
     descriptors.add(`${fontSize}px ${quoteFontFamily(primaryFontFamily)}`);
@@ -333,12 +334,8 @@ function BrowserTerminalPanel({ active, terminal }: TerminalPanelProps) {
   const terminalSizeRef = useRef({ cols: 0, rows: 0 });
   const writeSchedulerRef = useRef<ReturnType<typeof createTerminalWriteScheduler> | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const {
-    reportTerminalDiagnostics,
-    terminalFontFamily,
-    terminalFontSize,
-    terminalRenderer,
-  } = useSettings();
+  const { reportTerminalDiagnostics, terminalFontFamily, terminalFontSize, terminalRenderer } =
+    useSettings();
   const { preset, resolvedAppearance } = useTheme();
   const hasLiveSession = terminalHasLiveSession(terminal.status);
 
@@ -667,17 +664,12 @@ function BrowserTerminalPanel({ active, terminal }: TerminalPanelProps) {
         {hasLiveSession ? (
           <div ref={hostRef} className="terminal-host h-full w-full" />
         ) : (
-          <div className="flex h-full items-center justify-center px-8 text-center">
-            <div>
-              <h3 className="text-lg font-semibold text-[var(--foreground)]">
-                Session unavailable
-              </h3>
-              <p className="mt-2 max-w-md text-sm text-[var(--muted-foreground)]">
-                This terminal session is no longer attachable. Start a new shell or harness session
-                to continue.
-              </p>
-            </div>
-          </div>
+          <EmptyState
+            className="h-full"
+            description="This terminal session is no longer attachable. Start a new session to continue."
+            icon={<TerminalSquare />}
+            title="Session unavailable"
+          />
         )}
       </div>
     </div>
@@ -709,9 +701,7 @@ export function TerminalPanel(props: TerminalPanelProps) {
   }, []);
 
   if (nativeTerminalAvailable === null) {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col bg-[var(--terminal-surface-background)]" />
-    );
+    return <div className="flex min-h-0 flex-1 flex-col bg-[var(--terminal-surface-background)]" />;
   }
 
   return nativeTerminalAvailable ? (

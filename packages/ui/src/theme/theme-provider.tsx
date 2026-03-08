@@ -13,35 +13,77 @@ import {
   type ThemeAppearance,
   type ThemePreset,
   type ThemeResolvedAppearance,
-} from "@lifecycle/ui";
-import { isTauri } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+} from "./presets";
 
 export interface ThemePreference {
   appearance: ThemeAppearance;
   preset: ThemePreset;
 }
 
-interface ThemeContextValue extends ThemePreference {
+export interface ThemeProviderProps {
+  children: ReactNode;
+  defaultPreference?: ThemePreference;
+  storageKey: string;
+}
+
+export interface ThemeContextValue extends ThemePreference {
   resolvedAppearance: ThemeResolvedAppearance;
   setAppearance: (appearance: ThemeAppearance) => void;
   setPreset: (preset: ThemePreset) => void;
 }
 
-const THEME_STORAGE_KEY = "lifecycle.desktop.theme.v1";
+interface ThemeStorageLike {
+  getItem: (key: string) => string | null;
+  setItem: (key: string, value: string) => void;
+}
 
-const defaultPreference: ThemePreference = {
+interface ThemeRootLike {
+  classList: {
+    add: (...tokens: string[]) => void;
+    remove: (...tokens: string[]) => void;
+  };
+  dataset: Record<string, string | undefined>;
+  style: {
+    colorScheme: string;
+  };
+}
+
+export const DEFAULT_THEME_PREFERENCE: ThemePreference = {
   appearance: "dark",
   preset: "lifecycle",
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-function readStoredPreference(): ThemePreference {
-  if (typeof window === "undefined") return defaultPreference;
+function getThemeStorage(): ThemeStorageLike | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
 
-  const raw = window.localStorage.getItem(THEME_STORAGE_KEY);
-  if (!raw) return defaultPreference;
+  return window.localStorage;
+}
+
+function getThemeRoot(): ThemeRootLike | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return document.documentElement;
+}
+
+export function readStoredThemePreference(
+  storageKey: string,
+  defaultPreference: ThemePreference = DEFAULT_THEME_PREFERENCE,
+  storage: ThemeStorageLike | null = getThemeStorage(),
+): ThemePreference {
+  if (!storage) {
+    return defaultPreference;
+  }
+
+  const raw = storage.getItem(storageKey);
+  if (!raw) {
+    return defaultPreference;
+  }
 
   try {
     const parsed = JSON.parse(raw) as Partial<ThemePreference>;
@@ -56,16 +98,39 @@ function readStoredPreference(): ThemePreference {
   }
 }
 
-function getSystemAppearance(): ThemeResolvedAppearance {
-  if (typeof window === "undefined") return "light";
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+export function getSystemThemeAppearance(
+  mediaQuery:
+    | {
+        matches: boolean;
+      }
+    | null
+    | undefined = typeof window === "undefined"
+    ? null
+    : window.matchMedia("(prefers-color-scheme: dark)"),
+): ThemeResolvedAppearance {
+  if (!mediaQuery) {
+    return "light";
+  }
+
+  return mediaQuery.matches ? "dark" : "light";
 }
 
-function applyThemeToDom(
+export function resolveThemeAppearance(
+  preference: ThemePreference,
+  systemAppearance: ThemeResolvedAppearance,
+): ThemeResolvedAppearance {
+  return preference.appearance === "system" ? systemAppearance : preference.appearance;
+}
+
+export function applyThemeToRoot(
   preference: ThemePreference,
   resolvedAppearance: ThemeResolvedAppearance,
+  root: ThemeRootLike | null = getThemeRoot(),
 ): void {
-  const root = document.documentElement;
+  if (!root) {
+    return;
+  }
+
   root.dataset.themePreset = preference.preset;
   root.dataset.themeAppearance = resolvedAppearance;
   root.dataset.themeMode = preference.appearance;
@@ -78,16 +143,25 @@ function applyThemeToDom(
   }
 }
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [preference, setPreference] = useState<ThemePreference>(() => readStoredPreference());
+export function ThemeProvider({
+  children,
+  defaultPreference = DEFAULT_THEME_PREFERENCE,
+  storageKey,
+}: ThemeProviderProps) {
+  const [preference, setPreference] = useState<ThemePreference>(() =>
+    readStoredThemePreference(storageKey, defaultPreference),
+  );
   const [systemAppearance, setSystemAppearance] = useState<ThemeResolvedAppearance>(() =>
-    getSystemAppearance(),
+    getSystemThemeAppearance(),
   );
 
-  const resolvedAppearance: ThemeResolvedAppearance =
-    preference.appearance === "system" ? systemAppearance : preference.appearance;
+  const resolvedAppearance = resolveThemeAppearance(preference, systemAppearance);
 
   useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const onChange = () => {
       setSystemAppearance(media.matches ? "dark" : "light");
@@ -99,20 +173,11 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    applyThemeToDom(preference, resolvedAppearance);
-    window.localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(preference));
-  }, [preference, resolvedAppearance]);
+    applyThemeToRoot(preference, resolvedAppearance);
 
-  useEffect(() => {
-    if (!isTauri()) return;
-
-    // Keep native window chrome aligned with the resolved app appearance.
-    void getCurrentWindow()
-      .setTheme(resolvedAppearance)
-      .catch((error) => {
-        console.warn("Failed to sync native window theme:", error);
-      });
-  }, [resolvedAppearance]);
+    const storage = getThemeStorage();
+    storage?.setItem(storageKey, JSON.stringify(preference));
+  }, [preference, resolvedAppearance, storageKey]);
 
   const setAppearance = useCallback((appearance: ThemeAppearance) => {
     setPreference((prev) => ({ ...prev, appearance }));
@@ -141,5 +206,6 @@ export function useTheme(): ThemeContextValue {
   if (!context) {
     throw new Error("useTheme must be used within ThemeProvider");
   }
+
   return context;
 }

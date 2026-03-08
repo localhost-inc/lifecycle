@@ -1,8 +1,8 @@
+import { Alert, AlertDescription, ToggleGroup, ToggleGroupItem, useTheme } from "@lifecycle/ui";
 import { parsePatchFiles } from "@pierre/diffs";
 import { PatchDiff } from "@pierre/diffs/react";
 import type { GitDiffResult, GitDiffScope } from "@lifecycle/contracts";
 import { useEffect, useMemo, useState } from "react";
-import { useTheme } from "../../../theme/theme-provider";
 import { getGitBaseRef, getGitDiff, openWorkspaceFile } from "../api";
 import { useGitStatus } from "../hooks";
 import { GitDiffFileBlock } from "./git-diff-file-block";
@@ -18,14 +18,6 @@ interface DiffViewerPanelProps {
   filePath: string;
   onScopeChange: (scope: GitDiffScope) => void;
   workspaceId: string;
-}
-
-function getScopeButtonClassName(active: boolean, disabled: boolean): string {
-  return `rounded-md px-3 py-1.5 text-xs font-medium transition ${
-    active
-      ? "bg-[var(--surface-selected)] text-[var(--foreground)]"
-      : "text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
-  } ${disabled ? "cursor-not-allowed opacity-50 hover:bg-transparent hover:text-[var(--muted-foreground)]" : ""}`;
 }
 
 export function DiffViewerPanel({
@@ -133,9 +125,25 @@ export function DiffViewerPanel({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--background)]">
       <div className="border-b border-[var(--border)] px-4 py-3">
-        <div className="inline-flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--panel)] p-1">
+        <ToggleGroup
+          className="gap-1"
+          onValueChange={(value) => {
+            if (!value) {
+              return;
+            }
+
+            const scope = value as GitDiffScope;
+            if (!scopeAvailability[scope] || scope === currentScope) {
+              return;
+            }
+
+            setCurrentScope(scope);
+            onScopeChange(scope);
+          }}
+          type="single"
+          value={currentScope}
+        >
           {(["working", "staged", "branch"] as const).map((scope) => {
-            const active = currentScope === scope;
             const disabled = !scopeAvailability[scope];
             const title =
               scope === "branch" && baseRef
@@ -147,26 +155,23 @@ export function DiffViewerPanel({
                     : undefined;
 
             return (
-              <button
+              <ToggleGroupItem
+                aria-label={SCOPE_LABELS[scope]}
+                className={
+                  disabled
+                    ? "cursor-not-allowed opacity-50 hover:bg-transparent hover:text-[var(--muted-foreground)]"
+                    : undefined
+                }
                 key={scope}
-                type="button"
                 disabled={disabled}
                 title={title}
-                onClick={() => {
-                  if (disabled || scope === currentScope) {
-                    return;
-                  }
-
-                  setCurrentScope(scope);
-                  onScopeChange(scope);
-                }}
-                className={getScopeButtonClassName(active, disabled)}
+                value={scope}
               >
                 {SCOPE_LABELS[scope]}
-              </button>
+              </ToggleGroupItem>
             );
           })}
-        </div>
+        </ToggleGroup>
       </div>
 
       {isLoading ? (
@@ -174,9 +179,9 @@ export function DiffViewerPanel({
           Loading diff...
         </div>
       ) : error ? (
-        <div className="m-5 rounded-md border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          Failed to load diff: {error}
-        </div>
+        <Alert className="m-5" variant="destructive">
+          <AlertDescription>Failed to load diff: {error}</AlertDescription>
+        </Alert>
       ) : !diff?.patch ? (
         <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
           {currentScope === "branch" && !baseRef

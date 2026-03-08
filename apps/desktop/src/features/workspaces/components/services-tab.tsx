@@ -1,17 +1,12 @@
+import { EmptyState, StatusDot, type StatusDotTone } from "@lifecycle/ui";
+import { FileJson, Layers } from "lucide-react";
 import type { ServiceRow } from "../api";
 
-const statusIcon: Record<string, string> = {
-  stopped: "○",
-  starting: "◌",
-  ready: "●",
-  failed: "✕",
-};
-
-const statusColor: Record<string, string> = {
-  stopped: "text-[var(--muted-foreground)]",
-  starting: "text-blue-500 animate-pulse",
-  ready: "text-emerald-500",
-  failed: "text-red-500",
+const statusTone: Record<string, StatusDotTone> = {
+  stopped: "neutral",
+  starting: "info",
+  ready: "success",
+  failed: "danger",
 };
 
 interface ServicesTabProps {
@@ -21,18 +16,32 @@ interface ServicesTabProps {
 
 export function ServicesTab({ hasManifest, services }: ServicesTabProps) {
   if (!hasManifest) {
-    return <p className="text-xs text-[var(--muted-foreground)]">No lifecycle.json</p>;
+    return (
+      <EmptyState
+        description="Add a lifecycle.json to configure services."
+        icon={<FileJson />}
+        size="sm"
+        title="No lifecycle.json"
+      />
+    );
   }
 
   if (services.length === 0) {
-    return <p className="text-xs text-[var(--muted-foreground)]">No services defined</p>;
+    return (
+      <EmptyState
+        description="Define services in lifecycle.json to see them here."
+        icon={<Layers />}
+        size="sm"
+        title="No services defined"
+      />
+    );
   }
 
   return (
     <div className="flex flex-col gap-0.5">
       {services.map((service) => {
-        const icon = statusIcon[service.status] ?? "?";
-        const color = statusColor[service.status] ?? "text-stone-400";
+        const tone = statusTone[service.status] ?? "neutral";
+        const pulse = service.status === "starting";
 
         return (
           <div
@@ -41,7 +50,7 @@ export function ServicesTab({ hasManifest, services }: ServicesTabProps) {
           >
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-2 text-xs text-[var(--foreground)]">
-                <span className={`text-[11px] ${color}`}>{icon}</span>
+                <StatusDot pulse={pulse} size="sm" tone={tone} />
                 {service.service_name}
               </span>
               {service.effective_port && (
@@ -51,7 +60,9 @@ export function ServicesTab({ hasManifest, services }: ServicesTabProps) {
               )}
             </div>
             {service.status_reason && (
-              <p className="mt-0.5 pl-5 text-[11px] text-red-400">{service.status_reason}</p>
+              <p className="mt-0.5 pl-5 text-[11px] text-[var(--destructive)]">
+                {service.status_reason}
+              </p>
             )}
           </div>
         );

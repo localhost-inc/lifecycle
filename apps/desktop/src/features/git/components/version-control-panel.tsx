@@ -1,4 +1,5 @@
 import type { GitDiffScope, GitLogEntry, WorkspaceMode } from "@lifecycle/contracts";
+import { Tabs, TabsList, TabsTrigger, cn } from "@lifecycle/ui";
 import { useState } from "react";
 import { useGitLog, useGitStatus } from "../hooks";
 import { ChangesTab } from "./changes-tab";
@@ -26,6 +27,10 @@ export function getVersionControlTabClassName(active: boolean): string {
 export const VERSION_CONTROL_PANEL_HEADER_CLASS_NAME = "px-2.5 py-3";
 export const VERSION_CONTROL_PANEL_BODY_CLASS_NAME = "px-2.5 pb-4 pt-1";
 export const VERSION_CONTROL_PANEL_EMPTY_STATE_CLASS_NAME = "px-2.5 py-4";
+const VERSION_CONTROL_PANEL_TABS_CLASS_NAME = cn(
+  getVersionControlTabClassName(false),
+  "data-[state=active]:bg-[var(--surface-selected)] data-[state=active]:text-[var(--foreground)]",
+);
 
 export function VersionControlPanel({
   onOpenDiff,
@@ -55,22 +60,19 @@ export function VersionControlPanel({
   return (
     <section className="flex min-h-0 h-full flex-col">
       <div className={VERSION_CONTROL_PANEL_HEADER_CLASS_NAME}>
-        <div className="inline-flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setActiveTab("changes")}
-            className={getVersionControlTabClassName(activeTab === "changes")}
-          >
-            Changes
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("history")}
-            className={getVersionControlTabClassName(activeTab === "history")}
-          >
-            History
-          </button>
-        </div>
+        <Tabs
+          onValueChange={(value) => setActiveTab(value as "changes" | "history")}
+          value={activeTab}
+        >
+          <TabsList className="gap-1 border-0 bg-transparent p-0">
+            <TabsTrigger className={VERSION_CONTROL_PANEL_TABS_CLASS_NAME} value="changes">
+              Changes
+            </TabsTrigger>
+            <TabsTrigger className={VERSION_CONTROL_PANEL_TABS_CLASS_NAME} value="history">
+              History
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className={VERSION_CONTROL_PANEL_BODY_CLASS_NAME}>

@@ -160,24 +160,29 @@ export function createFileDiffTab(
 
 export function createCommitDiffTab(input: CommitDiffInput | string): CommitDiffDocument {
   const sha = typeof input === "string" ? input : input.sha;
-  const shortSha = typeof input === "string" ? shortShaFromSha(sha) : input.shortSha ?? shortShaFromSha(sha);
+  const shortSha =
+    typeof input === "string" ? shortShaFromSha(sha) : (input.shortSha ?? shortShaFromSha(sha));
   const message =
-    typeof input === "string" ? defaultCommitMessage(shortSha) : input.message ?? defaultCommitMessage(shortSha);
+    typeof input === "string"
+      ? defaultCommitMessage(shortSha)
+      : (input.message ?? defaultCommitMessage(shortSha));
 
   return {
-    author: typeof input === "string" ? "" : input.author ?? "",
-    email: typeof input === "string" ? "" : input.email ?? "",
+    author: typeof input === "string" ? "" : (input.author ?? ""),
+    email: typeof input === "string" ? "" : (input.email ?? ""),
     key: commitDiffTabKey(sha),
     kind: "commit-diff",
     label: shortSha,
     message,
     sha,
     shortSha,
-    timestamp: typeof input === "string" ? "" : input.timestamp ?? "",
+    timestamp: typeof input === "string" ? "" : (input.timestamp ?? ""),
   };
 }
 
-export function isFileDiffDocument(document: WorkspaceSurfaceDocument): document is FileDiffDocument {
+export function isFileDiffDocument(
+  document: WorkspaceSurfaceDocument,
+): document is FileDiffDocument {
   return document.kind === "file-diff";
 }
 
@@ -215,9 +220,7 @@ export function migrateLegacyActiveTabKeyToV2(activeTabKey: string | null): stri
   return activeTabKey;
 }
 
-function normalizeDocuments(
-  documents: WorkspaceSurfaceDocument[],
-): WorkspaceSurfaceDocument[] {
+function normalizeDocuments(documents: WorkspaceSurfaceDocument[]): WorkspaceSurfaceDocument[] {
   const dedupedDocuments = new Map<string, WorkspaceSurfaceDocument>();
 
   for (const document of documents) {
@@ -227,9 +230,7 @@ function normalizeDocuments(
   return [...dedupedDocuments.values()];
 }
 
-function normalizeWorkspaceSurfaceState(
-  state: WorkspaceSurfaceState,
-): WorkspaceSurfaceState {
+function normalizeWorkspaceSurfaceState(state: WorkspaceSurfaceState): WorkspaceSurfaceState {
   const documents = normalizeDocuments(state.documents);
   const activeTabKey = migrateLegacyActiveTabKeyToV2(state.activeTabKey);
 
@@ -239,9 +240,7 @@ function normalizeWorkspaceSurfaceState(
   };
 }
 
-function parseJsonObject<T extends Record<string, unknown>>(
-  value: string | null,
-): T | null {
+function parseJsonObject<T extends Record<string, unknown>>(value: string | null): T | null {
   if (!value) {
     return null;
   }
@@ -386,7 +385,9 @@ function serializeCommitDiffDocument(document: CommitDiffDocument): Record<strin
   return serialized;
 }
 
-function serializeWorkspaceSurfaceDocument(document: WorkspaceSurfaceDocument): Record<string, string> {
+function serializeWorkspaceSurfaceDocument(
+  document: WorkspaceSurfaceDocument,
+): Record<string, string> {
   if (isFileDiffDocument(document)) {
     return {
       activeScope: document.activeScope,
@@ -404,7 +405,9 @@ function serializeWorkspaceSurfaceState(state: WorkspaceSurfaceState): Persisted
 
   return {
     activeTabKey: normalizedState.activeTabKey,
-    documents: normalizedState.documents.map((document) => serializeWorkspaceSurfaceDocument(document)),
+    documents: normalizedState.documents.map((document) =>
+      serializeWorkspaceSurfaceDocument(document),
+    ),
   };
 }
 
@@ -461,10 +464,7 @@ export function writeWorkspaceSurfaceState(
   if (Object.keys(nextMap).length === 0) {
     resolvedStorage.removeItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2);
   } else {
-    resolvedStorage.setItem(
-      WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2,
-      JSON.stringify(nextMap),
-    );
+    resolvedStorage.setItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2, JSON.stringify(nextMap));
   }
 
   resolvedStorage.removeItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY_V1);

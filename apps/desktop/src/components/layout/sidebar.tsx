@@ -1,6 +1,21 @@
 import { isTauri } from "@tauri-apps/api/core";
 import type { ProjectRecord } from "@lifecycle/contracts";
-import { Collapsible, CollapsibleContent } from "@lifecycle/ui";
+import {
+  Button,
+  Collapsible,
+  CollapsibleContent,
+  Sidebar as UiSidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+} from "@lifecycle/ui";
 import { FolderPlus, Settings } from "lucide-react";
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
@@ -15,7 +30,6 @@ interface SidebarProps {
   workspacesByProjectId: Record<string, WorkspaceRow[]>;
   selectedProjectId: string | null;
   selectedWorkspaceId: string | null;
-  width: number;
   onSelectProject: (projectId: string) => void;
   onSelectWorkspace: (workspaceId: string) => void;
   onAddProject: () => void;
@@ -64,7 +78,6 @@ export function Sidebar({
   workspacesByProjectId,
   selectedProjectId,
   selectedWorkspaceId,
-  width,
   onSelectProject,
   onSelectWorkspace,
   onAddProject,
@@ -87,58 +100,61 @@ export function Sidebar({
   }, [canGoForward, navigate]);
   const historyActions = (
     <>
-      <button
-        type="button"
+      <Button
         aria-label="Go back"
+        className="h-6 w-6 p-0"
         onClick={goBack}
         disabled={!canGoBack}
-        className="flex h-6 w-6 items-center justify-center rounded text-sm text-[var(--muted-foreground)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
+        size="icon"
+        variant="ghost"
       >
         ←
-      </button>
-      <button
-        type="button"
+      </Button>
+      <Button
         aria-label="Go forward"
+        className="h-6 w-6 p-0"
         onClick={goForward}
         disabled={!canGoForward}
-        className="flex h-6 w-6 items-center justify-center rounded text-sm text-[var(--muted-foreground)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-40"
+        size="icon"
+        variant="ghost"
       >
         →
-      </button>
+      </Button>
     </>
   );
   const addProjectAction = (
-    <button
-      type="button"
+    <Button
+      className="h-6 w-6 p-0"
       onClick={onAddProject}
-      className="flex h-6 w-6 items-center justify-center rounded text-[var(--muted-foreground)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
+      size="icon"
       title="Add project"
+      variant="ghost"
     >
       <FolderPlus size={16} />
-    </button>
+    </Button>
   );
 
   return (
-    <aside
-      className="flex h-full shrink-0 flex-col bg-[var(--panel)]"
-      style={{ width: `${width}px` }}
-    >
-      <div data-tauri-drag-region className={getSidebarHeaderClassName(shouldInsetSidebarHeader)}>
+    <UiSidebar collapsible="none">
+      <SidebarHeader
+        className={getSidebarHeaderClassName(shouldInsetSidebarHeader)}
+        data-tauri-drag-region
+      >
         {shouldInsetSidebarHeader ? (
           <>
             <div data-no-drag className="flex min-h-6 items-center justify-end gap-1">
               {historyActions}
             </div>
             <div className="flex items-center justify-between">
-              <h1 className="text-sm font-semibold tracking-tight text-[var(--foreground)]">
+              <h1 className="text-[13px] font-medium text-[var(--sidebar-muted-foreground)]">
                 Workspaces
               </h1>
-              <div data-no-drag>{addProjectAction}</div>
+              <div data-no-drag className="-mr-1.5">{addProjectAction}</div>
             </div>
           </>
         ) : (
           <>
-            <h1 className="text-sm font-semibold tracking-tight text-[var(--foreground)]">
+            <h1 className="text-[13px] font-medium text-[var(--sidebar-muted-foreground)]">
               Workspaces
             </h1>
             <div data-no-drag className="flex items-center gap-1">
@@ -147,9 +163,9 @@ export function Sidebar({
             </div>
           </>
         )}
-      </div>
+      </SidebarHeader>
 
-      <nav className="flex-1 overflow-y-auto px-2 py-1">
+      <SidebarContent className="px-2 py-1">
         {isLoading && projects.length === 0 ? (
           <p className="px-3 py-8 text-center text-xs text-[var(--muted-foreground)]">
             Loading projects...
@@ -159,52 +175,56 @@ export function Sidebar({
             No projects yet
           </p>
         ) : (
-          <ul className="space-y-2">
-            {projects.map((project) => {
-              const workspaces = workspacesByProjectId[project.id] ?? [];
-              return (
-                <li key={project.id}>
-                  <Collapsible defaultOpen className="group/project">
-                    <ProjectItem
-                      project={project}
-                      selected={project.id === selectedProjectId}
-                      onSelect={() => onSelectProject(project.id)}
-                      onCreateWorkspace={() => onCreateWorkspace(project.id)}
-                    />
+          <SidebarGroup className="p-0">
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-3">
+                {projects.map((project) => {
+                  const workspaces = workspacesByProjectId[project.id] ?? [];
+                  return (
+                    <SidebarMenuItem key={project.id}>
+                      <Collapsible defaultOpen className="group/project">
+                        <ProjectItem
+                          project={project}
+                          selected={project.id === selectedProjectId}
+                          onSelect={() => onSelectProject(project.id)}
+                          onCreateWorkspace={() => onCreateWorkspace(project.id)}
+                        />
 
-                    {workspaces.length > 0 && (
-                      <CollapsibleContent>
-                        <ul className="mt-0.5 space-y-0.5">
-                          {workspaces.map((workspace) => (
-                            <li key={workspace.id}>
-                              <WorkspaceTreeItem
-                                workspace={workspace}
-                                selected={workspace.id === selectedWorkspaceId}
-                                onSelect={() => onSelectWorkspace(workspace.id)}
-                              />
-                            </li>
-                          ))}
-                        </ul>
-                      </CollapsibleContent>
-                    )}
-                  </Collapsible>
-                </li>
-              );
-            })}
-          </ul>
+                        {workspaces.length > 0 && (
+                          <CollapsibleContent>
+                            <SidebarMenuSub className="mt-1">
+                              {workspaces.map((workspace) => (
+                                <SidebarMenuSubItem key={workspace.id}>
+                                  <WorkspaceTreeItem
+                                    workspace={workspace}
+                                    selected={workspace.id === selectedWorkspaceId}
+                                    onSelect={() => onSelectWorkspace(workspace.id)}
+                                  />
+                                </SidebarMenuSubItem>
+                              ))}
+                            </SidebarMenuSub>
+                          </CollapsibleContent>
+                        )}
+                      </Collapsible>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
         )}
-      </nav>
+      </SidebarContent>
 
-      <div className="border-t border-[var(--border)] px-3 py-2">
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          className="flex items-center gap-2 text-xs text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
-        >
-          <Settings size={14} />
-          Settings
-        </button>
-      </div>
-    </aside>
+      <SidebarFooter className="border-t border-[var(--border)]">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton className="text-xs" onClick={onOpenSettings}>
+              <Settings size={14} />
+              <span>Settings</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+    </UiSidebar>
   );
 }

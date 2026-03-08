@@ -83,9 +83,7 @@ export function detectPlatformHint(): string {
       ? String(navigator.userAgentData.platform)
       : undefined;
 
-  return normalizePlatformHint(
-    userAgentDataPlatform ?? navigator.platform ?? navigator.userAgent,
-  );
+  return normalizePlatformHint(userAgentDataPlatform ?? navigator.platform ?? navigator.userAgent);
 }
 
 export function getTerminalPlatform(platformHint = detectPlatformHint()): TerminalPlatform {
@@ -301,7 +299,9 @@ function parseCssAlpha(value: string): number | null {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
-export function shouldAllowTerminalTransparency(backgroundColor: string | null | undefined): boolean {
+export function shouldAllowTerminalTransparency(
+  backgroundColor: string | null | undefined,
+): boolean {
   const color = backgroundColor?.trim().toLowerCase();
   if (!color) {
     return false;
@@ -340,7 +340,10 @@ export function shouldAllowTerminalTransparency(backgroundColor: string | null |
 
 export function resolveTerminalRuntimeOptions(
   input: ResolveTerminalRuntimeOptionsInput,
-): Pick<TerminalRuntimeDiagnostics, "allowTransparency" | "requestedRenderer" | "resolvedRenderer"> {
+): Pick<
+  TerminalRuntimeDiagnostics,
+  "allowTransparency" | "requestedRenderer" | "resolvedRenderer"
+> {
   const requestedRenderer = normalizeTerminalRenderer(input.renderer);
   return {
     allowTransparency: shouldAllowTerminalTransparency(input.backgroundColor),

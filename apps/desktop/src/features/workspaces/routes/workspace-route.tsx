@@ -1,7 +1,8 @@
+import { Alert, AlertDescription, AlertTitle } from "@lifecycle/ui";
 import { useParams } from "react-router-dom";
 import { useProjectManifest } from "../../projects/hooks";
-import { useWorkspace } from "../hooks";
 import { WorkspacePanel } from "../components/workspace-panel";
+import { useWorkspace } from "../hooks";
 
 export function WorkspaceRoute() {
   const { workspaceId } = useParams();
@@ -11,9 +12,10 @@ export function WorkspaceRoute() {
   if (workspaceQuery.error) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-sm text-red-600">
-          Failed to load workspace: {String(workspaceQuery.error)}
-        </p>
+        <Alert className="max-w-lg" variant="destructive">
+          <AlertTitle>Failed to load workspace</AlertTitle>
+          <AlertDescription>{String(workspaceQuery.error)}</AlertDescription>
+        </Alert>
       </div>
     );
   }
@@ -45,9 +47,10 @@ export function WorkspaceRoute() {
   if (manifestQuery.error) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-sm text-red-600">
-          Failed to load manifest: {String(manifestQuery.error)}
-        </p>
+        <Alert className="max-w-lg" variant="destructive">
+          <AlertTitle>Failed to load manifest</AlertTitle>
+          <AlertDescription>{String(manifestQuery.error)}</AlertDescription>
+        </Alert>
       </div>
     );
   }

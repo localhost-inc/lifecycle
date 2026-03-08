@@ -1,3 +1,5 @@
+import { Alert, AlertDescription, EmptyState, useTheme } from "@lifecycle/ui";
+import { TerminalSquare } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   hideNativeTerminalSurface,
@@ -7,7 +9,6 @@ import {
 } from "../api";
 import { resolveTerminalTheme } from "../terminal-theme";
 import { useSettings } from "../../settings/state/app-settings-provider";
-import { useTheme } from "../../../theme/theme-provider";
 
 interface NativeTerminalPanelProps {
   active: boolean;
@@ -42,7 +43,10 @@ export function NativeTerminalPanel({ active, terminal }: NativeTerminalPanelPro
     }
 
     try {
-      if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
+      if (
+        document.activeElement instanceof HTMLElement &&
+        document.activeElement !== document.body
+      ) {
         document.activeElement.blur();
       }
       await syncNativeTerminalSurface({
@@ -107,28 +111,20 @@ export function NativeTerminalPanel({ active, terminal }: NativeTerminalPanelPro
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[var(--terminal-surface-background)]">
       {error && (
-        <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          {error}
-        </div>
+        <Alert className="border-x-0 border-t-0" variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
       <div className="min-h-0 flex-1 overflow-hidden">
         {hasLiveSession ? (
-          <div
-            ref={hostRef}
-            className="h-full w-full bg-[var(--terminal-surface-background)]"
-          />
+          <div ref={hostRef} className="h-full w-full bg-[var(--terminal-surface-background)]" />
         ) : (
-          <div className="flex h-full items-center justify-center px-8 text-center">
-            <div>
-              <h3 className="text-lg font-semibold text-[var(--foreground)]">
-                Session unavailable
-              </h3>
-              <p className="mt-2 max-w-md text-sm text-[var(--muted-foreground)]">
-                This terminal session is no longer attachable. Start a new shell or harness session
-                to continue.
-              </p>
-            </div>
-          </div>
+          <EmptyState
+            className="h-full"
+            description="This terminal session is no longer attachable. Start a new session to continue."
+            icon={<TerminalSquare />}
+            title="Session unavailable"
+          />
         )}
       </div>
     </div>

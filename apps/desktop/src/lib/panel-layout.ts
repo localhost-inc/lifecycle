@@ -93,10 +93,7 @@ export function getRightSidebarWidthFromPointer(
   return clampPanelSize(containerRight - pointerClientX, bounds);
 }
 
-export function getSplitRatioBounds(
-  containerSize: number,
-  minPanelSize: number,
-): SplitRatioBounds {
+export function getSplitRatioBounds(containerSize: number, minPanelSize: number): SplitRatioBounds {
   if (!Number.isFinite(containerSize) || containerSize <= 0) {
     return {
       maxRatio: 0.5,

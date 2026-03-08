@@ -1,4 +1,11 @@
-import type { GitDiffScope, GitFileChangeKind, GitFileStatus, GitStatusResult } from "@lifecycle/contracts";
+import type {
+  GitDiffScope,
+  GitFileChangeKind,
+  GitFileStatus,
+  GitStatusResult,
+} from "@lifecycle/contracts";
+import { EmptyState } from "@lifecycle/ui";
+import { GitBranch } from "lucide-react";
 import { useState } from "react";
 import { stageGitFiles, unstageGitFiles } from "../api";
 
@@ -144,9 +151,7 @@ function FileRow({
     >
       <div className="flex min-w-0 flex-1 items-baseline gap-1">
         <span className="shrink-0 text-[13px] font-medium text-[var(--foreground)]">{name}</span>
-        {dir && (
-          <span className="truncate text-xs text-[var(--muted-foreground)]">{dir}</span>
-        )}
+        {dir && <span className="truncate text-xs text-[var(--muted-foreground)]">{dir}</span>}
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
@@ -226,7 +231,14 @@ export function ChangesTab({
   }
 
   if (files.length === 0) {
-    return <p className="text-xs text-[var(--muted-foreground)]">Working tree clean.</p>;
+    return (
+      <EmptyState
+        description="New edits will appear here."
+        icon={<GitBranch />}
+        size="sm"
+        title="Working tree clean"
+      />
+    );
   }
 
   return (

@@ -1,4 +1,6 @@
 import type { GitDiffScope, GitLogEntry, TerminalStatus } from "@lifecycle/contracts";
+import { EmptyState } from "@lifecycle/ui";
+import { TerminalSquare } from "lucide-react";
 import { useEffect, useMemo, useReducer, useState } from "react";
 import { useStoreClient } from "../../../store";
 import { CommitDiffViewerPanel } from "../../git/components/commit-diff-viewer-panel";
@@ -170,10 +172,8 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
     null,
   );
   const [error, setError] = useState<string | null>(null);
-  const [state, dispatch] = useReducer(
-    workspaceSurfaceReducer,
-    workspaceId,
-    (initialWorkspaceId) => readWorkspaceSurfaceState(initialWorkspaceId),
+  const [state, dispatch] = useReducer(workspaceSurfaceReducer, workspaceId, (initialWorkspaceId) =>
+    readWorkspaceSurfaceState(initialWorkspaceId),
   );
 
   const terminals = useMemo(
@@ -378,24 +378,18 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
                     workspaceId={workspaceId}
                   />
                 ) : isCommitDiffDocument(tab) ? (
-                  <CommitDiffViewerPanel
-                    commit={tab}
-                    workspaceId={workspaceId}
-                  />
+                  <CommitDiffViewerPanel commit={tab} workspaceId={workspaceId} />
                 ) : null}
               </div>
             );
           })}
         </>
       ) : (
-        <div className="flex flex-1 items-center justify-center px-8 text-center">
-          <div>
-            <h3 className="text-lg font-semibold text-[var(--foreground)]">No open tabs</h3>
-            <p className="mt-2 max-w-md text-sm text-[var(--muted-foreground)]">
-              Start a shell or harness session, or open a diff from the version control panel.
-            </p>
-          </div>
-        </div>
+        <EmptyState
+          description="Start a shell or harness session, or open a diff from the version control panel."
+          icon={<TerminalSquare />}
+          title="No open tabs"
+        />
       )}
     </div>
   );

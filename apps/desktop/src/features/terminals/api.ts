@@ -261,8 +261,7 @@ function normalizeBrowserReplayState(
         continue;
       }
 
-      const data =
-        "data" in rawChunk && typeof rawChunk.data === "string" ? rawChunk.data : null;
+      const data = "data" in rawChunk && typeof rawChunk.data === "string" ? rawChunk.data : null;
       if (data === null) {
         continue;
       }
@@ -667,7 +666,11 @@ export async function attachTerminalStream(
     const parsedReplayCursor = parseReplayCursor(replayCursor);
     for (const chunk of replay) {
       const chunkCursor = parseReplayCursor(chunk.cursor);
-      if (parsedReplayCursor !== null && chunkCursor !== null && chunkCursor <= parsedReplayCursor) {
+      if (
+        parsedReplayCursor !== null &&
+        chunkCursor !== null &&
+        chunkCursor <= parsedReplayCursor
+      ) {
         continue;
       }
 

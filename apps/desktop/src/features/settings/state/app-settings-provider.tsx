@@ -84,15 +84,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     return next;
   }, []);
 
-  const setWorktreeRoot = useCallback((value: string) => {
-    setSettings((prev) => {
-      const next = {
-        ...prev,
-        worktreeRoot: normalizeWorktreeRoot(value),
-      };
-      return persistSettings(next);
-    });
-  }, [persistSettings]);
+  const setWorktreeRoot = useCallback(
+    (value: string) => {
+      setSettings((prev) => {
+        const next = {
+          ...prev,
+          worktreeRoot: normalizeWorktreeRoot(value),
+        };
+        return persistSettings(next);
+      });
+    },
+    [persistSettings],
+  );
 
   const setTerminalFontFamily = useCallback(
     (value: string) => {

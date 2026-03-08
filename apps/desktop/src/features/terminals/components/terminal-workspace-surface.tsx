@@ -1,3 +1,4 @@
+import { Alert, AlertDescription, AlertTitle } from "@lifecycle/ui";
 import { useEffect, useState } from "react";
 import { useStoreClient } from "../../../store";
 import {
@@ -98,23 +99,23 @@ export function TerminalWorkspaceSurface({ workspaceId }: TerminalWorkspaceSurfa
         terminals={terminals}
       />
       {Boolean(terminalsQuery.error) && (
-        <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          Failed to load terminals: {String(terminalsQuery.error)}
-        </div>
+        <Alert className="border-x-0 border-t-0" variant="destructive">
+          <AlertTitle>Failed to load terminals</AlertTitle>
+          <AlertDescription>{String(terminalsQuery.error)}</AlertDescription>
+        </Alert>
       )}
       {error && (
-        <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          {error}
-        </div>
+        <Alert className="border-x-0 border-t-0" variant="destructive">
+          <AlertTitle>Terminal error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
       {terminals.length > 0 ? (
         terminals.map((terminal) => (
           <div
             key={terminal.id}
             className={
-              terminal.id === activeTerminal?.id
-                ? "flex min-h-0 flex-1 flex-col"
-                : "hidden"
+              terminal.id === activeTerminal?.id ? "flex min-h-0 flex-1 flex-col" : "hidden"
             }
           >
             <TerminalPanel active={terminal.id === activeTerminal?.id} terminal={terminal} />

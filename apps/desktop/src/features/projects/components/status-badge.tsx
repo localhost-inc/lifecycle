@@ -1,9 +1,10 @@
+import { Badge } from "@lifecycle/ui";
 import type { ManifestStatus } from "../api/projects";
 
-const styles = {
-  valid: "bg-emerald-500/10 text-emerald-400",
-  invalid: "bg-red-500/10 text-red-400",
-  missing: "bg-[var(--muted)] text-[var(--muted-foreground)]",
+const variants = {
+  valid: "success",
+  invalid: "destructive",
+  missing: "muted",
 } as const;
 
 const labels = {
@@ -15,11 +16,5 @@ const labels = {
 export function StatusBadge({ state }: { state: ManifestStatus["state"] }) {
   if (state === "missing") return null;
 
-  return (
-    <span
-      className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${styles[state]}`}
-    >
-      {labels[state]}
-    </span>
-  );
+  return <Badge variant={variants[state]}>{labels[state]}</Badge>;
 }

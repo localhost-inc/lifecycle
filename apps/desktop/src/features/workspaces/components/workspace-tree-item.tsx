@@ -1,15 +1,35 @@
 import type { WorkspaceStatus } from "@lifecycle/contracts";
+import {
+  cn,
+  sidebarMenuSubButtonVariants,
+  StatusDot,
+  type StatusDotTone,
+} from "@lifecycle/ui";
 import { formatCompactRelativeTime } from "../../../lib/format";
 import type { WorkspaceRow } from "../api";
 
-const dotStyles: Record<WorkspaceStatus, string> = {
-  creating: "bg-amber-500 animate-pulse",
-  starting: "bg-blue-500 animate-pulse",
-  ready: "bg-emerald-500",
-  resetting: "bg-amber-500 animate-pulse",
+const dotTone: Record<WorkspaceStatus, StatusDotTone> = {
+  creating: "warning",
+  starting: "info",
+  ready: "success",
+  resetting: "warning",
+  sleeping: "neutral",
+  destroying: "danger",
+  failed: "danger",
+};
+
+const dotPulse: Record<WorkspaceStatus, boolean> = {
+  creating: true,
+  starting: true,
+  ready: false,
+  resetting: true,
+  sleeping: false,
+  destroying: true,
+  failed: false,
+};
+
+const dotClassName: Partial<Record<WorkspaceStatus, string>> = {
   sleeping: "bg-zinc-400",
-  destroying: "bg-red-500 animate-pulse",
-  failed: "bg-red-500",
 };
 
 const dotLabels: Record<WorkspaceStatus, string> = {
@@ -34,24 +54,25 @@ export function WorkspaceTreeItem({ workspace, selected, onSelect }: WorkspaceTr
 
   return (
     <button
-      type="button"
+      className={cn(sidebarMenuSubButtonVariants({ active: selected }), "gap-1.5 pl-[18px] pr-2")}
       onClick={onSelect}
-      className={`flex w-full items-center gap-1.5 py-1 pl-[18px] pr-2 text-left transition-colors ${
-        selected
-          ? "bg-[var(--surface-selected)] text-[var(--foreground)]"
-          : "text-[var(--sidebar-muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
-      }`}
       title={workspace.source_ref}
+      type="button"
     >
-      <span
-        className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotStyles[status]}`}
+      <StatusDot
+        className={dotClassName[status]}
+        pulse={dotPulse[status]}
+        size="sm"
         title={dotLabels[status]}
+        tone={dotTone[status]}
       />
       <span className="flex-1 truncate text-sm">{workspace.source_ref}</span>
       {timestamp && (
         <span
           className={`shrink-0 text-xs ${
-            selected ? "text-[var(--foreground)] opacity-70" : "text-[var(--sidebar-muted-foreground)]"
+            selected
+              ? "text-[var(--sidebar-foreground)] opacity-70"
+              : "text-[var(--sidebar-muted-foreground)]"
           }`}
         >
           {timestamp}

@@ -96,29 +96,20 @@ describe("terminal attachments", () => {
   });
 
   test("formats saved attachment paths for insertion into the terminal prompt", () => {
-    expect(
-      formatTerminalAttachmentInsertion([
-        "/tmp/one.png",
-        "/tmp/two with spaces.png",
-      ]),
-    ).toBe('"/tmp/one.png" "/tmp/two with spaces.png"');
+    expect(formatTerminalAttachmentInsertion(["/tmp/one.png", "/tmp/two with spaces.png"])).toBe(
+      '"/tmp/one.png" "/tmp/two with spaces.png"',
+    );
   });
 
   test("uses plain terminal text for non-Codex harnesses", () => {
     expect(
-      buildTerminalAttachmentWritePayloads("claude", [
-        "/tmp/one.png",
-        "/tmp/two with spaces.png",
-      ]),
+      buildTerminalAttachmentWritePayloads("claude", ["/tmp/one.png", "/tmp/two with spaces.png"]),
     ).toEqual(['"/tmp/one.png" "/tmp/two with spaces.png" ']);
   });
 
   test("uses bracketed paste payloads for Codex image attachments", () => {
     expect(
-      buildTerminalAttachmentWritePayloads("codex", [
-        "/tmp/one.png",
-        "/tmp/two with spaces.png",
-      ]),
+      buildTerminalAttachmentWritePayloads("codex", ["/tmp/one.png", "/tmp/two with spaces.png"]),
     ).toEqual([
       '\u001b[200~"/tmp/one.png"\u001b[201~',
       '\u001b[200~"/tmp/two with spaces.png"\u001b[201~',

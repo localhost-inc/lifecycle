@@ -87,10 +87,7 @@ export function WorkspaceSidebar({
   }, [clampedTopPanelRatio, topPanelRatio]);
 
   useEffect(() => {
-    writePersistedPanelValue(
-      WORKSPACE_SIDEBAR_TOP_PANEL_RATIO_STORAGE_KEY,
-      clampedTopPanelRatio,
-    );
+    writePersistedPanelValue(WORKSPACE_SIDEBAR_TOP_PANEL_RATIO_STORAGE_KEY, clampedTopPanelRatio);
   }, [clampedTopPanelRatio]);
 
   useEffect(() => {
@@ -160,8 +157,7 @@ export function WorkspaceSidebar({
 
   const handlePanelSeparatorKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
-      const ratioStep =
-        sidebarHeight > 0 ? PANEL_SEPARATOR_STEP_PX / sidebarHeight : 0.08;
+      const ratioStep = sidebarHeight > 0 ? PANEL_SEPARATOR_STEP_PX / sidebarHeight : 0.08;
 
       if (event.key === "ArrowUp") {
         event.preventDefault();
@@ -189,7 +185,7 @@ export function WorkspaceSidebar({
   return (
     <aside
       ref={sidebarRef}
-      className="flex h-full min-h-0 w-full shrink-0 flex-col overflow-hidden bg-[var(--panel)]"
+      className="flex h-full min-h-0 w-full shrink-0 flex-col overflow-hidden bg-[var(--background)]"
     >
       <div
         className="min-h-0 shrink-0 overflow-hidden"

@@ -49,15 +49,9 @@ describe("terminal browser simulator", () => {
     });
 
     const initialReplay: TerminalStreamChunk[] = [];
-    const disposeInitialReplay = await attachTerminalStream(
-      terminal.id,
-      120,
-      32,
-      null,
-      (chunk) => {
-        initialReplay.push(chunk);
-      },
-    );
+    const disposeInitialReplay = await attachTerminalStream(terminal.id, 120, 32, null, (chunk) => {
+      initialReplay.push(chunk);
+    });
     expect(initialReplay.length).toBeGreaterThan(0);
     const lastSeenCursor = initialReplay.at(-1)?.cursor ?? null;
     expect(lastSeenCursor).not.toBeNull();

@@ -22,7 +22,7 @@ const workspace = {
 };
 
 describe("WorkspaceTreeItem", () => {
-  test("uses the shared selected panel treatment", () => {
+  test("uses the shared selected sidebar treatment", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceTreeItem, {
         workspace,
@@ -31,12 +31,12 @@ describe("WorkspaceTreeItem", () => {
       }),
     );
 
-    expect(markup).toContain("bg-[var(--surface-selected)]");
-    expect(markup).toContain("text-[var(--foreground)]");
+    expect(markup).toContain("bg-[var(--sidebar-selected)]");
+    expect(markup).toContain("text-[var(--sidebar-foreground)]");
     expect(markup).toContain("opacity-70");
   });
 
-  test("uses the shared idle hover treatment", () => {
+  test("uses the shared idle sidebar hover treatment", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceTreeItem, {
         workspace,
@@ -45,8 +45,8 @@ describe("WorkspaceTreeItem", () => {
       }),
     );
 
-    expect(markup).toContain("text-[var(--muted-foreground)]");
-    expect(markup).toContain("hover:bg-[var(--surface-hover)]");
-    expect(markup).toContain("hover:text-[var(--foreground)]");
+    expect(markup).toContain("text-[var(--sidebar-foreground)]");
+    expect(markup).toContain("hover:bg-[var(--sidebar-hover)]");
+    expect(markup).toContain("text-[var(--sidebar-muted-foreground)]");
   });
 });

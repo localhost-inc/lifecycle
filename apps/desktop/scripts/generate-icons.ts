@@ -1,12 +1,5 @@
 import { spawnSync } from "node:child_process";
-import {
-  copyFileSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  rmSync,
-  unlinkSync,
-} from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,14 +30,10 @@ const trackedBundleFiles = new Set([
 ]);
 
 try {
-  const result = spawnSync(
-    process.execPath,
-    ["x", "tauri", "icon", sourceIcon, "-o", tempDir],
-    {
-      cwd: appDir,
-      stdio: "inherit",
-    },
-  );
+  const result = spawnSync(process.execPath, ["x", "tauri", "icon", sourceIcon, "-o", tempDir], {
+    cwd: appDir,
+    stdio: "inherit",
+  });
 
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
