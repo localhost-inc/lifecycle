@@ -1,7 +1,10 @@
 import { Alert, AlertDescription, EmptyState, useTheme } from "@lifecycle/ui";
 import { TerminalSquare } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useShellResizeInProgress } from "../../../components/layout/shell-resize-provider";
+import {
+  subscribeToShellResize,
+  useShellResizeInProgress,
+} from "../../../components/layout/shell-resize-provider";
 import {
   hideNativeTerminalSurface,
   syncNativeTerminalSurface,
@@ -15,6 +18,8 @@ interface NativeTerminalSurfaceProps {
   active: boolean;
   terminal: TerminalRow;
 }
+
+const NATIVE_TERMINAL_RESUME_DELAY_MS = 120;
 
 export function shouldShowNativeTerminalSurface({
   active,
@@ -36,11 +41,40 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
   const hostRef = useRef<HTMLDivElement | null>(null);
   const frameIdRef = useRef<number | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const resumeTimeoutRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { terminalFontSize } = useSettings();
   const { preset, resolvedAppearance } = useTheme();
   const hasLiveSession = terminalHasLiveSession(terminal.status);
   const isShellResizeInProgress = useShellResizeInProgress();
+  const shellResizeHoldRef = useRef(isShellResizeInProgress);
+
+  const cancelScheduledSync = () => {
+    if (frameIdRef.current === null) {
+      return;
+    }
+
+    window.cancelAnimationFrame(frameIdRef.current);
+    frameIdRef.current = null;
+  };
+
+  const clearResumeTimeout = () => {
+    if (resumeTimeoutRef.current === null) {
+      return;
+    }
+
+    window.clearTimeout(resumeTimeoutRef.current);
+    resumeTimeoutRef.current = null;
+  };
+
+  const hideSurface = async () => {
+    try {
+      await hideNativeTerminalSurface(terminal.id);
+      setError(null);
+    } catch (nextError) {
+      setError(String(nextError));
+    }
+  };
 
   const syncSurface = async () => {
     const host = hostRef.current;
@@ -49,20 +83,16 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
     }
 
     const rect = host.getBoundingClientRect();
+    const shellResizeBlocked = shellResizeHoldRef.current || isShellResizeInProgress;
     const visible = shouldShowNativeTerminalSurface({
       active,
       hasLiveSession,
       height: rect.height,
-      isShellResizeInProgress,
+      isShellResizeInProgress: shellResizeBlocked,
       width: rect.width,
     });
     if (!visible) {
-      try {
-        await hideNativeTerminalSurface(terminal.id);
-        setError(null);
-      } catch (nextError) {
-        setError(String(nextError));
-      }
+      await hideSurface();
       return;
     }
 
@@ -93,6 +123,11 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
   };
 
   const scheduleSync = () => {
+    if (shellResizeHoldRef.current || isShellResizeInProgress) {
+      cancelScheduledSync();
+      return;
+    }
+
     if (frameIdRef.current !== null) {
       return;
     }
@@ -102,6 +137,45 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
       void syncSurface();
     });
   };
+
+  useEffect(() => {
+    if (!isShellResizeInProgress) {
+      return;
+    }
+
+    shellResizeHoldRef.current = true;
+    clearResumeTimeout();
+    cancelScheduledSync();
+    void hideSurface();
+  }, [isShellResizeInProgress, terminal.id]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToShellResize((resizing) => {
+      if (resizing) {
+        shellResizeHoldRef.current = true;
+        clearResumeTimeout();
+        cancelScheduledSync();
+        void hideSurface();
+        return;
+      }
+
+      if (!shellResizeHoldRef.current) {
+        return;
+      }
+
+      clearResumeTimeout();
+      resumeTimeoutRef.current = window.setTimeout(() => {
+        resumeTimeoutRef.current = null;
+        shellResizeHoldRef.current = false;
+        scheduleSync();
+      }, NATIVE_TERMINAL_RESUME_DELAY_MS);
+    });
+
+    return () => {
+      unsubscribe();
+      clearResumeTimeout();
+    };
+  }, [scheduleSync, terminal.id]);
 
   useEffect(() => {
     if (!hostRef.current) {
@@ -119,16 +193,14 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
     document.addEventListener("visibilitychange", scheduleSync);
 
     return () => {
-      if (frameIdRef.current !== null) {
-        window.cancelAnimationFrame(frameIdRef.current);
-        frameIdRef.current = null;
-      }
+      clearResumeTimeout();
+      cancelScheduledSync();
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
       window.removeEventListener("resize", scheduleSync);
       window.removeEventListener("scroll", scheduleSync, true);
       document.removeEventListener("visibilitychange", scheduleSync);
-      void hideNativeTerminalSurface(terminal.id);
+      void hideSurface();
     };
   }, [
     active,

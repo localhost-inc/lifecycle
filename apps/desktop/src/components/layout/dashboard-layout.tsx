@@ -37,7 +37,7 @@ import {
   writePersistedPanelValue,
 } from "../../lib/panel-layout";
 import { useStoreClient } from "../../store";
-import { ShellResizeProvider } from "./shell-resize-provider";
+import { notifyShellResizeListeners, ShellResizeProvider } from "./shell-resize-provider";
 import { Sidebar } from "./sidebar";
 import { AppStatusBar } from "./app-status-bar";
 import { TitleBar } from "./title-bar";
@@ -110,6 +110,12 @@ export function DashboardLayout() {
       }),
     [layoutRowWidth, leftSidebarWidth],
   );
+  const leftSidebarBoundsRef = useRef(leftSidebarBounds);
+  const rightSidebarBoundsRef = useRef(rightSidebarBounds);
+  const leftSidebarCollapsedRef = useRef(leftSidebarCollapsed);
+  leftSidebarBoundsRef.current = leftSidebarBounds;
+  rightSidebarBoundsRef.current = rightSidebarBounds;
+  leftSidebarCollapsedRef.current = leftSidebarCollapsed;
 
   useEffect(() => {
     const layoutRow = layoutRowRef.current;
@@ -224,34 +230,48 @@ export function DashboardLayout() {
 
       const bounds = layoutRow.getBoundingClientRect();
       if (activeSidebarResize === "left") {
-        if (leftSidebarCollapsed) {
+        if (leftSidebarCollapsedRef.current) {
+          leftSidebarCollapsedRef.current = false;
           setLeftSidebarCollapsed(false);
         }
         setLeftSidebarWidth(
-          getLeftSidebarWidthFromPointer(event.clientX, bounds.left, leftSidebarBounds),
+          getLeftSidebarWidthFromPointer(event.clientX, bounds.left, leftSidebarBoundsRef.current),
         );
         return;
       }
 
       setRightSidebarWidth(
-        getRightSidebarWidthFromPointer(event.clientX, bounds.right, rightSidebarBounds),
+        getRightSidebarWidthFromPointer(
+          event.clientX,
+          bounds.right,
+          rightSidebarBoundsRef.current,
+        ),
       );
     };
 
     const handlePointerUp = () => {
+      notifyShellResizeListeners(false);
       setActiveSidebarResize(null);
     };
 
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
     window.addEventListener("pointercancel", handlePointerUp);
+    window.addEventListener("blur", handlePointerUp);
 
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
+      window.removeEventListener("blur", handlePointerUp);
     };
-  }, [activeSidebarResize, leftSidebarBounds, rightSidebarBounds]);
+  }, [activeSidebarResize]);
+
+  useEffect(() => {
+    return () => {
+      notifyShellResizeListeners(false);
+    };
+  }, []);
 
   useEffect(() => {
     if (activeSidebarResize === null) {
@@ -343,6 +363,8 @@ export function DashboardLayout() {
 
       event.preventDefault();
       event.stopPropagation();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      notifyShellResizeListeners(true);
       setActiveSidebarResize(side);
     },
     [],
