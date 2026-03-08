@@ -3,14 +3,14 @@ import { Badge } from "./badge";
 import { Label } from "./label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
 import { useTheme } from "../theme/theme-provider";
-import { themeAppearanceOptions, themePresetOptions, type ThemeAppearance } from "../theme/presets";
+import { themeOptions, type Theme } from "../theme/presets";
 
 interface ThemeSelectorProps {
   className?: string;
 }
 
 export function ThemeSelector({ className }: ThemeSelectorProps) {
-  const { appearance, preset, resolvedAppearance, setAppearance, setPreset } = useTheme();
+  const { theme, resolvedAppearance, setTheme } = useTheme();
 
   return (
     <div className={cn("grid gap-3", className)}>
@@ -18,38 +18,21 @@ export function ThemeSelector({ className }: ThemeSelectorProps) {
         <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
           Theme
         </p>
-        <Badge className="uppercase tracking-[0.18em]" variant="muted">
-          {resolvedAppearance}
-        </Badge>
+        {theme === "system" && (
+          <Badge className="uppercase tracking-[0.18em]" variant="muted">
+            {resolvedAppearance}
+          </Badge>
+        )}
       </div>
 
       <div className="grid gap-1.5">
-        <Label htmlFor="theme-preset">Preset</Label>
-        <Select value={preset} onValueChange={(value: string) => setPreset(value as typeof preset)}>
-          <SelectTrigger id="theme-preset">
-            <SelectValue placeholder="Select a preset" />
+        <Label htmlFor="theme-select">Theme</Label>
+        <Select value={theme} onValueChange={(value: string) => setTheme(value as Theme)}>
+          <SelectTrigger id="theme-select">
+            <SelectValue placeholder="Select a theme" />
           </SelectTrigger>
           <SelectContent>
-            {themePresetOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="grid gap-1.5">
-        <Label htmlFor="theme-appearance">Appearance</Label>
-        <Select
-          value={appearance}
-          onValueChange={(value: string) => setAppearance(value as ThemeAppearance)}
-        >
-          <SelectTrigger id="theme-appearance">
-            <SelectValue placeholder="Select an appearance" />
-          </SelectTrigger>
-          <SelectContent>
-            {themeAppearanceOptions.map((option) => (
+            {themeOptions.map((option) => (
               <SelectItem key={option.value} value={option.value}>
                 {option.label}
               </SelectItem>

@@ -61,9 +61,6 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
     null,
   );
   const [error, setError] = useState<string | null>(null);
-  const [windowFocused, setWindowFocused] = useState(() =>
-    typeof document === "undefined" ? true : document.hasFocus(),
-  );
   const [documentVisible, setDocumentVisible] = useState(() =>
     typeof document === "undefined" ? true : document.visibilityState === "visible",
   );
@@ -139,21 +136,13 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
   }, [state, workspaceId]);
 
   useEffect(() => {
-    const syncWindowFocused = () => {
-      setWindowFocused(document.hasFocus());
-    };
     const syncDocumentVisible = () => {
       setDocumentVisible(document.visibilityState === "visible");
-      syncWindowFocused();
     };
 
-    window.addEventListener("focus", syncWindowFocused);
-    window.addEventListener("blur", syncWindowFocused);
     document.addEventListener("visibilitychange", syncDocumentVisible);
 
     return () => {
-      window.removeEventListener("focus", syncWindowFocused);
-      window.removeEventListener("blur", syncWindowFocused);
       document.removeEventListener("visibilitychange", syncDocumentVisible);
     };
   }, []);
@@ -215,7 +204,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
   }, [state.documents, visibleTabs.length, waitingForActiveRuntimeTab]);
 
   useEffect(() => {
-    if (!activeTerminalId || !windowFocused || !documentVisible) {
+    if (!activeTerminalId || !documentVisible) {
       return;
     }
 
@@ -229,7 +218,6 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
     clearTerminalResponseReady,
     documentVisible,
     isTerminalResponseReady,
-    windowFocused,
   ]);
 
   const handleSelectTab = useCallback(
@@ -561,15 +549,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
           onSetTabOrder={(keys) => {
             dispatch({ keys, type: "set-tab-order" });
           }}
-          renderTabLeading={(tab) => (
-            <WorkspaceSurfaceTabLeading
-              tab={
-                tab.type === "terminal" && tab.key === state.activeTabKey
-                  ? { ...tab, responseReady: false }
-                  : tab
-              }
-            />
-          )}
+          renderTabLeading={(tab) => <WorkspaceSurfaceTabLeading tab={tab} />}
           visibleTabs={visibleTabs}
         />
         <SurfaceLaunchActions

@@ -44,6 +44,15 @@ Provider-specific runtime detail should not be stuffed into a generic `mode_stat
 5. V1 ships both `CloudWorkspaceProvider` and `LocalWorkspaceProvider`. Both are implemented against the `WorkspaceProvider` interface and validated in parallel from Milestone 3 onward.
 6. Platform stance is Cloudflare-first for cloud execution, edge routing, and storage integration.
 
+## Event Kernel Contract
+
+Normative event and hook rules live in [events.md](./events.md).
+
+1. Provider-owned lifecycle mutations publish normalized fact events into the Lifecycle event kernel.
+2. The desktop store, notifications, metrics, and future plugins are consumers of that kernel, not independent sources of truth.
+3. Commands may expose `before|after|failed` hooks, but blocking hooks remain Lifecycle-owned until a plugin trust model exists.
+4. High-frequency streams such as PTY output remain on dedicated transports rather than the generic event kernel.
+
 ## Terminal Stream Contract (M3+)
 
 Terminal transport is split between control-plane mutations and ordered data streaming.

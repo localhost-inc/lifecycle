@@ -1,23 +1,31 @@
-export type ThemeAppearance = "light" | "dark" | "system";
-export type ThemeResolvedAppearance = "light" | "dark";
-export type ThemePreset = "lifecycle" | "nord" | "monokai";
+export type Theme =
+  | "system"
+  | "light"
+  | "dark"
+  | "nord-light"
+  | "nord-dark"
+  | "monokai-light"
+  | "monokai-dark";
 
-export const themePresetOptions: Array<{ label: string; value: ThemePreset }> = [
-  { label: "Lifecycle", value: "lifecycle" },
-  { label: "Nord", value: "nord" },
-  { label: "Monokai", value: "monokai" },
-];
+export type ResolvedTheme = Exclude<Theme, "system">;
 
-export const themeAppearanceOptions: Array<{ label: string; value: ThemeAppearance }> = [
+export const themeOptions: Array<{ label: string; value: Theme }> = [
   { label: "System", value: "system" },
   { label: "Light", value: "light" },
   { label: "Dark", value: "dark" },
+  { label: "Nord Light", value: "nord-light" },
+  { label: "Nord Dark", value: "nord-dark" },
+  { label: "Monokai Light", value: "monokai-light" },
+  { label: "Monokai Dark", value: "monokai-dark" },
 ];
 
-export function isThemeAppearance(value: unknown): value is ThemeAppearance {
-  return value === "light" || value === "dark" || value === "system";
+const THEME_VALUES = new Set<string>(themeOptions.map((option) => option.value));
+
+export function isTheme(value: unknown): value is Theme {
+  return typeof value === "string" && THEME_VALUES.has(value);
 }
 
-export function isThemePreset(value: unknown): value is ThemePreset {
-  return value === "lifecycle" || value === "nord" || value === "monokai";
+export function themeAppearance(theme: ResolvedTheme): "light" | "dark" {
+  if (theme === "light" || theme === "dark") return theme;
+  return theme.endsWith("-dark") ? "dark" : "light";
 }

@@ -336,7 +336,7 @@ function BrowserTerminalSurface({ active, terminal }: TerminalSurfaceProps) {
   const [error, setError] = useState<string | null>(null);
   const { reportTerminalDiagnostics, terminalFontFamily, terminalFontSize, terminalRenderer } =
     useSettings();
-  const { preset, resolvedAppearance } = useTheme();
+  const { resolvedTheme } = useTheme();
   const hasLiveSession = terminalHasLiveSession(terminal.status);
 
   const handleTerminalError = (nextError: unknown) => {
@@ -488,7 +488,7 @@ function BrowserTerminalSurface({ active, terminal }: TerminalSurfaceProps) {
         return;
       }
 
-      const terminalTheme = resolveTerminalTheme(host, preset, resolvedAppearance).webTheme;
+      const terminalTheme = resolveTerminalTheme(host, resolvedTheme).webTheme;
       const terminalBackground = applyTerminalAppearance({
         host,
         theme: terminalTheme,
@@ -648,10 +648,10 @@ function BrowserTerminalSurface({ active, terminal }: TerminalSurfaceProps) {
 
     applyTerminalAppearance({
       host,
-      theme: resolveTerminalTheme(host, preset, resolvedAppearance).webTheme,
+      theme: resolveTerminalTheme(host, resolvedTheme).webTheme,
       xterm: xtermRef.current,
     });
-  }, [hasLiveSession, preset, resolvedAppearance]);
+  }, [hasLiveSession, resolvedTheme]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[var(--terminal-surface-background)]">

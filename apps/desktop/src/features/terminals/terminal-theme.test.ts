@@ -65,8 +65,8 @@ describe("buildTerminalTheme", () => {
         },
       }) as CSSStyleDeclaration) as typeof getComputedStyle;
 
-    const tokens = readTerminalThemeTokens({} as HTMLElement, "light");
-    const theme = buildTerminalTheme("monokai", "light", tokens);
+    const tokens = readTerminalThemeTokens({} as HTMLElement, "monokai-light");
+    const theme = buildTerminalTheme("monokai-light", tokens);
 
     expect(tokens.foreground).toBe("#5b5a54");
     expect(tokens.paletteOverrides?.black).toBe("#d8d1c1");
@@ -82,7 +82,7 @@ describe("buildTerminalTheme", () => {
   });
 
   test("keeps the terminal surface aligned with the app background tokens", () => {
-    const theme = buildTerminalTheme("lifecycle", "dark", {
+    const theme = buildTerminalTheme("dark", {
       background: "#111113",
       foreground: "#fafaf9",
       selectionBackground: "#27272a",
@@ -120,8 +120,8 @@ describe("buildTerminalTheme", () => {
     expect(theme.webTheme.selectionBackground).toBe("#27272a");
   });
 
-  test("uses preset-specific ansi colors for alternate themes", () => {
-    const theme = buildTerminalTheme("nord", "light", {
+  test("uses theme-specific ansi colors for alternate themes", () => {
+    const theme = buildTerminalTheme("nord-light", {
       background: "#eceff4",
       foreground: "#2e3440",
       selectionBackground: "#c5cedb",

@@ -1,14 +1,24 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 
 describe("theme.css", () => {
-  test("keeps sidebar background aligned with the panel token in every theme block", () => {
-    const css = readFileSync(new URL("./theme.css", import.meta.url), "utf8");
-    const sidebarBackgroundMatches = [...css.matchAll(/--sidebar-background:\s*([^;]+);/g)];
+  test("keeps sidebar background aligned with the panel token in every theme file", () => {
+    const themesDir = new URL("./themes/", import.meta.url);
+    const themeFiles = readdirSync(themesDir).filter(
+      (file) => file.endsWith(".css") && file !== "index.css",
+    );
 
-    expect(sidebarBackgroundMatches.length).toBeGreaterThan(0);
-    for (const match of sidebarBackgroundMatches) {
-      expect(match[1]?.trim()).toBe("var(--panel)");
+    expect(themeFiles.length).toBeGreaterThan(0);
+
+    for (const file of themeFiles) {
+      const css = readFileSync(join(themesDir.pathname, file), "utf8");
+      const sidebarBackgroundMatches = [...css.matchAll(/--sidebar-background:\s*([^;]+);/g)];
+
+      expect(sidebarBackgroundMatches.length).toBeGreaterThan(0);
+      for (const match of sidebarBackgroundMatches) {
+        expect(match[1]?.trim()).toBe("var(--panel)");
+      }
     }
   });
 

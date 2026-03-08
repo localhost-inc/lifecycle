@@ -7,17 +7,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  isThemeAppearance,
-  isThemePreset,
-  type ThemeAppearance,
-  type ThemePreset,
-  type ThemeResolvedAppearance,
-} from "./presets";
+import { isTheme, themeAppearance, type ResolvedTheme, type Theme } from "./presets";
 
 export interface ThemePreference {
-  appearance: ThemeAppearance;
-  preset: ThemePreset;
+  theme: Theme;
 }
 
 export interface ThemeProviderProps {
@@ -26,10 +19,11 @@ export interface ThemeProviderProps {
   storageKey: string;
 }
 
-export interface ThemeContextValue extends ThemePreference {
-  resolvedAppearance: ThemeResolvedAppearance;
-  setAppearance: (appearance: ThemeAppearance) => void;
-  setPreset: (preset: ThemePreset) => void;
+export interface ThemeContextValue {
+  theme: Theme;
+  resolvedTheme: ResolvedTheme;
+  resolvedAppearance: "light" | "dark";
+  setTheme: (theme: Theme) => void;
 }
 
 interface ThemeStorageLike {
@@ -49,8 +43,7 @@ interface ThemeRootLike {
 }
 
 export const DEFAULT_THEME_PREFERENCE: ThemePreference = {
-  appearance: "dark",
-  preset: "lifecycle",
+  theme: "dark",
 };
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -86,16 +79,48 @@ export function readStoredThemePreference(
   }
 
   try {
-    const parsed = JSON.parse(raw) as Partial<ThemePreference>;
-    return {
-      appearance: isThemeAppearance(parsed.appearance)
-        ? parsed.appearance
-        : defaultPreference.appearance,
-      preset: isThemePreset(parsed.preset) ? parsed.preset : defaultPreference.preset,
-    };
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+
+    // New format: { theme: "..." }
+    if (isTheme(parsed.theme)) {
+      return { theme: parsed.theme };
+    }
+
+    // Migration from old format: { preset: "...", appearance: "..." }
+    if (typeof parsed.preset === "string" && typeof parsed.appearance === "string") {
+      const migrated = migrateOldPreference(parsed.preset, parsed.appearance);
+      if (migrated) {
+        storage.setItem(storageKey, JSON.stringify(migrated));
+        return migrated;
+      }
+    }
+
+    return defaultPreference;
   } catch {
     return defaultPreference;
   }
+}
+
+function migrateOldPreference(preset: string, appearance: string): ThemePreference | null {
+  if (preset === "lifecycle") {
+    if (appearance === "system") return { theme: "system" };
+    if (appearance === "light") return { theme: "light" };
+    if (appearance === "dark") return { theme: "dark" };
+  }
+
+  if (preset === "nord") {
+    if (appearance === "system") return { theme: "system" };
+    if (appearance === "light") return { theme: "nord-light" };
+    if (appearance === "dark") return { theme: "nord-dark" };
+  }
+
+  if (preset === "monokai") {
+    if (appearance === "system") return { theme: "system" };
+    if (appearance === "light") return { theme: "monokai-light" };
+    if (appearance === "dark") return { theme: "monokai-dark" };
+  }
+
+  return null;
 }
 
 export function getSystemThemeAppearance(
@@ -107,7 +132,7 @@ export function getSystemThemeAppearance(
     | undefined = typeof window === "undefined"
     ? null
     : window.matchMedia("(prefers-color-scheme: dark)"),
-): ThemeResolvedAppearance {
+): "light" | "dark" {
   if (!mediaQuery) {
     return "light";
   }
@@ -115,28 +140,26 @@ export function getSystemThemeAppearance(
   return mediaQuery.matches ? "dark" : "light";
 }
 
-export function resolveThemeAppearance(
-  preference: ThemePreference,
-  systemAppearance: ThemeResolvedAppearance,
-): ThemeResolvedAppearance {
-  return preference.appearance === "system" ? systemAppearance : preference.appearance;
+export function resolveTheme(
+  theme: Theme,
+  systemAppearance: "light" | "dark",
+): ResolvedTheme {
+  return theme === "system" ? systemAppearance : theme;
 }
 
 export function applyThemeToRoot(
-  preference: ThemePreference,
-  resolvedAppearance: ThemeResolvedAppearance,
+  resolvedTheme: ResolvedTheme,
   root: ThemeRootLike | null = getThemeRoot(),
 ): void {
   if (!root) {
     return;
   }
 
-  root.dataset.themePreset = preference.preset;
-  root.dataset.themeAppearance = resolvedAppearance;
-  root.dataset.themeMode = preference.appearance;
-  root.style.colorScheme = resolvedAppearance;
+  const appearance = themeAppearance(resolvedTheme);
+  root.dataset.theme = resolvedTheme;
+  root.style.colorScheme = appearance;
 
-  if (resolvedAppearance === "dark") {
+  if (appearance === "dark") {
     root.classList.add("dark");
   } else {
     root.classList.remove("dark");
@@ -151,11 +174,12 @@ export function ThemeProvider({
   const [preference, setPreference] = useState<ThemePreference>(() =>
     readStoredThemePreference(storageKey, defaultPreference),
   );
-  const [systemAppearance, setSystemAppearance] = useState<ThemeResolvedAppearance>(() =>
+  const [systemAppearance, setSystemAppearance] = useState<"light" | "dark">(() =>
     getSystemThemeAppearance(),
   );
 
-  const resolvedAppearance = resolveThemeAppearance(preference, systemAppearance);
+  const resolvedTheme = resolveTheme(preference.theme, systemAppearance);
+  const resolvedAppearance = themeAppearance(resolvedTheme);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
@@ -173,29 +197,24 @@ export function ThemeProvider({
   }, []);
 
   useEffect(() => {
-    applyThemeToRoot(preference, resolvedAppearance);
+    applyThemeToRoot(resolvedTheme);
 
     const storage = getThemeStorage();
     storage?.setItem(storageKey, JSON.stringify(preference));
-  }, [preference, resolvedAppearance, storageKey]);
+  }, [preference, resolvedTheme, storageKey]);
 
-  const setAppearance = useCallback((appearance: ThemeAppearance) => {
-    setPreference((prev) => ({ ...prev, appearance }));
-  }, []);
-
-  const setPreset = useCallback((preset: ThemePreset) => {
-    setPreference((prev) => ({ ...prev, preset }));
+  const setTheme = useCallback((theme: Theme) => {
+    setPreference({ theme });
   }, []);
 
   const value = useMemo<ThemeContextValue>(
     () => ({
-      appearance: preference.appearance,
-      preset: preference.preset,
+      theme: preference.theme,
+      resolvedTheme,
       resolvedAppearance,
-      setAppearance,
-      setPreset,
+      setTheme,
     }),
-    [preference.appearance, preference.preset, resolvedAppearance, setAppearance, setPreset],
+    [preference.theme, resolvedTheme, resolvedAppearance, setTheme],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

@@ -133,5 +133,6 @@ Backlog items are intentionally out of milestone sequencing and should not block
 - [ ] Canonical naming uses `workspace` across all layers
 - [ ] Typed error model stays aligned with [docs/reference/errors.md](./reference/errors.md)
 - [ ] State transitions stay aligned with [docs/reference/state-machines.md](./reference/state-machines.md)
+- [ ] Event kernel and command hooks stay aligned with [docs/reference/events.md](./reference/events.md)
 - [ ] Provider boundaries stay aligned with [docs/reference/workspace-provider.md](./reference/workspace-provider.md)
 - [ ] Reliability targets stay aligned with [docs/reference/slos.md](./reference/slos.md)

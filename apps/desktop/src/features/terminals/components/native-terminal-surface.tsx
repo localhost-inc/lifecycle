@@ -1,4 +1,4 @@
-import { Alert, AlertDescription, EmptyState, useTheme } from "@lifecycle/ui";
+import { Alert, AlertDescription, EmptyState, themeAppearance, useTheme } from "@lifecycle/ui";
 import { TerminalSquare } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { subscribeToShellResize } from "../../../components/layout/shell-resize-provider";
@@ -54,7 +54,7 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
   const shellResizeInProgressRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const { terminalFontSize } = useSettings();
-  const { preset, resolvedAppearance } = useTheme();
+  const { resolvedTheme } = useTheme();
   const hasLiveSession = terminalHasLiveSession(terminal.status);
 
   const cancelScheduledSync = () => {
@@ -107,14 +107,14 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
         document.activeElement.blur();
       }
       await syncNativeTerminalSurface({
-        appearance: resolvedAppearance,
+        appearance: themeAppearance(resolvedTheme),
         focused: interaction.focused,
         fontSize: terminalFontSize,
         height: rect.height,
         pointerPassthrough: interaction.pointerPassthrough,
         scaleFactor: window.devicePixelRatio,
         terminalId: terminal.id,
-        theme: resolveTerminalTheme(host, preset, resolvedAppearance).nativeTheme,
+        theme: resolveTerminalTheme(host, resolvedTheme).nativeTheme,
         visible: true,
         width: rect.width,
         x: rect.left,
@@ -147,7 +147,7 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
     return () => {
       unsubscribe();
     };
-  }, [active, hasLiveSession, preset, resolvedAppearance, terminal.id, terminalFontSize]);
+  }, [active, hasLiveSession, resolvedTheme, terminal.id, terminalFontSize]);
 
   useEffect(() => {
     if (!hostRef.current) {
@@ -173,7 +173,7 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
       document.removeEventListener("visibilitychange", scheduleSync);
       void hideSurface();
     };
-  }, [active, hasLiveSession, preset, resolvedAppearance, terminal.id, terminalFontSize]);
+  }, [active, hasLiveSession, resolvedTheme, terminal.id, terminalFontSize]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[var(--terminal-surface-background)]">

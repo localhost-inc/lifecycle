@@ -67,20 +67,18 @@ export { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/tabs";
 export { ToggleGroup, ToggleGroupItem } from "./components/toggle-group";
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/tooltip";
 export {
-  themePresetOptions,
-  themeAppearanceOptions,
-  isThemeAppearance,
-  isThemePreset,
-  type ThemeAppearance,
-  type ThemePreset,
-  type ThemeResolvedAppearance,
+  themeOptions,
+  isTheme,
+  themeAppearance,
+  type Theme,
+  type ResolvedTheme,
 } from "./theme/presets";
 export {
   applyThemeToRoot,
   DEFAULT_THEME_PREFERENCE,
   getSystemThemeAppearance,
   readStoredThemePreference,
-  resolveThemeAppearance,
+  resolveTheme,
   type ThemeContextValue,
   ThemeProvider,
   type ThemePreference,

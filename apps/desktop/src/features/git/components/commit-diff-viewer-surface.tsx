@@ -99,7 +99,7 @@ export function CommitDiffViewerSurface({ commit, workspaceId }: CommitDiffViewe
           {totalAdditions > 0 && (
             <>
               ,{" "}
-              <span className="text-emerald-400">
+              <span className="text-[var(--git-status-added)]">
                 {totalAdditions} insertion{totalAdditions === 1 ? "" : "s"}(+)
               </span>
             </>
@@ -107,7 +107,7 @@ export function CommitDiffViewerSurface({ commit, workspaceId }: CommitDiffViewe
           {totalDeletions > 0 && (
             <>
               ,{" "}
-              <span className="text-red-400">
+              <span className="text-[var(--git-status-deleted)]">
                 {totalDeletions} deletion{totalDeletions === 1 ? "" : "s"}(-)
               </span>
             </>

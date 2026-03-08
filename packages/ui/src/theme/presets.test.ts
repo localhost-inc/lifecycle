@@ -1,39 +1,38 @@
 import { describe, expect, test } from "bun:test";
-import {
-  isThemeAppearance,
-  isThemePreset,
-  themeAppearanceOptions,
-  themePresetOptions,
-} from "./presets";
+import { isTheme, themeAppearance, themeOptions } from "./presets";
 
 describe("theme presets", () => {
-  test("contains base appearance options", () => {
-    expect(themeAppearanceOptions.map((option) => option.value)).toEqual([
+  test("contains all theme options", () => {
+    expect(themeOptions.map((option) => option.value)).toEqual([
       "system",
       "light",
       "dark",
+      "nord-light",
+      "nord-dark",
+      "monokai-light",
+      "monokai-dark",
     ]);
   });
 
-  test("contains default preset options", () => {
-    expect(themePresetOptions.map((option) => option.value)).toEqual([
-      "lifecycle",
-      "nord",
-      "monokai",
-    ]);
+  test("validates theme values", () => {
+    expect(isTheme("system")).toBeTrue();
+    expect(isTheme("light")).toBeTrue();
+    expect(isTheme("dark")).toBeTrue();
+    expect(isTheme("nord-light")).toBeTrue();
+    expect(isTheme("nord-dark")).toBeTrue();
+    expect(isTheme("monokai-light")).toBeTrue();
+    expect(isTheme("monokai-dark")).toBeTrue();
+    expect(isTheme("unknown")).toBeFalse();
+    expect(isTheme("lifecycle")).toBeFalse();
+    expect(isTheme(42)).toBeFalse();
   });
 
-  test("validates appearance values", () => {
-    expect(isThemeAppearance("light")).toBeTrue();
-    expect(isThemeAppearance("dark")).toBeTrue();
-    expect(isThemeAppearance("system")).toBeTrue();
-    expect(isThemeAppearance("unknown")).toBeFalse();
-  });
-
-  test("validates preset values", () => {
-    expect(isThemePreset("lifecycle")).toBeTrue();
-    expect(isThemePreset("nord")).toBeTrue();
-    expect(isThemePreset("monokai")).toBeTrue();
-    expect(isThemePreset("dracula")).toBeFalse();
+  test("derives appearance from resolved theme", () => {
+    expect(themeAppearance("light")).toBe("light");
+    expect(themeAppearance("dark")).toBe("dark");
+    expect(themeAppearance("nord-light")).toBe("light");
+    expect(themeAppearance("nord-dark")).toBe("dark");
+    expect(themeAppearance("monokai-light")).toBe("light");
+    expect(themeAppearance("monokai-dark")).toBe("dark");
   });
 });
