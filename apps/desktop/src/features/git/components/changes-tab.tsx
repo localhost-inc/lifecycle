@@ -1,9 +1,4 @@
-import type {
-  GitDiffScope,
-  GitFileChangeKind,
-  GitFileStatus,
-  GitStatusResult,
-} from "@lifecycle/contracts";
+import type { GitFileChangeKind, GitFileStatus, GitStatusResult } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
 import {
   ChevronRight,
@@ -24,7 +19,7 @@ interface ChangesTabProps {
   error: unknown;
   gitStatus: GitStatusResult | null;
   isLoading: boolean;
-  onOpenDiff: (filePath: string, scope: GitDiffScope) => void;
+  onOpenDiff: (filePath: string) => void;
   refresh: () => Promise<void>;
   workspaceId: string;
 }
@@ -126,7 +121,7 @@ function SectionHeader({
       <button
         type="button"
         onClick={onToggle}
-        className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
+        className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
       >
         <ChevronRight
           className={`h-3.5 w-3.5 shrink-0 transition-transform duration-150 ${collapsed ? "" : "rotate-90"}`}
@@ -138,7 +133,7 @@ function SectionHeader({
         type="button"
         onClick={onAction}
         disabled={disabled}
-        className="rounded-sm px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-wait disabled:opacity-60"
+        className="rounded-sm px-1.5 py-0.5 text-xs font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-wait disabled:opacity-60"
       >
         {actionLabel}
       </button>
@@ -161,7 +156,7 @@ function ActionRow({
         type="button"
         onClick={onAction}
         disabled={disabled}
-        className="rounded-sm px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-wait disabled:opacity-60"
+        className="rounded-sm px-1.5 py-0.5 text-xs font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-wait disabled:opacity-60"
       >
         {actionLabel}
       </button>
@@ -171,7 +166,7 @@ function ActionRow({
 
 function FileRow({
   file,
-  scope,
+  toggleMode,
   statusKind,
   mutating,
   disabled,
@@ -179,7 +174,7 @@ function FileRow({
   onToggle,
 }: {
   file: GitFileStatus;
-  scope: GitDiffScope;
+  toggleMode: "stage" | "unstage";
   statusKind: GitFileChangeKind | null;
   mutating: boolean;
   disabled: boolean;
@@ -207,14 +202,17 @@ function FileRow({
       className="group/row flex h-8 cursor-pointer items-center gap-2 rounded-md px-2 transition hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
       title={file.path}
     >
-      <span className="flex h-4 w-4 shrink-0 items-center justify-center" style={{ color: `var(${cssVar})` }}>
+      <span
+        className="flex h-4 w-4 shrink-0 items-center justify-center"
+        style={{ color: `var(${cssVar})` }}
+      >
         <Icon className="h-4 w-4" />
       </span>
 
       <div className="flex min-w-0 flex-1 items-baseline gap-1">
         <span className="shrink-0 text-sm font-medium text-[var(--foreground)]">{name}</span>
         {dir && (
-          <span className="truncate text-[13px] text-[var(--muted-foreground)] opacity-60">
+          <span className="truncate text-sm text-[var(--muted-foreground)] opacity-60">
             {dir}
           </span>
         )}
@@ -235,11 +233,11 @@ function FileRow({
           }}
           disabled={disabled}
           className={`flex h-5 w-5 items-center justify-center rounded-sm text-[var(--muted-foreground)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-wait ${mutating ? "" : "opacity-0 group-hover/row:opacity-100"}`}
-          title={scope === "working" ? "Stage file" : "Unstage file"}
+          title={toggleMode === "stage" ? "Stage file" : "Unstage file"}
         >
           {mutating ? (
             <span className="text-xs">&hellip;</span>
-          ) : scope === "working" ? (
+          ) : toggleMode === "stage" ? (
             <Plus className="h-3.5 w-3.5" />
           ) : (
             <Minus className="h-3.5 w-3.5" />
@@ -341,11 +339,11 @@ export function ChangesTab({
                 <FileRow
                   key={`staged:${file.path}`}
                   file={file}
-                  scope="staged"
                   statusKind={file.indexStatus}
+                  toggleMode="unstage"
                   mutating={mutatingKey === `unstage:${file.path}`}
                   disabled={mutatingKey !== null}
-                  onOpen={() => onOpenDiff(file.path, "staged")}
+                  onOpen={() => onOpenDiff(file.path)}
                   onToggle={() => handleUnstageFile(file)}
                 />
               ))}
@@ -379,11 +377,11 @@ export function ChangesTab({
                 <FileRow
                   key={`unstaged:${file.path}`}
                   file={file}
-                  scope="working"
                   statusKind={file.worktreeStatus}
+                  toggleMode="stage"
                   mutating={mutatingKey === `stage:${file.path}`}
                   disabled={mutatingKey !== null}
-                  onOpen={() => onOpenDiff(file.path, "working")}
+                  onOpen={() => onOpenDiff(file.path)}
                   onToggle={() => handleStageFile(file)}
                 />
               ))}

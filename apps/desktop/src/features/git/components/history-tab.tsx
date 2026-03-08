@@ -138,10 +138,10 @@ function CommitRow({
     >
       <AuthorAvatar name={entry.author} email={entry.email} />
       <div className="min-w-0 flex-1">
-        <p className="line-clamp-2 text-[13px] leading-snug text-[var(--foreground)]">
+        <p className="line-clamp-2 text-sm leading-snug text-[var(--foreground)]">
           {entry.message}
         </p>
-        <p className="mt-0.5 text-[11px] text-[var(--muted-foreground)]">
+        <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
           {entry.author}
           {" · "}
           {formatRelativeTime(entry.timestamp)}

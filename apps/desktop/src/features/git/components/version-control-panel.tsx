@@ -1,4 +1,4 @@
-import type { GitDiffScope, GitLogEntry, WorkspaceMode } from "@lifecycle/contracts";
+import type { GitLogEntry, WorkspaceMode } from "@lifecycle/contracts";
 import { Tabs, TabsList, TabsTrigger, cn } from "@lifecycle/ui";
 import { useState } from "react";
 import { useGitLog, useGitStatus } from "../hooks";
@@ -6,10 +6,10 @@ import { ChangesTab } from "./changes-tab";
 import { HistoryTab } from "./history-tab";
 
 const sectionHeader =
-  "text-[11px] uppercase tracking-[0.14em] text-[var(--muted-foreground)] font-medium";
+  "text-xs uppercase tracking-[0.14em] text-[var(--muted-foreground)] font-medium";
 
 interface VersionControlPanelProps {
-  onOpenDiff: (filePath: string, scope: GitDiffScope) => void;
+  onOpenDiff: (filePath: string) => void;
   onOpenCommitDiff: (entry: GitLogEntry) => void;
   workspaceId: string;
   workspaceMode: WorkspaceMode;
@@ -55,16 +55,10 @@ export function VersionControlPanel({
           value={activeTab}
         >
           <TabsList className="gap-1 border-0 bg-transparent p-0">
-            <TabsTrigger
-              className={VERSION_CONTROL_PANEL_TAB_TRIGGER_CLASS_NAME}
-              value="changes"
-            >
+            <TabsTrigger className={VERSION_CONTROL_PANEL_TAB_TRIGGER_CLASS_NAME} value="changes">
               Changes
             </TabsTrigger>
-            <TabsTrigger
-              className={VERSION_CONTROL_PANEL_TAB_TRIGGER_CLASS_NAME}
-              value="history"
-            >
+            <TabsTrigger className={VERSION_CONTROL_PANEL_TAB_TRIGGER_CLASS_NAME} value="history">
               History
             </TabsTrigger>
           </TabsList>

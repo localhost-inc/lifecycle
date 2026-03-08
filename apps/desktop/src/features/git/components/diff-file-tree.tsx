@@ -35,8 +35,8 @@ function DiffFileTreeComponent({
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-[var(--border)] px-3 py-2">
-        <span className="text-[11px] font-semibold text-[var(--foreground)]">
+      <div className="flex min-h-11 items-center gap-2 border-b border-[var(--border)] px-3 py-3">
+        <span className="text-xs font-semibold text-[var(--foreground)]">
           Files Changed
           <span className="ml-1.5 font-normal text-[var(--muted-foreground)]">{files.length}</span>
         </span>
@@ -91,7 +91,7 @@ function TreeNodeRow({
     return (
       <button
         type="button"
-        className={`flex w-full items-center gap-1.5 py-1 pr-3 text-left text-[11px] transition-colors hover:bg-[var(--surface-hover)] ${isActive ? "bg-[var(--surface-selected)]" : ""}`}
+        className={`flex w-full items-center gap-1.5 py-1 pr-3 text-left text-xs transition-colors hover:bg-[var(--surface-hover)] ${isActive ? "bg-[var(--surface-selected)]" : ""}`}
         style={{ paddingLeft: `${depth * 12 + 12}px` }}
         onClick={() => onSelectFile(node.path)}
         title={node.path}
@@ -115,7 +115,7 @@ function TreeNodeRow({
     <>
       <button
         type="button"
-        className="flex w-full items-center gap-1.5 py-1 pr-3 text-left text-[11px] transition-colors hover:bg-[var(--surface-hover)]"
+        className="flex w-full items-center gap-1.5 py-1 pr-3 text-left text-xs transition-colors hover:bg-[var(--surface-hover)]"
         style={{ paddingLeft: `${depth * 12 + 12}px` }}
         onClick={() => onToggleDir(node.path)}
         title={node.path}

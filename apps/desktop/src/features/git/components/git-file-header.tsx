@@ -2,35 +2,25 @@ import type React from "react";
 import { ChevronRight, SquareArrowOutUpRight } from "lucide-react";
 import type { FileDiffMetadata } from "@pierre/diffs/react";
 
-function changeTypeLabel(type: FileDiffMetadata["type"]): string {
+function changeTypeLetter(type: FileDiffMetadata["type"]): string {
   switch (type) {
     case "new":
-      return "Added";
+      return "A";
     case "deleted":
-      return "Deleted";
+      return "D";
     case "rename-pure":
-      return "Renamed";
     case "rename-changed":
-      return "Renamed";
+      return "R";
     default:
-      return "Modified";
+      return "M";
   }
 }
 
-function statusBadgeStyle(type: FileDiffMetadata["type"]): React.CSSProperties {
-  const v =
-    type === "new"
-      ? "--git-status-added"
-      : type === "deleted"
-        ? "--git-status-deleted"
-        : type === "rename-pure" || type === "rename-changed"
-          ? "--git-status-renamed"
-          : "--git-status-modified";
-  return {
-    color: `var(${v})`,
-    borderColor: `color-mix(in srgb, var(${v}) 25%, transparent)`,
-    backgroundColor: `color-mix(in srgb, var(${v}) 8%, transparent)`,
-  };
+function statusCssVar(type: FileDiffMetadata["type"]): string {
+  if (type === "new") return "--git-status-added";
+  if (type === "deleted") return "--git-status-deleted";
+  if (type === "rename-pure" || type === "rename-changed") return "--git-status-renamed";
+  return "--git-status-modified";
 }
 
 function basename(path: string): string {
@@ -81,7 +71,7 @@ export function GitFileHeader({
 
   return (
     <div
-      className={`group/file-header flex w-full items-center gap-3 px-4 py-3 text-left ${sticky ? "sticky top-0 z-10 bg-[var(--panel)] border-b border-[var(--border)]" : collapsed ? "" : "border-b border-[var(--border)]"}`}
+      className={`group/file-header flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left ${sticky ? "sticky top-0 z-10 bg-[var(--panel)] border-b border-[var(--border)]" : collapsed ? "" : "border-b border-[var(--border)]"}`}
     >
       <button
         type="button"
@@ -95,15 +85,21 @@ export function GitFileHeader({
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
             <span
-              className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em]"
-              style={statusBadgeStyle(fileDiff.type)}
+              className="shrink-0 text-xs font-semibold"
+              style={{ color: `var(${statusCssVar(fileDiff.type)})` }}
             >
-              {changeTypeLabel(fileDiff.type)}
+              {changeTypeLetter(fileDiff.type)}
             </span>
-            <span className="truncate font-mono text-sm">
+            <span className="truncate font-mono text-xs">
               {dir && <span className="text-[var(--muted-foreground)]">{dir}</span>}
               <span className="text-[var(--foreground)]">{file}</span>
             </span>
+            {(additions > 0 || deletions > 0) && (
+              <span className="shrink-0 font-mono text-xs flex items-center gap-1.5">
+                {additions > 0 && <span className="text-[var(--git-status-added)]">+{additions}</span>}
+                {deletions > 0 && <span className="text-[var(--git-status-deleted)]">-{deletions}</span>}
+              </span>
+            )}
           </div>
           {previousTitle && previousTitle !== title && (
             <p className="mt-1 truncate font-mono text-xs text-[var(--muted-foreground)]">
@@ -112,20 +108,16 @@ export function GitFileHeader({
           )}
         </div>
       </button>
-      <div className="flex shrink-0 items-center gap-2 font-mono text-xs">
-        {additions > 0 && <span className="text-[var(--git-status-added)]">+{additions}</span>}
-        {deletions > 0 && <span className="text-[var(--git-status-deleted)]">-{deletions}</span>}
-        {onOpenFile && (
-          <button
-            type="button"
-            onClick={onOpenFile}
-            className="ml-1 cursor-pointer text-[var(--muted-foreground)] opacity-0 transition-opacity hover:text-[var(--foreground)] group-hover/file-header:opacity-100"
-            title={`Open ${title}`}
-          >
-            <SquareArrowOutUpRight className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </div>
+      {onOpenFile && (
+        <button
+          type="button"
+          onClick={onOpenFile}
+          className="shrink-0 cursor-pointer text-[var(--muted-foreground)] opacity-0 transition-opacity hover:text-[var(--foreground)] group-hover/file-header:opacity-100"
+          title={`Open ${title}`}
+        >
+          <SquareArrowOutUpRight className="h-3.5 w-3.5" />
+        </button>
+      )}
     </div>
   );
 }
