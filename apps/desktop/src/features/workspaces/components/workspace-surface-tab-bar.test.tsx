@@ -10,7 +10,7 @@ describe("WorkspaceSurfaceTabBar", () => {
         activeTabKey: "terminal:term-1",
         onCloseDocumentTab: () => {},
         onCloseRuntimeTab: async () => {},
-        onOpenLauncher: () => {},
+
         onSelectTab: () => {},
         onSetTabOrder: () => {},
         renderTabLeading: (tab) =>
@@ -40,7 +40,7 @@ describe("WorkspaceSurfaceTabBar", () => {
         activeTabKey: "terminal:term-1",
         onCloseDocumentTab: () => {},
         onCloseRuntimeTab: async () => {},
-        onOpenLauncher: () => {},
+
         onSelectTab: () => {},
         onSetTabOrder: () => {},
         visibleTabs: [
@@ -68,7 +68,7 @@ describe("WorkspaceSurfaceTabBar", () => {
         activeTabKey: "terminal:term-1",
         onCloseDocumentTab: () => {},
         onCloseRuntimeTab: async () => {},
-        onOpenLauncher: () => {},
+
         onSelectTab: () => {},
         onSetTabOrder: () => {},
         visibleTabs: [

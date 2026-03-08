@@ -46,6 +46,8 @@ export type WorkspaceSurfaceTab = RuntimeTab | WorkspaceSurfaceDocument;
 
 export type WorkspaceTabPlacement = "after" | "before";
 
+const NO_TAB_DRAG_SHIFT = 0 as const;
+
 export interface WorkspaceTabHotkeyEvent {
   altKey: boolean;
   code?: string;
@@ -298,6 +300,32 @@ export function reorderWorkspaceTabKeys(
 
   const insertionIndex = placement === "after" ? targetIndex + 1 : targetIndex;
   return [...nextKeys.slice(0, insertionIndex), draggedKey, ...nextKeys.slice(insertionIndex)];
+}
+
+export function getWorkspaceTabDragShiftDirection(
+  tabKeys: readonly string[],
+  draggedKey: string,
+  targetKey: string,
+  placement: WorkspaceTabPlacement,
+  tabKey: string,
+): -1 | 0 | 1 {
+  if (tabKey === draggedKey) {
+    return NO_TAB_DRAG_SHIFT;
+  }
+
+  const currentIndex = tabKeys.indexOf(tabKey);
+  if (currentIndex < 0) {
+    return NO_TAB_DRAG_SHIFT;
+  }
+
+  const previewIndex = reorderWorkspaceTabKeys(tabKeys, draggedKey, targetKey, placement).indexOf(
+    tabKey,
+  );
+  if (previewIndex < 0 || previewIndex === currentIndex) {
+    return NO_TAB_DRAG_SHIFT;
+  }
+
+  return previewIndex < currentIndex ? -1 : 1;
 }
 
 export function readWorkspaceTabHotkeyAction(

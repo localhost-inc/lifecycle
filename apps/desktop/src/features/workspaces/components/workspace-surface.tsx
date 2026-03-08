@@ -1,5 +1,4 @@
 import type { TerminalStatus } from "@lifecycle/contracts";
-import { ScrollFade } from "@lifecycle/ui";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
@@ -551,22 +550,19 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="flex items-center gap-1 px-1.5 py-1">
-        <ScrollFade className="flex-1" size={24}>
-          <WorkspaceSurfaceTabBar
-            activeTabKey={state.activeTabKey}
-            onCloseDocumentTab={handleCloseDocumentTab}
-            onCloseRuntimeTab={handleCloseRuntimeTab}
-            onOpenLauncher={handleOpenLauncher}
-            onSelectTab={handleSelectTab}
-            onSetTabOrder={(keys) => {
-              dispatch({ keys, type: "set-tab-order" });
-            }}
-            renderTabLeading={(tab) => <WorkspaceSurfaceTabLeading tab={tab} />}
-            visibleTabs={visibleTabs}
-          />
-        </ScrollFade>
-        <SurfaceLaunchActions actions={surfaceActions} onLaunch={handleLaunchSurface} />
+      <div className="flex items-center gap-1 px-1.5 pt-1 pb-3">
+        <WorkspaceSurfaceTabBar
+          activeTabKey={state.activeTabKey}
+          onCloseDocumentTab={handleCloseDocumentTab}
+          onCloseRuntimeTab={handleCloseRuntimeTab}
+          onSelectTab={handleSelectTab}
+          onSetTabOrder={(keys) => {
+            dispatch({ keys, type: "set-tab-order" });
+          }}
+          renderTabLeading={(tab) => <WorkspaceSurfaceTabLeading tab={tab} />}
+          visibleTabs={visibleTabs}
+        />
+        <SurfaceLaunchActions actions={surfaceActions} onLaunch={handleLaunchSurface} onOpenLauncher={handleOpenLauncher} />
       </div>
 
       {Boolean(terminalsQuery.error) && (

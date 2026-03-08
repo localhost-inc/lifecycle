@@ -23,7 +23,7 @@ function ScrollFade({
 
   return (
     <div
-      className={cn("relative min-w-0", className)}
+      className={cn("relative", className)}
       style={style}
       {...props}
     >
@@ -38,7 +38,7 @@ function ScrollFade({
       {showRight && (
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-y-0 right-0 z-10 bg-gradient-to-l from-[var(--background)] to-transparent"
+          className="pointer-events-none absolute inset-y-0 right-0 z-10 bg-red-500"
           style={{ width: size }}
         />
       )}

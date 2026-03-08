@@ -37,6 +37,7 @@ import {
   writePersistedPanelValue,
 } from "../../lib/panel-layout";
 import { useStoreClient } from "../../store";
+import { ShellResizeProvider } from "./shell-resize-provider";
 import { Sidebar } from "./sidebar";
 import { AppStatusBar } from "./app-status-bar";
 import { TitleBar } from "./title-bar";
@@ -341,6 +342,7 @@ export function DashboardLayout() {
       }
 
       event.preventDefault();
+      event.stopPropagation();
       setActiveSidebarResize(side);
     },
     [],
@@ -407,74 +409,78 @@ export function DashboardLayout() {
   return (
     <div className="flex h-full w-full flex-col bg-[var(--background)] text-[var(--foreground)]">
       <div ref={layoutRowRef} className="flex min-h-0 flex-1">
-        <SidebarProvider
-          className="min-h-0 flex-1"
-          open={!leftSidebarCollapsed}
-          onOpenChange={(open) => setLeftSidebarCollapsed(!open)}
-          sidebarWidth={`${leftSidebarWidth}px`}
-          sidebarWidthIcon="0px"
-        >
-          <Sidebar
-            isLoading={projectCatalogQuery.isLoading || workspacesByProjectQuery.isLoading}
-            projects={projects}
-            workspacesByProjectId={workspacesByProjectId}
-            selectedProjectId={activeProjectId}
-            selectedWorkspaceId={selectedWorkspaceId}
-            onSelectProject={handleSelectProject}
-            onSelectWorkspace={handleSelectWorkspace}
-            onAddProject={handleAddProject}
-            onCreateWorkspace={handleCreateWorkspace}
-            onOpenSettings={handleOpenSettings}
-          />
-          <div className="relative w-px shrink-0">
-            <div
-              role="separator"
-              aria-label="Resize workspace list sidebar"
-              aria-orientation="vertical"
-              aria-valuemax={leftSidebarBounds.maxSize}
-              aria-valuemin={leftSidebarBounds.minSize}
-              aria-valuenow={leftSidebarCollapsed ? 0 : leftSidebarWidth}
-              tabIndex={0}
-              onDoubleClick={handleLeftSidebarSeparatorDoubleClick}
-              onKeyDown={handleLeftSidebarSeparatorKeyDown}
-              onPointerDown={(event) => handleSidebarResizePointerDown("left", event)}
-              className="group absolute inset-y-0 left-1/2 z-10 flex w-3 -translate-x-1/2 cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--primary)]"
-            >
-              <div className="w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--primary)] group-focus-visible:bg-[var(--primary)]" />
-            </div>
-          </div>
-          <SidebarInset>
-            <TitleBar selectedWorkspace={selectedWorkspace} />
-            <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-              <Outlet />
-            </main>
-          </SidebarInset>
-          {showRightSidebar && (
-            <>
-              <div className="relative w-px shrink-0">
-                <div
-                  role="separator"
-                  aria-label="Resize workspace details sidebar"
-                  aria-orientation="vertical"
-                  aria-valuemax={rightSidebarBounds.maxSize}
-                  aria-valuemin={rightSidebarBounds.minSize}
-                  aria-valuenow={rightSidebarWidth}
-                  tabIndex={0}
-                  onKeyDown={handleRightSidebarSeparatorKeyDown}
-                  onPointerDown={(event) => handleSidebarResizePointerDown("right", event)}
-                  className="group absolute inset-y-0 left-1/2 z-10 flex w-3 -translate-x-1/2 cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--primary)]"
-                >
-                  <div className="w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--primary)] group-focus-visible:bg-[var(--primary)]" />
-                </div>
-              </div>
+        <ShellResizeProvider resizing={activeSidebarResize !== null}>
+          <SidebarProvider
+            className="min-h-0 flex-1"
+            open={!leftSidebarCollapsed}
+            onOpenChange={(open) => setLeftSidebarCollapsed(!open)}
+            sidebarWidth={`${leftSidebarWidth}px`}
+            sidebarWidthIcon="0px"
+          >
+            <Sidebar
+              isLoading={projectCatalogQuery.isLoading || workspacesByProjectQuery.isLoading}
+              projects={projects}
+              workspacesByProjectId={workspacesByProjectId}
+              selectedProjectId={activeProjectId}
+              selectedWorkspaceId={selectedWorkspaceId}
+              onSelectProject={handleSelectProject}
+              onSelectWorkspace={handleSelectWorkspace}
+              onAddProject={handleAddProject}
+              onCreateWorkspace={handleCreateWorkspace}
+              onOpenSettings={handleOpenSettings}
+            />
+            <div className="relative w-px shrink-0">
               <div
-                id="workspace-right-rail"
-                className="flex min-h-0 shrink-0 bg-[var(--panel)]"
-                style={{ width: `${rightSidebarWidth}px` }}
-              />
-            </>
-          )}
-        </SidebarProvider>
+                role="separator"
+                aria-label="Resize workspace list sidebar"
+                aria-orientation="vertical"
+                aria-valuemax={leftSidebarBounds.maxSize}
+                aria-valuemin={leftSidebarBounds.minSize}
+                aria-valuenow={leftSidebarCollapsed ? 0 : leftSidebarWidth}
+                data-no-drag
+                tabIndex={0}
+                onDoubleClick={handleLeftSidebarSeparatorDoubleClick}
+                onKeyDown={handleLeftSidebarSeparatorKeyDown}
+                onPointerDown={(event) => handleSidebarResizePointerDown("left", event)}
+                className="group absolute inset-y-0 left-1/2 z-10 flex w-3 -translate-x-1/2 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--primary)]"
+              >
+                <div className="w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--primary)] group-focus-visible:bg-[var(--primary)]" />
+              </div>
+            </div>
+            <SidebarInset>
+              <TitleBar selectedWorkspace={selectedWorkspace} />
+              <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                <Outlet />
+              </main>
+            </SidebarInset>
+            {showRightSidebar && (
+              <>
+                <div className="relative w-px shrink-0">
+                  <div
+                    role="separator"
+                    aria-label="Resize workspace details sidebar"
+                    aria-orientation="vertical"
+                    aria-valuemax={rightSidebarBounds.maxSize}
+                    aria-valuemin={rightSidebarBounds.minSize}
+                    aria-valuenow={rightSidebarWidth}
+                    data-no-drag
+                    tabIndex={0}
+                    onKeyDown={handleRightSidebarSeparatorKeyDown}
+                    onPointerDown={(event) => handleSidebarResizePointerDown("right", event)}
+                    className="group absolute inset-y-0 left-1/2 z-10 flex w-3 -translate-x-1/2 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--primary)]"
+                  >
+                    <div className="w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--primary)] group-focus-visible:bg-[var(--primary)]" />
+                  </div>
+                </div>
+                <div
+                  id="workspace-right-rail"
+                  className="flex min-h-0 shrink-0 bg-[var(--panel)]"
+                  style={{ width: `${rightSidebarWidth}px` }}
+                />
+              </>
+            )}
+          </SidebarProvider>
+        </ShellResizeProvider>
       </div>
       <AppStatusBar />
     </div>

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  getWorkspaceTabDragShiftDirection,
   getRightmostWorkspaceTabKey,
   getWorkspaceAdjacentTabKey,
   getWorkspaceTabClosePlan,
@@ -302,6 +303,50 @@ describe("workspace tab helpers", () => {
         "after",
       ),
     ).toEqual(["diff:file:src/app.tsx", "launcher:launcher-1", "terminal:1"]);
+  });
+
+  test("shifts intervening tabs left when previewing a drag to the right", () => {
+    expect(
+      getWorkspaceTabDragShiftDirection(
+        ["terminal:1", "diff:file:src/app.tsx", "launcher:launcher-1"],
+        "terminal:1",
+        "launcher:launcher-1",
+        "after",
+        "diff:file:src/app.tsx",
+      ),
+    ).toBe(-1);
+
+    expect(
+      getWorkspaceTabDragShiftDirection(
+        ["terminal:1", "diff:file:src/app.tsx", "launcher:launcher-1"],
+        "terminal:1",
+        "launcher:launcher-1",
+        "after",
+        "launcher:launcher-1",
+      ),
+    ).toBe(-1);
+  });
+
+  test("shifts intervening tabs right when previewing a drag to the left", () => {
+    expect(
+      getWorkspaceTabDragShiftDirection(
+        ["terminal:1", "diff:file:src/app.tsx", "launcher:launcher-1"],
+        "launcher:launcher-1",
+        "terminal:1",
+        "before",
+        "terminal:1",
+      ),
+    ).toBe(1);
+
+    expect(
+      getWorkspaceTabDragShiftDirection(
+        ["terminal:1", "diff:file:src/app.tsx", "launcher:launcher-1"],
+        "launcher:launcher-1",
+        "terminal:1",
+        "before",
+        "diff:file:src/app.tsx",
+      ),
+    ).toBe(1);
   });
 });
 

@@ -1,6 +1,7 @@
 import { Alert, AlertDescription, EmptyState, useTheme } from "@lifecycle/ui";
 import { TerminalSquare } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useShellResizeInProgress } from "../../../components/layout/shell-resize-provider";
 import {
   hideNativeTerminalSurface,
   syncNativeTerminalSurface,
@@ -15,6 +16,22 @@ interface NativeTerminalSurfaceProps {
   terminal: TerminalRow;
 }
 
+export function shouldShowNativeTerminalSurface({
+  active,
+  hasLiveSession,
+  isShellResizeInProgress,
+  height,
+  width,
+}: {
+  active: boolean;
+  hasLiveSession: boolean;
+  isShellResizeInProgress: boolean;
+  height: number;
+  width: number;
+}): boolean {
+  return active && hasLiveSession && !isShellResizeInProgress && width > 1 && height > 1;
+}
+
 export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfaceProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const frameIdRef = useRef<number | null>(null);
@@ -23,6 +40,7 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
   const { terminalFontSize } = useSettings();
   const { preset, resolvedAppearance } = useTheme();
   const hasLiveSession = terminalHasLiveSession(terminal.status);
+  const isShellResizeInProgress = useShellResizeInProgress();
 
   const syncSurface = async () => {
     const host = hostRef.current;
@@ -31,7 +49,13 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
     }
 
     const rect = host.getBoundingClientRect();
-    const visible = active && hasLiveSession && rect.width > 1 && rect.height > 1;
+    const visible = shouldShowNativeTerminalSurface({
+      active,
+      hasLiveSession,
+      height: rect.height,
+      isShellResizeInProgress,
+      width: rect.width,
+    });
     if (!visible) {
       try {
         await hideNativeTerminalSurface(terminal.id);
@@ -106,7 +130,15 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
       document.removeEventListener("visibilitychange", scheduleSync);
       void hideNativeTerminalSurface(terminal.id);
     };
-  }, [active, hasLiveSession, preset, resolvedAppearance, terminal.id, terminalFontSize]);
+  }, [
+    active,
+    hasLiveSession,
+    isShellResizeInProgress,
+    preset,
+    resolvedAppearance,
+    terminal.id,
+    terminalFontSize,
+  ]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[var(--terminal-surface-background)]">
