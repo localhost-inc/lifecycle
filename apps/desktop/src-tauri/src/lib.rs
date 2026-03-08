@@ -113,6 +113,7 @@ pub fn run() {
             capabilities::workspaces::commands::kill_terminal,
             capabilities::workspaces::commands::get_workspace_git_status,
             capabilities::workspaces::commands::get_workspace_git_diff,
+            capabilities::workspaces::commands::get_workspace_git_scope_patch,
             capabilities::workspaces::commands::list_workspace_git_log,
             capabilities::workspaces::commands::get_workspace_git_base_ref,
             capabilities::workspaces::commands::get_workspace_git_commit_patch,

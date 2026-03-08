@@ -22,9 +22,17 @@ This backend follows a capability + platform layout.
   - `workspaces/shared.rs`: workspace command internals reused across create/start/stop.
   - `workspaces/manifest.rs`: workspace manifest model/serde contracts.
   - `workspaces/state_machine.rs`: allowed workspace transitions.
+  - `workspaces/terminal.rs`: terminal command surface and lifecycle orchestration.
+    - `workspaces/terminal/persistence.rs`: terminal/workspace lookup and mutation helpers.
+    - `workspaces/terminal/native_surface.rs`: native Ghostty theme + main-thread/webview bridge helpers.
+    - `workspaces/terminal/attachments.rs`: attachment naming and extension inference.
+  - `workspaces/title.rs`: harness-log-driven auto-title generation and provider-specific prompt extraction.
 - `src/platform/`
   - `db.rs`: SQLite open + FK policy + ordered schema migrations (`schema_migrations` + SQL files under `platform/migrations`).
   - `git/worktree.rs`: git worktree/branch/SHA adapters.
+  - `git/status.rs`: git status/diff/log/public adapter surface.
+    - `git/status/runner.rs`: shared git subprocess execution policy.
+    - `git/status/z_records.rs`: shared NUL-delimited parser cursor for `-z` git output.
   - `runtime/supervisor.rs`: process/container lifecycle.
   - `runtime/setup.rs`: setup step execution + event streaming.
   - `runtime/health.rs`: readiness probes.

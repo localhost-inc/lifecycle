@@ -4,8 +4,9 @@ import type { GitLogEntry } from "@lifecycle/contracts";
 import { useEffect, useMemo, useState } from "react";
 import { formatRelativeTime } from "../../../lib/format";
 import { getGitCommitPatch, openWorkspaceFile } from "../api";
-import { GitDiffFileBlock } from "./git-diff-file-block";
-import { summarizeChanges } from "./git-file-header";
+import { buildPatchRenderCacheKey } from "../lib/diff-virtualization";
+import { DiffRenderProvider } from "./diff-render-provider";
+import { MultiFileDiffLayout } from "./multi-file-diff-layout";
 
 interface CommitDiffViewerSurfaceProps {
   commit: GitLogEntry;
@@ -59,22 +60,14 @@ export function CommitDiffViewerSurface({ commit, workspaceId }: CommitDiffViewe
     }
 
     try {
-      return parsePatchFiles(patch).flatMap((parsedPatch) => parsedPatch.files);
+      return parsePatchFiles(
+        patch,
+        buildPatchRenderCacheKey(`commit-diff:${workspaceId}:${commit.sha}`, patch),
+      ).flatMap((parsedPatch) => parsedPatch.files);
     } catch {
       return [];
     }
-  }, [patch]);
-
-  const { totalAdditions, totalDeletions } = useMemo(() => {
-    let adds = 0;
-    let dels = 0;
-    for (const f of files) {
-      const s = summarizeChanges(f);
-      adds += s.additions;
-      dels += s.deletions;
-    }
-    return { totalAdditions: adds, totalDeletions: dels };
-  }, [files]);
+  }, [commit.sha, patch, workspaceId]);
 
   const handleOpenFile = (filePath: string) => {
     void openWorkspaceFile(workspaceId, filePath).catch((openError) => {
@@ -93,54 +86,28 @@ export function CommitDiffViewerSurface({ commit, workspaceId }: CommitDiffViewe
           <span className="font-mono">{commit.shortSha}</span>
         </p>
       </div>
-      {files.length > 0 && (
-        <div className="border-b border-[var(--border)] px-4 py-2 text-xs text-[var(--muted-foreground)]">
-          {files.length} {files.length === 1 ? "file" : "files"} changed
-          {totalAdditions > 0 && (
-            <>
-              ,{" "}
-              <span className="text-[var(--git-status-added)]">
-                {totalAdditions} insertion{totalAdditions === 1 ? "" : "s"}(+)
-              </span>
-            </>
-          )}
-          {totalDeletions > 0 && (
-            <>
-              ,{" "}
-              <span className="text-[var(--git-status-deleted)]">
-                {totalDeletions} deletion{totalDeletions === 1 ? "" : "s"}(-)
-              </span>
-            </>
-          )}
-        </div>
-      )}
 
-      {isLoading ? (
-        <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
-          Loading commit diff...
-        </div>
-      ) : error ? (
-        <Alert className="m-5" variant="destructive">
-          <AlertDescription>Failed to load commit diff: {error}</AlertDescription>
-        </Alert>
-      ) : files.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
-          No diff to display.
-        </div>
-      ) : (
-        <div className="min-h-0 flex-1 overflow-auto px-4 py-4">
-          <div className="flex flex-col gap-4">
-            {files.map((fileDiff, index) => (
-              <GitDiffFileBlock
-                key={`${fileDiff.prevName ?? ""}:${fileDiff.name}:${index}`}
-                fileDiff={fileDiff}
-                onOpenFile={handleOpenFile}
-                themeType={resolvedAppearance}
-              />
-            ))}
+      <DiffRenderProvider>
+        {isLoading ? (
+          <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
+            Loading commit diff...
           </div>
-        </div>
-      )}
+        ) : error ? (
+          <Alert className="m-5" variant="destructive">
+            <AlertDescription>Failed to load commit diff: {error}</AlertDescription>
+          </Alert>
+        ) : files.length === 0 ? (
+          <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
+            No diff to display.
+          </div>
+        ) : (
+          <MultiFileDiffLayout
+            files={files}
+            onOpenFile={handleOpenFile}
+            themeType={resolvedAppearance}
+          />
+        )}
+      </DiffRenderProvider>
     </div>
   );
 }

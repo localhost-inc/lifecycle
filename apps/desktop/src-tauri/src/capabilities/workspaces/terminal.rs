@@ -1,15 +1,14 @@
-use crate::platform::db::{open_db, DbPath};
-use crate::platform::native_terminal::{self, NativeTerminalColorScheme, NativeTerminalFrame};
+use crate::platform::db::DbPath;
+use crate::platform::native_terminal::{self, NativeTerminalFrame};
 use crate::platform::runtime::terminal::{
     TerminalExitOutcome, TerminalStreamChunk, TerminalSupervisor,
 };
-use crate::shared::errors::{
-    LifecycleError, TerminalFailureReason, TerminalStatus, TerminalType, WorkspaceStatus,
-};
+#[cfg(test)]
+use crate::shared::errors::WorkspaceStatus;
+use crate::shared::errors::{LifecycleError, TerminalFailureReason, TerminalStatus, TerminalType};
 use crate::TerminalSupervisorMap;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use portable_pty::CommandBuilder;
-use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{hash_map::DefaultHasher, HashSet};
@@ -24,6 +23,29 @@ use tauri::{ipc::Channel, AppHandle, Emitter, Manager, State, WebviewWindow};
 
 use super::query::TerminalRow;
 use super::rename::TitleOrigin;
+
+#[path = "terminal/attachments.rs"]
+mod attachments;
+#[path = "terminal/native_surface.rs"]
+mod native_surface;
+#[path = "terminal/persistence.rs"]
+mod persistence;
+
+use attachments::build_terminal_attachment_file_name;
+#[cfg(test)]
+use native_surface::build_native_terminal_theme_config;
+use native_surface::{
+    parse_native_terminal_color_scheme, run_native_terminal_on_main_thread,
+    sync_native_terminal_in_webview, write_native_terminal_theme_override,
+};
+pub(crate) use persistence::load_terminal_row;
+#[cfg(test)]
+use persistence::WorkspaceRuntime;
+use persistence::{
+    insert_terminal_row, load_claimed_harness_session_ids, load_workspace_runtime,
+    next_terminal_label, touch_terminal, update_terminal_harness_session_id, update_terminal_state,
+    workspace_has_interactive_terminal_context,
+};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -441,83 +463,6 @@ pub fn native_terminal_capabilities() -> NativeTerminalCapabilities {
     NativeTerminalCapabilities {
         available: native_terminal::is_available(),
     }
-}
-
-fn validate_native_terminal_theme_value(
-    field: &str,
-    value: &str,
-) -> Result<String, LifecycleError> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return Err(LifecycleError::AttachFailed(format!(
-            "native terminal theme field `{field}` is empty"
-        )));
-    }
-
-    Ok(trimmed.to_string())
-}
-
-fn build_native_terminal_theme_config(
-    theme: &NativeTerminalTheme,
-) -> Result<String, LifecycleError> {
-    if theme.palette.len() != 16 {
-        return Err(LifecycleError::AttachFailed(format!(
-            "native terminal theme palette must contain 16 colors, received {}",
-            theme.palette.len()
-        )));
-    }
-
-    let background = validate_native_terminal_theme_value("background", &theme.background)?;
-    let foreground = validate_native_terminal_theme_value("foreground", &theme.foreground)?;
-    let cursor_color = validate_native_terminal_theme_value("cursorColor", &theme.cursor_color)?;
-    let selection_background =
-        validate_native_terminal_theme_value("selectionBackground", &theme.selection_background)?;
-    let selection_foreground =
-        validate_native_terminal_theme_value("selectionForeground", &theme.selection_foreground)?;
-
-    let mut config_lines = Vec::with_capacity(theme.palette.len() + 8);
-    for (index, color) in theme.palette.iter().enumerate() {
-        let color = validate_native_terminal_theme_value("palette", color)?;
-        config_lines.push(format!("palette = {index}={color}"));
-    }
-    config_lines.push(format!("background = {background}"));
-    config_lines.push(format!("foreground = {foreground}"));
-    config_lines.push(format!("cursor-color = {cursor_color}"));
-    config_lines.push(format!("selection-background = {selection_background}"));
-    config_lines.push(format!("selection-foreground = {selection_foreground}"));
-    config_lines.push("background-opacity = 1".to_string());
-    config_lines.push("window-padding-x = 0".to_string());
-    config_lines.push("window-padding-y = 0".to_string());
-
-    Ok(config_lines.join("\n"))
-}
-
-fn native_terminal_theme_dir() -> Result<PathBuf, LifecycleError> {
-    let path = std::env::temp_dir().join("lifecycle-native-terminal-themes");
-    fs::create_dir_all(&path).map_err(|error| {
-        LifecycleError::AttachFailed(format!(
-            "failed to create native terminal theme directory: {error}"
-        ))
-    })?;
-    Ok(path)
-}
-
-fn write_native_terminal_theme_override(
-    theme: &NativeTerminalTheme,
-) -> Result<PathBuf, LifecycleError> {
-    let config = build_native_terminal_theme_config(theme)?;
-    let mut hasher = DefaultHasher::new();
-    config.hash(&mut hasher);
-    let path = native_terminal_theme_dir()?.join(format!("{:016x}.conf", hasher.finish()));
-    if !path.exists() {
-        fs::write(&path, config).map_err(|error| {
-            LifecycleError::AttachFailed(format!(
-                "failed to write native terminal theme override: {error}"
-            ))
-        })?;
-    }
-
-    Ok(path)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1268,58 +1213,6 @@ fn json_string_at_path<'a>(value: &'a Value, path: &[&str]) -> Option<&'a str> {
     current.as_str()
 }
 
-fn load_claimed_harness_session_ids(
-    db_path: &str,
-    workspace_id: &str,
-    harness_provider: &str,
-    exclude_terminal_id: &str,
-) -> Result<HashSet<String>, LifecycleError> {
-    let conn = open_db(db_path)?;
-    let mut stmt = conn
-        .prepare(
-            "SELECT harness_session_id
-             FROM terminal
-             WHERE workspace_id = ?1
-               AND harness_provider = ?2
-               AND id != ?3
-               AND harness_session_id IS NOT NULL
-               AND harness_session_id != ''",
-        )
-        .map_err(|error| LifecycleError::Database(error.to_string()))?;
-    let rows = stmt
-        .query_map(
-            params![workspace_id, harness_provider, exclude_terminal_id],
-            |row| row.get::<_, String>(0),
-        )
-        .map_err(|error| LifecycleError::Database(error.to_string()))?;
-
-    let mut claimed = HashSet::new();
-    for row in rows {
-        claimed.insert(row.map_err(|error| LifecycleError::Database(error.to_string()))?);
-    }
-
-    Ok(claimed)
-}
-
-fn update_terminal_harness_session_id(
-    db_path: &str,
-    terminal_id: &str,
-    harness_session_id: &str,
-) -> Result<TerminalRow, LifecycleError> {
-    let conn = open_db(db_path)?;
-    conn.execute(
-        "UPDATE terminal
-         SET harness_session_id = ?1
-         WHERE id = ?2
-           AND (harness_session_id IS NULL OR harness_session_id = '')",
-        params![harness_session_id, terminal_id],
-    )
-    .map_err(|error| LifecycleError::Database(error.to_string()))?;
-
-    load_terminal_row(db_path, terminal_id)?
-        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()))
-}
-
 pub async fn hide_native_terminal_surface(
     app: AppHandle,
     db_path: State<'_, DbPath>,
@@ -1516,62 +1409,6 @@ fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
 
-fn parse_native_terminal_color_scheme(
-    appearance: &str,
-) -> Result<NativeTerminalColorScheme, LifecycleError> {
-    match appearance {
-        "light" => Ok(NativeTerminalColorScheme::Light),
-        "dark" => Ok(NativeTerminalColorScheme::Dark),
-        other => Err(LifecycleError::AttachFailed(format!(
-            "unsupported native terminal appearance: {other}"
-        ))),
-    }
-}
-
-fn run_native_terminal_on_main_thread<T: Send + 'static>(
-    app: &AppHandle,
-    task: impl FnOnce() -> Result<T, LifecycleError> + Send + 'static,
-) -> Result<T, LifecycleError> {
-    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
-    app.run_on_main_thread(move || {
-        let _ = sender.send(task());
-    })
-    .map_err(|error| LifecycleError::AttachFailed(error.to_string()))?;
-
-    receiver.recv().map_err(|_| {
-        LifecycleError::AttachFailed(
-            "native terminal main-thread task did not complete".to_string(),
-        )
-    })?
-}
-
-#[cfg(target_os = "macos")]
-fn sync_native_terminal_in_webview<T: Send + 'static>(
-    window: &WebviewWindow,
-    task: impl FnOnce(*mut std::ffi::c_void) -> Result<T, LifecycleError> + Send + 'static,
-) -> Result<T, LifecycleError> {
-    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
-    window
-        .with_webview(move |webview| {
-            let _ = sender.send(task(webview.inner()));
-        })
-        .map_err(|error| LifecycleError::AttachFailed(error.to_string()))?;
-
-    receiver.recv().map_err(|_| {
-        LifecycleError::AttachFailed("native terminal webview task did not complete".to_string())
-    })?
-}
-
-#[cfg(not(target_os = "macos"))]
-fn sync_native_terminal_in_webview<T: Send + 'static>(
-    _window: &WebviewWindow,
-    _task: impl FnOnce(*mut std::ffi::c_void) -> Result<T, LifecycleError> + Send + 'static,
-) -> Result<T, LifecycleError> {
-    Err(LifecycleError::AttachFailed(
-        "native terminal webview integration is unavailable on this platform".to_string(),
-    ))
-}
-
 #[derive(Debug, PartialEq, Eq)]
 struct TerminalLaunchSpec {
     program: String,
@@ -1623,256 +1460,6 @@ fn resolve_terminal_launch(
             other.as_str()
         ))),
     }
-}
-
-fn next_terminal_label(
-    db_path: &str,
-    workspace_id: &str,
-    launch_type: &TerminalType,
-    harness_provider: Option<&str>,
-) -> Result<String, LifecycleError> {
-    let conn = open_db(db_path)?;
-    let count: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM terminal WHERE workspace_id = ?1",
-            params![workspace_id],
-            |row| row.get(0),
-        )
-        .map_err(|e| LifecycleError::Database(e.to_string()))?;
-    let sequence = count + 1;
-
-    let label = match (launch_type, harness_provider) {
-        (TerminalType::Harness, Some("claude")) => format!("Claude · Session {sequence}"),
-        (TerminalType::Harness, Some("codex")) => format!("Codex · Session {sequence}"),
-        (TerminalType::Harness, Some(_)) => format!("Harness · Session {sequence}"),
-        _ => format!("Terminal {sequence}"),
-    };
-
-    Ok(label)
-}
-
-fn touch_terminal(db_path: &str, terminal_id: &str) -> Result<(), LifecycleError> {
-    let conn = open_db(db_path)?;
-    conn.execute(
-        "UPDATE terminal SET last_active_at = datetime('now') WHERE id = ?1",
-        params![terminal_id],
-    )
-    .map_err(|e| LifecycleError::Database(e.to_string()))?;
-    Ok(())
-}
-
-fn build_terminal_attachment_file_name(file_name: &str, media_type: Option<&str>) -> String {
-    let stem = sanitize_attachment_stem(
-        Path::new(file_name)
-            .file_stem()
-            .and_then(|value| value.to_str())
-            .unwrap_or("pasted-image"),
-    );
-    let extension = infer_attachment_extension(file_name, media_type);
-    let unique_id = uuid::Uuid::new_v4().simple().to_string();
-    format!("{stem}-{}.{}", &unique_id[..8], extension)
-}
-
-fn sanitize_attachment_stem(value: &str) -> String {
-    let sanitized = value
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() {
-                ch.to_ascii_lowercase()
-            } else {
-                '-'
-            }
-        })
-        .collect::<String>();
-    let trimmed = sanitized.trim_matches('-');
-    if trimmed.is_empty() {
-        "pasted-image".to_string()
-    } else {
-        trimmed.to_string()
-    }
-}
-
-fn infer_attachment_extension(file_name: &str, media_type: Option<&str>) -> &'static str {
-    if let Some(extension) = Path::new(file_name)
-        .extension()
-        .and_then(|value| value.to_str())
-    {
-        return match extension.to_ascii_lowercase().as_str() {
-            "avif" => "avif",
-            "bmp" => "bmp",
-            "gif" => "gif",
-            "heic" => "heic",
-            "heif" => "heif",
-            "jpeg" | "jpg" => "jpg",
-            "png" => "png",
-            "svg" | "svgz" => "svg",
-            "tif" | "tiff" => "tiff",
-            "webp" => "webp",
-            _ => infer_attachment_extension_from_media_type(media_type),
-        };
-    }
-
-    infer_attachment_extension_from_media_type(media_type)
-}
-
-fn infer_attachment_extension_from_media_type(media_type: Option<&str>) -> &'static str {
-    match media_type.map(str::trim).unwrap_or_default() {
-        "image/avif" => "avif",
-        "image/bmp" => "bmp",
-        "image/gif" => "gif",
-        "image/heic" => "heic",
-        "image/heif" => "heif",
-        "image/jpeg" => "jpg",
-        "image/png" => "png",
-        "image/svg+xml" => "svg",
-        "image/tiff" => "tiff",
-        "image/webp" => "webp",
-        _ => "png",
-    }
-}
-
-fn insert_terminal_row(
-    db_path: &str,
-    terminal_id: &str,
-    workspace_id: &str,
-    launch_type: &TerminalType,
-    harness_provider: Option<&str>,
-    harness_session_id: Option<&str>,
-    launch_worktree_path: &str,
-    label: &str,
-    label_origin: TitleOrigin,
-    status: TerminalStatus,
-) -> Result<TerminalRow, LifecycleError> {
-    let conn = open_db(db_path)?;
-    conn.execute(
-        "INSERT INTO terminal (id, workspace_id, launch_type, harness_provider, harness_session_id, launch_worktree_path, label, label_origin, status)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-        params![
-            terminal_id,
-            workspace_id,
-            launch_type.as_str(),
-            harness_provider,
-            harness_session_id,
-            launch_worktree_path,
-            label,
-            label_origin.as_str(),
-            status.as_str()
-        ],
-    )
-    .map_err(|e| LifecycleError::Database(e.to_string()))?;
-
-    load_terminal_row(db_path, terminal_id)?
-        .ok_or_else(|| LifecycleError::Database("terminal insert did not persist".to_string()))
-}
-
-pub(crate) fn update_terminal_state(
-    db_path: &str,
-    terminal_id: &str,
-    status: TerminalStatus,
-    failure_reason: Option<&TerminalFailureReason>,
-    exit_code: Option<i64>,
-    ended: bool,
-) -> Result<TerminalRow, LifecycleError> {
-    let conn = open_db(db_path)?;
-    conn.execute(
-        "UPDATE terminal
-         SET status = ?1,
-             failure_reason = ?2,
-             exit_code = ?3,
-             ended_at = CASE WHEN ?4 THEN datetime('now') ELSE ended_at END,
-             last_active_at = datetime('now')
-         WHERE id = ?5",
-        params![
-            status.as_str(),
-            failure_reason.map(|reason| reason.as_str()),
-            exit_code,
-            ended,
-            terminal_id
-        ],
-    )
-    .map_err(|e| LifecycleError::Database(e.to_string()))?;
-
-    load_terminal_row(db_path, terminal_id)?
-        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()))
-}
-
-pub(crate) fn load_terminal_row(
-    db_path: &str,
-    terminal_id: &str,
-) -> Result<Option<TerminalRow>, LifecycleError> {
-    let conn = open_db(db_path)?;
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, created_by, launch_worktree_path, label, label_origin, status, failure_reason, exit_code, started_at, last_active_at, ended_at
-             FROM terminal
-             WHERE id = ?1
-             LIMIT 1",
-        )
-        .map_err(|e| LifecycleError::Database(e.to_string()))?;
-
-    let row = stmt.query_row(params![terminal_id], |row| {
-        Ok(TerminalRow {
-            id: row.get(0)?,
-            workspace_id: row.get(1)?,
-            launch_type: row.get(2)?,
-            harness_provider: row.get(3)?,
-            harness_session_id: row.get(4)?,
-            created_by: row.get(5)?,
-            launch_worktree_path: row.get(6)?,
-            label: row.get(7)?,
-            label_origin: row.get(8)?,
-            status: row.get(9)?,
-            failure_reason: row.get(10)?,
-            exit_code: row.get(11)?,
-            started_at: row.get(12)?,
-            last_active_at: row.get(13)?,
-            ended_at: row.get(14)?,
-        })
-    });
-
-    match row {
-        Ok(row) => Ok(Some(row)),
-        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(error) => Err(LifecycleError::Database(error.to_string())),
-    }
-}
-
-struct WorkspaceRuntime {
-    status: WorkspaceStatus,
-    worktree_path: String,
-}
-
-fn workspace_has_interactive_terminal_context(workspace: &WorkspaceRuntime) -> bool {
-    !matches!(
-        workspace.status,
-        WorkspaceStatus::Creating | WorkspaceStatus::Destroying
-    )
-}
-
-fn load_workspace_runtime(
-    db_path: &str,
-    workspace_id: &str,
-) -> Result<WorkspaceRuntime, LifecycleError> {
-    let conn = open_db(db_path)?;
-    let (status, worktree_path): (String, Option<String>) = conn
-        .query_row(
-            "SELECT status, worktree_path FROM workspace WHERE id = ?1 LIMIT 1",
-            params![workspace_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .map_err(|e| match e {
-            rusqlite::Error::QueryReturnedNoRows => {
-                LifecycleError::WorkspaceNotFound(workspace_id.to_string())
-            }
-            _ => LifecycleError::Database(e.to_string()),
-        })?;
-
-    Ok(WorkspaceRuntime {
-        status: WorkspaceStatus::from_str(&status)?,
-        worktree_path: worktree_path.ok_or_else(|| {
-            LifecycleError::Database("workspace is missing worktree_path".to_string())
-        })?,
-    })
 }
 
 fn emit_terminal_created(app: &AppHandle, terminal: &TerminalRow) {

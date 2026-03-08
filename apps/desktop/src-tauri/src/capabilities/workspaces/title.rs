@@ -21,6 +21,35 @@ fn auto_title_registry() -> &'static Mutex<HashSet<String>> {
     REGISTRY.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
+#[derive(Clone, Copy)]
+struct HarnessTitleProvider {
+    extract_prompt: fn(&Value) -> Option<String>,
+}
+
+struct AutoTitleGuard {
+    terminal_id: String,
+}
+
+impl AutoTitleGuard {
+    fn acquire(terminal_id: &str) -> Option<Self> {
+        let mut registry = auto_title_registry().lock().unwrap();
+        if !registry.insert(terminal_id.to_string()) {
+            return None;
+        }
+
+        Some(Self {
+            terminal_id: terminal_id.to_string(),
+        })
+    }
+}
+
+impl Drop for AutoTitleGuard {
+    fn drop(&mut self) {
+        let mut registry = auto_title_registry().lock().unwrap();
+        registry.remove(&self.terminal_id);
+    }
+}
+
 pub fn maybe_schedule_terminal_auto_title_from_harness_completion(
     app: &AppHandle,
     db_path: &str,
@@ -48,12 +77,9 @@ pub fn maybe_schedule_terminal_auto_title_from_harness_completion(
         return;
     };
 
-    {
-        let mut registry = auto_title_registry().lock().unwrap();
-        if !registry.insert(terminal_id.to_string()) {
-            return;
-        }
-    }
+    let Some(guard) = AutoTitleGuard::acquire(terminal_id) else {
+        return;
+    };
 
     let app = app.clone();
     let db_path = db_path.to_string();
@@ -61,6 +87,7 @@ pub fn maybe_schedule_terminal_auto_title_from_harness_completion(
     let workspace_id = workspace_id.to_string();
 
     tauri::async_runtime::spawn(async move {
+        let _guard = guard;
         let title = generate_title(&prompt)
             .await
             .unwrap_or_else(|_| fallback_title(&prompt));
@@ -88,9 +115,6 @@ pub fn maybe_schedule_terminal_auto_title_from_harness_completion(
                 );
             }
         }
-
-        let mut registry = auto_title_registry().lock().unwrap();
-        registry.remove(&terminal_id);
     });
 }
 
@@ -135,6 +159,8 @@ fn read_first_prompt_from_session_reader<R: BufRead>(
     harness_provider: &str,
     reader: R,
 ) -> Option<String> {
+    let provider = resolve_harness_title_provider(harness_provider)?;
+
     for line in reader.lines().map_while(Result::ok) {
         let trimmed = line.trim();
         if trimmed.is_empty() {
@@ -145,11 +171,7 @@ fn read_first_prompt_from_session_reader<R: BufRead>(
             continue;
         };
 
-        let prompt = match harness_provider {
-            "claude" => extract_claude_prompt(&value),
-            "codex" => extract_codex_prompt(&value),
-            _ => None,
-        };
+        let prompt = (provider.extract_prompt)(&value);
 
         if let Some(normalized_prompt) = prompt.and_then(|prompt| normalize_prompt_text(&prompt)) {
             return Some(normalized_prompt);
@@ -157,6 +179,18 @@ fn read_first_prompt_from_session_reader<R: BufRead>(
     }
 
     None
+}
+
+fn resolve_harness_title_provider(name: &str) -> Option<HarnessTitleProvider> {
+    match name {
+        "claude" => Some(HarnessTitleProvider {
+            extract_prompt: extract_claude_prompt,
+        }),
+        "codex" => Some(HarnessTitleProvider {
+            extract_prompt: extract_codex_prompt,
+        }),
+        _ => None,
+    }
 }
 
 fn extract_claude_prompt(value: &Value) -> Option<String> {

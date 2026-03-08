@@ -3,7 +3,14 @@ use crate::shared::errors::LifecycleError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use tokio::process::Command;
+
+#[path = "status/runner.rs"]
+mod runner;
+#[path = "status/z_records.rs"]
+mod z_records;
+
+use runner::{git_output, git_output_allow_exit, git_output_optional};
+use z_records::ZeroSeparatedRecords;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -113,52 +120,6 @@ struct BranchDiffRenameEntry {
     current_path: String,
 }
 
-fn git_failure(operation: &str, stderr: &[u8]) -> LifecycleError {
-    let reason = {
-        let stderr = String::from_utf8_lossy(stderr).trim().to_string();
-        if stderr.is_empty() {
-            "git command failed".to_string()
-        } else {
-            stderr
-        }
-    };
-
-    LifecycleError::GitOperationFailed {
-        operation: operation.to_string(),
-        reason,
-    }
-}
-
-async fn git_command(
-    repo_path: &str,
-    operation: &str,
-    args: &[&str],
-) -> Result<std::process::Output, LifecycleError> {
-    Command::new("git")
-        .args(args)
-        .current_dir(repo_path)
-        .output()
-        .await
-        .map_err(|error| LifecycleError::GitOperationFailed {
-            operation: operation.to_string(),
-            reason: error.to_string(),
-        })
-}
-
-async fn git_output(
-    repo_path: &str,
-    operation: &str,
-    args: &[&str],
-) -> Result<Vec<u8>, LifecycleError> {
-    let output = git_command(repo_path, operation, args).await?;
-
-    if !output.status.success() {
-        return Err(git_failure(operation, &output.stderr));
-    }
-
-    Ok(output.stdout)
-}
-
 fn parse_head_sha(output: &[u8]) -> Option<String> {
     let sha = String::from_utf8_lossy(output).trim().to_string();
     if sha.is_empty() {
@@ -173,21 +134,12 @@ fn trimmed_stdout(output: &[u8]) -> String {
 }
 
 async fn resolve_head_sha(repo_path: &str) -> Result<Option<String>, LifecycleError> {
-    let output = Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .current_dir(repo_path)
-        .output()
-        .await
-        .map_err(|error| LifecycleError::GitOperationFailed {
-            operation: "resolve git head sha".to_string(),
-            reason: error.to_string(),
-        })?;
-
-    if output.status.success() {
-        Ok(parse_head_sha(&output.stdout))
-    } else {
-        Ok(None)
-    }
+    Ok(
+        git_output_optional(repo_path, "resolve git head sha", &["rev-parse", "HEAD"])
+            .await?
+            .as_deref()
+            .and_then(parse_head_sha),
+    )
 }
 
 fn parse_branch_header(line: &str) -> ParsedBranchStatus {
@@ -279,50 +231,28 @@ fn parse_status_entries(
         behind: 0,
     };
     let mut files = Vec::new();
-    let mut parts = output
-        .split(|byte| *byte == 0)
-        .filter(|part| !part.is_empty())
-        .peekable();
+    let mut parts = ZeroSeparatedRecords::new(output, "parse git status output");
 
-    while let Some(part) = parts.next() {
-        let entry =
-            std::str::from_utf8(part).map_err(|error| LifecycleError::GitOperationFailed {
-                operation: "parse git status output".to_string(),
-                reason: error.to_string(),
-            })?;
-
+    while let Some(entry) = parts.next_str()? {
         if entry.starts_with("## ") {
             branch_status = parse_branch_header(entry);
             continue;
         }
 
-        if part.len() < 4 {
+        let bytes = entry.as_bytes();
+        if bytes.len() < 4 {
             continue;
         }
 
-        let index_code = part[0] as char;
-        let worktree_code = part[1] as char;
-        let path = std::str::from_utf8(&part[3..]).map_err(|error| {
-            LifecycleError::GitOperationFailed {
-                operation: "parse git status path".to_string(),
-                reason: error.to_string(),
-            }
-        })?;
+        let index_code = bytes[0] as char;
+        let worktree_code = bytes[1] as char;
+        let path = &entry[3..];
 
         let original_path = if matches!(index_code, 'R' | 'C') || matches!(worktree_code, 'R' | 'C')
         {
-            let next_part = parts
-                .next()
-                .ok_or_else(|| LifecycleError::GitOperationFailed {
-                    operation: "parse renamed git status path".to_string(),
-                    reason: "missing original path for rename/copy status".to_string(),
-                })?;
             Some(
-                std::str::from_utf8(next_part)
-                    .map_err(|error| LifecycleError::GitOperationFailed {
-                        operation: "parse renamed git status path".to_string(),
-                        reason: error.to_string(),
-                    })?
+                parts
+                    .next_required_str("missing original path for rename/copy status")?
                     .to_string(),
             )
         } else {
@@ -367,43 +297,17 @@ fn parse_numstat_count(value: &str) -> Option<u64> {
 
 fn parse_numstat_entries(output: &[u8]) -> Result<Vec<ParsedNumstatEntry>, LifecycleError> {
     let mut entries = Vec::new();
-    let mut parts = output
-        .split(|byte| *byte == 0)
-        .filter(|part| !part.is_empty())
-        .peekable();
+    let mut parts = ZeroSeparatedRecords::new(output, "parse git numstat output");
 
-    while let Some(part) = parts.next() {
-        let line =
-            std::str::from_utf8(part).map_err(|error| LifecycleError::GitOperationFailed {
-                operation: "parse git numstat output".to_string(),
-                reason: error.to_string(),
-            })?;
+    while let Some(line) = parts.next_str()? {
         let mut fields = line.split('\t');
         let insertions = parse_numstat_count(fields.next().unwrap_or("0"));
         let deletions = parse_numstat_count(fields.next().unwrap_or("0"));
         let path_field = fields.next().unwrap_or("");
 
         let path = if path_field.is_empty() {
-            let _original_path =
-                parts
-                    .next()
-                    .ok_or_else(|| LifecycleError::GitOperationFailed {
-                        operation: "parse renamed git numstat path".to_string(),
-                        reason: "missing original path".to_string(),
-                    })?;
-            let path = parts
-                .next()
-                .ok_or_else(|| LifecycleError::GitOperationFailed {
-                    operation: "parse renamed git numstat path".to_string(),
-                    reason: "missing renamed path".to_string(),
-                })?;
-
-            std::str::from_utf8(path)
-                .map_err(|error| LifecycleError::GitOperationFailed {
-                    operation: "parse renamed git numstat path".to_string(),
-                    reason: error.to_string(),
-                })?
-                .to_string()
+            let _original_path = parts.next_required_str("missing original path")?;
+            parts.next_required_str("missing renamed path")?.to_string()
         } else {
             path_field.to_string()
         };
@@ -488,18 +392,11 @@ async fn resolve_symbolic_ref(
     operation: &str,
     reference: &str,
 ) -> Result<Option<String>, LifecycleError> {
-    let args = vec!["symbolic-ref", "--quiet", "--short", reference];
-    let output = git_command(repo_path, operation, &args).await?;
-    if !output.status.success() {
-        return Ok(None);
-    }
-
-    let value = trimmed_stdout(&output.stdout);
-    if value.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(value))
-    }
+    let args = ["symbolic-ref", "--quiet", "--short", reference];
+    let output = git_output_optional(repo_path, operation, &args).await?;
+    Ok(output
+        .map(|stdout| trimmed_stdout(&stdout))
+        .filter(|value| !value.is_empty()))
 }
 
 async fn resolve_remote_head_label(repo_path: &str) -> Result<Option<String>, LifecycleError> {
@@ -586,17 +483,10 @@ async fn resolve_branch_diff_base(
         })?;
 
     let fork_point_args = vec!["merge-base", "--fork-point", label.as_str(), "HEAD"];
-    let fork_point = git_command(repo_path, "resolve git fork point", &fork_point_args).await?;
-    let diff_base = if fork_point.status.success() {
-        let value = trimmed_stdout(&fork_point.stdout);
-        if value.is_empty() {
-            None
-        } else {
-            Some(value)
-        }
-    } else {
-        None
-    };
+    let diff_base = git_output_optional(repo_path, "resolve git fork point", &fork_point_args)
+        .await?
+        .map(|stdout| trimmed_stdout(&stdout))
+        .filter(|value| !value.is_empty());
 
     let diff_base = match diff_base {
         Some(value) => value,
@@ -621,48 +511,20 @@ fn parse_branch_diff_rename_entries(
     output: &[u8],
 ) -> Result<Vec<BranchDiffRenameEntry>, LifecycleError> {
     let mut entries = Vec::new();
-    let mut parts = output
-        .split(|byte| *byte == 0)
-        .filter(|part| !part.is_empty())
-        .peekable();
+    let mut parts = ZeroSeparatedRecords::new(output, "parse branch diff rename output");
 
-    while let Some(part) = parts.next() {
-        let status =
-            std::str::from_utf8(part).map_err(|error| LifecycleError::GitOperationFailed {
-                operation: "parse branch diff rename output".to_string(),
-                reason: error.to_string(),
-            })?;
-
+    while let Some(status) = parts.next_str()? {
         if status.starts_with('R') || status.starts_with('C') {
-            let original_path = parts
-                .next()
-                .ok_or_else(|| LifecycleError::GitOperationFailed {
-                    operation: "parse branch diff rename output".to_string(),
-                    reason: "missing original path for rename/copy".to_string(),
-                })?;
-            let current_path = parts
-                .next()
-                .ok_or_else(|| LifecycleError::GitOperationFailed {
-                    operation: "parse branch diff rename output".to_string(),
-                    reason: "missing current path for rename/copy".to_string(),
-                })?;
-
             entries.push(BranchDiffRenameEntry {
-                original_path: std::str::from_utf8(original_path)
-                    .map_err(|error| LifecycleError::GitOperationFailed {
-                        operation: "parse branch diff rename output".to_string(),
-                        reason: error.to_string(),
-                    })?
+                original_path: parts
+                    .next_required_str("missing original path for rename/copy")?
                     .to_string(),
-                current_path: std::str::from_utf8(current_path)
-                    .map_err(|error| LifecycleError::GitOperationFailed {
-                        operation: "parse branch diff rename output".to_string(),
-                        reason: error.to_string(),
-                    })?
+                current_path: parts
+                    .next_required_str("missing current path for rename/copy")?
                     .to_string(),
             });
         } else {
-            let _ = parts.next();
+            let _ = parts.next_str()?;
         }
     }
 
@@ -773,91 +635,99 @@ fn temp_empty_file_path() -> PathBuf {
     std::env::temp_dir().join(format!("lifecycle-empty-{}", uuid::Uuid::new_v4()))
 }
 
+async fn read_untracked_working_diff(
+    repo_path: &str,
+    file_path: &str,
+) -> Result<String, LifecycleError> {
+    let empty_file = temp_empty_file_path();
+    std::fs::write(&empty_file, []).map_err(|error| LifecycleError::GitOperationFailed {
+        operation: "prepare untracked git diff".to_string(),
+        reason: error.to_string(),
+    })?;
+
+    let empty_file_str = empty_file.to_string_lossy().into_owned();
+    let output = git_output_allow_exit(
+        repo_path,
+        "read untracked git diff",
+        &["diff", "--no-index", "--", &empty_file_str, file_path],
+        &[1],
+    )
+    .await;
+    let _ = std::fs::remove_file(&empty_file);
+
+    Ok(String::from_utf8_lossy(&output?.stdout).into_owned())
+}
+
+async fn read_working_or_staged_diff(
+    repo_path: &str,
+    file_path: &str,
+    scope: &str,
+) -> Result<(String, Option<String>, String), LifecycleError> {
+    let status = get_git_status(repo_path).await?;
+    let file_status = status.files.iter().find(|status| status.path == file_path);
+    let original_path = file_status.and_then(|status| status.original_path.clone());
+
+    let patch = if is_untracked_working_file(file_status, scope) {
+        read_untracked_working_diff(repo_path, file_path).await?
+    } else if scope == "staged" {
+        String::from_utf8_lossy(
+            &git_output(
+                repo_path,
+                "read staged git diff",
+                &["diff", "--cached", "--", file_path],
+            )
+            .await?,
+        )
+        .into_owned()
+    } else {
+        String::from_utf8_lossy(
+            &git_output(
+                repo_path,
+                "read working git diff",
+                &["diff", "--", file_path],
+            )
+            .await?,
+        )
+        .into_owned()
+    };
+
+    Ok((file_path.to_string(), original_path, patch))
+}
+
+async fn read_branch_diff(
+    repo_path: &str,
+    file_path: &str,
+) -> Result<(String, Option<String>, String), LifecycleError> {
+    let base_ref = resolve_branch_diff_base(repo_path).await?;
+    let selection =
+        resolve_branch_diff_path_selection(repo_path, &base_ref.diff_base, file_path).await?;
+    let mut args = vec![
+        "diff",
+        "--find-renames",
+        "--find-copies",
+        "--binary",
+        base_ref.diff_base.as_str(),
+        "HEAD",
+        "--",
+    ];
+    for pathspec in &selection.pathspecs {
+        args.push(pathspec.as_str());
+    }
+
+    let patch =
+        String::from_utf8_lossy(&git_output(repo_path, "read branch git diff", &args).await?)
+            .into_owned();
+    Ok((selection.file_path, selection.original_path, patch))
+}
+
 pub async fn get_git_diff(
     repo_path: &str,
     file_path: &str,
     scope: &str,
 ) -> Result<GitDiffResult, LifecycleError> {
     let (resolved_file_path, original_path, patch) = match scope {
-        "working" | "staged" => {
-            let status = get_git_status(repo_path).await?;
-            let file_status = status.files.iter().find(|status| status.path == file_path);
-            let original_path = file_status.and_then(|status| status.original_path.clone());
-
-            let patch = if is_untracked_working_file(file_status, scope) {
-                let empty_file = temp_empty_file_path();
-                std::fs::write(&empty_file, []).map_err(|error| {
-                    LifecycleError::GitOperationFailed {
-                        operation: "prepare untracked git diff".to_string(),
-                        reason: error.to_string(),
-                    }
-                })?;
-
-                let empty_file_str = empty_file.to_string_lossy().into_owned();
-                let output = Command::new("git")
-                    .args(["diff", "--no-index", "--", &empty_file_str, file_path])
-                    .current_dir(repo_path)
-                    .output()
-                    .await
-                    .map_err(|error| LifecycleError::GitOperationFailed {
-                        operation: "read untracked git diff".to_string(),
-                        reason: error.to_string(),
-                    })?;
-                if !output.status.success() && output.status.code() != Some(1) {
-                    let _ = std::fs::remove_file(&empty_file);
-                    return Err(git_failure("read untracked git diff", &output.stderr));
-                }
-                let patch = String::from_utf8_lossy(&output.stdout).into_owned();
-                let _ = std::fs::remove_file(&empty_file);
-                patch
-            } else if scope == "staged" {
-                String::from_utf8_lossy(
-                    &git_output(
-                        repo_path,
-                        "read staged git diff",
-                        &["diff", "--cached", "--", file_path],
-                    )
-                    .await?,
-                )
-                .into_owned()
-            } else {
-                String::from_utf8_lossy(
-                    &git_output(
-                        repo_path,
-                        "read working git diff",
-                        &["diff", "--", file_path],
-                    )
-                    .await?,
-                )
-                .into_owned()
-            };
-
-            (file_path.to_string(), original_path, patch)
-        }
-        "branch" => {
-            let base_ref = resolve_branch_diff_base(repo_path).await?;
-            let selection =
-                resolve_branch_diff_path_selection(repo_path, &base_ref.diff_base, file_path)
-                    .await?;
-            let mut args = vec![
-                "diff",
-                "--find-renames",
-                "--find-copies",
-                "--binary",
-                base_ref.diff_base.as_str(),
-                "HEAD",
-                "--",
-            ];
-            for pathspec in &selection.pathspecs {
-                args.push(pathspec.as_str());
-            }
-
-            let patch = String::from_utf8_lossy(
-                &git_output(repo_path, "read branch git diff", &args).await?,
-            )
-            .into_owned();
-            (selection.file_path, selection.original_path, patch)
-        }
+        "working" | "staged" => read_working_or_staged_diff(repo_path, file_path, scope).await?,
+        "branch" => read_branch_diff(repo_path, file_path).await?,
         _ => {
             return Err(LifecycleError::GitOperationFailed {
                 operation: "read git diff".to_string(),
@@ -877,6 +747,68 @@ pub async fn get_git_diff(
     })
 }
 
+pub async fn get_git_scope_patch(repo_path: &str, scope: &str) -> Result<String, LifecycleError> {
+    let patch = match scope {
+        "working" => {
+            let mut patch = String::from_utf8_lossy(
+                &git_output(repo_path, "read working git diff", &["diff"]).await?,
+            )
+            .into_owned();
+            let status = get_git_status(repo_path).await?;
+
+            for file in status
+                .files
+                .iter()
+                .filter(|file| matches!(file.worktree_status.as_deref(), Some("untracked")))
+            {
+                let file_patch = read_untracked_working_diff(repo_path, &file.path).await?;
+                if file_patch.is_empty() {
+                    continue;
+                }
+
+                if !patch.is_empty() && !patch.ends_with('\n') {
+                    patch.push('\n');
+                }
+
+                patch.push_str(&file_patch);
+            }
+
+            patch
+        }
+        "staged" => String::from_utf8_lossy(
+            &git_output(repo_path, "read staged git diff", &["diff", "--cached"]).await?,
+        )
+        .into_owned(),
+        "branch" => {
+            let base_ref = resolve_branch_diff_base(repo_path).await?;
+            String::from_utf8_lossy(
+                &git_output(
+                    repo_path,
+                    "read branch git diff",
+                    &[
+                        "diff",
+                        "--find-renames",
+                        "--find-copies",
+                        "--binary",
+                        base_ref.diff_base.as_str(),
+                        "HEAD",
+                    ],
+                )
+                .await?,
+            )
+            .into_owned()
+        }
+        _ => {
+            return Err(LifecycleError::GitOperationFailed {
+                operation: "read git scope diff".to_string(),
+                reason: format!("unsupported diff scope: {scope}"),
+            });
+        }
+    };
+
+    Ok(patch)
+}
+
 pub async fn get_git_log(repo_path: &str, limit: u32) -> Result<Vec<GitLogEntry>, LifecycleError> {
     let limit_string = limit.to_string();
     let output = git_output(
@@ -894,20 +826,17 @@ pub async fn get_git_log(repo_path: &str, limit: u32) -> Result<Vec<GitLogEntry>
         .lines()
         .map(|line| line.to_string())
         .collect::<Vec<_>>();
-    let mut entries = Vec::new();
-
-    for chunk in lines.chunks_exact(6) {
-        entries.push(GitLogEntry {
+    Ok(lines
+        .chunks_exact(6)
+        .map(|chunk| GitLogEntry {
             sha: chunk[0].clone(),
             short_sha: chunk[1].clone(),
             message: chunk[2].clone(),
             author: chunk[3].clone(),
             email: chunk[4].clone(),
             timestamp: chunk[5].clone(),
-        });
-    }
-
-    Ok(entries)
+        })
+        .collect())
 }
 
 pub async fn stage_git_files(repo_path: &str, file_paths: &[String]) -> Result<(), LifecycleError> {
@@ -915,23 +844,11 @@ pub async fn stage_git_files(repo_path: &str, file_paths: &[String]) -> Result<(
         return Ok(());
     }
 
-    let mut command = Command::new("git");
-    command
-        .arg("add")
-        .arg("--")
-        .args(file_paths)
-        .current_dir(repo_path);
-    let output = command
-        .output()
-        .await
-        .map_err(|error| LifecycleError::GitOperationFailed {
-            operation: "stage git files".to_string(),
-            reason: error.to_string(),
-        })?;
-
-    if !output.status.success() {
-        return Err(git_failure("stage git files", &output.stderr));
+    let mut args = vec!["add", "--"];
+    for file_path in file_paths {
+        args.push(file_path.as_str());
     }
+    let _ = git_output(repo_path, "stage git files", &args).await?;
 
     Ok(())
 }
@@ -944,24 +861,11 @@ pub async fn unstage_git_files(
         return Ok(());
     }
 
-    let mut command = Command::new("git");
-    command
-        .arg("reset")
-        .arg("HEAD")
-        .arg("--")
-        .args(file_paths)
-        .current_dir(repo_path);
-    let output = command
-        .output()
-        .await
-        .map_err(|error| LifecycleError::GitOperationFailed {
-            operation: "unstage git files".to_string(),
-            reason: error.to_string(),
-        })?;
-
-    if !output.status.success() {
-        return Err(git_failure("unstage git files", &output.stderr));
+    let mut args = vec!["reset", "HEAD", "--"];
+    for file_path in file_paths {
+        args.push(file_path.as_str());
     }
+    let _ = git_output(repo_path, "unstage git files", &args).await?;
 
     Ok(())
 }
@@ -1010,31 +914,19 @@ pub async fn get_git_commit_patch(
 }
 
 async fn resolve_upstream(repo_path: &str) -> Result<Option<String>, LifecycleError> {
-    let output = Command::new("git")
-        .args([
+    Ok(git_output_optional(
+        repo_path,
+        "resolve git upstream",
+        &[
             "rev-parse",
             "--abbrev-ref",
             "--symbolic-full-name",
             "@{upstream}",
-        ])
-        .current_dir(repo_path)
-        .output()
-        .await
-        .map_err(|error| LifecycleError::GitOperationFailed {
-            operation: "resolve git upstream".to_string(),
-            reason: error.to_string(),
-        })?;
-
-    if !output.status.success() {
-        return Ok(None);
-    }
-
-    let upstream = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if upstream.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(upstream))
-    }
+        ],
+    )
+    .await?
+    .map(|stdout| trimmed_stdout(&stdout))
+    .filter(|upstream| !upstream.is_empty()))
 }
 
 pub async fn push_git(repo_path: &str) -> Result<GitPushResult, LifecycleError> {
@@ -1220,6 +1112,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn get_git_scope_patch_includes_tracked_and_untracked_working_changes() {
+        let repo_path = temp_repo_path("lifecycle-git-scope-patch");
+        init_repo(&repo_path);
+        fs::write(repo_path.join("README.md"), "seed\nsecond\n").expect("modify tracked file");
+        fs::write(repo_path.join("notes.txt"), "draft\n").expect("write untracked file");
+
+        let patch = get_git_scope_patch(repo_path.to_str().expect("repo path is utf8"), "working")
+            .await
+            .expect("git scope patch should succeed");
+
+        assert!(patch.contains("diff --git a/README.md b/README.md"));
+        assert!(patch.contains("+++ b/README.md"));
+        assert!(patch.contains("+++ b/notes.txt"));
+        assert!(patch.contains("+draft"));
+
+        fs::remove_dir_all(repo_path).expect("remove temp repo");
+    }
+
+    #[tokio::test]
     async fn get_git_base_ref_resolves_remote_default_branch() {
         let fixture_root = temp_repo_path("lifecycle-git-base-ref");
         let seed_path = fixture_root.join("seed");
@@ -1284,6 +1195,36 @@ mod tests {
         .expect("branch diff should preserve rename semantics for original path");
         assert!(original_path_diff.patch.contains("rename from README.md"));
         assert!(original_path_diff.patch.contains("rename to docs.md"));
+
+        fs::remove_dir_all(repo_path).expect("remove temp repo");
+    }
+
+    #[tokio::test]
+    async fn get_git_scope_patch_branch_scope_uses_merge_base() {
+        let repo_path = temp_repo_path("lifecycle-git-branch-scope-patch");
+        init_repo_with_branch(&repo_path, "trunk");
+        run_git(repo_path.as_path(), &["checkout", "-b", "lifecycle/test"]);
+
+        run_git(repo_path.as_path(), &["checkout", "trunk"]);
+        fs::write(repo_path.join("README.md"), "seed\nupstream\n")
+            .expect("write upstream branch change");
+        run_git(repo_path.as_path(), &["commit", "-am", "upstream change"]);
+
+        run_git(repo_path.as_path(), &["checkout", "lifecycle/test"]);
+        run_git(repo_path.as_path(), &["mv", "README.md", "docs.md"]);
+        fs::write(repo_path.join("docs.md"), "seed\nbranch\n").expect("write branch change");
+        run_git(repo_path.as_path(), &["commit", "-am", "rename readme"]);
+
+        let branch_patch =
+            get_git_scope_patch(repo_path.to_str().expect("repo path is utf8"), "branch")
+                .await
+                .expect("branch scope patch should succeed");
+
+        assert!(branch_patch.contains("diff --git a/docs.md b/docs.md"));
+        assert!(branch_patch.contains("+++ b/docs.md"));
+        assert!(branch_patch.contains("seed"));
+        assert!(branch_patch.contains("branch"));
+        assert!(!branch_patch.contains("upstream"));
 
         fs::remove_dir_all(repo_path).expect("remove temp repo");
     }

@@ -1,11 +1,13 @@
 import { Alert, AlertDescription, ToggleGroup, ToggleGroupItem, useTheme } from "@lifecycle/ui";
 import { parsePatchFiles } from "@pierre/diffs";
 import { PatchDiff } from "@pierre/diffs/react";
-import type { GitDiffResult, GitDiffScope } from "@lifecycle/contracts";
+import type { GitDiffScope } from "@lifecycle/contracts";
 import { useEffect, useMemo, useState } from "react";
-import { getGitBaseRef, getGitDiff, openWorkspaceFile } from "../api";
+import { getGitBaseRef, getGitScopePatch, openWorkspaceFile } from "../api";
 import { useGitStatus } from "../hooks";
-import { GitDiffFileBlock } from "./git-diff-file-block";
+import { buildPatchRenderCacheKey } from "../lib/diff-virtualization";
+import { DiffRenderProvider } from "./diff-render-provider";
+import { MultiFileDiffLayout } from "./multi-file-diff-layout";
 
 const SCOPE_LABELS: Record<GitDiffScope, string> = {
   working: "Working",
@@ -30,7 +32,7 @@ export function DiffViewerSurface({
   const statusQuery = useGitStatus(workspaceId);
   const [baseRef, setBaseRef] = useState<string | null>(null);
   const [currentScope, setCurrentScope] = useState(activeScope);
-  const [diff, setDiff] = useState<GitDiffResult | null>(null);
+  const [patch, setPatch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -65,17 +67,17 @@ export function DiffViewerSurface({
   useEffect(() => {
     let cancelled = false;
 
-    setDiff(null);
+    setPatch("");
     setError(null);
     setIsLoading(true);
 
-    void getGitDiff(workspaceId, filePath, currentScope)
+    void getGitScopePatch(workspaceId, currentScope)
       .then((result) => {
         if (cancelled) {
           return;
         }
 
-        setDiff(result);
+        setPatch(result);
       })
       .catch((nextError) => {
         if (cancelled) {
@@ -95,26 +97,33 @@ export function DiffViewerSurface({
     return () => {
       cancelled = true;
     };
-  }, [currentScope, filePath, workspaceId]);
+  }, [currentScope, workspaceId]);
 
-  const fileStatus = statusQuery.data?.files.find((file) => file.path === filePath) ?? null;
+  const hasWorkingChanges = (statusQuery.data?.files ?? []).some((file) => file.unstaged);
+  const hasStagedChanges = (statusQuery.data?.files ?? []).some((file) => file.staged);
   const scopeAvailability: Record<GitDiffScope, boolean> = {
-    working: Boolean(fileStatus?.unstaged),
-    staged: Boolean(fileStatus?.staged),
+    working: hasWorkingChanges,
+    staged: hasStagedChanges,
     branch: baseRef !== null,
   };
 
   const parsedFiles = useMemo(() => {
-    if (!diff?.patch) {
+    if (!patch) {
       return [];
     }
 
     try {
-      return parsePatchFiles(diff.patch).flatMap((patch) => patch.files);
+      return parsePatchFiles(
+        patch,
+        buildPatchRenderCacheKey(
+          `workspace-diff:${workspaceId}:${currentScope}:${filePath}`,
+          patch,
+        ),
+      ).flatMap((patch) => patch.files);
     } catch {
       return null;
     }
-  }, [diff?.patch]);
+  }, [currentScope, filePath, patch, workspaceId]);
 
   const handleOpenFile = (nextFilePath: string) => {
     void openWorkspaceFile(workspaceId, nextFilePath).catch((openError) => {
@@ -151,7 +160,7 @@ export function DiffViewerSurface({
                 : scope === "branch"
                   ? "No base branch available"
                   : disabled
-                    ? `No ${scope} changes for this file`
+                    ? `No ${scope} changes in this workspace`
                     : undefined;
 
             return (
@@ -174,44 +183,40 @@ export function DiffViewerSurface({
         </ToggleGroup>
       </div>
 
-      {isLoading ? (
-        <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
-          Loading diff...
-        </div>
-      ) : error ? (
-        <Alert className="m-5" variant="destructive">
-          <AlertDescription>Failed to load diff: {error}</AlertDescription>
-        </Alert>
-      ) : !diff?.patch ? (
-        <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
-          {currentScope === "branch" && !baseRef
-            ? "No base branch available for comparison."
-            : "No diff to display."}
-        </div>
-      ) : parsedFiles === null ? (
-        <div className="min-h-0 flex-1 overflow-auto px-4 py-4">
-          <PatchDiff
-            patch={diff.patch}
-            options={{
-              disableFileHeader: true,
-              themeType: resolvedAppearance,
-            }}
-          />
-        </div>
-      ) : (
-        <div className="min-h-0 flex-1 overflow-auto px-4 py-4">
-          <div className="flex flex-col gap-4">
-            {parsedFiles.map((fileDiff, index) => (
-              <GitDiffFileBlock
-                key={`${fileDiff.prevName ?? ""}:${fileDiff.name}:${index}`}
-                fileDiff={fileDiff}
-                onOpenFile={handleOpenFile}
-                themeType={resolvedAppearance}
-              />
-            ))}
+      <DiffRenderProvider>
+        {isLoading ? (
+          <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
+            Loading diff...
           </div>
-        </div>
-      )}
+        ) : error ? (
+          <Alert className="m-5" variant="destructive">
+            <AlertDescription>Failed to load diff: {error}</AlertDescription>
+          </Alert>
+        ) : !patch ? (
+          <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
+            {currentScope === "branch" && !baseRef
+              ? "No base branch available for comparison."
+              : "No diff to display."}
+          </div>
+        ) : parsedFiles === null ? (
+          <div className="min-h-0 flex-1 overflow-auto">
+            <PatchDiff
+              patch={patch}
+              options={{
+                disableFileHeader: true,
+                themeType: resolvedAppearance,
+              }}
+            />
+          </div>
+        ) : (
+          <MultiFileDiffLayout
+            files={parsedFiles}
+            initialFilePath={filePath}
+            onOpenFile={handleOpenFile}
+            themeType={resolvedAppearance}
+          />
+        )}
+      </DiffRenderProvider>
     </div>
   );
 }

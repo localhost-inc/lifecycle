@@ -63,6 +63,7 @@ interface GitFileHeaderProps {
   fileDiff: FileDiffMetadata;
   onOpenFile?: (() => void) | null;
   onToggleCollapse: () => void;
+  sticky?: boolean;
 }
 
 export function GitFileHeader({
@@ -70,6 +71,7 @@ export function GitFileHeader({
   fileDiff,
   onOpenFile,
   onToggleCollapse,
+  sticky,
 }: GitFileHeaderProps) {
   const { additions, deletions } = summarizeChanges(fileDiff);
   const title = fileDiff.name;
@@ -79,7 +81,7 @@ export function GitFileHeader({
 
   return (
     <div
-      className={`group/file-header flex w-full items-center gap-3 px-4 py-3 text-left ${collapsed ? "" : "border-b border-[var(--border)]"}`}
+      className={`group/file-header flex w-full items-center gap-3 px-4 py-3 text-left ${sticky ? "sticky top-0 z-10 bg-[var(--panel)] border-b border-[var(--border)]" : collapsed ? "" : "border-b border-[var(--border)]"}`}
     >
       <button
         type="button"

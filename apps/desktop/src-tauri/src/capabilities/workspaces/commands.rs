@@ -305,6 +305,15 @@ pub async fn get_workspace_git_diff(
 }
 
 #[tauri::command]
+pub async fn get_workspace_git_scope_patch(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    scope: String,
+) -> Result<String, LifecycleError> {
+    super::git::get_workspace_git_scope_patch(&db_path.0, workspace_id, scope).await
+}
+
+#[tauri::command]
 pub async fn list_workspace_git_log(
     db_path: State<'_, DbPath>,
     workspace_id: String,

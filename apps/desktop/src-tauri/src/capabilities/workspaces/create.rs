@@ -19,7 +19,7 @@ pub async fn create_workspace(
     let workspace_name = workspace_name
         .and_then(normalize_optional_string)
         .unwrap_or_else(|| auto_workspace_name(&workspace_id));
-    let source_ref = workspace_branch_name(&workspace_name, &workspace_id);
+    let source_ref = worktree::workspace_branch_name(&workspace_name, &workspace_id);
     let db = db_path.0.clone();
 
     // Insert workspace row
@@ -134,26 +134,6 @@ fn normalize_optional_ref(value: &str) -> Option<&str> {
     } else {
         Some(trimmed)
     }
-}
-
-fn short_workspace_id(workspace_id: &str) -> String {
-    let short: String = workspace_id
-        .chars()
-        .filter(|ch| ch.is_ascii_alphanumeric())
-        .take(8)
-        .collect();
-
-    if short.is_empty() {
-        "workspace".to_string()
-    } else {
-        short
-    }
-}
-
-fn workspace_branch_name(workspace_name: &str, workspace_id: &str) -> String {
-    let name_slug = worktree::slugify_workspace_name(workspace_name);
-    let short_id = short_workspace_id(workspace_id);
-    format!("lifecycle/{}-{}", name_slug, short_id)
 }
 
 fn auto_workspace_name(workspace_id: &str) -> String {

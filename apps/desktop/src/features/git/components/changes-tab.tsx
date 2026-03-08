@@ -5,7 +5,18 @@ import type {
   GitStatusResult,
 } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
-import { GitBranch } from "lucide-react";
+import {
+  ChevronRight,
+  File,
+  FileCode,
+  FileJson,
+  FileText,
+  GitBranch,
+  Image as ImageIcon,
+  Minus,
+  Plus,
+} from "lucide-react";
+import type React from "react";
 import { useState } from "react";
 import { stageGitFiles, unstageGitFiles } from "../api";
 
@@ -28,46 +39,68 @@ function dirname(filePath: string): string {
   return idx > 0 ? filePath.slice(0, idx + 1) : "";
 }
 
-function statusLetter(kind: GitFileChangeKind | null): string {
+function statusCssVar(kind: GitFileChangeKind | null): string {
   switch (kind) {
-    case "modified":
-      return "M";
     case "added":
-      return "A";
-    case "deleted":
-      return "D";
-    case "renamed":
-      return "R";
-    case "copied":
-      return "C";
-    case "unmerged":
-      return "U";
     case "untracked":
-      return "?";
-    case "ignored":
-      return "!";
+      return "--git-status-added";
+    case "deleted":
+    case "unmerged":
+      return "--git-status-deleted";
+    case "renamed":
+    case "copied":
+      return "--git-status-renamed";
+    case "modified":
     case "type_changed":
-      return "T";
+      return "--git-status-modified";
     default:
-      return " ";
+      return "--muted-foreground";
   }
 }
 
-function statusTextColor(kind: GitFileChangeKind | null): string {
-  switch (kind) {
-    case "added":
-      return "text-[var(--git-status-added)]";
-    case "deleted":
-    case "unmerged":
-      return "text-[var(--git-status-deleted)]";
-    case "renamed":
-    case "copied":
-      return "text-[var(--git-status-renamed)]";
-    case "modified":
-    case "type_changed":
-      return "text-[var(--git-status-modified)]";
+function fileIconFor(filePath: string): React.ComponentType<{ className?: string }> {
+  const dot = filePath.lastIndexOf(".");
+  if (dot === -1) return File;
+  const ext = filePath.slice(dot).toLowerCase();
+  switch (ext) {
+    case ".ts":
+    case ".tsx":
+    case ".js":
+    case ".jsx":
+    case ".rs":
+    case ".py":
+    case ".go":
+    case ".rb":
+    case ".java":
+    case ".c":
+    case ".cpp":
+    case ".h":
+    case ".css":
+    case ".scss":
+    case ".html":
+    case ".vue":
+    case ".svelte":
+      return FileCode;
+    case ".json":
+    case ".yaml":
+    case ".yml":
+    case ".toml":
+      return FileJson;
+    case ".md":
+    case ".mdx":
+    case ".txt":
+    case ".rst":
+      return FileText;
+    case ".png":
+    case ".jpg":
+    case ".jpeg":
+    case ".gif":
+    case ".svg":
+    case ".webp":
+    case ".ico":
+      return ImageIcon;
     default:
-      return "text-[var(--muted-foreground)]";
+      return File;
   }
 }
 
@@ -89,21 +122,46 @@ function SectionHeader({
   disabled: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between px-1 py-1">
+    <div className="flex items-center justify-between px-1 py-1.5">
       <button
         type="button"
         onClick={onToggle}
-        className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
+        className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
       >
-        <span className="text-[9px]">{collapsed ? "▸" : "▾"}</span>
+        <ChevronRight
+          className={`h-3.5 w-3.5 shrink-0 transition-transform duration-150 ${collapsed ? "" : "rotate-90"}`}
+        />
         {label}
-        <span className="tabular-nums">({count})</span>
+        <span className="font-normal tabular-nums">{count}</span>
       </button>
       <button
         type="button"
         onClick={onAction}
         disabled={disabled}
-        className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)] transition hover:text-[var(--foreground)] disabled:cursor-wait disabled:opacity-60"
+        className="rounded-sm px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-wait disabled:opacity-60"
+      >
+        {actionLabel}
+      </button>
+    </div>
+  );
+}
+
+function ActionRow({
+  actionLabel,
+  onAction,
+  disabled,
+}: {
+  actionLabel: string;
+  onAction: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="flex justify-end px-1 pb-1">
+      <button
+        type="button"
+        onClick={onAction}
+        disabled={disabled}
+        className="rounded-sm px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-wait disabled:opacity-60"
       >
         {actionLabel}
       </button>
@@ -130,10 +188,10 @@ function FileRow({
 }) {
   const dir = dirname(file.path);
   const name = basename(file.path);
-  const letter = statusLetter(statusKind);
-  const color = statusTextColor(statusKind);
   const ins = file.stats.insertions;
   const del = file.stats.deletions;
+  const Icon = fileIconFor(file.path);
+  const cssVar = statusCssVar(statusKind);
 
   return (
     <div
@@ -146,20 +204,28 @@ function FileRow({
           onOpen();
         }
       }}
-      className="flex h-7 cursor-pointer items-center gap-2 rounded px-2 transition hover:bg-[var(--surface-hover)]"
+      className="group/row flex h-8 cursor-pointer items-center gap-2 rounded-md px-2 transition hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
       title={file.path}
     >
+      <span className="flex h-4 w-4 shrink-0 items-center justify-center" style={{ color: `var(${cssVar})` }}>
+        <Icon className="h-4 w-4" />
+      </span>
+
       <div className="flex min-w-0 flex-1 items-baseline gap-1">
         <span className="shrink-0 text-sm font-medium text-[var(--foreground)]">{name}</span>
-        {dir && <span className="truncate text-[13px] text-[var(--muted-foreground)]">{dir}</span>}
+        {dir && (
+          <span className="truncate text-[13px] text-[var(--muted-foreground)] opacity-60">
+            {dir}
+          </span>
+        )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-1.5">
         {ins !== null && ins > 0 && (
-          <span className="font-mono text-xs text-[var(--muted-foreground)]">+{ins}</span>
+          <span className="font-mono text-xs text-[var(--git-status-added)]">+{ins}</span>
         )}
         {del !== null && del > 0 && (
-          <span className="font-mono text-xs text-[var(--muted-foreground)]">-{del}</span>
+          <span className="font-mono text-xs text-[var(--git-status-deleted)]">-{del}</span>
         )}
         <button
           type="button"
@@ -168,10 +234,16 @@ function FileRow({
             onToggle();
           }}
           disabled={disabled}
-          className={`w-4 text-center font-mono text-[12px] font-semibold transition hover:brightness-125 disabled:cursor-wait disabled:opacity-60 ${color}`}
+          className={`flex h-5 w-5 items-center justify-center rounded-sm text-[var(--muted-foreground)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-wait ${mutating ? "" : "opacity-0 group-hover/row:opacity-100"}`}
           title={scope === "working" ? "Stage file" : "Unstage file"}
         >
-          {mutating ? "…" : letter}
+          {mutating ? (
+            <span className="text-xs">&hellip;</span>
+          ) : scope === "working" ? (
+            <Plus className="h-3.5 w-3.5" />
+          ) : (
+            <Minus className="h-3.5 w-3.5" />
+          )}
         </button>
       </div>
     </div>
@@ -193,6 +265,7 @@ export function ChangesTab({
   const files = gitStatus?.files ?? [];
   const stagedFiles = files.filter((f) => f.staged);
   const unstagedFiles = files.filter((f) => f.unstaged);
+  const hasBothSections = stagedFiles.length > 0 && unstagedFiles.length > 0;
 
   const runMutation = async (key: string, action: () => Promise<void>) => {
     setMutatingKey(key);
@@ -242,20 +315,28 @@ export function ChangesTab({
   }
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-3">
       {stagedFiles.length > 0 && (
         <div>
-          <SectionHeader
-            label="Staged Changes"
-            count={stagedFiles.length}
-            collapsed={stagedCollapsed}
-            onToggle={() => setStagedCollapsed((v) => !v)}
-            actionLabel="Unstage All"
-            onAction={handleUnstageAll}
-            disabled={mutatingKey !== null}
-          />
-          {!stagedCollapsed && (
-            <div className="flex flex-col">
+          {hasBothSections ? (
+            <SectionHeader
+              label="Staged Changes"
+              count={stagedFiles.length}
+              collapsed={stagedCollapsed}
+              onToggle={() => setStagedCollapsed((v) => !v)}
+              actionLabel="Unstage All"
+              onAction={handleUnstageAll}
+              disabled={mutatingKey !== null}
+            />
+          ) : (
+            <ActionRow
+              actionLabel="Unstage All"
+              onAction={handleUnstageAll}
+              disabled={mutatingKey !== null}
+            />
+          )}
+          {(!hasBothSections || !stagedCollapsed) && (
+            <div className="flex flex-col gap-0.5">
               {stagedFiles.map((file) => (
                 <FileRow
                   key={`staged:${file.path}`}
@@ -275,17 +356,25 @@ export function ChangesTab({
 
       {unstagedFiles.length > 0 && (
         <div>
-          <SectionHeader
-            label="Changes"
-            count={unstagedFiles.length}
-            collapsed={unstagedCollapsed}
-            onToggle={() => setUnstagedCollapsed((v) => !v)}
-            actionLabel="Stage All"
-            onAction={handleStageAll}
-            disabled={mutatingKey !== null}
-          />
-          {!unstagedCollapsed && (
-            <div className="flex flex-col">
+          {hasBothSections ? (
+            <SectionHeader
+              label="Changes"
+              count={unstagedFiles.length}
+              collapsed={unstagedCollapsed}
+              onToggle={() => setUnstagedCollapsed((v) => !v)}
+              actionLabel="Stage All"
+              onAction={handleStageAll}
+              disabled={mutatingKey !== null}
+            />
+          ) : (
+            <ActionRow
+              actionLabel="Stage All"
+              onAction={handleStageAll}
+              disabled={mutatingKey !== null}
+            />
+          )}
+          {(!hasBothSections || !unstagedCollapsed) && (
+            <div className="flex flex-col gap-0.5">
               {unstagedFiles.map((file) => (
                 <FileRow
                   key={`unstaged:${file.path}`}

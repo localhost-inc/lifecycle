@@ -19,6 +19,8 @@ interface VersionControlPanelProps {
 export const VERSION_CONTROL_PANEL_HEADER_CLASS_NAME = "px-2.5 py-3";
 export const VERSION_CONTROL_PANEL_BODY_CLASS_NAME = "px-2.5 pb-4 pt-1";
 export const VERSION_CONTROL_PANEL_EMPTY_STATE_CLASS_NAME = "px-2.5 py-4";
+export const VERSION_CONTROL_PANEL_TAB_TRIGGER_CLASS_NAME =
+  "font-medium data-[state=active]:font-medium";
 
 export function VersionControlPanel({
   onOpenDiff,
@@ -53,8 +55,18 @@ export function VersionControlPanel({
           value={activeTab}
         >
           <TabsList className="gap-1 border-0 bg-transparent p-0">
-            <TabsTrigger value="changes">Changes</TabsTrigger>
-            <TabsTrigger value="history">History</TabsTrigger>
+            <TabsTrigger
+              className={VERSION_CONTROL_PANEL_TAB_TRIGGER_CLASS_NAME}
+              value="changes"
+            >
+              Changes
+            </TabsTrigger>
+            <TabsTrigger
+              className={VERSION_CONTROL_PANEL_TAB_TRIGGER_CLASS_NAME}
+              value="history"
+            >
+              History
+            </TabsTrigger>
           </TabsList>
         </Tabs>
       </div>

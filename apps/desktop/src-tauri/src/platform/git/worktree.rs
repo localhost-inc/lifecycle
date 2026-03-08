@@ -172,7 +172,7 @@ pub fn slugify_workspace_name(value: &str) -> String {
     }
 }
 
-fn short_workspace_id(workspace_id: &str) -> String {
+pub fn short_workspace_id(workspace_id: &str) -> String {
     let short: String = workspace_id
         .chars()
         .filter(|ch| ch.is_ascii_alphanumeric())
@@ -184,6 +184,12 @@ fn short_workspace_id(workspace_id: &str) -> String {
     } else {
         short
     }
+}
+
+pub fn workspace_branch_name(workspace_name: &str, workspace_id: &str) -> String {
+    let name_slug = slugify_workspace_name(workspace_name);
+    let short_id = short_workspace_id(workspace_id);
+    format!("lifecycle/{}-{}", name_slug, short_id)
 }
 
 fn worktree_directory_name(workspace_name: &str, workspace_id: &str) -> String {

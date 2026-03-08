@@ -288,6 +288,12 @@ impl From<std::io::Error> for LifecycleError {
     }
 }
 
+impl From<rusqlite::Error> for LifecycleError {
+    fn from(error: rusqlite::Error) -> Self {
+        Self::Database(error.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

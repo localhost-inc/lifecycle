@@ -396,7 +396,7 @@ export function WorkspaceSurfaceTabBar({
         className="flex items-center gap-0.5 overflow-x-auto py-1"
         role="tablist"
       >
-        {visibleTabs.map((tab) => {
+        {visibleTabs.map((tab, index) => {
           const active = tab.key === activeTabKey;
           const isTerminal = tab.type === "terminal";
           const isRenaming = renameState?.key === tab.key;
@@ -461,6 +461,9 @@ export function WorkspaceSurfaceTabBar({
               renameInputRef={renameInputRef}
               renameSaving={renameState?.saving ?? false}
               renameValue={renameState?.value ?? tab.label}
+              showLeadingSeparator={
+                index > 0 && !active && visibleTabs[index - 1]?.key !== activeTabKey
+              }
               showFloatingReadyDot={showFloatingReadyDot}
               style={translateX === 0 ? undefined : { transform: `translateX(${translateX}px)` }}
               tab={tab}

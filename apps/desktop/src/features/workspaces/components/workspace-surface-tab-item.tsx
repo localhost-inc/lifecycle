@@ -29,6 +29,7 @@ interface WorkspaceSurfaceTabItemProps {
   renameInputRef: RefObject<HTMLInputElement | null>;
   renameSaving: boolean;
   renameValue: string;
+  showLeadingSeparator: boolean;
   showFloatingReadyDot: boolean;
   style?: { transform: string };
   tab: WorkspaceSurfaceTab;
@@ -54,6 +55,7 @@ export function WorkspaceSurfaceTabItem({
   renameInputRef,
   renameSaving,
   renameValue,
+  showLeadingSeparator,
   showFloatingReadyDot,
   style,
   tab,
@@ -62,7 +64,7 @@ export function WorkspaceSurfaceTabItem({
   onRenameChange,
   onRenameKeyDown,
 }: WorkspaceSurfaceTabItemProps) {
-  const className = `group relative flex max-w-[300px] shrink-0 touch-none select-none items-center gap-1.5 rounded-[18px] px-4 py-1.5 text-left text-sm font-semibold will-change-transform ${
+  const className = `group relative flex max-w-[300px] shrink-0 touch-none select-none items-center gap-1.5 rounded-[18px] px-4 py-1.5 text-left text-sm font-medium will-change-transform ${
     active
       ? "bg-[var(--surface-selected)] text-[var(--foreground)]"
       : "text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
@@ -90,6 +92,13 @@ export function WorkspaceSurfaceTabItem({
       tabIndex={tabIndex}
       title={tabTitle(tab)}
     >
+      {showLeadingSeparator ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute left-[-1px] top-1/2 h-5 w-px -translate-y-1/2 bg-[var(--border)]/70"
+          data-slot="workspace-tab-separator"
+        />
+      ) : null}
       {showFloatingReadyDot ? (
         <ResponseReadyDot className="pointer-events-none absolute right-3 top-1.5" />
       ) : null}

@@ -1,0 +1,229 @@
+use crate::platform::db::open_db;
+use crate::shared::errors::{
+    LifecycleError, TerminalFailureReason, TerminalStatus, TerminalType, WorkspaceStatus,
+};
+use rusqlite::params;
+use std::collections::HashSet;
+
+use super::super::query::TerminalRow;
+use super::super::rename::TitleOrigin;
+
+pub(crate) struct WorkspaceRuntime {
+    pub(crate) status: WorkspaceStatus,
+    pub(crate) worktree_path: String,
+}
+
+pub(crate) fn next_terminal_label(
+    db_path: &str,
+    workspace_id: &str,
+    launch_type: &TerminalType,
+    harness_provider: Option<&str>,
+) -> Result<String, LifecycleError> {
+    let conn = open_db(db_path)?;
+    let count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM terminal WHERE workspace_id = ?1",
+        params![workspace_id],
+        |row| row.get(0),
+    )?;
+    let sequence = count + 1;
+
+    let label = match (launch_type, harness_provider) {
+        (TerminalType::Harness, Some("claude")) => format!("Claude · Session {sequence}"),
+        (TerminalType::Harness, Some("codex")) => format!("Codex · Session {sequence}"),
+        (TerminalType::Harness, Some(_)) => format!("Harness · Session {sequence}"),
+        _ => format!("Terminal {sequence}"),
+    };
+
+    Ok(label)
+}
+
+pub(crate) fn touch_terminal(db_path: &str, terminal_id: &str) -> Result<(), LifecycleError> {
+    let conn = open_db(db_path)?;
+    conn.execute(
+        "UPDATE terminal SET last_active_at = datetime('now') WHERE id = ?1",
+        params![terminal_id],
+    )?;
+    Ok(())
+}
+
+pub(crate) fn insert_terminal_row(
+    db_path: &str,
+    terminal_id: &str,
+    workspace_id: &str,
+    launch_type: &TerminalType,
+    harness_provider: Option<&str>,
+    harness_session_id: Option<&str>,
+    launch_worktree_path: &str,
+    label: &str,
+    label_origin: TitleOrigin,
+    status: TerminalStatus,
+) -> Result<TerminalRow, LifecycleError> {
+    let conn = open_db(db_path)?;
+    conn.execute(
+        "INSERT INTO terminal (id, workspace_id, launch_type, harness_provider, harness_session_id, launch_worktree_path, label, label_origin, status)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        params![
+            terminal_id,
+            workspace_id,
+            launch_type.as_str(),
+            harness_provider,
+            harness_session_id,
+            launch_worktree_path,
+            label,
+            label_origin.as_str(),
+            status.as_str()
+        ],
+    )?;
+
+    load_terminal_row(db_path, terminal_id)?
+        .ok_or_else(|| LifecycleError::Database("terminal insert did not persist".to_string()))
+}
+
+pub(crate) fn update_terminal_state(
+    db_path: &str,
+    terminal_id: &str,
+    status: TerminalStatus,
+    failure_reason: Option<&TerminalFailureReason>,
+    exit_code: Option<i64>,
+    ended: bool,
+) -> Result<TerminalRow, LifecycleError> {
+    let conn = open_db(db_path)?;
+    conn.execute(
+        "UPDATE terminal
+         SET status = ?1,
+             failure_reason = ?2,
+             exit_code = ?3,
+             ended_at = CASE WHEN ?4 THEN datetime('now') ELSE ended_at END,
+             last_active_at = datetime('now')
+         WHERE id = ?5",
+        params![
+            status.as_str(),
+            failure_reason.map(|reason| reason.as_str()),
+            exit_code,
+            ended,
+            terminal_id
+        ],
+    )?;
+
+    load_terminal_row(db_path, terminal_id)?
+        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()))
+}
+
+pub(crate) fn load_terminal_row(
+    db_path: &str,
+    terminal_id: &str,
+) -> Result<Option<TerminalRow>, LifecycleError> {
+    let conn = open_db(db_path)?;
+    let mut stmt = conn.prepare(
+        "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, created_by, launch_worktree_path, label, label_origin, status, failure_reason, exit_code, started_at, last_active_at, ended_at
+         FROM terminal
+         WHERE id = ?1
+         LIMIT 1",
+    )?;
+
+    let row = stmt.query_row(params![terminal_id], |row| {
+        Ok(TerminalRow {
+            id: row.get(0)?,
+            workspace_id: row.get(1)?,
+            launch_type: row.get(2)?,
+            harness_provider: row.get(3)?,
+            harness_session_id: row.get(4)?,
+            created_by: row.get(5)?,
+            launch_worktree_path: row.get(6)?,
+            label: row.get(7)?,
+            label_origin: row.get(8)?,
+            status: row.get(9)?,
+            failure_reason: row.get(10)?,
+            exit_code: row.get(11)?,
+            started_at: row.get(12)?,
+            last_active_at: row.get(13)?,
+            ended_at: row.get(14)?,
+        })
+    });
+
+    match row {
+        Ok(row) => Ok(Some(row)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(error) => Err(LifecycleError::Database(error.to_string())),
+    }
+}
+
+pub(crate) fn workspace_has_interactive_terminal_context(workspace: &WorkspaceRuntime) -> bool {
+    !matches!(
+        workspace.status,
+        WorkspaceStatus::Creating | WorkspaceStatus::Destroying
+    )
+}
+
+pub(crate) fn load_workspace_runtime(
+    db_path: &str,
+    workspace_id: &str,
+) -> Result<WorkspaceRuntime, LifecycleError> {
+    let conn = open_db(db_path)?;
+    let (status, worktree_path): (String, Option<String>) = conn
+        .query_row(
+            "SELECT status, worktree_path FROM workspace WHERE id = ?1 LIMIT 1",
+            params![workspace_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|error| match error {
+            rusqlite::Error::QueryReturnedNoRows => {
+                LifecycleError::WorkspaceNotFound(workspace_id.to_string())
+            }
+            _ => LifecycleError::Database(error.to_string()),
+        })?;
+
+    Ok(WorkspaceRuntime {
+        status: WorkspaceStatus::from_str(&status)?,
+        worktree_path: worktree_path.ok_or_else(|| {
+            LifecycleError::Database("workspace is missing worktree_path".to_string())
+        })?,
+    })
+}
+
+pub(crate) fn load_claimed_harness_session_ids(
+    db_path: &str,
+    workspace_id: &str,
+    harness_provider: &str,
+    exclude_terminal_id: &str,
+) -> Result<HashSet<String>, LifecycleError> {
+    let conn = open_db(db_path)?;
+    let mut stmt = conn.prepare(
+        "SELECT harness_session_id
+         FROM terminal
+         WHERE workspace_id = ?1
+           AND harness_provider = ?2
+           AND id != ?3
+           AND harness_session_id IS NOT NULL
+           AND harness_session_id != ''",
+    )?;
+    let rows = stmt.query_map(
+        params![workspace_id, harness_provider, exclude_terminal_id],
+        |row| row.get::<_, String>(0),
+    )?;
+
+    let mut claimed = HashSet::new();
+    for row in rows {
+        claimed.insert(row?);
+    }
+
+    Ok(claimed)
+}
+
+pub(crate) fn update_terminal_harness_session_id(
+    db_path: &str,
+    terminal_id: &str,
+    harness_session_id: &str,
+) -> Result<TerminalRow, LifecycleError> {
+    let conn = open_db(db_path)?;
+    conn.execute(
+        "UPDATE terminal
+         SET harness_session_id = ?1
+         WHERE id = ?2
+           AND (harness_session_id IS NULL OR harness_session_id = '')",
+        params![harness_session_id, terminal_id],
+    )?;
+
+    load_terminal_row(db_path, terminal_id)?
+        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()))
+}

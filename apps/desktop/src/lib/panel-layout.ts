@@ -32,6 +32,11 @@ export const MAX_RIGHT_SIDEBAR_WIDTH = 420;
 
 export const MIN_DASHBOARD_MAIN_PANEL_WIDTH = 480;
 
+export const DIFF_FILE_TREE_WIDTH_STORAGE_KEY = "lifecycle.desktop.diff-file-tree-width.v1";
+export const DEFAULT_DIFF_FILE_TREE_WIDTH = 240;
+export const MIN_DIFF_FILE_TREE_WIDTH = 180;
+export const MAX_DIFF_FILE_TREE_WIDTH = 360;
+
 export const DEFAULT_WORKSPACE_SIDEBAR_TOP_PANEL_RATIO = 0.54;
 export const MIN_WORKSPACE_SIDEBAR_PANEL_HEIGHT = 180;
 
