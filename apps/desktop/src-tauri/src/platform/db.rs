@@ -17,8 +17,38 @@ pub fn run_migrations(db_path: &str) -> Result<(), LifecycleError> {
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
     conn.execute_batch(include_str!("migrations/0002_terminal_schema.sql"))
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    ensure_workspace_name_columns(&conn)?;
     ensure_terminal_launch_columns(&conn)?;
+    ensure_terminal_metadata_columns(&conn)?;
     reconcile_ephemeral_terminals(&conn)?;
+    Ok(())
+}
+
+fn ensure_workspace_name_columns(conn: &rusqlite::Connection) -> Result<(), LifecycleError> {
+    if !column_exists(conn, "workspace", "name") {
+        conn.execute(
+            "ALTER TABLE workspace ADD COLUMN name TEXT NOT NULL DEFAULT ''",
+            [],
+        )
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    }
+
+    if !column_exists(conn, "workspace", "name_origin") {
+        conn.execute(
+            "ALTER TABLE workspace ADD COLUMN name_origin TEXT NOT NULL DEFAULT 'manual'",
+            [],
+        )
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    }
+
+    conn.execute(
+        "UPDATE workspace
+         SET name = COALESCE(NULLIF(TRIM(name), ''), source_ref)
+         WHERE name IS NULL OR TRIM(name) = ''",
+        [],
+    )
+    .map_err(|e| LifecycleError::Database(e.to_string()))?;
+
     Ok(())
 }
 
@@ -50,6 +80,38 @@ fn ensure_terminal_launch_columns(conn: &rusqlite::Connection) -> Result<(), Lif
              ELSE 'shell'
          END
          WHERE launch_type IS NULL OR launch_type = ''",
+        [],
+    )
+    .map_err(|e| LifecycleError::Database(e.to_string()))?;
+
+    Ok(())
+}
+
+fn ensure_terminal_metadata_columns(conn: &rusqlite::Connection) -> Result<(), LifecycleError> {
+    if !column_exists(conn, "terminal", "launch_worktree_path") {
+        conn.execute("ALTER TABLE terminal ADD COLUMN launch_worktree_path TEXT", [])
+            .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    }
+
+    if !column_exists(conn, "terminal", "label_origin") {
+        conn.execute(
+            "ALTER TABLE terminal ADD COLUMN label_origin TEXT NOT NULL DEFAULT 'manual'",
+            [],
+        )
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    }
+
+    conn.execute(
+        "UPDATE terminal
+         SET launch_worktree_path = COALESCE(
+             launch_worktree_path,
+             (
+                 SELECT workspace.worktree_path
+                 FROM workspace
+                 WHERE workspace.id = terminal.workspace_id
+             )
+         )
+         WHERE launch_worktree_path IS NULL",
         [],
     )
     .map_err(|e| LifecycleError::Database(e.to_string()))?;
@@ -106,11 +168,15 @@ mod tests {
 
         let conn = open_db(&db_path).expect("open db");
         assert!(column_exists(&conn, "workspace", "created_by"));
+        assert!(column_exists(&conn, "workspace", "name"));
+        assert!(column_exists(&conn, "workspace", "name_origin"));
         assert!(column_exists(&conn, "workspace", "source_workspace_id"));
         assert!(column_exists(&conn, "workspace", "setup_completed_at"));
         assert!(column_exists(&conn, "terminal", "workspace_id"));
         assert!(column_exists(&conn, "terminal", "launch_type"));
+        assert!(column_exists(&conn, "terminal", "launch_worktree_path"));
         assert!(column_exists(&conn, "terminal", "harness_provider"));
+        assert!(column_exists(&conn, "terminal", "label_origin"));
         assert!(column_exists(&conn, "terminal", "status"));
         assert!(!column_exists(&conn, "workspace", "mode_state"));
 

@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct LifecycleConfig {
     pub setup: SetupConfig,
@@ -35,6 +36,7 @@ pub enum ServiceConfig {
 }
 
 impl ServiceConfig {
+    #[allow(dead_code)]
     pub fn env_vars(&self) -> Option<&HashMap<String, String>> {
         match self {
             Self::Process(s) => s.env_vars.as_ref(),
@@ -111,6 +113,7 @@ pub enum HealthCheck {
     Http { url: String, timeout_seconds: u64 },
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct SecretConfig {
     #[serde(rename = "ref")]
@@ -118,6 +121,7 @@ pub struct SecretConfig {
     pub required: bool,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct ResetConfig {
     pub strategy: Option<String>,
@@ -125,6 +129,7 @@ pub struct ResetConfig {
     pub timeout_seconds: Option<u64>,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 pub struct McpServerConfig {
     pub command: String,

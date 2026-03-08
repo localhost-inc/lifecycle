@@ -56,16 +56,16 @@ function statusLetter(kind: GitFileChangeKind | null): string {
 function statusTextColor(kind: GitFileChangeKind | null): string {
   switch (kind) {
     case "added":
-      return "text-emerald-400";
+      return "text-[var(--status-added)]";
     case "deleted":
     case "unmerged":
-      return "text-red-400";
+      return "text-[var(--status-deleted)]";
     case "renamed":
     case "copied":
-      return "text-blue-400";
+      return "text-[var(--status-renamed)]";
     case "modified":
     case "type_changed":
-      return "text-amber-400";
+      return "text-[var(--status-modified)]";
     default:
       return "text-[var(--muted-foreground)]";
   }

@@ -1,48 +1,28 @@
-import { Badge, Card, CardContent, CardHeader, CardTitle } from "@lifecycle/ui";
+import { Badge } from "@lifecycle/ui";
+import { SettingsPage, SettingsRow, SettingsSection } from "../components/settings-primitives";
 
 export function SettingsGeneralRoute() {
   return (
-    <div className="flex flex-1 justify-center overflow-y-auto p-8">
-      <div className="w-full max-w-4xl">
-        <h1 className="text-3xl font-semibold tracking-tight text-[var(--foreground)]">General</h1>
+    <SettingsPage title="General">
+      <SettingsSection label="Defaults">
+        <SettingsRow
+          label="Default open destination"
+          description="Where files and folders open by default."
+        >
+          <Badge variant="outline">VS Code</Badge>
+        </SettingsRow>
 
-        <Card className="mt-8 overflow-hidden">
-          <CardHeader>
-            <CardTitle>Defaults</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-0 p-0">
-            <div className="grid grid-cols-[1fr_auto] items-center gap-4 border-b border-[var(--border)] px-4 py-4">
-              <div>
-                <h2 className="text-base font-medium text-[var(--foreground)]">
-                  Default open destination
-                </h2>
-                <p className="text-sm text-[var(--muted-foreground)]">
-                  Where files and folders open by default.
-                </p>
-              </div>
-              <Badge variant="outline">VS Code</Badge>
-            </div>
+        <SettingsRow label="Language" description="Language for the app UI.">
+          <Badge variant="outline">Auto Detect</Badge>
+        </SettingsRow>
 
-            <div className="grid grid-cols-[1fr_auto] items-center gap-4 border-b border-[var(--border)] px-4 py-4">
-              <div>
-                <h2 className="text-base font-medium text-[var(--foreground)]">Language</h2>
-                <p className="text-sm text-[var(--muted-foreground)]">Language for the app UI.</p>
-              </div>
-              <Badge variant="outline">Auto Detect</Badge>
-            </div>
-
-            <div className="grid grid-cols-[1fr_auto] items-center gap-4 px-4 py-4">
-              <div>
-                <h2 className="text-base font-medium text-[var(--foreground)]">Thread detail</h2>
-                <p className="text-sm text-[var(--muted-foreground)]">
-                  Choose how much command output to show in threads.
-                </p>
-              </div>
-              <Badge variant="outline">Steps with code commands</Badge>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+        <SettingsRow
+          label="Thread detail"
+          description="Choose how much command output to show in threads."
+        >
+          <Badge variant="outline">Steps with code commands</Badge>
+        </SettingsRow>
+      </SettingsSection>
+    </SettingsPage>
   );
 }

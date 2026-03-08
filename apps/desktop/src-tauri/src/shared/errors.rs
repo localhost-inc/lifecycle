@@ -266,6 +266,9 @@ pub enum LifecycleError {
     #[error("Git operation failed during {operation}: {reason}")]
     GitOperationFailed { operation: String, reason: String },
 
+    #[error("Invalid {field}: {reason}")]
+    InvalidInput { field: String, reason: String },
+
     #[error("IO error: {0}")]
     Io(String),
 }

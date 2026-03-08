@@ -9,6 +9,7 @@ use std::collections::HashMap;
 pub struct WorkspaceRow {
     pub id: String,
     pub project_id: String,
+    pub name: String,
     pub source_ref: String,
     pub git_sha: Option<String>,
     pub worktree_path: Option<String>,
@@ -50,7 +51,12 @@ pub struct TerminalRow {
     pub harness_provider: Option<String>,
     pub harness_session_id: Option<String>,
     pub created_by: Option<String>,
+    #[serde(skip_serializing)]
+    pub launch_worktree_path: Option<String>,
     pub label: String,
+    #[allow(dead_code)]
+    #[serde(skip_serializing)]
+    pub label_origin: Option<String>,
     pub status: String,
     pub failure_reason: Option<String>,
     pub exit_code: Option<i64>,
@@ -67,13 +73,15 @@ fn map_terminal_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<TerminalRow> {
         harness_provider: row.get(3)?,
         harness_session_id: row.get(4)?,
         created_by: row.get(5)?,
-        label: row.get(6)?,
-        status: row.get(7)?,
-        failure_reason: row.get(8)?,
-        exit_code: row.get(9)?,
-        started_at: row.get(10)?,
-        last_active_at: row.get(11)?,
-        ended_at: row.get(12)?,
+        launch_worktree_path: row.get(6)?,
+        label: row.get(7)?,
+        label_origin: row.get(8)?,
+        status: row.get(9)?,
+        failure_reason: row.get(10)?,
+        exit_code: row.get(11)?,
+        started_at: row.get(12)?,
+        last_active_at: row.get(13)?,
+        ended_at: row.get(14)?,
     })
 }
 
@@ -81,19 +89,20 @@ fn map_workspace_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRow> 
     Ok(WorkspaceRow {
         id: row.get(0)?,
         project_id: row.get(1)?,
-        source_ref: row.get(2)?,
-        git_sha: row.get(3)?,
-        worktree_path: row.get(4)?,
-        mode: row.get(5)?,
-        status: row.get(6)?,
-        failure_reason: row.get(7)?,
-        failed_at: row.get(8)?,
-        created_by: row.get(9)?,
-        source_workspace_id: row.get(10)?,
-        created_at: row.get(11)?,
-        updated_at: row.get(12)?,
-        last_active_at: row.get(13)?,
-        expires_at: row.get(14)?,
+        name: row.get(2)?,
+        source_ref: row.get(3)?,
+        git_sha: row.get(4)?,
+        worktree_path: row.get(5)?,
+        mode: row.get(6)?,
+        status: row.get(7)?,
+        failure_reason: row.get(8)?,
+        failed_at: row.get(9)?,
+        created_by: row.get(10)?,
+        source_workspace_id: row.get(11)?,
+        created_at: row.get(12)?,
+        updated_at: row.get(13)?,
+        last_active_at: row.get(14)?,
+        expires_at: row.get(15)?,
     })
 }
 
@@ -103,7 +112,7 @@ pub async fn get_workspace(
 ) -> Result<Option<WorkspaceRow>, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, source_ref, git_sha, worktree_path, mode, status, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at FROM workspace WHERE project_id = ?1 ORDER BY created_at DESC LIMIT 1"
+        "SELECT id, project_id, name, source_ref, git_sha, worktree_path, mode, status, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at FROM workspace WHERE project_id = ?1 ORDER BY created_at DESC LIMIT 1"
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     let row = stmt.query_row(params![project_id], map_workspace_row);
@@ -121,7 +130,7 @@ pub async fn get_workspace_by_id(
 ) -> Result<Option<WorkspaceRow>, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, source_ref, git_sha, worktree_path, mode, status, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at FROM workspace WHERE id = ?1 LIMIT 1"
+        "SELECT id, project_id, name, source_ref, git_sha, worktree_path, mode, status, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at FROM workspace WHERE id = ?1 LIMIT 1"
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     let row = stmt.query_row(params![workspace_id], map_workspace_row);
@@ -136,7 +145,7 @@ pub async fn get_workspace_by_id(
 pub async fn list_workspaces(db_path: &str) -> Result<Vec<WorkspaceRow>, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, source_ref, git_sha, worktree_path, mode, status, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at FROM workspace WHERE status != 'destroying' ORDER BY created_at DESC"
+        "SELECT id, project_id, name, source_ref, git_sha, worktree_path, mode, status, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at FROM workspace WHERE status != 'destroying' ORDER BY created_at DESC"
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     let rows = stmt
@@ -214,7 +223,7 @@ pub async fn list_workspace_terminals(
     let conn = open_db(db_path)?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, created_by, label, status, failure_reason, exit_code, started_at, last_active_at, ended_at
+            "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, created_by, launch_worktree_path, label, label_origin, status, failure_reason, exit_code, started_at, last_active_at, ended_at
              FROM terminal
              WHERE workspace_id = ?1
              ORDER BY started_at DESC, id DESC",
@@ -240,7 +249,7 @@ pub async fn get_terminal_by_id(
     let conn = open_db(db_path)?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, created_by, label, status, failure_reason, exit_code, started_at, last_active_at, ended_at
+            "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, created_by, launch_worktree_path, label, label_origin, status, failure_reason, exit_code, started_at, last_active_at, ended_at
              FROM terminal
              WHERE id = ?1
              LIMIT 1",

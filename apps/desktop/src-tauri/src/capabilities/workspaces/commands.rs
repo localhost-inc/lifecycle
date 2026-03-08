@@ -27,6 +27,16 @@ pub async fn create_workspace(
 }
 
 #[tauri::command]
+pub async fn rename_workspace(
+    app: AppHandle,
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    name: String,
+) -> Result<super::query::WorkspaceRow, LifecycleError> {
+    super::rename::rename_workspace(app, &db_path.0, &workspace_id, &name).await
+}
+
+#[tauri::command]
 pub async fn start_services(
     app: AppHandle,
     db_path: State<'_, DbPath>,
@@ -107,6 +117,16 @@ pub async fn get_terminal(
 }
 
 #[tauri::command]
+pub async fn rename_terminal(
+    app: AppHandle,
+    db_path: State<'_, DbPath>,
+    terminal_id: String,
+    label: String,
+) -> Result<super::query::TerminalRow, LifecycleError> {
+    super::rename::rename_terminal(&app, &db_path.0, &terminal_id, &label)
+}
+
+#[tauri::command]
 pub async fn create_terminal(
     app: AppHandle,
     db_path: State<'_, DbPath>,
@@ -158,12 +178,13 @@ pub async fn attach_terminal(
 
 #[tauri::command]
 pub async fn write_terminal(
+    app: AppHandle,
     db_path: State<'_, DbPath>,
     terminal_supervisors: State<'_, TerminalSupervisorMap>,
     terminal_id: String,
     data: String,
 ) -> Result<(), LifecycleError> {
-    super::terminal::write_terminal(db_path, terminal_supervisors, terminal_id, data).await
+    super::terminal::write_terminal(app, db_path, terminal_supervisors, terminal_id, data).await
 }
 
 #[tauri::command]

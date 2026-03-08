@@ -46,6 +46,12 @@ export interface TerminalRemovedEvent {
   workspace_id: string;
 }
 
+export interface TerminalRenamedEvent {
+  terminal_id: string;
+  workspace_id: string;
+  label: string;
+}
+
 export interface TerminalHarnessTurnCompletedEvent {
   terminal_id: string;
   workspace_id: string;
@@ -133,13 +139,18 @@ interface BrowserTerminalState {
   nextSequence: number;
   inputByTerminalId: Record<string, string>;
   replayByTerminalId: Record<string, BrowserReplayChunk[]>;
-  terminals: TerminalRow[];
+  terminals: BrowserTerminalRow[];
+}
+
+interface BrowserTerminalRow extends TerminalRow {
+  label_origin?: "default" | "generated" | "manual";
 }
 
 interface BrowserTerminalListeners {
   created: Set<(event: TerminalCreatedEvent) => void>;
   harnessTurnCompleted: Set<(event: TerminalHarnessTurnCompletedEvent) => void>;
   removed: Set<(event: TerminalRemovedEvent) => void>;
+  renamed: Set<(event: TerminalRenamedEvent) => void>;
   status: Set<(event: TerminalStatusEvent) => void>;
 }
 
@@ -161,10 +172,30 @@ const browserListeners: BrowserTerminalListeners = {
   created: new Set(),
   harnessTurnCompleted: new Set(),
   removed: new Set(),
+  renamed: new Set(),
   status: new Set(),
 };
 
 const browserStreamListeners = new Map<string, Set<(chunk: TerminalStreamChunk) => void>>();
+
+function normalizeBrowserTerminalRow(terminal: Partial<BrowserTerminalRow>): BrowserTerminalRow {
+  return {
+    created_by: terminal.created_by ?? null,
+    ended_at: terminal.ended_at ?? null,
+    exit_code: terminal.exit_code ?? null,
+    failure_reason: terminal.failure_reason ?? null,
+    harness_provider: terminal.harness_provider ?? null,
+    harness_session_id: terminal.harness_session_id ?? null,
+    id: terminal.id ?? crypto.randomUUID(),
+    label: terminal.label?.trim() || "Terminal",
+    label_origin: terminal.label_origin ?? "manual",
+    last_active_at: terminal.last_active_at ?? nowIso(),
+    launch_type: terminal.launch_type ?? "shell",
+    started_at: terminal.started_at ?? nowIso(),
+    status: terminal.status ?? "detached",
+    workspace_id: terminal.workspace_id ?? "",
+  };
+}
 
 function readBrowserTerminalState(): BrowserTerminalState {
   if (typeof window === "undefined") {
@@ -202,7 +233,9 @@ function readBrowserTerminalState(): BrowserTerminalState {
       nextReplayCursor: normalizedReplay.nextReplayCursor,
       nextSequence: typeof parsed.nextSequence === "number" ? parsed.nextSequence : 1,
       replayByTerminalId: normalizedReplay.replayByTerminalId,
-      terminals: Array.isArray(parsed.terminals) ? parsed.terminals : [],
+      terminals: Array.isArray(parsed.terminals)
+        ? parsed.terminals.map((terminal) => normalizeBrowserTerminalRow(terminal))
+        : [],
     };
   } catch {
     return {
@@ -338,6 +371,12 @@ function emitTerminalCreated(event: TerminalCreatedEvent): void {
 
 function emitTerminalStatus(event: TerminalStatusEvent): void {
   for (const callback of browserListeners.status) {
+    callback(event);
+  }
+}
+
+function emitTerminalRenamed(event: TerminalRenamedEvent): void {
+  for (const callback of browserListeners.renamed) {
     callback(event);
   }
 }
@@ -641,6 +680,48 @@ export async function createTerminal(input: CreateTerminalInput): Promise<Termin
   return result.terminal;
 }
 
+export async function renameTerminal(terminalId: string, label: string): Promise<TerminalRow> {
+  const normalizedLabel = label.trim().replace(/\s+/g, " ");
+  if (normalizedLabel.length === 0) {
+    throw new Error("Session title cannot be empty.");
+  }
+
+  if (!isTauri()) {
+    let renamedTerminal: BrowserTerminalRow | null = null;
+    browserTerminalState = {
+      ...browserTerminalState,
+      terminals: browserTerminalState.terminals.map((terminal) => {
+        if (terminal.id !== terminalId) {
+          return terminal;
+        }
+
+        renamedTerminal = {
+          ...terminal,
+          label: normalizedLabel,
+          label_origin: "manual",
+          last_active_at: nowIso(),
+        };
+        return renamedTerminal;
+      }),
+    };
+    persistBrowserTerminalState();
+
+    if (!renamedTerminal) {
+      throw new Error(`Terminal not found: ${terminalId}`);
+    }
+
+    const nextTerminal = renamedTerminal as BrowserTerminalRow;
+    emitTerminalRenamed({
+      terminal_id: nextTerminal.id,
+      workspace_id: nextTerminal.workspace_id,
+      label: nextTerminal.label,
+    });
+    return nextTerminal;
+  }
+
+  return invoke<TerminalRow>("rename_terminal", { terminalId, label: normalizedLabel });
+}
+
 export async function getNativeTerminalCapabilities(): Promise<NativeTerminalCapabilities> {
   if (!isTauri()) {
     return { available: false };
@@ -929,6 +1010,21 @@ export async function subscribeToTerminalRemovedEvents(
   }
 
   return listen<TerminalRemovedEvent>("terminal:removed", (event) => {
+    callback(event.payload);
+  });
+}
+
+export async function subscribeToTerminalRenamedEvents(
+  callback: (event: TerminalRenamedEvent) => void,
+): Promise<UnlistenFn> {
+  if (!isTauri()) {
+    browserListeners.renamed.add(callback);
+    return () => {
+      browserListeners.renamed.delete(callback);
+    };
+  }
+
+  return listen<TerminalRenamedEvent>("terminal:renamed", (event) => {
     callback(event.payload);
   });
 }

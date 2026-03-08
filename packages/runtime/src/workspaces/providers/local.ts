@@ -45,6 +45,7 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
     return {
       workspace: {
         id: workspaceId,
+        name: context.workspaceName ?? input.sourceRef,
         projectId: context.projectId,
         mode: "local",
         sourceRef: input.sourceRef,

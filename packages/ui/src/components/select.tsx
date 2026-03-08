@@ -95,9 +95,9 @@ function SelectContent({
   children,
   side = "bottom",
   sideOffset = 4,
-  align = "center",
+  align = "start",
   alignOffset = 0,
-  alignItemWithTrigger = true,
+  alignItemWithTrigger = false,
   position,
   ...props
 }: SelectPrimitive.Popup.Props &
@@ -121,7 +121,7 @@ function SelectContent({
       >
         <SelectPrimitive.Popup
           className={cn(
-            "relative z-50 max-h-[var(--available-height)] min-w-[8rem] w-[var(--anchor-width)] overflow-x-hidden overflow-y-auto border border-[var(--border)] bg-[var(--panel)] text-[var(--foreground)] shadow-none rounded-lg",
+            "relative z-50 max-h-[var(--available-height)] min-w-[8rem] w-[var(--anchor-width)] overflow-x-hidden overflow-y-auto border border-[var(--border)] bg-[var(--panel)] text-[var(--foreground)] shadow-md rounded-lg p-1",
             className,
           )}
           data-slot="select-content"
@@ -150,7 +150,7 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.Item.Prop
   return (
     <SelectPrimitive.Item
       className={cn(
-        "relative flex w-full cursor-pointer select-none items-center gap-2 border border-transparent px-2 py-1.5 text-sm outline-none transition-colors data-highlighted:bg-[var(--surface-hover)] data-highlighted:text-[var(--foreground)] data-disabled:cursor-not-allowed data-disabled:pointer-events-none data-disabled:opacity-50 rounded-lg",
+        "relative flex w-full cursor-pointer select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none transition-colors data-highlighted:bg-[var(--surface-hover)] data-highlighted:text-[var(--foreground)] data-disabled:cursor-not-allowed data-disabled:pointer-events-none data-disabled:opacity-50",
         className,
       )}
       data-slot="select-item"

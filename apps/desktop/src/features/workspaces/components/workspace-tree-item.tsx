@@ -1,8 +1,10 @@
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { WorkspaceStatus } from "@lifecycle/contracts";
 import { cn, sidebarMenuSubButtonVariants, StatusDot, type StatusDotTone } from "@lifecycle/ui";
 import { ResponseReadyDot } from "../../../components/response-ready-dot";
+import { TypedTitle } from "../../../components/typed-title";
 import { formatCompactRelativeTime } from "../../../lib/format";
-import type { WorkspaceRow } from "../api";
+import { renameWorkspace, type WorkspaceRow } from "../api";
 
 const dotTone: Record<WorkspaceStatus, StatusDotTone> = {
   creating: "warning",
@@ -53,15 +55,155 @@ export function WorkspaceTreeItem({
 }: WorkspaceTreeItemProps) {
   const status = workspace.status as WorkspaceStatus;
   const timestamp = formatCompactRelativeTime(workspace.last_active_at);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const skipBlurCommitRef = useRef(false);
+  const [draftName, setDraftName] = useState(workspace.name);
+  const [editing, setEditing] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!editing) {
+      setDraftName(workspace.name);
+      setRenameError(null);
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }, 0);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [editing, workspace.name]);
+
+  const startEditing = () => {
+    skipBlurCommitRef.current = false;
+    setDraftName(workspace.name);
+    setRenameError(null);
+    setEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setDraftName(workspace.name);
+    setRenameError(null);
+    setSaving(false);
+    setEditing(false);
+  };
+
+  const commitRename = async () => {
+    if (saving) {
+      return;
+    }
+
+    const normalizedName = draftName.trim().replace(/\s+/g, " ");
+    if (normalizedName.length === 0) {
+      setRenameError("Workspace name cannot be empty.");
+      inputRef.current?.focus();
+      inputRef.current?.select();
+      return;
+    }
+
+    if (normalizedName === workspace.name) {
+      cancelEditing();
+      return;
+    }
+
+    setSaving(true);
+    setRenameError(null);
+
+    try {
+      await renameWorkspace(workspace.id, normalizedName);
+      setEditing(false);
+    } catch (error) {
+      setRenameError(error instanceof Error ? error.message : "Workspace rename failed.");
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void commitRename();
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      skipBlurCommitRef.current = true;
+      cancelEditing();
+    }
+  };
+
+  const rowClassName = cn(
+    sidebarMenuSubButtonVariants({ active: selected }),
+    "relative gap-1.5 pl-[16px] pr-2",
+    editing ? "cursor-text ring-1 ring-[var(--sidebar-foreground)]/20" : undefined,
+  );
+
+  const titleText = renameError ?? workspace.source_ref;
+
+  if (editing) {
+    return (
+      <div className={rowClassName} title={titleText}>
+        {responseReady && <ResponseReadyDot className="absolute left-1 top-1/2 -translate-y-1/2" />}
+        <StatusDot
+          className={dotClassName[status]}
+          pulse={dotPulse[status]}
+          size="sm"
+          title={dotLabels[status]}
+          tone={dotTone[status]}
+        />
+        <input
+          ref={inputRef}
+          aria-label="Rename workspace"
+          className={cn(
+            "min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[var(--sidebar-muted-foreground)]",
+            renameError ? "text-rose-300" : undefined,
+          )}
+          disabled={saving}
+          onBlur={() => {
+            if (skipBlurCommitRef.current) {
+              skipBlurCommitRef.current = false;
+              return;
+            }
+            void commitRename();
+          }}
+          onChange={(event) => {
+            setDraftName(event.target.value);
+            if (renameError) {
+              setRenameError(null);
+            }
+          }}
+          onKeyDown={handleInputKeyDown}
+          onMouseDown={(event) => {
+            event.stopPropagation();
+          }}
+          value={draftName}
+        />
+        {timestamp && (
+          <span className="shrink-0 text-[13px] text-[var(--sidebar-foreground)] opacity-70">
+            {timestamp}
+          </span>
+        )}
+      </div>
+    );
+  }
 
   return (
     <button
-      className={cn(
-        sidebarMenuSubButtonVariants({ active: selected }),
-        "relative gap-1.5 pl-[16px] pr-2",
-      )}
+      className={rowClassName}
       onClick={onSelect}
-      title={workspace.source_ref}
+      onDoubleClick={(event) => {
+        event.preventDefault();
+        startEditing();
+      }}
+      title={titleText}
       type="button"
     >
       {responseReady && <ResponseReadyDot className="absolute left-1 top-1/2 -translate-y-1/2" />}
@@ -72,7 +214,7 @@ export function WorkspaceTreeItem({
         title={dotLabels[status]}
         tone={dotTone[status]}
       />
-      <span className="flex-1 truncate text-[13px]">{workspace.source_ref}</span>
+      <TypedTitle className="flex-1 truncate text-[13px]" text={workspace.name} />
       {timestamp && (
         <span
           className={`shrink-0 text-[13px] ${

@@ -28,6 +28,7 @@ export type WorkspaceFailureReason =
 export interface WorkspaceRecord {
   id: string;
   projectId: string;
+  name: string;
   mode: WorkspaceMode;
   sourceRef: string;
   gitSha?: string;

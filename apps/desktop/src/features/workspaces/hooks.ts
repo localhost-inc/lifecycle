@@ -26,6 +26,29 @@ const workspacesByProjectQuery: QueryDescriptor<Record<string, WorkspaceRow[]>> 
       return { type: "invalidate" };
     }
 
+    if (event.kind === "workspace-renamed" && current) {
+      let found = false;
+      const next = Object.fromEntries(
+        Object.entries(current).map(([projectId, workspaces]) => [
+          projectId,
+          workspaces.map((workspace) => {
+            if (workspace.id !== event.workspaceId) {
+              return workspace;
+            }
+
+            found = true;
+            return {
+              ...workspace,
+              name: event.name,
+              worktree_path: event.worktreePath,
+            };
+          }),
+        ]),
+      );
+
+      return found ? { type: "replace", data: next } : { type: "invalidate" };
+    }
+
     if (event.kind !== "workspace-status-changed" || !current) {
       return { type: "none" };
     }
@@ -74,6 +97,21 @@ function createWorkspaceQuery(workspaceId: string): QueryDescriptor<WorkspaceRow
       }
 
       if (event.kind !== "workspace-status-changed" || event.workspaceId !== workspaceId) {
+        if (event.kind === "workspace-renamed" && event.workspaceId === workspaceId) {
+          if (!current) {
+            return { type: "invalidate" };
+          }
+
+          return {
+            type: "replace",
+            data: {
+              ...current,
+              name: event.name,
+              worktree_path: event.worktreePath,
+            },
+          };
+        }
+
         return { type: "none" };
       }
 

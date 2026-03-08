@@ -73,6 +73,10 @@
   --terminal-ansi-bright-magenta: #c4b5fd;
   --terminal-ansi-bright-cyan: #67e8f9;
   --terminal-ansi-bright-white: #fafaf9;
+  --status-added: #4ade80;
+  --status-modified: #fbbf24;
+  --status-deleted: #f87171;
+  --status-renamed: #60a5fa;
 }
 
 :root[data-theme-preset="lifecycle"][data-theme-appearance="light"] {
@@ -118,6 +122,10 @@
   --terminal-ansi-bright-magenta: #8b5cf6;
   --terminal-ansi-bright-cyan: #14b8a6;
   --terminal-ansi-bright-white: #09090b;
+  --status-added: #16a34a;
+  --status-modified: #ca8a04;
+  --status-deleted: #dc2626;
+  --status-renamed: #2563eb;
 }
 
 :root[data-theme-preset="lifecycle"][data-theme-appearance="dark"] {
@@ -163,6 +171,10 @@
   --terminal-ansi-bright-magenta: #c4b5fd;
   --terminal-ansi-bright-cyan: #67e8f9;
   --terminal-ansi-bright-white: #fafaf9;
+  --status-added: #4ade80;
+  --status-modified: #fbbf24;
+  --status-deleted: #f87171;
+  --status-renamed: #60a5fa;
 }
 
 :root[data-theme-preset="nord"][data-theme-appearance="light"] {
@@ -208,6 +220,10 @@
   --terminal-ansi-bright-magenta: #b48ead;
   --terminal-ansi-bright-cyan: #88c0d0;
   --terminal-ansi-bright-white: #2e3440;
+  --status-added: #5e815b;
+  --status-modified: #b48a2d;
+  --status-deleted: #bf616a;
+  --status-renamed: #5e81ac;
 }
 
 :root[data-theme-preset="nord"][data-theme-appearance="dark"] {
@@ -253,6 +269,10 @@
   --terminal-ansi-bright-magenta: #c895bf;
   --terminal-ansi-bright-cyan: #8fbcbb;
   --terminal-ansi-bright-white: #eceff4;
+  --status-added: #a3be8c;
+  --status-modified: #ebcb8b;
+  --status-deleted: #bf616a;
+  --status-renamed: #81a1c1;
 }
 
 :root[data-theme-preset="monokai"][data-theme-appearance="light"] {
@@ -298,6 +318,10 @@
   --terminal-ansi-bright-magenta: #a26bff;
   --terminal-ansi-bright-cyan: #14b8a6;
   --terminal-ansi-bright-white: #272822;
+  --status-added: #3f7d20;
+  --status-modified: #8f6a0b;
+  --status-deleted: #d73a49;
+  --status-renamed: #0f75bc;
 }
 
 :root[data-theme-preset="monokai"][data-theme-appearance="dark"] {
@@ -343,6 +367,10 @@
   --terminal-ansi-bright-magenta: #c4a7ff;
   --terminal-ansi-bright-cyan: #b8f2e6;
   --terminal-ansi-bright-white: #f8f8f2;
+  --status-added: #a6e22e;
+  --status-modified: #e6db74;
+  --status-deleted: #f92672;
+  --status-renamed: #66d9ef;
 }
 
 :where(button, [role="button"]):where(:not(:disabled)):where(:not([aria-disabled="true"])) {

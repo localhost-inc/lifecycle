@@ -58,6 +58,52 @@ pub async fn remove_worktree(repo_path: &str, worktree_path: &str) -> Result<(),
     Ok(())
 }
 
+pub async fn move_worktree(
+    repo_path: &str,
+    current_worktree_path: &str,
+    workspace_name: &str,
+    workspace_id: &str,
+) -> Result<String, LifecycleError> {
+    let current_path = Path::new(current_worktree_path);
+    let parent = current_path.parent().ok_or_else(|| LifecycleError::GitOperationFailed {
+        operation: "move worktree".to_string(),
+        reason: "worktree path has no parent directory".to_string(),
+    })?;
+    let next_path = parent.join(worktree_directory_name(workspace_name, workspace_id));
+    let next_path_str = next_path.to_string_lossy().into_owned();
+
+    if next_path_str == current_worktree_path {
+        return Ok(next_path_str);
+    }
+
+    if next_path.exists() {
+        return Err(LifecycleError::GitOperationFailed {
+            operation: "move worktree".to_string(),
+            reason: format!("target worktree path already exists: {next_path_str}"),
+        });
+    }
+
+    let output = Command::new("git")
+        .args(["worktree", "move", current_worktree_path, &next_path_str])
+        .current_dir(repo_path)
+        .output()
+        .await
+        .map_err(|error| LifecycleError::GitOperationFailed {
+            operation: "move worktree".to_string(),
+            reason: error.to_string(),
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(LifecycleError::GitOperationFailed {
+            operation: "move worktree".to_string(),
+            reason: format!("git worktree move failed: {stderr}"),
+        });
+    }
+
+    Ok(next_path_str)
+}
+
 pub async fn get_sha(repo_path: &str, ref_name: &str) -> Result<String, LifecycleError> {
     let output = Command::new("git")
         .args(["rev-parse", ref_name])
@@ -278,6 +324,57 @@ mod tests {
         assert_eq!(checked_out_branch, source_ref);
 
         remove_worktree(repo_path_str, &worktree_path)
+            .await
+            .expect("worktree cleanup should succeed");
+        fs::remove_dir_all(repo_path).expect("remove temp repo");
+        fs::remove_dir_all(configured_root).expect("remove configured root");
+    }
+
+    #[tokio::test]
+    async fn move_worktree_renames_the_worktree_directory() {
+        let repo_path = temp_repo_path();
+        init_repo(&repo_path);
+        let repo_path_str = repo_path.to_str().expect("repo path is utf8");
+        let base_ref = get_current_branch(repo_path_str)
+            .await
+            .expect("get current branch");
+        let configured_root =
+            std::env::temp_dir().join(format!("lifecycle-worktree-root-{}", uuid::Uuid::new_v4()));
+        let configured_root_str = configured_root
+            .to_str()
+            .expect("configured root path is utf8");
+
+        let initial_path = create_worktree(
+            repo_path_str,
+            &base_ref,
+            "lifecycle/rename-source",
+            "Initial Name",
+            "ws-rename-target",
+            Some(configured_root_str),
+        )
+        .await
+        .expect("initial worktree should be created");
+
+        let moved_path = move_worktree(
+            repo_path_str,
+            &initial_path,
+            "Renamed Workspace",
+            "ws-rename-target",
+        )
+        .await
+        .expect("worktree should move");
+
+        assert_ne!(initial_path, moved_path);
+        assert!(!Path::new(&initial_path).exists(), "old path should be removed");
+        assert!(Path::new(&moved_path).exists(), "new path should exist");
+
+        let worktree_list = git_output(&repo_path, &["worktree", "list"]);
+        assert!(
+            worktree_list.contains(&moved_path),
+            "git worktree metadata should reflect new path"
+        );
+
+        remove_worktree(repo_path_str, &moved_path)
             .await
             .expect("worktree cleanup should succeed");
         fs::remove_dir_all(repo_path).expect("remove temp repo");

@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useHistoryAvailability } from "../../app/history-stack";
+import { TypedTitle } from "../typed-title";
 import { WorkspaceBadge } from "../../features/workspaces/components/workspace-badge";
 import type { WorkspaceRow } from "../../features/workspaces/api";
 
@@ -87,10 +88,15 @@ export function TitleBar({ selectedWorkspace }: TitleBarProps) {
     >
       <div data-tauri-drag-region className="flex min-w-0 flex-1 items-center gap-3">
         {selectedWorkspace && (
-          <div data-no-drag className="flex min-w-0 items-center gap-2.5">
-            <span className="font-mono text-[13px] font-medium text-[var(--foreground)]">
-              {selectedWorkspace.source_ref}
-            </span>
+          <div
+            data-no-drag
+            className="flex min-w-0 items-center gap-2.5"
+            title={selectedWorkspace.source_ref}
+          >
+            <TypedTitle
+              className="font-mono text-[13px] font-medium text-[var(--foreground)]"
+              text={selectedWorkspace.name}
+            />
             {selectedWorkspace.git_sha && (
               <span className="font-mono text-xs text-[var(--muted-foreground)]">
                 {selectedWorkspace.git_sha.slice(0, 8)}

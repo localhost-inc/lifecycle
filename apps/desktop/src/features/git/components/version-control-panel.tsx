@@ -16,21 +16,9 @@ interface VersionControlPanelProps {
   worktreePath: string | null;
 }
 
-export function getVersionControlTabClassName(active: boolean): string {
-  return `rounded-[18px] px-4 py-1.5 text-sm font-semibold transition-all duration-200 ease-out ${
-    active
-      ? "bg-[var(--surface-selected)] text-[var(--foreground)] shadow-[var(--tab-shadow)]"
-      : "text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
-  }`;
-}
-
 export const VERSION_CONTROL_PANEL_HEADER_CLASS_NAME = "px-2.5 py-3";
 export const VERSION_CONTROL_PANEL_BODY_CLASS_NAME = "px-2.5 pb-4 pt-1";
 export const VERSION_CONTROL_PANEL_EMPTY_STATE_CLASS_NAME = "px-2.5 py-4";
-const VERSION_CONTROL_PANEL_TABS_CLASS_NAME = cn(
-  getVersionControlTabClassName(false),
-  "data-[state=active]:bg-[var(--surface-selected)] data-[state=active]:text-[var(--foreground)] data-[state=active]:shadow-[var(--tab-shadow)]",
-);
 
 export function VersionControlPanel({
   onOpenDiff,
@@ -65,12 +53,8 @@ export function VersionControlPanel({
           value={activeTab}
         >
           <TabsList className="gap-1 border-0 bg-transparent p-0">
-            <TabsTrigger className={VERSION_CONTROL_PANEL_TABS_CLASS_NAME} value="changes">
-              Changes
-            </TabsTrigger>
-            <TabsTrigger className={VERSION_CONTROL_PANEL_TABS_CLASS_NAME} value="history">
-              History
-            </TabsTrigger>
+            <TabsTrigger value="changes">Changes</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>

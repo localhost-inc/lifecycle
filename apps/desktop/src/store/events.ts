@@ -12,7 +12,19 @@ export type StoreEvent =
   | { kind: "projects-invalidated" }
   | { kind: "project-manifests-invalidated" }
   | { kind: "workspaces-invalidated"; workspaceId?: string }
+  | {
+      kind: "workspace-renamed";
+      workspaceId: string;
+      name: string;
+      worktreePath: string | null;
+    }
   | { kind: "terminal-created"; workspaceId: string; terminal: TerminalRow }
+  | {
+      kind: "terminal-renamed";
+      terminalId: string;
+      workspaceId: string;
+      label: string;
+    }
   | {
       kind: "terminal-status-changed";
       endedAt: string | null;

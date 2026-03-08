@@ -26,8 +26,8 @@ pub async fn create_workspace(
     {
         let conn = open_db(&db)?;
         conn.execute(
-            "INSERT INTO workspace (id, project_id, source_ref, status, mode) VALUES (?1, ?2, ?3, 'creating', 'local')",
-            params![workspace_id, project_id, source_ref],
+            "INSERT INTO workspace (id, project_id, name, name_origin, source_ref, status, mode) VALUES (?1, ?2, ?3, 'default', ?4, 'creating', 'local')",
+            params![workspace_id, project_id, workspace_name, source_ref],
         ).map_err(|e| LifecycleError::Database(e.to_string()))?;
     }
 

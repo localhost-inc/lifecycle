@@ -191,7 +191,7 @@ export function HistoryTab({ error, isLoading, entries, onOpenCommit }: HistoryT
     <div className="flex flex-col">
       {groups.map((group) => (
         <div key={group.label}>
-          <div className="sticky top-0 z-10 bg-[var(--panel)] px-2 py-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
+          <div className="sticky top-0 z-10 px-2 py-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
             {group.label}
           </div>
           {group.entries.map((entry) => (

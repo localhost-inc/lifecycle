@@ -1,3 +1,4 @@
+import type React from "react";
 import { SquareArrowOutUpRight } from "lucide-react";
 import type { FileDiffMetadata } from "@pierre/diffs/react";
 
@@ -16,18 +17,20 @@ function changeTypeLabel(type: FileDiffMetadata["type"]): string {
   }
 }
 
-function statusBadgeClasses(type: FileDiffMetadata["type"]): string {
-  switch (type) {
-    case "new":
-      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
-    case "deleted":
-      return "border-red-500/30 bg-red-500/10 text-red-300";
-    case "rename-pure":
-    case "rename-changed":
-      return "border-blue-500/30 bg-blue-500/10 text-blue-300";
-    default:
-      return "border-amber-500/30 bg-amber-500/10 text-amber-300";
-  }
+function statusBadgeStyle(type: FileDiffMetadata["type"]): React.CSSProperties {
+  const v =
+    type === "new"
+      ? "--status-added"
+      : type === "deleted"
+        ? "--status-deleted"
+        : type === "rename-pure" || type === "rename-changed"
+          ? "--status-renamed"
+          : "--status-modified";
+  return {
+    color: `var(${v})`,
+    borderColor: `color-mix(in srgb, var(${v}) 25%, transparent)`,
+    backgroundColor: `color-mix(in srgb, var(${v}) 8%, transparent)`,
+  };
 }
 
 function basename(path: string): string {
@@ -85,7 +88,8 @@ export function GitFileHeader({ fileDiff, onOpenFile, openable }: GitFileHeaderP
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-center gap-2">
           <span
-            className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em] ${statusBadgeClasses(fileDiff.type)}`}
+            className="shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.16em]"
+            style={statusBadgeStyle(fileDiff.type)}
           >
             {changeTypeLabel(fileDiff.type)}
           </span>
@@ -101,8 +105,8 @@ export function GitFileHeader({ fileDiff, onOpenFile, openable }: GitFileHeaderP
         )}
       </div>
       <div className="flex shrink-0 items-center gap-2 font-mono text-xs">
-        {additions > 0 && <span className="text-emerald-400">+{additions}</span>}
-        {deletions > 0 && <span className="text-red-400">-{deletions}</span>}
+        {additions > 0 && <span className="text-[var(--status-added)]">+{additions}</span>}
+        {deletions > 0 && <span className="text-[var(--status-deleted)]">-{deletions}</span>}
         {openable && (
           <SquareArrowOutUpRight className="h-3.5 w-3.5 text-[var(--muted-foreground)] opacity-0 transition-opacity group-hover/file-header:opacity-100" />
         )}

@@ -7,6 +7,7 @@ import {
   listWorkspaceTerminals,
   subscribeToTerminalCreatedEvents,
   subscribeToTerminalRemovedEvents,
+  subscribeToTerminalRenamedEvents,
   subscribeToTerminalStatusEvents,
 } from "../features/terminals/api";
 import { listProjects, readManifest } from "../features/projects/api/projects";
@@ -15,6 +16,7 @@ import {
   getWorkspaceById,
   getWorkspaceServices,
   listWorkspacesByProject,
+  subscribeToWorkspaceRenamedEvents,
   subscribeToServiceStatusEvents,
   subscribeToSetupProgressEvents,
   subscribeToWorkspaceStatusEvents,
@@ -53,6 +55,14 @@ export function createSource(): StoreSource {
             workspaceId: event.workspace_id,
             status: event.status,
             failureReason: event.failure_reason,
+          });
+        }),
+        subscribeToWorkspaceRenamedEvents((event) => {
+          listener({
+            kind: "workspace-renamed",
+            name: event.name,
+            workspaceId: event.workspace_id,
+            worktreePath: event.worktree_path,
           });
         }),
         subscribeToServiceStatusEvents((event) => {
@@ -94,6 +104,14 @@ export function createSource(): StoreSource {
         subscribeToTerminalRemovedEvents((event) => {
           listener({
             kind: "terminal-removed",
+            terminalId: event.terminal_id,
+            workspaceId: event.workspace_id,
+          });
+        }),
+        subscribeToTerminalRenamedEvents((event) => {
+          listener({
+            kind: "terminal-renamed",
+            label: event.label,
             terminalId: event.terminal_id,
             workspaceId: event.workspace_id,
           });

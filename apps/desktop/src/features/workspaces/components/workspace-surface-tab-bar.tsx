@@ -7,17 +7,14 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { ResponseReadyDot } from "../../../components/response-ready-dot";
 import { isCommitDiffDocument, isLauncherDocument } from "../state/workspace-surface-state";
 import {
   getWorkspaceTabDragShiftDirection,
   reorderWorkspaceTabKeys,
-  tabTitle,
-  workspaceTabDomId,
-  workspaceTabPanelId,
   type WorkspaceSurfaceTab,
   type WorkspaceTabPlacement,
 } from "./workspace-surface-logic";
+import { WorkspaceSurfaceTabItem } from "./workspace-surface-tab-item";
 
 const TAB_DRAG_GAP_PX = 2;
 const TAB_DRAG_START_THRESHOLD_PX = 6;
@@ -42,10 +39,19 @@ interface WorkspaceSurfaceTabBarProps {
   activeTabKey: string | null;
   onCloseDocumentTab: (tabKey: string) => void;
   onCloseRuntimeTab: (tabKey: string, terminalId: string) => void;
+  onRenameRuntimeTab?: (terminalId: string, label: string) => Promise<unknown> | unknown;
   onSelectTab: (key: string) => void;
   onSetTabOrder: (keys: string[]) => void;
   renderTabLeading?: (tab: WorkspaceSurfaceTab) => ReactNode;
   visibleTabs: WorkspaceSurfaceTab[];
+}
+
+interface WorkspaceTabRenameState {
+  error: string | null;
+  key: string;
+  saving: boolean;
+  terminalId: string;
+  value: string;
 }
 
 function defaultTabLeading(tab: WorkspaceSurfaceTab) {
@@ -72,14 +78,18 @@ export function WorkspaceSurfaceTabBar({
   activeTabKey,
   onCloseDocumentTab,
   onCloseRuntimeTab,
+  onRenameRuntimeTab,
   onSelectTab,
   onSetTabOrder,
   renderTabLeading,
   visibleTabs,
 }: WorkspaceSurfaceTabBarProps) {
   const [dragState, setDragState] = useState<WorkspaceTabDragState | null>(null);
+  const [renameState, setRenameState] = useState<WorkspaceTabRenameState | null>(null);
   const dragSessionRef = useRef<WorkspaceTabPointerSession | null>(null);
   const dragStateRef = useRef<WorkspaceTabDragState | null>(null);
+  const renameInputRef = useRef<HTMLInputElement | null>(null);
+  const skipRenameBlurRef = useRef(false);
   const tabElementsRef = useRef(new Map<string, HTMLDivElement>());
   const onSetTabOrderRef = useRef(onSetTabOrder);
   const suppressClickRef = useRef<string | null>(null);
@@ -97,6 +107,34 @@ export function WorkspaceSurfaceTabBar({
   useEffect(() => {
     visibleTabKeysRef.current = visibleTabKeys;
   }, [visibleTabKeys]);
+
+  useEffect(() => {
+    if (!renameState) {
+      return;
+    }
+
+    const activeTab = visibleTabs.find(
+      (tab) => tab.key === renameState.key && tab.type === "terminal",
+    );
+    if (!activeTab) {
+      setRenameState(null);
+    }
+  }, [renameState, visibleTabs]);
+
+  useEffect(() => {
+    if (!renameState) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      renameInputRef.current?.focus();
+      renameInputRef.current?.select();
+    }, 0);
+
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [renameState]);
 
   const setTabElement = useCallback((key: string, element: HTMLDivElement | null) => {
     if (element) {
@@ -207,6 +245,10 @@ export function WorkspaceSurfaceTabBar({
 
   const handleTabPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>, key: string) => {
+      if (renameState?.key === key) {
+        return;
+      }
+
       if (event.button !== 0) {
         return;
       }
@@ -219,11 +261,15 @@ export function WorkspaceSurfaceTabBar({
         started: false,
       };
     },
-    [],
+    [renameState],
   );
 
   const handleTabClick = useCallback(
     (key: string) => {
+      if (renameState?.key === key) {
+        return;
+      }
+
       if (suppressClickRef.current === key) {
         suppressClickRef.current = null;
         return;
@@ -231,11 +277,15 @@ export function WorkspaceSurfaceTabBar({
 
       onSelectTab(key);
     },
-    [onSelectTab],
+    [onSelectTab, renameState],
   );
 
   const handleTabKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>, key: string) => {
+      if (renameState?.key === key) {
+        return;
+      }
+
       if (event.key !== "Enter" && event.key !== " ") {
         return;
       }
@@ -243,8 +293,97 @@ export function WorkspaceSurfaceTabBar({
       event.preventDefault();
       onSelectTab(key);
     },
-    [onSelectTab],
+    [onSelectTab, renameState],
   );
+
+  const startRenamingTab = useCallback(
+    (tab: WorkspaceSurfaceTab) => {
+      if (tab.type !== "terminal" || !onRenameRuntimeTab) {
+        return;
+      }
+
+      dragSessionRef.current = null;
+      dragStateRef.current = null;
+      document.body.style.userSelect = "";
+      setDragState(null);
+      skipRenameBlurRef.current = false;
+      setRenameState({
+        error: null,
+        key: tab.key,
+        saving: false,
+        terminalId: tab.terminalId,
+        value: tab.label,
+      });
+      onSelectTab(tab.key);
+    },
+    [onRenameRuntimeTab, onSelectTab],
+  );
+
+  const cancelTabRename = useCallback(() => {
+    setRenameState(null);
+  }, []);
+
+  const commitTabRename = useCallback(async () => {
+    if (!renameState || !onRenameRuntimeTab || renameState.saving) {
+      return;
+    }
+
+    const normalizedLabel = renameState.value.trim().replace(/\s+/g, " ");
+    if (normalizedLabel.length === 0) {
+      setRenameState((current) =>
+        current
+          ? {
+              ...current,
+              error: "Session title cannot be empty.",
+            }
+          : current,
+      );
+      renameInputRef.current?.focus();
+      renameInputRef.current?.select();
+      return;
+    }
+
+    const currentTab = visibleTabs.find(
+      (tab): tab is Extract<WorkspaceSurfaceTab, { type: "terminal" }> =>
+        tab.key === renameState.key && tab.type === "terminal",
+    );
+    if (!currentTab) {
+      setRenameState(null);
+      return;
+    }
+
+    if (normalizedLabel === currentTab.label) {
+      setRenameState(null);
+      return;
+    }
+
+    setRenameState((current) =>
+      current
+        ? {
+            ...current,
+            error: null,
+            saving: true,
+          }
+        : current,
+    );
+
+    try {
+      await onRenameRuntimeTab(renameState.terminalId, normalizedLabel);
+      setRenameState(null);
+    } catch (error) {
+      setRenameState((current) =>
+        current
+          ? {
+              ...current,
+              error: error instanceof Error ? error.message : "Session rename failed.",
+              saving: false,
+            }
+          : current,
+      );
+      renameInputRef.current?.focus();
+      renameInputRef.current?.select();
+    }
+  }, [onRenameRuntimeTab, renameState, visibleTabs]);
 
   return (
     <div className="relative min-w-0 flex-1">
@@ -260,10 +399,12 @@ export function WorkspaceSurfaceTabBar({
         {visibleTabs.map((tab) => {
           const active = tab.key === activeTabKey;
           const isTerminal = tab.type === "terminal";
+          const isRenaming = renameState?.key === tab.key;
           const isDropTarget = dragState?.targetKey === tab.key;
           const isDraggedTab = dragState?.draggedKey === tab.key;
           const leading = renderTabLeading ? renderTabLeading(tab) : defaultTabLeading(tab);
-          const showFloatingReadyDot = isTerminal && tab.responseReady && !renderTabLeading;
+          const showFloatingReadyDot =
+            isTerminal && tab.responseReady && !active && !renderTabLeading;
           const previewShiftDirection =
             dragState?.targetKey && dragState.placement
               ? getWorkspaceTabDragShiftDirection(
@@ -281,70 +422,82 @@ export function WorkspaceSurfaceTabBar({
           const translateX = isDraggedTab ? (dragState?.pointerDeltaX ?? 0) : previewShiftPx;
 
           return (
-            <div
+            <WorkspaceSurfaceTabItem
               key={tab.key}
-              ref={(element) => setTabElement(tab.key, element)}
-              id={workspaceTabDomId(tab.key)}
-              aria-controls={workspaceTabPanelId(tab.key)}
-              aria-selected={active}
-              className={`group relative flex max-w-[300px] shrink-0 touch-none select-none items-center gap-1.5 rounded-[18px] px-4 py-1.5 text-left text-sm font-semibold will-change-transform ${
-                active
-                  ? "bg-[var(--surface-selected)] text-[var(--foreground)] shadow-[var(--tab-shadow)]"
-                  : "text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
-              } ${
-                isDraggedTab
-                  ? "pointer-events-none z-20 cursor-grabbing opacity-90 shadow-[var(--tab-shadow-drag)] transition-none"
-                  : "cursor-grab transition-[background-color,color,box-shadow,opacity,transform] duration-200 ease-out"
-              } ${isDropTarget ? "ring-1 ring-[var(--foreground)]/35" : ""}`}
+              active={active}
+              isDraggedTab={isDraggedTab}
+              isDropTarget={isDropTarget}
+              isRenaming={Boolean(isRenaming)}
+              leading={leading}
               onClick={() => handleTabClick(tab.key)}
+              onClose={() => {
+                if (isTerminal) {
+                  void onCloseRuntimeTab(tab.key, tab.terminalId);
+                  return;
+                }
+
+                onCloseDocumentTab(tab.key);
+              }}
+              onDoubleClick={(event) => {
+                if (!isTerminal || !onRenameRuntimeTab) {
+                  return;
+                }
+
+                if (
+                  event.target instanceof Element &&
+                  event.target.closest("[data-tab-action='close']")
+                ) {
+                  return;
+                }
+
+                event.preventDefault();
+                event.stopPropagation();
+                startRenamingTab(tab);
+              }}
               onKeyDown={(event) => handleTabKeyDown(event, tab.key)}
               onPointerDown={(event) => handleTabPointerDown(event, tab.key)}
-              role="tab"
+              refCallback={(element) => setTabElement(tab.key, element)}
+              renameError={renameState?.error ?? null}
+              renameInputRef={renameInputRef}
+              renameSaving={renameState?.saving ?? false}
+              renameValue={renameState?.value ?? tab.label}
+              showFloatingReadyDot={showFloatingReadyDot}
               style={translateX === 0 ? undefined : { transform: `translateX(${translateX}px)` }}
-              tabIndex={active ? 0 : -1}
-              title={tabTitle(tab)}
-            >
-              {showFloatingReadyDot ? (
-                <ResponseReadyDot className="pointer-events-none absolute right-3 top-1.5" />
-              ) : null}
-              {leading}
-              <span className="truncate">{tab.label}</span>
-              <button
-                type="button"
-                aria-label={`Close ${tab.label}`}
-                data-tab-action="close"
-                className={`ml-auto shrink-0 rounded-full p-1 transition hover:bg-[var(--background)]/70 ${
-                  active
-                    ? "opacity-100"
-                    : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
-                }`}
-                onPointerDown={(event) => {
-                  event.stopPropagation();
-                }}
-                onClick={(event) => {
-                  event.stopPropagation();
+              tab={tab}
+              tabIndex={isRenaming ? -1 : active ? 0 : -1}
+              onRenameBlur={() => {
+                if (skipRenameBlurRef.current) {
+                  skipRenameBlurRef.current = false;
+                  return;
+                }
+                void commitTabRename();
+              }}
+              onRenameChange={(value) => {
+                setRenameState((current) =>
+                  current
+                    ? {
+                        ...current,
+                        error: null,
+                        value,
+                      }
+                    : current,
+                );
+              }}
+              onRenameKeyDown={(event) => {
+                event.stopPropagation();
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void commitTabRename();
+                  return;
+                }
 
-                  if (isTerminal) {
-                    void onCloseRuntimeTab(tab.key, tab.terminalId);
-                    return;
-                  }
-
-                  onCloseDocumentTab(tab.key);
-                }}
-              >
-                <svg
-                  fill="none"
-                  height="12"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeWidth="1.5"
-                  viewBox="0 0 12 12"
-                  width="12"
-                >
-                  <path d="M3 3l6 6M9 3l-6 6" />
-                </svg>
-              </button>
-            </div>
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  skipRenameBlurRef.current = true;
+                  cancelTabRename();
+                }
+              }}
+            />
           );
         })}
       </div>

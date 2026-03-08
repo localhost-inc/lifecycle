@@ -11,9 +11,11 @@ const badgeVariants = cva(
         secondary: "border-transparent bg-[var(--muted)] text-[var(--foreground)]",
         outline: "border-[var(--border)] bg-transparent text-[var(--foreground)]",
         destructive: "border-[var(--destructive)]/40 bg-transparent text-[var(--destructive)]",
-        success: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-        warning: "border-amber-500/30 bg-amber-500/10 text-amber-300",
-        info: "border-blue-500/30 bg-blue-500/10 text-blue-300",
+        success:
+          "text-[var(--status-added)] border-[color-mix(in_srgb,var(--status-added)_25%,transparent)] bg-[color-mix(in_srgb,var(--status-added)_8%,transparent)]",
+        warning:
+          "text-[var(--status-modified)] border-[color-mix(in_srgb,var(--status-modified)_25%,transparent)] bg-[color-mix(in_srgb,var(--status-modified)_8%,transparent)]",
+        info: "text-[var(--status-renamed)] border-[color-mix(in_srgb,var(--status-renamed)_25%,transparent)] bg-[color-mix(in_srgb,var(--status-renamed)_8%,transparent)]",
         muted: "border-transparent bg-[var(--muted)] text-[var(--muted-foreground)]",
       },
     },

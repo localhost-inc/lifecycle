@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS project (
 CREATE TABLE IF NOT EXISTS workspace (
     id TEXT PRIMARY KEY NOT NULL,
     project_id TEXT NOT NULL REFERENCES project(id),
+    name TEXT NOT NULL DEFAULT '',
+    name_origin TEXT NOT NULL DEFAULT 'manual',
     source_ref TEXT NOT NULL,
     git_sha TEXT,
     worktree_path TEXT,

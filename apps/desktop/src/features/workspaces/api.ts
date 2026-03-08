@@ -14,6 +14,7 @@ import type {
 export interface WorkspaceRow {
   id: string;
   project_id: string;
+  name: string;
   source_ref: string;
   git_sha: string | null;
   worktree_path: string | null;
@@ -66,6 +67,12 @@ export interface SetupStepEvent {
   data: string | null;
 }
 
+export interface WorkspaceRenamedEvent {
+  workspace_id: string;
+  name: string;
+  worktree_path: string | null;
+}
+
 export type WorkspaceShortcutAction =
   | "close-active-tab"
   | "new-tab"
@@ -81,12 +88,17 @@ export interface WorkspaceShortcutEvent {
 }
 
 interface BrowserWorkspaceState {
-  workspaces: WorkspaceRow[];
+  workspaces: BrowserWorkspaceRow[];
   services: ServiceRow[];
+}
+
+interface BrowserWorkspaceRow extends WorkspaceRow {
+  name_origin?: "default" | "generated" | "manual";
 }
 
 interface BrowserEventListeners {
   workspaceStatus: Set<(event: WorkspaceStatusEvent) => void>;
+  workspaceRenamed: Set<(event: WorkspaceRenamedEvent) => void>;
   serviceStatus: Set<(event: ServiceStatusEvent) => void>;
   setupProgress: Set<(event: SetupStepEvent) => void>;
 }
@@ -97,6 +109,7 @@ let browserWorkspaceState = readBrowserWorkspaceState();
 
 const browserListeners: BrowserEventListeners = {
   workspaceStatus: new Set(),
+  workspaceRenamed: new Set(),
   serviceStatus: new Set(),
   setupProgress: new Set(),
 };
@@ -114,7 +127,9 @@ function readBrowserWorkspaceState(): BrowserWorkspaceState {
   try {
     const parsed = JSON.parse(raw) as Partial<BrowserWorkspaceState>;
     return {
-      workspaces: Array.isArray(parsed.workspaces) ? parsed.workspaces : [],
+      workspaces: Array.isArray(parsed.workspaces)
+        ? parsed.workspaces.map((workspace) => normalizeBrowserWorkspaceRow(workspace))
+        : [],
       services: Array.isArray(parsed.services) ? parsed.services : [],
     };
   } catch {
@@ -132,6 +147,12 @@ function persistBrowserWorkspaceState(): void {
 
 function emitWorkspaceStatus(event: WorkspaceStatusEvent): void {
   for (const callback of browserListeners.workspaceStatus) {
+    callback(event);
+  }
+}
+
+function emitWorkspaceRenamed(event: WorkspaceRenamedEvent): void {
+  for (const callback of browserListeners.workspaceRenamed) {
     callback(event);
   }
 }
@@ -154,6 +175,62 @@ function nowIso(): string {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function shortWorkspaceId(workspaceId: string): string {
+  const short = workspaceId
+    .split("")
+    .filter((char) => /[a-z0-9]/i.test(char))
+    .join("")
+    .slice(0, 8);
+  return short.length > 0 ? short : "workspace";
+}
+
+function slugifyWorkspaceName(value: string): string {
+  const slug = value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s\-_/.]+/g, "")
+    .replace(/[\s\-_/.]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug.length > 0 ? slug : "workspace";
+}
+
+function renameBrowserWorktreePath(
+  worktreePath: string | null,
+  workspaceName: string,
+  workspaceId: string,
+): string | null {
+  if (!worktreePath) {
+    return null;
+  }
+
+  const lastSeparatorIndex = Math.max(worktreePath.lastIndexOf("/"), worktreePath.lastIndexOf("\\"));
+  const parent = lastSeparatorIndex >= 0 ? worktreePath.slice(0, lastSeparatorIndex) : "";
+  const nextLeaf = `${slugifyWorkspaceName(workspaceName)}--${shortWorkspaceId(workspaceId)}`;
+  return parent.length > 0 ? `${parent}/${nextLeaf}` : nextLeaf;
+}
+
+function normalizeBrowserWorkspaceRow(workspace: Partial<BrowserWorkspaceRow>): BrowserWorkspaceRow {
+  return {
+    ...workspace,
+    created_at: workspace.created_at ?? nowIso(),
+    created_by: workspace.created_by ?? null,
+    expires_at: workspace.expires_at ?? null,
+    failed_at: workspace.failed_at ?? null,
+    failure_reason: workspace.failure_reason ?? null,
+    git_sha: workspace.git_sha ?? null,
+    id: workspace.id ?? crypto.randomUUID(),
+    last_active_at: workspace.last_active_at ?? nowIso(),
+    mode: workspace.mode ?? "local",
+    name: workspace.name?.trim() || workspace.source_ref?.trim() || "Workspace",
+    name_origin: workspace.name_origin ?? "manual",
+    project_id: workspace.project_id ?? "",
+    source_ref: workspace.source_ref ?? "main",
+    source_workspace_id: workspace.source_workspace_id ?? null,
+    status: workspace.status ?? "sleeping",
+    updated_at: workspace.updated_at ?? nowIso(),
+    worktree_path: workspace.worktree_path ?? null,
+  };
 }
 
 function updateWorkspaceRow(
@@ -201,6 +278,7 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
     const workspace: WorkspaceRow = {
       id,
       project_id: input.projectId,
+      name: input.workspaceName?.trim() || input.baseRef?.trim() || "Workspace",
       source_ref: input.baseRef ?? "main",
       git_sha: null,
       worktree_path: `${input.worktreeRoot ?? `${input.projectPath}/.worktrees`}/${id}`,
@@ -218,7 +296,7 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
 
     browserWorkspaceState = {
       ...browserWorkspaceState,
-      workspaces: [workspace, ...browserWorkspaceState.workspaces],
+      workspaces: [{ ...workspace, name_origin: "default" }, ...browserWorkspaceState.workspaces],
     };
     persistBrowserWorkspaceState();
     return id;
@@ -231,6 +309,53 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
     baseRef: input.baseRef,
     worktreeRoot: input.worktreeRoot,
   });
+}
+
+export async function renameWorkspace(workspaceId: string, name: string): Promise<WorkspaceRow> {
+  const normalizedName = name.trim().replace(/\s+/g, " ");
+  if (normalizedName.length === 0) {
+    throw new Error("Workspace name cannot be empty.");
+  }
+
+  if (!isTauri()) {
+    let renamedWorkspace: BrowserWorkspaceRow | null = null;
+    browserWorkspaceState = {
+      ...browserWorkspaceState,
+      workspaces: browserWorkspaceState.workspaces.map((workspace) => {
+        if (workspace.id !== workspaceId) {
+          return workspace;
+        }
+
+        renamedWorkspace = {
+          ...workspace,
+          name: normalizedName,
+          name_origin: "manual",
+          updated_at: nowIso(),
+          worktree_path: renameBrowserWorktreePath(
+            workspace.worktree_path,
+            normalizedName,
+            workspaceId,
+          ),
+        };
+        return renamedWorkspace;
+      }),
+    };
+    persistBrowserWorkspaceState();
+
+    if (!renamedWorkspace) {
+      throw new Error(`Workspace not found: ${workspaceId}`);
+    }
+
+    const nextWorkspace = renamedWorkspace as BrowserWorkspaceRow;
+    emitWorkspaceRenamed({
+      workspace_id: nextWorkspace.id,
+      name: nextWorkspace.name,
+      worktree_path: nextWorkspace.worktree_path,
+    });
+    return nextWorkspace;
+  }
+
+  return invoke<WorkspaceRow>("rename_workspace", { workspaceId, name: normalizedName });
 }
 
 export async function subscribeToNativeWorkspaceShortcutEvents(
@@ -440,6 +565,21 @@ export async function subscribeToWorkspaceStatusEvents(
 
   return listen<WorkspaceStatusEvent>("workspace:status-changed", (e) => {
     callback(e.payload);
+  });
+}
+
+export async function subscribeToWorkspaceRenamedEvents(
+  callback: (event: WorkspaceRenamedEvent) => void,
+): Promise<UnlistenFn> {
+  if (!isTauri()) {
+    browserListeners.workspaceRenamed.add(callback);
+    return () => {
+      browserListeners.workspaceRenamed.delete(callback);
+    };
+  }
+
+  return listen<WorkspaceRenamedEvent>("workspace:renamed", (event) => {
+    callback(event.payload);
   });
 }
 

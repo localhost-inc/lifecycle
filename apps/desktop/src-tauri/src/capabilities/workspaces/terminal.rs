@@ -23,6 +23,7 @@ use std::time::{Duration, SystemTime};
 use tauri::{ipc::Channel, AppHandle, Emitter, Manager, State, WebviewWindow};
 
 use super::query::TerminalRow;
+use super::rename::TitleOrigin;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -222,7 +223,9 @@ pub async fn create_terminal(
             &launch_type,
             harness_provider.as_deref(),
             harness_session_id.as_deref(),
+            &workspace.worktree_path,
             &label,
+            TitleOrigin::Default,
             TerminalStatus::Detached,
         )?;
         emit_terminal_created(&app, &terminal);
@@ -271,7 +274,9 @@ pub async fn create_terminal(
         &launch_type,
         harness_provider.as_deref(),
         harness_session_id.as_deref(),
+        &workspace.worktree_path,
         &label,
+        TitleOrigin::Default,
         TerminalStatus::Detached,
     )?;
 
@@ -285,7 +290,10 @@ pub async fn create_terminal(
         &app,
         &db,
         &terminal,
-        &workspace.worktree_path,
+        terminal
+            .launch_worktree_path
+            .as_deref()
+            .unwrap_or(&workspace.worktree_path),
         launch_started_at,
     );
 
@@ -367,12 +375,15 @@ pub async fn attach_terminal(
 }
 
 pub async fn write_terminal(
+    app: AppHandle,
     db_path: State<'_, DbPath>,
     terminal_supervisors: State<'_, TerminalSupervisorMap>,
     terminal_id: String,
     data: String,
 ) -> Result<(), LifecycleError> {
     let db = db_path.0.clone();
+    let terminal = load_terminal_row(&db, &terminal_id)?
+        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.clone()))?;
     let supervisor = {
         let terminals = terminal_supervisors.lock().await;
         terminals.get(&terminal_id).cloned()
@@ -381,6 +392,7 @@ pub async fn write_terminal(
 
     supervisor.write(&data)?;
     touch_terminal(&db, &terminal_id)?;
+    super::title::maybe_schedule_terminal_auto_title(&app, &db, &terminal, &data);
     Ok(())
 }
 
@@ -561,7 +573,10 @@ pub async fn sync_native_terminal_surface(
     let command_line = native_terminal_command(&launch_type, &launch);
     let terminal_id_for_surface = terminal_id.clone();
     let theme_override_path = theme_override_path.to_string_lossy().to_string();
-    let worktree_path = workspace.worktree_path.clone();
+    let worktree_path = terminal
+        .launch_worktree_path
+        .clone()
+        .unwrap_or_else(|| workspace.worktree_path.clone());
     sync_native_terminal_in_webview(&window, move |webview_view| {
         native_terminal::sync_surface(
             webview_view,
@@ -588,7 +603,10 @@ pub async fn sync_native_terminal_surface(
         window.app_handle(),
         &db,
         &terminal,
-        &workspace.worktree_path,
+        terminal
+            .launch_worktree_path
+            .as_deref()
+            .unwrap_or(&workspace.worktree_path),
         SystemTime::now(),
     );
 
@@ -1713,20 +1731,24 @@ fn insert_terminal_row(
     launch_type: &TerminalType,
     harness_provider: Option<&str>,
     harness_session_id: Option<&str>,
+    launch_worktree_path: &str,
     label: &str,
+    label_origin: TitleOrigin,
     status: TerminalStatus,
 ) -> Result<TerminalRow, LifecycleError> {
     let conn = open_db(db_path)?;
     conn.execute(
-        "INSERT INTO terminal (id, workspace_id, launch_type, harness_provider, harness_session_id, label, status)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO terminal (id, workspace_id, launch_type, harness_provider, harness_session_id, launch_worktree_path, label, label_origin, status)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         params![
             terminal_id,
             workspace_id,
             launch_type.as_str(),
             harness_provider,
             harness_session_id,
+            launch_worktree_path,
             label,
+            label_origin.as_str(),
             status.as_str()
         ],
     )
@@ -1774,7 +1796,7 @@ pub(crate) fn load_terminal_row(
     let conn = open_db(db_path)?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, created_by, label, status, failure_reason, exit_code, started_at, last_active_at, ended_at
+            "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, created_by, launch_worktree_path, label, label_origin, status, failure_reason, exit_code, started_at, last_active_at, ended_at
              FROM terminal
              WHERE id = ?1
              LIMIT 1",
@@ -1789,13 +1811,15 @@ pub(crate) fn load_terminal_row(
             harness_provider: row.get(3)?,
             harness_session_id: row.get(4)?,
             created_by: row.get(5)?,
-            label: row.get(6)?,
-            status: row.get(7)?,
-            failure_reason: row.get(8)?,
-            exit_code: row.get(9)?,
-            started_at: row.get(10)?,
-            last_active_at: row.get(11)?,
-            ended_at: row.get(12)?,
+            launch_worktree_path: row.get(6)?,
+            label: row.get(7)?,
+            label_origin: row.get(8)?,
+            status: row.get(9)?,
+            failure_reason: row.get(10)?,
+            exit_code: row.get(11)?,
+            started_at: row.get(12)?,
+            last_active_at: row.get(13)?,
+            ended_at: row.get(14)?,
         })
     });
 

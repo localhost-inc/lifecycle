@@ -6,6 +6,7 @@ import { WorkspaceTreeItem } from "./workspace-tree-item";
 const workspace = {
   id: "workspace_1",
   project_id: "project_1",
+  name: "Auth Flow Fix",
   source_ref: "lifecycle/ember-atlas-42",
   git_sha: null,
   worktree_path: "/tmp/workspace_1",
@@ -22,6 +23,19 @@ const workspace = {
 };
 
 describe("WorkspaceTreeItem", () => {
+  test("renders the workspace display name instead of the branch ref", () => {
+    const markup = renderToStaticMarkup(
+      createElement(WorkspaceTreeItem, {
+        workspace,
+        selected: false,
+        onSelect: () => {},
+      }),
+    );
+
+    expect(markup).toContain("Auth Flow Fix");
+    expect(markup).not.toContain("lifecycle/ember-atlas-42</span>");
+  });
+
   test("renders a visible response-ready marker without shifting the row layout", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceTreeItem, {

@@ -8,6 +8,7 @@ import {
   DEFAULT_TERMINAL_ROWS,
   createTerminal,
   detachTerminal,
+  renameTerminal,
   terminalHasLiveSession,
   type CreateTerminalRequest,
   type HarnessProvider,
@@ -555,11 +556,20 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
           activeTabKey={state.activeTabKey}
           onCloseDocumentTab={handleCloseDocumentTab}
           onCloseRuntimeTab={handleCloseRuntimeTab}
+          onRenameRuntimeTab={(terminalId, label) => renameTerminal(terminalId, label)}
           onSelectTab={handleSelectTab}
           onSetTabOrder={(keys) => {
             dispatch({ keys, type: "set-tab-order" });
           }}
-          renderTabLeading={(tab) => <WorkspaceSurfaceTabLeading tab={tab} />}
+          renderTabLeading={(tab) => (
+            <WorkspaceSurfaceTabLeading
+              tab={
+                tab.type === "terminal" && tab.key === state.activeTabKey
+                  ? { ...tab, responseReady: false }
+                  : tab
+              }
+            />
+          )}
           visibleTabs={visibleTabs}
         />
         <SurfaceLaunchActions
