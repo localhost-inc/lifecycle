@@ -15,38 +15,56 @@ import {
   workspaceSurfaceReducer,
 } from "./workspace-surface-logic";
 import {
+  changesDiffTabKeyV2,
+  createChangesDiffTab,
   createCommitDiffTab,
   createDefaultWorkspaceSurfaceState,
-  createFileDiffTab,
   createLauncherTab,
 } from "../state/workspace-surface-state";
 
 describe("workspaceSurfaceReducer", () => {
-  test("updates an open diff tab when its scope changes", () => {
-    const workingTab = createFileDiffTab("src/app.tsx", "working");
+  test("reuses the changes tab and updates focusPath on repeated opens", () => {
+    const changesTab = createChangesDiffTab("src/app.tsx");
 
     expect(
       workspaceSurfaceReducer(
         {
           ...createDefaultWorkspaceSurfaceState(),
-          activeTabKey: workingTab.key,
-          documents: [workingTab],
+          activeTabKey: changesTab.key,
+          documents: [changesTab],
         },
         {
-          key: workingTab.key,
-          scope: "staged",
-          type: "change-scope",
+          request: {
+            id: "req-2",
+            focusPath: "README.md",
+            type: "changes-diff",
+          },
+          type: "open-document",
         },
       ),
     ).toEqual({
       ...createDefaultWorkspaceSurfaceState(),
-      activeTabKey: workingTab.key,
-      documents: [
-        {
-          ...workingTab,
-          activeScope: "staged",
+      activeTabKey: changesDiffTabKeyV2,
+      documents: [createChangesDiffTab("README.md")],
+      tabOrderKeys: [changesDiffTabKeyV2],
+    });
+  });
+
+  test("opens a single changes tab when requested from version control", () => {
+    expect(
+      workspaceSurfaceReducer(createDefaultWorkspaceSurfaceState(), {
+        request: {
+          id: "req-1",
+          focusPath: "src/app.tsx",
+          type: "changes-diff",
         },
-      ],
+        type: "open-document",
+      }),
+    ).toEqual({
+      ...createDefaultWorkspaceSurfaceState(),
+      activeTabKey: changesDiffTabKeyV2,
+      documents: [createChangesDiffTab("src/app.tsx")],
+      tabOrderKeys: [changesDiffTabKeyV2],
     });
   });
 
@@ -117,10 +135,10 @@ describe("workspaceSurfaceReducer", () => {
       workspaceSurfaceReducer(
         {
           ...createDefaultWorkspaceSurfaceState(),
-          activeTabKey: "diff:file:src/app.tsx",
-          documents: [createFileDiffTab("src/app.tsx", "working")],
+          activeTabKey: changesDiffTabKeyV2,
+          documents: [createChangesDiffTab("src/app.tsx")],
           hiddenRuntimeTabKeys: ["terminal:term-2"],
-          tabOrderKeys: ["diff:file:src/app.tsx"],
+          tabOrderKeys: [changesDiffTabKeyV2],
         },
         {
           key: "terminal:term-2",
@@ -131,9 +149,9 @@ describe("workspaceSurfaceReducer", () => {
     ).toEqual({
       ...createDefaultWorkspaceSurfaceState(),
       activeTabKey: "terminal:term-2",
-      documents: [createFileDiffTab("src/app.tsx", "working")],
+      documents: [createChangesDiffTab("src/app.tsx")],
       hiddenRuntimeTabKeys: [],
-      tabOrderKeys: ["diff:file:src/app.tsx", "terminal:term-2"],
+      tabOrderKeys: [changesDiffTabKeyV2, "terminal:term-2"],
     });
   });
 });
@@ -201,11 +219,11 @@ describe("workspace tab helpers", () => {
             terminalId: "term-2",
           },
         ],
-        [createFileDiffTab("src/app.tsx", "working"), createLauncherTab("launcher-1")],
-        ["launcher:launcher-1", "terminal:term-2", "diff:file:src/app.tsx", "terminal:term-1"],
+        [createChangesDiffTab("src/app.tsx"), createLauncherTab("launcher-1")],
+        ["launcher:launcher-1", "terminal:term-2", changesDiffTabKeyV2, "terminal:term-1"],
         ["terminal:term-2"],
       ).map((tab) => tab.key),
-    ).toEqual(["launcher:launcher-1", "diff:file:src/app.tsx", "terminal:term-1"]);
+    ).toEqual(["launcher:launcher-1", changesDiffTabKeyV2, "terminal:term-1"]);
   });
 
   test("returns the key for the rightmost tab", () => {
@@ -221,8 +239,8 @@ describe("workspace tab helpers", () => {
   test("selects the tab to the right before falling back to the left when closing", () => {
     expect(
       getWorkspaceTabKeyAfterClose(
-        ["terminal:1", "diff:file:src/app.tsx", "launcher:launcher-1"],
-        "diff:file:src/app.tsx",
+        ["terminal:1", changesDiffTabKeyV2, "launcher:launcher-1"],
+        changesDiffTabKeyV2,
       ),
     ).toBe("launcher:launcher-1");
     expect(
@@ -270,50 +288,48 @@ describe("workspace tab helpers", () => {
   });
 
   test("moves to adjacent tabs without wrapping", () => {
-    const keys = ["terminal:1", "diff:file:src/app.tsx", "launcher:launcher-1"];
+    const keys = ["terminal:1", changesDiffTabKeyV2, "launcher:launcher-1"];
 
-    expect(getWorkspaceAdjacentTabKey(keys, "diff:file:src/app.tsx", "next")).toBe(
+    expect(getWorkspaceAdjacentTabKey(keys, changesDiffTabKeyV2, "next")).toBe(
       "launcher:launcher-1",
     );
-    expect(getWorkspaceAdjacentTabKey(keys, "diff:file:src/app.tsx", "previous")).toBe(
-      "terminal:1",
-    );
+    expect(getWorkspaceAdjacentTabKey(keys, changesDiffTabKeyV2, "previous")).toBe("terminal:1");
     expect(getWorkspaceAdjacentTabKey(keys, "launcher:launcher-1", "next")).toBeNull();
   });
 
   test("maps numeric shortcuts to visible tab positions", () => {
-    const keys = ["terminal:1", "terminal:2", "diff:file:src/app.tsx", "launcher:launcher-1"];
+    const keys = ["terminal:1", "terminal:2", changesDiffTabKeyV2, "launcher:launcher-1"];
 
     expect(getWorkspaceTabKeyByIndex(keys, 1)).toBe("terminal:1");
-    expect(getWorkspaceTabKeyByIndex(keys, 3)).toBe("diff:file:src/app.tsx");
+    expect(getWorkspaceTabKeyByIndex(keys, 3)).toBe(changesDiffTabKeyV2);
     expect(getWorkspaceTabKeyByIndex(keys, 9)).toBe("launcher:launcher-1");
   });
 
   test("reorders visible tab keys based on drag placement", () => {
     expect(
       reorderWorkspaceTabKeys(
-        ["terminal:1", "diff:file:src/app.tsx", "launcher:launcher-1"],
+        ["terminal:1", changesDiffTabKeyV2, "launcher:launcher-1"],
         "terminal:1",
         "launcher:launcher-1",
         "after",
       ),
-    ).toEqual(["diff:file:src/app.tsx", "launcher:launcher-1", "terminal:1"]);
+    ).toEqual([changesDiffTabKeyV2, "launcher:launcher-1", "terminal:1"]);
   });
 
   test("shifts intervening tabs left when previewing a drag to the right", () => {
     expect(
       getWorkspaceTabDragShiftDirection(
-        ["terminal:1", "diff:file:src/app.tsx", "launcher:launcher-1"],
+        ["terminal:1", changesDiffTabKeyV2, "launcher:launcher-1"],
         "terminal:1",
         "launcher:launcher-1",
         "after",
-        "diff:file:src/app.tsx",
+        changesDiffTabKeyV2,
       ),
     ).toBe(-1);
 
     expect(
       getWorkspaceTabDragShiftDirection(
-        ["terminal:1", "diff:file:src/app.tsx", "launcher:launcher-1"],
+        ["terminal:1", changesDiffTabKeyV2, "launcher:launcher-1"],
         "terminal:1",
         "launcher:launcher-1",
         "after",
@@ -325,7 +341,7 @@ describe("workspace tab helpers", () => {
   test("shifts intervening tabs right when previewing a drag to the left", () => {
     expect(
       getWorkspaceTabDragShiftDirection(
-        ["terminal:1", "diff:file:src/app.tsx", "launcher:launcher-1"],
+        ["terminal:1", changesDiffTabKeyV2, "launcher:launcher-1"],
         "launcher:launcher-1",
         "terminal:1",
         "before",
@@ -335,11 +351,11 @@ describe("workspace tab helpers", () => {
 
     expect(
       getWorkspaceTabDragShiftDirection(
-        ["terminal:1", "diff:file:src/app.tsx", "launcher:launcher-1"],
+        ["terminal:1", changesDiffTabKeyV2, "launcher:launcher-1"],
         "launcher:launcher-1",
         "terminal:1",
         "before",
-        "diff:file:src/app.tsx",
+        changesDiffTabKeyV2,
       ),
     ).toBe(1);
   });

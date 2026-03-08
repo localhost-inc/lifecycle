@@ -69,6 +69,16 @@ export async function getGitScopePatch(workspaceId: string, scope: GitDiffScope)
   });
 }
 
+export async function getGitChangesPatch(workspaceId: string): Promise<string> {
+  if (!isTauri()) {
+    return "";
+  }
+
+  return invoke<string>("get_workspace_git_changes_patch", {
+    workspaceId,
+  });
+}
+
 export async function getGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]> {
   if (!isTauri()) {
     return [];

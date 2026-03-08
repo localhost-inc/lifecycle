@@ -133,6 +133,10 @@ fn trimmed_stdout(output: &[u8]) -> String {
     String::from_utf8_lossy(output).trim().to_string()
 }
 
+const EMPTY_TREE_SHA1: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+const EMPTY_TREE_SHA256: &str =
+    "6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321";
+
 async fn resolve_head_sha(repo_path: &str) -> Result<Option<String>, LifecycleError> {
     Ok(
         git_output_optional(repo_path, "resolve git head sha", &["rev-parse", "HEAD"])
@@ -140,6 +144,22 @@ async fn resolve_head_sha(repo_path: &str) -> Result<Option<String>, LifecycleEr
             .as_deref()
             .and_then(parse_head_sha),
     )
+}
+
+async fn resolve_empty_tree_sha(repo_path: &str) -> Result<&'static str, LifecycleError> {
+    let object_format = git_output_optional(
+        repo_path,
+        "resolve git object format",
+        &["rev-parse", "--show-object-format"],
+    )
+    .await?
+    .map(|stdout| trimmed_stdout(&stdout))
+    .unwrap_or_else(|| "sha1".to_string());
+
+    Ok(match object_format.as_str() {
+        "sha256" => EMPTY_TREE_SHA256,
+        _ => EMPTY_TREE_SHA1,
+    })
 }
 
 fn parse_branch_header(line: &str) -> ParsedBranchStatus {
@@ -747,6 +767,51 @@ pub async fn get_git_diff(
     })
 }
 
+async fn append_untracked_working_diffs(
+    repo_path: &str,
+    patch: &mut String,
+) -> Result<(), LifecycleError> {
+    let status = get_git_status(repo_path).await?;
+
+    for file in status
+        .files
+        .iter()
+        .filter(|file| matches!(file.worktree_status.as_deref(), Some("untracked")))
+    {
+        let file_patch = read_untracked_working_diff(repo_path, &file.path).await?;
+        if file_patch.is_empty() {
+            continue;
+        }
+
+        if !patch.is_empty() && !patch.ends_with('\n') {
+            patch.push('\n');
+        }
+
+        patch.push_str(&file_patch);
+    }
+
+    Ok(())
+}
+
+pub async fn get_git_changes_patch(repo_path: &str) -> Result<String, LifecycleError> {
+    let diff_target = match resolve_head_sha(repo_path).await? {
+        Some(head_sha) => head_sha,
+        None => resolve_empty_tree_sha(repo_path).await?.to_string(),
+    };
+    let mut patch =
+        String::from_utf8_lossy(
+            &git_output(
+                repo_path,
+                "read current git changes",
+                &["diff", diff_target.as_str()],
+            )
+            .await?,
+        )
+        .into_owned();
+    append_untracked_working_diffs(repo_path, &mut patch).await?;
+    Ok(patch)
+}
+
 pub async fn get_git_scope_patch(repo_path: &str, scope: &str) -> Result<String, LifecycleError> {
     let patch = match scope {
         "working" => {
@@ -754,25 +819,7 @@ pub async fn get_git_scope_patch(repo_path: &str, scope: &str) -> Result<String,
                 &git_output(repo_path, "read working git diff", &["diff"]).await?,
             )
             .into_owned();
-            let status = get_git_status(repo_path).await?;
-
-            for file in status
-                .files
-                .iter()
-                .filter(|file| matches!(file.worktree_status.as_deref(), Some("untracked")))
-            {
-                let file_patch = read_untracked_working_diff(repo_path, &file.path).await?;
-                if file_patch.is_empty() {
-                    continue;
-                }
-
-                if !patch.is_empty() && !patch.ends_with('\n') {
-                    patch.push('\n');
-                }
-
-                patch.push_str(&file_patch);
-            }
-
+            append_untracked_working_diffs(repo_path, &mut patch).await?;
             patch
         }
         "staged" => String::from_utf8_lossy(
@@ -1008,6 +1055,12 @@ mod tests {
         init_repo_with_branch(repo_path, "main");
     }
 
+    fn init_unborn_repo(repo_path: &Path) {
+        fs::create_dir_all(repo_path).expect("create temp repo path");
+        run_git(repo_path, &["init"]);
+        configure_repo(repo_path);
+    }
+
     fn init_repo_with_branch(repo_path: &Path, branch_name: &str) {
         fs::create_dir_all(repo_path).expect("create temp repo path");
         run_git(repo_path, &["init"]);
@@ -1125,6 +1178,84 @@ mod tests {
         assert!(patch.contains("diff --git a/README.md b/README.md"));
         assert!(patch.contains("+++ b/README.md"));
         assert!(patch.contains("+++ b/notes.txt"));
+        assert!(patch.contains("+draft"));
+
+        fs::remove_dir_all(repo_path).expect("remove temp repo");
+    }
+
+    #[tokio::test]
+    async fn get_git_changes_patch_includes_staged_unstaged_partial_and_untracked_changes() {
+        let repo_path = temp_repo_path("lifecycle-git-changes-patch");
+        init_repo(&repo_path);
+
+        fs::write(repo_path.join("staged.txt"), "base\n").expect("write staged fixture");
+        fs::write(repo_path.join("unstaged.txt"), "base\n").expect("write unstaged fixture");
+        fs::write(repo_path.join("partial.txt"), "base\n").expect("write partial fixture");
+        run_git(
+            repo_path.as_path(),
+            &["add", "staged.txt", "unstaged.txt", "partial.txt"],
+        );
+        run_git(
+            repo_path.as_path(),
+            &["commit", "-m", "add tracked fixtures"],
+        );
+
+        fs::write(repo_path.join("staged.txt"), "base\nstaged\n").expect("modify staged file");
+        run_git(repo_path.as_path(), &["add", "staged.txt"]);
+
+        fs::write(repo_path.join("unstaged.txt"), "base\nunstaged\n")
+            .expect("modify unstaged file");
+
+        fs::write(repo_path.join("partial.txt"), "base\nstaged\n").expect("stage partial file");
+        run_git(repo_path.as_path(), &["add", "partial.txt"]);
+        fs::write(repo_path.join("partial.txt"), "base\nstaged\nworktree\n")
+            .expect("modify partial file again");
+
+        fs::write(repo_path.join("notes.txt"), "draft\n").expect("write untracked file");
+
+        let patch = get_git_changes_patch(repo_path.to_str().expect("repo path is utf8"))
+            .await
+            .expect("git changes patch should succeed");
+
+        assert!(patch.contains("diff --git a/staged.txt b/staged.txt"));
+        assert!(patch.contains("diff --git a/unstaged.txt b/unstaged.txt"));
+        assert!(patch.contains("diff --git a/partial.txt b/partial.txt"));
+        assert!(patch.contains("+++ b/notes.txt"));
+        assert!(patch.contains("+staged"));
+        assert!(patch.contains("+unstaged"));
+        assert!(patch.contains("+worktree"));
+        assert!(patch.contains("+draft"));
+
+        fs::remove_dir_all(repo_path).expect("remove temp repo");
+    }
+
+    #[tokio::test]
+    async fn get_git_changes_patch_supports_unborn_branches() {
+        let repo_path = temp_repo_path("lifecycle-git-changes-patch-unborn");
+        init_unborn_repo(&repo_path);
+
+        fs::write(repo_path.join("staged.txt"), "base\n").expect("write staged fixture");
+        run_git(repo_path.as_path(), &["add", "staged.txt"]);
+
+        fs::write(repo_path.join("partial.txt"), "base\n").expect("write partial fixture");
+        run_git(repo_path.as_path(), &["add", "partial.txt"]);
+        fs::write(repo_path.join("partial.txt"), "base\nworktree\n")
+            .expect("modify partial fixture");
+
+        fs::write(repo_path.join("notes.txt"), "draft\n").expect("write untracked fixture");
+
+        let patch = get_git_changes_patch(repo_path.to_str().expect("repo path is utf8"))
+            .await
+            .expect("git changes patch should succeed");
+
+        assert_eq!(
+            patch.matches("diff --git a/partial.txt b/partial.txt").count(),
+            1
+        );
+        assert!(patch.contains("+++ b/staged.txt"));
+        assert!(patch.contains("+++ b/partial.txt"));
+        assert!(patch.contains("+++ b/notes.txt"));
+        assert!(patch.contains("+worktree"));
         assert!(patch.contains("+draft"));
 
         fs::remove_dir_all(repo_path).expect("remove temp repo");

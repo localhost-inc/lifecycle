@@ -12,7 +12,7 @@ The restore boundary needs to stay explicit:
 2. Runtime-backed tab existence still belongs to the provider/runtime layer. Local tab restore must not pretend a dead PTY process survived app restart.
 3. Native terminal tabs can survive app relaunch as persisted `terminal` metadata by reconciling stale rows to a restorable state (`sleeping`) and letting the native host recreate the surface on demand.
 4. A restored active-tab key may point at a runtime tab, but the runtime list should still be re-derived from provider data each time the workspace surface mounts.
-5. Persisting only the document-tab inputs (`file_path`, `scope`) avoids coupling desktop restore logic to render-only labels or future tab presentation changes.
+5. Persisting only the document-tab inputs (`focus_path` for the shared Changes tab, commit SHA for History tabs) avoids coupling desktop restore logic to render-only labels or future tab presentation changes.
 
 ## Milestone Impact
 

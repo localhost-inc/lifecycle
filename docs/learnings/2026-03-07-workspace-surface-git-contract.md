@@ -19,7 +19,7 @@ The durable contract is:
    - runtime-backed tabs for provider-owned resources like terminals
    - document tabs for diff/file/editor surfaces owned by desktop UI state
 4. Runtime-backed tabs cannot be treated like ordinary React pages because inactive terminals may still need an attached stream or synchronized native host surface.
-5. Document tabs should use stable derived keys such as `{file_path, scope}` so reopen focuses the existing tab.
+5. Document tabs should use stable derived keys that match the product model: one workspace-scoped `Changes` tab for current edits and commit-scoped tabs for History review.
 6. Keeping these contracts explicit now avoids a second refactor when cloud git and file editors arrive.
 
 ## Milestone Impact

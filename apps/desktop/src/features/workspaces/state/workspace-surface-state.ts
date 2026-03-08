@@ -1,4 +1,4 @@
-import type { GitDiffScope, GitLogEntry } from "@lifecycle/contracts";
+import type { GitLogEntry } from "@lifecycle/contracts";
 
 const LAST_WORKSPACE_ID_STORAGE_KEY = "lifecycle.desktop.last-workspace-id";
 const WORKSPACE_SURFACE_STATE_STORAGE_KEY_V1 = "lifecycle.desktop.workspace-surface.v1";
@@ -10,13 +10,11 @@ export interface StorageLike {
   setItem(key: string, value: string): void;
 }
 
-export interface FileDiffDocument {
-  activeScope: GitDiffScope;
-  filePath: string;
-  initialScope: GitDiffScope;
+export interface ChangesDiffDocument {
+  focusPath: string | null;
   key: string;
-  type: "file-diff";
-  label: string;
+  type: "changes-diff";
+  label: "Changes";
 }
 
 export interface CommitDiffDocument extends GitLogEntry {
@@ -31,7 +29,7 @@ export interface LauncherTab {
   label: string;
 }
 
-export type WorkspaceSurfaceDocument = FileDiffDocument | CommitDiffDocument | LauncherTab;
+export type WorkspaceSurfaceDocument = ChangesDiffDocument | CommitDiffDocument | LauncherTab;
 
 export interface WorkspaceSurfaceState {
   activeTabKey: string | null;
@@ -50,13 +48,16 @@ type PersistedV1WorkspaceState = {
   documents?: unknown;
 };
 
-type PersistedFileDiffDocument = {
-  activeScope?: unknown;
-  filePath?: unknown;
-  initialScope?: unknown;
+type PersistedChangesDiffDocument = {
+  focusPath?: unknown;
   type?: unknown;
   kind?: unknown;
-  scope?: unknown;
+};
+
+type PersistedFileDiffDocument = {
+  filePath?: unknown;
+  type?: unknown;
+  kind?: unknown;
 };
 
 type PersistedCommitDiffDocument = {
@@ -77,15 +78,12 @@ type PersistedLauncherDocument = {
 };
 
 type PersistedLegacyDiffDocument = {
-  activeScope?: unknown;
   diffKind?: unknown;
   filePath?: unknown;
-  initialScope?: unknown;
   type?: unknown;
   kind?: unknown;
-  message?: unknown;
-  scope?: unknown;
   sha?: unknown;
+  message?: unknown;
   shortSha?: unknown;
   timestamp?: unknown;
 };
@@ -132,12 +130,6 @@ function getOptionalString(value: Record<string, unknown>, key: string): string 
   return typeof field === "string" ? field : undefined;
 }
 
-function getBasename(filePath: string): string {
-  const segments = filePath.split(/[\\/]/);
-  const basename = segments.at(-1);
-  return basename && basename.length > 0 ? basename : filePath;
-}
-
 function defaultCommitMessage(shortSha: string): string {
   return `Commit ${shortSha}`;
 }
@@ -150,15 +142,32 @@ function shortShaFromSha(sha: string): string {
   return sha.slice(0, 8);
 }
 
-export function isGitDiffScope(value: unknown): value is GitDiffScope {
-  return value === "working" || value === "staged" || value === "branch";
+function extractLegacyFileDiffFocusPath(tabKey: string | null): string | null {
+  if (!tabKey) {
+    return null;
+  }
+
+  const legacyDiffMatch = /^diff:(working|staged|branch):(.*)$/.exec(tabKey);
+  if (legacyDiffMatch) {
+    return legacyDiffMatch[2] ?? null;
+  }
+
+  if (tabKey.startsWith("file-diff:")) {
+    return tabKey.slice("file-diff:".length);
+  }
+
+  if (tabKey.startsWith("diff:file:")) {
+    return tabKey.slice("diff:file:".length);
+  }
+
+  return null;
 }
 
-export function fileDiffTabKey(filePath: string): string {
-  return `diff:file:${filePath}`;
+export function changesDiffTabKey(): string {
+  return "diff:changes";
 }
 
-export const fileDiffTabKeyV2 = fileDiffTabKey;
+export const changesDiffTabKeyV2 = changesDiffTabKey();
 
 export function commitDiffTabKey(sha: string): string {
   return `diff:commit:${sha}`;
@@ -166,18 +175,12 @@ export function commitDiffTabKey(sha: string): string {
 
 export const commitDiffTabKeyV2 = commitDiffTabKey;
 
-export function createFileDiffTab(
-  filePath: string,
-  initialScope: GitDiffScope,
-  activeScope: GitDiffScope = initialScope,
-): FileDiffDocument {
+export function createChangesDiffTab(focusPath: string | null = null): ChangesDiffDocument {
   return {
-    activeScope,
-    filePath,
-    initialScope,
-    key: fileDiffTabKey(filePath),
-    type: "file-diff",
-    label: getBasename(filePath),
+    focusPath,
+    key: changesDiffTabKey(),
+    type: "changes-diff",
+    label: "Changes",
   };
 }
 
@@ -211,10 +214,10 @@ export function createLauncherTab(id: string): LauncherTab {
   };
 }
 
-export function isFileDiffDocument(
+export function isChangesDiffDocument(
   document: WorkspaceSurfaceDocument,
-): document is FileDiffDocument {
-  return document.type === "file-diff";
+): document is ChangesDiffDocument {
+  return document.type === "changes-diff";
 }
 
 export function isCommitDiffDocument(
@@ -236,25 +239,20 @@ export function createDefaultWorkspaceSurfaceState(): WorkspaceSurfaceState {
   };
 }
 
-export function migrateLegacyActiveTabKeyToV2(activeTabKey: string | null): string | null {
-  if (!activeTabKey) {
+export function migrateLegacyTabKeyToV2(tabKey: string | null): string | null {
+  if (!tabKey) {
     return null;
   }
 
-  const legacyDiffMatch = /^diff:(working|staged|branch):(.*)$/.exec(activeTabKey);
-  if (legacyDiffMatch) {
-    return fileDiffTabKey(legacyDiffMatch[2] ?? "");
+  if (extractLegacyFileDiffFocusPath(tabKey) !== null || tabKey === changesDiffTabKey()) {
+    return changesDiffTabKey();
   }
 
-  if (activeTabKey.startsWith("file-diff:")) {
-    return fileDiffTabKey(activeTabKey.slice("file-diff:".length));
+  if (tabKey.startsWith("commit-diff:")) {
+    return commitDiffTabKey(tabKey.slice("commit-diff:".length));
   }
 
-  if (activeTabKey.startsWith("commit-diff:")) {
-    return commitDiffTabKey(activeTabKey.slice("commit-diff:".length));
-  }
-
-  return activeTabKey;
+  return tabKey;
 }
 
 function normalizeDocuments(documents: WorkspaceSurfaceDocument[]): WorkspaceSurfaceDocument[] {
@@ -275,7 +273,10 @@ function normalizeTabKeyList(keys: readonly string[]): string[] {
       continue;
     }
 
-    dedupedKeys.add(key);
+    const migratedKey = migrateLegacyTabKeyToV2(key);
+    if (migratedKey) {
+      dedupedKeys.add(migratedKey);
+    }
   }
 
   return [...dedupedKeys];
@@ -290,7 +291,7 @@ function normalizeWorkspaceSurfaceState(state: WorkspaceSurfaceState): Workspace
   const tabOrderKeys = normalizeTabKeyList(state.tabOrderKeys).filter(
     (key) => !hiddenRuntimeTabKeySet.has(key),
   );
-  const activeTabKey = migrateLegacyActiveTabKeyToV2(state.activeTabKey);
+  const activeTabKey = migrateLegacyTabKeyToV2(state.activeTabKey);
 
   return {
     activeTabKey: activeTabKey && hiddenRuntimeTabKeySet.has(activeTabKey) ? null : activeTabKey,
@@ -313,23 +314,28 @@ function parseJsonObject<T extends Record<string, unknown>>(value: string | null
   }
 }
 
-function parseFileDiffDocument(value: Record<string, unknown>): FileDiffDocument | null {
+interface LegacyFileDiffDocument {
+  filePath: string;
+  type: "legacy-file-diff";
+}
+
+type ParsedWorkspaceSurfaceDocument = WorkspaceSurfaceDocument | LegacyFileDiffDocument;
+
+function parseChangesDiffDocument(value: Record<string, unknown>): ChangesDiffDocument {
+  const focusPath = getOptionalString(value, "focusPath") ?? null;
+  return createChangesDiffTab(focusPath);
+}
+
+function parseFileDiffDocument(value: Record<string, unknown>): LegacyFileDiffDocument | null {
   const filePath = getOptionalString(value, "filePath");
   if (!filePath) {
     return null;
   }
 
-  const initialScope = isGitDiffScope(value.initialScope)
-    ? value.initialScope
-    : isGitDiffScope(value.scope)
-      ? value.scope
-      : null;
-  if (!initialScope) {
-    return null;
-  }
-
-  const activeScope = isGitDiffScope(value.activeScope) ? value.activeScope : initialScope;
-  return createFileDiffTab(filePath, initialScope, activeScope);
+  return {
+    filePath,
+    type: "legacy-file-diff",
+  };
 }
 
 function parseCommitDiffDocument(value: Record<string, unknown>): CommitDiffDocument | null {
@@ -375,12 +381,16 @@ function getPersistedDocumentType(value: Record<string, unknown>): string | null
   return null;
 }
 
-function parseWorkspaceSurfaceDocument(value: unknown): WorkspaceSurfaceDocument | null {
+function parseWorkspaceSurfaceDocument(value: unknown): ParsedWorkspaceSurfaceDocument | null {
   if (!isRecord(value)) {
     return null;
   }
 
   const documentType = getPersistedDocumentType(value);
+
+  if (documentType === "changes-diff") {
+    return parseChangesDiffDocument(value as PersistedChangesDiffDocument);
+  }
 
   if (documentType === "file-diff") {
     return parseFileDiffDocument(value as PersistedFileDiffDocument);
@@ -409,23 +419,65 @@ function parseWorkspaceSurfaceDocument(value: unknown): WorkspaceSurfaceDocument
   return null;
 }
 
+function collapsePersistedDocuments(
+  documents: ParsedWorkspaceSurfaceDocument[],
+  activeTabKey: string | null,
+): WorkspaceSurfaceDocument[] {
+  const collapsedDocuments: WorkspaceSurfaceDocument[] = [];
+  const activeLegacyFocusPath = extractLegacyFileDiffFocusPath(activeTabKey);
+  const activeChangesTab = migrateLegacyTabKeyToV2(activeTabKey) === changesDiffTabKey();
+  let diffInsertIndex: number | null = null;
+  let migratedFocusPath: string | null = activeLegacyFocusPath;
+  let fallbackFocusPath: string | null = null;
+
+  for (const document of documents) {
+    if (document.type === "legacy-file-diff") {
+      fallbackFocusPath ??= document.filePath;
+      if (activeLegacyFocusPath === document.filePath) {
+        migratedFocusPath = document.filePath;
+      }
+      diffInsertIndex ??= collapsedDocuments.length;
+      continue;
+    }
+
+    if (isChangesDiffDocument(document)) {
+      fallbackFocusPath ??= document.focusPath;
+      if (activeChangesTab && migratedFocusPath === null && document.focusPath !== null) {
+        migratedFocusPath = document.focusPath;
+      }
+      diffInsertIndex ??= collapsedDocuments.length;
+      continue;
+    }
+
+    collapsedDocuments.push(document);
+  }
+
+  if (diffInsertIndex !== null || activeChangesTab) {
+    collapsedDocuments.splice(
+      diffInsertIndex ?? collapsedDocuments.length,
+      0,
+      createChangesDiffTab(migratedFocusPath ?? fallbackFocusPath ?? null),
+    );
+  }
+
+  return normalizeDocuments(collapsedDocuments);
+}
+
 function parseWorkspaceSurfaceState(value: unknown): WorkspaceSurfaceState {
   if (!isRecord(value)) {
     return createDefaultWorkspaceSurfaceState();
   }
 
+  const activeTabKey = typeof value.activeTabKey === "string" ? value.activeTabKey : null;
   const documents = Array.isArray(value.documents)
-    ? normalizeDocuments(
+    ? collapsePersistedDocuments(
         value.documents
           .map((document) => parseWorkspaceSurfaceDocument(document))
-          .filter((document): document is WorkspaceSurfaceDocument => document !== null),
+          .filter((document): document is ParsedWorkspaceSurfaceDocument => document !== null),
+        activeTabKey,
       )
     : [];
 
-  const activeTabKey =
-    typeof value.activeTabKey === "string"
-      ? migrateLegacyActiveTabKeyToV2(value.activeTabKey)
-      : null;
   const hiddenRuntimeTabKeys = Array.isArray(value.hiddenRuntimeTabKeys)
     ? value.hiddenRuntimeTabKeys.filter((key): key is string => typeof key === "string")
     : [];
@@ -483,13 +535,13 @@ function serializeCommitDiffDocument(document: CommitDiffDocument): Record<strin
 function serializeWorkspaceSurfaceDocument(
   document: WorkspaceSurfaceDocument,
 ): Record<string, string> {
-  if (isFileDiffDocument(document)) {
-    return {
-      activeScope: document.activeScope,
-      filePath: document.filePath,
-      initialScope: document.initialScope,
-      type: document.type,
-    };
+  if (isChangesDiffDocument(document)) {
+    return document.focusPath === null
+      ? { type: document.type }
+      : {
+          focusPath: document.focusPath,
+          type: document.type,
+        };
   }
 
   if (isLauncherDocument(document)) {

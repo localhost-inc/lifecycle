@@ -28,6 +28,7 @@ describe("workspace provider interface", () => {
       "killTerminal",
       "exposePort",
       "getGitStatus",
+      "getGitChangesPatch",
       "getGitDiff",
       "listGitLog",
       "stageGitFiles",
@@ -36,7 +37,7 @@ describe("workspace provider interface", () => {
       "pushGit",
     ];
 
-    expect(requiredMethods).toHaveLength(22);
+    expect(requiredMethods).toHaveLength(23);
   });
 
   test("local provider exposes the full contract surface", () => {
@@ -58,6 +59,7 @@ describe("workspace provider interface", () => {
     expect(typeof provider.killTerminal).toBe("function");
     expect(typeof provider.exposePort).toBe("function");
     expect(typeof provider.getGitStatus).toBe("function");
+    expect(typeof provider.getGitChangesPatch).toBe("function");
     expect(typeof provider.getGitDiff).toBe("function");
     expect(typeof provider.listGitLog).toBe("function");
     expect(typeof provider.stageGitFiles).toBe("function");
@@ -105,6 +107,7 @@ describe("workspace provider interface", () => {
         behind: 0,
         files: [],
       }),
+      getGitChangesPatch: async () => "",
       getGitDiff: async (input: WorkspaceProviderGitDiffInput) => ({
         scope: input.scope,
         filePath: input.filePath,
@@ -143,6 +146,7 @@ describe("workspace provider interface", () => {
     expect(typeof provider.killTerminal).toBe("function");
     expect(typeof provider.exposePort).toBe("function");
     expect(typeof provider.getGitStatus).toBe("function");
+    expect(typeof provider.getGitChangesPatch).toBe("function");
     expect(typeof provider.getGitDiff).toBe("function");
     expect(typeof provider.listGitLog).toBe("function");
     expect(typeof provider.stageGitFiles).toBe("function");

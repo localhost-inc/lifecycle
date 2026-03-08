@@ -8,6 +8,10 @@ export const gitKeys = {
   status: (workspaceId: string) => ["workspace-git-status", workspaceId] as const,
 };
 
+interface GitQueryOptions {
+  polling?: boolean;
+}
+
 function createGitStatusQuery(workspaceId: string): QueryDescriptor<GitStatusResult> {
   return {
     key: gitKeys.status(workspaceId),
@@ -46,6 +50,7 @@ function usePollingRefresh(
 
 export function useGitStatus(
   workspaceId: string | null,
+  options?: GitQueryOptions,
 ): StoreQueryResult<GitStatusResult | undefined> {
   const descriptor = useMemo(
     () => (workspaceId ? createGitStatusQuery(workspaceId) : null),
@@ -54,8 +59,9 @@ export function useGitStatus(
   const query = useStoreQuery(descriptor, {
     disabledData: undefined,
   });
+  const polling = options?.polling ?? true;
 
-  usePollingRefresh(query.refresh, Boolean(workspaceId), 3000);
+  usePollingRefresh(query.refresh, Boolean(workspaceId) && polling, 3000);
   return query;
 }
 

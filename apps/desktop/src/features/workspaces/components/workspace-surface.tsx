@@ -213,12 +213,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
     }
 
     clearTerminalResponseReady(activeTerminalId);
-  }, [
-    activeTerminalId,
-    clearTerminalResponseReady,
-    documentVisible,
-    isTerminalResponseReady,
-  ]);
+  }, [activeTerminalId, clearTerminalResponseReady, documentVisible, isTerminalResponseReady]);
 
   const handleSelectTab = useCallback(
     (key: string) => {
@@ -576,9 +571,6 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
         creatingSelection={creatingSelection}
         documents={state.documents}
         hasVisibleTabs={visibleTabs.length > 0}
-        onChangeFileDiffScope={(key, scope) => {
-          dispatch({ key, scope, type: "change-scope" });
-        }}
         onCreateTerminal={handleCreateTerminal}
         onOpenTerminal={handleShowRuntimeTab}
         sessionHistory={sessionHistory}

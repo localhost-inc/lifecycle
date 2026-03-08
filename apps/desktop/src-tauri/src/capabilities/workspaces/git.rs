@@ -165,6 +165,14 @@ pub async fn get_workspace_git_scope_patch(
     status::get_git_scope_patch(&worktree_path, &scope).await
 }
 
+pub async fn get_workspace_git_changes_patch(
+    db_path: &str,
+    workspace_id: String,
+) -> Result<String, LifecycleError> {
+    let worktree_path = require_local_worktree(db_path, &workspace_id)?;
+    status::get_git_changes_patch(&worktree_path).await
+}
+
 pub async fn list_workspace_git_log(
     db_path: &str,
     workspace_id: String,

@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  createChangesDiffTab,
   createCommitDiffTab,
-  createFileDiffTab,
   createLauncherTab,
 } from "../state/workspace-surface-state";
 import { WorkspaceSurfaceTabLeading } from "./surface-icons";
@@ -39,7 +39,7 @@ describe("WorkspaceSurfaceTabLeading", () => {
           tab: createLauncherTab("launcher-1"),
         }),
         createElement(WorkspaceSurfaceTabLeading, {
-          tab: createFileDiffTab("src/app.tsx", "working"),
+          tab: createChangesDiffTab("src/app.tsx"),
         }),
         createElement(WorkspaceSurfaceTabLeading, {
           tab: createCommitDiffTab("abc12345"),
@@ -48,7 +48,7 @@ describe("WorkspaceSurfaceTabLeading", () => {
     );
 
     expect(markup).toContain('data-surface-tab-icon="launcher"');
-    expect(markup).toContain('data-surface-tab-icon="file-diff"');
+    expect(markup).toContain('data-surface-tab-icon="changes-diff"');
     expect(markup).toContain('data-surface-tab-icon="commit-diff"');
   });
 });

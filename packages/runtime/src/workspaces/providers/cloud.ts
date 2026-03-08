@@ -39,6 +39,7 @@ export interface CloudWorkspaceClient {
   killTerminal(terminalId: string): Promise<void>;
   exposePort(workspaceId: string, serviceName: string, port: number): Promise<string | null>;
   getGitStatus(workspaceId: string): Promise<GitStatusResult>;
+  getGitChangesPatch(workspaceId: string): Promise<string>;
   getGitDiff(input: WorkspaceProviderGitDiffInput): Promise<GitDiffResult>;
   listGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]>;
   stageGitFiles(workspaceId: string, filePaths: string[]): Promise<void>;
@@ -120,6 +121,10 @@ export class CloudWorkspaceProvider implements WorkspaceProvider {
 
   getGitStatus(workspaceId: string): Promise<GitStatusResult> {
     return this.client.getGitStatus(workspaceId);
+  }
+
+  getGitChangesPatch(workspaceId: string): Promise<string> {
+    return this.client.getGitChangesPatch(workspaceId);
   }
 
   getGitDiff(input: WorkspaceProviderGitDiffInput): Promise<GitDiffResult> {

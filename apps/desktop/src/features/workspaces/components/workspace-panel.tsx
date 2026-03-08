@@ -1,4 +1,4 @@
-import type { GitDiffScope, GitLogEntry } from "@lifecycle/contracts";
+import type { GitLogEntry } from "@lifecycle/contracts";
 import {
   Alert,
   AlertDescription,
@@ -87,12 +87,11 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
   );
 
   const hasNotices = showSetup || showServices || (status === "failed" && Boolean(failureReason));
-  const handleOpenDiff = useCallback((filePath: string, scope: GitDiffScope) => {
+  const handleOpenDiff = useCallback((filePath: string) => {
     setOpenDocumentRequest({
-      filePath,
+      focusPath: filePath,
       id: crypto.randomUUID(),
-      type: "file-diff",
-      scope,
+      type: "changes-diff",
     });
   }, []);
   const handleOpenCommitDiff = useCallback((entry: GitLogEntry) => {

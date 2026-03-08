@@ -2,7 +2,11 @@ import type { ReactNode } from "react";
 import { FileText, GitCommitHorizontal, Plus } from "lucide-react";
 import { ResponseReadyDot } from "../../../components/response-ready-dot";
 import { TerminalStatusDot } from "../../terminals/components/terminal-status-dot";
-import { isCommitDiffDocument, isLauncherDocument } from "../state/workspace-surface-state";
+import {
+  isChangesDiffDocument,
+  isCommitDiffDocument,
+  isLauncherDocument,
+} from "../state/workspace-surface-state";
 import type { HarnessProvider } from "../../terminals/api";
 import type { WorkspaceSurfaceTab } from "./workspace-surface-logic";
 
@@ -75,7 +79,11 @@ function tabIconName(tab: WorkspaceSurfaceTab): string {
     return "commit-diff";
   }
 
-  return "file-diff";
+  if (isChangesDiffDocument(tab)) {
+    return "changes-diff";
+  }
+
+  return "workspace-tab";
 }
 
 function SurfaceBubble({ children, tab }: { children: ReactNode; tab: WorkspaceSurfaceTab }) {

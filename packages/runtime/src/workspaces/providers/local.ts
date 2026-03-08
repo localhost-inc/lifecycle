@@ -146,6 +146,10 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
     return this.invoke("get_workspace_git_status", { workspaceId }) as Promise<GitStatusResult>;
   }
 
+  async getGitChangesPatch(workspaceId: string): Promise<string> {
+    return this.invoke("get_workspace_git_changes_patch", { workspaceId }) as Promise<string>;
+  }
+
   async getGitDiff(input: WorkspaceProviderGitDiffInput): Promise<GitDiffResult> {
     return this.invoke("get_workspace_git_diff", {
       workspaceId: input.workspaceId,

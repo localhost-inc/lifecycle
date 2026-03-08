@@ -11,7 +11,7 @@ The workspace center panel is a shared surface that can host both provider-backe
 2. Document tabs:
    - backed by workspace content or derived workspace artifacts
    - examples: launcher, git diff, file editor, preview-specific documents
-   - identity is client-owned and derived from document content (`diff:path:scope`, future `file:path`)
+   - identity is client-owned and derived from document intent (`diff:changes`, `diff:commit:<sha>`, future `file:path`)
 
 ## Ownership Rules
 
@@ -40,10 +40,10 @@ The workspace center panel is a shared surface that can host both provider-backe
 ## Git Diff Documents
 
 1. Git diffs are document tabs, not runtime tabs.
-2. A diff tab key should be stable per `{file_path, scope}` so re-opening focuses the existing tab instead of duplicating it.
-3. Diff scope is explicit: `working` and `staged` are different documents even for the same file.
+2. Current local edits use a single workspace-scoped `Changes` tab with a fixed key; repeated clicks update that tab's `focusPath` instead of opening file-scoped diff tabs.
+3. History commit diffs use commit-scoped document tabs keyed by commit SHA.
 4. Full patch rendering belongs in the center panel; list summaries belong in the side panel.
-5. The side panel should stay lightweight: summaries, status toggles, and diff navigation belong there; commit composition does not.
+5. The side panel should stay lightweight: summaries, stage/unstage actions, and diff navigation belong there; commit composition does not.
 
 ## Forward Compatibility
 

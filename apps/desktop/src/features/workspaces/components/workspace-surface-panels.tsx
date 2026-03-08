@@ -1,13 +1,11 @@
-import type { GitDiffScope } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
 import { TerminalSquare } from "lucide-react";
 import type { CreateTerminalRequest, HarnessProvider, TerminalRow } from "../../terminals/api";
 import { TerminalSurface } from "../../terminals/components/terminal-surface";
-import { CommitDiffViewerSurface } from "../../git/components/commit-diff-viewer-surface";
-import { DiffViewerSurface } from "../../git/components/diff-viewer-surface";
+import { GitDiffSurface } from "../../git/components/git-diff-surface";
 import {
+  isChangesDiffDocument,
   isCommitDiffDocument,
-  isFileDiffDocument,
   isLauncherDocument,
   type WorkspaceSurfaceDocument,
 } from "../state/workspace-surface-state";
@@ -20,7 +18,6 @@ interface WorkspaceSurfacePanelsProps {
   creatingSelection: "shell" | HarnessProvider | null;
   documents: WorkspaceSurfaceDocument[];
   hasVisibleTabs: boolean;
-  onChangeFileDiffScope: (key: string, scope: GitDiffScope) => void;
   onCreateTerminal: (input: CreateTerminalRequest, launcherKey?: string) => Promise<void>;
   onOpenTerminal: (terminalId: string, launcherKey?: string) => void;
   sessionHistory: TerminalRow[];
@@ -35,7 +32,6 @@ export function WorkspaceSurfacePanels({
   creatingSelection,
   documents,
   hasVisibleTabs,
-  onChangeFileDiffScope,
   onCreateTerminal,
   onOpenTerminal,
   sessionHistory,
@@ -89,17 +85,13 @@ export function WorkspaceSurfacePanels({
             className={active ? "flex min-h-0 flex-1 flex-col" : "hidden"}
             role="tabpanel"
           >
-            {isFileDiffDocument(tab) ? (
-              <DiffViewerSurface
-                activeScope={tab.activeScope}
-                filePath={tab.filePath}
-                onScopeChange={(scope) => {
-                  onChangeFileDiffScope(tab.key, scope);
-                }}
+            {isChangesDiffDocument(tab) ? (
+              <GitDiffSurface
+                source={{ focusPath: tab.focusPath, mode: "changes" }}
                 workspaceId={workspaceId}
               />
             ) : isCommitDiffDocument(tab) ? (
-              <CommitDiffViewerSurface commit={tab} workspaceId={workspaceId} />
+              <GitDiffSurface source={{ commit: tab, mode: "commit" }} workspaceId={workspaceId} />
             ) : isLauncherDocument(tab) ? (
               <WorkspaceLauncherSurface
                 activeTerminalId={activeTerminalId}

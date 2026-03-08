@@ -101,6 +101,7 @@ export interface WorkspaceProvider {
   killTerminal(terminalId: string): Promise<void>;
   exposePort(workspaceId: string, serviceName: string, port: number): Promise<string | null>;
   getGitStatus(workspaceId: string): Promise<GitStatusResult>;
+  getGitChangesPatch(workspaceId: string): Promise<string>;
   getGitDiff(input: WorkspaceProviderGitDiffInput): Promise<GitDiffResult>;
   listGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]>;
   stageGitFiles(workspaceId: string, filePaths: string[]): Promise<void>;

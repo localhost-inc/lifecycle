@@ -243,6 +243,17 @@ Current runtime signals should normalize into kernel events along these lines:
 
 The desktop store may continue to use narrower in-process event types, but those should be adapters over this kernel, not an independent contract.
 
+## Git Opportunity
+
+The current desktop git Changes flow still depends on status polling plus query invalidation to keep sidebar state and diff surfaces aligned. The stale-diff edge cases in the unified Changes tab are a concrete signal that `git` should graduate from "initial domain" to explicit typed fact events.
+
+Useful future facts include:
+1. `git.status_changed`
+2. `git.head_changed`
+3. `git.index_changed`
+
+Those events should describe repository-level facts after authoritative git mutations such as stage, unstage, commit, checkout, and refresh-worthy file-state transitions. That would let desktop consumers invalidate status and patch queries directly instead of inferring reloads from polling snapshots or UI-local focus changes.
+
 ## Implementation Direction
 
 1. Create one event registry that owns event names, versions, and payload schemas.

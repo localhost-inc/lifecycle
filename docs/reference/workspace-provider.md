@@ -22,6 +22,7 @@ interface WorkspaceProvider {
   killTerminal(terminal_id) → void
   exposePort(workspace_id, service, port) → access_url | null
   getGitStatus(workspace_id) → git_status
+  getGitChangesPatch(workspace_id) → unified_diff
   getGitDiff(workspace_id, file_path, scope) → unified_diff
   listGitLog(workspace_id, limit) → git_log_entries
   stageGitFiles(workspace_id, file_paths[]) → void
@@ -92,7 +93,8 @@ Git operations follow the same authority rule as terminals and lifecycle mutatio
    - local filesystem assumptions do not apply
 5. The public git result types must stay provider-agnostic:
    - status includes current branch/head plus split index/worktree file state
-   - diff uses explicit `scope` (`working|staged`)
+   - changes patch returns the combined `HEAD -> worktree` diff for the primary Changes viewer
+   - file diff uses explicit `scope` (`working|staged|branch`) for secondary or provider-level flows
    - log entries and commit/push results use normalized typed payloads
 6. UI surfaces may hide unsupported git actions per mode until the authoritative provider exists, but the contract shape should not fork.
 

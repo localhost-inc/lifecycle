@@ -1,26 +1,25 @@
-import type { GitDiffScope, GitLogEntry, TerminalStatus } from "@lifecycle/contracts";
+import type { GitLogEntry, TerminalStatus } from "@lifecycle/contracts";
 import type { DragEvent as ReactDragEvent } from "react";
 import type { HarnessProvider, TerminalRow } from "../../terminals/api";
 import type { WorkspaceShortcutEvent } from "../api";
 import {
+  changesDiffTabKey,
   commitDiffTabKey,
+  createChangesDiffTab,
   createCommitDiffTab,
-  createFileDiffTab,
   createLauncherTab,
-  fileDiffTabKey,
+  isChangesDiffDocument,
   isCommitDiffDocument,
-  isFileDiffDocument,
   readWorkspaceSurfaceState,
-  type FileDiffDocument,
+  type ChangesDiffDocument,
   type WorkspaceSurfaceDocument,
   type WorkspaceSurfaceState,
 } from "../state/workspace-surface-state";
 
-export interface FileDiffOpenRequest {
-  filePath: string;
+export interface ChangesDiffOpenRequest {
+  focusPath: string | null;
   id: string;
-  type: "file-diff";
-  scope: GitDiffScope;
+  type: "changes-diff";
 }
 
 export interface CommitDiffOpenRequest {
@@ -29,7 +28,7 @@ export interface CommitDiffOpenRequest {
   type: "commit-diff";
 }
 
-export type OpenDocumentRequest = FileDiffOpenRequest | CommitDiffOpenRequest;
+export type OpenDocumentRequest = ChangesDiffOpenRequest | CommitDiffOpenRequest;
 
 export type RuntimeTab = {
   harnessProvider: HarnessProvider | null;
@@ -75,7 +74,6 @@ export type WorkspaceSurfaceAction =
   | { type: "open-document"; request: OpenDocumentRequest }
   | { type: "open-launcher"; launcherId: string }
   | { type: "replace-launcher-with-tab"; launcherKey: string; tabKey: string }
-  | { type: "change-scope"; key: string; scope: GitDiffScope }
   | { type: "select-tab"; key: string | null }
   | { type: "close-document"; key: string; nextActiveKey: string | null }
   | { type: "hide-runtime-tab"; key: string; nextActiveKey: string | null }
@@ -406,8 +404,8 @@ export function tabTitle(tab: WorkspaceSurfaceTab): string {
     return tab.label;
   }
 
-  if (isFileDiffDocument(tab)) {
-    return tab.filePath;
+  if (isChangesDiffDocument(tab)) {
+    return tab.label;
   }
 
   if (isCommitDiffDocument(tab)) {
@@ -454,10 +452,10 @@ export function workspaceSurfaceReducer(
     case "open-document": {
       const request = action.request;
 
-      if (request.type === "file-diff") {
-        const key = fileDiffTabKey(request.filePath);
+      if (request.type === "changes-diff") {
+        const key = changesDiffTabKey();
         const existing = state.documents.find(
-          (tab): tab is FileDiffDocument => isFileDiffDocument(tab) && tab.key === key,
+          (tab): tab is ChangesDiffDocument => isChangesDiffDocument(tab) && tab.key === key,
         );
 
         if (existing) {
@@ -465,8 +463,8 @@ export function workspaceSurfaceReducer(
             ...state,
             activeTabKey: key,
             documents: state.documents.map((tab) =>
-              tab.key === key && isFileDiffDocument(tab)
-                ? { ...tab, activeScope: request.scope }
+              tab.key === key && isChangesDiffDocument(tab)
+                ? { ...tab, focusPath: request.focusPath }
                 : tab,
             ),
             tabOrderKeys: state.tabOrderKeys.includes(key)
@@ -478,7 +476,7 @@ export function workspaceSurfaceReducer(
         return {
           ...state,
           activeTabKey: key,
-          documents: [...state.documents, createFileDiffTab(request.filePath, request.scope)],
+          documents: [...state.documents, createChangesDiffTab(request.focusPath)],
           tabOrderKeys: appendWorkspaceTabKey(state.tabOrderKeys, key),
         };
       }
@@ -519,15 +517,6 @@ export function workspaceSurfaceReducer(
         tabOrderKeys,
       };
     }
-    case "change-scope":
-      return {
-        ...state,
-        documents: state.documents.map((tab) =>
-          tab.key === action.key && isFileDiffDocument(tab)
-            ? { ...tab, activeScope: action.scope }
-            : tab,
-        ),
-      };
     case "select-tab":
     case "sync-active":
       return {
