@@ -15,7 +15,7 @@ use serde_json::Value;
 use std::collections::{hash_map::DefaultHasher, HashSet};
 use std::fs::{self, File};
 use std::hash::{Hash, Hasher};
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
@@ -48,6 +48,16 @@ struct TerminalStatusEvent {
 }
 
 #[derive(Debug, Clone, Serialize)]
+struct TerminalHarnessTurnCompletedEvent {
+    terminal_id: String,
+    workspace_id: String,
+    harness_provider: Option<String>,
+    harness_session_id: Option<String>,
+    completion_key: String,
+    turn_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SavedTerminalAttachment {
     pub absolute_path: String,
@@ -75,8 +85,10 @@ pub struct NativeTerminalTheme {
 const HARNESS_SESSION_CAPTURE_GRACE: Duration = Duration::from_secs(5);
 const HARNESS_SESSION_CAPTURE_POLL_INTERVAL: Duration = Duration::from_millis(500);
 const HARNESS_SESSION_CAPTURE_TIMEOUT: Duration = Duration::from_secs(15);
+const HARNESS_COMPLETION_WATCH_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 static HARNESS_SESSION_CAPTURE_INFLIGHT: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
+static HARNESS_COMPLETION_WATCH_INFLIGHT: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
 #[derive(Clone, Copy)]
 struct HarnessProviderConfig {
@@ -114,6 +126,10 @@ enum SessionStoreScope {
 
 fn harness_session_capture_registry() -> &'static Mutex<HashSet<String>> {
     HARNESS_SESSION_CAPTURE_INFLIGHT.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+fn harness_completion_watch_registry() -> &'static Mutex<HashSet<String>> {
+    HARNESS_COMPLETION_WATCH_INFLIGHT.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
 fn claude_resume_args(session_id: &str) -> Vec<String> {
@@ -265,7 +281,8 @@ pub async fn create_terminal(
     }
 
     emit_terminal_created(&app, &terminal);
-    maybe_schedule_harness_session_capture(
+    maybe_schedule_harness_observers(
+        &app,
         &db,
         &terminal,
         &workspace.worktree_path,
@@ -565,7 +582,8 @@ pub async fn sync_native_terminal_surface(
             color_scheme,
         )
     })?;
-    maybe_schedule_harness_session_capture(
+    maybe_schedule_harness_observers(
+        window.app_handle(),
         &db,
         &terminal,
         &workspace.worktree_path,
@@ -585,7 +603,8 @@ pub async fn sync_native_terminal_surface(
     Ok(())
 }
 
-fn maybe_schedule_harness_session_capture(
+fn maybe_schedule_harness_observers(
+    app: &AppHandle,
     db_path: &str,
     terminal: &TerminalRow,
     worktree_path: &str,
@@ -594,7 +613,18 @@ fn maybe_schedule_harness_session_capture(
     let Some(provider) = resolve_harness_provider(terminal.harness_provider.as_deref()) else {
         return;
     };
-    if terminal.harness_session_id.is_some() {
+
+    if let Some(session_id) = terminal.harness_session_id.as_deref() {
+        maybe_schedule_harness_completion_watch(
+            app,
+            db_path,
+            &terminal.id,
+            &terminal.workspace_id,
+            terminal.harness_provider.as_deref(),
+            provider,
+            session_id,
+            worktree_path,
+        );
         return;
     }
 
@@ -606,6 +636,7 @@ fn maybe_schedule_harness_session_capture(
         }
     }
 
+    let app = app.clone();
     let db_path = db_path.to_string();
     let terminal_id = terminal.id.clone();
     let workspace_id = terminal.workspace_id.clone();
@@ -622,7 +653,8 @@ fn maybe_schedule_harness_session_capture(
         );
 
         if let Some(session_id) = capture_result {
-            if let Err(error) = update_terminal_harness_session_id(&db_path, &terminal_id, &session_id)
+            if let Err(error) =
+                update_terminal_harness_session_id(&db_path, &terminal_id, &session_id)
             {
                 tracing::warn!(
                     "failed to persist {} harness session id for terminal {}: {error}",
@@ -630,11 +662,331 @@ fn maybe_schedule_harness_session_capture(
                     terminal_id
                 );
             }
+
+            maybe_schedule_harness_completion_watch(
+                &app,
+                &db_path,
+                &terminal_id,
+                &workspace_id,
+                Some(provider.name),
+                provider,
+                &session_id,
+                &worktree_path,
+            );
         }
 
         let mut inflight = harness_session_capture_registry().lock().unwrap();
         inflight.remove(&terminal_id);
     });
+}
+
+fn maybe_schedule_harness_completion_watch(
+    app: &AppHandle,
+    db_path: &str,
+    terminal_id: &str,
+    workspace_id: &str,
+    harness_provider: Option<&str>,
+    provider: HarnessProviderConfig,
+    session_id: &str,
+    worktree_path: &str,
+) {
+    if provider.session_store.is_none() {
+        return;
+    }
+
+    let registry = harness_completion_watch_registry();
+    {
+        let mut inflight = registry.lock().unwrap();
+        if !inflight.insert(terminal_id.to_string()) {
+            return;
+        }
+    }
+
+    let app = app.clone();
+    let db_path = db_path.to_string();
+    let terminal_id = terminal_id.to_string();
+    let workspace_id = workspace_id.to_string();
+    let harness_provider = harness_provider.map(str::to_string);
+    let harness_session_id = session_id.to_string();
+    let worktree_path = worktree_path.to_string();
+
+    thread::spawn(move || {
+        watch_harness_turn_completions(
+            &app,
+            &db_path,
+            &terminal_id,
+            &workspace_id,
+            harness_provider.as_deref(),
+            &harness_session_id,
+            provider,
+            &worktree_path,
+        );
+
+        let mut inflight = harness_completion_watch_registry().lock().unwrap();
+        inflight.remove(&terminal_id);
+    });
+}
+
+#[derive(Debug, Clone)]
+struct HarnessTurnCompletion {
+    completion_key: String,
+    turn_id: Option<String>,
+}
+
+fn watch_harness_turn_completions(
+    app: &AppHandle,
+    db_path: &str,
+    terminal_id: &str,
+    workspace_id: &str,
+    harness_provider: Option<&str>,
+    harness_session_id: &str,
+    provider: HarnessProviderConfig,
+    worktree_path: &str,
+) {
+    let mut session_log_path: Option<PathBuf> = None;
+    let mut emitted_completion_keys = HashSet::new();
+    let mut log_offset = 0_u64;
+    let mut pending_line_fragment = String::new();
+
+    loop {
+        match load_terminal_row(db_path, terminal_id) {
+            Ok(Some(terminal)) => {
+                if terminal.status == TerminalStatus::Finished.as_str()
+                    || terminal.status == TerminalStatus::Failed.as_str()
+                {
+                    return;
+                }
+            }
+            Ok(None) => return,
+            Err(error) => {
+                tracing::warn!(
+                    "failed to load terminal {} while watching harness completion: {error}",
+                    terminal_id
+                );
+                return;
+            }
+        }
+
+        if session_log_path.is_none() {
+            session_log_path =
+                resolve_harness_session_log_path(provider, worktree_path, harness_session_id);
+            if let Some(path) = session_log_path.as_ref() {
+                if let Ok(metadata) = fs::metadata(path) {
+                    log_offset = metadata.len();
+                    pending_line_fragment.clear();
+                }
+            } else {
+                thread::sleep(HARNESS_COMPLETION_WATCH_POLL_INTERVAL);
+                continue;
+            }
+        }
+
+        let Some(path) = session_log_path.as_ref() else {
+            thread::sleep(HARNESS_COMPLETION_WATCH_POLL_INTERVAL);
+            continue;
+        };
+
+        match read_new_harness_log_lines(path, &mut log_offset, &mut pending_line_fragment) {
+            Ok(lines) => {
+                for line in lines {
+                    let Some(completion) = parse_harness_turn_completion(provider, &line) else {
+                        continue;
+                    };
+                    if !emitted_completion_keys.insert(completion.completion_key.clone()) {
+                        continue;
+                    }
+
+                    emit_harness_turn_completed(
+                        app,
+                        terminal_id,
+                        workspace_id,
+                        harness_provider,
+                        harness_session_id,
+                        &completion.completion_key,
+                        completion.turn_id.as_deref(),
+                    );
+                }
+            }
+            Err(error) => {
+                tracing::debug!(
+                    "failed to tail harness session log for terminal {}: {error}",
+                    terminal_id
+                );
+                session_log_path = None;
+                log_offset = 0;
+                pending_line_fragment.clear();
+            }
+        }
+
+        thread::sleep(HARNESS_COMPLETION_WATCH_POLL_INTERVAL);
+    }
+}
+
+fn resolve_harness_session_log_path(
+    provider: HarnessProviderConfig,
+    worktree_path: &str,
+    session_id: &str,
+) -> Option<PathBuf> {
+    let store = provider.session_store?;
+    let root = harness_home_subdir(store.root_subdir)?;
+
+    match store.scope {
+        SessionStoreScope::ExactWorkspaceDir { workspace_dir_name } => {
+            let path = root
+                .join(workspace_dir_name(worktree_path))
+                .join(format!("{session_id}.jsonl"));
+            path.exists().then_some(path)
+        }
+        SessionStoreScope::Recursive => {
+            resolve_harness_session_log_path_from_tree(&root, &store, worktree_path, session_id)
+        }
+    }
+}
+
+fn resolve_harness_session_log_path_from_tree(
+    root: &Path,
+    store: &SessionStoreConfig,
+    worktree_path: &str,
+    session_id: &str,
+) -> Option<PathBuf> {
+    let mut pending = vec![root.to_path_buf()];
+
+    while let Some(dir) = pending.pop() {
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+
+            if file_type.is_dir() {
+                pending.push(path);
+                continue;
+            }
+
+            if path.extension().and_then(|extension| extension.to_str()) != Some("jsonl") {
+                continue;
+            }
+
+            let Some((cwd, candidate_session_id)) = read_session_metadata(&path, store) else {
+                continue;
+            };
+            if cwd == worktree_path && candidate_session_id == session_id {
+                return Some(path);
+            }
+        }
+    }
+
+    None
+}
+
+fn read_new_harness_log_lines(
+    path: &Path,
+    offset: &mut u64,
+    pending_line_fragment: &mut String,
+) -> Result<Vec<String>, std::io::Error> {
+    let metadata = fs::metadata(path)?;
+    let file_len = metadata.len();
+    if file_len < *offset {
+        *offset = file_len;
+        pending_line_fragment.clear();
+        return Ok(Vec::new());
+    }
+
+    let mut file = File::open(path)?;
+    file.seek(SeekFrom::Start(*offset))?;
+
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    *offset = file_len;
+
+    if bytes.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    pending_line_fragment.push_str(&String::from_utf8_lossy(&bytes));
+
+    let mut lines = Vec::new();
+    while let Some(newline_index) = pending_line_fragment.find('\n') {
+        let line = pending_line_fragment[..newline_index]
+            .trim_end_matches('\r')
+            .to_string();
+        pending_line_fragment.drain(..=newline_index);
+        if !line.is_empty() {
+            lines.push(line);
+        }
+    }
+
+    Ok(lines)
+}
+
+fn parse_harness_turn_completion(
+    provider: HarnessProviderConfig,
+    line: &str,
+) -> Option<HarnessTurnCompletion> {
+    let value = serde_json::from_str::<Value>(line).ok()?;
+
+    match provider.name {
+        "claude" => {
+            if json_string_at_path(&value, &["type"]) != Some("assistant") {
+                return None;
+            }
+            if json_string_at_path(&value, &["message", "stop_reason"]) != Some("end_turn") {
+                return None;
+            }
+
+            let turn_id = json_string_at_path(&value, &["message", "id"])
+                .or_else(|| json_string_at_path(&value, &["uuid"]));
+
+            Some(HarnessTurnCompletion {
+                completion_key: build_harness_completion_key(provider.name, line, &[turn_id]),
+                turn_id: turn_id.map(ToString::to_string),
+            })
+        }
+        "codex" => {
+            if json_string_at_path(&value, &["type"]) != Some("event_msg") {
+                return None;
+            }
+            if json_string_at_path(&value, &["payload", "type"]) != Some("task_complete") {
+                return None;
+            }
+
+            let turn_id = json_string_at_path(&value, &["payload", "turn_id"]);
+            let last_agent_message_id =
+                json_string_at_path(&value, &["payload", "last_agent_message", "id"])
+                    .or_else(|| {
+                        json_string_at_path(&value, &["payload", "last_agent_message", "uuid"])
+                    });
+
+            Some(HarnessTurnCompletion {
+                completion_key: build_harness_completion_key(
+                    provider.name,
+                    line,
+                    &[turn_id, last_agent_message_id],
+                ),
+                turn_id: turn_id.map(ToString::to_string),
+            })
+        }
+        _ => None,
+    }
+}
+
+fn build_harness_completion_key(
+    provider_name: &str,
+    line: &str,
+    identifiers: &[Option<&str>],
+) -> String {
+    if let Some(identifier) = identifiers.iter().flatten().find(|value| !value.is_empty()) {
+        return format!("{provider_name}:{identifier}");
+    }
+
+    let mut hasher = DefaultHasher::new();
+    provider_name.hash(&mut hasher);
+    line.hash(&mut hasher);
+    format!("{provider_name}:hash:{:016x}", hasher.finish())
 }
 
 fn wait_for_harness_session_id(
@@ -672,9 +1024,12 @@ fn wait_for_harness_session_id(
             load_claimed_harness_session_ids(db_path, workspace_id, provider.name, terminal_id)
                 .unwrap_or_default();
 
-        if let Some(session_id) =
-            discover_harness_session_id(provider, worktree_path, launched_after, &claimed_session_ids)
-        {
+        if let Some(session_id) = discover_harness_session_id(
+            provider,
+            worktree_path,
+            launched_after,
+            &claimed_session_ids,
+        ) {
             return Some(session_id);
         }
 
@@ -775,7 +1130,10 @@ fn discover_session_id_from_directory(
     }
 
     candidates.sort_by(|left, right| right.modified_at.cmp(&left.modified_at));
-    candidates.into_iter().next().map(|candidate| candidate.session_id)
+    candidates
+        .into_iter()
+        .next()
+        .map(|candidate| candidate.session_id)
 }
 
 fn discover_session_id_from_tree(
@@ -832,7 +1190,10 @@ fn discover_session_id_from_tree(
     }
 
     candidates.sort_by(|left, right| right.modified_at.cmp(&left.modified_at));
-    candidates.into_iter().next().map(|candidate| candidate.session_id)
+    candidates
+        .into_iter()
+        .next()
+        .map(|candidate| candidate.session_id)
 }
 
 fn read_session_metadata(path: &Path, store: &SessionStoreConfig) -> Option<(String, String)> {
@@ -1506,6 +1867,28 @@ pub(super) fn emit_terminal_status(app: &AppHandle, terminal: &TerminalRow) {
     );
 }
 
+fn emit_harness_turn_completed(
+    app: &AppHandle,
+    terminal_id: &str,
+    workspace_id: &str,
+    harness_provider: Option<&str>,
+    harness_session_id: &str,
+    completion_key: &str,
+    turn_id: Option<&str>,
+) {
+    let _ = app.emit(
+        "terminal:harness-turn-completed",
+        TerminalHarnessTurnCompletedEvent {
+            completion_key: completion_key.to_string(),
+            terminal_id: terminal_id.to_string(),
+            workspace_id: workspace_id.to_string(),
+            harness_provider: harness_provider.map(str::to_string),
+            harness_session_id: Some(harness_session_id.to_string()),
+            turn_id: turn_id.map(str::to_string),
+        },
+    );
+}
+
 pub(crate) fn complete_native_terminal_exit(
     app: &AppHandle,
     db_path: &str,
@@ -1688,7 +2071,9 @@ mod tests {
     #[test]
     fn claude_project_directory_name_matches_cli_workspace_encoding() {
         assert_eq!(
-            claude_project_directory_name("/Users/kyle/.lifecycle/worktrees/frost-harbor--57f59253"),
+            claude_project_directory_name(
+                "/Users/kyle/.lifecycle/worktrees/frost-harbor--57f59253"
+            ),
             "-Users-kyle--lifecycle-worktrees-frost-harbor--57f59253"
         );
     }
@@ -1779,6 +2164,34 @@ mod tests {
         );
 
         assert_eq!(discovered, None);
+    }
+
+    #[test]
+    fn parses_codex_task_complete_lines_as_turn_completions() {
+        let provider = resolve_harness_provider(Some("codex")).expect("codex provider");
+
+        let completion = parse_harness_turn_completion(
+            provider,
+            "{\"type\":\"event_msg\",\"payload\":{\"type\":\"task_complete\",\"turn_id\":\"turn-123\"}}",
+        )
+        .expect("codex task complete");
+
+        assert_eq!(completion.completion_key, "codex:turn-123");
+        assert_eq!(completion.turn_id.as_deref(), Some("turn-123"));
+    }
+
+    #[test]
+    fn parses_claude_end_turn_lines_as_turn_completions() {
+        let provider = resolve_harness_provider(Some("claude")).expect("claude provider");
+
+        let completion = parse_harness_turn_completion(
+            provider,
+            "{\"type\":\"assistant\",\"uuid\":\"assistant-uuid\",\"message\":{\"id\":\"msg_123\",\"stop_reason\":\"end_turn\"}}",
+        )
+        .expect("claude end_turn");
+
+        assert_eq!(completion.completion_key, "claude:msg_123");
+        assert_eq!(completion.turn_id.as_deref(), Some("msg_123"));
     }
 
     #[test]

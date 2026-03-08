@@ -21,6 +21,7 @@ import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useHistoryAvailability } from "../../app/history-stack";
 import { ProjectItem } from "../../features/projects/components/project-item";
+import { useTerminalResponseReady } from "../../features/terminals/state/terminal-response-ready-provider";
 import type { WorkspaceRow } from "../../features/workspaces/api";
 import { WorkspaceTreeItem } from "../../features/workspaces/components/workspace-tree-item";
 
@@ -35,6 +36,15 @@ interface SidebarProps {
   onAddProject: () => void;
   onCreateWorkspace: (projectId: string) => void;
   onOpenSettings: () => void;
+}
+
+export function createWorkspaceSelectionHandler(
+  workspaceId: string,
+  onSelectWorkspace: (workspaceId: string) => void,
+): () => void {
+  return () => {
+    onSelectWorkspace(workspaceId);
+  };
 }
 
 function detectPlatformHint(): string {
@@ -90,6 +100,7 @@ export function Sidebar({
     detectPlatformHint(),
     isTauri(),
   );
+  const { hasWorkspaceResponseReady } = useTerminalResponseReady();
   const goBack = useCallback(() => {
     if (!canGoBack) return;
     navigate(-1);
@@ -135,7 +146,7 @@ export function Sidebar({
   );
 
   return (
-    <UiSidebar collapsible="none">
+    <UiSidebar collapsible="icon">
       <SidebarHeader
         className={getSidebarHeaderClassName(shouldInsetSidebarHeader)}
         data-tauri-drag-region
@@ -146,15 +157,17 @@ export function Sidebar({
               {historyActions}
             </div>
             <div className="flex items-center justify-between">
-              <h1 className="text-[13px] font-medium text-[var(--sidebar-muted-foreground)]">
+              <h1 className="text-sm font-medium text-[var(--sidebar-muted-foreground)]">
                 Workspaces
               </h1>
-              <div data-no-drag className="-mr-1.5">{addProjectAction}</div>
+              <div data-no-drag className="-mr-1.5">
+                {addProjectAction}
+              </div>
             </div>
           </>
         ) : (
           <>
-            <h1 className="text-[13px] font-medium text-[var(--sidebar-muted-foreground)]">
+            <h1 className="text-sm font-medium text-[var(--sidebar-muted-foreground)]">
               Workspaces
             </h1>
             <div data-no-drag className="flex items-center gap-1">
@@ -196,9 +209,13 @@ export function Sidebar({
                               {workspaces.map((workspace) => (
                                 <SidebarMenuSubItem key={workspace.id}>
                                   <WorkspaceTreeItem
+                                    responseReady={hasWorkspaceResponseReady(workspace.id)}
                                     workspace={workspace}
                                     selected={workspace.id === selectedWorkspaceId}
-                                    onSelect={() => onSelectWorkspace(workspace.id)}
+                                    onSelect={createWorkspaceSelectionHandler(
+                                      workspace.id,
+                                      onSelectWorkspace,
+                                    )}
                                   />
                                 </SidebarMenuSubItem>
                               ))}
@@ -218,8 +235,8 @@ export function Sidebar({
       <SidebarFooter className="border-t border-[var(--border)]">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton className="text-xs" onClick={onOpenSettings}>
-              <Settings size={14} />
+            <SidebarMenuButton onClick={onOpenSettings}>
+              <Settings size={16} />
               <span>Settings</span>
             </SidebarMenuButton>
           </SidebarMenuItem>

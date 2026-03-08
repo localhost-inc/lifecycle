@@ -16,6 +16,11 @@ export { Input } from "./components/input";
 export { Label } from "./components/label";
 export { ScrollArea, ScrollBar } from "./components/scroll-area";
 export {
+  ScrollFade,
+  type ScrollFadeDirection,
+  type ScrollFadeProps,
+} from "./components/scroll-fade";
+export {
   Select,
   SelectContent,
   SelectGroup,
@@ -25,6 +30,7 @@ export {
   SelectTrigger,
   SelectValue,
 } from "./components/select";
+export { Popover, PopoverContent, PopoverTrigger } from "./components/popover";
 export { Separator } from "./components/separator";
 export {
   Sidebar,

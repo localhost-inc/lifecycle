@@ -1,199 +1,126 @@
-import type { GitDiffScope, GitLogEntry, TerminalStatus } from "@lifecycle/contracts";
-import { EmptyState } from "@lifecycle/ui";
-import { TerminalSquare } from "lucide-react";
-import { useEffect, useMemo, useReducer, useState } from "react";
+import type { TerminalStatus } from "@lifecycle/contracts";
+import { ScrollFade } from "@lifecycle/ui";
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useStoreClient } from "../../../store";
-import { CommitDiffViewerPanel } from "../../git/components/commit-diff-viewer-panel";
-import { DiffViewerPanel } from "../../git/components/diff-viewer-panel";
 import {
   DEFAULT_TERMINAL_COLS,
   DEFAULT_TERMINAL_ROWS,
   createTerminal,
-  killTerminal,
+  detachTerminal,
   terminalHasLiveSession,
   type CreateTerminalRequest,
   type HarnessProvider,
 } from "../../terminals/api";
-import { TerminalLaunchActions } from "../../terminals/components/terminal-launch-actions";
-import { TerminalPanel } from "../../terminals/components/terminal-panel";
-import { TerminalStatusDot } from "../../terminals/components/terminal-status-dot";
 import { terminalKeys, useWorkspaceTerminals } from "../../terminals/hooks";
+import { useTerminalResponseReady } from "../../terminals/state/terminal-response-ready-provider";
+import { subscribeToNativeWorkspaceShortcutEvents } from "../api";
+import { isRuntimeTabKey, writeWorkspaceSurfaceState } from "../state/workspace-surface-state";
 import {
-  commitDiffTabKey,
-  createCommitDiffTab,
-  createFileDiffTab,
-  fileDiffTabKey,
-  isCommitDiffDocument,
-  isFileDiffDocument,
-  readWorkspaceSurfaceState,
-  type FileDiffDocument,
-  type WorkspaceSurfaceDocument,
-  type WorkspaceSurfaceState,
-  writeWorkspaceSurfaceState,
-} from "../state/workspace-surface-state";
-
-interface FileDiffOpenRequest {
-  filePath: string;
-  id: string;
-  kind: "file-diff";
-  scope: GitDiffScope;
-}
-
-interface CommitDiffOpenRequest {
-  commit: GitLogEntry;
-  id: string;
-  kind: "commit-diff";
-}
-
-type OpenDocumentRequest = FileDiffOpenRequest | CommitDiffOpenRequest;
+  SurfaceLaunchActions,
+  type SurfaceLaunchAction,
+  type SurfaceLaunchRequest,
+} from "./surface-launch-actions";
+import { ClaudeIcon, CodexIcon, ShellIcon, WorkspaceSurfaceTabLeading } from "./surface-icons";
+import {
+  areStringArraysEqual,
+  createInitialWorkspaceSurfaceState,
+  createWorkspaceLauncherId,
+  getRightmostWorkspaceTabKey,
+  getWorkspaceAdjacentTabKey,
+  getWorkspaceTabClosePlan,
+  getWorkspaceTabKeyByIndex,
+  isEditableTarget,
+  isMacPlatform,
+  orderWorkspaceTerminals,
+  readWorkspaceTabHotkeyAction,
+  reconcileHiddenRuntimeTabKeys,
+  releaseWebviewFocus,
+  resolveWorkspaceVisibleTabs,
+  shouldTreatWindowCloseAsTabClose,
+  toWorkspaceTabHotkeyAction,
+  workspaceSurfaceReducer,
+  type OpenDocumentRequest,
+  type RuntimeTab,
+  type WorkspaceTabHotkeyAction,
+} from "./workspace-surface-logic";
+import { WorkspaceSurfacePanels } from "./workspace-surface-panels";
+import { WorkspaceSurfaceTabBar } from "./workspace-surface-tab-bar";
 
 interface WorkspaceSurfaceProps {
   openDocumentRequest: OpenDocumentRequest | null;
   workspaceId: string;
 }
 
-type RuntimeTab = {
-  kind: "terminal";
-  key: string;
-  label: string;
-  status: TerminalStatus;
-  terminalId: string;
-};
-
-type WorkspaceSurfaceAction =
-  | { type: "open-document"; request: OpenDocumentRequest }
-  | { type: "change-scope"; key: string; scope: GitDiffScope }
-  | { type: "update-diff-scope"; key: string; scope: GitDiffScope }
-  | { type: "select-tab"; key: string | null }
-  | { type: "close-document"; key: string }
-  | { type: "sync-active"; key: string | null };
-
-export function workspaceSurfaceReducer(
-  state: WorkspaceSurfaceState,
-  action: WorkspaceSurfaceAction,
-): WorkspaceSurfaceState {
-  switch (action.type) {
-    case "open-document": {
-      const request = action.request;
-
-      if (request.kind === "file-diff") {
-        const key = fileDiffTabKey(request.filePath);
-        const existing = state.documents.find(
-          (tab): tab is FileDiffDocument => isFileDiffDocument(tab) && tab.key === key,
-        );
-
-        if (existing) {
-          return {
-            activeTabKey: key,
-            documents: state.documents.map((tab) =>
-              tab.key === key && isFileDiffDocument(tab)
-                ? { ...tab, activeScope: request.scope }
-                : tab,
-            ),
-          };
-        }
-
-        return {
-          activeTabKey: key,
-          documents: [...state.documents, createFileDiffTab(request.filePath, request.scope)],
-        };
-      }
-
-      const key = commitDiffTabKey(request.commit.sha);
-      const nextTab = createCommitDiffTab(request.commit);
-      const exists = state.documents.some((tab) => tab.key === key);
-
-      return {
-        activeTabKey: key,
-        documents: exists
-          ? state.documents.map((tab) => (tab.key === key ? nextTab : tab))
-          : [...state.documents, nextTab],
-      };
-    }
-    case "change-scope":
-    case "update-diff-scope":
-      return {
-        ...state,
-        documents: state.documents.map((tab) =>
-          tab.key === action.key && isFileDiffDocument(tab)
-            ? { ...tab, activeScope: action.scope }
-            : tab,
-        ),
-      };
-    case "select-tab":
-    case "sync-active":
-      return {
-        ...state,
-        activeTabKey: action.key,
-      };
-    case "close-document": {
-      const documents = state.documents.filter((tab) => tab.key !== action.key);
-      const activeTabKey = state.activeTabKey === action.key ? null : state.activeTabKey;
-      return {
-        activeTabKey,
-        documents,
-      };
-    }
-    default:
-      return state;
-  }
-}
-
-function releaseWebviewFocus(): void {
-  if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
-    document.activeElement.blur();
-  }
-}
-
-function tabLabel(tab: RuntimeTab | WorkspaceSurfaceDocument): string {
-  return tab.label;
-}
-
-function tabTitle(tab: RuntimeTab | WorkspaceSurfaceDocument): string {
-  if (tab.kind === "terminal") {
-    return tab.label;
-  }
-
-  if (isFileDiffDocument(tab)) {
-    return tab.filePath;
-  }
-
-  return `${tab.shortSha} ${tab.message}`;
-}
-
-function tabGlyph(tab: WorkspaceSurfaceDocument): string {
-  return isCommitDiffDocument(tab) ? "#" : "Δ";
-}
-
 export function WorkspaceSurface({ openDocumentRequest, workspaceId }: WorkspaceSurfaceProps) {
   const client = useStoreClient();
+  const { clearTerminalResponseReady, isTerminalResponseReady } = useTerminalResponseReady();
   const terminalsQuery = useWorkspaceTerminals(workspaceId);
   const [creatingSelection, setCreatingSelection] = useState<"shell" | HarnessProvider | null>(
     null,
   );
   const [error, setError] = useState<string | null>(null);
-  const [state, dispatch] = useReducer(workspaceSurfaceReducer, workspaceId, (initialWorkspaceId) =>
-    readWorkspaceSurfaceState(initialWorkspaceId),
+  const [windowFocused, setWindowFocused] = useState(() =>
+    typeof document === "undefined" ? true : document.hasFocus(),
   );
+  const [documentVisible, setDocumentVisible] = useState(() =>
+    typeof document === "undefined" ? true : document.visibilityState === "visible",
+  );
+  const [state, dispatch] = useReducer(
+    workspaceSurfaceReducer,
+    workspaceId,
+    createInitialWorkspaceSurfaceState,
+  );
+  const closeShortcutTriggeredAtRef = useRef(0);
+  const closeShortcutHandledAtRef = useRef(0);
 
+  const sessionHistory = useMemo(() => terminalsQuery.data ?? [], [terminalsQuery.data]);
   const terminals = useMemo(
-    () => (terminalsQuery.data ?? []).filter((terminal) => terminalHasLiveSession(terminal.status)),
-    [terminalsQuery.data],
+    () =>
+      orderWorkspaceTerminals(
+        sessionHistory.filter((terminal) => terminalHasLiveSession(terminal.status)),
+      ),
+    [sessionHistory],
   );
   const runtimeTabs = useMemo<RuntimeTab[]>(
     () =>
       terminals.map((terminal) => ({
-        kind: "terminal",
+        harnessProvider: terminal.harness_provider as HarnessProvider | null,
         key: `terminal:${terminal.id}`,
+        type: "terminal",
         label: terminal.label,
+        launchType: terminal.launch_type,
+        responseReady: isTerminalResponseReady(terminal.id),
         status: terminal.status as TerminalStatus,
         terminalId: terminal.id,
       })),
-    [terminals],
+    [isTerminalResponseReady, terminals],
   );
-  const allTabs = useMemo(
-    () => [...runtimeTabs, ...state.documents],
-    [runtimeTabs, state.documents],
+  const visibleTabs = useMemo(
+    () =>
+      resolveWorkspaceVisibleTabs(
+        runtimeTabs,
+        state.documents,
+        state.tabOrderKeys,
+        state.hiddenRuntimeTabKeys,
+      ),
+    [runtimeTabs, state.documents, state.hiddenRuntimeTabKeys, state.tabOrderKeys],
+  );
+  const visibleTabKeys = useMemo(() => visibleTabs.map((tab) => tab.key), [visibleTabs]);
+  const knownRuntimeTabKeys = useMemo(
+    () => sessionHistory.map((terminal) => `terminal:${terminal.id}`),
+    [sessionHistory],
+  );
+  const activeTerminalId =
+    state.activeTabKey && isRuntimeTabKey(state.activeTabKey)
+      ? state.activeTabKey.slice("terminal:".length)
+      : null;
+  const waitingForActiveRuntimeTab = Boolean(
+    state.activeTabKey &&
+    isRuntimeTabKey(state.activeTabKey) &&
+    terminalsQuery.isLoading &&
+    !visibleTabKeys.includes(state.activeTabKey),
   );
 
   useEffect(() => {
@@ -202,8 +129,8 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
     }
 
     dispatch({
-      type: "open-document",
       request: openDocumentRequest,
+      type: "open-document",
     });
   }, [openDocumentRequest]);
 
@@ -212,131 +139,434 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
   }, [state, workspaceId]);
 
   useEffect(() => {
-    if (allTabs.length === 0) {
+    const syncWindowFocused = () => {
+      setWindowFocused(document.hasFocus());
+    };
+    const syncDocumentVisible = () => {
+      setDocumentVisible(document.visibilityState === "visible");
+      syncWindowFocused();
+    };
+
+    window.addEventListener("focus", syncWindowFocused);
+    window.addEventListener("blur", syncWindowFocused);
+    document.addEventListener("visibilitychange", syncDocumentVisible);
+
+    return () => {
+      window.removeEventListener("focus", syncWindowFocused);
+      window.removeEventListener("blur", syncWindowFocused);
+      document.removeEventListener("visibilitychange", syncDocumentVisible);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!areStringArraysEqual(state.tabOrderKeys, visibleTabKeys)) {
+      dispatch({ keys: visibleTabKeys, type: "set-tab-order" });
+    }
+  }, [state.tabOrderKeys, visibleTabKeys]);
+
+  useEffect(() => {
+    const nextHiddenRuntimeTabKeys = reconcileHiddenRuntimeTabKeys(
+      state.hiddenRuntimeTabKeys,
+      knownRuntimeTabKeys,
+      terminalsQuery.status === "ready",
+    );
+
+    if (!areStringArraysEqual(state.hiddenRuntimeTabKeys, nextHiddenRuntimeTabKeys)) {
+      dispatch({
+        keys: nextHiddenRuntimeTabKeys,
+        type: "set-hidden-runtime-tab-keys",
+      });
+    }
+  }, [knownRuntimeTabKeys, state.hiddenRuntimeTabKeys, terminalsQuery.status]);
+
+  useEffect(() => {
+    if (waitingForActiveRuntimeTab) {
+      return;
+    }
+
+    if (visibleTabs.length === 0) {
       if (state.activeTabKey !== null) {
-        dispatch({ type: "sync-active", key: null });
+        dispatch({ key: null, type: "sync-active" });
       }
       return;
     }
 
     if (!state.activeTabKey) {
-      dispatch({ type: "sync-active", key: allTabs[0]?.key ?? null });
+      dispatch({ key: getRightmostWorkspaceTabKey(visibleTabs), type: "sync-active" });
       return;
     }
 
-    if (!allTabs.some((tab) => tab.key === state.activeTabKey)) {
-      dispatch({ type: "sync-active", key: allTabs[0]?.key ?? null });
+    if (!visibleTabs.some((tab) => tab.key === state.activeTabKey)) {
+      dispatch({ key: getRightmostWorkspaceTabKey(visibleTabs), type: "sync-active" });
     }
-  }, [allTabs, state.activeTabKey]);
+  }, [state.activeTabKey, visibleTabs, waitingForActiveRuntimeTab]);
 
-  const handleCreateTerminal = async (input: CreateTerminalRequest) => {
-    setCreatingSelection(input.launchType === "harness" ? input.harnessProvider : "shell");
-    setError(null);
-    releaseWebviewFocus();
+  useEffect(() => {
+    if (waitingForActiveRuntimeTab) {
+      return;
+    }
 
-    try {
-      const terminal = await createTerminal({
-        cols: DEFAULT_TERMINAL_COLS,
-        ...input,
-        rows: DEFAULT_TERMINAL_ROWS,
-        workspaceId,
+    if (visibleTabs.length === 0 && !state.documents.some((tab) => tab.type === "launcher")) {
+      dispatch({
+        launcherId: createWorkspaceLauncherId(),
+        type: "open-launcher",
       });
-      client.invalidate(terminalKeys.byWorkspace(workspaceId));
-      client.invalidate(terminalKeys.detail(terminal.id));
-      dispatch({ type: "select-tab", key: `terminal:${terminal.id}` });
-    } catch (createError) {
-      setError(String(createError));
-    } finally {
-      setCreatingSelection(null);
     }
-  };
+  }, [state.documents, visibleTabs.length, waitingForActiveRuntimeTab]);
 
-  const handleCloseTerminal = async (terminalId: string) => {
-    try {
-      await killTerminal(terminalId);
-      client.invalidate(terminalKeys.byWorkspace(workspaceId));
-    } catch (closeError) {
-      setError(String(closeError));
+  useEffect(() => {
+    if (!activeTerminalId || !windowFocused || !documentVisible) {
+      return;
     }
-  };
+
+    if (!isTerminalResponseReady(activeTerminalId)) {
+      return;
+    }
+
+    clearTerminalResponseReady(activeTerminalId);
+  }, [
+    activeTerminalId,
+    clearTerminalResponseReady,
+    documentVisible,
+    isTerminalResponseReady,
+    windowFocused,
+  ]);
+
+  const handleSelectTab = useCallback(
+    (key: string) => {
+      releaseWebviewFocus();
+      if (isRuntimeTabKey(key)) {
+        clearTerminalResponseReady(key.slice("terminal:".length));
+      }
+      dispatch({ key, type: "select-tab" });
+    },
+    [clearTerminalResponseReady],
+  );
+
+  const handleOpenLauncher = useCallback(() => {
+    dispatch({
+      launcherId: createWorkspaceLauncherId(),
+      type: "open-launcher",
+    });
+  }, []);
+
+  const handleShowRuntimeTab = useCallback(
+    (terminalId: string, launcherKey?: string) => {
+      releaseWebviewFocus();
+      clearTerminalResponseReady(terminalId);
+      const runtimeKey = `terminal:${terminalId}`;
+      dispatch(
+        launcherKey
+          ? { launcherKey, tabKey: runtimeKey, type: "replace-launcher-with-tab" }
+          : { key: runtimeKey, select: true, type: "show-runtime-tab" },
+      );
+    },
+    [clearTerminalResponseReady],
+  );
+
+  const handleCreateTerminal = useCallback(
+    async (input: CreateTerminalRequest, launcherKey?: string) => {
+      setCreatingSelection(input.launchType === "harness" ? input.harnessProvider : "shell");
+      setError(null);
+      releaseWebviewFocus();
+
+      try {
+        const terminal = await createTerminal({
+          cols: DEFAULT_TERMINAL_COLS,
+          ...input,
+          rows: DEFAULT_TERMINAL_ROWS,
+          workspaceId,
+        });
+        client.invalidate(terminalKeys.byWorkspace(workspaceId));
+        client.invalidate(terminalKeys.detail(terminal.id));
+        handleShowRuntimeTab(terminal.id, launcherKey);
+      } catch (createError) {
+        setError(String(createError));
+      } finally {
+        setCreatingSelection(null);
+      }
+    },
+    [client, handleShowRuntimeTab, workspaceId],
+  );
+
+  const handleLaunchSurface = useCallback(
+    (request: SurfaceLaunchRequest) => {
+      switch (request.type) {
+        case "terminal":
+          void handleCreateTerminal(request);
+          break;
+      }
+    },
+    [handleCreateTerminal],
+  );
+
+  const surfaceActions: SurfaceLaunchAction[] = useMemo(
+    () => [
+      {
+        key: "shell",
+        title: "New shell",
+        icon: <ShellIcon />,
+        request: { type: "terminal", launchType: "shell" },
+        loading: creatingSelection === "shell",
+        disabled: creatingSelection !== null,
+      },
+      {
+        key: "claude",
+        title: "New Claude session",
+        icon: <ClaudeIcon />,
+        request: { type: "terminal", launchType: "harness", harnessProvider: "claude" as const },
+        loading: creatingSelection === "claude",
+        disabled: creatingSelection !== null,
+      },
+      {
+        key: "codex",
+        title: "New Codex session",
+        icon: <CodexIcon />,
+        request: { type: "terminal", launchType: "harness", harnessProvider: "codex" as const },
+        loading: creatingSelection === "codex",
+        disabled: creatingSelection !== null,
+      },
+    ],
+    [creatingSelection],
+  );
+
+  const handleCloseRuntimeTab = useCallback(
+    async (tabKey: string, terminalId: string) => {
+      const launcherId = createWorkspaceLauncherId();
+      const closePlan =
+        state.activeTabKey === tabKey
+          ? getWorkspaceTabClosePlan(visibleTabKeys, tabKey, `launcher:${launcherId}`)
+          : {
+              nextActiveKey: state.activeTabKey,
+              openLauncher: false,
+            };
+
+      try {
+        await detachTerminal(terminalId);
+        client.invalidate(terminalKeys.byWorkspace(workspaceId));
+        client.invalidate(terminalKeys.detail(terminalId));
+        if (closePlan.openLauncher) {
+          dispatch({
+            launcherId,
+            type: "open-launcher",
+          });
+        }
+        dispatch({
+          key: tabKey,
+          nextActiveKey: closePlan.nextActiveKey,
+          type: "hide-runtime-tab",
+        });
+      } catch (closeError) {
+        setError(String(closeError));
+      }
+    },
+    [client, state.activeTabKey, visibleTabKeys, workspaceId],
+  );
+
+  const handleCloseDocumentTab = useCallback(
+    (tabKey: string) => {
+      const launcherId = createWorkspaceLauncherId();
+      const closePlan =
+        state.activeTabKey === tabKey
+          ? getWorkspaceTabClosePlan(visibleTabKeys, tabKey, `launcher:${launcherId}`)
+          : {
+              nextActiveKey: state.activeTabKey,
+              openLauncher: false,
+            };
+
+      if (closePlan.openLauncher) {
+        dispatch({
+          launcherId,
+          type: "open-launcher",
+        });
+      }
+      dispatch({
+        key: tabKey,
+        nextActiveKey: closePlan.nextActiveKey,
+        type: "close-document",
+      });
+    },
+    [state.activeTabKey, visibleTabKeys],
+  );
+
+  const handleWorkspaceTabHotkeyAction = useCallback(
+    (action: WorkspaceTabHotkeyAction) => {
+      switch (action.type) {
+        case "new-tab":
+          handleOpenLauncher();
+          return;
+        case "close-active-tab": {
+          if (!state.activeTabKey) {
+            return;
+          }
+
+          const activeTab = visibleTabs.find((tab) => tab.key === state.activeTabKey);
+          if (!activeTab) {
+            return;
+          }
+
+          closeShortcutHandledAtRef.current = Date.now();
+          if (activeTab.type === "terminal") {
+            void handleCloseRuntimeTab(activeTab.key, activeTab.terminalId);
+            return;
+          }
+
+          handleCloseDocumentTab(activeTab.key);
+          return;
+        }
+        case "next-tab": {
+          const nextKey = getWorkspaceAdjacentTabKey(visibleTabKeys, state.activeTabKey, "next");
+          if (nextKey) {
+            handleSelectTab(nextKey);
+          }
+          return;
+        }
+        case "previous-tab": {
+          const previousKey = getWorkspaceAdjacentTabKey(
+            visibleTabKeys,
+            state.activeTabKey,
+            "previous",
+          );
+          if (previousKey) {
+            handleSelectTab(previousKey);
+          }
+          return;
+        }
+        case "select-tab-index": {
+          const selectedKey = getWorkspaceTabKeyByIndex(visibleTabKeys, action.index);
+          if (selectedKey) {
+            handleSelectTab(selectedKey);
+          }
+        }
+      }
+    },
+    [
+      handleCloseDocumentTab,
+      handleCloseRuntimeTab,
+      handleOpenLauncher,
+      handleSelectTab,
+      state.activeTabKey,
+      visibleTabKeys,
+      visibleTabs,
+    ],
+  );
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || isEditableTarget(event.target)) {
+        return;
+      }
+
+      const action = readWorkspaceTabHotkeyAction(event, isMacPlatform());
+      if (!action) {
+        return;
+      }
+
+      if (action.type === "close-active-tab") {
+        closeShortcutTriggeredAtRef.current = Date.now();
+      }
+      event.preventDefault();
+      handleWorkspaceTabHotkeyAction(action);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleWorkspaceTabHotkeyAction]);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    void subscribeToNativeWorkspaceShortcutEvents((event) => {
+      if (
+        disposed ||
+        event.source_surface_kind !== "native-terminal" ||
+        event.source_surface_id !== activeTerminalId
+      ) {
+        return;
+      }
+
+      const action = toWorkspaceTabHotkeyAction(event);
+      if (action) {
+        if (action.type === "close-active-tab") {
+          closeShortcutTriggeredAtRef.current = Date.now();
+        }
+        handleWorkspaceTabHotkeyAction(action);
+      }
+    }).then((cleanup) => {
+      if (disposed) {
+        cleanup();
+        return;
+      }
+
+      unlisten = cleanup;
+    });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [activeTerminalId, handleWorkspaceTabHotkeyAction]);
+
+  useEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    void getCurrentWindow()
+      .onCloseRequested((event) => {
+        const now = Date.now();
+        if (
+          !state.activeTabKey ||
+          visibleTabs.length === 0 ||
+          !shouldTreatWindowCloseAsTabClose(closeShortcutTriggeredAtRef.current, now)
+        ) {
+          return;
+        }
+
+        closeShortcutTriggeredAtRef.current = 0;
+        event.preventDefault();
+        if (shouldTreatWindowCloseAsTabClose(closeShortcutHandledAtRef.current, now)) {
+          return;
+        }
+        handleWorkspaceTabHotkeyAction({ type: "close-active-tab" });
+      })
+      .then((cleanup) => {
+        if (disposed) {
+          cleanup();
+          return;
+        }
+
+        unlisten = cleanup;
+      });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [handleWorkspaceTabHotkeyAction, state.activeTabKey, visibleTabs.length]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="flex items-end border-b border-[var(--border)]">
-        <div className="flex min-w-0 flex-1 items-end overflow-x-auto px-1">
-          {allTabs.map((tab) => {
-            const active = tab.key === state.activeTabKey;
-            const isTerminal = tab.kind === "terminal";
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => {
-                  releaseWebviewFocus();
-                  dispatch({ type: "select-tab", key: tab.key });
-                }}
-                className={`group flex min-w-[160px] max-w-[260px] shrink-0 items-center gap-2 px-3 py-2 text-left text-sm transition ${
-                  active
-                    ? "font-medium text-[var(--foreground)]"
-                    : "bg-[var(--panel)] text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-                }`}
-                title={tabTitle(tab)}
-              >
-                {isTerminal ? (
-                  <TerminalStatusDot status={tab.status} />
-                ) : (
-                  <span className="flex h-4 w-4 items-center justify-center rounded-full border border-[var(--border)] font-mono text-[10px] text-[var(--muted-foreground)]">
-                    {tabGlyph(tab)}
-                  </span>
-                )}
-                <span className="truncate">{tabLabel(tab)}</span>
-                <span
-                  role="button"
-                  tabIndex={-1}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    if (isTerminal) {
-                      void handleCloseTerminal(tab.terminalId);
-                      return;
-                    }
-                    dispatch({ type: "close-document", key: tab.key });
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter") {
-                      return;
-                    }
-
-                    event.stopPropagation();
-                    if (isTerminal) {
-                      void handleCloseTerminal(tab.terminalId);
-                      return;
-                    }
-                    dispatch({ type: "close-document", key: tab.key });
-                  }}
-                  className="ml-auto shrink-0 rounded p-0.5 opacity-0 transition hover:bg-[var(--surface-hover)] group-hover:opacity-100"
-                >
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 12 12"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  >
-                    <path d="M3 3l6 6M9 3l-6 6" />
-                  </svg>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        <TerminalLaunchActions
-          creatingSelection={creatingSelection}
-          onCreateTerminal={(input) => {
-            void handleCreateTerminal(input);
-          }}
-        />
+      <div className="flex items-center gap-1 px-1.5 py-1">
+        <ScrollFade className="flex-1" size={24}>
+          <WorkspaceSurfaceTabBar
+            activeTabKey={state.activeTabKey}
+            onCloseDocumentTab={handleCloseDocumentTab}
+            onCloseRuntimeTab={handleCloseRuntimeTab}
+            onOpenLauncher={handleOpenLauncher}
+            onSelectTab={handleSelectTab}
+            onSetTabOrder={(keys) => {
+              dispatch({ keys, type: "set-tab-order" });
+            }}
+            renderTabLeading={(tab) => <WorkspaceSurfaceTabLeading tab={tab} />}
+            visibleTabs={visibleTabs}
+          />
+        </ScrollFade>
+        <SurfaceLaunchActions actions={surfaceActions} onLaunch={handleLaunchSurface} />
       </div>
 
       {Boolean(terminalsQuery.error) && (
@@ -350,47 +580,22 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
         </div>
       )}
 
-      {allTabs.length > 0 ? (
-        <>
-          {terminals.map((terminal) => {
-            const key = `terminal:${terminal.id}`;
-            const active = key === state.activeTabKey;
-
-            return (
-              <div key={terminal.id} className={active ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-                <TerminalPanel active={active} terminal={terminal} />
-              </div>
-            );
-          })}
-
-          {state.documents.map((tab) => {
-            const active = tab.key === state.activeTabKey;
-
-            return (
-              <div key={tab.key} className={active ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
-                {isFileDiffDocument(tab) ? (
-                  <DiffViewerPanel
-                    activeScope={tab.activeScope}
-                    filePath={tab.filePath}
-                    onScopeChange={(scope) => {
-                      dispatch({ type: "change-scope", key: tab.key, scope });
-                    }}
-                    workspaceId={workspaceId}
-                  />
-                ) : isCommitDiffDocument(tab) ? (
-                  <CommitDiffViewerPanel commit={tab} workspaceId={workspaceId} />
-                ) : null}
-              </div>
-            );
-          })}
-        </>
-      ) : (
-        <EmptyState
-          description="Start a shell or harness session, or open a diff from the version control panel."
-          icon={<TerminalSquare />}
-          title="No open tabs"
-        />
-      )}
+      <WorkspaceSurfacePanels
+        activeTabKey={state.activeTabKey}
+        activeTerminalId={activeTerminalId}
+        creatingSelection={creatingSelection}
+        documents={state.documents}
+        hasVisibleTabs={visibleTabs.length > 0}
+        onChangeFileDiffScope={(key, scope) => {
+          dispatch({ key, scope, type: "change-scope" });
+        }}
+        onCreateTerminal={handleCreateTerminal}
+        onOpenTerminal={handleShowRuntimeTab}
+        sessionHistory={sessionHistory}
+        terminals={terminals}
+        waitingForActiveRuntimeTab={waitingForActiveRuntimeTab}
+        workspaceId={workspaceId}
+      />
     </div>
   );
 }

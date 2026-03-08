@@ -4,7 +4,7 @@ import { Button, type ButtonProps } from "./button";
 import { cn } from "../lib/cn";
 
 const alertVariants = cva(
-  "relative grid w-full grid-cols-[1fr_auto] items-start gap-x-4 gap-y-1.5 border px-4 py-3 text-sm rounded-none [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:size-4 [&>svg]:text-current [&>svg~[data-slot=alert-title]]:pl-7 [&>svg~[data-slot=alert-description]]:pl-7",
+  "relative grid w-full grid-cols-[1fr_auto] items-start gap-x-4 gap-y-1.5 border px-4 py-3 text-sm rounded-lg [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:size-4 [&>svg]:text-current [&>svg~[data-slot=alert-title]]:pl-7 [&>svg~[data-slot=alert-description]]:pl-7",
   {
     variants: {
       variant: {

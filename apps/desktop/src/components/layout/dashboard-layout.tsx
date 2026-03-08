@@ -1,16 +1,17 @@
-import { useCallback, useEffect, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { SidebarInset, SidebarProvider } from "@lifecycle/ui";
 import { Outlet, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { addProjectFromDirectory } from "../../features/projects/api/projects";
 import { projectKeys, useProjectCatalog } from "../../features/projects/hooks";
 import { useSettings } from "../../features/settings/state/app-settings-provider";
-import {
-  createTerminal,
-  DEFAULT_HARNESS_PROVIDER,
-  DEFAULT_TERMINAL_COLS,
-  DEFAULT_TERMINAL_ROWS,
-} from "../../features/terminals/api";
-import { terminalKeys } from "../../features/terminals/hooks";
 import { createWorkspace, getCurrentBranch } from "../../features/workspaces/api";
 import { useWorkspacesByProject, workspaceKeys } from "../../features/workspaces/hooks";
 import {
@@ -20,6 +21,7 @@ import {
 } from "../../features/workspaces/state/workspace-surface-state";
 import {
   clampPanelSize,
+  DASHBOARD_LEFT_SIDEBAR_COLLAPSED_STORAGE_KEY,
   DASHBOARD_LEFT_SIDEBAR_WIDTH_STORAGE_KEY,
   DASHBOARD_RIGHT_SIDEBAR_WIDTH_STORAGE_KEY,
   DEFAULT_LEFT_SIDEBAR_WIDTH,
@@ -58,6 +60,13 @@ export function DashboardLayout() {
   const [rightSidebarWidth, setRightSidebarWidth] = useState(() =>
     readPersistedPanelValue(DASHBOARD_RIGHT_SIDEBAR_WIDTH_STORAGE_KEY, DEFAULT_RIGHT_SIDEBAR_WIDTH),
   );
+  const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(DASHBOARD_LEFT_SIDEBAR_COLLAPSED_STORAGE_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
   const [activeSidebarResize, setActiveSidebarResize] = useState<"left" | "right" | null>(null);
   const projects = projectCatalogQuery.data?.projects ?? [];
   const workspacesByProjectId = workspacesByProjectQuery.data ?? {};
@@ -96,7 +105,7 @@ export function DashboardLayout() {
         containerWidth: layoutRowWidth,
         maxWidth: MAX_RIGHT_SIDEBAR_WIDTH,
         minWidth: MIN_RIGHT_SIDEBAR_WIDTH,
-        oppositeSidebarWidth: leftSidebarWidth,
+        oppositeSidebarWidth: leftSidebarCollapsed ? 0 : leftSidebarWidth,
       }),
     [layoutRowWidth, leftSidebarWidth],
   );
@@ -191,6 +200,17 @@ export function DashboardLayout() {
   }, [rightSidebarBounds, rightSidebarWidth]);
 
   useEffect(() => {
+    try {
+      localStorage.setItem(
+        DASHBOARD_LEFT_SIDEBAR_COLLAPSED_STORAGE_KEY,
+        String(leftSidebarCollapsed),
+      );
+    } catch {
+      // best-effort
+    }
+  }, [leftSidebarCollapsed]);
+
+  useEffect(() => {
     if (activeSidebarResize === null) {
       return;
     }
@@ -203,6 +223,9 @@ export function DashboardLayout() {
 
       const bounds = layoutRow.getBoundingClientRect();
       if (activeSidebarResize === "left") {
+        if (leftSidebarCollapsed) {
+          setLeftSidebarCollapsed(false);
+        }
         setLeftSidebarWidth(
           getLeftSidebarWidthFromPointer(event.clientX, bounds.left, leftSidebarBounds),
         );
@@ -292,24 +315,6 @@ export function DashboardLayout() {
           worktreeRoot,
         });
 
-        void (async () => {
-          try {
-            await createTerminal({
-              cols: DEFAULT_TERMINAL_COLS,
-              harnessProvider: DEFAULT_HARNESS_PROVIDER,
-              launchType: "harness",
-              rows: DEFAULT_TERMINAL_ROWS,
-              workspaceId,
-            });
-            client.invalidate(terminalKeys.byWorkspace(workspaceId));
-          } catch (terminalError) {
-            console.error("Failed to create initial harness terminal:", terminalError);
-            alert(
-              `Workspace created, but failed to start the initial ${DEFAULT_HARNESS_PROVIDER} harness: ${terminalError}`,
-            );
-          }
-        })();
-
         client.invalidate(workspaceKeys.byProject());
         client.invalidate(workspaceKeys.detail(workspaceId));
         void navigate(`/workspaces/${workspaceId}`);
@@ -324,6 +329,10 @@ export function DashboardLayout() {
   const handleOpenSettings = useCallback(() => {
     void navigate("/settings/general");
   }, [navigate]);
+
+  const handleLeftSidebarSeparatorDoubleClick = useCallback(() => {
+    setLeftSidebarCollapsed((c) => !c);
+  }, []);
 
   const handleSidebarResizePointerDown = useCallback(
     (side: "left" | "right", event: ReactPointerEvent<HTMLDivElement>) => {
@@ -400,8 +409,10 @@ export function DashboardLayout() {
       <div ref={layoutRowRef} className="flex min-h-0 flex-1">
         <SidebarProvider
           className="min-h-0 flex-1"
+          open={!leftSidebarCollapsed}
+          onOpenChange={(open) => setLeftSidebarCollapsed(!open)}
           sidebarWidth={`${leftSidebarWidth}px`}
-          sidebarWidthIcon={`${MIN_LEFT_SIDEBAR_WIDTH}px`}
+          sidebarWidthIcon="0px"
         >
           <Sidebar
             isLoading={projectCatalogQuery.isLoading || workspacesByProjectQuery.isLoading}
@@ -422,8 +433,9 @@ export function DashboardLayout() {
               aria-orientation="vertical"
               aria-valuemax={leftSidebarBounds.maxSize}
               aria-valuemin={leftSidebarBounds.minSize}
-              aria-valuenow={leftSidebarWidth}
+              aria-valuenow={leftSidebarCollapsed ? 0 : leftSidebarWidth}
               tabIndex={0}
+              onDoubleClick={handleLeftSidebarSeparatorDoubleClick}
               onKeyDown={handleLeftSidebarSeparatorKeyDown}
               onPointerDown={(event) => handleSidebarResizePointerDown("left", event)}
               className="group absolute inset-y-0 left-1/2 z-10 flex w-3 -translate-x-1/2 cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--primary)]"

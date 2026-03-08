@@ -38,6 +38,10 @@ pub fn run() {
             run_migrations(&db_path_str).expect("failed to run migrations");
             app.manage(DbPath(db_path_str.clone()));
 
+            if let Err(error) = disable_main_webview_scroll_elasticity(&app.handle()) {
+                crate::platform::diagnostics::append_error("main-webview-scroll-elasticity", error);
+            }
+
             if native_terminal::is_available() {
                 native_terminal::initialize(app.handle().clone(), db_path_str.clone())
                     .expect("failed to initialize native terminal runtime");
@@ -93,4 +97,28 @@ pub fn run() {
         );
         panic!("error while running tauri application: {error}");
     }
+}
+
+#[cfg(target_os = "macos")]
+fn disable_main_webview_scroll_elasticity(app: &tauri::AppHandle) -> Result<(), LifecycleError> {
+    use objc2_app_kit::{NSScrollElasticity, NSView};
+
+    let main_window = app
+        .get_webview_window("main")
+        .ok_or_else(|| LifecycleError::AttachFailed("main webview window not found".to_string()))?;
+
+    main_window
+        .with_webview(|webview| unsafe {
+            let view: &NSView = &*webview.inner().cast();
+            if let Some(scroll_view) = view.enclosingScrollView() {
+                scroll_view.setHorizontalScrollElasticity(NSScrollElasticity::None);
+                scroll_view.setVerticalScrollElasticity(NSScrollElasticity::None);
+            }
+        })
+        .map_err(|error| LifecycleError::AttachFailed(error.to_string()))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn disable_main_webview_scroll_elasticity(_app: &tauri::AppHandle) -> Result<(), LifecycleError> {
+    Ok(())
 }

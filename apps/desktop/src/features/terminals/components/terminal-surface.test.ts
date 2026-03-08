@@ -6,7 +6,7 @@ import {
   formatTerminalAttachmentInsertion,
   isBenignTerminalIoError,
   isImageAttachmentFile,
-} from "./terminal-panel";
+} from "./terminal-surface";
 
 describe("isBenignTerminalIoError", () => {
   test("suppresses closed-pty noise", () => {

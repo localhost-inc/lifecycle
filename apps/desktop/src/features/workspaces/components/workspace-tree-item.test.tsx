@@ -22,6 +22,22 @@ const workspace = {
 };
 
 describe("WorkspaceTreeItem", () => {
+  test("renders a visible response-ready marker without shifting the row layout", () => {
+    const markup = renderToStaticMarkup(
+      createElement(WorkspaceTreeItem, {
+        responseReady: true,
+        workspace,
+        selected: false,
+        onSelect: () => {},
+      }),
+    );
+
+    expect(markup).toContain('aria-label="Response ready"');
+    expect(markup).toContain("absolute left-1 top-1/2 -translate-y-1/2");
+    expect(markup).toContain("bg-amber-400");
+    expect(markup).toContain("animate-ping");
+  });
+
   test("uses the shared selected sidebar treatment", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceTreeItem, {

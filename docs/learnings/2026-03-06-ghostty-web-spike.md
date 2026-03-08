@@ -42,7 +42,7 @@ Use `ghostty-web` as the current browser terminal spike for M3 instead of contin
 ## Sources
 
 1. Repo implementation:
-   - `apps/desktop/src/features/terminals/components/terminal-panel.tsx`
+   - `apps/desktop/src/features/terminals/components/terminal-surface.tsx`
    - `apps/desktop/src/features/terminals/ghostty-runtime.ts`
    - `apps/desktop/src-tauri/src/platform/runtime/terminal.rs`
 2. Ghostty Web upstream:

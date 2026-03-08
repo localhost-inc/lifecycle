@@ -2073,6 +2073,7 @@ dependencies = [
  "cc",
  "futures-util",
  "libc",
+ "objc2-app-kit",
  "portable-pty",
  "reqwest 0.12.28",
  "rusqlite",

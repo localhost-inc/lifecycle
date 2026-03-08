@@ -6,7 +6,7 @@ import { ChangesTab } from "./changes-tab";
 import { HistoryTab } from "./history-tab";
 
 const sectionHeader =
-  "text-[10px] uppercase tracking-[0.18em] text-[var(--muted-foreground)] font-medium";
+  "text-[11px] uppercase tracking-[0.14em] text-[var(--muted-foreground)] font-medium";
 
 interface VersionControlPanelProps {
   onOpenDiff: (filePath: string, scope: GitDiffScope) => void;
@@ -17,9 +17,9 @@ interface VersionControlPanelProps {
 }
 
 export function getVersionControlTabClassName(active: boolean): string {
-  return `rounded-[12px] px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
+  return `rounded-[16px] px-4 py-2 text-sm font-semibold transition-all ${
     active
-      ? "bg-[var(--surface-selected)] text-[var(--foreground)]"
+      ? "bg-[var(--surface-selected)] text-[var(--foreground)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_24px_rgba(0,0,0,0.24)]"
       : "text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
   }`;
 }
@@ -29,7 +29,7 @@ export const VERSION_CONTROL_PANEL_BODY_CLASS_NAME = "px-2.5 pb-4 pt-1";
 export const VERSION_CONTROL_PANEL_EMPTY_STATE_CLASS_NAME = "px-2.5 py-4";
 const VERSION_CONTROL_PANEL_TABS_CLASS_NAME = cn(
   getVersionControlTabClassName(false),
-  "data-[state=active]:bg-[var(--surface-selected)] data-[state=active]:text-[var(--foreground)]",
+  "data-[state=active]:bg-[var(--surface-selected)] data-[state=active]:text-[var(--foreground)] data-[state=active]:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_24px_rgba(0,0,0,0.24)]",
 );
 
 export function VersionControlPanel({

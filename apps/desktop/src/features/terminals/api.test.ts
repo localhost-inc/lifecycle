@@ -5,7 +5,9 @@ import {
   createTerminal,
   detachTerminal,
   evaluateBrowserTerminalCommand,
+  subscribeToTerminalHarnessTurnCompletedEvents,
   terminalHasLiveSession,
+  writeTerminal,
   type TerminalStreamChunk,
 } from "./api";
 
@@ -74,5 +76,30 @@ describe("terminal browser simulator", () => {
 
     disposeNextReplay();
     await detachTerminal(terminal.id);
+  });
+
+  test("emits a response-ready event for harness turns in the browser simulator", async () => {
+    const terminal = await createTerminal({
+      cols: 120,
+      launchType: "harness",
+      harnessProvider: "codex",
+      rows: 32,
+      workspaceId: `ws_${crypto.randomUUID()}`,
+    });
+    const events: string[] = [];
+    const disposeStream = await attachTerminalStream(terminal.id, 120, 32, null, () => {});
+    const unlisten = await subscribeToTerminalHarnessTurnCompletedEvents((event) => {
+      if (event.terminal_id === terminal.id) {
+        events.push(event.workspace_id);
+      }
+    });
+
+    try {
+      await writeTerminal(terminal.id, "help\r");
+      expect(events).toEqual([terminal.workspace_id]);
+    } finally {
+      disposeStream();
+      unlisten();
+    }
   });
 });

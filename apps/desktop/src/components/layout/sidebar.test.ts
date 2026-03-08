@@ -3,8 +3,10 @@ import { SidebarProvider } from "@lifecycle/ui";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
+import { TerminalResponseReadyProvider } from "../../features/terminals/state/terminal-response-ready-provider";
 import {
   Sidebar,
+  createWorkspaceSelectionHandler,
   getSidebarHeaderClassName,
   shouldInsetSidebarHeaderForWindowControls,
 } from "./sidebar";
@@ -34,6 +36,17 @@ describe("getSidebarHeaderClassName", () => {
 });
 
 describe("Sidebar", () => {
+  test("workspace selection only navigates and does not eagerly acknowledge workspace readiness", () => {
+    const selectedWorkspaceIds: string[] = [];
+    const handleSelect = createWorkspaceSelectionHandler("workspace_1", (workspaceId) => {
+      selectedWorkspaceIds.push(workspaceId);
+    });
+
+    handleSelect();
+
+    expect(selectedWorkspaceIds).toEqual(["workspace_1"]);
+  });
+
   test("renders history actions in the header before the add-project button", () => {
     const markup = renderToStaticMarkup(
       createElement(
@@ -44,18 +57,22 @@ describe("Sidebar", () => {
           {
             sidebarWidth: "256px",
           },
-          createElement(Sidebar, {
-            isLoading: false,
-            projects: [],
-            workspacesByProjectId: {},
-            selectedProjectId: null,
-            selectedWorkspaceId: null,
-            onSelectProject: () => {},
-            onSelectWorkspace: () => {},
-            onAddProject: () => {},
-            onCreateWorkspace: () => {},
-            onOpenSettings: () => {},
-          }),
+          createElement(
+            TerminalResponseReadyProvider,
+            null,
+            createElement(Sidebar, {
+              isLoading: false,
+              projects: [],
+              workspacesByProjectId: {},
+              selectedProjectId: null,
+              selectedWorkspaceId: null,
+              onSelectProject: () => {},
+              onSelectWorkspace: () => {},
+              onAddProject: () => {},
+              onCreateWorkspace: () => {},
+              onOpenSettings: () => {},
+            }),
+          ),
         ),
       ),
     );
@@ -79,18 +96,22 @@ describe("Sidebar", () => {
           {
             sidebarWidth: "256px",
           },
-          createElement(Sidebar, {
-            isLoading: false,
-            projects: [],
-            workspacesByProjectId: {},
-            selectedProjectId: null,
-            selectedWorkspaceId: null,
-            onSelectProject: () => {},
-            onSelectWorkspace: () => {},
-            onAddProject: () => {},
-            onCreateWorkspace: () => {},
-            onOpenSettings: () => {},
-          }),
+          createElement(
+            TerminalResponseReadyProvider,
+            null,
+            createElement(Sidebar, {
+              isLoading: false,
+              projects: [],
+              workspacesByProjectId: {},
+              selectedProjectId: null,
+              selectedWorkspaceId: null,
+              onSelectProject: () => {},
+              onSelectWorkspace: () => {},
+              onAddProject: () => {},
+              onCreateWorkspace: () => {},
+              onOpenSettings: () => {},
+            }),
+          ),
         ),
       ),
     );

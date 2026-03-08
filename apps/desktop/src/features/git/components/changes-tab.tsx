@@ -93,7 +93,7 @@ function SectionHeader({
       <button
         type="button"
         onClick={onToggle}
-        className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
+        className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
       >
         <span className="text-[9px]">{collapsed ? "▸" : "▾"}</span>
         {label}
@@ -103,7 +103,7 @@ function SectionHeader({
         type="button"
         onClick={onAction}
         disabled={disabled}
-        className="text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)] transition hover:text-[var(--foreground)] disabled:cursor-wait disabled:opacity-60"
+        className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)] transition hover:text-[var(--foreground)] disabled:cursor-wait disabled:opacity-60"
       >
         {actionLabel}
       </button>
@@ -146,20 +146,20 @@ function FileRow({
           onOpen();
         }
       }}
-      className="flex h-7 cursor-default items-center gap-2 rounded px-2 transition hover:bg-[var(--surface-hover)]"
+      className="flex h-7 cursor-pointer items-center gap-2 rounded px-2 transition hover:bg-[var(--surface-hover)]"
       title={file.path}
     >
       <div className="flex min-w-0 flex-1 items-baseline gap-1">
-        <span className="shrink-0 text-[13px] font-medium text-[var(--foreground)]">{name}</span>
-        {dir && <span className="truncate text-xs text-[var(--muted-foreground)]">{dir}</span>}
+        <span className="shrink-0 text-sm font-medium text-[var(--foreground)]">{name}</span>
+        {dir && <span className="truncate text-[13px] text-[var(--muted-foreground)]">{dir}</span>}
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
         {ins !== null && ins > 0 && (
-          <span className="font-mono text-[11px] text-[var(--muted-foreground)]">+{ins}</span>
+          <span className="font-mono text-xs text-[var(--muted-foreground)]">+{ins}</span>
         )}
         {del !== null && del > 0 && (
-          <span className="font-mono text-[11px] text-[var(--muted-foreground)]">-{del}</span>
+          <span className="font-mono text-xs text-[var(--muted-foreground)]">-{del}</span>
         )}
         <button
           type="button"

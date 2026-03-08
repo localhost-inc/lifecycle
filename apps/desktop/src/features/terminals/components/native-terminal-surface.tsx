@@ -10,12 +10,12 @@ import {
 import { resolveTerminalTheme } from "../terminal-theme";
 import { useSettings } from "../../settings/state/app-settings-provider";
 
-interface NativeTerminalPanelProps {
+interface NativeTerminalSurfaceProps {
   active: boolean;
   terminal: TerminalRow;
 }
 
-export function NativeTerminalPanel({ active, terminal }: NativeTerminalPanelProps) {
+export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfaceProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const frameIdRef = useRef<number | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);

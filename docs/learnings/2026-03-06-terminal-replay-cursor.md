@@ -44,4 +44,4 @@ Keep mounted terminal surfaces for smoother tab switching, but make replay curso
    - `apps/desktop/src-tauri/src/platform/runtime/terminal.rs`
    - `apps/desktop/src-tauri/src/capabilities/workspaces/terminal.rs`
    - `apps/desktop/src/features/terminals/api.ts`
-   - `apps/desktop/src/features/terminals/components/terminal-panel.tsx`
+   - `apps/desktop/src/features/terminals/components/terminal-surface.tsx`

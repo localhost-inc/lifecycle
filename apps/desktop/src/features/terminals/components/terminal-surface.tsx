@@ -25,9 +25,9 @@ import {
 import { resolveTerminalTheme } from "../terminal-theme";
 import { getGhosttyRuntime } from "../ghostty-runtime";
 import { useSettings } from "../../settings/state/app-settings-provider";
-import { NativeTerminalPanel } from "./native-terminal-panel";
+import { NativeTerminalSurface } from "./native-terminal-surface";
 
-interface TerminalPanelProps {
+interface TerminalSurfaceProps {
   active: boolean;
   terminal: TerminalRow;
 }
@@ -323,7 +323,7 @@ export function applyTerminalAppearance({
   return background;
 }
 
-function BrowserTerminalPanel({ active, terminal }: TerminalPanelProps) {
+function BrowserTerminalSurface({ active, terminal }: TerminalSurfaceProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const disposeStreamRef = useRef<(() => void) | null>(null);
@@ -676,7 +676,7 @@ function BrowserTerminalPanel({ active, terminal }: TerminalPanelProps) {
   );
 }
 
-export function TerminalPanel(props: TerminalPanelProps) {
+export function TerminalSurface(props: TerminalSurfaceProps) {
   const [nativeTerminalAvailable, setNativeTerminalAvailable] = useState<boolean | null>(() =>
     isTauri() ? null : false,
   );
@@ -705,8 +705,8 @@ export function TerminalPanel(props: TerminalPanelProps) {
   }
 
   return nativeTerminalAvailable ? (
-    <NativeTerminalPanel {...props} />
+    <NativeTerminalSurface {...props} />
   ) : (
-    <BrowserTerminalPanel {...props} />
+    <BrowserTerminalSurface {...props} />
   );
 }

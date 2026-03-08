@@ -25,5 +25,6 @@ describe("Tabs", () => {
     expect(markup).toContain('data-state="active"');
     expect(markup).toContain('data-state="inactive"');
     expect(markup).toContain('data-slot="tabs-trigger"');
+    expect(markup).toContain("cursor-pointer");
   });
 });

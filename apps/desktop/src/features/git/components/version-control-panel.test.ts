@@ -12,10 +12,11 @@ describe("getVersionControlTabClassName", () => {
 
     expect(className).not.toContain("uppercase");
     expect(className).not.toContain("tracking-[0.18em]");
-    expect(className).toContain("text-[13px]");
-    expect(className).toContain("px-3.5");
-    expect(className).toContain("py-1.5");
+    expect(className).toContain("text-sm");
+    expect(className).toContain("px-4");
+    expect(className).toContain("py-2");
     expect(className).toContain("bg-[var(--surface-selected)]");
+    expect(className).toContain("rounded-[16px]");
   });
 
   test("uses standard title case styling for inactive tabs", () => {
@@ -23,10 +24,11 @@ describe("getVersionControlTabClassName", () => {
 
     expect(className).not.toContain("uppercase");
     expect(className).not.toContain("tracking-[0.18em]");
-    expect(className).toContain("text-[13px]");
-    expect(className).toContain("px-3.5");
-    expect(className).toContain("py-1.5");
+    expect(className).toContain("text-sm");
+    expect(className).toContain("px-4");
+    expect(className).toContain("py-2");
     expect(className).toContain("hover:bg-[var(--surface-hover)]");
+    expect(className).toContain("rounded-[16px]");
   });
 });
 

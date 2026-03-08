@@ -7,10 +7,11 @@ describe("buttonVariants", () => {
   test("uses the shared outline treatment", () => {
     const className = buttonVariants({ variant: "outline" });
 
+    expect(className).toContain("cursor-pointer");
     expect(className).toContain("border ");
     expect(className).toContain("border-[var(--border)]");
     expect(className).toContain("hover:bg-[var(--surface-hover)]");
-    expect(className).toContain("rounded-none");
+    expect(className).toContain("rounded-lg");
   });
 
   test("keeps ghost actions borderless", () => {
@@ -37,6 +38,7 @@ describe("Button", () => {
     expect(markup).toContain("<button");
     expect(markup).toContain('type="button"');
     expect(markup).toContain("Launch");
+    expect(markup).toContain("cursor-pointer");
   });
 
   test("supports asChild rendering for link-like actions", () => {

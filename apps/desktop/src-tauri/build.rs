@@ -20,14 +20,10 @@ fn main() {
             .file(native_dir.join("lifecycle_native_terminal.m"))
             .include(&headers_dir)
             .flag("-fobjc-arc")
-            .flag(&format!(
-                "-mmacosx-version-min={GHOSTTY_MIN_MACOS_VERSION}"
-            ))
+            .flag(&format!("-mmacosx-version-min={GHOSTTY_MIN_MACOS_VERSION}"))
             .compile("lifecycle_native_terminal");
 
-        println!(
-            "cargo:rustc-link-arg=-mmacosx-version-min={GHOSTTY_MIN_MACOS_VERSION}"
-        );
+        println!("cargo:rustc-link-arg=-mmacosx-version-min={GHOSTTY_MIN_MACOS_VERSION}");
         println!("cargo:rustc-link-search=native={}", slice_dir.display());
         println!("cargo:rustc-link-lib=static=ghostty-fat");
         println!("cargo:rustc-link-lib=c++");

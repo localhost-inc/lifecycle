@@ -12,6 +12,7 @@ import { createPortal } from "react-dom";
 import { useCallback, useLayoutEffect, useState } from "react";
 import type { ManifestStatus } from "../../projects/api/projects";
 import { ServiceIndicator } from "./service-indicator";
+import type { OpenDocumentRequest } from "./workspace-surface-logic";
 import { WorkspaceSidebar } from "./workspace-sidebar";
 import { WorkspaceSurface } from "./workspace-surface";
 import type { WorkspaceRow } from "../api";
@@ -35,20 +36,7 @@ export function workspaceSupportsTerminalInteraction(
 
 export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProps) {
   const [rightRailRoot, setRightRailRoot] = useState<HTMLElement | null>(null);
-  const [openDocumentRequest, setOpenDocumentRequest] = useState<
-    | {
-        filePath: string;
-        id: string;
-        kind: "file-diff";
-        scope: GitDiffScope;
-      }
-    | {
-        commit: GitLogEntry;
-        id: string;
-        kind: "commit-diff";
-      }
-    | null
-  >(null);
+  const [openDocumentRequest, setOpenDocumentRequest] = useState<OpenDocumentRequest | null>(null);
   const hasManifest = manifestStatus?.state === "valid";
   const config = hasManifest ? manifestStatus.result.config : null;
   const servicesQuery = useWorkspaceServices(workspace.id);
@@ -103,7 +91,7 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
     setOpenDocumentRequest({
       filePath,
       id: crypto.randomUUID(),
-      kind: "file-diff",
+      type: "file-diff",
       scope,
     });
   }, []);
@@ -111,7 +99,7 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
     setOpenDocumentRequest({
       commit: entry,
       id: crypto.randomUUID(),
-      kind: "commit-diff",
+      type: "commit-diff",
     });
   }, []);
 

@@ -5,7 +5,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/cn";
 
 const toggleGroupItemVariants = cva(
-  "inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium text-[var(--muted-foreground)] transition-colors outline-none hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:pointer-events-none disabled:opacity-50 data-[state=on]:bg-[var(--surface-selected)] data-[state=on]:text-[var(--foreground)]",
+  "inline-flex cursor-pointer items-center justify-center px-3 py-1.5 text-xs font-medium text-[var(--muted-foreground)] transition-colors outline-none hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50 data-[state=on]:bg-[var(--surface-selected)] data-[state=on]:text-[var(--foreground)]",
   {
     variants: {
       size: {

@@ -10,7 +10,7 @@ The workspace center panel is a shared surface that can host both provider-backe
    - identity is provider-owned (`terminal_id`, future `agent_session_id`)
 2. Document tabs:
    - backed by workspace content or derived workspace artifacts
-   - examples: git diff, file editor, preview-specific documents
+   - examples: launcher, git diff, file editor, preview-specific documents
    - identity is client-owned and derived from document content (`diff:path:scope`, future `file:path`)
 
 ## Ownership Rules
@@ -18,15 +18,24 @@ The workspace center panel is a shared surface that can host both provider-backe
 1. Runtime lifecycle remains provider-authoritative even when the React tree controls selection state.
 2. Document tabs are desktop-owned UI state and should not require provider persistence in V1.
 3. Desktop-owned tab state may be restored locally across app restarts, but that restore must stay separate from provider/runtime authority.
-4. Side-panel actions may request opening a document tab, but they do not own tab state.
-5. Mixed tab bars must render from normalized tab records rather than terminal-specific component state.
+4. Visible mixed-tab ordering (`tabOrderKeys`) and hidden-runtime presentation (`hiddenRuntimeTabKeys`) are desktop-owned surface state.
+5. Side-panel actions may request opening a document tab, but they do not own tab state.
+6. Mixed tab bars must render from normalized tab records rather than terminal-specific component state.
 
 ## Runtime Mount Semantics
 
 1. Runtime tabs may require a live attachment or native host surface.
 2. Inactive runtime tabs must remain mounted when their host contract depends on attachment continuity or native surface synchronization.
 3. Switching tabs should hide or detach runtime presentation without implicitly destroying the runtime resource.
-4. Document tabs may mount on demand because they are render-only views over workspace data.
+4. Closing a runtime tab from the strip should detach or hide it, not kill the runtime.
+5. Document tabs may mount on demand because they are render-only views over workspace data.
+
+## Launcher Tabs
+
+1. The launcher is a workspace-owned tab, not a provider-backed runtime.
+2. `Cmd/Ctrl + T` should open a launcher tab.
+3. A newly opened workspace should default to a launcher tab when no visible tab state exists yet.
+4. Launcher tabs may create new runtime tabs or reopen prior sessions, but they do not own runtime lifecycle.
 
 ## Git Diff Documents
 

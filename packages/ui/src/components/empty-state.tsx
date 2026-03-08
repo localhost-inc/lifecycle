@@ -19,14 +19,7 @@ interface EmptyStateProps {
   className?: string;
 }
 
-function EmptyState({
-  icon,
-  title,
-  description,
-  action,
-  size = "lg",
-  className,
-}: EmptyStateProps) {
+function EmptyState({ icon, title, description, action, size = "lg", className }: EmptyStateProps) {
   const isSmall = size === "sm";
 
   return (
@@ -50,10 +43,7 @@ function EmptyState({
         )}
         <div className={cn("flex flex-col items-center", isSmall ? "gap-1" : "gap-1.5")}>
           <p
-            className={cn(
-              "font-medium text-[var(--foreground)]",
-              isSmall ? "text-xs" : "text-sm",
-            )}
+            className={cn("font-medium text-[var(--foreground)]", isSmall ? "text-xs" : "text-sm")}
           >
             {title}
           </p>

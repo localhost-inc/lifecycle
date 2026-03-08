@@ -15,6 +15,7 @@ describe("sidebarMenuButtonVariants", () => {
   test("uses the shared active sidebar treatment", () => {
     const className = sidebarMenuButtonVariants({ active: true });
 
+    expect(className).toContain("cursor-pointer");
     expect(className).toContain("bg-[var(--sidebar-selected)]");
     expect(className).toContain("text-[var(--sidebar-foreground)]");
   });
@@ -22,6 +23,7 @@ describe("sidebarMenuButtonVariants", () => {
   test("uses the shared idle sidebar hover treatment", () => {
     const className = sidebarMenuButtonVariants({ active: false });
 
+    expect(className).toContain("cursor-pointer");
     expect(className).toContain("hover:bg-[var(--sidebar-hover)]");
     expect(className).toContain("text-[var(--sidebar-foreground)]");
   });

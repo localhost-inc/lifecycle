@@ -1,5 +1,10 @@
 import type { ProjectRecord } from "@lifecycle/contracts";
-import { cn, CollapsibleTrigger, SidebarMenuAction, sidebarMenuButtonVariants } from "@lifecycle/ui";
+import {
+  cn,
+  CollapsibleTrigger,
+  SidebarMenuAction,
+  sidebarMenuButtonVariants,
+} from "@lifecycle/ui";
 import { FolderClosed, FolderOpen, Plus } from "lucide-react";
 
 interface ProjectItemProps {

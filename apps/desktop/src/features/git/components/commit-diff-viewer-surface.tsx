@@ -7,12 +7,12 @@ import { getGitCommitPatch, openWorkspaceFile } from "../api";
 import { GitDiffFileBlock } from "./git-diff-file-block";
 import { summarizeChanges } from "./git-file-header";
 
-interface CommitDiffViewerPanelProps {
+interface CommitDiffViewerSurfaceProps {
   commit: GitLogEntry;
   workspaceId: string;
 }
 
-export function CommitDiffViewerPanel({ commit, workspaceId }: CommitDiffViewerPanelProps) {
+export function CommitDiffViewerSurface({ commit, workspaceId }: CommitDiffViewerSurfaceProps) {
   const { resolvedAppearance } = useTheme();
   const [patch, setPatch] = useState("");
   const [error, setError] = useState<string | null>(null);

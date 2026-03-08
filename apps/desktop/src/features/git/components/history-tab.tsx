@@ -133,7 +133,7 @@ function CommitRow({
           onOpenCommit(entry);
         }
       }}
-      className="flex cursor-default items-start gap-2 rounded px-2 py-1.5 transition hover:bg-[var(--surface-hover)]"
+      className="flex cursor-pointer items-start gap-2 rounded px-2 py-1.5 transition hover:bg-[var(--surface-hover)]"
       title={`Open diff for ${entry.shortSha}`}
     >
       <AuthorAvatar name={entry.author} email={entry.email} />

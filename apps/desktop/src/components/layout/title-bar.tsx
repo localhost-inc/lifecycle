@@ -88,11 +88,11 @@ export function TitleBar({ selectedWorkspace }: TitleBarProps) {
       <div data-tauri-drag-region className="flex min-w-0 flex-1 items-center gap-3">
         {selectedWorkspace && (
           <div data-no-drag className="flex min-w-0 items-center gap-2.5">
-            <span className="font-mono text-[12px] font-medium text-[var(--foreground)]">
+            <span className="font-mono text-[13px] font-medium text-[var(--foreground)]">
               {selectedWorkspace.source_ref}
             </span>
             {selectedWorkspace.git_sha && (
-              <span className="font-mono text-[11px] text-[var(--muted-foreground)]">
+              <span className="font-mono text-xs text-[var(--muted-foreground)]">
                 {selectedWorkspace.git_sha.slice(0, 8)}
               </span>
             )}
@@ -100,6 +100,7 @@ export function TitleBar({ selectedWorkspace }: TitleBarProps) {
           </div>
         )}
       </div>
+      <div data-no-drag id="title-bar-actions" className="flex shrink-0 items-center gap-1" />
     </header>
   );
 }

@@ -10,9 +10,15 @@ const STATUS_TONES: Record<TerminalStatus, StatusDotTone> = {
 };
 
 interface TerminalStatusDotProps {
+  className?: string;
+  size?: "default" | "sm";
   status: TerminalStatus;
 }
 
-export function TerminalStatusDot({ status }: TerminalStatusDotProps) {
-  return <StatusDot title={status} tone={STATUS_TONES[status]} />;
+export function TerminalStatusDot({
+  className,
+  size = "default",
+  status,
+}: TerminalStatusDotProps) {
+  return <StatusDot className={className} size={size} title={status} tone={STATUS_TONES[status]} />;
 }

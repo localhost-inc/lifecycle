@@ -46,7 +46,7 @@ Near-term stance:
 
 ## Follow-up
 
-1. If we want optional renderer experiments later, first extract a renderer adapter boundary from the current `TerminalPanel` so alternatives can be tested without changing PTY transport.
+1. If we want optional renderer experiments later, first extract a renderer adapter boundary from the current `TerminalSurface` so alternatives can be tested without changing PTY transport.
 2. Revisit `libghostty` only when upstream offers a documented, stable embedding story for third-party apps across the platforms we care about.
 3. If we want to explore Ghostty tech sooner, run a narrow spike around `libghostty-vt` for read-only replay/log rendering or key/paste utilities, not for the main interactive terminal.
 
@@ -57,7 +57,7 @@ Near-term stance:
    - `docs/milestones/m4.md`
    - `docs/milestones/m7.md`
    - `docs/reference/workspace-provider.md`
-   - `apps/desktop/src/features/terminals/components/terminal-panel.tsx`
+   - `apps/desktop/src/features/terminals/components/terminal-surface.tsx`
    - `apps/desktop/src-tauri/src/platform/runtime/terminal.rs`
 2. Ghostty upstream:
    - https://github.com/ghostty-org/ghostty/blob/main/README.md

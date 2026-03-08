@@ -6,6 +6,7 @@ import {
   createCommitDiffTab,
   createDefaultWorkspaceSurfaceState,
   createFileDiffTab,
+  createLauncherTab,
   fileDiffTabKeyV2,
   readLastWorkspaceId,
   readWorkspaceSurfaceState,
@@ -30,6 +31,13 @@ class MemoryStorage implements StorageLike {
   setItem(key: string, value: string): void {
     this.values.set(key, value);
   }
+}
+
+function withDefaultState(state: Partial<ReturnType<typeof createDefaultWorkspaceSurfaceState>>) {
+  return {
+    ...createDefaultWorkspaceSurfaceState(),
+    ...state,
+  };
 }
 
 function createCommitEntry(overrides: Partial<ReturnType<typeof createCommitDiffTab>> = {}) {
@@ -62,6 +70,7 @@ describe("workspace surface state persistence", () => {
 
     const restored = readWorkspaceSurfaceState("ws-1", storage);
     expect(restored).toEqual({
+      ...createDefaultWorkspaceSurfaceState(),
       activeTabKey: fileDiffTabKeyV2("src/app.ts"),
       documents: [
         createFileDiffTab("src/app.ts", "working"),
@@ -80,13 +89,13 @@ describe("workspace surface state persistence", () => {
             activeScope: "working",
             filePath: "src/app.ts",
             initialScope: "working",
-            kind: "file-diff",
+            type: "file-diff",
           },
           {
             activeScope: "staged",
             filePath: "README.md",
             initialScope: "staged",
-            kind: "file-diff",
+            type: "file-diff",
           },
         ],
       },
@@ -98,18 +107,19 @@ describe("workspace surface state persistence", () => {
 
     writeWorkspaceSurfaceState(
       "ws-1",
-      {
+      withDefaultState({
         activeTabKey: "diff:staged:src/app.ts",
         documents: [
           createFileDiffTab("src/app.ts", "working"),
           createFileDiffTab("src/app.ts", "working", "staged"),
           createFileDiffTab("README.md", "staged"),
         ],
-      },
+      }),
       storage,
     );
 
     expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
+      ...createDefaultWorkspaceSurfaceState(),
       activeTabKey: fileDiffTabKeyV2("src/app.ts"),
       documents: [
         createFileDiffTab("src/app.ts", "working", "staged"),
@@ -124,13 +134,13 @@ describe("workspace surface state persistence", () => {
             activeScope: "staged",
             filePath: "src/app.ts",
             initialScope: "working",
-            kind: "file-diff",
+            type: "file-diff",
           },
           {
             activeScope: "staged",
             filePath: "README.md",
             initialScope: "staged",
-            kind: "file-diff",
+            type: "file-diff",
           },
         ],
       },
@@ -150,18 +160,19 @@ describe("workspace surface state persistence", () => {
 
     writeWorkspaceSurfaceState(
       "ws-1",
-      {
+      withDefaultState({
         activeTabKey: commitDiffTabKeyV2(firstCommit.sha),
         documents: [
           createCommitDiffTab(firstCommit),
           createCommitDiffTab(secondCommit),
           createCommitDiffTab(firstCommit),
         ],
-      },
+      }),
       storage,
     );
 
     expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
+      ...createDefaultWorkspaceSurfaceState(),
       activeTabKey: commitDiffTabKeyV2(firstCommit.sha),
       documents: [createCommitDiffTab(firstCommit), createCommitDiffTab(secondCommit)],
     });
@@ -171,7 +182,7 @@ describe("workspace surface state persistence", () => {
         documents: [
           {
             author: firstCommit.author,
-            kind: "commit-diff",
+            type: "commit-diff",
             message: firstCommit.message,
             sha: firstCommit.sha,
             shortSha: firstCommit.shortSha,
@@ -179,7 +190,7 @@ describe("workspace surface state persistence", () => {
           },
           {
             author: secondCommit.author,
-            kind: "commit-diff",
+            type: "commit-diff",
             message: secondCommit.message,
             sha: secondCommit.sha,
             shortSha: secondCommit.shortSha,
@@ -195,14 +206,15 @@ describe("workspace surface state persistence", () => {
 
     writeWorkspaceSurfaceState(
       "ws-1",
-      {
+      withDefaultState({
         activeTabKey: "terminal:term-42",
         documents: [],
-      },
+      }),
       storage,
     );
 
     expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
+      ...createDefaultWorkspaceSurfaceState(),
       activeTabKey: "terminal:term-42",
       documents: [],
     });
@@ -211,6 +223,71 @@ describe("workspace surface state persistence", () => {
         activeTabKey: "terminal:term-42",
         documents: [],
       },
+    });
+  });
+
+  test("persists launcher tabs alongside workspace-owned tab ordering", () => {
+    const storage = new MemoryStorage();
+    const launcher = createLauncherTab("launcher-1");
+
+    writeWorkspaceSurfaceState(
+      "ws-1",
+      withDefaultState({
+        activeTabKey: launcher.key,
+        documents: [launcher, createFileDiffTab("src/app.ts", "working")],
+        tabOrderKeys: [launcher.key, "diff:file:src/app.ts", "terminal:term-2"],
+      }),
+      storage,
+    );
+
+    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
+      ...createDefaultWorkspaceSurfaceState(),
+      activeTabKey: launcher.key,
+      documents: [launcher, createFileDiffTab("src/app.ts", "working")],
+      hiddenRuntimeTabKeys: [],
+      tabOrderKeys: [launcher.key, "diff:file:src/app.ts", "terminal:term-2"],
+    });
+    expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2) ?? "null")).toEqual({
+      "ws-1": {
+        activeTabKey: launcher.key,
+        documents: [
+          {
+            key: launcher.key,
+            type: "launcher",
+          },
+          {
+            activeScope: "working",
+            filePath: "src/app.ts",
+            initialScope: "working",
+            type: "file-diff",
+          },
+        ],
+        tabOrderKeys: [launcher.key, "diff:file:src/app.ts", "terminal:term-2"],
+      },
+    });
+  });
+
+  test("keeps hidden runtime tabs separate from visible order and clears invalid active runtime keys", () => {
+    const storage = new MemoryStorage();
+
+    storage.setItem(
+      WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2,
+      JSON.stringify({
+        "ws-1": {
+          activeTabKey: "terminal:term-hidden",
+          documents: [createLauncherTab("launcher-1")],
+          hiddenRuntimeTabKeys: ["terminal:term-hidden", "diff:file:src/ignored.ts"],
+          tabOrderKeys: ["launcher:launcher-1", "terminal:term-hidden", "launcher:launcher-1"],
+        },
+      }),
+    );
+
+    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
+      ...createDefaultWorkspaceSurfaceState(),
+      activeTabKey: null,
+      documents: [createLauncherTab("launcher-1")],
+      hiddenRuntimeTabKeys: ["terminal:term-hidden"],
+      tabOrderKeys: ["launcher:launcher-1"],
     });
   });
 
@@ -228,39 +305,39 @@ describe("workspace surface state persistence", () => {
               activeScope: "working",
               filePath: "src/app.ts",
               initialScope: "working",
-              kind: "file-diff",
+              type: "file-diff",
             },
             {
               activeScope: "staged",
               filePath: "src/app.ts",
               initialScope: "working",
-              kind: "file-diff",
+              type: "file-diff",
             },
             {
               activeScope: "working",
               filePath: "src/ignored.ts",
               initialScope: "invalid",
-              kind: "file-diff",
+              type: "file-diff",
             },
             {
               activeScope: "working",
               filePath: 42,
               initialScope: "working",
-              kind: "file-diff",
+              type: "file-diff",
             },
             {
               author: commit.author,
-              kind: "commit-diff",
+              type: "commit-diff",
               message: commit.message,
               sha: commit.sha,
               shortSha: commit.shortSha,
               timestamp: commit.timestamp,
             },
-            { kind: "commit-diff", sha: "" },
-            { kind: "commit-diff", sha: 42 },
+            { type: "commit-diff", sha: "" },
+            { type: "commit-diff", sha: 42 },
             {
               author: 42,
-              kind: "commit-diff",
+              type: "commit-diff",
               message: "bad author",
               sha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
               shortSha: "deadbeef",
@@ -274,6 +351,7 @@ describe("workspace surface state persistence", () => {
     );
 
     expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
+      ...createDefaultWorkspaceSurfaceState(),
       activeTabKey: fileDiffTabKeyV2("src/app.ts"),
       documents: [
         createFileDiffTab("src/app.ts", "working", "staged"),
@@ -296,7 +374,7 @@ describe("workspace surface state persistence", () => {
               activeScope: "working",
               filePath: "src/ignored.ts",
               initialScope: "invalid",
-              kind: "file-diff",
+              type: "file-diff",
             },
           ],
         },
@@ -304,6 +382,7 @@ describe("workspace surface state persistence", () => {
     );
 
     expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
+      ...createDefaultWorkspaceSurfaceState(),
       activeTabKey: "terminal:term-42",
       documents: [],
     });
@@ -314,10 +393,10 @@ describe("workspace surface state persistence", () => {
 
     writeWorkspaceSurfaceState(
       "ws-1",
-      {
+      withDefaultState({
         activeTabKey: fileDiffTabKeyV2("src/app.ts"),
         documents: [createFileDiffTab("src/app.ts", "working")],
-      },
+      }),
       storage,
     );
     writeWorkspaceSurfaceState("ws-1", createDefaultWorkspaceSurfaceState(), storage);

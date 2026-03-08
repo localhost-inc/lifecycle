@@ -40,7 +40,7 @@ function SelectTrigger({ className, children, ...props }: SelectPrimitive.Trigge
   return (
     <SelectPrimitive.Trigger
       className={cn(
-        "flex h-9 w-full items-center justify-between gap-2 border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--foreground)] outline-none transition-colors data-placeholder:text-[var(--muted-foreground)] focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-60 rounded-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "flex h-9 w-full cursor-pointer items-center justify-between gap-2 border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--foreground)] outline-none transition-colors data-placeholder:text-[var(--muted-foreground)] focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-60 rounded-lg [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,
       )}
       data-slot="select-trigger"
@@ -61,7 +61,7 @@ function SelectScrollUpButton({
   return (
     <SelectPrimitive.ScrollUpArrow
       className={cn(
-        "flex cursor-default items-center justify-center py-1 text-[var(--muted-foreground)]",
+        "flex cursor-pointer items-center justify-center py-1 text-[var(--muted-foreground)]",
         className,
       )}
       data-slot="select-scroll-up-button"
@@ -79,7 +79,7 @@ function SelectScrollDownButton({
   return (
     <SelectPrimitive.ScrollDownArrow
       className={cn(
-        "flex cursor-default items-center justify-center py-1 text-[var(--muted-foreground)]",
+        "flex cursor-pointer items-center justify-center py-1 text-[var(--muted-foreground)]",
         className,
       )}
       data-slot="select-scroll-down-button"
@@ -121,7 +121,7 @@ function SelectContent({
       >
         <SelectPrimitive.Popup
           className={cn(
-            "relative z-50 max-h-[var(--available-height)] min-w-[8rem] w-[var(--anchor-width)] overflow-x-hidden overflow-y-auto border border-[var(--border)] bg-[var(--panel)] text-[var(--foreground)] shadow-none rounded-none",
+            "relative z-50 max-h-[var(--available-height)] min-w-[8rem] w-[var(--anchor-width)] overflow-x-hidden overflow-y-auto border border-[var(--border)] bg-[var(--panel)] text-[var(--foreground)] shadow-none rounded-lg",
             className,
           )}
           data-slot="select-content"
@@ -150,7 +150,7 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.Item.Prop
   return (
     <SelectPrimitive.Item
       className={cn(
-        "relative flex w-full cursor-default select-none items-center gap-2 border border-transparent px-2 py-1.5 text-sm outline-none transition-colors data-highlighted:bg-[var(--surface-hover)] data-highlighted:text-[var(--foreground)] data-disabled:pointer-events-none data-disabled:opacity-50 rounded-none",
+        "relative flex w-full cursor-pointer select-none items-center gap-2 border border-transparent px-2 py-1.5 text-sm outline-none transition-colors data-highlighted:bg-[var(--surface-hover)] data-highlighted:text-[var(--foreground)] data-disabled:cursor-not-allowed data-disabled:pointer-events-none data-disabled:opacity-50 rounded-lg",
         className,
       )}
       data-slot="select-item"

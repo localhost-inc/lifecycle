@@ -11,6 +11,9 @@
 #include "ghostty.h"
 
 typedef void (*LifecycleNativeTerminalExitCallback)(const char *terminal_id, int32_t exit_code);
+typedef void (*LifecycleNativeWorkspaceShortcutCallback)(const char *terminal_id,
+                                                         int32_t shortcut_kind,
+                                                         int32_t shortcut_index);
 
 typedef struct {
   const char *terminal_id;
@@ -31,14 +34,23 @@ typedef struct {
 
 @class LifecycleNativeTerminalView;
 static LifecycleNativeTerminalView *lifecycleTerminalViewForSurface(ghostty_surface_t surface);
+static BOOL lifecycleNativeTerminalHandleWorkspaceShortcut(LifecycleNativeTerminalView *view,
+                                                           NSEvent *event);
 
 static ghostty_app_t gGhosttyApp = NULL;
 static ghostty_config_t gGhosttyConfig = NULL;
 static LifecycleNativeTerminalExitCallback gExitCallback = NULL;
+static LifecycleNativeWorkspaceShortcutCallback gWorkspaceShortcutCallback = NULL;
 static NSMutableDictionary<NSString *, NSView *> *gTerminalViews;
 static NSString *gLastError;
 static NSString *gDiagnosticsLogPath;
 static int gDiagnosticsLogFd = -1;
+
+static const int32_t kLifecycleShortcutPreviousTab = 1;
+static const int32_t kLifecycleShortcutNextTab = 2;
+static const int32_t kLifecycleShortcutCloseActiveTab = 3;
+static const int32_t kLifecycleShortcutSelectTabIndex = 4;
+static const int32_t kLifecycleShortcutNewTab = 5;
 
 static void lifecycleWriteDiagnosticUTF8(const char *value, size_t length) {
   if (value == NULL || length == 0) {
@@ -804,6 +816,10 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return NO;
   }
 
+  if (lifecycleNativeTerminalHandleWorkspaceShortcut(self, event)) {
+    return YES;
+  }
+
   ghostty_input_key_s bindingEvent =
       lifecycleGhosttyKeyEvent(event, GHOSTTY_ACTION_PRESS, event.modifierFlags);
   NSString *bindingText = event.characters ?: @"";
@@ -1189,6 +1205,55 @@ static LifecycleNativeTerminalView *lifecycleTerminalViewForSurface(ghostty_surf
   return (__bridge LifecycleNativeTerminalView *)userdata;
 }
 
+static BOOL lifecycleNativeTerminalHandleWorkspaceShortcut(LifecycleNativeTerminalView *view,
+                                                           NSEvent *event) {
+  if (gWorkspaceShortcutCallback == NULL || view == nil || view.terminalId.length == 0) {
+    return NO;
+  }
+
+  const NSEventModifierFlags flags =
+      event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
+  const BOOL hasCommand = (flags & NSEventModifierFlagCommand) != 0;
+  const BOOL hasControl = (flags & NSEventModifierFlagControl) != 0;
+  const BOOL hasOption = (flags & NSEventModifierFlagOption) != 0;
+  const BOOL hasShift = (flags & NSEventModifierFlagShift) != 0;
+  if (!hasCommand || hasControl || hasOption) {
+    return NO;
+  }
+
+  NSString *charactersIgnoringModifiers = event.charactersIgnoringModifiers.lowercaseString ?: @"";
+  if (!hasShift && [charactersIgnoringModifiers isEqualToString:@"t"]) {
+    gWorkspaceShortcutCallback(view.terminalId.UTF8String, kLifecycleShortcutNewTab, 0);
+    return YES;
+  }
+
+  if (!hasShift && [charactersIgnoringModifiers isEqualToString:@"w"]) {
+    gWorkspaceShortcutCallback(view.terminalId.UTF8String, kLifecycleShortcutCloseActiveTab, 0);
+    return YES;
+  }
+
+  if (!hasShift && charactersIgnoringModifiers.length == 1) {
+    const unichar character = [charactersIgnoringModifiers characterAtIndex:0];
+    if (character >= '1' && character <= '9') {
+      gWorkspaceShortcutCallback(view.terminalId.UTF8String, kLifecycleShortcutSelectTabIndex,
+                                 (int32_t)(character - '0'));
+      return YES;
+    }
+  }
+
+  if (hasShift && [charactersIgnoringModifiers isEqualToString:@"["]) {
+    gWorkspaceShortcutCallback(view.terminalId.UTF8String, kLifecycleShortcutPreviousTab, 0);
+    return YES;
+  }
+
+  if (hasShift && [charactersIgnoringModifiers isEqualToString:@"]"]) {
+    gWorkspaceShortcutCallback(view.terminalId.UTF8String, kLifecycleShortcutNextTab, 0);
+    return YES;
+  }
+
+  return NO;
+}
+
 static void lifecycleWakeup(void *userdata) {
   (void)userdata;
   dispatch_async(dispatch_get_main_queue(), ^{
@@ -1248,9 +1313,11 @@ static bool lifecycleAction(ghostty_app_t app, ghostty_target_s target, ghostty_
   }
 }
 
-bool lifecycle_native_terminal_initialize(LifecycleNativeTerminalExitCallback callback) {
+bool lifecycle_native_terminal_initialize(LifecycleNativeTerminalExitCallback callback,
+                                          LifecycleNativeWorkspaceShortcutCallback shortcutCallback) {
   if (gGhosttyApp != NULL) {
     gExitCallback = callback;
+    gWorkspaceShortcutCallback = shortcutCallback;
     return true;
   }
 
@@ -1297,6 +1364,7 @@ bool lifecycle_native_terminal_initialize(LifecycleNativeTerminalExitCallback ca
       }
 
       gExitCallback = callback;
+      gWorkspaceShortcutCallback = shortcutCallback;
       gTerminalViews = [[NSMutableDictionary alloc] init];
       gLastError = nil;
       return true;

@@ -11,4 +11,11 @@ describe("theme.css", () => {
       expect(match[1]?.trim()).toBe("var(--panel)");
     }
   });
+
+  test("keeps a shared pointer affordance for native and role-based buttons", () => {
+    const css = readFileSync(new URL("./theme.css", import.meta.url), "utf8");
+
+    expect(css).toContain(':where(button, [role="button"])');
+    expect(css).toContain('cursor: pointer;');
+  });
 });

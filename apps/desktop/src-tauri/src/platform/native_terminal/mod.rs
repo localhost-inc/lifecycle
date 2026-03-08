@@ -20,10 +20,11 @@ mod imp {
     use crate::capabilities::workspaces::terminal::complete_native_terminal_exit;
     use crate::platform::diagnostics;
     use crate::shared::errors::LifecycleError;
+    use serde::Serialize;
     use std::ffi::{c_char, c_int, c_void, CStr, CString};
     use std::path::Path;
     use std::sync::OnceLock;
-    use tauri::AppHandle;
+    use tauri::{AppHandle, Emitter};
 
     #[derive(Clone)]
     struct NativeTerminalRuntimeContext {
@@ -51,9 +52,24 @@ mod imp {
         dark: bool,
     }
 
+    #[derive(Debug, Clone, Serialize)]
+    struct NativeWorkspaceShortcutEvent {
+        action: String,
+        index: Option<i32>,
+        source_surface_id: Option<String>,
+        source_surface_kind: Option<String>,
+    }
+
+    const NATIVE_TERMINAL_SHORTCUT_PREVIOUS_TAB: c_int = 1;
+    const NATIVE_TERMINAL_SHORTCUT_NEXT_TAB: c_int = 2;
+    const NATIVE_TERMINAL_SHORTCUT_CLOSE_ACTIVE_TAB: c_int = 3;
+    const NATIVE_TERMINAL_SHORTCUT_SELECT_TAB_INDEX: c_int = 4;
+    const NATIVE_TERMINAL_SHORTCUT_NEW_TAB: c_int = 5;
+
     unsafe extern "C" {
         fn lifecycle_native_terminal_initialize(
             exit_callback: extern "C" fn(*const c_char, c_int),
+            shortcut_callback: extern "C" fn(*const c_char, c_int, c_int),
         ) -> bool;
         fn lifecycle_native_terminal_last_error() -> *const c_char;
         fn lifecycle_native_terminal_sync(
@@ -148,6 +164,46 @@ mod imp {
         }
     }
 
+    extern "C" fn native_workspace_shortcut_callback(
+        terminal_id: *const c_char,
+        shortcut_kind: c_int,
+        shortcut_index: c_int,
+    ) {
+        if terminal_id.is_null() {
+            return;
+        }
+
+        let Some(context) = RUNTIME_CONTEXT.get() else {
+            return;
+        };
+
+        let Some((action, index)) = (match shortcut_kind {
+            NATIVE_TERMINAL_SHORTCUT_PREVIOUS_TAB => Some(("previous-tab", None)),
+            NATIVE_TERMINAL_SHORTCUT_NEXT_TAB => Some(("next-tab", None)),
+            NATIVE_TERMINAL_SHORTCUT_CLOSE_ACTIVE_TAB => Some(("close-active-tab", None)),
+            NATIVE_TERMINAL_SHORTCUT_SELECT_TAB_INDEX => {
+                Some(("select-tab-index", Some(shortcut_index)))
+            }
+            NATIVE_TERMINAL_SHORTCUT_NEW_TAB => Some(("new-tab", None)),
+            _ => None,
+        }) else {
+            return;
+        };
+
+        let terminal_id = unsafe { CStr::from_ptr(terminal_id) }
+            .to_string_lossy()
+            .to_string();
+        let _ = context.app.emit(
+            "native-workspace:shortcut",
+            NativeWorkspaceShortcutEvent {
+                action: action.to_string(),
+                index,
+                source_surface_id: Some(terminal_id),
+                source_surface_kind: Some("native-terminal".to_string()),
+            },
+        );
+    }
+
     pub fn initialize(
         app: AppHandle,
         db_path: String,
@@ -168,7 +224,12 @@ mod imp {
         }
 
         with_error(
-            || unsafe { lifecycle_native_terminal_initialize(native_terminal_exit_callback) },
+            || unsafe {
+                lifecycle_native_terminal_initialize(
+                    native_terminal_exit_callback,
+                    native_workspace_shortcut_callback,
+                )
+            },
             "failed to initialize native terminal runtime",
         )
     }

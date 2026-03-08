@@ -46,6 +46,15 @@ export interface TerminalRemovedEvent {
   workspace_id: string;
 }
 
+export interface TerminalHarnessTurnCompletedEvent {
+  terminal_id: string;
+  workspace_id: string;
+  harness_provider: string | null;
+  harness_session_id: string | null;
+  completion_key: string;
+  turn_id: string | null;
+}
+
 export interface TerminalStreamChunk {
   cursor: string;
   data: string;
@@ -128,6 +137,7 @@ interface BrowserTerminalState {
 
 interface BrowserTerminalListeners {
   created: Set<(event: TerminalCreatedEvent) => void>;
+  harnessTurnCompleted: Set<(event: TerminalHarnessTurnCompletedEvent) => void>;
   removed: Set<(event: TerminalRemovedEvent) => void>;
   status: Set<(event: TerminalStatusEvent) => void>;
 }
@@ -148,6 +158,7 @@ let browserTerminalState = readBrowserTerminalState();
 
 const browserListeners: BrowserTerminalListeners = {
   created: new Set(),
+  harnessTurnCompleted: new Set(),
   removed: new Set(),
   status: new Set(),
 };
@@ -330,6 +341,12 @@ function emitTerminalStatus(event: TerminalStatusEvent): void {
   }
 }
 
+function emitTerminalHarnessTurnCompleted(event: TerminalHarnessTurnCompletedEvent): void {
+  for (const callback of browserListeners.harnessTurnCompleted) {
+    callback(event);
+  }
+}
+
 function emitTerminalChunk(terminalId: string, chunk: TerminalStreamChunk): void {
   const listeners = browserStreamListeners.get(terminalId);
   if (!listeners) {
@@ -392,6 +409,28 @@ function setBrowserTerminalStatus(
   }
 
   return nextTerminal;
+}
+
+function emitBrowserHarnessTurnCompleted(
+  terminal: TerminalRow,
+  turnId: string | null = null,
+): void {
+  if (terminal.launch_type !== "harness") {
+    return;
+  }
+
+  emitTerminalHarnessTurnCompleted({
+    completion_key:
+      turnId ??
+      (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`),
+    harness_provider: terminal.harness_provider,
+    harness_session_id: terminal.harness_session_id,
+    terminal_id: terminal.id,
+    turn_id: turnId,
+    workspace_id: terminal.workspace_id,
+  });
 }
 
 function appendBrowserTerminalOutput(
@@ -749,6 +788,8 @@ export async function writeTerminal(terminalId: string, data: string): Promise<v
             endedAt: nowIso(),
             exitCode: result.exitCode ?? 0,
           });
+        } else if (terminal.launch_type === "harness") {
+          emitBrowserHarnessTurnCompleted(terminal);
         }
         continue;
       }
@@ -856,6 +897,21 @@ export async function subscribeToTerminalStatusEvents(
   }
 
   return listen<TerminalStatusEvent>("terminal:status-changed", (event) => {
+    callback(event.payload);
+  });
+}
+
+export async function subscribeToTerminalHarnessTurnCompletedEvents(
+  callback: (event: TerminalHarnessTurnCompletedEvent) => void,
+): Promise<UnlistenFn> {
+  if (!isTauri()) {
+    browserListeners.harnessTurnCompleted.add(callback);
+    return () => {
+      browserListeners.harnessTurnCompleted.delete(callback);
+    };
+  }
+
+  return listen<TerminalHarnessTurnCompletedEvent>("terminal:harness-turn-completed", (event) => {
     callback(event.payload);
   });
 }

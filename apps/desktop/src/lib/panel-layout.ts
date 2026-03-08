@@ -13,6 +13,8 @@ export interface SplitRatioBounds {
   minRatio: number;
 }
 
+export const DASHBOARD_LEFT_SIDEBAR_COLLAPSED_STORAGE_KEY =
+  "lifecycle.desktop.dashboard-left-sidebar-collapsed.v1";
 export const DASHBOARD_LEFT_SIDEBAR_WIDTH_STORAGE_KEY =
   "lifecycle.desktop.dashboard-left-sidebar-width.v1";
 export const DASHBOARD_RIGHT_SIDEBAR_WIDTH_STORAGE_KEY =

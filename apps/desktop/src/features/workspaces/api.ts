@@ -66,6 +66,20 @@ export interface SetupStepEvent {
   data: string | null;
 }
 
+export type WorkspaceShortcutAction =
+  | "close-active-tab"
+  | "new-tab"
+  | "next-tab"
+  | "previous-tab"
+  | "select-tab-index";
+
+export interface WorkspaceShortcutEvent {
+  action: WorkspaceShortcutAction;
+  index: number | null;
+  source_surface_id: string | null;
+  source_surface_kind: "native-terminal" | null;
+}
+
 interface BrowserWorkspaceState {
   workspaces: WorkspaceRow[];
   services: ServiceRow[];
@@ -216,6 +230,18 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
     workspaceName: input.workspaceName,
     baseRef: input.baseRef,
     worktreeRoot: input.worktreeRoot,
+  });
+}
+
+export async function subscribeToNativeWorkspaceShortcutEvents(
+  callback: (event: WorkspaceShortcutEvent) => void,
+): Promise<UnlistenFn> {
+  if (!isTauri()) {
+    return () => {};
+  }
+
+  return listen<WorkspaceShortcutEvent>("native-workspace:shortcut", (event) => {
+    callback(event.payload);
   });
 }
 

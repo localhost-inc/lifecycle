@@ -20,5 +20,6 @@ describe("ToggleGroup", () => {
     expect(markup).toContain('data-state="on"');
     expect(markup).toContain('data-state="off"');
     expect(markup).toContain('data-slot="toggle-group-item"');
+    expect(markup).toContain("cursor-pointer");
   });
 });

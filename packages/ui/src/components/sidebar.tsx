@@ -121,7 +121,7 @@ function Sidebar({
     <aside
       className={cn(
         "peer/sidebar flex h-full min-h-0 shrink-0 flex-col bg-[var(--sidebar-background)] text-[var(--sidebar-foreground)]",
-        collapsible !== "none" && "transition-[width] duration-200 ease-linear",
+        collapsible !== "none" && "overflow-hidden transition-[width] duration-200 ease-linear",
         variant === "floating" && "border border-[var(--border)]",
         className,
       )}
@@ -256,7 +256,7 @@ function SidebarMenuItem({ className, ...props }: React.ComponentProps<"li">) {
 }
 
 const sidebarMenuButtonVariants = cva(
-  "flex w-full items-center gap-2 overflow-hidden px-2 py-1.5 text-left text-sm font-medium outline-none transition-colors focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:pointer-events-none disabled:opacity-50 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
+  "flex w-full cursor-pointer items-center gap-2 overflow-hidden px-2 py-1.5 text-left text-sm font-medium outline-none transition-colors focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
   {
     variants: {
       active: {
@@ -339,7 +339,7 @@ function SidebarMenuAction({
   return (
     <ButtonPrimitive
       className={cn(
-        "absolute right-1 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center text-[var(--sidebar-muted-foreground)] outline-none transition-colors focus-visible:ring-1 focus-visible:ring-[var(--ring)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)] disabled:pointer-events-none disabled:opacity-50",
+        "absolute right-1 top-1/2 flex size-5 -translate-y-1/2 cursor-pointer items-center justify-center text-[var(--sidebar-muted-foreground)] outline-none transition-colors focus-visible:ring-1 focus-visible:ring-[var(--ring)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)] disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50",
         showOnHover &&
           "opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100",
         className,
@@ -357,7 +357,7 @@ function SidebarMenuAction({
 }
 
 const sidebarMenuSubButtonVariants = cva(
-  "flex w-full items-center gap-2 overflow-hidden px-2 py-1.5 text-left text-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-[var(--ring)] [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
+  "flex w-full cursor-pointer items-center gap-2 overflow-hidden px-2 py-1.5 text-left text-sm outline-none transition-colors focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0",
   {
     variants: {
       active: {

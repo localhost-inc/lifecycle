@@ -15,21 +15,29 @@ export interface FileDiffDocument {
   filePath: string;
   initialScope: GitDiffScope;
   key: string;
-  kind: "file-diff";
+  type: "file-diff";
   label: string;
 }
 
 export interface CommitDiffDocument extends GitLogEntry {
   key: string;
-  kind: "commit-diff";
+  type: "commit-diff";
   label: string;
 }
 
-export type WorkspaceSurfaceDocument = FileDiffDocument | CommitDiffDocument;
+export interface LauncherTab {
+  key: string;
+  type: "launcher";
+  label: string;
+}
+
+export type WorkspaceSurfaceDocument = FileDiffDocument | CommitDiffDocument | LauncherTab;
 
 export interface WorkspaceSurfaceState {
   activeTabKey: string | null;
   documents: WorkspaceSurfaceDocument[];
+  hiddenRuntimeTabKeys: string[];
+  tabOrderKeys: string[];
 }
 
 type PersistedV1Document = {
@@ -46,6 +54,7 @@ type PersistedFileDiffDocument = {
   activeScope?: unknown;
   filePath?: unknown;
   initialScope?: unknown;
+  type?: unknown;
   kind?: unknown;
   scope?: unknown;
 };
@@ -53,6 +62,7 @@ type PersistedFileDiffDocument = {
 type PersistedCommitDiffDocument = {
   author?: unknown;
   email?: unknown;
+  type?: unknown;
   kind?: unknown;
   message?: unknown;
   sha?: unknown;
@@ -60,11 +70,18 @@ type PersistedCommitDiffDocument = {
   timestamp?: unknown;
 };
 
+type PersistedLauncherDocument = {
+  key?: unknown;
+  type?: unknown;
+  kind?: unknown;
+};
+
 type PersistedLegacyDiffDocument = {
   activeScope?: unknown;
   diffKind?: unknown;
   filePath?: unknown;
   initialScope?: unknown;
+  type?: unknown;
   kind?: unknown;
   message?: unknown;
   scope?: unknown;
@@ -76,6 +93,8 @@ type PersistedLegacyDiffDocument = {
 type PersistedWorkspaceState = {
   activeTabKey?: unknown;
   documents?: unknown;
+  hiddenRuntimeTabKeys?: unknown;
+  tabOrderKeys?: unknown;
 };
 
 type PersistedWorkspaceStateMap = Record<string, PersistedWorkspaceState>;
@@ -123,6 +142,10 @@ function defaultCommitMessage(shortSha: string): string {
   return `Commit ${shortSha}`;
 }
 
+export function isRuntimeTabKey(value: string): boolean {
+  return value.startsWith("terminal:");
+}
+
 function shortShaFromSha(sha: string): string {
   return sha.slice(0, 8);
 }
@@ -153,7 +176,7 @@ export function createFileDiffTab(
     filePath,
     initialScope,
     key: fileDiffTabKey(filePath),
-    kind: "file-diff",
+    type: "file-diff",
     label: getBasename(filePath),
   };
 }
@@ -171,7 +194,7 @@ export function createCommitDiffTab(input: CommitDiffInput | string): CommitDiff
     author: typeof input === "string" ? "" : (input.author ?? ""),
     email: typeof input === "string" ? "" : (input.email ?? ""),
     key: commitDiffTabKey(sha),
-    kind: "commit-diff",
+    type: "commit-diff",
     label: shortSha,
     message,
     sha,
@@ -180,22 +203,36 @@ export function createCommitDiffTab(input: CommitDiffInput | string): CommitDiff
   };
 }
 
+export function createLauncherTab(id: string): LauncherTab {
+  return {
+    key: `launcher:${id}`,
+    type: "launcher",
+    label: "New Tab",
+  };
+}
+
 export function isFileDiffDocument(
   document: WorkspaceSurfaceDocument,
 ): document is FileDiffDocument {
-  return document.kind === "file-diff";
+  return document.type === "file-diff";
 }
 
 export function isCommitDiffDocument(
   document: WorkspaceSurfaceDocument,
 ): document is CommitDiffDocument {
-  return document.kind === "commit-diff";
+  return document.type === "commit-diff";
+}
+
+export function isLauncherDocument(document: WorkspaceSurfaceDocument): document is LauncherTab {
+  return document.type === "launcher";
 }
 
 export function createDefaultWorkspaceSurfaceState(): WorkspaceSurfaceState {
   return {
     activeTabKey: null,
     documents: [],
+    hiddenRuntimeTabKeys: [],
+    tabOrderKeys: [],
   };
 }
 
@@ -230,13 +267,36 @@ function normalizeDocuments(documents: WorkspaceSurfaceDocument[]): WorkspaceSur
   return [...dedupedDocuments.values()];
 }
 
+function normalizeTabKeyList(keys: readonly string[]): string[] {
+  const dedupedKeys = new Set<string>();
+
+  for (const key of keys) {
+    if (typeof key !== "string" || key.length === 0) {
+      continue;
+    }
+
+    dedupedKeys.add(key);
+  }
+
+  return [...dedupedKeys];
+}
+
 function normalizeWorkspaceSurfaceState(state: WorkspaceSurfaceState): WorkspaceSurfaceState {
   const documents = normalizeDocuments(state.documents);
+  const hiddenRuntimeTabKeys = normalizeTabKeyList(state.hiddenRuntimeTabKeys).filter(
+    isRuntimeTabKey,
+  );
+  const hiddenRuntimeTabKeySet = new Set(hiddenRuntimeTabKeys);
+  const tabOrderKeys = normalizeTabKeyList(state.tabOrderKeys).filter(
+    (key) => !hiddenRuntimeTabKeySet.has(key),
+  );
   const activeTabKey = migrateLegacyActiveTabKeyToV2(state.activeTabKey);
 
   return {
-    activeTabKey,
+    activeTabKey: activeTabKey && hiddenRuntimeTabKeySet.has(activeTabKey) ? null : activeTabKey,
     documents,
+    hiddenRuntimeTabKeys,
+    tabOrderKeys,
   };
 }
 
@@ -294,24 +354,51 @@ function parseCommitDiffDocument(value: Record<string, unknown>): CommitDiffDocu
   });
 }
 
+function parseLauncherDocument(value: Record<string, unknown>): LauncherTab | null {
+  const key = getOptionalString(value, "key");
+  if (!key || !key.startsWith("launcher:")) {
+    return null;
+  }
+
+  return createLauncherTab(key.slice("launcher:".length));
+}
+
+function getPersistedDocumentType(value: Record<string, unknown>): string | null {
+  if (typeof value.type === "string") {
+    return value.type;
+  }
+
+  if (typeof value.kind === "string") {
+    return value.kind;
+  }
+
+  return null;
+}
+
 function parseWorkspaceSurfaceDocument(value: unknown): WorkspaceSurfaceDocument | null {
   if (!isRecord(value)) {
     return null;
   }
 
-  if (value.kind === "file-diff") {
+  const documentType = getPersistedDocumentType(value);
+
+  if (documentType === "file-diff") {
     return parseFileDiffDocument(value as PersistedFileDiffDocument);
   }
 
-  if (value.kind === "commit-diff") {
+  if (documentType === "commit-diff") {
     return parseCommitDiffDocument(value as PersistedCommitDiffDocument);
   }
 
-  if (value.kind === "diff" && value.diffKind === "file") {
+  if (documentType === "launcher") {
+    return parseLauncherDocument(value as PersistedLauncherDocument);
+  }
+
+  if (documentType === "diff" && value.diffKind === "file") {
     return parseFileDiffDocument(value as PersistedLegacyDiffDocument);
   }
 
-  if (value.kind === "diff" && value.diffKind === "commit") {
+  if (documentType === "diff" && value.diffKind === "commit") {
     return parseCommitDiffDocument(value as PersistedLegacyDiffDocument);
   }
 
@@ -339,11 +426,19 @@ function parseWorkspaceSurfaceState(value: unknown): WorkspaceSurfaceState {
     typeof value.activeTabKey === "string"
       ? migrateLegacyActiveTabKeyToV2(value.activeTabKey)
       : null;
+  const hiddenRuntimeTabKeys = Array.isArray(value.hiddenRuntimeTabKeys)
+    ? value.hiddenRuntimeTabKeys.filter((key): key is string => typeof key === "string")
+    : [];
+  const tabOrderKeys = Array.isArray(value.tabOrderKeys)
+    ? value.tabOrderKeys.filter((key): key is string => typeof key === "string")
+    : [];
 
-  return {
+  return normalizeWorkspaceSurfaceState({
     activeTabKey,
     documents,
-  };
+    hiddenRuntimeTabKeys,
+    tabOrderKeys,
+  });
 }
 
 function readPersistedWorkspaceSurfaceStateMap(
@@ -361,7 +456,7 @@ function readPersistedWorkspaceSurfaceStateMap(
 
 function serializeCommitDiffDocument(document: CommitDiffDocument): Record<string, string> {
   const serialized: Record<string, string> = {
-    kind: "commit-diff",
+    type: "commit-diff",
     sha: document.sha,
     shortSha: document.shortSha,
   };
@@ -393,7 +488,14 @@ function serializeWorkspaceSurfaceDocument(
       activeScope: document.activeScope,
       filePath: document.filePath,
       initialScope: document.initialScope,
-      kind: document.kind,
+      type: document.type,
+    };
+  }
+
+  if (isLauncherDocument(document)) {
+    return {
+      key: document.key,
+      type: document.type,
     };
   }
 
@@ -403,12 +505,22 @@ function serializeWorkspaceSurfaceDocument(
 function serializeWorkspaceSurfaceState(state: WorkspaceSurfaceState): PersistedWorkspaceState {
   const normalizedState = normalizeWorkspaceSurfaceState(state);
 
-  return {
+  const serializedState: PersistedWorkspaceState = {
     activeTabKey: normalizedState.activeTabKey,
     documents: normalizedState.documents.map((document) =>
       serializeWorkspaceSurfaceDocument(document),
     ),
   };
+
+  if (normalizedState.tabOrderKeys.length > 0) {
+    serializedState.tabOrderKeys = normalizedState.tabOrderKeys;
+  }
+
+  if (normalizedState.hiddenRuntimeTabKeys.length > 0) {
+    serializedState.hiddenRuntimeTabKeys = normalizedState.hiddenRuntimeTabKeys;
+  }
+
+  return serializedState;
 }
 
 export function readWorkspaceSurfaceState(
@@ -455,7 +567,12 @@ export function writeWorkspaceSurfaceState(
   const nextMap: PersistedWorkspaceStateMap = { ...persistedMap };
   const normalizedState = normalizeWorkspaceSurfaceState(state);
 
-  if (normalizedState.documents.length === 0 && normalizedState.activeTabKey === null) {
+  if (
+    normalizedState.documents.length === 0 &&
+    normalizedState.activeTabKey === null &&
+    normalizedState.hiddenRuntimeTabKeys.length === 0 &&
+    normalizedState.tabOrderKeys.length === 0
+  ) {
     delete nextMap[workspaceId];
   } else {
     nextMap[workspaceId] = serializeWorkspaceSurfaceState(normalizedState);

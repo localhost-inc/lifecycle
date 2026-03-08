@@ -13,19 +13,19 @@ const SCOPE_LABELS: Record<GitDiffScope, string> = {
   branch: "Branch",
 };
 
-interface DiffViewerPanelProps {
+interface DiffViewerSurfaceProps {
   activeScope: GitDiffScope;
   filePath: string;
   onScopeChange: (scope: GitDiffScope) => void;
   workspaceId: string;
 }
 
-export function DiffViewerPanel({
+export function DiffViewerSurface({
   activeScope,
   filePath,
   onScopeChange,
   workspaceId,
-}: DiffViewerPanelProps) {
+}: DiffViewerSurfaceProps) {
   const { resolvedAppearance } = useTheme();
   const statusQuery = useGitStatus(workspaceId);
   const [baseRef, setBaseRef] = useState<string | null>(null);
