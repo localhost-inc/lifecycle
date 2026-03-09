@@ -9,6 +9,12 @@ use std::path::{Component, Path, PathBuf};
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WorkspaceAppOpener {
+    Default,
+    Program(&'static str),
+}
+
 fn workspace_git_failure(operation: &str, reason: impl Into<String>) -> LifecycleError {
     LifecycleError::GitOperationFailed {
         operation: operation.to_string(),
@@ -41,6 +47,20 @@ fn require_local_worktree(db_path: &str, workspace_id: &str) -> Result<String, L
     worktree_path.ok_or_else(|| LifecycleError::GitOperationFailed {
         operation: "resolve workspace git context".to_string(),
         reason: format!("workspace {workspace_id} has no local worktree path"),
+    })
+}
+
+fn resolve_workspace_root_path(
+    db_path: &str,
+    workspace_id: &str,
+    operation: &str,
+) -> Result<PathBuf, LifecycleError> {
+    let worktree_path = require_local_worktree(db_path, workspace_id)?;
+    std::fs::canonicalize(&worktree_path).map_err(|error| {
+        workspace_git_failure(
+            operation,
+            format!("failed to resolve workspace root: {error}"),
+        )
     })
 }
 
@@ -98,13 +118,8 @@ fn resolve_workspace_file_path(
     workspace_id: &str,
     repo_relative_path: &str,
 ) -> Result<PathBuf, LifecycleError> {
-    let worktree_path = require_local_worktree(db_path, workspace_id)?;
-    let canonical_worktree = std::fs::canonicalize(&worktree_path).map_err(|error| {
-        workspace_git_failure(
-            "open workspace file",
-            format!("failed to resolve workspace root: {error}"),
-        )
-    })?;
+    let canonical_worktree =
+        resolve_workspace_root_path(db_path, workspace_id, "open workspace file")?;
     let relative_path = normalize_repo_relative_path(repo_relative_path)?;
     let candidate_path = canonical_worktree.join(relative_path);
     let canonical_candidate = std::fs::canonicalize(&candidate_path).map_err(|error| {
@@ -122,6 +137,44 @@ fn resolve_workspace_file_path(
     }
 
     Ok(canonical_candidate)
+}
+
+fn resolve_workspace_app_opener(app_id: &str) -> Result<WorkspaceAppOpener, LifecycleError> {
+    #[cfg(target_os = "macos")]
+    let opener = match app_id {
+        "cursor" => WorkspaceAppOpener::Program("Cursor"),
+        "ghostty" => WorkspaceAppOpener::Program("Ghostty"),
+        "iterm" => WorkspaceAppOpener::Program("iTerm"),
+        "vscode" => WorkspaceAppOpener::Program("Visual Studio Code"),
+        "warp" => WorkspaceAppOpener::Program("Warp"),
+        "windsurf" => WorkspaceAppOpener::Program("Windsurf"),
+        "xcode" => WorkspaceAppOpener::Program("Xcode"),
+        "zed" => WorkspaceAppOpener::Program("Zed"),
+        "finder" => WorkspaceAppOpener::Default,
+        "terminal" => WorkspaceAppOpener::Program("Terminal"),
+        _ => {
+            return Err(workspace_git_failure(
+                "open workspace in app",
+                format!("unsupported app: {app_id}"),
+            ))
+        }
+    };
+
+    #[cfg(not(target_os = "macos"))]
+    let opener = match app_id {
+        "cursor" => WorkspaceAppOpener::Program("cursor"),
+        "windsurf" => WorkspaceAppOpener::Program("windsurf"),
+        "vscode" => WorkspaceAppOpener::Program("code"),
+        "zed" => WorkspaceAppOpener::Program("zed"),
+        _ => {
+            return Err(workspace_git_failure(
+                "open workspace in app",
+                format!("unsupported app on this platform: {app_id}"),
+            ))
+        }
+    };
+
+    Ok(opener)
 }
 
 fn update_workspace_git_sha(
@@ -211,36 +264,29 @@ pub fn open_workspace_file(
         .map_err(|error| workspace_git_failure("open workspace file", error.to_string()))
 }
 
-pub async fn open_workspace_in_app(
+pub fn open_workspace_in_app(
+    app: &AppHandle,
     db_path: &str,
     workspace_id: String,
     app_id: String,
 ) -> Result<(), LifecycleError> {
-    let worktree_path = require_local_worktree(db_path, &workspace_id)?;
+    let resolved_path =
+        resolve_workspace_root_path(db_path, &workspace_id, "open workspace in app")?;
+    let resolved_path = resolved_path.to_string_lossy().into_owned();
+    let opener = resolve_workspace_app_opener(&app_id)?;
 
-    let (program, args): (&str, Vec<&str>) = match app_id.as_str() {
-        "cursor" => ("cursor", vec![&worktree_path]),
-        "vscode" => ("code", vec![&worktree_path]),
-        "zed" => ("zed", vec![&worktree_path]),
-        "finder" => ("open", vec![&worktree_path]),
-        "terminal" => ("open", vec!["-a", "Terminal", &worktree_path]),
-        _ => {
-            return Err(workspace_git_failure(
-                "open workspace in app",
-                format!("unsupported app: {app_id}"),
-            ));
-        }
-    };
-
-    tokio::process::Command::new(program)
-        .args(&args)
-        .spawn()
-        .map_err(|error| {
-            workspace_git_failure(
-                "open workspace in app",
-                format!("failed to launch {app_id}: {error}"),
-            )
-        })?;
+    match opener {
+        WorkspaceAppOpener::Default => app.opener().open_path(resolved_path, None::<String>),
+        WorkspaceAppOpener::Program(program) => app
+            .opener()
+            .open_path(resolved_path, Some(program.to_string())),
+    }
+    .map_err(|error| {
+        workspace_git_failure(
+            "open workspace in app",
+            format!("failed to launch {app_id}: {error}"),
+        )
+    })?;
 
     Ok(())
 }
@@ -369,5 +415,92 @@ mod tests {
 
         let _ = fs::remove_dir_all(root);
         let _ = fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn resolve_workspace_app_opener_rejects_unknown_apps() {
+        let error = resolve_workspace_app_opener("unknown").expect_err("reject unsupported app");
+        match error {
+            LifecycleError::GitOperationFailed { operation, reason } => {
+                assert_eq!(operation, "open workspace in app");
+                assert!(reason.contains("unsupported app"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn resolve_workspace_app_opener_uses_macos_application_names() {
+        assert_eq!(
+            resolve_workspace_app_opener("cursor").expect("cursor opener"),
+            WorkspaceAppOpener::Program("Cursor")
+        );
+        assert_eq!(
+            resolve_workspace_app_opener("vscode").expect("vscode opener"),
+            WorkspaceAppOpener::Program("Visual Studio Code")
+        );
+        assert_eq!(
+            resolve_workspace_app_opener("windsurf").expect("windsurf opener"),
+            WorkspaceAppOpener::Program("Windsurf")
+        );
+        assert_eq!(
+            resolve_workspace_app_opener("zed").expect("zed opener"),
+            WorkspaceAppOpener::Program("Zed")
+        );
+        assert_eq!(
+            resolve_workspace_app_opener("finder").expect("finder opener"),
+            WorkspaceAppOpener::Default
+        );
+        assert_eq!(
+            resolve_workspace_app_opener("terminal").expect("terminal opener"),
+            WorkspaceAppOpener::Program("Terminal")
+        );
+        assert_eq!(
+            resolve_workspace_app_opener("iterm").expect("iterm opener"),
+            WorkspaceAppOpener::Program("iTerm")
+        );
+        assert_eq!(
+            resolve_workspace_app_opener("ghostty").expect("ghostty opener"),
+            WorkspaceAppOpener::Program("Ghostty")
+        );
+        assert_eq!(
+            resolve_workspace_app_opener("warp").expect("warp opener"),
+            WorkspaceAppOpener::Program("Warp")
+        );
+        assert_eq!(
+            resolve_workspace_app_opener("xcode").expect("xcode opener"),
+            WorkspaceAppOpener::Program("Xcode")
+        );
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn resolve_workspace_app_opener_uses_non_macos_program_names() {
+        assert_eq!(
+            resolve_workspace_app_opener("cursor").expect("cursor opener"),
+            WorkspaceAppOpener::Program("cursor")
+        );
+        assert_eq!(
+            resolve_workspace_app_opener("vscode").expect("vscode opener"),
+            WorkspaceAppOpener::Program("code")
+        );
+        assert_eq!(
+            resolve_workspace_app_opener("windsurf").expect("windsurf opener"),
+            WorkspaceAppOpener::Program("windsurf")
+        );
+        assert_eq!(
+            resolve_workspace_app_opener("zed").expect("zed opener"),
+            WorkspaceAppOpener::Program("zed")
+        );
+        let error =
+            resolve_workspace_app_opener("terminal").expect_err("terminal is unsupported here");
+        match error {
+            LifecycleError::GitOperationFailed { operation, reason } => {
+                assert_eq!(operation, "open workspace in app");
+                assert!(reason.contains("unsupported app on this platform"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 }

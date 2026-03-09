@@ -99,6 +99,37 @@ function fileIconFor(filePath: string): React.ComponentType<{ className?: string
   }
 }
 
+const DELTA_SQUARES = 5;
+
+function DeltaBar({ insertions, deletions }: { insertions: number; deletions: number }) {
+  const total = insertions + deletions;
+  if (total === 0) return null;
+
+  let addCount: number;
+  if (deletions === 0) {
+    addCount = DELTA_SQUARES;
+  } else if (insertions === 0) {
+    addCount = 0;
+  } else {
+    addCount = Math.max(1, Math.min(DELTA_SQUARES - 1, Math.round((insertions / total) * DELTA_SQUARES)));
+  }
+
+  return (
+    <div className="flex items-center gap-px">
+      {Array.from({ length: DELTA_SQUARES }, (_, i) => (
+        <span
+          key={i}
+          className={`h-[7px] w-[7px] rounded-[2px] ${
+            i < addCount
+              ? "bg-[var(--git-status-added)]"
+              : "bg-[var(--git-status-deleted)]"
+          }`}
+        />
+      ))}
+    </div>
+  );
+}
+
 function SectionHeader({
   label,
   count,
@@ -219,12 +250,7 @@ function FileRow({
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">
-        {ins !== null && ins > 0 && (
-          <span className="font-mono text-xs text-[var(--git-status-added)]">+{ins}</span>
-        )}
-        {del !== null && del > 0 && (
-          <span className="font-mono text-xs text-[var(--git-status-deleted)]">-{del}</span>
-        )}
+        <DeltaBar insertions={ins ?? 0} deletions={del ?? 0} />
         <button
           type="button"
           onClick={(e) => {

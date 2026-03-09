@@ -17,20 +17,11 @@ import { WorkspaceSidebar } from "./workspace-sidebar";
 import { WorkspaceSurface } from "./workspace-surface";
 import { startServices, stopWorkspace } from "../api";
 import { useWorkspaceServices, useWorkspaceSetup } from "../hooks";
+import { workspaceSupportsFilesystemInteraction } from "../lib/workspace-capabilities";
 
 interface WorkspacePanelProps {
   workspace: WorkspaceRecord;
   manifestStatus: ManifestStatus | null;
-}
-
-export function workspaceSupportsTerminalInteraction(
-  workspace: Pick<WorkspaceRecord, "status" | "worktree_path">,
-): boolean {
-  return (
-    workspace.worktree_path !== null &&
-    workspace.status !== "creating" &&
-    workspace.status !== "destroying"
-  );
 }
 
 export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProps) {
@@ -63,7 +54,7 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
     }
   }, [workspace.id]);
 
-  const supportsTerminalInteraction = workspaceSupportsTerminalInteraction(workspace);
+  const supportsTerminalInteraction = workspaceSupportsFilesystemInteraction(workspace);
   const canRun = (status === "sleeping" || status === "failed") && hasManifest;
   const canStop = status === "ready";
   const showMissingManifest = status === "sleeping" && !hasManifest;

@@ -26,7 +26,7 @@ function ScrollFade({
       {showLeft && (
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-y-0 left-0 z-10 bg-gradient-to-r from-[var(--background)] to-transparent"
+          className="pointer-events-none absolute inset-y-0 left-0 z-[1] bg-gradient-to-r from-[var(--background)] to-transparent"
           style={{ width: size }}
         />
       )}
@@ -34,7 +34,7 @@ function ScrollFade({
       {showRight && (
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-y-0 right-0 z-10 bg-red-500"
+          className="pointer-events-none absolute inset-y-0 right-0 z-[1] bg-gradient-to-l from-[var(--background)] to-transparent"
           style={{ width: size }}
         />
       )}

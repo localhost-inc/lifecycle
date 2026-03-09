@@ -25,12 +25,14 @@ pub(super) struct GeneratedIdentityTitles {
 pub(super) async fn generate_terminal_title(
     prompt: &str,
 ) -> Result<GeneratedTitle, LifecycleError> {
-    if let Some((source, output)) =
-        run_json_generation(&terminal_title_prompt(prompt), TERMINAL_TITLE_SCHEMA).await?
+    if let Some((source, title)) = generate_with_fallback(
+        &terminal_title_prompt(prompt),
+        TERMINAL_TITLE_SCHEMA,
+        parse_title_json,
+    )
+    .await?
     {
-        if let Some(title) = parse_title_json(&output) {
-            return Ok(GeneratedTitle { source, title });
-        }
+        return Ok(GeneratedTitle { source, title });
     }
 
     Ok(GeneratedTitle {
@@ -42,24 +44,21 @@ pub(super) async fn generate_terminal_title(
 pub(super) async fn generate_identity_titles(
     prompt: &str,
 ) -> Result<Option<GeneratedIdentityTitles>, LifecycleError> {
-    let Some((source, output)) = run_json_generation(
+    let Some((source, (workspace_title, session_title))) = generate_with_fallback(
         &workspace_identity_prompt(prompt),
         WORKSPACE_IDENTITY_SCHEMA,
+        parse_identity_titles_json,
     )
     .await?
     else {
         return Ok(None);
     };
 
-    Ok(
-        parse_identity_titles_json(&output).map(|(workspace_title, session_title)| {
-            GeneratedIdentityTitles {
-                source,
-                workspace_title,
-                session_title,
-            }
-        }),
-    )
+    Ok(Some(GeneratedIdentityTitles {
+        source,
+        workspace_title,
+        session_title,
+    }))
 }
 
 pub(super) fn fallback_terminal_title(prompt: &str) -> String {
@@ -70,16 +69,28 @@ pub(super) fn prompt_preview(prompt: &str) -> String {
     truncate_title(prompt, 72)
 }
 
-async fn run_json_generation(
+async fn generate_with_fallback<T, F>(
     prompt_text: &str,
     schema_json: &str,
-) -> Result<Option<(&'static str, String)>, LifecycleError> {
+    parser: F,
+) -> Result<Option<(&'static str, T)>, LifecycleError>
+where
+    F: Fn(&str) -> Option<T>,
+{
     if let Some(output) = run_claude_json_generator(prompt_text, schema_json).await? {
-        return Ok(Some(("claude-sonnet", output)));
+        if let Some(parsed) = parser(&output) {
+            return Ok(Some(("claude-sonnet", parsed)));
+        }
+
+        tracing::warn!("claude naming generator returned unparseable schema output");
     }
 
     if let Some(output) = run_codex_json_generator(prompt_text, schema_json).await? {
-        return Ok(Some(("codex", output)));
+        if let Some(parsed) = parser(&output) {
+            return Ok(Some(("codex", parsed)));
+        }
+
+        tracing::warn!("codex naming generator returned unparseable schema output");
     }
 
     Ok(None)
@@ -242,20 +253,29 @@ async fn run_codex_json_generator(
 
 fn parse_title_json(output: &str) -> Option<String> {
     let value = serde_json::from_str::<Value>(output).ok()?;
-    let title = value.get("title")?.as_str()?;
+    let payload = schema_payload(&value);
+    let title = payload.get("title")?.as_str()?;
     let sanitized = sanitize_generated_title(title);
     (!sanitized.is_empty()).then_some(sanitized)
 }
 
 fn parse_identity_titles_json(output: &str) -> Option<(String, String)> {
     let value = serde_json::from_str::<Value>(output).ok()?;
-    let workspace_title = sanitize_generated_title(value.get("workspace_title")?.as_str()?);
-    let session_title = sanitize_generated_title(value.get("session_title")?.as_str()?);
+    let payload = schema_payload(&value);
+    let workspace_title = sanitize_generated_title(payload.get("workspace_title")?.as_str()?);
+    let session_title = sanitize_generated_title(payload.get("session_title")?.as_str()?);
     if workspace_title.is_empty() || session_title.is_empty() {
         return None;
     }
 
     Some((workspace_title, session_title))
+}
+
+fn schema_payload<'a>(value: &'a Value) -> &'a Value {
+    value
+        .get("structured_output")
+        .filter(|payload| payload.is_object())
+        .unwrap_or(value)
 }
 
 fn terminal_title_prompt(prompt: &str) -> String {
@@ -327,5 +347,23 @@ mod tests {
             Some(("Fix Auth Callback".to_string(), "Auth Callback".to_string()))
         );
         assert!(parse_identity_titles_json(r#"{"workspace_title":"Only One"}"#).is_none());
+    }
+
+    #[test]
+    fn parse_title_json_supports_structured_output_wrapper() {
+        assert_eq!(
+            parse_title_json(r#"{"type":"result","structured_output":{"title":"Fix Auth Flow"}}"#),
+            Some("Fix Auth Flow".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_identity_titles_json_supports_structured_output_wrapper() {
+        assert_eq!(
+            parse_identity_titles_json(
+                r#"{"type":"result","structured_output":{"workspace_title":"Auth Callback","session_title":"Fix Callback"}}"#
+            ),
+            Some(("Auth Callback".to_string(), "Fix Callback".to_string()))
+        );
     }
 }

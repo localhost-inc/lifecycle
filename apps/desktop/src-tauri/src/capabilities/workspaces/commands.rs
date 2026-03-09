@@ -358,12 +358,13 @@ pub fn open_workspace_file(
 }
 
 #[tauri::command]
-pub async fn open_workspace_in_app(
+pub fn open_workspace_in_app(
+    app: AppHandle,
     db_path: State<'_, DbPath>,
     workspace_id: String,
     app_id: String,
 ) -> Result<(), LifecycleError> {
-    super::git::open_workspace_in_app(&db_path.0, workspace_id, app_id).await
+    super::git::open_workspace_in_app(&app, &db_path.0, workspace_id, app_id)
 }
 
 #[tauri::command]

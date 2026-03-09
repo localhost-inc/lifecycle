@@ -485,7 +485,17 @@ export async function getWorkspaceServices(workspaceId: string): Promise<Service
   return invoke<ServiceRecord[]>("get_workspace_services", { workspaceId });
 }
 
-export type OpenInAppId = "cursor" | "vscode" | "zed" | "finder" | "terminal";
+export type OpenInAppId =
+  | "cursor"
+  | "finder"
+  | "ghostty"
+  | "iterm"
+  | "terminal"
+  | "vscode"
+  | "warp"
+  | "windsurf"
+  | "xcode"
+  | "zed";
 
 export async function openWorkspaceInApp(workspaceId: string, appId: OpenInAppId): Promise<void> {
   if (!isTauri()) {

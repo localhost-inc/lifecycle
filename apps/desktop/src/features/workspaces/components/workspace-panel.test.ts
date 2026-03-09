@@ -1,16 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import { workspaceSupportsTerminalInteraction } from "./workspace-panel";
+import { workspaceSupportsFilesystemInteraction } from "../lib/workspace-capabilities";
 
-describe("workspaceSupportsTerminalInteraction", () => {
+describe("workspaceSupportsFilesystemInteraction", () => {
   test("allows terminals once a worktree exists outside create and destroy", () => {
     expect(
-      workspaceSupportsTerminalInteraction({
+      workspaceSupportsFilesystemInteraction({
+        mode: "local",
         status: "sleeping",
         worktree_path: "/tmp/worktree",
       }),
     ).toBeTrue();
     expect(
-      workspaceSupportsTerminalInteraction({
+      workspaceSupportsFilesystemInteraction({
+        mode: "local",
         status: "starting",
         worktree_path: "/tmp/worktree",
       }),
@@ -19,21 +21,31 @@ describe("workspaceSupportsTerminalInteraction", () => {
 
   test("rejects workspaces without an interactive filesystem context", () => {
     expect(
-      workspaceSupportsTerminalInteraction({
+      workspaceSupportsFilesystemInteraction({
+        mode: "local",
         status: "creating",
         worktree_path: "/tmp/worktree",
       }),
     ).toBeFalse();
     expect(
-      workspaceSupportsTerminalInteraction({
+      workspaceSupportsFilesystemInteraction({
+        mode: "local",
         status: "destroying",
         worktree_path: "/tmp/worktree",
       }),
     ).toBeFalse();
     expect(
-      workspaceSupportsTerminalInteraction({
+      workspaceSupportsFilesystemInteraction({
+        mode: "local",
         status: "sleeping",
         worktree_path: null,
+      }),
+    ).toBeFalse();
+    expect(
+      workspaceSupportsFilesystemInteraction({
+        mode: "cloud",
+        status: "ready",
+        worktree_path: "/tmp/worktree",
       }),
     ).toBeFalse();
   });
