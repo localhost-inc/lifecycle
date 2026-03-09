@@ -331,6 +331,22 @@ pub async fn list_workspace_git_log(
 }
 
 #[tauri::command]
+pub async fn list_workspace_git_pull_requests(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+) -> Result<crate::platform::git::pull_request::GitPullRequestListResult, LifecycleError> {
+    super::git::list_workspace_git_pull_requests(&db_path.0, workspace_id).await
+}
+
+#[tauri::command]
+pub async fn get_workspace_current_git_pull_request(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+) -> Result<crate::platform::git::pull_request::GitBranchPullRequestResult, LifecycleError> {
+    super::git::get_workspace_current_git_pull_request(&db_path.0, workspace_id).await
+}
+
+#[tauri::command]
 pub async fn get_workspace_git_base_ref(
     db_path: State<'_, DbPath>,
     workspace_id: String,
@@ -368,6 +384,24 @@ pub fn open_workspace_in_app(
 }
 
 #[tauri::command]
+pub fn show_workspace_open_in_menu(
+    window: WebviewWindow,
+    workspace_id: String,
+    current_app_id: String,
+    appearance: String,
+    x: f64,
+    y: f64,
+) -> Result<(), LifecycleError> {
+    super::git::show_workspace_open_in_menu(&window, workspace_id, current_app_id, appearance, x, y)
+}
+
+#[tauri::command]
+pub fn list_workspace_open_in_apps() -> Result<Vec<super::git::WorkspaceOpenInApp>, LifecycleError>
+{
+    super::git::list_workspace_open_in_apps()
+}
+
+#[tauri::command]
 pub async fn stage_workspace_git_files(
     db_path: State<'_, DbPath>,
     workspace_id: String,
@@ -400,4 +434,22 @@ pub async fn push_workspace_git(
     workspace_id: String,
 ) -> Result<crate::platform::git::status::GitPushResult, LifecycleError> {
     super::git::push_workspace_git(&db_path.0, workspace_id).await
+}
+
+#[tauri::command]
+pub async fn create_workspace_git_pull_request(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+) -> Result<crate::platform::git::pull_request::GitPullRequestSummary, LifecycleError> {
+    super::git::create_workspace_git_pull_request(&db_path.0, workspace_id).await
+}
+
+#[tauri::command]
+pub async fn merge_workspace_git_pull_request(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    pull_request_number: u64,
+) -> Result<crate::platform::git::pull_request::GitPullRequestSummary, LifecycleError> {
+    super::git::merge_workspace_git_pull_request(&db_path.0, workspace_id, pull_request_number)
+        .await
 }

@@ -1,7 +1,10 @@
 import type {
+  GitBranchPullRequestResult,
   GitCommitResult,
   GitDiffResult,
   GitLogEntry,
+  GitPullRequestListResult,
+  GitPullRequestSummary,
   GitPushResult,
   GitStatusResult,
   ServiceRecord,
@@ -172,6 +175,18 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
     }) as Promise<GitLogEntry[]>;
   }
 
+  async listGitPullRequests(workspaceId: string): Promise<GitPullRequestListResult> {
+    return this.invoke("list_workspace_git_pull_requests", {
+      workspaceId,
+    }) as Promise<GitPullRequestListResult>;
+  }
+
+  async getCurrentGitPullRequest(workspaceId: string): Promise<GitBranchPullRequestResult> {
+    return this.invoke("get_workspace_current_git_pull_request", {
+      workspaceId,
+    }) as Promise<GitBranchPullRequestResult>;
+  }
+
   async stageGitFiles(workspaceId: string, filePaths: string[]): Promise<void> {
     await this.invoke("stage_workspace_git_files", { workspaceId, filePaths });
   }
@@ -189,6 +204,22 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
 
   async pushGit(workspaceId: string): Promise<GitPushResult> {
     return this.invoke("push_workspace_git", { workspaceId }) as Promise<GitPushResult>;
+  }
+
+  async createGitPullRequest(workspaceId: string): Promise<GitPullRequestSummary> {
+    return this.invoke("create_workspace_git_pull_request", {
+      workspaceId,
+    }) as Promise<GitPullRequestSummary>;
+  }
+
+  async mergeGitPullRequest(
+    workspaceId: string,
+    pullRequestNumber: number,
+  ): Promise<GitPullRequestSummary> {
+    return this.invoke("merge_workspace_git_pull_request", {
+      workspaceId,
+      pullRequestNumber,
+    }) as Promise<GitPullRequestSummary>;
   }
 }
 

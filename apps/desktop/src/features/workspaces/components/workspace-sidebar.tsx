@@ -19,7 +19,7 @@ import {
 } from "react";
 import type { GitLogEntry, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { EnvironmentPanel } from "./environment-panel";
-import { VersionControlPanel } from "../../git/components/version-control-panel";
+import { GitPanel } from "../../git/components/git-panel";
 
 const PANEL_SEPARATOR_STEP_PX = 32;
 
@@ -190,7 +190,7 @@ export function WorkspaceSidebar({
         className="min-h-0 shrink-0 overflow-hidden"
         style={{ flexBasis: `${clampedTopPanelRatio * 100}%` }}
       >
-        <VersionControlPanel
+        <GitPanel
           onOpenDiff={onOpenDiff}
           onOpenCommitDiff={onOpenCommitDiff}
           workspaceId={workspace.id}

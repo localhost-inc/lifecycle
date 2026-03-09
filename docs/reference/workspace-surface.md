@@ -43,7 +43,7 @@ The workspace center panel is a shared surface that can host both provider-backe
 2. Current local edits use a single workspace-scoped `Changes` tab with a fixed key; repeated clicks update that tab's `focusPath` instead of opening file-scoped diff tabs.
 3. History commit diffs use commit-scoped document tabs keyed by commit SHA.
 4. Full patch rendering belongs in the center panel; list summaries belong in the side panel.
-5. The side panel should stay lightweight: summaries, stage/unstage actions, and diff navigation belong there; commit composition does not.
+5. The side panel should stay lightweight: summaries and diff navigation belong there; commit composition and staging workflows do not.
 
 ## Forward Compatibility
 

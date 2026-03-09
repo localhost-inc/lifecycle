@@ -28,4 +28,14 @@ describe("theme.css", () => {
     expect(css).toContain(':where(button, [role="button"])');
     expect(css).toContain("cursor: pointer;");
   });
+
+  test("defines the shared compact control treatment for themed button-like surfaces", () => {
+    const css = readFileSync(new URL("./theme.css", import.meta.url), "utf8");
+
+    expect(css).toContain("--control-compact-height: 32px;");
+    expect(css).toContain("--control-compact-radius: 13px;");
+    expect(css).toContain(".compact-control-shell");
+    expect(css).toContain(".compact-control-standalone");
+    expect(css).toContain(".compact-control-tone-active");
+  });
 });

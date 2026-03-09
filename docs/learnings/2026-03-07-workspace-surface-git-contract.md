@@ -2,7 +2,7 @@
 
 ## Context
 
-The version-control panel adds live git state and diff tabs to local workspaces, but it also forces two cross-cutting design decisions:
+The Git panel adds live git state and diff tabs to local workspaces, but it also forces two cross-cutting design decisions:
 
 1. git operations need the same provider-scoped authority boundary as lifecycle and terminal operations
 2. the center panel can no longer be modeled as terminal-only tab state
@@ -35,4 +35,4 @@ The durable contract is:
 2. Preserve terminal mount semantics when introducing new tab types.
 3. Reuse the document-tab path for file editors instead of creating another center-panel abstraction.
 4. Add cloud provider implementations later without changing the shared git payload shapes.
-5. Keep the right-side version-control pane navigational; commit composition should live in a terminal or future dedicated flow.
+5. Keep the right-side Git pane navigational; commit composition and PR authoring should live in a terminal or future dedicated flow.

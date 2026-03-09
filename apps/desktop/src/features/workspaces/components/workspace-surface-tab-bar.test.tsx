@@ -37,7 +37,7 @@ describe("WorkspaceSurfaceTabBar", () => {
     expect(markup).toContain("lead:terminal:term-1");
   });
 
-  test("renders workspace tab items with medium-weight labels", () => {
+  test("renders workspace tab items with the compact control shell treatment", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceSurfaceTabBar, {
         activeTabKey: "terminal:term-1",
@@ -60,8 +60,9 @@ describe("WorkspaceSurfaceTabBar", () => {
       }),
     );
 
-    expect(markup).toContain("font-medium");
-    expect(markup).not.toContain("font-semibold");
+    expect(markup).toContain("compact-control-standalone");
+    expect(markup).toContain("compact-control-tab");
+    expect(markup).toContain("compact-control-tone-active");
   });
 
   test("hides the horizontal scrollbar and reserves a right gutter for the fade", () => {
@@ -100,9 +101,11 @@ describe("WorkspaceSurfaceTabBar", () => {
     expect(markup).toContain("padding-right:24px");
     expect(markup).toContain("scrollbar-width:none");
     expect(markup).toContain("-ms-overflow-style:none");
+    expect(markup).toContain("z-[1]");
+    expect(markup).not.toContain("right-0 z-10");
   });
 
-  test("renders a light separator between adjacent inactive workspace tabs", () => {
+  test("uses standalone shells instead of legacy tab separators", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceSurfaceTabBar, {
         activeTabKey: "terminal:term-3",
@@ -145,54 +148,8 @@ describe("WorkspaceSurfaceTabBar", () => {
       }),
     );
 
-    expect(markup.match(/data-slot="workspace-tab-separator"/g)?.length).toBe(1);
-    expect(markup).toContain("bg-[var(--border)]/70");
-  });
-
-  test("does not render separators on either side of the active workspace tab", () => {
-    const markup = renderToStaticMarkup(
-      createElement(WorkspaceSurfaceTabBar, {
-        activeTabKey: "terminal:term-2",
-        onCloseDocumentTab: () => {},
-        onCloseRuntimeTab: async () => {},
-        onSelectTab: () => {},
-        onSetTabOrder: () => {},
-        visibleTabs: [
-          {
-            key: "terminal:term-1",
-            harnessProvider: null,
-            type: "terminal",
-            label: "Terminal 1",
-            launchType: "shell",
-            responseReady: false,
-            status: "active",
-            terminalId: "term-1",
-          },
-          {
-            key: "terminal:term-2",
-            harnessProvider: null,
-            type: "terminal",
-            label: "Terminal 2",
-            launchType: "shell",
-            responseReady: false,
-            status: "active",
-            terminalId: "term-2",
-          },
-          {
-            key: "terminal:term-3",
-            harnessProvider: null,
-            type: "terminal",
-            label: "Terminal 3",
-            launchType: "shell",
-            responseReady: false,
-            status: "active",
-            terminalId: "term-3",
-          },
-        ],
-      }),
-    );
-
     expect(markup).not.toContain('data-slot="workspace-tab-separator"');
+    expect(markup).toContain("gap-1");
   });
 
   test("does not render a status dot for a plain terminal tab", () => {

@@ -1,9 +1,12 @@
 import type {
+  GitBranchPullRequestResult,
   GitCommitDiffResult,
   GitCommitResult,
   GitDiffResult,
   GitDiffScope,
   GitLogEntry,
+  GitPullRequestListResult,
+  GitPullRequestSummary,
   GitPushResult,
   GitStatusResult,
 } from "@lifecycle/contracts";
@@ -16,6 +19,26 @@ const EMPTY_STATUS: GitStatusResult = {
   ahead: 0,
   behind: 0,
   files: [],
+};
+
+const EMPTY_PULL_REQUEST_SUPPORT = {
+  available: false,
+  message: "Pull requests are only available in the desktop app.",
+  provider: null,
+  reason: "mode_not_supported",
+} as const;
+
+const EMPTY_PULL_REQUEST_LIST_RESULT: GitPullRequestListResult = {
+  support: EMPTY_PULL_REQUEST_SUPPORT,
+  pullRequests: [],
+};
+
+const EMPTY_BRANCH_PULL_REQUEST_RESULT: GitBranchPullRequestResult = {
+  support: EMPTY_PULL_REQUEST_SUPPORT,
+  branch: null,
+  upstream: null,
+  suggestedBaseRef: null,
+  pullRequest: null,
 };
 
 function browserCommitResult(message: string): GitCommitResult {
@@ -90,6 +113,28 @@ export async function getGitLog(workspaceId: string, limit: number): Promise<Git
   });
 }
 
+export async function getGitPullRequests(workspaceId: string): Promise<GitPullRequestListResult> {
+  if (!isTauri()) {
+    return EMPTY_PULL_REQUEST_LIST_RESULT;
+  }
+
+  return invoke<GitPullRequestListResult>("list_workspace_git_pull_requests", {
+    workspaceId,
+  });
+}
+
+export async function getCurrentGitPullRequest(
+  workspaceId: string,
+): Promise<GitBranchPullRequestResult> {
+  if (!isTauri()) {
+    return EMPTY_BRANCH_PULL_REQUEST_RESULT;
+  }
+
+  return invoke<GitBranchPullRequestResult>("get_workspace_current_git_pull_request", {
+    workspaceId,
+  });
+}
+
 export async function getGitBaseRef(workspaceId: string): Promise<string | null> {
   if (!isTauri()) {
     return null;
@@ -128,28 +173,6 @@ export async function openWorkspaceFile(workspaceId: string, filePath: string): 
   });
 }
 
-export async function stageGitFiles(workspaceId: string, filePaths: string[]): Promise<void> {
-  if (!isTauri()) {
-    return;
-  }
-
-  await invoke("stage_workspace_git_files", {
-    workspaceId,
-    filePaths,
-  });
-}
-
-export async function unstageGitFiles(workspaceId: string, filePaths: string[]): Promise<void> {
-  if (!isTauri()) {
-    return;
-  }
-
-  await invoke("unstage_workspace_git_files", {
-    workspaceId,
-    filePaths,
-  });
-}
-
 export async function commitGit(workspaceId: string, message: string): Promise<GitCommitResult> {
   if (!isTauri()) {
     return browserCommitResult(message);
@@ -173,5 +196,29 @@ export async function pushGit(workspaceId: string): Promise<GitPushResult> {
 
   return invoke<GitPushResult>("push_workspace_git", {
     workspaceId,
+  });
+}
+
+export async function createGitPullRequest(workspaceId: string): Promise<GitPullRequestSummary> {
+  if (!isTauri()) {
+    throw new Error("Pull request creation is only available in the desktop app.");
+  }
+
+  return invoke<GitPullRequestSummary>("create_workspace_git_pull_request", {
+    workspaceId,
+  });
+}
+
+export async function mergeGitPullRequest(
+  workspaceId: string,
+  pullRequestNumber: number,
+): Promise<GitPullRequestSummary> {
+  if (!isTauri()) {
+    throw new Error("Pull request merge is only available in the desktop app.");
+  }
+
+  return invoke<GitPullRequestSummary>("merge_workspace_git_pull_request", {
+    workspaceId,
+    pullRequestNumber,
   });
 }

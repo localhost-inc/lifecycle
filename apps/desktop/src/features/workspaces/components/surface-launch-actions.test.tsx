@@ -49,8 +49,9 @@ describe("SurfaceLaunchActions", () => {
     expect(markup).toContain('title="New shell"');
     expect(markup).toContain('title="New Claude session"');
     expect(markup).toContain('title="New Codex session"');
-    expect(markup).toContain("rounded-lg");
-    expect(markup).toContain("gap-1");
+    expect(markup).toContain("compact-control-standalone");
+    expect(markup).toContain("compact-control-icon");
+    expect(markup).toContain("gap-1.5");
   });
 
   test("renders loading dot when action is loading", () => {

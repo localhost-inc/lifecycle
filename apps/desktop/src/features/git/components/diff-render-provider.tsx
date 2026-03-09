@@ -1,5 +1,5 @@
-import { WorkerPoolContextProvider } from "@pierre/diffs/react";
-import { useMemo, type ReactNode } from "react";
+import { useWorkerPool, WorkerPoolContextProvider } from "@pierre/diffs/react";
+import { useEffect, useMemo, type ReactNode } from "react";
 
 const DEFAULT_DIFF_RENDER_CACHE_SIZE = 300;
 const MAX_DIFF_RENDER_WORKERS = 4;
@@ -7,12 +7,23 @@ const MIN_DIFF_RENDER_WORKERS = 2;
 
 interface DiffRenderProviderProps {
   children: ReactNode;
+  theme: string;
 }
 
 const createDiffRenderWorker = () =>
   new Worker(new URL("../workers/diff-render-worker.ts", import.meta.url), { type: "module" });
 
-export function DiffRenderProvider({ children }: DiffRenderProviderProps) {
+function DiffThemeSyncer({ theme }: { theme: string }) {
+  const workerPool = useWorkerPool();
+
+  useEffect(() => {
+    void workerPool?.setRenderOptions({ theme: { dark: theme, light: theme } });
+  }, [theme, workerPool]);
+
+  return null;
+}
+
+export function DiffRenderProvider({ children, theme }: DiffRenderProviderProps) {
   const poolSize = useMemo(() => {
     if (typeof navigator === "undefined" || !Number.isFinite(navigator.hardwareConcurrency)) {
       return MIN_DIFF_RENDER_WORKERS;
@@ -26,13 +37,14 @@ export function DiffRenderProvider({ children }: DiffRenderProviderProps) {
 
   return (
     <WorkerPoolContextProvider
-      highlighterOptions={{}}
+      highlighterOptions={{ theme: { dark: theme, light: theme } }}
       poolOptions={{
         poolSize,
         totalASTLRUCacheSize: DEFAULT_DIFF_RENDER_CACHE_SIZE,
         workerFactory: createDiffRenderWorker,
       }}
     >
+      <DiffThemeSyncer theme={theme} />
       {children}
     </WorkerPoolContextProvider>
   );

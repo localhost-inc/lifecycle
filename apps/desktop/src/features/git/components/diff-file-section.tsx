@@ -74,9 +74,10 @@ function DiffFileSectionComponent({
         <div
           className="overflow-x-auto overflow-y-hidden"
           style={{
+            "--diffs-gap-block": "0px",
             containIntrinsicSize: `${estimateDiffBodyHeight(fileDiff)}px`,
             contentVisibility: "auto",
-          }}
+          } as React.CSSProperties}
         >
           <FileDiff
             fileDiff={fileDiff}

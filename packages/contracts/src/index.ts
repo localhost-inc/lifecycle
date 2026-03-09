@@ -12,6 +12,9 @@ export type {
   SetupStepEventType,
 } from "./events";
 export type {
+  GitBranchPullRequestResult,
+  GitPullRequestCheckStatus,
+  GitPullRequestCheckSummary,
   GitCommitDiffResult,
   GitCommitResult,
   GitDiffResult,
@@ -20,6 +23,14 @@ export type {
   GitFileStats,
   GitFileStatus,
   GitLogEntry,
+  GitPullRequestListResult,
+  GitPullRequestMergeable,
+  GitPullRequestProvider,
+  GitPullRequestReviewDecision,
+  GitPullRequestState,
+  GitPullRequestSummary,
+  GitPullRequestSupport,
+  GitPullRequestSupportReason,
   GitPushResult,
   GitStatusResult,
 } from "./git";

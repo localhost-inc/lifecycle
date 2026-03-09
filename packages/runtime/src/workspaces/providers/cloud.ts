@@ -1,7 +1,10 @@
 import type {
+  GitBranchPullRequestResult,
   GitCommitResult,
   GitDiffResult,
   GitLogEntry,
+  GitPullRequestListResult,
+  GitPullRequestSummary,
   GitPushResult,
   GitStatusResult,
   ServiceRecord,
@@ -42,10 +45,17 @@ export interface CloudWorkspaceClient {
   getGitChangesPatch(workspaceId: string): Promise<string>;
   getGitDiff(input: WorkspaceProviderGitDiffInput): Promise<GitDiffResult>;
   listGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]>;
+  listGitPullRequests(workspaceId: string): Promise<GitPullRequestListResult>;
+  getCurrentGitPullRequest(workspaceId: string): Promise<GitBranchPullRequestResult>;
   stageGitFiles(workspaceId: string, filePaths: string[]): Promise<void>;
   unstageGitFiles(workspaceId: string, filePaths: string[]): Promise<void>;
   commitGit(workspaceId: string, message: string): Promise<GitCommitResult>;
   pushGit(workspaceId: string): Promise<GitPushResult>;
+  createGitPullRequest(workspaceId: string): Promise<GitPullRequestSummary>;
+  mergeGitPullRequest(
+    workspaceId: string,
+    pullRequestNumber: number,
+  ): Promise<GitPullRequestSummary>;
 }
 
 export class CloudWorkspaceProvider implements WorkspaceProvider {
@@ -135,6 +145,14 @@ export class CloudWorkspaceProvider implements WorkspaceProvider {
     return this.client.listGitLog(workspaceId, limit);
   }
 
+  listGitPullRequests(workspaceId: string): Promise<GitPullRequestListResult> {
+    return this.client.listGitPullRequests(workspaceId);
+  }
+
+  getCurrentGitPullRequest(workspaceId: string): Promise<GitBranchPullRequestResult> {
+    return this.client.getCurrentGitPullRequest(workspaceId);
+  }
+
   stageGitFiles(workspaceId: string, filePaths: string[]): Promise<void> {
     return this.client.stageGitFiles(workspaceId, filePaths);
   }
@@ -149,5 +167,16 @@ export class CloudWorkspaceProvider implements WorkspaceProvider {
 
   pushGit(workspaceId: string): Promise<GitPushResult> {
     return this.client.pushGit(workspaceId);
+  }
+
+  createGitPullRequest(workspaceId: string): Promise<GitPullRequestSummary> {
+    return this.client.createGitPullRequest(workspaceId);
+  }
+
+  mergeGitPullRequest(
+    workspaceId: string,
+    pullRequestNumber: number,
+  ): Promise<GitPullRequestSummary> {
+    return this.client.mergeGitPullRequest(workspaceId, pullRequestNumber);
   }
 }

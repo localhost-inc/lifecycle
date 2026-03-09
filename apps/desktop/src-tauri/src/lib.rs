@@ -59,6 +59,10 @@ pub fn run() {
                 crate::platform::diagnostics::append_error("main-webview-scroll-elasticity", error);
             }
 
+            if let Err(error) = expand_main_window_for_dev(&app.handle()) {
+                crate::platform::diagnostics::append_error("main-window-dev-size", error);
+            }
+
             if native_terminal::is_available() {
                 native_terminal::initialize(app.handle().clone(), db_path_str.clone())
                     .expect("failed to initialize native terminal runtime");
@@ -71,14 +75,24 @@ pub fn run() {
         })
         .on_menu_event(|app, event| {
             #[cfg(target_os = "macos")]
-            if event.id() == APP_MENU_ITEM_OPEN_SETTINGS {
-                let _ = app.emit(
-                    APP_HOTKEY_EVENT_NAME,
-                    AppShortcutEvent {
-                        action: "open-settings",
-                        source: "menu",
-                    },
-                );
+            {
+                if event.id() == APP_MENU_ITEM_OPEN_SETTINGS {
+                    let _ = app.emit(
+                        APP_HOTKEY_EVENT_NAME,
+                        AppShortcutEvent {
+                            action: "open-settings",
+                            source: "menu",
+                        },
+                    );
+                    return;
+                }
+
+                if capabilities::workspaces::git::handle_workspace_open_in_menu_event(
+                    app,
+                    event.id().as_ref(),
+                ) {
+                    return;
+                }
             }
         })
         .manage(supervisors)
@@ -116,14 +130,20 @@ pub fn run() {
             capabilities::workspaces::commands::get_workspace_git_scope_patch,
             capabilities::workspaces::commands::get_workspace_git_changes_patch,
             capabilities::workspaces::commands::list_workspace_git_log,
+            capabilities::workspaces::commands::list_workspace_git_pull_requests,
+            capabilities::workspaces::commands::get_workspace_current_git_pull_request,
             capabilities::workspaces::commands::get_workspace_git_base_ref,
             capabilities::workspaces::commands::get_workspace_git_commit_patch,
             capabilities::workspaces::commands::open_workspace_file,
             capabilities::workspaces::commands::open_workspace_in_app,
+            capabilities::workspaces::commands::list_workspace_open_in_apps,
+            capabilities::workspaces::commands::show_workspace_open_in_menu,
             capabilities::workspaces::commands::stage_workspace_git_files,
             capabilities::workspaces::commands::unstage_workspace_git_files,
             capabilities::workspaces::commands::commit_workspace_git,
             capabilities::workspaces::commands::push_workspace_git,
+            capabilities::workspaces::commands::create_workspace_git_pull_request,
+            capabilities::workspaces::commands::merge_workspace_git_pull_request,
         ])
         .run(tauri::generate_context!());
 
@@ -157,6 +177,22 @@ fn disable_main_webview_scroll_elasticity(app: &tauri::AppHandle) -> Result<(), 
 
 #[cfg(not(target_os = "macos"))]
 fn disable_main_webview_scroll_elasticity(_app: &tauri::AppHandle) -> Result<(), LifecycleError> {
+    Ok(())
+}
+
+#[cfg(debug_assertions)]
+fn expand_main_window_for_dev(app: &tauri::AppHandle) -> Result<(), LifecycleError> {
+    let main_window = app
+        .get_webview_window("main")
+        .ok_or_else(|| LifecycleError::AttachFailed("main webview window not found".to_string()))?;
+
+    main_window
+        .maximize()
+        .map_err(|error| LifecycleError::AttachFailed(error.to_string()))
+}
+
+#[cfg(not(debug_assertions))]
+fn expand_main_window_for_dev(_app: &tauri::AppHandle) -> Result<(), LifecycleError> {
     Ok(())
 }
 

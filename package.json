@@ -7,6 +7,7 @@
     "packages/*"
   ],
   "scripts": {
+    "bench:naming": "bun run scripts/benchmark-naming-models.ts",
     "build": "turbo run build",
     "dev": "turbo run dev --filter=@lifecycle/desktop --filter=@lifecycle/worker",
     "format": "oxfmt --write apps packages",

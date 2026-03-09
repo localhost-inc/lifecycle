@@ -69,3 +69,67 @@ export interface GitPushResult {
   ahead: number;
   behind: number;
 }
+
+export type GitPullRequestProvider = "github";
+
+export type GitPullRequestState = "open" | "closed" | "merged";
+
+export type GitPullRequestMergeable = "mergeable" | "conflicting" | "unknown";
+
+export type GitPullRequestReviewDecision =
+  | "approved"
+  | "changes_requested"
+  | "review_required";
+
+export type GitPullRequestCheckStatus = "pending" | "success" | "failed" | "neutral";
+
+export type GitPullRequestSupportReason =
+  | "mode_not_supported"
+  | "provider_unavailable"
+  | "authentication_required"
+  | "repository_unavailable"
+  | "unsupported_remote";
+
+export interface GitPullRequestSupport {
+  available: boolean;
+  provider: GitPullRequestProvider | null;
+  reason: GitPullRequestSupportReason | null;
+  message: string | null;
+}
+
+export interface GitPullRequestCheckSummary {
+  name: string;
+  status: GitPullRequestCheckStatus;
+  workflowName: string | null;
+  detailsUrl: string | null;
+}
+
+export interface GitPullRequestSummary {
+  number: number;
+  title: string;
+  url: string;
+  state: GitPullRequestState;
+  isDraft: boolean;
+  author: string;
+  headRefName: string;
+  baseRefName: string;
+  createdAt: string;
+  updatedAt: string;
+  mergeable: GitPullRequestMergeable;
+  mergeStateStatus: string | null;
+  reviewDecision: GitPullRequestReviewDecision | null;
+  checks: GitPullRequestCheckSummary[] | null;
+}
+
+export interface GitPullRequestListResult {
+  support: GitPullRequestSupport;
+  pullRequests: GitPullRequestSummary[];
+}
+
+export interface GitBranchPullRequestResult {
+  support: GitPullRequestSupport;
+  branch: string | null;
+  upstream: string | null;
+  suggestedBaseRef: string | null;
+  pullRequest: GitPullRequestSummary | null;
+}

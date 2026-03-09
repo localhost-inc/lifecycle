@@ -1,5 +1,6 @@
 use crate::shared::errors::LifecycleError;
 use serde_json::Value;
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use tokio::process::Command;
@@ -25,14 +26,17 @@ pub(super) struct GeneratedIdentityTitles {
 pub(super) async fn generate_terminal_title(
     prompt: &str,
 ) -> Result<GeneratedTitle, LifecycleError> {
-    if let Some((source, title)) = generate_with_fallback(
+    if let Some(title) = generate_with_codex(
         &terminal_title_prompt(prompt),
         TERMINAL_TITLE_SCHEMA,
         parse_title_json,
     )
     .await?
     {
-        return Ok(GeneratedTitle { source, title });
+        return Ok(GeneratedTitle {
+            source: "codex",
+            title,
+        });
     }
 
     Ok(GeneratedTitle {
@@ -44,7 +48,7 @@ pub(super) async fn generate_terminal_title(
 pub(super) async fn generate_identity_titles(
     prompt: &str,
 ) -> Result<Option<GeneratedIdentityTitles>, LifecycleError> {
-    let Some((source, (workspace_title, session_title))) = generate_with_fallback(
+    let Some((workspace_title, session_title)) = generate_with_codex(
         &workspace_identity_prompt(prompt),
         WORKSPACE_IDENTITY_SCHEMA,
         parse_identity_titles_json,
@@ -55,7 +59,7 @@ pub(super) async fn generate_identity_titles(
     };
 
     Ok(Some(GeneratedIdentityTitles {
-        source,
+        source: "codex",
         workspace_title,
         session_title,
     }))
@@ -69,100 +73,23 @@ pub(super) fn prompt_preview(prompt: &str) -> String {
     truncate_title(prompt, 72)
 }
 
-async fn generate_with_fallback<T, F>(
+async fn generate_with_codex<T, F>(
     prompt_text: &str,
     schema_json: &str,
     parser: F,
-) -> Result<Option<(&'static str, T)>, LifecycleError>
+) -> Result<Option<T>, LifecycleError>
 where
     F: Fn(&str) -> Option<T>,
 {
-    if let Some(output) = run_claude_json_generator(prompt_text, schema_json).await? {
-        if let Some(parsed) = parser(&output) {
-            return Ok(Some(("claude-sonnet", parsed)));
-        }
-
-        tracing::warn!("claude naming generator returned unparseable schema output");
-    }
-
     if let Some(output) = run_codex_json_generator(prompt_text, schema_json).await? {
         if let Some(parsed) = parser(&output) {
-            return Ok(Some(("codex", parsed)));
+            return Ok(Some(parsed));
         }
 
         tracing::warn!("codex naming generator returned unparseable schema output");
     }
 
     Ok(None)
-}
-
-async fn run_claude_json_generator(
-    prompt_text: &str,
-    schema_json: &str,
-) -> Result<Option<String>, LifecycleError> {
-    let started_at = Instant::now();
-    let output = match timeout(
-        TITLE_GENERATION_TIMEOUT,
-        Command::new("claude")
-            .args([
-                "-p",
-                "--tools",
-                "",
-                "--permission-mode",
-                "bypassPermissions",
-                "--no-session-persistence",
-                "--model",
-                "sonnet",
-                "--output-format",
-                "json",
-                "--json-schema",
-                schema_json,
-                prompt_text,
-            ])
-            .output(),
-    )
-    .await
-    {
-        Ok(Ok(output)) => output,
-        Ok(Err(error)) if error.kind() == std::io::ErrorKind::NotFound => {
-            tracing::info!(
-                elapsed_ms = started_at.elapsed().as_millis() as u64,
-                "claude naming generator unavailable; falling back"
-            );
-            return Ok(None);
-        }
-        Ok(Err(error)) => {
-            tracing::info!(
-                elapsed_ms = started_at.elapsed().as_millis() as u64,
-                "claude naming generator failed to launch: {error}"
-            );
-            return Ok(None);
-        }
-        Err(_) => {
-            tracing::info!(
-                elapsed_ms = started_at.elapsed().as_millis() as u64,
-                timeout_ms = TITLE_GENERATION_TIMEOUT.as_millis() as u64,
-                "claude naming generator timed out"
-            );
-            return Ok(None);
-        }
-    };
-
-    if !output.status.success() {
-        tracing::info!(
-            elapsed_ms = started_at.elapsed().as_millis() as u64,
-            "claude naming generator exited with status {}",
-            output.status
-        );
-        return Ok(None);
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    tracing::info!(
-        elapsed_ms = started_at.elapsed().as_millis() as u64,
-        "claude naming generator completed"
-    );
-    Ok(Some(stdout))
 }
 
 async fn run_codex_json_generator(
@@ -176,24 +103,28 @@ async fn run_codex_json_generator(
     let output_path_string = output_path.to_string_lossy().to_string();
     std::fs::write(&schema_path, schema_json)
         .map_err(|error| LifecycleError::Io(error.to_string()))?;
+    let codex_mcp_servers = read_codex_mcp_server_names();
+    let mut args = vec![
+        "exec".to_string(),
+        "--skip-git-repo-check".to_string(),
+        "--sandbox".to_string(),
+        "read-only".to_string(),
+        "--color".to_string(),
+        "never".to_string(),
+        "--ephemeral".to_string(),
+        "-c".to_string(),
+        r#"model_reasoning_effort="medium""#.to_string(),
+    ];
+    args.extend(build_codex_no_mcp_args(&codex_mcp_servers));
+    args.push("--output-schema".to_string());
+    args.push(schema_path_string.clone());
+    args.push("--output-last-message".to_string());
+    args.push(output_path_string.clone());
+    args.push(prompt_text.to_string());
 
     let result = timeout(
         TITLE_GENERATION_TIMEOUT,
-        Command::new("codex")
-            .args([
-                "exec",
-                "--skip-git-repo-check",
-                "--sandbox",
-                "read-only",
-                "--color",
-                "never",
-                "--output-schema",
-                &schema_path_string,
-                "--output-last-message",
-                &output_path_string,
-                prompt_text,
-            ])
-            .output(),
+        Command::new("codex").args(&args).output(),
     )
     .await;
 
@@ -246,9 +177,75 @@ async fn run_codex_json_generator(
 
     tracing::info!(
         elapsed_ms = started_at.elapsed().as_millis() as u64,
+        disabled_mcp_servers = codex_mcp_servers.len(),
         "codex naming generator completed"
     );
     Ok(Some(output))
+}
+
+fn read_codex_mcp_server_names() -> Vec<String> {
+    let Some(home) = std::env::var_os("HOME") else {
+        return Vec::new();
+    };
+    let config_path = PathBuf::from(home).join(".codex").join("config.toml");
+    let Ok(config_contents) = std::fs::read_to_string(config_path) else {
+        return Vec::new();
+    };
+
+    parse_codex_mcp_server_names(&config_contents)
+}
+
+fn parse_codex_mcp_server_names(config_contents: &str) -> Vec<String> {
+    let mut names = Vec::new();
+    let mut seen = HashSet::new();
+
+    for line in config_contents.lines() {
+        let trimmed = line.trim();
+        let Some(remainder) = trimmed.strip_prefix("[mcp_servers.") else {
+            continue;
+        };
+        let Some(name) = remainder.strip_suffix(']') else {
+            continue;
+        };
+        let name = name.trim();
+        if name.is_empty() {
+            continue;
+        }
+
+        let name = name.to_string();
+        if seen.insert(name.clone()) {
+            names.push(name);
+        }
+    }
+
+    names.sort();
+    names
+}
+
+fn build_codex_no_mcp_args(server_names: &[String]) -> Vec<String> {
+    let mut args = Vec::with_capacity((server_names.len() + 1) * 2);
+    for server_name in server_names {
+        args.push("-c".to_string());
+        args.push(format!(
+            "mcp_servers.{}.enabled=false",
+            codex_config_key_segment(server_name)
+        ));
+    }
+
+    args.push("-c".to_string());
+    args.push("features.apps=false".to_string());
+    args
+}
+
+fn codex_config_key_segment(server_name: &str) -> String {
+    if server_name
+        .chars()
+        .all(|character| character.is_ascii_alphanumeric() || character == '_' || character == '-')
+    {
+        return server_name.to_string();
+    }
+
+    format!("\"{}\"", server_name.replace('"', "\\\""))
 }
 
 fn parse_title_json(output: &str) -> Option<String> {
@@ -364,6 +361,27 @@ mod tests {
                 r#"{"type":"result","structured_output":{"workspace_title":"Auth Callback","session_title":"Fix Callback"}}"#
             ),
             Some(("Auth Callback".to_string(), "Fix Callback".to_string()))
+        );
+    }
+
+    #[test]
+    fn parse_codex_mcp_server_names_reads_unique_sorted_servers() {
+        let config = r#"
+model = "gpt-5.4"
+
+[mcp_servers.paper]
+url = "http://127.0.0.1:29979/mcp"
+
+[mcp_servers.linear]
+url = "https://mcp.linear.app/mcp"
+
+[mcp_servers.paper]
+url = "http://127.0.0.1:29979/mcp"
+"#;
+
+        assert_eq!(
+            parse_codex_mcp_server_names(config),
+            vec!["linear".to_string(), "paper".to_string()]
         );
     }
 }

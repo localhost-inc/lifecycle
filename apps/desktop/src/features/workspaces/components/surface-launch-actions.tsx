@@ -44,13 +44,13 @@ export function SurfaceLaunchActions({
 }: SurfaceLaunchActionsProps) {
   return (
     <TooltipProvider>
-      <div className="flex shrink-0 items-center gap-1 px-0 py-0">
+      <div className="flex shrink-0 items-center gap-1.5 px-0 py-0">
         {onOpenLauncher && (
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--muted-foreground)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
+                className="compact-control-standalone compact-control-item compact-control-icon compact-control-tone-muted"
                 onClick={onOpenLauncher}
               >
                 <svg
@@ -74,7 +74,7 @@ export function SurfaceLaunchActions({
             <TooltipTrigger asChild>
               <button
                 type="button"
-                className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--surface-hover)] text-[var(--muted-foreground)] transition-colors hover:bg-[var(--border)] hover:text-[var(--foreground)] disabled:opacity-40 disabled:pointer-events-none"
+                className="compact-control-standalone compact-control-item compact-control-icon compact-control-tone-muted"
                 disabled={action.disabled}
                 onClick={() => onLaunch(action.request)}
                 title={action.title}

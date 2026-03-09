@@ -37,7 +37,7 @@ function LauncherActionCard({
       onClick={onClick}
       className="flex flex-col items-start gap-3 rounded-3xl border border-[var(--border)] bg-[var(--panel)] px-4 py-4 text-left transition hover:border-[var(--foreground)]/30 hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
     >
-      <span className="text-[#b8b0a8]">{icon}</span>
+      <span className="text-[var(--muted-foreground)]">{icon}</span>
       <div>
         <p className="text-sm font-medium text-[var(--foreground)]">{label}</p>
         <p className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{description}</p>

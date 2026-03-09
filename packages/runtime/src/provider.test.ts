@@ -31,13 +31,17 @@ describe("workspace provider interface", () => {
       "getGitChangesPatch",
       "getGitDiff",
       "listGitLog",
+      "listGitPullRequests",
+      "getCurrentGitPullRequest",
       "stageGitFiles",
       "unstageGitFiles",
       "commitGit",
       "pushGit",
+      "createGitPullRequest",
+      "mergeGitPullRequest",
     ];
 
-    expect(requiredMethods).toHaveLength(23);
+    expect(requiredMethods).toHaveLength(27);
   });
 
   test("local provider exposes the full contract surface", () => {
@@ -62,10 +66,14 @@ describe("workspace provider interface", () => {
     expect(typeof provider.getGitChangesPatch).toBe("function");
     expect(typeof provider.getGitDiff).toBe("function");
     expect(typeof provider.listGitLog).toBe("function");
+    expect(typeof provider.listGitPullRequests).toBe("function");
+    expect(typeof provider.getCurrentGitPullRequest).toBe("function");
     expect(typeof provider.stageGitFiles).toBe("function");
     expect(typeof provider.unstageGitFiles).toBe("function");
     expect(typeof provider.commitGit).toBe("function");
     expect(typeof provider.pushGit).toBe("function");
+    expect(typeof provider.createGitPullRequest).toBe("function");
+    expect(typeof provider.mergeGitPullRequest).toBe("function");
   });
 
   test("cloud provider delegates the full contract surface", () => {
@@ -121,6 +129,27 @@ describe("workspace provider interface", () => {
         isBinary: false,
       }),
       listGitLog: async () => [],
+      listGitPullRequests: async () => ({
+        support: {
+          available: true,
+          message: null,
+          provider: "github",
+          reason: null,
+        },
+        pullRequests: [],
+      }),
+      getCurrentGitPullRequest: async () => ({
+        support: {
+          available: true,
+          message: null,
+          provider: "github",
+          reason: null,
+        },
+        branch: "feature/version-control",
+        upstream: "origin/feature/version-control",
+        suggestedBaseRef: "main",
+        pullRequest: null,
+      }),
       stageGitFiles: async () => {},
       unstageGitFiles: async () => {},
       commitGit: async (_workspaceId, message) => ({
@@ -133,6 +162,38 @@ describe("workspace provider interface", () => {
         remote: "origin",
         ahead: 0,
         behind: 0,
+      }),
+      createGitPullRequest: async () => ({
+        author: "kyle",
+        baseRefName: "main",
+        createdAt: "2026-03-09T10:00:00.000Z",
+        headRefName: "feature/version-control",
+        isDraft: false,
+        mergeStateStatus: "CLEAN",
+        mergeable: "mergeable",
+        number: 42,
+        reviewDecision: "approved",
+        checks: null,
+        state: "open",
+        title: "feat: add version control",
+        updatedAt: "2026-03-09T11:00:00.000Z",
+        url: "https://github.com/example/repo/pull/42",
+      }),
+      mergeGitPullRequest: async () => ({
+        author: "kyle",
+        baseRefName: "main",
+        createdAt: "2026-03-09T10:00:00.000Z",
+        headRefName: "feature/version-control",
+        isDraft: false,
+        mergeStateStatus: "CLEAN",
+        mergeable: "mergeable",
+        number: 42,
+        reviewDecision: "approved",
+        checks: null,
+        state: "merged",
+        title: "feat: add version control",
+        updatedAt: "2026-03-09T11:30:00.000Z",
+        url: "https://github.com/example/repo/pull/42",
       }),
     };
     const provider = new CloudWorkspaceProvider(client);
@@ -155,10 +216,14 @@ describe("workspace provider interface", () => {
     expect(typeof provider.getGitChangesPatch).toBe("function");
     expect(typeof provider.getGitDiff).toBe("function");
     expect(typeof provider.listGitLog).toBe("function");
+    expect(typeof provider.listGitPullRequests).toBe("function");
+    expect(typeof provider.getCurrentGitPullRequest).toBe("function");
     expect(typeof provider.stageGitFiles).toBe("function");
     expect(typeof provider.unstageGitFiles).toBe("function");
     expect(typeof provider.commitGit).toBe("function");
     expect(typeof provider.pushGit).toBe("function");
+    expect(typeof provider.createGitPullRequest).toBe("function");
+    expect(typeof provider.mergeGitPullRequest).toBe("function");
   });
 
   test("create input supports provider-specific context via mode discriminator", () => {
@@ -292,6 +357,29 @@ describe("workspace provider interface", () => {
           };
         case "list_workspace_git_log":
           return [];
+        case "list_workspace_git_pull_requests":
+          return {
+            support: {
+              available: true,
+              message: null,
+              provider: "github",
+              reason: null,
+            },
+            pullRequests: [],
+          };
+        case "get_workspace_current_git_pull_request":
+          return {
+            support: {
+              available: true,
+              message: null,
+              provider: "github",
+              reason: null,
+            },
+            branch: "feature/version-control",
+            upstream: "origin/feature/version-control",
+            suggestedBaseRef: "main",
+            pullRequest: null,
+          };
         case "commit_workspace_git":
           return {
             sha: "abcdef1234567890",
@@ -304,6 +392,40 @@ describe("workspace provider interface", () => {
             remote: "origin",
             ahead: 0,
             behind: 0,
+          };
+        case "create_workspace_git_pull_request":
+          return {
+            author: "kyle",
+            baseRefName: "main",
+            createdAt: "2026-03-09T10:00:00.000Z",
+            headRefName: "feature/version-control",
+            isDraft: false,
+            mergeStateStatus: "CLEAN",
+            mergeable: "mergeable",
+            number: 42,
+            reviewDecision: "approved",
+            checks: null,
+            state: "open",
+            title: "feat: add version control",
+            updatedAt: "2026-03-09T11:00:00.000Z",
+            url: "https://github.com/example/repo/pull/42",
+          };
+        case "merge_workspace_git_pull_request":
+          return {
+            author: "kyle",
+            baseRefName: "main",
+            createdAt: "2026-03-09T10:00:00.000Z",
+            headRefName: "feature/version-control",
+            isDraft: false,
+            mergeStateStatus: "CLEAN",
+            mergeable: "mergeable",
+            number: Number(args?.pullRequestNumber ?? 42),
+            reviewDecision: "approved",
+            checks: null,
+            state: "merged",
+            title: "feat: add version control",
+            updatedAt: "2026-03-09T11:30:00.000Z",
+            url: "https://github.com/example/repo/pull/42",
           };
         default:
           return undefined;
@@ -318,10 +440,14 @@ describe("workspace provider interface", () => {
       scope: "working",
     });
     await provider.listGitLog("ws_1", 25);
+    await provider.listGitPullRequests("ws_1");
+    await provider.getCurrentGitPullRequest("ws_1");
     await provider.stageGitFiles("ws_1", ["src/app.ts"]);
     await provider.unstageGitFiles("ws_1", ["src/app.ts"]);
     await provider.commitGit("ws_1", "feat: add version control");
     await provider.pushGit("ws_1");
+    await provider.createGitPullRequest("ws_1");
+    await provider.mergeGitPullRequest("ws_1", 42);
 
     expect(calls).toEqual([
       {
@@ -343,6 +469,18 @@ describe("workspace provider interface", () => {
         args: {
           workspaceId: "ws_1",
           limit: 25,
+        },
+      },
+      {
+        cmd: "list_workspace_git_pull_requests",
+        args: {
+          workspaceId: "ws_1",
+        },
+      },
+      {
+        cmd: "get_workspace_current_git_pull_request",
+        args: {
+          workspaceId: "ws_1",
         },
       },
       {
@@ -370,6 +508,19 @@ describe("workspace provider interface", () => {
         cmd: "push_workspace_git",
         args: {
           workspaceId: "ws_1",
+        },
+      },
+      {
+        cmd: "create_workspace_git_pull_request",
+        args: {
+          workspaceId: "ws_1",
+        },
+      },
+      {
+        cmd: "merge_workspace_git_pull_request",
+        args: {
+          workspaceId: "ws_1",
+          pullRequestNumber: 42,
         },
       },
     ]);

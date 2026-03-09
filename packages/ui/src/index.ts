@@ -61,6 +61,13 @@ export {
   type SetupProgressStep,
   type SetupProgressStepStatus,
 } from "./components/setup-progress";
+export {
+  SplitButton,
+  SplitButtonPrimary,
+  SplitButtonSecondary,
+  splitButtonPrimaryVariants,
+  splitButtonSecondaryVariants,
+} from "./components/split-button";
 export { StatusDot, statusDotVariants, type StatusDotTone } from "./components/status-dot";
 export { ThemeSelector } from "./components/theme-selector";
 export { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/tabs";

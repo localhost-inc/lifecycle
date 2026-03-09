@@ -2,7 +2,7 @@
 
 ## Context
 
-The desktop shell used fixed widths for the project rail and workspace rail, and the workspace rail split its version-control and environment panels with an inflexible 50/50 stack.
+The desktop shell used fixed widths for the project rail and workspace rail, and the workspace rail split its Git and environment panels with an inflexible 50/50 stack.
 
 That made the shell feel cramped on smaller windows and wasted space on larger ones, especially once terminal and git surfaces started competing for room in M3 and M4 work.
 

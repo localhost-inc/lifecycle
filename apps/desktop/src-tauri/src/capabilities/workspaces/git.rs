@@ -1,18 +1,68 @@
 use crate::platform::db::open_db;
+use crate::platform::git::pull_request::{
+    self, GitBranchPullRequestResult, GitPullRequestListResult, GitPullRequestSummary,
+};
 use crate::platform::git::status::{
     self, GitCommitDiffResult, GitCommitResult, GitDiffResult, GitLogEntry, GitPushResult,
     GitStatusResult,
 };
 use crate::shared::errors::LifecycleError;
+#[cfg(target_os = "macos")]
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use rusqlite::params;
+#[cfg(target_os = "macos")]
+use serde::Serialize;
+#[cfg(target_os = "macos")]
+use std::ffi::{CStr, CString};
 use std::path::{Component, Path, PathBuf};
-use tauri::AppHandle;
+#[cfg(target_os = "macos")]
+use tauri::image::Image;
+use tauri::{AppHandle, Manager};
+#[cfg(target_os = "macos")]
+use tauri::{Emitter, LogicalPosition, WebviewWindow};
 use tauri_plugin_opener::OpenerExt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum WorkspaceAppOpener {
     Default,
     Program(&'static str),
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkspaceOpenInApp {
+    pub id: String,
+    pub label: String,
+    pub icon_data_url: Option<String>,
+}
+
+#[cfg(target_os = "macos")]
+const WORKSPACE_OPEN_IN_MENU_EVENT_NAME: &str = "workspace:open-in-menu";
+
+#[cfg(target_os = "macos")]
+const WORKSPACE_OPEN_IN_MENU_ID_PREFIX: &str = "workspace.open-in";
+
+#[cfg(target_os = "macos")]
+const WORKSPACE_OPEN_IN_ICON_PIXEL_SIZE: u32 = 64;
+
+#[cfg(target_os = "macos")]
+unsafe extern "C" {
+    fn lifecycle_native_resolve_application_path(
+        application_name: *const std::ffi::c_char,
+    ) -> *mut std::ffi::c_char;
+    fn lifecycle_native_copy_application_icon_png_path(
+        application_name: *const std::ffi::c_char,
+        pixel_size: u32,
+    ) -> *mut std::ffi::c_char;
+    fn lifecycle_native_set_application_appearance(appearance_name: *const std::ffi::c_char);
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkspaceOpenInMenuEvent {
+    pub workspace_id: String,
+    pub app_id: String,
+    pub error: Option<String>,
 }
 
 fn workspace_git_failure(operation: &str, reason: impl Into<String>) -> LifecycleError {
@@ -22,20 +72,26 @@ fn workspace_git_failure(operation: &str, reason: impl Into<String>) -> Lifecycl
     }
 }
 
-fn require_local_worktree(db_path: &str, workspace_id: &str) -> Result<String, LifecycleError> {
+fn resolve_workspace_git_context(
+    db_path: &str,
+    workspace_id: &str,
+) -> Result<(String, Option<String>), LifecycleError> {
     let conn = open_db(db_path)?;
-    let (mode, worktree_path): (String, Option<String>) = conn
-        .query_row(
-            "SELECT mode, worktree_path FROM workspace WHERE id = ?1 LIMIT 1",
-            params![workspace_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .map_err(|error| match error {
-            rusqlite::Error::QueryReturnedNoRows => {
-                LifecycleError::WorkspaceNotFound(workspace_id.to_string())
-            }
-            _ => LifecycleError::Database(error.to_string()),
-        })?;
+    conn.query_row(
+        "SELECT mode, worktree_path FROM workspace WHERE id = ?1 LIMIT 1",
+        params![workspace_id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .map_err(|error| match error {
+        rusqlite::Error::QueryReturnedNoRows => {
+            LifecycleError::WorkspaceNotFound(workspace_id.to_string())
+        }
+        _ => LifecycleError::Database(error.to_string()),
+    })
+}
+
+fn require_local_worktree(db_path: &str, workspace_id: &str) -> Result<String, LifecycleError> {
+    let (mode, worktree_path) = resolve_workspace_git_context(db_path, workspace_id)?;
 
     if mode != "local" {
         return Err(LifecycleError::GitOperationFailed {
@@ -177,6 +233,153 @@ fn resolve_workspace_app_opener(app_id: &str) -> Result<WorkspaceAppOpener, Life
     Ok(opener)
 }
 
+#[cfg(target_os = "macos")]
+fn workspace_open_in_menu_targets() -> &'static [(&'static str, &'static str)] {
+    &[
+        ("vscode", "VS Code"),
+        ("cursor", "Cursor"),
+        ("windsurf", "Windsurf"),
+        ("finder", "Finder"),
+        ("terminal", "Terminal"),
+        ("iterm", "iTerm2"),
+        ("ghostty", "Ghostty"),
+        ("warp", "Warp"),
+        ("xcode", "Xcode"),
+    ]
+}
+
+#[cfg(target_os = "macos")]
+fn make_workspace_open_in_menu_item_id(
+    window_label: &str,
+    workspace_id: &str,
+    app_id: &str,
+) -> String {
+    format!("{WORKSPACE_OPEN_IN_MENU_ID_PREFIX}|{window_label}|{workspace_id}|{app_id}")
+}
+
+#[cfg(target_os = "macos")]
+fn parse_workspace_open_in_menu_item_id(menu_id: &str) -> Option<(&str, &str, &str)> {
+    let mut segments = menu_id.splitn(4, '|');
+    let prefix = segments.next()?;
+    let window_label = segments.next()?;
+    let workspace_id = segments.next()?;
+    let app_id = segments.next()?;
+    if prefix != WORKSPACE_OPEN_IN_MENU_ID_PREFIX {
+        return None;
+    }
+    Some((window_label, workspace_id, app_id))
+}
+
+#[cfg(target_os = "macos")]
+fn workspace_open_in_menu_icon_application_name(app_id: &str) -> Option<&'static str> {
+    match app_id {
+        "vscode" => Some("Visual Studio Code"),
+        "cursor" => Some("Cursor"),
+        "windsurf" => Some("Windsurf"),
+        "finder" => Some("Finder"),
+        "terminal" => Some("Terminal"),
+        "iterm" => Some("iTerm"),
+        "ghostty" => Some("Ghostty"),
+        "warp" => Some("Warp"),
+        "xcode" => Some("Xcode"),
+        _ => None,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn workspace_open_in_menu_application_path(
+    application_name: &str,
+) -> Result<Option<PathBuf>, LifecycleError> {
+    let application_name = CString::new(application_name)
+        .map_err(|error| workspace_git_failure("show workspace open in menu", error.to_string()))?;
+
+    let application_path =
+        unsafe { lifecycle_native_resolve_application_path(application_name.as_ptr()) };
+    if application_path.is_null() {
+        return Ok(None);
+    }
+
+    let application_path_string = unsafe { CStr::from_ptr(application_path) }
+        .to_string_lossy()
+        .into_owned();
+    unsafe { libc::free(application_path.cast()) };
+    Ok(Some(PathBuf::from(application_path_string)))
+}
+
+#[cfg(target_os = "macos")]
+fn workspace_open_in_menu_icon_path(
+    application_name: &str,
+    pixel_size: u32,
+) -> Result<Option<PathBuf>, LifecycleError> {
+    let application_name = CString::new(application_name)
+        .map_err(|error| workspace_git_failure("show workspace open in menu", error.to_string()))?;
+
+    let icon_path = unsafe {
+        lifecycle_native_copy_application_icon_png_path(application_name.as_ptr(), pixel_size)
+    };
+    if icon_path.is_null() {
+        return Ok(None);
+    }
+
+    let icon_path_string = unsafe { CStr::from_ptr(icon_path) }
+        .to_string_lossy()
+        .into_owned();
+    unsafe { libc::free(icon_path.cast()) };
+    Ok(Some(PathBuf::from(icon_path_string)))
+}
+
+#[cfg(target_os = "macos")]
+fn list_installed_workspace_open_in_apps(
+) -> Result<Vec<(&'static str, &'static str)>, LifecycleError> {
+    let mut installed_targets = Vec::new();
+    for (app_id, label) in workspace_open_in_menu_targets() {
+        let Some(application_name) = workspace_open_in_menu_icon_application_name(app_id) else {
+            continue;
+        };
+
+        if workspace_open_in_menu_application_path(application_name)?.is_some() {
+            installed_targets.push((*app_id, *label));
+        }
+    }
+
+    Ok(installed_targets)
+}
+
+#[cfg(target_os = "macos")]
+fn workspace_open_in_menu_icon(app_id: &str) -> Result<Option<Image<'static>>, LifecycleError> {
+    let Some(application_name) = workspace_open_in_menu_icon_application_name(app_id) else {
+        return Ok(None);
+    };
+    let Some(icon_path) =
+        workspace_open_in_menu_icon_path(application_name, WORKSPACE_OPEN_IN_ICON_PIXEL_SIZE)?
+    else {
+        return Ok(None);
+    };
+
+    Image::from_path(icon_path)
+        .map(Some)
+        .map_err(|error| workspace_git_failure("show workspace open in menu", error.to_string()))
+}
+
+#[cfg(target_os = "macos")]
+fn workspace_open_in_icon_data_url(app_id: &str) -> Result<Option<String>, LifecycleError> {
+    let Some(application_name) = workspace_open_in_menu_icon_application_name(app_id) else {
+        return Ok(None);
+    };
+    let Some(icon_path) =
+        workspace_open_in_menu_icon_path(application_name, WORKSPACE_OPEN_IN_ICON_PIXEL_SIZE)?
+    else {
+        return Ok(None);
+    };
+
+    let icon_bytes = std::fs::read(&icon_path)
+        .map_err(|error| workspace_git_failure("list workspace open in apps", error.to_string()))?;
+    Ok(Some(format!(
+        "data:image/png;base64,{}",
+        STANDARD.encode(icon_bytes)
+    )))
+}
+
 fn update_workspace_git_sha(
     db_path: &str,
     workspace_id: &str,
@@ -235,6 +438,53 @@ pub async fn list_workspace_git_log(
     status::get_git_log(&worktree_path, limit).await
 }
 
+pub async fn list_workspace_git_pull_requests(
+    db_path: &str,
+    workspace_id: String,
+) -> Result<GitPullRequestListResult, LifecycleError> {
+    let (mode, worktree_path) = resolve_workspace_git_context(db_path, &workspace_id)?;
+    if mode != "local" {
+        return Ok(GitPullRequestListResult {
+            support: pull_request::mode_not_supported(
+                "Cloud workspace pull requests will use the cloud provider once it exists.",
+            ),
+            pull_requests: Vec::new(),
+        });
+    }
+
+    let worktree_path = worktree_path.ok_or_else(|| LifecycleError::GitOperationFailed {
+        operation: "list GitHub pull requests".to_string(),
+        reason: format!("workspace {workspace_id} has no local worktree path"),
+    })?;
+
+    pull_request::list_open_pull_requests(&worktree_path).await
+}
+
+pub async fn get_workspace_current_git_pull_request(
+    db_path: &str,
+    workspace_id: String,
+) -> Result<GitBranchPullRequestResult, LifecycleError> {
+    let (mode, worktree_path) = resolve_workspace_git_context(db_path, &workspace_id)?;
+    if mode != "local" {
+        return Ok(GitBranchPullRequestResult {
+            support: pull_request::mode_not_supported(
+                "Cloud workspace pull requests will use the cloud provider once it exists.",
+            ),
+            branch: None,
+            upstream: None,
+            suggested_base_ref: None,
+            pull_request: None,
+        });
+    }
+
+    let worktree_path = worktree_path.ok_or_else(|| LifecycleError::GitOperationFailed {
+        operation: "read current branch GitHub pull request".to_string(),
+        reason: format!("workspace {workspace_id} has no local worktree path"),
+    })?;
+
+    pull_request::get_current_branch_pull_request(&worktree_path).await
+}
+
 pub async fn get_workspace_git_base_ref(
     db_path: &str,
     workspace_id: String,
@@ -291,6 +541,126 @@ pub fn open_workspace_in_app(
     Ok(())
 }
 
+#[cfg(target_os = "macos")]
+pub fn list_workspace_open_in_apps() -> Result<Vec<WorkspaceOpenInApp>, LifecycleError> {
+    list_installed_workspace_open_in_apps()?
+        .into_iter()
+        .map(|(app_id, label)| {
+            Ok(WorkspaceOpenInApp {
+                id: app_id.to_string(),
+                label: label.to_string(),
+                icon_data_url: workspace_open_in_icon_data_url(app_id)?,
+            })
+        })
+        .collect()
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn list_workspace_open_in_apps() -> Result<Vec<WorkspaceOpenInApp>, LifecycleError> {
+    Ok(Vec::new())
+}
+
+#[cfg(target_os = "macos")]
+pub fn show_workspace_open_in_menu(
+    window: &WebviewWindow,
+    workspace_id: String,
+    _current_app_id: String,
+    appearance: String,
+    x: f64,
+    y: f64,
+) -> Result<(), LifecycleError> {
+    use tauri::menu::{IconMenuItemBuilder, MenuBuilder, MenuItemBuilder};
+
+    let appearance = CString::new(appearance)
+        .map_err(|error| workspace_git_failure("show workspace open in menu", error.to_string()))?;
+    unsafe { lifecycle_native_set_application_appearance(appearance.as_ptr()) };
+
+    let header = MenuItemBuilder::new("Open in")
+        .enabled(false)
+        .build(window)
+        .map_err(|error| workspace_git_failure("show workspace open in menu", error.to_string()))?;
+
+    let mut menu = MenuBuilder::new(window).item(&header).separator();
+    for (index, (app_id, label)) in list_installed_workspace_open_in_apps()?
+        .into_iter()
+        .enumerate()
+    {
+        if index == 3 {
+            menu = menu.separator();
+        }
+
+        let mut item = IconMenuItemBuilder::with_id(
+            make_workspace_open_in_menu_item_id(window.label(), &workspace_id, app_id),
+            label,
+        );
+        if let Some(icon) = workspace_open_in_menu_icon(app_id)? {
+            item = item.icon(icon);
+        }
+
+        let item = item.build(window).map_err(|error| {
+            workspace_git_failure("show workspace open in menu", error.to_string())
+        })?;
+
+        menu = menu.item(&item);
+    }
+
+    let menu = menu
+        .build()
+        .map_err(|error| workspace_git_failure("show workspace open in menu", error.to_string()))?;
+
+    window
+        .popup_menu_at(&menu, LogicalPosition::new(x, y))
+        .map_err(|error| workspace_git_failure("show workspace open in menu", error.to_string()))
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn show_workspace_open_in_menu(
+    _window: &tauri::WebviewWindow,
+    _workspace_id: String,
+    _current_app_id: String,
+    _appearance: String,
+    _x: f64,
+    _y: f64,
+) -> Result<(), LifecycleError> {
+    Err(workspace_git_failure(
+        "show workspace open in menu",
+        "native open-in menu is only available on macOS",
+    ))
+}
+
+#[cfg(target_os = "macos")]
+pub fn handle_workspace_open_in_menu_event(app: &AppHandle, menu_id: &str) -> bool {
+    let Some((window_label, workspace_id, app_id)) = parse_workspace_open_in_menu_item_id(menu_id)
+    else {
+        return false;
+    };
+
+    let db_path = app.state::<crate::platform::db::DbPath>();
+    let result = open_workspace_in_app(
+        app,
+        &db_path.0,
+        workspace_id.to_string(),
+        app_id.to_string(),
+    );
+
+    let _ = app.emit_to(
+        window_label,
+        WORKSPACE_OPEN_IN_MENU_EVENT_NAME,
+        WorkspaceOpenInMenuEvent {
+            workspace_id: workspace_id.to_string(),
+            app_id: app_id.to_string(),
+            error: result.err().map(|error| error.to_string()),
+        },
+    );
+
+    true
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn handle_workspace_open_in_menu_event(_app: &AppHandle, _menu_id: &str) -> bool {
+    false
+}
+
 pub async fn stage_workspace_git_files(
     db_path: &str,
     workspace_id: String,
@@ -326,6 +696,23 @@ pub async fn push_workspace_git(
 ) -> Result<GitPushResult, LifecycleError> {
     let worktree_path = require_local_worktree(db_path, &workspace_id)?;
     status::push_git(&worktree_path).await
+}
+
+pub async fn create_workspace_git_pull_request(
+    db_path: &str,
+    workspace_id: String,
+) -> Result<GitPullRequestSummary, LifecycleError> {
+    let worktree_path = require_local_worktree(db_path, &workspace_id)?;
+    pull_request::create_pull_request(&worktree_path).await
+}
+
+pub async fn merge_workspace_git_pull_request(
+    db_path: &str,
+    workspace_id: String,
+    pull_request_number: u64,
+) -> Result<GitPullRequestSummary, LifecycleError> {
+    let worktree_path = require_local_worktree(db_path, &workspace_id)?;
+    pull_request::merge_pull_request(&worktree_path, pull_request_number).await
 }
 
 #[cfg(test)]
@@ -502,5 +889,45 @@ mod tests {
             }
             other => panic!("unexpected error: {other:?}"),
         }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn parse_workspace_open_in_menu_item_id_round_trips() {
+        let id = make_workspace_open_in_menu_item_id("main", "workspace_1", "vscode");
+        assert_eq!(
+            parse_workspace_open_in_menu_item_id(&id),
+            Some(("main", "workspace_1", "vscode"))
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn parse_workspace_open_in_menu_item_id_rejects_other_prefixes() {
+        assert_eq!(
+            parse_workspace_open_in_menu_item_id("app.open-settings"),
+            None
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn workspace_open_in_menu_icon_uses_expected_application_names() {
+        assert_eq!(
+            workspace_open_in_menu_icon_application_name("vscode"),
+            Some("Visual Studio Code")
+        );
+        assert_eq!(
+            workspace_open_in_menu_icon_application_name("finder"),
+            Some("Finder")
+        );
+        assert_eq!(
+            workspace_open_in_menu_icon_application_name("iterm"),
+            Some("iTerm")
+        );
+        assert_eq!(
+            workspace_open_in_menu_icon_application_name("unknown"),
+            None
+        );
     }
 }

@@ -1,27 +1,20 @@
 import type { GitFileChangeKind, GitFileStatus, GitStatusResult } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
 import {
-  ChevronRight,
   File,
   FileCode,
   FileJson,
   FileText,
   GitBranch,
   Image as ImageIcon,
-  Minus,
-  Plus,
 } from "lucide-react";
 import type React from "react";
-import { useState } from "react";
-import { stageGitFiles, unstageGitFiles } from "../api";
 
 interface ChangesTabProps {
   error: unknown;
   gitStatus: GitStatusResult | null;
   isLoading: boolean;
   onOpenDiff: (filePath: string) => void;
-  refresh: () => Promise<void>;
-  workspaceId: string;
 }
 
 function basename(filePath: string): string {
@@ -99,118 +92,18 @@ function fileIconFor(filePath: string): React.ComponentType<{ className?: string
   }
 }
 
-const DELTA_SQUARES = 5;
-
-function DeltaBar({ insertions, deletions }: { insertions: number; deletions: number }) {
-  const total = insertions + deletions;
-  if (total === 0) return null;
-
-  let addCount: number;
-  if (deletions === 0) {
-    addCount = DELTA_SQUARES;
-  } else if (insertions === 0) {
-    addCount = 0;
-  } else {
-    addCount = Math.max(1, Math.min(DELTA_SQUARES - 1, Math.round((insertions / total) * DELTA_SQUARES)));
-  }
-
-  return (
-    <div className="flex items-center gap-px">
-      {Array.from({ length: DELTA_SQUARES }, (_, i) => (
-        <span
-          key={i}
-          className={`h-[7px] w-[7px] rounded-[2px] ${
-            i < addCount
-              ? "bg-[var(--git-status-added)]"
-              : "bg-[var(--git-status-deleted)]"
-          }`}
-        />
-      ))}
-    </div>
-  );
-}
-
-function SectionHeader({
-  label,
-  count,
-  collapsed,
-  onToggle,
-  actionLabel,
-  onAction,
-  disabled,
-}: {
-  label: string;
-  count: number;
-  collapsed: boolean;
-  onToggle: () => void;
-  actionLabel: string;
-  onAction: () => void;
-  disabled: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between px-1 py-1.5">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[var(--muted-foreground)] transition hover:text-[var(--foreground)]"
-      >
-        <ChevronRight
-          className={`h-3.5 w-3.5 shrink-0 transition-transform duration-150 ${collapsed ? "" : "rotate-90"}`}
-        />
-        {label}
-        <span className="font-normal tabular-nums">{count}</span>
-      </button>
-      <button
-        type="button"
-        onClick={onAction}
-        disabled={disabled}
-        className="rounded-sm px-1.5 py-0.5 text-xs font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-wait disabled:opacity-60"
-      >
-        {actionLabel}
-      </button>
-    </div>
-  );
-}
-
-function ActionRow({
-  actionLabel,
-  onAction,
-  disabled,
-}: {
-  actionLabel: string;
-  onAction: () => void;
-  disabled: boolean;
-}) {
-  return (
-    <div className="flex justify-end px-1 pb-1">
-      <button
-        type="button"
-        onClick={onAction}
-        disabled={disabled}
-        className="rounded-sm px-1.5 py-0.5 text-xs font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-wait disabled:opacity-60"
-      >
-        {actionLabel}
-      </button>
-    </div>
-  );
+function resolveDisplayStatus(file: GitFileStatus): GitFileChangeKind | null {
+  return file.worktreeStatus ?? file.indexStatus;
 }
 
 function FileRow({
   file,
-  toggleMode,
   statusKind,
-  mutating,
-  disabled,
   onOpen,
-  onToggle,
 }: {
   file: GitFileStatus;
-  toggleMode: "stage" | "unstage";
   statusKind: GitFileChangeKind | null;
-  mutating: boolean;
-  disabled: boolean;
   onOpen: () => void;
-  onToggle: () => void;
 }) {
   const dir = dirname(file.path);
   const name = basename(file.path);
@@ -249,26 +142,13 @@ function FileRow({
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-1.5">
-        <DeltaBar insertions={ins ?? 0} deletions={del ?? 0} />
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggle();
-          }}
-          disabled={disabled}
-          className={`flex h-5 w-5 items-center justify-center rounded-sm text-[var(--muted-foreground)] transition hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-wait ${mutating ? "" : "opacity-0 group-hover/row:opacity-100"}`}
-          title={toggleMode === "stage" ? "Stage file" : "Unstage file"}
-        >
-          {mutating ? (
-            <span className="text-xs">&hellip;</span>
-          ) : toggleMode === "stage" ? (
-            <Plus className="h-3.5 w-3.5" />
-          ) : (
-            <Minus className="h-3.5 w-3.5" />
-          )}
-        </button>
+      <div className="ml-auto flex shrink-0 items-center gap-1.5">
+        {ins !== null && ins > 0 && (
+          <span className="font-mono text-xs text-[var(--git-status-added)]">+{ins}</span>
+        )}
+        {del !== null && del > 0 && (
+          <span className="font-mono text-xs text-[var(--git-status-deleted)]">-{del}</span>
+        )}
       </div>
     </div>
   );
@@ -279,45 +159,8 @@ export function ChangesTab({
   gitStatus,
   isLoading,
   onOpenDiff,
-  refresh,
-  workspaceId,
 }: ChangesTabProps) {
-  const [mutatingKey, setMutatingKey] = useState<string | null>(null);
-  const [stagedCollapsed, setStagedCollapsed] = useState(false);
-  const [unstagedCollapsed, setUnstagedCollapsed] = useState(false);
-
   const files = gitStatus?.files ?? [];
-  const stagedFiles = files.filter((f) => f.staged);
-  const unstagedFiles = files.filter((f) => f.unstaged);
-  const hasBothSections = stagedFiles.length > 0 && unstagedFiles.length > 0;
-
-  const runMutation = async (key: string, action: () => Promise<void>) => {
-    setMutatingKey(key);
-    try {
-      await action();
-      await refresh();
-    } finally {
-      setMutatingKey(null);
-    }
-  };
-
-  const handleStageFile = (file: GitFileStatus) => {
-    void runMutation(`stage:${file.path}`, () => stageGitFiles(workspaceId, [file.path]));
-  };
-
-  const handleUnstageFile = (file: GitFileStatus) => {
-    void runMutation(`unstage:${file.path}`, () => unstageGitFiles(workspaceId, [file.path]));
-  };
-
-  const handleStageAll = () => {
-    const paths = unstagedFiles.map((f) => f.path);
-    void runMutation("stage:all", () => stageGitFiles(workspaceId, paths));
-  };
-
-  const handleUnstageAll = () => {
-    const paths = stagedFiles.map((f) => f.path);
-    void runMutation("unstage:all", () => unstageGitFiles(workspaceId, paths));
-  };
 
   if (isLoading && !gitStatus) {
     return <p className="text-xs text-[var(--muted-foreground)]">Loading changes...</p>;
@@ -339,82 +182,15 @@ export function ChangesTab({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      {stagedFiles.length > 0 && (
-        <div>
-          {hasBothSections ? (
-            <SectionHeader
-              label="Staged Changes"
-              count={stagedFiles.length}
-              collapsed={stagedCollapsed}
-              onToggle={() => setStagedCollapsed((v) => !v)}
-              actionLabel="Unstage All"
-              onAction={handleUnstageAll}
-              disabled={mutatingKey !== null}
-            />
-          ) : (
-            <ActionRow
-              actionLabel="Unstage All"
-              onAction={handleUnstageAll}
-              disabled={mutatingKey !== null}
-            />
-          )}
-          {(!hasBothSections || !stagedCollapsed) && (
-            <div className="flex flex-col gap-0.5">
-              {stagedFiles.map((file) => (
-                <FileRow
-                  key={`staged:${file.path}`}
-                  file={file}
-                  statusKind={file.indexStatus}
-                  toggleMode="unstage"
-                  mutating={mutatingKey === `unstage:${file.path}`}
-                  disabled={mutatingKey !== null}
-                  onOpen={() => onOpenDiff(file.path)}
-                  onToggle={() => handleUnstageFile(file)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {unstagedFiles.length > 0 && (
-        <div>
-          {hasBothSections ? (
-            <SectionHeader
-              label="Changes"
-              count={unstagedFiles.length}
-              collapsed={unstagedCollapsed}
-              onToggle={() => setUnstagedCollapsed((v) => !v)}
-              actionLabel="Stage All"
-              onAction={handleStageAll}
-              disabled={mutatingKey !== null}
-            />
-          ) : (
-            <ActionRow
-              actionLabel="Stage All"
-              onAction={handleStageAll}
-              disabled={mutatingKey !== null}
-            />
-          )}
-          {(!hasBothSections || !unstagedCollapsed) && (
-            <div className="flex flex-col gap-0.5">
-              {unstagedFiles.map((file) => (
-                <FileRow
-                  key={`unstaged:${file.path}`}
-                  file={file}
-                  statusKind={file.worktreeStatus}
-                  toggleMode="stage"
-                  mutating={mutatingKey === `stage:${file.path}`}
-                  disabled={mutatingKey !== null}
-                  onOpen={() => onOpenDiff(file.path)}
-                  onToggle={() => handleStageFile(file)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+    <div className="flex flex-col gap-0.5">
+      {files.map((file) => (
+        <FileRow
+          key={file.path}
+          file={file}
+          statusKind={resolveDisplayStatus(file)}
+          onOpen={() => onOpenDiff(file.path)}
+        />
+      ))}
     </div>
   );
 }

@@ -30,8 +30,113 @@
   --radius-xl: 14px;
   --radius-2xl: 18px;
   --radius-3xl: 24px;
+
+  --control-compact-height: 32px;
+  --control-compact-radius: 13px;
+  --control-compact-padding-x: 12px;
 }
 
 :where(button, [role="button"]):where(:not(:disabled)):where(:not([aria-disabled="true"])) {
   cursor: pointer;
+}
+
+.compact-control-shell {
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--control-compact-radius);
+  background: var(--panel);
+}
+
+.compact-control-standalone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--control-compact-radius);
+  background: var(--panel);
+}
+
+.compact-control-item {
+  outline: none;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease,
+    opacity 150ms ease;
+}
+
+.compact-control-item:focus-visible {
+  box-shadow: 0 0 0 1px var(--ring);
+}
+
+.compact-control-item:disabled,
+.compact-control-item[aria-disabled="true"] {
+  cursor: not-allowed;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.compact-control-divider {
+  border-left: 1px solid var(--border);
+}
+
+.compact-control-divider:first-child {
+  border-left: 0;
+}
+
+.compact-control-label {
+  display: inline-flex;
+  height: var(--control-compact-height);
+  align-items: center;
+  gap: 0.5rem;
+  padding-inline: var(--control-compact-padding-x);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.compact-control-icon {
+  display: inline-flex;
+  height: var(--control-compact-height);
+  width: var(--control-compact-height);
+  align-items: center;
+  justify-content: center;
+}
+
+.compact-control-tab {
+  display: inline-flex;
+  height: var(--control-compact-height);
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  padding-inline: calc(var(--control-compact-padding-x) + 2px);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.compact-control-tone-muted {
+  color: var(--muted-foreground);
+}
+
+.compact-control-tone-muted:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--surface-hover);
+  color: var(--foreground);
+}
+
+.compact-control-tone-foreground {
+  color: var(--foreground);
+}
+
+.compact-control-tone-foreground:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--surface-hover);
+}
+
+.compact-control-tone-active {
+  background: var(--surface-selected);
+  color: var(--foreground);
+}
+
+.compact-control-tone-active:hover:not(:disabled):not([aria-disabled="true"]) {
+  background: var(--surface-selected);
 }

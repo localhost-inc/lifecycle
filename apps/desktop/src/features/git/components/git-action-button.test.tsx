@@ -1,0 +1,191 @@
+import { describe, expect, test } from "bun:test";
+import type { GitBranchPullRequestResult, GitStatusResult } from "@lifecycle/contracts";
+import { ThemeProvider } from "@lifecycle/ui";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { GitActionButton, GitActionMenuContent } from "./git-action-button";
+
+function renderGitActionButton(props: Partial<Parameters<typeof GitActionButton>[0]> = {}) {
+  return renderToStaticMarkup(
+    createElement(ThemeProvider, {
+      children: createElement(GitActionButton, {
+        actionError: null,
+        branchPullRequest: null,
+        defaultOpen: true,
+        gitStatus: null,
+        isCommitting: false,
+        isCreatingPullRequest: false,
+        isLoading: false,
+        isMergingPullRequest: false,
+        isPushingBranch: false,
+        onCommit: async () => {},
+        onCreatePullRequest: async () => {},
+        onMergePullRequest: async () => {},
+        onOpenPullRequest: () => {},
+        onPushBranch: async () => {},
+        onShowChanges: () => {},
+        ...props,
+      }),
+      storageKey: "test.theme",
+    }),
+  );
+}
+
+function renderGitActionMenuContent(
+  props: Partial<Parameters<typeof GitActionMenuContent>[0]> = {},
+) {
+  return renderToStaticMarkup(
+    createElement(ThemeProvider, {
+      children: createElement(GitActionMenuContent, {
+        actionError: null,
+        branchPullRequest: null,
+        commitMessage: "",
+        gitStatus: null,
+        isCommitting: false,
+        isCreatingPullRequest: false,
+        isMergingPullRequest: false,
+        isPushingBranch: false,
+        onCommit: async () => {},
+        onCommitMessageChange: () => {},
+        onCreatePullRequest: async () => {},
+        onMergePullRequest: async () => {},
+        onOpenPullRequest: () => {},
+        onPushBranch: async () => {},
+        onShowChanges: () => {},
+        ...props,
+      }),
+      storageKey: "test.theme",
+    }),
+  );
+}
+
+describe("GitActionButton", () => {
+  test("shows an inline commit workflow when the branch has local changes", () => {
+    const gitStatus: GitStatusResult = {
+      ahead: 0,
+      behind: 0,
+      branch: "feature/git-panel-prs",
+      files: [
+        {
+          indexStatus: null,
+          path: "src/app.tsx",
+          staged: false,
+          stats: { deletions: 0, insertions: 3 },
+          unstaged: true,
+          worktreeStatus: "modified",
+        },
+      ],
+      headSha: "0123456789abcdef0123456789abcdef01234567",
+      upstream: "origin/feature/git-panel-prs",
+    };
+    const branchPullRequest: GitBranchPullRequestResult = {
+      support: {
+        available: true,
+        message: null,
+        provider: "github",
+        reason: null,
+      },
+      branch: "feature/git-panel-prs",
+      pullRequest: null,
+      suggestedBaseRef: "main",
+      upstream: "origin/feature/git-panel-prs",
+    };
+
+    const markup = renderGitActionMenuContent({
+      branchPullRequest,
+      gitStatus,
+    });
+
+    expect(renderGitActionButton({ branchPullRequest, gitStatus })).toContain("Commit &amp; Push");
+    expect(markup).toContain("Commit message");
+    expect(markup).toContain("Review changes");
+  });
+
+  test("shows PR checks when the current branch pull request has them", () => {
+    const gitStatus: GitStatusResult = {
+      ahead: 0,
+      behind: 0,
+      branch: "feature/git-panel-prs",
+      files: [],
+      headSha: "0123456789abcdef0123456789abcdef01234567",
+      upstream: "origin/feature/git-panel-prs",
+    };
+    const branchPullRequest: GitBranchPullRequestResult = {
+      support: {
+        available: true,
+        message: null,
+        provider: "github",
+        reason: null,
+      },
+      branch: "feature/git-panel-prs",
+      pullRequest: {
+        author: "kyle",
+        baseRefName: "main",
+        checks: [
+          {
+            detailsUrl: "https://github.com/example/repo/actions/runs/42",
+            name: "lint",
+            status: "success",
+            workflowName: "CI",
+          },
+          {
+            detailsUrl: "https://github.com/example/repo/actions/runs/84",
+            name: "integration",
+            status: "pending",
+            workflowName: "CI",
+          },
+        ],
+        createdAt: "2026-03-09T10:00:00.000Z",
+        headRefName: "feature/git-panel-prs",
+        isDraft: false,
+        mergeStateStatus: "CLEAN",
+        mergeable: "mergeable",
+        number: 42,
+        reviewDecision: "approved",
+        state: "open",
+        title: "feat: add pull request rail",
+        updatedAt: "2026-03-09T11:00:00.000Z",
+        url: "https://github.com/example/repo/pull/42",
+      },
+      suggestedBaseRef: "main",
+      upstream: "origin/feature/git-panel-prs",
+    };
+
+    const markup = renderGitActionMenuContent({
+      branchPullRequest,
+      gitStatus,
+    });
+
+    expect(renderGitActionButton({ branchPullRequest, gitStatus })).toContain("Merge PR");
+    expect(markup).toContain("Merge PR");
+    expect(markup).toContain("Checks");
+    expect(markup).toContain("lint");
+    expect(markup).toContain("integration");
+    expect(markup).toContain("Passing");
+    expect(markup).toContain("Running");
+  });
+
+  test("surfaces unsupported provider state without local git assumptions", () => {
+    const branchPullRequest: GitBranchPullRequestResult = {
+      support: {
+        available: false,
+        message: "Pull request state will come from the cloud provider later.",
+        provider: null,
+        reason: "mode_not_supported",
+      },
+      branch: null,
+      pullRequest: null,
+      suggestedBaseRef: null,
+      upstream: null,
+    };
+
+    const markup = renderGitActionMenuContent({
+      branchPullRequest,
+      gitStatus: null,
+    });
+
+    expect(renderGitActionButton({ branchPullRequest, gitStatus: null })).toContain("Git Status");
+    expect(markup).toContain("Pull request provider unavailable");
+    expect(markup).toContain("Pull request state will come from the cloud provider later.");
+  });
+});

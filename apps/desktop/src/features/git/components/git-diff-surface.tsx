@@ -177,7 +177,7 @@ export function GitDiffSurface({ source, workspaceId }: GitDiffSurfaceProps) {
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--background)]">
       {header(source)}
 
-      <DiffRenderProvider>
+      <DiffRenderProvider theme={diffTheme(resolvedTheme)}>
         {isLoading && !patch ? (
           <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
             {loadingLabel(source)}

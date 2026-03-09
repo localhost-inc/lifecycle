@@ -1,8 +1,7 @@
 import type { GitLogEntry } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
 import { History } from "lucide-react";
-import { useCallback, useState } from "react";
-import { formatRelativeTime } from "../../../lib/format";
+import { useState } from "react";
 
 interface HistoryTabProps {
   error: unknown;
@@ -61,6 +60,21 @@ function groupEntriesByDate(
   return groups;
 }
 
+function formatShortAge(iso: string): string {
+  const seconds = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (seconds < 60) return "now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 52) return `${weeks}w`;
+  const years = Math.floor(days / 365);
+  return `${years}y`;
+}
+
 function authorHue(name: string): number {
   let hash = 5381;
   for (let i = 0; i < name.length; i++) {
@@ -91,7 +105,7 @@ function AuthorAvatar({ name, email }: { name: string; email: string }) {
       <img
         src={url}
         alt={name}
-        className="h-5 w-5 shrink-0 rounded-full"
+        className="h-4 w-4 shrink-0 rounded-full"
         onError={() => setImgFailed(true)}
       />
     );
@@ -99,7 +113,7 @@ function AuthorAvatar({ name, email }: { name: string; email: string }) {
 
   return (
     <div
-      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold leading-none text-white"
+      className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold leading-none text-white"
       style={{ backgroundColor: `hsl(${hue}, 50%, 45%)` }}
     >
       {letter}
@@ -114,14 +128,6 @@ function CommitRow({
   entry: GitLogEntry;
   onOpenCommit: (entry: GitLogEntry) => void;
 }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(entry.sha);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1500);
-  }, [entry.sha]);
-
   return (
     <div
       role="button"
@@ -138,25 +144,12 @@ function CommitRow({
     >
       <AuthorAvatar name={entry.author} email={entry.email} />
       <div className="min-w-0 flex-1">
-        <p className="line-clamp-2 text-sm leading-snug text-[var(--foreground)]">
+        <div className="flex items-baseline gap-1 text-xs text-[var(--muted-foreground)]">
+          <span className="truncate">{entry.author}</span>
+          <span className="ml-auto shrink-0">{formatShortAge(entry.timestamp)}</span>
+        </div>
+        <p className="line-clamp-2 text-[13px] leading-snug text-[var(--foreground)]">
           {entry.message}
-        </p>
-        <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
-          {entry.author}
-          {" · "}
-          {formatRelativeTime(entry.timestamp)}
-          {" · "}
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              handleCopy();
-            }}
-            className="rounded px-1 font-mono transition hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]"
-            title={entry.sha}
-          >
-            {copied ? "Copied!" : entry.shortSha}
-          </button>
         </p>
       </div>
     </div>

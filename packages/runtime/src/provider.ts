@@ -1,8 +1,11 @@
 import type {
+  GitBranchPullRequestResult,
   GitCommitResult,
   GitDiffResult,
   GitDiffScope,
   GitLogEntry,
+  GitPullRequestListResult,
+  GitPullRequestSummary,
   GitPushResult,
   GitStatusResult,
   ServiceRecord,
@@ -104,8 +107,15 @@ export interface WorkspaceProvider {
   getGitChangesPatch(workspaceId: string): Promise<string>;
   getGitDiff(input: WorkspaceProviderGitDiffInput): Promise<GitDiffResult>;
   listGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]>;
+  listGitPullRequests(workspaceId: string): Promise<GitPullRequestListResult>;
+  getCurrentGitPullRequest(workspaceId: string): Promise<GitBranchPullRequestResult>;
   stageGitFiles(workspaceId: string, filePaths: string[]): Promise<void>;
   unstageGitFiles(workspaceId: string, filePaths: string[]): Promise<void>;
   commitGit(workspaceId: string, message: string): Promise<GitCommitResult>;
   pushGit(workspaceId: string): Promise<GitPushResult>;
+  createGitPullRequest(workspaceId: string): Promise<GitPullRequestSummary>;
+  mergeGitPullRequest(
+    workspaceId: string,
+    pullRequestNumber: number,
+  ): Promise<GitPullRequestSummary>;
 }

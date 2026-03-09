@@ -12,12 +12,12 @@ The simpler durable model is:
 2. Current local edits work better as one reusable workspace-scoped `Changes` tab with an optional `focusPath`, not as separate tabs per file or per diff scope.
 3. Commit review still benefits from dedicated commit-scoped tabs because users often compare or revisit multiple history entries over time.
 4. A single diff surface component can serve both modes if the source contract is explicit (`changes` vs `commit`) and the shared multi-file layout accepts an initial focus path.
-5. The staged/unstaged split belongs in the side panel for actions, not in the center diff viewer as separate rendering modes.
+5. The side panel works better as a single changes list for now; staged/unstaged actions can return later if commit workflows need them.
 
 ## Milestone Impact
 
 1. M5: workspace git observability becomes easier to persist, reopen, and reason about without losing multi-file diff performance.
-2. M5: staged/unstaged actions remain available without making the main viewer juggle multiple current-change patch scopes.
+2. M5: the current-change surface stays simpler while commit and staging workflows are still deferred.
 3. M6: cloud git history and current-change viewing can reuse the same center-panel model without reintroducing file-scoped document tabs.
 
 ## Follow-Up Actions

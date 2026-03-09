@@ -29,7 +29,7 @@ export function GitDiffFileBlock({ fileDiff, onOpenFile, themeType }: GitDiffFil
         onToggleCollapse={() => setCollapsed((prev) => !prev)}
       />
       {!collapsed && (
-        <div className="overflow-auto px-2 py-2">
+        <div className="overflow-auto" style={{ "--diffs-gap-block": "0px" } as React.CSSProperties}>
           <FileDiff
             fileDiff={fileDiff}
             options={{

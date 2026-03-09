@@ -497,6 +497,18 @@ export type OpenInAppId =
   | "xcode"
   | "zed";
 
+export interface WorkspaceOpenInMenuEvent {
+  app_id: OpenInAppId;
+  error: string | null;
+  workspace_id: string;
+}
+
+export interface WorkspaceOpenInAppInfo {
+  icon_data_url: string | null;
+  id: OpenInAppId;
+  label: string;
+}
+
 export async function openWorkspaceInApp(workspaceId: string, appId: OpenInAppId): Promise<void> {
   if (!isTauri()) {
     console.warn("[browser] open_workspace_in_app is not supported outside Tauri");
@@ -504,6 +516,47 @@ export async function openWorkspaceInApp(workspaceId: string, appId: OpenInAppId
   }
 
   return invoke<void>("open_workspace_in_app", { workspaceId, appId });
+}
+
+export async function listWorkspaceOpenInApps(): Promise<WorkspaceOpenInAppInfo[]> {
+  if (!isTauri()) {
+    return [];
+  }
+
+  return invoke<WorkspaceOpenInAppInfo[]>("list_workspace_open_in_apps");
+}
+
+export async function showWorkspaceOpenInMenu(
+  workspaceId: string,
+  currentAppId: OpenInAppId,
+  appearance: "light" | "dark",
+  x: number,
+  y: number,
+): Promise<void> {
+  if (!isTauri()) {
+    console.warn("[browser] show_workspace_open_in_menu is not supported outside Tauri");
+    return;
+  }
+
+  return invoke<void>("show_workspace_open_in_menu", {
+    appearance,
+    currentAppId,
+    workspaceId,
+    x,
+    y,
+  });
+}
+
+export async function subscribeToWorkspaceOpenInMenuEvents(
+  callback: (event: WorkspaceOpenInMenuEvent) => void,
+): Promise<UnlistenFn> {
+  if (!isTauri()) {
+    return () => {};
+  }
+
+  return listen<WorkspaceOpenInMenuEvent>("workspace:open-in-menu", (event) => {
+    callback(event.payload);
+  });
 }
 
 export async function getCurrentBranch(projectPath: string): Promise<string> {

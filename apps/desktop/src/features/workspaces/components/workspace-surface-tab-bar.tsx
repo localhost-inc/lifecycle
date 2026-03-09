@@ -461,17 +461,17 @@ export function WorkspaceSurfaceTabBar({
     <div className="relative min-w-0 flex-1">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 right-0 z-10 bg-gradient-to-l from-[var(--background)] to-transparent"
+        className="pointer-events-none absolute inset-y-0 right-0 z-[1] bg-gradient-to-l from-[var(--background)] to-transparent"
         style={{ width: TAB_BAR_RIGHT_FADE_WIDTH_PX }}
       />
       <div
         aria-label="Workspace tabs"
-        className="flex items-center gap-0.5 overflow-x-auto py-1 [&::-webkit-scrollbar]:hidden"
+        className="flex items-center gap-1 overflow-x-auto py-1 [&::-webkit-scrollbar]:hidden"
         role="tablist"
         ref={tabListRef}
         style={tabListStyle}
       >
-        {visibleTabs.map((tab, index) => {
+        {visibleTabs.map((tab) => {
           const active = tab.key === activeTabKey;
           const isTerminal = tab.type === "terminal";
           const isRenaming = renameState?.key === tab.key;
@@ -536,9 +536,6 @@ export function WorkspaceSurfaceTabBar({
               renameInputRef={renameInputRef}
               renameSaving={renameState?.saving ?? false}
               renameValue={renameState?.value ?? tab.label}
-              showLeadingSeparator={
-                index > 0 && !active && visibleTabs[index - 1]?.key !== activeTabKey
-              }
               showFloatingReadyDot={showFloatingReadyDot}
               style={translateX === 0 ? undefined : { transform: `translateX(${translateX}px)` }}
               tab={tab}

@@ -50,7 +50,7 @@ describe("workspaceSurfaceReducer", () => {
     });
   });
 
-  test("opens a single changes tab when requested from version control", () => {
+  test("opens a single changes tab when requested from the git panel", () => {
     expect(
       workspaceSurfaceReducer(createDefaultWorkspaceSurfaceState(), {
         request: {

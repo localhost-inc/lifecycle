@@ -1,20 +1,36 @@
-import type { ReactNode } from "react";
-import { useState } from "react";
+import { isTauri } from "@tauri-apps/api/core";
+import { message } from "@tauri-apps/plugin-dialog";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
-import { cn, Popover, PopoverContent, PopoverTrigger } from "@lifecycle/ui";
+import {
+  cn,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  SplitButton,
+  SplitButtonPrimary,
+  SplitButtonSecondary,
+  useTheme,
+} from "@lifecycle/ui";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { isMacPlatform } from "../../app/app-hotkeys";
-import { openWorkspaceInApp, type OpenInAppId } from "../../features/workspaces/api";
+import {
+  listWorkspaceOpenInApps,
+  openWorkspaceInApp,
+  showWorkspaceOpenInMenu,
+  subscribeToWorkspaceOpenInMenuEvents,
+  type WorkspaceOpenInAppInfo,
+  type OpenInAppId,
+} from "../../features/workspaces/api";
 
 interface OpenInTarget {
   id: OpenInAppId;
+  iconDataUrl?: string | null;
   label: string;
   macOnly?: boolean;
 }
 
 const DEFAULT_OPEN_TARGET: OpenInAppId = "vscode";
-const PREFERRED_OPEN_TARGET_KEY = "lifecycle.desktop.preferred-open-target";
-const LEGACY_PREFERRED_EDITOR_KEY = "lifecycle.desktop.preferred-editor";
 const OPEN_IN_TARGETS: readonly OpenInTarget[] = [
   { id: "vscode", label: "VS Code" },
   { id: "cursor", label: "Cursor" },
@@ -46,38 +62,10 @@ function listAvailableOpenInTargets(macPlatform: boolean): readonly OpenInTarget
   return OPEN_IN_TARGETS.filter((target) => !target.macOnly || macPlatform);
 }
 
-function normalizePreferredTarget(
-  value: string | null,
-  availableTargets: readonly OpenInTarget[],
-): OpenInAppId {
-  if (isSupportedOpenInAppId(value) && availableTargets.some((target) => target.id === value)) {
-    return value;
-  }
-
+export function resolveDefaultOpenTarget(availableTargets: readonly OpenInTarget[]): OpenInTarget {
   return (
-    availableTargets.find((target) => target.id === DEFAULT_OPEN_TARGET)?.id ??
-    availableTargets[0]!.id
+    availableTargets.find((target) => target.id === DEFAULT_OPEN_TARGET) ?? availableTargets[0]!
   );
-}
-
-function getStoredPreferredTarget(availableTargets: readonly OpenInTarget[]): OpenInAppId {
-  if (typeof window === "undefined") {
-    return normalizePreferredTarget(null, availableTargets);
-  }
-
-  const storedTarget =
-    window.localStorage.getItem(PREFERRED_OPEN_TARGET_KEY) ??
-    window.localStorage.getItem(LEGACY_PREFERRED_EDITOR_KEY);
-
-  return normalizePreferredTarget(storedTarget, availableTargets);
-}
-
-function persistPreferredTarget(appId: OpenInAppId): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(PREFERRED_OPEN_TARGET_KEY, appId);
 }
 
 function describeOpenInError(error: unknown): string {
@@ -114,7 +102,7 @@ function AppIconTile({
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[8px] border border-white/10 bg-black/20",
+        "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[8px] border border-[var(--border)] bg-[var(--background)]/60",
         sizeClass,
         className,
       )}
@@ -124,7 +112,26 @@ function AppIconTile({
   );
 }
 
-function OpenInAppIcon({ appId, sizeClass }: { appId: OpenInAppId; sizeClass?: string }) {
+function OpenInAppIcon({
+  appId,
+  iconDataUrl,
+  sizeClass,
+}: {
+  appId: OpenInAppId;
+  iconDataUrl?: string | null;
+  sizeClass?: string;
+}) {
+  if (iconDataUrl) {
+    return (
+      <img
+        alt=""
+        aria-hidden
+        className={cn("shrink-0 object-contain", sizeClass ?? "size-6")}
+        src={iconDataUrl}
+      />
+    );
+  }
+
   switch (appId) {
     case "vscode":
       return (
@@ -274,16 +281,121 @@ interface TitleBarActionsProps {
 }
 
 export function TitleBarActions({ workspace }: TitleBarActionsProps) {
-  const availableTargets = listAvailableOpenInTargets(isMacPlatform());
-  const [preferredTargetId, setPreferredTargetId] = useState(() =>
-    getStoredPreferredTarget(availableTargets),
-  );
+  const { resolvedAppearance } = useTheme();
+  const [baseAvailableTargets] = useState(() => listAvailableOpenInTargets(isMacPlatform()));
+  const launcherRef = useRef<HTMLDivElement | null>(null);
+  const [availableTargets, setAvailableTargets] =
+    useState<readonly OpenInTarget[]>(baseAvailableTargets);
   const [openInOpen, setOpenInOpen] = useState(false);
   const [launchingTarget, setLaunchingTarget] = useState<OpenInAppId | null>(null);
   const [launchError, setLaunchError] = useState<string | null>(null);
+  const usesNativeOpenInMenu = isMacPlatform() && isTauri();
 
-  const preferredTarget =
-    availableTargets.find((target) => target.id === preferredTargetId) ?? availableTargets[0]!;
+  const defaultTarget = resolveDefaultOpenTarget(availableTargets);
+
+  function mergeInstalledTargets(
+    installedApps: readonly WorkspaceOpenInAppInfo[],
+  ): readonly OpenInTarget[] {
+    const installedTargets: OpenInTarget[] = [];
+
+    for (const target of baseAvailableTargets) {
+      const installedApp = installedApps.find((app) => app.id === target.id);
+      if (!installedApp) {
+        continue;
+      }
+
+      installedTargets.push({
+        ...target,
+        iconDataUrl: installedApp.icon_data_url,
+        label: installedApp.label,
+      });
+    }
+
+    if (installedTargets.length > 0) {
+      return installedTargets;
+    }
+
+    return baseAvailableTargets;
+  }
+
+  async function syncInstalledTargets(): Promise<void> {
+    setAvailableTargets(mergeInstalledTargets(await listWorkspaceOpenInApps()));
+  }
+
+  useEffect(() => {
+    if (!usesNativeOpenInMenu) {
+      setAvailableTargets(baseAvailableTargets);
+      return;
+    }
+
+    let cancelled = false;
+
+    void listWorkspaceOpenInApps()
+      .then((installedApps) => {
+        if (cancelled) {
+          return;
+        }
+
+        setAvailableTargets(mergeInstalledTargets(installedApps));
+      })
+      .catch((error) => {
+        console.error("Failed to list installed workspace open-in apps:", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [baseAvailableTargets, usesNativeOpenInMenu]);
+
+  useEffect(() => {
+    if (!usesNativeOpenInMenu) {
+      return;
+    }
+
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+
+    void subscribeToWorkspaceOpenInMenuEvents((event) => {
+      if (event.workspace_id !== workspace.id || !isSupportedOpenInAppId(event.app_id)) {
+        return;
+      }
+
+      if (event.error) {
+        void message(event.error, {
+          kind: "error",
+          title: "Unable to open workspace",
+        });
+        return;
+      }
+
+      setLaunchError(null);
+    }).then((nextUnlisten) => {
+      if (disposed) {
+        nextUnlisten();
+        return;
+      }
+
+      unlisten = nextUnlisten;
+    });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [usesNativeOpenInMenu, workspace.id]);
+
+  async function presentLaunchError(errorText: string): Promise<void> {
+    if (usesNativeOpenInMenu) {
+      await message(errorText, {
+        kind: "error",
+        title: "Unable to open workspace",
+      });
+      return;
+    }
+
+    setLaunchError(errorText);
+    setOpenInOpen(true);
+  }
 
   async function handleOpenIn(appId: OpenInAppId): Promise<void> {
     setLaunchError(null);
@@ -291,83 +403,116 @@ export function TitleBarActions({ workspace }: TitleBarActionsProps) {
 
     try {
       await openWorkspaceInApp(workspace.id, appId);
-      persistPreferredTarget(appId);
-      setPreferredTargetId(appId);
       setOpenInOpen(false);
     } catch (error) {
       const nextError = describeOpenInError(error);
       console.error("Failed to open workspace in app:", error);
-      setLaunchError(nextError);
-      setOpenInOpen(true);
+      await presentLaunchError(nextError);
     } finally {
       setLaunchingTarget(null);
     }
   }
 
+  async function handleShowNativeOpenInMenu(): Promise<void> {
+    const rect = launcherRef.current?.getBoundingClientRect();
+    if (!rect) {
+      return;
+    }
+
+    setLaunchError(null);
+
+    try {
+      await syncInstalledTargets();
+      await showWorkspaceOpenInMenu(
+        workspace.id,
+        defaultTarget.id,
+        resolvedAppearance,
+        rect.left,
+        rect.bottom + 4,
+      );
+    } catch (error) {
+      const nextError = describeOpenInError(error);
+      console.error("Failed to show workspace open-in menu:", error);
+      await presentLaunchError(nextError);
+    }
+  }
+
   return (
     <div className="flex items-center gap-1.5">
-      <div className="flex items-center overflow-hidden rounded-[13px] border border-[rgba(255,255,255,0.09)] bg-[rgba(22,22,24,0.94)] shadow-[0_4px_14px_rgba(0,0,0,0.18)]">
-        <button
-          className="flex h-8 items-center gap-2 bg-transparent pl-2 pr-2.5 text-[12px] font-semibold text-[var(--foreground)] transition-colors hover:bg-white/[0.035] disabled:cursor-default disabled:opacity-60"
+      <SplitButton ref={launcherRef}>
+        <SplitButtonPrimary
           disabled={launchingTarget !== null}
-          onClick={() => void handleOpenIn(preferredTarget.id)}
-          title={`Open in ${preferredTarget.label}`}
-          type="button"
+          leadingIcon={
+            <OpenInAppIcon
+              appId={defaultTarget.id}
+              iconDataUrl={defaultTarget.iconDataUrl}
+              sizeClass="size-[22px]"
+            />
+          }
+          onClick={() => void handleOpenIn(defaultTarget.id)}
+          title={`Open in ${defaultTarget.label}`}
         >
-          <OpenInAppIcon appId={preferredTarget.id} sizeClass="size-[22px]" />
-          <span>Open</span>
-        </button>
+          Open
+        </SplitButtonPrimary>
 
-        <Popover open={openInOpen} onOpenChange={setOpenInOpen}>
-          <PopoverTrigger asChild>
-            <button
-              aria-label="Choose app"
-              className="flex h-8 w-8 items-center justify-center border-l border-[rgba(255,255,255,0.08)] bg-transparent text-[var(--muted-foreground)] transition-colors hover:bg-white/[0.035] hover:text-[var(--foreground)] disabled:cursor-default disabled:opacity-60"
-              disabled={launchingTarget !== null}
-              type="button"
-            >
-              <ChevronDown className="size-3.5" strokeWidth={2.4} />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent
-            align="end"
-            className="w-[18rem] rounded-[22px] border-white/10 bg-[rgba(28,28,30,0.96)] p-3 shadow-[0_20px_64px_rgba(0,0,0,0.4)] backdrop-blur-xl"
-            side="bottom"
-            sideOffset={8}
+        {usesNativeOpenInMenu ? (
+          <SplitButtonSecondary
+            aria-label="Choose app"
+            disabled={launchingTarget !== null}
+            onClick={() => void handleShowNativeOpenInMenu()}
           >
-            <div className="px-2 pb-2 pt-1 text-[14px] font-medium text-[var(--muted-foreground)]">
-              Open in
-            </div>
-
-            {launchError && (
-              <div
-                className="mx-2 mb-2 rounded-2xl border border-[var(--destructive)]/30 bg-[var(--destructive)]/8 px-3 py-2 text-[12px] text-[var(--destructive)]"
-                role="alert"
+            <ChevronDown className="size-3.5" strokeWidth={2.4} />
+          </SplitButtonSecondary>
+        ) : (
+          <Popover open={openInOpen} onOpenChange={setOpenInOpen}>
+            <PopoverTrigger asChild>
+              <SplitButtonSecondary
+                aria-label="Choose app"
+                disabled={launchingTarget !== null}
               >
-                {launchError}
+                <ChevronDown className="size-3.5" strokeWidth={2.4} />
+              </SplitButtonSecondary>
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              className="w-[18rem] rounded-[22px] border-[var(--border)] bg-[var(--card)] p-3 shadow-[0_20px_64px_rgba(0,0,0,0.18)]"
+              side="bottom"
+              sideOffset={8}
+            >
+              <div className="px-2 pb-2 pt-1 text-[14px] font-medium text-[var(--muted-foreground)]">
+                Open in
               </div>
-            )}
 
-            <div className="space-y-0.5">
-              {availableTargets.map((target) => (
-                <button
-                  className={cn(
-                    "flex w-full items-center gap-3 rounded-[14px] px-2.5 py-2 text-left text-[14px] font-medium text-[var(--foreground)] transition-colors hover:bg-white/[0.05] disabled:cursor-default disabled:opacity-60",
-                    target.id === preferredTarget.id && "bg-white/[0.03]",
-                  )}
-                  disabled={launchingTarget !== null}
-                  key={target.id}
-                  onClick={() => void handleOpenIn(target.id)}
-                  type="button"
+              {launchError && (
+                <div
+                  className="mx-2 mb-2 rounded-2xl border border-[var(--destructive)]/30 bg-[var(--destructive)]/8 px-3 py-2 text-[12px] text-[var(--destructive)]"
+                  role="alert"
                 >
-                  <OpenInAppIcon appId={target.id} />
-                  <span>{target.label}</span>
-                </button>
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
-      </div>
+                  {launchError}
+                </div>
+              )}
+
+              <div className="space-y-0.5">
+                {availableTargets.map((target) => (
+                  <button
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-[14px] px-2.5 py-2 text-left text-[14px] font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--surface-hover)] disabled:cursor-default disabled:opacity-60",
+                      target.id === defaultTarget.id && "bg-[var(--surface-selected)]",
+                    )}
+                    disabled={launchingTarget !== null}
+                    key={target.id}
+                    onClick={() => void handleOpenIn(target.id)}
+                    type="button"
+                  >
+                    <OpenInAppIcon appId={target.id} iconDataUrl={target.iconDataUrl} />
+                    <span>{target.label}</span>
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
+      </SplitButton>
     </div>
   );
 }

@@ -1,10 +1,17 @@
-import type { GitLogEntry, GitStatusResult } from "@lifecycle/contracts";
+import type {
+  GitBranchPullRequestResult,
+  GitLogEntry,
+  GitPullRequestListResult,
+  GitStatusResult,
+} from "@lifecycle/contracts";
 import { useEffect, useMemo } from "react";
 import type { QueryDescriptor, QueryResult } from "../../query";
 import { useQuery } from "../../query";
 
 export const gitKeys = {
+  currentPullRequest: (workspaceId: string) => ["workspace-git-current-pull-request", workspaceId] as const,
   log: (workspaceId: string, limit: number) => ["workspace-git-log", workspaceId, limit] as const,
+  pullRequests: (workspaceId: string) => ["workspace-git-pull-requests", workspaceId] as const,
   status: (workspaceId: string) => ["workspace-git-status", workspaceId] as const,
 };
 
@@ -26,6 +33,28 @@ function createGitLogQuery(workspaceId: string, limit: number): QueryDescriptor<
     key: gitKeys.log(workspaceId, limit),
     fetch(source) {
       return source.getWorkspaceGitLog(workspaceId, limit);
+    },
+  };
+}
+
+function createGitPullRequestsQuery(
+  workspaceId: string,
+): QueryDescriptor<GitPullRequestListResult> {
+  return {
+    key: gitKeys.pullRequests(workspaceId),
+    fetch(source) {
+      return source.getWorkspaceGitPullRequests(workspaceId);
+    },
+  };
+}
+
+function createCurrentGitPullRequestQuery(
+  workspaceId: string,
+): QueryDescriptor<GitBranchPullRequestResult> {
+  return {
+    key: gitKeys.currentPullRequest(workspaceId),
+    fetch(source) {
+      return source.getWorkspaceCurrentGitPullRequest(workspaceId);
     },
   };
 }
@@ -78,5 +107,35 @@ export function useGitLog(
   });
 
   usePollingRefresh(query.refresh, Boolean(workspaceId), 10000);
+  return query;
+}
+
+export function useGitPullRequests(
+  workspaceId: string | null,
+): QueryResult<GitPullRequestListResult | undefined> {
+  const descriptor = useMemo(
+    () => (workspaceId ? createGitPullRequestsQuery(workspaceId) : null),
+    [workspaceId],
+  );
+  const query = useQuery(descriptor, {
+    disabledData: undefined,
+  });
+
+  usePollingRefresh(query.refresh, Boolean(workspaceId), 15000);
+  return query;
+}
+
+export function useCurrentGitPullRequest(
+  workspaceId: string | null,
+): QueryResult<GitBranchPullRequestResult | undefined> {
+  const descriptor = useMemo(
+    () => (workspaceId ? createCurrentGitPullRequestQuery(workspaceId) : null),
+    [workspaceId],
+  );
+  const query = useQuery(descriptor, {
+    disabledData: undefined,
+  });
+
+  usePollingRefresh(query.refresh, Boolean(workspaceId), 8000);
   return query;
 }

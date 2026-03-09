@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import type {
+  GitBranchPullRequestResult,
   GitCommitDiffResult,
   GitCommitResult,
   GitDiffResult,
   GitDiffScope,
   GitFileChangeKind,
+  GitPullRequestListResult,
   GitStatusResult,
 } from "./git";
 
@@ -79,5 +81,53 @@ describe("git contracts", () => {
     expect(diff.scope).toBe("working");
     expect(commitDiff.sha).toBe("abcdef1234567890");
     expect(commit.shortSha).toBe("abcdef12");
+  });
+
+  test("supports pull request list and current-branch payloads", () => {
+    const pullRequests: GitPullRequestListResult = {
+      support: {
+        available: true,
+        message: null,
+        provider: "github",
+        reason: null,
+      },
+      pullRequests: [
+        {
+          author: "kyle",
+          baseRefName: "main",
+          createdAt: "2026-03-09T10:00:00.000Z",
+          headRefName: "feature/git-prs",
+          isDraft: false,
+          mergeStateStatus: "CLEAN",
+          mergeable: "mergeable",
+          number: 42,
+          reviewDecision: "approved",
+          checks: [
+            {
+              detailsUrl: "https://github.com/example/repo/actions/runs/42",
+              name: "build",
+              status: "success",
+              workflowName: "CI",
+            },
+          ],
+          state: "open",
+          title: "feat: add git pull request rail",
+          updatedAt: "2026-03-09T11:00:00.000Z",
+          url: "https://github.com/example/repo/pull/42",
+        },
+      ],
+    };
+    const currentBranch: GitBranchPullRequestResult = {
+      support: pullRequests.support,
+      branch: "feature/git-prs",
+      upstream: "origin/feature/git-prs",
+      suggestedBaseRef: "main",
+      pullRequest: pullRequests.pullRequests[0] ?? null,
+    };
+
+    expect(pullRequests.pullRequests[0]?.number).toBe(42);
+    expect(currentBranch.pullRequest?.mergeable).toBe("mergeable");
+    expect(currentBranch.pullRequest?.checks?.[0]?.status).toBe("success");
+    expect(currentBranch.suggestedBaseRef).toBe("main");
   });
 });

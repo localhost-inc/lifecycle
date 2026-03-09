@@ -41,6 +41,31 @@ function createMockSource() {
     async getWorkspaceGitLog() {
       return [];
     },
+    async getWorkspaceGitPullRequests() {
+      return {
+        support: {
+          available: false,
+          message: "Pull requests unavailable in test mock.",
+          provider: null,
+          reason: "mode_not_supported",
+        },
+        pullRequests: [],
+      };
+    },
+    async getWorkspaceCurrentGitPullRequest() {
+      return {
+        support: {
+          available: false,
+          message: "Pull requests unavailable in test mock.",
+          provider: null,
+          reason: "mode_not_supported",
+        },
+        branch: null,
+        upstream: null,
+        suggestedBaseRef: null,
+        pullRequest: null,
+      };
+    },
     async getWorkspaceGitStatus() {
       return {
         ahead: 0,

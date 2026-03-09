@@ -19,9 +19,9 @@ export function formatCompactRelativeTime(iso: string): string {
 
   if (diff < 0) return "just now";
   if (diff < MINUTE) return "just now";
-  if (diff < HOUR) return `${Math.floor(diff / MINUTE)}m ago`;
-  if (diff < DAY) return `${Math.floor(diff / HOUR)}h ago`;
-  if (diff < 30 * DAY) return `${Math.floor(diff / DAY)}d ago`;
+  if (diff < HOUR) return `${Math.floor(diff / MINUTE)}m`;
+  if (diff < DAY) return `${Math.floor(diff / HOUR)}h`;
+  if (diff < 30 * DAY) return `${Math.floor(diff / DAY)}d`;
 
   return dayjs(iso).format("MMM D");
 }

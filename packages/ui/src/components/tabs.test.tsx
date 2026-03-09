@@ -25,6 +25,11 @@ describe("Tabs", () => {
     expect(markup).toContain('data-state="active"');
     expect(markup).toContain('data-state="inactive"');
     expect(markup).toContain('data-slot="tabs-trigger"');
-    expect(markup).toContain("cursor-pointer");
+    expect(markup).toContain('data-slot="tabs-list"');
+    expect(markup).toContain("compact-control-shell");
+    expect(markup).toContain("compact-control-tab");
+    expect(markup).toContain("compact-control-divider");
+    expect(markup).toContain("data-active:bg-[var(--surface-selected)]");
+    expect(markup).toContain("data-[state=active]:bg-[var(--surface-selected)]");
   });
 });
