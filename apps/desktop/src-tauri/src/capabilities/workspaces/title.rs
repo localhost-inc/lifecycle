@@ -3,15 +3,16 @@ use crate::shared::errors::LifecycleError;
 use rusqlite::params;
 use serde_json::Value;
 use std::collections::HashSet;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::AppHandle;
 use tokio::process::Command;
 use tokio::time::timeout;
 
+use super::harness::normalize_prompt_text;
+#[cfg(test)]
+use super::harness::read_first_prompt_from_session_reader;
 use super::rename::{self, TitleOrigin};
 
 const TITLE_GENERATION_TIMEOUT: Duration = Duration::from_secs(8);
@@ -21,13 +22,13 @@ fn auto_title_registry() -> &'static Mutex<HashSet<String>> {
     REGISTRY.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
-#[derive(Clone, Copy)]
-struct HarnessTitleProvider {
-    extract_prompt: fn(&Value) -> Option<String>,
-}
-
 struct AutoTitleGuard {
     terminal_id: String,
+}
+
+struct GeneratedTitle {
+    source: &'static str,
+    title: String,
 }
 
 impl AutoTitleGuard {
@@ -50,13 +51,12 @@ impl Drop for AutoTitleGuard {
     }
 }
 
-pub fn maybe_schedule_terminal_auto_title_from_harness_completion(
+pub fn maybe_schedule_terminal_auto_title_from_prompt(
     app: &AppHandle,
     db_path: &str,
     terminal_id: &str,
     workspace_id: &str,
-    harness_provider: &str,
-    session_log_path: &Path,
+    prompt: &str,
 ) {
     let should_generate = match should_generate_title(db_path, terminal_id, workspace_id) {
         Ok(value) => value,
@@ -72,14 +72,22 @@ pub fn maybe_schedule_terminal_auto_title_from_harness_completion(
         return;
     }
 
-    let Some(prompt) = read_first_prompt_from_session_log(harness_provider, session_log_path)
-    else {
+    let Some(prompt) = normalize_prompt_text(prompt) else {
         return;
     };
+    let fallback_title = fallback_title(&prompt);
 
     let Some(guard) = AutoTitleGuard::acquire(terminal_id) else {
         return;
     };
+
+    tracing::info!(
+        terminal_id,
+        workspace_id,
+        prompt_preview = %prompt_preview(&prompt),
+        fallback_title = %fallback_title,
+        "auto title generation scheduled"
+    );
 
     let app = app.clone();
     let db_path = db_path.to_string();
@@ -88,30 +96,96 @@ pub fn maybe_schedule_terminal_auto_title_from_harness_completion(
 
     tauri::async_runtime::spawn(async move {
         let _guard = guard;
-        let title = generate_title(&prompt)
-            .await
-            .unwrap_or_else(|_| fallback_title(&prompt));
-        if !title.is_empty() {
-            if let Err(error) =
-                rename::maybe_apply_generated_terminal_label(&app, &db_path, &terminal_id, &title)
-            {
-                tracing::warn!(
-                    "failed to apply generated terminal label {}: {error}",
-                    terminal_id
+        let generation_started_at = Instant::now();
+        let generated_title = generate_title(&prompt).await.unwrap_or_else(|error| {
+            tracing::warn!(
+                terminal_id,
+                workspace_id,
+                fallback_title = %fallback_title,
+                "auto title generation failed, falling back to prompt title: {error}"
+            );
+            GeneratedTitle {
+                source: "fallback",
+                title: fallback_title.clone(),
+            }
+        });
+        let elapsed_ms = generation_started_at.elapsed().as_millis() as u64;
+
+        tracing::info!(
+            terminal_id,
+            workspace_id,
+            source = generated_title.source,
+            elapsed_ms,
+            title = %generated_title.title,
+            "auto title generation completed"
+        );
+
+        match rename::maybe_apply_generated_terminal_label(
+            &app,
+            &db_path,
+            &terminal_id,
+            &generated_title.title,
+        ) {
+            Ok(Some(_)) => {
+                tracing::info!(
+                    terminal_id,
+                    workspace_id,
+                    title = %generated_title.title,
+                    source = generated_title.source,
+                    elapsed_ms,
+                    "applied generated terminal title"
                 );
             }
-
-            if let Err(error) = rename::maybe_apply_generated_workspace_name(
-                app.clone(),
-                &db_path,
-                &workspace_id,
-                &title,
-            )
-            .await
-            {
+            Ok(None) => {
+                tracing::info!(
+                    terminal_id,
+                    workspace_id,
+                    title = %generated_title.title,
+                    "skipped generated terminal title because the user already renamed it"
+                );
+            }
+            Err(error) => {
                 tracing::warn!(
-                    "failed to apply generated workspace name {}: {error}",
-                    workspace_id
+                    terminal_id,
+                    workspace_id,
+                    title = %generated_title.title,
+                    "failed to apply generated terminal label: {error}"
+                );
+            }
+        }
+
+        match rename::maybe_apply_generated_workspace_name(
+            app.clone(),
+            &db_path,
+            &workspace_id,
+            &generated_title.title,
+        )
+        .await
+        {
+            Ok(Some(_)) => {
+                tracing::info!(
+                    terminal_id,
+                    workspace_id,
+                    title = %generated_title.title,
+                    source = generated_title.source,
+                    elapsed_ms,
+                    "applied generated workspace title"
+                );
+            }
+            Ok(None) => {
+                tracing::info!(
+                    terminal_id,
+                    workspace_id,
+                    title = %generated_title.title,
+                    "skipped generated workspace title because the user already renamed it"
+                );
+            }
+            Err(error) => {
+                tracing::warn!(
+                    terminal_id,
+                    workspace_id,
+                    title = %generated_title.title,
+                    "failed to apply generated workspace name: {error}"
                 );
             }
         }
@@ -147,189 +221,29 @@ fn should_generate_title(
     })
 }
 
-fn read_first_prompt_from_session_log(
-    harness_provider: &str,
-    session_log_path: &Path,
-) -> Option<String> {
-    let file = File::open(session_log_path).ok()?;
-    read_first_prompt_from_session_reader(harness_provider, BufReader::new(file))
-}
-
-fn read_first_prompt_from_session_reader<R: BufRead>(
-    harness_provider: &str,
-    reader: R,
-) -> Option<String> {
-    let provider = resolve_harness_title_provider(harness_provider)?;
-
-    for line in reader.lines().map_while(Result::ok) {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-
-        let Ok(value) = serde_json::from_str::<Value>(trimmed) else {
-            continue;
-        };
-
-        let prompt = (provider.extract_prompt)(&value);
-
-        if let Some(normalized_prompt) = prompt.and_then(|prompt| normalize_prompt_text(&prompt)) {
-            return Some(normalized_prompt);
-        }
-    }
-
-    None
-}
-
-fn resolve_harness_title_provider(name: &str) -> Option<HarnessTitleProvider> {
-    match name {
-        "claude" => Some(HarnessTitleProvider {
-            extract_prompt: extract_claude_prompt,
-        }),
-        "codex" => Some(HarnessTitleProvider {
-            extract_prompt: extract_codex_prompt,
-        }),
-        _ => None,
-    }
-}
-
-fn extract_claude_prompt(value: &Value) -> Option<String> {
-    if json_string_at_path(value, &["type"]) != Some("user") {
-        return None;
-    }
-    if value
-        .get("isMeta")
-        .and_then(Value::as_bool)
-        .unwrap_or(false)
-    {
-        return None;
-    }
-
-    let message = value.get("message")?;
-    if json_string_at_path(message, &["role"]) != Some("user") {
-        return None;
-    }
-
-    extract_text_from_message_content(message)
-}
-
-fn extract_codex_prompt(value: &Value) -> Option<String> {
-    if json_string_at_path(value, &["type"]) == Some("event_msg")
-        && json_string_at_path(value, &["payload", "type"]) == Some("user_message")
-    {
-        return value
-            .get("payload")
-            .and_then(|payload| payload.get("message"))
-            .and_then(Value::as_str)
-            .map(str::to_string);
-    }
-
-    if json_string_at_path(value, &["type"]) == Some("response_item")
-        && json_string_at_path(value, &["payload", "type"]) == Some("message")
-        && json_string_at_path(value, &["payload", "role"]) == Some("user")
-    {
-        return value
-            .get("payload")
-            .and_then(extract_text_from_message_content);
-    }
-
-    if json_string_at_path(value, &["type"]) == Some("message")
-        && json_string_at_path(value, &["role"]) == Some("user")
-    {
-        return extract_text_from_message_content(value);
-    }
-
-    None
-}
-
-fn extract_text_from_message_content(message: &Value) -> Option<String> {
-    let content = message.get("content")?;
-
-    if let Some(text) = content.as_str() {
-        return Some(text.to_string());
-    }
-
-    let items = content.as_array()?;
-    let mut fragments = Vec::new();
-
-    for item in items {
-        match item.get("type").and_then(Value::as_str) {
-            Some("text") | Some("input_text") => {
-                if let Some(text) = item.get("text").and_then(Value::as_str) {
-                    fragments.push(text.to_string());
-                }
-            }
-            _ => {}
-        }
-    }
-
-    if fragments.is_empty() {
-        None
-    } else {
-        Some(fragments.join("\n"))
-    }
-}
-
-fn normalize_prompt_text(value: &str) -> Option<String> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-
-    let mut lines = Vec::new();
-    for line in trimmed.lines() {
-        let next = line.trim();
-        if lines.is_empty() && next.eq_ignore_ascii_case("## My request for Codex:") {
-            continue;
-        }
-        if next.is_empty() {
-            continue;
-        }
-        lines.push(next);
-    }
-
-    let collapsed = lines.join(" ");
-    let normalized = collapsed.split_whitespace().collect::<Vec<_>>().join(" ");
-    if normalized.is_empty() || is_scaffolding_prompt(&normalized) {
-        return None;
-    }
-
-    Some(normalized)
-}
-
-fn is_scaffolding_prompt(value: &str) -> bool {
-    let lowercase = value.to_ascii_lowercase();
-    lowercase.starts_with("<environment_context>")
-        || lowercase.starts_with("<local-command-caveat>")
-        || lowercase.starts_with("<command-name>")
-        || lowercase.starts_with("<command-message>")
-        || lowercase.starts_with("<command-args>")
-        || lowercase.starts_with("<local-command-stdout>")
-        || lowercase.starts_with("[request interrupted by user]")
-        || lowercase.starts_with("[image:")
-}
-
-fn json_string_at_path<'a>(value: &'a Value, path: &[&str]) -> Option<&'a str> {
-    let mut current = value;
-    for segment in path {
-        current = current.get(*segment)?;
-    }
-    current.as_str()
-}
-
-async fn generate_title(prompt: &str) -> Result<String, LifecycleError> {
+async fn generate_title(prompt: &str) -> Result<GeneratedTitle, LifecycleError> {
     if let Some(title) = run_claude_title_generator(prompt).await? {
-        return Ok(title);
+        return Ok(GeneratedTitle {
+            source: "claude-sonnet",
+            title,
+        });
     }
 
     if let Some(title) = run_codex_title_generator(prompt).await? {
-        return Ok(title);
+        return Ok(GeneratedTitle {
+            source: "codex",
+            title,
+        });
     }
 
-    Ok(fallback_title(prompt))
+    Ok(GeneratedTitle {
+        source: "fallback",
+        title: fallback_title(prompt),
+    })
 }
 
 async fn run_claude_title_generator(prompt: &str) -> Result<Option<String>, LifecycleError> {
+    let started_at = Instant::now();
     let prompt_text = title_prompt(prompt);
     let output = match timeout(
         TITLE_GENERATION_TIMEOUT,
@@ -354,29 +268,50 @@ async fn run_claude_title_generator(prompt: &str) -> Result<Option<String>, Life
     .await
     {
         Ok(Ok(output)) => output,
-        Ok(Err(error)) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Ok(Err(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+            tracing::info!(
+                elapsed_ms = started_at.elapsed().as_millis() as u64,
+                "claude title generator unavailable; falling back"
+            );
+            return Ok(None);
+        }
         Ok(Err(error)) => {
-            tracing::debug!("claude title generator failed to launch: {error}");
+            tracing::info!(
+                elapsed_ms = started_at.elapsed().as_millis() as u64,
+                "claude title generator failed to launch: {error}"
+            );
             return Ok(None);
         }
         Err(_) => {
-            tracing::debug!("claude title generator timed out");
+            tracing::info!(
+                elapsed_ms = started_at.elapsed().as_millis() as u64,
+                timeout_ms = TITLE_GENERATION_TIMEOUT.as_millis() as u64,
+                "claude title generator timed out"
+            );
             return Ok(None);
         }
     };
 
     if !output.status.success() {
-        tracing::debug!(
+        tracing::info!(
+            elapsed_ms = started_at.elapsed().as_millis() as u64,
             "claude title generator exited with status {}",
             output.status
         );
         return Ok(None);
     }
 
-    Ok(parse_title_json(&String::from_utf8_lossy(&output.stdout)))
+    let title = parse_title_json(&String::from_utf8_lossy(&output.stdout));
+    tracing::info!(
+        elapsed_ms = started_at.elapsed().as_millis() as u64,
+        has_title = title.is_some(),
+        "claude title generator completed"
+    );
+    Ok(title)
 }
 
 async fn run_codex_title_generator(prompt: &str) -> Result<Option<String>, LifecycleError> {
+    let started_at = Instant::now();
     let schema_path = temp_file_path("lifecycle-title-schema", "json");
     let output_path = temp_file_path("lifecycle-title-output", "json");
     let schema_path_string = schema_path.to_string_lossy().to_string();
@@ -412,16 +347,27 @@ async fn run_codex_title_generator(prompt: &str) -> Result<Option<String>, Lifec
         Ok(Ok(output)) => output,
         Ok(Err(error)) if error.kind() == std::io::ErrorKind::NotFound => {
             let _ = std::fs::remove_file(&schema_path);
+            tracing::info!(
+                elapsed_ms = started_at.elapsed().as_millis() as u64,
+                "codex title generator unavailable; falling back"
+            );
             return Ok(None);
         }
         Ok(Err(error)) => {
             let _ = std::fs::remove_file(&schema_path);
-            tracing::debug!("codex title generator failed to launch: {error}");
+            tracing::info!(
+                elapsed_ms = started_at.elapsed().as_millis() as u64,
+                "codex title generator failed to launch: {error}"
+            );
             return Ok(None);
         }
         Err(_) => {
             let _ = std::fs::remove_file(&schema_path);
-            tracing::debug!("codex title generator timed out");
+            tracing::info!(
+                elapsed_ms = started_at.elapsed().as_millis() as u64,
+                timeout_ms = TITLE_GENERATION_TIMEOUT.as_millis() as u64,
+                "codex title generator timed out"
+            );
             return Ok(None);
         }
     };
@@ -430,7 +376,8 @@ async fn run_codex_title_generator(prompt: &str) -> Result<Option<String>, Lifec
 
     if !command_output.status.success() {
         let _ = std::fs::remove_file(&output_path);
-        tracing::debug!(
+        tracing::info!(
+            elapsed_ms = started_at.elapsed().as_millis() as u64,
             "codex title generator exited with status {}",
             command_output.status
         );
@@ -443,7 +390,13 @@ async fn run_codex_title_generator(prompt: &str) -> Result<Option<String>, Lifec
     };
     let _ = std::fs::remove_file(&output_path);
 
-    Ok(parse_title_json(&output))
+    let title = parse_title_json(&output);
+    tracing::info!(
+        elapsed_ms = started_at.elapsed().as_millis() as u64,
+        has_title = title.is_some(),
+        "codex title generator completed"
+    );
+    Ok(title)
 }
 
 fn parse_title_json(output: &str) -> Option<String> {
@@ -466,35 +419,29 @@ fn sanitize_generated_title(value: &str) -> String {
 }
 
 fn fallback_title(prompt: &str) -> String {
-    const STOP_WORDS: &[&str] = &[
-        "a", "an", "and", "for", "from", "in", "into", "of", "on", "or", "the", "to", "with",
-    ];
-
-    let words = prompt
-        .split(|ch: char| !ch.is_ascii_alphanumeric())
-        .filter_map(|word| {
-            let normalized = word.trim().to_ascii_lowercase();
-            if normalized.is_empty() || STOP_WORDS.contains(&normalized.as_str()) {
-                return None;
-            }
-            Some(capitalize(&normalized))
-        })
-        .take(4)
-        .collect::<Vec<_>>();
-
-    if words.is_empty() {
-        "Agent Session".to_string()
-    } else {
-        words.join(" ")
-    }
+    truncate_title(prompt, 48)
 }
 
-fn capitalize(value: &str) -> String {
-    let mut chars = value.chars();
-    match chars.next() {
-        Some(first) => format!("{}{}", first.to_ascii_uppercase(), chars.as_str()),
-        None => String::new(),
+fn prompt_preview(prompt: &str) -> String {
+    truncate_title(prompt, 72)
+}
+
+fn truncate_title(value: &str, limit: usize) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return "Agent Session".to_string();
     }
+
+    let chars = trimmed.chars().collect::<Vec<_>>();
+    if chars.len() <= limit {
+        return trimmed.to_string();
+    }
+
+    let truncated = chars
+        .into_iter()
+        .take(limit.saturating_sub(3))
+        .collect::<String>();
+    format!("{truncated}...")
 }
 
 fn temp_file_path(prefix: &str, extension: &str) -> PathBuf {
@@ -537,11 +484,18 @@ mod tests {
     }
 
     #[test]
-    fn fallback_title_keeps_key_words() {
+    fn fallback_title_uses_truncated_prompt_text() {
+        assert_eq!(fallback_title("what is this"), "what is this");
         assert_eq!(
-            fallback_title("fix the auth callback in settings"),
-            "Fix Auth Callback Settings"
+            fallback_title(&"x".repeat(60)),
+            format!("{}...", "x".repeat(45))
         );
         assert_eq!(fallback_title("   "), "Agent Session");
+    }
+
+    #[test]
+    fn prompt_preview_truncates_long_prompts() {
+        assert_eq!(prompt_preview("short prompt"), "short prompt");
+        assert!(prompt_preview(&"x".repeat(100)).ends_with("..."));
     }
 }

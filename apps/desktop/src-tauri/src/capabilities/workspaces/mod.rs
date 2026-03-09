@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod create;
 pub mod git;
+mod harness;
 pub mod manifest;
 pub mod query;
 pub mod rename;

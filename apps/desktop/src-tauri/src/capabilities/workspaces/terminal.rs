@@ -12,16 +12,16 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use portable_pty::CommandBuilder;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::{hash_map::DefaultHasher, HashSet};
+use std::collections::HashSet;
 use std::fs::{self, File};
-use std::hash::{Hash, Hasher};
-use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, SystemTime};
 use tauri::{ipc::Channel, AppHandle, Manager, State, WebviewWindow};
 
+use super::harness::{self, HarnessAdapter};
 use super::query::TerminalRecord;
 use super::rename::TitleOrigin;
 
@@ -80,7 +80,6 @@ pub struct NativeTerminalTheme {
     pub selection_foreground: String,
 }
 
-const HARNESS_SESSION_CAPTURE_GRACE: Duration = Duration::from_secs(5);
 const HARNESS_SESSION_CAPTURE_POLL_INTERVAL: Duration = Duration::from_millis(500);
 const HARNESS_SESSION_CAPTURE_TIMEOUT: Duration = Duration::from_secs(15);
 const HARNESS_COMPLETION_WATCH_POLL_INTERVAL: Duration = Duration::from_millis(500);
@@ -88,94 +87,12 @@ const HARNESS_COMPLETION_WATCH_POLL_INTERVAL: Duration = Duration::from_millis(5
 static HARNESS_SESSION_CAPTURE_INFLIGHT: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 static HARNESS_COMPLETION_WATCH_INFLIGHT: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
-#[derive(Clone, Copy)]
-struct HarnessProviderConfig {
-    name: &'static str,
-    program: &'static str,
-    new_session_args: &'static [&'static str],
-    resume_args: fn(&str) -> Vec<String>,
-    session_store: Option<SessionStoreConfig>,
-}
-
-#[derive(Debug)]
-struct HarnessSessionCandidate {
-    modified_at: SystemTime,
-    session_id: String,
-}
-
-#[derive(Clone, Copy)]
-struct SessionStoreConfig {
-    root_subdir: &'static str,
-    scope: SessionStoreScope,
-    metadata_line_limit: usize,
-    required_type: Option<(&'static [&'static str], &'static str)>,
-    cwd_path: &'static [&'static str],
-    session_id_path: Option<&'static [&'static str]>,
-    session_id_from_file_stem: bool,
-}
-
-#[derive(Clone, Copy)]
-enum SessionStoreScope {
-    ExactWorkspaceDir {
-        workspace_dir_name: fn(&str) -> String,
-    },
-    Recursive,
-}
-
 fn harness_session_capture_registry() -> &'static Mutex<HashSet<String>> {
     HARNESS_SESSION_CAPTURE_INFLIGHT.get_or_init(|| Mutex::new(HashSet::new()))
 }
 
 fn harness_completion_watch_registry() -> &'static Mutex<HashSet<String>> {
     HARNESS_COMPLETION_WATCH_INFLIGHT.get_or_init(|| Mutex::new(HashSet::new()))
-}
-
-fn claude_resume_args(session_id: &str) -> Vec<String> {
-    vec!["--resume".to_string(), session_id.to_string()]
-}
-
-fn codex_resume_args(session_id: &str) -> Vec<String> {
-    vec!["resume".to_string(), session_id.to_string()]
-}
-
-// Keep harness-specific launch and session-store details behind one boundary so
-// adding a new provider does not leak provider conditionals across the terminal lifecycle.
-fn resolve_harness_provider(provider: Option<&str>) -> Option<HarnessProviderConfig> {
-    match provider {
-        Some("claude") => Some(HarnessProviderConfig {
-            name: "claude",
-            program: "claude",
-            new_session_args: &[],
-            resume_args: claude_resume_args,
-            session_store: Some(SessionStoreConfig {
-                root_subdir: ".claude/projects",
-                scope: SessionStoreScope::ExactWorkspaceDir {
-                    workspace_dir_name: claude_project_directory_name,
-                },
-                metadata_line_limit: 10,
-                required_type: None,
-                cwd_path: &["cwd"],
-                session_id_path: Some(&["sessionId"]),
-                session_id_from_file_stem: true,
-            }),
-        }),
-        Some("codex") => Some(HarnessProviderConfig {
-            name: "codex",
-            program: "codex",
-            new_session_args: &[],
-            resume_args: codex_resume_args,
-            session_store: Some(SessionStoreConfig {
-                root_subdir: ".codex/sessions",
-                scope: SessionStoreScope::Recursive,
-                metadata_line_limit: 1,
-                required_type: Some((&["type"], "session_meta")),
-                cwd_path: &["payload", "cwd"],
-                session_id_path: Some(&["payload", "id"]),
-                session_id_from_file_stem: false,
-            }),
-        }),
-        _ => None,
-    }
 }
 
 pub async fn create_terminal(
@@ -549,7 +466,8 @@ fn maybe_schedule_harness_observers(
     worktree_path: &str,
     launched_after: SystemTime,
 ) {
-    let Some(provider) = resolve_harness_provider(terminal.harness_provider.as_deref()) else {
+    let Some(provider) = harness::resolve_harness_adapter(terminal.harness_provider.as_deref())
+    else {
         return;
     };
 
@@ -563,6 +481,7 @@ fn maybe_schedule_harness_observers(
             provider,
             session_id,
             worktree_path,
+            launched_after,
         );
         return;
     }
@@ -611,6 +530,7 @@ fn maybe_schedule_harness_observers(
                 provider,
                 &session_id,
                 &worktree_path,
+                launched_after,
             );
         }
 
@@ -625,11 +545,12 @@ fn maybe_schedule_harness_completion_watch(
     terminal_id: &str,
     workspace_id: &str,
     harness_provider: Option<&str>,
-    provider: HarnessProviderConfig,
+    provider: HarnessAdapter,
     session_id: &str,
     worktree_path: &str,
+    launched_after: SystemTime,
 ) {
-    if provider.session_store.is_none() {
+    if !provider.supports_session_observer() {
         return;
     }
 
@@ -659,17 +580,12 @@ fn maybe_schedule_harness_completion_watch(
             &harness_session_id,
             provider,
             &worktree_path,
+            launched_after,
         );
 
         let mut inflight = harness_completion_watch_registry().lock().unwrap();
         inflight.remove(&terminal_id);
     });
-}
-
-#[derive(Debug, Clone)]
-struct HarnessTurnCompletion {
-    completion_key: String,
-    turn_id: Option<String>,
 }
 
 fn watch_harness_turn_completions(
@@ -679,10 +595,12 @@ fn watch_harness_turn_completions(
     workspace_id: &str,
     harness_provider: Option<&str>,
     harness_session_id: &str,
-    provider: HarnessProviderConfig,
+    provider: HarnessAdapter,
     worktree_path: &str,
+    launched_after: SystemTime,
 ) {
     let mut session_log_path: Option<PathBuf> = None;
+    let mut emitted_prompt_keys = HashSet::new();
     let mut emitted_completion_keys = HashSet::new();
     let mut log_offset = 0_u64;
     let mut pending_line_fragment = String::new();
@@ -707,17 +625,18 @@ fn watch_harness_turn_completions(
         }
 
         if session_log_path.is_none() {
-            session_log_path =
-                resolve_harness_session_log_path(provider, worktree_path, harness_session_id);
-            if let Some(path) = session_log_path.as_ref() {
-                if let Ok(metadata) = fs::metadata(path) {
-                    log_offset = metadata.len();
-                    pending_line_fragment.clear();
-                }
-            } else {
+            session_log_path = harness::resolve_harness_session_log_path(
+                provider,
+                worktree_path,
+                harness_session_id,
+            );
+            if session_log_path.is_none() {
                 thread::sleep(HARNESS_COMPLETION_WATCH_POLL_INTERVAL);
                 continue;
             }
+
+            log_offset = 0;
+            pending_line_fragment.clear();
         }
 
         let Some(path) = session_log_path.as_ref() else {
@@ -728,7 +647,44 @@ fn watch_harness_turn_completions(
         match read_new_harness_log_lines(path, &mut log_offset, &mut pending_line_fragment) {
             Ok(lines) => {
                 for line in lines {
-                    let Some(completion) = parse_harness_turn_completion(provider, &line) else {
+                    let Ok(value) = serde_json::from_str::<Value>(&line) else {
+                        continue;
+                    };
+                    if !harness::line_is_within_launched_session(&value, launched_after) {
+                        continue;
+                    }
+
+                    if let Some(prompt) = provider.parse_prompt_submission(&value, &line) {
+                        if emitted_prompt_keys.insert(prompt.prompt_key.clone()) {
+                            tracing::info!(
+                                terminal_id,
+                                workspace_id,
+                                harness_provider = harness_provider.unwrap_or(provider.name),
+                                harness_session_id,
+                                prompt_key = %prompt.prompt_key,
+                                turn_id = ?prompt.turn_id,
+                                "harness prompt submitted; scheduling auto title"
+                            );
+                            emit_harness_prompt_submitted(
+                                app,
+                                terminal_id,
+                                workspace_id,
+                                harness_provider,
+                                harness_session_id,
+                                &prompt.prompt_text,
+                                prompt.turn_id.as_deref(),
+                            );
+                            super::title::maybe_schedule_terminal_auto_title_from_prompt(
+                                app,
+                                db_path,
+                                terminal_id,
+                                workspace_id,
+                                &prompt.prompt_text,
+                            );
+                        }
+                    }
+
+                    let Some(completion) = provider.parse_turn_completion(&value, &line) else {
                         continue;
                     };
                     if !emitted_completion_keys.insert(completion.completion_key.clone()) {
@@ -743,14 +699,6 @@ fn watch_harness_turn_completions(
                         harness_session_id,
                         &completion.completion_key,
                         completion.turn_id.as_deref(),
-                    );
-                    super::title::maybe_schedule_terminal_auto_title_from_harness_completion(
-                        app,
-                        db_path,
-                        terminal_id,
-                        workspace_id,
-                        provider.name,
-                        path,
                     );
                 }
             }
@@ -767,67 +715,6 @@ fn watch_harness_turn_completions(
 
         thread::sleep(HARNESS_COMPLETION_WATCH_POLL_INTERVAL);
     }
-}
-
-fn resolve_harness_session_log_path(
-    provider: HarnessProviderConfig,
-    worktree_path: &str,
-    session_id: &str,
-) -> Option<PathBuf> {
-    let store = provider.session_store?;
-    let root = harness_home_subdir(store.root_subdir)?;
-
-    match store.scope {
-        SessionStoreScope::ExactWorkspaceDir { workspace_dir_name } => {
-            let path = root
-                .join(workspace_dir_name(worktree_path))
-                .join(format!("{session_id}.jsonl"));
-            path.exists().then_some(path)
-        }
-        SessionStoreScope::Recursive => {
-            resolve_harness_session_log_path_from_tree(&root, &store, worktree_path, session_id)
-        }
-    }
-}
-
-fn resolve_harness_session_log_path_from_tree(
-    root: &Path,
-    store: &SessionStoreConfig,
-    worktree_path: &str,
-    session_id: &str,
-) -> Option<PathBuf> {
-    let mut pending = vec![root.to_path_buf()];
-
-    while let Some(dir) = pending.pop() {
-        let Ok(entries) = fs::read_dir(&dir) else {
-            continue;
-        };
-
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let Ok(file_type) = entry.file_type() else {
-                continue;
-            };
-
-            if file_type.is_dir() {
-                pending.push(path);
-                continue;
-            }
-
-            if path.extension().and_then(|extension| extension.to_str()) != Some("jsonl") {
-                continue;
-            }
-
-            let Some((cwd, candidate_session_id)) = read_session_metadata(&path, store) else {
-                continue;
-            };
-            if cwd == worktree_path && candidate_session_id == session_id {
-                return Some(path);
-            }
-        }
-    }
-
-    None
 }
 
 fn read_new_harness_log_lines(
@@ -870,76 +757,11 @@ fn read_new_harness_log_lines(
     Ok(lines)
 }
 
-fn parse_harness_turn_completion(
-    provider: HarnessProviderConfig,
-    line: &str,
-) -> Option<HarnessTurnCompletion> {
-    let value = serde_json::from_str::<Value>(line).ok()?;
-
-    match provider.name {
-        "claude" => {
-            if json_string_at_path(&value, &["type"]) != Some("assistant") {
-                return None;
-            }
-            if json_string_at_path(&value, &["message", "stop_reason"]) != Some("end_turn") {
-                return None;
-            }
-
-            let turn_id = json_string_at_path(&value, &["message", "id"])
-                .or_else(|| json_string_at_path(&value, &["uuid"]));
-
-            Some(HarnessTurnCompletion {
-                completion_key: build_harness_completion_key(provider.name, line, &[turn_id]),
-                turn_id: turn_id.map(ToString::to_string),
-            })
-        }
-        "codex" => {
-            if json_string_at_path(&value, &["type"]) != Some("event_msg") {
-                return None;
-            }
-            if json_string_at_path(&value, &["payload", "type"]) != Some("task_complete") {
-                return None;
-            }
-
-            let turn_id = json_string_at_path(&value, &["payload", "turn_id"]);
-            let last_agent_message_id =
-                json_string_at_path(&value, &["payload", "last_agent_message", "id"]).or_else(
-                    || json_string_at_path(&value, &["payload", "last_agent_message", "uuid"]),
-                );
-
-            Some(HarnessTurnCompletion {
-                completion_key: build_harness_completion_key(
-                    provider.name,
-                    line,
-                    &[turn_id, last_agent_message_id],
-                ),
-                turn_id: turn_id.map(ToString::to_string),
-            })
-        }
-        _ => None,
-    }
-}
-
-fn build_harness_completion_key(
-    provider_name: &str,
-    line: &str,
-    identifiers: &[Option<&str>],
-) -> String {
-    if let Some(identifier) = identifiers.iter().flatten().find(|value| !value.is_empty()) {
-        return format!("{provider_name}:{identifier}");
-    }
-
-    let mut hasher = DefaultHasher::new();
-    provider_name.hash(&mut hasher);
-    line.hash(&mut hasher);
-    format!("{provider_name}:hash:{:016x}", hasher.finish())
-}
-
 fn wait_for_harness_session_id(
     db_path: &str,
     terminal_id: &str,
     workspace_id: &str,
-    provider: HarnessProviderConfig,
+    provider: HarnessAdapter,
     worktree_path: &str,
     launched_after: SystemTime,
 ) -> Option<String> {
@@ -970,7 +792,7 @@ fn wait_for_harness_session_id(
             load_claimed_harness_session_ids(db_path, workspace_id, provider.name, terminal_id)
                 .unwrap_or_default();
 
-        if let Some(session_id) = discover_harness_session_id(
+        if let Some(session_id) = harness::discover_harness_session_id(
             provider,
             worktree_path,
             launched_after,
@@ -981,211 +803,6 @@ fn wait_for_harness_session_id(
 
         thread::sleep(HARNESS_SESSION_CAPTURE_POLL_INTERVAL);
     }
-}
-
-fn discover_harness_session_id(
-    provider: HarnessProviderConfig,
-    worktree_path: &str,
-    launched_after: SystemTime,
-    claimed_session_ids: &HashSet<String>,
-) -> Option<String> {
-    let modified_after = launched_after
-        .checked_sub(HARNESS_SESSION_CAPTURE_GRACE)
-        .unwrap_or(SystemTime::UNIX_EPOCH);
-
-    let store = provider.session_store?;
-    discover_session_id_from_store(&store, worktree_path, modified_after, claimed_session_ids)
-}
-
-fn harness_home_subdir(subdir: &str) -> Option<PathBuf> {
-    std::env::var_os("HOME").map(|home| PathBuf::from(home).join(subdir))
-}
-
-fn claude_project_directory_name(worktree_path: &str) -> String {
-    worktree_path
-        .chars()
-        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '-' })
-        .collect()
-}
-
-fn discover_session_id_from_store(
-    store: &SessionStoreConfig,
-    worktree_path: &str,
-    modified_after: SystemTime,
-    claimed_session_ids: &HashSet<String>,
-) -> Option<String> {
-    let root = harness_home_subdir(store.root_subdir)?;
-    match store.scope {
-        SessionStoreScope::ExactWorkspaceDir { workspace_dir_name } => {
-            discover_session_id_from_directory(
-                &root.join(workspace_dir_name(worktree_path)),
-                store,
-                worktree_path,
-                modified_after,
-                claimed_session_ids,
-            )
-        }
-        SessionStoreScope::Recursive => discover_session_id_from_tree(
-            &root,
-            store,
-            worktree_path,
-            modified_after,
-            claimed_session_ids,
-        ),
-    }
-}
-
-fn discover_session_id_from_directory(
-    dir: &Path,
-    store: &SessionStoreConfig,
-    worktree_path: &str,
-    modified_after: SystemTime,
-    claimed_session_ids: &HashSet<String>,
-) -> Option<String> {
-    let entries = fs::read_dir(dir).ok()?;
-    let mut candidates = Vec::new();
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|extension| extension.to_str()) != Some("jsonl") {
-            continue;
-        }
-
-        let Some(modified_at) = entry
-            .metadata()
-            .ok()
-            .and_then(|metadata| metadata.modified().ok())
-        else {
-            continue;
-        };
-        if modified_at < modified_after {
-            continue;
-        }
-
-        let Some((cwd, session_id)) = read_session_metadata(&path, store) else {
-            continue;
-        };
-        if cwd != worktree_path || claimed_session_ids.contains(&session_id) {
-            continue;
-        }
-
-        candidates.push(HarnessSessionCandidate {
-            modified_at,
-            session_id,
-        });
-    }
-
-    candidates.sort_by(|left, right| right.modified_at.cmp(&left.modified_at));
-    candidates
-        .into_iter()
-        .next()
-        .map(|candidate| candidate.session_id)
-}
-
-fn discover_session_id_from_tree(
-    root: &Path,
-    store: &SessionStoreConfig,
-    worktree_path: &str,
-    modified_after: SystemTime,
-    claimed_session_ids: &HashSet<String>,
-) -> Option<String> {
-    let mut pending = vec![root.to_path_buf()];
-    let mut candidates = Vec::new();
-
-    while let Some(dir) = pending.pop() {
-        let Ok(entries) = fs::read_dir(&dir) else {
-            continue;
-        };
-
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let Ok(file_type) = entry.file_type() else {
-                continue;
-            };
-            if file_type.is_dir() {
-                pending.push(path);
-                continue;
-            }
-            if path.extension().and_then(|extension| extension.to_str()) != Some("jsonl") {
-                continue;
-            }
-
-            let Some(modified_at) = entry
-                .metadata()
-                .ok()
-                .and_then(|metadata| metadata.modified().ok())
-            else {
-                continue;
-            };
-            if modified_at < modified_after {
-                continue;
-            }
-
-            let Some((cwd, session_id)) = read_session_metadata(&path, store) else {
-                continue;
-            };
-            if cwd != worktree_path || claimed_session_ids.contains(&session_id) {
-                continue;
-            }
-
-            candidates.push(HarnessSessionCandidate {
-                modified_at,
-                session_id,
-            });
-        }
-    }
-
-    candidates.sort_by(|left, right| right.modified_at.cmp(&left.modified_at));
-    candidates
-        .into_iter()
-        .next()
-        .map(|candidate| candidate.session_id)
-}
-
-fn read_session_metadata(path: &Path, store: &SessionStoreConfig) -> Option<(String, String)> {
-    let file = File::open(path).ok()?;
-    for line in BufReader::new(file).lines().take(store.metadata_line_limit) {
-        let Ok(line) = line else {
-            continue;
-        };
-        let Ok(value) = serde_json::from_str::<Value>(&line) else {
-            continue;
-        };
-        if let Some((type_path, expected_type)) = store.required_type {
-            if json_string_at_path(&value, type_path) != Some(expected_type) {
-                continue;
-            }
-        }
-
-        let Some(cwd) = json_string_at_path(&value, store.cwd_path) else {
-            continue;
-        };
-        let Some(session_id) = store
-            .session_id_path
-            .and_then(|path| json_string_at_path(&value, path))
-            .or_else(|| {
-                if store.session_id_from_file_stem {
-                    path.file_stem().and_then(|stem| stem.to_str())
-                } else {
-                    None
-                }
-            })
-        else {
-            continue;
-        };
-
-        return Some((cwd.to_string(), session_id.to_string()));
-    }
-
-    None
-}
-
-fn json_string_at_path<'a>(value: &'a Value, path: &[&str]) -> Option<&'a str> {
-    let mut current = value;
-    for key in path {
-        current = current.get(*key)?;
-    }
-    current.as_str()
 }
 
 pub async fn hide_native_terminal_surface(
@@ -1412,7 +1029,7 @@ fn resolve_terminal_launch(
             "harness terminals require a harness provider".to_string(),
         )),
         (TerminalType::Harness, Some(provider), harness_session_id) => {
-            let provider = resolve_harness_provider(Some(provider)).ok_or_else(|| {
+            let provider = harness::resolve_harness_adapter(Some(provider)).ok_or_else(|| {
                 LifecycleError::LocalPtySpawnFailed(format!(
                     "unsupported harness provider: {provider}"
                 ))
@@ -1457,6 +1074,28 @@ pub(super) fn emit_terminal_status(app: &AppHandle, terminal: &TerminalRecord) {
             failure_reason: terminal.failure_reason.clone(),
             exit_code: terminal.exit_code,
             ended_at: terminal.ended_at.clone(),
+        },
+    );
+}
+
+fn emit_harness_prompt_submitted(
+    app: &AppHandle,
+    terminal_id: &str,
+    workspace_id: &str,
+    harness_provider: Option<&str>,
+    harness_session_id: &str,
+    prompt_text: &str,
+    turn_id: Option<&str>,
+) {
+    publish_lifecycle_event(
+        app,
+        LifecycleEvent::TerminalHarnessPromptSubmitted {
+            terminal_id: terminal_id.to_string(),
+            workspace_id: workspace_id.to_string(),
+            prompt_text: prompt_text.to_string(),
+            harness_provider: harness_provider.map(str::to_string),
+            harness_session_id: Some(harness_session_id.to_string()),
+            turn_id: turn_id.map(str::to_string),
         },
     );
 }
@@ -1531,20 +1170,6 @@ pub(crate) fn complete_native_terminal_exit(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::UNIX_EPOCH;
-
-    fn create_test_temp_dir(name: &str) -> PathBuf {
-        let path = std::env::temp_dir().join(format!(
-            "lifecycle-terminal-{name}-{}",
-            uuid::Uuid::new_v4()
-        ));
-        fs::create_dir_all(&path).expect("create temp dir");
-        path
-    }
-
-    fn write_test_file(path: &Path, contents: &str) {
-        fs::write(path, contents).expect("write test file");
-    }
 
     #[test]
     fn resolve_terminal_launch_rejects_unsupported_harness() {
@@ -1660,132 +1285,6 @@ mod tests {
 
         assert!(file_name.starts_with("clipboard-image-"));
         assert!(file_name.ends_with(".webp"));
-    }
-
-    #[test]
-    fn claude_project_directory_name_matches_cli_workspace_encoding() {
-        assert_eq!(
-            claude_project_directory_name(
-                "/Users/kyle/.lifecycle/worktrees/frost-harbor--57f59253"
-            ),
-            "-Users-kyle--lifecycle-worktrees-frost-harbor--57f59253"
-        );
-    }
-
-    #[test]
-    fn discovers_claude_session_ids_for_the_matching_workspace() {
-        let project_dir = create_test_temp_dir("claude-session");
-        let matching_path = project_dir.join("session-a.jsonl");
-        let ignored_path = project_dir.join("session-b.jsonl");
-        let store = resolve_harness_provider(Some("claude"))
-            .and_then(|provider| provider.session_store)
-            .expect("claude session store");
-        write_test_file(
-            &matching_path,
-            concat!(
-                "{\"type\":\"file-history-snapshot\"}\n",
-                "{\"cwd\":\"/tmp/worktree-a\",\"sessionId\":\"session-a\"}\n"
-            ),
-        );
-        write_test_file(
-            &ignored_path,
-            "{\"cwd\":\"/tmp/worktree-b\",\"sessionId\":\"session-b\"}\n",
-        );
-
-        let discovered = discover_session_id_from_directory(
-            &project_dir,
-            &store,
-            "/tmp/worktree-a",
-            UNIX_EPOCH,
-            &HashSet::new(),
-        );
-
-        assert_eq!(discovered.as_deref(), Some("session-a"));
-    }
-
-    #[test]
-    fn discovers_codex_session_ids_for_the_matching_workspace() {
-        let root = create_test_temp_dir("codex-session");
-        let session_dir = root.join("2026/03/07");
-        let store = resolve_harness_provider(Some("codex"))
-            .and_then(|provider| provider.session_store)
-            .expect("codex session store");
-        fs::create_dir_all(&session_dir).expect("create nested codex dir");
-        let matching_path = session_dir.join("rollout-a.jsonl");
-        let ignored_path = session_dir.join("rollout-b.jsonl");
-        write_test_file(
-            &matching_path,
-            concat!(
-                "{\"type\":\"session_meta\",\"payload\":{\"id\":\"session-a\",\"cwd\":\"/tmp/worktree-a\"}}\n",
-                "{\"type\":\"event_msg\"}\n"
-            ),
-        );
-        write_test_file(
-            &ignored_path,
-            "{\"type\":\"session_meta\",\"payload\":{\"id\":\"session-b\",\"cwd\":\"/tmp/worktree-b\"}}\n",
-        );
-
-        let discovered = discover_session_id_from_tree(
-            &root,
-            &store,
-            "/tmp/worktree-a",
-            UNIX_EPOCH,
-            &HashSet::new(),
-        );
-
-        assert_eq!(discovered.as_deref(), Some("session-a"));
-    }
-
-    #[test]
-    fn skips_harness_session_ids_already_claimed_by_another_terminal() {
-        let project_dir = create_test_temp_dir("claimed-session");
-        let matching_path = project_dir.join("session-a.jsonl");
-        let store = resolve_harness_provider(Some("claude"))
-            .and_then(|provider| provider.session_store)
-            .expect("claude session store");
-        write_test_file(
-            &matching_path,
-            "{\"cwd\":\"/tmp/worktree-a\",\"sessionId\":\"session-a\"}\n",
-        );
-        let claimed = HashSet::from([String::from("session-a")]);
-
-        let discovered = discover_session_id_from_directory(
-            &project_dir,
-            &store,
-            "/tmp/worktree-a",
-            UNIX_EPOCH,
-            &claimed,
-        );
-
-        assert_eq!(discovered, None);
-    }
-
-    #[test]
-    fn parses_codex_task_complete_lines_as_turn_completions() {
-        let provider = resolve_harness_provider(Some("codex")).expect("codex provider");
-
-        let completion = parse_harness_turn_completion(
-            provider,
-            "{\"type\":\"event_msg\",\"payload\":{\"type\":\"task_complete\",\"turn_id\":\"turn-123\"}}",
-        )
-        .expect("codex task complete");
-
-        assert_eq!(completion.completion_key, "codex:turn-123");
-        assert_eq!(completion.turn_id.as_deref(), Some("turn-123"));
-    }
-
-    #[test]
-    fn parses_claude_end_turn_lines_as_turn_completions() {
-        let provider = resolve_harness_provider(Some("claude")).expect("claude provider");
-
-        let completion = parse_harness_turn_completion(
-            provider,
-            "{\"type\":\"assistant\",\"uuid\":\"assistant-uuid\",\"message\":{\"id\":\"msg_123\",\"stop_reason\":\"end_turn\"}}",
-        )
-        .expect("claude end_turn");
-
-        assert_eq!(completion.completion_key, "claude:msg_123");
-        assert_eq!(completion.turn_id.as_deref(), Some("msg_123"));
     }
 
     #[test]

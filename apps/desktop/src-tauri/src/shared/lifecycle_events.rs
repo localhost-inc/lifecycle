@@ -63,6 +63,15 @@ pub enum LifecycleEvent {
         workspace_id: String,
         label: String,
     },
+    #[serde(rename = "terminal.harness_prompt_submitted")]
+    TerminalHarnessPromptSubmitted {
+        terminal_id: String,
+        workspace_id: String,
+        prompt_text: String,
+        harness_provider: Option<String>,
+        harness_session_id: Option<String>,
+        turn_id: Option<String>,
+    },
     #[serde(rename = "terminal.harness_turn_completed")]
     TerminalHarnessTurnCompleted {
         terminal_id: String,

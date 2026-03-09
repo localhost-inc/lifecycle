@@ -79,6 +79,17 @@ export type LifecycleEvent =
   | {
       id: string;
       occurred_at: string;
+      type: "terminal.harness_prompt_submitted";
+      terminal_id: string;
+      workspace_id: string;
+      prompt_text: string;
+      harness_provider: string | null;
+      harness_session_id: string | null;
+      turn_id: string | null;
+    }
+  | {
+      id: string;
+      occurred_at: string;
       type: "terminal.harness_turn_completed";
       terminal_id: string;
       workspace_id: string;

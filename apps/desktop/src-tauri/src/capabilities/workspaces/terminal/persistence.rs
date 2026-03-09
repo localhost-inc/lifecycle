@@ -5,6 +5,7 @@ use crate::shared::errors::{
 use rusqlite::params;
 use std::collections::HashSet;
 
+use super::super::harness::default_harness_terminal_label;
 use super::super::query::TerminalRecord;
 use super::super::rename::TitleOrigin;
 
@@ -28,9 +29,7 @@ pub(crate) fn next_terminal_label(
     let sequence = count + 1;
 
     let label = match (launch_type, harness_provider) {
-        (TerminalType::Harness, Some("claude")) => format!("Claude · Session {sequence}"),
-        (TerminalType::Harness, Some("codex")) => format!("Codex · Session {sequence}"),
-        (TerminalType::Harness, Some(_)) => format!("Harness · Session {sequence}"),
+        (TerminalType::Harness, _) => default_harness_terminal_label(harness_provider, sequence),
         _ => format!("Terminal {sequence}"),
     };
 
