@@ -6,10 +6,10 @@ import { useNavigate } from "react-router-dom";
 import { useHistoryAvailability } from "../../app/history-stack";
 import { TypedTitle } from "../typed-title";
 import { WorkspaceBadge } from "../../features/workspaces/components/workspace-badge";
-import type { WorkspaceRow } from "../../features/workspaces/api";
+import type { WorkspaceRecord } from "@lifecycle/contracts";
 
 interface TitleBarProps {
-  selectedWorkspace?: WorkspaceRow | null;
+  selectedWorkspace?: WorkspaceRecord | null;
 }
 
 function shouldSkipDrag(target: EventTarget | null): boolean {

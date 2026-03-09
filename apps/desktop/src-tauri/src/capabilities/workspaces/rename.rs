@@ -1,11 +1,11 @@
 use crate::platform::{db::open_db, git::worktree};
 use crate::shared::errors::LifecycleError;
+use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
 use rusqlite::params;
-use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
-use super::query::{self, TerminalRow, WorkspaceRow};
-use super::terminal::load_terminal_row;
+use super::query::{self, TerminalRecord, WorkspaceRecord};
+use super::terminal::load_terminal_record;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TitleOrigin {
@@ -22,20 +22,6 @@ impl TitleOrigin {
             Self::Manual => "manual",
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct WorkspaceRenamedEvent {
-    workspace_id: String,
-    name: String,
-    worktree_path: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct TerminalRenamedEvent {
-    terminal_id: String,
-    workspace_id: String,
-    label: String,
 }
 
 #[derive(Debug)]
@@ -57,7 +43,7 @@ pub async fn rename_workspace(
     db_path: &str,
     workspace_id: &str,
     name: &str,
-) -> Result<WorkspaceRow, LifecycleError> {
+) -> Result<WorkspaceRecord, LifecycleError> {
     update_workspace_name(app, db_path, workspace_id, name, TitleOrigin::Manual).await
 }
 
@@ -66,7 +52,7 @@ pub fn rename_terminal(
     db_path: &str,
     terminal_id: &str,
     label: &str,
-) -> Result<TerminalRow, LifecycleError> {
+) -> Result<TerminalRecord, LifecycleError> {
     update_terminal_label(app, db_path, terminal_id, label, TitleOrigin::Manual)
 }
 
@@ -75,7 +61,7 @@ pub async fn maybe_apply_generated_workspace_name(
     db_path: &str,
     workspace_id: &str,
     name: &str,
-) -> Result<Option<WorkspaceRow>, LifecycleError> {
+) -> Result<Option<WorkspaceRecord>, LifecycleError> {
     let context = load_workspace_rename_context(db_path, workspace_id)?;
     if context.name_origin == TitleOrigin::Manual.as_str() {
         return Ok(None);
@@ -92,7 +78,7 @@ pub fn maybe_apply_generated_terminal_label(
     db_path: &str,
     terminal_id: &str,
     label: &str,
-) -> Result<Option<TerminalRow>, LifecycleError> {
+) -> Result<Option<TerminalRecord>, LifecycleError> {
     let context = load_terminal_rename_context(db_path, terminal_id)?;
     if context.label_origin == TitleOrigin::Manual.as_str() {
         return Ok(None);
@@ -108,7 +94,7 @@ async fn update_workspace_name(
     workspace_id: &str,
     name: &str,
     origin: TitleOrigin,
-) -> Result<WorkspaceRow, LifecycleError> {
+) -> Result<WorkspaceRecord, LifecycleError> {
     let next_name = normalize_title_input("workspace name", name)?;
     let context = load_workspace_rename_context(db_path, workspace_id)?;
 
@@ -159,12 +145,12 @@ fn update_terminal_label(
     terminal_id: &str,
     label: &str,
     origin: TitleOrigin,
-) -> Result<TerminalRow, LifecycleError> {
+) -> Result<TerminalRecord, LifecycleError> {
     let next_label = normalize_title_input("session title", label)?;
     let context = load_terminal_rename_context(db_path, terminal_id)?;
 
     if context.current_label == next_label && context.label_origin == origin.as_str() {
-        return load_terminal_row(db_path, terminal_id)?
+        return load_terminal_record(db_path, terminal_id)?
             .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()));
     }
 
@@ -178,7 +164,7 @@ fn update_terminal_label(
     )
     .map_err(|error| LifecycleError::Database(error.to_string()))?;
 
-    let terminal = load_terminal_row(db_path, terminal_id)?
+    let terminal = load_terminal_record(db_path, terminal_id)?
         .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()))?;
     emit_terminal_renamed(app, &terminal);
     Ok(terminal)
@@ -259,10 +245,10 @@ fn normalize_title_input(field: &str, value: &str) -> Result<String, LifecycleEr
     Ok(normalized.chars().take(64).collect())
 }
 
-fn emit_workspace_renamed(app: &AppHandle, workspace: &WorkspaceRow) {
-    let _ = app.emit(
-        "workspace:renamed",
-        WorkspaceRenamedEvent {
+fn emit_workspace_renamed(app: &AppHandle, workspace: &WorkspaceRecord) {
+    publish_lifecycle_event(
+        app,
+        LifecycleEvent::WorkspaceRenamed {
             workspace_id: workspace.id.clone(),
             name: workspace.name.clone(),
             worktree_path: workspace.worktree_path.clone(),
@@ -270,10 +256,10 @@ fn emit_workspace_renamed(app: &AppHandle, workspace: &WorkspaceRow) {
     );
 }
 
-fn emit_terminal_renamed(app: &AppHandle, terminal: &TerminalRow) {
-    let _ = app.emit(
-        "terminal:renamed",
-        TerminalRenamedEvent {
+fn emit_terminal_renamed(app: &AppHandle, terminal: &TerminalRecord) {
+    publish_lifecycle_event(
+        app,
+        LifecycleEvent::TerminalRenamed {
             terminal_id: terminal.id.clone(),
             workspace_id: terminal.workspace_id.clone(),
             label: terminal.label.clone(),

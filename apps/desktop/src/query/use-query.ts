@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type { QueryDescriptor } from "./client";
-import { useStoreClient } from "./provider";
+import { useQueryClient } from "./provider";
 
-export interface StoreQueryResult<T> {
+export interface QueryResult<T> {
   data: T | undefined;
   error: unknown;
   isLoading: boolean;
@@ -10,15 +10,15 @@ export interface StoreQueryResult<T> {
   status: "idle" | "loading" | "ready" | "error";
 }
 
-interface UseStoreQueryOptions<T> {
+interface UseQueryOptions<T> {
   disabledData: T;
 }
 
-export function useStoreQuery<T>(
+export function useQuery<T>(
   descriptor: QueryDescriptor<T> | null,
-  options: UseStoreQueryOptions<T>,
-): StoreQueryResult<T> {
-  const client = useStoreClient();
+  options: UseQueryOptions<T>,
+): QueryResult<T> {
+  const client = useQueryClient();
   const { disabledData } = options;
   const disabledSnapshot = useMemo(
     () => ({

@@ -1,4 +1,4 @@
-import type { GitLogEntry } from "@lifecycle/contracts";
+import type { GitLogEntry, WorkspaceRecord } from "@lifecycle/contracts";
 import {
   Alert,
   AlertDescription,
@@ -15,17 +15,16 @@ import { ServiceIndicator } from "./service-indicator";
 import type { OpenDocumentRequest } from "./workspace-surface-logic";
 import { WorkspaceSidebar } from "./workspace-sidebar";
 import { WorkspaceSurface } from "./workspace-surface";
-import type { WorkspaceRow } from "../api";
 import { startServices, stopWorkspace } from "../api";
 import { useWorkspaceServices, useWorkspaceSetup } from "../hooks";
 
 interface WorkspacePanelProps {
-  workspace: WorkspaceRow;
+  workspace: WorkspaceRecord;
   manifestStatus: ManifestStatus | null;
 }
 
 export function workspaceSupportsTerminalInteraction(
-  workspace: Pick<WorkspaceRow, "status" | "worktree_path">,
+  workspace: Pick<WorkspaceRecord, "status" | "worktree_path">,
 ): boolean {
   return (
     workspace.worktree_path !== null &&

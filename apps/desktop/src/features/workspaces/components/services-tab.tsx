@@ -1,6 +1,6 @@
 import { EmptyState, StatusDot, type StatusDotTone } from "@lifecycle/ui";
 import { FileJson, Layers } from "lucide-react";
-import type { ServiceRow } from "../api";
+import type { ServiceRecord } from "@lifecycle/contracts";
 
 const statusTone: Record<string, StatusDotTone> = {
   stopped: "neutral",
@@ -11,7 +11,7 @@ const statusTone: Record<string, StatusDotTone> = {
 
 interface ServicesTabProps {
   hasManifest: boolean;
-  services: ServiceRow[];
+  services: ServiceRecord[];
 }
 
 export function ServicesTab({ hasManifest, services }: ServicesTabProps) {

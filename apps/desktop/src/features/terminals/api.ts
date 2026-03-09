@@ -1,6 +1,11 @@
 import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { TerminalFailureReason, TerminalStatus, TerminalType } from "@lifecycle/contracts";
+import type { UnlistenFn } from "@tauri-apps/api/event";
+import type {
+  TerminalRecord,
+  TerminalFailureReason,
+  TerminalStatus,
+} from "@lifecycle/contracts";
+import { publishBrowserLifecycleEvent } from "../events/api";
 
 export type HarnessProvider = "claude" | "codex";
 export const DEFAULT_HARNESS_PROVIDER: HarnessProvider = "claude";
@@ -9,56 +14,6 @@ export const DEFAULT_TERMINAL_ROWS = 32;
 
 export function terminalHasLiveSession(status: TerminalStatus): boolean {
   return status !== "failed" && status !== "finished";
-}
-
-export interface TerminalRow {
-  id: string;
-  workspace_id: string;
-  launch_type: TerminalType;
-  harness_provider: string | null;
-  harness_session_id: string | null;
-  created_by: string | null;
-  label: string;
-  status: TerminalStatus;
-  failure_reason: TerminalFailureReason | null;
-  exit_code: number | null;
-  started_at: string;
-  last_active_at: string;
-  ended_at: string | null;
-}
-
-export interface TerminalCreatedEvent {
-  workspace_id: string;
-  terminal: TerminalRow;
-}
-
-export interface TerminalStatusEvent {
-  terminal_id: string;
-  workspace_id: string;
-  status: TerminalStatus;
-  failure_reason: TerminalFailureReason | null;
-  exit_code: number | null;
-  ended_at: string | null;
-}
-
-export interface TerminalRemovedEvent {
-  terminal_id: string;
-  workspace_id: string;
-}
-
-export interface TerminalRenamedEvent {
-  terminal_id: string;
-  workspace_id: string;
-  label: string;
-}
-
-export interface TerminalHarnessTurnCompletedEvent {
-  terminal_id: string;
-  workspace_id: string;
-  harness_provider: string | null;
-  harness_session_id: string | null;
-  completion_key: string;
-  turn_id: string | null;
 }
 
 export interface TerminalStreamChunk {
@@ -85,7 +40,7 @@ export type CreateTerminalInput = CreateTerminalBaseInput & CreateTerminalReques
 
 export interface AttachTerminalResult {
   replayCursor: string | null;
-  terminal: TerminalRow;
+  terminal: TerminalRecord;
 }
 
 export interface SaveTerminalAttachmentInput {
@@ -139,19 +94,11 @@ interface BrowserTerminalState {
   nextSequence: number;
   inputByTerminalId: Record<string, string>;
   replayByTerminalId: Record<string, BrowserReplayChunk[]>;
-  terminals: BrowserTerminalRow[];
+  terminals: BrowserTerminalRecord[];
 }
 
-interface BrowserTerminalRow extends TerminalRow {
+interface BrowserTerminalRecord extends TerminalRecord {
   label_origin?: "default" | "generated" | "manual";
-}
-
-interface BrowserTerminalListeners {
-  created: Set<(event: TerminalCreatedEvent) => void>;
-  harnessTurnCompleted: Set<(event: TerminalHarnessTurnCompletedEvent) => void>;
-  removed: Set<(event: TerminalRemovedEvent) => void>;
-  renamed: Set<(event: TerminalRenamedEvent) => void>;
-  status: Set<(event: TerminalStatusEvent) => void>;
 }
 
 interface BrowserTerminalCommandResult {
@@ -168,17 +115,11 @@ let nativeTerminalCapabilitiesPromise: Promise<NativeTerminalCapabilities> | nul
 
 let browserTerminalState = readBrowserTerminalState();
 
-const browserListeners: BrowserTerminalListeners = {
-  created: new Set(),
-  harnessTurnCompleted: new Set(),
-  removed: new Set(),
-  renamed: new Set(),
-  status: new Set(),
-};
-
 const browserStreamListeners = new Map<string, Set<(chunk: TerminalStreamChunk) => void>>();
 
-function normalizeBrowserTerminalRow(terminal: Partial<BrowserTerminalRow>): BrowserTerminalRow {
+function normalizeBrowserTerminalRecord(
+  terminal: Partial<BrowserTerminalRecord>,
+): BrowserTerminalRecord {
   return {
     created_by: terminal.created_by ?? null,
     ended_at: terminal.ended_at ?? null,
@@ -234,7 +175,7 @@ function readBrowserTerminalState(): BrowserTerminalState {
       nextSequence: typeof parsed.nextSequence === "number" ? parsed.nextSequence : 1,
       replayByTerminalId: normalizedReplay.replayByTerminalId,
       terminals: Array.isArray(parsed.terminals)
-        ? parsed.terminals.map((terminal) => normalizeBrowserTerminalRow(terminal))
+        ? parsed.terminals.map((terminal) => normalizeBrowserTerminalRecord(terminal))
         : [],
     };
   } catch {
@@ -363,28 +304,40 @@ function buildTerminalLabel(input: CreateTerminalRequest, sequence: number): str
   return `Harness · ${resumeLabel}`;
 }
 
-function emitTerminalCreated(event: TerminalCreatedEvent): void {
-  for (const callback of browserListeners.created) {
-    callback(event);
-  }
+function emitTerminalCreated(workspaceId: string, terminal: TerminalRecord): void {
+  publishBrowserLifecycleEvent({
+    type: "terminal.created",
+    workspace_id: workspaceId,
+    terminal,
+  });
 }
 
-function emitTerminalStatus(event: TerminalStatusEvent): void {
-  for (const callback of browserListeners.status) {
-    callback(event);
-  }
+function emitTerminalStatus(
+  terminalId: string,
+  workspaceId: string,
+  status: TerminalStatus,
+  failureReason: TerminalFailureReason | null,
+  exitCode: number | null,
+  endedAt: string | null,
+): void {
+  publishBrowserLifecycleEvent({
+    type: "terminal.status_changed",
+    terminal_id: terminalId,
+    workspace_id: workspaceId,
+    status,
+    failure_reason: failureReason,
+    exit_code: exitCode,
+    ended_at: endedAt,
+  });
 }
 
-function emitTerminalRenamed(event: TerminalRenamedEvent): void {
-  for (const callback of browserListeners.renamed) {
-    callback(event);
-  }
-}
-
-function emitTerminalHarnessTurnCompleted(event: TerminalHarnessTurnCompletedEvent): void {
-  for (const callback of browserListeners.harnessTurnCompleted) {
-    callback(event);
-  }
+function emitTerminalRenamed(terminalId: string, workspaceId: string, label: string): void {
+  publishBrowserLifecycleEvent({
+    type: "terminal.renamed",
+    terminal_id: terminalId,
+    workspace_id: workspaceId,
+    label,
+  });
 }
 
 function emitTerminalChunk(terminalId: string, chunk: TerminalStreamChunk): void {
@@ -400,9 +353,9 @@ function emitTerminalChunk(terminalId: string, chunk: TerminalStreamChunk): void
 
 function updateBrowserTerminal(
   terminalId: string,
-  updater: (terminal: TerminalRow) => TerminalRow,
-): TerminalRow | null {
-  let nextTerminal: TerminalRow | null = null;
+  updater: (terminal: TerminalRecord) => TerminalRecord,
+): TerminalRecord | null {
+  let nextTerminal: TerminalRecord | null = null;
   browserTerminalState = {
     ...browserTerminalState,
     terminals: browserTerminalState.terminals.map((terminal) => {
@@ -426,7 +379,7 @@ function setBrowserTerminalStatus(
     exitCode?: number | null;
     failureReason?: TerminalFailureReason | null;
   },
-): TerminalRow | null {
+): TerminalRecord | null {
   const nextTerminal = updateBrowserTerminal(terminalId, (terminal) => ({
     ...terminal,
     ended_at: options?.endedAt === undefined ? terminal.ended_at : options.endedAt,
@@ -438,28 +391,29 @@ function setBrowserTerminalStatus(
   }));
 
   if (nextTerminal) {
-    emitTerminalStatus({
-      ended_at: nextTerminal.ended_at,
-      exit_code: nextTerminal.exit_code,
-      failure_reason: nextTerminal.failure_reason,
-      status: nextTerminal.status,
-      terminal_id: nextTerminal.id,
-      workspace_id: nextTerminal.workspace_id,
-    });
+    emitTerminalStatus(
+      nextTerminal.id,
+      nextTerminal.workspace_id,
+      nextTerminal.status,
+      nextTerminal.failure_reason,
+      nextTerminal.exit_code,
+      nextTerminal.ended_at,
+    );
   }
 
   return nextTerminal;
 }
 
 function emitBrowserHarnessTurnCompleted(
-  terminal: TerminalRow,
+  terminal: TerminalRecord,
   turnId: string | null = null,
 ): void {
   if (terminal.launch_type !== "harness") {
     return;
   }
 
-  emitTerminalHarnessTurnCompleted({
+  publishBrowserLifecycleEvent({
+    type: "terminal.harness_turn_completed",
     completion_key:
       turnId ??
       (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -496,7 +450,7 @@ function appendBrowserTerminalOutput(
   emitTerminalChunk(terminalId, { ...chunk, kind });
 }
 
-function buildTerminalBanner(terminal: TerminalRow): string {
+function buildTerminalBanner(terminal: TerminalRecord): string {
   const prompt = buildHarnessPrompt(terminal.harness_provider);
 
   if (terminal.launch_type === "harness" && terminal.harness_provider === "claude") {
@@ -534,7 +488,7 @@ function buildTerminalBanner(terminal: TerminalRow): string {
 
 export function evaluateBrowserTerminalCommand(
   command: string,
-  terminal: Pick<TerminalRow, "launch_type" | "harness_provider" | "workspace_id">,
+  terminal: Pick<TerminalRecord, "launch_type" | "harness_provider" | "workspace_id">,
 ): BrowserTerminalCommandResult {
   const trimmed = command.trim();
   const prompt = buildHarnessPrompt(terminal.harness_provider);
@@ -604,9 +558,9 @@ export function evaluateBrowserTerminalCommand(
   };
 }
 
-function createBrowserTerminal(input: CreateTerminalInput): TerminalRow {
+function createBrowserTerminal(input: CreateTerminalInput): TerminalRecord {
   const sequence = browserTerminalState.nextSequence;
-  const terminal: TerminalRow = {
+  const terminal: TerminalRecord = {
     created_by: null,
     ended_at: null,
     exit_code: null,
@@ -637,33 +591,32 @@ function createBrowserTerminal(input: CreateTerminalInput): TerminalRow {
     terminals: [terminal, ...browserTerminalState.terminals],
   };
   persistBrowserTerminalState();
-  emitTerminalCreated({
-    terminal,
-    workspace_id: terminal.workspace_id,
-  });
+  emitTerminalCreated(terminal.workspace_id, terminal);
   appendBrowserTerminalOutput(terminal.id, buildTerminalBanner(terminal), "live");
   return terminal;
 }
 
-export async function listWorkspaceTerminals(workspaceId: string): Promise<TerminalRow[]> {
+export async function listWorkspaceTerminals(
+  workspaceId: string,
+): Promise<TerminalRecord[]> {
   if (!isTauri()) {
     return browserTerminalState.terminals.filter(
       (terminal) => terminal.workspace_id === workspaceId,
     );
   }
 
-  return invoke<TerminalRow[]>("list_workspace_terminals", { workspaceId });
+  return invoke<TerminalRecord[]>("list_workspace_terminals", { workspaceId });
 }
 
-export async function getTerminal(terminalId: string): Promise<TerminalRow | null> {
+export async function getTerminal(terminalId: string): Promise<TerminalRecord | null> {
   if (!isTauri()) {
     return browserTerminalState.terminals.find((terminal) => terminal.id === terminalId) ?? null;
   }
 
-  return invoke<TerminalRow | null>("get_terminal", { terminalId });
+  return invoke<TerminalRecord | null>("get_terminal", { terminalId });
 }
 
-export async function createTerminal(input: CreateTerminalInput): Promise<TerminalRow> {
+export async function createTerminal(input: CreateTerminalInput): Promise<TerminalRecord> {
   if (!isTauri()) {
     return createBrowserTerminal(input);
   }
@@ -680,14 +633,17 @@ export async function createTerminal(input: CreateTerminalInput): Promise<Termin
   return result.terminal;
 }
 
-export async function renameTerminal(terminalId: string, label: string): Promise<TerminalRow> {
+export async function renameTerminal(
+  terminalId: string,
+  label: string,
+): Promise<TerminalRecord> {
   const normalizedLabel = label.trim().replace(/\s+/g, " ");
   if (normalizedLabel.length === 0) {
     throw new Error("Session title cannot be empty.");
   }
 
   if (!isTauri()) {
-    let renamedTerminal: BrowserTerminalRow | null = null;
+    let renamedTerminal: BrowserTerminalRecord | null = null;
     browserTerminalState = {
       ...browserTerminalState,
       terminals: browserTerminalState.terminals.map((terminal) => {
@@ -710,16 +666,12 @@ export async function renameTerminal(terminalId: string, label: string): Promise
       throw new Error(`Terminal not found: ${terminalId}`);
     }
 
-    const nextTerminal = renamedTerminal as BrowserTerminalRow;
-    emitTerminalRenamed({
-      terminal_id: nextTerminal.id,
-      workspace_id: nextTerminal.workspace_id,
-      label: nextTerminal.label,
-    });
+    const nextTerminal = renamedTerminal as BrowserTerminalRecord;
+    emitTerminalRenamed(nextTerminal.id, nextTerminal.workspace_id, nextTerminal.label);
     return nextTerminal;
   }
 
-  return invoke<TerminalRow>("rename_terminal", { terminalId, label: normalizedLabel });
+  return invoke<TerminalRecord>("rename_terminal", { terminalId, label: normalizedLabel });
 }
 
 export async function getNativeTerminalCapabilities(): Promise<NativeTerminalCapabilities> {
@@ -952,79 +904,4 @@ export async function killTerminal(terminalId: string): Promise<void> {
   }
 
   await invoke<void>("kill_terminal", { terminalId });
-}
-
-export async function subscribeToTerminalCreatedEvents(
-  callback: (event: TerminalCreatedEvent) => void,
-): Promise<UnlistenFn> {
-  if (!isTauri()) {
-    browserListeners.created.add(callback);
-    return () => {
-      browserListeners.created.delete(callback);
-    };
-  }
-
-  return listen<TerminalCreatedEvent>("terminal:created", (event) => {
-    callback(event.payload);
-  });
-}
-
-export async function subscribeToTerminalStatusEvents(
-  callback: (event: TerminalStatusEvent) => void,
-): Promise<UnlistenFn> {
-  if (!isTauri()) {
-    browserListeners.status.add(callback);
-    return () => {
-      browserListeners.status.delete(callback);
-    };
-  }
-
-  return listen<TerminalStatusEvent>("terminal:status-changed", (event) => {
-    callback(event.payload);
-  });
-}
-
-export async function subscribeToTerminalHarnessTurnCompletedEvents(
-  callback: (event: TerminalHarnessTurnCompletedEvent) => void,
-): Promise<UnlistenFn> {
-  if (!isTauri()) {
-    browserListeners.harnessTurnCompleted.add(callback);
-    return () => {
-      browserListeners.harnessTurnCompleted.delete(callback);
-    };
-  }
-
-  return listen<TerminalHarnessTurnCompletedEvent>("terminal:harness-turn-completed", (event) => {
-    callback(event.payload);
-  });
-}
-
-export async function subscribeToTerminalRemovedEvents(
-  callback: (event: TerminalRemovedEvent) => void,
-): Promise<UnlistenFn> {
-  if (!isTauri()) {
-    browserListeners.removed.add(callback);
-    return () => {
-      browserListeners.removed.delete(callback);
-    };
-  }
-
-  return listen<TerminalRemovedEvent>("terminal:removed", (event) => {
-    callback(event.payload);
-  });
-}
-
-export async function subscribeToTerminalRenamedEvents(
-  callback: (event: TerminalRenamedEvent) => void,
-): Promise<UnlistenFn> {
-  if (!isTauri()) {
-    browserListeners.renamed.add(callback);
-    return () => {
-      browserListeners.renamed.delete(callback);
-    };
-  }
-
-  return listen<TerminalRenamedEvent>("terminal:renamed", (event) => {
-    callback(event.payload);
-  });
 }

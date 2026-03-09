@@ -4,7 +4,7 @@ import type {
   GitLogEntry,
   GitPushResult,
   GitStatusResult,
-  WorkspaceServiceRecord,
+  ServiceRecord,
 } from "@lifecycle/contracts";
 import type {
   LocalWorkspaceProviderCreateContext,
@@ -45,20 +45,27 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
     return {
       workspace: {
         id: workspaceId,
+        project_id: context.projectId,
         name: context.workspaceName ?? input.sourceRef,
-        projectId: context.projectId,
+        source_ref: input.sourceRef,
+        git_sha: null,
+        worktree_path: null,
         mode: "local",
-        sourceRef: input.sourceRef,
         status: "creating",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        lastActiveAt: new Date().toISOString(),
+        failure_reason: null,
+        failed_at: null,
+        created_by: null,
+        source_workspace_id: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        last_active_at: new Date().toISOString(),
+        expires_at: null,
       },
       worktreePath: "",
     };
   }
 
-  async startServices(input: WorkspaceProviderStartInput): Promise<WorkspaceServiceRecord[]> {
+  async startServices(input: WorkspaceProviderStartInput): Promise<ServiceRecord[]> {
     await this.invoke("start_services", {
       workspaceId: input.workspace.id,
       manifestJson: input.manifestJson,
@@ -69,7 +76,7 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
   async healthCheck(workspaceId: string): Promise<WorkspaceProviderHealthResult> {
     const services = (await this.invoke("get_workspace_services", {
       workspaceId,
-    })) as WorkspaceServiceRecord[];
+    })) as ServiceRecord[];
     const healthy = services.every((s) => s.status === "ready");
     return { healthy, services };
   }

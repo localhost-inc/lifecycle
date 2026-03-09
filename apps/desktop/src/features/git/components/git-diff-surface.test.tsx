@@ -3,12 +3,12 @@ import type { GitStatusResult } from "@lifecycle/contracts";
 import { ThemeProvider } from "@lifecycle/ui";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { StoreProvider } from "../../../store";
+import { QueryProvider } from "../../../query";
 import { buildChangesPatchReloadKey, GitDiffSurface } from "./git-diff-surface";
 
 function renderSurface(node: ReturnType<typeof createElement>) {
   return renderToStaticMarkup(
-    createElement(StoreProvider, {
+    createElement(QueryProvider, {
       children: createElement(ThemeProvider, { children: node, storageKey: "test.theme" }),
     }),
   );

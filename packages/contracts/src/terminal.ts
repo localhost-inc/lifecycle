@@ -9,19 +9,3 @@ export type TerminalFailureReason =
   | "attach_failed"
   | "workspace_destroyed"
   | "unknown";
-
-export interface TerminalRecord {
-  id: string;
-  workspaceId: string;
-  launchType: TerminalType;
-  harnessProvider?: string;
-  harnessSessionId?: string;
-  createdBy?: string;
-  label: string;
-  status: TerminalStatus;
-  failureReason?: TerminalFailureReason;
-  exitCode?: number;
-  startedAt: string;
-  lastActiveAt: string;
-  endedAt?: string;
-}

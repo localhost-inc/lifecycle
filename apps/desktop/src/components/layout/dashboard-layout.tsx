@@ -37,7 +37,7 @@ import {
   readPersistedPanelValue,
   writePersistedPanelValue,
 } from "../../lib/panel-layout";
-import { useStoreClient } from "../../store";
+import { useQueryClient } from "../../query";
 import { notifyShellResizeListeners, ShellResizeProvider } from "./shell-resize-provider";
 import { Sidebar } from "./sidebar";
 import { AppStatusBar } from "./app-status-bar";
@@ -65,7 +65,7 @@ export function getLeftSidebarRailWidth({
 }
 
 export function DashboardLayout() {
-  const client = useStoreClient();
+  const client = useQueryClient();
   const navigate = useNavigate();
   const { workspaceId } = useParams();
   const [searchParams] = useSearchParams();

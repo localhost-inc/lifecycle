@@ -4,24 +4,9 @@ use crate::platform::db::open_db;
 use crate::shared::errors::{
     LifecycleError, ServiceStatus, WorkspaceFailureReason, WorkspaceStatus,
 };
+use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
 use rusqlite::params;
-use serde::Serialize;
-use tauri::{AppHandle, Emitter};
-
-#[derive(Debug, Clone, Serialize)]
-struct WorkspaceStatusEvent {
-    workspace_id: String,
-    status: String,
-    failure_reason: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct ServiceStatusEvent {
-    workspace_id: String,
-    service_name: String,
-    status: String,
-    status_reason: Option<String>,
-}
+use tauri::AppHandle;
 
 pub(super) fn emit_workspace_status(
     app: &AppHandle,
@@ -29,9 +14,9 @@ pub(super) fn emit_workspace_status(
     status: &str,
     failure_reason: Option<&str>,
 ) {
-    let _ = app.emit(
-        "workspace:status-changed",
-        WorkspaceStatusEvent {
+    publish_lifecycle_event(
+        app,
+        LifecycleEvent::WorkspaceStatusChanged {
             workspace_id: workspace_id.to_string(),
             status: status.to_string(),
             failure_reason: failure_reason.map(|s| s.to_string()),
@@ -46,9 +31,9 @@ pub(super) fn emit_service_status(
     status: &str,
     reason: Option<&str>,
 ) {
-    let _ = app.emit(
-        "service:status-changed",
-        ServiceStatusEvent {
+    publish_lifecycle_event(
+        app,
+        LifecycleEvent::ServiceStatusChanged {
             workspace_id: workspace_id.to_string(),
             service_name: service_name.to_string(),
             status: status.to_string(),

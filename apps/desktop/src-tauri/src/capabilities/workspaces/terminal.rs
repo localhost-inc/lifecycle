@@ -6,6 +6,7 @@ use crate::platform::runtime::terminal::{
 #[cfg(test)]
 use crate::shared::errors::WorkspaceStatus;
 use crate::shared::errors::{LifecycleError, TerminalFailureReason, TerminalStatus, TerminalType};
+use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
 use crate::TerminalSupervisorMap;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use portable_pty::CommandBuilder;
@@ -19,9 +20,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, SystemTime};
-use tauri::{ipc::Channel, AppHandle, Emitter, Manager, State, WebviewWindow};
+use tauri::{ipc::Channel, AppHandle, Manager, State, WebviewWindow};
 
-use super::query::TerminalRow;
+use super::query::TerminalRecord;
 use super::rename::TitleOrigin;
 
 #[path = "terminal/attachments.rs"]
@@ -38,11 +39,11 @@ use native_surface::{
     parse_native_terminal_color_scheme, run_native_terminal_on_main_thread,
     sync_native_terminal_in_webview, write_native_terminal_theme_override,
 };
-pub(crate) use persistence::load_terminal_row;
+pub(crate) use persistence::load_terminal_record;
 #[cfg(test)]
 use persistence::WorkspaceRuntime;
 use persistence::{
-    insert_terminal_row, load_claimed_harness_session_ids, load_workspace_runtime,
+    insert_terminal_record, load_claimed_harness_session_ids, load_workspace_runtime,
     next_terminal_label, touch_terminal, update_terminal_harness_session_id, update_terminal_state,
     workspace_has_interactive_terminal_context,
 };
@@ -50,34 +51,8 @@ use persistence::{
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalAttachResult {
-    pub terminal: TerminalRow,
+    pub terminal: TerminalRecord,
     pub replay_cursor: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct TerminalCreatedEvent {
-    workspace_id: String,
-    terminal: TerminalRow,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct TerminalStatusEvent {
-    terminal_id: String,
-    workspace_id: String,
-    status: String,
-    failure_reason: Option<String>,
-    exit_code: Option<i64>,
-    ended_at: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct TerminalHarnessTurnCompletedEvent {
-    terminal_id: String,
-    workspace_id: String,
-    harness_provider: Option<String>,
-    harness_session_id: Option<String>,
-    completion_key: String,
-    turn_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -238,7 +213,7 @@ pub async fn create_terminal(
     )?;
 
     if native_terminal::is_available() {
-        let terminal = insert_terminal_row(
+        let terminal = insert_terminal_record(
             &db,
             &terminal_id,
             &workspace_id,
@@ -289,7 +264,7 @@ pub async fn create_terminal(
     )?;
     let replay_cursor = supervisor.replay_cursor();
 
-    let terminal = insert_terminal_row(
+    let terminal = insert_terminal_record(
         &db,
         &terminal_id,
         &workspace_id,
@@ -336,7 +311,7 @@ pub async fn attach_terminal(
     handler: Channel<TerminalStreamChunk>,
 ) -> Result<TerminalAttachResult, LifecycleError> {
     let db = db_path.0.clone();
-    let mut terminal = load_terminal_row(&db, &terminal_id)?
+    let mut terminal = load_terminal_record(&db, &terminal_id)?
         .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.clone()))?;
     let workspace = load_workspace_runtime(&db, &terminal.workspace_id)?;
     if !workspace_has_interactive_terminal_context(&workspace) {
@@ -404,7 +379,7 @@ pub async fn write_terminal(
     data: String,
 ) -> Result<(), LifecycleError> {
     let db = db_path.0.clone();
-    load_terminal_row(&db, &terminal_id)?
+    load_terminal_record(&db, &terminal_id)?
         .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.clone()))?;
     let supervisor = {
         let terminals = terminal_supervisors.lock().await;
@@ -489,7 +464,7 @@ pub async fn sync_native_terminal_surface(
     }
 
     let db = db_path.0.clone();
-    let terminal = load_terminal_row(&db, &terminal_id)?
+    let terminal = load_terminal_record(&db, &terminal_id)?
         .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.clone()))?;
     if terminal.status == TerminalStatus::Finished.as_str()
         || terminal.status == TerminalStatus::Failed.as_str()
@@ -570,7 +545,7 @@ pub async fn sync_native_terminal_surface(
 fn maybe_schedule_harness_observers(
     app: &AppHandle,
     db_path: &str,
-    terminal: &TerminalRow,
+    terminal: &TerminalRecord,
     worktree_path: &str,
     launched_after: SystemTime,
 ) {
@@ -713,7 +688,7 @@ fn watch_harness_turn_completions(
     let mut pending_line_fragment = String::new();
 
     loop {
-        match load_terminal_row(db_path, terminal_id) {
+        match load_terminal_record(db_path, terminal_id) {
             Ok(Some(terminal)) => {
                 if terminal.status == TerminalStatus::Finished.as_str()
                     || terminal.status == TerminalStatus::Failed.as_str()
@@ -977,7 +952,7 @@ fn wait_for_harness_session_id(
             return None;
         }
 
-        match load_terminal_row(db_path, terminal_id) {
+        match load_terminal_record(db_path, terminal_id) {
             Ok(Some(terminal)) => {
                 if let Some(session_id) = terminal.harness_session_id {
                     return Some(session_id);
@@ -1227,7 +1202,7 @@ pub async fn hide_native_terminal_surface(
         native_terminal::hide_surface(&terminal_id_for_surface)
     })?;
     let db = db_path.0.clone();
-    let Some(terminal) = load_terminal_row(&db, &terminal_id)? else {
+    let Some(terminal) = load_terminal_record(&db, &terminal_id)? else {
         return Ok(());
     };
     if terminal.status == TerminalStatus::Active.as_str() {
@@ -1272,7 +1247,7 @@ pub async fn detach_terminal(
     }
 
     let db = db_path.0.clone();
-    let terminal = load_terminal_row(&db, &terminal_id)?
+    let terminal = load_terminal_record(&db, &terminal_id)?
         .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.clone()))?;
     if terminal.status == TerminalStatus::Finished.as_str()
         || terminal.status == TerminalStatus::Failed.as_str()
@@ -1312,7 +1287,7 @@ pub async fn kill_terminal(
             native_terminal::destroy_surface(&terminal_id_for_surface)
         })?;
         let db = db_path.0.clone();
-        if let Some(terminal) = load_terminal_row(&db, &terminal_id)? {
+        if let Some(terminal) = load_terminal_record(&db, &terminal_id)? {
             if terminal.status != TerminalStatus::Finished.as_str()
                 && terminal.status != TerminalStatus::Failed.as_str()
             {
@@ -1462,20 +1437,20 @@ fn resolve_terminal_launch(
     }
 }
 
-fn emit_terminal_created(app: &AppHandle, terminal: &TerminalRow) {
-    let _ = app.emit(
-        "terminal:created",
-        TerminalCreatedEvent {
+fn emit_terminal_created(app: &AppHandle, terminal: &TerminalRecord) {
+    publish_lifecycle_event(
+        app,
+        LifecycleEvent::TerminalCreated {
             workspace_id: terminal.workspace_id.clone(),
             terminal: terminal.clone(),
         },
     );
 }
 
-pub(super) fn emit_terminal_status(app: &AppHandle, terminal: &TerminalRow) {
-    let _ = app.emit(
-        "terminal:status-changed",
-        TerminalStatusEvent {
+pub(super) fn emit_terminal_status(app: &AppHandle, terminal: &TerminalRecord) {
+    publish_lifecycle_event(
+        app,
+        LifecycleEvent::TerminalStatusChanged {
             terminal_id: terminal.id.clone(),
             workspace_id: terminal.workspace_id.clone(),
             status: terminal.status.clone(),
@@ -1495,9 +1470,9 @@ fn emit_harness_turn_completed(
     completion_key: &str,
     turn_id: Option<&str>,
 ) {
-    let _ = app.emit(
-        "terminal:harness-turn-completed",
-        TerminalHarnessTurnCompletedEvent {
+    publish_lifecycle_event(
+        app,
+        LifecycleEvent::TerminalHarnessTurnCompleted {
             completion_key: completion_key.to_string(),
             terminal_id: terminal_id.to_string(),
             workspace_id: workspace_id.to_string(),
@@ -1514,7 +1489,7 @@ pub(crate) fn complete_native_terminal_exit(
     terminal_id: &str,
     exit_code: i64,
 ) -> Result<(), LifecycleError> {
-    let Some(terminal) = load_terminal_row(db_path, terminal_id)? else {
+    let Some(terminal) = load_terminal_record(db_path, terminal_id)? else {
         return Ok(());
     };
 

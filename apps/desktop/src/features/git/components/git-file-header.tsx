@@ -1,4 +1,3 @@
-import type React from "react";
 import { ChevronRight, SquareArrowOutUpRight } from "lucide-react";
 import type { FileDiffMetadata } from "@pierre/diffs/react";
 

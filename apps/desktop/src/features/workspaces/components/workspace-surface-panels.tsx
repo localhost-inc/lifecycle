@@ -1,6 +1,7 @@
+import type { TerminalRecord } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
 import { TerminalSquare } from "lucide-react";
-import type { CreateTerminalRequest, HarnessProvider, TerminalRow } from "../../terminals/api";
+import type { CreateTerminalRequest, HarnessProvider } from "../../terminals/api";
 import { TerminalSurface } from "../../terminals/components/terminal-surface";
 import { GitDiffSurface } from "../../git/components/git-diff-surface";
 import {
@@ -20,8 +21,8 @@ interface WorkspaceSurfacePanelsProps {
   hasVisibleTabs: boolean;
   onCreateTerminal: (input: CreateTerminalRequest, launcherKey?: string) => Promise<void>;
   onOpenTerminal: (terminalId: string, launcherKey?: string) => void;
-  sessionHistory: TerminalRow[];
-  terminals: TerminalRow[];
+  sessionHistory: TerminalRecord[];
+  terminals: TerminalRecord[];
   waitingForActiveRuntimeTab: boolean;
   workspaceId: string;
 }

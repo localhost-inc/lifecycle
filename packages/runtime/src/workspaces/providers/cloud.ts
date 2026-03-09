@@ -4,7 +4,7 @@ import type {
   GitLogEntry,
   GitPushResult,
   GitStatusResult,
-  WorkspaceServiceRecord,
+  ServiceRecord,
 } from "@lifecycle/contracts";
 import type {
   WorkspaceProviderAttachTerminalInput,
@@ -20,7 +20,7 @@ import type {
 
 export interface CloudWorkspaceClient {
   createWorkspace(input: WorkspaceProviderCreateInput): Promise<WorkspaceProviderCreateResult>;
-  startServices(input: WorkspaceProviderStartInput): Promise<WorkspaceServiceRecord[]>;
+  startServices(input: WorkspaceProviderStartInput): Promise<ServiceRecord[]>;
   healthCheck(workspaceId: string): Promise<WorkspaceProviderHealthResult>;
   stopServices(workspaceId: string, serviceNames?: string[]): Promise<void>;
   runSetup(workspaceId: string): Promise<void>;
@@ -59,7 +59,7 @@ export class CloudWorkspaceProvider implements WorkspaceProvider {
     return this.client.createWorkspace(input);
   }
 
-  startServices(input: WorkspaceProviderStartInput): Promise<WorkspaceServiceRecord[]> {
+  startServices(input: WorkspaceProviderStartInput): Promise<ServiceRecord[]> {
     return this.client.startServices(input);
   }
 

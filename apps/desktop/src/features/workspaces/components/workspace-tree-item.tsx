@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import type { WorkspaceStatus } from "@lifecycle/contracts";
+import type { WorkspaceRecord, WorkspaceStatus } from "@lifecycle/contracts";
 import { cn, sidebarMenuSubButtonVariants, StatusDot, type StatusDotTone } from "@lifecycle/ui";
 import { ResponseReadyDot } from "../../../components/response-ready-dot";
 import { TypedTitle } from "../../../components/typed-title";
 import { formatCompactRelativeTime } from "../../../lib/format";
-import { renameWorkspace, type WorkspaceRow } from "../api";
+import { renameWorkspace } from "../api";
 
 const dotTone: Record<WorkspaceStatus, StatusDotTone> = {
   creating: "warning",
@@ -42,7 +42,7 @@ const dotLabels: Record<WorkspaceStatus, string> = {
 
 interface WorkspaceTreeItemProps {
   responseReady?: boolean;
-  workspace: WorkspaceRow;
+  workspace: WorkspaceRecord;
   selected: boolean;
   onSelect: () => void;
 }

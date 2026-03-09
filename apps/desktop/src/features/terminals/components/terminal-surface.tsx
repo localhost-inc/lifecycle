@@ -1,4 +1,5 @@
 import { EmptyState, useTheme } from "@lifecycle/ui";
+import type { TerminalRecord } from "@lifecycle/contracts";
 import { TerminalSquare } from "lucide-react";
 import { isTauri } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
@@ -11,7 +12,6 @@ import {
   resizeTerminal,
   saveTerminalAttachment,
   terminalHasLiveSession,
-  type TerminalRow,
   writeTerminal,
 } from "../api";
 import {
@@ -29,7 +29,7 @@ import { NativeTerminalSurface } from "./native-terminal-surface";
 
 interface TerminalSurfaceProps {
   active: boolean;
-  terminal: TerminalRow;
+  terminal: TerminalRecord;
 }
 
 const TERMINAL_WRITE_IMMEDIATE_THRESHOLD = 16 * 1024;

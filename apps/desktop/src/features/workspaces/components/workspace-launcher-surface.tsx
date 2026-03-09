@@ -1,7 +1,8 @@
 import { Button } from "@lifecycle/ui";
+import type { TerminalRecord } from "@lifecycle/contracts";
 
 import type { ReactNode } from "react";
-import type { CreateTerminalRequest, HarnessProvider, TerminalRow } from "../../terminals/api";
+import type { CreateTerminalRequest, HarnessProvider } from "../../terminals/api";
 import { TerminalSessionHistory } from "../../terminals/components/terminal-session-history";
 import { ClaudeIcon, CodexIcon, ShellIcon } from "./surface-icons";
 
@@ -11,7 +12,7 @@ interface WorkspaceLauncherSurfaceProps {
   onCreateTerminal: (input: CreateTerminalRequest) => void;
   onOpenTerminal: (terminalId: string) => void;
   onResumeTerminal: (input: Extract<CreateTerminalRequest, { launchType: "harness" }>) => void;
-  terminals: TerminalRow[];
+  terminals: TerminalRecord[];
 }
 
 interface LauncherActionCardProps {

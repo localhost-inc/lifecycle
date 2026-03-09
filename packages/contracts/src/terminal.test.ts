@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import type {
-  TerminalFailureReason,
-  TerminalRecord,
-  TerminalStatus,
-  TerminalType,
-} from "./terminal";
+import type { TerminalRecord } from "./db";
+import type { TerminalFailureReason, TerminalStatus, TerminalType } from "./terminal";
 
 describe("terminal contracts", () => {
   test("keeps canonical terminal status values", () => {
@@ -27,17 +23,21 @@ describe("terminal contracts", () => {
   test("supports harness provider metadata on a terminal record", () => {
     const terminal: TerminalRecord = {
       id: "term_1",
-      workspaceId: "ws_1",
-      launchType: "harness",
-      harnessProvider: "codex",
-      harnessSessionId: "session_1",
+      workspace_id: "ws_1",
+      launch_type: "harness",
+      harness_provider: "codex",
+      harness_session_id: "session_1",
+      created_by: null,
       label: "Codex · auth-fix",
-      lastActiveAt: "2026-03-05T08:00:00.000Z",
-      startedAt: "2026-03-05T08:00:00.000Z",
+      failure_reason: null,
+      exit_code: null,
+      last_active_at: "2026-03-05T08:00:00.000Z",
+      started_at: "2026-03-05T08:00:00.000Z",
       status: "active",
+      ended_at: null,
     };
 
-    expect(terminal.harnessSessionId).toBe("session_1");
-    expect(terminal.harnessProvider).toBe("codex");
+    expect(terminal.harness_session_id).toBe("session_1");
+    expect(terminal.harness_provider).toBe("codex");
   });
 });

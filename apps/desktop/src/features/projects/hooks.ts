@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { ProjectRecord } from "@lifecycle/contracts";
 import type { ManifestStatus } from "./api/projects";
-import { useStoreQuery, type QueryDescriptor, type StoreQueryResult } from "../../store";
+import { useQuery, type QueryDescriptor, type QueryResult } from "../../query";
 
 export interface ProjectCatalog {
   manifestsByProjectId: Record<string, ManifestStatus>;
@@ -28,12 +28,6 @@ const projectCatalogQuery: QueryDescriptor<ProjectCatalog> = {
       projects,
     };
   },
-  reduce(_current, event) {
-    if (event.kind === "projects-invalidated" || event.kind === "project-manifests-invalidated") {
-      return { type: "invalidate" };
-    }
-    return { type: "none" };
-  },
 };
 
 function createProjectManifestQuery(projectId: string): QueryDescriptor<ManifestStatus | null> {
@@ -47,22 +41,16 @@ function createProjectManifestQuery(projectId: string): QueryDescriptor<Manifest
       }
       return source.readManifest(project.path);
     },
-    reduce(_current, event) {
-      if (event.kind === "projects-invalidated" || event.kind === "project-manifests-invalidated") {
-        return { type: "invalidate" };
-      }
-      return { type: "none" };
-    },
   };
 }
 
 export function useProjectCatalog() {
-  return useStoreQuery(projectCatalogQuery, {
+  return useQuery(projectCatalogQuery, {
     disabledData: undefined,
   });
 }
 
-export function useProjects(): StoreQueryResult<ProjectRecord[] | undefined> {
+export function useProjects(): QueryResult<ProjectRecord[] | undefined> {
   const query = useProjectCatalog();
 
   return useMemo(
@@ -74,7 +62,7 @@ export function useProjects(): StoreQueryResult<ProjectRecord[] | undefined> {
   );
 }
 
-export function useProjectManifestStates(): StoreQueryResult<
+export function useProjectManifestStates(): QueryResult<
   Record<string, ManifestStatus["state"]> | undefined
 > {
   const query = useProjectCatalog();
@@ -95,15 +83,13 @@ export function useProjectManifestStates(): StoreQueryResult<
   );
 }
 
-export function useProjectManifest(
-  projectId: string | null,
-): StoreQueryResult<ManifestStatus | null> {
+export function useProjectManifest(projectId: string | null): QueryResult<ManifestStatus | null> {
   const descriptor = useMemo(
     () => (projectId ? createProjectManifestQuery(projectId) : null),
     [projectId],
   );
 
-  return useStoreQuery(descriptor, {
+  return useQuery(descriptor, {
     disabledData: null,
   });
 }

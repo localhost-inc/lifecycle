@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct WorkspaceRow {
+pub struct WorkspaceRecord {
     pub id: String,
     pub project_id: String,
     pub name: String,
@@ -26,7 +26,7 @@ pub struct WorkspaceRow {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ServiceRow {
+pub struct ServiceRecord {
     pub id: String,
     pub workspace_id: String,
     pub service_name: String,
@@ -44,7 +44,7 @@ pub struct ServiceRow {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TerminalRow {
+pub struct TerminalRecord {
     pub id: String,
     pub workspace_id: String,
     pub launch_type: String,
@@ -65,8 +65,8 @@ pub struct TerminalRow {
     pub ended_at: Option<String>,
 }
 
-fn map_terminal_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<TerminalRow> {
-    Ok(TerminalRow {
+fn map_terminal_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<TerminalRecord> {
+    Ok(TerminalRecord {
         id: row.get(0)?,
         workspace_id: row.get(1)?,
         launch_type: row.get(2)?,
@@ -85,8 +85,8 @@ fn map_terminal_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<TerminalRow> {
     })
 }
 
-fn map_workspace_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRow> {
-    Ok(WorkspaceRow {
+fn map_workspace_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRecord> {
+    Ok(WorkspaceRecord {
         id: row.get(0)?,
         project_id: row.get(1)?,
         name: row.get(2)?,
@@ -109,13 +109,13 @@ fn map_workspace_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRow> 
 pub async fn get_workspace(
     db_path: &str,
     project_id: String,
-) -> Result<Option<WorkspaceRow>, LifecycleError> {
+) -> Result<Option<WorkspaceRecord>, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn.prepare(
         "SELECT id, project_id, name, source_ref, git_sha, worktree_path, mode, status, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at FROM workspace WHERE project_id = ?1 ORDER BY created_at DESC LIMIT 1"
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;
 
-    let row = stmt.query_row(params![project_id], map_workspace_row);
+    let row = stmt.query_row(params![project_id], map_workspace_record);
 
     match row {
         Ok(r) => Ok(Some(r)),
@@ -127,13 +127,13 @@ pub async fn get_workspace(
 pub async fn get_workspace_by_id(
     db_path: &str,
     workspace_id: String,
-) -> Result<Option<WorkspaceRow>, LifecycleError> {
+) -> Result<Option<WorkspaceRecord>, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn.prepare(
         "SELECT id, project_id, name, source_ref, git_sha, worktree_path, mode, status, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at FROM workspace WHERE id = ?1 LIMIT 1"
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;
 
-    let row = stmt.query_row(params![workspace_id], map_workspace_row);
+    let row = stmt.query_row(params![workspace_id], map_workspace_record);
 
     match row {
         Ok(r) => Ok(Some(r)),
@@ -142,14 +142,14 @@ pub async fn get_workspace_by_id(
     }
 }
 
-pub async fn list_workspaces(db_path: &str) -> Result<Vec<WorkspaceRow>, LifecycleError> {
+pub async fn list_workspaces(db_path: &str) -> Result<Vec<WorkspaceRecord>, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn.prepare(
         "SELECT id, project_id, name, source_ref, git_sha, worktree_path, mode, status, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at FROM workspace WHERE status != 'destroying' ORDER BY created_at DESC"
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     let rows = stmt
-        .query_map([], map_workspace_row)
+        .query_map([], map_workspace_record)
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     let mut result = Vec::new();
@@ -161,9 +161,9 @@ pub async fn list_workspaces(db_path: &str) -> Result<Vec<WorkspaceRow>, Lifecyc
 
 pub async fn list_workspaces_by_project(
     db_path: &str,
-) -> Result<HashMap<String, Vec<WorkspaceRow>>, LifecycleError> {
+) -> Result<HashMap<String, Vec<WorkspaceRecord>>, LifecycleError> {
     let workspace_rows = list_workspaces(db_path).await?;
-    let mut grouped: HashMap<String, Vec<WorkspaceRow>> = HashMap::new();
+    let mut grouped: HashMap<String, Vec<WorkspaceRecord>> = HashMap::new();
 
     for workspace in workspace_rows {
         grouped
@@ -178,7 +178,7 @@ pub async fn list_workspaces_by_project(
 pub async fn get_workspace_services(
     db_path: &str,
     workspace_id: String,
-) -> Result<Vec<ServiceRow>, LifecycleError> {
+) -> Result<Vec<ServiceRecord>, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn.prepare(
         "SELECT id, workspace_id, service_name, exposure, port_override, status, status_reason, default_port, effective_port, preview_state, preview_failure_reason, preview_url, created_at, updated_at FROM workspace_service WHERE workspace_id = ?1 ORDER BY service_name"
@@ -186,7 +186,7 @@ pub async fn get_workspace_services(
 
     let rows = stmt
         .query_map(params![workspace_id], |row| {
-            Ok(ServiceRow {
+            Ok(ServiceRecord {
                 id: row.get(0)?,
                 workspace_id: row.get(1)?,
                 service_name: row.get(2)?,
@@ -219,7 +219,7 @@ pub async fn get_current_branch(project_path: String) -> Result<String, Lifecycl
 pub async fn list_workspace_terminals(
     db_path: &str,
     workspace_id: String,
-) -> Result<Vec<TerminalRow>, LifecycleError> {
+) -> Result<Vec<TerminalRecord>, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn
         .prepare(
@@ -231,7 +231,7 @@ pub async fn list_workspace_terminals(
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     let rows = stmt
-        .query_map(params![workspace_id], map_terminal_row)
+        .query_map(params![workspace_id], map_terminal_record)
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     let mut result = Vec::new();
@@ -245,7 +245,7 @@ pub async fn list_workspace_terminals(
 pub async fn get_terminal_by_id(
     db_path: &str,
     terminal_id: String,
-) -> Result<Option<TerminalRow>, LifecycleError> {
+) -> Result<Option<TerminalRecord>, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn
         .prepare(
@@ -256,7 +256,7 @@ pub async fn get_terminal_by_id(
         )
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
 
-    let row = stmt.query_row(params![terminal_id], map_terminal_row);
+    let row = stmt.query_row(params![terminal_id], map_terminal_record);
     match row {
         Ok(row) => Ok(Some(row)),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),

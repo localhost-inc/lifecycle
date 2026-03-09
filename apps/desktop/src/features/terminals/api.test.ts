@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import { subscribeToLifecycleEvents } from "../events/api";
 
 import {
   attachTerminalStream,
   createTerminal,
   detachTerminal,
   evaluateBrowserTerminalCommand,
-  subscribeToTerminalHarnessTurnCompletedEvents,
   terminalHasLiveSession,
   writeTerminal,
   type TerminalStreamChunk,
@@ -88,7 +88,7 @@ describe("terminal browser simulator", () => {
     });
     const events: string[] = [];
     const disposeStream = await attachTerminalStream(terminal.id, 120, 32, null, () => {});
-    const unlisten = await subscribeToTerminalHarnessTurnCompletedEvents((event) => {
+    const unlisten = await subscribeToLifecycleEvents(["terminal.harness_turn_completed"], (event) => {
       if (event.terminal_id === terminal.id) {
         events.push(event.workspace_id);
       }

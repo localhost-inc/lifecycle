@@ -1,77 +1,15 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
-  WorkspaceMode,
+  ServiceRecord,
+  SetupStepEventType,
+  WorkspaceRecord,
   WorkspaceStatus,
   WorkspaceFailureReason,
-  WorkspaceServiceExposure,
-  WorkspaceServicePreviewFailureReason,
-  WorkspaceServicePreviewState,
   WorkspaceServiceStatus,
   WorkspaceServiceStatusReason,
 } from "@lifecycle/contracts";
-
-export interface WorkspaceRow {
-  id: string;
-  project_id: string;
-  name: string;
-  source_ref: string;
-  git_sha: string | null;
-  worktree_path: string | null;
-  mode: WorkspaceMode;
-  status: WorkspaceStatus;
-  failure_reason: WorkspaceFailureReason | null;
-  failed_at: string | null;
-  created_by: string | null;
-  source_workspace_id: string | null;
-  created_at: string;
-  updated_at: string;
-  last_active_at: string;
-  expires_at: string | null;
-}
-
-export interface ServiceRow {
-  id: string;
-  workspace_id: string;
-  service_name: string;
-  exposure: WorkspaceServiceExposure;
-  port_override: number | null;
-  status: WorkspaceServiceStatus;
-  status_reason: WorkspaceServiceStatusReason | null;
-  default_port: number | null;
-  effective_port: number | null;
-  preview_state: WorkspaceServicePreviewState;
-  preview_failure_reason: WorkspaceServicePreviewFailureReason | null;
-  preview_url: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface WorkspaceStatusEvent {
-  workspace_id: string;
-  status: WorkspaceStatus;
-  failure_reason: WorkspaceFailureReason | null;
-}
-
-export interface ServiceStatusEvent {
-  workspace_id: string;
-  service_name: string;
-  status: WorkspaceServiceStatus;
-  status_reason: WorkspaceServiceStatusReason | null;
-}
-
-export interface SetupStepEvent {
-  workspace_id: string;
-  step_name: string;
-  event_type: "started" | "stdout" | "stderr" | "completed" | "failed" | "timeout";
-  data: string | null;
-}
-
-export interface WorkspaceRenamedEvent {
-  workspace_id: string;
-  name: string;
-  worktree_path: string | null;
-}
+import { publishBrowserLifecycleEvent } from "../events/api";
 
 export type WorkspaceShortcutAction =
   | "close-active-tab"
@@ -88,31 +26,17 @@ export interface WorkspaceShortcutEvent {
 }
 
 interface BrowserWorkspaceState {
-  workspaces: BrowserWorkspaceRow[];
-  services: ServiceRow[];
+  workspaces: BrowserWorkspaceRecord[];
+  services: ServiceRecord[];
 }
 
-interface BrowserWorkspaceRow extends WorkspaceRow {
+interface BrowserWorkspaceRecord extends WorkspaceRecord {
   name_origin?: "default" | "generated" | "manual";
-}
-
-interface BrowserEventListeners {
-  workspaceStatus: Set<(event: WorkspaceStatusEvent) => void>;
-  workspaceRenamed: Set<(event: WorkspaceRenamedEvent) => void>;
-  serviceStatus: Set<(event: ServiceStatusEvent) => void>;
-  setupProgress: Set<(event: SetupStepEvent) => void>;
 }
 
 const BROWSER_WORKSPACES_STORAGE_KEY = "lifecycle.desktop.browser.workspaces.v1";
 
 let browserWorkspaceState = readBrowserWorkspaceState();
-
-const browserListeners: BrowserEventListeners = {
-  workspaceStatus: new Set(),
-  workspaceRenamed: new Set(),
-  serviceStatus: new Set(),
-  setupProgress: new Set(),
-};
 
 function readBrowserWorkspaceState(): BrowserWorkspaceState {
   if (typeof window === "undefined") {
@@ -128,7 +52,7 @@ function readBrowserWorkspaceState(): BrowserWorkspaceState {
     const parsed = JSON.parse(raw) as Partial<BrowserWorkspaceState>;
     return {
       workspaces: Array.isArray(parsed.workspaces)
-        ? parsed.workspaces.map((workspace) => normalizeBrowserWorkspaceRow(workspace))
+        ? parsed.workspaces.map((workspace) => normalizeBrowserWorkspaceRecord(workspace))
         : [],
       services: Array.isArray(parsed.services) ? parsed.services : [],
     };
@@ -145,28 +69,60 @@ function persistBrowserWorkspaceState(): void {
   );
 }
 
-function emitWorkspaceStatus(event: WorkspaceStatusEvent): void {
-  for (const callback of browserListeners.workspaceStatus) {
-    callback(event);
-  }
+function emitWorkspaceStatus(
+  workspaceId: string,
+  status: WorkspaceStatus,
+  failureReason: WorkspaceFailureReason | null,
+): void {
+  publishBrowserLifecycleEvent({
+    type: "workspace.status_changed",
+    workspace_id: workspaceId,
+    status,
+    failure_reason: failureReason,
+  });
 }
 
-function emitWorkspaceRenamed(event: WorkspaceRenamedEvent): void {
-  for (const callback of browserListeners.workspaceRenamed) {
-    callback(event);
-  }
+function emitWorkspaceRenamed(
+  workspaceId: string,
+  name: string,
+  worktreePath: string | null,
+): void {
+  publishBrowserLifecycleEvent({
+    type: "workspace.renamed",
+    workspace_id: workspaceId,
+    name,
+    worktree_path: worktreePath,
+  });
 }
 
-function emitServiceStatus(event: ServiceStatusEvent): void {
-  for (const callback of browserListeners.serviceStatus) {
-    callback(event);
-  }
+function emitServiceStatus(
+  workspaceId: string,
+  serviceName: string,
+  status: WorkspaceServiceStatus,
+  statusReason: WorkspaceServiceStatusReason | null,
+): void {
+  publishBrowserLifecycleEvent({
+    type: "service.status_changed",
+    workspace_id: workspaceId,
+    service_name: serviceName,
+    status,
+    status_reason: statusReason,
+  });
 }
 
-function emitSetupProgress(event: SetupStepEvent): void {
-  for (const callback of browserListeners.setupProgress) {
-    callback(event);
-  }
+function emitSetupProgress(
+  workspaceId: string,
+  stepName: string,
+  eventType: SetupStepEventType,
+  data: string | null,
+): void {
+  publishBrowserLifecycleEvent({
+    type: "setup.step_progress",
+    workspace_id: workspaceId,
+    step_name: stepName,
+    event_type: eventType,
+    data,
+  });
 }
 
 function nowIso(): string {
@@ -210,7 +166,9 @@ function renameBrowserWorktreePath(
   return parent.length > 0 ? `${parent}/${nextLeaf}` : nextLeaf;
 }
 
-function normalizeBrowserWorkspaceRow(workspace: Partial<BrowserWorkspaceRow>): BrowserWorkspaceRow {
+function normalizeBrowserWorkspaceRecord(
+  workspace: Partial<BrowserWorkspaceRecord>,
+): BrowserWorkspaceRecord {
   return {
     ...workspace,
     created_at: workspace.created_at ?? nowIso(),
@@ -256,11 +214,7 @@ function updateWorkspaceRow(
 
   persistBrowserWorkspaceState();
 
-  emitWorkspaceStatus({
-    workspace_id: workspaceId,
-    status: nextStatus,
-    failure_reason: failureReason,
-  });
+  emitWorkspaceStatus(workspaceId, nextStatus, failureReason);
 }
 
 export interface CreateWorkspaceInput {
@@ -275,7 +229,7 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
   if (!isTauri()) {
     const id = crypto.randomUUID();
     const now = nowIso();
-    const workspace: WorkspaceRow = {
+    const workspace: WorkspaceRecord = {
       id,
       project_id: input.projectId,
       name: input.workspaceName?.trim() || input.baseRef?.trim() || "Workspace",
@@ -311,14 +265,17 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
   });
 }
 
-export async function renameWorkspace(workspaceId: string, name: string): Promise<WorkspaceRow> {
+export async function renameWorkspace(
+  workspaceId: string,
+  name: string,
+): Promise<WorkspaceRecord> {
   const normalizedName = name.trim().replace(/\s+/g, " ");
   if (normalizedName.length === 0) {
     throw new Error("Workspace name cannot be empty.");
   }
 
   if (!isTauri()) {
-    let renamedWorkspace: BrowserWorkspaceRow | null = null;
+    let renamedWorkspace: BrowserWorkspaceRecord | null = null;
     browserWorkspaceState = {
       ...browserWorkspaceState,
       workspaces: browserWorkspaceState.workspaces.map((workspace) => {
@@ -346,16 +303,12 @@ export async function renameWorkspace(workspaceId: string, name: string): Promis
       throw new Error(`Workspace not found: ${workspaceId}`);
     }
 
-    const nextWorkspace = renamedWorkspace as BrowserWorkspaceRow;
-    emitWorkspaceRenamed({
-      workspace_id: nextWorkspace.id,
-      name: nextWorkspace.name,
-      worktree_path: nextWorkspace.worktree_path,
-    });
+    const nextWorkspace = renamedWorkspace as BrowserWorkspaceRecord;
+    emitWorkspaceRenamed(nextWorkspace.id, nextWorkspace.name, nextWorkspace.worktree_path);
     return nextWorkspace;
   }
 
-  return invoke<WorkspaceRow>("rename_workspace", { workspaceId, name: normalizedName });
+  return invoke<WorkspaceRecord>("rename_workspace", { workspaceId, name: normalizedName });
 }
 
 export async function subscribeToNativeWorkspaceShortcutEvents(
@@ -382,25 +335,15 @@ export async function startServices(workspaceId: string, manifestJson: string): 
     const setupSteps = Array.isArray(manifest.setup?.steps) ? manifest.setup.steps : [];
     for (const [index, step] of setupSteps.entries()) {
       const stepName = step.name ?? `step-${index + 1}`;
-      emitSetupProgress({
-        workspace_id: workspaceId,
-        step_name: stepName,
-        event_type: "started",
-        data: null,
-      });
-      emitSetupProgress({
-        workspace_id: workspaceId,
-        step_name: stepName,
-        event_type: "stdout",
-        data: step.command ? `$ ${step.command}` : "Running setup",
-      });
+      emitSetupProgress(workspaceId, stepName, "started", null);
+      emitSetupProgress(
+        workspaceId,
+        stepName,
+        "stdout",
+        step.command ? `$ ${step.command}` : "Running setup",
+      );
       await delay(60);
-      emitSetupProgress({
-        workspace_id: workspaceId,
-        step_name: stepName,
-        event_type: "completed",
-        data: null,
-      });
+      emitSetupProgress(workspaceId, stepName, "completed", null);
     }
 
     const serviceEntries = Object.entries(manifest.services ?? {});
@@ -426,19 +369,9 @@ export async function startServices(workspaceId: string, manifestJson: string): 
         updated_at: now,
       });
 
-      emitServiceStatus({
-        workspace_id: workspaceId,
-        service_name: serviceName,
-        status: "starting",
-        status_reason: null,
-      });
+      emitServiceStatus(workspaceId, serviceName, "starting", null);
       await delay(40);
-      emitServiceStatus({
-        workspace_id: workspaceId,
-        service_name: serviceName,
-        status: "ready",
-        status_reason: null,
-      });
+      emitServiceStatus(workspaceId, serviceName, "ready", null);
     }
 
     browserWorkspaceState = {
@@ -471,12 +404,7 @@ export async function stopWorkspace(workspaceId: string): Promise<void> {
 
     for (const service of browserWorkspaceState.services) {
       if (service.workspace_id !== workspaceId) continue;
-      emitServiceStatus({
-        workspace_id: workspaceId,
-        service_name: service.service_name,
-        status: "stopped",
-        status_reason: null,
-      });
+      emitServiceStatus(workspaceId, service.service_name, "stopped", null);
     }
 
     updateWorkspaceRow(workspaceId, "sleeping");
@@ -486,7 +414,7 @@ export async function stopWorkspace(workspaceId: string): Promise<void> {
   return invoke<void>("stop_workspace", { workspaceId });
 }
 
-export async function getWorkspace(projectId: string): Promise<WorkspaceRow | null> {
+export async function getWorkspace(projectId: string): Promise<WorkspaceRecord | null> {
   if (!isTauri()) {
     return (
       browserWorkspaceState.workspaces.find((workspace) => workspace.project_id === projectId) ??
@@ -494,30 +422,30 @@ export async function getWorkspace(projectId: string): Promise<WorkspaceRow | nu
     );
   }
 
-  return invoke<WorkspaceRow | null>("get_workspace", { projectId });
+  return invoke<WorkspaceRecord | null>("get_workspace", { projectId });
 }
 
-export async function getWorkspaceById(workspaceId: string): Promise<WorkspaceRow | null> {
+export async function getWorkspaceById(workspaceId: string): Promise<WorkspaceRecord | null> {
   if (!isTauri()) {
     return (
       browserWorkspaceState.workspaces.find((workspace) => workspace.id === workspaceId) ?? null
     );
   }
 
-  return invoke<WorkspaceRow | null>("get_workspace_by_id", { workspaceId });
+  return invoke<WorkspaceRecord | null>("get_workspace_by_id", { workspaceId });
 }
 
-export async function listWorkspaces(): Promise<WorkspaceRow[]> {
+export async function listWorkspaces(): Promise<WorkspaceRecord[]> {
   if (!isTauri()) {
     return [...browserWorkspaceState.workspaces];
   }
 
-  return invoke<WorkspaceRow[]>("list_workspaces");
+  return invoke<WorkspaceRecord[]>("list_workspaces");
 }
 
-export async function listWorkspacesByProject(): Promise<Record<string, WorkspaceRow[]>> {
+export async function listWorkspacesByProject(): Promise<Record<string, WorkspaceRecord[]>> {
   if (!isTauri()) {
-    return browserWorkspaceState.workspaces.reduce<Record<string, WorkspaceRow[]>>(
+    return browserWorkspaceState.workspaces.reduce<Record<string, WorkspaceRecord[]>>(
       (acc, workspace) => {
         const projectWorkspaces = acc[workspace.project_id] ?? [];
         projectWorkspaces.push(workspace);
@@ -528,15 +456,17 @@ export async function listWorkspacesByProject(): Promise<Record<string, Workspac
     );
   }
 
-  return invoke<Record<string, WorkspaceRow[]>>("list_workspaces_by_project");
+  return invoke<Record<string, WorkspaceRecord[]>>("list_workspaces_by_project");
 }
 
-export async function getWorkspaceServices(workspaceId: string): Promise<ServiceRow[]> {
+export async function getWorkspaceServices(
+  workspaceId: string,
+): Promise<ServiceRecord[]> {
   if (!isTauri()) {
     return browserWorkspaceState.services.filter((service) => service.workspace_id === workspaceId);
   }
 
-  return invoke<ServiceRow[]>("get_workspace_services", { workspaceId });
+  return invoke<ServiceRecord[]>("get_workspace_services", { workspaceId });
 }
 
 export async function getCurrentBranch(projectPath: string): Promise<string> {
@@ -545,156 +475,4 @@ export async function getCurrentBranch(projectPath: string): Promise<string> {
   }
 
   return invoke<string>("get_current_branch", { projectPath });
-}
-
-export interface WorkspaceEventCallbacks {
-  onWorkspaceStatus?: (event: WorkspaceStatusEvent) => void;
-  onServiceStatus?: (event: ServiceStatusEvent) => void;
-  onSetupProgress?: (event: SetupStepEvent) => void;
-}
-
-export async function subscribeToWorkspaceStatusEvents(
-  callback: (event: WorkspaceStatusEvent) => void,
-): Promise<UnlistenFn> {
-  if (!isTauri()) {
-    browserListeners.workspaceStatus.add(callback);
-    return () => {
-      browserListeners.workspaceStatus.delete(callback);
-    };
-  }
-
-  return listen<WorkspaceStatusEvent>("workspace:status-changed", (e) => {
-    callback(e.payload);
-  });
-}
-
-export async function subscribeToWorkspaceRenamedEvents(
-  callback: (event: WorkspaceRenamedEvent) => void,
-): Promise<UnlistenFn> {
-  if (!isTauri()) {
-    browserListeners.workspaceRenamed.add(callback);
-    return () => {
-      browserListeners.workspaceRenamed.delete(callback);
-    };
-  }
-
-  return listen<WorkspaceRenamedEvent>("workspace:renamed", (event) => {
-    callback(event.payload);
-  });
-}
-
-export async function subscribeToServiceStatusEvents(
-  callback: (event: ServiceStatusEvent) => void,
-): Promise<UnlistenFn> {
-  if (!isTauri()) {
-    browserListeners.serviceStatus.add(callback);
-    return () => {
-      browserListeners.serviceStatus.delete(callback);
-    };
-  }
-
-  return listen<ServiceStatusEvent>("service:status-changed", (e) => {
-    callback(e.payload);
-  });
-}
-
-export async function subscribeToSetupProgressEvents(
-  callback: (event: SetupStepEvent) => void,
-): Promise<UnlistenFn> {
-  if (!isTauri()) {
-    browserListeners.setupProgress.add(callback);
-    return () => {
-      browserListeners.setupProgress.delete(callback);
-    };
-  }
-
-  return listen<SetupStepEvent>("setup:step-progress", (e) => {
-    callback(e.payload);
-  });
-}
-
-export async function subscribeToWorkspaceEvents(
-  workspaceId: string,
-  callbacks: WorkspaceEventCallbacks,
-): Promise<UnlistenFn> {
-  if (!isTauri()) {
-    const cleanup: Array<() => void> = [];
-
-    if (callbacks.onWorkspaceStatus) {
-      const cb = (event: WorkspaceStatusEvent) => {
-        if (event.workspace_id === workspaceId) {
-          callbacks.onWorkspaceStatus?.(event);
-        }
-      };
-      browserListeners.workspaceStatus.add(cb);
-      cleanup.push(() => browserListeners.workspaceStatus.delete(cb));
-    }
-
-    if (callbacks.onServiceStatus) {
-      const cb = (event: ServiceStatusEvent) => {
-        if (event.workspace_id === workspaceId) {
-          callbacks.onServiceStatus?.(event);
-        }
-      };
-      browserListeners.serviceStatus.add(cb);
-      cleanup.push(() => browserListeners.serviceStatus.delete(cb));
-    }
-
-    if (callbacks.onSetupProgress) {
-      const cb = (event: SetupStepEvent) => {
-        if (event.workspace_id === workspaceId) {
-          callbacks.onSetupProgress?.(event);
-        }
-      };
-      browserListeners.setupProgress.add(cb);
-      cleanup.push(() => browserListeners.setupProgress.delete(cb));
-    }
-
-    return () => {
-      for (const unregister of cleanup) {
-        unregister();
-      }
-    };
-  }
-
-  const unlisteners: UnlistenFn[] = [];
-
-  if (callbacks.onWorkspaceStatus) {
-    const cb = callbacks.onWorkspaceStatus;
-    unlisteners.push(
-      await listen<WorkspaceStatusEvent>("workspace:status-changed", (e) => {
-        if (e.payload.workspace_id === workspaceId) {
-          cb(e.payload);
-        }
-      }),
-    );
-  }
-
-  if (callbacks.onServiceStatus) {
-    const cb = callbacks.onServiceStatus;
-    unlisteners.push(
-      await listen<ServiceStatusEvent>("service:status-changed", (e) => {
-        if (e.payload.workspace_id === workspaceId) {
-          cb(e.payload);
-        }
-      }),
-    );
-  }
-
-  if (callbacks.onSetupProgress) {
-    const cb = callbacks.onSetupProgress;
-    unlisteners.push(
-      await listen<SetupStepEvent>("setup:step-progress", (e) => {
-        if (e.payload.workspace_id === workspaceId) {
-          cb(e.payload);
-        }
-      }),
-    );
-  }
-
-  return () => {
-    for (const unlisten of unlisteners) {
-      unlisten();
-    }
-  };
 }

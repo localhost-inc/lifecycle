@@ -2,7 +2,7 @@ import type { TerminalStatus } from "@lifecycle/contracts";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { useStoreClient } from "../../../store";
+import { useQueryClient } from "../../../query";
 import {
   DEFAULT_TERMINAL_COLS,
   DEFAULT_TERMINAL_ROWS,
@@ -54,7 +54,7 @@ interface WorkspaceSurfaceProps {
 }
 
 export function WorkspaceSurface({ openDocumentRequest, workspaceId }: WorkspaceSurfaceProps) {
-  const client = useStoreClient();
+  const client = useQueryClient();
   const { clearTerminalResponseReady, isTerminalResponseReady } = useTerminalResponseReady();
   const terminalsQuery = useWorkspaceTerminals(workspaceId);
   const [creatingSelection, setCreatingSelection] = useState<"shell" | HarnessProvider | null>(

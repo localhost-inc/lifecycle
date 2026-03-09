@@ -32,7 +32,7 @@ pub async fn rename_workspace(
     db_path: State<'_, DbPath>,
     workspace_id: String,
     name: String,
-) -> Result<super::query::WorkspaceRow, LifecycleError> {
+) -> Result<super::query::WorkspaceRecord, LifecycleError> {
     super::rename::rename_workspace(app, &db_path.0, &workspace_id, &name).await
 }
 
@@ -61,7 +61,7 @@ pub async fn stop_workspace(
 pub async fn get_workspace(
     db_path: State<'_, DbPath>,
     project_id: String,
-) -> Result<Option<super::query::WorkspaceRow>, LifecycleError> {
+) -> Result<Option<super::query::WorkspaceRecord>, LifecycleError> {
     super::query::get_workspace(&db_path.0, project_id).await
 }
 
@@ -69,21 +69,21 @@ pub async fn get_workspace(
 pub async fn get_workspace_by_id(
     db_path: State<'_, DbPath>,
     workspace_id: String,
-) -> Result<Option<super::query::WorkspaceRow>, LifecycleError> {
+) -> Result<Option<super::query::WorkspaceRecord>, LifecycleError> {
     super::query::get_workspace_by_id(&db_path.0, workspace_id).await
 }
 
 #[tauri::command]
 pub async fn list_workspaces(
     db_path: State<'_, DbPath>,
-) -> Result<Vec<super::query::WorkspaceRow>, LifecycleError> {
+) -> Result<Vec<super::query::WorkspaceRecord>, LifecycleError> {
     super::query::list_workspaces(&db_path.0).await
 }
 
 #[tauri::command]
 pub async fn list_workspaces_by_project(
     db_path: State<'_, DbPath>,
-) -> Result<HashMap<String, Vec<super::query::WorkspaceRow>>, LifecycleError> {
+) -> Result<HashMap<String, Vec<super::query::WorkspaceRecord>>, LifecycleError> {
     super::query::list_workspaces_by_project(&db_path.0).await
 }
 
@@ -91,7 +91,7 @@ pub async fn list_workspaces_by_project(
 pub async fn get_workspace_services(
     db_path: State<'_, DbPath>,
     workspace_id: String,
-) -> Result<Vec<super::query::ServiceRow>, LifecycleError> {
+) -> Result<Vec<super::query::ServiceRecord>, LifecycleError> {
     super::query::get_workspace_services(&db_path.0, workspace_id).await
 }
 
@@ -104,7 +104,7 @@ pub async fn get_current_branch(project_path: String) -> Result<String, Lifecycl
 pub async fn list_workspace_terminals(
     db_path: State<'_, DbPath>,
     workspace_id: String,
-) -> Result<Vec<super::query::TerminalRow>, LifecycleError> {
+) -> Result<Vec<super::query::TerminalRecord>, LifecycleError> {
     super::query::list_workspace_terminals(&db_path.0, workspace_id).await
 }
 
@@ -112,7 +112,7 @@ pub async fn list_workspace_terminals(
 pub async fn get_terminal(
     db_path: State<'_, DbPath>,
     terminal_id: String,
-) -> Result<Option<super::query::TerminalRow>, LifecycleError> {
+) -> Result<Option<super::query::TerminalRecord>, LifecycleError> {
     super::query::get_terminal_by_id(&db_path.0, terminal_id).await
 }
 
@@ -122,7 +122,7 @@ pub async fn rename_terminal(
     db_path: State<'_, DbPath>,
     terminal_id: String,
     label: String,
-) -> Result<super::query::TerminalRow, LifecycleError> {
+) -> Result<super::query::TerminalRecord, LifecycleError> {
     super::rename::rename_terminal(&app, &db_path.0, &terminal_id, &label)
 }
 

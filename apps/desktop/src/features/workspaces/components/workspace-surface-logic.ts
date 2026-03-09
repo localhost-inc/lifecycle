@@ -1,6 +1,6 @@
-import type { GitLogEntry, TerminalStatus } from "@lifecycle/contracts";
+import type { GitLogEntry, TerminalRecord, TerminalStatus } from "@lifecycle/contracts";
 import type { DragEvent as ReactDragEvent } from "react";
-import type { HarnessProvider, TerminalRow } from "../../terminals/api";
+import type { HarnessProvider } from "../../terminals/api";
 import type { WorkspaceShortcutEvent } from "../api";
 import {
   changesDiffTabKey,
@@ -35,7 +35,7 @@ export type RuntimeTab = {
   type: "terminal";
   key: string;
   label: string;
-  launchType: TerminalRow["launch_type"];
+  launchType: TerminalRecord["launch_type"];
   responseReady: boolean;
   status: TerminalStatus;
   terminalId: string;
@@ -138,7 +138,9 @@ export function areStringArraysEqual(left: readonly string[], right: readonly st
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
-export function orderWorkspaceTerminals(terminals: readonly TerminalRow[]): TerminalRow[] {
+export function orderWorkspaceTerminals(
+  terminals: readonly TerminalRecord[],
+): TerminalRecord[] {
   return [...terminals].sort(
     (left, right) =>
       left.started_at.localeCompare(right.started_at) || left.id.localeCompare(right.id),

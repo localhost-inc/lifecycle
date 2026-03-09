@@ -1,50 +1,74 @@
-# Events and Hook Kernel
+# Event Foundation
 
-Canonical contract for Lifecycle's internal event kernel.
+Canonical contract for Lifecycle's internal event foundation.
 
-This document defines the normalized event and command-hook model that sits between provider/runtime authority and app consumers such as the desktop store, notifications, metrics, audit, and future plugins.
+This document defines the forward-looking v1 model for fact events and command hooks. Commands, fact events, streams, and derived projections are separate concepts. The rest of the product should build on this model rather than inventing transport-local event dialects.
 
-## Scope
+## Purpose
 
 Use this contract for:
-1. Typed fact events that describe state changes or notable runtime outcomes
-2. Typed command-hook phases around imperative operations
-3. Normalization rules between provider-specific runtime signals and Lifecycle domain events
+1. Typed fact events that describe authoritative state changes or notable runtime outcomes
+2. Command hooks around imperative operations
+3. Normalization rules between provider/runtime signals and Lifecycle domain facts
 
 Do not use this contract for:
 1. PTY byte streams
 2. Terminal input transport
 3. Line-by-line log streaming
 4. Large artifact transfer
-5. Ad hoc UI-local state notifications
+5. Ad hoc UI-local notifications
 
-## Core Model
+### Design Goals
 
-Lifecycle separates three concerns:
+1. Keep one canonical event vocabulary across local runtime, cloud runtime, desktop, CLI, and future plugin consumers.
+2. Preserve a clear authority boundary: provider/runtime code publishes facts, while UI/query/projection code consumes them.
+3. Keep facts semantic and compact so they remain portable across transports and storage layers.
+4. Make missed delivery recoverable through authoritative refetch rather than forcing every consumer to depend on a perfect event stream.
+5. Leave room for future domains without redefining the event model again.
+
+### Non-Goals
+
+1. This is not a full event-sourcing requirement for the whole product.
+2. This does not replace imperative commands or their typed results.
+3. This does not carry high-volume streams such as PTY output, setup logs, or artifact bytes.
+4. This does not define consumer-specific projection schemas such as activity rows, audit records, or metrics tables.
+5. This does not freeze transport-local event names that exist only for rollout or adapter compatibility.
+
+## Mental Model
+
+Lifecycle separates five concerns:
 
 1. `commands`
-   - imperative requests such as `workspace.start`, `workspace.stop`, `terminal.create`
-2. `events`
-   - facts that already happened such as `workspace.status_changed`, `service.status_changed`, `terminal.renamed`
-3. `hooks`
-   - lifecycle observation points around commands: `before`, `after`, `failed`
+   - imperative requests such as `workspace.start`, `workspace.destroy`, `terminal.create`
+2. `fact events`
+   - statements about what already happened, such as `workspace.status_changed` or `git.head_changed`
+3. `streams`
+   - ordered transport channels for high-volume data such as PTY output or log output
+4. `hooks`
+   - command-scoped observation points with phases `before`, `after`, and `failed`
+5. `projections`
+   - derived read models such as activity feeds, audit logs, metrics, usage records, or UI query caches
 
-These are intentionally not the same thing.
+These are intentionally different layers.
 
 - Commands ask the system to do work.
-- Events report what the authoritative runtime decided or observed.
-- Hooks allow trusted Lifecycle-owned modules to observe or extend command execution without redefining the command surface itself.
+- Fact events describe what the authoritative system committed or observed.
+- Streams move transport-heavy data that should never be treated as coarse lifecycle facts.
+- Hooks let Lifecycle-owned modules observe or extend command execution.
+- Projections consume commands and facts; they do not define them.
 
 ## Authority Boundary
 
-1. Provider/runtime code is authoritative for workspace, service, terminal, and future agent lifecycle facts.
-2. The control plane may enrich or aggregate those facts, but it must not let UI-local state become authoritative lifecycle state.
-3. React/store code consumes normalized events; it does not define the canonical event model.
-4. Provider-specific signals must be normalized before they reach app consumers.
+1. Provider/runtime code is authoritative for workspace, service, terminal, and git facts.
+2. The control plane may enrich, persist, or project those facts, but it must not let UI-local state become authoritative lifecycle state.
+3. React query/cache code, Tauri listeners, Convex reactive queries, CLI output, and future transports are delivery or subscription surfaces, not the canonical event model.
+4. Activity, audit, and usage records are downstream projections over facts and command outcomes. They are not the internal event foundation itself.
+5. Provider-specific signals must be normalized before they reach app consumers.
+6. If a consumer misses an event or cannot reduce it safely, the recovery path is to refetch authoritative state rather than infer history from local assumptions.
 
 ## Canonical Event Envelope
 
-Canonical field names use `snake_case` at the kernel boundary so the shape stays portable across Rust, TypeScript, persistence, and future remote transport. Language-specific adapters may map casing at the edge.
+Canonical field names use `snake_case` at the foundation boundary so the shape stays portable across Rust, TypeScript, persistence, and remote transport.
 
 ```ts
 interface LifecycleEvent<TPayload = unknown> {
@@ -53,7 +77,7 @@ interface LifecycleEvent<TPayload = unknown> {
   version: number;
   occurred_at: string;
   source: {
-    layer: "provider" | "control_plane" | "desktop" | "cli" | "plugin";
+    layer: "provider" | "control_plane" | "desktop" | "cli" | "system";
     component: string;
     runtime: "local" | "cloud" | "system";
     provider?: string;
@@ -68,7 +92,35 @@ interface LifecycleEvent<TPayload = unknown> {
 }
 ```
 
-## Canonical Hook Envelope
+### Envelope Semantics
+
+| Field | Required | Rules |
+| --- | --- | --- |
+| `id` | yes | Opaque globally unique identifier for this fact delivery identity. Replays and fanout copies of the same fact reuse the same `id`. |
+| `type` | yes | Stable canonical fact name such as `workspace.status_changed`. |
+| `version` | yes | Positive integer payload schema version for this `type`. Start at `1`. |
+| `occurred_at` | yes | RFC 3339 / ISO-8601 UTC timestamp for when the authoritative fact was committed or observed. |
+| `source.layer` | yes | The emitting layer at the point the fact entered the canonical foundation. |
+| `source.component` | yes | Stable publisher identifier within that layer, for example a provider module or runtime subsystem. |
+| `source.runtime` | yes | Authority location for the fact: `local`, `cloud`, or `system`. |
+| `source.provider` | no | Stable provider identifier when the fact crossed a provider boundary and that identity matters. |
+| `workspace_id` | no | Required for all workspace-, service-, terminal-, and workspace-scoped git facts. |
+| `project_id` | no | Include when the authoritative publisher already knows the project scope without extra lookup. |
+| `terminal_id` | no | Required for terminal facts. |
+| `service_name` | no | Required for service facts. |
+| `correlation_id` | no | Shared trace id that ties one command/request flow to resulting facts. |
+| `causation_id` | no | Immediate parent trigger for this fact, such as the command attempt id or a prior fact in the same chain. |
+| `payload` | yes | Semantic payload whose schema is determined by `type` and `version`. |
+
+### Envelope Invariants
+
+1. `type` plus `version` defines the payload contract; consumers must not infer payload shape from transport or publisher.
+2. Envelope scope identifiers are routing keys. Payloads should not duplicate them unless the payload genuinely needs both source and target identities, such as `workspace.forked`.
+3. Omit optional scope fields instead of sending empty strings.
+4. Facts must not carry secrets, credential material, raw PTY bytes, large diffs, or whole log streams.
+5. If a payload repeats an identifier that also exists in the envelope, the values must match exactly.
+
+## Canonical Command Hook Context
 
 Hooks are command-scoped, not event-scoped.
 
@@ -79,7 +131,7 @@ interface CommandHookContext<TInput = unknown, TResult = unknown> {
   phase: "before" | "after" | "failed";
   occurred_at: string;
   source: {
-    layer: "desktop" | "cli" | "control_plane" | "plugin";
+    layer: "desktop" | "cli" | "control_plane" | "system";
     component: string;
   };
   workspace_id?: string;
@@ -95,7 +147,15 @@ interface CommandHookContext<TInput = unknown, TResult = unknown> {
 }
 ```
 
-## Naming Rules
+### Hook Context Rules
+
+1. `command_id` is unique per command attempt, not per command name.
+2. `before` runs after input has been parsed into a typed command boundary and before the authoritative side effect begins.
+3. `after` runs after the command produced its synchronous result; related fact events may be emitted before or after the hook depending on publisher internals, but they must share the same `correlation_id` when they belong to the same command flow.
+4. `failed` runs only when the command attempt produced a typed failure. Silent fallback is forbidden.
+5. Hooks are never a substitute for fact events. They describe command execution phases, while facts describe committed outcomes.
+
+## Naming and Versioning
 
 ### Commands
 
@@ -108,251 +168,358 @@ interface CommandHookContext<TInput = unknown, TResult = unknown> {
   - `terminal.kill`
   - `git.commit`
 
-### Events
+### Fact Events
 
-- Events are facts and use `<domain>.<fact>`
-- Prefer past-tense outcomes or state-change facts
+- Fact events use `<domain>.<fact>`
+- Use lowercase dotted names with snake_case segments
+- Prefer past-tense outcomes or explicit state-change facts
+- Prefer specific names such as `created`, `destroyed`, `renamed`, `forked`, or `status_changed`
+- Avoid generic names such as `updated`
+- Transport-local prefixes such as `tauri.*`, `convex.*`, or `query.*` do not belong in the canonical contract
 - Examples:
   - `workspace.created`
   - `workspace.status_changed`
-  - `workspace.renamed`
   - `service.status_changed`
-  - `terminal.created`
-  - `terminal.status_changed`
   - `terminal.renamed`
-  - `terminal.removed`
-  - `terminal.harness_prompt_submitted`
-  - `terminal.harness_turn_completed`
+  - `git.head_changed`
 
 ### Hooks
 
-- Hooks are phases of a command, not standalone domain events
 - Hook phase names are fixed:
   - `before`
   - `after`
   - `failed`
 
-## Delivery Rules
+### Versioning
+
+1. `type` names are stable identifiers for the semantic fact.
+2. Breaking payload changes increment `version`.
+3. Additive payload fields keep the existing `type` and `version`.
+4. Consumers must ignore unknown additive fields.
+5. Transport-specific aliases do not belong in the canonical contract.
+
+## Publication and Normalization Rules
 
 1. Publish fact events after the authoritative state change or observation is committed.
-2. Preserve causal ordering within a single aggregate where practical:
+2. Normalize provider-specific signals into canonical domain names and canonical enums before publication.
+3. Do not leak transient provider-only statuses that are not part of the canonical state machines in [state-machines.md](./state-machines.md).
+4. A single command may emit zero, one, or many facts.
+5. A single real-world action that touches multiple aggregates should emit multiple facts, one per aggregate, rather than one overloaded catch-all fact.
+6. Facts may be derived from authoritative provider/runtime logs when the log is the durable source of truth for that semantic milestone, such as harness turn completion.
+7. If a provider cannot produce a stable semantic fact, do not publish an approximate UI-local substitute. Keep the capability absent until it can be normalized correctly.
+8. Publishers should include `correlation_id` on command-caused facts and set `causation_id` to the immediate parent trigger when available.
+
+### Normalization Examples
+
+| Raw source signal | Canonical output | Notes |
+| --- | --- | --- |
+| Workspace row persisted with a new lifecycle status | `workspace.status_changed` | The payload uses canonical `WorkspaceStatus` and typed `failure_reason` values. |
+| Manual or generated rename committed to shared state | `workspace.renamed` or `terminal.renamed` | UI-only rename draft changes do not publish facts. |
+| Terminal PTY output chunk | none | This is a stream attachment, not a fact event. |
+| Harness accepts a prompt boundary | `terminal.harness_prompt_submitted` | Emitted once per accepted turn, never per keystroke. |
+| Harness provider log reports turn completion | `terminal.harness_turn_completed` | The publisher may synthesize this from authoritative session logs. |
+| Git commit completes successfully | `git.head_changed`, `git.log_changed`, `git.status_changed` | Multiple repository facts may result from one command. |
+| Activity row appended to an org feed | none | Activity is a projection over facts, not a source fact itself. |
+
+## Delivery, Ordering, Replay, and Dedupe
+
+1. Preserve causal ordering within a single aggregate where practical:
    - per `workspace_id`
    - per `terminal_id`
    - per `service_name` within a workspace
-3. Do not promise one global total order across the whole app.
-4. Use `correlation_id` and `causation_id` to connect command execution to resulting events.
-5. Consumers must tolerate duplicate delivery and should dedupe by `id` where replay or fanout paths exist.
+   - per workspace-scoped git repository
+2. Do not promise one global total order across the whole product.
+3. Replay may happen on reconnect, query cache bootstrap, subscription fanout, or future remote attach flows.
+4. Consumers must tolerate duplicate delivery and should dedupe by `id`.
+5. Consumers must be idempotent. Applying the same fact twice must not corrupt derived state.
+6. If a consumer encounters an unknown `type`, unsupported `version`, or a suspected gap, the correct fallback is authoritative refetch, not best-effort guesswork.
+7. The event foundation is a semantic notification layer. It is not, by itself, a promise of durable historical replay forever.
+8. Durable retention, searchability, and compliance history belong to projections and audit stores, not necessarily to every event transport.
 
-## Harness Turn Semantics
+## Payload Design Rules
 
-Harness turn facts are semantic lifecycle events, not transport streams.
+1. Payload fields must use canonical nouns and typed enums from [state-machines.md](./state-machines.md), [errors.md](./errors.md), and shared contracts.
+2. Keep payloads semantic and compact. Include what changed and what downstream consumers need to reason about that change.
+3. Prefer explicit before/after fields for state transitions instead of one ambiguous `state`.
+4. Created facts may include enough metadata for consumer upserts, but they should not embed arbitrarily large nested snapshots.
+5. Human-readable summaries, display strings, and analytics rollups belong in projections unless they are themselves authoritative shared state, such as `workspace.name` or `terminal.label`.
+6. Do not include raw terminal output, setup log lines, unified diffs, attachment bytes, or secret values.
+7. Optional fields should mean "not known" or "not applicable", not "empty placeholder".
 
-1. `terminal.harness_prompt_submitted` means the harness accepted a submitted user prompt as a turn boundary.
-2. `terminal.harness_prompt_submitted` is emitted once per submitted turn, not per keystroke, PTY input chunk, or renderer-local input change.
-3. `terminal.harness_prompt_submitted` must be emitted by authoritative provider/runtime/backend code after the submit boundary is known.
-4. `terminal.harness_turn_completed` is a separate fact that means the harness finished responding for a turn.
-5. Auto-title logic that wants immediate first-prompt titles should listen to `terminal.harness_prompt_submitted`, not `terminal.harness_turn_completed`.
-6. Until `terminal.harness_prompt_submitted` exists, the backend may temporarily recover the first prompt from the authoritative harness session log when the first `terminal.harness_turn_completed` fact arrives.
-7. When `terminal.label_origin == default` and `workspace.name_origin == default`, the first submitted harness prompt may trigger title derivation followed by `terminal.renamed` and `workspace.renamed`.
+## Domain Catalog
 
-Suggested normalized payload for `terminal.harness_prompt_submitted`:
+The first concrete catalog for v1 is `workspace`, `service`, `terminal`, and `git`.
+
+### Shared Helper Types
+
+Payload enums must stay aligned with [state-machines.md](./state-machines.md), [errors.md](./errors.md), [workspace.ts](../../packages/contracts/src/workspace.ts), and [terminal.ts](../../packages/contracts/src/terminal.ts).
 
 ```ts
-interface TerminalHarnessPromptSubmittedPayload {
-  terminal_id: string;
-  workspace_id: string;
-  harness_provider?: string;
-  harness_session_id?: string;
-  prompt_text: string;
-  turn_id?: string;
+type NameOrigin = "default" | "generated" | "manual";
+type LaunchType = "shell" | "harness" | "preset" | "command";
+```
+
+### Workspace Facts
+
+Workspace facts describe workspace identity, lifecycle state, and shared naming.
+
+| Type | Meaning |
+| --- | --- |
+| `workspace.created` | A workspace record and execution context were created. |
+| `workspace.forked` | A workspace was created by forking another workspace across execution boundaries. |
+| `workspace.status_changed` | The authoritative workspace state machine advanced. |
+| `workspace.renamed` | The shared workspace title changed. |
+| `workspace.destroyed` | The workspace was destroyed and should be treated as terminal. |
+
+```ts
+interface WorkspaceCreatedPayload {
+  name: string;
+  name_origin: NameOrigin;
+  mode: WorkspaceMode;
+  status: WorkspaceStatus;
+  source_ref: string;
+  source_workspace_id?: string;
+}
+
+interface WorkspaceForkedPayload {
+  source_workspace_id: string;
+  target_workspace_id: string;
+  source_mode: WorkspaceMode;
+  target_mode: WorkspaceMode;
+  included_uncommitted: boolean;
+  source_destroyed?: boolean;
+}
+
+interface WorkspaceStatusChangedPayload {
+  from_status: WorkspaceStatus;
+  to_status: WorkspaceStatus;
+  failure_reason?: WorkspaceFailureReason;
+}
+
+interface WorkspaceRenamedPayload {
+  name: string;
+  name_origin: NameOrigin;
+  worktree_path?: string;
+}
+
+interface WorkspaceDestroyedPayload {
+  previous_status?: WorkspaceStatus;
 }
 ```
 
-## What Belongs on the Kernel
+### Service Facts
 
-Use the kernel for:
-1. Lifecycle state transitions
-2. Semantic runtime milestones
-3. Rename/title changes that affect shared state
-4. Audit-worthy or metric-worthy domain facts
-5. Future artifact and agent session facts
+Service facts describe workspace service runtime state and exposure policy. Preview route lifecycle remains a deferred `preview` domain concern even when exposure changes have preview side effects.
 
-Do not use the kernel for:
-1. PTY output chunks
-2. Terminal input data
-3. High-frequency renderer sync
-4. Raw setup stdout/stderr lines
-5. Bulk attachment/artifact bytes
+| Type | Meaning |
+| --- | --- |
+| `service.status_changed` | A workspace service changed runtime status. |
+| `service.exposure_changed` | A workspace service changed sharing or exposure policy. |
 
-Those use dedicated transports. The kernel may still publish coarse facts about them, for example:
-- `setup.step_started`
-- `setup.step_completed`
-- `setup.step_failed`
-- `artifact.published`
+```ts
+interface ServiceStatusChangedPayload {
+  status: WorkspaceServiceStatus;
+  previous_status?: WorkspaceServiceStatus;
+  status_reason?: WorkspaceServiceStatusReason;
+}
+
+interface ServiceExposureChangedPayload {
+  exposure: WorkspaceServiceExposure;
+  previous_exposure?: WorkspaceServiceExposure;
+}
+```
+
+### Terminal Facts
+
+Terminal facts describe terminal lifecycle, naming, and harness turn boundaries. They do not carry PTY stream bytes.
+
+| Type | Meaning |
+| --- | --- |
+| `terminal.created` | A terminal session was created. |
+| `terminal.status_changed` | The authoritative terminal lifecycle changed. |
+| `terminal.renamed` | The shared terminal label changed. |
+| `terminal.removed` | The terminal record was removed from shared state. |
+| `terminal.harness_prompt_submitted` | A harness accepted a submitted prompt as a turn boundary. |
+| `terminal.harness_turn_completed` | A harness finished responding for a turn. |
+
+```ts
+interface TerminalCreatedPayload {
+  launch_type: LaunchType;
+  status: TerminalStatus;
+  label: string;
+  label_origin: NameOrigin;
+  harness_provider?: string;
+  harness_session_id?: string;
+}
+
+interface TerminalStatusChangedPayload {
+  status: TerminalStatus;
+  previous_status?: TerminalStatus;
+  failure_reason?: TerminalFailureReason;
+  exit_code?: number;
+}
+
+interface TerminalRenamedPayload {
+  label: string;
+  label_origin: NameOrigin;
+}
+
+interface TerminalRemovedPayload {
+  previous_status?: TerminalStatus;
+}
+
+interface TerminalHarnessPromptSubmittedPayload {
+  prompt_text: string;
+  harness_provider?: string;
+  harness_session_id?: string;
+  turn_id?: string;
+}
+
+interface TerminalHarnessTurnCompletedPayload {
+  harness_provider?: string;
+  harness_session_id?: string;
+  turn_id?: string;
+  completion_key?: string;
+}
+```
+
+`completion_key` is a provider-normalized dedupe token for repeated observation of the same semantic turn completion.
+
+### Git Facts
+
+Git facts are repository-level invalidation points scoped to a workspace. They do not carry patch bytes, per-file diffs, or whole log payloads.
+
+| Type | Meaning |
+| --- | --- |
+| `git.status_changed` | The authoritative working tree or index summary changed. Consumers should refetch status and current changes patch. |
+| `git.head_changed` | The repository head or branch position changed. Consumers should refetch status, history, and commit-scoped views. |
+| `git.log_changed` | Visible history may have changed. Consumers should refetch git log views. |
+
+```ts
+interface GitStatusChangedPayload {
+  branch?: string;
+  head_sha?: string;
+  upstream?: string;
+}
+
+interface GitHeadChangedPayload {
+  branch?: string;
+  head_sha?: string;
+  upstream?: string;
+  ahead?: number;
+  behind?: number;
+}
+
+interface GitLogChangedPayload {
+  branch?: string;
+  head_sha?: string;
+}
+```
+
+## Harness Semantics
+
+Harness turn facts are semantic lifecycle facts, not transport streams.
+
+1. `terminal.harness_prompt_submitted` is emitted once per accepted prompt or turn.
+2. It is never emitted per keystroke, PTY input chunk, or renderer-local draft change.
+3. Auto-title logic should listen to `terminal.harness_prompt_submitted`, not `terminal.harness_turn_completed`.
+4. `terminal.harness_turn_completed` means a turn response finished, not that the PTY exited.
+5. Publishers may dedupe repeated completion detection for the same turn by `completion_key`.
+6. When `terminal.label_origin == default` and `workspace.name_origin == default`, the first submitted harness prompt may trigger title derivation followed by `terminal.renamed` and `workspace.renamed`.
+
+## Command-to-Fact Examples
+
+These examples are illustrative sequencing rules, not exhaustive transport traces.
+
+### `workspace.start`
+
+1. Hook `before` fires for `workspace.start`.
+2. Publisher commits `workspace.status_changed` with `from_status=sleeping|failed|ready` and `to_status=starting`.
+3. Publisher emits zero or more `service.status_changed` facts as services start and settle.
+4. Publisher commits `workspace.status_changed` with `to_status=ready` or `to_status=failed`.
+5. Hook `after` or `failed` fires for the command attempt.
+
+### `terminal.create`
+
+1. Hook `before` fires for `terminal.create`.
+2. Publisher commits `terminal.created`.
+3. Any PTY attach or replay stream starts on a separate stream transport, not as fact events.
+4. Later process lifecycle changes publish `terminal.status_changed`.
+
+### `git.commit`
+
+1. Hook `before` fires for `git.commit`.
+2. Provider commits the repository mutation.
+3. Publisher emits `git.head_changed`, `git.log_changed`, and `git.status_changed` as needed for the new repository state.
+4. Hook `after` fires with the typed commit result.
+
+### First Harness Prompt
+
+1. Publisher emits `terminal.harness_prompt_submitted`.
+2. If default titles are still in effect, publisher may emit `terminal.renamed` and `workspace.renamed`.
+3. Later, when the harness completes the turn, publisher emits `terminal.harness_turn_completed`.
+
+## Streams and Projections
+
+### Streams
+
+Use dedicated transports for:
+1. PTY output
+2. Terminal input
+3. Setup or job log lines
+4. Large artifact or attachment bytes
+
+The event foundation may still publish coarse semantic facts about stream-backed workflows, but it does not carry the stream itself.
+
+### Projections
+
+Activity feeds, audit logs, metrics, and usage records are projections over canonical facts and command outcomes.
+
+1. Projection records may persist selected event metadata such as `event_type`, `workspace_id`, `actor`, and human-readable summaries.
+2. Projection schemas are consumer-specific and may denormalize data for queryability.
+3. Projection record types must not replace the canonical fact event definitions in this document.
 
 ## Hook Rules
 
 1. Hooks exist to observe or extend command execution, not to replace the command model.
 2. `before` hooks are the only phase that may block command execution.
-3. Blocking hooks must stay trusted and Lifecycle-owned until there is an explicit plugin permission model.
-4. Third-party plugin hooks should default to non-blocking observation until trust, sandboxing, and failure isolation are designed.
-5. Hook failures must surface typed errors rather than silent fallback behavior.
+3. Blocking hooks stay Lifecycle-owned until an explicit trust and permission model exists.
+4. Hook failures must surface typed errors rather than silent fallback behavior.
+5. Hooks and fact events are complementary surfaces: hooks describe command execution phases, while fact events describe committed outcomes.
 
 ## Consumer Rules
 
-Expected kernel consumers include:
-1. Desktop reactive store/query reduction
+Expected consumers include:
+1. Desktop reactive query cache and reducer layer
 2. Notifications and attention UX
 3. Diagnostics and metrics
-4. Audit/activity feeds
+4. Activity, audit, and usage projections
 5. Future plugin subscriptions
 
-Consumers may derive view state, but they must not rewrite authoritative lifecycle history.
+Consumers may derive view state, but they must not redefine authoritative lifecycle history.
 
-## Initial Kernel Domains
+Consumer-specific rules:
+1. If a consumer sees an unsupported `version`, it should fail closed for that fact and refetch authoritative state.
+2. Consumers may maintain local cursors or reduction checkpoints, but those checkpoints are not canonical lifecycle history.
+3. Consumer-specific display labels, summaries, and badge logic should be derived from facts, not pushed back into the canonical foundation as new fact types.
 
-The first normalized domains should be:
-1. `workspace`
-2. `service`
-3. `terminal`
-4. `project`
-5. `git`
+## Anti-Patterns
 
-Later domains may add:
-1. `agent`
-2. `artifact`
-3. `preview`
+Do not introduce:
+1. Catch-all facts such as `workspace.updated`
+2. Fact types for PTY output, raw log lines, or attachment bytes
+3. Projection rows such as `activity.created` as a replacement for canonical facts
+4. UI-local event names as cross-layer contracts
+5. Silent provider-specific fallback facts when a stable canonical fact does not yet exist
+
+## Deferred Domains
+
+The foundation intentionally reserves additional domains for later work:
+1. `preview`
+2. `agent`
+3. `artifact`
 4. `activity`
 5. `usage`
+6. `repository`
 
-## Current Lifecycle Mapping
-
-Current runtime signals should normalize into kernel events along these lines:
-
-| Current concept | Kernel event |
-| --- | --- |
-| workspace status change | `workspace.status_changed` |
-| workspace rename | `workspace.renamed` |
-| service status change | `service.status_changed` |
-| terminal create | `terminal.created` |
-| terminal rename | `terminal.renamed` |
-| terminal status change | `terminal.status_changed` |
-| terminal removal | `terminal.removed` |
-| harness prompt submission | `terminal.harness_prompt_submitted` |
-| harness response completion | `terminal.harness_turn_completed` |
-
-The desktop store may continue to use narrower in-process event types, but those should be adapters over this kernel, not an independent contract.
-
-## Git Opportunity
-
-The current desktop git Changes flow still depends on status polling plus query invalidation to keep sidebar state and diff surfaces aligned. The stale-diff edge cases in the unified Changes tab are a concrete signal that `git` should graduate from "initial domain" to explicit typed fact events.
-
-Useful future facts include:
-1. `git.status_changed`
-2. `git.head_changed`
-3. `git.index_changed`
-
-Those events should describe repository-level facts after authoritative git mutations such as stage, unstage, commit, checkout, and refresh-worthy file-state transitions. That would let desktop consumers invalidate status and patch queries directly instead of inferring reloads from polling snapshots or UI-local focus changes.
-
-## Implementation Direction
-
-1. Create one event registry that owns event names, versions, and payload schemas.
-2. Route provider-owned lifecycle publishers through that registry before fanout.
-3. Make the desktop store a subscriber to the kernel rather than the primary fan-in surface.
-4. Add command hook registration separately from event subscription.
-5. Keep stream transports explicit and outside the kernel.
-
-## Technical Plan
-
-This is the implementation sequence for making the kernel part of the system's default path rather than an optional side abstraction.
-
-### Phase 1: Kernel Spine
-
-Goal: one canonical publish/subscribe surface exists.
-
-Scope:
-1. Add shared event name and envelope definitions in `packages/contracts`.
-2. Add a backend kernel module under the desktop runtime, for example `apps/desktop/src-tauri/src/platform/events/*`.
-3. Add one `publish_event(...)` path instead of scattered raw lifecycle `app.emit(...)` calls for new work.
-4. Add one desktop-facing subscription adapter that can fan out normalized kernel events to current consumers.
-
-Suggested landing zones:
-- `packages/contracts/src/events.ts`
-- `apps/desktop/src-tauri/src/platform/events/mod.rs`
-- `apps/desktop/src-tauri/src/platform/events/registry.rs`
-- `apps/desktop/src-tauri/src/platform/events/hooks.rs`
-- `apps/desktop/src/features/events/api.ts`
-
-### Phase 2: Producer Migration
-
-Goal: authoritative lifecycle publishers emit through the kernel first.
-
-Scope:
-1. Migrate workspace lifecycle publishers:
-   - create
-   - start
-   - stop
-   - rename
-   - failure/status transitions
-2. Migrate service lifecycle publishers:
-   - status changes
-   - health/failure transitions
-3. Migrate terminal lifecycle publishers:
-   - create
-   - status changes
-   - rename
-   - removal
-   - semantic harness prompt submission
-   - semantic completion events such as harness turn completion
-4. Keep temporary adapters for existing Tauri event names only where needed for rollout.
-
-### Phase 3: Consumer Migration
-
-Goal: app consumers use the kernel path, not ad hoc domain-specific subscriptions.
-
-Scope:
-1. Refactor the desktop store fan-in in `apps/desktop/src/store/source.ts` to subscribe through one kernel adapter.
-2. Keep feature hooks reducer-driven, but make them consumers of normalized kernel events.
-3. Route diagnostics, attention/notification UX, and future activity feeds through kernel consumers rather than direct provider listeners.
-
-### Phase 4: Command Hook Runner
-
-Goal: command interception becomes explicit and trusted.
-
-Scope:
-1. Introduce a command runner wrapper around imperative lifecycle operations.
-2. Support `before|after|failed` phases for trusted Lifecycle-owned hooks only.
-3. Attach `command_id`, `correlation_id`, and `causation_id` so command execution and published facts stay traceable.
-4. Keep plugin-facing hooks out of scope until there is a trust and permission model.
-
-### Phase 5: Guardrails
-
-Goal: new work naturally uses the kernel.
-
-Scope:
-1. Add contract tests for event names, payload shapes, and per-aggregate ordering assumptions.
-2. Add integration tests for one workspace path and one terminal path going through the kernel.
-3. Add a lightweight code-review or lint guard against new raw domain lifecycle `emit` calls outside the kernel module.
-4. Update docs when new domains join the registry.
-
-## Definition of Done
-
-This effort is integrated into system DNA when:
-
-1. New lifecycle work publishes facts through the kernel by default.
-2. The desktop store is a kernel consumer, not the primary lifecycle event definition surface.
-3. Commands and hooks are explicit and separate from fact events.
-4. PTY/log streams still use dedicated transports and have not leaked into the generic kernel.
-5. Event names and payload shapes are centrally registered and tested.
-
-## Deferred Scope
-
-This plan does not include:
-
-1. third-party plugin host/runtime
-2. extension permissions or sandboxing
-3. marketplace or activation-event model
-4. user-installed hook scripts
-5. cross-process extension isolation
-
-Those build on top of the internal kernel after the kernel is the authoritative path.
+When those domains are introduced, they should follow this document's naming, envelope, ordering, and projection rules instead of creating parallel models.

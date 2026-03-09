@@ -17,9 +17,8 @@ import {
   useRef,
   useState,
 } from "react";
-import type { GitLogEntry } from "@lifecycle/contracts";
+import type { GitLogEntry, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { EnvironmentPanel } from "./environment-panel";
-import type { ServiceRow, WorkspaceRow } from "../api";
 import { VersionControlPanel } from "../../git/components/version-control-panel";
 
 const PANEL_SEPARATOR_STEP_PX = 32;
@@ -28,8 +27,8 @@ interface WorkspaceSidebarProps {
   hasManifest: boolean;
   onOpenDiff: (filePath: string) => void;
   onOpenCommitDiff: (entry: GitLogEntry) => void;
-  services: ServiceRow[];
-  workspace: WorkspaceRow;
+  services: ServiceRecord[];
+  workspace: WorkspaceRecord;
 }
 
 export function WorkspaceSidebar({

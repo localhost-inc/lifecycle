@@ -73,12 +73,18 @@ describe("workspace provider interface", () => {
       replayCursor: null,
       terminal: {
         id: "term_1",
+        workspace_id: "ws_1",
+        launch_type: "shell",
+        harness_provider: null,
+        harness_session_id: null,
+        created_by: null,
         label: "Terminal 1",
-        lastActiveAt: "2026-03-05T08:00:00.000Z",
-        launchType: "shell",
-        startedAt: "2026-03-05T08:00:00.000Z",
         status: "active",
-        workspaceId: "ws_1",
+        failure_reason: null,
+        exit_code: null,
+        started_at: "2026-03-05T08:00:00.000Z",
+        last_active_at: "2026-03-05T08:00:00.000Z",
+        ended_at: null,
       },
     };
     const client: CloudWorkspaceClient = {
@@ -216,15 +222,19 @@ describe("workspace provider interface", () => {
       return {
         replayCursor: null,
         terminal: {
-          harnessProvider: "claude",
-          harnessSessionId: "session-123",
           id: "term_1",
+          workspace_id: "ws_1",
+          launch_type: "harness",
+          harness_provider: "claude",
+          harness_session_id: "session-123",
+          created_by: null,
           label: "Claude · Session 1",
-          lastActiveAt: "2026-03-05T08:00:00.000Z",
-          launchType: "harness",
-          startedAt: "2026-03-05T08:00:00.000Z",
           status: "detached",
-          workspaceId: "ws_1",
+          failure_reason: null,
+          exit_code: null,
+          started_at: "2026-03-05T08:00:00.000Z",
+          last_active_at: "2026-03-05T08:00:00.000Z",
+          ended_at: null,
         },
       };
     };

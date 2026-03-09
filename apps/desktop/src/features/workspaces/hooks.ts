@@ -1,7 +1,11 @@
+import type {
+  LifecycleEventType,
+  ServiceRecord,
+  WorkspaceRecord,
+} from "@lifecycle/contracts";
 import { useMemo } from "react";
-import type { QueryDescriptor, StoreQueryResult } from "../../store";
-import { useStoreQuery } from "../../store";
-import type { ServiceRow, WorkspaceRow } from "./api";
+import type { QueryDescriptor, QueryResult } from "../../query";
+import { useQuery } from "../../query";
 
 export interface SetupStepState {
   name: string;
@@ -16,23 +20,36 @@ export const workspaceKeys = {
   setup: (workspaceId: string) => ["workspace-setup", workspaceId] as const,
 };
 
-const workspacesByProjectQuery: QueryDescriptor<Record<string, WorkspaceRow[]>> = {
+const WORKSPACES_BY_PROJECT_EVENT_TYPES = [
+  "workspace.renamed",
+  "workspace.status_changed",
+] as const satisfies readonly LifecycleEventType[];
+const WORKSPACE_EVENT_TYPES = [
+  "workspace.renamed",
+  "workspace.status_changed",
+] as const satisfies readonly LifecycleEventType[];
+const WORKSPACE_SERVICE_EVENT_TYPES = [
+  "service.status_changed",
+] as const satisfies readonly LifecycleEventType[];
+const WORKSPACE_SETUP_EVENT_TYPES = [
+  "workspace.status_changed",
+  "setup.step_progress",
+] as const satisfies readonly LifecycleEventType[];
+
+const workspacesByProjectQuery: QueryDescriptor<Record<string, WorkspaceRecord[]>> = {
+  eventTypes: WORKSPACES_BY_PROJECT_EVENT_TYPES,
   key: workspaceKeys.byProject(),
   fetch(source) {
     return source.listWorkspacesByProject();
   },
   reduce(current, event) {
-    if (event.kind === "workspaces-invalidated") {
-      return { type: "invalidate" };
-    }
-
-    if (event.kind === "workspace-renamed" && current) {
+    if (event.type === "workspace.renamed" && current) {
       let found = false;
       const next = Object.fromEntries(
         Object.entries(current).map(([projectId, workspaces]) => [
           projectId,
           workspaces.map((workspace) => {
-            if (workspace.id !== event.workspaceId) {
+            if (workspace.id !== event.workspace_id) {
               return workspace;
             }
 
@@ -40,7 +57,7 @@ const workspacesByProjectQuery: QueryDescriptor<Record<string, WorkspaceRow[]>> 
             return {
               ...workspace,
               name: event.name,
-              worktree_path: event.worktreePath,
+              worktree_path: event.worktree_path,
             };
           }),
         ]),
@@ -49,7 +66,7 @@ const workspacesByProjectQuery: QueryDescriptor<Record<string, WorkspaceRow[]>> 
       return found ? { type: "replace", data: next } : { type: "invalidate" };
     }
 
-    if (event.kind !== "workspace-status-changed" || !current) {
+    if (event.type !== "workspace.status_changed" || !current) {
       return { type: "none" };
     }
 
@@ -59,7 +76,7 @@ const workspacesByProjectQuery: QueryDescriptor<Record<string, WorkspaceRow[]>> 
       Object.entries(current).map(([projectId, workspaces]) => [
         projectId,
         workspaces.map((workspace) => {
-          if (workspace.id !== event.workspaceId) {
+          if (workspace.id !== event.workspace_id) {
             return workspace;
           }
 
@@ -67,7 +84,7 @@ const workspacesByProjectQuery: QueryDescriptor<Record<string, WorkspaceRow[]>> 
           changed = true;
           return {
             ...workspace,
-            failure_reason: event.failureReason,
+            failure_reason: event.failure_reason,
             status: event.status,
           };
         }),
@@ -82,22 +99,16 @@ const workspacesByProjectQuery: QueryDescriptor<Record<string, WorkspaceRow[]>> 
   },
 };
 
-function createWorkspaceQuery(workspaceId: string): QueryDescriptor<WorkspaceRow | null> {
+function createWorkspaceQuery(workspaceId: string): QueryDescriptor<WorkspaceRecord | null> {
   return {
+    eventTypes: WORKSPACE_EVENT_TYPES,
     key: workspaceKeys.detail(workspaceId),
     fetch(source) {
       return source.getWorkspace(workspaceId);
     },
     reduce(current, event) {
-      if (
-        event.kind === "workspaces-invalidated" &&
-        (!event.workspaceId || event.workspaceId === workspaceId)
-      ) {
-        return { type: "invalidate" };
-      }
-
-      if (event.kind !== "workspace-status-changed" || event.workspaceId !== workspaceId) {
-        if (event.kind === "workspace-renamed" && event.workspaceId === workspaceId) {
+      if (event.type !== "workspace.status_changed" || event.workspace_id !== workspaceId) {
+        if (event.type === "workspace.renamed" && event.workspace_id === workspaceId) {
           if (!current) {
             return { type: "invalidate" };
           }
@@ -107,7 +118,7 @@ function createWorkspaceQuery(workspaceId: string): QueryDescriptor<WorkspaceRow
             data: {
               ...current,
               name: event.name,
-              worktree_path: event.worktreePath,
+              worktree_path: event.worktree_path,
             },
           };
         }
@@ -123,7 +134,7 @@ function createWorkspaceQuery(workspaceId: string): QueryDescriptor<WorkspaceRow
         type: "replace",
         data: {
           ...current,
-          failure_reason: event.failureReason,
+          failure_reason: event.failure_reason,
           status: event.status,
         },
       };
@@ -131,21 +142,15 @@ function createWorkspaceQuery(workspaceId: string): QueryDescriptor<WorkspaceRow
   };
 }
 
-function createWorkspaceServicesQuery(workspaceId: string): QueryDescriptor<ServiceRow[]> {
+function createWorkspaceServicesQuery(workspaceId: string): QueryDescriptor<ServiceRecord[]> {
   return {
+    eventTypes: WORKSPACE_SERVICE_EVENT_TYPES,
     key: workspaceKeys.services(workspaceId),
     fetch(source) {
       return source.getWorkspaceServices(workspaceId);
     },
     reduce(current, event) {
-      if (
-        event.kind === "workspaces-invalidated" &&
-        (!event.workspaceId || event.workspaceId === workspaceId)
-      ) {
-        return { type: "invalidate" };
-      }
-
-      if (event.kind !== "workspace-service-status-changed" || event.workspaceId !== workspaceId) {
+      if (event.type !== "service.status_changed" || event.workspace_id !== workspaceId) {
         return { type: "none" };
       }
 
@@ -154,15 +159,15 @@ function createWorkspaceServicesQuery(workspaceId: string): QueryDescriptor<Serv
       }
 
       const next = current.map((service) =>
-        service.service_name === event.serviceName
+        service.service_name === event.service_name
           ? {
               ...service,
               status: event.status,
-              status_reason: event.statusReason,
+              status_reason: event.status_reason,
             }
           : service,
       );
-      const found = next.some((service) => service.service_name === event.serviceName);
+      const found = next.some((service) => service.service_name === event.service_name);
 
       if (!found) {
         return { type: "invalidate" };
@@ -175,44 +180,38 @@ function createWorkspaceServicesQuery(workspaceId: string): QueryDescriptor<Serv
 
 function createWorkspaceSetupQuery(workspaceId: string): QueryDescriptor<SetupStepState[]> {
   return {
+    eventTypes: WORKSPACE_SETUP_EVENT_TYPES,
     key: workspaceKeys.setup(workspaceId),
     async fetch() {
       return [];
     },
     reduce(current, event) {
       if (
-        event.kind === "workspaces-invalidated" &&
-        (!event.workspaceId || event.workspaceId === workspaceId)
-      ) {
-        return { type: "invalidate" };
-      }
-
-      if (
-        event.kind === "workspace-status-changed" &&
-        event.workspaceId === workspaceId &&
+        event.type === "workspace.status_changed" &&
+        event.workspace_id === workspaceId &&
         event.status === "starting"
       ) {
         return { type: "replace", data: [] };
       }
 
-      if (event.kind !== "workspace-setup-progress" || event.workspaceId !== workspaceId) {
+      if (event.type !== "setup.step_progress" || event.workspace_id !== workspaceId) {
         return { type: "none" };
       }
 
       const previous = current ?? [];
-      const existing = previous.find((step) => step.name === event.stepName);
+      const existing = previous.find((step) => step.name === event.step_name);
       const steps = existing
         ? previous
-        : [...previous, { name: event.stepName, output: [], status: "pending" as const }];
+        : [...previous, { name: event.step_name, output: [], status: "pending" as const }];
 
       return {
         type: "replace",
         data: steps.map((step) => {
-          if (step.name !== event.stepName) {
+          if (step.name !== event.step_name) {
             return step;
           }
 
-          switch (event.eventType) {
+          switch (event.event_type) {
             case "started":
               return { ...step, status: "running" as const };
             case "stdout":
@@ -236,14 +235,14 @@ function createWorkspaceSetupQuery(workspaceId: string): QueryDescriptor<SetupSt
 }
 
 export function useWorkspacesByProject() {
-  return useStoreQuery(workspacesByProjectQuery, {
+  return useQuery(workspacesByProjectQuery, {
     disabledData: undefined,
   });
 }
 
 export function useProjectWorkspaces(
   projectId: string | null,
-): StoreQueryResult<WorkspaceRow[] | undefined> {
+): QueryResult<WorkspaceRecord[] | undefined> {
   const query = useWorkspacesByProject();
 
   return useMemo(
@@ -255,39 +254,39 @@ export function useProjectWorkspaces(
   );
 }
 
-export function useWorkspace(workspaceId: string | null): StoreQueryResult<WorkspaceRow | null> {
+export function useWorkspace(workspaceId: string | null): QueryResult<WorkspaceRecord | null> {
   const descriptor = useMemo(
     () => (workspaceId ? createWorkspaceQuery(workspaceId) : null),
     [workspaceId],
   );
 
-  return useStoreQuery(descriptor, {
+  return useQuery(descriptor, {
     disabledData: null,
   });
 }
 
 export function useWorkspaceServices(
   workspaceId: string | null,
-): StoreQueryResult<ServiceRow[] | undefined> {
+): QueryResult<ServiceRecord[] | undefined> {
   const descriptor = useMemo(
     () => (workspaceId ? createWorkspaceServicesQuery(workspaceId) : null),
     [workspaceId],
   );
 
-  return useStoreQuery(descriptor, {
+  return useQuery(descriptor, {
     disabledData: undefined,
   });
 }
 
 export function useWorkspaceSetup(
   workspaceId: string | null,
-): StoreQueryResult<SetupStepState[] | undefined> {
+): QueryResult<SetupStepState[] | undefined> {
   const descriptor = useMemo(
     () => (workspaceId ? createWorkspaceSetupQuery(workspaceId) : null),
     [workspaceId],
   );
 
-  return useStoreQuery(descriptor, {
+  return useQuery(descriptor, {
     disabledData: undefined,
   });
 }

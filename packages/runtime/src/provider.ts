@@ -5,9 +5,9 @@ import type {
   GitLogEntry,
   GitPushResult,
   GitStatusResult,
+  ServiceRecord,
   TerminalRecord,
   WorkspaceRecord,
-  WorkspaceServiceRecord,
 } from "@lifecycle/contracts";
 
 export interface LocalWorkspaceProviderCreateContext {
@@ -45,13 +45,13 @@ export interface WorkspaceProviderCreateResult {
 
 export interface WorkspaceProviderStartInput {
   workspace: WorkspaceRecord;
-  services: WorkspaceServiceRecord[];
+  services: ServiceRecord[];
   manifestJson: string;
 }
 
 export interface WorkspaceProviderHealthResult {
   healthy: boolean;
-  services: WorkspaceServiceRecord[];
+  services: ServiceRecord[];
 }
 
 export interface WorkspaceProviderCreateTerminalInput {
@@ -82,7 +82,7 @@ export interface WorkspaceProviderGitDiffInput {
 
 export interface WorkspaceProvider {
   createWorkspace(input: WorkspaceProviderCreateInput): Promise<WorkspaceProviderCreateResult>;
-  startServices(input: WorkspaceProviderStartInput): Promise<WorkspaceServiceRecord[]>;
+  startServices(input: WorkspaceProviderStartInput): Promise<ServiceRecord[]>;
   healthCheck(workspaceId: string): Promise<WorkspaceProviderHealthResult>;
   stopServices(workspaceId: string, serviceNames?: string[]): Promise<void>;
   runSetup(workspaceId: string): Promise<void>;

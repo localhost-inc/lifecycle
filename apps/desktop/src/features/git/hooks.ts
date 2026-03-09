@@ -1,7 +1,7 @@
 import type { GitLogEntry, GitStatusResult } from "@lifecycle/contracts";
 import { useEffect, useMemo } from "react";
-import type { QueryDescriptor, StoreQueryResult } from "../../store";
-import { useStoreQuery } from "../../store";
+import type { QueryDescriptor, QueryResult } from "../../query";
+import { useQuery } from "../../query";
 
 export const gitKeys = {
   log: (workspaceId: string, limit: number) => ["workspace-git-log", workspaceId, limit] as const,
@@ -51,12 +51,12 @@ function usePollingRefresh(
 export function useGitStatus(
   workspaceId: string | null,
   options?: GitQueryOptions,
-): StoreQueryResult<GitStatusResult | undefined> {
+): QueryResult<GitStatusResult | undefined> {
   const descriptor = useMemo(
     () => (workspaceId ? createGitStatusQuery(workspaceId) : null),
     [workspaceId],
   );
-  const query = useStoreQuery(descriptor, {
+  const query = useQuery(descriptor, {
     disabledData: undefined,
   });
   const polling = options?.polling ?? true;
@@ -68,12 +68,12 @@ export function useGitStatus(
 export function useGitLog(
   workspaceId: string | null,
   limit = 50,
-): StoreQueryResult<GitLogEntry[] | undefined> {
+): QueryResult<GitLogEntry[] | undefined> {
   const descriptor = useMemo(
     () => (workspaceId ? createGitLogQuery(workspaceId, limit) : null),
     [limit, workspaceId],
   );
-  const query = useStoreQuery(descriptor, {
+  const query = useQuery(descriptor, {
     disabledData: undefined,
   });
 

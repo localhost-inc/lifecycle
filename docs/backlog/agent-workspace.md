@@ -16,8 +16,8 @@ The workspace center panel becomes a Lifecycle-native agent workspace instead of
 3. A normalized agent runtime boundary that can support a Lifecycle-native runtime and, when explicitly needed, external harness-backed sessions without copying their TUIs.
 4. A structured tool layer for filesystem, search, shell, git, and workspace-context operations.
 5. A SQLite schema renovation for append-friendly agent history plus queryable projections for attachments, tools, tasks, approvals, artifacts, and replay.
-6. Typed agent session event streaming distinct from PTY byte streaming.
-7. Local-first authority rules that keep local sessions portable to future remote/cloud execution without redesigning the desktop store.
+6. Typed `agent.*` fact streaming distinct from PTY byte streaming.
+7. Local-first authority rules that keep local sessions portable to future remote/cloud execution without redesigning the desktop query layer.
 8. A desktop state model that is session-centric rather than terminal-centric for the main agent surface.
 
 ## Non-Goals (Explicit)
@@ -36,7 +36,7 @@ The workspace center panel becomes a Lifecycle-native agent workspace instead of
 
 1. Lifecycle owns the primary agent workspace UI, session model, attachment model, task model, approvals, artifacts, and persistence.
 2. Terminal sessions remain available as shell/debug surfaces, but are not the source of truth for the center panel.
-3. `workspace` remains the root execution noun. The agent domain is namespaced as `agent_*` at database/API/event boundaries and always references `workspace_id`.
+3. `workspace` remains the root execution noun. The agent domain is namespaced as `agent_*` at database, API, and fact-event boundaries and always references `workspace_id`.
 4. The center panel should sit on the shared workspace-surface contract: provider-backed runtime tabs plus client-owned document tabs.
 
 ### Core data flow
@@ -49,8 +49,8 @@ user input
   -> runtime adapter
   -> model step / tool call / approval / artifact publish
   -> persist agent_* rows
-  -> emit typed agent events
-  -> StoreClient reducers
+  -> emit typed `agent.*` fact events
+  -> QueryClient reducers
   -> center panel, attachment previews, task pane, approval cards, artifact pane
 ```
 
@@ -58,7 +58,7 @@ user input
 
 1. `useChat` is a UI edge helper, not the authoritative source of session history.
 2. The authoritative record for replay is persisted `agent_*` state in SQLite for `workspace.mode=local`.
-3. Runtime adapters normalize provider-specific events before they touch store state or UI code.
+3. Runtime adapters normalize provider-specific signals into canonical `agent.*` facts before they touch query state or UI code.
 4. Attachments are first-class inputs distinct from artifacts. Screenshots and files should not be smuggled through ad-hoc file path strings.
 5. Structured tools are the default path for filesystem and workspace interaction. Shell remains available, but it is not the only tool.
 6. The UI must render from normalized queries, not from provider transcripts or terminal attachment state.
@@ -110,12 +110,12 @@ user input
 1. Add `apps/desktop/src/features/agents/*` as the home for the new center-panel feature.
 2. Expected modules:
    - `api.ts`: invoke wrappers and subscription helpers
-   - `hooks.ts`: store query descriptors and hooks
+   - `hooks.ts`: query descriptors and hooks
    - `message-mapper.ts`: persisted record -> UI message mapping
    - `components/*`: center panel, composer, attachment tray, screenshot action, task pane, approval cards, artifact pane, session switcher
    - `transport.ts`: `LifecycleChatTransport`
 3. `WorkspacePanel` should compose `AgentWorkspaceSurface` as the main center surface and keep terminal entry points visible but secondary through the shared workspace-surface tab model.
-4. The store layer should extend the existing `StoreClient` pattern rather than introducing a second query/cache system.
+4. The query layer should extend the existing `QueryClient` pattern rather than introducing a second query/cache system.
 
 ### Surface shape
 
@@ -140,7 +140,7 @@ user input
 
 ### Runtime adapter boundary
 
-1. The center-panel UI consumes normalized agent events, not PTY escape sequences.
+1. The center-panel UI consumes normalized `agent.*` facts, not PTY escape sequences.
 2. Define a Lifecycle-owned runtime interface for the main agent surface:
 
 ```typescript
@@ -155,28 +155,27 @@ interface AgentRuntimeAdapter {
 ```
 
 3. The runtime interface is Lifecycle-owned even if the backing executor changes later.
-4. Local native runtime and compatibility adapters must both emit the same `AgentEvent` families:
-   - `agent-session-upserted`
-   - `agent-message-upserted`
-   - `agent-message-part-upserted`
-   - `agent-attachment-upserted`
-   - `agent-tool-call-upserted`
-   - `agent-task-upserted`
-   - `agent-approval-request-upserted`
-   - `agent-artifact-created`
+4. Local native runtime and compatibility adapters must both emit the same conceptual `agent.*` fact families, following [docs/reference/events.md](../reference/events.md):
+   - session lifecycle and metadata facts
+   - message and message-part facts
+   - attachment facts
+   - tool-call facts
+   - task facts
+   - approval-request facts
+   - artifact publication facts
 
 ### Native runtime implementation stance
 
 1. The first native runtime path should be built around AI SDK Core `ToolLoopAgent`, not a custom loop from scratch.
 2. Drop to lower-level AI SDK generation primitives only when the product needs workflow control that `ToolLoopAgent` cannot express cleanly.
-3. Tool execution, approvals, and persistence hooks should be Lifecycle-owned wrappers around AI SDK tools rather than provider-owned side effects.
+3. Tool execution, approvals, and persistence integration points should be Lifecycle-owned wrappers around AI SDK tools rather than provider-owned side effects.
 4. Experimental AI SDK callbacks may be used for observability, but correctness-critical persistence should rely on stable tool wrappers and completion boundaries.
 
 ### Provider strategy
 
 1. This backlog item should still ship a strong Lifecycle-native agent workspace even if no external CLI adapter is fully integrated into the center panel on day one.
 2. Claude Code and Codex are valuable execution backends and raw-terminal escapes, but they are not the UI contract.
-3. Adapter support should be accepted only where it cleanly normalizes into `agent_*` events and tool/approval semantics.
+3. Adapter support should be accepted only where it cleanly normalizes into `agent.*` facts and tool/approval semantics.
 4. Do not block this backlog item on reproducing provider-specific slash commands, transcript formatting, keyboard semantics, or TUI affordances.
 
 ### Transport placement decision
@@ -457,9 +456,9 @@ Attachments and tools are different capabilities:
 3. For future cloud mode, the same metadata model should point at remote blob/object storage without changing the transcript schema.
 4. Image previews should resolve through a Lifecycle attachment fetch path rather than direct filesystem reads from React.
 
-### Store contract
+### Query Contract
 
-1. Extend `StoreSource`, `StoreEvent`, and query descriptors for:
+1. Extend `QuerySource`, lifecycle events, and query descriptors for:
    - `useAgentSessions(workspaceId)`
    - `useAgentSession(sessionId)`
    - `useAgentMessages(sessionId)`
@@ -482,7 +481,7 @@ Attachments and tools are different capabilities:
    - the cloud provider/control plane will later own live execution
    - the desktop app consumes the same logical `agent_*` shapes over transport
    - the center panel must not assume local file paths, local shell access, local-only attachment URIs, or local-only artifact URIs
-4. UI code must not branch on provider-specific transcript or permission payloads; adapters normalize them before they enter store state.
+4. UI code must not branch on provider-specific transcript or permission payloads; adapters normalize them before they enter query state.
 5. Sync is additive later. This backlog item only needs the schema, event, and reducer/query model to be portable.
 
 ## Backend Ownership Contract
@@ -498,7 +497,7 @@ Attachments and tools are different capabilities:
 3. Responsibilities:
    - persist normalized `agent_*` rows
    - ingest attachment metadata and store/fetch attachment bytes
-   - expose query commands for the desktop store
+   - expose query commands for the desktop query layer
    - expose prompt / cancel / approval commands
    - emit typed agent events to the desktop app
    - mediate access to local workspace filesystem/shell capabilities
@@ -517,14 +516,14 @@ Attachments and tools are different capabilities:
 1. Add `packages/contracts/src/agent.ts` plus exports/tests.
 2. Add SQLite migration for `agent_*` tables and indexes, including `agent_attachment`.
 3. Add Tauri attachment import/fetch/query commands and desktop API wrappers for loading sessions/messages/attachments/tasks/approvals/artifacts.
-4. Extend `StoreSource` and `StoreEvent` for agent-domain subscriptions.
+4. Extend `QuerySource` and lifecycle event subscriptions for agent-domain data.
 
 ### Batch 2: Center-panel surface
 
 1. Add `features/agents/*` scaffolding.
 2. Replace `TerminalWorkspaceSurface` as the default center panel with `AgentWorkspaceSurface`.
 3. Keep a visible raw-terminal entry point.
-4. Render persisted transcript, attachments, tasks, approvals, and artifacts from store queries.
+4. Render persisted transcript, attachments, tasks, approvals, and artifacts from query-backed persisted reads.
 5. Add composer attachment tray, thumbnail previews, paste/drop handlers, and screenshot action.
 
 ### Batch 3: Prompt loop and streaming

@@ -1,9 +1,9 @@
+import type { TerminalRecord } from "@lifecycle/contracts";
 import { formatCompactRelativeTime } from "../../../lib/format";
 import {
   terminalHasLiveSession,
   type CreateTerminalRequest,
   type HarnessProvider,
-  type TerminalRow,
 } from "../api";
 import { TerminalStatusDot } from "./terminal-status-dot";
 
@@ -12,18 +12,18 @@ interface TerminalSessionHistoryProps {
   creatingSelection: "shell" | HarnessProvider | null;
   onOpenTerminal: (terminalId: string) => void;
   onResumeTerminal: (input: Extract<CreateTerminalRequest, { launchType: "harness" }>) => void;
-  terminals: TerminalRow[];
+  terminals: TerminalRecord[];
 }
 
 function isHarnessProvider(value: string | null): value is HarnessProvider {
   return value === "claude" || value === "codex";
 }
 
-function sessionLabel(terminal: TerminalRow): string {
+function sessionLabel(terminal: TerminalRecord): string {
   return terminal.label;
 }
 
-function sessionMeta(terminal: TerminalRow): string {
+function sessionMeta(terminal: TerminalRecord): string {
   if (terminal.harness_session_id) {
     return `session ${terminal.harness_session_id.slice(0, 6)}`;
   }
@@ -35,7 +35,7 @@ function sessionMeta(terminal: TerminalRow): string {
   return "";
 }
 
-function activityTime(terminal: TerminalRow): string {
+function activityTime(terminal: TerminalRecord): string {
   if (terminal.ended_at) {
     return formatCompactRelativeTime(terminal.ended_at);
   }

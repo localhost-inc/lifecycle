@@ -45,14 +45,14 @@ Provider-specific runtime detail should not be stuffed into a generic `mode_stat
 5. V1 ships both `CloudWorkspaceProvider` and `LocalWorkspaceProvider`. Both are implemented against the `WorkspaceProvider` interface and validated in parallel from Milestone 3 onward.
 6. Platform stance is Cloudflare-first for cloud execution, edge routing, and storage integration.
 
-## Event Kernel Contract
+## Event Foundation Contract
 
 Normative event and hook rules live in [events.md](./events.md).
 
-1. Provider-owned lifecycle mutations publish normalized fact events into the Lifecycle event kernel.
-2. The desktop store, notifications, metrics, and future plugins are consumers of that kernel, not independent sources of truth.
+1. Provider-owned lifecycle mutations publish normalized fact events into the Lifecycle event foundation.
+2. The desktop query cache, notifications, metrics, and future plugins are consumers of that foundation, not independent sources of truth.
 3. Commands may expose `before|after|failed` hooks, but blocking hooks remain Lifecycle-owned until a plugin trust model exists.
-4. High-frequency streams such as PTY output remain on dedicated transports rather than the generic event kernel.
+4. High-frequency streams such as PTY output remain on dedicated transports rather than the generic event foundation.
 
 ## Terminal Stream Contract (M3+)
 
@@ -60,9 +60,9 @@ Terminal transport is split between control-plane mutations and ordered data str
 
 1. Control-plane operations stay typed and imperative (`create`, `attach`, `write`, `resize`, `detach`, `kill`).
 2. `writeTerminal(terminal_id, data)` transports terminal input data that has already been encoded by the active terminal surface. Providers should treat it as terminal input bytes/data, not as abstract key events to reinterpret.
-3. Terminal output is an ordered PTY data stream exposed as ordered chunks, not a coarse app event.
+3. Terminal output is an ordered PTY data stream exposed as ordered chunks, not a coarse lifecycle fact.
 4. Local mode should use Tauri `Channel` for PTY output streaming.
-5. Generic app events remain appropriate for terminal metadata/status changes, not high-frequency byte output.
+5. Semantic terminal facts remain appropriate for metadata/status changes, not high-frequency byte output.
 6. Replay buffers are provider-owned implementation detail as long as attach/replay ordering is preserved.
 7. Collaborative terminal viewing should attach multiple clients to the same authoritative PTY output stream. Viewer/watch mode consumes output plus replay, while control mode additionally sends input through `writeTerminal`.
 8. Providers must not try to reconstruct remote terminal state by mirroring another user's key events into a separate terminal instance. Shared terminal state comes from the authoritative PTY output stream.
@@ -97,6 +97,7 @@ Git operations follow the same authority rule as terminals and lifecycle mutatio
    - file diff uses explicit `scope` (`working|staged|branch`) for secondary or provider-level flows
    - log entries and commit/push results use normalized typed payloads
 6. UI surfaces may hide unsupported git actions per mode until the authoritative provider exists, but the contract shape should not fork.
+7. Authoritative git mutations publish repository-level fact events such as `git.status_changed`, `git.head_changed`, and `git.log_changed` after commit, stage, unstage, push, checkout, or equivalent provider-owned transitions.
 
 ## `CloudWorkspaceProvider` (V1)
 

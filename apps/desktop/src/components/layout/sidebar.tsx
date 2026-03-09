@@ -1,5 +1,5 @@
 import { isTauri } from "@tauri-apps/api/core";
-import type { ProjectRecord } from "@lifecycle/contracts";
+import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import {
   Button,
   Collapsible,
@@ -21,13 +21,12 @@ import { useNavigate } from "react-router-dom";
 import { useHistoryAvailability } from "../../app/history-stack";
 import { ProjectItem } from "../../features/projects/components/project-item";
 import { useTerminalResponseReady } from "../../features/terminals/state/terminal-response-ready-provider";
-import type { WorkspaceRow } from "../../features/workspaces/api";
 import { WorkspaceTreeItem } from "../../features/workspaces/components/workspace-tree-item";
 
 interface SidebarProps {
   isLoading?: boolean;
   projects: ProjectRecord[];
-  workspacesByProjectId: Record<string, WorkspaceRow[]>;
+  workspacesByProjectId: Record<string, WorkspaceRecord[]>;
   selectedProjectId: string | null;
   selectedWorkspaceId: string | null;
   onSelectProject: (projectId: string) => void;

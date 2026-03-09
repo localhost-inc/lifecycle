@@ -60,7 +60,7 @@ github.handleWebhook(payload, signature) # HTTP action for Worker
 - `repositories.connect`: accepts (`organizationId`, `provider`, `owner`, `name`)
 - `repositories.get`: returns repository VCS identity record
 - `workspaces.create`: `projectId`, `sourceRef`, optional `mode` (`cloud|local`, default `cloud`). Project must have `repository_id` set for cloud mode.
-- `workspaces.fork`: accepts `workspaceId`, `mode` (`cloud|local`), optional `destroySource` (boolean, default false), optional `includeUncommitted` (boolean, default false). Validates source workspace exists. When `includeUncommitted`, stash-commits dirty working tree to temporary branch (`lifecycle/fork/<short-id>`), pushes, and creates target at that branch; otherwise creates at current committed `sourceRef`. Optionally destroys source after target reaches `ready`. Returns new workspace ID. Records `workspace_forked` activity on both source and target.
+- `workspaces.fork`: accepts `workspaceId`, `mode` (`cloud|local`), optional `destroySource` (boolean, default false), optional `includeUncommitted` (boolean, default false). Validates source workspace exists. When `includeUncommitted`, stash-commits dirty working tree to temporary branch (`lifecycle/fork/<short-id>`), pushes, and creates target at that branch; otherwise creates at current committed `sourceRef`. Optionally destroys source after target reaches `ready`. Returns new workspace ID. Emits canonical `workspace.forked` facts and records derived activity rows on both source and target.
 - `organizations.update`: mutable org settings including `default_sandbox_image_id` (UUID, nullable), `idle_timeout_minutes`
 - `workspaceServices.update`: patches the `workspace_service` record. Accepts only writable fields: `exposure` (`internal|organization|local`), `portOverride` (nullable). Returns full service record including computed fields (`status`, `previewState`, `previewUrl`, `effectivePort`).
 - `workspaceServices.list`: returns all `workspace_service` records for a workspace with computed preview state inline
@@ -97,6 +97,12 @@ github.handleWebhook(payload, signature) # HTTP action for Worker
 - Workspace state changes, activity feeds, and service status are all push-based via Convex reactive queries (`useQuery`) — no polling
 - Terminal PTY attach uses WebSocket to execution environment (cloud: Cloudflare Sandbox with attach token) or Tauri IPC (local)
 - Test execution streaming is expansion-scope (testing.md)
+
+## Event Foundation Alignment
+
+- Convex reactive queries, WebSockets, and HTTP actions are delivery and projection surfaces. They are not the canonical lifecycle event model.
+- Canonical lifecycle facts and command-hook rules are defined in [events.md](./events.md).
+- Cloud activity, audit, and usage records are derived projections over those facts and command outcomes, not replacements for them.
 
 ## Error Model
 

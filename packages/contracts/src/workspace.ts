@@ -25,25 +25,6 @@ export type WorkspaceFailureReason =
   | "operation_timeout"
   | "unknown";
 
-export interface WorkspaceRecord {
-  id: string;
-  projectId: string;
-  name: string;
-  mode: WorkspaceMode;
-  sourceRef: string;
-  gitSha?: string;
-  worktreePath?: string;
-  status: WorkspaceStatus;
-  failureReason?: WorkspaceFailureReason;
-  failedAt?: string;
-  createdBy?: string;
-  sourceWorkspaceId?: string;
-  createdAt: string;
-  updatedAt: string;
-  lastActiveAt: string;
-  expiresAt?: string;
-}
-
 export type WorkspaceServiceStatus = "starting" | "ready" | "failed" | "stopped";
 
 export type WorkspaceServiceStatusReason =
@@ -68,20 +49,3 @@ export type WorkspaceServicePreviewFailureReason =
   | "unknown";
 
 export type WorkspaceServiceExposure = "internal" | "organization" | "local";
-
-export interface WorkspaceServiceRecord {
-  id: string;
-  workspaceId: string;
-  serviceName: string;
-  exposure: WorkspaceServiceExposure;
-  portOverride?: number;
-  status: WorkspaceServiceStatus;
-  statusReason?: WorkspaceServiceStatusReason;
-  defaultPort?: number;
-  effectivePort?: number;
-  previewState: WorkspaceServicePreviewState;
-  previewFailureReason?: WorkspaceServicePreviewFailureReason;
-  previewUrl?: string;
-  createdAt: string;
-  updatedAt: string;
-}

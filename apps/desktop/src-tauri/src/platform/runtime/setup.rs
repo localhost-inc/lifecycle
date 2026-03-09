@@ -1,16 +1,9 @@
 use crate::capabilities::workspaces::manifest::SetupStep;
 use crate::shared::errors::LifecycleError;
-use tauri::{AppHandle, Emitter};
+use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
+use tauri::AppHandle;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
-
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct SetupStepEvent {
-    pub workspace_id: String,
-    pub step_name: String,
-    pub event_type: String,
-    pub data: Option<String>,
-}
 
 pub async fn run_setup_steps(
     app: &AppHandle,
@@ -25,9 +18,9 @@ pub async fn run_setup_steps(
             worktree_path.to_string()
         };
 
-        let _ = app.emit(
-            "setup:step-progress",
-            SetupStepEvent {
+        publish_lifecycle_event(
+            app,
+            LifecycleEvent::SetupStepProgress {
                 workspace_id: workspace_id.to_string(),
                 step_name: step.name.clone(),
                 event_type: "started".to_string(),
@@ -69,9 +62,9 @@ pub async fn run_setup_steps(
                 let reader = BufReader::new(stdout);
                 let mut lines = reader.lines();
                 while let Ok(Some(line)) = lines.next_line().await {
-                    let _ = app_c.emit(
-                        "setup:step-progress",
-                        SetupStepEvent {
+                    publish_lifecycle_event(
+                        &app_c,
+                        LifecycleEvent::SetupStepProgress {
                             workspace_id: ws.clone(),
                             step_name: sn.clone(),
                             event_type: "stdout".to_string(),
@@ -92,9 +85,9 @@ pub async fn run_setup_steps(
                 let reader = BufReader::new(stderr);
                 let mut lines = reader.lines();
                 while let Ok(Some(line)) = lines.next_line().await {
-                    let _ = app_c.emit(
-                        "setup:step-progress",
-                        SetupStepEvent {
+                    publish_lifecycle_event(
+                        &app_c,
+                        LifecycleEvent::SetupStepProgress {
                             workspace_id: ws.clone(),
                             step_name: sn.clone(),
                             event_type: "stderr".to_string(),
@@ -126,9 +119,9 @@ pub async fn run_setup_steps(
             Ok(Ok(exit_status)) => {
                 if !exit_status.success() {
                     let exit_code = exit_status.code().unwrap_or(-1);
-                    let _ = app.emit(
-                        "setup:step-progress",
-                        SetupStepEvent {
+                    publish_lifecycle_event(
+                        app,
+                        LifecycleEvent::SetupStepProgress {
                             workspace_id: workspace_id.to_string(),
                             step_name: step.name.clone(),
                             event_type: "failed".to_string(),
@@ -150,9 +143,9 @@ pub async fn run_setup_steps(
             Err(_) => {
                 // Timeout — kill the child
                 let _ = child.kill().await;
-                let _ = app.emit(
-                    "setup:step-progress",
-                    SetupStepEvent {
+                publish_lifecycle_event(
+                    app,
+                    LifecycleEvent::SetupStepProgress {
                         workspace_id: workspace_id.to_string(),
                         step_name: step.name.clone(),
                         event_type: "timeout".to_string(),
@@ -165,9 +158,9 @@ pub async fn run_setup_steps(
             }
         }
 
-        let _ = app.emit(
-            "setup:step-progress",
-            SetupStepEvent {
+        publish_lifecycle_event(
+            app,
+            LifecycleEvent::SetupStepProgress {
                 workspace_id: workspace_id.to_string(),
                 step_name: step.name.clone(),
                 event_type: "completed".to_string(),

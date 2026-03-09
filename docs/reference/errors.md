@@ -57,5 +57,5 @@ All non-2xx responses include: `code`, `message`, `details`, `request_id`, `sugg
 2. Concurrency guardrails:
    - Convex OCC handles serialization natively — mutations on the same document are serialized automatically
    - global quotas by organization (max active workspaces)
-3. Metering hooks (expansion-scope, see billing.md):
+3. Metering emission (expansion-scope, see billing.md):
    - workspace state transitions emit usage events when billing is enabled

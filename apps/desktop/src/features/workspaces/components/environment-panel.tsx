@@ -1,4 +1,4 @@
-import type { ServiceRow } from "../api";
+import type { ServiceRecord } from "@lifecycle/contracts";
 import { ServicesTab } from "./services-tab";
 
 const sectionHeader =
@@ -6,7 +6,7 @@ const sectionHeader =
 
 interface EnvironmentPanelProps {
   hasManifest: boolean;
-  services: ServiceRow[];
+  services: ServiceRecord[];
 }
 
 export function EnvironmentPanel({ hasManifest, services }: EnvironmentPanelProps) {

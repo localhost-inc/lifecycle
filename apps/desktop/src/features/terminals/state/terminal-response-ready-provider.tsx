@@ -2,16 +2,12 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useReducer,
   type ReactNode,
 } from "react";
-import {
-  subscribeToTerminalHarnessTurnCompletedEvents,
-  subscribeToTerminalRemovedEvents,
-  subscribeToTerminalStatusEvents,
-} from "../api";
+import type { LifecycleEventType } from "@lifecycle/contracts";
+import { useLifecycleEvent } from "../../events";
 
 export interface TerminalResponseReadyState {
   acknowledgedCompletionKeyByTerminalId: Record<string, string>;
@@ -39,6 +35,10 @@ interface TerminalResponseReadyContextValue {
 }
 
 const TerminalResponseReadyContext = createContext<TerminalResponseReadyContextValue | null>(null);
+const TERMINAL_RESPONSE_READY_EVENT_TYPES = [
+  "terminal.harness_turn_completed",
+  "terminal.status_changed",
+] as const satisfies readonly LifecycleEventType[];
 
 export function createDefaultTerminalResponseReadyState(): TerminalResponseReadyState {
   return {
@@ -189,59 +189,28 @@ export function TerminalResponseReadyProvider({ children }: { children: ReactNod
     createDefaultTerminalResponseReadyState,
   );
 
-  useEffect(() => {
-    let disposed = false;
-    let stop: (() => void) | null = null;
-
-    void Promise.all([
-      subscribeToTerminalHarnessTurnCompletedEvents((event) => {
+  useLifecycleEvent(TERMINAL_RESPONSE_READY_EVENT_TYPES, (event) => {
+    switch (event.type) {
+      case "terminal.harness_turn_completed":
         dispatch({
           completionKey: event.completion_key,
           terminalId: event.terminal_id,
           type: "mark-ready",
           workspaceId: event.workspace_id,
         });
-      }),
-      subscribeToTerminalRemovedEvents((event) => {
-        dispatch({
-          terminalId: event.terminal_id,
-          type: "clear-terminal",
-        });
-      }),
-      subscribeToTerminalStatusEvents((event) => {
+        break;
+      case "terminal.status_changed":
         if (event.status !== "failed" && event.status !== "finished") {
-          return;
+          break;
         }
 
         dispatch({
           terminalId: event.terminal_id,
           type: "clear-terminal",
         });
-      }),
-    ])
-      .then((unlisten) => {
-        if (disposed) {
-          for (const unsubscribe of unlisten) {
-            unsubscribe();
-          }
-          return;
-        }
-
-        stop = () => {
-          for (const unsubscribe of unlisten) {
-            unsubscribe();
-          }
-        };
-      })
-      .catch((error) => {
-        console.error("Failed to subscribe to terminal response-ready events:", error);
-      });
-
-    return () => {
-      disposed = true;
-      stop?.();
-    };
-  }, []);
+        break;
+    }
+  });
 
   const readyWorkspaceIds = useMemo(() => new Set(getResponseReadyWorkspaceIds(state)), [state]);
 

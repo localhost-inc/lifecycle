@@ -1,5 +1,5 @@
 import { Badge, Card, StatusDot, type StatusDotTone } from "@lifecycle/ui";
-import type { ServiceRow } from "../api";
+import type { ServiceRecord } from "@lifecycle/contracts";
 
 const statusTone: Record<string, StatusDotTone> = {
   stopped: "neutral",
@@ -15,7 +15,7 @@ const statusVariant: Record<string, React.ComponentProps<typeof Badge>["variant"
   failed: "destructive",
 };
 
-export function ServiceIndicator({ service }: { service: ServiceRow }) {
+export function ServiceIndicator({ service }: { service: ServiceRecord }) {
   const tone = statusTone[service.status] ?? "neutral";
   const variant = statusVariant[service.status] ?? "muted";
   const pulse = service.status === "starting";

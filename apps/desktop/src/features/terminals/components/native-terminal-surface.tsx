@@ -1,3 +1,4 @@
+import type { TerminalRecord } from "@lifecycle/contracts";
 import { Alert, AlertDescription, EmptyState, themeAppearance, useTheme } from "@lifecycle/ui";
 import { TerminalSquare } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -6,14 +7,13 @@ import {
   hideNativeTerminalSurface,
   syncNativeTerminalSurface,
   terminalHasLiveSession,
-  type TerminalRow,
 } from "../api";
 import { resolveTerminalTheme } from "../terminal-theme";
 import { useSettings } from "../../settings/state/app-settings-provider";
 
 interface NativeTerminalSurfaceProps {
   active: boolean;
-  terminal: TerminalRow;
+  terminal: TerminalRecord;
 }
 
 // DOM splitters cannot stack above the sibling native NSView, so keep the
