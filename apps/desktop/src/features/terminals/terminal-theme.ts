@@ -53,7 +53,8 @@ const TOKEN_FALLBACKS: Record<"light" | "dark", TerminalThemeTokens> = {
 /** Base ANSI palettes for themes whose CSS does not define --terminal-ansi-* vars.
  *  Themes with CSS-defined terminal vars (nord, monokai, catppuccin, dracula, rose-pine)
  *  get their palette entirely from paletteOverrides at runtime. */
-const ANSI_PALETTES: Partial<Record<ResolvedTheme, TerminalAnsiPalette>> & Record<"light" | "dark", TerminalAnsiPalette> = {
+const ANSI_PALETTES: Partial<Record<ResolvedTheme, TerminalAnsiPalette>> &
+  Record<"light" | "dark", TerminalAnsiPalette> = {
   dark: {
     black: "#27272a",
     red: "#ef4444",

@@ -1,8 +1,4 @@
-import type {
-  TerminalFailureReason,
-  TerminalStatus,
-  TerminalType,
-} from "./terminal";
+import type { TerminalFailureReason, TerminalStatus, TerminalType } from "./terminal";
 import type {
   WorkspaceFailureReason,
   WorkspaceMode,

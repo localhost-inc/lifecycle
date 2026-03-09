@@ -76,10 +76,7 @@ export type GitPullRequestState = "open" | "closed" | "merged";
 
 export type GitPullRequestMergeable = "mergeable" | "conflicting" | "unknown";
 
-export type GitPullRequestReviewDecision =
-  | "approved"
-  | "changes_requested"
-  | "review_required";
+export type GitPullRequestReviewDecision = "approved" | "changes_requested" | "review_required";
 
 export type GitPullRequestCheckStatus = "pending" | "success" | "failed" | "neutral";
 

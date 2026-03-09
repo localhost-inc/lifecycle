@@ -87,7 +87,8 @@ export function PullRequestsTab({
                 )}
               </div>
               <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                #{pullRequest.number} · {pullRequest.author} · {formatShortAge(pullRequest.updatedAt)}
+                #{pullRequest.number} · {pullRequest.author} ·{" "}
+                {formatShortAge(pullRequest.updatedAt)}
               </p>
               <p className="mt-2 text-xs text-[var(--muted-foreground)]">
                 {pullRequest.headRefName} → {pullRequest.baseRefName}
@@ -105,11 +106,7 @@ export function PullRequestsTab({
                 )}
               </div>
             </div>
-            <Button
-              onClick={() => onOpenPullRequest(pullRequest.url)}
-              size="sm"
-              variant="outline"
-            >
+            <Button onClick={() => onOpenPullRequest(pullRequest.url)} size="sm" variant="outline">
               Open
             </Button>
           </div>

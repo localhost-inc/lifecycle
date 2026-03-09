@@ -108,10 +108,7 @@ export function getSystemThemeAppearance(
   return mediaQuery.matches ? "dark" : "light";
 }
 
-export function resolveTheme(
-  theme: Theme,
-  systemAppearance: "light" | "dark",
-): ResolvedTheme {
+export function resolveTheme(theme: Theme, systemAppearance: "light" | "dark"): ResolvedTheme {
   return theme === "system" ? systemAppearance : theme;
 }
 

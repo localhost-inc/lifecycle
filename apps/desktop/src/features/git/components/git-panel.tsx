@@ -1,18 +1,8 @@
 import type { GitLogEntry, WorkspaceMode } from "@lifecycle/contracts";
 import { EmptyState, Tabs, TabsList, TabsTrigger, cn } from "@lifecycle/ui";
 import { useState } from "react";
-import {
-  commitGit,
-  createGitPullRequest,
-  mergeGitPullRequest,
-  pushGit,
-} from "../api";
-import {
-  useCurrentGitPullRequest,
-  useGitLog,
-  useGitPullRequests,
-  useGitStatus,
-} from "../hooks";
+import { commitGit, createGitPullRequest, mergeGitPullRequest, pushGit } from "../api";
+import { useCurrentGitPullRequest, useGitLog, useGitPullRequests, useGitStatus } from "../hooks";
 import { ChangesTab } from "./changes-tab";
 import { GitActionButton } from "./git-action-button";
 import { HistoryTab } from "./history-tab";
@@ -228,7 +218,9 @@ export function GitPanel({
             ))}
           {activeTab === "pull-requests" && (
             <PullRequestsTab
-              currentBranchPullRequestNumber={currentPullRequestQuery.data?.pullRequest?.number ?? null}
+              currentBranchPullRequestNumber={
+                currentPullRequestQuery.data?.pullRequest?.number ?? null
+              }
               error={pullRequestsQuery.error}
               isLoading={pullRequestsQuery.isLoading}
               onOpenPullRequest={handleOpenPullRequest}

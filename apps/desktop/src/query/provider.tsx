@@ -6,9 +6,7 @@ import { createQuerySource } from "./source";
 const QueryClientContext = createContext<QueryClient | null>(null);
 
 export function QueryProvider({ children }: PropsWithChildren) {
-  const [client] = useState(
-    () => new QueryClient(createQuerySource(), subscribeToLifecycleEvents),
-  );
+  const [client] = useState(() => new QueryClient(createQuerySource(), subscribeToLifecycleEvents));
 
   useEffect(() => {
     return () => {

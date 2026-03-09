@@ -48,8 +48,7 @@ export function buildGitPullRequestQuickState(
     return {
       branch: null,
       description:
-        support.message ??
-        "Pull request actions are not available for this workspace yet.",
+        support.message ?? "Pull request actions are not available for this workspace yet.",
       kind: "remote_unavailable",
       pullRequest,
       title: "Pull request provider unavailable",
@@ -101,8 +100,7 @@ export function buildGitPullRequestQuickState(
     return {
       branch,
       description:
-        support?.message ??
-        "Pull request actions are not available for this workspace yet.",
+        support?.message ?? "Pull request actions are not available for this workspace yet.",
       kind: "remote_unavailable",
       pullRequest,
       title: "Pull request provider unavailable",
@@ -144,9 +142,9 @@ export function buildGitPullRequestPrimaryAction(
   branchPullRequest: GitBranchPullRequestResult | null,
 ): GitPullRequestPrimaryAction {
   const state = buildGitPullRequestQuickState(gitStatus, branchPullRequest);
-  const canPushAfterCommit = Boolean(gitStatus?.branch) && Boolean(
-    gitStatus?.upstream || branchPullRequest?.support.available,
-  );
+  const canPushAfterCommit =
+    Boolean(gitStatus?.branch) &&
+    Boolean(gitStatus?.upstream || branchPullRequest?.support.available);
 
   switch (state.kind) {
     case "needs_commit":

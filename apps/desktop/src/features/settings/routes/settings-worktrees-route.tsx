@@ -16,10 +16,7 @@ export function SettingsWorktreesRoute() {
   }, [normalizedDraft, worktreeRoot]);
 
   return (
-    <SettingsPage
-      title="Worktrees"
-      description="Choose where new workspace worktrees are created."
-    >
+    <SettingsPage title="Worktrees" description="Choose where new workspace worktrees are created.">
       <SettingsSection label="Worktree root">
         <SettingsFieldRow
           label="Worktree root path"

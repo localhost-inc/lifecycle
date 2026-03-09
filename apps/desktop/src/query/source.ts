@@ -17,7 +17,11 @@ import {
 import type { ManifestStatus } from "../features/projects/api/projects";
 import { getTerminal, listWorkspaceTerminals } from "../features/terminals/api";
 import { listProjects, readManifest } from "../features/projects/api/projects";
-import { getWorkspaceById, getWorkspaceServices, listWorkspacesByProject } from "../features/workspaces/api";
+import {
+  getWorkspaceById,
+  getWorkspaceServices,
+  listWorkspacesByProject,
+} from "../features/workspaces/api";
 
 export interface QuerySource {
   listProjects(): Promise<ProjectRecord[]>;

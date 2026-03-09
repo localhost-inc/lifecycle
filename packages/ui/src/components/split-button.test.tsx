@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import {
-  SplitButton,
-  SplitButtonPrimary,
-  SplitButtonSecondary,
-} from "../index";
+import { SplitButton, SplitButtonPrimary, SplitButtonSecondary } from "../index";
 
 describe("SplitButton", () => {
   test("renders a shared split-control shell with primary and secondary actions", () => {

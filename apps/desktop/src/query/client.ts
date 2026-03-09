@@ -77,10 +77,7 @@ export type LifecycleEventSubscriber = (
 
 export class QueryClient {
   private readonly entries = new Map<string, QueryEntry<unknown>>();
-  private readonly entriesByEventType = new Map<
-    LifecycleEventType,
-    Set<QueryEntry<unknown>>
-  >();
+  private readonly entriesByEventType = new Map<LifecycleEventType, Set<QueryEntry<unknown>>>();
   private readonly source: QuerySource;
   private readonly subscribeToEvents: LifecycleEventSubscriber;
   private sourceUnsubscribe: (() => void) | null = null;

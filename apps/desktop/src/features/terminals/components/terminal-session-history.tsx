@@ -1,10 +1,6 @@
 import type { TerminalRecord } from "@lifecycle/contracts";
 import { formatCompactRelativeTime } from "../../../lib/format";
-import {
-  terminalHasLiveSession,
-  type CreateTerminalRequest,
-  type HarnessProvider,
-} from "../api";
+import { terminalHasLiveSession, type CreateTerminalRequest, type HarnessProvider } from "../api";
 import { TerminalStatusDot } from "./terminal-status-dot";
 
 interface TerminalSessionHistoryProps {

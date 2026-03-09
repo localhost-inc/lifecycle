@@ -517,7 +517,8 @@ export function DashboardLayout() {
                 </div>
                 <div
                   id="workspace-right-rail"
-                  className="flex min-h-0 shrink-0 bg-[var(--panel)]"
+                  className="relative flex min-h-0 shrink-0 bg-[var(--panel)]"
+                  data-overlay-boundary
                   style={{ width: `${rightSidebarWidth}px` }}
                 />
               </>

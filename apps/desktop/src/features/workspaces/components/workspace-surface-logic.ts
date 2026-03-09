@@ -138,9 +138,7 @@ export function areStringArraysEqual(left: readonly string[], right: readonly st
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
-export function orderWorkspaceTerminals(
-  terminals: readonly TerminalRecord[],
-): TerminalRecord[] {
+export function orderWorkspaceTerminals(terminals: readonly TerminalRecord[]): TerminalRecord[] {
   return [...terminals].sort(
     (left, right) =>
       left.started_at.localeCompare(right.started_at) || left.id.localeCompare(right.id),

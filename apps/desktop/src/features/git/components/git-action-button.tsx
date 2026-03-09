@@ -17,11 +17,12 @@ import {
   type StatusDotTone,
 } from "@lifecycle/ui";
 import { ChevronDown } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   buildGitPullRequestPrimaryAction,
   buildGitPullRequestQuickState,
 } from "../lib/pull-request-state";
+import { resolveContainedOverlayWidth, useOverlayBoundary } from "../../../lib/overlay-boundary";
 
 interface GitActionButtonProps {
   actionError: string | null;
@@ -130,7 +131,9 @@ export function GitActionMenuContent({
               {quickState.description}
             </p>
           </div>
-          {quickState.pullRequest && <Badge variant="outline">#{quickState.pullRequest.number}</Badge>}
+          {quickState.pullRequest && (
+            <Badge variant="outline">#{quickState.pullRequest.number}</Badge>
+          )}
         </div>
         {meta && <p className="mt-2 text-[12px] text-[var(--muted-foreground)]">{meta}</p>}
       </div>
@@ -305,6 +308,7 @@ export function GitActionButton({
 }: GitActionButtonProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [commitMessage, setCommitMessage] = useState("");
+  const triggerRef = useRef<HTMLDivElement | null>(null);
   const quickState = useMemo(
     () => buildGitPullRequestQuickState(gitStatus, branchPullRequest),
     [branchPullRequest, gitStatus],
@@ -314,8 +318,12 @@ export function GitActionButton({
     [branchPullRequest, gitStatus],
   );
   const hasCommitMessage = commitMessage.trim().length > 0;
-  const isBusy =
-    isCommitting || isCreatingPullRequest || isMergingPullRequest || isPushingBranch;
+  const isBusy = isCommitting || isCreatingPullRequest || isMergingPullRequest || isPushingBranch;
+  const overlayBoundary = useOverlayBoundary(triggerRef);
+  const contentWidth = resolveContainedOverlayWidth({
+    boundaryWidth: overlayBoundary.width,
+    idealWidth: 352,
+  });
 
   async function handlePrimaryClick(): Promise<void> {
     if (primaryAction.kind === "commit" || primaryAction.kind === "commit_and_push") {
@@ -356,7 +364,7 @@ export function GitActionButton({
 
   return (
     <Popover onOpenChange={setOpen} open={open}>
-      <SplitButton>
+      <SplitButton ref={triggerRef}>
         <SplitButtonPrimary
           disabled={isBusy}
           onClick={() => void handlePrimaryClick()}
@@ -366,19 +374,18 @@ export function GitActionButton({
           {isLoading ? "Loading..." : primaryAction.label}
         </SplitButtonPrimary>
         <PopoverTrigger asChild>
-          <SplitButtonSecondary
-            aria-label="Show git actions"
-            disabled={isBusy}
-          >
+          <SplitButtonSecondary aria-label="Show git actions" disabled={isBusy}>
             <ChevronDown className="size-3.5" strokeWidth={2.4} />
           </SplitButtonSecondary>
         </PopoverTrigger>
       </SplitButton>
       <PopoverContent
         align="end"
-        className="w-[22rem] rounded-[22px] border-[var(--border)] bg-[var(--card)] p-3 shadow-[0_20px_64px_rgba(0,0,0,0.18)]"
+        className="rounded-[22px] border-[var(--border)] bg-[var(--card)] p-3 shadow-[0_20px_64px_rgba(0,0,0,0.18)]"
+        container={overlayBoundary.element ?? undefined}
         side="bottom"
         sideOffset={8}
+        style={{ maxWidth: "calc(100vw - 2rem)", width: `${contentWidth}px` }}
       >
         <GitActionMenuContent
           actionError={actionError}

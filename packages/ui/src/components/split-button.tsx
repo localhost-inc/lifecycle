@@ -2,39 +2,36 @@ import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/cn";
 
-const splitButtonPrimaryVariants = cva(
-  "compact-control-item compact-control-label",
-  {
-    variants: {
-      variant: {
-        foreground: "compact-control-tone-foreground",
-        active: "compact-control-tone-active",
-      },
-      withIcon: {
-        true: "pl-2 pr-2.5",
-        false: "px-3",
-      },
+const splitButtonPrimaryVariants = cva("compact-control-item compact-control-label", {
+  variants: {
+    variant: {
+      foreground: "compact-control-tone-foreground",
+      active: "compact-control-tone-active",
     },
-    defaultVariants: {
-      variant: "foreground",
-      withIcon: false,
+    withIcon: {
+      true: "pl-2 pr-2.5",
+      false: "px-3",
     },
   },
-);
+  defaultVariants: {
+    variant: "foreground",
+    withIcon: false,
+  },
+});
 
 const splitButtonSecondaryVariants = cva(
   "compact-control-item compact-control-icon compact-control-tone-muted compact-control-divider",
 );
 
-const SplitButton = React.forwardRef<
-  HTMLDivElement,
-  React.ComponentPropsWithoutRef<"div">
->(function SplitButton({ className, ...props }, ref) {
-  return <div className={cn("compact-control-shell", className)} ref={ref} {...props} />;
-});
+const SplitButton = React.forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef<"div">>(
+  function SplitButton({ className, ...props }, ref) {
+    return <div className={cn("compact-control-shell", className)} ref={ref} {...props} />;
+  },
+);
 
 interface SplitButtonPrimaryProps
-  extends React.ComponentPropsWithoutRef<"button">,
+  extends
+    React.ComponentPropsWithoutRef<"button">,
     VariantProps<typeof splitButtonPrimaryVariants> {
   leadingIcon?: React.ReactNode;
 }

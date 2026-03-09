@@ -2,11 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { buildFileTree, type FileTreeDirectory, type FileTreeLeaf } from "./file-tree";
 import type { FileDiffMetadata } from "@pierre/diffs/react";
 
-function makeFile(
-  name: string,
-  additions: number = 0,
-  deletions: number = 0,
-): FileDiffMetadata {
+function makeFile(name: string, additions: number = 0, deletions: number = 0): FileDiffMetadata {
   return {
     name,
     prevName: undefined,
@@ -40,10 +36,7 @@ describe("buildFileTree", () => {
   });
 
   test("flat files at root level", () => {
-    const tree = buildFileTree([
-      makeFile("README.md", 10, 2),
-      makeFile("package.json", 1, 0),
-    ]);
+    const tree = buildFileTree([makeFile("README.md", 10, 2), makeFile("package.json", 1, 0)]);
 
     expect(tree).toHaveLength(2);
     expect(tree[0]!.kind).toBe("file");
@@ -78,9 +71,7 @@ describe("buildFileTree", () => {
   });
 
   test("collapses single-child directory chains", () => {
-    const tree = buildFileTree([
-      makeFile("apps/desktop/src/main.ts", 4, 0),
-    ]);
+    const tree = buildFileTree([makeFile("apps/desktop/src/main.ts", 4, 0)]);
 
     // apps/desktop/src should collapse into one directory node
     expect(tree).toHaveLength(1);
@@ -94,10 +85,7 @@ describe("buildFileTree", () => {
   });
 
   test("does not collapse when directory has multiple children", () => {
-    const tree = buildFileTree([
-      makeFile("src/a.ts", 1, 0),
-      makeFile("src/b.ts", 2, 0),
-    ]);
+    const tree = buildFileTree([makeFile("src/a.ts", 1, 0), makeFile("src/b.ts", 2, 0)]);
 
     expect(tree).toHaveLength(1);
     const src = tree[0] as FileTreeDirectory;
@@ -106,10 +94,7 @@ describe("buildFileTree", () => {
   });
 
   test("aggregates stats from leaves up to directories", () => {
-    const tree = buildFileTree([
-      makeFile("src/a.ts", 10, 2),
-      makeFile("src/b.ts", 5, 3),
-    ]);
+    const tree = buildFileTree([makeFile("src/a.ts", 10, 2), makeFile("src/b.ts", 5, 3)]);
 
     const src = tree[0] as FileTreeDirectory;
     expect(src.additions).toBe(15);

@@ -120,7 +120,11 @@ describe("QueryClient", () => {
         return { id: "ws-1", status: "sleeping" };
       },
       reduce(current, event) {
-        if (event.type !== "workspace.status_changed" || event.workspace_id !== "ws-1" || !current) {
+        if (
+          event.type !== "workspace.status_changed" ||
+          event.workspace_id !== "ws-1" ||
+          !current
+        ) {
           return { type: "none" };
         }
 

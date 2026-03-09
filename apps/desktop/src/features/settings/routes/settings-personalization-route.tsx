@@ -83,10 +83,7 @@ export function SettingsPersonalizationRoute() {
   };
 
   return (
-    <SettingsPage
-      title="Personalization"
-      description="Customize the look and feel of the app."
-    >
+    <SettingsPage title="Personalization" description="Customize the look and feel of the app.">
       <SettingsSection label="Theme">
         <div className="py-4">
           <ThemeSelector />
@@ -94,7 +91,10 @@ export function SettingsPersonalizationRoute() {
       </SettingsSection>
 
       <SettingsSection label="Terminal display">
-        <SettingsRow label="Engine" description="The desktop terminal currently renders through Ghostty Web's canvas surface.">
+        <SettingsRow
+          label="Engine"
+          description="The desktop terminal currently renders through Ghostty Web's canvas surface."
+        >
           <Badge variant="outline">Ghostty Web</Badge>
         </SettingsRow>
 

@@ -1,8 +1,4 @@
-import type {
-  LifecycleEvent,
-  LifecycleEventType,
-  TerminalRecord,
-} from "@lifecycle/contracts";
+import type { LifecycleEvent, LifecycleEventType, TerminalRecord } from "@lifecycle/contracts";
 import { useMemo } from "react";
 import type { QueryDescriptor, QueryResult, QueryUpdate } from "../../query";
 import { useQuery } from "../../query";

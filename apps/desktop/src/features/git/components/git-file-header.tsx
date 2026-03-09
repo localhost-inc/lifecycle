@@ -95,8 +95,12 @@ export function GitFileHeader({
             </span>
             {(additions > 0 || deletions > 0) && (
               <span className="shrink-0 font-mono text-xs flex items-center gap-1.5">
-                {additions > 0 && <span className="text-[var(--git-status-added)]">+{additions}</span>}
-                {deletions > 0 && <span className="text-[var(--git-status-deleted)]">-{deletions}</span>}
+                {additions > 0 && (
+                  <span className="text-[var(--git-status-added)]">+{additions}</span>
+                )}
+                {deletions > 0 && (
+                  <span className="text-[var(--git-status-deleted)]">-{deletions}</span>
+                )}
               </span>
             )}
           </div>

@@ -1,13 +1,6 @@
 import type { GitFileChangeKind, GitFileStatus, GitStatusResult } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
-import {
-  File,
-  FileCode,
-  FileJson,
-  FileText,
-  GitBranch,
-  Image as ImageIcon,
-} from "lucide-react";
+import { File, FileCode, FileJson, FileText, GitBranch, Image as ImageIcon } from "lucide-react";
 import type React from "react";
 
 interface ChangesTabProps {
@@ -136,9 +129,7 @@ function FileRow({
       <div className="flex min-w-0 flex-1 items-baseline gap-1">
         <span className="shrink-0 text-sm font-medium text-[var(--foreground)]">{name}</span>
         {dir && (
-          <span className="truncate text-sm text-[var(--muted-foreground)] opacity-60">
-            {dir}
-          </span>
+          <span className="truncate text-sm text-[var(--muted-foreground)] opacity-60">{dir}</span>
         )}
       </div>
 
@@ -154,12 +145,7 @@ function FileRow({
   );
 }
 
-export function ChangesTab({
-  error,
-  gitStatus,
-  isLoading,
-  onOpenDiff,
-}: ChangesTabProps) {
+export function ChangesTab({ error, gitStatus, isLoading, onOpenDiff }: ChangesTabProps) {
   const files = gitStatus?.files ?? [];
 
   if (isLoading && !gitStatus) {

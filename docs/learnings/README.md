@@ -23,3 +23,4 @@ This directory captures implementation learnings, architectural decisions, and m
 - [2026-03-04-destination-alignment.md](./2026-03-04-destination-alignment.md)
 - [2026-03-04-theming-shadcn-readiness.md](./2026-03-04-theming-shadcn-readiness.md)
 - [2026-03-04-titlebar-bleed-pattern.md](./2026-03-04-titlebar-bleed-pattern.md)
+- [2026-03-09-native-overlay-boundary-policy.md](./2026-03-09-native-overlay-boundary-policy.md)

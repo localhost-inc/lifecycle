@@ -466,10 +466,7 @@ export function TitleBarActions({ workspace }: TitleBarActionsProps) {
         ) : (
           <Popover open={openInOpen} onOpenChange={setOpenInOpen}>
             <PopoverTrigger asChild>
-              <SplitButtonSecondary
-                aria-label="Choose app"
-                disabled={launchingTarget !== null}
-              >
+              <SplitButtonSecondary aria-label="Choose app" disabled={launchingTarget !== null}>
                 <ChevronDown className="size-3.5" strokeWidth={2.4} />
               </SplitButtonSecondary>
             </PopoverTrigger>

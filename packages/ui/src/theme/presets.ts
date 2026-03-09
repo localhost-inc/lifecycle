@@ -1,4 +1,12 @@
-export type Theme = "system" | "light" | "dark" | "nord" | "monokai" | "catppuccin" | "dracula" | "rose-pine";
+export type Theme =
+  | "system"
+  | "light"
+  | "dark"
+  | "nord"
+  | "monokai"
+  | "catppuccin"
+  | "dracula"
+  | "rose-pine";
 
 export type ResolvedTheme = Exclude<Theme, "system">;
 
@@ -9,7 +17,12 @@ export const themeOptions: Array<{
   shikiTheme: string;
 }> = [
   { label: "System", value: "system", appearance: "light", shikiTheme: "" },
-  { label: "Lifecycle Light", value: "light", appearance: "light", shikiTheme: "github-light-default" },
+  {
+    label: "Lifecycle Light",
+    value: "light",
+    appearance: "light",
+    shikiTheme: "github-light-default",
+  },
   { label: "Lifecycle Dark", value: "dark", appearance: "dark", shikiTheme: "github-dark-default" },
   { label: "Nord", value: "nord", appearance: "dark", shikiTheme: "nord" },
   { label: "Monokai", value: "monokai", appearance: "dark", shikiTheme: "monokai" },

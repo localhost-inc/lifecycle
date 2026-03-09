@@ -1,10 +1,6 @@
 import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import type { UnlistenFn } from "@tauri-apps/api/event";
-import type {
-  TerminalRecord,
-  TerminalFailureReason,
-  TerminalStatus,
-} from "@lifecycle/contracts";
+import type { TerminalRecord, TerminalFailureReason, TerminalStatus } from "@lifecycle/contracts";
 import { publishBrowserLifecycleEvent } from "../events/api";
 
 export type HarnessProvider = "claude" | "codex";
@@ -596,9 +592,7 @@ function createBrowserTerminal(input: CreateTerminalInput): TerminalRecord {
   return terminal;
 }
 
-export async function listWorkspaceTerminals(
-  workspaceId: string,
-): Promise<TerminalRecord[]> {
+export async function listWorkspaceTerminals(workspaceId: string): Promise<TerminalRecord[]> {
   if (!isTauri()) {
     return browserTerminalState.terminals.filter(
       (terminal) => terminal.workspace_id === workspaceId,
@@ -633,10 +627,7 @@ export async function createTerminal(input: CreateTerminalInput): Promise<Termin
   return result.terminal;
 }
 
-export async function renameTerminal(
-  terminalId: string,
-  label: string,
-): Promise<TerminalRecord> {
+export async function renameTerminal(terminalId: string, label: string): Promise<TerminalRecord> {
   const normalizedLabel = label.trim().replace(/\s+/g, " ");
   if (normalizedLabel.length === 0) {
     throw new Error("Session title cannot be empty.");

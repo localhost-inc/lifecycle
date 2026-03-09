@@ -1,8 +1,4 @@
-export type {
-  ServiceRecord,
-  TerminalRecord,
-  WorkspaceRecord,
-} from "./db";
+export type { ServiceRecord, TerminalRecord, WorkspaceRecord } from "./db";
 export type { ErrorEnvelope } from "./errors";
 export type {
   LifecycleEvent,
@@ -37,11 +33,7 @@ export type {
 export type { FieldError, LifecycleConfig, ManifestParseResult } from "./manifest";
 export { LifecycleConfigSchema, parseManifest } from "./manifest";
 export type { ProjectRecord } from "./project";
-export type {
-  TerminalFailureReason,
-  TerminalStatus,
-  TerminalType,
-} from "./terminal";
+export type { TerminalFailureReason, TerminalStatus, TerminalType } from "./terminal";
 export type {
   WorkspaceFailureReason,
   WorkspaceMode,
