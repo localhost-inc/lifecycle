@@ -32,6 +32,7 @@ interface MultiFileDiffLayoutProps {
   files: FileDiffMetadata[];
   initialFilePath?: string | null;
   onOpenFile?: ((filePath: string) => void) | null;
+  theme: string;
   themeType: "light" | "dark";
 }
 
@@ -44,6 +45,7 @@ export function MultiFileDiffLayout({
   files,
   initialFilePath,
   onOpenFile,
+  theme,
   themeType,
 }: MultiFileDiffLayoutProps) {
   const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(() => new Set());
@@ -99,6 +101,7 @@ export function MultiFileDiffLayout({
             fileDiff={fileDiff}
             onOpenFile={onOpenFile}
             onToggleCollapse={handleToggleCollapse}
+            theme={theme}
             themeType={themeType}
           />
         ))}
@@ -113,6 +116,7 @@ export function MultiFileDiffLayout({
       collapsedPaths={collapsedPaths}
       initialFilePath={initialFilePath}
       onToggleCollapse={handleToggleCollapse}
+      theme={theme}
       themeType={themeType}
       totalAdditions={totalAdditions}
       totalDeletions={totalDeletions}
@@ -126,6 +130,7 @@ interface InnerProps {
   initialFilePath?: string | null;
   onOpenFile?: ((filePath: string) => void) | null;
   onToggleCollapse: (path: string) => void;
+  theme: string;
   themeType: "light" | "dark";
   totalAdditions: number;
   totalDeletions: number;
@@ -137,6 +142,7 @@ function MultiFileDiffLayoutInner({
   initialFilePath,
   onOpenFile,
   onToggleCollapse,
+  theme,
   themeType,
   totalAdditions,
   totalDeletions,
@@ -400,6 +406,7 @@ function MultiFileDiffLayoutInner({
             onHeightChange={handleSectionHeightChange}
             onOpenFile={onOpenFile}
             onToggleCollapse={handleVirtualizedToggleCollapse}
+            theme={theme}
             themeType={themeType}
           />
         ))}

@@ -1,7 +1,7 @@
 # Event Foundation Docs First
 
 Date: 2026-03-09
-Milestone: Cross-milestone foundation with immediate M3 and M7 impact
+Milestone: Cross-milestone foundation with immediate M3 and M6 impact
 
 ## Context
 
@@ -29,7 +29,7 @@ The durable documentation model is:
 ## Milestone Impact
 
 1. M3: terminal docs now describe semantic terminal facts separately from PTY transport.
-2. M7: cloud activity is framed as a projection over canonical facts instead of a competing event model.
+2. M6: cloud activity is framed as a projection over canonical facts instead of a competing event model.
 3. Backlog agent workspace: future agent work now has a single event vocabulary to plug into.
 
 ## Follow-Up Actions

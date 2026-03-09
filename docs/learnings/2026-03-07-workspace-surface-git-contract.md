@@ -25,8 +25,8 @@ The durable contract is:
 ## Milestone Impact
 
 1. M3: terminal tabs become the first runtime-backed workspace-surface tabs instead of the only tab model.
-2. M6: local git observability/control can reuse the same provider-scoped git types for CLI output contracts.
-3. M7: cloud git support can implement the same status/diff/log/commit/push contract without changing the desktop UI API.
+2. M5: local git observability/control can reuse the same provider-scoped git types for CLI output contracts.
+3. M6: cloud git support can implement the same status/diff/log/commit/push contract without changing the desktop UI API.
 4. Backlog agent workspace: future agent sessions can plug into the runtime-tab path while diff/file artifacts stay document tabs.
 
 ## Follow-Up Actions

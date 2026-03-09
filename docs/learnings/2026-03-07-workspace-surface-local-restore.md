@@ -17,8 +17,8 @@ The restore boundary needs to stay explicit:
 ## Milestone Impact
 
 1. M3: app relaunch can restore workspace selection and document tabs without changing the local terminal non-goal around process survival across restart.
-2. M6: CLI and desktop can continue to treat runtime state as provider-authoritative while each client owns its own view-state restore policy.
-3. M7: cloud workspace surfaces can reuse the same desktop restore boundary without leaking cloud session state into local UI persistence.
+2. M5: CLI and desktop can continue to treat runtime state as provider-authoritative while each client owns its own view-state restore policy.
+3. M6: cloud workspace surfaces can reuse the same desktop restore boundary without leaking cloud session state into local UI persistence.
 
 ## Follow-Up Actions
 

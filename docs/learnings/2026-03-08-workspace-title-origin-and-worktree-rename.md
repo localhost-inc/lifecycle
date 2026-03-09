@@ -20,7 +20,7 @@ Inline workspace and terminal rename now share the same native desktop path as t
 
 1. M3 now includes inline workspace/session naming and first-prompt auto-titles as part of the terminal surface contract.
 2. M3 title generation should key off prompt submission rather than response completion when immediate visual feedback is required, but a completion-triggered session-log fallback is acceptable until that event exists.
-3. M5 lifecycle work should treat worktree rename as ordinary local metadata maintenance, not a special destructive flow.
+3. M4 lifecycle work should treat worktree rename as ordinary local metadata maintenance, not a special destructive flow.
 
 ## Follow-Up Actions
 

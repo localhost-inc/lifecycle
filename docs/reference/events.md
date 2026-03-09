@@ -41,7 +41,7 @@ Lifecycle separates five concerns:
 1. `commands`
    - imperative requests such as `workspace.start`, `workspace.destroy`, `terminal.create`
 2. `fact events`
-   - statements about what already happened, such as `workspace.status_changed` or `git.head_changed`
+   - statements about what already happened, such as `environment.status_changed` or `git.head_changed`
 3. `streams`
    - ordered transport channels for high-volume data such as PTY output or log output
 4. `hooks`
@@ -56,6 +56,25 @@ These are intentionally different layers.
 - Streams move transport-heavy data that should never be treated as coarse lifecycle facts.
 - Hooks let Lifecycle-owned modules observe or extend command execution.
 - Projections consume commands and facts; they do not define them.
+
+## Workspace vs Environment Event Boundary
+
+Fact domains should follow the thing that actually changed.
+
+1. `workspace.*`
+   - durable workspace lifecycle and shared metadata
+   - examples: `workspace.created`, `workspace.renamed`, future `workspace.archived`
+2. `environment.*`
+   - execution-state transitions for the singleton environment attached to a workspace
+   - examples: future `environment.status_changed`
+3. `service.*`
+   - per-service runtime changes inside that environment
+
+Implementation note:
+
+1. Current local rollout still emits `workspace.status_changed` because environment state is still stored on `workspace.status`.
+2. M4 should migrate that execution-state fact to `environment.status_changed` rather than deepening long-lived dependencies on `workspace.status_changed`.
+3. Until that migration lands, consumers should treat `workspace.status_changed` as an environment-state fact in disguise, not as durable workspace lifecycle.
 
 ## Authority Boundary
 
@@ -97,7 +116,7 @@ interface LifecycleEvent<TPayload = unknown> {
 | Field | Required | Rules |
 | --- | --- | --- |
 | `id` | yes | Opaque globally unique identifier for this fact delivery identity. Replays and fanout copies of the same fact reuse the same `id`. |
-| `type` | yes | Stable canonical fact name such as `workspace.status_changed`. |
+| `type` | yes | Stable canonical fact name such as `environment.status_changed`. |
 | `version` | yes | Positive integer payload schema version for this `type`. Start at `1`. |
 | `occurred_at` | yes | RFC 3339 / ISO-8601 UTC timestamp for when the authoritative fact was committed or observed. |
 | `source.layer` | yes | The emitting layer at the point the fact entered the canonical foundation. |
@@ -178,7 +197,7 @@ interface CommandHookContext<TInput = unknown, TResult = unknown> {
 - Transport-local prefixes such as `tauri.*`, `convex.*`, or `query.*` do not belong in the canonical contract
 - Examples:
   - `workspace.created`
-  - `workspace.status_changed`
+  - `environment.status_changed`
   - `service.status_changed`
   - `terminal.renamed`
   - `git.head_changed`
@@ -213,7 +232,7 @@ interface CommandHookContext<TInput = unknown, TResult = unknown> {
 
 | Raw source signal | Canonical output | Notes |
 | --- | --- | --- |
-| Workspace row persisted with a new lifecycle status | `workspace.status_changed` | The payload uses canonical `WorkspaceStatus` and typed `failure_reason` values. |
+| Workspace row persisted with a new environment status | `environment.status_changed` | Current rollout still emits `workspace.status_changed` until the environment split lands. |
 | Manual or generated rename committed to shared state | `workspace.renamed` or `terminal.renamed` | UI-only rename draft changes do not publish facts. |
 | Terminal PTY output chunk | none | This is a stream attachment, not a fact event. |
 | Harness accepts a prompt boundary | `terminal.harness_prompt_submitted` | Emitted once per accepted turn, never per keystroke. |
@@ -248,7 +267,7 @@ interface CommandHookContext<TInput = unknown, TResult = unknown> {
 
 ## Domain Catalog
 
-The first concrete catalog for v1 is `workspace`, `service`, `terminal`, and `git`.
+The first concrete catalog for v1 is `workspace`, `environment`, `service`, `terminal`, and `git`.
 
 ### Shared Helper Types
 
@@ -261,13 +280,14 @@ type LaunchType = "shell" | "harness" | "preset" | "command";
 
 ### Workspace Facts
 
-Workspace facts describe workspace identity, lifecycle state, and shared naming.
+Workspace facts describe durable workspace identity, lifecycle, and shared naming.
 
 | Type | Meaning |
 | --- | --- |
-| `workspace.created` | A workspace record and execution context were created. |
+| `workspace.created` | A workspace record and durable shell were created. |
 | `workspace.forked` | A workspace was created by forking another workspace across execution boundaries. |
-| `workspace.status_changed` | The authoritative workspace state machine advanced. |
+| `workspace.archived` | The durable workspace was archived. |
+| `workspace.unarchived` | The durable workspace returned to active state. |
 | `workspace.renamed` | The shared workspace title changed. |
 | `workspace.destroyed` | The workspace was destroyed and should be treated as terminal. |
 
@@ -276,9 +296,10 @@ interface WorkspaceCreatedPayload {
   name: string;
   name_origin: NameOrigin;
   mode: WorkspaceMode;
-  status: WorkspaceStatus;
   source_ref: string;
   source_workspace_id?: string;
+  archived_at?: string;
+  environment_status?: WorkspaceStatus;
 }
 
 interface WorkspaceForkedPayload {
@@ -290,10 +311,13 @@ interface WorkspaceForkedPayload {
   source_destroyed?: boolean;
 }
 
-interface WorkspaceStatusChangedPayload {
-  from_status: WorkspaceStatus;
-  to_status: WorkspaceStatus;
-  failure_reason?: WorkspaceFailureReason;
+interface WorkspaceArchivedPayload {
+  archived_at: string;
+  previous_environment_status?: WorkspaceStatus;
+}
+
+interface WorkspaceUnarchivedPayload {
+  previous_archived_at: string;
 }
 
 interface WorkspaceRenamedPayload {
@@ -303,9 +327,31 @@ interface WorkspaceRenamedPayload {
 }
 
 interface WorkspaceDestroyedPayload {
-  previous_status?: WorkspaceStatus;
+  archived_at?: string;
+  previous_environment_status?: WorkspaceStatus;
 }
 ```
+
+### Environment Facts
+
+Environment facts describe execution-state transitions for the singleton environment attached to a workspace.
+
+| Type | Meaning |
+| --- | --- |
+| `environment.status_changed` | The authoritative workspace environment state machine advanced. |
+
+```ts
+interface EnvironmentStatusChangedPayload {
+  from_status: WorkspaceStatus;
+  to_status: WorkspaceStatus;
+  failure_reason?: WorkspaceFailureReason;
+}
+```
+
+Current rollout note:
+
+1. Local publishers still emit `workspace.status_changed` with this payload shape until the workspace/environment contract split lands.
+2. M4 should migrate publishers and consumers to `environment.status_changed` instead of standardizing the overloaded workspace fact.
 
 ### Service Facts
 
@@ -434,9 +480,9 @@ These examples are illustrative sequencing rules, not exhaustive transport trace
 ### `workspace.start`
 
 1. Hook `before` fires for `workspace.start`.
-2. Publisher commits `workspace.status_changed` with `from_status=sleeping|failed|ready` and `to_status=starting`.
+2. Publisher commits `environment.status_changed` with `from_status=sleeping|failed|ready` and `to_status=starting`.
 3. Publisher emits zero or more `service.status_changed` facts as services start and settle.
-4. Publisher commits `workspace.status_changed` with `to_status=ready` or `to_status=failed`.
+4. Publisher commits `environment.status_changed` with `to_status=ready` or `to_status=failed`.
 5. Hook `after` or `failed` fires for the command attempt.
 
 ### `terminal.create`

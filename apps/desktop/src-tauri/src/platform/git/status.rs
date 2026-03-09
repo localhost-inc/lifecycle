@@ -134,8 +134,7 @@ fn trimmed_stdout(output: &[u8]) -> String {
 }
 
 const EMPTY_TREE_SHA1: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
-const EMPTY_TREE_SHA256: &str =
-    "6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321";
+const EMPTY_TREE_SHA256: &str = "6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321";
 
 async fn resolve_head_sha(repo_path: &str) -> Result<Option<String>, LifecycleError> {
     Ok(
@@ -798,16 +797,15 @@ pub async fn get_git_changes_patch(repo_path: &str) -> Result<String, LifecycleE
         Some(head_sha) => head_sha,
         None => resolve_empty_tree_sha(repo_path).await?.to_string(),
     };
-    let mut patch =
-        String::from_utf8_lossy(
-            &git_output(
-                repo_path,
-                "read current git changes",
-                &["diff", diff_target.as_str()],
-            )
-            .await?,
+    let mut patch = String::from_utf8_lossy(
+        &git_output(
+            repo_path,
+            "read current git changes",
+            &["diff", diff_target.as_str()],
         )
-        .into_owned();
+        .await?,
+    )
+    .into_owned();
     append_untracked_working_diffs(repo_path, &mut patch).await?;
     Ok(patch)
 }
@@ -1249,7 +1247,9 @@ mod tests {
             .expect("git changes patch should succeed");
 
         assert_eq!(
-            patch.matches("diff --git a/partial.txt b/partial.txt").count(),
+            patch
+                .matches("diff --git a/partial.txt b/partial.txt")
+                .count(),
             1
         );
         assert!(patch.contains("+++ b/staged.txt"));

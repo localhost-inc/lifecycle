@@ -18,9 +18,9 @@ That meant a moderate patch could eagerly mount dozens of `@pierre/diffs/react` 
 
 ## Milestone Impact
 
-1. M6: git observability surfaces can support larger working tree and commit diffs without regressing local interaction quality.
-2. M7: the same measured-window pattern can be reused for other long, sectioned workspace surfaces where sticky headers matter.
-3. M6: working tree change clicks can stay lightweight tab intents while the diff surface remains unified around one multi-file renderer.
+1. M5: git observability surfaces can support larger working tree and commit diffs without regressing local interaction quality.
+2. M6: the same measured-window pattern can be reused for other long, sectioned workspace surfaces where sticky headers matter.
+3. M5: working tree change clicks can stay lightweight tab intents while the diff surface remains unified around one multi-file renderer.
 
 ## Follow-up
 

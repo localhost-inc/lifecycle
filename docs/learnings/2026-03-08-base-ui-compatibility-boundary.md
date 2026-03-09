@@ -26,8 +26,8 @@ The riskiest migration cost was not styling. It was API drift:
 ## Milestone Impact
 
 1. M3: terminal, git, and workspace surfaces can adopt the Base UI primitive stack without another feature-level refactor.
-2. M5: lifecycle and observability panels can keep composing shared primitives while the implementation detail underneath stays replaceable.
-3. M6: future CLI or web clients can reuse the same stable `@lifecycle/ui` contracts instead of inheriting library-specific behavior.
+2. M4: lifecycle and observability panels can keep composing shared primitives while the implementation detail underneath stays replaceable.
+3. M5: future CLI or web clients can reuse the same stable `@lifecycle/ui` contracts instead of inheriting library-specific behavior.
 
 ## Follow-up actions
 

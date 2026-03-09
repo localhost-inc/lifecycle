@@ -67,6 +67,7 @@ export { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/tabs";
 export { ToggleGroup, ToggleGroupItem } from "./components/toggle-group";
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/tooltip";
 export {
+  diffTheme,
   themeOptions,
   isTheme,
   themeAppearance,

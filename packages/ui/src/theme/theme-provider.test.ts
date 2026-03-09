@@ -20,54 +20,24 @@ describe("readStoredThemePreference", () => {
 
   test("returns the stored preference when the theme value is valid", () => {
     const storage = {
-      getItem: () => '{"theme":"nord-dark"}',
+      getItem: () => '{"theme":"nord"}',
       setItem: () => {},
     };
 
     expect(readStoredThemePreference("theme", DEFAULT_THEME_PREFERENCE, storage)).toEqual({
-      theme: "nord-dark",
+      theme: "nord",
     });
   });
 
-  test("migrates old preset+appearance format to new theme format", () => {
-    const stored: Record<string, string> = {};
+  test("falls back to default for unrecognized old format", () => {
     const storage = {
       getItem: () => '{"preset":"nord","appearance":"dark"}',
-      setItem: (key: string, value: string) => {
-        stored[key] = value;
-      },
-    };
-
-    expect(readStoredThemePreference("theme", DEFAULT_THEME_PREFERENCE, storage)).toEqual({
-      theme: "nord-dark",
-    });
-    expect(stored.theme).toBe('{"theme":"nord-dark"}');
-  });
-
-  test("migrates old lifecycle+system format to system theme", () => {
-    const stored: Record<string, string> = {};
-    const storage = {
-      getItem: () => '{"preset":"lifecycle","appearance":"system"}',
-      setItem: (key: string, value: string) => {
-        stored[key] = value;
-      },
-    };
-
-    expect(readStoredThemePreference("theme", DEFAULT_THEME_PREFERENCE, storage)).toEqual({
-      theme: "system",
-    });
-    expect(stored.theme).toBe('{"theme":"system"}');
-  });
-
-  test("migrates old lifecycle+light format to light theme", () => {
-    const storage = {
-      getItem: () => '{"preset":"lifecycle","appearance":"light"}',
       setItem: () => {},
     };
 
-    expect(readStoredThemePreference("theme", DEFAULT_THEME_PREFERENCE, storage)).toEqual({
-      theme: "light",
-    });
+    expect(readStoredThemePreference("theme", DEFAULT_THEME_PREFERENCE, storage)).toEqual(
+      DEFAULT_THEME_PREFERENCE,
+    );
   });
 });
 
@@ -78,7 +48,7 @@ describe("resolveTheme", () => {
   });
 
   test("returns the theme directly when not system", () => {
-    expect(resolveTheme("nord-dark", "light")).toBe("nord-dark");
+    expect(resolveTheme("nord", "light")).toBe("nord");
     expect(resolveTheme("light", "dark")).toBe("light");
   });
 });
@@ -102,9 +72,9 @@ describe("applyThemeToRoot", () => {
       },
     };
 
-    applyThemeToRoot("nord-dark", root);
+    applyThemeToRoot("nord", root);
 
-    expect(root.dataset.theme).toBe("nord-dark");
+    expect(root.dataset.theme).toBe("nord");
     expect(root.style.colorScheme).toBe("dark");
     expect(added).toContain("dark");
     expect(removed).toHaveLength(0);
@@ -128,9 +98,9 @@ describe("applyThemeToRoot", () => {
       },
     };
 
-    applyThemeToRoot("monokai-light", root);
+    applyThemeToRoot("light", root);
 
-    expect(root.dataset.theme).toBe("monokai-light");
+    expect(root.dataset.theme).toBe("light");
     expect(root.style.colorScheme).toBe("light");
     expect(added).toHaveLength(0);
     expect(removed).toContain("dark");

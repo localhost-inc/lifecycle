@@ -46,7 +46,7 @@ The current terminal lifecycle already emits coarse status events when a session
 
 1. M3: makes harness terminals observable at the level users actually care about, not just process lifetime.
 2. M3: keeps Claude/Codex specifics behind the provider boundary instead of leaking parser logic into React.
-3. M5+: opens a clean path for richer workspace attention UX such as dock badges or unread-style runtime indicators.
+3. M4+: opens a clean path for richer workspace attention UX such as dock badges or unread-style runtime indicators.
 
 ## Follow-Up Actions
 

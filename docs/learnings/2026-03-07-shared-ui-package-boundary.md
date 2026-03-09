@@ -17,8 +17,8 @@ The durable package boundary is:
 ## Milestone Impact
 
 1. M3: terminal and workspace surfaces now share the same primitive vocabulary without forcing a shell-level rewrite.
-2. M5: service/runtime status presentation can evolve on top of shared badges and status dots instead of duplicating variants per feature.
-3. M6: CLI-centric flows and future web surfaces can reuse the same theme/provider contract and primitive set from `packages/ui`.
+2. M4: service/runtime status presentation can evolve on top of shared badges and status dots instead of duplicating variants per feature.
+3. M5: CLI-centric flows and future web surfaces can reuse the same theme/provider contract and primitive set from `packages/ui`.
 
 ## Follow-Up Actions
 

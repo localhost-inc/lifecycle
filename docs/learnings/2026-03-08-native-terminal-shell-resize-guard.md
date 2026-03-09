@@ -22,7 +22,7 @@ That means shell sidebar drags are not purely DOM-local. The rail separators liv
 ## Milestone Impact
 
 1. M3 native terminal hosting remains usable while shell rail resizing is enabled.
-2. M5 and M6 can keep extending sidebar-driven workspace controls without reopening the native-host interaction boundary.
+2. M4 and M5 can keep extending sidebar-driven workspace controls without reopening the native-host interaction boundary.
 
 ## Follow-Up Actions
 

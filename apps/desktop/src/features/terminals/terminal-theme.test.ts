@@ -42,43 +42,43 @@ describe("buildTerminalTheme", () => {
         getPropertyValue(name: string) {
           switch (name) {
             case "--terminal-surface-background":
-              return "#f1ecde";
+              return "#272822";
             case "--terminal-foreground":
-              return "#5b5a54";
+              return "#f8f8f2";
             case "--foreground":
-              return "#272822";
+              return "#f8f8f2";
             case "--surface-selected":
-              return "#d8d1c1";
+              return "#49483e";
             case "--terminal-ansi-black":
-              return "#d8d1c1";
+              return "#403e41";
             case "--terminal-ansi-white":
-              return "#5b5a54";
+              return "#ccccc6";
             case "--terminal-ansi-bright-black":
-              return "#b8b09e";
+              return "#75715e";
             case "--terminal-ansi-bright-white":
-              return "#272822";
+              return "#f8f8f2";
             case "--terminal-cursor-color":
-              return "#0f75bc";
+              return "#66d9ef";
             default:
               return "";
           }
         },
       }) as CSSStyleDeclaration) as typeof getComputedStyle;
 
-    const tokens = readTerminalThemeTokens({} as HTMLElement, "monokai-light");
-    const theme = buildTerminalTheme("monokai-light", tokens);
+    const tokens = readTerminalThemeTokens({} as HTMLElement, "monokai");
+    const theme = buildTerminalTheme("monokai", tokens);
 
-    expect(tokens.foreground).toBe("#5b5a54");
-    expect(tokens.paletteOverrides?.black).toBe("#d8d1c1");
-    expect(tokens.paletteOverrides?.white).toBe("#5b5a54");
-    expect(tokens.paletteOverrides?.brightBlack).toBe("#b8b09e");
-    expect(tokens.paletteOverrides?.brightWhite).toBe("#272822");
-    expect(tokens.paletteOverrides?.cursor).toBe("#0f75bc");
-    expect(theme.nativeTheme.palette[0]).toBe("#d8d1c1");
-    expect(theme.nativeTheme.palette[7]).toBe("#5b5a54");
-    expect(theme.nativeTheme.palette[8]).toBe("#b8b09e");
-    expect(theme.nativeTheme.palette[15]).toBe("#272822");
-    expect(theme.nativeTheme.cursorColor).toBe("#0f75bc");
+    expect(tokens.foreground).toBe("#f8f8f2");
+    expect(tokens.paletteOverrides?.black).toBe("#403e41");
+    expect(tokens.paletteOverrides?.white).toBe("#ccccc6");
+    expect(tokens.paletteOverrides?.brightBlack).toBe("#75715e");
+    expect(tokens.paletteOverrides?.brightWhite).toBe("#f8f8f2");
+    expect(tokens.paletteOverrides?.cursor).toBe("#66d9ef");
+    expect(theme.nativeTheme.palette[0]).toBe("#403e41");
+    expect(theme.nativeTheme.palette[7]).toBe("#ccccc6");
+    expect(theme.nativeTheme.palette[8]).toBe("#75715e");
+    expect(theme.nativeTheme.palette[15]).toBe("#f8f8f2");
+    expect(theme.nativeTheme.cursorColor).toBe("#66d9ef");
   });
 
   test("keeps the terminal surface aligned with the app background tokens", () => {
@@ -120,16 +120,71 @@ describe("buildTerminalTheme", () => {
     expect(theme.webTheme.selectionBackground).toBe("#27272a");
   });
 
-  test("uses theme-specific ansi colors for alternate themes", () => {
-    const theme = buildTerminalTheme("nord-light", {
-      background: "#eceff4",
-      foreground: "#2e3440",
-      selectionBackground: "#c5cedb",
-      selectionForeground: "#2e3440",
+  test("CSS-defined themes override the appearance base palette", () => {
+    const theme = buildTerminalTheme("dracula", {
+      background: "#282a36",
+      foreground: "#f8f8f2",
+      selectionBackground: "#44475a",
+      selectionForeground: "#f8f8f2",
+      paletteOverrides: {
+        black: "#21222c",
+        red: "#ff5555",
+        green: "#50fa7b",
+        yellow: "#f1fa8c",
+        blue: "#bd93f9",
+        magenta: "#ff79c6",
+        cyan: "#8be9fd",
+        white: "#f8f8f2",
+        brightBlack: "#6272a4",
+        brightRed: "#ff6e6e",
+        brightGreen: "#69ff94",
+        brightYellow: "#ffffa5",
+        brightBlue: "#d6acff",
+        brightMagenta: "#ff92df",
+        brightCyan: "#a4ffff",
+        brightWhite: "#ffffff",
+        cursor: "#f8f8f2",
+      },
     });
 
-    expect(theme.nativeTheme.cursorColor).toBe("#5e81ac");
-    expect(theme.nativeTheme.palette[4]).toBe("#5e81ac");
-    expect(theme.nativeTheme.palette[15]).toBe("#2e3440");
+    expect(theme.nativeTheme.cursorColor).toBe("#f8f8f2");
+    expect(theme.nativeTheme.palette[0]).toBe("#21222c");
+    expect(theme.nativeTheme.palette[1]).toBe("#ff5555");
+    expect(theme.nativeTheme.palette[2]).toBe("#50fa7b");
+    expect(theme.nativeTheme.palette[4]).toBe("#bd93f9");
+    expect(theme.webTheme.green).toBe("#50fa7b");
+    expect(theme.webTheme.cursor).toBe("#f8f8f2");
+  });
+
+  test("uses theme-specific ansi colors for alternate themes", () => {
+    const theme = buildTerminalTheme("nord", {
+      background: "#2e3440",
+      foreground: "#eceff4",
+      selectionBackground: "#4c566a",
+      selectionForeground: "#eceff4",
+      paletteOverrides: {
+        black: "#3b4252",
+        red: "#bf616a",
+        green: "#a3be8c",
+        yellow: "#ebcb8b",
+        blue: "#81a1c1",
+        magenta: "#b48ead",
+        cyan: "#88c0d0",
+        white: "#e5e9f0",
+        brightBlack: "#4c566a",
+        brightRed: "#d08770",
+        brightGreen: "#b5d7a7",
+        brightYellow: "#f0d399",
+        brightBlue: "#88c0d0",
+        brightMagenta: "#c895bf",
+        brightCyan: "#8fbcbb",
+        brightWhite: "#eceff4",
+        cursor: "#88c0d0",
+      },
+    });
+
+    expect(theme.nativeTheme.cursorColor).toBe("#88c0d0");
+    expect(theme.nativeTheme.palette[4]).toBe("#81a1c1");
+    expect(theme.nativeTheme.palette[15]).toBe("#eceff4");
   });
 });

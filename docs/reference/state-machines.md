@@ -2,7 +2,37 @@
 
 Canonical transition rules for all Lifecycle state machines. This is the single source of truth for transition guards and implementation tests.
 
-## Workspace `status` Allowed Transitions
+Lifecycle has three related but distinct machines:
+
+1. workspace lifecycle
+   - durable shell existence and archive state
+2. workspace environment status
+   - the singleton runnable environment attached to a workspace
+3. workspace service status
+   - per-service runtime inside that environment
+
+Implementation note:
+
+1. V1 still stores environment state on `workspace.status`.
+2. The target contract is `workspace.archived_at` (or equivalent workspace-lifecycle metadata) plus `workspace.environment_status`.
+3. Do not add new product behavior that deepens the overloaded meaning of `workspace.status`.
+
+## Workspace Lifecycle
+
+Workspace lifecycle is about the durable shell, not whether services are currently running.
+
+- `created -> active`
+- `active -> archived`
+- `archived -> active`
+- `active|archived -> destroyed` (terminal)
+
+### Workspace Lifecycle Invariants
+
+1. Archiving or destroying a workspace must first drive the environment down.
+2. Starting, stopping, resetting, sleeping, or waking the environment does not create, archive, unarchive, or destroy the workspace.
+3. Archived workspaces remain durable records; destroy is the terminal workspace removal path.
+
+## Workspace Environment `status` Allowed Transitions
 
 - `creating -> starting|sleeping|failed`
 - `starting -> ready|failed`
@@ -12,14 +42,14 @@ Canonical transition rules for all Lifecycle state machines. This is the single 
 - `failed -> starting|resetting|destroying`
 - `destroying -> deleted` (terminal)
 
-### Workspace State Invariants
+### Workspace Environment Invariants
 
 1. Allowed states: `creating`, `starting`, `ready`, `resetting`, `sleeping`, `destroying`, `failed`
-2. Transitional status acts as implicit mutation lock for workspace/service mutations (`creating|starting|resetting|sleeping|destroying`). Terminal create/attach is governed by interactive workspace context instead of service readiness.
-3. Project `setup` executes exactly once per workspace create
+2. Transitional environment status acts as implicit mutation lock for environment/service mutations (`creating|starting|resetting|sleeping|destroying`). Terminal create/attach is governed by interactive workspace context instead of service readiness.
+3. Project `setup` executes exactly once per workspace create; ordinary environment start/stop does not rerun setup.
 4. All defined services must pass health checks before transition to `ready`
 
-### State Semantics by Mode
+### Environment State Semantics by Mode
 
 | State | `CloudWorkspaceProvider` | `LocalWorkspaceProvider` |
 |-------|-------------------|-------------------|
@@ -31,6 +61,19 @@ Canonical transition rules for all Lifecycle state machines. This is the single 
 
 - All failed transitions include typed `failure_reason` and `failed_at`
 - All forbidden transitions must throw `invalid_state_transition` error with current/target state in `details`
+
+## Workspace Service `status` Allowed Transitions
+
+- `stopped -> starting`
+- `starting -> ready|failed|stopped`
+- `ready -> starting|failed|stopped`
+- `failed -> starting|stopped`
+
+### Workspace Service State Invariants
+
+1. Allowed states: `stopped`, `starting`, `ready`, `failed`
+2. Service status is subordinate to the environment: a sleeping or destroying environment cannot have `ready` services.
+3. Individual service failure may drive the environment to `failed` when the health gate requires all declared services.
 
 ## Terminal `status` Allowed Transitions
 
@@ -60,7 +103,7 @@ Canonical transition rules for all Lifecycle state machines. This is the single 
 - `disabled -> provisioning` on `share on` or `share_default=true`
 - `provisioning -> ready|failed` after route bind + health confirmation
 - `ready -> provisioning` during service restart/rebind (URL remains stable)
-- `ready -> sleeping` when workspace sleeps
+- `ready -> sleeping` when the workspace environment sleeps
 - `sleeping -> provisioning|ready` on wake and route reconcile
 - `* -> expired` when workspace is destroyed or TTL-cleaned
 - Health check must pass before `preview_state=ready` for all providers

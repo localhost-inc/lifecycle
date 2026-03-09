@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { WorkspaceSurfaceTabBar } from "./workspace-surface-tab-bar";
+import {
+  getWorkspaceActiveTabScrollLeft,
+  WorkspaceSurfaceTabBar,
+} from "./workspace-surface-tab-bar";
 
 describe("WorkspaceSurfaceTabBar", () => {
   test("renders caller-provided leading content for surface tabs", () => {
@@ -59,6 +62,44 @@ describe("WorkspaceSurfaceTabBar", () => {
 
     expect(markup).toContain("font-medium");
     expect(markup).not.toContain("font-semibold");
+  });
+
+  test("hides the horizontal scrollbar and reserves a right gutter for the fade", () => {
+    const markup = renderToStaticMarkup(
+      createElement(WorkspaceSurfaceTabBar, {
+        activeTabKey: "terminal:term-1",
+        onCloseDocumentTab: () => {},
+        onCloseRuntimeTab: async () => {},
+        onSelectTab: () => {},
+        onSetTabOrder: () => {},
+        visibleTabs: [
+          {
+            key: "terminal:term-1",
+            harnessProvider: null,
+            type: "terminal",
+            label: "Terminal 1",
+            launchType: "shell",
+            responseReady: false,
+            status: "active",
+            terminalId: "term-1",
+          },
+          {
+            key: "terminal:term-2",
+            harnessProvider: null,
+            type: "terminal",
+            label: "Terminal 2",
+            launchType: "shell",
+            responseReady: false,
+            status: "active",
+            terminalId: "term-2",
+          },
+        ],
+      }),
+    );
+
+    expect(markup).toContain("padding-right:24px");
+    expect(markup).toContain("scrollbar-width:none");
+    expect(markup).toContain("-ms-overflow-style:none");
   });
 
   test("renders a light separator between adjacent inactive workspace tabs", () => {
@@ -248,5 +289,52 @@ describe("WorkspaceSurfaceTabBar", () => {
     expect(markup).toContain('aria-label="Response ready"');
     expect(markup).toContain("pointer-events-none absolute right-3 top-1.5");
     expect(markup).not.toContain('title="detached"');
+  });
+});
+
+describe("getWorkspaceActiveTabScrollLeft", () => {
+  test("keeps the scroll position when the active tab is fully visible", () => {
+    expect(
+      getWorkspaceActiveTabScrollLeft(
+        {
+          clientWidth: 320,
+          scrollLeft: 48,
+        },
+        {
+          offsetLeft: 72,
+          offsetWidth: 96,
+        },
+      ),
+    ).toBeNull();
+  });
+
+  test("scrolls right when the active tab would land under the fade", () => {
+    expect(
+      getWorkspaceActiveTabScrollLeft(
+        {
+          clientWidth: 240,
+          scrollLeft: 0,
+        },
+        {
+          offsetLeft: 200,
+          offsetWidth: 80,
+        },
+      ),
+    ).toBe(64);
+  });
+
+  test("scrolls left when the active tab sits before the current viewport", () => {
+    expect(
+      getWorkspaceActiveTabScrollLeft(
+        {
+          clientWidth: 240,
+          scrollLeft: 80,
+        },
+        {
+          offsetLeft: 32,
+          offsetWidth: 72,
+        },
+      ),
+    ).toBe(32);
   });
 });

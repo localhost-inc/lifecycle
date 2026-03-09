@@ -50,7 +50,10 @@ const TOKEN_FALLBACKS: Record<"light" | "dark", TerminalThemeTokens> = {
   },
 };
 
-const ANSI_PALETTES: Record<ResolvedTheme, TerminalAnsiPalette> = {
+/** Base ANSI palettes for themes whose CSS does not define --terminal-ansi-* vars.
+ *  Themes with CSS-defined terminal vars (nord, monokai, catppuccin, dracula, rose-pine)
+ *  get their palette entirely from paletteOverrides at runtime. */
+const ANSI_PALETTES: Partial<Record<ResolvedTheme, TerminalAnsiPalette>> & Record<"light" | "dark", TerminalAnsiPalette> = {
   dark: {
     black: "#27272a",
     red: "#ef4444",
@@ -88,82 +91,6 @@ const ANSI_PALETTES: Record<ResolvedTheme, TerminalAnsiPalette> = {
     brightCyan: "#14b8a6",
     brightWhite: "#09090b",
     cursor: "#2563eb",
-  },
-  "monokai-dark": {
-    black: "#403e41",
-    red: "#f92672",
-    green: "#a6e22e",
-    yellow: "#e6db74",
-    blue: "#66d9ef",
-    magenta: "#ae81ff",
-    cyan: "#a1efe4",
-    white: "#ccccc6",
-    brightBlack: "#75715e",
-    brightRed: "#ff6188",
-    brightGreen: "#bef264",
-    brightYellow: "#ffd866",
-    brightBlue: "#78dce8",
-    brightMagenta: "#c4a7ff",
-    brightCyan: "#b8f2e6",
-    brightWhite: "#f8f8f2",
-    cursor: "#66d9ef",
-  },
-  "monokai-light": {
-    black: "#d8d1c1",
-    red: "#d73a49",
-    green: "#3f7d20",
-    yellow: "#8f6a0b",
-    blue: "#0f75bc",
-    magenta: "#8a4fff",
-    cyan: "#0f8b8d",
-    white: "#5b5a54",
-    brightBlack: "#b8b09e",
-    brightRed: "#ef476f",
-    brightGreen: "#4d9f3a",
-    brightYellow: "#b8850b",
-    brightBlue: "#2b8fdc",
-    brightMagenta: "#a26bff",
-    brightCyan: "#14b8a6",
-    brightWhite: "#272822",
-    cursor: "#0f75bc",
-  },
-  "nord-dark": {
-    black: "#3b4252",
-    red: "#bf616a",
-    green: "#a3be8c",
-    yellow: "#ebcb8b",
-    blue: "#81a1c1",
-    magenta: "#b48ead",
-    cyan: "#88c0d0",
-    white: "#e5e9f0",
-    brightBlack: "#4c566a",
-    brightRed: "#d08770",
-    brightGreen: "#b5d7a7",
-    brightYellow: "#f0d399",
-    brightBlue: "#88c0d0",
-    brightMagenta: "#c895bf",
-    brightCyan: "#8fbcbb",
-    brightWhite: "#eceff4",
-    cursor: "#88c0d0",
-  },
-  "nord-light": {
-    black: "#c5cedb",
-    red: "#bf616a",
-    green: "#5e815b",
-    yellow: "#b48a2d",
-    blue: "#5e81ac",
-    magenta: "#8f6f93",
-    cyan: "#5f8f95",
-    white: "#4c566a",
-    brightBlack: "#81a1c1",
-    brightRed: "#d08770",
-    brightGreen: "#81a06b",
-    brightYellow: "#c89f3d",
-    brightBlue: "#81a1c1",
-    brightMagenta: "#b48ead",
-    brightCyan: "#88c0d0",
-    brightWhite: "#2e3440",
-    cursor: "#5e81ac",
   },
 };
 
@@ -257,8 +184,9 @@ export function buildTerminalTheme(
   resolvedTheme: ResolvedTheme,
   tokens: TerminalThemeTokens,
 ): ResolvedTerminalTheme {
+  const basePalette = ANSI_PALETTES[resolvedTheme] ?? ANSI_PALETTES[themeAppearance(resolvedTheme)];
   const palette = {
-    ...ANSI_PALETTES[resolvedTheme],
+    ...basePalette,
     ...tokens.paletteOverrides,
   };
   return {

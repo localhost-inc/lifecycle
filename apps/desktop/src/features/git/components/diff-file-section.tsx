@@ -10,6 +10,7 @@ interface DiffFileSectionProps {
   onHeightChange?: ((path: string, height: number) => void) | null;
   onOpenFile?: ((filePath: string) => void) | null;
   onToggleCollapse: (path: string) => void;
+  theme: string;
   themeType: "light" | "dark";
 }
 
@@ -19,6 +20,7 @@ function DiffFileSectionComponent({
   onHeightChange,
   onOpenFile,
   onToggleCollapse,
+  theme,
   themeType,
 }: DiffFileSectionProps) {
   const openablePath = getOpenableDiffFilePath(fileDiff);
@@ -80,6 +82,7 @@ function DiffFileSectionComponent({
             fileDiff={fileDiff}
             options={{
               disableFileHeader: true,
+              theme,
               themeType,
             }}
           />

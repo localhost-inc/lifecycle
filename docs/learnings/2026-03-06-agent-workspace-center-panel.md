@@ -21,9 +21,9 @@ The right product split is:
 ## Milestone Impact
 
 1. Backlog: preserves the Lifecycle-native agent workspace concept outside the active milestone sequence.
-2. M5: resumes as the next active post-M3 milestone for local lifecycle controls.
-3. M6: keeps the CLI focused on machine-friendly workspace control and observability instead of defining the primary agent UX.
-4. M7: can later project the same agent session/task/tool/artifact model into cloud workspaces without redesigning the desktop surface if the backlog item is revived.
+2. M4: resumes as the next active post-M3 milestone for local workspace environment and lifecycle controls.
+3. M5: keeps the CLI focused on machine-friendly workspace control and observability instead of defining the primary agent UX.
+4. M6: can later project the same agent session/task/tool/artifact model into cloud workspaces without redesigning the desktop surface if the backlog item is revived.
 
 ## Follow-Up Actions
 

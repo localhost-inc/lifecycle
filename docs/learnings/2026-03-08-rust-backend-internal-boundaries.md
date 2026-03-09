@@ -20,7 +20,7 @@ That made behavior-preserving cleanups expensive because persistence, subprocess
 ## Milestone Impact
 
 1. M3: terminal lifecycle work is easier to extend because native-surface and persistence helpers no longer have to evolve inside one monolithic file.
-2. M5: workspace lifecycle controls can keep adding terminal and title behavior without reintroducing backend duplication at the command layer.
+2. M4: workspace lifecycle controls can keep adding terminal and title behavior without reintroducing backend duplication at the command layer.
 
 ## Follow-up
 

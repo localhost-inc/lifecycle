@@ -21,9 +21,9 @@ The durable sidebar contract is:
 
 ## Milestone Impact
 
-1. M5: services remain visible in a dedicated lower panel without coupling to git UI state.
-2. M6: local observability and git controls can evolve independently inside separate panel boundaries.
-3. M7: cloud-specific controls and logs can slot into the same panel contract without another right-rail rewrite.
+1. M4: services remain visible in a dedicated lower panel without coupling to git UI state.
+2. M5: local observability and git controls can evolve independently inside separate panel boundaries.
+3. M6: cloud-specific controls and logs can slot into the same panel contract without another right-rail rewrite.
 
 ## Follow-Up Actions
 

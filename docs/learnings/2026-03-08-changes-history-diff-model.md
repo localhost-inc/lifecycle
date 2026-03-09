@@ -16,9 +16,9 @@ The simpler durable model is:
 
 ## Milestone Impact
 
-1. M6: workspace git observability becomes easier to persist, reopen, and reason about without losing multi-file diff performance.
-2. M6: staged/unstaged actions remain available without making the main viewer juggle multiple current-change patch scopes.
-3. M7: cloud git history and current-change viewing can reuse the same center-panel model without reintroducing file-scoped document tabs.
+1. M5: workspace git observability becomes easier to persist, reopen, and reason about without losing multi-file diff performance.
+2. M5: staged/unstaged actions remain available without making the main viewer juggle multiple current-change patch scopes.
+3. M6: cloud git history and current-change viewing can reuse the same center-panel model without reintroducing file-scoped document tabs.
 
 ## Follow-Up Actions
 

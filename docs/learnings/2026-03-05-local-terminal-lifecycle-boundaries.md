@@ -14,8 +14,8 @@ Two lifecycle boundaries need to stay explicit in the implementation:
 ## Milestone Impact
 
 1. M3: terminal replay, detach, and exit behavior can be covered with unit tests that exercise the real PTY supervisor and persistence rules.
-2. M5: sleep and wake work must distinguish between metadata transitions and true process survival semantics.
-3. M6: CLI attach work still needs its own transport layer; it should not rely on desktop-only in-memory supervisor state.
+2. M4: sleep and wake work must distinguish between metadata transitions and true process survival semantics.
+3. M5: CLI attach work still needs its own transport layer; it should not rely on desktop-only in-memory supervisor state.
 
 ## Follow-Up Actions
 

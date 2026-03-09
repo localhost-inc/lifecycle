@@ -2,6 +2,20 @@
 
 The `WorkspaceProvider` is the primary extensibility seam for workspace lifecycle operations. It is the adapter layer between the control plane and the environment where workspaces actually run. Workspace mode is selected **per-workspace** at creation time and stored as `workspace.mode`.
 
+## Workspace vs Environment Boundary
+
+Lifecycle should model three layers explicitly:
+
+1. `workspace`
+   - durable shell, identity, worktree ownership, provider mode, archive metadata
+2. `environment`
+   - singleton execution layer attached to the workspace
+   - start/stop/reset/sleep/wake/fail semantics live here
+3. `workspace_service`
+   - per-service runtime inside the environment
+
+In V1, the environment is represented on the workspace record rather than as a separate table because there is exactly one environment per workspace.
+
 ## Interface
 
 ```typescript
@@ -34,6 +48,13 @@ interface WorkspaceProvider {
 
 Provider-specific runtime detail should not be stuffed into a generic `mode_state` field. If a field materially affects product behavior, model it explicitly on `workspace`; otherwise keep it inside the provider implementation.
 
+### Provider Responsibility Split
+
+1. `createWorkspace` and `destroy` are workspace-lifecycle operations.
+2. `startServices`, `stopServices`, `sleep`, `wake`, and reset flows operate on the environment attached to that workspace.
+3. Future archive/unarchive flows are workspace-lifecycle operations that must drive the environment down or back up as needed.
+4. The provider boundary should expose one coherent workspace-scoped API even when the underlying behavior targets the environment or a service within it.
+
 ## Execution Model
 
 `lifecycle.json` describes **WHAT** to run. The `WorkspaceProvider` decides **WHERE**.
@@ -53,6 +74,12 @@ Normative event and hook rules live in [events.md](./events.md).
 2. The desktop query cache, notifications, metrics, and future plugins are consumers of that foundation, not independent sources of truth.
 3. Commands may expose `before|after|failed` hooks, but blocking hooks remain Lifecycle-owned until a plugin trust model exists.
 4. High-frequency streams such as PTY output remain on dedicated transports rather than the generic event foundation.
+
+Execution-state facts should follow the thing that changed:
+
+1. workspace facts describe durable workspace lifecycle and metadata
+2. environment facts describe start/stop/reset/sleep/wake/fail transitions
+3. service facts describe per-service runtime changes
 
 ## Terminal Stream Contract (M3+)
 

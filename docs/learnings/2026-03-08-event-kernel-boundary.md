@@ -34,9 +34,9 @@ That is enough for current UI behavior, but it is not yet a first-class internal
 ## Impact on milestones
 
 1. M3: clarifies that terminal lifecycle events are normalized facts while PTY output remains dedicated stream transport.
-2. M5: creates a clean place for lifecycle notifications, attention UX, and operation instrumentation.
-3. M6: gives the CLI a shared observability/event vocabulary instead of a separate local-only reporting contract.
-4. M7+: provides the right foundation for cloud activity feeds, audit, metrics, and future plugin subscriptions.
+2. M4: creates a clean place for lifecycle notifications, attention UX, and operation instrumentation.
+3. M5: gives the CLI a shared observability/event vocabulary instead of a separate local-only reporting contract.
+4. M6+: provides the right foundation for cloud activity feeds, audit, metrics, and future plugin subscriptions.
 
 ## Follow-up actions
 

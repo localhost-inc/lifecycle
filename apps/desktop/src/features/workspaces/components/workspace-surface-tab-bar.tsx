@@ -3,6 +3,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
@@ -18,6 +19,13 @@ import { WorkspaceSurfaceTabItem } from "./workspace-surface-tab-item";
 
 const TAB_DRAG_GAP_PX = 2;
 const TAB_DRAG_START_THRESHOLD_PX = 6;
+const TAB_BAR_RIGHT_FADE_WIDTH_PX = 24;
+
+const tabListStyle: CSSProperties = {
+  msOverflowStyle: "none",
+  paddingRight: TAB_BAR_RIGHT_FADE_WIDTH_PX,
+  scrollbarWidth: "none",
+};
 
 interface WorkspaceTabDragState {
   draggedKey: string;
@@ -52,6 +60,42 @@ interface WorkspaceTabRenameState {
   saving: boolean;
   terminalId: string;
   value: string;
+}
+
+interface WorkspaceTabListScrollMetrics {
+  clientWidth: number;
+  scrollLeft: number;
+}
+
+interface WorkspaceTabScrollTargetMetrics {
+  offsetLeft: number;
+  offsetWidth: number;
+}
+
+export function getWorkspaceActiveTabScrollLeft(
+  tabList: WorkspaceTabListScrollMetrics,
+  tabElement: WorkspaceTabScrollTargetMetrics,
+  obscuredRightWidth = TAB_BAR_RIGHT_FADE_WIDTH_PX,
+) {
+  const availableWidth = tabList.clientWidth - obscuredRightWidth;
+  if (availableWidth <= 0) {
+    return null;
+  }
+
+  const visibleLeft = tabList.scrollLeft;
+  const visibleRight = visibleLeft + availableWidth;
+  const tabLeft = tabElement.offsetLeft;
+  const tabRight = tabLeft + tabElement.offsetWidth;
+
+  if (tabLeft < visibleLeft) {
+    return Math.max(0, tabLeft);
+  }
+
+  if (tabRight > visibleRight) {
+    return Math.max(0, tabRight - availableWidth);
+  }
+
+  return null;
 }
 
 function defaultTabLeading(tab: WorkspaceSurfaceTab) {
@@ -90,10 +134,13 @@ export function WorkspaceSurfaceTabBar({
   const dragStateRef = useRef<WorkspaceTabDragState | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const skipRenameBlurRef = useRef(false);
+  const tabListRef = useRef<HTMLDivElement | null>(null);
   const tabElementsRef = useRef(new Map<string, HTMLDivElement>());
   const onSetTabOrderRef = useRef(onSetTabOrder);
   const suppressClickRef = useRef<string | null>(null);
   const visibleTabKeys = visibleTabs.map((tab) => tab.key);
+  const visibleTabLayoutKey = visibleTabKeys.join("\u0000");
+  const activeTabLabel = visibleTabs.find((tab) => tab.key === activeTabKey)?.label ?? null;
   const visibleTabKeysRef = useRef(visibleTabKeys);
 
   useEffect(() => {
@@ -135,6 +182,31 @@ export function WorkspaceSurfaceTabBar({
       clearTimeout(timeoutId);
     };
   }, [renameState]);
+
+  useEffect(() => {
+    if (!activeTabKey) {
+      return;
+    }
+
+    const tabList = tabListRef.current;
+    const activeTabElement = tabElementsRef.current.get(activeTabKey);
+    if (!tabList || !activeTabElement) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const nextScrollLeft = getWorkspaceActiveTabScrollLeft(tabList, activeTabElement);
+      if (nextScrollLeft === null || Math.abs(nextScrollLeft - tabList.scrollLeft) < 1) {
+        return;
+      }
+
+      tabList.scrollTo({ left: nextScrollLeft });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [activeTabKey, activeTabLabel, visibleTabLayoutKey]);
 
   const setTabElement = useCallback((key: string, element: HTMLDivElement | null) => {
     if (element) {
@@ -389,12 +461,15 @@ export function WorkspaceSurfaceTabBar({
     <div className="relative min-w-0 flex-1">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 right-0 z-10 w-6 bg-gradient-to-l from-[var(--background)] to-transparent"
+        className="pointer-events-none absolute inset-y-0 right-0 z-10 bg-gradient-to-l from-[var(--background)] to-transparent"
+        style={{ width: TAB_BAR_RIGHT_FADE_WIDTH_PX }}
       />
       <div
         aria-label="Workspace tabs"
-        className="flex items-center gap-0.5 overflow-x-auto py-1"
+        className="flex items-center gap-0.5 overflow-x-auto py-1 [&::-webkit-scrollbar]:hidden"
         role="tablist"
+        ref={tabListRef}
+        style={tabListStyle}
       >
         {visibleTabs.map((tab, index) => {
           const active = tab.key === activeTabKey;

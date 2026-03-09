@@ -1,4 +1,4 @@
-import { Alert, AlertDescription, useTheme } from "@lifecycle/ui";
+import { Alert, AlertDescription, diffTheme, useTheme } from "@lifecycle/ui";
 import type { GitLogEntry, GitStatusResult } from "@lifecycle/contracts";
 import { parsePatchFiles } from "@pierre/diffs";
 import { PatchDiff } from "@pierre/diffs/react";
@@ -84,7 +84,7 @@ export function buildChangesPatchReloadKey(
 }
 
 export function GitDiffSurface({ source, workspaceId }: GitDiffSurfaceProps) {
-  const { resolvedAppearance } = useTheme();
+  const { resolvedAppearance, resolvedTheme } = useTheme();
   const [patch, setPatch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -196,6 +196,7 @@ export function GitDiffSurface({ source, workspaceId }: GitDiffSurfaceProps) {
               patch={patch}
               options={{
                 disableFileHeader: true,
+                theme: diffTheme(resolvedTheme),
                 themeType: resolvedAppearance,
               }}
             />
@@ -205,6 +206,7 @@ export function GitDiffSurface({ source, workspaceId }: GitDiffSurfaceProps) {
             files={parsedFiles}
             initialFilePath={focusPath}
             onOpenFile={handleOpenFile}
+            theme={diffTheme(resolvedTheme)}
             themeType={resolvedAppearance}
           />
         )}

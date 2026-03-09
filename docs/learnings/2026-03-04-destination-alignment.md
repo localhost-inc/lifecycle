@@ -18,7 +18,7 @@ The target design adds major surfaces not yet implemented:
 
 ## Decision
 
-1. Treat the target design as the north-star UI for M3-M7 work.
+1. Treat the target design as the north-star UI for M3-M6 work.
 2. Keep frontend organization feature-oriented and progressively composable.
 3. Standardize React component filenames to lowercase hyphen-case.
 4. Record new architectural learnings in this directory as work lands.
@@ -27,8 +27,8 @@ The target design adds major surfaces not yet implemented:
 
 - M3 directly owns terminal tab runtime and raw shell access.
 - Deferred backlog item owns the Lifecycle-native agent workspace and portable center-pane interaction model when revisited.
-- M5 extends operational controls and service lifecycle fidelity that drive side-panel state.
-- M7 introduces organization switcher, cloud workspace surfaces, activity feed, and PR actions that complete the design language.
+- M4 extends operational controls and service lifecycle fidelity that drive side-panel state.
+- M6 introduces organization switcher, cloud workspace surfaces, activity feed, and PR actions that complete the design language.
 
 ## Follow-up actions
 

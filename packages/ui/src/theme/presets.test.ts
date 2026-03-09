@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isTheme, themeAppearance, themeOptions } from "./presets";
+import { diffTheme, isTheme, themeAppearance, themeOptions } from "./presets";
 
 describe("theme presets", () => {
   test("contains all theme options", () => {
@@ -7,10 +7,11 @@ describe("theme presets", () => {
       "system",
       "light",
       "dark",
-      "nord-light",
-      "nord-dark",
-      "monokai-light",
-      "monokai-dark",
+      "nord",
+      "monokai",
+      "catppuccin",
+      "dracula",
+      "rose-pine",
     ]);
   });
 
@@ -18,10 +19,15 @@ describe("theme presets", () => {
     expect(isTheme("system")).toBeTrue();
     expect(isTheme("light")).toBeTrue();
     expect(isTheme("dark")).toBeTrue();
-    expect(isTheme("nord-light")).toBeTrue();
-    expect(isTheme("nord-dark")).toBeTrue();
-    expect(isTheme("monokai-light")).toBeTrue();
-    expect(isTheme("monokai-dark")).toBeTrue();
+    expect(isTheme("nord")).toBeTrue();
+    expect(isTheme("monokai")).toBeTrue();
+    expect(isTheme("catppuccin")).toBeTrue();
+    expect(isTheme("dracula")).toBeTrue();
+    expect(isTheme("rose-pine")).toBeTrue();
+    expect(isTheme("nord-light")).toBeFalse();
+    expect(isTheme("nord-dark")).toBeFalse();
+    expect(isTheme("monokai-light")).toBeFalse();
+    expect(isTheme("monokai-dark")).toBeFalse();
     expect(isTheme("unknown")).toBeFalse();
     expect(isTheme("lifecycle")).toBeFalse();
     expect(isTheme(42)).toBeFalse();
@@ -30,9 +36,20 @@ describe("theme presets", () => {
   test("derives appearance from resolved theme", () => {
     expect(themeAppearance("light")).toBe("light");
     expect(themeAppearance("dark")).toBe("dark");
-    expect(themeAppearance("nord-light")).toBe("light");
-    expect(themeAppearance("nord-dark")).toBe("dark");
-    expect(themeAppearance("monokai-light")).toBe("light");
-    expect(themeAppearance("monokai-dark")).toBe("dark");
+    expect(themeAppearance("nord")).toBe("dark");
+    expect(themeAppearance("monokai")).toBe("dark");
+    expect(themeAppearance("catppuccin")).toBe("dark");
+    expect(themeAppearance("dracula")).toBe("dark");
+    expect(themeAppearance("rose-pine")).toBe("dark");
+  });
+
+  test("maps themes to shiki theme names", () => {
+    expect(diffTheme("light")).toBe("github-light-default");
+    expect(diffTheme("dark")).toBe("github-dark-default");
+    expect(diffTheme("nord")).toBe("nord");
+    expect(diffTheme("monokai")).toBe("monokai");
+    expect(diffTheme("catppuccin")).toBe("catppuccin-mocha");
+    expect(diffTheme("dracula")).toBe("dracula");
+    expect(diffTheme("rose-pine")).toBe("rose-pine");
   });
 });

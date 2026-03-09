@@ -22,8 +22,8 @@ The right contract for M3 is:
 ## Milestone Impact
 
 1. M3: terminal architecture becomes channel-based, store-aware, and local-first without pretending daemon semantics already exist.
-2. M6: CLI attach/bridge work stays explicitly deferred instead of leaking into the desktop milestone.
-3. M7: cloud terminal transport can slot in later without rewriting the terminal domain model.
+2. M5: CLI attach/bridge work stays explicitly deferred instead of leaking into the desktop milestone.
+3. M6: cloud terminal transport can slot in later without rewriting the terminal domain model.
 
 ## Follow-Up Actions
 

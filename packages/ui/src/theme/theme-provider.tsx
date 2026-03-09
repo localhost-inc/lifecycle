@@ -81,46 +81,14 @@ export function readStoredThemePreference(
   try {
     const parsed = JSON.parse(raw) as Record<string, unknown>;
 
-    // New format: { theme: "..." }
     if (isTheme(parsed.theme)) {
       return { theme: parsed.theme };
-    }
-
-    // Migration from old format: { preset: "...", appearance: "..." }
-    if (typeof parsed.preset === "string" && typeof parsed.appearance === "string") {
-      const migrated = migrateOldPreference(parsed.preset, parsed.appearance);
-      if (migrated) {
-        storage.setItem(storageKey, JSON.stringify(migrated));
-        return migrated;
-      }
     }
 
     return defaultPreference;
   } catch {
     return defaultPreference;
   }
-}
-
-function migrateOldPreference(preset: string, appearance: string): ThemePreference | null {
-  if (preset === "lifecycle") {
-    if (appearance === "system") return { theme: "system" };
-    if (appearance === "light") return { theme: "light" };
-    if (appearance === "dark") return { theme: "dark" };
-  }
-
-  if (preset === "nord") {
-    if (appearance === "system") return { theme: "system" };
-    if (appearance === "light") return { theme: "nord-light" };
-    if (appearance === "dark") return { theme: "nord-dark" };
-  }
-
-  if (preset === "monokai") {
-    if (appearance === "system") return { theme: "system" };
-    if (appearance === "light") return { theme: "monokai-light" };
-    if (appearance === "dark") return { theme: "monokai-dark" };
-  }
-
-  return null;
 }
 
 export function getSystemThemeAppearance(

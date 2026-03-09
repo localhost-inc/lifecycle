@@ -15,8 +15,8 @@ Terminal interactivity and service runtime readiness are separate concerns:
 ## Milestone Impact
 
 1. M3: newly created workspaces can open directly into a harness terminal without waiting for service startup.
-2. M5: run/sleep/wake controls must only manage service/runtime state; they should not implicitly suspend agent terminals.
-3. M7: cloud terminal access should keep the same high-level contract by resolving interactive context provider-side instead of hardcoding local-ready assumptions.
+2. M4: run/sleep/wake controls must only manage service/runtime state; they should not implicitly suspend agent terminals.
+3. M6: cloud terminal access should keep the same high-level contract by resolving interactive context provider-side instead of hardcoding local-ready assumptions.
 
 ## Follow-Up Actions
 

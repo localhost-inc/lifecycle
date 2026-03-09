@@ -40,7 +40,7 @@ Near-term stance:
 
 ## Impact
 
-1. Preserves the existing terminal provider contract, detach/reattach replay behavior, and M7 shared-session text transport assumptions.
+1. Preserves the existing terminal provider contract, detach/reattach replay behavior, and M6 shared-session text transport assumptions.
 2. Avoids a platform-specific rewrite that would split the desktop terminal surface away from the current Tauri webview architecture.
 3. Clarifies that terminal quality work should focus on current-surface improvements unless the product explicitly chooses a native terminal strategy.
 
@@ -55,7 +55,7 @@ Near-term stance:
 1. Repo contracts and implementation:
    - `docs/milestones/m3.md`
    - `docs/milestones/m4.md`
-   - `docs/milestones/m7.md`
+   - `docs/milestones/m6.md`
    - `docs/reference/workspace-provider.md`
    - `apps/desktop/src/features/terminals/components/terminal-surface.tsx`
    - `apps/desktop/src-tauri/src/platform/runtime/terminal.rs`

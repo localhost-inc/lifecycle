@@ -94,11 +94,11 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
   }
 
   async wake(_workspaceId: string): Promise<void> {
-    // TODO: M5 — restart services from sleeping state.
+    // TODO: M4 — restart services from sleeping state.
   }
 
   async destroy(_workspaceId: string): Promise<void> {
-    // TODO: M5 — stop + remove worktree + delete records.
+    // TODO: M4 — stop + remove worktree + delete records.
   }
 
   async createTerminal(
@@ -145,7 +145,7 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
     _serviceName: string,
     _port: number,
   ): Promise<string | null> {
-    // TODO: M6.
+    // TODO: M5.
     return null;
   }
 

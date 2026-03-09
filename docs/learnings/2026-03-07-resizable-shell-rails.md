@@ -4,7 +4,7 @@
 
 The desktop shell used fixed widths for the project rail and workspace rail, and the workspace rail split its version-control and environment panels with an inflexible 50/50 stack.
 
-That made the shell feel cramped on smaller windows and wasted space on larger ones, especially once terminal and git surfaces started competing for room in M3 and M5 work.
+That made the shell feel cramped on smaller windows and wasted space on larger ones, especially once terminal and git surfaces started competing for room in M3 and M4 work.
 
 ## Learning
 
@@ -19,8 +19,8 @@ The durable resizing contract is:
 ## Milestone Impact
 
 1. M3: terminal and harness surfaces keep a protected center workspace area while side rails remain adjustable.
-2. M5: local lifecycle and observability controls can grow in the right rail without forcing another shell layout rewrite.
-3. M6: future CLI/context surfaces can reuse the same persisted shell resizing contract instead of introducing ad-hoc panel math.
+2. M4: local lifecycle and observability controls can grow in the right rail without forcing another shell layout rewrite.
+3. M5: future CLI/context surfaces can reuse the same persisted shell resizing contract instead of introducing ad-hoc panel math.
 
 ## Follow-Up Actions
 
