@@ -5,7 +5,6 @@ CREATE TABLE IF NOT EXISTS terminal (
     harness_provider TEXT,
     harness_session_id TEXT,
     created_by TEXT,
-    launch_worktree_path TEXT,
     label TEXT NOT NULL,
     label_origin TEXT NOT NULL DEFAULT 'manual',
     status TEXT NOT NULL DEFAULT 'detached',

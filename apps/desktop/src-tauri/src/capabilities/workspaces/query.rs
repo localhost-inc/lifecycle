@@ -51,8 +51,6 @@ pub struct TerminalRecord {
     pub harness_provider: Option<String>,
     pub harness_session_id: Option<String>,
     pub created_by: Option<String>,
-    #[serde(skip_serializing)]
-    pub launch_worktree_path: Option<String>,
     pub label: String,
     #[allow(dead_code)]
     #[serde(skip_serializing)]
@@ -73,15 +71,14 @@ fn map_terminal_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<TerminalReco
         harness_provider: row.get(3)?,
         harness_session_id: row.get(4)?,
         created_by: row.get(5)?,
-        launch_worktree_path: row.get(6)?,
-        label: row.get(7)?,
-        label_origin: row.get(8)?,
-        status: row.get(9)?,
-        failure_reason: row.get(10)?,
-        exit_code: row.get(11)?,
-        started_at: row.get(12)?,
-        last_active_at: row.get(13)?,
-        ended_at: row.get(14)?,
+        label: row.get(6)?,
+        label_origin: row.get(7)?,
+        status: row.get(8)?,
+        failure_reason: row.get(9)?,
+        exit_code: row.get(10)?,
+        started_at: row.get(11)?,
+        last_active_at: row.get(12)?,
+        ended_at: row.get(13)?,
     })
 }
 
@@ -223,7 +220,7 @@ pub async fn list_workspace_terminals(
     let conn = open_db(db_path)?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, created_by, launch_worktree_path, label, label_origin, status, failure_reason, exit_code, started_at, last_active_at, ended_at
+            "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, created_by, label, label_origin, status, failure_reason, exit_code, started_at, last_active_at, ended_at
              FROM terminal
              WHERE workspace_id = ?1
              ORDER BY started_at DESC, id DESC",
@@ -249,7 +246,7 @@ pub async fn get_terminal_by_id(
     let conn = open_db(db_path)?;
     let mut stmt = conn
         .prepare(
-            "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, created_by, launch_worktree_path, label, label_origin, status, failure_reason, exit_code, started_at, last_active_at, ended_at
+            "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, created_by, label, label_origin, status, failure_reason, exit_code, started_at, last_active_at, ended_at
              FROM terminal
              WHERE id = ?1
              LIMIT 1",

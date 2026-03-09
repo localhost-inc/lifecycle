@@ -52,22 +52,20 @@ pub(crate) fn insert_terminal_record(
     launch_type: &TerminalType,
     harness_provider: Option<&str>,
     harness_session_id: Option<&str>,
-    launch_worktree_path: &str,
     label: &str,
     label_origin: TitleOrigin,
     status: TerminalStatus,
 ) -> Result<TerminalRecord, LifecycleError> {
     let conn = open_db(db_path)?;
     conn.execute(
-        "INSERT INTO terminal (id, workspace_id, launch_type, harness_provider, harness_session_id, launch_worktree_path, label, label_origin, status)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        "INSERT INTO terminal (id, workspace_id, launch_type, harness_provider, harness_session_id, label, label_origin, status)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             terminal_id,
             workspace_id,
             launch_type.as_str(),
             harness_provider,
             harness_session_id,
-            launch_worktree_path,
             label,
             label_origin.as_str(),
             status.as_str()
@@ -114,7 +112,7 @@ pub(crate) fn load_terminal_record(
 ) -> Result<Option<TerminalRecord>, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn.prepare(
-        "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, created_by, launch_worktree_path, label, label_origin, status, failure_reason, exit_code, started_at, last_active_at, ended_at
+        "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, created_by, label, label_origin, status, failure_reason, exit_code, started_at, last_active_at, ended_at
          FROM terminal
          WHERE id = ?1
          LIMIT 1",
@@ -128,15 +126,14 @@ pub(crate) fn load_terminal_record(
             harness_provider: row.get(3)?,
             harness_session_id: row.get(4)?,
             created_by: row.get(5)?,
-            launch_worktree_path: row.get(6)?,
-            label: row.get(7)?,
-            label_origin: row.get(8)?,
-            status: row.get(9)?,
-            failure_reason: row.get(10)?,
-            exit_code: row.get(11)?,
-            started_at: row.get(12)?,
-            last_active_at: row.get(13)?,
-            ended_at: row.get(14)?,
+            label: row.get(6)?,
+            label_origin: row.get(7)?,
+            status: row.get(8)?,
+            failure_reason: row.get(9)?,
+            exit_code: row.get(10)?,
+            started_at: row.get(11)?,
+            last_active_at: row.get(12)?,
+            ended_at: row.get(13)?,
         })
     });
 

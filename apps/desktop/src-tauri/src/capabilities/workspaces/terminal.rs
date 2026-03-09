@@ -137,7 +137,6 @@ pub async fn create_terminal(
             &launch_type,
             harness_provider.as_deref(),
             harness_session_id.as_deref(),
-            &workspace.worktree_path,
             &label,
             TitleOrigin::Default,
             TerminalStatus::Detached,
@@ -188,7 +187,6 @@ pub async fn create_terminal(
         &launch_type,
         harness_provider.as_deref(),
         harness_session_id.as_deref(),
-        &workspace.worktree_path,
         &label,
         TitleOrigin::Default,
         TerminalStatus::Detached,
@@ -204,10 +202,7 @@ pub async fn create_terminal(
         &app,
         &db,
         &terminal,
-        terminal
-            .launch_worktree_path
-            .as_deref()
-            .unwrap_or(&workspace.worktree_path),
+        &workspace.worktree_path,
         launch_started_at,
     );
 
@@ -409,10 +404,7 @@ pub async fn sync_native_terminal_surface(
     let command_line = native_terminal_command(&launch_type, &launch);
     let terminal_id_for_surface = terminal_id.clone();
     let theme_override_path = theme_override_path.to_string_lossy().to_string();
-    let worktree_path = terminal
-        .launch_worktree_path
-        .clone()
-        .unwrap_or_else(|| workspace.worktree_path.clone());
+    let worktree_path = workspace.worktree_path.clone();
     sync_native_terminal_in_webview(&window, move |webview_view| {
         native_terminal::sync_surface(
             webview_view,
@@ -439,10 +431,7 @@ pub async fn sync_native_terminal_surface(
         window.app_handle(),
         &db,
         &terminal,
-        terminal
-            .launch_worktree_path
-            .as_deref()
-            .unwrap_or(&workspace.worktree_path),
+        &workspace.worktree_path,
         SystemTime::now(),
     );
 
@@ -674,7 +663,7 @@ fn watch_harness_turn_completions(
                                 &prompt.prompt_text,
                                 prompt.turn_id.as_deref(),
                             );
-                            super::title::maybe_schedule_terminal_auto_title_from_prompt(
+                            super::identity::maybe_schedule_workspace_identity_from_prompt(
                                 app,
                                 db_path,
                                 terminal_id,

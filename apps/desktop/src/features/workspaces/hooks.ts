@@ -1,8 +1,4 @@
-import type {
-  LifecycleEventType,
-  ServiceRecord,
-  WorkspaceRecord,
-} from "@lifecycle/contracts";
+import type { LifecycleEventType, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { useMemo } from "react";
 import type { QueryDescriptor, QueryResult } from "../../query";
 import { useQuery } from "../../query";
@@ -57,6 +53,7 @@ const workspacesByProjectQuery: QueryDescriptor<Record<string, WorkspaceRecord[]
             return {
               ...workspace,
               name: event.name,
+              source_ref: event.source_ref,
               worktree_path: event.worktree_path,
             };
           }),
@@ -118,6 +115,7 @@ function createWorkspaceQuery(workspaceId: string): QueryDescriptor<WorkspaceRec
             data: {
               ...current,
               name: event.name,
+              source_ref: event.source_ref,
               worktree_path: event.worktree_path,
             },
           };

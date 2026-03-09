@@ -119,6 +119,7 @@ pub fn run() {
             capabilities::workspaces::commands::get_workspace_git_base_ref,
             capabilities::workspaces::commands::get_workspace_git_commit_patch,
             capabilities::workspaces::commands::open_workspace_file,
+            capabilities::workspaces::commands::open_workspace_in_app,
             capabilities::workspaces::commands::stage_workspace_git_files,
             capabilities::workspaces::commands::unstage_workspace_git_files,
             capabilities::workspaces::commands::commit_workspace_git,

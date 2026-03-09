@@ -32,6 +32,7 @@ interface BrowserWorkspaceState {
 
 interface BrowserWorkspaceRecord extends WorkspaceRecord {
   name_origin?: "default" | "generated" | "manual";
+  source_ref_origin?: "default" | "generated" | "manual";
 }
 
 const BROWSER_WORKSPACES_STORAGE_KEY = "lifecycle.desktop.browser.workspaces.v1";
@@ -85,12 +86,14 @@ function emitWorkspaceStatus(
 function emitWorkspaceRenamed(
   workspaceId: string,
   name: string,
+  sourceRef: string,
   worktreePath: string | null,
 ): void {
   publishBrowserLifecycleEvent({
     type: "workspace.renamed",
     workspace_id: workspaceId,
     name,
+    source_ref: sourceRef,
     worktree_path: worktreePath,
   });
 }
@@ -160,10 +163,17 @@ function renameBrowserWorktreePath(
     return null;
   }
 
-  const lastSeparatorIndex = Math.max(worktreePath.lastIndexOf("/"), worktreePath.lastIndexOf("\\"));
+  const lastSeparatorIndex = Math.max(
+    worktreePath.lastIndexOf("/"),
+    worktreePath.lastIndexOf("\\"),
+  );
   const parent = lastSeparatorIndex >= 0 ? worktreePath.slice(0, lastSeparatorIndex) : "";
   const nextLeaf = `${slugifyWorkspaceName(workspaceName)}--${shortWorkspaceId(workspaceId)}`;
   return parent.length > 0 ? `${parent}/${nextLeaf}` : nextLeaf;
+}
+
+function browserWorkspaceSourceRef(workspaceName: string, workspaceId: string): string {
+  return `lifecycle/${slugifyWorkspaceName(workspaceName)}-${shortWorkspaceId(workspaceId)}`;
 }
 
 function normalizeBrowserWorkspaceRecord(
@@ -184,6 +194,7 @@ function normalizeBrowserWorkspaceRecord(
     name_origin: workspace.name_origin ?? "manual",
     project_id: workspace.project_id ?? "",
     source_ref: workspace.source_ref ?? "main",
+    source_ref_origin: workspace.source_ref_origin ?? "manual",
     source_workspace_id: workspace.source_workspace_id ?? null,
     status: workspace.status ?? "sleeping",
     updated_at: workspace.updated_at ?? nowIso(),
@@ -250,7 +261,10 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
 
     browserWorkspaceState = {
       ...browserWorkspaceState,
-      workspaces: [{ ...workspace, name_origin: "default" }, ...browserWorkspaceState.workspaces],
+      workspaces: [
+        { ...workspace, name_origin: "default", source_ref_origin: "default" },
+        ...browserWorkspaceState.workspaces,
+      ],
     };
     persistBrowserWorkspaceState();
     return id;
@@ -265,10 +279,7 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
   });
 }
 
-export async function renameWorkspace(
-  workspaceId: string,
-  name: string,
-): Promise<WorkspaceRecord> {
+export async function renameWorkspace(workspaceId: string, name: string): Promise<WorkspaceRecord> {
   const normalizedName = name.trim().replace(/\s+/g, " ");
   if (normalizedName.length === 0) {
     throw new Error("Workspace name cannot be empty.");
@@ -287,6 +298,8 @@ export async function renameWorkspace(
           ...workspace,
           name: normalizedName,
           name_origin: "manual",
+          source_ref: browserWorkspaceSourceRef(normalizedName, workspaceId),
+          source_ref_origin: "manual",
           updated_at: nowIso(),
           worktree_path: renameBrowserWorktreePath(
             workspace.worktree_path,
@@ -304,7 +317,12 @@ export async function renameWorkspace(
     }
 
     const nextWorkspace = renamedWorkspace as BrowserWorkspaceRecord;
-    emitWorkspaceRenamed(nextWorkspace.id, nextWorkspace.name, nextWorkspace.worktree_path);
+    emitWorkspaceRenamed(
+      nextWorkspace.id,
+      nextWorkspace.name,
+      nextWorkspace.source_ref,
+      nextWorkspace.worktree_path,
+    );
     return nextWorkspace;
   }
 
@@ -459,14 +477,23 @@ export async function listWorkspacesByProject(): Promise<Record<string, Workspac
   return invoke<Record<string, WorkspaceRecord[]>>("list_workspaces_by_project");
 }
 
-export async function getWorkspaceServices(
-  workspaceId: string,
-): Promise<ServiceRecord[]> {
+export async function getWorkspaceServices(workspaceId: string): Promise<ServiceRecord[]> {
   if (!isTauri()) {
     return browserWorkspaceState.services.filter((service) => service.workspace_id === workspaceId);
   }
 
   return invoke<ServiceRecord[]>("get_workspace_services", { workspaceId });
+}
+
+export type OpenInAppId = "cursor" | "vscode" | "zed" | "finder" | "terminal";
+
+export async function openWorkspaceInApp(workspaceId: string, appId: OpenInAppId): Promise<void> {
+  if (!isTauri()) {
+    console.warn("[browser] open_workspace_in_app is not supported outside Tauri");
+    return;
+  }
+
+  return invoke<void>("open_workspace_in_app", { workspaceId, appId });
 }
 
 export async function getCurrentBranch(projectPath: string): Promise<string> {

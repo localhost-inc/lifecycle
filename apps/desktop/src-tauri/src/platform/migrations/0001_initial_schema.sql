@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS workspace (
     name TEXT NOT NULL DEFAULT '',
     name_origin TEXT NOT NULL DEFAULT 'manual',
     source_ref TEXT NOT NULL,
+    source_ref_origin TEXT NOT NULL DEFAULT 'manual',
     git_sha TEXT,
     worktree_path TEXT,
     mode TEXT NOT NULL DEFAULT 'local',

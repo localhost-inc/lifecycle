@@ -27,6 +27,7 @@ pub enum LifecycleEvent {
     WorkspaceRenamed {
         workspace_id: String,
         name: String,
+        source_ref: String,
         worktree_path: Option<String>,
     },
     #[serde(rename = "service.status_changed")]

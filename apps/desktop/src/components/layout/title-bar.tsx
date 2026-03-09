@@ -7,6 +7,7 @@ import { useHistoryAvailability } from "../../app/history-stack";
 import { TypedTitle } from "../typed-title";
 import { WorkspaceBadge } from "../../features/workspaces/components/workspace-badge";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
+import { TitleBarActions } from "./title-bar-actions";
 
 interface TitleBarProps {
   selectedWorkspace?: WorkspaceRecord | null;
@@ -106,7 +107,9 @@ export function TitleBar({ selectedWorkspace }: TitleBarProps) {
           </div>
         )}
       </div>
-      <div data-no-drag id="title-bar-actions" className="flex shrink-0 items-center gap-1" />
+      <div data-no-drag id="title-bar-actions" className="flex shrink-0 items-center gap-1">
+        {selectedWorkspace && <TitleBarActions workspace={selectedWorkspace} />}
+      </div>
     </header>
   );
 }

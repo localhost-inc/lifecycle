@@ -211,6 +211,40 @@ pub fn open_workspace_file(
         .map_err(|error| workspace_git_failure("open workspace file", error.to_string()))
 }
 
+pub async fn open_workspace_in_app(
+    db_path: &str,
+    workspace_id: String,
+    app_id: String,
+) -> Result<(), LifecycleError> {
+    let worktree_path = require_local_worktree(db_path, &workspace_id)?;
+
+    let (program, args): (&str, Vec<&str>) = match app_id.as_str() {
+        "cursor" => ("cursor", vec![&worktree_path]),
+        "vscode" => ("code", vec![&worktree_path]),
+        "zed" => ("zed", vec![&worktree_path]),
+        "finder" => ("open", vec![&worktree_path]),
+        "terminal" => ("open", vec!["-a", "Terminal", &worktree_path]),
+        _ => {
+            return Err(workspace_git_failure(
+                "open workspace in app",
+                format!("unsupported app: {app_id}"),
+            ));
+        }
+    };
+
+    tokio::process::Command::new(program)
+        .args(&args)
+        .spawn()
+        .map_err(|error| {
+            workspace_git_failure(
+                "open workspace in app",
+                format!("failed to launch {app_id}: {error}"),
+            )
+        })?;
+
+    Ok(())
+}
+
 pub async fn stage_workspace_git_files(
     db_path: &str,
     workspace_id: String,

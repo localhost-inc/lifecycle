@@ -30,6 +30,7 @@ export type LifecycleEvent =
       type: "workspace.renamed";
       workspace_id: string;
       name: string;
+      source_ref: string;
       worktree_path: string | null;
     }
   | {

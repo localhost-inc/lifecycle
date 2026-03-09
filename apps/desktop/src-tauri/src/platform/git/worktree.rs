@@ -106,6 +106,73 @@ pub async fn move_worktree(
     Ok(next_path_str)
 }
 
+pub async fn rename_workspace_branch(
+    worktree_path: &str,
+    current_source_ref: &str,
+    next_source_ref: &str,
+) -> Result<(), LifecycleError> {
+    if current_source_ref == next_source_ref {
+        return Ok(());
+    }
+
+    let output = Command::new("git")
+        .args([
+            "-C",
+            worktree_path,
+            "branch",
+            "-m",
+            current_source_ref,
+            next_source_ref,
+        ])
+        .output()
+        .await
+        .map_err(|error| LifecycleError::GitOperationFailed {
+            operation: "rename workspace branch".to_string(),
+            reason: error.to_string(),
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(LifecycleError::GitOperationFailed {
+            operation: "rename workspace branch".to_string(),
+            reason: format!("git branch -m failed: {stderr}"),
+        });
+    }
+
+    Ok(())
+}
+
+pub async fn branch_has_upstream(
+    worktree_path: &str,
+    branch_name: &str,
+) -> Result<bool, LifecycleError> {
+    let ref_name = format!("refs/heads/{branch_name}");
+    let output = Command::new("git")
+        .args([
+            "-C",
+            worktree_path,
+            "for-each-ref",
+            "--format=%(upstream:short)",
+            &ref_name,
+        ])
+        .output()
+        .await
+        .map_err(|error| LifecycleError::GitOperationFailed {
+            operation: "inspect workspace branch upstream".to_string(),
+            reason: error.to_string(),
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(LifecycleError::GitOperationFailed {
+            operation: "inspect workspace branch upstream".to_string(),
+            reason: format!("git for-each-ref failed: {stderr}"),
+        });
+    }
+
+    Ok(!String::from_utf8_lossy(&output.stdout).trim().is_empty())
+}
+
 pub async fn get_sha(repo_path: &str, ref_name: &str) -> Result<String, LifecycleError> {
     let output = Command::new("git")
         .args(["rev-parse", ref_name])
@@ -190,6 +257,22 @@ pub fn workspace_branch_name(workspace_name: &str, workspace_id: &str) -> String
     let name_slug = slugify_workspace_name(workspace_name);
     let short_id = short_workspace_id(workspace_id);
     format!("lifecycle/{}-{}", name_slug, short_id)
+}
+
+pub fn is_managed_workspace_branch(source_ref: &str, workspace_id: &str) -> bool {
+    let Some(slug) = source_ref.strip_prefix("lifecycle/") else {
+        return false;
+    };
+
+    let short_id = short_workspace_id(workspace_id);
+    let Some(name_slug) = slug.strip_suffix(&format!("-{short_id}")) else {
+        return false;
+    };
+
+    !name_slug.is_empty()
+        && name_slug
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
 }
 
 fn worktree_directory_name(workspace_name: &str, workspace_id: &str) -> String {
@@ -386,6 +469,64 @@ mod tests {
         );
 
         remove_worktree(repo_path_str, &moved_path)
+            .await
+            .expect("worktree cleanup should succeed");
+        fs::remove_dir_all(repo_path).expect("remove temp repo");
+        fs::remove_dir_all(configured_root).expect("remove configured root");
+    }
+
+    #[test]
+    fn is_managed_workspace_branch_requires_lifecycle_prefix_and_workspace_suffix() {
+        assert!(is_managed_workspace_branch(
+            "lifecycle/fix-auth-1234abcd",
+            "1234abcd"
+        ));
+        assert!(!is_managed_workspace_branch("feature/fix-auth", "1234abcd"));
+        assert!(!is_managed_workspace_branch(
+            "lifecycle/fix-auth-9876ffff",
+            "1234abcd"
+        ));
+    }
+
+    #[tokio::test]
+    async fn rename_workspace_branch_renames_the_checked_out_branch() {
+        let repo_path = temp_repo_path();
+        init_repo(&repo_path);
+        let repo_path_str = repo_path.to_str().expect("repo path is utf8");
+        let base_ref = get_current_branch(repo_path_str)
+            .await
+            .expect("get current branch");
+        let configured_root =
+            std::env::temp_dir().join(format!("lifecycle-worktree-root-{}", uuid::Uuid::new_v4()));
+        let configured_root_str = configured_root
+            .to_str()
+            .expect("configured root path is utf8");
+        let workspace_id = "ws-rename-branch";
+        let current_source_ref = workspace_branch_name("Initial Name", workspace_id);
+        let next_source_ref = workspace_branch_name("Next Name", workspace_id);
+
+        let worktree_path = create_worktree(
+            repo_path_str,
+            &base_ref,
+            &current_source_ref,
+            "Initial Name",
+            workspace_id,
+            Some(configured_root_str),
+        )
+        .await
+        .expect("create worktree");
+
+        rename_workspace_branch(&worktree_path, &current_source_ref, &next_source_ref)
+            .await
+            .expect("rename branch");
+
+        let checked_out_branch = git_output(
+            Path::new(&worktree_path),
+            &["rev-parse", "--abbrev-ref", "HEAD"],
+        );
+        assert_eq!(checked_out_branch, next_source_ref);
+
+        remove_worktree(repo_path_str, &worktree_path)
             .await
             .expect("worktree cleanup should succeed");
         fs::remove_dir_all(repo_path).expect("remove temp repo");
