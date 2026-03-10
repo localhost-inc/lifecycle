@@ -38,4 +38,12 @@ describe("theme.css", () => {
     expect(css).toContain(".compact-control-standalone");
     expect(css).toContain(".compact-control-tone-active");
   });
+
+  test("defines a shared panel title treatment for sidebar and rail headers", () => {
+    const css = readFileSync(new URL("./theme.css", import.meta.url), "utf8");
+
+    expect(css).toContain(".app-panel-title");
+    expect(css).toContain("font-size: 14px;");
+    expect(css).toContain("color: var(--sidebar-muted-foreground);");
+  });
 });

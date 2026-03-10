@@ -124,6 +124,8 @@ export function GitActionMenuContent({
   const checks = quickState.pullRequest?.checks ?? null;
   const meta = branchMeta(branchPullRequest);
   const hasCommitMessage = commitMessage.trim().length > 0;
+  const hasStagedChanges = (gitStatus?.files ?? []).some((file) => file.staged);
+  const hasUnstagedChanges = (gitStatus?.files ?? []).some((file) => file.unstaged);
 
   return (
     <>
@@ -151,6 +153,19 @@ export function GitActionMenuContent({
         </div>
       )}
 
+      {quickState.kind === "needs_stage" && (
+        <div className="space-y-3 px-2 pb-2">
+          <p className="text-[12px] text-[var(--muted-foreground)]">
+            Stage the files you want to include from the Changes tab, then commit them here.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={onShowChanges} size="sm" variant="outline">
+              Open changes
+            </Button>
+          </div>
+        </div>
+      )}
+
       {quickState.kind === "needs_commit" && (
         <div className="space-y-3 px-2 pb-2">
           <div className="space-y-2">
@@ -164,9 +179,14 @@ export function GitActionMenuContent({
               value={commitMessage}
             />
           </div>
+          {hasUnstagedChanges && (
+            <p className="text-[12px] text-[var(--muted-foreground)]">
+              Only staged files will be included. Unstaged edits remain in the working tree.
+            </p>
+          )}
           <div className="flex flex-wrap gap-2">
             <Button
-              disabled={!hasCommitMessage || isCommitting}
+              disabled={!hasCommitMessage || isCommitting || !hasStagedChanges}
               onClick={() => void onCommit(false)}
               size="sm"
               variant="outline"
@@ -174,7 +194,7 @@ export function GitActionMenuContent({
               {isCommitting ? "Committing..." : "Commit"}
             </Button>
             <Button
-              disabled={!hasCommitMessage || isCommitting || isPushingBranch}
+              disabled={!hasCommitMessage || isCommitting || isPushingBranch || !hasStagedChanges}
               onClick={() => void onCommit(true)}
               size="sm"
             >
@@ -301,7 +321,6 @@ export function GitActionButton({
   gitStatus,
   isCommitting,
   isCreatingPullRequest,
-  isLoading,
   isMergingPullRequest,
   isPushingBranch,
   onCommit,
@@ -400,6 +419,11 @@ export function GitActionButton({
   const usesHostedOverlay = hostedOverlay.hosted;
 
   async function handlePrimaryClick(): Promise<void> {
+    if (primaryAction.kind === "show_changes") {
+      onShowChanges();
+      return;
+    }
+
     if (primaryAction.kind === "commit" || primaryAction.kind === "commit_and_push") {
       setOpen(true);
       return;
@@ -448,7 +472,7 @@ export function GitActionButton({
         title={quickState.title}
         variant="foreground"
       >
-        {isLoading ? "Loading..." : primaryAction.label}
+        {primaryAction.label}
       </SplitButtonPrimary>
       {usesHostedOverlay ? (
         <SplitButtonSecondary

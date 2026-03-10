@@ -28,7 +28,7 @@ const baseBranchPullRequest: GitBranchPullRequestResult = {
 };
 
 describe("buildGitPullRequestQuickState", () => {
-  test("requires a commit before push or PR actions", () => {
+  test("requires staging before commit actions when only working tree changes exist", () => {
     const state = buildGitPullRequestQuickState(
       {
         ...baseStatus,
@@ -46,7 +46,8 @@ describe("buildGitPullRequestQuickState", () => {
       baseBranchPullRequest,
     );
 
-    expect(state.kind).toBe("needs_commit");
+    expect(state.kind).toBe("needs_stage");
+    expect(state.title).toContain("Stage");
   });
 
   test("requires a push when the branch has no upstream yet", () => {
@@ -100,7 +101,7 @@ describe("buildGitPullRequestQuickState", () => {
     expect(state.pullRequest?.number).toBe(42);
   });
 
-  test("recommends commit and push when a dirty branch already has remote PR context", () => {
+  test("recommends stage changes when nothing is staged yet", () => {
     const action = buildGitPullRequestPrimaryAction(
       {
         ...baseStatus,
@@ -112,6 +113,28 @@ describe("buildGitPullRequestQuickState", () => {
             stats: { deletions: 0, insertions: 1 },
             unstaged: true,
             worktreeStatus: "modified",
+          },
+        ],
+      },
+      baseBranchPullRequest,
+    );
+
+    expect(action.kind).toBe("show_changes");
+    expect(action.label).toBe("Stage Changes");
+  });
+
+  test("recommends commit and push when staged changes are ready", () => {
+    const action = buildGitPullRequestPrimaryAction(
+      {
+        ...baseStatus,
+        files: [
+          {
+            indexStatus: "modified",
+            path: "src/app.tsx",
+            staged: true,
+            stats: { deletions: 0, insertions: 1 },
+            unstaged: false,
+            worktreeStatus: null,
           },
         ],
       },

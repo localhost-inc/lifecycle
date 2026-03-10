@@ -206,6 +206,67 @@ describe("QueryClient", () => {
     expect(client.getSnapshot(descriptor).data).toBe(2);
   });
 
+  test("refetches git queries when git fact events invalidate them", async () => {
+    const source = createMockSource();
+    const subscriber = createMockSubscriber();
+    const client = new QueryClient(source, subscriber.subscribe);
+    cleanup.push(() => client.dispose());
+
+    let fetchCount = 0;
+    const descriptor: QueryDescriptor<number> = {
+      eventTypes: ["git.head_changed", "git.status_changed"],
+      key: ["workspace-git-status", "ws-1"],
+      async fetch() {
+        fetchCount += 1;
+        return fetchCount;
+      },
+      reduce(_current, event) {
+        if (
+          (event.type === "git.head_changed" || event.type === "git.status_changed") &&
+          event.workspace_id === "ws-1"
+        ) {
+          return { type: "invalidate" };
+        }
+
+        return { type: "none" };
+      },
+    };
+
+    const unsubscribe = client.subscribe(descriptor, () => {});
+    cleanup.push(unsubscribe);
+    await flush();
+
+    expect(client.getSnapshot(descriptor).data).toBe(1);
+
+    subscriber.emit({
+      id: "evt-3",
+      occurred_at: "2026-03-10T00:00:00Z",
+      type: "git.status_changed",
+      workspace_id: "ws-1",
+      branch: "feature/git-events",
+      head_sha: "abcdef1234567890",
+      upstream: "origin/feature/git-events",
+    });
+    await flush();
+
+    expect(client.getSnapshot(descriptor).data).toBe(2);
+
+    subscriber.emit({
+      id: "evt-4",
+      occurred_at: "2026-03-10T00:00:00Z",
+      type: "git.head_changed",
+      workspace_id: "ws-2",
+      branch: "other",
+      head_sha: "fedcba0987654321",
+      upstream: "origin/other",
+      ahead: 0,
+      behind: 0,
+    });
+    await flush();
+
+    expect(client.getSnapshot(descriptor).data).toBe(2);
+  });
+
   test("subscribes only to the active query event types", async () => {
     const source = createMockSource();
     const subscriber = createMockSubscriber();

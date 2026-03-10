@@ -17,7 +17,9 @@ pub enum NativeTerminalColorScheme {
 #[cfg(all(target_os = "macos", has_ghosttykit))]
 mod imp {
     use super::{NativeTerminalColorScheme, NativeTerminalFrame};
-    use crate::capabilities::workspaces::terminal::complete_native_terminal_exit;
+    use crate::capabilities::workspaces::terminal::{
+        complete_native_terminal_exit, prepare_native_terminal_attachment_paste,
+    };
     use crate::platform::diagnostics;
     use crate::shared::errors::LifecycleError;
     use serde::Serialize;
@@ -205,6 +207,85 @@ mod imp {
         );
     }
 
+    #[no_mangle]
+    pub extern "C" fn lifecycle_native_terminal_prepare_paste_image(
+        terminal_id: *const c_char,
+        file_name: *const c_char,
+        media_type: *const c_char,
+        bytes: *const u8,
+        bytes_len: usize,
+    ) -> *mut c_char {
+        if terminal_id.is_null() || file_name.is_null() || bytes.is_null() || bytes_len == 0 {
+            diagnostics::append_diagnostic(
+                "native-terminal",
+                "clipboard image paste received incomplete arguments",
+            );
+            return std::ptr::null_mut();
+        }
+
+        let Some(context) = RUNTIME_CONTEXT.get() else {
+            diagnostics::append_diagnostic(
+                "native-terminal",
+                "clipboard image paste received no runtime context",
+            );
+            return std::ptr::null_mut();
+        };
+
+        let terminal_id = unsafe { CStr::from_ptr(terminal_id) }
+            .to_string_lossy()
+            .to_string();
+        let file_name = unsafe { CStr::from_ptr(file_name) }
+            .to_string_lossy()
+            .to_string();
+        let media_type = if media_type.is_null() {
+            None
+        } else {
+            Some(
+                unsafe { CStr::from_ptr(media_type) }
+                    .to_string_lossy()
+                    .to_string(),
+            )
+        };
+        let bytes = unsafe { std::slice::from_raw_parts(bytes, bytes_len) };
+
+        match prepare_native_terminal_attachment_paste(
+            &context.db_path,
+            &terminal_id,
+            &file_name,
+            media_type.as_deref(),
+            bytes,
+        ) {
+            Ok(payload) => match CString::new(payload) {
+                Ok(payload) => payload.into_raw(),
+                Err(error) => {
+                    diagnostics::append_error(
+                        "native-terminal",
+                        format!("failed to encode clipboard image paste payload: {error}"),
+                    );
+                    std::ptr::null_mut()
+                }
+            },
+            Err(error) => {
+                diagnostics::append_error(
+                    "native-terminal",
+                    format!("failed to paste clipboard image for {terminal_id}: {error}"),
+                );
+                std::ptr::null_mut()
+            }
+        }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn lifecycle_native_terminal_free_string(value: *mut c_char) {
+        if value.is_null() {
+            return;
+        }
+
+        unsafe {
+            let _ = CString::from_raw(value);
+        }
+    }
+
     pub fn initialize(
         app: AppHandle,
         db_path: String,
@@ -345,6 +426,20 @@ mod imp {
     pub fn destroy_surface(_terminal_id: &str) -> Result<(), LifecycleError> {
         Ok(())
     }
+
+    #[no_mangle]
+    pub extern "C" fn lifecycle_native_terminal_prepare_paste_image(
+        _terminal_id: *const std::ffi::c_char,
+        _file_name: *const std::ffi::c_char,
+        _media_type: *const std::ffi::c_char,
+        _bytes: *const u8,
+        _bytes_len: usize,
+    ) -> *mut std::ffi::c_char {
+        std::ptr::null_mut()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn lifecycle_native_terminal_free_string(_value: *mut std::ffi::c_char) {}
 }
 
 pub fn is_available() -> bool {

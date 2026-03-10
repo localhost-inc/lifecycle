@@ -15,6 +15,10 @@ typedef void (*LifecycleNativeTerminalExitCallback)(const char *terminal_id, int
 typedef void (*LifecycleNativeWorkspaceShortcutCallback)(const char *terminal_id,
                                                          int32_t shortcut_kind,
                                                          int32_t shortcut_index);
+char *lifecycle_native_terminal_prepare_paste_image(const char *terminal_id, const char *file_name,
+                                                    const char *media_type,
+                                                    const uint8_t *bytes, size_t bytes_len);
+void lifecycle_native_terminal_free_string(char *value);
 
 typedef struct {
   const char *terminal_id;
@@ -302,7 +306,15 @@ static void lifecycleGhosttySendText(ghostty_surface_t surface, NSString *text) 
     return;
   }
 
-  ghostty_surface_text(surface, utf8, strlen(utf8));
+  @try {
+    ghostty_surface_text(surface, utf8, strlen(utf8));
+  } @catch (NSException *exception) {
+    NSString *name = exception.name ?: @"NSException";
+    NSString *reason = exception.reason ?: @"(no reason provided)";
+    lifecycleAppendDiagnosticLine(
+        [NSString stringWithFormat:@"[exception] native terminal text input threw: %@ (%@)",
+                                   reason, name]);
+  }
 }
 
 static ghostty_input_key_s lifecycleGhosttyKeyEvent(NSEvent *event,
@@ -375,7 +387,17 @@ static BOOL lifecycleGhosttyKeyAction(ghostty_surface_t surface,
           terminalId, action, (unsigned short)event.keyCode, (unsigned long)event.modifierFlags,
           keyEvent.consumed_mods, (unsigned long)textLength,
           (unsigned long)utf8Length, firstByte, lifecycleDebugString(text), composing]);
-  BOOL handled = ghostty_surface_key(surface, keyEvent);
+  BOOL handled = NO;
+  @try {
+    handled = ghostty_surface_key(surface, keyEvent);
+  } @catch (NSException *exception) {
+    NSString *name = exception.name ?: @"NSException";
+    NSString *reason = exception.reason ?: @"(no reason provided)";
+    lifecycleAppendDiagnosticLine(
+        [NSString stringWithFormat:@"[exception] native terminal key input threw: %@ (%@)",
+                                   reason, name]);
+    handled = NO;
+  }
   lifecycleAppendDiagnosticLine([NSString
       stringWithFormat:
           @"[key-action] terminal=%@ action=%d keycode=%hu mods=0x%lx consumed=0x%x "
@@ -418,6 +440,49 @@ static BOOL lifecycleWindowFirstResponderBelongsToView(NSWindow *window, NSView 
   }
 
   return [(NSView *)firstResponder isDescendantOf:view];
+}
+
+static BOOL lifecycleEventMatchesPasteShortcut(NSEvent *event) {
+  if (event.type != NSEventTypeKeyDown) {
+    return NO;
+  }
+
+  NSString *charactersIgnoringModifiers =
+      event.charactersIgnoringModifiers.lowercaseString ?: @"";
+  if (![charactersIgnoringModifiers isEqualToString:@"v"]) {
+    return NO;
+  }
+
+  NSEventModifierFlags deviceIndependentFlags =
+      event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
+  const NSEventModifierFlags required = NSEventModifierFlagCommand;
+  const NSEventModifierFlags disallowed =
+      NSEventModifierFlagControl | NSEventModifierFlagOption;
+  return (deviceIndependentFlags & required) == required &&
+         (deviceIndependentFlags & disallowed) == 0;
+}
+
+static NSData *lifecycleNativeTerminalPNGDataForPasteboard(NSPasteboard *pasteboard) {
+  if (pasteboard == nil) {
+    return nil;
+  }
+
+  NSImage *image = [[NSImage alloc] initWithPasteboard:pasteboard];
+  if (image == nil) {
+    return nil;
+  }
+
+  CGImageRef cgImage = [image CGImageForProposedRect:NULL context:nil hints:nil];
+  if (cgImage == NULL) {
+    return nil;
+  }
+
+  NSBitmapImageRep *bitmap = [[NSBitmapImageRep alloc] initWithCGImage:cgImage];
+  if (bitmap == nil) {
+    return nil;
+  }
+
+  return [bitmap representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
 }
 
 static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
@@ -848,6 +913,11 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return YES;
   }
 
+  if (lifecycleEventMatchesPasteShortcut(event)) {
+    [self paste:nil];
+    return YES;
+  }
+
   ghostty_input_key_s bindingEvent =
       lifecycleGhosttyKeyEvent(event, GHOSTTY_ACTION_PRESS, event.modifierFlags);
   NSString *bindingText = event.characters ?: @"";
@@ -1183,8 +1253,42 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
 
 - (void)paste:(id)sender {
   (void)sender;
-  NSString *string = [NSPasteboard.generalPasteboard stringForType:NSPasteboardTypeString];
-  if (self.surface == NULL || string.length == 0) {
+  if (self.surface == NULL) {
+    return;
+  }
+
+  NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
+  NSData *imageData = lifecycleNativeTerminalPNGDataForPasteboard(pasteboard);
+  if (imageData.length > 0) {
+    lifecycleAppendDiagnosticLine([NSString
+        stringWithFormat:@"[paste] terminal=%@ imageBytes=%lu", self.terminalId,
+                         (unsigned long)imageData.length]);
+    char *payload = lifecycle_native_terminal_prepare_paste_image(
+        self.terminalId.UTF8String, "clipboard-image.png", "image/png",
+        (const uint8_t *)imageData.bytes, imageData.length);
+    if (payload == NULL) {
+      lifecycleAppendDiagnosticLine([NSString
+          stringWithFormat:@"[paste] terminal=%@ failed to persist clipboard image",
+                           self.terminalId]);
+      NSBeep();
+    } else {
+      NSString *attachmentText = [NSString stringWithUTF8String:payload];
+      lifecycle_native_terminal_free_string(payload);
+      if (attachmentText.length > 0) {
+        lifecycleGhosttySendText(self.surface, attachmentText);
+      } else {
+        lifecycleAppendDiagnosticLine([NSString
+            stringWithFormat:@"[paste] terminal=%@ produced an empty attachment payload",
+                             self.terminalId]);
+        NSBeep();
+      }
+    }
+    return;
+  }
+
+  NSString *string = [pasteboard stringForType:NSPasteboardTypeString];
+  if (string.length == 0) {
+    NSBeep();
     return;
   }
 

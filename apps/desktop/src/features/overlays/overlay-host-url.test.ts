@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  buildOverlayHostUrl,
-  readOverlayHostOwnerWindowLabel,
-} from "./overlay-host-url";
+import { buildOverlayHostUrl, readOverlayHostOwnerWindowLabel } from "./overlay-host-url";
 
 describe("overlay host url", () => {
   test("encodes the owner window label into the host route", () => {

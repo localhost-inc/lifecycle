@@ -8,7 +8,9 @@ use crate::platform::git::status::{
     GitStatusResult,
 };
 use crate::shared::errors::LifecycleError;
+use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
 use rusqlite::params;
+use tauri::AppHandle;
 
 fn update_workspace_git_sha(
     db_path: &str,
@@ -24,12 +26,66 @@ fn update_workspace_git_sha(
     Ok(())
 }
 
+fn emit_git_repository_events(
+    app: &AppHandle,
+    workspace_id: &str,
+    status: Option<&GitStatusResult>,
+    include_head_changed: bool,
+    include_log_changed: bool,
+    include_status_changed: bool,
+    fallback_head_sha: Option<&str>,
+) {
+    let branch = status.and_then(|value| value.branch.clone());
+    let head_sha = status
+        .and_then(|value| value.head_sha.clone())
+        .or_else(|| fallback_head_sha.map(|value| value.to_string()));
+    let upstream = status.and_then(|value| value.upstream.clone());
+    let ahead = status.map(|value| value.ahead);
+    let behind = status.map(|value| value.behind);
+
+    if include_head_changed {
+        publish_lifecycle_event(
+            app,
+            LifecycleEvent::GitHeadChanged {
+                workspace_id: workspace_id.to_string(),
+                branch: branch.clone(),
+                head_sha: head_sha.clone(),
+                upstream: upstream.clone(),
+                ahead,
+                behind,
+            },
+        );
+    }
+
+    if include_log_changed {
+        publish_lifecycle_event(
+            app,
+            LifecycleEvent::GitLogChanged {
+                workspace_id: workspace_id.to_string(),
+                branch: branch.clone(),
+                head_sha: head_sha.clone(),
+            },
+        );
+    }
+
+    if include_status_changed {
+        publish_lifecycle_event(
+            app,
+            LifecycleEvent::GitStatusChanged {
+                workspace_id: workspace_id.to_string(),
+                branch,
+                head_sha,
+                upstream,
+            },
+        );
+    }
+}
+
 pub async fn get_workspace_git_status(
     db_path: &str,
     workspace_id: String,
 ) -> Result<GitStatusResult, LifecycleError> {
-    let worktree_path =
-        require_local_worktree(db_path, &workspace_id, "get workspace git status")?;
+    let worktree_path = require_local_worktree(db_path, &workspace_id, "get workspace git status")?;
     status::get_git_status(&worktree_path).await
 }
 
@@ -138,43 +194,97 @@ pub async fn get_workspace_git_commit_patch(
 }
 
 pub async fn stage_workspace_git_files(
+    app: &AppHandle,
     db_path: &str,
     workspace_id: String,
     file_paths: Vec<String>,
 ) -> Result<(), LifecycleError> {
     let worktree_path =
         require_local_worktree(db_path, &workspace_id, "stage workspace git files")?;
-    status::stage_git_files(&worktree_path, &file_paths).await
+    status::stage_git_files(&worktree_path, &file_paths).await?;
+
+    let next_status = status::get_git_status(&worktree_path).await.ok();
+    emit_git_repository_events(
+        app,
+        &workspace_id,
+        next_status.as_ref(),
+        false,
+        false,
+        true,
+        None,
+    );
+
+    Ok(())
 }
 
 pub async fn unstage_workspace_git_files(
+    app: &AppHandle,
     db_path: &str,
     workspace_id: String,
     file_paths: Vec<String>,
 ) -> Result<(), LifecycleError> {
     let worktree_path =
         require_local_worktree(db_path, &workspace_id, "unstage workspace git files")?;
-    status::unstage_git_files(&worktree_path, &file_paths).await
+    status::unstage_git_files(&worktree_path, &file_paths).await?;
+
+    let next_status = status::get_git_status(&worktree_path).await.ok();
+    emit_git_repository_events(
+        app,
+        &workspace_id,
+        next_status.as_ref(),
+        false,
+        false,
+        true,
+        None,
+    );
+
+    Ok(())
 }
 
 pub async fn commit_workspace_git(
+    app: &AppHandle,
     db_path: &str,
     workspace_id: String,
     message: String,
 ) -> Result<GitCommitResult, LifecycleError> {
-    let worktree_path =
-        require_local_worktree(db_path, &workspace_id, "commit workspace git")?;
+    let worktree_path = require_local_worktree(db_path, &workspace_id, "commit workspace git")?;
     let result = status::commit_git(&worktree_path, &message).await?;
     update_workspace_git_sha(db_path, &workspace_id, &result.sha)?;
+
+    let next_status = status::get_git_status(&worktree_path).await.ok();
+    emit_git_repository_events(
+        app,
+        &workspace_id,
+        next_status.as_ref(),
+        true,
+        true,
+        true,
+        Some(result.sha.as_str()),
+    );
+
     Ok(result)
 }
 
 pub async fn push_workspace_git(
+    app: &AppHandle,
     db_path: &str,
     workspace_id: String,
 ) -> Result<GitPushResult, LifecycleError> {
     let worktree_path = require_local_worktree(db_path, &workspace_id, "push workspace git")?;
-    status::push_git(&worktree_path).await
+    let result = status::push_git(&worktree_path).await?;
+
+    let next_status = status::get_git_status(&worktree_path).await.ok();
+    emit_git_repository_events(
+        app,
+        &workspace_id,
+        next_status.as_ref(),
+        true,
+        false,
+        true,
+        None,
+    );
+
+    Ok(result)
 }
 
 pub async fn create_workspace_git_pull_request(

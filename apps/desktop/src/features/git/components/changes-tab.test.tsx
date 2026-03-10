@@ -13,6 +13,8 @@ function renderChangesTab(gitStatus: GitStatusResult) {
         gitStatus,
         isLoading: false,
         onOpenDiff: () => {},
+        onRefresh: async () => {},
+        workspaceId: "workspace_1",
       }),
       storageKey: "test.theme",
     }),
@@ -20,7 +22,7 @@ function renderChangesTab(gitStatus: GitStatusResult) {
 }
 
 describe("ChangesTab", () => {
-  test("renders a single changes list without staging actions", () => {
+  test("renders working and staged sections with staging actions", () => {
     const markup = renderChangesTab({
       ahead: 0,
       behind: 0,
@@ -55,12 +57,15 @@ describe("ChangesTab", () => {
       upstream: "origin/main",
     });
 
+    expect(markup).toContain("Working");
+    expect(markup).toContain("Staged");
     expect(markup).toContain("app.tsx");
     expect(markup).toContain("README.md");
-    expect(markup).not.toContain("Stage All");
-    expect(markup).not.toContain("Unstage All");
-    expect(markup).not.toContain("Stage file");
-    expect(markup).not.toContain("Unstage file");
+    expect(markup).toContain("Stage all");
+    expect(markup).toContain("Unstage all");
+    expect(markup).toContain('aria-label="Stage src/app.tsx"');
+    expect(markup).toContain('aria-label="Unstage src/app.tsx"');
     expect(markup).not.toContain("Staged Changes");
+    expect(markup).not.toContain("divide-y");
   });
 });

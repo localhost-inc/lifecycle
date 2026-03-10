@@ -8,9 +8,6 @@ import { GitActionButton } from "./git-action-button";
 import { HistoryTab } from "./history-tab";
 import { PullRequestsTab } from "./pull-requests-tab";
 
-const sectionHeader =
-  "text-xs uppercase tracking-[0.14em] text-[var(--muted-foreground)] font-medium";
-
 export const GIT_PANEL_TITLE = "Git";
 
 export const GIT_PANEL_TABS = [
@@ -29,8 +26,8 @@ interface GitPanelProps {
   worktreePath: string | null;
 }
 
-export const GIT_PANEL_HEADER_CLASS_NAME = "px-2.5 py-3";
-export const GIT_PANEL_BODY_CLASS_NAME = "px-2.5 pb-4 pt-1";
+export const GIT_PANEL_HEADER_CLASS_NAME = "px-2.5 pt-3 pb-0";
+export const GIT_PANEL_BODY_CLASS_NAME = "px-2.5 pb-4 pt-0";
 export const GIT_PANEL_EMPTY_STATE_CLASS_NAME = "px-2.5 py-4";
 
 function GitPanelPlaceholder({ description, title }: { description: string; title: string }) {
@@ -146,7 +143,7 @@ export function GitPanel({
       <div className={GIT_PANEL_HEADER_CLASS_NAME}>
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
-            <span className={sectionHeader}>{GIT_PANEL_TITLE}</span>
+            <span className="app-panel-title">{GIT_PANEL_TITLE}</span>
             <GitActionButton
               actionError={actionError}
               branchPullRequest={currentPullRequestQuery.data ?? null}
@@ -192,6 +189,8 @@ export function GitPanel({
                 gitStatus={gitStatusQuery.data ?? null}
                 isLoading={gitStatusQuery.isLoading}
                 onOpenDiff={onOpenDiff}
+                onRefresh={gitStatusQuery.refresh}
+                workspaceId={workspaceId}
               />
             ) : (
               <div className={GIT_PANEL_EMPTY_STATE_CLASS_NAME}>

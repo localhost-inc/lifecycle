@@ -155,9 +155,7 @@ export function Sidebar({
               {historyActions}
             </div>
             <div className="flex items-center justify-between">
-              <h1 className="text-sm font-medium text-[var(--sidebar-muted-foreground)]">
-                Workspaces
-              </h1>
+              <h1 className="app-panel-title">Workspaces</h1>
               <div data-no-drag className="-mr-1.5">
                 {addProjectAction}
               </div>
@@ -165,9 +163,7 @@ export function Sidebar({
           </>
         ) : (
           <>
-            <h1 className="text-sm font-medium text-[var(--sidebar-muted-foreground)]">
-              Workspaces
-            </h1>
+            <h1 className="app-panel-title">Workspaces</h1>
             <div data-no-drag className="flex items-center gap-1">
               {historyActions}
               {addProjectAction}

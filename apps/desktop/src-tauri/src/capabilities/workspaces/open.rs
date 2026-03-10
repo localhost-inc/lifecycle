@@ -175,8 +175,9 @@ fn workspace_open_in_menu_icon_application_name(app_id: &str) -> Option<&'static
 fn workspace_open_in_menu_application_path(
     application_name: &str,
 ) -> Result<Option<PathBuf>, LifecycleError> {
-    let application_name = CString::new(application_name)
-        .map_err(|error| workspace_open_failure("show workspace open in menu", error.to_string()))?;
+    let application_name = CString::new(application_name).map_err(|error| {
+        workspace_open_failure("show workspace open in menu", error.to_string())
+    })?;
 
     let application_path =
         unsafe { lifecycle_native_resolve_application_path(application_name.as_ptr()) };
@@ -196,8 +197,9 @@ fn workspace_open_in_menu_icon_path(
     application_name: &str,
     pixel_size: u32,
 ) -> Result<Option<PathBuf>, LifecycleError> {
-    let application_name = CString::new(application_name)
-        .map_err(|error| workspace_open_failure("show workspace open in menu", error.to_string()))?;
+    let application_name = CString::new(application_name).map_err(|error| {
+        workspace_open_failure("show workspace open in menu", error.to_string())
+    })?;
 
     let icon_path = unsafe {
         lifecycle_native_copy_application_icon_png_path(application_name.as_ptr(), pixel_size)
@@ -241,8 +243,9 @@ fn workspace_open_in_icon_data_url(app_id: &str) -> Result<Option<String>, Lifec
         return Ok(None);
     };
 
-    let icon_bytes = std::fs::read(&icon_path)
-        .map_err(|error| workspace_open_failure("list workspace open in apps", error.to_string()))?;
+    let icon_bytes = std::fs::read(&icon_path).map_err(|error| {
+        workspace_open_failure("list workspace open in apps", error.to_string())
+    })?;
     Ok(Some(format!(
         "data:image/png;base64,{}",
         STANDARD.encode(icon_bytes)
@@ -300,6 +303,9 @@ mod tests {
             workspace_open_in_menu_icon_application_name("finder"),
             Some("Finder")
         );
-        assert_eq!(workspace_open_in_menu_icon_application_name("unknown"), None);
+        assert_eq!(
+            workspace_open_in_menu_icon_application_name("unknown"),
+            None
+        );
     }
 }

@@ -1,12 +1,5 @@
 import type { GitLogEntry, WorkspaceRecord } from "@lifecycle/contracts";
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-  Button,
-  EmptyState,
-  SetupProgress,
-} from "@lifecycle/ui";
+import { Alert, AlertDescription, AlertTitle, EmptyState, SetupProgress } from "@lifecycle/ui";
 import { FileJson } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useCallback, useLayoutEffect, useState } from "react";
@@ -43,6 +36,7 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
       await startServices(workspace.id, manifestJson);
     } catch (err) {
       console.error("Failed to start services:", err);
+      throw err;
     }
   }, [workspace.id, config]);
 
@@ -51,30 +45,14 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
       await stopWorkspace(workspace.id);
     } catch (err) {
       console.error("Failed to stop workspace:", err);
+      throw err;
     }
   }, [workspace.id]);
 
   const supportsTerminalInteraction = workspaceSupportsFilesystemInteraction(workspace);
-  const canRun = (status === "sleeping" || status === "failed") && hasManifest;
-  const canStop = status === "ready";
   const showMissingManifest = status === "sleeping" && !hasManifest;
   const showSetup = setupSteps.length > 0 && (status === "starting" || status === "failed");
   const showServices = services.length > 0 && status !== "ready";
-
-  const actionButtons = (
-    <div className="flex items-center gap-2">
-      {canRun && (
-        <Button className="px-3 py-1.5" onClick={handleRun}>
-          Run
-        </Button>
-      )}
-      {canStop && (
-        <Button className="px-3 py-1.5" onClick={handleStop} variant="outline">
-          Stop
-        </Button>
-      )}
-    </div>
-  );
 
   const hasNotices = showSetup || showServices || (status === "failed" && Boolean(failureReason));
   const handleOpenDiff = useCallback((filePath: string) => {
@@ -147,10 +125,8 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
   ) : (
     <div className="flex-1 overflow-y-auto p-8">
       <div className="mx-auto max-w-2xl">
-        {actionButtons}
-
         {showMissingManifest && (
-          <div className="mt-8">
+          <div>
             <EmptyState
               description="Add a lifecycle.json file to the project root to configure services and setup steps."
               icon={<FileJson />}
@@ -200,6 +176,8 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
         createPortal(
           <WorkspaceSidebar
             hasManifest={hasManifest}
+            onRun={handleRun}
+            onStop={handleStop}
             onOpenDiff={handleOpenDiff}
             onOpenCommitDiff={handleOpenCommitDiff}
             services={services}
@@ -210,6 +188,8 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
       ) : (
         <WorkspaceSidebar
           hasManifest={hasManifest}
+          onRun={handleRun}
+          onStop={handleStop}
           onOpenDiff={handleOpenDiff}
           onOpenCommitDiff={handleOpenCommitDiff}
           services={services}

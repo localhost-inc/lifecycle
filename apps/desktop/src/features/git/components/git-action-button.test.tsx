@@ -60,7 +60,16 @@ function renderGitActionMenuContent(
 }
 
 describe("GitActionButton", () => {
-  test("shows an inline commit workflow when the branch has local changes", () => {
+  test("keeps the semantic action label while loading", () => {
+    const markup = renderGitActionButton({
+      isLoading: true,
+    });
+
+    expect(markup).toContain("Git Status");
+    expect(markup).not.toContain("Loading...");
+  });
+
+  test("shows a staging workflow when the branch only has unstaged changes", () => {
     const gitStatus: GitStatusResult = {
       ahead: 0,
       behind: 0,
@@ -73,6 +82,47 @@ describe("GitActionButton", () => {
           stats: { deletions: 0, insertions: 3 },
           unstaged: true,
           worktreeStatus: "modified",
+        },
+      ],
+      headSha: "0123456789abcdef0123456789abcdef01234567",
+      upstream: "origin/feature/git-panel-prs",
+    };
+    const branchPullRequest: GitBranchPullRequestResult = {
+      support: {
+        available: true,
+        message: null,
+        provider: "github",
+        reason: null,
+      },
+      branch: "feature/git-panel-prs",
+      pullRequest: null,
+      suggestedBaseRef: "main",
+      upstream: "origin/feature/git-panel-prs",
+    };
+
+    const markup = renderGitActionMenuContent({
+      branchPullRequest,
+      gitStatus,
+    });
+
+    expect(renderGitActionButton({ branchPullRequest, gitStatus })).toContain("Stage Changes");
+    expect(markup).toContain("Open changes");
+    expect(markup).not.toContain("Commit message");
+  });
+
+  test("shows a commit workflow when the branch has staged changes", () => {
+    const gitStatus: GitStatusResult = {
+      ahead: 0,
+      behind: 0,
+      branch: "feature/git-panel-prs",
+      files: [
+        {
+          indexStatus: "modified",
+          path: "src/app.tsx",
+          staged: true,
+          stats: { deletions: 0, insertions: 3 },
+          unstaged: false,
+          worktreeStatus: null,
         },
       ],
       headSha: "0123456789abcdef0123456789abcdef01234567",

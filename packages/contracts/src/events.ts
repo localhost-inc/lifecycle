@@ -98,6 +98,34 @@ export type LifecycleEvent =
       harness_session_id: string | null;
       completion_key: string;
       turn_id: string | null;
+    }
+  | {
+      id: string;
+      occurred_at: string;
+      type: "git.status_changed";
+      workspace_id: string;
+      branch: string | null;
+      head_sha: string | null;
+      upstream: string | null;
+    }
+  | {
+      id: string;
+      occurred_at: string;
+      type: "git.head_changed";
+      workspace_id: string;
+      branch: string | null;
+      head_sha: string | null;
+      upstream: string | null;
+      ahead: number | null;
+      behind: number | null;
+    }
+  | {
+      id: string;
+      occurred_at: string;
+      type: "git.log_changed";
+      workspace_id: string;
+      branch: string | null;
+      head_sha: string | null;
     };
 
 export type LifecycleEventType = LifecycleEvent["type"];

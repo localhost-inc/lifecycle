@@ -1,7 +1,4 @@
-import type {
-  GitBranchPullRequestResult,
-  GitStatusResult,
-} from "@lifecycle/contracts";
+import type { GitBranchPullRequestResult, GitStatusResult } from "@lifecycle/contracts";
 import type { OpenInAppId } from "../workspaces/api";
 import type { OpenInTarget } from "../workspaces/lib/open-in-targets";
 
@@ -31,7 +28,7 @@ interface HostedOverlayBase {
 
 export interface HostedWorkspaceOpenInOverlay extends HostedOverlayBase {
   availableTargets: readonly OpenInTarget[];
-  defaultTargetId: OpenInAppId;
+  autoFocusTargetId: OpenInAppId | null;
   kind: "workspace-open-in";
   launchError: string | null;
   launchingTarget: OpenInAppId | null;

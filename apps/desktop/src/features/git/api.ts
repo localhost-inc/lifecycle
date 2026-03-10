@@ -11,6 +11,7 @@ import type {
   GitStatusResult,
 } from "@lifecycle/contracts";
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { publishBrowserLifecycleEvent } from "../events/api";
 
 const EMPTY_STATUS: GitStatusResult = {
   branch: null,
@@ -48,6 +49,40 @@ function browserCommitResult(message: string): GitCommitResult {
     shortSha: sha.slice(0, 8),
     message,
   };
+}
+
+function emitBrowserGitStatusChanged(workspaceId: string): void {
+  publishBrowserLifecycleEvent({
+    type: "git.status_changed",
+    workspace_id: workspaceId,
+    branch: null,
+    head_sha: null,
+    upstream: null,
+  });
+}
+
+function emitBrowserGitHeadChanged(
+  workspaceId: string,
+  options?: { ahead?: number | null; behind?: number | null; headSha?: string | null },
+): void {
+  publishBrowserLifecycleEvent({
+    type: "git.head_changed",
+    workspace_id: workspaceId,
+    branch: null,
+    head_sha: options?.headSha ?? null,
+    upstream: null,
+    ahead: options?.ahead ?? 0,
+    behind: options?.behind ?? 0,
+  });
+}
+
+function emitBrowserGitLogChanged(workspaceId: string, headSha: string | null): void {
+  publishBrowserLifecycleEvent({
+    type: "git.log_changed",
+    workspace_id: workspaceId,
+    branch: null,
+    head_sha: headSha,
+  });
 }
 
 export async function getGitStatus(workspaceId: string): Promise<GitStatusResult> {
@@ -173,9 +208,45 @@ export async function openWorkspaceFile(workspaceId: string, filePath: string): 
   });
 }
 
+export async function stageGitFiles(workspaceId: string, filePaths: string[]): Promise<void> {
+  if (filePaths.length === 0) {
+    return;
+  }
+
+  if (!isTauri()) {
+    emitBrowserGitStatusChanged(workspaceId);
+    return;
+  }
+
+  await invoke("stage_workspace_git_files", {
+    workspaceId,
+    filePaths,
+  });
+}
+
+export async function unstageGitFiles(workspaceId: string, filePaths: string[]): Promise<void> {
+  if (filePaths.length === 0) {
+    return;
+  }
+
+  if (!isTauri()) {
+    emitBrowserGitStatusChanged(workspaceId);
+    return;
+  }
+
+  await invoke("unstage_workspace_git_files", {
+    workspaceId,
+    filePaths,
+  });
+}
+
 export async function commitGit(workspaceId: string, message: string): Promise<GitCommitResult> {
   if (!isTauri()) {
-    return browserCommitResult(message);
+    const result = browserCommitResult(message);
+    emitBrowserGitHeadChanged(workspaceId, { headSha: result.sha });
+    emitBrowserGitLogChanged(workspaceId, result.sha);
+    emitBrowserGitStatusChanged(workspaceId);
+    return result;
   }
 
   return invoke<GitCommitResult>("commit_workspace_git", {
@@ -186,12 +257,15 @@ export async function commitGit(workspaceId: string, message: string): Promise<G
 
 export async function pushGit(workspaceId: string): Promise<GitPushResult> {
   if (!isTauri()) {
-    return {
+    const result = {
       branch: null,
       remote: null,
       ahead: 0,
       behind: 0,
     };
+    emitBrowserGitHeadChanged(workspaceId, result);
+    emitBrowserGitStatusChanged(workspaceId);
+    return result;
   }
 
   return invoke<GitPushResult>("push_workspace_git", {

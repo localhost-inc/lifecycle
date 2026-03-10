@@ -1,0 +1,40 @@
+{
+  // One-time workspace bootstrap for this repo.
+  "setup": {
+    "steps": [
+      {
+        "name": "install",
+        "command": "bun install --frozen-lockfile",
+        "timeout_seconds": 300
+      }
+    ]
+  },
+
+  // Explicit long-lived services. We model the previewable web surfaces directly
+  // instead of delegating orchestration to the repo-level `bun run dev` fanout.
+  "services": {
+    "desktop-web": {
+      "runtime": "process",
+      "command": "bun --filter @lifecycle/desktop run vite:dev",
+      "port": 1420,
+      "share_default": true,
+      "startup_timeout_seconds": 45,
+      "health_check": {
+        "type": "http",
+        "url": "http://127.0.0.1:1420",
+        "timeout_seconds": 5
+      }
+    },
+    "worker": {
+      "runtime": "process",
+      "command": "bun --filter @lifecycle/worker run dev",
+      "port": 8787,
+      "startup_timeout_seconds": 30,
+      "health_check": {
+        "type": "http",
+        "url": "http://127.0.0.1:8787/health",
+        "timeout_seconds": 5
+      }
+    }
+  }
+}

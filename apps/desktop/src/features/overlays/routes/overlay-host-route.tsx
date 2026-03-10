@@ -1,4 +1,4 @@
-import { isTauri } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { EventTarget } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -57,7 +57,10 @@ export function OverlayHostRoute() {
   const [draftCommitMessage, setDraftCommitMessage] = useState("");
   const draftOverlayIdRef = useRef<string | null>(null);
   const viewport = useViewportSize();
-  const ownerWindowLabel = useMemo(() => readOverlayHostOwnerWindowLabel(window.location.search), []);
+  const ownerWindowLabel = useMemo(
+    () => readOverlayHostOwnerWindowLabel(window.location.search),
+    [],
+  );
 
   useEffect(() => {
     document.documentElement.dataset.overlayHostWindow = "true";
@@ -101,6 +104,11 @@ export function OverlayHostRoute() {
 
     void (async () => {
       try {
+        await invoke("set_window_accepts_mouse_moved_events", {
+          enabled: true,
+        }).catch((error) => {
+          console.warn("Failed to enable mouse-moved events on overlay host window:", error);
+        });
         const [nextPresent, nextAnchor, nextClose, nextStatus] = await Promise.all([
           currentWebview.listen<HostedOverlayPayload>(OVERLAY_HOST_PRESENT_EVENT, ({ payload }) => {
             logOverlayDebug("host:present-received", {
@@ -110,32 +118,38 @@ export function OverlayHostRoute() {
             });
             setOverlay(payload);
           }),
-          currentWebview.listen<HostedOverlayAnchorUpdate>(OVERLAY_HOST_ANCHOR_EVENT, ({ payload }) => {
-            logOverlayDebug("host:anchor-received", {
-              overlayId: payload.overlayId,
-              ownerWindowLabel: payload.ownerWindowLabel,
-            });
-            setOverlay((current) => {
-              if (!current || current.overlayId !== payload.overlayId) {
-                return current;
-              }
+          currentWebview.listen<HostedOverlayAnchorUpdate>(
+            OVERLAY_HOST_ANCHOR_EVENT,
+            ({ payload }) => {
+              logOverlayDebug("host:anchor-received", {
+                overlayId: payload.overlayId,
+                ownerWindowLabel: payload.ownerWindowLabel,
+              });
+              setOverlay((current) => {
+                if (!current || current.overlayId !== payload.overlayId) {
+                  return current;
+                }
 
-              return {
-                ...current,
-                anchor: payload.anchor,
-              };
-            });
-          }),
-          currentWebview.listen<HostedOverlayCloseRequest>(OVERLAY_HOST_CLOSE_EVENT, ({ payload }) => {
-            logOverlayDebug("host:close-received", payload);
-            setOverlay((current) => {
-              if (!current || current.overlayId !== payload.overlayId) {
-                return current;
-              }
+                return {
+                  ...current,
+                  anchor: payload.anchor,
+                };
+              });
+            },
+          ),
+          currentWebview.listen<HostedOverlayCloseRequest>(
+            OVERLAY_HOST_CLOSE_EVENT,
+            ({ payload }) => {
+              logOverlayDebug("host:close-received", payload);
+              setOverlay((current) => {
+                if (!current || current.overlayId !== payload.overlayId) {
+                  return current;
+                }
 
-              return null;
-            });
-          }),
+                return null;
+              });
+            },
+          ),
           currentWebview.listen<HostedOverlayStatusRequest>(
             OVERLAY_HOST_STATUS_REQUEST_EVENT,
             ({ payload }) => {
@@ -304,7 +318,7 @@ export function OverlayHostRoute() {
       return (
         <WorkspaceOpenInMenu
           availableTargets={currentOverlay.availableTargets}
-          defaultTargetId={currentOverlay.defaultTargetId}
+          autoFocusTargetId={currentOverlay.autoFocusTargetId}
           launchError={currentOverlay.launchError}
           launchingTarget={currentOverlay.launchingTarget}
           onOpenIn={(appId) =>
@@ -316,11 +330,17 @@ export function OverlayHostRoute() {
               ownerWindowLabel: currentOverlay.ownerWindowLabel,
             })
           }
+          useNativeCursorTracking
         />
       );
     }
 
-    return renderGitActionsOverlay(currentOverlay, draftCommitMessage, setDraftCommitMessage, emitAction);
+    return renderGitActionsOverlay(
+      currentOverlay,
+      draftCommitMessage,
+      setDraftCommitMessage,
+      emitAction,
+    );
   }
 
   return (

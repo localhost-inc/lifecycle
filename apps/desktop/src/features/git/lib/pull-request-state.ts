@@ -6,6 +6,7 @@ import type {
 
 export type GitPullRequestQuickStateKind =
   | "detached"
+  | "needs_stage"
   | "needs_commit"
   | "needs_push"
   | "remote_unavailable"
@@ -23,6 +24,7 @@ export interface GitPullRequestQuickState {
 
 export type GitPullRequestPrimaryActionKind =
   | "disabled"
+  | "show_changes"
   | "commit"
   | "commit_and_push"
   | "push"
@@ -35,6 +37,19 @@ export interface GitPullRequestPrimaryAction {
   label: string;
 }
 
+function summarizeLocalChanges(gitStatus: GitStatusResult | null): {
+  hasLocalChanges: boolean;
+  hasStagedChanges: boolean;
+  hasUnstagedChanges: boolean;
+} {
+  const files = gitStatus?.files ?? [];
+  return {
+    hasLocalChanges: files.length > 0,
+    hasStagedChanges: files.some((file) => file.staged),
+    hasUnstagedChanges: files.some((file) => file.unstaged),
+  };
+}
+
 export function buildGitPullRequestQuickState(
   gitStatus: GitStatusResult | null,
   branchPullRequest: GitBranchPullRequestResult | null,
@@ -42,7 +57,8 @@ export function buildGitPullRequestQuickState(
   const branch = branchPullRequest?.branch ?? gitStatus?.branch ?? null;
   const pullRequest = branchPullRequest?.pullRequest ?? null;
   const support = branchPullRequest?.support ?? null;
-  const hasLocalChanges = (gitStatus?.files.length ?? 0) > 0;
+  const { hasLocalChanges, hasStagedChanges, hasUnstagedChanges } =
+    summarizeLocalChanges(gitStatus);
 
   if (!branch && support && !support.available) {
     return {
@@ -66,12 +82,25 @@ export function buildGitPullRequestQuickState(
   }
 
   if (hasLocalChanges) {
+    if (!hasStagedChanges) {
+      return {
+        branch,
+        description:
+          "Stage the files you want to include, then commit them before pushing or opening a pull request.",
+        kind: "needs_stage",
+        pullRequest,
+        title: "Stage changes to commit",
+      };
+    }
+
     return {
       branch,
-      description: "Commit the current worktree changes before pushing or opening a pull request.",
+      description: hasUnstagedChanges
+        ? "Commit the staged changes. Unstaged edits can stay in the working tree."
+        : "Commit the staged changes before pushing or opening a pull request.",
       kind: "needs_commit",
       pullRequest,
-      title: "Commit your changes first",
+      title: "Commit your staged changes",
     };
   }
 
@@ -142,15 +171,29 @@ export function buildGitPullRequestPrimaryAction(
   branchPullRequest: GitBranchPullRequestResult | null,
 ): GitPullRequestPrimaryAction {
   const state = buildGitPullRequestQuickState(gitStatus, branchPullRequest);
+  const { hasStagedChanges } = summarizeLocalChanges(gitStatus);
   const canPushAfterCommit =
     Boolean(gitStatus?.branch) &&
     Boolean(gitStatus?.upstream || branchPullRequest?.support.available);
 
   switch (state.kind) {
+    case "needs_stage":
+      return {
+        kind: "show_changes",
+        label: "Stage Changes",
+      };
     case "needs_commit":
       return {
-        kind: canPushAfterCommit ? "commit_and_push" : "commit",
-        label: canPushAfterCommit ? "Commit & Push" : "Commit",
+        kind: hasStagedChanges
+          ? canPushAfterCommit
+            ? "commit_and_push"
+            : "commit"
+          : "show_changes",
+        label: hasStagedChanges
+          ? canPushAfterCommit
+            ? "Commit & Push"
+            : "Commit"
+          : "Stage Changes",
       };
     case "needs_push":
       return {

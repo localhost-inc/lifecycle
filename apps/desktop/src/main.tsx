@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
 import { router } from "./app/router";
 import { OverlayHostBootstrap } from "./features/overlays/overlay-host-bootstrap";
+import { ProjectManifestWatcher } from "./features/projects/components/project-manifest-watcher";
 import { SettingsProvider } from "./features/settings/state/app-settings-provider";
 import { TerminalResponseReadyProvider } from "./features/terminals/state/terminal-response-ready-provider";
 import { QueryProvider } from "./query";
@@ -16,6 +17,7 @@ createRoot(document.getElementById("root")!).render(
       <ThemeWindowSync />
       <OverlayHostBootstrap />
       <QueryProvider>
+        <ProjectManifestWatcher />
         <SettingsProvider>
           <TerminalResponseReadyProvider>
             <RouterProvider router={router} />

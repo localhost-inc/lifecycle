@@ -37,7 +37,7 @@ Those belong in milestone or reference docs.
 | M1        | done    | M0         | Desktop shell + project import + manifest validation    | [m1](./milestones/m1.md) |
 | M2        | done    | M1         | Local workspace create/start/health to `ready`          | [m2](./milestones/m2.md) |
 | M3        | done    | M2         | Terminal and harness runtime in workspace               | [m3](./milestones/m3.md) |
-| M4        | planned | M3         | Run and control local workspace environments            | [m4](./milestones/m4.md) |
+| M4        | in_progress | M3         | Run and control local workspace environments            | [m4](./milestones/m4.md) |
 | M5        | planned | M4         | First-class local CLI                                   | [m5](./milestones/m5.md) |
 | M6        | planned | M5         | Auth, cloud workspaces, previews, PR flow               | [m6](./milestones/m6.md) |
 | M7        | planned | M6         | Cloud lifecycle hardening (sleep/wake, TTL, quotas)     | [m7](./milestones/m7.md) |

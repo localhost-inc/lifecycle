@@ -82,6 +82,28 @@ pub enum LifecycleEvent {
         completion_key: String,
         turn_id: Option<String>,
     },
+    #[serde(rename = "git.status_changed")]
+    GitStatusChanged {
+        workspace_id: String,
+        branch: Option<String>,
+        head_sha: Option<String>,
+        upstream: Option<String>,
+    },
+    #[serde(rename = "git.head_changed")]
+    GitHeadChanged {
+        workspace_id: String,
+        branch: Option<String>,
+        head_sha: Option<String>,
+        upstream: Option<String>,
+        ahead: Option<u64>,
+        behind: Option<u64>,
+    },
+    #[serde(rename = "git.log_changed")]
+    GitLogChanged {
+        workspace_id: String,
+        branch: Option<String>,
+        head_sha: Option<String>,
+    },
 }
 
 pub fn publish_lifecycle_event(app: &AppHandle, event: LifecycleEvent) {

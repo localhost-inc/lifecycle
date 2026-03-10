@@ -184,8 +184,10 @@ export function HistoryTab({ error, isLoading, entries, onOpenCommit }: HistoryT
     <div className="flex flex-col">
       {groups.map((group) => (
         <div key={group.label}>
-          <div className="sticky top-0 z-10 px-2 py-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
-            {group.label}
+          <div className="sticky top-0 z-10 flex px-2 py-1.5">
+            <span className="rounded-full bg-[var(--panel)]/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)] backdrop-blur-md">
+              {group.label}
+            </span>
           </div>
           {group.entries.map((entry) => (
             <CommitRow key={entry.sha} entry={entry} onOpenCommit={onOpenCommit} />

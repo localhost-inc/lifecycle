@@ -354,9 +354,7 @@ export async function presentHostedOverlay(payload: HostedOverlayPayload): Promi
   await emitTo(overlayHostTarget(), OVERLAY_HOST_PRESENT_EVENT, payload);
 }
 
-export async function updateHostedOverlayAnchor(
-  payload: HostedOverlayAnchorUpdate,
-): Promise<void> {
+export async function updateHostedOverlayAnchor(payload: HostedOverlayAnchorUpdate): Promise<void> {
   if (!isTauri() || isOverlayHostWindow() || !getOverlayHostReady()) {
     return;
   }

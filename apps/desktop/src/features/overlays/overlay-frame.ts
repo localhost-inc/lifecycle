@@ -67,10 +67,7 @@ export function computeHostedOverlayFrame({
 
   const maxHeight = Math.max(
     0,
-    Math.min(
-      placement.estimatedHeight,
-      side === "bottom" ? availableBelow : availableAbove,
-    ),
+    Math.min(placement.estimatedHeight, side === "bottom" ? availableBelow : availableAbove),
   );
 
   const top =

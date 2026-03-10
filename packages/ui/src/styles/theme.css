@@ -40,6 +40,12 @@
   cursor: pointer;
 }
 
+.app-panel-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--sidebar-muted-foreground);
+}
+
 .compact-control-shell {
   display: inline-flex;
   align-items: center;

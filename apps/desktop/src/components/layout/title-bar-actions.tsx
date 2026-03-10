@@ -58,6 +58,7 @@ export function TitleBarActions({ workspace }: TitleBarActionsProps) {
   const [availableTargets, setAvailableTargets] =
     useState<readonly OpenInTarget[]>(baseAvailableTargets);
   const [openInOpen, setOpenInOpen] = useState(false);
+  const [openInKeyboardMode, setOpenInKeyboardMode] = useState(false);
   const [launchingTarget, setLaunchingTarget] = useState<OpenInAppId | null>(null);
   const [launchError, setLaunchError] = useState<string | null>(null);
   const menuTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -145,7 +146,7 @@ export function TitleBarActions({ workspace }: TitleBarActionsProps) {
   const hostedOverlayPayload = useMemo(
     () => ({
       availableTargets,
-      defaultTargetId: defaultTarget.id,
+      autoFocusTargetId: openInKeyboardMode ? defaultTarget.id : null,
       kind: "workspace-open-in" as const,
       launchError,
       launchingTarget,
@@ -157,9 +158,9 @@ export function TitleBarActions({ workspace }: TitleBarActionsProps) {
         side: "bottom" as const,
         sideOffset: 8,
       },
-      requiresWindowFocus: false,
+      requiresWindowFocus: openInKeyboardMode,
     }),
-    [availableTargets, defaultTarget.id, launchError, launchingTarget],
+    [availableTargets, defaultTarget.id, launchError, launchingTarget, openInKeyboardMode],
   );
 
   const hostedOpenIn = useHostedOverlay({
@@ -179,6 +180,15 @@ export function TitleBarActions({ workspace }: TitleBarActionsProps) {
   });
 
   const usesHostedOpenInMenu = hostedOpenIn.hosted;
+
+  function handleOpenInKeyboardIntent(key: string): boolean {
+    if (key !== "Enter" && key !== " " && key !== "ArrowDown" && key !== "ArrowUp") {
+      return false;
+    }
+
+    setOpenInKeyboardMode(true);
+    return key === "ArrowDown" || key === "ArrowUp";
+  }
 
   return (
     <div className="flex items-center gap-1.5">
@@ -202,6 +212,19 @@ export function TitleBarActions({ workspace }: TitleBarActionsProps) {
           <SplitButtonSecondary
             aria-label="Choose app"
             disabled={launchingTarget !== null}
+            onKeyDown={(event) => {
+              const shouldOpen = handleOpenInKeyboardIntent(event.key);
+              if (!shouldOpen) {
+                return;
+              }
+
+              event.preventDefault();
+              setLaunchError(null);
+              setOpenInOpen(true);
+            }}
+            onPointerDown={() => {
+              setOpenInKeyboardMode(false);
+            }}
             onClick={() => {
               setLaunchError(null);
               setOpenInOpen((current) => !current);
@@ -216,6 +239,18 @@ export function TitleBarActions({ workspace }: TitleBarActionsProps) {
               <SplitButtonSecondary
                 aria-label="Choose app"
                 disabled={launchingTarget !== null}
+                onKeyDown={(event) => {
+                  const shouldOpen = handleOpenInKeyboardIntent(event.key);
+                  if (!shouldOpen) {
+                    return;
+                  }
+
+                  event.preventDefault();
+                  setOpenInOpen(true);
+                }}
+                onPointerDown={() => {
+                  setOpenInKeyboardMode(false);
+                }}
                 ref={menuTriggerRef}
               >
                 <ChevronDown className="size-3.5" strokeWidth={2.4} />
@@ -229,7 +264,7 @@ export function TitleBarActions({ workspace }: TitleBarActionsProps) {
             >
               <WorkspaceOpenInMenu
                 availableTargets={availableTargets}
-                defaultTargetId={defaultTarget.id}
+                autoFocusTargetId={openInKeyboardMode ? defaultTarget.id : null}
                 launchError={launchError}
                 launchingTarget={launchingTarget}
                 onOpenIn={(appId) => void handleOpenIn(appId)}

@@ -25,6 +25,8 @@ const PANEL_SEPARATOR_STEP_PX = 32;
 
 interface WorkspaceSidebarProps {
   hasManifest: boolean;
+  onRun: () => Promise<void>;
+  onStop: () => Promise<void>;
   onOpenDiff: (filePath: string) => void;
   onOpenCommitDiff: (entry: GitLogEntry) => void;
   services: ServiceRecord[];
@@ -33,6 +35,8 @@ interface WorkspaceSidebarProps {
 
 export function WorkspaceSidebar({
   hasManifest,
+  onRun,
+  onStop,
   onOpenDiff,
   onOpenCommitDiff,
   services,
@@ -215,7 +219,13 @@ export function WorkspaceSidebar({
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
-        <EnvironmentPanel hasManifest={hasManifest} services={services} />
+        <EnvironmentPanel
+          hasManifest={hasManifest}
+          onRun={onRun}
+          onStop={onStop}
+          services={services}
+          workspace={workspace}
+        />
       </div>
     </aside>
   );

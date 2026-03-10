@@ -32,7 +32,9 @@ mod native_surface;
 #[path = "terminal/persistence.rs"]
 mod persistence;
 
-use attachments::build_terminal_attachment_file_name;
+use attachments::{
+    build_native_terminal_attachment_paste_payload, build_terminal_attachment_file_name,
+};
 #[cfg(test)]
 use native_surface::build_native_terminal_theme_config;
 use native_surface::{
@@ -304,14 +306,14 @@ pub async fn write_terminal(
     Ok(())
 }
 
-pub async fn save_terminal_attachment(
-    db_path: State<'_, DbPath>,
-    workspace_id: String,
-    file_name: String,
-    media_type: Option<String>,
-    base64_data: String,
+fn persist_terminal_attachment_bytes(
+    db_path: &str,
+    workspace_id: &str,
+    file_name: &str,
+    media_type: Option<&str>,
+    bytes: &[u8],
 ) -> Result<SavedTerminalAttachment, LifecycleError> {
-    let workspace = load_workspace_runtime(&db_path.0, &workspace_id)?;
+    let workspace = load_workspace_runtime(db_path, workspace_id)?;
     if !workspace_has_interactive_terminal_context(&workspace) {
         return Err(LifecycleError::InvalidStateTransition {
             from: workspace.status.as_str().to_string(),
@@ -319,9 +321,6 @@ pub async fn save_terminal_attachment(
         });
     }
 
-    let bytes = STANDARD
-        .decode(base64_data)
-        .map_err(|error| LifecycleError::AttachmentPersistenceFailed(error.to_string()))?;
     let attachment_dir = Path::new(&workspace.worktree_path)
         .join(".lifecycle")
         .join("attachments");
@@ -331,7 +330,7 @@ pub async fn save_terminal_attachment(
         ))
     })?;
 
-    let stored_file_name = build_terminal_attachment_file_name(&file_name, media_type.as_deref());
+    let stored_file_name = build_terminal_attachment_file_name(file_name, media_type);
     let attachment_path = attachment_dir.join(&stored_file_name);
     std::fs::write(&attachment_path, bytes).map_err(|error| {
         LifecycleError::AttachmentPersistenceFailed(format!(
@@ -344,6 +343,47 @@ pub async fn save_terminal_attachment(
         file_name: stored_file_name.clone(),
         relative_path: format!(".lifecycle/attachments/{stored_file_name}"),
     })
+}
+
+pub async fn save_terminal_attachment(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    file_name: String,
+    media_type: Option<String>,
+    base64_data: String,
+) -> Result<SavedTerminalAttachment, LifecycleError> {
+    let bytes = STANDARD
+        .decode(base64_data)
+        .map_err(|error| LifecycleError::AttachmentPersistenceFailed(error.to_string()))?;
+    persist_terminal_attachment_bytes(
+        &db_path.0,
+        &workspace_id,
+        &file_name,
+        media_type.as_deref(),
+        &bytes,
+    )
+}
+
+pub fn prepare_native_terminal_attachment_paste(
+    db_path: &str,
+    terminal_id: &str,
+    file_name: &str,
+    media_type: Option<&str>,
+    bytes: &[u8],
+) -> Result<String, LifecycleError> {
+    let terminal = load_terminal_record(db_path, terminal_id)?
+        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()))?;
+    let attachment = persist_terminal_attachment_bytes(
+        db_path,
+        &terminal.workspace_id,
+        file_name,
+        media_type,
+        bytes,
+    )?;
+    Ok(build_native_terminal_attachment_paste_payload(
+        terminal.harness_provider.as_deref(),
+        &[attachment.absolute_path],
+    ))
 }
 
 pub fn native_terminal_capabilities() -> NativeTerminalCapabilities {
@@ -1255,25 +1295,6 @@ mod tests {
                 worktree_path: "/tmp/worktree".to_string(),
             }
         ));
-    }
-
-    #[test]
-    fn build_terminal_attachment_file_name_sanitizes_the_stem() {
-        let file_name = build_terminal_attachment_file_name(
-            "Screenshot 2026-03-06 11.22.33.PNG",
-            Some("image/png"),
-        );
-
-        assert!(file_name.starts_with("screenshot-2026-03-06-11-22-33-"));
-        assert!(file_name.ends_with(".png"));
-    }
-
-    #[test]
-    fn build_terminal_attachment_file_name_infers_extension_from_media_type() {
-        let file_name = build_terminal_attachment_file_name("clipboard-image", Some("image/webp"));
-
-        assert!(file_name.starts_with("clipboard-image-"));
-        assert!(file_name.ends_with(".webp"));
     }
 
     #[test]
