@@ -101,13 +101,32 @@ Terminal transport is split between control-plane mutations and ordered data str
 
 `workspace.mode` is the authority boundary for workspace lifecycle data.
 
-1. `workspace.mode=local` means the local provider is authoritative for that workspace's runtime state, persistence, and lifecycle operations.
-2. `workspace.mode=cloud` means the cloud provider and control plane are authoritative for that workspace's runtime state, persistence, and lifecycle operations.
+1. `workspace.mode=local` means the local provider is authoritative for that workspace's environment state, persistence, and lifecycle operations.
+2. `workspace.mode=cloud` means the cloud provider and control plane are authoritative for that workspace's environment state, persistence, and lifecycle operations.
 3. Signing in enables cloud-mode workspaces and sync flows; it does not change the authority of existing local-mode workspaces.
 4. Desktop surfaces may present local and cloud workspaces together in one list, but each workspace still has exactly one authoritative provider selected by `workspace.mode`.
 5. Mixed-mode workspace lists must be aggregated from normalized domain records, not by composing raw storage-specific rows directly in UI code.
 6. Mutations issued from aggregated views must dispatch back to the authoritative provider for the selected workspace.
 7. `mode` is a workspace concern. Do not apply it broadly to unrelated entities unless a concrete execution-boundary need emerges.
+
+### Future Local Target Split
+
+As a future consideration, local mode may still support more than one execution target. That should remain a target concern, not a new top-level mode.
+
+1. `workspace.mode=local` should continue to mean the local provider is authoritative.
+2. Future local targets may include:
+   - `host`
+   - `docker`
+   - `remote_host`
+3. `ssh` should not be modeled as a peer to those targets.
+4. `ssh` is transport for reaching a `remote_host`, not an authority mode.
+5. If Lifecycle's control plane provisions and owns the remote machine, that is `cloud` even if some implementation path also uses SSH under the hood.
+
+The decision rule is simple:
+
+1. `local` means user-owned authority.
+2. `cloud` means Lifecycle-owned authority.
+3. target selection answers where the environment runs; transport answers how the provider reaches it.
 
 ## Git Operations Contract
 
@@ -153,3 +172,17 @@ Git operations follow the same authority rule as terminals and lifecycle mutatio
    - local workspaces operate without network — Convex connection only required for cloud workspaces and fork-to-cloud
    - Tauri desktop app must be running (the Rust backend IS the local process supervisor — no separate daemon)
    - Docker Desktop required for `image` runtime services
+
+### Future Local Targets
+
+V1 local execution is host-oriented, but the long-term provider model should leave room for additional local targets without redefining `workspace.mode`.
+
+1. `host`
+   - processes run on the user's machine
+   - image services may still use local Docker sidecars
+2. `docker`
+   - the local environment runs in a stronger containerized boundary
+   - better fit for workspace-local networking and isolation
+3. `remote_host`
+   - the environment runs on a user-managed machine outside the local laptop
+   - initial transport may be SSH, but authority remains `local`

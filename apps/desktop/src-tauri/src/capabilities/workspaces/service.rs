@@ -1,4 +1,5 @@
-use super::shared::{preview_fields_for_service, resolve_effective_port};
+use super::ports::resolve_effective_port;
+use super::preview::preview_fields_for_service;
 use crate::platform::db::open_db;
 use crate::shared::errors::{LifecycleError, WorkspaceStatus};
 use rusqlite::params;
@@ -135,6 +136,7 @@ pub async fn update_workspace_service(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::capabilities::workspaces::test_support::available_test_port;
     use crate::platform::db::open_db;
 
     fn temp_db_path() -> String {
@@ -143,16 +145,6 @@ mod tests {
             std::env::temp_dir().display(),
             uuid::Uuid::new_v4()
         )
-    }
-
-    fn unused_port() -> i64 {
-        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("bind temporary port");
-        let port = listener
-            .local_addr()
-            .expect("port should have local addr")
-            .port();
-        drop(listener);
-        i64::from(port)
     }
 
     fn init_workspace_tables(db_path: &str) {
@@ -186,8 +178,8 @@ mod tests {
     async fn update_workspace_service_updates_effective_port_and_preview_url() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
-        let default_port = unused_port();
-        let override_port = unused_port();
+        let default_port = available_test_port();
+        let override_port = available_test_port();
 
         let conn = open_db(&db_path).expect("open db");
         conn.execute(
@@ -261,8 +253,8 @@ mod tests {
     async fn update_workspace_service_restores_manifest_port_when_override_is_cleared() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
-        let default_port = unused_port();
-        let override_port = unused_port();
+        let default_port = available_test_port();
+        let override_port = available_test_port();
 
         let conn = open_db(&db_path).expect("open db");
         conn.execute(

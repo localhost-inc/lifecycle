@@ -1,5 +1,4 @@
 import { themeAppearance, type ResolvedTheme } from "@lifecycle/ui";
-import type { ITheme } from "ghostty-web";
 import type { NativeTerminalTheme } from "./api";
 
 interface TerminalThemeTokens {
@@ -30,11 +29,6 @@ interface TerminalAnsiPalette {
   cursor: string;
 }
 
-export interface ResolvedTerminalTheme {
-  nativeTheme: NativeTerminalTheme;
-  webTheme: ITheme;
-}
-
 const TOKEN_FALLBACKS: Record<"light" | "dark", TerminalThemeTokens> = {
   dark: {
     background: "#111113",
@@ -50,9 +44,6 @@ const TOKEN_FALLBACKS: Record<"light" | "dark", TerminalThemeTokens> = {
   },
 };
 
-/** Base ANSI palettes for themes whose CSS does not define --terminal-ansi-* vars.
- *  Themes with CSS-defined terminal vars (nord, monokai, catppuccin, dracula, rose-pine)
- *  get their palette entirely from paletteOverrides at runtime. */
 const ANSI_PALETTES: Partial<Record<ResolvedTheme, TerminalAnsiPalette>> &
   Record<"light" | "dark", TerminalAnsiPalette> = {
   dark: {
@@ -184,50 +175,26 @@ export function readTerminalThemeTokens(
 export function buildTerminalTheme(
   resolvedTheme: ResolvedTheme,
   tokens: TerminalThemeTokens,
-): ResolvedTerminalTheme {
+): NativeTerminalTheme {
   const basePalette = ANSI_PALETTES[resolvedTheme] ?? ANSI_PALETTES[themeAppearance(resolvedTheme)];
   const palette = {
     ...basePalette,
     ...tokens.paletteOverrides,
   };
+
   return {
-    nativeTheme: {
-      background: tokens.background,
-      cursorColor: palette.cursor,
-      foreground: tokens.foreground,
-      palette: paletteToList(palette),
-      selectionBackground: tokens.selectionBackground,
-      selectionForeground: tokens.selectionForeground,
-    },
-    webTheme: {
-      background: tokens.background,
-      black: palette.black,
-      blue: palette.blue,
-      brightBlack: palette.brightBlack,
-      brightBlue: palette.brightBlue,
-      brightCyan: palette.brightCyan,
-      brightGreen: palette.brightGreen,
-      brightMagenta: palette.brightMagenta,
-      brightRed: palette.brightRed,
-      brightWhite: palette.brightWhite,
-      brightYellow: palette.brightYellow,
-      cursor: palette.cursor,
-      cursorAccent: tokens.background,
-      cyan: palette.cyan,
-      foreground: tokens.foreground,
-      green: palette.green,
-      magenta: palette.magenta,
-      red: palette.red,
-      selectionBackground: tokens.selectionBackground,
-      white: palette.white,
-      yellow: palette.yellow,
-    },
+    background: tokens.background,
+    cursorColor: palette.cursor,
+    foreground: tokens.foreground,
+    palette: paletteToList(palette),
+    selectionBackground: tokens.selectionBackground,
+    selectionForeground: tokens.selectionForeground,
   };
 }
 
 export function resolveTerminalTheme(
   element: HTMLElement,
   resolvedTheme: ResolvedTheme,
-): ResolvedTerminalTheme {
+): NativeTerminalTheme {
   return buildTerminalTheme(resolvedTheme, readTerminalThemeTokens(element, resolvedTheme));
 }

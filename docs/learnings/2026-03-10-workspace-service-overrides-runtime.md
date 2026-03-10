@@ -11,7 +11,7 @@ We already had `workspace_service.exposure`, `port_override`, and `effective_por
 Persisting service overrides is not enough. Local environment controls only stay honest if the same overrides are re-applied in three places:
 
 1. during manifest reconciliation, so service rows survive `lifecycle.json` edits without losing local overrides
-2. in browser-mode simulation, so the desktop fallback matches Tauri semantics
+2. in preview and environment projection, so the desktop surface reflects the same effective ports and exposure state the runtime will use
 3. at runtime startup, so `run` uses the workspace-level override state instead of silently booting the manifest defaults
 
 Without that third step, the Environment rail can show one port while the supervisor actually starts another.

@@ -18,8 +18,8 @@ export function AppHotkeyListener() {
     (action: AppHotkeyAction) => {
       switch (action) {
         case "open-settings":
-          if (location.pathname !== "/settings/general") {
-            void navigate("/settings/general");
+          if (location.pathname !== "/settings") {
+            void navigate("/settings");
           }
           return;
       }

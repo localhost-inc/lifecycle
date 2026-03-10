@@ -21,4 +21,4 @@ Native terminal tabs run through the embedded Ghostty surface, so keystrokes do 
 ## Follow-Up Actions
 
 1. Add a native integration test that verifies the first submitted harness prompt emits `terminal.harness_prompt_submitted` before `terminal.harness_turn_completed`.
-2. Decide whether the browser simulator should mirror the same prompt-submitted fact or remain a narrower desktop-only test double.
+2. If a browser terminal ever returns, add prompt-submitted parity as part of that separate contract instead of carrying a hidden compatibility shim in the native path.

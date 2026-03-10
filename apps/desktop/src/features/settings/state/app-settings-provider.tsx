@@ -1,41 +1,61 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import {
-  DEFAULT_TERMINAL_RENDERER,
-  DEFAULT_TERMINAL_FONT_SIZE,
-  DEFAULT_TERMINAL_LINE_HEIGHT,
-  getDefaultTerminalFontFamily,
-  normalizeTerminalFontFamily,
-  normalizeTerminalFontSize,
-  normalizeTerminalLineHeight,
-  normalizeTerminalRenderer,
-  type TerminalRenderer,
-  type TerminalRuntimeDiagnostics,
-} from "../../terminals/terminal-display";
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import {
+  DEFAULT_INTERFACE_FONT_FAMILY,
+  DEFAULT_MONOSPACE_FONT_FAMILY,
+  normalizeFontFamily,
+} from "../../../lib/typography";
 
 export const DEFAULT_LIFECYCLE_ROOT = "~/.lifecycle";
 export const DEFAULT_WORKTREE_ROOT = `${DEFAULT_LIFECYCLE_ROOT}/worktrees`;
 const SETTINGS_STORAGE_KEY = "lifecycle.desktop.settings";
 
 export interface AppSettings {
-  terminalFontFamily: string;
-  terminalFontSize: number;
-  terminalLineHeight: number;
-  terminalRenderer: TerminalRenderer;
+  interfaceFontFamily: string;
+  monospaceFontFamily: string;
   worktreeRoot: string;
 }
 
 interface SettingsContextValue extends AppSettings {
-  reportTerminalDiagnostics: (value: TerminalRuntimeDiagnostics | null) => void;
-  resetTerminalDisplay: () => void;
-  setTerminalFontFamily: (value: string) => void;
-  setTerminalFontSize: (value: number | string) => void;
-  setTerminalLineHeight: (value: number | string) => void;
-  setTerminalRenderer: (value: TerminalRenderer | string) => void;
+  resetTypography: () => void;
+  setInterfaceFontFamily: (value: string) => void;
+  setMonospaceFontFamily: (value: string) => void;
   setWorktreeRoot: (value: string) => void;
-  terminalDiagnostics: TerminalRuntimeDiagnostics | null;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
+
+interface FontSettingsRoot {
+  setProperty: (name: string, value: string) => void;
+}
+
+function getFontSettingsRoot(): FontSettingsRoot | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return document.documentElement.style;
+}
+
+export function applyFontSettings(
+  settings: Pick<AppSettings, "interfaceFontFamily" | "monospaceFontFamily">,
+  root: FontSettingsRoot | null = getFontSettingsRoot(),
+): void {
+  if (!root) {
+    return;
+  }
+
+  root.setProperty("--font-heading", settings.interfaceFontFamily);
+  root.setProperty("--font-body", settings.interfaceFontFamily);
+  root.setProperty("--font-mono", settings.monospaceFontFamily);
+}
 
 function normalizeWorktreeRoot(value: string | undefined | null): string {
   if (!value) return DEFAULT_WORKTREE_ROOT;
@@ -45,10 +65,8 @@ function normalizeWorktreeRoot(value: string | undefined | null): string {
 
 function buildDefaultSettings(): AppSettings {
   return {
-    terminalFontFamily: getDefaultTerminalFontFamily(),
-    terminalFontSize: DEFAULT_TERMINAL_FONT_SIZE,
-    terminalLineHeight: DEFAULT_TERMINAL_LINE_HEIGHT,
-    terminalRenderer: DEFAULT_TERMINAL_RENDERER,
+    interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
+    monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
     worktreeRoot: DEFAULT_WORKTREE_ROOT,
   };
 }
@@ -63,10 +81,14 @@ function readStoredSettings(): AppSettings {
   try {
     const parsed = JSON.parse(raw) as Partial<AppSettings>;
     return {
-      terminalFontFamily: normalizeTerminalFontFamily(parsed.terminalFontFamily),
-      terminalFontSize: normalizeTerminalFontSize(parsed.terminalFontSize),
-      terminalLineHeight: normalizeTerminalLineHeight(parsed.terminalLineHeight),
-      terminalRenderer: normalizeTerminalRenderer(parsed.terminalRenderer),
+      interfaceFontFamily: normalizeFontFamily(
+        parsed.interfaceFontFamily,
+        defaults.interfaceFontFamily,
+      ),
+      monospaceFontFamily: normalizeFontFamily(
+        parsed.monospaceFontFamily,
+        defaults.monospaceFontFamily,
+      ),
       worktreeRoot: normalizeWorktreeRoot(parsed.worktreeRoot),
     };
   } catch {
@@ -76,14 +98,15 @@ function readStoredSettings(): AppSettings {
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<AppSettings>(() => readStoredSettings());
-  const [terminalDiagnostics, setTerminalDiagnostics] = useState<TerminalRuntimeDiagnostics | null>(
-    null,
-  );
 
   const persistSettings = useCallback((next: AppSettings) => {
     window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next));
     return next;
   }, []);
+
+  useEffect(() => {
+    applyFontSettings(settings);
+  }, [settings.interfaceFontFamily, settings.monospaceFontFamily]);
 
   const setWorktreeRoot = useCallback(
     (value: string) => {
@@ -98,12 +121,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [persistSettings],
   );
 
-  const setTerminalFontFamily = useCallback(
+  const setInterfaceFontFamily = useCallback(
     (value: string) => {
       setSettings((prev) => {
         const next = {
           ...prev,
-          terminalFontFamily: normalizeTerminalFontFamily(value),
+          interfaceFontFamily: normalizeFontFamily(value, DEFAULT_INTERFACE_FONT_FAMILY),
         };
         return persistSettings(next);
       });
@@ -111,12 +134,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [persistSettings],
   );
 
-  const setTerminalFontSize = useCallback(
-    (value: number | string) => {
+  const setMonospaceFontFamily = useCallback(
+    (value: string) => {
       setSettings((prev) => {
         const next = {
           ...prev,
-          terminalFontSize: normalizeTerminalFontSize(value),
+          monospaceFontFamily: normalizeFontFamily(value, DEFAULT_MONOSPACE_FONT_FAMILY),
         };
         return persistSettings(next);
       });
@@ -124,79 +147,35 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [persistSettings],
   );
 
-  const setTerminalLineHeight = useCallback(
-    (value: number | string) => {
-      setSettings((prev) => {
-        const next = {
-          ...prev,
-          terminalLineHeight: normalizeTerminalLineHeight(value),
-        };
-        return persistSettings(next);
-      });
-    },
-    [persistSettings],
-  );
-
-  const setTerminalRenderer = useCallback(
-    (value: TerminalRenderer | string) => {
-      setSettings((prev) => {
-        const next = {
-          ...prev,
-          terminalRenderer: normalizeTerminalRenderer(value),
-        };
-        return persistSettings(next);
-      });
-    },
-    [persistSettings],
-  );
-
-  const resetTerminalDisplay = useCallback(() => {
+  const resetTypography = useCallback(() => {
     setSettings((prev) => {
       const next: AppSettings = {
         ...prev,
-        terminalFontFamily: getDefaultTerminalFontFamily(),
-        terminalFontSize: DEFAULT_TERMINAL_FONT_SIZE,
-        terminalLineHeight: DEFAULT_TERMINAL_LINE_HEIGHT,
-        terminalRenderer: DEFAULT_TERMINAL_RENDERER,
+        interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
+        monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
       };
       return persistSettings(next);
     });
   }, [persistSettings]);
 
-  const reportTerminalDiagnostics = useCallback((value: TerminalRuntimeDiagnostics | null) => {
-    setTerminalDiagnostics(value);
-  }, []);
-
   const contextValue = useMemo<SettingsContextValue>(
     () => ({
-      reportTerminalDiagnostics,
-      resetTerminalDisplay,
-      setTerminalFontFamily,
-      setTerminalFontSize,
-      setTerminalLineHeight,
-      setTerminalRenderer,
+      interfaceFontFamily: settings.interfaceFontFamily,
+      monospaceFontFamily: settings.monospaceFontFamily,
+      resetTypography,
+      setInterfaceFontFamily,
+      setMonospaceFontFamily,
       worktreeRoot: settings.worktreeRoot,
-      terminalDiagnostics,
-      terminalRenderer: settings.terminalRenderer,
-      terminalFontFamily: settings.terminalFontFamily,
-      terminalFontSize: settings.terminalFontSize,
-      terminalLineHeight: settings.terminalLineHeight,
       setWorktreeRoot,
     }),
     [
-      reportTerminalDiagnostics,
-      resetTerminalDisplay,
-      setTerminalFontFamily,
-      setTerminalFontSize,
-      setTerminalLineHeight,
-      setTerminalRenderer,
+      settings.interfaceFontFamily,
+      settings.monospaceFontFamily,
       settings.worktreeRoot,
-      settings.terminalRenderer,
-      settings.terminalFontFamily,
-      settings.terminalFontSize,
-      settings.terminalLineHeight,
+      resetTypography,
+      setInterfaceFontFamily,
+      setMonospaceFontFamily,
       setWorktreeRoot,
-      terminalDiagnostics,
     ],
   );
 

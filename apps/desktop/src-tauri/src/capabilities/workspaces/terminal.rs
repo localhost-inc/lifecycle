@@ -66,12 +66,6 @@ pub struct SavedTerminalAttachment {
     pub relative_path: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NativeTerminalCapabilities {
-    pub available: bool,
-}
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTerminalTheme {
@@ -401,12 +395,6 @@ pub fn prepare_native_terminal_attachment_paste(
     ))
 }
 
-pub fn native_terminal_capabilities() -> NativeTerminalCapabilities {
-    NativeTerminalCapabilities {
-        available: native_terminal::is_available(),
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 pub async fn sync_native_terminal_surface(
     window: WebviewWindow,
@@ -420,6 +408,7 @@ pub async fn sync_native_terminal_surface(
     focused: bool,
     pointer_passthrough: bool,
     appearance: String,
+    font_family: String,
     theme: NativeTerminalTheme,
     font_size: f64,
     scale_factor: f64,
@@ -454,7 +443,7 @@ pub async fn sync_native_terminal_surface(
         terminal.harness_provider.as_deref(),
         terminal.harness_session_id.as_deref(),
     )?;
-    let theme_override_path = write_native_terminal_theme_override(&theme)?;
+    let theme_override_path = write_native_terminal_theme_override(&theme, &font_family)?;
     let color_scheme = parse_native_terminal_color_scheme(&appearance)?;
     let command_line = native_terminal_command(&launch_type, &launch);
     let terminal_id_for_surface = terminal_id.clone();
@@ -1324,35 +1313,40 @@ mod tests {
 
     #[test]
     fn build_native_terminal_theme_config_serializes_ghostty_theme_fields() {
-        let config = build_native_terminal_theme_config(&NativeTerminalTheme {
-            background: "#1a1a1a".to_string(),
-            cursor_color: "#539bf5".to_string(),
-            foreground: "#adbac7".to_string(),
-            palette: vec![
-                "#545d68".to_string(),
-                "#f47067".to_string(),
-                "#57ab5a".to_string(),
-                "#c69026".to_string(),
-                "#539bf5".to_string(),
-                "#b083f0".to_string(),
-                "#39c5cf".to_string(),
-                "#909dab".to_string(),
-                "#636e7b".to_string(),
-                "#ff938a".to_string(),
-                "#6bc46d".to_string(),
-                "#daaa3f".to_string(),
-                "#6cb6ff".to_string(),
-                "#dcbdfb".to_string(),
-                "#56d4dd".to_string(),
-                "#cdd9e5".to_string(),
-            ],
-            selection_background: "#444c56".to_string(),
-            selection_foreground: "#adbac7".to_string(),
-        })
+        let config = build_native_terminal_theme_config(
+            &NativeTerminalTheme {
+                background: "#1a1a1a".to_string(),
+                cursor_color: "#539bf5".to_string(),
+                foreground: "#adbac7".to_string(),
+                palette: vec![
+                    "#545d68".to_string(),
+                    "#f47067".to_string(),
+                    "#57ab5a".to_string(),
+                    "#c69026".to_string(),
+                    "#539bf5".to_string(),
+                    "#b083f0".to_string(),
+                    "#39c5cf".to_string(),
+                    "#909dab".to_string(),
+                    "#636e7b".to_string(),
+                    "#ff938a".to_string(),
+                    "#6bc46d".to_string(),
+                    "#daaa3f".to_string(),
+                    "#6cb6ff".to_string(),
+                    "#dcbdfb".to_string(),
+                    "#56d4dd".to_string(),
+                    "#cdd9e5".to_string(),
+                ],
+                selection_background: "#444c56".to_string(),
+                selection_foreground: "#adbac7".to_string(),
+            },
+            "Geist Mono",
+        )
         .expect("native theme config");
 
         assert!(config.contains("palette = 0=#545d68"));
         assert!(config.contains("palette = 15=#cdd9e5"));
+        assert!(config.contains("font-family = \"\""));
+        assert!(config.contains("font-family = \"Geist Mono\""));
         assert!(config.contains("background = #1a1a1a"));
         assert!(config.contains("foreground = #adbac7"));
         assert!(config.contains("cursor-color = #539bf5"));
@@ -1364,19 +1358,45 @@ mod tests {
 
     #[test]
     fn build_native_terminal_theme_config_rejects_incomplete_palettes() {
-        let error = build_native_terminal_theme_config(&NativeTerminalTheme {
-            background: "#09090b".to_string(),
-            cursor_color: "#93c5fd".to_string(),
-            foreground: "#fafaf9".to_string(),
-            palette: vec!["#27272a".to_string(); 15],
-            selection_background: "#27272a".to_string(),
-            selection_foreground: "#fafaf9".to_string(),
-        })
+        let error = build_native_terminal_theme_config(
+            &NativeTerminalTheme {
+                background: "#09090b".to_string(),
+                cursor_color: "#93c5fd".to_string(),
+                foreground: "#fafaf9".to_string(),
+                palette: vec!["#27272a".to_string(); 15],
+                selection_background: "#27272a".to_string(),
+                selection_foreground: "#fafaf9".to_string(),
+            },
+            "Geist Mono",
+        )
         .expect_err("palette length must fail");
 
         match error {
             LifecycleError::AttachFailed(message) => {
                 assert!(message.contains("palette must contain 16 colors"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn build_native_terminal_theme_config_rejects_blank_font_family() {
+        let error = build_native_terminal_theme_config(
+            &NativeTerminalTheme {
+                background: "#09090b".to_string(),
+                cursor_color: "#93c5fd".to_string(),
+                foreground: "#fafaf9".to_string(),
+                palette: vec!["#27272a".to_string(); 16],
+                selection_background: "#27272a".to_string(),
+                selection_foreground: "#fafaf9".to_string(),
+            },
+            "   ",
+        )
+        .expect_err("blank font family must fail");
+
+        match error {
+            LifecycleError::AttachFailed(message) => {
+                assert!(message.contains("font family"));
             }
             other => panic!("unexpected error: {other}"),
         }

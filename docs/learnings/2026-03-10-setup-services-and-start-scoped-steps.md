@@ -2,7 +2,7 @@
 
 ## Context
 
-Kin exposed a gap in the local workspace runtime: setup always ran before managed services existed, and setup only ran once per workspace.
+Kin exposed a gap in the local workspace environment model: setup always ran before managed services existed, and setup only ran once per workspace.
 
 That model breaks real projects that need workspace-scoped infra before migrations or emulator bootstrap can run, and it breaks again on restart when local containers are recreated and lose ephemeral state.
 
@@ -20,7 +20,7 @@ That model breaks real projects that need workspace-scoped infra before migratio
 
 ## Milestone Impact
 
-1. M4 local runtime can now model infra-first startup instead of forcing fake side orchestration.
+1. M4 local environment behavior can now model infra-first startup instead of forcing fake side orchestration.
 2. M5 sleep/wake durability still needs explicit persistent storage for image services; `run_on=start` restores boot correctness, not data retention.
 
 ## Follow-Up

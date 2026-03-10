@@ -20,15 +20,15 @@ This also exposed that the previous database bootstrap path was not a real migra
 - Introduce a versioned `schema_migration` table and run numbered SQL migrations in order.
 - Persist `workspace.manifest_fingerprint` as the last applied manifest fingerprint.
 - Reconcile `workspace_service` rows immediately for sleeping or failed workspaces when `lifecycle.json` changes.
-- Treat manifest changes for running workspaces as restart-required, not hot-applied runtime mutation.
+- Treat manifest changes for running workspaces as restart-required, not hot-applied environment mutation.
 - Do not carry compatibility logic for pre-migration local schemas; reset those development databases instead.
 
 ## Milestone Impact
 
-- Supports M5 workspace lifecycle semantics by separating declared environment shape from live runtime state.
+- Supports M5 workspace lifecycle semantics by separating declared environment shape from live environment state.
 - Unblocks honest pre-run service registration in the Environment rail.
 
 ## Follow-up
 
 - Add explicit UI treatment for manifest-invalid running workspaces beyond the current rail notice.
-- Revisit setup execution so manifest changes that alter setup requirements can trigger a scoped rerun instead of relying on one-time completion.
+- Revisit setup execution so manifest changes that alter setup requirements can trigger the right setup cadence instead of relying on one-time completion.

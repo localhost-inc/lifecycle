@@ -271,12 +271,6 @@ pub async fn save_terminal_attachment(
 }
 
 #[tauri::command]
-pub async fn native_terminal_capabilities(
-) -> Result<super::terminal::NativeTerminalCapabilities, LifecycleError> {
-    Ok(super::terminal::native_terminal_capabilities())
-}
-
-#[tauri::command]
 pub async fn sync_native_terminal_surface(
     window: WebviewWindow,
     db_path: State<'_, DbPath>,
@@ -289,6 +283,7 @@ pub async fn sync_native_terminal_surface(
     focused: bool,
     pointer_passthrough: bool,
     appearance: String,
+    font_family: String,
     theme: super::terminal::NativeTerminalTheme,
     font_size: f64,
     scale_factor: f64,
@@ -305,6 +300,7 @@ pub async fn sync_native_terminal_surface(
         focused,
         pointer_passthrough,
         appearance,
+        font_family,
         theme,
         font_size,
         scale_factor,

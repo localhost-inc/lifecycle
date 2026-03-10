@@ -55,7 +55,7 @@ github.handleWebhook(payload, signature) # HTTP action for Worker
 ## Key Semantics
 
 - `projects.sync`: syncs local project metadata to Convex when user signs in; creates or updates project record in org scope
-- `projects.sync` is a bridge and mirror flow, not an authority handoff. Local project and local workspace runtime state remain local unless explicitly forked or created in cloud mode.
+- `projects.sync` is a bridge and mirror flow, not an authority handoff. Local project and local workspace environment state remain local unless explicitly forked or created in cloud mode.
 - `projects.linkRepository`: links a project to a repository for VCS integration
 - `repositories.connect`: accepts (`organizationId`, `provider`, `owner`, `name`)
 - `repositories.get`: returns repository VCS identity record
@@ -81,7 +81,7 @@ github.handleWebhook(payload, signature) # HTTP action for Worker
 
 - **Cloud (solo)**: Convex action mints attach token → desktop app connects WebSocket directly to Cloudflare Sandbox PTY
 - **Cloud (shared)**: Convex action mints attach token with role → desktop app connects WebSocket to Durable Object session multiplexer → multiplexer fans in stdin from `editor` clients to PTY, fans out stdout to all clients. Viewer stdin is rejected at protocol level.
-- **Local**: macOS hosts a native Ghostty terminal surface inside the Tauri window and syncs it from the DOM shell over Tauri IPC; browser fallback continues to use the Rust PTY supervisor and Tauri IPC stream. Shared sessions are not supported in local mode.
+- **Local**: macOS hosts a native Ghostty terminal surface inside the Tauri window and syncs it from the DOM shell over Tauri IPC. Shared sessions are not supported in local mode.
 
 ## Terminal Auth (Cloud Only)
 
@@ -95,7 +95,7 @@ github.handleWebhook(payload, signature) # HTTP action for Worker
 ## Streaming and Real-Time
 
 - Workspace state changes, activity feeds, and service status are all push-based via Convex reactive queries (`useQuery`) — no polling
-- Terminal PTY attach uses WebSocket to execution environment (cloud: Cloudflare Sandbox with attach token) or Tauri IPC (local)
+- Terminal PTY attach uses WebSocket to the authoritative workspace environment (cloud: Cloudflare Sandbox with attach token) or Tauri IPC (local)
 - Test execution streaming is expansion-scope (testing.md)
 
 ## Event Foundation Alignment

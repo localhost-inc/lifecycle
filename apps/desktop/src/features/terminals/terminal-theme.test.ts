@@ -74,11 +74,11 @@ describe("buildTerminalTheme", () => {
     expect(tokens.paletteOverrides?.brightBlack).toBe("#75715e");
     expect(tokens.paletteOverrides?.brightWhite).toBe("#f8f8f2");
     expect(tokens.paletteOverrides?.cursor).toBe("#66d9ef");
-    expect(theme.nativeTheme.palette[0]).toBe("#403e41");
-    expect(theme.nativeTheme.palette[7]).toBe("#ccccc6");
-    expect(theme.nativeTheme.palette[8]).toBe("#75715e");
-    expect(theme.nativeTheme.palette[15]).toBe("#f8f8f2");
-    expect(theme.nativeTheme.cursorColor).toBe("#66d9ef");
+    expect(theme.palette[0]).toBe("#403e41");
+    expect(theme.palette[7]).toBe("#ccccc6");
+    expect(theme.palette[8]).toBe("#75715e");
+    expect(theme.palette[15]).toBe("#f8f8f2");
+    expect(theme.cursorColor).toBe("#66d9ef");
   });
 
   test("keeps the terminal surface aligned with the app background tokens", () => {
@@ -89,7 +89,7 @@ describe("buildTerminalTheme", () => {
       selectionForeground: "#fafaf9",
     });
 
-    expect(theme.nativeTheme).toEqual({
+    expect(theme).toEqual({
       background: "#111113",
       cursorColor: "#93c5fd",
       foreground: "#fafaf9",
@@ -114,10 +114,6 @@ describe("buildTerminalTheme", () => {
       selectionBackground: "#27272a",
       selectionForeground: "#fafaf9",
     });
-    expect(theme.webTheme.background).toBe("#111113");
-    expect(theme.webTheme.foreground).toBe("#fafaf9");
-    expect(theme.webTheme.cursor).toBe("#93c5fd");
-    expect(theme.webTheme.selectionBackground).toBe("#27272a");
   });
 
   test("CSS-defined themes override the appearance base palette", () => {
@@ -147,13 +143,11 @@ describe("buildTerminalTheme", () => {
       },
     });
 
-    expect(theme.nativeTheme.cursorColor).toBe("#f8f8f2");
-    expect(theme.nativeTheme.palette[0]).toBe("#21222c");
-    expect(theme.nativeTheme.palette[1]).toBe("#ff5555");
-    expect(theme.nativeTheme.palette[2]).toBe("#50fa7b");
-    expect(theme.nativeTheme.palette[4]).toBe("#bd93f9");
-    expect(theme.webTheme.green).toBe("#50fa7b");
-    expect(theme.webTheme.cursor).toBe("#f8f8f2");
+    expect(theme.cursorColor).toBe("#f8f8f2");
+    expect(theme.palette[0]).toBe("#21222c");
+    expect(theme.palette[1]).toBe("#ff5555");
+    expect(theme.palette[2]).toBe("#50fa7b");
+    expect(theme.palette[4]).toBe("#bd93f9");
   });
 
   test("uses theme-specific ansi colors for alternate themes", () => {
@@ -183,8 +177,8 @@ describe("buildTerminalTheme", () => {
       },
     });
 
-    expect(theme.nativeTheme.cursorColor).toBe("#88c0d0");
-    expect(theme.nativeTheme.palette[4]).toBe("#81a1c1");
-    expect(theme.nativeTheme.palette[15]).toBe("#eceff4");
+    expect(theme.cursorColor).toBe("#88c0d0");
+    expect(theme.palette[4]).toBe("#81a1c1");
+    expect(theme.palette[15]).toBe("#eceff4");
   });
 });

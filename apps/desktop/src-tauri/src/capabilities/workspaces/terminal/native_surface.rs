@@ -22,8 +22,31 @@ fn validate_native_terminal_theme_value(
     Ok(trimmed.to_string())
 }
 
+fn validate_native_terminal_font_family(value: &str) -> Result<String, LifecycleError> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(LifecycleError::AttachFailed(
+            "native terminal font family is empty".to_string(),
+        ));
+    }
+
+    if trimmed.contains(['\n', '\r']) {
+        return Err(LifecycleError::AttachFailed(
+            "native terminal font family contains an unsupported newline".to_string(),
+        ));
+    }
+
+    Ok(trimmed.to_string())
+}
+
+fn quote_native_terminal_font_family(value: &str) -> String {
+    let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
+    format!("\"{escaped}\"")
+}
+
 pub(crate) fn build_native_terminal_theme_config(
     theme: &NativeTerminalTheme,
+    font_family: &str,
 ) -> Result<String, LifecycleError> {
     if theme.palette.len() != 16 {
         return Err(LifecycleError::AttachFailed(format!(
@@ -32,6 +55,7 @@ pub(crate) fn build_native_terminal_theme_config(
         )));
     }
 
+    let font_family = validate_native_terminal_font_family(font_family)?;
     let background = validate_native_terminal_theme_value("background", &theme.background)?;
     let foreground = validate_native_terminal_theme_value("foreground", &theme.foreground)?;
     let cursor_color = validate_native_terminal_theme_value("cursorColor", &theme.cursor_color)?;
@@ -40,11 +64,16 @@ pub(crate) fn build_native_terminal_theme_config(
     let selection_foreground =
         validate_native_terminal_theme_value("selectionForeground", &theme.selection_foreground)?;
 
-    let mut config_lines = Vec::with_capacity(theme.palette.len() + 8);
+    let mut config_lines = Vec::with_capacity(theme.palette.len() + 10);
     for (index, color) in theme.palette.iter().enumerate() {
         let color = validate_native_terminal_theme_value("palette", color)?;
         config_lines.push(format!("palette = {index}={color}"));
     }
+    config_lines.push("font-family = \"\"".to_string());
+    config_lines.push(format!(
+        "font-family = {}",
+        quote_native_terminal_font_family(&font_family)
+    ));
     config_lines.push(format!("background = {background}"));
     config_lines.push(format!("foreground = {foreground}"));
     config_lines.push(format!("cursor-color = {cursor_color}"));
@@ -69,8 +98,9 @@ fn native_terminal_theme_dir() -> Result<PathBuf, LifecycleError> {
 
 pub(crate) fn write_native_terminal_theme_override(
     theme: &NativeTerminalTheme,
+    font_family: &str,
 ) -> Result<PathBuf, LifecycleError> {
-    let config = build_native_terminal_theme_config(theme)?;
+    let config = build_native_terminal_theme_config(theme, font_family)?;
     let mut hasher = DefaultHasher::new();
     config.hash(&mut hasher);
     let path = native_terminal_theme_dir()?.join(format!("{:016x}.conf", hasher.finish()));

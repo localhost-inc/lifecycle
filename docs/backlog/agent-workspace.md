@@ -13,7 +13,7 @@ The workspace center panel becomes a Lifecycle-native agent workspace instead of
 
 1. A center-panel Lifecycle agent workspace with conversation, attachments, task state, approvals, artifacts, and contextual workspace metadata.
 2. A `useChat`-backed interaction surface that uses Lifecycle-owned transport and persistence rather than provider-native UI state.
-3. A normalized agent runtime boundary that can support a Lifecycle-native runtime and, when explicitly needed, external harness-backed sessions without copying their TUIs.
+3. A normalized agent execution boundary that can support a Lifecycle-native execution path and, when explicitly needed, external harness-backed sessions without copying their TUIs.
 4. A structured tool layer for filesystem, search, shell, git, and workspace-context operations.
 5. A SQLite schema renovation for append-friendly agent history plus queryable projections for attachments, tools, tasks, approvals, artifacts, and replay.
 6. Typed `agent.*` fact streaming distinct from PTY byte streaming.
@@ -24,7 +24,7 @@ The workspace center panel becomes a Lifecycle-native agent workspace instead of
 
 1. No attempt to faithfully emulate every terminal-based coding agent UI inside the center panel.
 2. No removal of raw shell terminals; shell access remains a first-class fallback.
-3. No requirement that local and remote sessions share the exact same runtime implementation in this milestone; they must share the same domain model, transport contract, and UI contract.
+3. No requirement that local and remote sessions share the exact same execution implementation in this milestone; they must share the same domain model, transport contract, and UI contract.
 4. No standalone model gateway product surface in this milestone.
 5. No parsing of raw PTY bytes into tasks, approvals, or artifacts.
 6. No provider SDK calls directly from React components.
@@ -198,8 +198,8 @@ interface AgentRuntimeAdapter {
 
 ### Local runtime stance
 
-1. This backlog item should prioritize a Lifecycle-native runtime path for the center panel rather than trying to mirror Claude/Codex terminal UX.
-2. The local runtime may use AI SDK Core for orchestration, but React must only talk to it through Lifecycle transport.
+1. This backlog item should prioritize a Lifecycle-native execution path for the center panel rather than trying to mirror Claude/Codex terminal UX.
+2. The local execution layer may use AI SDK Core for orchestration, but React must only talk to it through Lifecycle transport.
 3. Do not bind React components directly to provider SDKs, API keys, or tool execution logic.
 4. If compatibility adapters are supported in this backlog item, they must publish normalized events and cannot force raw TUI rendering into the center panel.
 
@@ -207,8 +207,8 @@ interface AgentRuntimeAdapter {
 
 Attachments and tools are different capabilities:
 
-1. Attachments are user- or runtime-provided media/file inputs that become part of message context.
-2. Tools are executable actions the runtime performs against the workspace or environment.
+1. Attachments are user- or system-provided media/file inputs that become part of message context.
+2. Tools are executable actions the execution layer performs against the workspace or environment.
 3. Screenshot capture may create an attachment, but that does not make screenshots an artifact or tool result by default.
 
 ### Minimum v1 tool catalog
@@ -243,7 +243,7 @@ Attachments and tools are different capabilities:
 
 ### Ownership
 
-1. Tool registry and schemas should be shared across local and future cloud runtimes.
+1. Tool registry and schemas should be shared across local and future cloud execution environments.
 2. Actual tool execution remains provider-authoritative:
    - local mode uses desktop/Tauri-owned workspace access
    - cloud mode later uses cloud provider/control-plane workspace access
@@ -256,7 +256,7 @@ Attachments and tools are different capabilities:
 1. Purpose:
    - normalized interaction thread attached to a workspace
    - primary unit of user-visible agent history in the center panel
-   - can be executed by a Lifecycle-native runtime or another adapter, but the persisted record shape is Lifecycle-owned
+   - can be executed by a Lifecycle-native execution path or another adapter, but the persisted record shape is Lifecycle-owned
 2. Required fields:
    - `id`
    - `workspace_id`
@@ -472,9 +472,9 @@ Attachments and tools are different capabilities:
 
 ## Local and Remote Authority Model
 
-1. `workspace.mode` remains the authority boundary for runtime execution.
+1. `workspace.mode` remains the authority boundary for live execution.
 2. For `workspace.mode=local`:
-   - the desktop app and local runtime own live execution
+   - the desktop app and local execution layer own live execution
    - SQLite is authoritative for local `agent_*` state
    - tool execution uses local workspace access under desktop control
 3. For `workspace.mode=cloud`:

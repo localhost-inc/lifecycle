@@ -121,7 +121,6 @@ pub fn run() {
             capabilities::workspaces::commands::attach_terminal,
             capabilities::workspaces::commands::write_terminal,
             capabilities::workspaces::commands::save_terminal_attachment,
-            capabilities::workspaces::commands::native_terminal_capabilities,
             capabilities::workspaces::commands::sync_native_terminal_surface,
             capabilities::workspaces::commands::hide_native_terminal_surface,
             capabilities::workspaces::commands::resize_terminal,

@@ -454,7 +454,7 @@ export function DashboardLayout() {
   );
 
   const handleOpenSettings = useCallback(() => {
-    void navigate("/settings/general");
+    void navigate("/settings");
   }, [navigate]);
 
   const handleLeftSidebarSeparatorDoubleClick = useCallback(() => {

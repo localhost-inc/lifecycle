@@ -8,6 +8,9 @@ use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
 use rusqlite::{params, OptionalExtension};
 use tauri::AppHandle;
 
+use super::ports::resolve_effective_port;
+use super::preview::{preview_fields_for_service, refresh_workspace_preview_rows};
+
 pub(super) fn emit_workspace_status(
     app: &AppHandle,
     workspace_id: &str,
@@ -115,210 +118,6 @@ pub(super) fn update_service_status_db(
         ],
     )
     .map_err(|e| LifecycleError::Database(e.to_string()))?;
-    Ok(())
-}
-
-fn local_preview_url(exposure: &str, effective_port: Option<i64>) -> Option<String> {
-    if exposure == "local" {
-        effective_port.map(|port| format!("http://localhost:{port}"))
-    } else {
-        None
-    }
-}
-
-fn preview_status_for_service(
-    exposure: &str,
-    effective_port: Option<i64>,
-    service_status: &str,
-    workspace_status: &WorkspaceStatus,
-) -> &'static str {
-    if exposure != "local" || effective_port.is_none() {
-        return "disabled";
-    }
-
-    if service_status == "failed" {
-        return "failed";
-    }
-
-    if matches!(
-        workspace_status,
-        WorkspaceStatus::Idle | WorkspaceStatus::Stopping
-    ) {
-        return "sleeping";
-    }
-
-    if service_status == "ready" {
-        return "ready";
-    }
-
-    if service_status == "starting" || *workspace_status == WorkspaceStatus::Starting {
-        return "provisioning";
-    }
-
-    "disabled"
-}
-
-fn preview_failure_reason_for_status(preview_status: &str) -> Option<&'static str> {
-    if preview_status == "failed" {
-        Some("service_unreachable")
-    } else {
-        None
-    }
-}
-
-pub(super) fn preview_fields_for_service(
-    exposure: &str,
-    effective_port: Option<i64>,
-    service_status: &str,
-    workspace_status: &WorkspaceStatus,
-) -> (String, Option<String>, Option<String>) {
-    let preview_status =
-        preview_status_for_service(exposure, effective_port, service_status, workspace_status);
-    (
-        preview_status.to_string(),
-        preview_failure_reason_for_status(preview_status).map(str::to_string),
-        local_preview_url(exposure, effective_port),
-    )
-}
-
-fn is_host_port_available(port: i64) -> bool {
-    if !(1..=65535).contains(&port) {
-        return false;
-    }
-
-    std::net::TcpListener::bind(("127.0.0.1", port as u16)).is_ok()
-}
-
-fn load_reserved_effective_ports(
-    conn: &rusqlite::Connection,
-    workspace_id: &str,
-    service_name: &str,
-) -> Result<std::collections::HashSet<i64>, LifecycleError> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT effective_port
-             FROM workspace_service
-             WHERE effective_port IS NOT NULL
-               AND NOT (workspace_id = ?1 AND service_name = ?2)",
-        )
-        .map_err(|error| LifecycleError::Database(error.to_string()))?;
-    let rows = stmt
-        .query_map(params![workspace_id, service_name], |row| {
-            row.get::<_, i64>(0)
-        })
-        .map_err(|error| LifecycleError::Database(error.to_string()))?;
-
-    let mut reserved = std::collections::HashSet::new();
-    for row in rows {
-        reserved.insert(row.map_err(|error| LifecycleError::Database(error.to_string()))?);
-    }
-
-    Ok(reserved)
-}
-
-pub(super) fn resolve_effective_port(
-    conn: &rusqlite::Connection,
-    workspace_id: &str,
-    service_name: &str,
-    default_port: Option<i64>,
-    port_override: Option<i64>,
-    current_effective_port: Option<i64>,
-) -> Result<Option<i64>, LifecycleError> {
-    let Some(default_port) = default_port else {
-        return Ok(None);
-    };
-
-    let reserved_ports = load_reserved_effective_ports(conn, workspace_id, service_name)?;
-
-    let is_port_usable = |candidate: i64| {
-        !reserved_ports.contains(&candidate)
-            && (current_effective_port == Some(candidate) || is_host_port_available(candidate))
-    };
-
-    if let Some(port_override) = port_override {
-        if is_port_usable(port_override) {
-            return Ok(Some(port_override));
-        }
-
-        return Err(LifecycleError::PortConflict {
-            service: service_name.to_string(),
-            port: port_override as u16,
-        });
-    }
-
-    if let Some(current_effective_port) = current_effective_port {
-        if is_port_usable(current_effective_port) {
-            return Ok(Some(current_effective_port));
-        }
-    }
-
-    for offset in 0..=200_i64 {
-        let candidate = default_port + offset;
-        if is_port_usable(candidate) {
-            return Ok(Some(candidate));
-        }
-    }
-
-    Err(LifecycleError::PortConflict {
-        service: service_name.to_string(),
-        port: default_port as u16,
-    })
-}
-
-fn refresh_workspace_preview_rows(
-    conn: &rusqlite::Connection,
-    workspace_id: &str,
-    workspace_status: &WorkspaceStatus,
-) -> Result<(), LifecycleError> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT service_name, exposure, effective_port, status
-             FROM workspace_service
-             WHERE workspace_id = ?1",
-        )
-        .map_err(|e| LifecycleError::Database(e.to_string()))?;
-    let rows = stmt
-        .query_map(params![workspace_id], |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, Option<i64>>(2)?,
-                row.get::<_, String>(3)?,
-            ))
-        })
-        .map_err(|e| LifecycleError::Database(e.to_string()))?;
-
-    let mut services = Vec::new();
-    for row in rows {
-        services.push(row.map_err(|e| LifecycleError::Database(e.to_string()))?);
-    }
-    drop(stmt);
-
-    for (service_name, exposure, effective_port, service_status) in services {
-        let (preview_status, preview_failure_reason, preview_url) = preview_fields_for_service(
-            &exposure,
-            effective_port,
-            &service_status,
-            workspace_status,
-        );
-        conn.execute(
-            "UPDATE workspace_service
-             SET preview_status = ?1,
-                 preview_failure_reason = ?2,
-                 preview_url = ?3,
-                 updated_at = datetime('now')
-             WHERE workspace_id = ?4 AND service_name = ?5",
-            params![
-                preview_status,
-                preview_failure_reason,
-                preview_url,
-                workspace_id,
-                service_name,
-            ],
-        )
-        .map_err(|e| LifecycleError::Database(e.to_string()))?;
-    }
-
     Ok(())
 }
 
@@ -709,6 +508,7 @@ pub(super) fn topo_sort_services<'a>(
 mod tests {
     use super::*;
     use crate::capabilities::workspaces::manifest::LifecycleConfig;
+    use crate::capabilities::workspaces::test_support::available_test_port;
     use std::collections::HashMap;
 
     fn temp_db_path() -> String {
@@ -751,16 +551,6 @@ mod tests {
     fn parse_services(json: &str) -> HashMap<String, ServiceConfig> {
         let config: LifecycleConfig = serde_json::from_str(json).expect("valid config");
         config.services
-    }
-
-    fn unused_port() -> i64 {
-        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("bind temporary port");
-        let port = listener
-            .local_addr()
-            .expect("port should have local addr")
-            .port();
-        drop(listener);
-        i64::from(port)
     }
 
     #[test]
@@ -1002,9 +792,9 @@ mod tests {
     fn reconcile_workspace_services_db_seeds_and_updates_declared_services() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
-        let web_default_port = unused_port();
-        let admin_default_port = unused_port();
-        let web_override_port = unused_port();
+        let web_default_port = available_test_port();
+        let admin_default_port = available_test_port();
+        let web_override_port = available_test_port();
 
         let conn = open_db(&db_path).expect("open db");
         conn.execute(
@@ -1143,7 +933,7 @@ mod tests {
     fn reconcile_workspace_services_db_assigns_next_available_port_for_conflicting_defaults() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
-        let default_port = unused_port();
+        let default_port = available_test_port();
 
         let conn = open_db(&db_path).expect("open db");
         conn.execute(

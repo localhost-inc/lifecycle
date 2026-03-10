@@ -52,6 +52,7 @@ describe("SurfaceLaunchActions", () => {
     expect(markup).toContain("compact-control-shell");
     expect(markup).toContain("compact-control-divider");
     expect(markup).toContain("compact-control-icon");
+    expect(markup).toContain('class="flex shrink-0 items-center pr-3"');
     expect(markup).not.toContain("compact-control-standalone");
   });
 

@@ -47,8 +47,8 @@ export function TerminalSessionHistory({
   terminals,
 }: TerminalSessionHistoryProps) {
   return (
-    <ul>
-      {terminals.map((terminal, index) => {
+    <ul className="space-y-1.5">
+      {terminals.map((terminal) => {
         const hasLiveSession = terminalHasLiveSession(terminal.status);
         const isCurrent = terminal.id === activeTerminalId;
         const canResume =
@@ -57,8 +57,6 @@ export function TerminalSessionHistory({
           isHarnessProvider(terminal.harness_provider) &&
           typeof terminal.harness_session_id === "string" &&
           terminal.harness_session_id.length > 0;
-        const isLast = index === terminals.length - 1;
-
         function handleClick() {
           if (hasLiveSession) {
             onOpenTerminal(terminal.id);
@@ -74,12 +72,16 @@ export function TerminalSessionHistory({
         const isClickable = (hasLiveSession || canResume) && creatingSelection === null;
 
         return (
-          <li key={terminal.id} className={!isLast ? "border-b border-[var(--border)]/40" : ""}>
+          <li key={terminal.id}>
             <button
               type="button"
               disabled={!isClickable}
               onClick={handleClick}
-              className="flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-[var(--surface-hover)] disabled:opacity-50"
+              className={`flex w-full items-center gap-3 rounded-2xl border border-transparent px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:opacity-50 ${
+                isCurrent
+                  ? "border-[var(--border)]/50 bg-[var(--surface-hover)]"
+                  : "hover:border-[var(--border)]/50 hover:bg-[var(--surface-hover)]"
+              }`}
             >
               <p className="flex min-w-0 flex-1 items-center gap-2 truncate text-xs font-medium text-[var(--foreground)]">
                 {hasLiveSession && (

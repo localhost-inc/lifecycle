@@ -4,10 +4,15 @@ import { TerminalSquare } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { subscribeToShellResize } from "../../../components/layout/shell-resize-provider";
 import {
+  DEFAULT_MONOSPACE_FONT_FAMILY,
+  getNativeMonospaceFontFamily,
+} from "../../../lib/typography";
+import {
   hideNativeTerminalSurface,
   syncNativeTerminalSurface,
   terminalHasLiveSession,
 } from "../api";
+import { DEFAULT_TERMINAL_FONT_SIZE } from "../terminal-display";
 import { resolveTerminalTheme } from "../terminal-theme";
 import { useSettings } from "../../settings/state/app-settings-provider";
 
@@ -53,9 +58,12 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const shellResizeInProgressRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
-  const { terminalFontSize } = useSettings();
+  const { monospaceFontFamily } = useSettings();
   const { resolvedTheme } = useTheme();
   const hasLiveSession = terminalHasLiveSession(terminal.status);
+  const terminalFontFamily = getNativeMonospaceFontFamily(
+    monospaceFontFamily || DEFAULT_MONOSPACE_FONT_FAMILY,
+  );
 
   const cancelScheduledSync = () => {
     if (frameIdRef.current === null) {
@@ -109,12 +117,13 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
       await syncNativeTerminalSurface({
         appearance: themeAppearance(resolvedTheme),
         focused: interaction.focused,
-        fontSize: terminalFontSize,
+        fontFamily: terminalFontFamily,
+        fontSize: DEFAULT_TERMINAL_FONT_SIZE,
         height: rect.height,
         pointerPassthrough: interaction.pointerPassthrough,
         scaleFactor: window.devicePixelRatio,
         terminalId: terminal.id,
-        theme: resolveTerminalTheme(host, resolvedTheme).nativeTheme,
+        theme: resolveTerminalTheme(host, resolvedTheme),
         visible: true,
         width: rect.width,
         x: rect.left,
@@ -147,7 +156,7 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
     return () => {
       unsubscribe();
     };
-  }, [active, hasLiveSession, resolvedTheme, terminal.id, terminalFontSize]);
+  }, [active, hasLiveSession, resolvedTheme, terminal.id, terminalFontFamily]);
 
   useEffect(() => {
     if (!hostRef.current) {
@@ -173,7 +182,7 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
       document.removeEventListener("visibilitychange", scheduleSync);
       void hideSurface();
     };
-  }, [active, hasLiveSession, resolvedTheme, terminal.id, terminalFontSize]);
+  }, [active, hasLiveSession, resolvedTheme, terminal.id, terminalFontFamily]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[var(--terminal-surface-background)]">

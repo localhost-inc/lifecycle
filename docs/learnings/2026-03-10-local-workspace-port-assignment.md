@@ -2,13 +2,13 @@
 
 ## Context
 
-The local runtime was still treating manifest ports as globally shared host ports.
+The local provider was still treating manifest ports as globally shared host ports.
 
 That broke the core workspace model:
 
 1. two local workspaces for the same repo could not run side by side without manual port edits
 2. app restart could leave workspace rows claiming `active` even though in-memory supervisors were gone
-3. setup scripts and services had no runtime-provided way to discover sibling service addresses inside one workspace
+3. setup scripts and services had no provider-provided way to discover sibling service addresses inside one workspace
 
 ## Learning
 
@@ -18,14 +18,14 @@ Local workspace isolation needs a first-class assigned host port layer.
 2. `default_port` stays the manifest preference, not a global guarantee.
 3. `port_override` remains the explicit user choice, but the provider must still preserve a stable collision-free `effective_port` when no override is set.
 4. `share_default` should seed `internal` vs `local` exposure honestly at service-row creation time.
-5. The local runtime should inject reserved `LIFECYCLE_*` discovery env vars so setup and process services can discover sibling service host/port assignments without hardcoding global localhost ports.
-6. App startup must reconcile stale workspace runtime state back to an honest local baseline because supervisors are in-memory only.
+5. The local provider should inject reserved `LIFECYCLE_*` discovery env vars so setup and process services can discover sibling service host/port assignments without hardcoding global localhost ports.
+6. App startup must reconcile stale workspace environment state back to an honest local baseline because supervisors are in-memory only.
 
 ## Milestone Impact
 
 1. M4: makes workspace-level local service isolation real instead of manual-only.
 2. M4: gives setup scripts a usable bridge for per-workspace service discovery.
-3. M5: establishes the runtime truth the CLI can later report through `workspace status` and `context`.
+3. M5: establishes the environment truth the CLI can later report through `workspace status` and `context`.
 
 ## Follow-Up Actions
 

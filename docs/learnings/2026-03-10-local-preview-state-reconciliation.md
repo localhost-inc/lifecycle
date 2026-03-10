@@ -4,7 +4,7 @@ Date: 2026-03-10
 
 ## Context
 
-We already stored `workspace_service.preview_status` and `preview_failure_reason`, but the local runtime mostly treated them as dead fields. `preview_url` was present, while the actual state transitions were not being reconciled on create, run, stop, manifest sync, or service mutation.
+We already stored `workspace_service.preview_status` and `preview_failure_reason`, but the local environment layer mostly treated them as dead fields. `preview_url` was present, while the actual state transitions were not being reconciled on create, run, stop, manifest sync, or service mutation.
 
 ## Learning
 

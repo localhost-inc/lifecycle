@@ -4,7 +4,7 @@ Date: 2026-03-10
 
 ## Context
 
-The local workspace runtime had accumulated too many `workspace.status` values: `creating`, `sleeping`, `ready`, `resetting`, `destroying`, and `failed` all mixed durable workspace concerns with environment runtime concerns. That made restart logic, mutation locking, and UI interpretation harder than they needed to be.
+The local workspace environment model had accumulated too many `workspace.status` values: `creating`, `sleeping`, `ready`, `resetting`, `destroying`, and `failed` all mixed durable workspace concerns with environment concerns. That made restart logic, mutation locking, and UI interpretation harder than they needed to be.
 
 ## Learning
 

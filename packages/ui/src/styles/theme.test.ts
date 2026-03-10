@@ -48,4 +48,11 @@ describe("theme.css", () => {
     expect(css).toContain("font-weight: 500;");
     expect(css).toContain("color: var(--sidebar-muted-foreground);");
   });
+
+  test("defaults shared monospace typography to Geist Mono without bundled branding", () => {
+    const css = readFileSync(new URL("./theme.css", import.meta.url), "utf8");
+
+    expect(css).toContain('--font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;');
+    expect(css).not.toContain("Lifecycle Mono");
+  });
 });

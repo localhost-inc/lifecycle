@@ -7,6 +7,8 @@ mod identity;
 pub mod manifest;
 mod naming;
 pub mod open;
+mod ports;
+mod preview;
 mod paths;
 pub mod query;
 pub mod rename;
@@ -15,5 +17,7 @@ mod shared;
 pub mod start;
 pub mod state_machine;
 pub mod stop;
+#[cfg(test)]
+pub(crate) mod test_support;
 pub mod terminal;
 pub mod title;

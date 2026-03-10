@@ -1,6 +1,6 @@
 # `lifecycle.json` Configuration (V1)
 
-Canonical specification for the `lifecycle.json` project runtime configuration file.
+Canonical specification for the `lifecycle.json` project environment configuration file.
 
 ## Overview
 
@@ -8,7 +8,7 @@ Canonical specification for the `lifecycle.json` project runtime configuration f
    - project file `lifecycle.json` (JSONC — JSON with comments)
    - parsed with a JSONC-aware parser; comments and trailing commas are permitted
    - a published JSON Schema provides editor autocomplete and inline validation
-   - target runtime direction beyond this V1 split is captured in [workspace-graph-runtime.md](./workspace-graph-runtime.md)
+   - target environment direction beyond this V1 split is captured in [workspace-environment-graph.md](./workspace-environment-graph.md)
 2. Required top-level fields:
    - `setup`, `services`
    - optional: `secrets`, `reset`, `mcps`
@@ -35,7 +35,7 @@ Canonical specification for the `lifecycle.json` project runtime configuration f
 - Shared optional fields: `cwd` (process only), `env_vars`, `depends_on`, `restart_policy`, `startup_timeout_seconds`, `health_check`, `port`, `share_default`
 - `port` is the service's preferred/default local port; the local provider may assign a different stable host `effective_port` per workspace when the default would collide
 - `share_default` (`true|false`) controls default `workspace_service.exposure` on workspace create (`true -> local`, omitted/`false -> internal`)
-- Services are long-lived runtime processes; they are not one-shot setup commands
+- Services are long-lived environment workloads; they are not one-shot setup commands
 
 ## `health_check` Contract (Service-Level)
 
@@ -67,7 +67,7 @@ Canonical specification for the `lifecycle.json` project runtime configuration f
 - `process` runtime: portable (child process in any provider)
 - `image` runtime: requires Docker (cloud: DinD in sandbox, local: Docker Desktop)
 - Secrets: resolved via control plane for both providers. Cloud: server-side injection. Local: fetched via CLI auth, injected as env vars.
-- Privileged Docker assumptions are out of scope for V1 cloud runtime
+- Privileged Docker assumptions are out of scope for the V1 cloud environment
 - Service networking contract is localhost/port readiness, not custom bridge/iptables authoring
 
 ## Out-of-Scope for V1 Config

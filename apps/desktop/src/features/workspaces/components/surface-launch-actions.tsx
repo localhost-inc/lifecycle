@@ -44,7 +44,7 @@ export function SurfaceLaunchActions({
 }: SurfaceLaunchActionsProps) {
   return (
     <TooltipProvider>
-      <div className="flex shrink-0 items-center px-0 py-0">
+      <div className="flex shrink-0 items-center pr-3">
         <div className="compact-control-shell">
           {onOpenLauncher && (
             <Tooltip>

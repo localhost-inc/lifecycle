@@ -43,7 +43,7 @@ Workspace lifecycle is about the durable shell, not whether services are current
 
 1. Allowed states: `idle`, `starting`, `active`, `stopping`
 2. Transitional environment status acts as implicit mutation lock for environment/service mutations (`starting|stopping`). Terminal create/attach is governed by interactive workspace context instead of service readiness.
-3. Project `setup` executes exactly once per workspace create; ordinary environment start/stop does not rerun setup.
+3. V1 `setup` follows each step's declared cadence; ordinary environment stop/start does not replay create-scoped setup work.
 4. All defined services must pass health checks before transition to `active`
 5. Failed start attempts land back in `idle`; the failure is carried by `failure_reason` and `failed_at` instead of a terminal `failed` status.
 6. Workspace creation and deletion are workspace-lifecycle concerns, not environment-status values.
@@ -53,7 +53,7 @@ Workspace lifecycle is about the durable shell, not whether services are current
 | State | `CloudWorkspaceProvider` | `LocalWorkspaceProvider` |
 |-------|-------------------|-------------------|
 | `idle` | No active sandbox services; workspace record persists | No running services; worktree persists |
-| `starting` | Provisioning or starting sandbox services | Running first-boot setup (if needed) and starting local processes + containers |
+| `starting` | Provisioning or starting sandbox services | Running any required workspace setup and starting local processes + containers |
 | `active` | Health checks pass in sandbox | Health checks pass on localhost |
 | `stopping` | Sandbox services are shutting down | Processes and containers are shutting down |
 

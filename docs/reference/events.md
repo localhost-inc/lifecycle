@@ -7,9 +7,9 @@ This document defines the forward-looking v1 model for fact events and command h
 ## Purpose
 
 Use this contract for:
-1. Typed fact events that describe authoritative state changes or notable runtime outcomes
+1. Typed fact events that describe authoritative state changes or notable environment outcomes
 2. Command hooks around imperative operations
-3. Normalization rules between provider/runtime signals and Lifecycle domain facts
+3. Normalization rules between provider and environment signals and Lifecycle domain facts
 
 Do not use this contract for:
 1. PTY byte streams
@@ -20,8 +20,8 @@ Do not use this contract for:
 
 ### Design Goals
 
-1. Keep one canonical event vocabulary across local runtime, cloud runtime, desktop, CLI, and future plugin consumers.
-2. Preserve a clear authority boundary: provider/runtime code publishes facts, while UI/query/projection code consumes them.
+1. Keep one canonical event vocabulary across local environment, cloud environment, desktop, CLI, and future plugin consumers.
+2. Preserve a clear authority boundary: provider and environment code publish facts, while UI/query/projection code consumes them.
 3. Keep facts semantic and compact so they remain portable across transports and storage layers.
 4. Make missed delivery recoverable through authoritative refetch rather than forcing every consumer to depend on a perfect event stream.
 5. Leave room for future domains without redefining the event model again.

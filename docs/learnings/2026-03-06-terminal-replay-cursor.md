@@ -24,7 +24,7 @@ The correct contract is incremental replay:
 
 ## Decision
 
-Keep mounted terminal surfaces for smoother tab switching, but make replay cursor-aware across the Tauri runtime and the browser simulator.
+Keep mounted terminal surfaces for smoother tab switching, but make replay cursor-aware across the Tauri runtime and any future terminal stream client.
 
 ## Impact
 
@@ -35,7 +35,7 @@ Keep mounted terminal surfaces for smoother tab switching, but make replay curso
 ## Follow-up
 
 1. Validate live tab switching in the desktop app with Claude and Codex sessions after reload.
-2. If tab switching still looks unstable, inspect Ghostty Web focus/canvas lifecycle next instead of revisiting the replay contract.
+2. If tab switching still looks unstable, inspect the native Ghostty surface attach/detach lifecycle next instead of revisiting the replay contract.
 3. Keep future terminal transport changes cursor-aware; full replay on every attach is only valid for a brand-new surface.
 
 ## Sources

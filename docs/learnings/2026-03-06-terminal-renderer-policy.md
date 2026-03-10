@@ -1,6 +1,7 @@
 # Terminal sharpness needs an explicit renderer policy
 
 Date: 2026-03-06
+Updated: 2026-03-10
 Milestone: M3
 
 ## Context
@@ -9,24 +10,21 @@ The desktop terminal looked materially worse than native macOS terminals even af
 
 ## Learning
 
-Terminal text quality needs an explicit policy, not just user-adjustable font fields. Renderer choice, transparency, and bundled font availability all affect whether xterm text looks crisp or washed out on a given platform.
+Terminal text quality needed an explicit policy while the desktop app still carried a browser terminal. Once the product direction moved fully to native libghostty, those renderer and transparency controls stopped being product settings and became legacy implementation baggage.
 
 ## Decision
 
-1. Add a first-class terminal renderer setting: `system|dom|webgl`.
-2. Resolve `system` to `dom` on macOS and `webgl` elsewhere.
-3. Disable xterm transparency unless the terminal background is actually translucent.
-4. Bundle `Lifecycle Mono` so the default stack is reproducible on every install.
-5. Surface runtime diagnostics in settings so renderer/font state is inspectable without guessing.
+1. Remove browser-terminal renderer policy from the desktop product path instead of exposing it in settings.
+2. Remove the bundled custom mono path and default shared monospace typography to `Geist Mono`.
+3. Let Appearance own the shared monospace choice so the native terminal and code UI follow the same font.
 
 ## Impact
 
-1. New installs and reset flows default to a sharper macOS terminal path without changing PTY behavior.
-2. Users still have an explicit escape hatch to force WebGL when they want throughput over text quality.
-3. Future terminal regressions can be debugged from renderer/font diagnostics instead of screenshot-driven guesswork.
+1. New installs default to a single shared typography model instead of a separate terminal-font model.
+2. The native terminal path now owns text quality by default without carrying browser-renderer controls through the desktop UX.
+3. Future terminal regressions should be investigated in the native host and Ghostty theme bridge instead of adding more user-facing renderer controls.
 
 ## Follow-up
 
-1. If multi-tab terminal diagnostics become noisy, scope diagnostics to the active tab instead of using the latest snapshot.
-2. If non-macOS text quality reports show the same issue, revisit the `system` renderer default for those platforms.
-3. If the product introduces real translucent terminal backgrounds later, re-evaluate the transparency gate rather than re-enabling it globally.
+1. If a browser fallback returns later, reintroduce it as an isolated contract rather than reshaping the native desktop UX.
+2. If the product introduces real translucent terminal backgrounds later, decide that in the native Ghostty layer rather than reviving a browser-oriented renderer model.

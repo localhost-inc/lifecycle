@@ -19,7 +19,7 @@ For Lifecycle, that means:
 
 ## Impact
 
-- Native terminal image paste now follows the same attachment persistence contract as the browser terminal path.
+- Native terminal image paste now follows the same attachment persistence contract the old browser terminal path used, without keeping that browser path alive as a product dependency.
 - Clipboard image payloads no longer route through `ghostty_surface_key(...)`, which removes the crash path observed on `Cmd+V`.
 - The bridge is closer to the AppKit contract where edit commands and terminal keystrokes are distinct surfaces.
 

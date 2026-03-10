@@ -1,39 +1,29 @@
 import { describe, expect, test } from "bun:test";
-import { subscribeToLifecycleEvents } from "../events/api";
-
 import {
   attachTerminalStream,
   createTerminal,
   detachTerminal,
-  evaluateBrowserTerminalCommand,
+  getTerminal,
+  killTerminal,
+  listWorkspaceTerminals,
+  renameTerminal,
+  resizeTerminal,
   terminalHasLiveSession,
   writeTerminal,
-  type TerminalStreamChunk,
 } from "./api";
 
-describe("terminal browser simulator", () => {
-  test("echoes help output with a prompt", () => {
-    const result = evaluateBrowserTerminalCommand("help", {
-      harness_provider: null,
-      launch_type: "shell",
-      workspace_id: "ws_1",
-    });
+const TERMINAL_RUNTIME_UNAVAILABLE_MESSAGE = "Terminal runtime requires the Tauri desktop shell.";
 
-    expect(result.output).toContain("Available commands:");
-    expect(result.output).toContain("lifecycle$ ");
-  });
+async function expectTerminalRuntimeError(promise: Promise<unknown>): Promise<void> {
+  try {
+    await promise;
+    throw new Error("Expected terminal runtime error.");
+  } catch (error) {
+    expect(String(error)).toContain(TERMINAL_RUNTIME_UNAVAILABLE_MESSAGE);
+  }
+}
 
-  test("finishes the session on exit", () => {
-    const result = evaluateBrowserTerminalCommand("exit", {
-      harness_provider: "codex",
-      launch_type: "harness",
-      workspace_id: "ws_1",
-    });
-
-    expect(result.finish).toBeTrue();
-    expect(result.exitCode).toBe(0);
-  });
-
+describe("terminal api", () => {
   test("identifies attachable terminal statuses", () => {
     expect(terminalHasLiveSession("active")).toBeTrue();
     expect(terminalHasLiveSession("detached")).toBeTrue();
@@ -42,67 +32,39 @@ describe("terminal browser simulator", () => {
     expect(terminalHasLiveSession("finished")).toBeFalse();
   });
 
-  test("reattach only replays unseen browser chunks when given a replay cursor", async () => {
-    const terminal = await createTerminal({
-      cols: 120,
-      launchType: "shell",
-      rows: 32,
-      workspaceId: `ws_${crypto.randomUUID()}`,
-    });
-
-    const initialReplay: TerminalStreamChunk[] = [];
-    const disposeInitialReplay = await attachTerminalStream(terminal.id, 120, 32, null, (chunk) => {
-      initialReplay.push(chunk);
-    });
-    expect(initialReplay.length).toBeGreaterThan(0);
-    const lastSeenCursor = initialReplay.at(-1)?.cursor ?? null;
-    expect(lastSeenCursor).not.toBeNull();
-
-    disposeInitialReplay();
-    await detachTerminal(terminal.id);
-
-    const nextReplay: TerminalStreamChunk[] = [];
-    const disposeNextReplay = await attachTerminalStream(
-      terminal.id,
-      120,
-      32,
-      lastSeenCursor,
-      (chunk) => {
-        nextReplay.push(chunk);
-      },
-    );
-
-    expect(nextReplay).toHaveLength(0);
-
-    disposeNextReplay();
-    await detachTerminal(terminal.id);
+  test("returns empty terminal state outside tauri", async () => {
+    expect(await listWorkspaceTerminals("workspace_1")).toEqual([]);
+    expect(await getTerminal("terminal_1")).toBeNull();
   });
 
-  test("emits a response-ready event for harness turns in the browser simulator", async () => {
-    const terminal = await createTerminal({
-      cols: 120,
-      launchType: "harness",
-      harnessProvider: "codex",
-      rows: 32,
-      workspaceId: `ws_${crypto.randomUUID()}`,
-    });
-    const events: string[] = [];
-    const disposeStream = await attachTerminalStream(terminal.id, 120, 32, null, () => {});
-    const unlisten = await subscribeToLifecycleEvents(
-      ["terminal.harness_turn_completed"],
-      (event) => {
-        if (event.terminal_id === terminal.id) {
-          events.push(event.workspace_id);
-        }
-      },
+  test("requires tauri for terminal runtime mutations", async () => {
+    await expectTerminalRuntimeError(
+      createTerminal({
+        cols: 120,
+        launchType: "shell",
+        rows: 32,
+        workspaceId: "workspace_1",
+      }),
     );
+    await expectTerminalRuntimeError(
+      attachTerminalStream("terminal_1", 120, 32, null, () => {}),
+    );
+    await expectTerminalRuntimeError(writeTerminal("terminal_1", "help\r"));
+    await expectTerminalRuntimeError(resizeTerminal("terminal_1", 120, 32));
+    await expectTerminalRuntimeError(detachTerminal("terminal_1"));
+    await expectTerminalRuntimeError(killTerminal("terminal_1"));
+  });
 
+  test("normalizes labels before checking runtime support", async () => {
+    await expectTerminalRuntimeError(renameTerminal("terminal_1", "  Codex   Session  "));
+  });
+
+  test("rejects empty labels before runtime checks", async () => {
     try {
-      await writeTerminal(terminal.id, "help\r");
-      expect(events).toEqual([terminal.workspace_id]);
-    } finally {
-      disposeStream();
-      unlisten();
+      await renameTerminal("terminal_1", "   ");
+      throw new Error("Expected empty label validation error.");
+    } catch (error) {
+      expect(String(error)).toContain("Session title cannot be empty.");
     }
   });
 });

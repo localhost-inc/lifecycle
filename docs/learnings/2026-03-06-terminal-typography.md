@@ -1,30 +1,31 @@
 # Terminal typography matters as much as emulator correctness
 
 Date: 2026-03-06
+Updated: 2026-03-10
 Milestone: M3
 
 ## Context
 
-While improving the desktop terminal surface, Claude Code still looked rough even after moving to newer xterm packages, enabling WebGL, and tightening PTY streaming behavior. The remaining issues were largely typography-driven: Claude's TUI uses symbol-heavy separators and glyphs that degrade quickly with narrow font coverage or editor-oriented line height defaults.
+While improving the desktop terminal surface, Claude Code still looked rough even after several browser-terminal rendering fixes. The remaining issues were largely typography-driven: Claude's TUI uses symbol-heavy separators and glyphs that degrade quickly with narrow font coverage or editor-oriented defaults.
 
 ## Learning
 
-Terminal quality is not only about escape-sequence support. For harness-driven TUIs, the default font stack, symbol fallback coverage, and line-height choices materially affect perceived correctness.
+Terminal quality is not only about escape-sequence support. For harness-driven TUIs, the selected monospace family materially affects perceived correctness, but the control should live with shared app typography rather than in a dedicated terminal settings surface.
 
 ## Decision
 
-1. Use a terminal-specific default font stack instead of a generic code-editor stack.
-2. Include symbol-friendly fallbacks such as `Symbols Nerd Font Mono`, `Apple Symbols`, `Segoe UI Symbol`, and `Noto Sans Symbols 2`.
-3. Expose terminal font family, font size, and line height as user settings so rendering can be tuned per machine without code changes.
+1. Default shared monospace typography to `Geist Mono` and let terminals consume that same selection.
+2. Stop branding a custom bundled mono as a product asset.
+3. Remove dedicated terminal font controls from settings and keep typography configuration under Appearance.
 
 ## Impact
 
-1. The in-app terminal now has denser defaults that are better suited for full-screen TUIs like Claude Code.
-2. Users have a direct escape hatch when platform fonts or installed symbol fonts behave differently.
-3. Future terminal rendering work should treat typography and renderer choice as separate concerns.
+1. The app shell and terminal surfaces now share the same monospace preference, which keeps typography consistent across UI and runtime surfaces.
+2. Native libghostty terminals can follow the selected monospace family without a separate terminal font model.
+3. Future terminal rendering work should treat native host behavior and shared typography as separate concerns.
 
 ## Follow-up
 
-1. Consider a dedicated terminal settings surface with presets such as `Balanced`, `Dense`, and `Nerd Font`.
-2. Evaluate whether theme changes should hot-update the active xterm instance instead of requiring a remount.
-3. If Claude-specific artifacts remain, capture raw PTY output before adding emulator-side workarounds.
+1. Keep theme and typography changes hot-updating active terminals so Appearance remains the single source of truth.
+2. If Claude-specific artifacts remain, capture raw PTY output before adding emulator-side workarounds.
+3. If a browser terminal ever returns, add only the minimum typography shim it needs instead of reintroducing a separate settings model.
