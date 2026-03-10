@@ -1,8 +1,7 @@
+use crate::platform::lifecycle_root::{expand_home_path, resolve_default_worktree_root};
 use crate::shared::errors::LifecycleError;
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
-
-const DEFAULT_WORKTREE_ROOT: &str = "~/.lifecycle/worktrees";
 
 pub async fn create_worktree(
     repo_path: &str,
@@ -283,32 +282,19 @@ fn worktree_directory_name(workspace_name: &str, workspace_id: &str) -> String {
     )
 }
 
-fn expand_tilde(path: &str) -> Result<PathBuf, LifecycleError> {
-    if path == "~" {
-        let home = std::env::var("HOME")
-            .map_err(|_| LifecycleError::Io("HOME environment variable is not set".to_string()))?;
-        return Ok(PathBuf::from(home));
-    }
-
-    if let Some(rest) = path.strip_prefix("~/") {
-        let home = std::env::var("HOME")
-            .map_err(|_| LifecycleError::Io("HOME environment variable is not set".to_string()))?;
-        return Ok(Path::new(&home).join(rest));
-    }
-
-    Ok(PathBuf::from(path))
-}
-
 fn resolve_worktree_root(
     repo_path: &str,
     configured_worktree_root: Option<&str>,
 ) -> Result<PathBuf, LifecycleError> {
-    let raw_root = configured_worktree_root
+    let expanded = if let Some(raw_root) = configured_worktree_root
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .unwrap_or(DEFAULT_WORKTREE_ROOT);
-
-    let expanded = expand_tilde(raw_root)?;
+    {
+        let home = std::env::var("HOME").ok();
+        expand_home_path(raw_root, home.as_deref())?
+    } else {
+        resolve_default_worktree_root()?
+    };
     if expanded.is_absolute() {
         Ok(expanded)
     } else {

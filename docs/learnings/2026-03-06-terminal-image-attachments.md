@@ -12,7 +12,7 @@ Lifecycle embeds Codex and Claude inside an xterm surface. Native terminal CLIs 
 Lifecycle now treats pasted and dropped images as workspace attachments:
 
 - The desktop app captures image clipboard/drop events at the terminal host.
-- Images are persisted into `WORKTREE/.lifecycle/attachments/`.
+- Images are persisted into a Lifecycle-managed attachment cache under `$LIFECYCLE_ROOT/attachments/`.
 - Claude accepts saved image paths as ordinary pasted terminal text.
 - Codex only upgrades saved image paths into real image attachments when they arrive through bracketed paste, so Lifecycle must emit Codex-specific bracketed-paste payloads instead of ordinary typed text.
 
@@ -20,7 +20,7 @@ Lifecycle now treats pasted and dropped images as workspace attachments:
 
 - This restores practical image input inside embedded harness sessions without depending on terminal-native binary attachment protocols.
 - Codex now receives image attachments through the same paste classification path it uses in native terminals, including quoted paths that contain spaces.
-- Theme, renderer, and PTY lifecycle remain separate from attachment persistence.
+- Theme, renderer, and PTY lifecycle remain separate from attachment persistence, and workspace file trees stay free of internal clipboard artifacts.
 
 ## Follow-up
 

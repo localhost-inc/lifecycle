@@ -12,7 +12,8 @@ import {
   type TerminalRuntimeDiagnostics,
 } from "../../terminals/terminal-display";
 
-export const DEFAULT_WORKTREE_ROOT = "~/.lifecycle/worktrees";
+export const DEFAULT_LIFECYCLE_ROOT = "~/.lifecycle";
+export const DEFAULT_WORKTREE_ROOT = `${DEFAULT_LIFECYCLE_ROOT}/worktrees`;
 const SETTINGS_STORAGE_KEY = "lifecycle.desktop.settings.v1";
 
 export interface AppSettings {

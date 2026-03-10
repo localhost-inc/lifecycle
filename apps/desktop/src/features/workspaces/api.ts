@@ -1,14 +1,17 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  LifecycleConfig,
   ServiceRecord,
   SetupStepEventType,
   WorkspaceRecord,
   WorkspaceStatus,
   WorkspaceFailureReason,
+  WorkspaceServiceExposure,
   WorkspaceServiceStatus,
   WorkspaceServiceStatusReason,
 } from "@lifecycle/contracts";
+import { getManifestFingerprint } from "@lifecycle/contracts";
 import { publishBrowserLifecycleEvent } from "../events/api";
 
 export type WorkspaceShortcutAction =
@@ -136,6 +139,73 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function browserPreviewUrl(
+  exposure: WorkspaceServiceExposure,
+  effectivePort: number | null,
+): string | null {
+  if (exposure !== "local" || effectivePort === null) {
+    return null;
+  }
+
+  return `http://localhost:${effectivePort}`;
+}
+
+function browserPreviewState(
+  exposure: WorkspaceServiceExposure,
+  effectivePort: number | null,
+  workspaceStatus: WorkspaceStatus,
+  status: WorkspaceServiceStatus,
+): ServiceRecord["preview_state"] {
+  if (exposure !== "local" || effectivePort === null) {
+    return "disabled";
+  }
+
+  if (status === "failed") {
+    return "failed";
+  }
+
+  if (workspaceStatus === "sleeping") {
+    return "sleeping";
+  }
+
+  switch (status) {
+    case "ready":
+      return "ready";
+    case "starting":
+      return "provisioning";
+    default:
+      if (
+        workspaceStatus === "creating" ||
+        workspaceStatus === "starting" ||
+        workspaceStatus === "resetting"
+      ) {
+        return "provisioning";
+      }
+      return "disabled";
+  }
+}
+
+function browserPreviewFailureReason(
+  previewState: ServiceRecord["preview_state"],
+): ServiceRecord["preview_failure_reason"] {
+  return previewState === "failed" ? "service_unreachable" : null;
+}
+
+function browserPreviewFields(
+  exposure: WorkspaceServiceExposure,
+  effectivePort: number | null,
+  workspaceStatus: WorkspaceStatus,
+  serviceStatus: WorkspaceServiceStatus,
+): Pick<ServiceRecord, "preview_failure_reason" | "preview_state" | "preview_url"> {
+  const previewState = browserPreviewState(exposure, effectivePort, workspaceStatus, serviceStatus);
+
+  return {
+    preview_state: previewState,
+    preview_failure_reason: browserPreviewFailureReason(previewState),
+    preview_url: browserPreviewUrl(exposure, effectivePort),
+  };
+}
+
 function shortWorkspaceId(workspaceId: string): string {
   const short = workspaceId
     .split("")
@@ -189,6 +259,7 @@ function normalizeBrowserWorkspaceRecord(
     git_sha: workspace.git_sha ?? null,
     id: workspace.id ?? crypto.randomUUID(),
     last_active_at: workspace.last_active_at ?? nowIso(),
+    manifest_fingerprint: workspace.manifest_fingerprint ?? null,
     mode: workspace.mode ?? "local",
     name: workspace.name?.trim() || workspace.source_ref?.trim() || "Workspace",
     name_origin: workspace.name_origin ?? "manual",
@@ -234,6 +305,8 @@ export interface CreateWorkspaceInput {
   workspaceName?: string;
   baseRef?: string;
   worktreeRoot?: string;
+  manifestJson?: string;
+  manifestFingerprint?: string | null;
 }
 
 export async function createWorkspace(input: CreateWorkspaceInput): Promise<string> {
@@ -248,6 +321,7 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
       git_sha: null,
       worktree_path: `${input.worktreeRoot ?? `${input.projectPath}/.worktrees`}/${id}`,
       mode: "local",
+      manifest_fingerprint: input.manifestFingerprint ?? null,
       status: "sleeping",
       failure_reason: null,
       failed_at: null,
@@ -265,6 +339,12 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
         { ...workspace, name_origin: "default", source_ref_origin: "default" },
         ...browserWorkspaceState.workspaces,
       ],
+      services: input.manifestJson
+        ? [
+            ...browserWorkspaceState.services.filter((service) => service.workspace_id !== id),
+            ...buildBrowserServices(id, input.manifestJson, "sleeping", "stopped", []),
+          ]
+        : browserWorkspaceState.services.filter((service) => service.workspace_id !== id),
     };
     persistBrowserWorkspaceState();
     return id;
@@ -276,6 +356,8 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
     workspaceName: input.workspaceName,
     baseRef: input.baseRef,
     worktreeRoot: input.worktreeRoot,
+    manifestJson: input.manifestJson ?? null,
+    manifestFingerprint: input.manifestFingerprint ?? null,
   });
 }
 
@@ -341,7 +423,51 @@ export async function subscribeToNativeWorkspaceShortcutEvents(
   });
 }
 
-export async function startServices(workspaceId: string, manifestJson: string): Promise<void> {
+function buildBrowserServices(
+  workspaceId: string,
+  manifestJson: string,
+  workspaceStatus: WorkspaceStatus,
+  status: "ready" | "starting" | "stopped",
+  existingServices: readonly ServiceRecord[] = [],
+): ServiceRecord[] {
+  const manifest = JSON.parse(manifestJson) as {
+    services?: Record<string, { port?: number }>;
+  };
+  const now = nowIso();
+  const existingByName = new Map(
+    existingServices.map((service) => [service.service_name, service] as const),
+  );
+
+  return Object.entries(manifest.services ?? {}).map(([serviceName, serviceConfig]) => {
+    const existing = existingByName.get(serviceName);
+    const defaultPort = serviceConfig.port ?? null;
+    const exposure = existing?.exposure ?? "local";
+    const portOverride = existing?.port_override ?? null;
+    const effectivePort = portOverride ?? defaultPort;
+    const previewFields = browserPreviewFields(exposure, effectivePort, workspaceStatus, status);
+
+    return {
+      id: existing?.id ?? crypto.randomUUID(),
+      workspace_id: workspaceId,
+      service_name: serviceName,
+      exposure,
+      port_override: portOverride,
+      status,
+      status_reason: null,
+      default_port: defaultPort,
+      effective_port: effectivePort,
+      ...previewFields,
+      created_at: existing?.created_at ?? now,
+      updated_at: now,
+    };
+  });
+}
+
+export async function startServices(
+  workspaceId: string,
+  manifestJson: string,
+  manifestFingerprint: string,
+): Promise<void> {
   if (!isTauri()) {
     updateWorkspaceRow(workspaceId, "starting");
 
@@ -364,29 +490,22 @@ export async function startServices(workspaceId: string, manifestJson: string): 
       emitSetupProgress(workspaceId, stepName, "completed", null);
     }
 
-    const serviceEntries = Object.entries(manifest.services ?? {});
-    const now = nowIso();
+    const existingServices = browserWorkspaceState.services.filter(
+      (service) => service.workspace_id === workspaceId,
+    );
+    const nextManifestServices = buildBrowserServices(
+      workspaceId,
+      manifestJson,
+      "starting",
+      "starting",
+      existingServices,
+    );
     const nextServices = browserWorkspaceState.services.filter(
       (svc) => svc.workspace_id !== workspaceId,
     );
-    for (const [serviceName, serviceConfig] of serviceEntries) {
-      nextServices.push({
-        id: crypto.randomUUID(),
-        workspace_id: workspaceId,
-        service_name: serviceName,
-        exposure: "local",
-        port_override: null,
-        status: "starting",
-        status_reason: null,
-        default_port: serviceConfig.port ?? null,
-        effective_port: serviceConfig.port ?? null,
-        preview_state: "disabled",
-        preview_failure_reason: null,
-        preview_url: null,
-        created_at: now,
-        updated_at: now,
-      });
-
+    for (const service of nextManifestServices) {
+      nextServices.push(service);
+      const serviceName = service.service_name;
       emitServiceStatus(workspaceId, serviceName, "starting", null);
       await delay(40);
       emitServiceStatus(workspaceId, serviceName, "ready", null);
@@ -394,9 +513,23 @@ export async function startServices(workspaceId: string, manifestJson: string): 
 
     browserWorkspaceState = {
       ...browserWorkspaceState,
+      workspaces: browserWorkspaceState.workspaces.map((workspace) =>
+        workspace.id === workspaceId
+          ? {
+              ...workspace,
+              manifest_fingerprint: manifestFingerprint,
+              updated_at: nowIso(),
+            }
+          : workspace,
+      ),
       services: nextServices.map((service) =>
         service.workspace_id === workspaceId
-          ? { ...service, status: "ready", updated_at: nowIso() }
+          ? {
+              ...service,
+              ...browserPreviewFields(service.exposure, service.effective_port, "ready", "ready"),
+              status: "ready",
+              updated_at: nowIso(),
+            }
           : service,
       ),
     };
@@ -405,7 +538,7 @@ export async function startServices(workspaceId: string, manifestJson: string): 
     return;
   }
 
-  return invoke<void>("start_services", { workspaceId, manifestJson });
+  return invoke<void>("start_services", { workspaceId, manifestJson, manifestFingerprint });
 }
 
 export async function stopWorkspace(workspaceId: string): Promise<void> {
@@ -414,7 +547,18 @@ export async function stopWorkspace(workspaceId: string): Promise<void> {
       ...browserWorkspaceState,
       services: browserWorkspaceState.services.map((service) =>
         service.workspace_id === workspaceId
-          ? { ...service, status: "stopped", status_reason: null, updated_at: nowIso() }
+          ? {
+              ...service,
+              ...browserPreviewFields(
+                service.exposure,
+                service.effective_port,
+                "sleeping",
+                "stopped",
+              ),
+              status: "stopped",
+              status_reason: null,
+              updated_at: nowIso(),
+            }
           : service,
       ),
     };
@@ -483,6 +627,107 @@ export async function getWorkspaceServices(workspaceId: string): Promise<Service
   }
 
   return invoke<ServiceRecord[]>("get_workspace_services", { workspaceId });
+}
+
+export interface UpdateWorkspaceServiceInput {
+  exposure: WorkspaceServiceExposure;
+  portOverride: number | null;
+}
+
+export async function updateWorkspaceService(
+  workspaceId: string,
+  serviceName: string,
+  input: UpdateWorkspaceServiceInput,
+): Promise<void> {
+  if (!isTauri()) {
+    let found = false;
+    browserWorkspaceState = {
+      ...browserWorkspaceState,
+      services: browserWorkspaceState.services.map((service) => {
+        if (service.workspace_id !== workspaceId || service.service_name !== serviceName) {
+          return service;
+        }
+
+        found = true;
+        const effectivePort = input.portOverride ?? service.default_port;
+        const workspaceStatus =
+          browserWorkspaceState.workspaces.find((workspace) => workspace.id === workspaceId)
+            ?.status ?? "sleeping";
+        return {
+          ...service,
+          exposure: input.exposure,
+          port_override: input.portOverride,
+          effective_port: effectivePort,
+          ...browserPreviewFields(input.exposure, effectivePort, workspaceStatus, service.status),
+          updated_at: nowIso(),
+        };
+      }),
+    };
+    persistBrowserWorkspaceState();
+
+    if (!found) {
+      throw new Error(`Unknown service: ${serviceName}`);
+    }
+
+    return;
+  }
+
+  return invoke<void>("update_workspace_service", {
+    workspaceId,
+    serviceName,
+    exposure: input.exposure,
+    portOverride: input.portOverride,
+  });
+}
+
+export async function syncWorkspaceManifest(
+  workspaceId: string,
+  config: LifecycleConfig | null,
+): Promise<void> {
+  const manifestJson = config ? JSON.stringify(config) : null;
+  const manifestFingerprint = config ? getManifestFingerprint(config) : null;
+
+  if (!isTauri()) {
+    const workspace = browserWorkspaceState.workspaces.find((item) => item.id === workspaceId);
+    if (!workspace || (workspace.status !== "sleeping" && workspace.status !== "failed")) {
+      return;
+    }
+
+    browserWorkspaceState = {
+      ...browserWorkspaceState,
+      workspaces: browserWorkspaceState.workspaces.map((item) =>
+        item.id === workspaceId
+          ? {
+              ...item,
+              manifest_fingerprint: manifestFingerprint,
+              updated_at: nowIso(),
+            }
+          : item,
+      ),
+      services: [
+        ...browserWorkspaceState.services.filter((service) => service.workspace_id !== workspaceId),
+        ...(manifestJson
+          ? buildBrowserServices(
+              workspaceId,
+              manifestJson,
+              workspace.status,
+              "stopped",
+              browserWorkspaceState.services.filter(
+                (service) => service.workspace_id === workspaceId,
+              ),
+            )
+          : []),
+      ],
+    };
+    persistBrowserWorkspaceState();
+    return;
+  }
+
+  return invoke<void>("sync_workspace_manifest", {
+    workspaceId,
+    manifestJson,
+    manifestFingerprint,
+  });
 }
 
 export type OpenInAppId =

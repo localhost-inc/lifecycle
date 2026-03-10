@@ -31,7 +31,7 @@ export type {
   GitStatusResult,
 } from "./git";
 export type { FieldError, LifecycleConfig, ManifestParseResult } from "./manifest";
-export { LifecycleConfigSchema, parseManifest } from "./manifest";
+export { getManifestFingerprint, LifecycleConfigSchema, parseManifest } from "./manifest";
 export type { ProjectRecord } from "./project";
 export type { TerminalFailureReason, TerminalStatus, TerminalType } from "./terminal";
 export type {

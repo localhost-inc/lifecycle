@@ -17,6 +17,7 @@ import type {
 import { logOverlayDebug } from "../overlay-debug";
 import { computeHostedOverlayFrame } from "../overlay-frame";
 import { readOverlayHostOwnerWindowLabel } from "../overlay-host-url";
+import { useOverlayViewport } from "../overlay-viewport";
 import {
   OVERLAY_HOST_ACTION_EVENT,
   OVERLAY_HOST_ANCHOR_EVENT,
@@ -32,31 +33,11 @@ function webviewWindowTarget(label: string): EventTarget {
   return { kind: "WebviewWindow", label };
 }
 
-function useViewportSize(): { height: number; width: number } {
-  const [size, setSize] = useState(() => ({
-    height: window.innerHeight,
-    width: window.innerWidth,
-  }));
-
-  useEffect(() => {
-    const handleResize = () => {
-      setSize({ height: window.innerHeight, width: window.innerWidth });
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, []);
-
-  return size;
-}
-
 export function OverlayHostRoute() {
   const [overlay, setOverlay] = useState<HostedOverlayPayload | null>(null);
   const [draftCommitMessage, setDraftCommitMessage] = useState("");
   const draftOverlayIdRef = useRef<string | null>(null);
-  const viewport = useViewportSize();
+  const viewport = useOverlayViewport();
   const ownerWindowLabel = useMemo(
     () => readOverlayHostOwnerWindowLabel(window.location.search),
     [],

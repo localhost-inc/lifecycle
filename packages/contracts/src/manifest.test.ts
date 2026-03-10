@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseManifest } from "./manifest";
+import { getManifestFingerprint, parseManifest } from "./manifest";
 
 const VALID_CONFIG = `{
   // One-time setup steps
@@ -190,5 +190,28 @@ describe("parseManifest", () => {
     expect(result.valid).toBe(true);
     if (!result.valid) return;
     expect(result.config.reset?.strategy).toBe("reseed");
+  });
+
+  test("produces a stable fingerprint independent of object key order", () => {
+    const left = parseManifest(`{
+      "setup": { "steps": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "services": {
+        "web": { "runtime": "process", "command": "bun run dev", "port": 3000, "env_vars": { "B": "2", "A": "1" } },
+        "api": { "runtime": "process", "command": "bun run api", "depends_on": ["web"] }
+      }
+    }`);
+    const right = parseManifest(`{
+      "services": {
+        "api": { "depends_on": ["web"], "command": "bun run api", "runtime": "process" },
+        "web": { "env_vars": { "A": "1", "B": "2" }, "port": 3000, "command": "bun run dev", "runtime": "process" }
+      },
+      "setup": { "steps": [{ "timeout_seconds": 10, "command": "bun install", "name": "install" }] }
+    }`);
+
+    expect(left.valid).toBe(true);
+    expect(right.valid).toBe(true);
+    if (!left.valid || !right.valid) return;
+
+    expect(getManifestFingerprint(left.config)).toBe(getManifestFingerprint(right.config));
   });
 });

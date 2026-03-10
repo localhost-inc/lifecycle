@@ -19,6 +19,7 @@ export interface WorkspaceRecord {
   worktree_path: string | null;
   mode: WorkspaceMode;
   status: WorkspaceStatus;
+  manifest_fingerprint?: string | null;
   failure_reason: WorkspaceFailureReason | null;
   failed_at: string | null;
   created_by: string | null;

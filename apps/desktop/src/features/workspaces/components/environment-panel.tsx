@@ -37,16 +37,26 @@ type EnvironmentPanelTabValue = (typeof ENVIRONMENT_PANEL_TABS)[number]["value"]
 
 interface EnvironmentPanelProps {
   hasManifest: boolean;
+  isManifestStale: boolean;
+  manifestState: "invalid" | "missing" | "valid";
   onRun: () => Promise<void>;
   onStop: () => Promise<void>;
+  onUpdateService: (input: {
+    exposure: ServiceRecord["exposure"];
+    portOverride: number | null;
+    serviceName: string;
+  }) => Promise<void>;
   services: ServiceRecord[];
   workspace: WorkspaceRecord;
 }
 
 export function EnvironmentPanel({
   hasManifest,
+  isManifestStale,
+  manifestState,
   onRun,
   onStop,
+  onUpdateService,
   services,
   workspace,
 }: EnvironmentPanelProps) {
@@ -152,6 +162,16 @@ export function EnvironmentPanel({
           {workspace.status === "failed" && workspace.failure_reason && (
             <p className="text-xs text-[var(--destructive)]">{workspace.failure_reason}</p>
           )}
+          {workspace.status === "ready" && isManifestStale && (
+            <p className="text-xs text-[var(--muted-foreground)]">
+              Manifest changed. Stop and run again to apply service updates.
+            </p>
+          )}
+          {workspace.status === "ready" && manifestState === "invalid" && (
+            <p className="text-xs text-[var(--destructive)]">
+              lifecycle.json is invalid. Current services keep running until you stop them.
+            </p>
+          )}
           {actionError && <p className="text-xs text-[var(--destructive)]">{actionError}</p>}
           <Tabs
             onValueChange={(value) => setActiveTab(value as EnvironmentPanelTabValue)}
@@ -170,7 +190,11 @@ export function EnvironmentPanel({
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className="flex min-h-0 flex-1 flex-col px-2.5 pb-4 pt-1">
           {activeTab === "services" && (
-            <ServicesTab hasManifest={hasManifest} services={services} />
+            <ServicesTab
+              manifestState={manifestState}
+              onUpdateService={onUpdateService}
+              services={services}
+            />
           )}
           {activeTab === "logs" && <LogsTab />}
         </div>

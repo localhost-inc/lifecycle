@@ -1,4 +1,4 @@
-use crate::capabilities::workspaces::manifest::ServiceConfig;
+use crate::capabilities::workspaces::manifest::{LifecycleConfig, ServiceConfig};
 use crate::capabilities::workspaces::state_machine::validate_workspace_transition;
 use crate::platform::db::open_db;
 use crate::shared::errors::{
@@ -62,6 +62,7 @@ pub(super) fn update_workspace_status_db(
             params![status.as_str(), workspace_id],
         ).map_err(|e| LifecycleError::Database(e.to_string()))?;
     }
+    refresh_workspace_preview_rows(&conn, workspace_id, status)?;
     Ok(())
 }
 
@@ -73,10 +74,325 @@ pub(super) fn update_service_status_db(
     reason: Option<&str>,
 ) -> Result<(), LifecycleError> {
     let conn = open_db(db_path)?;
+    let workspace_status = conn
+        .query_row(
+            "SELECT status FROM workspace WHERE id = ?1",
+            params![workspace_id],
+            |row| row.get::<_, String>(0),
+        )
+        .map_err(|e| LifecycleError::Database(e.to_string()))
+        .and_then(|status| WorkspaceStatus::from_str(&status))?;
+    let (exposure, effective_port): (String, Option<i64>) = conn
+        .query_row(
+            "SELECT exposure, effective_port FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+            params![workspace_id, service_name],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    let (preview_state, preview_failure_reason, preview_url) = preview_fields_for_service(
+        &exposure,
+        effective_port,
+        status.as_str(),
+        &workspace_status,
+    );
     conn.execute(
-        "UPDATE workspace_service SET status = ?1, status_reason = ?2, updated_at = datetime('now') WHERE workspace_id = ?3 AND service_name = ?4",
-        params![status.as_str(), reason, workspace_id, service_name],
-    ).map_err(|e| LifecycleError::Database(e.to_string()))?;
+        "UPDATE workspace_service
+         SET status = ?1,
+             status_reason = ?2,
+             preview_state = ?3,
+             preview_failure_reason = ?4,
+             preview_url = ?5,
+             updated_at = datetime('now')
+         WHERE workspace_id = ?6 AND service_name = ?7",
+        params![
+            status.as_str(),
+            reason,
+            preview_state,
+            preview_failure_reason,
+            preview_url,
+            workspace_id,
+            service_name,
+        ],
+    )
+    .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    Ok(())
+}
+
+fn local_preview_url(exposure: &str, effective_port: Option<i64>) -> Option<String> {
+    if exposure == "local" {
+        effective_port.map(|port| format!("http://localhost:{port}"))
+    } else {
+        None
+    }
+}
+
+fn preview_state_for_service(
+    exposure: &str,
+    effective_port: Option<i64>,
+    service_status: &str,
+    workspace_status: &WorkspaceStatus,
+) -> &'static str {
+    if exposure != "local" || effective_port.is_none() {
+        return "disabled";
+    }
+
+    if service_status == "failed" {
+        return "failed";
+    }
+
+    if *workspace_status == WorkspaceStatus::Sleeping {
+        return "sleeping";
+    }
+
+    if service_status == "ready" {
+        return "ready";
+    }
+
+    if service_status == "starting"
+        || matches!(
+            workspace_status,
+            WorkspaceStatus::Creating | WorkspaceStatus::Starting | WorkspaceStatus::Resetting
+        )
+    {
+        return "provisioning";
+    }
+
+    "disabled"
+}
+
+fn preview_failure_reason_for_state(preview_state: &str) -> Option<&'static str> {
+    if preview_state == "failed" {
+        Some("service_unreachable")
+    } else {
+        None
+    }
+}
+
+pub(super) fn preview_fields_for_service(
+    exposure: &str,
+    effective_port: Option<i64>,
+    service_status: &str,
+    workspace_status: &WorkspaceStatus,
+) -> (String, Option<String>, Option<String>) {
+    let preview_state =
+        preview_state_for_service(exposure, effective_port, service_status, workspace_status);
+    (
+        preview_state.to_string(),
+        preview_failure_reason_for_state(preview_state).map(str::to_string),
+        local_preview_url(exposure, effective_port),
+    )
+}
+
+fn refresh_workspace_preview_rows(
+    conn: &rusqlite::Connection,
+    workspace_id: &str,
+    workspace_status: &WorkspaceStatus,
+) -> Result<(), LifecycleError> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT service_name, exposure, effective_port, status
+             FROM workspace_service
+             WHERE workspace_id = ?1",
+        )
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    let rows = stmt
+        .query_map(params![workspace_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<i64>>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+
+    let mut services = Vec::new();
+    for row in rows {
+        services.push(row.map_err(|e| LifecycleError::Database(e.to_string()))?);
+    }
+    drop(stmt);
+
+    for (service_name, exposure, effective_port, service_status) in services {
+        let (preview_state, preview_failure_reason, preview_url) = preview_fields_for_service(
+            &exposure,
+            effective_port,
+            &service_status,
+            workspace_status,
+        );
+        conn.execute(
+            "UPDATE workspace_service
+             SET preview_state = ?1,
+                 preview_failure_reason = ?2,
+                 preview_url = ?3,
+                 updated_at = datetime('now')
+             WHERE workspace_id = ?4 AND service_name = ?5",
+            params![
+                preview_state,
+                preview_failure_reason,
+                preview_url,
+                workspace_id,
+                service_name,
+            ],
+        )
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    }
+
+    Ok(())
+}
+
+pub(super) fn reconcile_workspace_services_db(
+    db_path: &str,
+    workspace_id: &str,
+    config: Option<&LifecycleConfig>,
+    manifest_fingerprint: Option<&str>,
+) -> Result<(), LifecycleError> {
+    let mut conn = open_db(db_path)?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    let workspace_status = tx
+        .query_row(
+            "SELECT status FROM workspace WHERE id = ?1",
+            params![workspace_id],
+            |row| row.get::<_, String>(0),
+        )
+        .map_err(|e| LifecycleError::Database(e.to_string()))
+        .and_then(|status| WorkspaceStatus::from_str(&status))?;
+
+    match config {
+        Some(config) => {
+            let mut existing_rows = tx
+                .prepare(
+                    "SELECT service_name, exposure, port_override
+                     FROM workspace_service
+                     WHERE workspace_id = ?1",
+                )
+                .map_err(|e| LifecycleError::Database(e.to_string()))?;
+            let existing = existing_rows
+                .query_map(params![workspace_id], |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, Option<i64>>(2)?,
+                    ))
+                })
+                .map_err(|e| LifecycleError::Database(e.to_string()))?;
+
+            let mut existing_rows_by_service = std::collections::HashMap::new();
+            for row in existing {
+                let (service_name, exposure, port_override) =
+                    row.map_err(|e| LifecycleError::Database(e.to_string()))?;
+                existing_rows_by_service.insert(service_name, (exposure, port_override));
+            }
+            drop(existing_rows);
+
+            let mut service_names: Vec<&str> = config.services.keys().map(String::as_str).collect();
+            service_names.sort_unstable();
+
+            if service_names.is_empty() {
+                tx.execute(
+                    "DELETE FROM workspace_service WHERE workspace_id = ?1",
+                    params![workspace_id],
+                )
+                .map_err(|e| LifecycleError::Database(e.to_string()))?;
+            } else {
+                let placeholders = std::iter::repeat("?")
+                    .take(service_names.len())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let query = format!(
+                    "DELETE FROM workspace_service WHERE workspace_id = ?1 AND service_name NOT IN ({placeholders})"
+                );
+                let delete_params =
+                    std::iter::once(workspace_id).chain(service_names.iter().copied());
+                tx.execute(&query, rusqlite::params_from_iter(delete_params))
+                    .map_err(|e| LifecycleError::Database(e.to_string()))?;
+            }
+
+            for (service_name, service_config) in &config.services {
+                let default_port = service_config.port().map(|port| port as i64);
+                let (exposure, port_override) = existing_rows_by_service
+                    .get(service_name)
+                    .cloned()
+                    .unwrap_or_else(|| ("local".to_string(), None));
+                let effective_port = port_override.or(default_port);
+                let (preview_state, preview_failure_reason, preview_url) =
+                    preview_fields_for_service(
+                        &exposure,
+                        effective_port,
+                        "stopped",
+                        &workspace_status,
+                    );
+
+                let updated = tx
+                    .execute(
+                        "UPDATE workspace_service
+                         SET status = 'stopped',
+                             status_reason = NULL,
+                             default_port = ?1,
+                             effective_port = ?2,
+                             preview_state = ?3,
+                             preview_failure_reason = ?4,
+                             preview_url = ?5,
+                             updated_at = datetime('now')
+                         WHERE workspace_id = ?6 AND service_name = ?7",
+                        params![
+                            default_port,
+                            effective_port,
+                            preview_state,
+                            preview_failure_reason,
+                            preview_url,
+                            workspace_id,
+                            service_name,
+                        ],
+                    )
+                    .map_err(|e| LifecycleError::Database(e.to_string()))?;
+
+                if updated == 0 {
+                    let (preview_state, preview_failure_reason, preview_url) =
+                        preview_fields_for_service(
+                            "local",
+                            effective_port,
+                            "stopped",
+                            &workspace_status,
+                        );
+                    tx.execute(
+                        "INSERT INTO workspace_service (
+                            id, workspace_id, service_name, exposure, status, default_port,
+                            effective_port, preview_state, preview_failure_reason, preview_url
+                         ) VALUES (?1, ?2, ?3, 'local', 'stopped', ?4, ?5, ?6, ?7, ?8)",
+                        params![
+                            uuid::Uuid::new_v4().to_string(),
+                            workspace_id,
+                            service_name,
+                            default_port,
+                            effective_port,
+                            preview_state,
+                            preview_failure_reason,
+                            preview_url,
+                        ],
+                    )
+                    .map_err(|e| LifecycleError::Database(e.to_string()))?;
+                }
+            }
+        }
+        None => {
+            tx.execute(
+                "DELETE FROM workspace_service WHERE workspace_id = ?1",
+                params![workspace_id],
+            )
+            .map_err(|e| LifecycleError::Database(e.to_string()))?;
+        }
+    }
+
+    tx.execute(
+        "UPDATE workspace SET manifest_fingerprint = ?1, updated_at = datetime('now') WHERE id = ?2",
+        params![manifest_fingerprint, workspace_id],
+    )
+    .map_err(|e| LifecycleError::Database(e.to_string()))?;
+
+    tx.commit()
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
     Ok(())
 }
 
@@ -108,6 +424,7 @@ pub(super) fn transition_workspace_to_starting(
             "UPDATE workspace SET status = 'starting', failure_reason = NULL, failed_at = NULL, updated_at = datetime('now') WHERE id = ?1",
             params![workspace_id],
         ).map_err(|e| LifecycleError::Database(e.to_string()))?;
+        refresh_workspace_preview_rows(&conn, workspace_id, &WorkspaceStatus::Starting)?;
 
         Ok(())
     })();
@@ -184,11 +501,18 @@ pub(super) fn mark_nonfailed_services_stopped(
     for row in rows {
         names.push(row.map_err(|e| LifecycleError::Database(e.to_string()))?);
     }
+    drop(stmt);
+    drop(conn);
 
-    conn.execute(
-        "UPDATE workspace_service SET status = 'stopped', status_reason = NULL, updated_at = datetime('now') WHERE workspace_id = ?1 AND status != 'failed'",
-        params![workspace_id],
-    ).map_err(|e| LifecycleError::Database(e.to_string()))?;
+    for service_name in &names {
+        update_service_status_db(
+            db_path,
+            workspace_id,
+            service_name,
+            &ServiceStatus::Stopped,
+            None,
+        )?;
+    }
 
     Ok(names)
 }
@@ -291,6 +615,7 @@ mod tests {
             "CREATE TABLE workspace (
                 id TEXT PRIMARY KEY NOT NULL,
                 status TEXT NOT NULL,
+                manifest_fingerprint TEXT,
                 failure_reason TEXT,
                 failed_at TEXT,
                 updated_at TEXT
@@ -299,8 +624,16 @@ mod tests {
                 id TEXT PRIMARY KEY NOT NULL,
                 workspace_id TEXT NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
                 service_name TEXT NOT NULL,
+                exposure TEXT NOT NULL DEFAULT 'local',
+                port_override INTEGER,
                 status TEXT NOT NULL,
                 status_reason TEXT,
+                default_port INTEGER,
+                effective_port INTEGER,
+                preview_state TEXT NOT NULL DEFAULT 'disabled',
+                preview_failure_reason TEXT,
+                preview_url TEXT,
+                created_at TEXT,
                 updated_at TEXT
             );",
         )
@@ -350,6 +683,24 @@ mod tests {
             rusqlite::params!["ws_1", "sleeping", "service_start_failed", "2026-03-04T00:00:00Z"],
         )
         .expect("insert workspace");
+        conn.execute(
+            "INSERT INTO workspace_service (
+                id, workspace_id, service_name, exposure, status, default_port, effective_port,
+                preview_state, preview_url, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'), datetime('now'))",
+            rusqlite::params![
+                "svc_ws_1",
+                "ws_1",
+                "web",
+                "local",
+                "stopped",
+                Some(3000_i64),
+                Some(3000_i64),
+                "sleeping",
+                Some("http://localhost:3000"),
+            ],
+        )
+        .expect("insert service");
         drop(conn);
 
         transition_workspace_to_starting(&db_path, "ws_1").expect("transition succeeds");
@@ -365,6 +716,14 @@ mod tests {
         assert_eq!(status, "starting");
         assert!(failure_reason.is_none());
         assert!(failed_at.is_none());
+        let preview_state: String = conn
+            .query_row(
+                "SELECT preview_state FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+                rusqlite::params!["ws_1", "web"],
+                |row| row.get(0),
+            )
+            .expect("query preview state");
+        assert_eq!(preview_state, "provisioning");
 
         drop(conn);
         let _ = std::fs::remove_file(db_path);
@@ -407,18 +766,55 @@ mod tests {
         )
         .expect("insert workspace");
         conn.execute(
-            "INSERT INTO workspace_service (id, workspace_id, service_name, status, status_reason, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
-            rusqlite::params!["svc_1", "ws_3", "api", "ready", Option::<String>::None],
+            "INSERT INTO workspace_service (
+                id, workspace_id, service_name, status, status_reason, effective_port,
+                preview_state, preview_url, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))",
+            rusqlite::params![
+                "svc_1",
+                "ws_3",
+                "api",
+                "ready",
+                Option::<String>::None,
+                Some(3000_i64),
+                "ready",
+                Some("http://localhost:3000"),
+            ],
         )
         .expect("insert api");
         conn.execute(
-            "INSERT INTO workspace_service (id, workspace_id, service_name, status, status_reason, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
-            rusqlite::params!["svc_2", "ws_3", "db", "failed", Some("service_port_unreachable")],
+            "INSERT INTO workspace_service (
+                id, workspace_id, service_name, status, status_reason, effective_port,
+                preview_state, preview_failure_reason, preview_url, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'))",
+            rusqlite::params![
+                "svc_2",
+                "ws_3",
+                "db",
+                "failed",
+                Some("service_port_unreachable"),
+                Some(5432_i64),
+                "failed",
+                Some("service_unreachable"),
+                Some("http://localhost:5432"),
+            ],
         )
         .expect("insert db");
         conn.execute(
-            "INSERT INTO workspace_service (id, workspace_id, service_name, status, status_reason, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
-            rusqlite::params!["svc_3", "ws_3", "worker", "starting", Option::<String>::None],
+            "INSERT INTO workspace_service (
+                id, workspace_id, service_name, status, status_reason, effective_port,
+                preview_state, preview_url, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))",
+            rusqlite::params![
+                "svc_3",
+                "ws_3",
+                "worker",
+                "starting",
+                Option::<String>::None,
+                Some(4173_i64),
+                "provisioning",
+                Some("http://localhost:4173"),
+            ],
         )
         .expect("insert worker");
         drop(conn);
@@ -431,7 +827,10 @@ mod tests {
             let conn = open_db(&db_path).expect("re-open db");
             let mut stmt = conn
                 .prepare(
-                    "SELECT service_name, status, status_reason FROM workspace_service WHERE workspace_id = ?1 ORDER BY service_name",
+                    "SELECT service_name, status, status_reason, preview_state, preview_failure_reason
+                     FROM workspace_service
+                     WHERE workspace_id = ?1
+                     ORDER BY service_name",
                 )
                 .expect("prepare");
             let rows = stmt
@@ -440,6 +839,8 @@ mod tests {
                         row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
                         row.get::<_, Option<String>>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, Option<String>>(4)?,
                     ))
                 })
                 .expect("query");
@@ -452,13 +853,165 @@ mod tests {
         assert_eq!(
             values,
             vec![
-                ("api".to_string(), "stopped".to_string(), None),
+                (
+                    "api".to_string(),
+                    "stopped".to_string(),
+                    None,
+                    "disabled".to_string(),
+                    None,
+                ),
                 (
                     "db".to_string(),
                     "failed".to_string(),
-                    Some("service_port_unreachable".to_string())
+                    Some("service_port_unreachable".to_string()),
+                    "failed".to_string(),
+                    Some("service_unreachable".to_string())
                 ),
-                ("worker".to_string(), "stopped".to_string(), None),
+                (
+                    "worker".to_string(),
+                    "stopped".to_string(),
+                    None,
+                    "disabled".to_string(),
+                    None,
+                ),
+            ]
+        );
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn reconcile_workspace_services_db_seeds_and_updates_declared_services() {
+        let db_path = temp_db_path();
+        init_workspace_tables(&db_path);
+
+        let conn = open_db(&db_path).expect("open db");
+        conn.execute(
+            "INSERT INTO workspace (id, status, updated_at) VALUES (?1, ?2, datetime('now'))",
+            rusqlite::params!["ws_seed", "sleeping"],
+        )
+        .expect("insert workspace");
+        conn.execute(
+            "INSERT INTO workspace_service (
+                id, workspace_id, service_name, exposure, port_override, status, status_reason,
+                default_port, effective_port, preview_state, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, datetime('now'), datetime('now'))",
+            rusqlite::params![
+                "svc_old",
+                "ws_seed",
+                "web",
+                "organization",
+                Some(4310_i64),
+                "failed",
+                Some("unknown"),
+                Some(3000_i64),
+                Some(4310_i64),
+                "disabled",
+            ],
+        )
+        .expect("insert existing service");
+        drop(conn);
+
+        let config: LifecycleConfig = serde_json::from_str(
+            r#"{
+                "setup": { "steps": [{ "name": "install", "command": "bun install", "timeout_seconds": 30 }] },
+                "services": {
+                    "web": { "runtime": "process", "command": "bun run dev", "port": 3000 },
+                    "admin": { "runtime": "process", "command": "bun run admin", "port": 4173 },
+                    "worker": { "runtime": "process", "command": "bun run worker" }
+                }
+            }"#,
+        )
+        .expect("valid config");
+
+        reconcile_workspace_services_db(&db_path, "ws_seed", Some(&config), Some("fingerprint_1"))
+            .expect("reconcile succeeds");
+
+        let conn = open_db(&db_path).expect("re-open db");
+        let fingerprint: Option<String> = conn
+            .query_row(
+                "SELECT manifest_fingerprint FROM workspace WHERE id = ?1",
+                rusqlite::params!["ws_seed"],
+                |row| row.get(0),
+            )
+            .expect("query fingerprint");
+        assert_eq!(fingerprint.as_deref(), Some("fingerprint_1"));
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT service_name, exposure, port_override, status, status_reason, default_port, effective_port, preview_state, preview_failure_reason, preview_url
+                 FROM workspace_service
+                 WHERE workspace_id = ?1
+                 ORDER BY service_name",
+            )
+            .expect("prepare select");
+        let rows = stmt
+            .query_map(rusqlite::params!["ws_seed"], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<i64>>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, Option<i64>>(5)?,
+                    row.get::<_, Option<i64>>(6)?,
+                    row.get::<_, String>(7)?,
+                    row.get::<_, Option<String>>(8)?,
+                    row.get::<_, Option<String>>(9)?,
+                ))
+            })
+            .expect("query services");
+        let values = rows.map(|row| row.expect("row")).collect::<Vec<(
+            String,
+            String,
+            Option<i64>,
+            String,
+            Option<String>,
+            Option<i64>,
+            Option<i64>,
+            String,
+            Option<String>,
+            Option<String>,
+        )>>();
+        assert_eq!(
+            values,
+            vec![
+                (
+                    "admin".to_string(),
+                    "local".to_string(),
+                    None,
+                    "stopped".to_string(),
+                    None,
+                    Some(4173_i64),
+                    Some(4173_i64),
+                    "sleeping".to_string(),
+                    None,
+                    Some("http://localhost:4173".to_string()),
+                ),
+                (
+                    "web".to_string(),
+                    "organization".to_string(),
+                    Some(4310_i64),
+                    "stopped".to_string(),
+                    None,
+                    Some(3000_i64),
+                    Some(4310_i64),
+                    "disabled".to_string(),
+                    None,
+                    None,
+                ),
+                (
+                    "worker".to_string(),
+                    "local".to_string(),
+                    None,
+                    "stopped".to_string(),
+                    None,
+                    None,
+                    None,
+                    "disabled".to_string(),
+                    None,
+                    None,
+                ),
             ]
         );
 

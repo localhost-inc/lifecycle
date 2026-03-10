@@ -25,8 +25,15 @@ const PANEL_SEPARATOR_STEP_PX = 32;
 
 interface WorkspaceSidebarProps {
   hasManifest: boolean;
+  isManifestStale: boolean;
+  manifestState: "invalid" | "missing" | "valid";
   onRun: () => Promise<void>;
   onStop: () => Promise<void>;
+  onUpdateService: (input: {
+    exposure: ServiceRecord["exposure"];
+    portOverride: number | null;
+    serviceName: string;
+  }) => Promise<void>;
   onOpenDiff: (filePath: string) => void;
   onOpenCommitDiff: (entry: GitLogEntry) => void;
   services: ServiceRecord[];
@@ -35,8 +42,11 @@ interface WorkspaceSidebarProps {
 
 export function WorkspaceSidebar({
   hasManifest,
+  isManifestStale,
+  manifestState,
   onRun,
   onStop,
+  onUpdateService,
   onOpenDiff,
   onOpenCommitDiff,
   services,
@@ -221,8 +231,11 @@ export function WorkspaceSidebar({
       <div className="min-h-0 flex-1 overflow-hidden">
         <EnvironmentPanel
           hasManifest={hasManifest}
+          isManifestStale={isManifestStale}
+          manifestState={manifestState}
           onRun={onRun}
           onStop={onStop}
+          onUpdateService={onUpdateService}
           services={services}
           workspace={workspace}
         />

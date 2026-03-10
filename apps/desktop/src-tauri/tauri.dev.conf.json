@@ -1,0 +1,22 @@
+{
+  "app": {
+    "windows": [
+      {
+        "title": "Lifecycle",
+        "width": 1024,
+        "height": 700,
+        "minWidth": 800,
+        "minHeight": 600,
+        "decorations": true,
+        "acceptFirstMouse": true,
+        "focus": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 16,
+          "y": 24
+        }
+      }
+    ]
+  }
+}

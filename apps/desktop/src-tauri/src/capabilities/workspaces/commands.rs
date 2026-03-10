@@ -13,6 +13,8 @@ pub async fn create_workspace(
     workspace_name: Option<String>,
     base_ref: Option<String>,
     worktree_root: Option<String>,
+    manifest_json: Option<String>,
+    manifest_fingerprint: Option<String>,
 ) -> Result<String, LifecycleError> {
     super::create::create_workspace(
         app,
@@ -22,6 +24,8 @@ pub async fn create_workspace(
         workspace_name,
         base_ref,
         worktree_root,
+        manifest_json,
+        manifest_fingerprint,
     )
     .await
 }
@@ -43,8 +47,33 @@ pub async fn start_services(
     supervisors: State<'_, SupervisorMap>,
     workspace_id: String,
     manifest_json: String,
+    manifest_fingerprint: String,
 ) -> Result<(), LifecycleError> {
-    super::start::start_services(app, db_path, supervisors, workspace_id, manifest_json).await
+    super::start::start_services(
+        app,
+        db_path,
+        supervisors,
+        workspace_id,
+        manifest_json,
+        manifest_fingerprint,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn sync_workspace_manifest(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    manifest_json: Option<String>,
+    manifest_fingerprint: Option<String>,
+) -> Result<(), LifecycleError> {
+    super::start::sync_workspace_manifest(
+        &db_path.0,
+        workspace_id,
+        manifest_json,
+        manifest_fingerprint,
+    )
+    .await
 }
 
 #[tauri::command]
@@ -93,6 +122,24 @@ pub async fn get_workspace_services(
     workspace_id: String,
 ) -> Result<Vec<super::query::ServiceRecord>, LifecycleError> {
     super::query::get_workspace_services(&db_path.0, workspace_id).await
+}
+
+#[tauri::command]
+pub async fn update_workspace_service(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    service_name: String,
+    exposure: String,
+    port_override: Option<i64>,
+) -> Result<(), LifecycleError> {
+    super::service::update_workspace_service(
+        &db_path.0,
+        workspace_id,
+        service_name,
+        exposure,
+        port_override,
+    )
+    .await
 }
 
 #[tauri::command]

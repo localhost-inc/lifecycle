@@ -86,6 +86,7 @@ Use this section to route work before implementation.
 4. If compatibility is explicitly required, document the scope and planned removal conditions in the same change.
 5. Make failure handling first-class: clear error type, message, and recovery path.
 6. Keep naming consistent with existing contracts and domain language.
+7. Desktop database schema changes must go through numbered SQL migrations in `apps/desktop/src-tauri/src/platform/migrations`; do not add startup-time schema guards or ad hoc `ALTER TABLE` helpers.
 
 ## Testing and Verification
 

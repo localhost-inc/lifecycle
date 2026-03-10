@@ -1,32 +1,10 @@
 import { cn } from "@lifecycle/ui";
 import { useEffect, useRef, useState } from "react";
+import { usePrefersReducedMotion } from "../hooks/use-prefers-reduced-motion";
 
 const TYPE_MIN_INTERVAL_MS = 18;
 const TYPE_MAX_INTERVAL_MS = 42;
 const TYPE_TOTAL_DURATION_MS = 420;
-
-function usePrefersReducedMotion(): boolean {
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-      return;
-    }
-
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const sync = () => {
-      setPrefersReducedMotion(media.matches);
-    };
-
-    sync();
-    media.addEventListener("change", sync);
-    return () => {
-      media.removeEventListener("change", sync);
-    };
-  }, []);
-
-  return prefersReducedMotion;
-}
 
 function titleTypeInterval(text: string): number {
   const boundedLength = Math.max(text.length, 1);

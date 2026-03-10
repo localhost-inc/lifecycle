@@ -7,10 +7,12 @@ import {
   useRef,
   useState,
 } from "react";
+import { getManifestFingerprint } from "@lifecycle/contracts";
 import { SidebarInset } from "@lifecycle/ui";
 import { Outlet, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppHotkeyListener } from "../../app/app-hotkey-listener";
 import { addProjectFromDirectory } from "../../features/projects/api/projects";
+import { WelcomeScreen } from "../../features/welcome/components/welcome-screen";
 import { projectKeys, useProjectCatalog } from "../../features/projects/hooks";
 import { useSettings } from "../../features/settings/state/app-settings-provider";
 import { createWorkspace, getCurrentBranch } from "../../features/workspaces/api";
@@ -342,12 +344,23 @@ export function DashboardLayout() {
     async (projectId: string) => {
       const project = projects.find((item) => item.id === projectId);
       if (!project) return;
+      const manifestStatus = projectCatalogQuery.data?.manifestsByProjectId[project.id];
+      const manifestJson =
+        manifestStatus?.state === "valid"
+          ? JSON.stringify(manifestStatus.result.config)
+          : undefined;
+      const manifestFingerprint =
+        manifestStatus?.state === "valid"
+          ? getManifestFingerprint(manifestStatus.result.config)
+          : null;
 
       try {
         const branch = await getCurrentBranch(project.path);
         const workspaceId = await createWorkspace({
           projectId: project.id,
           baseRef: branch,
+          manifestFingerprint,
+          manifestJson,
           projectPath: project.path,
           worktreeRoot,
         });
@@ -360,7 +373,7 @@ export function DashboardLayout() {
         alert(`Failed to create workspace: ${err}`);
       }
     },
-    [client, navigate, projects, worktreeRoot],
+    [client, navigate, projectCatalogQuery.data, projects, worktreeRoot],
   );
 
   const handleOpenSettings = useCallback(() => {
@@ -444,6 +457,23 @@ export function DashboardLayout() {
     [rightSidebarBounds],
   );
 
+  if (projectCatalogQuery.isLoading && !projectCatalogQuery.data) {
+    return (
+      <div className="flex h-full w-full bg-[var(--background)]">
+        <AppHotkeyListener />
+      </div>
+    );
+  }
+
+  if (projects.length === 0) {
+    return (
+      <div className="flex h-full w-full bg-[var(--background)] text-[var(--foreground)]">
+        <AppHotkeyListener />
+        <WelcomeScreen onAddProject={handleAddProject} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full w-full flex-col bg-[var(--background)] text-[var(--foreground)]">
       <AppHotkeyListener />
@@ -493,7 +523,7 @@ export function DashboardLayout() {
             <SidebarInset>
               <TitleBar selectedWorkspace={selectedWorkspace} />
               <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-                <Outlet />
+                <Outlet context={{ onCreateWorkspace: handleCreateWorkspace }} />
               </main>
             </SidebarInset>
             {showRightSidebar && (

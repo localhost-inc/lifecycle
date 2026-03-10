@@ -105,7 +105,7 @@ function AuthorAvatar({ name, email }: { name: string; email: string }) {
       <img
         src={url}
         alt={name}
-        className="h-4 w-4 shrink-0 rounded-full"
+        className="h-5 w-5 shrink-0 rounded-full"
         onError={() => setImgFailed(true)}
       />
     );
@@ -184,8 +184,8 @@ export function HistoryTab({ error, isLoading, entries, onOpenCommit }: HistoryT
     <div className="flex flex-col">
       {groups.map((group) => (
         <div key={group.label}>
-          <div className="sticky top-0 z-10 flex px-2 py-1.5">
-            <span className="rounded-full bg-[var(--panel)]/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)] backdrop-blur-md">
+          <div className="sticky top-0 z-10 flex justify-center px-2 py-1.5">
+            <span className="rounded-full bg-[var(--background)]/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)] backdrop-blur-md">
               {group.label}
             </span>
           </div>

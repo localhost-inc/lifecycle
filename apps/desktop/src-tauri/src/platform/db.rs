@@ -1,5 +1,44 @@
 use crate::shared::errors::LifecycleError;
 
+const MIGRATIONS: [(&str, &str); 9] = [
+    (
+        "0001_initial_schema",
+        include_str!("migrations/0001_initial_schema.sql"),
+    ),
+    (
+        "0002_terminal_schema",
+        include_str!("migrations/0002_terminal_schema.sql"),
+    ),
+    (
+        "0003_workspace_name",
+        include_str!("migrations/0003_workspace_name.sql"),
+    ),
+    (
+        "0004_workspace_name_origin",
+        include_str!("migrations/0004_workspace_name_origin.sql"),
+    ),
+    (
+        "0005_workspace_source_ref_origin",
+        include_str!("migrations/0005_workspace_source_ref_origin.sql"),
+    ),
+    (
+        "0006_terminal_launch_type",
+        include_str!("migrations/0006_terminal_launch_type.sql"),
+    ),
+    (
+        "0007_terminal_harness_provider",
+        include_str!("migrations/0007_terminal_harness_provider.sql"),
+    ),
+    (
+        "0008_terminal_label_origin",
+        include_str!("migrations/0008_terminal_label_origin.sql"),
+    ),
+    (
+        "0009_workspace_manifest_fingerprint",
+        include_str!("migrations/0009_workspace_manifest_fingerprint.sql"),
+    ),
+];
+
 /// Holds the resolved path to the SQLite database file.
 pub struct DbPath(pub String);
 
@@ -12,55 +51,23 @@ pub fn open_db(db_path: &str) -> Result<rusqlite::Connection, LifecycleError> {
 }
 
 pub fn run_migrations(db_path: &str) -> Result<(), LifecycleError> {
-    let conn = open_db(db_path)?;
-    conn.execute_batch(include_str!("migrations/0001_initial_schema.sql"))
-        .map_err(|e| LifecycleError::Database(e.to_string()))?;
-    conn.execute_batch(include_str!("migrations/0002_terminal_schema.sql"))
-        .map_err(|e| LifecycleError::Database(e.to_string()))?;
-    ensure_workspace_identity_columns(&conn)?;
-    ensure_terminal_launch_columns(&conn)?;
-    ensure_terminal_metadata_columns(&conn)?;
+    let mut conn = open_db(db_path)?;
+    initialize_migration_table(&conn)?;
+
+    for (version, sql) in MIGRATIONS {
+        apply_migration(&mut conn, version, sql)?;
+    }
+
     reconcile_ephemeral_terminals(&conn)?;
     Ok(())
 }
 
-fn ensure_workspace_identity_columns(conn: &rusqlite::Connection) -> Result<(), LifecycleError> {
-    if !column_exists(conn, "workspace", "name") {
-        conn.execute(
-            "ALTER TABLE workspace ADD COLUMN name TEXT NOT NULL DEFAULT ''",
-            [],
-        )
-        .map_err(|e| LifecycleError::Database(e.to_string()))?;
-    }
-
-    if !column_exists(conn, "workspace", "name_origin") {
-        conn.execute(
-            "ALTER TABLE workspace ADD COLUMN name_origin TEXT NOT NULL DEFAULT 'manual'",
-            [],
-        )
-        .map_err(|e| LifecycleError::Database(e.to_string()))?;
-    }
-
-    if !column_exists(conn, "workspace", "source_ref_origin") {
-        conn.execute(
-            "ALTER TABLE workspace ADD COLUMN source_ref_origin TEXT NOT NULL DEFAULT 'manual'",
-            [],
-        )
-        .map_err(|e| LifecycleError::Database(e.to_string()))?;
-    }
-
+fn initialize_migration_table(conn: &rusqlite::Connection) -> Result<(), LifecycleError> {
     conn.execute(
-        "UPDATE workspace
-         SET name = COALESCE(NULLIF(TRIM(name), ''), source_ref)
-         WHERE name IS NULL OR TRIM(name) = ''",
-        [],
-    )
-    .map_err(|e| LifecycleError::Database(e.to_string()))?;
-
-    conn.execute(
-        "UPDATE workspace
-         SET source_ref_origin = 'manual'
-         WHERE source_ref_origin IS NULL OR TRIM(source_ref_origin) = ''",
+        "CREATE TABLE IF NOT EXISTS schema_migration (
+            version TEXT PRIMARY KEY NOT NULL,
+            applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )",
         [],
     )
     .map_err(|e| LifecycleError::Database(e.to_string()))?;
@@ -68,63 +75,36 @@ fn ensure_workspace_identity_columns(conn: &rusqlite::Connection) -> Result<(), 
     Ok(())
 }
 
-fn ensure_terminal_launch_columns(conn: &rusqlite::Connection) -> Result<(), LifecycleError> {
-    if !column_exists(conn, "terminal", "launch_type") {
-        conn.execute("ALTER TABLE terminal ADD COLUMN launch_type TEXT", [])
-            .map_err(|e| LifecycleError::Database(e.to_string()))?;
-    }
-
-    if !column_exists(conn, "terminal", "harness_provider") {
-        conn.execute("ALTER TABLE terminal ADD COLUMN harness_provider TEXT", [])
-            .map_err(|e| LifecycleError::Database(e.to_string()))?;
-    }
-
-    if column_exists(conn, "terminal", "harness") {
-        conn.execute(
-            "UPDATE terminal
-             SET harness_provider = COALESCE(harness_provider, harness)
-             WHERE harness_provider IS NULL AND harness IS NOT NULL",
-            [],
+fn apply_migration(
+    conn: &mut rusqlite::Connection,
+    version: &str,
+    sql: &str,
+) -> Result<(), LifecycleError> {
+    let already_applied: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM schema_migration WHERE version = ?1",
+            [version],
+            |row| row.get(0),
         )
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    if already_applied > 0 {
+        return Ok(());
     }
 
-    conn.execute(
-        "UPDATE terminal
-         SET launch_type = CASE
-             WHEN COALESCE(harness_provider, '') != '' THEN 'harness'
-             ELSE 'shell'
-         END
-         WHERE launch_type IS NULL OR launch_type = ''",
-        [],
+    let tx = conn
+        .transaction()
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    tx.execute_batch(sql)
+        .map_err(|e| LifecycleError::Database(format!("migration {version} failed: {e}")))?;
+    tx.execute(
+        "INSERT INTO schema_migration (version) VALUES (?1)",
+        [version],
     )
     .map_err(|e| LifecycleError::Database(e.to_string()))?;
-
-    Ok(())
-}
-
-fn ensure_terminal_metadata_columns(conn: &rusqlite::Connection) -> Result<(), LifecycleError> {
-    if !column_exists(conn, "terminal", "label_origin") {
-        conn.execute(
-            "ALTER TABLE terminal ADD COLUMN label_origin TEXT NOT NULL DEFAULT 'manual'",
-            [],
-        )
+    tx.commit()
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
-    }
 
     Ok(())
-}
-
-fn column_exists(conn: &rusqlite::Connection, table: &str, column: &str) -> bool {
-    let mut stmt = conn
-        .prepare(&format!("PRAGMA table_info({table})"))
-        .expect("prepare table info");
-    let rows = stmt
-        .query_map([], |row| row.get::<_, String>(1))
-        .expect("query table info");
-
-    let exists = rows.flatten().any(|name| name == column);
-    exists
 }
 
 fn reconcile_ephemeral_terminals(conn: &rusqlite::Connection) -> Result<(), LifecycleError> {
@@ -155,6 +135,18 @@ mod tests {
         path.to_string_lossy().into_owned()
     }
 
+    fn column_exists(conn: &rusqlite::Connection, table: &str, column: &str) -> bool {
+        let mut stmt = conn
+            .prepare(&format!("PRAGMA table_info({table})"))
+            .expect("prepare table info");
+        let rows = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .expect("query table info");
+
+        let exists = rows.flatten().any(|name| name == column);
+        exists
+    }
+
     #[test]
     fn run_migrations_is_idempotent() {
         let db_path = temp_db_path();
@@ -169,12 +161,37 @@ mod tests {
         assert!(column_exists(&conn, "workspace", "source_ref_origin"));
         assert!(column_exists(&conn, "workspace", "source_workspace_id"));
         assert!(column_exists(&conn, "workspace", "setup_completed_at"));
+        assert!(column_exists(&conn, "workspace", "manifest_fingerprint"));
         assert!(column_exists(&conn, "terminal", "workspace_id"));
         assert!(column_exists(&conn, "terminal", "launch_type"));
         assert!(column_exists(&conn, "terminal", "harness_provider"));
         assert!(column_exists(&conn, "terminal", "label_origin"));
         assert!(column_exists(&conn, "terminal", "status"));
         assert!(!column_exists(&conn, "workspace", "mode_state"));
+        let versions = {
+            let mut stmt = conn
+                .prepare("SELECT version FROM schema_migration ORDER BY version")
+                .expect("prepare migration select");
+            let rows = stmt
+                .query_map([], |row| row.get::<_, String>(0))
+                .expect("query migrations");
+            rows.map(|row| row.expect("migration row"))
+                .collect::<Vec<String>>()
+        };
+        assert_eq!(
+            versions,
+            vec![
+                "0001_initial_schema".to_string(),
+                "0002_terminal_schema".to_string(),
+                "0003_workspace_name".to_string(),
+                "0004_workspace_name_origin".to_string(),
+                "0005_workspace_source_ref_origin".to_string(),
+                "0006_terminal_launch_type".to_string(),
+                "0007_terminal_harness_provider".to_string(),
+                "0008_terminal_label_origin".to_string(),
+                "0009_workspace_manifest_fingerprint".to_string(),
+            ]
+        );
 
         drop(conn);
         let _ = std::fs::remove_file(db_path);
@@ -367,16 +384,27 @@ mod tests {
     fn run_migrations_backfills_workspace_source_ref_origin_to_manual() {
         let db_path = temp_db_path();
         let conn = open_db(&db_path).expect("open db");
-        conn.execute_batch(
-            "CREATE TABLE workspace (
-                id TEXT PRIMARY KEY NOT NULL,
-                project_id TEXT NOT NULL,
-                name TEXT NOT NULL DEFAULT '',
-                name_origin TEXT NOT NULL DEFAULT 'manual',
-                source_ref TEXT NOT NULL
-            );",
+        initialize_migration_table(&conn).expect("initialize migration table");
+        conn.execute_batch(include_str!("migrations/0001_initial_schema.sql"))
+            .expect("seed workspace schema");
+        conn.execute_batch(include_str!("migrations/0003_workspace_name.sql"))
+            .expect("apply workspace name migration");
+        conn.execute_batch(include_str!("migrations/0004_workspace_name_origin.sql"))
+            .expect("apply workspace name origin migration");
+        conn.execute(
+            "INSERT INTO schema_migration (version) VALUES (?1), (?2), (?3)",
+            rusqlite::params![
+                "0001_initial_schema",
+                "0003_workspace_name",
+                "0004_workspace_name_origin"
+            ],
         )
-        .expect("seed legacy workspace schema");
+        .expect("record applied migrations");
+        conn.execute(
+            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["project_1", "/tmp/project_1", "Project 1"],
+        )
+        .expect("insert project");
         conn.execute(
             "INSERT INTO workspace (id, project_id, name, name_origin, source_ref)
              VALUES (?1, ?2, ?3, ?4, ?5)",

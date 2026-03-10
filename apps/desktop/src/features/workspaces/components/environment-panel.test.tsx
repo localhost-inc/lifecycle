@@ -34,9 +34,9 @@ const services: ServiceRecord[] = [
     status_reason: null,
     default_port: 3000,
     effective_port: 3000,
-    preview_state: "disabled",
+    preview_state: "ready",
     preview_failure_reason: null,
-    preview_url: null,
+    preview_url: "http://localhost:3000",
     created_at: "2026-03-09T10:00:00.000Z",
     updated_at: "2026-03-09T10:00:00.000Z",
   },
@@ -50,21 +50,26 @@ const services: ServiceRecord[] = [
     status_reason: null,
     default_port: 8787,
     effective_port: 8787,
-    preview_state: "disabled",
+    preview_state: "provisioning",
     preview_failure_reason: null,
-    preview_url: null,
+    preview_url: "http://localhost:8787",
     created_at: "2026-03-09T10:00:00.000Z",
     updated_at: "2026-03-09T10:00:00.000Z",
   },
 ];
+
+const readyWebService = services[0]!;
 
 describe("EnvironmentPanel", () => {
   test("renders environment controls and tabs for a ready workspace", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
         hasManifest: true,
+        isManifestStale: false,
+        manifestState: "valid",
         onRun: async () => {},
         onStop: async () => {},
+        onUpdateService: async () => {},
         services,
         workspace: baseWorkspace,
       }),
@@ -83,8 +88,11 @@ describe("EnvironmentPanel", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
         hasManifest: true,
+        isManifestStale: false,
+        manifestState: "valid",
         onRun: async () => {},
         onStop: async () => {},
+        onUpdateService: async () => {},
         services,
         workspace: {
           ...baseWorkspace,
@@ -104,8 +112,11 @@ describe("EnvironmentPanel", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
         hasManifest: false,
+        isManifestStale: false,
+        manifestState: "missing",
         onRun: async () => {},
         onStop: async () => {},
+        onUpdateService: async () => {},
         services: [],
         workspace: {
           ...baseWorkspace,
@@ -118,5 +129,73 @@ describe("EnvironmentPanel", () => {
     expect(markup).toContain('disabled=""');
     expect(markup).toContain("Services");
     expect(markup).toContain("Logs");
+  });
+
+  test("shows restart guidance when a running workspace manifest is stale", () => {
+    const markup = renderToStaticMarkup(
+      createElement(EnvironmentPanel, {
+        hasManifest: true,
+        isManifestStale: true,
+        manifestState: "valid",
+        onRun: async () => {},
+        onStop: async () => {},
+        onUpdateService: async () => {},
+        services,
+        workspace: baseWorkspace,
+      }),
+    );
+
+    expect(markup).toContain("Manifest changed. Stop and run again to apply service updates.");
+  });
+
+  test("renders service controls and preview metadata", () => {
+    const markup = renderToStaticMarkup(
+      createElement(EnvironmentPanel, {
+        hasManifest: true,
+        isManifestStale: false,
+        manifestState: "valid",
+        onRun: async () => {},
+        onStop: async () => {},
+        onUpdateService: async () => {},
+        services,
+        workspace: baseWorkspace,
+      }),
+    );
+
+    expect(markup).toContain("Exposure");
+    expect(markup).toContain("Port");
+    expect(markup).toContain("Preview ready");
+    expect(markup).toContain("Preview provisioning");
+    expect(markup).toContain("Open");
+    expect(markup).toContain("Copy URL");
+    expect(markup).toContain("http://localhost:3000");
+  });
+
+  test("renders sleeping preview state for local services while the workspace sleeps", () => {
+    const markup = renderToStaticMarkup(
+      createElement(EnvironmentPanel, {
+        hasManifest: true,
+        isManifestStale: false,
+        manifestState: "valid",
+        onRun: async () => {},
+        onStop: async () => {},
+        onUpdateService: async () => {},
+        services: [
+          {
+            ...readyWebService,
+            preview_state: "sleeping",
+            status: "stopped",
+            updated_at: "2026-03-09T10:05:00.000Z",
+          },
+        ],
+        workspace: {
+          ...baseWorkspace,
+          status: "sleeping",
+        },
+      }),
+    );
+
+    expect(markup).toContain("Preview sleeping");
+    expect(markup).toContain("http://localhost:3000");
   });
 });

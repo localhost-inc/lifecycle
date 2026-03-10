@@ -126,3 +126,25 @@ export function parseManifest(text: string): ManifestParseResult {
 
   return { valid: false, errors };
 }
+
+function stableSerialize(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableSerialize(entry)).join(",")}]`;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>).sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
+
+  return `{${entries
+    .map(([key, entryValue]) => `${JSON.stringify(key)}:${stableSerialize(entryValue)}`)
+    .join(",")}}`;
+}
+
+export function getManifestFingerprint(config: LifecycleConfig): string {
+  return stableSerialize(config);
+}

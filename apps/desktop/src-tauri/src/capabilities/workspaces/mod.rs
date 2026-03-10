@@ -9,6 +9,7 @@ pub mod open;
 mod paths;
 pub mod query;
 pub mod rename;
+pub mod service;
 mod shared;
 pub mod start;
 pub mod state_machine;

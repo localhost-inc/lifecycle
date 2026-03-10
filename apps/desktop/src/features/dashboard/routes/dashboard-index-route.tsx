@@ -1,8 +1,15 @@
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useOutletContext } from "react-router-dom";
+import { Layers } from "lucide-react";
+import { Button, EmptyState } from "@lifecycle/ui";
 import { useProjectCatalog } from "../../projects/hooks";
+
+interface DashboardOutletContext {
+  onCreateWorkspace: (projectId: string) => void;
+}
 
 export function DashboardIndexRoute() {
   const [searchParams] = useSearchParams();
+  const { onCreateWorkspace } = useOutletContext<DashboardOutletContext>();
   const projectCatalogQuery = useProjectCatalog();
   const projects = projectCatalogQuery.data?.projects ?? [];
   const selectedProjectId = searchParams.get("project");
@@ -31,19 +38,23 @@ export function DashboardIndexRoute() {
   if (selectedProjectId) {
     const selectedProject = projects.find((project) => project.id === selectedProjectId);
     return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <div className="text-center">
-          <h2 className="text-lg font-semibold text-[var(--foreground)]">No workspace selected</h2>
-          <p className="mt-2 text-sm text-[var(--muted-foreground)]">
-            {selectedProject
-              ? `Project ${selectedProject.name} has no active workspace yet.`
-              : "This project has no active workspace yet."}
-          </p>
-          <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-            Create a workspace from the project row in the sidebar.
-          </p>
-        </div>
-      </div>
+      <EmptyState
+        icon={<Layers />}
+        title="No workspace selected"
+        description={
+          selectedProject
+            ? `Project ${selectedProject.name} has no active workspace yet.`
+            : "This project has no active workspace yet."
+        }
+        action={
+          <Button
+            variant="secondary"
+            onClick={() => onCreateWorkspace(selectedProjectId)}
+          >
+            + New workspace
+          </Button>
+        }
+      />
     );
   }
 

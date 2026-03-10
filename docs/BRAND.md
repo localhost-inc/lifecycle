@@ -21,7 +21,8 @@
 
 - Always "Lifecycle" (title case) in prose
 - `lifecycle` (lowercase) in code, CLI commands, config files, package names
-- Logo/wordmark: TBD (defer until visual identity matures)
+- Logo mark: [docs/brand/lifecycle-logo.svg](./brand/lifecycle-logo.svg)
+- Wordmark: TBD (defer until visual identity matures)
 
 ## Voice & Tone
 

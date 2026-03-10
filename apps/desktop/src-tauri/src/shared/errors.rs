@@ -224,6 +224,9 @@ pub enum LifecycleError {
     #[error("Invalid state transition from '{from}' to '{to}'")]
     InvalidStateTransition { from: String, to: String },
 
+    #[error("Workspace mutation locked while environment status is '{status}'")]
+    WorkspaceMutationLocked { status: String },
+
     #[error("Workspace not found: {0}")]
     WorkspaceNotFound(String),
 

@@ -103,12 +103,14 @@ pub fn run() {
             capabilities::workspaces::commands::create_workspace,
             capabilities::workspaces::commands::rename_workspace,
             capabilities::workspaces::commands::start_services,
+            capabilities::workspaces::commands::sync_workspace_manifest,
             capabilities::workspaces::commands::stop_workspace,
             capabilities::workspaces::commands::get_workspace,
             capabilities::workspaces::commands::get_workspace_by_id,
             capabilities::workspaces::commands::list_workspaces,
             capabilities::workspaces::commands::list_workspaces_by_project,
             capabilities::workspaces::commands::get_workspace_services,
+            capabilities::workspaces::commands::update_workspace_service,
             capabilities::workspaces::commands::get_current_branch,
             capabilities::workspaces::commands::list_workspace_terminals,
             capabilities::workspaces::commands::get_terminal,
@@ -179,13 +181,8 @@ fn disable_main_webview_scroll_elasticity(_app: &tauri::AppHandle) -> Result<(),
 
 #[cfg(debug_assertions)]
 fn expand_main_window_for_dev(app: &tauri::AppHandle) -> Result<(), LifecycleError> {
-    let main_window = app
-        .get_webview_window("main")
-        .ok_or_else(|| LifecycleError::AttachFailed("main webview window not found".to_string()))?;
-
-    main_window
-        .maximize()
-        .map_err(|error| LifecycleError::AttachFailed(error.to_string()))
+    let _ = app;
+    Ok(())
 }
 
 #[cfg(not(debug_assertions))]

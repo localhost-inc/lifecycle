@@ -1,4 +1,5 @@
 use crate::platform::db::DbPath;
+use crate::platform::lifecycle_root::resolve_lifecycle_root;
 use crate::platform::native_terminal::{self, NativeTerminalFrame};
 use crate::platform::runtime::terminal::{
     TerminalExitOutcome, TerminalStreamChunk, TerminalSupervisor,
@@ -321,9 +322,7 @@ fn persist_terminal_attachment_bytes(
         });
     }
 
-    let attachment_dir = Path::new(&workspace.worktree_path)
-        .join(".lifecycle")
-        .join("attachments");
+    let attachment_dir = terminal_attachment_dir(workspace_id)?;
     std::fs::create_dir_all(&attachment_dir).map_err(|error| {
         LifecycleError::AttachmentPersistenceFailed(format!(
             "failed to create attachment directory: {error}"
@@ -341,8 +340,24 @@ fn persist_terminal_attachment_bytes(
     Ok(SavedTerminalAttachment {
         absolute_path: attachment_path.to_string_lossy().to_string(),
         file_name: stored_file_name.clone(),
-        relative_path: format!(".lifecycle/attachments/{stored_file_name}"),
+        relative_path: format!("attachments/{workspace_id}/{stored_file_name}"),
     })
+}
+
+fn terminal_attachment_dir_for_root(lifecycle_root_dir: &Path, workspace_id: &str) -> PathBuf {
+    lifecycle_root_dir.join("attachments").join(workspace_id)
+}
+
+fn terminal_attachment_dir(workspace_id: &str) -> Result<PathBuf, LifecycleError> {
+    let lifecycle_root_dir = resolve_lifecycle_root().map_err(|error| {
+        LifecycleError::AttachmentPersistenceFailed(format!(
+            "failed to resolve Lifecycle root: {error}"
+        ))
+    })?;
+    Ok(terminal_attachment_dir_for_root(
+        &lifecycle_root_dir,
+        workspace_id,
+    ))
 }
 
 pub async fn save_terminal_attachment(
@@ -1295,6 +1310,17 @@ mod tests {
                 worktree_path: "/tmp/worktree".to_string(),
             }
         ));
+    }
+
+    #[test]
+    fn terminal_attachment_dir_uses_lifecycle_root_storage() {
+        let path =
+            terminal_attachment_dir_for_root(Path::new("/tmp/lifecycle-root"), "workspace-123");
+
+        assert_eq!(
+            path,
+            PathBuf::from("/tmp/lifecycle-root/attachments/workspace-123")
+        );
     }
 
     #[test]

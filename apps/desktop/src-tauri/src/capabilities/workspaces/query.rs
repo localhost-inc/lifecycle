@@ -15,6 +15,7 @@ pub struct WorkspaceRecord {
     pub worktree_path: Option<String>,
     pub mode: String,
     pub status: String,
+    pub manifest_fingerprint: Option<String>,
     pub failure_reason: Option<String>,
     pub failed_at: Option<String>,
     pub created_by: Option<String>,
@@ -92,14 +93,15 @@ fn map_workspace_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRe
         worktree_path: row.get(5)?,
         mode: row.get(6)?,
         status: row.get(7)?,
-        failure_reason: row.get(8)?,
-        failed_at: row.get(9)?,
-        created_by: row.get(10)?,
-        source_workspace_id: row.get(11)?,
-        created_at: row.get(12)?,
-        updated_at: row.get(13)?,
-        last_active_at: row.get(14)?,
-        expires_at: row.get(15)?,
+        manifest_fingerprint: row.get(8)?,
+        failure_reason: row.get(9)?,
+        failed_at: row.get(10)?,
+        created_by: row.get(11)?,
+        source_workspace_id: row.get(12)?,
+        created_at: row.get(13)?,
+        updated_at: row.get(14)?,
+        last_active_at: row.get(15)?,
+        expires_at: row.get(16)?,
     })
 }
 
@@ -109,7 +111,7 @@ pub async fn get_workspace(
 ) -> Result<Option<WorkspaceRecord>, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, name, source_ref, git_sha, worktree_path, mode, status, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at FROM workspace WHERE project_id = ?1 ORDER BY created_at DESC LIMIT 1"
+        "SELECT id, project_id, name, source_ref, git_sha, worktree_path, mode, status, manifest_fingerprint, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at FROM workspace WHERE project_id = ?1 ORDER BY created_at DESC LIMIT 1"
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     let row = stmt.query_row(params![project_id], map_workspace_record);
@@ -127,7 +129,7 @@ pub async fn get_workspace_by_id(
 ) -> Result<Option<WorkspaceRecord>, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, name, source_ref, git_sha, worktree_path, mode, status, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at FROM workspace WHERE id = ?1 LIMIT 1"
+        "SELECT id, project_id, name, source_ref, git_sha, worktree_path, mode, status, manifest_fingerprint, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at FROM workspace WHERE id = ?1 LIMIT 1"
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     let row = stmt.query_row(params![workspace_id], map_workspace_record);
@@ -142,7 +144,7 @@ pub async fn get_workspace_by_id(
 pub async fn list_workspaces(db_path: &str) -> Result<Vec<WorkspaceRecord>, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, name, source_ref, git_sha, worktree_path, mode, status, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at FROM workspace WHERE status != 'destroying' ORDER BY created_at DESC"
+        "SELECT id, project_id, name, source_ref, git_sha, worktree_path, mode, status, manifest_fingerprint, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at FROM workspace WHERE status != 'destroying' ORDER BY created_at DESC"
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     let rows = stmt

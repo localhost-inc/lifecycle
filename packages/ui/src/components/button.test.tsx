@@ -8,10 +8,9 @@ describe("buttonVariants", () => {
     const className = buttonVariants({ variant: "outline" });
 
     expect(className).toContain("cursor-pointer");
-    expect(className).toContain("border ");
-    expect(className).toContain("border-[var(--border)]");
+    expect(className).toContain("bg-[var(--muted)]");
     expect(className).toContain("hover:bg-[var(--surface-hover)]");
-    expect(className).toContain("rounded-lg");
+    expect(className).toContain("rounded-xl");
   });
 
   test("keeps ghost actions borderless", () => {

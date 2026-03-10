@@ -1,10 +1,13 @@
+use crate::capabilities::workspaces::manifest::LifecycleConfig;
 use crate::platform::db::{open_db, DbPath};
 use crate::platform::git::worktree;
 use crate::shared::errors::{LifecycleError, WorkspaceFailureReason, WorkspaceStatus};
 use rusqlite::params;
 use tauri::{AppHandle, State};
 
-use super::shared::{emit_workspace_status, update_workspace_status_db};
+use super::shared::{
+    emit_workspace_status, reconcile_workspace_services_db, update_workspace_status_db,
+};
 
 pub async fn create_workspace(
     app: AppHandle,
@@ -14,7 +17,16 @@ pub async fn create_workspace(
     workspace_name: Option<String>,
     base_ref: Option<String>,
     worktree_root: Option<String>,
+    manifest_json: Option<String>,
+    manifest_fingerprint: Option<String>,
 ) -> Result<String, LifecycleError> {
+    let manifest = manifest_json
+        .as_deref()
+        .map(|json| {
+            serde_json::from_str::<LifecycleConfig>(json)
+                .map_err(|error| LifecycleError::ManifestInvalid(error.to_string()))
+        })
+        .transpose()?;
     let workspace_id = uuid::Uuid::new_v4().to_string();
     let workspace_name = workspace_name
         .and_then(normalize_optional_string)
@@ -44,6 +56,13 @@ pub async fn create_workspace(
         worktree_root.as_deref(),
     )
     .await?;
+
+    reconcile_workspace_services_db(
+        &db,
+        &workspace_id,
+        manifest.as_ref(),
+        manifest_fingerprint.as_deref(),
+    )?;
 
     Ok(workspace_id)
 }

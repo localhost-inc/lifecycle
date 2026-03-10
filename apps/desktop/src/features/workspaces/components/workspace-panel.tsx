@@ -1,15 +1,20 @@
-import type { GitLogEntry, WorkspaceRecord } from "@lifecycle/contracts";
+import {
+  getManifestFingerprint,
+  type GitLogEntry,
+  type ServiceRecord,
+  type WorkspaceRecord,
+} from "@lifecycle/contracts";
 import { Alert, AlertDescription, AlertTitle, EmptyState, SetupProgress } from "@lifecycle/ui";
 import { FileJson } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useCallback, useLayoutEffect, useState } from "react";
 import type { ManifestStatus } from "../../projects/api/projects";
-import { ServiceIndicator } from "./service-indicator";
+import { useQueryClient } from "../../../query";
 import type { OpenDocumentRequest } from "./workspace-surface-logic";
 import { WorkspaceSidebar } from "./workspace-sidebar";
 import { WorkspaceSurface } from "./workspace-surface";
-import { startServices, stopWorkspace } from "../api";
-import { useWorkspaceServices, useWorkspaceSetup } from "../hooks";
+import { startServices, stopWorkspace, updateWorkspaceService } from "../api";
+import { useWorkspaceServices, useWorkspaceSetup, workspaceKeys } from "../hooks";
 import { workspaceSupportsFilesystemInteraction } from "../lib/workspace-capabilities";
 
 interface WorkspacePanelProps {
@@ -18,10 +23,13 @@ interface WorkspacePanelProps {
 }
 
 export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProps) {
+  const client = useQueryClient();
   const [rightRailRoot, setRightRailRoot] = useState<HTMLElement | null>(null);
   const [openDocumentRequest, setOpenDocumentRequest] = useState<OpenDocumentRequest | null>(null);
   const hasManifest = manifestStatus?.state === "valid";
   const config = hasManifest ? manifestStatus.result.config : null;
+  const manifestState = manifestStatus?.state ?? "missing";
+  const manifestFingerprint = config ? getManifestFingerprint(config) : null;
   const servicesQuery = useWorkspaceServices(workspace.id);
   const setupQuery = useWorkspaceSetup(workspace.id);
   const status = workspace.status;
@@ -33,7 +41,7 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
     if (!config) return;
     try {
       const manifestJson = JSON.stringify(config);
-      await startServices(workspace.id, manifestJson);
+      await startServices(workspace.id, manifestJson, getManifestFingerprint(config));
     } catch (err) {
       console.error("Failed to start services:", err);
       throw err;
@@ -49,12 +57,38 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
     }
   }, [workspace.id]);
 
+  const handleUpdateService = useCallback(
+    async ({
+      exposure,
+      portOverride,
+      serviceName,
+    }: {
+      exposure: ServiceRecord["exposure"];
+      portOverride: number | null;
+      serviceName: string;
+    }) => {
+      try {
+        await updateWorkspaceService(workspace.id, serviceName, { exposure, portOverride });
+        client.invalidate(workspaceKeys.services(workspace.id));
+      } catch (err) {
+        console.error("Failed to update workspace service:", err);
+        throw err;
+      }
+    },
+    [client, workspace.id],
+  );
+
   const supportsTerminalInteraction = workspaceSupportsFilesystemInteraction(workspace);
   const showMissingManifest = status === "sleeping" && !hasManifest;
   const showSetup = setupSteps.length > 0 && (status === "starting" || status === "failed");
-  const showServices = services.length > 0 && status !== "ready";
+  const isManifestStale =
+    manifestState === "valid" &&
+    manifestFingerprint !== null &&
+    workspace.manifest_fingerprint !== null &&
+    workspace.manifest_fingerprint !== undefined &&
+    workspace.manifest_fingerprint !== manifestFingerprint;
 
-  const hasNotices = showSetup || showServices || (status === "failed" && Boolean(failureReason));
+  const hasNotices = showSetup || (status === "failed" && Boolean(failureReason));
   const handleOpenDiff = useCallback((filePath: string) => {
     setOpenDocumentRequest({
       focusPath: filePath,
@@ -91,21 +125,8 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
             </div>
           )}
 
-          {showServices && (
-            <div className={showSetup ? "mt-6" : ""}>
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-                Services
-              </h3>
-              <div className="space-y-2">
-                {services.map((svc) => (
-                  <ServiceIndicator key={svc.service_name} service={svc} />
-                ))}
-              </div>
-            </div>
-          )}
-
           {status === "failed" && failureReason && (
-            <div className={showSetup || showServices ? "mt-6" : ""}>
+            <div className={showSetup ? "mt-6" : ""}>
               <Alert variant="destructive">
                 <AlertTitle>Workspace failed</AlertTitle>
                 <AlertDescription>{failureReason}</AlertDescription>
@@ -144,19 +165,6 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
           </div>
         )}
 
-        {showServices && (
-          <div className="mt-8">
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-              Services
-            </h3>
-            <div className="space-y-2">
-              {services.map((svc) => (
-                <ServiceIndicator key={svc.service_name} service={svc} />
-              ))}
-            </div>
-          </div>
-        )}
-
         {status === "failed" && failureReason && (
           <div className="mt-8">
             <Alert variant="destructive">
@@ -176,8 +184,11 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
         createPortal(
           <WorkspaceSidebar
             hasManifest={hasManifest}
+            isManifestStale={isManifestStale}
+            manifestState={manifestState}
             onRun={handleRun}
             onStop={handleStop}
+            onUpdateService={handleUpdateService}
             onOpenDiff={handleOpenDiff}
             onOpenCommitDiff={handleOpenCommitDiff}
             services={services}
@@ -188,8 +199,11 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
       ) : (
         <WorkspaceSidebar
           hasManifest={hasManifest}
+          isManifestStale={isManifestStale}
+          manifestState={manifestState}
           onRun={handleRun}
           onStop={handleStop}
+          onUpdateService={handleUpdateService}
           onOpenDiff={handleOpenDiff}
           onOpenCommitDiff={handleOpenCommitDiff}
           services={services}

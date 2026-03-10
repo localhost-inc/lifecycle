@@ -16,23 +16,32 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: "Geist Pixel Square";
+  src: url("./fonts/GeistPixel-Square.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 @theme {
   --font-heading: "Geist", "Inter", system-ui, sans-serif;
   --font-body: "Geist", "Inter", system-ui, sans-serif;
   --font-sans: var(--font-body);
   --font-mono: "Lifecycle Mono", "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+  --font-pixel: "Geist Pixel Square", monospace;
 
   --radius-xs: 2px;
   --radius-sm: 4px;
   --radius: 6px;
   --radius-md: 8px;
   --radius-lg: 10px;
-  --radius-xl: 14px;
+  --radius-xl: 12px;
   --radius-2xl: 18px;
   --radius-3xl: 24px;
 
   --control-compact-height: 32px;
-  --control-compact-radius: 13px;
+  --control-compact-radius: var(--radius-xl);
   --control-compact-padding-x: 12px;
 }
 
@@ -41,27 +50,27 @@
 }
 
 .app-panel-title {
-  font-size: 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
   font-weight: 500;
   color: var(--sidebar-muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 }
 
 .compact-control-shell {
   display: inline-flex;
   align-items: center;
   overflow: hidden;
-  border: 1px solid var(--border);
   border-radius: var(--control-compact-radius);
-  background: var(--panel);
+  background: var(--muted);
 }
 
 .compact-control-standalone {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border);
   border-radius: var(--control-compact-radius);
-  background: var(--panel);
 }
 
 .compact-control-item {
@@ -85,11 +94,7 @@
 }
 
 .compact-control-divider {
-  border-left: 1px solid var(--border);
-}
-
-.compact-control-divider:first-child {
-  border-left: 0;
+  border-left: 1px solid var(--background);
 }
 
 .compact-control-label {
@@ -125,8 +130,12 @@
   color: var(--muted-foreground);
 }
 
+.compact-control-standalone.compact-control-tone-muted {
+  border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+
 .compact-control-tone-muted:hover:not(:disabled):not([aria-disabled="true"]) {
-  background: var(--surface-hover);
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
   color: var(--foreground);
 }
 
@@ -135,14 +144,38 @@
 }
 
 .compact-control-tone-foreground:hover:not(:disabled):not([aria-disabled="true"]) {
-  background: var(--surface-hover);
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
 }
 
 .compact-control-tone-active {
-  background: var(--surface-selected);
+  background: var(--muted);
   color: var(--foreground);
 }
 
 .compact-control-tone-active:hover:not(:disabled):not([aria-disabled="true"]) {
-  background: var(--surface-selected);
+  background: var(--muted);
+}
+
+.compact-control-underline-tab {
+  position: relative;
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  box-shadow: inset 0 -1px 0 0 transparent;
+}
+
+.compact-control-underline-tab:hover:not(:disabled) {
+  color: var(--foreground);
+}
+
+.compact-control-underline-tab[data-state="active"],
+.compact-control-underline-tab[data-active] {
+  color: var(--foreground);
+  box-shadow: inset 0 -1px 0 0 var(--foreground);
 }

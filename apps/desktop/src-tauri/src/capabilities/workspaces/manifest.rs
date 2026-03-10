@@ -2,7 +2,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct LifecycleConfig {
     pub setup: SetupConfig,
     pub services: HashMap<String, ServiceConfig>,
@@ -12,12 +12,12 @@ pub struct LifecycleConfig {
     pub mcps: Option<HashMap<String, McpServerConfig>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct SetupConfig {
     pub steps: Vec<SetupStep>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct SetupStep {
     pub name: String,
     pub command: String,
@@ -26,7 +26,7 @@ pub struct SetupStep {
     pub env_vars: Option<HashMap<String, String>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "runtime")]
 pub enum ServiceConfig {
     #[serde(rename = "process")]
@@ -73,7 +73,7 @@ impl ServiceConfig {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct ProcessService {
     pub command: String,
     pub cwd: Option<String>,
@@ -86,7 +86,7 @@ pub struct ProcessService {
     pub share_default: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct ImageService {
     pub image: String,
     pub command: Option<String>,
@@ -100,7 +100,7 @@ pub struct ImageService {
     pub share_default: Option<bool>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "type")]
 pub enum HealthCheck {
     #[serde(rename = "tcp")]
@@ -114,7 +114,7 @@ pub enum HealthCheck {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct SecretConfig {
     #[serde(rename = "ref")]
     pub secret_ref: String,
@@ -122,7 +122,7 @@ pub struct SecretConfig {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct ResetConfig {
     pub strategy: Option<String>,
     pub command: Option<String>,
@@ -130,7 +130,7 @@ pub struct ResetConfig {
 }
 
 #[allow(dead_code)]
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct McpServerConfig {
     pub command: String,
     pub args: Option<Vec<String>>,

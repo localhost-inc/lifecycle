@@ -2,6 +2,8 @@
 
 The `WorkspaceProvider` is the primary extensibility seam for workspace lifecycle operations. It is the adapter layer between the control plane and the environment where workspaces actually run. Workspace mode is selected **per-workspace** at creation time and stored as `workspace.mode`.
 
+Preview transport and tunnel-routing direction is captured in [tunnel.md](./tunnel.md).
+
 ## Workspace vs Environment Boundary
 
 Lifecycle should model three layers explicitly:
@@ -60,7 +62,7 @@ Provider-specific runtime detail should not be stuffed into a generic `mode_stat
 `lifecycle.json` describes **WHAT** to run. The `WorkspaceProvider` decides **WHERE**.
 
 1. All workspaces are lifecycle-managed execution environments backed by a `WorkspaceProvider`.
-2. Every workspace supports `share` with team-accessible preview URL (mechanism varies by provider).
+2. Workspaces may expose previews through direct local URLs or optional tunnel-backed share URLs, depending on provider capabilities and configured policy.
 3. Org TTL and cleanup are enforced by the control plane regardless of provider.
 4. If the target provider's capacity is unavailable, create request is rejected with actionable error.
 5. V1 ships both `CloudWorkspaceProvider` and `LocalWorkspaceProvider`. Both are implemented against the `WorkspaceProvider` interface and validated in parallel from Milestone 3 onward.
