@@ -15,6 +15,7 @@ import {
 } from "../../terminals/api";
 import { terminalKeys, useWorkspaceTerminals } from "../../terminals/hooks";
 import { useTerminalResponseReady } from "../../terminals/state/terminal-response-ready-provider";
+import { useWorkspaceActivity } from "../hooks";
 import { subscribeToNativeWorkspaceShortcutEvents } from "../api";
 import { isRuntimeTabKey, writeWorkspaceSurfaceState } from "../state/workspace-surface-state";
 import {
@@ -57,6 +58,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
   const client = useQueryClient();
   const { clearTerminalResponseReady, isTerminalResponseReady, isTerminalTurnRunning } =
     useTerminalResponseReady();
+  const activityQuery = useWorkspaceActivity(workspaceId);
   const terminalsQuery = useWorkspaceTerminals(workspaceId);
   const [creatingSelection, setCreatingSelection] = useState<"shell" | HarnessProvider | null>(
     null,
@@ -570,6 +572,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
       <WorkspaceSurfacePanels
         activeTabKey={state.activeTabKey}
         activeTerminalId={activeTerminalId}
+        activity={activityQuery.data ?? []}
         creatingSelection={creatingSelection}
         documents={state.documents}
         hasVisibleTabs={visibleTabs.length > 0}

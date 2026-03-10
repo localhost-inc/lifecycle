@@ -199,7 +199,7 @@ export function TitleBarActions({ workspace }: TitleBarActionsProps) {
             <OpenInAppIcon
               appId={defaultTarget.id}
               iconDataUrl={defaultTarget.iconDataUrl}
-              sizeClass="size-[21px]"
+              sizeClass="size-[18px]"
             />
           }
           onClick={() => void handleOpenIn(defaultTarget.id)}

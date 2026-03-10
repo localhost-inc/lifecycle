@@ -36,6 +36,7 @@ The workspace center panel is a shared surface that can host both provider-backe
 2. `Cmd/Ctrl + T` should open a launcher tab.
 3. A newly opened workspace should default to a launcher tab when no visible tab state exists yet.
 4. Launcher tabs may create new runtime tabs or reopen prior sessions, but they do not own runtime lifecycle.
+5. Launcher tabs may surface recent sessions and a workspace-scoped lifecycle activity feed sourced from normalized events.
 
 ## Git Diff Documents
 

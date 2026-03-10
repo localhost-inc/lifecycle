@@ -4,10 +4,13 @@ import type { TerminalRecord } from "@lifecycle/contracts";
 import type { ReactNode } from "react";
 import type { CreateTerminalRequest, HarnessProvider } from "../../terminals/api";
 import { TerminalSessionHistory } from "../../terminals/components/terminal-session-history";
+import type { WorkspaceActivityItem } from "../hooks";
 import { ClaudeIcon, CodexIcon, ShellIcon } from "./surface-icons";
+import { WorkspaceActivityFeed } from "./workspace-activity-feed";
 
 interface WorkspaceLauncherSurfaceProps {
   activeTerminalId: string | null;
+  activity: WorkspaceActivityItem[];
   creatingSelection: "shell" | HarnessProvider | null;
   onCreateTerminal: (input: CreateTerminalRequest) => void;
   onOpenTerminal: (terminalId: string) => void;
@@ -48,6 +51,7 @@ function LauncherActionCard({
 
 export function WorkspaceLauncherSurface({
   activeTerminalId,
+  activity,
   creatingSelection,
   onCreateTerminal,
   onOpenTerminal,
@@ -59,7 +63,7 @@ export function WorkspaceLauncherSurface({
       <div className="mx-auto flex w-full max-w-5xl flex-col px-6 py-8">
         <div className="grid gap-4 md:grid-cols-3">
           <LauncherActionCard
-            description="Open a plain shell in this workspace."
+            description="Plain shell tab."
             disabled={creatingSelection !== null}
             icon={
               creatingSelection === "shell" ? (
@@ -72,7 +76,7 @@ export function WorkspaceLauncherSurface({
             onClick={() => onCreateTerminal({ launchType: "shell" })}
           />
           <LauncherActionCard
-            description="Start a Claude Code session in a fresh tab."
+            description="Fresh Claude tab."
             disabled={creatingSelection !== null}
             icon={
               creatingSelection === "claude" ? (
@@ -85,7 +89,7 @@ export function WorkspaceLauncherSurface({
             onClick={() => onCreateTerminal({ harnessProvider: "claude", launchType: "harness" })}
           />
           <LauncherActionCard
-            description="Start a Codex session in a fresh tab."
+            description="Fresh Codex tab."
             disabled={creatingSelection !== null}
             icon={
               creatingSelection === "codex" ? (
@@ -99,26 +103,35 @@ export function WorkspaceLauncherSurface({
           />
         </div>
 
-        <div className="mt-8 flex flex-col gap-3">
-          <p className="font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-[var(--muted-foreground)]">
-            Recent sessions
-          </p>
-          <div className="overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--panel)]">
-            {terminals.length > 0 ? (
-              <TerminalSessionHistory
-                activeTerminalId={activeTerminalId}
-                creatingSelection={creatingSelection}
-                onOpenTerminal={onOpenTerminal}
-                onResumeTerminal={onResumeTerminal}
-                terminals={terminals}
-              />
-            ) : (
-              <div className="px-4 py-3">
-                <p className="text-xs text-[var(--muted-foreground)]/60">
-                  Sessions will appear here as you work.
+        <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div className="min-w-0">
+            <p className="font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-[var(--muted-foreground)]">
+              Recent sessions
+            </p>
+            <div className="mt-3">
+              {terminals.length > 0 ? (
+                <TerminalSessionHistory
+                  activeTerminalId={activeTerminalId}
+                  creatingSelection={creatingSelection}
+                  onOpenTerminal={onOpenTerminal}
+                  onResumeTerminal={onResumeTerminal}
+                  terminals={terminals}
+                />
+              ) : (
+                <p className="py-3 text-xs text-[var(--muted-foreground)]/60">
+                  No sessions yet.
                 </p>
-              </div>
-            )}
+              )}
+            </div>
+          </div>
+
+          <div className="min-w-0">
+            <p className="font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-[var(--muted-foreground)]">
+              Workspace activity
+            </p>
+            <div className="mt-3">
+              <WorkspaceActivityFeed items={activity} />
+            </div>
           </div>
         </div>
 
@@ -131,7 +144,7 @@ export function WorkspaceLauncherSurface({
           >
             Quick Shell
           </Button>
-          <span>Cmd/Ctrl + T opens another launcher tab.</span>
+          <span>Cmd/Ctrl + T opens a new launcher tab.</span>
         </div>
       </div>
     </div>

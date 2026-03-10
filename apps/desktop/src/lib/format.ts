@@ -17,8 +17,8 @@ export function formatCompactRelativeTime(iso: string): string {
 
   const diff = Date.now() - new Date(iso).getTime();
 
-  if (diff < 0) return "just now";
-  if (diff < MINUTE) return "just now";
+  if (diff < 0) return "Now";
+  if (diff < MINUTE) return "Now";
   if (diff < HOUR) return `${Math.floor(diff / MINUTE)}m`;
   if (diff < DAY) return `${Math.floor(diff / HOUR)}h`;
   if (diff < 30 * DAY) return `${Math.floor(diff / DAY)}d`;

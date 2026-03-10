@@ -4,6 +4,7 @@ import { TerminalSquare } from "lucide-react";
 import type { CreateTerminalRequest, HarnessProvider } from "../../terminals/api";
 import { TerminalSurface } from "../../terminals/components/terminal-surface";
 import { GitDiffSurface } from "../../git/components/git-diff-surface";
+import type { WorkspaceActivityItem } from "../hooks";
 import { PullRequestSurface } from "../../git/components/pull-request-surface";
 import {
   isChangesDiffDocument,
@@ -18,6 +19,7 @@ import { workspaceTabDomId, workspaceTabPanelId } from "./workspace-surface-logi
 interface WorkspaceSurfacePanelsProps {
   activeTabKey: string | null;
   activeTerminalId: string | null;
+  activity: WorkspaceActivityItem[];
   creatingSelection: "shell" | HarnessProvider | null;
   documents: WorkspaceSurfaceDocument[];
   hasVisibleTabs: boolean;
@@ -32,6 +34,7 @@ interface WorkspaceSurfacePanelsProps {
 export function WorkspaceSurfacePanels({
   activeTabKey,
   activeTerminalId,
+  activity,
   creatingSelection,
   documents,
   hasVisibleTabs,
@@ -100,6 +103,7 @@ export function WorkspaceSurfacePanels({
             ) : isLauncherDocument(tab) ? (
               <WorkspaceLauncherSurface
                 activeTerminalId={activeTerminalId}
+                activity={activity}
                 creatingSelection={creatingSelection}
                 onCreateTerminal={(input) => {
                   void onCreateTerminal(input, tab.key);

@@ -47,7 +47,7 @@ export function TerminalSessionHistory({
   terminals,
 }: TerminalSessionHistoryProps) {
   return (
-    <div>
+    <ul>
       {terminals.map((terminal, index) => {
         const hasLiveSession = terminalHasLiveSession(terminal.status);
         const isCurrent = terminal.id === activeTerminalId;
@@ -74,40 +74,41 @@ export function TerminalSessionHistory({
         const isClickable = (hasLiveSession || canResume) && creatingSelection === null;
 
         return (
-          <button
-            type="button"
-            key={terminal.id}
-            disabled={!isClickable}
-            onClick={handleClick}
-            className={`flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--surface-hover)] disabled:opacity-50 ${!isLast ? "border-b border-[var(--border)]/50" : ""}`}
-          >
-            <p className="flex min-w-0 flex-1 items-center gap-2 truncate text-xs font-medium text-[var(--foreground)]">
-              {hasLiveSession && (
-                <TerminalStatusDot className="shrink-0" size="sm" status={terminal.status} />
-              )}
-              {sessionLabel(terminal)}
-            </p>
+          <li key={terminal.id} className={!isLast ? "border-b border-[var(--border)]/40" : ""}>
+            <button
+              type="button"
+              disabled={!isClickable}
+              onClick={handleClick}
+              className="flex w-full items-center gap-3 py-3 text-left transition-colors hover:bg-[var(--surface-hover)] disabled:opacity-50"
+            >
+              <p className="flex min-w-0 flex-1 items-center gap-2 truncate text-xs font-medium text-[var(--foreground)]">
+                {hasLiveSession && (
+                  <TerminalStatusDot className="shrink-0" size="sm" status={terminal.status} />
+                )}
+                {sessionLabel(terminal)}
+              </p>
 
-            <span className="shrink-0 font-mono text-[10px] text-[var(--muted-foreground)]/40">
-              {sessionMeta(terminal)}
-            </span>
-
-            {isCurrent ? (
-              <span className="shrink-0 rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--foreground)]/70">
-                Current
+              <span className="shrink-0 font-mono text-[10px] text-[var(--muted-foreground)]/40">
+                {sessionMeta(terminal)}
               </span>
-            ) : canResume ? (
-              <span className="shrink-0 rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--foreground)]/70">
-                Resume
-              </span>
-            ) : null}
 
-            <span className="w-14 shrink-0 text-right text-[11px] text-[var(--muted-foreground)]">
-              {activityTime(terminal)}
-            </span>
-          </button>
+              {isCurrent ? (
+                <span className="shrink-0 rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--foreground)]/70">
+                  Current
+                </span>
+              ) : canResume ? (
+                <span className="shrink-0 rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--foreground)]/70">
+                  Resume
+                </span>
+              ) : null}
+
+              <span className="w-14 shrink-0 text-right text-[11px] text-[var(--muted-foreground)]">
+                {activityTime(terminal)}
+              </span>
+            </button>
+          </li>
         );
       })}
-    </div>
+    </ul>
   );
 }
