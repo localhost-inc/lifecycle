@@ -33,6 +33,8 @@ interface SidebarProps {
   onSelectWorkspace: (workspaceId: string) => void;
   onAddProject: () => void;
   onCreateWorkspace: (projectId: string) => void;
+  onRemoveProject: (projectId: string) => void;
+  onDestroyWorkspace: (workspace: WorkspaceRecord) => void;
   onOpenSettings: () => void;
 }
 
@@ -90,6 +92,8 @@ export function Sidebar({
   onSelectWorkspace,
   onAddProject,
   onCreateWorkspace,
+  onRemoveProject,
+  onDestroyWorkspace,
   onOpenSettings,
 }: SidebarProps) {
   const navigate = useNavigate();
@@ -98,7 +102,7 @@ export function Sidebar({
     detectPlatformHint(),
     isTauri(),
   );
-  const { hasWorkspaceResponseReady } = useTerminalResponseReady();
+  const { hasWorkspaceResponseReady, hasWorkspaceRunningTurn } = useTerminalResponseReady();
   const goBack = useCallback(() => {
     if (!canGoBack) return;
     navigate(-1);
@@ -195,6 +199,7 @@ export function Sidebar({
                           selected={project.id === selectedProjectId}
                           onSelect={() => onSelectProject(project.id)}
                           onCreateWorkspace={() => onCreateWorkspace(project.id)}
+                          onRemoveProject={() => onRemoveProject(project.id)}
                         />
 
                         {workspaces.length > 0 && (
@@ -203,9 +208,11 @@ export function Sidebar({
                               {workspaces.map((workspace) => (
                                 <SidebarMenuSubItem key={workspace.id}>
                                   <WorkspaceTreeItem
+                                    running={hasWorkspaceRunningTurn(workspace.id)}
                                     responseReady={hasWorkspaceResponseReady(workspace.id)}
                                     workspace={workspace}
                                     selected={workspace.id === selectedWorkspaceId}
+                                    onDestroy={() => onDestroyWorkspace(workspace)}
                                     onSelect={createWorkspaceSelectionHandler(
                                       workspace.id,
                                       onSelectWorkspace,

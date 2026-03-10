@@ -4,7 +4,7 @@ import type {
   WorkspaceMode,
   WorkspaceServiceExposure,
   WorkspaceServicePreviewFailureReason,
-  WorkspaceServicePreviewState,
+  WorkspaceServicePreviewStatus,
   WorkspaceServiceStatus,
   WorkspaceServiceStatusReason,
   WorkspaceStatus,
@@ -40,7 +40,7 @@ export interface ServiceRecord {
   status_reason: WorkspaceServiceStatusReason | null;
   default_port: number | null;
   effective_port: number | null;
-  preview_state: WorkspaceServicePreviewState;
+  preview_status: WorkspaceServicePreviewStatus;
   preview_failure_reason: WorkspaceServicePreviewFailureReason | null;
   preview_url: string | null;
   created_at: string;

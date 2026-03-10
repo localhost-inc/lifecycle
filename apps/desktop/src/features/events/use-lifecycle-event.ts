@@ -1,34 +1,34 @@
-import type { LifecycleEvent, LifecycleEventOf, LifecycleEventType } from "@lifecycle/contracts";
+import type { LifecycleEvent, LifecycleEventOf, LifecycleEventKind } from "@lifecycle/contracts";
 import { useEffect, useRef } from "react";
 import { subscribeToLifecycleEvents } from "./api";
 
-export function useLifecycleEvent<Type extends LifecycleEventType>(
-  type: Type,
-  listener: (event: LifecycleEventOf<Type>) => void,
+export function useLifecycleEvent<Kind extends LifecycleEventKind>(
+  kind: Kind,
+  listener: (event: LifecycleEventOf<Kind>) => void,
 ): void;
-export function useLifecycleEvent<Types extends readonly LifecycleEventType[]>(
-  types: Types,
-  listener: (event: LifecycleEventOf<Types[number]>) => void,
+export function useLifecycleEvent<Kinds extends readonly LifecycleEventKind[]>(
+  kinds: Kinds,
+  listener: (event: LifecycleEventOf<Kinds[number]>) => void,
 ): void;
 export function useLifecycleEvent(
-  types: LifecycleEventType | readonly LifecycleEventType[],
+  kinds: LifecycleEventKind | readonly LifecycleEventKind[],
   listener: (event: LifecycleEvent) => void,
 ): void {
   const listenerRef = useRef(listener);
   listenerRef.current = listener;
 
-  const eventTypes = Array.isArray(types) ? [...types] : [types];
-  const eventTypesKey = [...new Set(eventTypes)].sort().join("\0");
+  const eventKinds = Array.isArray(kinds) ? [...kinds] : [kinds];
+  const eventKindsKey = [...new Set(eventKinds)].sort().join("\0");
 
   useEffect(() => {
-    if (eventTypes.length === 0) {
+    if (eventKinds.length === 0) {
       return;
     }
 
     let disposed = false;
     let stop: (() => void) | null = null;
 
-    void subscribeToLifecycleEvents(eventTypes, (event) => {
+    void subscribeToLifecycleEvents(eventKinds, (event) => {
       listenerRef.current(event);
     })
       .then((unsubscribe) => {
@@ -47,5 +47,5 @@ export function useLifecycleEvent(
       disposed = true;
       stop?.();
     };
-  }, [eventTypesKey]);
+  }, [eventKindsKey]);
 }

@@ -17,7 +17,7 @@ const VALID_CONFIG = `{
       "runtime": "image",
       "image": "postgres:16-alpine",
       "startup_timeout_seconds": 45,
-      "health_check": { "type": "tcp", "host": "127.0.0.1", "port": 5432, "timeout_seconds": 45 },
+      "health_check": { "kind": "tcp", "host": "127.0.0.1", "port": 5432, "timeout_seconds": 45 },
       "env_vars": {
         "POSTGRES_USER": "app",
         "POSTGRES_PASSWORD": "\${secrets.POSTGRES_PASSWORD}",
@@ -31,7 +31,7 @@ const VALID_CONFIG = `{
       "port": 3001,
       "share_default": true,
       "health_check": {
-        "type": "http",
+        "kind": "http",
         "url": "http://127.0.0.1:3001/health",
         "timeout_seconds": 45,
       },
@@ -156,14 +156,14 @@ describe("parseManifest", () => {
     expect(result.valid).toBe(false);
   });
 
-  test("validates health check types", () => {
+  test("validates health check kinds", () => {
     const result = parseManifest(`{
       "setup": { "steps": [{ "name": "a", "command": "b", "timeout_seconds": 10 }] },
       "services": {
         "api": {
           "runtime": "process",
           "command": "run",
-          "health_check": { "type": "http", "url": "http://localhost:3000/health", "timeout_seconds": 30 }
+          "health_check": { "kind": "http", "url": "http://localhost:3000/health", "timeout_seconds": 30 }
         }
       }
     }`);

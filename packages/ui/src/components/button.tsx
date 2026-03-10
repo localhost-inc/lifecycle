@@ -11,8 +11,7 @@ const buttonVariants = cva(
       variant: {
         default: "bg-[var(--primary)] text-[var(--primary-foreground)] hover:brightness-110",
         secondary: "bg-[var(--muted)] text-[var(--foreground)] hover:bg-[var(--surface-hover)]",
-        outline:
-          "bg-[var(--muted)] text-[var(--foreground)] hover:bg-[var(--surface-hover)]",
+        outline: "bg-[var(--muted)] text-[var(--foreground)] hover:bg-[var(--surface-hover)]",
         ghost:
           "bg-transparent text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]",
         destructive:

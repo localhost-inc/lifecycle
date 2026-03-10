@@ -1,32 +1,10 @@
-import type { ServiceRecord, WorkspaceRecord, WorkspaceStatus } from "@lifecycle/contracts";
-import { Badge, Tabs, TabsList, TabsTrigger, cn } from "@lifecycle/ui";
+import type { ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
+import { SetupProgress, Tabs, TabsList, TabsTrigger, cn } from "@lifecycle/ui";
 import { useState } from "react";
 import { Play, Square } from "lucide-react";
 import { LogsTab } from "./logs-tab";
 import { ServicesTab } from "./services-tab";
-
-const statusBadgeVariant: Record<
-  WorkspaceStatus,
-  "destructive" | "info" | "muted" | "success" | "warning"
-> = {
-  creating: "info",
-  destroying: "warning",
-  failed: "destructive",
-  ready: "success",
-  resetting: "info",
-  sleeping: "muted",
-  starting: "info",
-};
-
-const statusLabel: Record<WorkspaceStatus, string> = {
-  creating: "Creating",
-  destroying: "Destroying",
-  failed: "Failed",
-  ready: "Ready",
-  resetting: "Resetting",
-  sleeping: "Sleeping",
-  starting: "Starting",
-};
+import type { SetupStepState } from "../hooks";
 
 const ENVIRONMENT_PANEL_TABS = [
   { label: "Services", value: "services" },
@@ -46,6 +24,7 @@ interface EnvironmentPanelProps {
     portOverride: number | null;
     serviceName: string;
   }) => Promise<void>;
+  setupSteps: SetupStepState[];
   services: ServiceRecord[];
   workspace: WorkspaceRecord;
 }
@@ -57,15 +36,20 @@ export function EnvironmentPanel({
   onRun,
   onStop,
   onUpdateService,
+  setupSteps,
   services,
   workspace,
 }: EnvironmentPanelProps) {
   const [activeTab, setActiveTab] = useState<EnvironmentPanelTabValue>("services");
   const [activeAction, setActiveAction] = useState<"run" | "stop" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const readyCount = services.filter((service) => service.status === "ready").length;
-  const canRun = (workspace.status === "sleeping" || workspace.status === "failed") && hasManifest;
-  const canStop = workspace.status === "ready";
+  const canRun = workspace.status === "idle" && hasManifest;
+  const canStop = workspace.status === "active" || workspace.status === "starting";
+  const stopping = workspace.status === "stopping";
+  const showSetupProgress =
+    setupSteps.length > 0 &&
+    (workspace.status === "starting" ||
+      (workspace.status === "idle" && workspace.failure_reason !== null));
 
   async function handleRun(): Promise<void> {
     if (!canRun || activeAction !== null) {
@@ -102,10 +86,10 @@ export function EnvironmentPanel({
   }
 
   const actionConfig =
-    workspace.status === "ready"
+    canStop || stopping
       ? {
           icon: <Square className="size-3.5 fill-current" strokeWidth={2.2} />,
-          label: activeAction === "stop" ? "Stopping..." : "Stop",
+          label: activeAction === "stop" || stopping ? "Stopping..." : "Stop",
           onClick: handleStop,
           title: "Stop workspace services",
           toneClassName: "compact-control-tone-foreground",
@@ -118,7 +102,7 @@ export function EnvironmentPanel({
           toneClassName: "compact-control-tone-active",
         };
 
-  const actionDisabled = activeAction !== null || (!canRun && !canStop);
+  const actionDisabled = activeAction !== null || stopping || (!canRun && !canStop);
 
   return (
     <section className="flex h-full min-h-0 flex-col">
@@ -126,22 +110,7 @@ export function EnvironmentPanel({
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <span className="app-panel-title">Environment</span>
-                {workspace.status !== "sleeping" && (
-                  <Badge
-                    className="uppercase tracking-[0.14em]"
-                    variant={statusBadgeVariant[workspace.status]}
-                  >
-                    {statusLabel[workspace.status]}
-                  </Badge>
-                )}
-                {services.length > 0 && (
-                  <span className="text-[11px] text-[var(--muted-foreground)]">
-                    {readyCount}/{services.length} ready
-                  </span>
-                )}
-              </div>
+              <span className="app-panel-title">Environment</span>
             </div>
             <div className="flex shrink-0 items-center">
               <button
@@ -159,20 +128,26 @@ export function EnvironmentPanel({
               </button>
             </div>
           </div>
-          {workspace.status === "failed" && workspace.failure_reason && (
+          {workspace.status === "idle" && workspace.failure_reason && (
             <p className="text-xs text-[var(--destructive)]">{workspace.failure_reason}</p>
           )}
-          {workspace.status === "ready" && isManifestStale && (
+          {manifestState === "missing" && (
+            <p className="text-xs text-[var(--muted-foreground)]">
+              Add a lifecycle.json file to the project root to configure services and setup steps.
+            </p>
+          )}
+          {workspace.status === "active" && isManifestStale && (
             <p className="text-xs text-[var(--muted-foreground)]">
               Manifest changed. Stop and run again to apply service updates.
             </p>
           )}
-          {workspace.status === "ready" && manifestState === "invalid" && (
+          {workspace.status === "active" && manifestState === "invalid" && (
             <p className="text-xs text-[var(--destructive)]">
               lifecycle.json is invalid. Current services keep running until you stop them.
             </p>
           )}
           {actionError && <p className="text-xs text-[var(--destructive)]">{actionError}</p>}
+          {showSetupProgress && <SetupProgress steps={setupSteps} />}
           <Tabs
             onValueChange={(value) => setActiveTab(value as EnvironmentPanelTabValue)}
             value={activeTab}

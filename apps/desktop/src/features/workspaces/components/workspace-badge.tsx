@@ -2,34 +2,23 @@ import { StatusDot, type StatusDotTone } from "@lifecycle/ui";
 import type { WorkspaceStatus } from "@lifecycle/contracts";
 
 const dotTones: Record<WorkspaceStatus, StatusDotTone> = {
-  creating: "warning",
+  idle: "neutral",
   starting: "info",
-  ready: "success",
-  resetting: "warning",
-  sleeping: "neutral",
-  destroying: "danger",
-  failed: "danger",
+  active: "success",
+  stopping: "warning",
 };
 
 const labels: Record<WorkspaceStatus, string> = {
-  creating: "Creating",
+  idle: "Idle",
   starting: "Starting",
-  ready: "Ready",
-  resetting: "Resetting",
-  sleeping: "Sleeping",
-  destroying: "Destroying",
-  failed: "Failed",
+  active: "Active",
+  stopping: "Stopping",
 };
 
 export function WorkspaceBadge({ status }: { status: WorkspaceStatus }) {
   return (
     <StatusDot
-      pulse={
-        status === "creating" ||
-        status === "starting" ||
-        status === "resetting" ||
-        status === "destroying"
-      }
+      pulse={status === "starting" || status === "stopping"}
       title={labels[status]}
       tone={dotTones[status]}
     />

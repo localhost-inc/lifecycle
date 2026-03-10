@@ -1,6 +1,7 @@
 import type {
   GitBranchPullRequestResult,
   GitPullRequestCheckStatus,
+  GitPullRequestSummary,
   GitStatusResult,
 } from "@lifecycle/contracts";
 import {
@@ -39,7 +40,7 @@ interface GitActionButtonProps {
   onCommit: (message: string, pushAfterCommit: boolean) => Promise<void>;
   onCreatePullRequest: () => Promise<void>;
   onMergePullRequest: (pullRequestNumber: number) => Promise<void>;
-  onOpenPullRequest: (url: string) => void;
+  onOpenPullRequest: (pullRequest: GitPullRequestSummary) => void;
   onPushBranch: () => Promise<void>;
   onShowChanges: () => void;
 }
@@ -71,7 +72,7 @@ interface GitActionMenuContentProps {
   onCommitMessageChange: (value: string) => void;
   onCreatePullRequest: () => Promise<void>;
   onMergePullRequest: (pullRequestNumber: number) => Promise<void>;
-  onOpenPullRequest: (url: string) => void;
+  onOpenPullRequest: (pullRequest: GitPullRequestSummary) => void;
   onPushBranch: () => Promise<void>;
   onShowChanges: () => void;
 }
@@ -256,7 +257,7 @@ export function GitActionMenuContent({
             )}
             <div className="flex flex-wrap gap-2">
               <Button
-                onClick={() => onOpenPullRequest(quickState.pullRequest!.url)}
+                onClick={() => onOpenPullRequest(quickState.pullRequest!)}
                 size="sm"
                 variant="outline"
               >
@@ -398,7 +399,9 @@ export function GitActionButton({
           void onMergePullRequest(action.pullRequestNumber);
           return;
         case "open-pull-request":
-          onOpenPullRequest(action.url);
+          if (quickState.pullRequest?.url === action.url) {
+            onOpenPullRequest(quickState.pullRequest);
+          }
           return;
         case "push-branch":
           void onPushBranch();
@@ -445,7 +448,7 @@ export function GitActionButton({
     }
 
     if (primaryAction.kind === "open_pull_request" && quickState.pullRequest) {
-      onOpenPullRequest(quickState.pullRequest.url);
+      onOpenPullRequest(quickState.pullRequest);
       return;
     }
 

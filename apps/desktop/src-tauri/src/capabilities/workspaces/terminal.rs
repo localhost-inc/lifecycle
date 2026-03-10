@@ -1282,11 +1282,10 @@ mod tests {
     #[test]
     fn interactive_terminal_context_requires_worktree_lifecycle_to_exist() {
         let interactive_statuses = [
+            WorkspaceStatus::Idle,
             WorkspaceStatus::Starting,
-            WorkspaceStatus::Ready,
-            WorkspaceStatus::Resetting,
-            WorkspaceStatus::Sleeping,
-            WorkspaceStatus::Failed,
+            WorkspaceStatus::Active,
+            WorkspaceStatus::Stopping,
         ];
 
         for status in interactive_statuses {
@@ -1300,14 +1299,14 @@ mod tests {
 
         assert!(!workspace_has_interactive_terminal_context(
             &WorkspaceRuntime {
-                status: WorkspaceStatus::Creating,
-                worktree_path: "/tmp/worktree".to_string(),
+                status: WorkspaceStatus::Idle,
+                worktree_path: String::new(),
             }
         ));
         assert!(!workspace_has_interactive_terminal_context(
             &WorkspaceRuntime {
-                status: WorkspaceStatus::Destroying,
-                worktree_path: "/tmp/worktree".to_string(),
+                status: WorkspaceStatus::Stopping,
+                worktree_path: String::new(),
             }
         ));
     }

@@ -13,7 +13,7 @@ const interactiveWorkspace: WorkspaceRecord = {
   git_sha: "abcdef1234567890",
   worktree_path: "/tmp/workspace_1",
   mode: "local",
-  status: "ready",
+  status: "active",
   failure_reason: null,
   failed_at: null,
   created_by: null,

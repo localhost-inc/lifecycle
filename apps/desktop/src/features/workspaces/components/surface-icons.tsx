@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
-import { FileText, GitCommitHorizontal, Plus } from "lucide-react";
+import { Spinner } from "@lifecycle/ui";
+import { FileText, GitBranch, GitCommitHorizontal, Plus } from "lucide-react";
 import { ResponseReadyDot } from "../../../components/response-ready-dot";
 import { TerminalStatusDot } from "../../terminals/components/terminal-status-dot";
 import {
   isChangesDiffDocument,
   isCommitDiffDocument,
   isLauncherDocument,
+  isPullRequestDocument,
 } from "../state/workspace-surface-state";
 import type { HarnessProvider } from "../../terminals/api";
 import type { WorkspaceSurfaceTab } from "./workspace-surface-logic";
@@ -63,7 +65,7 @@ function TerminalProviderIcon({
 }
 
 function tabIconName(tab: WorkspaceSurfaceTab): string {
-  if (tab.type === "terminal") {
+  if (tab.kind === "terminal") {
     if (tab.launchType === "harness" && tab.harnessProvider) {
       return tab.harnessProvider;
     }
@@ -77,6 +79,10 @@ function tabIconName(tab: WorkspaceSurfaceTab): string {
 
   if (isCommitDiffDocument(tab)) {
     return "commit-diff";
+  }
+
+  if (isPullRequestDocument(tab)) {
+    return "pull-request";
   }
 
   if (isChangesDiffDocument(tab)) {
@@ -98,22 +104,35 @@ function SurfaceBubble({ children, tab }: { children: ReactNode; tab: WorkspaceS
 }
 
 export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceSurfaceTab }) {
-  if (tab.type === "terminal") {
+  if (tab.kind === "terminal") {
     return (
-      <span
-        className="relative flex h-5 w-5 shrink-0 items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--background)]/75 text-current"
-        data-surface-tab-icon={tabIconName(tab)}
-      >
-        {tab.responseReady ? (
-          <ResponseReadyDot />
-        ) : (
-          <TerminalProviderIcon harnessProvider={tab.harnessProvider} launchType={tab.launchType} />
-        )}
-        <TerminalStatusDot
-          className="absolute -bottom-0.5 -right-0.5 ring-2 ring-[var(--background)]"
-          size="sm"
-          status={tab.status}
-        />
+      <span className="flex items-center gap-1.5">
+        {tab.running ? (
+          <Spinner
+            aria-hidden="true"
+            aria-label={undefined}
+            className="size-3.5 shrink-0 text-[var(--muted-foreground)]"
+            role={undefined}
+          />
+        ) : null}
+        <span
+          className="relative flex h-5 w-5 shrink-0 items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--background)]/75 text-current"
+          data-surface-tab-icon={tabIconName(tab)}
+        >
+          {tab.responseReady ? (
+            <ResponseReadyDot />
+          ) : (
+            <TerminalProviderIcon
+              harnessProvider={tab.harnessProvider}
+              launchType={tab.launchType}
+            />
+          )}
+          <TerminalStatusDot
+            className="absolute -bottom-0.5 -right-0.5 ring-2 ring-[var(--background)]"
+            size="sm"
+            status={tab.status}
+          />
+        </span>
       </span>
     );
   }
@@ -130,6 +149,14 @@ export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceSurfaceTab }
     return (
       <SurfaceBubble tab={tab}>
         <GitCommitHorizontal className="h-3 w-3" strokeWidth={1.8} />
+      </SurfaceBubble>
+    );
+  }
+
+  if (isPullRequestDocument(tab)) {
+    return (
+      <SurfaceBubble tab={tab}>
+        <GitBranch className="h-3 w-3" strokeWidth={1.8} />
       </SurfaceBubble>
     );
   }

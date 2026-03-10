@@ -11,11 +11,12 @@ import { getManifestFingerprint } from "@lifecycle/contracts";
 import { SidebarInset } from "@lifecycle/ui";
 import { Outlet, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppHotkeyListener } from "../../app/app-hotkey-listener";
-import { addProjectFromDirectory } from "../../features/projects/api/projects";
+import { addProjectFromDirectory, removeProject } from "../../features/projects/api/projects";
+import { getGitStatus } from "../../features/git/api";
 import { WelcomeScreen } from "../../features/welcome/components/welcome-screen";
 import { projectKeys, useProjectCatalog } from "../../features/projects/hooks";
 import { useSettings } from "../../features/settings/state/app-settings-provider";
-import { createWorkspace, getCurrentBranch } from "../../features/workspaces/api";
+import { createWorkspace, destroyWorkspace, getCurrentBranch } from "../../features/workspaces/api";
 import { useWorkspacesByProject, workspaceKeys } from "../../features/workspaces/hooks";
 import {
   clearLastWorkspaceId,
@@ -92,7 +93,16 @@ export function DashboardLayout() {
   });
   const [activeSidebarResize, setActiveSidebarResize] = useState<"left" | "right" | null>(null);
   const projects = projectCatalogQuery.data?.projects ?? [];
-  const workspacesByProjectId = workspacesByProjectQuery.data ?? {};
+  const rawWorkspacesByProjectId = workspacesByProjectQuery.data ?? {};
+  const workspacesByProjectId = useMemo(() => {
+    const visibleProjectIds = new Set(projects.map((project) => project.id));
+
+    return Object.fromEntries(
+      Object.entries(rawWorkspacesByProjectId).filter(([projectId]) =>
+        visibleProjectIds.has(projectId),
+      ),
+    );
+  }, [projects, rawWorkspacesByProjectId]);
   const workspaces = useMemo(
     () => Object.values(workspacesByProjectId).flat(),
     [workspacesByProjectId],
@@ -376,6 +386,73 @@ export function DashboardLayout() {
     [client, navigate, projectCatalogQuery.data, projects, worktreeRoot],
   );
 
+  const handleRemoveProject = useCallback(
+    async (projectId: string) => {
+      try {
+        await removeProject(projectId);
+        client.invalidate(projectKeys.catalog());
+
+        if (selectedWorkspace?.project_id === projectId) {
+          clearLastWorkspaceId();
+          void navigate("/");
+          return;
+        }
+
+        if (activeProjectId === projectId) {
+          void navigate("/");
+        }
+      } catch (err) {
+        console.error("Failed to remove project:", err);
+        alert(`Failed to remove project: ${err}`);
+      }
+    },
+    [activeProjectId, client, navigate, selectedWorkspace?.project_id],
+  );
+
+  const handleDestroyWorkspace = useCallback(
+    async (workspace: (typeof workspaces)[number]) => {
+      try {
+        if (workspace.mode === "local" && workspace.worktree_path) {
+          const gitStatus = await getGitStatus(workspace.id);
+          if (gitStatus.files.length > 0) {
+            const shouldProceed = window.confirm(
+              `"${workspace.name}" has uncommitted work. Archive the workspace anyway?`,
+            );
+            if (!shouldProceed) {
+              return;
+            }
+          }
+        }
+
+        await destroyWorkspace(workspace.id);
+        client.invalidate(workspaceKeys.byProject());
+        client.invalidateMatching((key) => key.includes(workspace.id));
+
+        if (readLastWorkspaceId() === workspace.id) {
+          clearLastWorkspaceId();
+        }
+
+        if (selectedWorkspaceId !== workspace.id) {
+          return;
+        }
+
+        const nextWorkspace = (workspacesByProjectId[workspace.project_id] ?? []).find(
+          (candidate) => candidate.id !== workspace.id,
+        );
+        if (nextWorkspace) {
+          void navigate(`/workspaces/${nextWorkspace.id}`);
+          return;
+        }
+
+        void navigate(`/?project=${workspace.project_id}`);
+      } catch (err) {
+        console.error("Failed to archive workspace:", err);
+        alert(`Failed to archive workspace: ${err}`);
+      }
+    },
+    [client, navigate, selectedWorkspaceId, workspacesByProjectId],
+  );
+
   const handleOpenSettings = useCallback(() => {
     void navigate("/settings/general");
   }, [navigate]);
@@ -499,6 +576,8 @@ export function DashboardLayout() {
                 onSelectWorkspace={handleSelectWorkspace}
                 onAddProject={handleAddProject}
                 onCreateWorkspace={handleCreateWorkspace}
+                onRemoveProject={handleRemoveProject}
+                onDestroyWorkspace={handleDestroyWorkspace}
                 onOpenSettings={handleOpenSettings}
               />
             </div>

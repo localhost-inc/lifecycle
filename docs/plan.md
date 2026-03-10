@@ -35,7 +35,7 @@ Those belong in milestone or reference docs.
 | --------- | ------- | ---------- | ------------------------------------------------------- | ------------- |
 | M0        | done    | none       | Monorepo/tooling baseline                               | [m0](./milestones/m0.md) |
 | M1        | done    | M0         | Desktop shell + project import + manifest validation    | [m1](./milestones/m1.md) |
-| M2        | done    | M1         | Local workspace create/start/health to `ready`          | [m2](./milestones/m2.md) |
+| M2        | done    | M1         | Local workspace create/start/health to `active`         | [m2](./milestones/m2.md) |
 | M3        | done    | M2         | Terminal and harness runtime in workspace               | [m3](./milestones/m3.md) |
 | M4        | in_progress | M3         | Run and control local workspace environments            | [m4](./milestones/m4.md) |
 | M5        | planned | M4         | First-class local CLI                                   | [m5](./milestones/m5.md) |
@@ -62,12 +62,12 @@ Detail spec: [docs/milestones/m1.md](./milestones/m1.md)
 - [x] `lifecycle.json` validation surfaces field-level issues
 - [x] Project state persists locally across app restarts
 
-### M2 - Local Workspace Reaches Ready
+### M2 - Local Workspace Reaches Active
 
 Detail spec: [docs/milestones/m2.md](./milestones/m2.md)
 
 - [x] Workspace + workspace-service entities are implemented
-- [x] Local provider create/start flow reaches `ready`
+- [x] Local provider create/start flow reaches `active`
 - [x] Service health gates readiness
 - [x] Desktop UI renders progress and typed failures
 

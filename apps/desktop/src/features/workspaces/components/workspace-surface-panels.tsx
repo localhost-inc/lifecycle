@@ -4,10 +4,12 @@ import { TerminalSquare } from "lucide-react";
 import type { CreateTerminalRequest, HarnessProvider } from "../../terminals/api";
 import { TerminalSurface } from "../../terminals/components/terminal-surface";
 import { GitDiffSurface } from "../../git/components/git-diff-surface";
+import { PullRequestSurface } from "../../git/components/pull-request-surface";
 import {
   isChangesDiffDocument,
   isCommitDiffDocument,
   isLauncherDocument,
+  isPullRequestDocument,
   type WorkspaceSurfaceDocument,
 } from "../state/workspace-surface-state";
 import { WorkspaceLauncherSurface } from "./workspace-launcher-surface";
@@ -93,6 +95,8 @@ export function WorkspaceSurfacePanels({
               />
             ) : isCommitDiffDocument(tab) ? (
               <GitDiffSurface source={{ commit: tab, mode: "commit" }} workspaceId={workspaceId} />
+            ) : isPullRequestDocument(tab) ? (
+              <PullRequestSurface pullRequest={tab} workspaceId={workspaceId} />
             ) : isLauncherDocument(tab) ? (
               <WorkspaceLauncherSurface
                 activeTerminalId={activeTerminalId}

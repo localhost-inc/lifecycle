@@ -32,8 +32,8 @@ Canonical specification for the `lifecycle.json` project runtime configuration f
 
 ## `health_check` Contract (Service-Level)
 
-- Optional per-service `health_check` object with readiness criteria (`tcp` or `http`)
-- Workspace transitions to `ready` only after all defined service health checks pass
+- Optional per-service `health_check` object with readiness criteria via `kind` (`tcp` or `http`)
+- Workspace transitions to `active` only after all defined service health checks pass
 
 ## `secrets` Contract
 
@@ -92,7 +92,7 @@ Canonical specification for the `lifecycle.json` project runtime configuration f
       "runtime": "image",
       "image": "postgres:16-alpine",
       "startup_timeout_seconds": 45,
-      "health_check": { "type": "tcp", "host": "127.0.0.1", "port": 5432, "timeout_seconds": 45 },
+      "health_check": { "kind": "tcp", "host": "127.0.0.1", "port": 5432, "timeout_seconds": 45 },
       "env_vars": {
         "POSTGRES_USER": "app",
         "POSTGRES_PASSWORD": "${secrets.POSTGRES_PASSWORD}",
@@ -105,7 +105,7 @@ Canonical specification for the `lifecycle.json` project runtime configuration f
       "command": "redis-server",
       "args": ["--save", "", "--appendonly", "no", "--requirepass", "${secrets.REDIS_PASSWORD}"],
       "startup_timeout_seconds": 30,
-      "health_check": { "type": "tcp", "host": "127.0.0.1", "port": 6379, "timeout_seconds": 30 },
+      "health_check": { "kind": "tcp", "host": "127.0.0.1", "port": 6379, "timeout_seconds": 30 },
     },
     "api": {
       "runtime": "process",
@@ -115,7 +115,7 @@ Canonical specification for the `lifecycle.json` project runtime configuration f
       "port": 3001,
       "share_default": true,
       "health_check": {
-        "type": "http",
+        "kind": "http",
         "url": "http://127.0.0.1:3001/health",
         "timeout_seconds": 45,
       },

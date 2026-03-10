@@ -101,7 +101,7 @@ pub struct ImageService {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "kind")]
 pub enum HealthCheck {
     #[serde(rename = "tcp")]
     Tcp {
@@ -156,7 +156,7 @@ mod tests {
                     "command": "bun run dev",
                     "port": 3000,
                     "health_check": {
-                        "type": "http",
+                        "kind": "http",
                         "url": "http://localhost:3000/health",
                         "timeout_seconds": 30
                     }
@@ -187,7 +187,7 @@ mod tests {
                     "image": "postgres:16",
                     "port": 5432,
                     "health_check": {
-                        "type": "tcp",
+                        "kind": "tcp",
                         "host": "localhost",
                         "port": 5432,
                         "timeout_seconds": 30

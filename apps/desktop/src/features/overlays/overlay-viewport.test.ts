@@ -1,10 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { readOverlayViewportSnapshot, subscribeOverlayViewport } from "./overlay-viewport";
 
-type WindowStub = Pick<
-  Window,
-  "addEventListener" | "removeEventListener"
-> & {
+type WindowStub = Pick<Window, "addEventListener" | "removeEventListener"> & {
   innerHeight: number;
   innerWidth: number;
   visualViewport: Pick<VisualViewport, "addEventListener" | "removeEventListener"> | null;

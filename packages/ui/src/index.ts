@@ -61,6 +61,7 @@ export {
   type SetupProgressStep,
   type SetupProgressStepStatus,
 } from "./components/setup-progress";
+export { Spinner } from "./components/spinner";
 export {
   SplitButton,
   SplitButtonPrimary,

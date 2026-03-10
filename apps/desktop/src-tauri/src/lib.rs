@@ -17,7 +17,8 @@ use tokio::sync::Mutex;
 
 pub use shared::errors::LifecycleError;
 
-pub type SupervisorMap = Arc<Mutex<HashMap<String, Supervisor>>>;
+pub type ManagedSupervisor = Arc<Mutex<Supervisor>>;
+pub type SupervisorMap = Arc<Mutex<HashMap<String, ManagedSupervisor>>>;
 pub type TerminalSupervisorMap = Arc<Mutex<HashMap<String, TerminalSupervisor>>>;
 
 #[cfg(target_os = "macos")]
@@ -105,6 +106,7 @@ pub fn run() {
             capabilities::workspaces::commands::start_services,
             capabilities::workspaces::commands::sync_workspace_manifest,
             capabilities::workspaces::commands::stop_workspace,
+            capabilities::workspaces::commands::destroy_workspace,
             capabilities::workspaces::commands::get_workspace,
             capabilities::workspaces::commands::get_workspace_by_id,
             capabilities::workspaces::commands::list_workspaces,

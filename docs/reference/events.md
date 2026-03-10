@@ -92,7 +92,7 @@ Canonical field names use `snake_case` at the foundation boundary so the shape s
 ```ts
 interface LifecycleEvent<TPayload = unknown> {
   id: string;
-  type: string;
+  kind: string;
   version: number;
   occurred_at: string;
   source: {
@@ -116,8 +116,8 @@ interface LifecycleEvent<TPayload = unknown> {
 | Field | Required | Rules |
 | --- | --- | --- |
 | `id` | yes | Opaque globally unique identifier for this fact delivery identity. Replays and fanout copies of the same fact reuse the same `id`. |
-| `type` | yes | Stable canonical fact name such as `environment.status_changed`. |
-| `version` | yes | Positive integer payload schema version for this `type`. Start at `1`. |
+| `kind` | yes | Stable canonical fact name such as `environment.status_changed`. |
+| `version` | yes | Positive integer payload schema version for this `kind`. Start at `1`. |
 | `occurred_at` | yes | RFC 3339 / ISO-8601 UTC timestamp for when the authoritative fact was committed or observed. |
 | `source.layer` | yes | The emitting layer at the point the fact entered the canonical foundation. |
 | `source.component` | yes | Stable publisher identifier within that layer, for example a provider module or runtime subsystem. |
@@ -129,11 +129,11 @@ interface LifecycleEvent<TPayload = unknown> {
 | `service_name` | no | Required for service facts. |
 | `correlation_id` | no | Shared trace id that ties one command/request flow to resulting facts. |
 | `causation_id` | no | Immediate parent trigger for this fact, such as the command attempt id or a prior fact in the same chain. |
-| `payload` | yes | Semantic payload whose schema is determined by `type` and `version`. |
+| `payload` | yes | Semantic payload whose schema is determined by `kind` and `version`. |
 
 ### Envelope Invariants
 
-1. `type` plus `version` defines the payload contract; consumers must not infer payload shape from transport or publisher.
+1. `kind` plus `version` defines the payload contract; consumers must not infer payload shape from transport or publisher.
 2. Envelope scope identifiers are routing keys. Payloads should not duplicate them unless the payload genuinely needs both source and target identities, such as `workspace.forked`.
 3. Omit optional scope fields instead of sending empty strings.
 4. Facts must not carry secrets, credential material, raw PTY bytes, large diffs, or whole log streams.
@@ -211,9 +211,9 @@ interface CommandHookContext<TInput = unknown, TResult = unknown> {
 
 ### Versioning
 
-1. `type` names are stable identifiers for the semantic fact.
+1. `kind` names are stable identifiers for the semantic fact.
 2. Breaking payload changes increment `version`.
-3. Additive payload fields keep the existing `type` and `version`.
+3. Additive payload fields keep the existing `kind` and `version`.
 4. Consumers must ignore unknown additive fields.
 5. Transport-specific aliases do not belong in the canonical contract.
 
@@ -232,7 +232,7 @@ interface CommandHookContext<TInput = unknown, TResult = unknown> {
 
 | Raw source signal | Canonical output | Notes |
 | --- | --- | --- |
-| Workspace row persisted with a new environment status | `environment.status_changed` | Current rollout still emits `workspace.status_changed` until the environment split lands. |
+| Workspace row persisted with a new environment status | `workspace.status_changed` | In the current rollout this is the authoritative environment-state fact because execution state still lives on `workspace.status`. |
 | Manual or generated rename committed to shared state | `workspace.renamed` or `terminal.renamed` | UI-only rename draft changes do not publish facts. |
 | Terminal PTY output chunk | none | This is a stream attachment, not a fact event. |
 | Harness accepts a prompt boundary | `terminal.harness_prompt_submitted` | Emitted once per accepted turn, never per keystroke. |
@@ -251,7 +251,7 @@ interface CommandHookContext<TInput = unknown, TResult = unknown> {
 3. Replay may happen on reconnect, query cache bootstrap, subscription fanout, or future remote attach flows.
 4. Consumers must tolerate duplicate delivery and should dedupe by `id`.
 5. Consumers must be idempotent. Applying the same fact twice must not corrupt derived state.
-6. If a consumer encounters an unknown `type`, unsupported `version`, or a suspected gap, the correct fallback is authoritative refetch, not best-effort guesswork.
+6. If a consumer encounters an unknown `kind`, unsupported `version`, or a suspected gap, the correct fallback is authoritative refetch, not best-effort guesswork.
 7. The event foundation is a semantic notification layer. It is not, by itself, a promise of durable historical replay forever.
 8. Durable retention, searchability, and compliance history belong to projections and audit stores, not necessarily to every event transport.
 
@@ -338,20 +338,19 @@ Environment facts describe execution-state transitions for the singleton environ
 
 | Type | Meaning |
 | --- | --- |
-| `environment.status_changed` | The authoritative workspace environment state machine advanced. |
+| `workspace.status_changed` | The authoritative workspace environment state machine advanced in the current rollout. |
 
 ```ts
-interface EnvironmentStatusChangedPayload {
-  from_status: WorkspaceStatus;
-  to_status: WorkspaceStatus;
-  failure_reason?: WorkspaceFailureReason;
+interface WorkspaceStatusChangedPayload {
+  status: WorkspaceStatus;
+  failure_reason?: WorkspaceFailureReason | null;
 }
 ```
 
 Current rollout note:
 
-1. Local publishers still emit `workspace.status_changed` with this payload shape until the workspace/environment contract split lands.
-2. M4 should migrate publishers and consumers to `environment.status_changed` instead of standardizing the overloaded workspace fact.
+1. Consumers should treat `workspace.status_changed` as an environment-state fact, not as durable workspace-lifecycle.
+2. A future workspace/environment contract split may introduce `environment.status_changed`, but the current shipped contract is `workspace.status_changed`.
 
 ### Service Facts
 
@@ -480,9 +479,9 @@ These examples are illustrative sequencing rules, not exhaustive transport trace
 ### `workspace.start`
 
 1. Hook `before` fires for `workspace.start`.
-2. Publisher commits `environment.status_changed` with `from_status=sleeping|failed|ready` and `to_status=starting`.
+2. Publisher commits `workspace.status_changed` with `status=starting`.
 3. Publisher emits zero or more `service.status_changed` facts as services start and settle.
-4. Publisher commits `environment.status_changed` with `to_status=ready` or `to_status=failed`.
+4. Publisher commits `workspace.status_changed` with `status=active` on success, or `status=idle` plus `failure_reason` on failure.
 5. Hook `after` or `failed` fires for the command attempt.
 
 ### `terminal.create`

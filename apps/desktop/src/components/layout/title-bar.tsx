@@ -1,4 +1,4 @@
-import type { WorkspaceStatus } from "@lifecycle/contracts";
+import type { WorkspaceRecord, WorkspaceStatus } from "@lifecycle/contracts";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, type MouseEvent } from "react";
@@ -6,7 +6,6 @@ import { useNavigate } from "react-router-dom";
 import { useHistoryAvailability } from "../../app/history-stack";
 import { TypedTitle } from "../typed-title";
 import { WorkspaceBadge } from "../../features/workspaces/components/workspace-badge";
-import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { workspaceSupportsFilesystemInteraction } from "../../features/workspaces/lib/workspace-capabilities";
 import { TitleBarActions } from "./title-bar-actions";
 

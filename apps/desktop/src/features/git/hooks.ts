@@ -4,7 +4,7 @@ import type {
   GitPullRequestListResult,
   GitStatusResult,
   LifecycleEvent,
-  LifecycleEventType,
+  LifecycleEventKind,
 } from "@lifecycle/contracts";
 import { useEffect, useMemo } from "react";
 import type { QueryDescriptor, QueryResult, QueryUpdate } from "../../query";
@@ -22,35 +22,35 @@ interface GitQueryOptions {
   polling?: boolean;
 }
 
-const GIT_STATUS_EVENT_TYPES = [
+const GIT_STATUS_EVENT_KINDS = [
   "git.head_changed",
   "git.status_changed",
-] as const satisfies readonly LifecycleEventType[];
-const GIT_LOG_EVENT_TYPES = [
+] as const satisfies readonly LifecycleEventKind[];
+const GIT_LOG_EVENT_KINDS = [
   "git.head_changed",
   "git.log_changed",
-] as const satisfies readonly LifecycleEventType[];
-const GIT_PULL_REQUEST_EVENT_TYPES = [
+] as const satisfies readonly LifecycleEventKind[];
+const GIT_PULL_REQUEST_EVENT_KINDS = [
   "git.head_changed",
-] as const satisfies readonly LifecycleEventType[];
+] as const satisfies readonly LifecycleEventKind[];
 
 function invalidateGitWorkspaceQuery<T>(
   event: LifecycleEvent,
   workspaceId: string,
 ): QueryUpdate<T> {
-  switch (event.type) {
+  switch (event.kind) {
     case "git.status_changed":
     case "git.head_changed":
     case "git.log_changed":
-      return event.workspace_id === workspaceId ? { type: "invalidate" } : { type: "none" };
+      return event.workspace_id === workspaceId ? { kind: "invalidate" } : { kind: "none" };
     default:
-      return { type: "none" };
+      return { kind: "none" };
   }
 }
 
 function createGitStatusQuery(workspaceId: string): QueryDescriptor<GitStatusResult> {
   return {
-    eventTypes: GIT_STATUS_EVENT_TYPES,
+    eventKinds: GIT_STATUS_EVENT_KINDS,
     key: gitKeys.status(workspaceId),
     fetch(source) {
       return source.getWorkspaceGitStatus(workspaceId);
@@ -63,7 +63,7 @@ function createGitStatusQuery(workspaceId: string): QueryDescriptor<GitStatusRes
 
 function createGitLogQuery(workspaceId: string, limit: number): QueryDescriptor<GitLogEntry[]> {
   return {
-    eventTypes: GIT_LOG_EVENT_TYPES,
+    eventKinds: GIT_LOG_EVENT_KINDS,
     key: gitKeys.log(workspaceId, limit),
     fetch(source) {
       return source.getWorkspaceGitLog(workspaceId, limit);
@@ -78,7 +78,7 @@ function createGitPullRequestsQuery(
   workspaceId: string,
 ): QueryDescriptor<GitPullRequestListResult> {
   return {
-    eventTypes: GIT_PULL_REQUEST_EVENT_TYPES,
+    eventKinds: GIT_PULL_REQUEST_EVENT_KINDS,
     key: gitKeys.pullRequests(workspaceId),
     fetch(source) {
       return source.getWorkspaceGitPullRequests(workspaceId);
@@ -93,7 +93,7 @@ function createCurrentGitPullRequestQuery(
   workspaceId: string,
 ): QueryDescriptor<GitBranchPullRequestResult> {
   return {
-    eventTypes: GIT_PULL_REQUEST_EVENT_TYPES,
+    eventKinds: GIT_PULL_REQUEST_EVENT_KINDS,
     key: gitKeys.currentPullRequest(workspaceId),
     fetch(source) {
       return source.getWorkspaceCurrentGitPullRequest(workspaceId);

@@ -1,4 +1,4 @@
-import type { GitPullRequestListResult } from "@lifecycle/contracts";
+import type { GitPullRequestListResult, GitPullRequestSummary } from "@lifecycle/contracts";
 import { Badge, Button, EmptyState } from "@lifecycle/ui";
 
 interface PullRequestsTabProps {
@@ -6,7 +6,7 @@ interface PullRequestsTabProps {
   error: unknown;
   isLoading: boolean;
   result: GitPullRequestListResult | null;
-  onOpenPullRequest: (url: string) => void;
+  onOpenPullRequest: (pullRequest: GitPullRequestSummary) => void;
 }
 
 function formatShortAge(iso: string): string {
@@ -106,7 +106,7 @@ export function PullRequestsTab({
                 )}
               </div>
             </div>
-            <Button onClick={() => onOpenPullRequest(pullRequest.url)} size="sm" variant="outline">
+            <Button onClick={() => onOpenPullRequest(pullRequest)} size="sm" variant="outline">
               Open
             </Button>
           </div>

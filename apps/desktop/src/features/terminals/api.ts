@@ -302,7 +302,7 @@ function buildTerminalLabel(input: CreateTerminalRequest, sequence: number): str
 
 function emitTerminalCreated(workspaceId: string, terminal: TerminalRecord): void {
   publishBrowserLifecycleEvent({
-    type: "terminal.created",
+    kind: "terminal.created",
     workspace_id: workspaceId,
     terminal,
   });
@@ -317,7 +317,7 @@ function emitTerminalStatus(
   endedAt: string | null,
 ): void {
   publishBrowserLifecycleEvent({
-    type: "terminal.status_changed",
+    kind: "terminal.status_changed",
     terminal_id: terminalId,
     workspace_id: workspaceId,
     status,
@@ -329,7 +329,7 @@ function emitTerminalStatus(
 
 function emitTerminalRenamed(terminalId: string, workspaceId: string, label: string): void {
   publishBrowserLifecycleEvent({
-    type: "terminal.renamed",
+    kind: "terminal.renamed",
     terminal_id: terminalId,
     workspace_id: workspaceId,
     label,
@@ -409,7 +409,7 @@ function emitBrowserHarnessTurnCompleted(
   }
 
   publishBrowserLifecycleEvent({
-    type: "terminal.harness_turn_completed",
+    kind: "terminal.harness_turn_completed",
     completion_key:
       turnId ??
       (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"

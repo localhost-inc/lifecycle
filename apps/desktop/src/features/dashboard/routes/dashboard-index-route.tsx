@@ -47,10 +47,7 @@ export function DashboardIndexRoute() {
             : "This project has no active workspace yet."
         }
         action={
-          <Button
-            variant="secondary"
-            onClick={() => onCreateWorkspace(selectedProjectId)}
-          >
+          <Button variant="secondary" onClick={() => onCreateWorkspace(selectedProjectId)}>
             + New workspace
           </Button>
         }

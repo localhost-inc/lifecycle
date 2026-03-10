@@ -1,13 +1,13 @@
-import type { LifecycleEvent, LifecycleEventType, TerminalRecord } from "@lifecycle/contracts";
+import type { LifecycleEvent, LifecycleEventKind, TerminalRecord } from "@lifecycle/contracts";
 import { useMemo } from "react";
 import type { QueryDescriptor, QueryResult, QueryUpdate } from "../../query";
 import { useQuery } from "../../query";
 
-const TERMINAL_EVENT_TYPES = [
+const TERMINAL_EVENT_KINDS = [
   "terminal.created",
   "terminal.status_changed",
   "terminal.renamed",
-] as const satisfies readonly LifecycleEventType[];
+] as const satisfies readonly LifecycleEventKind[];
 
 export const terminalKeys = {
   byWorkspace: (workspaceId: string) => ["workspace-terminals", workspaceId] as const,
@@ -19,21 +19,21 @@ export function reduceWorkspaceTerminals(
   event: LifecycleEvent,
   workspaceId: string,
 ): QueryUpdate<TerminalRecord[]> {
-  if (event.type === "terminal.created" && event.workspace_id === workspaceId) {
+  if (event.kind === "terminal.created" && event.workspace_id === workspaceId) {
     const previous = current ?? [];
     if (previous.some((terminal) => terminal.id === event.terminal.id)) {
-      return { type: "none" };
+      return { kind: "none" };
     }
 
     return {
-      type: "replace",
+      kind: "replace",
       data: [event.terminal, ...previous],
     };
   }
 
-  if (event.type === "terminal.status_changed" && event.workspace_id === workspaceId) {
+  if (event.kind === "terminal.status_changed" && event.workspace_id === workspaceId) {
     if (!current) {
-      return { type: "invalidate" };
+      return { kind: "invalidate" };
     }
 
     let found = false;
@@ -52,12 +52,12 @@ export function reduceWorkspaceTerminals(
       };
     });
 
-    return found ? { type: "replace", data: next } : { type: "invalidate" };
+    return found ? { kind: "replace", data: next } : { kind: "invalidate" };
   }
 
-  if (event.type === "terminal.renamed" && event.workspace_id === workspaceId) {
+  if (event.kind === "terminal.renamed" && event.workspace_id === workspaceId) {
     if (!current) {
-      return { type: "invalidate" };
+      return { kind: "invalidate" };
     }
 
     let found = false;
@@ -73,15 +73,15 @@ export function reduceWorkspaceTerminals(
       };
     });
 
-    return found ? { type: "replace", data: next } : { type: "invalidate" };
+    return found ? { kind: "replace", data: next } : { kind: "invalidate" };
   }
 
-  return { type: "none" };
+  return { kind: "none" };
 }
 
 function createWorkspaceTerminalsQuery(workspaceId: string): QueryDescriptor<TerminalRecord[]> {
   return {
-    eventTypes: TERMINAL_EVENT_TYPES,
+    eventKinds: TERMINAL_EVENT_KINDS,
     key: terminalKeys.byWorkspace(workspaceId),
     fetch(source) {
       return source.listWorkspaceTerminals(workspaceId);
@@ -97,20 +97,20 @@ export function reduceTerminal(
   event: LifecycleEvent,
   terminalId: string,
 ): QueryUpdate<TerminalRecord | null> {
-  if (event.type === "terminal.created" && event.terminal.id === terminalId) {
+  if (event.kind === "terminal.created" && event.terminal.id === terminalId) {
     return {
-      type: "replace",
+      kind: "replace",
       data: event.terminal,
     };
   }
 
-  if (event.type === "terminal.status_changed" && event.terminal_id === terminalId) {
+  if (event.kind === "terminal.status_changed" && event.terminal_id === terminalId) {
     if (!current) {
-      return { type: "invalidate" };
+      return { kind: "invalidate" };
     }
 
     return {
-      type: "replace",
+      kind: "replace",
       data: {
         ...current,
         ended_at: event.ended_at,
@@ -121,13 +121,13 @@ export function reduceTerminal(
     };
   }
 
-  if (event.type === "terminal.renamed" && event.terminal_id === terminalId) {
+  if (event.kind === "terminal.renamed" && event.terminal_id === terminalId) {
     if (!current) {
-      return { type: "invalidate" };
+      return { kind: "invalidate" };
     }
 
     return {
-      type: "replace",
+      kind: "replace",
       data: {
         ...current,
         label: event.label,
@@ -135,12 +135,12 @@ export function reduceTerminal(
     };
   }
 
-  return { type: "none" };
+  return { kind: "none" };
 }
 
 function createTerminalQuery(terminalId: string): QueryDescriptor<TerminalRecord | null> {
   return {
-    eventTypes: TERMINAL_EVENT_TYPES,
+    eventKinds: TERMINAL_EVENT_KINDS,
     key: terminalKeys.detail(terminalId),
     fetch(source) {
       return source.getTerminal(terminalId);

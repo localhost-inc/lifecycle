@@ -1,21 +1,24 @@
 import { describe, expect, test } from "bun:test";
+import type { GitPullRequestSummary } from "@lifecycle/contracts";
 import type { StorageLike } from "./workspace-surface-state";
 import {
-  changesDiffTabKeyV2,
+  changesDiffTabKey,
   clearLastWorkspaceId,
-  commitDiffTabKeyV2,
+  commitDiffTabKey,
   createChangesDiffTab,
   createCommitDiffTab,
   createDefaultWorkspaceSurfaceState,
   createLauncherTab,
+  createPullRequestTab,
+  pullRequestTabKey,
   readLastWorkspaceId,
   readWorkspaceSurfaceState,
   writeLastWorkspaceId,
   writeWorkspaceSurfaceState,
 } from "./workspace-surface-state";
 
-const WORKSPACE_SURFACE_STATE_STORAGE_KEY_V1 = "lifecycle.desktop.workspace-surface.v1";
-const WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2 = "lifecycle.desktop.workspace-surface.v2";
+const WORKSPACE_SURFACE_STATE_STORAGE_KEY = "lifecycle.desktop.workspace-surface";
+const CHANGES_DIFF_TAB_KEY = changesDiffTabKey();
 
 class MemoryStorage implements StorageLike {
   private readonly values = new Map<string, string>();
@@ -51,72 +54,57 @@ function createCommitEntry(overrides: Partial<ReturnType<typeof createCommitDiff
   };
 }
 
+function createPullRequestSummary(
+  overrides: Partial<GitPullRequestSummary> = {},
+): GitPullRequestSummary {
+  return {
+    author: "kyle",
+    baseRefName: "main",
+    checks: null,
+    createdAt: "2026-03-10T10:00:00.000Z",
+    headRefName: "feature/pull-request-surface",
+    isDraft: false,
+    mergeStateStatus: "CLEAN",
+    mergeable: "mergeable",
+    number: 42,
+    reviewDecision: "approved",
+    state: "open",
+    title: "feat: add pull request surface",
+    updatedAt: "2026-03-10T11:00:00.000Z",
+    url: "https://github.com/example/repo/pull/42",
+    ...overrides,
+  };
+}
+
 describe("workspace surface state persistence", () => {
-  test("migrates v1 snapshots and legacy diff active keys into one changes tab", () => {
+  test("restores only the current kind-based document schema", () => {
     const storage = new MemoryStorage();
+    const commit = createCommitEntry();
 
     storage.setItem(
-      WORKSPACE_SURFACE_STATE_STORAGE_KEY_V1,
+      WORKSPACE_SURFACE_STATE_STORAGE_KEY,
       JSON.stringify({
         "ws-1": {
-          activeTabKey: "diff:staged:src/app.ts",
+          activeTabKey: CHANGES_DIFF_TAB_KEY,
           documents: [
-            { filePath: "src/app.ts", scope: "working" },
-            { filePath: "README.md", scope: "staged" },
-          ],
-        },
-      }),
-    );
-
-    const restored = readWorkspaceSurfaceState("ws-1", storage);
-    expect(restored).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
-      activeTabKey: changesDiffTabKeyV2,
-      documents: [createChangesDiffTab("src/app.ts")],
-    });
-
-    writeWorkspaceSurfaceState("ws-1", restored, storage);
-
-    expect(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY_V1)).toBeNull();
-    expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2) ?? "null")).toEqual({
-      "ws-1": {
-        activeTabKey: changesDiffTabKeyV2,
-        documents: [
-          {
-            focusPath: "src/app.ts",
-            type: "changes-diff",
-          },
-        ],
-      },
-    });
-  });
-
-  test("collapses persisted legacy file diffs to the first diff path when none is active", () => {
-    const storage = new MemoryStorage();
-    const firstCommit = createCommitEntry();
-
-    storage.setItem(
-      WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2,
-      JSON.stringify({
-        "ws-1": {
-          activeTabKey: commitDiffTabKeyV2(firstCommit.sha),
-          documents: [
-            // Legacy file-scoped diff tabs should collapse into one changes tab.
             {
-              type: "file-diff",
-              filePath: "src/first.ts",
+              focusPath: "src/app.ts",
+              kind: "changes-diff",
             },
             {
-              type: "commit-diff",
-              author: firstCommit.author,
-              message: firstCommit.message,
-              sha: firstCommit.sha,
-              shortSha: firstCommit.shortSha,
-              timestamp: firstCommit.timestamp,
+              author: commit.author,
+              kind: "commit-diff",
+              message: commit.message,
+              sha: commit.sha,
+              shortSha: commit.shortSha,
+              timestamp: commit.timestamp,
             },
             {
-              type: "file-diff",
-              filePath: "src/second.ts",
+              filePath: "README.md",
+            },
+            {
+              kind: "obsolete-document",
+              filePath: "README.md",
             },
           ],
         },
@@ -125,8 +113,8 @@ describe("workspace surface state persistence", () => {
 
     expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
       ...createDefaultWorkspaceSurfaceState(),
-      activeTabKey: commitDiffTabKeyV2(firstCommit.sha),
-      documents: [createChangesDiffTab("src/first.ts"), createCommitDiffTab(firstCommit)],
+      activeTabKey: CHANGES_DIFF_TAB_KEY,
+      documents: [createChangesDiffTab("src/app.ts"), createCommitDiffTab(commit)],
     });
   });
 
@@ -136,7 +124,7 @@ describe("workspace surface state persistence", () => {
     writeWorkspaceSurfaceState(
       "ws-1",
       withDefaultState({
-        activeTabKey: changesDiffTabKeyV2,
+        activeTabKey: CHANGES_DIFF_TAB_KEY,
         documents: [createChangesDiffTab("src/app.ts"), createChangesDiffTab("README.md")],
       }),
       storage,
@@ -144,16 +132,16 @@ describe("workspace surface state persistence", () => {
 
     expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
       ...createDefaultWorkspaceSurfaceState(),
-      activeTabKey: changesDiffTabKeyV2,
+      activeTabKey: CHANGES_DIFF_TAB_KEY,
       documents: [createChangesDiffTab("README.md")],
     });
-    expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2) ?? "null")).toEqual({
+    expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY) ?? "null")).toEqual({
       "ws-1": {
-        activeTabKey: changesDiffTabKeyV2,
+        activeTabKey: CHANGES_DIFF_TAB_KEY,
         documents: [
           {
             focusPath: "README.md",
-            type: "changes-diff",
+            kind: "changes-diff",
           },
         ],
       },
@@ -174,7 +162,7 @@ describe("workspace surface state persistence", () => {
     writeWorkspaceSurfaceState(
       "ws-1",
       withDefaultState({
-        activeTabKey: commitDiffTabKeyV2(firstCommit.sha),
+        activeTabKey: commitDiffTabKey(firstCommit.sha),
         documents: [
           createCommitDiffTab(firstCommit),
           createCommitDiffTab(secondCommit),
@@ -186,16 +174,16 @@ describe("workspace surface state persistence", () => {
 
     expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
       ...createDefaultWorkspaceSurfaceState(),
-      activeTabKey: commitDiffTabKeyV2(firstCommit.sha),
+      activeTabKey: commitDiffTabKey(firstCommit.sha),
       documents: [createCommitDiffTab(firstCommit), createCommitDiffTab(secondCommit)],
     });
-    expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2) ?? "null")).toEqual({
+    expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY) ?? "null")).toEqual({
       "ws-1": {
-        activeTabKey: commitDiffTabKeyV2(firstCommit.sha),
+        activeTabKey: commitDiffTabKey(firstCommit.sha),
         documents: [
           {
             author: firstCommit.author,
-            type: "commit-diff",
+            kind: "commit-diff",
             message: firstCommit.message,
             sha: firstCommit.sha,
             shortSha: firstCommit.shortSha,
@@ -203,11 +191,71 @@ describe("workspace surface state persistence", () => {
           },
           {
             author: secondCommit.author,
-            type: "commit-diff",
+            kind: "commit-diff",
             message: secondCommit.message,
             sha: secondCommit.sha,
             shortSha: secondCommit.shortSha,
             timestamp: secondCommit.timestamp,
+          },
+        ],
+      },
+    });
+  });
+
+  test("persists pull request tabs with number-based dedupe", () => {
+    const storage = new MemoryStorage();
+    const firstPullRequest = createPullRequestSummary();
+    const secondPullRequest = createPullRequestSummary({
+      checks: [
+        {
+          detailsUrl: "https://github.com/example/repo/actions/runs/42",
+          name: "CI",
+          status: "success",
+          workflowName: "ci",
+        },
+      ],
+      mergeStateStatus: "HAS_HOOKS",
+      title: "feat: add pull request surface polish",
+      updatedAt: "2026-03-10T12:30:00.000Z",
+    });
+
+    writeWorkspaceSurfaceState(
+      "ws-1",
+      withDefaultState({
+        activeTabKey: pullRequestTabKey(firstPullRequest.number),
+        documents: [
+          createPullRequestTab(firstPullRequest),
+          createPullRequestTab(secondPullRequest),
+        ],
+      }),
+      storage,
+    );
+
+    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
+      ...createDefaultWorkspaceSurfaceState(),
+      activeTabKey: pullRequestTabKey(firstPullRequest.number),
+      documents: [createPullRequestTab(secondPullRequest)],
+    });
+    expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY) ?? "null")).toEqual({
+      "ws-1": {
+        activeTabKey: pullRequestTabKey(firstPullRequest.number),
+        documents: [
+          {
+            author: secondPullRequest.author,
+            baseRefName: secondPullRequest.baseRefName,
+            checks: secondPullRequest.checks,
+            createdAt: secondPullRequest.createdAt,
+            headRefName: secondPullRequest.headRefName,
+            isDraft: secondPullRequest.isDraft,
+            mergeStateStatus: secondPullRequest.mergeStateStatus,
+            mergeable: secondPullRequest.mergeable,
+            number: secondPullRequest.number,
+            reviewDecision: secondPullRequest.reviewDecision,
+            state: secondPullRequest.state,
+            title: secondPullRequest.title,
+            kind: "pull-request",
+            updatedAt: secondPullRequest.updatedAt,
+            url: secondPullRequest.url,
           },
         ],
       },
@@ -231,7 +279,7 @@ describe("workspace surface state persistence", () => {
       activeTabKey: "terminal:term-42",
       documents: [],
     });
-    expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2) ?? "null")).toEqual({
+    expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY) ?? "null")).toEqual({
       "ws-1": {
         activeTabKey: "terminal:term-42",
         documents: [],
@@ -248,7 +296,7 @@ describe("workspace surface state persistence", () => {
       withDefaultState({
         activeTabKey: launcher.key,
         documents: [launcher, createChangesDiffTab("src/app.ts")],
-        tabOrderKeys: [launcher.key, changesDiffTabKeyV2, "terminal:term-2"],
+        tabOrderKeys: [launcher.key, CHANGES_DIFF_TAB_KEY, "terminal:term-2"],
       }),
       storage,
     );
@@ -258,22 +306,22 @@ describe("workspace surface state persistence", () => {
       activeTabKey: launcher.key,
       documents: [launcher, createChangesDiffTab("src/app.ts")],
       hiddenRuntimeTabKeys: [],
-      tabOrderKeys: [launcher.key, changesDiffTabKeyV2, "terminal:term-2"],
+      tabOrderKeys: [launcher.key, CHANGES_DIFF_TAB_KEY, "terminal:term-2"],
     });
-    expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2) ?? "null")).toEqual({
+    expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY) ?? "null")).toEqual({
       "ws-1": {
         activeTabKey: launcher.key,
         documents: [
           {
             key: launcher.key,
-            type: "launcher",
+            kind: "launcher",
           },
           {
             focusPath: "src/app.ts",
-            type: "changes-diff",
+            kind: "changes-diff",
           },
         ],
-        tabOrderKeys: [launcher.key, changesDiffTabKeyV2, "terminal:term-2"],
+        tabOrderKeys: [launcher.key, CHANGES_DIFF_TAB_KEY, "terminal:term-2"],
       },
     });
   });
@@ -282,13 +330,13 @@ describe("workspace surface state persistence", () => {
     const storage = new MemoryStorage();
 
     storage.setItem(
-      WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2,
+      WORKSPACE_SURFACE_STATE_STORAGE_KEY,
       JSON.stringify({
         "ws-1": {
           activeTabKey: "terminal:term-hidden",
           documents: [createLauncherTab("launcher-1")],
-          hiddenRuntimeTabKeys: ["terminal:term-hidden", "diff:file:src/ignored.ts"],
-          tabOrderKeys: ["launcher:launcher-1", "terminal:term-hidden", changesDiffTabKeyV2],
+          hiddenRuntimeTabKeys: ["terminal:term-hidden", "launcher:ignored"],
+          tabOrderKeys: ["launcher:launcher-1", "terminal:term-hidden", CHANGES_DIFF_TAB_KEY],
         },
       }),
     );
@@ -298,50 +346,48 @@ describe("workspace surface state persistence", () => {
       activeTabKey: null,
       documents: [createLauncherTab("launcher-1")],
       hiddenRuntimeTabKeys: ["terminal:term-hidden"],
-      tabOrderKeys: ["launcher:launcher-1", changesDiffTabKeyV2],
+      tabOrderKeys: ["launcher:launcher-1", CHANGES_DIFF_TAB_KEY],
     });
   });
 
-  test("filters invalid persisted payloads while preserving valid migrated documents", () => {
+  test("filters invalid persisted payloads while preserving valid current documents", () => {
     const storage = new MemoryStorage();
     const commit = createCommitEntry();
 
     storage.setItem(
-      WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2,
+      WORKSPACE_SURFACE_STATE_STORAGE_KEY,
       JSON.stringify({
         "ws-1": {
-          activeTabKey: "diff:working:src/app.ts",
+          activeTabKey: CHANGES_DIFF_TAB_KEY,
           documents: [
             {
-              type: "changes-diff",
+              kind: "changes-diff",
               focusPath: "src/existing.ts",
             },
-            // Legacy diff payloads still need restore coverage until older persisted state ages out.
             {
               filePath: "src/app.ts",
-              scope: "working",
             },
             {
-              type: "file-diff",
+              kind: "obsolete-document",
               filePath: "README.md",
             },
             {
-              type: "file-diff",
+              kind: "obsolete-document",
               filePath: 42,
             },
             {
               author: commit.author,
-              type: "commit-diff",
+              kind: "commit-diff",
               message: commit.message,
               sha: commit.sha,
               shortSha: commit.shortSha,
               timestamp: commit.timestamp,
             },
-            { type: "commit-diff", sha: "" },
-            { type: "commit-diff", sha: 42 },
+            { kind: "commit-diff", sha: "" },
+            { kind: "commit-diff", sha: 42 },
             {
               author: 42,
-              type: "commit-diff",
+              kind: "commit-diff",
               message: "bad author",
               sha: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
               shortSha: "deadbeef",
@@ -355,42 +401,8 @@ describe("workspace surface state persistence", () => {
 
     expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
       ...createDefaultWorkspaceSurfaceState(),
-      activeTabKey: changesDiffTabKeyV2,
-      documents: [createChangesDiffTab("src/app.ts"), createCommitDiffTab(commit)],
-    });
-  });
-
-  test("prefers the active legacy diff key when restoring a collapsed changes tab", () => {
-    const storage = new MemoryStorage();
-    const commit = createCommitEntry();
-
-    storage.setItem(
-      WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2,
-      JSON.stringify({
-        "ws-1": {
-          activeTabKey: "diff:file:src/missing.ts",
-          documents: [
-            {
-              type: "file-diff",
-              filePath: "README.md",
-            },
-            {
-              type: "commit-diff",
-              author: commit.author,
-              message: commit.message,
-              sha: commit.sha,
-              shortSha: commit.shortSha,
-              timestamp: commit.timestamp,
-            },
-          ],
-        },
-      }),
-    );
-
-    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
-      activeTabKey: changesDiffTabKeyV2,
-      documents: [createChangesDiffTab("src/missing.ts"), createCommitDiffTab(commit)],
+      activeTabKey: CHANGES_DIFF_TAB_KEY,
+      documents: [createChangesDiffTab("src/existing.ts"), createCommitDiffTab(commit)],
     });
   });
 
@@ -398,13 +410,13 @@ describe("workspace surface state persistence", () => {
     const storage = new MemoryStorage();
 
     storage.setItem(
-      WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2,
+      WORKSPACE_SURFACE_STATE_STORAGE_KEY,
       JSON.stringify({
         "ws-1": {
           activeTabKey: "terminal:term-42",
           documents: [
             {
-              type: "file-diff",
+              kind: "obsolete-document",
               filePath: 42,
             },
           ],
@@ -425,7 +437,7 @@ describe("workspace surface state persistence", () => {
     writeWorkspaceSurfaceState(
       "ws-1",
       withDefaultState({
-        activeTabKey: changesDiffTabKeyV2,
+        activeTabKey: CHANGES_DIFF_TAB_KEY,
         documents: [createChangesDiffTab("src/app.ts")],
       }),
       storage,
@@ -435,8 +447,7 @@ describe("workspace surface state persistence", () => {
     expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual(
       createDefaultWorkspaceSurfaceState(),
     );
-    expect(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY_V1)).toBeNull();
-    expect(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2)).toBeNull();
+    expect(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY)).toBeNull();
   });
 
   test("persists and clears the last selected workspace id", () => {

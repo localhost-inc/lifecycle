@@ -27,15 +27,15 @@ type ToggleGroupSharedProps = Omit<
 
 type ToggleGroupSingleProps = ToggleGroupSharedProps & {
   defaultValue?: string;
+  kind?: "single";
   onValueChange?: (value: string) => void;
-  type?: "single";
   value?: string;
 };
 
 type ToggleGroupMultipleProps = ToggleGroupSharedProps & {
   defaultValue?: string[];
+  kind: "multiple";
   onValueChange?: (value: string[]) => void;
-  type: "multiple";
   value?: string[];
 };
 
@@ -44,12 +44,12 @@ type ToggleGroupProps = ToggleGroupSingleProps | ToggleGroupMultipleProps;
 function ToggleGroup({
   className,
   defaultValue,
+  kind = "single",
   onValueChange,
-  type = "single",
   value,
   ...props
 }: ToggleGroupProps) {
-  const isMultiple = type === "multiple";
+  const isMultiple = kind === "multiple";
   const normalizedDefaultValue: readonly string[] | undefined =
     defaultValue === undefined
       ? undefined

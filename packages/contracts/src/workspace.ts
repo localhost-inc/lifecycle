@@ -1,13 +1,6 @@
 export type WorkspaceMode = "local" | "cloud";
 
-export type WorkspaceStatus =
-  | "creating"
-  | "starting"
-  | "ready"
-  | "resetting"
-  | "sleeping"
-  | "destroying"
-  | "failed";
+export type WorkspaceStatus = "idle" | "starting" | "active" | "stopping";
 
 export type WorkspaceFailureReason =
   | "capacity_unavailable"
@@ -33,7 +26,7 @@ export type WorkspaceServiceStatusReason =
   | "service_port_unreachable"
   | "unknown";
 
-export type WorkspaceServicePreviewState =
+export type WorkspaceServicePreviewStatus =
   | "disabled"
   | "provisioning"
   | "ready"

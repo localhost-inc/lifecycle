@@ -17,9 +17,15 @@ import {
   useRef,
   useState,
 } from "react";
-import type { GitLogEntry, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
+import type {
+  GitLogEntry,
+  GitPullRequestSummary,
+  ServiceRecord,
+  WorkspaceRecord,
+} from "@lifecycle/contracts";
 import { EnvironmentPanel } from "./environment-panel";
 import { GitPanel } from "../../git/components/git-panel";
+import type { SetupStepState } from "../hooks";
 
 const PANEL_SEPARATOR_STEP_PX = 32;
 
@@ -36,6 +42,8 @@ interface WorkspaceSidebarProps {
   }) => Promise<void>;
   onOpenDiff: (filePath: string) => void;
   onOpenCommitDiff: (entry: GitLogEntry) => void;
+  onOpenPullRequest: (pullRequest: GitPullRequestSummary) => void;
+  setupSteps: SetupStepState[];
   services: ServiceRecord[];
   workspace: WorkspaceRecord;
 }
@@ -49,6 +57,8 @@ export function WorkspaceSidebar({
   onUpdateService,
   onOpenDiff,
   onOpenCommitDiff,
+  onOpenPullRequest,
+  setupSteps,
   services,
   workspace,
 }: WorkspaceSidebarProps) {
@@ -207,6 +217,7 @@ export function WorkspaceSidebar({
         <GitPanel
           onOpenDiff={onOpenDiff}
           onOpenCommitDiff={onOpenCommitDiff}
+          onOpenPullRequest={onOpenPullRequest}
           workspaceId={workspace.id}
           workspaceMode={workspace.mode}
           worktreePath={workspace.worktree_path}
@@ -236,6 +247,7 @@ export function WorkspaceSidebar({
           onRun={onRun}
           onStop={onStop}
           onUpdateService={onUpdateService}
+          setupSteps={setupSteps}
           services={services}
           workspace={workspace}
         />

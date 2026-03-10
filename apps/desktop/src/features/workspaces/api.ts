@@ -3,7 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   LifecycleConfig,
   ServiceRecord,
-  SetupStepEventType,
+  SetupStepEventKind,
   WorkspaceRecord,
   WorkspaceStatus,
   WorkspaceFailureReason,
@@ -38,6 +38,10 @@ interface BrowserWorkspaceRecord extends WorkspaceRecord {
   source_ref_origin?: "default" | "generated" | "manual";
 }
 
+interface LegacyBrowserServiceRecord extends Partial<ServiceRecord> {
+  preview_state?: ServiceRecord["preview_status"];
+}
+
 const BROWSER_WORKSPACES_STORAGE_KEY = "lifecycle.desktop.browser.workspaces.v1";
 
 let browserWorkspaceState = readBrowserWorkspaceState();
@@ -58,7 +62,11 @@ function readBrowserWorkspaceState(): BrowserWorkspaceState {
       workspaces: Array.isArray(parsed.workspaces)
         ? parsed.workspaces.map((workspace) => normalizeBrowserWorkspaceRecord(workspace))
         : [],
-      services: Array.isArray(parsed.services) ? parsed.services : [],
+      services: Array.isArray(parsed.services)
+        ? parsed.services.map((service) =>
+            normalizeBrowserServiceRecord(service as LegacyBrowserServiceRecord),
+          )
+        : [],
     };
   } catch {
     return { workspaces: [], services: [] };
@@ -79,7 +87,7 @@ function emitWorkspaceStatus(
   failureReason: WorkspaceFailureReason | null,
 ): void {
   publishBrowserLifecycleEvent({
-    type: "workspace.status_changed",
+    kind: "workspace.status_changed",
     workspace_id: workspaceId,
     status,
     failure_reason: failureReason,
@@ -93,11 +101,18 @@ function emitWorkspaceRenamed(
   worktreePath: string | null,
 ): void {
   publishBrowserLifecycleEvent({
-    type: "workspace.renamed",
+    kind: "workspace.renamed",
     workspace_id: workspaceId,
     name,
     source_ref: sourceRef,
     worktree_path: worktreePath,
+  });
+}
+
+function emitWorkspaceDeleted(workspaceId: string): void {
+  publishBrowserLifecycleEvent({
+    kind: "workspace.deleted",
+    workspace_id: workspaceId,
   });
 }
 
@@ -108,7 +123,7 @@ function emitServiceStatus(
   statusReason: WorkspaceServiceStatusReason | null,
 ): void {
   publishBrowserLifecycleEvent({
-    type: "service.status_changed",
+    kind: "service.status_changed",
     workspace_id: workspaceId,
     service_name: serviceName,
     status,
@@ -119,14 +134,14 @@ function emitServiceStatus(
 function emitSetupProgress(
   workspaceId: string,
   stepName: string,
-  eventType: SetupStepEventType,
+  eventKind: SetupStepEventKind,
   data: string | null,
 ): void {
   publishBrowserLifecycleEvent({
-    type: "setup.step_progress",
+    kind: "setup.step_progress",
     workspace_id: workspaceId,
     step_name: stepName,
-    event_type: eventType,
+    event_kind: eventKind,
     data,
   });
 }
@@ -150,12 +165,12 @@ function browserPreviewUrl(
   return `http://localhost:${effectivePort}`;
 }
 
-function browserPreviewState(
+function browserPreviewStatus(
   exposure: WorkspaceServiceExposure,
   effectivePort: number | null,
   workspaceStatus: WorkspaceStatus,
   status: WorkspaceServiceStatus,
-): ServiceRecord["preview_state"] {
+): ServiceRecord["preview_status"] {
   if (exposure !== "local" || effectivePort === null) {
     return "disabled";
   }
@@ -164,7 +179,7 @@ function browserPreviewState(
     return "failed";
   }
 
-  if (workspaceStatus === "sleeping") {
+  if (workspaceStatus === "idle" || workspaceStatus === "stopping") {
     return "sleeping";
   }
 
@@ -174,11 +189,7 @@ function browserPreviewState(
     case "starting":
       return "provisioning";
     default:
-      if (
-        workspaceStatus === "creating" ||
-        workspaceStatus === "starting" ||
-        workspaceStatus === "resetting"
-      ) {
+      if (workspaceStatus === "starting") {
         return "provisioning";
       }
       return "disabled";
@@ -186,9 +197,9 @@ function browserPreviewState(
 }
 
 function browserPreviewFailureReason(
-  previewState: ServiceRecord["preview_state"],
+  previewStatus: ServiceRecord["preview_status"],
 ): ServiceRecord["preview_failure_reason"] {
-  return previewState === "failed" ? "service_unreachable" : null;
+  return previewStatus === "failed" ? "service_unreachable" : null;
 }
 
 function browserPreviewFields(
@@ -196,12 +207,17 @@ function browserPreviewFields(
   effectivePort: number | null,
   workspaceStatus: WorkspaceStatus,
   serviceStatus: WorkspaceServiceStatus,
-): Pick<ServiceRecord, "preview_failure_reason" | "preview_state" | "preview_url"> {
-  const previewState = browserPreviewState(exposure, effectivePort, workspaceStatus, serviceStatus);
+): Pick<ServiceRecord, "preview_failure_reason" | "preview_status" | "preview_url"> {
+  const previewStatus = browserPreviewStatus(
+    exposure,
+    effectivePort,
+    workspaceStatus,
+    serviceStatus,
+  );
 
   return {
-    preview_state: previewState,
-    preview_failure_reason: browserPreviewFailureReason(previewState),
+    preview_status: previewStatus,
+    preview_failure_reason: browserPreviewFailureReason(previewStatus),
     preview_url: browserPreviewUrl(exposure, effectivePort),
   };
 }
@@ -271,9 +287,18 @@ function normalizeBrowserWorkspaceRecord(
     source_ref: workspace.source_ref ?? "main",
     source_ref_origin: workspace.source_ref_origin ?? "manual",
     source_workspace_id: workspace.source_workspace_id ?? null,
-    status: workspace.status ?? "sleeping",
+    status: workspace.status ?? "idle",
     updated_at: workspace.updated_at ?? nowIso(),
     worktree_path: workspace.worktree_path ?? null,
+  };
+}
+
+function normalizeBrowserServiceRecord(service: LegacyBrowserServiceRecord): ServiceRecord {
+  return {
+    ...(service as ServiceRecord),
+    preview_status: service.preview_status ?? service.preview_state ?? "disabled",
+    preview_failure_reason: service.preview_failure_reason ?? null,
+    preview_url: service.preview_url ?? null,
   };
 }
 
@@ -328,7 +353,7 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
       worktree_path: `${worktreeRoot}/${browserWorktreeDirectoryName(normalizedName, id)}`,
       mode: "local",
       manifest_fingerprint: input.manifestFingerprint ?? null,
-      status: "sleeping",
+      status: "idle",
       failure_reason: null,
       failed_at: null,
       created_by: null,
@@ -348,7 +373,7 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
       services: input.manifestJson
         ? [
             ...browserWorkspaceState.services.filter((service) => service.workspace_id !== id),
-            ...buildBrowserServices(id, input.manifestJson, "sleeping", "stopped", []),
+            ...buildBrowserServices(id, input.manifestJson, "idle", "stopped", []),
           ]
         : browserWorkspaceState.services.filter((service) => service.workspace_id !== id),
     };
@@ -532,7 +557,7 @@ export async function startServices(
         service.workspace_id === workspaceId
           ? {
               ...service,
-              ...browserPreviewFields(service.exposure, service.effective_port, "ready", "ready"),
+              ...browserPreviewFields(service.exposure, service.effective_port, "active", "ready"),
               status: "ready",
               updated_at: nowIso(),
             }
@@ -540,7 +565,7 @@ export async function startServices(
       ),
     };
     persistBrowserWorkspaceState();
-    updateWorkspaceRow(workspaceId, "ready");
+    updateWorkspaceRow(workspaceId, "active");
     return;
   }
 
@@ -549,6 +574,9 @@ export async function startServices(
 
 export async function stopWorkspace(workspaceId: string): Promise<void> {
   if (!isTauri()) {
+    updateWorkspaceRow(workspaceId, "stopping");
+    await delay(40);
+
     browserWorkspaceState = {
       ...browserWorkspaceState,
       services: browserWorkspaceState.services.map((service) =>
@@ -558,7 +586,7 @@ export async function stopWorkspace(workspaceId: string): Promise<void> {
               ...browserPreviewFields(
                 service.exposure,
                 service.effective_port,
-                "sleeping",
+                "stopping",
                 "stopped",
               ),
               status: "stopped",
@@ -575,11 +603,37 @@ export async function stopWorkspace(workspaceId: string): Promise<void> {
       emitServiceStatus(workspaceId, service.service_name, "stopped", null);
     }
 
-    updateWorkspaceRow(workspaceId, "sleeping");
+    updateWorkspaceRow(workspaceId, "idle");
     return;
   }
 
   return invoke<void>("stop_workspace", { workspaceId });
+}
+
+export async function destroyWorkspace(workspaceId: string): Promise<void> {
+  if (!isTauri()) {
+    const existingWorkspace = browserWorkspaceState.workspaces.find(
+      (workspace) => workspace.id === workspaceId,
+    );
+    if (!existingWorkspace) {
+      throw new Error(`Workspace not found: ${workspaceId}`);
+    }
+
+    browserWorkspaceState = {
+      ...browserWorkspaceState,
+      services: browserWorkspaceState.services.filter(
+        (service) => service.workspace_id !== workspaceId,
+      ),
+      workspaces: browserWorkspaceState.workspaces.filter(
+        (workspace) => workspace.id !== workspaceId,
+      ),
+    };
+    persistBrowserWorkspaceState();
+    emitWorkspaceDeleted(workspaceId);
+    return;
+  }
+
+  return invoke<void>("destroy_workspace", { workspaceId });
 }
 
 export async function getWorkspace(projectId: string): Promise<WorkspaceRecord | null> {
@@ -658,7 +712,7 @@ export async function updateWorkspaceService(
         const effectivePort = input.portOverride ?? service.default_port;
         const workspaceStatus =
           browserWorkspaceState.workspaces.find((workspace) => workspace.id === workspaceId)
-            ?.status ?? "sleeping";
+            ?.status ?? "idle";
         return {
           ...service,
           exposure: input.exposure,
@@ -695,7 +749,7 @@ export async function syncWorkspaceManifest(
 
   if (!isTauri()) {
     const workspace = browserWorkspaceState.workspaces.find((item) => item.id === workspaceId);
-    if (!workspace || (workspace.status !== "sleeping" && workspace.status !== "failed")) {
+    if (!workspace || workspace.status !== "idle") {
       return;
     }
 

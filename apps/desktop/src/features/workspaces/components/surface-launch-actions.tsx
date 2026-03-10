@@ -4,8 +4,8 @@ import type { HarnessProvider } from "../../terminals/api";
 import { ClaudeIcon, CodexIcon, ShellIcon } from "./surface-icons";
 
 export type SurfaceLaunchRequest =
-  | { type: "terminal"; launchType: "shell" }
-  | { type: "terminal"; launchType: "harness"; harnessProvider: HarnessProvider };
+  | { kind: "terminal"; launchType: "shell" }
+  | { kind: "terminal"; launchType: "harness"; harnessProvider: HarnessProvider };
 
 export interface SurfaceLaunchAction {
   key: string;

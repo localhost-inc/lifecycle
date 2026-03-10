@@ -1,11 +1,11 @@
 import {
   getManifestFingerprint,
   type GitLogEntry,
+  type GitPullRequestSummary,
   type ServiceRecord,
   type WorkspaceRecord,
 } from "@lifecycle/contracts";
-import { Alert, AlertDescription, AlertTitle, EmptyState, SetupProgress } from "@lifecycle/ui";
-import { FileJson } from "lucide-react";
+import { EmptyState } from "@lifecycle/ui";
 import { createPortal } from "react-dom";
 import { useCallback, useLayoutEffect, useState } from "react";
 import type { ManifestStatus } from "../../projects/api/projects";
@@ -32,8 +32,6 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
   const manifestFingerprint = config ? getManifestFingerprint(config) : null;
   const servicesQuery = useWorkspaceServices(workspace.id);
   const setupQuery = useWorkspaceSetup(workspace.id);
-  const status = workspace.status;
-  const failureReason = workspace.failure_reason;
   const services = servicesQuery.data ?? [];
   const setupSteps = setupQuery.data ?? [];
 
@@ -79,8 +77,6 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
   );
 
   const supportsTerminalInteraction = workspaceSupportsFilesystemInteraction(workspace);
-  const showMissingManifest = status === "sleeping" && !hasManifest;
-  const showSetup = setupSteps.length > 0 && (status === "starting" || status === "failed");
   const isManifestStale =
     manifestState === "valid" &&
     manifestFingerprint !== null &&
@@ -88,21 +84,35 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
     workspace.manifest_fingerprint !== undefined &&
     workspace.manifest_fingerprint !== manifestFingerprint;
 
-  const hasNotices = showSetup || (status === "failed" && Boolean(failureReason));
   const handleOpenDiff = useCallback((filePath: string) => {
     setOpenDocumentRequest({
       focusPath: filePath,
       id: crypto.randomUUID(),
-      type: "changes-diff",
+      kind: "changes-diff",
     });
   }, []);
   const handleOpenCommitDiff = useCallback((entry: GitLogEntry) => {
     setOpenDocumentRequest({
       commit: entry,
       id: crypto.randomUUID(),
-      type: "commit-diff",
+      kind: "commit-diff",
     });
   }, []);
+  const handleOpenPullRequest = useCallback(
+    (pullRequest: GitPullRequestSummary) => {
+      if (!supportsTerminalInteraction) {
+        window.open(pullRequest.url, "_blank", "noopener,noreferrer");
+        return;
+      }
+
+      setOpenDocumentRequest({
+        id: crypto.randomUUID(),
+        pullRequest,
+        kind: "pull-request",
+      });
+    },
+    [supportsTerminalInteraction],
+  );
 
   useLayoutEffect(() => {
     if (typeof document === "undefined") {
@@ -114,27 +124,6 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
 
   const mainContent = supportsTerminalInteraction ? (
     <div className="flex min-h-0 flex-1 flex-col">
-      {hasNotices && (
-        <div className="border-b border-[var(--border)] bg-[var(--card)]/40 px-6 py-5">
-          {showSetup && (
-            <div>
-              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-                Setup
-              </h3>
-              <SetupProgress steps={setupSteps} />
-            </div>
-          )}
-
-          {status === "failed" && failureReason && (
-            <div className={showSetup ? "mt-6" : ""}>
-              <Alert variant="destructive">
-                <AlertTitle>Workspace failed</AlertTitle>
-                <AlertDescription>{failureReason}</AlertDescription>
-              </Alert>
-            </div>
-          )}
-        </div>
-      )}
       <div className="flex min-h-0 flex-1 flex-col">
         <WorkspaceSurface
           key={workspace.id}
@@ -146,33 +135,10 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
   ) : (
     <div className="flex-1 overflow-y-auto p-8">
       <div className="mx-auto max-w-2xl">
-        {showMissingManifest && (
-          <div>
-            <EmptyState
-              description="Add a lifecycle.json file to the project root to configure services and setup steps."
-              icon={<FileJson />}
-              title="No lifecycle.json found"
-            />
-          </div>
-        )}
-
-        {showSetup && (
-          <div className="mt-8">
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-              Setup
-            </h3>
-            <SetupProgress steps={setupSteps} />
-          </div>
-        )}
-
-        {status === "failed" && failureReason && (
-          <div className="mt-8">
-            <Alert variant="destructive">
-              <AlertTitle>Workspace failed</AlertTitle>
-              <AlertDescription>{failureReason}</AlertDescription>
-            </Alert>
-          </div>
-        )}
+        <EmptyState
+          description="Use the Environment panel for lifecycle state and setup details until this workspace exposes an interactive surface."
+          title="Workspace surface unavailable"
+        />
       </div>
     </div>
   );
@@ -191,6 +157,8 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
             onUpdateService={handleUpdateService}
             onOpenDiff={handleOpenDiff}
             onOpenCommitDiff={handleOpenCommitDiff}
+            onOpenPullRequest={handleOpenPullRequest}
+            setupSteps={setupSteps}
             services={services}
             workspace={workspace}
           />,
@@ -206,6 +174,8 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
           onUpdateService={handleUpdateService}
           onOpenDiff={handleOpenDiff}
           onOpenCommitDiff={handleOpenCommitDiff}
+          onOpenPullRequest={handleOpenPullRequest}
+          setupSteps={setupSteps}
           services={services}
           workspace={workspace}
         />

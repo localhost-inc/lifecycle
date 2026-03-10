@@ -15,7 +15,7 @@ pub struct LifecycleEnvelope {
 }
 
 #[derive(Debug, Clone, Serialize)]
-#[serde(tag = "type")]
+#[serde(tag = "kind")]
 pub enum LifecycleEvent {
     #[serde(rename = "workspace.status_changed")]
     WorkspaceStatusChanged {
@@ -30,6 +30,8 @@ pub enum LifecycleEvent {
         source_ref: String,
         worktree_path: Option<String>,
     },
+    #[serde(rename = "workspace.deleted")]
+    WorkspaceDeleted { workspace_id: String },
     #[serde(rename = "service.status_changed")]
     ServiceStatusChanged {
         workspace_id: String,
@@ -41,7 +43,7 @@ pub enum LifecycleEvent {
     SetupStepProgress {
         workspace_id: String,
         step_name: String,
-        event_type: String,
+        event_kind: String,
         data: Option<String>,
     },
     #[serde(rename = "terminal.created")]

@@ -8,7 +8,11 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { isCommitDiffDocument, isLauncherDocument } from "../state/workspace-surface-state";
+import {
+  isCommitDiffDocument,
+  isLauncherDocument,
+  isPullRequestDocument,
+} from "../state/workspace-surface-state";
 import {
   getWorkspaceTabDragShiftDirection,
   reorderWorkspaceTabKeys,
@@ -99,7 +103,7 @@ export function getWorkspaceActiveTabScrollLeft(
 }
 
 function defaultTabLeading(tab: WorkspaceSurfaceTab) {
-  if (tab.type === "terminal") {
+  if (tab.kind === "terminal") {
     return null;
   }
 
@@ -113,7 +117,7 @@ function defaultTabLeading(tab: WorkspaceSurfaceTab) {
 
   return (
     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--background)]/70 font-mono text-[10px] text-[var(--muted-foreground)]">
-      {isCommitDiffDocument(tab) ? "#" : "D"}
+      {isCommitDiffDocument(tab) ? "#" : isPullRequestDocument(tab) ? "PR" : "D"}
     </span>
   );
 }
@@ -161,7 +165,7 @@ export function WorkspaceSurfaceTabBar({
     }
 
     const activeTab = visibleTabs.find(
-      (tab) => tab.key === renameState.key && tab.type === "terminal",
+      (tab) => tab.key === renameState.key && tab.kind === "terminal",
     );
     if (!activeTab) {
       setRenameState(null);
@@ -370,7 +374,7 @@ export function WorkspaceSurfaceTabBar({
 
   const startRenamingTab = useCallback(
     (tab: WorkspaceSurfaceTab) => {
-      if (tab.type !== "terminal" || !onRenameRuntimeTab) {
+      if (tab.kind !== "terminal" || !onRenameRuntimeTab) {
         return;
       }
 
@@ -416,8 +420,8 @@ export function WorkspaceSurfaceTabBar({
     }
 
     const currentTab = visibleTabs.find(
-      (tab): tab is Extract<WorkspaceSurfaceTab, { type: "terminal" }> =>
-        tab.key === renameState.key && tab.type === "terminal",
+      (tab): tab is Extract<WorkspaceSurfaceTab, { kind: "terminal" }> =>
+        tab.key === renameState.key && tab.kind === "terminal",
     );
     if (!currentTab) {
       setRenameState(null);
@@ -473,7 +477,7 @@ export function WorkspaceSurfaceTabBar({
       >
         {visibleTabs.map((tab) => {
           const active = tab.key === activeTabKey;
-          const isTerminal = tab.type === "terminal";
+          const isTerminal = tab.kind === "terminal";
           const isRenaming = renameState?.key === tab.key;
           const isDropTarget = dragState?.targetKey === tab.key;
           const isDraggedTab = dragState?.draggedKey === tab.key;

@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import type { LifecycleEvent, LifecycleEventType, TerminalRecord } from "@lifecycle/contracts";
+import type { LifecycleEvent, LifecycleEventKind, TerminalRecord } from "@lifecycle/contracts";
 import { QueryClient, type LifecycleEventSubscriber, type QueryDescriptor } from "./client";
 import type { QuerySource } from "./source";
 
 function createMockSubscriber() {
   let listener: ((event: LifecycleEvent) => void) | null = null;
-  let activeTypes: readonly LifecycleEventType[] = [];
+  let activeTypes: readonly LifecycleEventKind[] = [];
 
   const subscribe: LifecycleEventSubscriber = async (types, next) => {
     activeTypes = [...types];
@@ -20,7 +20,7 @@ function createMockSubscriber() {
     emit(event: LifecycleEvent) {
       listener?.(event);
     },
-    getActiveTypes(): readonly LifecycleEventType[] {
+    getActiveTypes(): readonly LifecycleEventKind[] {
       return activeTypes;
     },
     subscribe,
@@ -114,22 +114,22 @@ describe("QueryClient", () => {
     cleanup.push(() => client.dispose());
 
     const descriptor: QueryDescriptor<{ id: string; status: string }> = {
-      eventTypes: ["workspace.status_changed"],
+      eventKinds: ["workspace.status_changed"],
       key: ["workspace", "ws-1"],
       async fetch() {
-        return { id: "ws-1", status: "sleeping" };
+        return { id: "ws-1", status: "idle" };
       },
       reduce(current, event) {
         if (
-          event.type !== "workspace.status_changed" ||
+          event.kind !== "workspace.status_changed" ||
           event.workspace_id !== "ws-1" ||
           !current
         ) {
-          return { type: "none" };
+          return { kind: "none" };
         }
 
         return {
-          type: "replace",
+          kind: "replace",
           data: {
             ...current,
             status: event.status,
@@ -143,7 +143,7 @@ describe("QueryClient", () => {
     await flush();
 
     expect(client.getSnapshot(descriptor)).toEqual({
-      data: { id: "ws-1", status: "sleeping" },
+      data: { id: "ws-1", status: "idle" },
       error: null,
       status: "ready",
     });
@@ -151,14 +151,14 @@ describe("QueryClient", () => {
     subscriber.emit({
       id: "evt-1",
       occurred_at: "2026-03-09T00:00:00Z",
-      type: "workspace.status_changed",
+      kind: "workspace.status_changed",
       failure_reason: null,
-      status: "ready",
+      status: "active",
       workspace_id: "ws-1",
     });
 
     expect(client.getSnapshot(descriptor)).toEqual({
-      data: { id: "ws-1", status: "ready" },
+      data: { id: "ws-1", status: "active" },
       error: null,
       status: "ready",
     });
@@ -172,17 +172,17 @@ describe("QueryClient", () => {
 
     let fetchCount = 0;
     const descriptor: QueryDescriptor<number> = {
-      eventTypes: ["service.status_changed"],
+      eventKinds: ["service.status_changed"],
       key: ["workspace-services", "ws-1"],
       async fetch() {
         fetchCount += 1;
         return fetchCount;
       },
       reduce(_current, event) {
-        if (event.type === "service.status_changed") {
-          return { type: "invalidate" };
+        if (event.kind === "service.status_changed") {
+          return { kind: "invalidate" };
         }
-        return { type: "none" };
+        return { kind: "none" };
       },
     };
 
@@ -195,7 +195,7 @@ describe("QueryClient", () => {
     subscriber.emit({
       id: "evt-2",
       occurred_at: "2026-03-09T00:00:00Z",
-      type: "service.status_changed",
+      kind: "service.status_changed",
       service_name: "web",
       status: "ready",
       status_reason: null,
@@ -214,7 +214,7 @@ describe("QueryClient", () => {
 
     let fetchCount = 0;
     const descriptor: QueryDescriptor<number> = {
-      eventTypes: ["git.head_changed", "git.status_changed"],
+      eventKinds: ["git.head_changed", "git.status_changed"],
       key: ["workspace-git-status", "ws-1"],
       async fetch() {
         fetchCount += 1;
@@ -222,13 +222,13 @@ describe("QueryClient", () => {
       },
       reduce(_current, event) {
         if (
-          (event.type === "git.head_changed" || event.type === "git.status_changed") &&
+          (event.kind === "git.head_changed" || event.kind === "git.status_changed") &&
           event.workspace_id === "ws-1"
         ) {
-          return { type: "invalidate" };
+          return { kind: "invalidate" };
         }
 
-        return { type: "none" };
+        return { kind: "none" };
       },
     };
 
@@ -241,7 +241,7 @@ describe("QueryClient", () => {
     subscriber.emit({
       id: "evt-3",
       occurred_at: "2026-03-10T00:00:00Z",
-      type: "git.status_changed",
+      kind: "git.status_changed",
       workspace_id: "ws-1",
       branch: "feature/git-events",
       head_sha: "abcdef1234567890",
@@ -254,7 +254,7 @@ describe("QueryClient", () => {
     subscriber.emit({
       id: "evt-4",
       occurred_at: "2026-03-10T00:00:00Z",
-      type: "git.head_changed",
+      kind: "git.head_changed",
       workspace_id: "ws-2",
       branch: "other",
       head_sha: "fedcba0987654321",
@@ -274,23 +274,23 @@ describe("QueryClient", () => {
     cleanup.push(() => client.dispose());
 
     const workspaceDescriptor: QueryDescriptor<number> = {
-      eventTypes: ["workspace.status_changed"],
+      eventKinds: ["workspace.status_changed"],
       key: ["workspace", "ws-1"],
       async fetch() {
         return 1;
       },
       reduce() {
-        return { type: "none" };
+        return { kind: "none" };
       },
     };
     const serviceDescriptor: QueryDescriptor<number> = {
-      eventTypes: ["service.status_changed"],
+      eventKinds: ["service.status_changed"],
       key: ["workspace-services", "ws-1"],
       async fetch() {
         return 1;
       },
       reduce() {
-        return { type: "none" };
+        return { kind: "none" };
       },
     };
 

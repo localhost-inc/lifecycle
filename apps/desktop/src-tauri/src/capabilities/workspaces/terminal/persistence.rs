@@ -145,10 +145,8 @@ pub(crate) fn load_terminal_record(
 }
 
 pub(crate) fn workspace_has_interactive_terminal_context(workspace: &WorkspaceRuntime) -> bool {
-    !matches!(
-        workspace.status,
-        WorkspaceStatus::Creating | WorkspaceStatus::Destroying
-    )
+    let _ = workspace.status;
+    !workspace.worktree_path.is_empty()
 }
 
 pub(crate) fn load_workspace_runtime(

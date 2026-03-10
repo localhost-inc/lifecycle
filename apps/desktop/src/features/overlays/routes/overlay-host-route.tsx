@@ -397,13 +397,13 @@ function renderGitActionsOverlay(
           pullRequestNumber,
         })
       }
-      onOpenPullRequest={(url) =>
+      onOpenPullRequest={(pullRequest) =>
         emitAction({
           action: "open-pull-request",
           kind: "git-actions",
           overlayId: overlay.overlayId,
           ownerWindowLabel: overlay.ownerWindowLabel,
-          url,
+          url: pullRequest.url,
         })
       }
       onPushBranch={() =>

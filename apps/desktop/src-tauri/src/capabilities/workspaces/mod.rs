@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod create;
+pub mod destroy;
 pub mod git;
 mod harness;
 mod identity;

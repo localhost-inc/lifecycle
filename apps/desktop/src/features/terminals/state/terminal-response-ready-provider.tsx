@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useReducer, type ReactNode } from "react";
-import type { LifecycleEventType } from "@lifecycle/contracts";
+import type { LifecycleEventKind } from "@lifecycle/contracts";
 import { useLifecycleEvent } from "../../events";
 
 export interface TerminalResponseReadyState {
@@ -11,32 +11,45 @@ export interface TerminalResponseReadyState {
       workspaceId: string;
     }
   >;
+  runningStateByTerminalId: Record<
+    string,
+    {
+      turnId: string | null;
+      workspaceId: string;
+    }
+  >;
 }
 
 type TerminalResponseReadyAction =
-  | { type: "mark-ready"; completionKey: string; terminalId: string; workspaceId: string }
-  | { type: "acknowledge-terminal"; terminalId: string }
-  | { type: "acknowledge-workspace"; workspaceId: string }
-  | { type: "clear-terminal"; terminalId: string }
-  | { type: "clear-workspace"; workspaceId: string };
+  | { kind: "mark-running"; terminalId: string; turnId: string | null; workspaceId: string }
+  | { kind: "mark-ready"; completionKey: string; terminalId: string; workspaceId: string }
+  | { kind: "acknowledge-terminal"; terminalId: string }
+  | { kind: "acknowledge-workspace"; workspaceId: string }
+  | { kind: "clear-running-terminal"; terminalId: string }
+  | { kind: "clear-terminal"; terminalId: string }
+  | { kind: "clear-workspace"; workspaceId: string };
 
 interface TerminalResponseReadyContextValue {
   clearTerminalResponseReady: (terminalId: string) => void;
   clearWorkspaceResponseReady: (workspaceId: string) => void;
+  hasWorkspaceRunningTurn: (workspaceId: string) => boolean;
   hasWorkspaceResponseReady: (workspaceId: string) => boolean;
   isTerminalResponseReady: (terminalId: string) => boolean;
+  isTerminalTurnRunning: (terminalId: string) => boolean;
 }
 
 const TerminalResponseReadyContext = createContext<TerminalResponseReadyContextValue | null>(null);
-const TERMINAL_RESPONSE_READY_EVENT_TYPES = [
+const TERMINAL_RESPONSE_READY_EVENT_KINDS = [
+  "terminal.harness_prompt_submitted",
   "terminal.harness_turn_completed",
   "terminal.status_changed",
-] as const satisfies readonly LifecycleEventType[];
+] as const satisfies readonly LifecycleEventKind[];
 
 export function createDefaultTerminalResponseReadyState(): TerminalResponseReadyState {
   return {
     acknowledgedCompletionKeyByTerminalId: {},
     readyStateByTerminalId: {},
+    runningStateByTerminalId: {},
   };
 }
 
@@ -44,7 +57,27 @@ export function terminalResponseReadyReducer(
   state: TerminalResponseReadyState,
   action: TerminalResponseReadyAction,
 ): TerminalResponseReadyState {
-  switch (action.type) {
+  switch (action.kind) {
+    case "mark-running": {
+      const currentRunningState = state.runningStateByTerminalId[action.terminalId];
+      if (
+        currentRunningState?.workspaceId === action.workspaceId &&
+        currentRunningState.turnId === action.turnId
+      ) {
+        return state;
+      }
+
+      return {
+        ...state,
+        runningStateByTerminalId: {
+          ...state.runningStateByTerminalId,
+          [action.terminalId]: {
+            turnId: action.turnId,
+            workspaceId: action.workspaceId,
+          },
+        },
+      };
+    }
     case "mark-ready": {
       if (state.acknowledgedCompletionKeyByTerminalId[action.terminalId] === action.completionKey) {
         return state;
@@ -81,6 +114,7 @@ export function terminalResponseReadyReducer(
       delete nextReadyStateByTerminalId[action.terminalId];
 
       return {
+        ...state,
         acknowledgedCompletionKeyByTerminalId: {
           ...state.acknowledgedCompletionKeyByTerminalId,
           [action.terminalId]: currentReadyState.completionKey,
@@ -113,15 +147,32 @@ export function terminalResponseReadyReducer(
       }
 
       return {
+        ...state,
         acknowledgedCompletionKeyByTerminalId: nextAcknowledgedCompletionKeyByTerminalId,
         readyStateByTerminalId: nextReadyStateByTerminalId,
+      };
+    }
+    case "clear-running-terminal": {
+      if (!(action.terminalId in state.runningStateByTerminalId)) {
+        return state;
+      }
+
+      const nextRunningStateByTerminalId = {
+        ...state.runningStateByTerminalId,
+      };
+      delete nextRunningStateByTerminalId[action.terminalId];
+
+      return {
+        ...state,
+        runningStateByTerminalId: nextRunningStateByTerminalId,
       };
     }
     case "clear-terminal": {
       const hadAcknowledgedCompletionKey =
         action.terminalId in state.acknowledgedCompletionKeyByTerminalId;
       const hadReadyState = action.terminalId in state.readyStateByTerminalId;
-      if (!hadAcknowledgedCompletionKey && !hadReadyState) {
+      const hadRunningState = action.terminalId in state.runningStateByTerminalId;
+      if (!hadAcknowledgedCompletionKey && !hadReadyState && !hadRunningState) {
         return state;
       }
 
@@ -135,14 +186,22 @@ export function terminalResponseReadyReducer(
       };
       delete nextReadyStateByTerminalId[action.terminalId];
 
+      const nextRunningStateByTerminalId = {
+        ...state.runningStateByTerminalId,
+      };
+      delete nextRunningStateByTerminalId[action.terminalId];
+
       return {
         acknowledgedCompletionKeyByTerminalId: nextAcknowledgedCompletionKeyByTerminalId,
         readyStateByTerminalId: nextReadyStateByTerminalId,
+        runningStateByTerminalId: nextRunningStateByTerminalId,
       };
     }
     case "clear-workspace": {
       let changed = false;
       const nextReadyStateByTerminalId: TerminalResponseReadyState["readyStateByTerminalId"] = {};
+      const nextRunningStateByTerminalId: TerminalResponseReadyState["runningStateByTerminalId"] =
+        {};
 
       for (const [terminalId, readyState] of Object.entries(state.readyStateByTerminalId)) {
         if (readyState.workspaceId === action.workspaceId) {
@@ -153,6 +212,15 @@ export function terminalResponseReadyReducer(
         nextReadyStateByTerminalId[terminalId] = readyState;
       }
 
+      for (const [terminalId, runningState] of Object.entries(state.runningStateByTerminalId)) {
+        if (runningState.workspaceId === action.workspaceId) {
+          changed = true;
+          continue;
+        }
+
+        nextRunningStateByTerminalId[terminalId] = runningState;
+      }
+
       if (!changed) {
         return state;
       }
@@ -160,6 +228,7 @@ export function terminalResponseReadyReducer(
       return {
         ...state,
         readyStateByTerminalId: nextReadyStateByTerminalId,
+        runningStateByTerminalId: nextRunningStateByTerminalId,
       };
     }
     default:
@@ -175,6 +244,14 @@ export function getResponseReadyWorkspaceIds(state: TerminalResponseReadyState):
   ];
 }
 
+export function getRunningWorkspaceIds(state: TerminalResponseReadyState): string[] {
+  return [
+    ...new Set(
+      Object.values(state.runningStateByTerminalId).map((runningState) => runningState.workspaceId),
+    ),
+  ];
+}
+
 export function TerminalResponseReadyProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(
     terminalResponseReadyReducer,
@@ -182,13 +259,25 @@ export function TerminalResponseReadyProvider({ children }: { children: ReactNod
     createDefaultTerminalResponseReadyState,
   );
 
-  useLifecycleEvent(TERMINAL_RESPONSE_READY_EVENT_TYPES, (event) => {
-    switch (event.type) {
+  useLifecycleEvent(TERMINAL_RESPONSE_READY_EVENT_KINDS, (event) => {
+    switch (event.kind) {
+      case "terminal.harness_prompt_submitted":
+        dispatch({
+          terminalId: event.terminal_id,
+          turnId: event.turn_id,
+          kind: "mark-running",
+          workspaceId: event.workspace_id,
+        });
+        break;
       case "terminal.harness_turn_completed":
+        dispatch({
+          terminalId: event.terminal_id,
+          kind: "clear-running-terminal",
+        });
         dispatch({
           completionKey: event.completion_key,
           terminalId: event.terminal_id,
-          type: "mark-ready",
+          kind: "mark-ready",
           workspaceId: event.workspace_id,
         });
         break;
@@ -199,24 +288,25 @@ export function TerminalResponseReadyProvider({ children }: { children: ReactNod
 
         dispatch({
           terminalId: event.terminal_id,
-          type: "clear-terminal",
+          kind: "clear-terminal",
         });
         break;
     }
   });
 
   const readyWorkspaceIds = useMemo(() => new Set(getResponseReadyWorkspaceIds(state)), [state]);
+  const runningWorkspaceIds = useMemo(() => new Set(getRunningWorkspaceIds(state)), [state]);
 
   const clearTerminalResponseReady = useCallback((terminalId: string) => {
     dispatch({
       terminalId,
-      type: "acknowledge-terminal",
+      kind: "acknowledge-terminal",
     });
   }, []);
 
   const clearWorkspaceResponseReady = useCallback((workspaceId: string) => {
     dispatch({
-      type: "acknowledge-workspace",
+      kind: "acknowledge-workspace",
       workspaceId,
     });
   }, []);
@@ -224,6 +314,16 @@ export function TerminalResponseReadyProvider({ children }: { children: ReactNod
   const isTerminalResponseReady = useCallback(
     (terminalId: string) => terminalId in state.readyStateByTerminalId,
     [state.readyStateByTerminalId],
+  );
+
+  const isTerminalTurnRunning = useCallback(
+    (terminalId: string) => terminalId in state.runningStateByTerminalId,
+    [state.runningStateByTerminalId],
+  );
+
+  const hasWorkspaceRunningTurn = useCallback(
+    (workspaceId: string) => runningWorkspaceIds.has(workspaceId),
+    [runningWorkspaceIds],
   );
 
   const hasWorkspaceResponseReady = useCallback(
@@ -235,14 +335,18 @@ export function TerminalResponseReadyProvider({ children }: { children: ReactNod
     () => ({
       clearTerminalResponseReady,
       clearWorkspaceResponseReady,
+      hasWorkspaceRunningTurn,
       hasWorkspaceResponseReady,
       isTerminalResponseReady,
+      isTerminalTurnRunning,
     }),
     [
       clearTerminalResponseReady,
       clearWorkspaceResponseReady,
+      hasWorkspaceRunningTurn,
       hasWorkspaceResponseReady,
       isTerminalResponseReady,
+      isTerminalTurnRunning,
     ],
   );
 

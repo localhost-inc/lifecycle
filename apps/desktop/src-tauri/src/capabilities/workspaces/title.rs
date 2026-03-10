@@ -209,10 +209,11 @@ mod tests {
 
     #[test]
     fn fallback_title_uses_truncated_prompt_text() {
-        assert_eq!(fallback_terminal_title("what is this"), "what is this");
+        assert_eq!(fallback_terminal_title("what is this"), "What Is This");
+        let expected = "X".to_string() + &"x".repeat(44) + "...";
         assert_eq!(
             fallback_terminal_title(&"x".repeat(60)),
-            format!("{}...", "x".repeat(45))
+            expected
         );
         assert_eq!(fallback_terminal_title("   "), "Agent Session");
     }

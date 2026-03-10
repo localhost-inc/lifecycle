@@ -29,37 +29,35 @@ Workspace lifecycle is about the durable shell, not whether services are current
 ### Workspace Lifecycle Invariants
 
 1. Archiving or destroying a workspace must first drive the environment down.
-2. Starting, stopping, resetting, sleeping, or waking the environment does not create, archive, unarchive, or destroy the workspace.
+2. Starting or stopping the environment does not create, archive, unarchive, or destroy the workspace.
 3. Archived workspaces remain durable records; destroy is the terminal workspace removal path.
 
 ## Workspace Environment `status` Allowed Transitions
 
-- `creating -> starting|sleeping|failed`
-- `starting -> ready|failed`
-- `ready -> starting|resetting|sleeping|destroying|failed` (`ready -> sleeping` only for idle-timeout cause)
-- `resetting -> starting|failed`
-- `sleeping -> starting|destroying|failed`
-- `failed -> starting|resetting|destroying`
-- `destroying -> deleted` (terminal)
+- `idle -> starting`
+- `starting -> active|stopping|idle`
+- `active -> stopping`
+- `stopping -> idle`
 
 ### Workspace Environment Invariants
 
-1. Allowed states: `creating`, `starting`, `ready`, `resetting`, `sleeping`, `destroying`, `failed`
-2. Transitional environment status acts as implicit mutation lock for environment/service mutations (`creating|starting|resetting|sleeping|destroying`). Terminal create/attach is governed by interactive workspace context instead of service readiness.
+1. Allowed states: `idle`, `starting`, `active`, `stopping`
+2. Transitional environment status acts as implicit mutation lock for environment/service mutations (`starting|stopping`). Terminal create/attach is governed by interactive workspace context instead of service readiness.
 3. Project `setup` executes exactly once per workspace create; ordinary environment start/stop does not rerun setup.
-4. All defined services must pass health checks before transition to `ready`
+4. All defined services must pass health checks before transition to `active`
+5. Failed start attempts land back in `idle`; the failure is carried by `failure_reason` and `failed_at` instead of a terminal `failed` status.
+6. Workspace creation and deletion are workspace-lifecycle concerns, not environment-status values.
 
 ### Environment State Semantics by Mode
 
 | State | `CloudWorkspaceProvider` | `LocalWorkspaceProvider` |
 |-------|-------------------|-------------------|
-| `creating` | Provisioning sandbox + clone + setup | Creating git worktree and persisting workspace metadata |
-| `starting` | Starting services in sandbox | Running first-boot setup (if needed) and starting local processes + containers |
-| `ready` | Health checks pass in sandbox | Health checks pass on localhost |
-| `sleeping` | R2 backup, sandbox terminated | Processes stopped, worktree preserved |
-| `destroying` | Sandbox terminated, metadata cleaned | Processes killed, worktree pruned |
+| `idle` | No active sandbox services; workspace record persists | No running services; worktree persists |
+| `starting` | Provisioning or starting sandbox services | Running first-boot setup (if needed) and starting local processes + containers |
+| `active` | Health checks pass in sandbox | Health checks pass on localhost |
+| `stopping` | Sandbox services are shutting down | Processes and containers are shutting down |
 
-- All failed transitions include typed `failure_reason` and `failed_at`
+- Failed start attempts record typed `failure_reason` and `failed_at` while returning the workspace to `idle`
 - All forbidden transitions must throw `invalid_state_transition` error with current/target state in `details`
 
 ## Workspace Service `status` Allowed Transitions
@@ -72,8 +70,8 @@ Workspace lifecycle is about the durable shell, not whether services are current
 ### Workspace Service State Invariants
 
 1. Allowed states: `stopped`, `starting`, `ready`, `failed`
-2. Service status is subordinate to the environment: a sleeping or destroying environment cannot have `ready` services.
-3. Individual service failure may drive the environment to `failed` when the health gate requires all declared services.
+2. Service status is subordinate to the environment: an `idle` or `stopping` environment cannot have `ready` services.
+3. Individual service failure may drive the environment back to `idle` with `failure_reason` when the health gate requires all declared services.
 
 ## Terminal `status` Allowed Transitions
 
@@ -85,11 +83,11 @@ Workspace lifecycle is about the durable shell, not whether services are current
 ### Terminal State Invariants
 
 1. Allowed states: `active`, `detached`, `sleeping`, `finished`, `failed`
-2. `create` and `attach` are allowed whenever the workspace has interactive context (worktree exists and the workspace is not `creating` or `destroying`); terminal access is not gated on service readiness.
+2. `create` and `attach` are allowed whenever the workspace has interactive context (the worktree exists); terminal access is not gated on service readiness.
 3. `sleeping` terminals must not accept input when the terminal itself is suspended.
 4. Workspace `destroy` hard-terminates any non-finished/non-failed terminal.
 
-## Preview `preview_state` Allowed Transitions
+## Preview `preview_status` Allowed Transitions
 
 - `disabled -> provisioning|expired`
 - `provisioning -> ready|failed|disabled|expired`
@@ -103,10 +101,10 @@ Workspace lifecycle is about the durable shell, not whether services are current
 - `disabled -> provisioning` on `share on` or `share_default=true`
 - `provisioning -> ready|failed` after route bind + health confirmation
 - `ready -> provisioning` during service restart/rebind (URL remains stable)
-- `ready -> sleeping` when the workspace environment sleeps
-- `sleeping -> provisioning|ready` on wake and route reconcile
+- `ready -> sleeping` when the workspace environment becomes `idle` or `stopping`
+- `sleeping -> provisioning|ready` on the next start and route reconcile
 - `* -> expired` when workspace is destroyed or TTL-cleaned
-- Health check must pass before `preview_state=ready` for all providers
+- Health check must pass before `preview_status=ready` for all providers
 
 ## Enforcement
 

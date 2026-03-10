@@ -23,7 +23,7 @@ pub async fn run_setup_steps(
             LifecycleEvent::SetupStepProgress {
                 workspace_id: workspace_id.to_string(),
                 step_name: step.name.clone(),
-                event_type: "started".to_string(),
+                event_kind: "started".to_string(),
                 data: None,
             },
         );
@@ -67,7 +67,7 @@ pub async fn run_setup_steps(
                         LifecycleEvent::SetupStepProgress {
                             workspace_id: ws.clone(),
                             step_name: sn.clone(),
-                            event_type: "stdout".to_string(),
+                            event_kind: "stdout".to_string(),
                             data: Some(line),
                         },
                     );
@@ -90,7 +90,7 @@ pub async fn run_setup_steps(
                         LifecycleEvent::SetupStepProgress {
                             workspace_id: ws.clone(),
                             step_name: sn.clone(),
-                            event_type: "stderr".to_string(),
+                            event_kind: "stderr".to_string(),
                             data: Some(line),
                         },
                     );
@@ -124,7 +124,7 @@ pub async fn run_setup_steps(
                         LifecycleEvent::SetupStepProgress {
                             workspace_id: workspace_id.to_string(),
                             step_name: step.name.clone(),
-                            event_type: "failed".to_string(),
+                            event_kind: "failed".to_string(),
                             data: Some(format!("Exit code: {exit_code}")),
                         },
                     );
@@ -148,7 +148,7 @@ pub async fn run_setup_steps(
                     LifecycleEvent::SetupStepProgress {
                         workspace_id: workspace_id.to_string(),
                         step_name: step.name.clone(),
-                        event_type: "timeout".to_string(),
+                        event_kind: "timeout".to_string(),
                         data: None,
                     },
                 );
@@ -163,7 +163,7 @@ pub async fn run_setup_steps(
             LifecycleEvent::SetupStepProgress {
                 workspace_id: workspace_id.to_string(),
                 step_name: step.name.clone(),
-                event_type: "completed".to_string(),
+                event_kind: "completed".to_string(),
                 data: None,
             },
         );

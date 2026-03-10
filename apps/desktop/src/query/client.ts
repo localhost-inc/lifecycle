@@ -1,4 +1,4 @@
-import type { LifecycleEvent, LifecycleEventType } from "@lifecycle/contracts";
+import type { LifecycleEvent, LifecycleEventKind } from "@lifecycle/contracts";
 import type { QuerySource } from "./source";
 
 export type QueryKeyPart = string | number | boolean | null;
@@ -13,9 +13,9 @@ export interface QuerySnapshot<T> {
 }
 
 export type QueryUpdate<T> =
-  | { type: "replace"; data: T }
-  | { type: "invalidate" }
-  | { type: "none" };
+  | { kind: "replace"; data: T }
+  | { kind: "invalidate" }
+  | { kind: "none" };
 
 interface BaseQueryDescriptor<T> {
   key: QueryKey;
@@ -23,12 +23,12 @@ interface BaseQueryDescriptor<T> {
 }
 
 interface PassiveQueryDescriptor<T> extends BaseQueryDescriptor<T> {
-  eventTypes?: never;
+  eventKinds?: never;
   reduce?: never;
 }
 
 interface EventQueryDescriptor<T> extends BaseQueryDescriptor<T> {
-  eventTypes: readonly LifecycleEventType[];
+  eventKinds: readonly LifecycleEventKind[];
   reduce(current: T | undefined, event: LifecycleEvent): QueryUpdate<T>;
 }
 
@@ -66,22 +66,22 @@ function isEventQueryDescriptor<T>(
   return "reduce" in descriptor && typeof descriptor.reduce === "function";
 }
 
-function eventTypesKey(types: readonly LifecycleEventType[]): string {
-  return [...new Set(types)].sort().join("\0");
+function eventKindsKey(kinds: readonly LifecycleEventKind[]): string {
+  return [...new Set(kinds)].sort().join("\0");
 }
 
 export type LifecycleEventSubscriber = (
-  types: readonly LifecycleEventType[],
+  kinds: readonly LifecycleEventKind[],
   listener: (event: LifecycleEvent) => void,
 ) => Promise<() => void>;
 
 export class QueryClient {
   private readonly entries = new Map<string, QueryEntry<unknown>>();
-  private readonly entriesByEventType = new Map<LifecycleEventType, Set<QueryEntry<unknown>>>();
+  private readonly entriesByEventKind = new Map<LifecycleEventKind, Set<QueryEntry<unknown>>>();
   private readonly source: QuerySource;
   private readonly subscribeToEvents: LifecycleEventSubscriber;
   private sourceUnsubscribe: (() => void) | null = null;
-  private subscriptionTypesKey = "";
+  private subscriptionKindsKey = "";
   private syncPromise: Promise<void> = Promise.resolve();
 
   constructor(source: QuerySource, subscribeToEvents: LifecycleEventSubscriber) {
@@ -90,8 +90,8 @@ export class QueryClient {
   }
 
   dispose(): void {
-    this.entriesByEventType.clear();
-    this.subscriptionTypesKey = "";
+    this.entriesByEventKind.clear();
+    this.subscriptionKindsKey = "";
     this.sourceUnsubscribe?.();
     this.sourceUnsubscribe = null;
     this.syncPromise = Promise.resolve();
@@ -162,14 +162,14 @@ export class QueryClient {
     if (existing) {
       const typedEntry = existing as QueryEntry<T>;
       const previousDescriptor = typedEntry.descriptor;
-      const previousTypesKey = isEventQueryDescriptor(previousDescriptor)
-        ? eventTypesKey(previousDescriptor.eventTypes)
+      const previousKindsKey = isEventQueryDescriptor(previousDescriptor)
+        ? eventKindsKey(previousDescriptor.eventKinds)
         : "";
-      const nextTypesKey = isEventQueryDescriptor(descriptor)
-        ? eventTypesKey(descriptor.eventTypes)
+      const nextKindsKey = isEventQueryDescriptor(descriptor)
+        ? eventKindsKey(descriptor.eventKinds)
         : "";
 
-      if (typedEntry.listeners.size > 0 && previousTypesKey !== nextTypesKey) {
+      if (typedEntry.listeners.size > 0 && previousKindsKey !== nextKindsKey) {
         if (isEventQueryDescriptor(previousDescriptor)) {
           this.unindexEntry(typedEntry, previousDescriptor);
         }
@@ -195,11 +195,11 @@ export class QueryClient {
   }
 
   private indexEntry<T>(entry: QueryEntry<T>, descriptor: EventQueryDescriptor<T>): void {
-    for (const type of new Set(descriptor.eventTypes)) {
-      let entries = this.entriesByEventType.get(type);
+    for (const kind of new Set(descriptor.eventKinds)) {
+      let entries = this.entriesByEventKind.get(kind);
       if (!entries) {
         entries = new Set();
-        this.entriesByEventType.set(type, entries);
+        this.entriesByEventKind.set(kind, entries);
       }
 
       entries.add(entry as QueryEntry<unknown>);
@@ -207,15 +207,15 @@ export class QueryClient {
   }
 
   private unindexEntry<T>(entry: QueryEntry<T>, descriptor: EventQueryDescriptor<T>): void {
-    for (const type of new Set(descriptor.eventTypes)) {
-      const entries = this.entriesByEventType.get(type);
+    for (const kind of new Set(descriptor.eventKinds)) {
+      const entries = this.entriesByEventKind.get(kind);
       if (!entries) {
         continue;
       }
 
       entries.delete(entry as QueryEntry<unknown>);
       if (entries.size === 0) {
-        this.entriesByEventType.delete(type);
+        this.entriesByEventKind.delete(kind);
       }
     }
   }
@@ -261,26 +261,26 @@ export class QueryClient {
 
   private syncEventSubscription(): Promise<void> {
     const nextTask = this.syncPromise.then(async () => {
-      const nextTypes = [...this.entriesByEventType.keys()].sort();
-      const nextTypesKey = eventTypesKey(nextTypes);
+      const nextKinds = [...this.entriesByEventKind.keys()].sort();
+      const nextKindsKey = eventKindsKey(nextKinds);
 
-      if (nextTypesKey === this.subscriptionTypesKey) {
+      if (nextKindsKey === this.subscriptionKindsKey) {
         return;
       }
 
-      this.subscriptionTypesKey = nextTypesKey;
+      this.subscriptionKindsKey = nextKindsKey;
       this.sourceUnsubscribe?.();
       this.sourceUnsubscribe = null;
 
-      if (nextTypes.length === 0) {
+      if (nextKinds.length === 0) {
         return;
       }
 
-      const unsubscribe = await this.subscribeToEvents(nextTypes, (event) => {
+      const unsubscribe = await this.subscribeToEvents(nextKinds, (event) => {
         this.handleEvent(event);
       });
 
-      if (this.subscriptionTypesKey !== nextTypesKey) {
+      if (this.subscriptionKindsKey !== nextKindsKey) {
         unsubscribe();
         return;
       }
@@ -296,7 +296,7 @@ export class QueryClient {
   }
 
   private handleEvent(event: LifecycleEvent): void {
-    const entries = this.entriesByEventType.get(event.type);
+    const entries = this.entriesByEventKind.get(event.kind);
     if (!entries) {
       return;
     }
@@ -311,11 +311,11 @@ export class QueryClient {
       const current = entry.snapshot.data;
       const update = reduce(current, event);
 
-      if (update.type === "none") {
+      if (update.kind === "none") {
         continue;
       }
 
-      if (update.type === "replace") {
+      if (update.kind === "replace") {
         entry.snapshot = {
           data: update.data,
           error: null,

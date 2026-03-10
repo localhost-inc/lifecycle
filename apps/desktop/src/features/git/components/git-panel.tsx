@@ -1,4 +1,4 @@
-import type { GitLogEntry, WorkspaceMode } from "@lifecycle/contracts";
+import type { GitLogEntry, GitPullRequestSummary, WorkspaceMode } from "@lifecycle/contracts";
 import { EmptyState, Tabs, TabsList, TabsTrigger, cn } from "@lifecycle/ui";
 import { useState } from "react";
 import { commitGit, createGitPullRequest, mergeGitPullRequest, pushGit } from "../api";
@@ -21,6 +21,7 @@ type GitPanelTabValue = (typeof GIT_PANEL_TABS)[number]["value"];
 interface GitPanelProps {
   onOpenDiff: (filePath: string) => void;
   onOpenCommitDiff: (entry: GitLogEntry) => void;
+  onOpenPullRequest: (pullRequest: GitPullRequestSummary) => void;
   workspaceId: string;
   workspaceMode: WorkspaceMode;
   worktreePath: string | null;
@@ -37,6 +38,7 @@ function GitPanelPlaceholder({ description, title }: { description: string; titl
 export function GitPanel({
   onOpenDiff,
   onOpenCommitDiff,
+  onOpenPullRequest,
   workspaceId,
   workspaceMode,
   worktreePath,
@@ -111,7 +113,7 @@ export function GitPanel({
     try {
       const pullRequest = await createGitPullRequest(workspaceId);
       await refreshPullRequestState();
-      window.open(pullRequest.url, "_blank", "noopener,noreferrer");
+      onOpenPullRequest(pullRequest);
       setActiveTab("pull-requests");
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error));
@@ -126,16 +128,12 @@ export function GitPanel({
     try {
       const pullRequest = await mergeGitPullRequest(workspaceId, pullRequestNumber);
       await refreshPullRequestState();
-      window.open(pullRequest.url, "_blank", "noopener,noreferrer");
+      onOpenPullRequest(pullRequest);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error));
     } finally {
       setIsMergingPullRequest(false);
     }
-  }
-
-  function handleOpenPullRequest(url: string): void {
-    window.open(url, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -156,7 +154,7 @@ export function GitPanel({
               onCommit={handleCommit}
               onCreatePullRequest={handleCreatePullRequest}
               onMergePullRequest={handleMergePullRequest}
-              onOpenPullRequest={handleOpenPullRequest}
+              onOpenPullRequest={onOpenPullRequest}
               onPushBranch={handlePushBranch}
               onShowChanges={() => setActiveTab("changes")}
             />
@@ -223,7 +221,7 @@ export function GitPanel({
               }
               error={pullRequestsQuery.error}
               isLoading={pullRequestsQuery.isLoading}
-              onOpenPullRequest={handleOpenPullRequest}
+              onOpenPullRequest={onOpenPullRequest}
               result={pullRequestsQuery.data ?? null}
             />
           )}

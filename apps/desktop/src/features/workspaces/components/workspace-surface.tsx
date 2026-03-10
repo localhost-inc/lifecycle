@@ -55,7 +55,8 @@ interface WorkspaceSurfaceProps {
 
 export function WorkspaceSurface({ openDocumentRequest, workspaceId }: WorkspaceSurfaceProps) {
   const client = useQueryClient();
-  const { clearTerminalResponseReady, isTerminalResponseReady } = useTerminalResponseReady();
+  const { clearTerminalResponseReady, isTerminalResponseReady, isTerminalTurnRunning } =
+    useTerminalResponseReady();
   const terminalsQuery = useWorkspaceTerminals(workspaceId);
   const [creatingSelection, setCreatingSelection] = useState<"shell" | HarnessProvider | null>(
     null,
@@ -85,14 +86,15 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
       terminals.map((terminal) => ({
         harnessProvider: terminal.harness_provider as HarnessProvider | null,
         key: `terminal:${terminal.id}`,
-        type: "terminal",
+        kind: "terminal",
         label: terminal.label,
         launchType: terminal.launch_type,
+        running: isTerminalTurnRunning(terminal.id),
         responseReady: isTerminalResponseReady(terminal.id),
         status: terminal.status as TerminalStatus,
         terminalId: terminal.id,
       })),
-    [isTerminalResponseReady, terminals],
+    [isTerminalResponseReady, isTerminalTurnRunning, terminals],
   );
   const visibleTabs = useMemo(
     () =>
@@ -127,7 +129,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
 
     dispatch({
       request: openDocumentRequest,
-      type: "open-document",
+      kind: "open-document",
     });
   }, [openDocumentRequest]);
 
@@ -149,7 +151,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
 
   useEffect(() => {
     if (!areStringArraysEqual(state.tabOrderKeys, visibleTabKeys)) {
-      dispatch({ keys: visibleTabKeys, type: "set-tab-order" });
+      dispatch({ keys: visibleTabKeys, kind: "set-tab-order" });
     }
   }, [state.tabOrderKeys, visibleTabKeys]);
 
@@ -163,7 +165,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
     if (!areStringArraysEqual(state.hiddenRuntimeTabKeys, nextHiddenRuntimeTabKeys)) {
       dispatch({
         keys: nextHiddenRuntimeTabKeys,
-        type: "set-hidden-runtime-tab-keys",
+        kind: "set-hidden-runtime-tab-keys",
       });
     }
   }, [knownRuntimeTabKeys, state.hiddenRuntimeTabKeys, terminalsQuery.status]);
@@ -175,18 +177,18 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
 
     if (visibleTabs.length === 0) {
       if (state.activeTabKey !== null) {
-        dispatch({ key: null, type: "sync-active" });
+        dispatch({ key: null, kind: "sync-active" });
       }
       return;
     }
 
     if (!state.activeTabKey) {
-      dispatch({ key: getRightmostWorkspaceTabKey(visibleTabs), type: "sync-active" });
+      dispatch({ key: getRightmostWorkspaceTabKey(visibleTabs), kind: "sync-active" });
       return;
     }
 
     if (!visibleTabs.some((tab) => tab.key === state.activeTabKey)) {
-      dispatch({ key: getRightmostWorkspaceTabKey(visibleTabs), type: "sync-active" });
+      dispatch({ key: getRightmostWorkspaceTabKey(visibleTabs), kind: "sync-active" });
     }
   }, [state.activeTabKey, visibleTabs, waitingForActiveRuntimeTab]);
 
@@ -195,10 +197,10 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
       return;
     }
 
-    if (visibleTabs.length === 0 && !state.documents.some((tab) => tab.type === "launcher")) {
+    if (visibleTabs.length === 0 && !state.documents.some((tab) => tab.kind === "launcher")) {
       dispatch({
         launcherId: createWorkspaceLauncherId(),
-        type: "open-launcher",
+        kind: "open-launcher",
       });
     }
   }, [state.documents, visibleTabs.length, waitingForActiveRuntimeTab]);
@@ -221,7 +223,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
       if (isRuntimeTabKey(key)) {
         clearTerminalResponseReady(key.slice("terminal:".length));
       }
-      dispatch({ key, type: "select-tab" });
+      dispatch({ key, kind: "select-tab" });
     },
     [clearTerminalResponseReady],
   );
@@ -229,7 +231,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
   const handleOpenLauncher = useCallback(() => {
     dispatch({
       launcherId: createWorkspaceLauncherId(),
-      type: "open-launcher",
+      kind: "open-launcher",
     });
   }, []);
 
@@ -240,8 +242,8 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
       const runtimeKey = `terminal:${terminalId}`;
       dispatch(
         launcherKey
-          ? { launcherKey, tabKey: runtimeKey, type: "replace-launcher-with-tab" }
-          : { key: runtimeKey, select: true, type: "show-runtime-tab" },
+          ? { launcherKey, tabKey: runtimeKey, kind: "replace-launcher-with-tab" }
+          : { key: runtimeKey, select: true, kind: "show-runtime-tab" },
       );
     },
     [clearTerminalResponseReady],
@@ -274,7 +276,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
 
   const handleLaunchSurface = useCallback(
     (request: SurfaceLaunchRequest) => {
-      switch (request.type) {
+      switch (request.kind) {
         case "terminal":
           void handleCreateTerminal(request);
           break;
@@ -289,7 +291,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
         key: "shell",
         title: "New shell",
         icon: <ShellIcon />,
-        request: { type: "terminal", launchType: "shell" },
+        request: { kind: "terminal", launchType: "shell" },
         loading: creatingSelection === "shell",
         disabled: creatingSelection !== null,
       },
@@ -297,7 +299,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
         key: "claude",
         title: "New Claude session",
         icon: <ClaudeIcon />,
-        request: { type: "terminal", launchType: "harness", harnessProvider: "claude" as const },
+        request: { kind: "terminal", launchType: "harness", harnessProvider: "claude" as const },
         loading: creatingSelection === "claude",
         disabled: creatingSelection !== null,
       },
@@ -305,7 +307,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
         key: "codex",
         title: "New Codex session",
         icon: <CodexIcon />,
-        request: { type: "terminal", launchType: "harness", harnessProvider: "codex" as const },
+        request: { kind: "terminal", launchType: "harness", harnessProvider: "codex" as const },
         loading: creatingSelection === "codex",
         disabled: creatingSelection !== null,
       },
@@ -331,13 +333,13 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
         if (closePlan.openLauncher) {
           dispatch({
             launcherId,
-            type: "open-launcher",
+            kind: "open-launcher",
           });
         }
         dispatch({
           key: tabKey,
           nextActiveKey: closePlan.nextActiveKey,
-          type: "hide-runtime-tab",
+          kind: "hide-runtime-tab",
         });
       } catch (closeError) {
         setError(String(closeError));
@@ -360,13 +362,13 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
       if (closePlan.openLauncher) {
         dispatch({
           launcherId,
-          type: "open-launcher",
+          kind: "open-launcher",
         });
       }
       dispatch({
         key: tabKey,
         nextActiveKey: closePlan.nextActiveKey,
-        type: "close-document",
+        kind: "close-document",
       });
     },
     [state.activeTabKey, visibleTabKeys],
@@ -374,7 +376,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
 
   const handleWorkspaceTabHotkeyAction = useCallback(
     (action: WorkspaceTabHotkeyAction) => {
-      switch (action.type) {
+      switch (action.kind) {
         case "new-tab":
           handleOpenLauncher();
           return;
@@ -389,7 +391,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
           }
 
           closeShortcutHandledAtRef.current = Date.now();
-          if (activeTab.type === "terminal") {
+          if (activeTab.kind === "terminal") {
             void handleCloseRuntimeTab(activeTab.key, activeTab.terminalId);
             return;
           }
@@ -445,7 +447,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
         return;
       }
 
-      if (action.type === "close-active-tab") {
+      if (action.kind === "close-active-tab") {
         closeShortcutTriggeredAtRef.current = Date.now();
       }
       event.preventDefault();
@@ -471,7 +473,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
 
       const action = toWorkspaceTabHotkeyAction(event);
       if (action) {
-        if (action.type === "close-active-tab") {
+        if (action.kind === "close-active-tab") {
           closeShortcutTriggeredAtRef.current = Date.now();
         }
         handleWorkspaceTabHotkeyAction(action);
@@ -515,7 +517,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
         if (shouldTreatWindowCloseAsTabClose(closeShortcutHandledAtRef.current, now)) {
           return;
         }
-        handleWorkspaceTabHotkeyAction({ type: "close-active-tab" });
+        handleWorkspaceTabHotkeyAction({ kind: "close-active-tab" });
       })
       .then((cleanup) => {
         if (disposed) {
@@ -542,7 +544,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
           onRenameRuntimeTab={(terminalId, label) => renameTerminal(terminalId, label)}
           onSelectTab={handleSelectTab}
           onSetTabOrder={(keys) => {
-            dispatch({ keys, type: "set-tab-order" });
+            dispatch({ keys, kind: "set-tab-order" });
           }}
           renderTabLeading={(tab) => <WorkspaceSurfaceTabLeading tab={tab} />}
           visibleTabs={visibleTabs}

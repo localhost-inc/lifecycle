@@ -30,7 +30,7 @@ pub async fn stop_workspace(
         names
     };
 
-    // Get current status and validate transition to sleeping before mutating runtime state.
+    // Transition into stopping before mutating runtime state so the UI can reflect shutdown work.
     let current_status = {
         let conn = open_db(&db)?;
         let status: String = conn
@@ -42,12 +42,15 @@ pub async fn stop_workspace(
             .map_err(|e| LifecycleError::Database(e.to_string()))?;
         WorkspaceStatus::from_str(&status)?
     };
-    validate_workspace_transition(&current_status, &WorkspaceStatus::Sleeping)?;
+    validate_workspace_transition(&current_status, &WorkspaceStatus::Stopping)?;
+    update_workspace_status_db(&db, &workspace_id, &WorkspaceStatus::Stopping, None)?;
+    emit_workspace_status(&app, &workspace_id, "stopping", None);
 
     // Stop all services
     {
         let mut sups = supervisors.lock().await;
-        if let Some(mut sup) = sups.remove(&workspace_id) {
+        if let Some(sup) = sups.remove(&workspace_id) {
+            let mut sup = sup.lock().await;
             sup.stop_all().await;
         }
     }
@@ -65,8 +68,8 @@ pub async fn stop_workspace(
         emit_service_status(&app, &workspace_id, &service_name, "stopped", None);
     }
 
-    update_workspace_status_db(&db, &workspace_id, &WorkspaceStatus::Sleeping, None)?;
-    emit_workspace_status(&app, &workspace_id, "sleeping", None);
+    update_workspace_status_db(&db, &workspace_id, &WorkspaceStatus::Idle, None)?;
+    emit_workspace_status(&app, &workspace_id, "idle", None);
 
     Ok(())
 }

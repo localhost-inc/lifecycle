@@ -1,6 +1,6 @@
 use crate::shared::errors::LifecycleError;
 
-const MIGRATIONS: [(&str, &str); 9] = [
+const MIGRATIONS: [(&str, &str); 11] = [
     (
         "0001_initial_schema",
         include_str!("migrations/0001_initial_schema.sql"),
@@ -36,6 +36,14 @@ const MIGRATIONS: [(&str, &str); 9] = [
     (
         "0009_workspace_manifest_fingerprint",
         include_str!("migrations/0009_workspace_manifest_fingerprint.sql"),
+    ),
+    (
+        "0010_workspace_status_idle_active_stopping",
+        include_str!("migrations/0010_workspace_status_idle_active_stopping.sql"),
+    ),
+    (
+        "0011_workspace_service_preview_status",
+        include_str!("migrations/0011_workspace_service_preview_status.sql"),
     ),
 ];
 
@@ -162,11 +170,13 @@ mod tests {
         assert!(column_exists(&conn, "workspace", "source_workspace_id"));
         assert!(column_exists(&conn, "workspace", "setup_completed_at"));
         assert!(column_exists(&conn, "workspace", "manifest_fingerprint"));
+        assert!(column_exists(&conn, "workspace_service", "preview_status"));
         assert!(column_exists(&conn, "terminal", "workspace_id"));
         assert!(column_exists(&conn, "terminal", "launch_type"));
         assert!(column_exists(&conn, "terminal", "harness_provider"));
         assert!(column_exists(&conn, "terminal", "label_origin"));
         assert!(column_exists(&conn, "terminal", "status"));
+        assert!(!column_exists(&conn, "workspace_service", "preview_state"));
         assert!(!column_exists(&conn, "workspace", "mode_state"));
         let versions = {
             let mut stmt = conn
@@ -190,6 +200,8 @@ mod tests {
                 "0007_terminal_harness_provider".to_string(),
                 "0008_terminal_label_origin".to_string(),
                 "0009_workspace_manifest_fingerprint".to_string(),
+                "0010_workspace_status_idle_active_stopping".to_string(),
+                "0011_workspace_service_preview_status".to_string(),
             ]
         );
 
@@ -216,7 +228,7 @@ mod tests {
                 "project_1",
                 "main",
                 "/tmp/project_1/worktree",
-                "ready"
+                "active"
             ],
         )
         .expect("insert workspace");
@@ -321,7 +333,7 @@ mod tests {
                 "project_1",
                 "main",
                 "/tmp/project_1/worktree",
-                "ready"
+                "active"
             ],
         )
         .expect("insert workspace");
@@ -430,6 +442,152 @@ mod tests {
             )
             .expect("query source ref origin");
         assert_eq!(source_ref_origin, "manual");
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn workspace_status_migration_sql_renames_legacy_statuses() {
+        let db_path = temp_db_path();
+        run_migrations(&db_path).expect("run migrations");
+        let conn = open_db(&db_path).expect("open db");
+        conn.execute(
+            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["project_1", "/tmp/project_1", "Project 1"],
+        )
+        .expect("insert project");
+        conn.execute(
+            "INSERT INTO workspace (id, project_id, name, name_origin, source_ref, source_ref_origin, status)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            rusqlite::params![
+                "workspace_active",
+                "project_1",
+                "Workspace Active",
+                "manual",
+                "lifecycle/workspace-active",
+                "manual",
+                "ready",
+            ],
+        )
+        .expect("insert ready workspace");
+        conn.execute(
+            "INSERT INTO workspace (id, project_id, name, name_origin, source_ref, source_ref_origin, status, failure_reason, failed_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            rusqlite::params![
+                "workspace_failed",
+                "project_1",
+                "Workspace Failed",
+                "manual",
+                "lifecycle/workspace-failed",
+                "manual",
+                "failed",
+                "service_start_failed",
+                "2026-03-10T00:00:00Z",
+            ],
+        )
+        .expect("insert failed workspace");
+        conn.execute(
+            "INSERT INTO workspace (id, project_id, name, name_origin, source_ref, source_ref_origin, status)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            rusqlite::params![
+                "workspace_sleeping",
+                "project_1",
+                "Workspace Sleeping",
+                "manual",
+                "lifecycle/workspace-sleeping",
+                "manual",
+                "sleeping",
+            ],
+        )
+        .expect("insert sleeping workspace");
+        conn.execute_batch(include_str!("migrations/0010_workspace_status_idle_active_stopping.sql"))
+            .expect("apply status rename sql");
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, status, failure_reason, failed_at
+                 FROM workspace
+                 ORDER BY id",
+            )
+            .expect("prepare select");
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                ))
+            })
+            .expect("query workspaces");
+        let values = rows
+            .map(|row| row.expect("row"))
+            .collect::<Vec<(String, String, Option<String>, Option<String>)>>();
+
+        assert_eq!(
+            values,
+            vec![
+                (
+                    "workspace_active".to_string(),
+                    "active".to_string(),
+                    None,
+                    None,
+                ),
+                (
+                    "workspace_failed".to_string(),
+                    "idle".to_string(),
+                    Some("service_start_failed".to_string()),
+                    Some("2026-03-10T00:00:00Z".to_string()),
+                ),
+                (
+                    "workspace_sleeping".to_string(),
+                    "idle".to_string(),
+                    None,
+                    None,
+                ),
+            ]
+        );
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn workspace_service_preview_status_migration_sql_renames_preview_state_column() {
+        let db_path = temp_db_path();
+        let conn = open_db(&db_path).expect("open db");
+        conn.execute_batch(include_str!("migrations/0001_initial_schema.sql"))
+            .expect("seed initial schema");
+        conn.execute(
+            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["project_1", "/tmp/project_1", "Project 1"],
+        )
+        .expect("insert project");
+        conn.execute(
+            "INSERT INTO workspace (id, project_id, source_ref, status)
+             VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["workspace_1", "project_1", "main", "creating"],
+        )
+        .expect("insert workspace");
+        conn.execute(
+            "INSERT INTO workspace_service (id, workspace_id, service_name, preview_state)
+             VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["service_1", "workspace_1", "web", "provisioning"],
+        )
+        .expect("insert workspace service");
+
+        conn.execute_batch(include_str!("migrations/0011_workspace_service_preview_status.sql"))
+            .expect("apply preview status rename sql");
+
+        assert!(column_exists(&conn, "workspace_service", "preview_status"));
+        assert!(!column_exists(&conn, "workspace_service", "preview_state"));
+        let preview_status: String = conn
+            .query_row(
+                "SELECT preview_status FROM workspace_service WHERE id = ?1",
+                rusqlite::params!["service_1"],
+                |row| row.get(0),
+            )
+            .expect("query preview status");
+        assert_eq!(preview_status, "provisioning");
 
         let _ = std::fs::remove_file(db_path);
     }

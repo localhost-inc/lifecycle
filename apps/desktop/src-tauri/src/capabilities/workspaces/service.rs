@@ -25,10 +25,7 @@ fn normalize_port_override(port_override: Option<i64>) -> Result<Option<i64>, Li
 }
 
 fn validate_mutable_workspace_status(status: &WorkspaceStatus) -> Result<(), LifecycleError> {
-    if matches!(
-        status,
-        WorkspaceStatus::Ready | WorkspaceStatus::Sleeping | WorkspaceStatus::Failed
-    ) {
+    if matches!(status, WorkspaceStatus::Idle | WorkspaceStatus::Active) {
         Ok(())
     } else {
         Err(LifecycleError::WorkspaceMutationLocked {
@@ -81,7 +78,7 @@ pub async fn update_workspace_service(
         })?;
 
     let effective_port = port_override.or(default_port);
-    let (preview_state, preview_failure_reason, preview_url) = preview_fields_for_service(
+    let (preview_status, preview_failure_reason, preview_url) = preview_fields_for_service(
         &exposure,
         effective_port,
         &service_status,
@@ -93,7 +90,7 @@ pub async fn update_workspace_service(
          SET exposure = ?1,
              port_override = ?2,
              effective_port = ?3,
-             preview_state = ?4,
+             preview_status = ?4,
              preview_failure_reason = ?5,
              preview_url = ?6,
              updated_at = datetime('now')
@@ -102,7 +99,7 @@ pub async fn update_workspace_service(
             exposure,
             port_override,
             effective_port,
-            preview_state,
+            preview_status,
             preview_failure_reason,
             preview_url,
             &workspace_id,
@@ -147,7 +144,7 @@ mod tests {
                 status TEXT NOT NULL,
                 default_port INTEGER,
                 effective_port INTEGER,
-                preview_state TEXT NOT NULL DEFAULT 'disabled',
+                preview_status TEXT NOT NULL DEFAULT 'disabled',
                 preview_failure_reason TEXT,
                 preview_url TEXT,
                 updated_at TEXT
@@ -165,7 +162,7 @@ mod tests {
         let conn = open_db(&db_path).expect("open db");
         conn.execute(
             "INSERT INTO workspace (id, status) VALUES (?1, ?2)",
-            params!["ws_1", "sleeping"],
+            params!["ws_1", "idle"],
         )
         .expect("insert workspace");
         conn.execute(
@@ -200,7 +197,7 @@ mod tests {
         let conn = open_db(&db_path).expect("re-open db");
         let row = conn
             .query_row(
-                "SELECT exposure, port_override, effective_port, preview_state, preview_failure_reason, preview_url FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+                "SELECT exposure, port_override, effective_port, preview_status, preview_failure_reason, preview_url FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
                 params!["ws_1", "web"],
                 |row| {
                     Ok((
@@ -238,7 +235,7 @@ mod tests {
         let conn = open_db(&db_path).expect("open db");
         conn.execute(
             "INSERT INTO workspace (id, status) VALUES (?1, ?2)",
-            params!["ws_2", "failed"],
+            params!["ws_2", "idle"],
         )
         .expect("insert workspace");
         conn.execute(
@@ -273,7 +270,7 @@ mod tests {
         let conn = open_db(&db_path).expect("re-open db");
         let row = conn
             .query_row(
-                "SELECT exposure, port_override, effective_port, preview_state, preview_failure_reason, preview_url FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+                "SELECT exposure, port_override, effective_port, preview_status, preview_failure_reason, preview_url FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
                 params!["ws_2", "api"],
                 |row| {
                     Ok((

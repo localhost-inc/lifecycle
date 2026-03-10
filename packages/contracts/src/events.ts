@@ -7,7 +7,7 @@ import type {
   WorkspaceStatus,
 } from "./workspace";
 
-export type SetupStepEventType =
+export type SetupStepEventKind =
   | "started"
   | "stdout"
   | "stderr"
@@ -19,7 +19,7 @@ export type LifecycleEvent =
   | {
       id: string;
       occurred_at: string;
-      type: "workspace.status_changed";
+      kind: "workspace.status_changed";
       workspace_id: string;
       status: WorkspaceStatus;
       failure_reason: WorkspaceFailureReason | null;
@@ -27,7 +27,7 @@ export type LifecycleEvent =
   | {
       id: string;
       occurred_at: string;
-      type: "workspace.renamed";
+      kind: "workspace.renamed";
       workspace_id: string;
       name: string;
       source_ref: string;
@@ -36,7 +36,13 @@ export type LifecycleEvent =
   | {
       id: string;
       occurred_at: string;
-      type: "service.status_changed";
+      kind: "workspace.deleted";
+      workspace_id: string;
+    }
+  | {
+      id: string;
+      occurred_at: string;
+      kind: "service.status_changed";
       workspace_id: string;
       service_name: string;
       status: WorkspaceServiceStatus;
@@ -45,23 +51,23 @@ export type LifecycleEvent =
   | {
       id: string;
       occurred_at: string;
-      type: "setup.step_progress";
+      kind: "setup.step_progress";
       workspace_id: string;
       step_name: string;
-      event_type: SetupStepEventType;
+      event_kind: SetupStepEventKind;
       data: string | null;
     }
   | {
       id: string;
       occurred_at: string;
-      type: "terminal.created";
+      kind: "terminal.created";
       workspace_id: string;
       terminal: TerminalRecord;
     }
   | {
       id: string;
       occurred_at: string;
-      type: "terminal.status_changed";
+      kind: "terminal.status_changed";
       terminal_id: string;
       workspace_id: string;
       status: TerminalStatus;
@@ -72,7 +78,7 @@ export type LifecycleEvent =
   | {
       id: string;
       occurred_at: string;
-      type: "terminal.renamed";
+      kind: "terminal.renamed";
       terminal_id: string;
       workspace_id: string;
       label: string;
@@ -80,7 +86,7 @@ export type LifecycleEvent =
   | {
       id: string;
       occurred_at: string;
-      type: "terminal.harness_prompt_submitted";
+      kind: "terminal.harness_prompt_submitted";
       terminal_id: string;
       workspace_id: string;
       prompt_text: string;
@@ -91,7 +97,7 @@ export type LifecycleEvent =
   | {
       id: string;
       occurred_at: string;
-      type: "terminal.harness_turn_completed";
+      kind: "terminal.harness_turn_completed";
       terminal_id: string;
       workspace_id: string;
       harness_provider: string | null;
@@ -102,7 +108,7 @@ export type LifecycleEvent =
   | {
       id: string;
       occurred_at: string;
-      type: "git.status_changed";
+      kind: "git.status_changed";
       workspace_id: string;
       branch: string | null;
       head_sha: string | null;
@@ -111,7 +117,7 @@ export type LifecycleEvent =
   | {
       id: string;
       occurred_at: string;
-      type: "git.head_changed";
+      kind: "git.head_changed";
       workspace_id: string;
       branch: string | null;
       head_sha: string | null;
@@ -122,17 +128,17 @@ export type LifecycleEvent =
   | {
       id: string;
       occurred_at: string;
-      type: "git.log_changed";
+      kind: "git.log_changed";
       workspace_id: string;
       branch: string | null;
       head_sha: string | null;
     };
 
-export type LifecycleEventType = LifecycleEvent["type"];
-export type LifecycleEventOf<Type extends LifecycleEventType> = Extract<
+export type LifecycleEventKind = LifecycleEvent["kind"];
+export type LifecycleEventOf<Kind extends LifecycleEventKind> = Extract<
   LifecycleEvent,
-  { type: Type }
+  { kind: Kind }
 >;
 export type LifecycleEventInput = {
-  [Type in LifecycleEventType]: Omit<LifecycleEventOf<Type>, "id" | "occurred_at">;
-}[LifecycleEventType];
+  [Kind in LifecycleEventKind]: Omit<LifecycleEventOf<Kind>, "id" | "occurred_at">;
+}[LifecycleEventKind];

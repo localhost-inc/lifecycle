@@ -1,8 +1,11 @@
-import type { GitLogEntry } from "@lifecycle/contracts";
+import type {
+  GitLogEntry,
+  GitPullRequestCheckSummary,
+  GitPullRequestSummary,
+} from "@lifecycle/contracts";
 
 const LAST_WORKSPACE_ID_STORAGE_KEY = "lifecycle.desktop.last-workspace-id";
-const WORKSPACE_SURFACE_STATE_STORAGE_KEY_V1 = "lifecycle.desktop.workspace-surface.v1";
-const WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2 = "lifecycle.desktop.workspace-surface.v2";
+const WORKSPACE_SURFACE_STATE_STORAGE_KEY = "lifecycle.desktop.workspace-surface";
 
 export interface StorageLike {
   getItem(key: string): string | null;
@@ -13,23 +16,33 @@ export interface StorageLike {
 export interface ChangesDiffDocument {
   focusPath: string | null;
   key: string;
-  type: "changes-diff";
+  kind: "changes-diff";
   label: "Changes";
 }
 
 export interface CommitDiffDocument extends GitLogEntry {
   key: string;
-  type: "commit-diff";
+  kind: "commit-diff";
+  label: string;
+}
+
+export interface PullRequestDocument extends GitPullRequestSummary {
+  key: string;
+  kind: "pull-request";
   label: string;
 }
 
 export interface LauncherTab {
   key: string;
-  type: "launcher";
+  kind: "launcher";
   label: string;
 }
 
-export type WorkspaceSurfaceDocument = ChangesDiffDocument | CommitDiffDocument | LauncherTab;
+export type WorkspaceSurfaceDocument =
+  | ChangesDiffDocument
+  | CommitDiffDocument
+  | PullRequestDocument
+  | LauncherTab;
 
 export interface WorkspaceSurfaceState {
   activeTabKey: string | null;
@@ -38,32 +51,14 @@ export interface WorkspaceSurfaceState {
   tabOrderKeys: string[];
 }
 
-type PersistedV1Document = {
-  filePath?: unknown;
-  scope?: unknown;
-};
-
-type PersistedV1WorkspaceState = {
-  activeTabKey?: unknown;
-  documents?: unknown;
-};
-
 type PersistedChangesDiffDocument = {
   focusPath?: unknown;
-  type?: unknown;
-  kind?: unknown;
-};
-
-type PersistedFileDiffDocument = {
-  filePath?: unknown;
-  type?: unknown;
   kind?: unknown;
 };
 
 type PersistedCommitDiffDocument = {
   author?: unknown;
   email?: unknown;
-  type?: unknown;
   kind?: unknown;
   message?: unknown;
   sha?: unknown;
@@ -73,19 +68,25 @@ type PersistedCommitDiffDocument = {
 
 type PersistedLauncherDocument = {
   key?: unknown;
-  type?: unknown;
   kind?: unknown;
 };
 
-type PersistedLegacyDiffDocument = {
-  diffKind?: unknown;
-  filePath?: unknown;
-  type?: unknown;
+type PersistedPullRequestDocument = {
+  author?: unknown;
+  baseRefName?: unknown;
+  checks?: unknown;
+  createdAt?: unknown;
+  headRefName?: unknown;
+  isDraft?: unknown;
+  mergeStateStatus?: unknown;
+  mergeable?: unknown;
+  number?: unknown;
+  reviewDecision?: unknown;
+  state?: unknown;
+  title?: unknown;
   kind?: unknown;
-  sha?: unknown;
-  message?: unknown;
-  shortSha?: unknown;
-  timestamp?: unknown;
+  updatedAt?: unknown;
+  url?: unknown;
 };
 
 type PersistedWorkspaceState = {
@@ -96,7 +97,6 @@ type PersistedWorkspaceState = {
 };
 
 type PersistedWorkspaceStateMap = Record<string, PersistedWorkspaceState>;
-type PersistedWorkspaceStateMapV1 = Record<string, PersistedV1WorkspaceState>;
 
 type CommitDiffInput =
   | GitLogEntry
@@ -142,44 +142,23 @@ function shortShaFromSha(sha: string): string {
   return sha.slice(0, 8);
 }
 
-function extractLegacyFileDiffFocusPath(tabKey: string | null): string | null {
-  if (!tabKey) {
-    return null;
-  }
-
-  const legacyDiffMatch = /^diff:(working|staged|branch):(.*)$/.exec(tabKey);
-  if (legacyDiffMatch) {
-    return legacyDiffMatch[2] ?? null;
-  }
-
-  if (tabKey.startsWith("file-diff:")) {
-    return tabKey.slice("file-diff:".length);
-  }
-
-  if (tabKey.startsWith("diff:file:")) {
-    return tabKey.slice("diff:file:".length);
-  }
-
-  return null;
-}
-
 export function changesDiffTabKey(): string {
   return "diff:changes";
 }
-
-export const changesDiffTabKeyV2 = changesDiffTabKey();
 
 export function commitDiffTabKey(sha: string): string {
   return `diff:commit:${sha}`;
 }
 
-export const commitDiffTabKeyV2 = commitDiffTabKey;
+export function pullRequestTabKey(pullRequestNumber: number): string {
+  return `pull-request:${pullRequestNumber}`;
+}
 
 export function createChangesDiffTab(focusPath: string | null = null): ChangesDiffDocument {
   return {
     focusPath,
     key: changesDiffTabKey(),
-    type: "changes-diff",
+    kind: "changes-diff",
     label: "Changes",
   };
 }
@@ -197,7 +176,7 @@ export function createCommitDiffTab(input: CommitDiffInput | string): CommitDiff
     author: typeof input === "string" ? "" : (input.author ?? ""),
     email: typeof input === "string" ? "" : (input.email ?? ""),
     key: commitDiffTabKey(sha),
-    type: "commit-diff",
+    kind: "commit-diff",
     label: shortSha,
     message,
     sha,
@@ -206,10 +185,19 @@ export function createCommitDiffTab(input: CommitDiffInput | string): CommitDiff
   };
 }
 
+export function createPullRequestTab(input: GitPullRequestSummary): PullRequestDocument {
+  return {
+    ...input,
+    key: pullRequestTabKey(input.number),
+    kind: "pull-request",
+    label: `PR #${input.number}`,
+  };
+}
+
 export function createLauncherTab(id: string): LauncherTab {
   return {
     key: `launcher:${id}`,
-    type: "launcher",
+    kind: "launcher",
     label: "New Tab",
   };
 }
@@ -217,17 +205,23 @@ export function createLauncherTab(id: string): LauncherTab {
 export function isChangesDiffDocument(
   document: WorkspaceSurfaceDocument,
 ): document is ChangesDiffDocument {
-  return document.type === "changes-diff";
+  return document.kind === "changes-diff";
 }
 
 export function isCommitDiffDocument(
   document: WorkspaceSurfaceDocument,
 ): document is CommitDiffDocument {
-  return document.type === "commit-diff";
+  return document.kind === "commit-diff";
+}
+
+export function isPullRequestDocument(
+  document: WorkspaceSurfaceDocument,
+): document is PullRequestDocument {
+  return document.kind === "pull-request";
 }
 
 export function isLauncherDocument(document: WorkspaceSurfaceDocument): document is LauncherTab {
-  return document.type === "launcher";
+  return document.kind === "launcher";
 }
 
 export function createDefaultWorkspaceSurfaceState(): WorkspaceSurfaceState {
@@ -237,22 +231,6 @@ export function createDefaultWorkspaceSurfaceState(): WorkspaceSurfaceState {
     hiddenRuntimeTabKeys: [],
     tabOrderKeys: [],
   };
-}
-
-export function migrateLegacyTabKeyToV2(tabKey: string | null): string | null {
-  if (!tabKey) {
-    return null;
-  }
-
-  if (extractLegacyFileDiffFocusPath(tabKey) !== null || tabKey === changesDiffTabKey()) {
-    return changesDiffTabKey();
-  }
-
-  if (tabKey.startsWith("commit-diff:")) {
-    return commitDiffTabKey(tabKey.slice("commit-diff:".length));
-  }
-
-  return tabKey;
 }
 
 function normalizeDocuments(documents: WorkspaceSurfaceDocument[]): WorkspaceSurfaceDocument[] {
@@ -273,10 +251,7 @@ function normalizeTabKeyList(keys: readonly string[]): string[] {
       continue;
     }
 
-    const migratedKey = migrateLegacyTabKeyToV2(key);
-    if (migratedKey) {
-      dedupedKeys.add(migratedKey);
-    }
+    dedupedKeys.add(key);
   }
 
   return [...dedupedKeys];
@@ -291,7 +266,7 @@ function normalizeWorkspaceSurfaceState(state: WorkspaceSurfaceState): Workspace
   const tabOrderKeys = normalizeTabKeyList(state.tabOrderKeys).filter(
     (key) => !hiddenRuntimeTabKeySet.has(key),
   );
-  const activeTabKey = migrateLegacyTabKeyToV2(state.activeTabKey);
+  const activeTabKey = state.activeTabKey;
 
   return {
     activeTabKey: activeTabKey && hiddenRuntimeTabKeySet.has(activeTabKey) ? null : activeTabKey,
@@ -314,28 +289,9 @@ function parseJsonObject<T extends Record<string, unknown>>(value: string | null
   }
 }
 
-interface LegacyFileDiffDocument {
-  filePath: string;
-  type: "legacy-file-diff";
-}
-
-type ParsedWorkspaceSurfaceDocument = WorkspaceSurfaceDocument | LegacyFileDiffDocument;
-
 function parseChangesDiffDocument(value: Record<string, unknown>): ChangesDiffDocument {
   const focusPath = getOptionalString(value, "focusPath") ?? null;
   return createChangesDiffTab(focusPath);
-}
-
-function parseFileDiffDocument(value: Record<string, unknown>): LegacyFileDiffDocument | null {
-  const filePath = getOptionalString(value, "filePath");
-  if (!filePath) {
-    return null;
-  }
-
-  return {
-    filePath,
-    type: "legacy-file-diff",
-  };
 }
 
 function parseCommitDiffDocument(value: Record<string, unknown>): CommitDiffDocument | null {
@@ -369,98 +325,161 @@ function parseLauncherDocument(value: Record<string, unknown>): LauncherTab | nu
   return createLauncherTab(key.slice("launcher:".length));
 }
 
-function getPersistedDocumentType(value: Record<string, unknown>): string | null {
-  if (typeof value.type === "string") {
-    return value.type;
-  }
-
-  if (typeof value.kind === "string") {
-    return value.kind;
-  }
-
-  return null;
+function isValidPullRequestState(value: unknown): value is PullRequestDocument["state"] {
+  return value === "open" || value === "closed" || value === "merged";
 }
 
-function parseWorkspaceSurfaceDocument(value: unknown): ParsedWorkspaceSurfaceDocument | null {
+function isValidPullRequestMergeable(value: unknown): value is PullRequestDocument["mergeable"] {
+  return value === "mergeable" || value === "conflicting" || value === "unknown";
+}
+
+function isValidPullRequestReviewDecision(
+  value: unknown,
+): value is Exclude<PullRequestDocument["reviewDecision"], null> {
+  return value === "approved" || value === "changes_requested" || value === "review_required";
+}
+
+function isValidPullRequestCheckStatus(
+  value: unknown,
+): value is GitPullRequestCheckSummary["status"] {
+  return value === "pending" || value === "success" || value === "failed" || value === "neutral";
+}
+
+function parsePullRequestChecks(value: unknown): GitPullRequestCheckSummary[] | null | undefined {
+  if (value === undefined) {
+    return null;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const checks: GitPullRequestCheckSummary[] = [];
+
+  for (const item of value) {
+    if (!isRecord(item)) {
+      return undefined;
+    }
+
+    const name = getOptionalString(item, "name");
+    const status = item.status;
+    if (!name || !isValidPullRequestCheckStatus(status)) {
+      return undefined;
+    }
+
+    const workflowName =
+      item.workflowName === null ? null : (getOptionalString(item, "workflowName") ?? undefined);
+    const detailsUrl =
+      item.detailsUrl === null ? null : (getOptionalString(item, "detailsUrl") ?? undefined);
+    if (workflowName === undefined || detailsUrl === undefined) {
+      return undefined;
+    }
+
+    checks.push({
+      detailsUrl,
+      name,
+      status,
+      workflowName,
+    });
+  }
+
+  return checks;
+}
+
+function parsePullRequestDocument(value: Record<string, unknown>): PullRequestDocument | null {
+  const number = value.number;
+  const title = getOptionalString(value, "title");
+  const url = getOptionalString(value, "url");
+  const state = value.state;
+  const isDraft = value.isDraft;
+  const author = getOptionalString(value, "author");
+  const headRefName = getOptionalString(value, "headRefName");
+  const baseRefName = getOptionalString(value, "baseRefName");
+  const createdAt = getOptionalString(value, "createdAt");
+  const updatedAt = getOptionalString(value, "updatedAt");
+  const mergeable = value.mergeable;
+  const reviewDecision = value.reviewDecision ?? null;
+  const checks = parsePullRequestChecks(value.checks);
+
+  if (
+    typeof number !== "number" ||
+    !Number.isInteger(number) ||
+    !title ||
+    !url ||
+    !isValidPullRequestState(state) ||
+    typeof isDraft !== "boolean" ||
+    !author ||
+    !headRefName ||
+    !baseRefName ||
+    !createdAt ||
+    !updatedAt ||
+    !isValidPullRequestMergeable(mergeable) ||
+    checks === undefined
+  ) {
+    return null;
+  }
+
+  if (reviewDecision !== null && !isValidPullRequestReviewDecision(reviewDecision)) {
+    return null;
+  }
+
+  const mergeStateStatus =
+    value.mergeStateStatus === null || value.mergeStateStatus === undefined
+      ? null
+      : (getOptionalString(value, "mergeStateStatus") ?? undefined);
+  if (mergeStateStatus === undefined) {
+    return null;
+  }
+
+  return createPullRequestTab({
+    author,
+    baseRefName,
+    checks,
+    createdAt,
+    headRefName,
+    isDraft,
+    mergeStateStatus,
+    mergeable,
+    number,
+    reviewDecision,
+    state,
+    title,
+    updatedAt,
+    url,
+  });
+}
+
+function parseWorkspaceSurfaceDocument(value: unknown): WorkspaceSurfaceDocument | null {
   if (!isRecord(value)) {
     return null;
   }
 
-  const documentType = getPersistedDocumentType(value);
+  const documentKind = getOptionalString(value, "kind");
+  if (!documentKind) {
+    return null;
+  }
 
-  if (documentType === "changes-diff") {
+  if (documentKind === "changes-diff") {
     return parseChangesDiffDocument(value as PersistedChangesDiffDocument);
   }
 
-  if (documentType === "file-diff") {
-    return parseFileDiffDocument(value as PersistedFileDiffDocument);
-  }
-
-  if (documentType === "commit-diff") {
+  if (documentKind === "commit-diff") {
     return parseCommitDiffDocument(value as PersistedCommitDiffDocument);
   }
 
-  if (documentType === "launcher") {
+  if (documentKind === "pull-request") {
+    return parsePullRequestDocument(value as PersistedPullRequestDocument);
+  }
+
+  if (documentKind === "launcher") {
     return parseLauncherDocument(value as PersistedLauncherDocument);
   }
 
-  if (documentType === "diff" && value.diffKind === "file") {
-    return parseFileDiffDocument(value as PersistedLegacyDiffDocument);
-  }
-
-  if (documentType === "diff" && value.diffKind === "commit") {
-    return parseCommitDiffDocument(value as PersistedLegacyDiffDocument);
-  }
-
-  if ("filePath" in value && "scope" in value) {
-    return parseFileDiffDocument(value as PersistedV1Document);
-  }
-
   return null;
-}
-
-function collapsePersistedDocuments(
-  documents: ParsedWorkspaceSurfaceDocument[],
-  activeTabKey: string | null,
-): WorkspaceSurfaceDocument[] {
-  const collapsedDocuments: WorkspaceSurfaceDocument[] = [];
-  const activeLegacyFocusPath = extractLegacyFileDiffFocusPath(activeTabKey);
-  const activeChangesTab = migrateLegacyTabKeyToV2(activeTabKey) === changesDiffTabKey();
-  let diffInsertIndex: number | null = null;
-  let migratedFocusPath: string | null = activeLegacyFocusPath;
-  let fallbackFocusPath: string | null = null;
-
-  for (const document of documents) {
-    if (document.type === "legacy-file-diff") {
-      fallbackFocusPath ??= document.filePath;
-      if (activeLegacyFocusPath === document.filePath) {
-        migratedFocusPath = document.filePath;
-      }
-      diffInsertIndex ??= collapsedDocuments.length;
-      continue;
-    }
-
-    if (isChangesDiffDocument(document)) {
-      fallbackFocusPath ??= document.focusPath;
-      if (activeChangesTab && migratedFocusPath === null && document.focusPath !== null) {
-        migratedFocusPath = document.focusPath;
-      }
-      diffInsertIndex ??= collapsedDocuments.length;
-      continue;
-    }
-
-    collapsedDocuments.push(document);
-  }
-
-  if (diffInsertIndex !== null || activeChangesTab) {
-    collapsedDocuments.splice(
-      diffInsertIndex ?? collapsedDocuments.length,
-      0,
-      createChangesDiffTab(migratedFocusPath ?? fallbackFocusPath ?? null),
-    );
-  }
-
-  return normalizeDocuments(collapsedDocuments);
 }
 
 function parseWorkspaceSurfaceState(value: unknown): WorkspaceSurfaceState {
@@ -470,11 +489,10 @@ function parseWorkspaceSurfaceState(value: unknown): WorkspaceSurfaceState {
 
   const activeTabKey = typeof value.activeTabKey === "string" ? value.activeTabKey : null;
   const documents = Array.isArray(value.documents)
-    ? collapsePersistedDocuments(
+    ? normalizeDocuments(
         value.documents
           .map((document) => parseWorkspaceSurfaceDocument(document))
-          .filter((document): document is ParsedWorkspaceSurfaceDocument => document !== null),
-        activeTabKey,
+          .filter((document): document is WorkspaceSurfaceDocument => document !== null),
       )
     : [];
 
@@ -496,19 +514,17 @@ function parseWorkspaceSurfaceState(value: unknown): WorkspaceSurfaceState {
 function readPersistedWorkspaceSurfaceStateMap(
   storage: StorageLike | null,
   key: string,
-): PersistedWorkspaceStateMap | PersistedWorkspaceStateMapV1 | null {
+): PersistedWorkspaceStateMap | null {
   if (!storage) {
     return null;
   }
 
-  return parseJsonObject<PersistedWorkspaceStateMap | PersistedWorkspaceStateMapV1>(
-    storage.getItem(key),
-  );
+  return parseJsonObject<PersistedWorkspaceStateMap>(storage.getItem(key));
 }
 
-function serializeCommitDiffDocument(document: CommitDiffDocument): Record<string, string> {
-  const serialized: Record<string, string> = {
-    type: "commit-diff",
+function serializeCommitDiffDocument(document: CommitDiffDocument): Record<string, unknown> {
+  const serialized: Record<string, unknown> = {
+    kind: "commit-diff",
     sha: document.sha,
     shortSha: document.shortSha,
   };
@@ -532,23 +548,47 @@ function serializeCommitDiffDocument(document: CommitDiffDocument): Record<strin
   return serialized;
 }
 
+function serializePullRequestDocument(document: PullRequestDocument): Record<string, unknown> {
+  return {
+    author: document.author,
+    baseRefName: document.baseRefName,
+    checks: document.checks,
+    createdAt: document.createdAt,
+    headRefName: document.headRefName,
+    isDraft: document.isDraft,
+    mergeStateStatus: document.mergeStateStatus,
+    mergeable: document.mergeable,
+    number: document.number,
+    reviewDecision: document.reviewDecision,
+    state: document.state,
+    title: document.title,
+    kind: document.kind,
+    updatedAt: document.updatedAt,
+    url: document.url,
+  };
+}
+
 function serializeWorkspaceSurfaceDocument(
   document: WorkspaceSurfaceDocument,
-): Record<string, string> {
+): Record<string, unknown> {
   if (isChangesDiffDocument(document)) {
     return document.focusPath === null
-      ? { type: document.type }
+      ? { kind: document.kind }
       : {
           focusPath: document.focusPath,
-          type: document.type,
+          kind: document.kind,
         };
   }
 
   if (isLauncherDocument(document)) {
     return {
       key: document.key,
-      type: document.type,
+      kind: document.kind,
     };
+  }
+
+  if (isPullRequestDocument(document)) {
+    return serializePullRequestDocument(document);
   }
 
   return serializeCommitDiffDocument(document);
@@ -580,22 +620,13 @@ export function readWorkspaceSurfaceState(
   storage?: StorageLike,
 ): WorkspaceSurfaceState {
   const resolvedStorage = getStorage(storage);
-  const persistedV2 = readPersistedWorkspaceSurfaceStateMap(
+  const persistedMap = readPersistedWorkspaceSurfaceStateMap(
     resolvedStorage,
-    WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2,
+    WORKSPACE_SURFACE_STATE_STORAGE_KEY,
   );
 
-  if (persistedV2 && workspaceId in persistedV2) {
-    return parseWorkspaceSurfaceState(persistedV2[workspaceId]);
-  }
-
-  const persistedV1 = readPersistedWorkspaceSurfaceStateMap(
-    resolvedStorage,
-    WORKSPACE_SURFACE_STATE_STORAGE_KEY_V1,
-  );
-
-  if (persistedV1 && workspaceId in persistedV1) {
-    return parseWorkspaceSurfaceState(persistedV1[workspaceId]);
+  if (persistedMap && workspaceId in persistedMap) {
+    return parseWorkspaceSurfaceState(persistedMap[workspaceId]);
   }
 
   return createDefaultWorkspaceSurfaceState();
@@ -612,10 +643,8 @@ export function writeWorkspaceSurfaceState(
   }
 
   const persistedMap =
-    readPersistedWorkspaceSurfaceStateMap(
-      resolvedStorage,
-      WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2,
-    ) ?? {};
+    readPersistedWorkspaceSurfaceStateMap(resolvedStorage, WORKSPACE_SURFACE_STATE_STORAGE_KEY) ??
+    {};
   const nextMap: PersistedWorkspaceStateMap = { ...persistedMap };
   const normalizedState = normalizeWorkspaceSurfaceState(state);
 
@@ -631,12 +660,10 @@ export function writeWorkspaceSurfaceState(
   }
 
   if (Object.keys(nextMap).length === 0) {
-    resolvedStorage.removeItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2);
+    resolvedStorage.removeItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY);
   } else {
-    resolvedStorage.setItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY_V2, JSON.stringify(nextMap));
+    resolvedStorage.setItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY, JSON.stringify(nextMap));
   }
-
-  resolvedStorage.removeItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY_V1);
 }
 
 export function readLastWorkspaceId(storage?: StorageLike): string | null {

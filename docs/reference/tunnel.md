@@ -28,7 +28,7 @@ Tunnels should be designed as a transport layer first, with access policy layere
    - team/organization membership
    - public, if ever supported
 
-The current `workspace_service.preview_state`, `preview_url`, and `preview_failure_reason` fields are the right provider-agnostic contract to keep.
+The current `workspace_service.preview_status`, `preview_url`, and `preview_failure_reason` fields are the right provider-agnostic contract to keep.
 
 ## Local-Mode Direction
 
@@ -52,7 +52,7 @@ Tunnel lifecycle should be driven by workspace/environment lifecycle, not buried
    - revoke the tunnel and clean provider state
 4. service restart / hot reload
    - preserve stable URL when possible
-   - keep `preview_state=provisioning` during rebind
+   - keep `preview_status=provisioning` during rebind
 
 ## Provider Boundary
 

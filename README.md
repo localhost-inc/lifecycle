@@ -27,6 +27,8 @@ bun run qa
 bun run dev
 ```
 
+Desktop development now uses the calmer Tauri loop by default: frontend edits hot reload in place, while Rust and other Tauri-native changes require restarting the desktop dev command. Use `bun --filter @lifecycle/desktop run dev:watch` when you explicitly want the old auto-relaunch behavior.
+
 Optional pre-commit hook setup:
 
 ```bash
@@ -66,6 +68,11 @@ From repo root:
 5. `bun run test:rust` - run desktop Rust tests
 6. `bun run qa` - run default quality gate (`qa:js` + Rust tests)
 7. `bun run build` - run workspace builds
+
+Desktop-specific dev loops:
+
+1. `bun --filter @lifecycle/desktop run dev` - launch the desktop shell once with Vite HMR; restart manually after Rust or Tauri-native changes
+2. `bun --filter @lifecycle/desktop run dev:watch` - opt into the old Tauri auto-restart loop for native changes
 
 ## Desktop App Icon
 

@@ -4,7 +4,7 @@ Date: 2026-03-10
 
 ## Context
 
-We already stored `workspace_service.preview_state` and `preview_failure_reason`, but the local runtime mostly treated them as dead fields. `preview_url` was present, while the actual state transitions were not being reconciled on create, run, stop, manifest sync, or service mutation.
+We already stored `workspace_service.preview_status` and `preview_failure_reason`, but the local runtime mostly treated them as dead fields. `preview_url` was present, while the actual state transitions were not being reconciled on create, run, stop, manifest sync, or service mutation.
 
 ## Learning
 
@@ -26,7 +26,7 @@ If we only persist `preview_url`, the service rail can show a link without accur
 - Recompute local preview metadata whenever workspace status changes.
 - Recompute local preview metadata whenever service status changes.
 - Recompute local preview metadata during manifest reconciliation and service override edits.
-- Keep local preview URLs stable when possible, but gate `Open` behavior in the UI on `preview_state=ready`.
+- Keep local preview URLs stable when possible, but gate `Open` behavior in the UI on `preview_status=ready`.
 
 ## Milestone Impact
 

@@ -19,6 +19,7 @@ function renderGitPanel(props: Partial<Parameters<typeof GitPanel>[0]> = {}) {
         children: createElement(GitPanel, {
           onOpenCommitDiff: () => {},
           onOpenDiff: () => {},
+          onOpenPullRequest: () => {},
           workspaceId: "workspace_1",
           workspaceMode: "local",
           worktreePath: "/tmp/lifecycle",

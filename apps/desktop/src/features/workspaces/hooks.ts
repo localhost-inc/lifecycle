@@ -1,4 +1,4 @@
-import type { LifecycleEventType, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
+import type { LifecycleEventKind, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { useMemo } from "react";
 import type { QueryDescriptor, QueryResult } from "../../query";
 import { useQuery } from "../../query";
@@ -16,30 +16,35 @@ export const workspaceKeys = {
   setup: (workspaceId: string) => ["workspace-setup", workspaceId] as const,
 };
 
-const WORKSPACES_BY_PROJECT_EVENT_TYPES = [
+const WORKSPACES_BY_PROJECT_EVENT_KINDS = [
   "workspace.renamed",
   "workspace.status_changed",
-] as const satisfies readonly LifecycleEventType[];
-const WORKSPACE_EVENT_TYPES = [
+  "workspace.deleted",
+] as const satisfies readonly LifecycleEventKind[];
+const WORKSPACE_EVENT_KINDS = [
   "workspace.renamed",
   "workspace.status_changed",
-] as const satisfies readonly LifecycleEventType[];
-const WORKSPACE_SERVICE_EVENT_TYPES = [
+  "workspace.deleted",
+] as const satisfies readonly LifecycleEventKind[];
+const WORKSPACE_SERVICE_EVENT_KINDS = [
   "service.status_changed",
-] as const satisfies readonly LifecycleEventType[];
-const WORKSPACE_SETUP_EVENT_TYPES = [
   "workspace.status_changed",
+  "workspace.deleted",
+] as const satisfies readonly LifecycleEventKind[];
+const WORKSPACE_SETUP_EVENT_KINDS = [
+  "workspace.status_changed",
+  "workspace.deleted",
   "setup.step_progress",
-] as const satisfies readonly LifecycleEventType[];
+] as const satisfies readonly LifecycleEventKind[];
 
 const workspacesByProjectQuery: QueryDescriptor<Record<string, WorkspaceRecord[]>> = {
-  eventTypes: WORKSPACES_BY_PROJECT_EVENT_TYPES,
+  eventKinds: WORKSPACES_BY_PROJECT_EVENT_KINDS,
   key: workspaceKeys.byProject(),
   fetch(source) {
     return source.listWorkspacesByProject();
   },
   reduce(current, event) {
-    if (event.type === "workspace.renamed" && current) {
+    if (event.kind === "workspace.renamed" && current) {
       let found = false;
       const next = Object.fromEntries(
         Object.entries(current).map(([projectId, workspaces]) => [
@@ -60,11 +65,29 @@ const workspacesByProjectQuery: QueryDescriptor<Record<string, WorkspaceRecord[]
         ]),
       );
 
-      return found ? { type: "replace", data: next } : { type: "invalidate" };
+      return found ? { kind: "replace", data: next } : { kind: "invalidate" };
     }
 
-    if (event.type !== "workspace.status_changed" || !current) {
-      return { type: "none" };
+    if (event.kind !== "workspace.status_changed" || !current) {
+      if (event.kind !== "workspace.deleted" || !current) {
+        return { kind: "none" };
+      }
+
+      let found = false;
+      const next = Object.fromEntries(
+        Object.entries(current).map(([projectId, workspaces]) => [
+          projectId,
+          workspaces.filter((workspace) => {
+            const matches = workspace.id === event.workspace_id;
+            if (matches) {
+              found = true;
+            }
+            return !matches;
+          }),
+        ]),
+      );
+
+      return found ? { kind: "replace", data: next } : { kind: "none" };
     }
 
     let changed = false;
@@ -89,29 +112,29 @@ const workspacesByProjectQuery: QueryDescriptor<Record<string, WorkspaceRecord[]
     );
 
     if (!found) {
-      return { type: "invalidate" };
+      return { kind: "invalidate" };
     }
 
-    return changed ? { type: "replace", data: next } : { type: "none" };
+    return changed ? { kind: "replace", data: next } : { kind: "none" };
   },
 };
 
 function createWorkspaceQuery(workspaceId: string): QueryDescriptor<WorkspaceRecord | null> {
   return {
-    eventTypes: WORKSPACE_EVENT_TYPES,
+    eventKinds: WORKSPACE_EVENT_KINDS,
     key: workspaceKeys.detail(workspaceId),
     fetch(source) {
       return source.getWorkspace(workspaceId);
     },
     reduce(current, event) {
-      if (event.type !== "workspace.status_changed" || event.workspace_id !== workspaceId) {
-        if (event.type === "workspace.renamed" && event.workspace_id === workspaceId) {
+      if (event.kind !== "workspace.status_changed" || event.workspace_id !== workspaceId) {
+        if (event.kind === "workspace.renamed" && event.workspace_id === workspaceId) {
           if (!current) {
-            return { type: "invalidate" };
+            return { kind: "invalidate" };
           }
 
           return {
-            type: "replace",
+            kind: "replace",
             data: {
               ...current,
               name: event.name,
@@ -121,15 +144,22 @@ function createWorkspaceQuery(workspaceId: string): QueryDescriptor<WorkspaceRec
           };
         }
 
-        return { type: "none" };
+        if (event.kind === "workspace.deleted" && event.workspace_id === workspaceId) {
+          return {
+            kind: "replace",
+            data: null,
+          };
+        }
+
+        return { kind: "none" };
       }
 
       if (!current) {
-        return { type: "invalidate" };
+        return { kind: "invalidate" };
       }
 
       return {
-        type: "replace",
+        kind: "replace",
         data: {
           ...current,
           failure_reason: event.failure_reason,
@@ -142,18 +172,25 @@ function createWorkspaceQuery(workspaceId: string): QueryDescriptor<WorkspaceRec
 
 function createWorkspaceServicesQuery(workspaceId: string): QueryDescriptor<ServiceRecord[]> {
   return {
-    eventTypes: WORKSPACE_SERVICE_EVENT_TYPES,
+    eventKinds: WORKSPACE_SERVICE_EVENT_KINDS,
     key: workspaceKeys.services(workspaceId),
     fetch(source) {
       return source.getWorkspaceServices(workspaceId);
     },
     reduce(current, event) {
-      if (event.type !== "service.status_changed" || event.workspace_id !== workspaceId) {
-        return { type: "none" };
+      if (
+        (event.kind === "workspace.status_changed" || event.kind === "workspace.deleted") &&
+        event.workspace_id === workspaceId
+      ) {
+        return { kind: "invalidate" };
+      }
+
+      if (event.kind !== "service.status_changed" || event.workspace_id !== workspaceId) {
+        return { kind: "none" };
       }
 
       if (!current) {
-        return { type: "invalidate" };
+        return { kind: "invalidate" };
       }
 
       const next = current.map((service) =>
@@ -168,32 +205,36 @@ function createWorkspaceServicesQuery(workspaceId: string): QueryDescriptor<Serv
       const found = next.some((service) => service.service_name === event.service_name);
 
       if (!found) {
-        return { type: "invalidate" };
+        return { kind: "invalidate" };
       }
 
-      return { type: "replace", data: next };
+      return { kind: "replace", data: next };
     },
   };
 }
 
 function createWorkspaceSetupQuery(workspaceId: string): QueryDescriptor<SetupStepState[]> {
   return {
-    eventTypes: WORKSPACE_SETUP_EVENT_TYPES,
+    eventKinds: WORKSPACE_SETUP_EVENT_KINDS,
     key: workspaceKeys.setup(workspaceId),
     async fetch() {
       return [];
     },
     reduce(current, event) {
+      if (event.kind === "workspace.deleted" && event.workspace_id === workspaceId) {
+        return { kind: "replace", data: [] };
+      }
+
       if (
-        event.type === "workspace.status_changed" &&
+        event.kind === "workspace.status_changed" &&
         event.workspace_id === workspaceId &&
         event.status === "starting"
       ) {
-        return { type: "replace", data: [] };
+        return { kind: "replace", data: [] };
       }
 
-      if (event.type !== "setup.step_progress" || event.workspace_id !== workspaceId) {
-        return { type: "none" };
+      if (event.kind !== "setup.step_progress" || event.workspace_id !== workspaceId) {
+        return { kind: "none" };
       }
 
       const previous = current ?? [];
@@ -203,13 +244,13 @@ function createWorkspaceSetupQuery(workspaceId: string): QueryDescriptor<SetupSt
         : [...previous, { name: event.step_name, output: [], status: "pending" as const }];
 
       return {
-        type: "replace",
+        kind: "replace",
         data: steps.map((step) => {
           if (step.name !== event.step_name) {
             return step;
           }
 
-          switch (event.event_type) {
+          switch (event.event_kind) {
             case "started":
               return { ...step, status: "running" as const };
             case "stdout":

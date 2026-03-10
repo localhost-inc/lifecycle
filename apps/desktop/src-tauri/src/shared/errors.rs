@@ -3,37 +3,28 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkspaceStatus {
-    Creating,
+    Idle,
     Starting,
-    Ready,
-    Resetting,
-    Sleeping,
-    Destroying,
-    Failed,
+    Active,
+    Stopping,
 }
 
 impl WorkspaceStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Creating => "creating",
+            Self::Idle => "idle",
             Self::Starting => "starting",
-            Self::Ready => "ready",
-            Self::Resetting => "resetting",
-            Self::Sleeping => "sleeping",
-            Self::Destroying => "destroying",
-            Self::Failed => "failed",
+            Self::Active => "active",
+            Self::Stopping => "stopping",
         }
     }
 
     pub fn from_str(s: &str) -> Result<Self, LifecycleError> {
         match s {
-            "creating" => Ok(Self::Creating),
+            "idle" => Ok(Self::Idle),
             "starting" => Ok(Self::Starting),
-            "ready" => Ok(Self::Ready),
-            "resetting" => Ok(Self::Resetting),
-            "sleeping" => Ok(Self::Sleeping),
-            "destroying" => Ok(Self::Destroying),
-            "failed" => Ok(Self::Failed),
+            "active" => Ok(Self::Active),
+            "stopping" => Ok(Self::Stopping),
             _ => Err(LifecycleError::InvalidStateTransition {
                 from: s.to_string(),
                 to: "unknown".to_string(),
@@ -304,13 +295,10 @@ mod tests {
     #[test]
     fn workspace_status_roundtrip() {
         let statuses = vec![
-            WorkspaceStatus::Creating,
+            WorkspaceStatus::Idle,
             WorkspaceStatus::Starting,
-            WorkspaceStatus::Ready,
-            WorkspaceStatus::Resetting,
-            WorkspaceStatus::Sleeping,
-            WorkspaceStatus::Destroying,
-            WorkspaceStatus::Failed,
+            WorkspaceStatus::Active,
+            WorkspaceStatus::Stopping,
         ];
         for status in statuses {
             let s = status.as_str();

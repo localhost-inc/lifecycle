@@ -10,8 +10,8 @@ The workspace center panel is a shared surface that can host both provider-backe
    - identity is provider-owned (`terminal_id`, future `agent_session_id`)
 2. Document tabs:
    - backed by workspace content or derived workspace artifacts
-   - examples: launcher, git diff, file editor, preview-specific documents
-   - identity is client-owned and derived from document intent (`diff:changes`, `diff:commit:<sha>`, future `file:path`)
+   - examples: launcher, git diff, pull request, file editor, preview-specific documents
+   - identity is client-owned and derived from document intent (`diff:changes`, `diff:commit:<sha>`, `pull-request:<number>`, future `file:path`)
 
 ## Ownership Rules
 
@@ -44,6 +44,13 @@ The workspace center panel is a shared surface that can host both provider-backe
 3. History commit diffs use commit-scoped document tabs keyed by commit SHA.
 4. Full patch rendering belongs in the center panel; list summaries belong in the side panel.
 5. The side panel should stay lightweight: summaries and diff navigation belong there; commit composition and staging workflows do not.
+
+## Pull Request Documents
+
+1. Pull requests are document tabs, not runtime tabs.
+2. Git-panel PR actions may request opening a PR tab, but the workspace surface owns the resulting tab lifecycle.
+3. PR tabs are keyed by pull request number within a workspace and should reuse the existing tab when the same PR is reopened.
+4. Persisted PR tabs may store a last-known snapshot so the surface can render even when live provider detail is temporarily unavailable.
 
 ## Forward Compatibility
 

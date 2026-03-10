@@ -37,7 +37,7 @@ pub struct ServiceRecord {
     pub status_reason: Option<String>,
     pub default_port: Option<i64>,
     pub effective_port: Option<i64>,
-    pub preview_state: String,
+    pub preview_status: String,
     pub preview_failure_reason: Option<String>,
     pub preview_url: Option<String>,
     pub created_at: String,
@@ -144,7 +144,7 @@ pub async fn get_workspace_by_id(
 pub async fn list_workspaces(db_path: &str) -> Result<Vec<WorkspaceRecord>, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, name, source_ref, git_sha, worktree_path, mode, status, manifest_fingerprint, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at FROM workspace WHERE status != 'destroying' ORDER BY created_at DESC"
+        "SELECT id, project_id, name, source_ref, git_sha, worktree_path, mode, status, manifest_fingerprint, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at FROM workspace ORDER BY created_at DESC"
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     let rows = stmt
@@ -180,7 +180,7 @@ pub async fn get_workspace_services(
 ) -> Result<Vec<ServiceRecord>, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn.prepare(
-        "SELECT id, workspace_id, service_name, exposure, port_override, status, status_reason, default_port, effective_port, preview_state, preview_failure_reason, preview_url, created_at, updated_at FROM workspace_service WHERE workspace_id = ?1 ORDER BY service_name"
+        "SELECT id, workspace_id, service_name, exposure, port_override, status, status_reason, default_port, effective_port, preview_status, preview_failure_reason, preview_url, created_at, updated_at FROM workspace_service WHERE workspace_id = ?1 ORDER BY service_name"
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     let rows = stmt
@@ -195,7 +195,7 @@ pub async fn get_workspace_services(
                 status_reason: row.get(6)?,
                 default_port: row.get(7)?,
                 effective_port: row.get(8)?,
-                preview_state: row.get(9)?,
+                preview_status: row.get(9)?,
                 preview_failure_reason: row.get(10)?,
                 preview_url: row.get(11)?,
                 created_at: row.get(12)?,

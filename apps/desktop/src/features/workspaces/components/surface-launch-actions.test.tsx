@@ -15,19 +15,19 @@ const actions: SurfaceLaunchAction[] = [
     key: "shell",
     title: "New shell",
     icon: createElement(ShellIcon),
-    request: { type: "terminal", launchType: "shell" },
+    request: { kind: "terminal", launchType: "shell" },
   },
   {
     key: "claude",
     title: "New Claude session",
     icon: createElement(ClaudeIcon),
-    request: { type: "terminal", launchType: "harness", harnessProvider: "claude" },
+    request: { kind: "terminal", launchType: "harness", harnessProvider: "claude" },
   },
   {
     key: "codex",
     title: "New Codex session",
     icon: createElement(CodexIcon),
-    request: { type: "terminal", launchType: "harness", harnessProvider: "codex" },
+    request: { kind: "terminal", launchType: "harness", harnessProvider: "codex" },
   },
 ];
 

@@ -54,7 +54,7 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
         git_sha: null,
         worktree_path: null,
         mode: "local",
-        status: "creating",
+        status: "idle",
         failure_reason: null,
         failed_at: null,
         created_by: null,
@@ -97,7 +97,7 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
   }
 
   async wake(_workspaceId: string): Promise<void> {
-    // TODO: M4 — restart services from sleeping state.
+    // TODO: M4 — restart services from idle state.
   }
 
   async destroy(_workspaceId: string): Promise<void> {

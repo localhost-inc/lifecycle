@@ -68,7 +68,7 @@ pub(super) async fn generate_identity_titles(
 }
 
 pub(super) fn fallback_terminal_title(prompt: &str) -> String {
-    truncate_title(prompt, 48)
+    title_case_title(&truncate_title(prompt, 48))
 }
 
 pub(super) fn prompt_preview(prompt: &str) -> String {
@@ -279,7 +279,7 @@ fn schema_payload<'a>(value: &'a Value) -> &'a Value {
 
 fn terminal_title_prompt(prompt: &str) -> String {
     format!(
-        "Return JSON only.\nCreate a concise 2-4 word terminal session title for this coding task.\nTask: {prompt}"
+        "Return JSON only.\nCreate a concise 2-4 word terminal session title for this coding task.\nUse plain title case text.\nTask: {prompt}"
     )
 }
 
@@ -292,7 +292,58 @@ fn workspace_identity_prompt(prompt: &str) -> String {
 fn sanitize_generated_title(value: &str) -> String {
     let trimmed = value.trim().trim_matches('"').trim_matches('\'');
     let collapsed = trimmed.split_whitespace().collect::<Vec<_>>().join(" ");
-    collapsed.chars().take(48).collect()
+    title_case_title(&collapsed).chars().take(48).collect()
+}
+
+fn title_case_title(value: &str) -> String {
+    let mut titled = String::with_capacity(value.len());
+    let mut segment = String::new();
+
+    for character in value.chars() {
+        if character.is_ascii_alphanumeric() {
+            segment.push(character);
+            continue;
+        }
+
+        if !segment.is_empty() {
+            titled.push_str(&title_case_segment(&segment));
+            segment.clear();
+        }
+
+        titled.push(character);
+    }
+
+    if !segment.is_empty() {
+        titled.push_str(&title_case_segment(&segment));
+    }
+
+    titled
+}
+
+fn title_case_segment(segment: &str) -> String {
+    let uppercase_or_digit_count = segment
+        .chars()
+        .filter(|character| character.is_ascii_uppercase() || character.is_ascii_digit())
+        .count();
+
+    if uppercase_or_digit_count == segment.len()
+        && uppercase_or_digit_count > 0
+        && segment.len() <= 5
+    {
+        return segment.to_string();
+    }
+
+    let mut characters = segment.chars();
+    let Some(first) = characters.next() else {
+        return String::new();
+    };
+
+    let mut titled = String::new();
+    titled.extend(first.to_uppercase());
+    for character in characters {
+        titled.extend(character.to_lowercase());
+    }
+    titled
 }
 
 fn truncate_title(value: &str, limit: usize) -> String {
@@ -323,12 +374,22 @@ mod tests {
 
     #[test]
     fn fallback_terminal_title_uses_prompt_truncation() {
-        assert_eq!(fallback_terminal_title("what is this"), "what is this");
+        assert_eq!(fallback_terminal_title("what is this"), "What Is This");
+        let expected = "X".to_string() + &"x".repeat(44) + "...";
         assert_eq!(
             fallback_terminal_title(&"x".repeat(60)),
-            format!("{}...", "x".repeat(45))
+            expected
         );
         assert_eq!(fallback_terminal_title("   "), "Agent Session");
+    }
+
+    #[test]
+    fn sanitize_generated_title_normalizes_to_title_case() {
+        assert_eq!(
+            sanitize_generated_title("  notification improvements  "),
+            "Notification Improvements"
+        );
+        assert_eq!(sanitize_generated_title("API cleanup"), "API Cleanup");
     }
 
     #[test]
@@ -341,7 +402,7 @@ mod tests {
     fn parse_identity_titles_json_requires_both_titles() {
         assert_eq!(
             parse_identity_titles_json(
-                r#"{"workspace_title":"Fix Auth Callback","session_title":"Auth Callback"}"#
+                r#"{"workspace_title":"fix auth callback","session_title":"auth callback"}"#
             ),
             Some(("Fix Auth Callback".to_string(), "Auth Callback".to_string()))
         );
@@ -351,7 +412,7 @@ mod tests {
     #[test]
     fn parse_title_json_supports_structured_output_wrapper() {
         assert_eq!(
-            parse_title_json(r#"{"type":"result","structured_output":{"title":"Fix Auth Flow"}}"#),
+            parse_title_json(r#"{"type":"result","structured_output":{"title":"fix auth flow"}}"#),
             Some("Fix Auth Flow".to_string())
         );
     }

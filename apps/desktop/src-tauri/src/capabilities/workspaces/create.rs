@@ -38,12 +38,12 @@ pub async fn create_workspace(
     {
         let conn = open_db(&db)?;
         conn.execute(
-            "INSERT INTO workspace (id, project_id, name, name_origin, source_ref, source_ref_origin, status, mode) VALUES (?1, ?2, ?3, 'default', ?4, 'default', 'creating', 'local')",
+            "INSERT INTO workspace (id, project_id, name, name_origin, source_ref, source_ref_origin, status, mode) VALUES (?1, ?2, ?3, 'default', ?4, 'default', 'idle', 'local')",
             params![workspace_id, project_id, workspace_name, source_ref],
         ).map_err(|e| LifecycleError::Database(e.to_string()))?;
     }
 
-    emit_workspace_status(&app, &workspace_id, "creating", None);
+    emit_workspace_status(&app, &workspace_id, "idle", None);
 
     run_workspace_creation(
         &app,
@@ -85,10 +85,10 @@ async fn run_workspace_creation(
                 update_workspace_status_db(
                     db_path,
                     workspace_id,
-                    &WorkspaceStatus::Failed,
+                    &WorkspaceStatus::Idle,
                     Some(&WorkspaceFailureReason::RepoCloneFailed),
                 )?;
-                emit_workspace_status(app, workspace_id, "failed", Some("repo_clone_failed"));
+                emit_workspace_status(app, workspace_id, "idle", Some("repo_clone_failed"));
                 return Err(e);
             }
         },
@@ -110,10 +110,10 @@ async fn run_workspace_creation(
             update_workspace_status_db(
                 db_path,
                 workspace_id,
-                &WorkspaceStatus::Failed,
+                &WorkspaceStatus::Idle,
                 Some(&WorkspaceFailureReason::RepoCloneFailed),
             )?;
-            emit_workspace_status(app, workspace_id, "failed", Some("repo_clone_failed"));
+            emit_workspace_status(app, workspace_id, "idle", Some("repo_clone_failed"));
             return Err(e);
         }
     };
@@ -130,9 +130,9 @@ async fn run_workspace_creation(
         ).map_err(|e| LifecycleError::Database(e.to_string()))?;
     }
 
-    // Workspace created — transition to sleeping (services not yet started)
-    update_workspace_status_db(db_path, workspace_id, &WorkspaceStatus::Sleeping, None)?;
-    emit_workspace_status(app, workspace_id, "sleeping", None);
+    // Workspace creation completes in the resting idle state.
+    update_workspace_status_db(db_path, workspace_id, &WorkspaceStatus::Idle, None)?;
+    emit_workspace_status(app, workspace_id, "idle", None);
 
     Ok(())
 }

@@ -184,7 +184,7 @@ mod tests {
                 "lifecycle/test",
                 worktree_path.to_str().expect("worktree path is utf8"),
                 "local",
-                "ready"
+                "active"
             ],
         )
         .expect("insert workspace");

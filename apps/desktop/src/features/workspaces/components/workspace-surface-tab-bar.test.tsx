@@ -22,7 +22,7 @@ describe("WorkspaceSurfaceTabBar", () => {
           {
             harnessProvider: "claude",
             key: "terminal:term-1",
-            type: "terminal",
+            kind: "terminal",
             label: "Claude",
             launchType: "harness",
             responseReady: false,
@@ -49,7 +49,7 @@ describe("WorkspaceSurfaceTabBar", () => {
           {
             key: "terminal:term-1",
             harnessProvider: null,
-            type: "terminal",
+            kind: "terminal",
             label: "Terminal 1",
             launchType: "shell",
             responseReady: false,
@@ -77,7 +77,7 @@ describe("WorkspaceSurfaceTabBar", () => {
           {
             key: "terminal:term-1",
             harnessProvider: null,
-            type: "terminal",
+            kind: "terminal",
             label: "Terminal 1",
             launchType: "shell",
             responseReady: false,
@@ -87,7 +87,7 @@ describe("WorkspaceSurfaceTabBar", () => {
           {
             key: "terminal:term-2",
             harnessProvider: null,
-            type: "terminal",
+            kind: "terminal",
             label: "Terminal 2",
             launchType: "shell",
             responseReady: false,
@@ -117,7 +117,7 @@ describe("WorkspaceSurfaceTabBar", () => {
           {
             key: "terminal:term-1",
             harnessProvider: null,
-            type: "terminal",
+            kind: "terminal",
             label: "Terminal 1",
             launchType: "shell",
             responseReady: false,
@@ -127,7 +127,7 @@ describe("WorkspaceSurfaceTabBar", () => {
           {
             key: "terminal:term-2",
             harnessProvider: null,
-            type: "terminal",
+            kind: "terminal",
             label: "Terminal 2",
             launchType: "shell",
             responseReady: false,
@@ -137,7 +137,7 @@ describe("WorkspaceSurfaceTabBar", () => {
           {
             key: "terminal:term-3",
             harnessProvider: null,
-            type: "terminal",
+            kind: "terminal",
             label: "Terminal 3",
             launchType: "shell",
             responseReady: false,
@@ -165,7 +165,7 @@ describe("WorkspaceSurfaceTabBar", () => {
           {
             key: "terminal:term-1",
             harnessProvider: null,
-            type: "terminal",
+            kind: "terminal",
             label: "Terminal 1",
             launchType: "shell",
             responseReady: false,
@@ -193,7 +193,7 @@ describe("WorkspaceSurfaceTabBar", () => {
           {
             key: "terminal:term-1",
             harnessProvider: null,
-            type: "terminal",
+            kind: "terminal",
             label: "Terminal 1",
             launchType: "shell",
             responseReady: true,
@@ -222,7 +222,7 @@ describe("WorkspaceSurfaceTabBar", () => {
           {
             key: "terminal:term-1",
             harnessProvider: null,
-            type: "terminal",
+            kind: "terminal",
             label: "Terminal 1",
             launchType: "shell",
             responseReady: true,
@@ -232,7 +232,7 @@ describe("WorkspaceSurfaceTabBar", () => {
           {
             key: "terminal:term-2",
             harnessProvider: null,
-            type: "terminal",
+            kind: "terminal",
             label: "Terminal 2",
             launchType: "shell",
             responseReady: false,

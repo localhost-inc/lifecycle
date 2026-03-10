@@ -4,7 +4,7 @@ import type {
   LifecycleEvent,
   LifecycleEventInput,
   LifecycleEventOf,
-  LifecycleEventType,
+  LifecycleEventKind,
 } from "@lifecycle/contracts";
 
 export const LIFECYCLE_EVENT_NAME = "lifecycle:event";
@@ -33,21 +33,21 @@ export function publishBrowserLifecycleEvent(event: LifecycleEventInput): Lifecy
   return nextEvent;
 }
 
-export async function subscribeToLifecycleEvents<Types extends readonly LifecycleEventType[]>(
-  types: Types,
-  listener: (event: LifecycleEventOf<Types[number]>) => void,
+export async function subscribeToLifecycleEvents<Kinds extends readonly LifecycleEventKind[]>(
+  kinds: Kinds,
+  listener: (event: LifecycleEventOf<Kinds[number]>) => void,
 ): Promise<UnlistenFn>;
 export async function subscribeToLifecycleEvents(
-  types: readonly LifecycleEventType[],
+  kinds: readonly LifecycleEventKind[],
   listener: (event: LifecycleEvent) => void,
 ): Promise<UnlistenFn> {
-  if (types.length === 0) {
+  if (kinds.length === 0) {
     return () => {};
   }
 
-  const typeSet = new Set(types);
+  const kindSet = new Set(kinds);
   const handleEvent = (event: LifecycleEvent) => {
-    if (!typeSet.has(event.type)) {
+    if (!kindSet.has(event.kind)) {
       return;
     }
 

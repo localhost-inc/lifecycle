@@ -1,4 +1,9 @@
-import type { GitLogEntry, TerminalRecord, TerminalStatus } from "@lifecycle/contracts";
+import type {
+  GitLogEntry,
+  GitPullRequestSummary,
+  TerminalRecord,
+  TerminalStatus,
+} from "@lifecycle/contracts";
 import type { DragEvent as ReactDragEvent } from "react";
 import type { HarnessProvider } from "../../terminals/api";
 import type { WorkspaceShortcutEvent } from "../api";
@@ -8,9 +13,12 @@ import {
   createChangesDiffTab,
   createCommitDiffTab,
   createLauncherTab,
+  createPullRequestTab,
   isChangesDiffDocument,
   isCommitDiffDocument,
+  isPullRequestDocument,
   readWorkspaceSurfaceState,
+  pullRequestTabKey,
   type ChangesDiffDocument,
   type WorkspaceSurfaceDocument,
   type WorkspaceSurfaceState,
@@ -19,23 +27,33 @@ import {
 export interface ChangesDiffOpenRequest {
   focusPath: string | null;
   id: string;
-  type: "changes-diff";
+  kind: "changes-diff";
 }
 
 export interface CommitDiffOpenRequest {
   commit: GitLogEntry;
   id: string;
-  type: "commit-diff";
+  kind: "commit-diff";
 }
 
-export type OpenDocumentRequest = ChangesDiffOpenRequest | CommitDiffOpenRequest;
+export interface PullRequestOpenRequest {
+  id: string;
+  pullRequest: GitPullRequestSummary;
+  kind: "pull-request";
+}
+
+export type OpenDocumentRequest =
+  | ChangesDiffOpenRequest
+  | CommitDiffOpenRequest
+  | PullRequestOpenRequest;
 
 export type RuntimeTab = {
   harnessProvider: HarnessProvider | null;
-  type: "terminal";
+  kind: "terminal";
   key: string;
   label: string;
   launchType: TerminalRecord["launch_type"];
+  running?: boolean;
   responseReady: boolean;
   status: TerminalStatus;
   terminalId: string;
@@ -57,11 +75,11 @@ export interface WorkspaceTabHotkeyEvent {
 }
 
 export type WorkspaceTabHotkeyAction =
-  | { type: "close-active-tab" }
-  | { type: "new-tab" }
-  | { type: "next-tab" }
-  | { type: "previous-tab" }
-  | { type: "select-tab-index"; index: number };
+  | { kind: "close-active-tab" }
+  | { kind: "new-tab" }
+  | { kind: "next-tab" }
+  | { kind: "previous-tab" }
+  | { kind: "select-tab-index"; index: number };
 
 export interface WorkspaceTabClosePlan {
   nextActiveKey: string | null;
@@ -71,16 +89,16 @@ export interface WorkspaceTabClosePlan {
 export const WORKSPACE_CLOSE_SHORTCUT_GRACE_MS = 250;
 
 export type WorkspaceSurfaceAction =
-  | { type: "open-document"; request: OpenDocumentRequest }
-  | { type: "open-launcher"; launcherId: string }
-  | { type: "replace-launcher-with-tab"; launcherKey: string; tabKey: string }
-  | { type: "select-tab"; key: string | null }
-  | { type: "close-document"; key: string; nextActiveKey: string | null }
-  | { type: "hide-runtime-tab"; key: string; nextActiveKey: string | null }
-  | { type: "show-runtime-tab"; key: string; select: boolean }
-  | { type: "set-hidden-runtime-tab-keys"; keys: string[] }
-  | { type: "set-tab-order"; keys: string[] }
-  | { type: "sync-active"; key: string | null };
+  | { kind: "open-document"; request: OpenDocumentRequest }
+  | { kind: "open-launcher"; launcherId: string }
+  | { kind: "replace-launcher-with-tab"; launcherKey: string; tabKey: string }
+  | { kind: "select-tab"; key: string | null }
+  | { kind: "close-document"; key: string; nextActiveKey: string | null }
+  | { kind: "hide-runtime-tab"; key: string; nextActiveKey: string | null }
+  | { kind: "show-runtime-tab"; key: string; select: boolean }
+  | { kind: "set-hidden-runtime-tab-keys"; keys: string[] }
+  | { kind: "set-tab-order"; keys: string[] }
+  | { kind: "sync-active"; key: string | null };
 
 function appendWorkspaceTabKey(keys: readonly string[], key: string): string[] {
   return [...keys.filter((existingKey) => existingKey !== key), key];
@@ -340,26 +358,26 @@ export function readWorkspaceTabHotkeyAction(
     }
 
     if (!event.shiftKey && lowerKey === "t") {
-      return { type: "new-tab" };
+      return { kind: "new-tab" };
     }
 
     if (!event.shiftKey && lowerKey === "w") {
-      return { type: "close-active-tab" };
+      return { kind: "close-active-tab" };
     }
 
     if (!event.shiftKey && lowerKey >= "1" && lowerKey <= "9") {
       return {
         index: Number.parseInt(lowerKey, 10),
-        type: "select-tab-index",
+        kind: "select-tab-index",
       };
     }
 
     if (event.shiftKey && isBracketLeft) {
-      return { type: "previous-tab" };
+      return { kind: "previous-tab" };
     }
 
     if (event.shiftKey && isBracketRight) {
-      return { type: "next-tab" };
+      return { kind: "next-tab" };
     }
 
     return null;
@@ -370,22 +388,22 @@ export function readWorkspaceTabHotkeyAction(
   }
 
   if (!event.shiftKey && lowerKey === "t") {
-    return { type: "new-tab" };
+    return { kind: "new-tab" };
   }
 
   if (!event.shiftKey && lowerKey === "w") {
-    return { type: "close-active-tab" };
+    return { kind: "close-active-tab" };
   }
 
   if (!event.shiftKey && lowerKey >= "1" && lowerKey <= "9") {
     return {
       index: Number.parseInt(lowerKey, 10),
-      type: "select-tab-index",
+      kind: "select-tab-index",
     };
   }
 
   if (event.key === "Tab") {
-    return event.shiftKey ? { type: "previous-tab" } : { type: "next-tab" };
+    return event.shiftKey ? { kind: "previous-tab" } : { kind: "next-tab" };
   }
 
   return null;
@@ -400,7 +418,7 @@ export function workspaceTabPanelId(key: string): string {
 }
 
 export function tabTitle(tab: WorkspaceSurfaceTab): string {
-  if (tab.type === "terminal") {
+  if (tab.kind === "terminal") {
     return tab.label;
   }
 
@@ -410,6 +428,10 @@ export function tabTitle(tab: WorkspaceSurfaceTab): string {
 
   if (isCommitDiffDocument(tab)) {
     return `${tab.shortSha} ${tab.message}`;
+  }
+
+  if (isPullRequestDocument(tab)) {
+    return `PR #${tab.number} ${tab.title}`;
   }
 
   return tab.label;
@@ -428,16 +450,16 @@ export function toWorkspaceTabHotkeyAction(
 ): WorkspaceTabHotkeyAction | null {
   switch (event.action) {
     case "close-active-tab":
-      return { type: "close-active-tab" };
+      return { kind: "close-active-tab" };
     case "new-tab":
-      return { type: "new-tab" };
+      return { kind: "new-tab" };
     case "next-tab":
-      return { type: "next-tab" };
+      return { kind: "next-tab" };
     case "previous-tab":
-      return { type: "previous-tab" };
+      return { kind: "previous-tab" };
     case "select-tab-index":
       return typeof event.index === "number"
-        ? { index: event.index, type: "select-tab-index" }
+        ? { index: event.index, kind: "select-tab-index" }
         : null;
     default:
       return null;
@@ -448,11 +470,11 @@ export function workspaceSurfaceReducer(
   state: WorkspaceSurfaceState,
   action: WorkspaceSurfaceAction,
 ): WorkspaceSurfaceState {
-  switch (action.type) {
+  switch (action.kind) {
     case "open-document": {
       const request = action.request;
 
-      if (request.type === "changes-diff") {
+      if (request.kind === "changes-diff") {
         const key = changesDiffTabKey();
         const existing = state.documents.find(
           (tab): tab is ChangesDiffDocument => isChangesDiffDocument(tab) && tab.key === key,
@@ -481,8 +503,25 @@ export function workspaceSurfaceReducer(
         };
       }
 
-      const key = commitDiffTabKey(request.commit.sha);
-      const nextTab = createCommitDiffTab(request.commit);
+      if (request.kind === "commit-diff") {
+        const key = commitDiffTabKey(request.commit.sha);
+        const nextTab = createCommitDiffTab(request.commit);
+        const exists = state.documents.some((tab) => tab.key === key);
+
+        return {
+          ...state,
+          activeTabKey: key,
+          documents: exists
+            ? state.documents.map((tab) => (tab.key === key ? nextTab : tab))
+            : [...state.documents, nextTab],
+          tabOrderKeys: exists
+            ? state.tabOrderKeys
+            : appendWorkspaceTabKey(state.tabOrderKeys, key),
+        };
+      }
+
+      const key = pullRequestTabKey(request.pullRequest.number);
+      const nextTab = createPullRequestTab(request.pullRequest);
       const exists = state.documents.some((tab) => tab.key === key);
 
       return {
@@ -575,6 +614,6 @@ export function createInitialWorkspaceSurfaceState(workspaceId: string): Workspa
 
   return workspaceSurfaceReducer(restoredState, {
     launcherId: createWorkspaceLauncherId(),
-    type: "open-launcher",
+    kind: "open-launcher",
   });
 }

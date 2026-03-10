@@ -1,57 +1,62 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { WorkspaceRecord, WorkspaceStatus } from "@lifecycle/contracts";
-import { cn, sidebarMenuSubButtonVariants, StatusDot, type StatusDotTone } from "@lifecycle/ui";
+import {
+  cn,
+  SidebarMenuAction,
+  sidebarMenuSubButtonVariants,
+  Spinner,
+  StatusDot,
+  type StatusDotTone,
+} from "@lifecycle/ui";
+import { Archive } from "lucide-react";
 import { ResponseReadyDot } from "../../../components/response-ready-dot";
 import { TypedTitle } from "../../../components/typed-title";
 import { formatCompactRelativeTime } from "../../../lib/format";
 import { renameWorkspace } from "../api";
 
 const dotTone: Record<WorkspaceStatus, StatusDotTone> = {
-  creating: "warning",
+  idle: "neutral",
   starting: "info",
-  ready: "success",
-  resetting: "warning",
-  sleeping: "neutral",
-  destroying: "danger",
-  failed: "danger",
+  active: "success",
+  stopping: "warning",
 };
 
 const dotPulse: Record<WorkspaceStatus, boolean> = {
-  creating: true,
+  idle: false,
   starting: true,
-  ready: false,
-  resetting: true,
-  sleeping: false,
-  destroying: true,
-  failed: false,
+  active: false,
+  stopping: true,
 };
 
 const dotClassName: Partial<Record<WorkspaceStatus, string>> = {
-  sleeping: "bg-zinc-400",
+  idle: "bg-zinc-400",
 };
 
 const dotLabels: Record<WorkspaceStatus, string> = {
-  creating: "Creating",
+  idle: "Idle",
   starting: "Starting",
-  ready: "Ready",
-  resetting: "Resetting",
-  sleeping: "Sleeping",
-  destroying: "Destroying",
-  failed: "Failed",
+  active: "Active",
+  stopping: "Stopping",
 };
 
 interface WorkspaceTreeItemProps {
+  running?: boolean;
   responseReady?: boolean;
   workspace: WorkspaceRecord;
   selected: boolean;
   onSelect: () => void;
+  onDestroy: () => void;
+  destroyDisabled?: boolean;
 }
 
 export function WorkspaceTreeItem({
+  running = false,
   responseReady = false,
   workspace,
   selected,
   onSelect,
+  onDestroy,
+  destroyDisabled = false,
 }: WorkspaceTreeItemProps) {
   const status = workspace.status as WorkspaceStatus;
   const timestamp = formatCompactRelativeTime(workspace.last_active_at);
@@ -159,6 +164,14 @@ export function WorkspaceTreeItem({
           title={dotLabels[status]}
           tone={dotTone[status]}
         />
+        {running ? (
+          <Spinner
+            aria-hidden="true"
+            aria-label={undefined}
+            className="size-3.5 shrink-0 text-[var(--sidebar-muted-foreground)]"
+            role={undefined}
+          />
+        ) : null}
         <input
           ref={inputRef}
           aria-label="Rename workspace"
@@ -196,36 +209,58 @@ export function WorkspaceTreeItem({
   }
 
   return (
-    <button
-      className={rowClassName}
-      onClick={onSelect}
-      onDoubleClick={(event) => {
-        event.preventDefault();
-        startEditing();
-      }}
-      title={titleText}
-      type="button"
-    >
-      {responseReady && <ResponseReadyDot className="absolute left-1 top-1/2 -translate-y-1/2" />}
-      <StatusDot
-        className={dotClassName[status]}
-        pulse={dotPulse[status]}
-        size="sm"
-        title={dotLabels[status]}
-        tone={dotTone[status]}
-      />
-      <TypedTitle className="flex-1 truncate text-[13px]" text={workspace.name} />
-      {timestamp && (
-        <span
-          className={`shrink-0 text-[13px] ${
-            selected
-              ? "text-[var(--sidebar-foreground)] opacity-70"
-              : "text-[var(--sidebar-muted-foreground)]"
-          }`}
-        >
-          {timestamp}
-        </span>
-      )}
-    </button>
+    <div className="group/workspace-item relative">
+      <button
+        className={rowClassName}
+        onClick={onSelect}
+        onDoubleClick={(event) => {
+          event.preventDefault();
+          startEditing();
+        }}
+        title={titleText}
+        type="button"
+      >
+        {responseReady && <ResponseReadyDot className="absolute left-1 top-1/2 -translate-y-1/2" />}
+        <StatusDot
+          className={dotClassName[status]}
+          pulse={dotPulse[status]}
+          size="sm"
+          title={dotLabels[status]}
+          tone={dotTone[status]}
+        />
+        {running ? (
+          <Spinner
+            aria-hidden="true"
+            aria-label={undefined}
+            className="size-3.5 shrink-0 text-[var(--sidebar-muted-foreground)]"
+            role={undefined}
+          />
+        ) : null}
+        <TypedTitle className="flex-1 truncate text-[13px]" text={workspace.name} />
+        {timestamp && (
+          <span
+            className={`shrink-0 text-[13px] transition-opacity group-hover/workspace-item:opacity-0 ${
+              selected
+                ? "text-[var(--sidebar-foreground)] opacity-70"
+                : "text-[var(--sidebar-muted-foreground)]"
+            }`}
+          >
+            {timestamp}
+          </span>
+        )}
+      </button>
+      <SidebarMenuAction
+        aria-label={`Archive workspace ${workspace.name}`}
+        className="pointer-events-none opacity-0 transition-opacity disabled:opacity-0 group-hover/workspace-item:pointer-events-auto group-hover/workspace-item:opacity-100 group-hover/workspace-item:disabled:opacity-50"
+        disabled={destroyDisabled}
+        onClick={(event) => {
+          event.stopPropagation();
+          onDestroy();
+        }}
+        title="Archive workspace"
+      >
+        <Archive size={14} strokeWidth={2} />
+      </SidebarMenuAction>
+    </div>
   );
 }

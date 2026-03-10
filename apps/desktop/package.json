@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
+    "dev": "tauri dev --no-watch --config src-tauri/tauri.dev.conf.json",
+    "dev:watch": "tauri dev --config src-tauri/tauri.dev.conf.json",
     "build": "tauri build",
     "icon:generate": "bun run scripts/generate-icons.ts",
     "vite:dev": "vite",

@@ -9,7 +9,7 @@ describe("ToggleGroup", () => {
       createElement(
         ToggleGroup,
         {
-          type: "single",
+          kind: "single",
           value: "working",
         },
         createElement(ToggleGroupItem, { value: "working" }, "Working"),

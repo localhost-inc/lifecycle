@@ -1,45 +1,89 @@
 import type { ServiceRecord } from "@lifecycle/contracts";
 import {
-  Badge,
   Button,
   EmptyState,
   Input,
   Select,
   SelectContent,
   SelectItem,
+  Spinner,
   SelectTrigger,
   SelectValue,
-  StatusDot,
-  type StatusDotTone,
 } from "@lifecycle/ui";
-import { FileJson, Layers } from "lucide-react";
-import { useState, type ComponentProps } from "react";
+import {
+  AlertTriangle,
+  Check,
+  Circle,
+  ExternalLink,
+  FileJson,
+  Layers,
+  RotateCcw,
+  Settings,
+} from "lucide-react";
+import { useState, type ReactNode } from "react";
 
-const statusTone: Record<string, StatusDotTone> = {
-  stopped: "neutral",
-  starting: "info",
-  ready: "success",
-  failed: "danger",
+const statusIcon: Record<string, { icon: ReactNode; className: string }> = {
+  stopped: {
+    icon: <Circle className="size-4" />,
+    className: "text-[var(--muted-foreground)]",
+  },
+  starting: {
+    icon: <Spinner className="size-4" />,
+    className: "text-blue-400",
+  },
+  ready: {
+    icon: <Check className="size-4" strokeWidth={2.5} />,
+    className: "text-emerald-400",
+  },
+  failed: {
+    icon: <AlertTriangle className="size-4" />,
+    className: "text-red-400",
+  },
 };
 
-const statusVariant: Record<string, ComponentProps<typeof Badge>["variant"]> = {
-  stopped: "muted",
-  starting: "info",
-  ready: "success",
-  failed: "destructive",
-};
+const defaultStatusIcon = statusIcon.stopped!;
 
-const previewVariant: Record<
-  ServiceRecord["preview_state"],
-  ComponentProps<typeof Badge>["variant"]
-> = {
-  disabled: "muted",
-  expired: "muted",
-  failed: "destructive",
-  provisioning: "info",
-  ready: "success",
-  sleeping: "warning",
-};
+function ServiceActionIcon({ service, onOpen }: { service: ServiceRecord; onOpen: () => void }) {
+  if (service.status === "ready" && service.preview_status === "ready") {
+    return (
+      <button
+        className="flex h-6 w-6 items-center justify-center rounded text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen();
+        }}
+        title="Open preview"
+        type="button"
+      >
+        <ExternalLink className="size-3.5" />
+      </button>
+    );
+  }
+
+  if (service.status === "failed") {
+    return (
+      <span
+        className="flex h-6 w-6 items-center justify-center text-[var(--muted-foreground)]"
+        title="Retry by restarting the environment"
+      >
+        <RotateCcw className="size-3.5" />
+      </span>
+    );
+  }
+
+  return (
+    <button
+      className="flex h-6 w-6 items-center justify-center rounded text-[var(--muted-foreground)] opacity-0 transition-opacity group-hover/row:opacity-100 hover:text-[var(--foreground)]"
+      onClick={(e) => {
+        e.stopPropagation();
+      }}
+      title="Service settings"
+      type="button"
+    >
+      <Settings className="size-3.5" />
+    </button>
+  );
+}
 
 interface ServicesTabProps {
   manifestState: "invalid" | "missing" | "valid";
@@ -99,7 +143,7 @@ function previewLabelFor(service: ServiceRecord): string {
     return "No preview port";
   }
 
-  switch (service.preview_state) {
+  switch (service.preview_status) {
     case "ready":
       return "Preview ready";
     case "provisioning":
@@ -130,8 +174,8 @@ function ServiceRow({
 
   const parsedPort = parsePortDraft(draftPort);
   const previewUrl = resolvePreviewUrl(service);
-  const tone = statusTone[service.status] ?? "neutral";
-  const variant = statusVariant[service.status] ?? "muted";
+  const { icon: leftIcon, className: iconClassName } =
+    statusIcon[service.status] ?? defaultStatusIcon;
   const isDirty = draftExposure !== service.exposure || parsedPort.value !== service.port_override;
 
   async function handleSave(): Promise<void> {
@@ -179,7 +223,7 @@ function ServiceRow({
   function handleOpenPreview(): void {
     if (
       !previewUrl ||
-      service.preview_state !== "ready" ||
+      service.preview_status !== "ready" ||
       typeof window === "undefined" ||
       typeof window.open !== "function"
     ) {
@@ -190,29 +234,51 @@ function ServiceRow({
   }
 
   const previewStatusLabel = previewLabelFor(service);
-  const canOpenPreview = previewUrl !== null && service.preview_state === "ready";
+  const canOpenPreview = previewUrl !== null && service.preview_status === "ready";
 
   const [expanded, setExpanded] = useState(false);
 
+  const showPreviewLine =
+    service.preview_status !== "disabled" && service.exposure !== "internal";
+
   return (
-    <div>
-      <button
-        className="flex w-full items-center gap-3 rounded px-2 py-1.5 text-left transition-colors hover:bg-[var(--surface-hover)]"
+    <div className="group/row">
+      <div
+        role="button"
+        tabIndex={0}
+        className="flex w-full items-center gap-2.5 rounded px-2 py-2 text-left transition-colors hover:bg-[var(--surface-hover)] cursor-pointer"
         onClick={() => setExpanded(!expanded)}
-        type="button"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setExpanded(!expanded);
+          }
+        }}
       >
-        <StatusDot pulse={service.status === "starting"} size="sm" tone={tone} />
-        <span className="min-w-0 flex-1 truncate text-xs text-[var(--foreground)]">
-          {service.service_name}
+        <span className={`flex shrink-0 items-center justify-center ${iconClassName}`}>
+          {leftIcon}
         </span>
-        <Badge variant={previewVariant[service.preview_state]}>{previewStatusLabel}</Badge>
-        {service.effective_port !== null && (
-          <span className="font-mono text-[11px] text-[var(--muted-foreground)]">
-            :{service.effective_port}
-          </span>
-        )}
-        <Badge variant={variant}>{service.status}</Badge>
-      </button>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <span className="truncate text-[13px] font-medium text-[var(--foreground)]">
+              {service.service_name}
+            </span>
+            <span className="ml-auto shrink-0 text-[11px] text-[var(--muted-foreground)]">
+              {service.status}
+            </span>
+          </div>
+          {(showPreviewLine || service.effective_port !== null) && (
+            <div className="flex items-baseline gap-1.5 text-[11px] text-[var(--muted-foreground)]">
+              {service.effective_port !== null && (
+                <span className="font-mono">:{service.effective_port}</span>
+              )}
+              {showPreviewLine && service.effective_port !== null && <span>·</span>}
+              {showPreviewLine && <span>{previewStatusLabel}</span>}
+            </div>
+          )}
+        </div>
+        <ServiceActionIcon service={service} onOpen={handleOpenPreview} />
+      </div>
 
       {service.status_reason && (
         <p className="px-2 pl-7 text-[11px] text-[var(--destructive)]">{service.status_reason}</p>
@@ -262,7 +328,12 @@ function ServiceRow({
               >
                 {isSaving ? "Saving..." : "Save"}
               </Button>
-              <Button disabled={!isDirty || isSaving} onClick={handleReset} size="sm" variant="ghost">
+              <Button
+                disabled={!isDirty || isSaving}
+                onClick={handleReset}
+                size="sm"
+                variant="ghost"
+              >
                 Reset
               </Button>
             </div>

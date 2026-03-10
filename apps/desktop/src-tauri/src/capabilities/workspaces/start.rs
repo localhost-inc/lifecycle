@@ -4,7 +4,7 @@ use crate::platform::runtime::{health, setup, supervisor};
 use crate::shared::errors::{
     LifecycleError, ServiceStatus, WorkspaceFailureReason, WorkspaceStatus,
 };
-use crate::SupervisorMap;
+use crate::{ManagedSupervisor, SupervisorMap};
 use rusqlite::params;
 use tauri::{AppHandle, State};
 
@@ -118,10 +118,69 @@ fn config_with_workspace_overrides(
     Ok(next)
 }
 
+fn load_workspace_status(db_path: &str, workspace_id: &str) -> Result<WorkspaceStatus, LifecycleError> {
+    let conn = open_db(db_path)?;
+    let status = conn
+        .query_row(
+            "SELECT status FROM workspace WHERE id = ?1",
+            params![workspace_id],
+            |row| row.get::<_, String>(0),
+        )
+        .map_err(|error| match error {
+            rusqlite::Error::QueryReturnedNoRows => {
+                LifecycleError::WorkspaceNotFound(workspace_id.to_string())
+            }
+            _ => LifecycleError::Database(error.to_string()),
+        })?;
+
+    WorkspaceStatus::from_str(&status)
+}
+
+async fn stop_managed_supervisor(supervisor: &ManagedSupervisor) {
+    let mut supervisor = supervisor.lock().await;
+    supervisor.stop_all().await;
+}
+
+async fn abort_start_if_needed(
+    db_path: &str,
+    workspace_id: &str,
+    supervisor: &ManagedSupervisor,
+) -> Result<bool, LifecycleError> {
+    if load_workspace_status(db_path, workspace_id)? == WorkspaceStatus::Starting {
+        return Ok(false);
+    }
+
+    stop_managed_supervisor(supervisor).await;
+    Ok(true)
+}
+
+async fn record_start_failure(
+    app: &AppHandle,
+    db_path: &str,
+    workspace_id: &str,
+    supervisor: &ManagedSupervisor,
+    failure_reason: WorkspaceFailureReason,
+) -> Result<bool, LifecycleError> {
+    if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
+        return Ok(false);
+    }
+
+    update_workspace_status_db(db_path, workspace_id, &WorkspaceStatus::Idle, Some(&failure_reason))?;
+    emit_workspace_status(app, workspace_id, "idle", Some(failure_reason.as_str()));
+    stop_managed_supervisor(supervisor).await;
+
+    let stopped_services = mark_nonfailed_services_stopped(db_path, workspace_id)?;
+    for service_name in stopped_services {
+        emit_service_status(app, workspace_id, &service_name, "stopped", None);
+    }
+
+    Ok(true)
+}
+
 async fn start_services_lifecycle(
     app: &AppHandle,
     db_path: &str,
-    supervisors: &SupervisorMap,
+    supervisor: &ManagedSupervisor,
     workspace_id: &str,
     worktree_path: &str,
     config: &LifecycleConfig,
@@ -133,6 +192,9 @@ async fn start_services_lifecycle(
         Some(config),
         Some(manifest_fingerprint),
     )?;
+    if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
+        return Ok(());
+    }
     let runtime_config = config_with_workspace_overrides(db_path, workspace_id, config)?;
 
     // Setup runs exactly once per workspace creation.
@@ -157,14 +219,22 @@ async fn start_services_lifecycle(
         )
         .await
         {
-            update_workspace_status_db(
+            let recorded = record_start_failure(
+                app,
                 db_path,
                 workspace_id,
-                &WorkspaceStatus::Failed,
-                Some(&WorkspaceFailureReason::SetupStepFailed),
-            )?;
-            emit_workspace_status(app, workspace_id, "failed", Some("setup_step_failed"));
+                supervisor,
+                WorkspaceFailureReason::SetupStepFailed,
+            )
+            .await?;
+            if !recorded {
+                return Ok(());
+            }
             return Err(e);
+        }
+
+        if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
+            return Ok(());
         }
 
         let conn = open_db(db_path)?;
@@ -176,7 +246,6 @@ async fn start_services_lifecycle(
     }
 
     // Start services (topologically sorted)
-    let mut sup = supervisor::Supervisor::new();
     let sorted_services = match topo_sort_services(&runtime_config.services) {
         Ok(sorted) => sorted,
         Err(error) => {
@@ -198,36 +267,46 @@ async fn start_services_lifecycle(
                 );
             }
 
-            update_workspace_status_db(
+            let recorded = record_start_failure(
+                app,
                 db_path,
                 workspace_id,
-                &WorkspaceStatus::Failed,
-                Some(&WorkspaceFailureReason::ServiceStartFailed),
-            )?;
-            emit_workspace_status(app, workspace_id, "failed", Some("service_start_failed"));
-
-            // Store empty supervisor so the entry exists
-            let mut sups = supervisors.lock().await;
-            sups.insert(workspace_id.to_string(), sup);
+                supervisor,
+                WorkspaceFailureReason::ServiceStartFailed,
+            )
+            .await?;
+            if !recorded {
+                return Ok(());
+            }
 
             return Err(error);
         }
     };
 
     for (name, svc) in &sorted_services {
+        if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
+            return Ok(());
+        }
+
         update_service_status_db(db_path, workspace_id, name, &ServiceStatus::Starting, None)?;
         emit_service_status(app, workspace_id, name, "starting", None);
 
         let start_result = match svc {
             ServiceConfig::Process(process_svc) => {
-                sup.start_process(name, process_svc, worktree_path).await
+                let mut managed = supervisor.lock().await;
+                managed.start_process(name, process_svc, worktree_path).await
             }
             ServiceConfig::Image(image_svc) => {
-                sup.start_container(name, image_svc, workspace_id).await
+                let mut managed = supervisor.lock().await;
+                managed.start_container(name, image_svc, workspace_id).await
             }
         };
 
         if let Err(e) = start_result {
+            if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
+                return Ok(());
+            }
+
             let failed_service_name = service_name_for_start_error(&e, name);
             let service_status_reason = service_status_reason_for_start_error(&e);
             let workspace_failure_reason = workspace_failure_reason_for_start_error(&e);
@@ -247,27 +326,17 @@ async fn start_services_lifecycle(
                 Some(service_status_reason),
             );
 
-            update_workspace_status_db(
+            let recorded = record_start_failure(
+                app,
                 db_path,
                 workspace_id,
-                &WorkspaceStatus::Failed,
-                Some(&workspace_failure_reason),
-            )?;
-            emit_workspace_status(
-                app,
-                workspace_id,
-                "failed",
-                Some(workspace_failure_reason.as_str()),
-            );
-            sup.stop_all().await;
-            let stopped_services = mark_nonfailed_services_stopped(db_path, workspace_id)?;
-            for service_name in stopped_services {
-                emit_service_status(app, workspace_id, &service_name, "stopped", None);
+                supervisor,
+                workspace_failure_reason,
+            )
+            .await?;
+            if !recorded {
+                return Ok(());
             }
-
-            // Store supervisor even on failure
-            let mut sups = supervisors.lock().await;
-            sups.insert(workspace_id.to_string(), sup);
 
             return Err(e);
         }
@@ -276,7 +345,16 @@ async fn start_services_lifecycle(
         if svc.health_check().is_none() {
             if matches!(svc, ServiceConfig::Process(_)) {
                 tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-                if !sup.is_process_running(name) {
+                if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
+                    return Ok(());
+                }
+
+                let is_running = {
+                    let mut managed = supervisor.lock().await;
+                    managed.is_process_running(name)
+                };
+
+                if !is_running {
                     update_service_status_db(
                         db_path,
                         workspace_id,
@@ -291,27 +369,17 @@ async fn start_services_lifecycle(
                         "failed",
                         Some("service_process_exited"),
                     );
-                    update_workspace_status_db(
+                    let recorded = record_start_failure(
+                        app,
                         db_path,
                         workspace_id,
-                        &WorkspaceStatus::Failed,
-                        Some(&WorkspaceFailureReason::ServiceStartFailed),
-                    )?;
-                    emit_workspace_status(
-                        app,
-                        workspace_id,
-                        "failed",
-                        Some("service_start_failed"),
-                    );
-                    sup.stop_all().await;
-                    let stopped_services = mark_nonfailed_services_stopped(db_path, workspace_id)?;
-                    for service_name in stopped_services {
-                        emit_service_status(app, workspace_id, &service_name, "stopped", None);
+                        supervisor,
+                        WorkspaceFailureReason::ServiceStartFailed,
+                    )
+                    .await?;
+                    if !recorded {
+                        return Ok(());
                     }
-
-                    // Store supervisor even on failure
-                    let mut sups = supervisors.lock().await;
-                    sups.insert(workspace_id.to_string(), sup);
 
                     return Err(LifecycleError::ServiceStartFailed {
                         service: (*name).to_string(),
@@ -320,6 +388,9 @@ async fn start_services_lifecycle(
                 }
             }
 
+            if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
+                return Ok(());
+            }
             update_service_status_db(db_path, workspace_id, name, &ServiceStatus::Ready, None)?;
             emit_service_status(app, workspace_id, name, "ready", None);
         }
@@ -328,9 +399,15 @@ async fn start_services_lifecycle(
     // Run health checks
     for (name, svc) in &sorted_services {
         if let Some(hc) = svc.health_check() {
+            if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
+                return Ok(());
+            }
             let timeout_secs = svc.startup_timeout_seconds();
             match health::wait_for_health(hc, timeout_secs).await {
                 Ok(()) => {
+                    if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
+                        return Ok(());
+                    }
                     update_service_status_db(
                         db_path,
                         workspace_id,
@@ -341,6 +418,9 @@ async fn start_services_lifecycle(
                     emit_service_status(app, workspace_id, name, "ready", None);
                 }
                 Err(_) => {
+                    if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
+                        return Ok(());
+                    }
                     update_service_status_db(
                         db_path,
                         workspace_id,
@@ -355,27 +435,17 @@ async fn start_services_lifecycle(
                         "failed",
                         Some("service_port_unreachable"),
                     );
-                    update_workspace_status_db(
+                    let recorded = record_start_failure(
+                        app,
                         db_path,
                         workspace_id,
-                        &WorkspaceStatus::Failed,
-                        Some(&WorkspaceFailureReason::ServiceHealthcheckFailed),
-                    )?;
-                    emit_workspace_status(
-                        app,
-                        workspace_id,
-                        "failed",
-                        Some("service_healthcheck_failed"),
-                    );
-                    sup.stop_all().await;
-                    let stopped_services = mark_nonfailed_services_stopped(db_path, workspace_id)?;
-                    for service_name in stopped_services {
-                        emit_service_status(app, workspace_id, &service_name, "stopped", None);
+                        supervisor,
+                        WorkspaceFailureReason::ServiceHealthcheckFailed,
+                    )
+                    .await?;
+                    if !recorded {
+                        return Ok(());
                     }
-
-                    // Store supervisor even on failure
-                    let mut sups = supervisors.lock().await;
-                    sups.insert(workspace_id.to_string(), sup);
 
                     return Err(LifecycleError::ServiceHealthcheckFailed {
                         service: name.to_string(),
@@ -385,13 +455,13 @@ async fn start_services_lifecycle(
         }
     }
 
-    // All healthy → ready
-    update_workspace_status_db(db_path, workspace_id, &WorkspaceStatus::Ready, None)?;
-    emit_workspace_status(app, workspace_id, "ready", None);
+    if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
+        return Ok(());
+    }
 
-    // Store supervisor
-    let mut sups = supervisors.lock().await;
-    sups.insert(workspace_id.to_string(), sup);
+    // All healthy -> active.
+    update_workspace_status_db(db_path, workspace_id, &WorkspaceStatus::Active, None)?;
+    emit_workspace_status(app, workspace_id, "active", None);
 
     Ok(())
 }
@@ -430,14 +500,18 @@ pub async fn start_services(
     emit_workspace_status(&app, &workspace_id, "starting", None);
 
     let db = db_path.0.clone();
-    let sups = supervisors.inner().clone();
+    let supervisor = std::sync::Arc::new(tokio::sync::Mutex::new(supervisor::Supervisor::new()));
+    {
+        let mut supervisors = supervisors.lock().await;
+        supervisors.insert(workspace_id.clone(), supervisor.clone());
+    }
     let ws_id = workspace_id.clone();
 
     tokio::spawn(async move {
         if let Err(e) = start_services_lifecycle(
             &app,
             &db,
-            &sups,
+            &supervisor,
             &ws_id,
             &worktree_path,
             &config,
@@ -482,10 +556,7 @@ pub async fn sync_workspace_manifest(
     drop(conn);
 
     let workspace_status = WorkspaceStatus::from_str(&status)?;
-    if matches!(
-        workspace_status,
-        WorkspaceStatus::Sleeping | WorkspaceStatus::Failed
-    ) {
+    if workspace_status == WorkspaceStatus::Idle {
         reconcile_workspace_services_db(
             db_path,
             &workspace_id,

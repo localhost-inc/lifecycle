@@ -51,7 +51,7 @@ pub(super) fn update_workspace_status_db(
     let conn = open_db(db_path)?;
     let failure_str: Option<&str> = failure_reason.map(|r| r.as_str());
 
-    if *status == WorkspaceStatus::Failed {
+    if failure_reason.is_some() {
         conn.execute(
             "UPDATE workspace SET status = ?1, failure_reason = ?2, failed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?3",
             params![status.as_str(), failure_str, workspace_id],
@@ -89,7 +89,7 @@ pub(super) fn update_service_status_db(
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
-    let (preview_state, preview_failure_reason, preview_url) = preview_fields_for_service(
+    let (preview_status, preview_failure_reason, preview_url) = preview_fields_for_service(
         &exposure,
         effective_port,
         status.as_str(),
@@ -99,7 +99,7 @@ pub(super) fn update_service_status_db(
         "UPDATE workspace_service
          SET status = ?1,
              status_reason = ?2,
-             preview_state = ?3,
+             preview_status = ?3,
              preview_failure_reason = ?4,
              preview_url = ?5,
              updated_at = datetime('now')
@@ -107,7 +107,7 @@ pub(super) fn update_service_status_db(
         params![
             status.as_str(),
             reason,
-            preview_state,
+            preview_status,
             preview_failure_reason,
             preview_url,
             workspace_id,
@@ -126,7 +126,7 @@ fn local_preview_url(exposure: &str, effective_port: Option<i64>) -> Option<Stri
     }
 }
 
-fn preview_state_for_service(
+fn preview_status_for_service(
     exposure: &str,
     effective_port: Option<i64>,
     service_status: &str,
@@ -140,7 +140,10 @@ fn preview_state_for_service(
         return "failed";
     }
 
-    if *workspace_status == WorkspaceStatus::Sleeping {
+    if matches!(
+        workspace_status,
+        WorkspaceStatus::Idle | WorkspaceStatus::Stopping
+    ) {
         return "sleeping";
     }
 
@@ -149,10 +152,7 @@ fn preview_state_for_service(
     }
 
     if service_status == "starting"
-        || matches!(
-            workspace_status,
-            WorkspaceStatus::Creating | WorkspaceStatus::Starting | WorkspaceStatus::Resetting
-        )
+        || *workspace_status == WorkspaceStatus::Starting
     {
         return "provisioning";
     }
@@ -160,8 +160,8 @@ fn preview_state_for_service(
     "disabled"
 }
 
-fn preview_failure_reason_for_state(preview_state: &str) -> Option<&'static str> {
-    if preview_state == "failed" {
+fn preview_failure_reason_for_status(preview_status: &str) -> Option<&'static str> {
+    if preview_status == "failed" {
         Some("service_unreachable")
     } else {
         None
@@ -174,11 +174,11 @@ pub(super) fn preview_fields_for_service(
     service_status: &str,
     workspace_status: &WorkspaceStatus,
 ) -> (String, Option<String>, Option<String>) {
-    let preview_state =
-        preview_state_for_service(exposure, effective_port, service_status, workspace_status);
+    let preview_status =
+        preview_status_for_service(exposure, effective_port, service_status, workspace_status);
     (
-        preview_state.to_string(),
-        preview_failure_reason_for_state(preview_state).map(str::to_string),
+        preview_status.to_string(),
+        preview_failure_reason_for_status(preview_status).map(str::to_string),
         local_preview_url(exposure, effective_port),
     )
 }
@@ -213,7 +213,7 @@ fn refresh_workspace_preview_rows(
     drop(stmt);
 
     for (service_name, exposure, effective_port, service_status) in services {
-        let (preview_state, preview_failure_reason, preview_url) = preview_fields_for_service(
+        let (preview_status, preview_failure_reason, preview_url) = preview_fields_for_service(
             &exposure,
             effective_port,
             &service_status,
@@ -221,13 +221,13 @@ fn refresh_workspace_preview_rows(
         );
         conn.execute(
             "UPDATE workspace_service
-             SET preview_state = ?1,
+             SET preview_status = ?1,
                  preview_failure_reason = ?2,
                  preview_url = ?3,
                  updated_at = datetime('now')
              WHERE workspace_id = ?4 AND service_name = ?5",
             params![
-                preview_state,
+                preview_status,
                 preview_failure_reason,
                 preview_url,
                 workspace_id,
@@ -316,7 +316,7 @@ pub(super) fn reconcile_workspace_services_db(
                     .cloned()
                     .unwrap_or_else(|| ("local".to_string(), None));
                 let effective_port = port_override.or(default_port);
-                let (preview_state, preview_failure_reason, preview_url) =
+                let (preview_status, preview_failure_reason, preview_url) =
                     preview_fields_for_service(
                         &exposure,
                         effective_port,
@@ -331,7 +331,7 @@ pub(super) fn reconcile_workspace_services_db(
                              status_reason = NULL,
                              default_port = ?1,
                              effective_port = ?2,
-                             preview_state = ?3,
+                             preview_status = ?3,
                              preview_failure_reason = ?4,
                              preview_url = ?5,
                              updated_at = datetime('now')
@@ -339,7 +339,7 @@ pub(super) fn reconcile_workspace_services_db(
                         params![
                             default_port,
                             effective_port,
-                            preview_state,
+                            preview_status,
                             preview_failure_reason,
                             preview_url,
                             workspace_id,
@@ -349,7 +349,7 @@ pub(super) fn reconcile_workspace_services_db(
                     .map_err(|e| LifecycleError::Database(e.to_string()))?;
 
                 if updated == 0 {
-                    let (preview_state, preview_failure_reason, preview_url) =
+                    let (preview_status, preview_failure_reason, preview_url) =
                         preview_fields_for_service(
                             "local",
                             effective_port,
@@ -359,7 +359,7 @@ pub(super) fn reconcile_workspace_services_db(
                     tx.execute(
                         "INSERT INTO workspace_service (
                             id, workspace_id, service_name, exposure, status, default_port,
-                            effective_port, preview_state, preview_failure_reason, preview_url
+                            effective_port, preview_status, preview_failure_reason, preview_url
                          ) VALUES (?1, ?2, ?3, 'local', 'stopped', ?4, ?5, ?6, ?7, ?8)",
                         params![
                             uuid::Uuid::new_v4().to_string(),
@@ -367,7 +367,7 @@ pub(super) fn reconcile_workspace_services_db(
                             service_name,
                             default_port,
                             effective_port,
-                            preview_state,
+                            preview_status,
                             preview_failure_reason,
                             preview_url,
                         ],
@@ -630,7 +630,7 @@ mod tests {
                 status_reason TEXT,
                 default_port INTEGER,
                 effective_port INTEGER,
-                preview_state TEXT NOT NULL DEFAULT 'disabled',
+                preview_status TEXT NOT NULL DEFAULT 'disabled',
                 preview_failure_reason TEXT,
                 preview_url TEXT,
                 created_at TEXT,
@@ -680,13 +680,13 @@ mod tests {
         let conn = open_db(&db_path).expect("open db");
         conn.execute(
             "INSERT INTO workspace (id, status, failure_reason, failed_at, updated_at) VALUES (?1, ?2, ?3, ?4, datetime('now'))",
-            rusqlite::params!["ws_1", "sleeping", "service_start_failed", "2026-03-04T00:00:00Z"],
+            rusqlite::params!["ws_1", "idle", "service_start_failed", "2026-03-04T00:00:00Z"],
         )
         .expect("insert workspace");
         conn.execute(
             "INSERT INTO workspace_service (
                 id, workspace_id, service_name, exposure, status, default_port, effective_port,
-                preview_state, preview_url, created_at, updated_at
+                preview_status, preview_url, created_at, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'), datetime('now'))",
             rusqlite::params![
                 "svc_ws_1",
@@ -716,14 +716,14 @@ mod tests {
         assert_eq!(status, "starting");
         assert!(failure_reason.is_none());
         assert!(failed_at.is_none());
-        let preview_state: String = conn
+        let preview_status: String = conn
             .query_row(
-                "SELECT preview_state FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+                "SELECT preview_status FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
                 rusqlite::params!["ws_1", "web"],
                 |row| row.get(0),
             )
-            .expect("query preview state");
-        assert_eq!(preview_state, "provisioning");
+            .expect("query preview status");
+        assert_eq!(preview_status, "provisioning");
 
         drop(conn);
         let _ = std::fs::remove_file(db_path);
@@ -762,13 +762,13 @@ mod tests {
         let conn = open_db(&db_path).expect("open db");
         conn.execute(
             "INSERT INTO workspace (id, status, updated_at) VALUES (?1, ?2, datetime('now'))",
-            rusqlite::params!["ws_3", "failed"],
+            rusqlite::params!["ws_3", "idle"],
         )
         .expect("insert workspace");
         conn.execute(
             "INSERT INTO workspace_service (
                 id, workspace_id, service_name, status, status_reason, effective_port,
-                preview_state, preview_url, updated_at
+                preview_status, preview_url, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))",
             rusqlite::params![
                 "svc_1",
@@ -785,7 +785,7 @@ mod tests {
         conn.execute(
             "INSERT INTO workspace_service (
                 id, workspace_id, service_name, status, status_reason, effective_port,
-                preview_state, preview_failure_reason, preview_url, updated_at
+                preview_status, preview_failure_reason, preview_url, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'))",
             rusqlite::params![
                 "svc_2",
@@ -803,7 +803,7 @@ mod tests {
         conn.execute(
             "INSERT INTO workspace_service (
                 id, workspace_id, service_name, status, status_reason, effective_port,
-                preview_state, preview_url, updated_at
+                preview_status, preview_url, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))",
             rusqlite::params![
                 "svc_3",
@@ -827,7 +827,7 @@ mod tests {
             let conn = open_db(&db_path).expect("re-open db");
             let mut stmt = conn
                 .prepare(
-                    "SELECT service_name, status, status_reason, preview_state, preview_failure_reason
+                    "SELECT service_name, status, status_reason, preview_status, preview_failure_reason
                      FROM workspace_service
                      WHERE workspace_id = ?1
                      ORDER BY service_name",
@@ -857,7 +857,7 @@ mod tests {
                     "api".to_string(),
                     "stopped".to_string(),
                     None,
-                    "disabled".to_string(),
+                    "sleeping".to_string(),
                     None,
                 ),
                 (
@@ -871,7 +871,7 @@ mod tests {
                     "worker".to_string(),
                     "stopped".to_string(),
                     None,
-                    "disabled".to_string(),
+                    "sleeping".to_string(),
                     None,
                 ),
             ]
@@ -888,13 +888,13 @@ mod tests {
         let conn = open_db(&db_path).expect("open db");
         conn.execute(
             "INSERT INTO workspace (id, status, updated_at) VALUES (?1, ?2, datetime('now'))",
-            rusqlite::params!["ws_seed", "sleeping"],
+            rusqlite::params!["ws_seed", "idle"],
         )
         .expect("insert workspace");
         conn.execute(
             "INSERT INTO workspace_service (
                 id, workspace_id, service_name, exposure, port_override, status, status_reason,
-                default_port, effective_port, preview_state, created_at, updated_at
+                default_port, effective_port, preview_status, created_at, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, datetime('now'), datetime('now'))",
             rusqlite::params![
                 "svc_old",
@@ -939,7 +939,7 @@ mod tests {
 
         let mut stmt = conn
             .prepare(
-                "SELECT service_name, exposure, port_override, status, status_reason, default_port, effective_port, preview_state, preview_failure_reason, preview_url
+                "SELECT service_name, exposure, port_override, status, status_reason, default_port, effective_port, preview_status, preview_failure_reason, preview_url
                  FROM workspace_service
                  WHERE workspace_id = ?1
                  ORDER BY service_name",

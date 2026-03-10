@@ -6,30 +6,16 @@ pub fn validate_workspace_transition(
 ) -> Result<(), LifecycleError> {
     let allowed = matches!(
         (from, to),
-        // creating -> sleeping | starting | failed
-        (WorkspaceStatus::Creating, WorkspaceStatus::Sleeping)
-            | (WorkspaceStatus::Creating, WorkspaceStatus::Starting)
-            | (WorkspaceStatus::Creating, WorkspaceStatus::Failed)
-            // starting -> ready | failed
-            | (WorkspaceStatus::Starting, WorkspaceStatus::Ready)
-            | (WorkspaceStatus::Starting, WorkspaceStatus::Failed)
-            // ready -> starting | resetting | sleeping | destroying | failed
-            | (WorkspaceStatus::Ready, WorkspaceStatus::Starting)
-            | (WorkspaceStatus::Ready, WorkspaceStatus::Resetting)
-            | (WorkspaceStatus::Ready, WorkspaceStatus::Sleeping)
-            | (WorkspaceStatus::Ready, WorkspaceStatus::Destroying)
-            | (WorkspaceStatus::Ready, WorkspaceStatus::Failed)
-            // resetting -> starting | failed
-            | (WorkspaceStatus::Resetting, WorkspaceStatus::Starting)
-            | (WorkspaceStatus::Resetting, WorkspaceStatus::Failed)
-            // sleeping -> starting | destroying | failed
-            | (WorkspaceStatus::Sleeping, WorkspaceStatus::Starting)
-            | (WorkspaceStatus::Sleeping, WorkspaceStatus::Destroying)
-            | (WorkspaceStatus::Sleeping, WorkspaceStatus::Failed)
-            // failed -> starting | resetting | destroying
-            | (WorkspaceStatus::Failed, WorkspaceStatus::Starting)
-            | (WorkspaceStatus::Failed, WorkspaceStatus::Resetting)
-            | (WorkspaceStatus::Failed, WorkspaceStatus::Destroying)
+        // idle -> starting
+        (WorkspaceStatus::Idle, WorkspaceStatus::Starting)
+            // starting -> active | stopping | idle
+            | (WorkspaceStatus::Starting, WorkspaceStatus::Active)
+            | (WorkspaceStatus::Starting, WorkspaceStatus::Stopping)
+            | (WorkspaceStatus::Starting, WorkspaceStatus::Idle)
+            // active -> stopping
+            | (WorkspaceStatus::Active, WorkspaceStatus::Stopping)
+            // stopping -> idle
+            | (WorkspaceStatus::Stopping, WorkspaceStatus::Idle)
     );
 
     if allowed {
@@ -49,24 +35,12 @@ mod tests {
     #[test]
     fn valid_transitions() {
         let cases = vec![
-            (WorkspaceStatus::Creating, WorkspaceStatus::Sleeping),
-            (WorkspaceStatus::Creating, WorkspaceStatus::Starting),
-            (WorkspaceStatus::Creating, WorkspaceStatus::Failed),
-            (WorkspaceStatus::Starting, WorkspaceStatus::Ready),
-            (WorkspaceStatus::Starting, WorkspaceStatus::Failed),
-            (WorkspaceStatus::Ready, WorkspaceStatus::Starting),
-            (WorkspaceStatus::Ready, WorkspaceStatus::Resetting),
-            (WorkspaceStatus::Ready, WorkspaceStatus::Sleeping),
-            (WorkspaceStatus::Ready, WorkspaceStatus::Destroying),
-            (WorkspaceStatus::Ready, WorkspaceStatus::Failed),
-            (WorkspaceStatus::Resetting, WorkspaceStatus::Starting),
-            (WorkspaceStatus::Resetting, WorkspaceStatus::Failed),
-            (WorkspaceStatus::Sleeping, WorkspaceStatus::Starting),
-            (WorkspaceStatus::Sleeping, WorkspaceStatus::Destroying),
-            (WorkspaceStatus::Sleeping, WorkspaceStatus::Failed),
-            (WorkspaceStatus::Failed, WorkspaceStatus::Starting),
-            (WorkspaceStatus::Failed, WorkspaceStatus::Resetting),
-            (WorkspaceStatus::Failed, WorkspaceStatus::Destroying),
+            (WorkspaceStatus::Idle, WorkspaceStatus::Starting),
+            (WorkspaceStatus::Starting, WorkspaceStatus::Active),
+            (WorkspaceStatus::Starting, WorkspaceStatus::Stopping),
+            (WorkspaceStatus::Starting, WorkspaceStatus::Idle),
+            (WorkspaceStatus::Active, WorkspaceStatus::Stopping),
+            (WorkspaceStatus::Stopping, WorkspaceStatus::Idle),
         ];
 
         for (from, to) in cases {
@@ -80,19 +54,13 @@ mod tests {
     #[test]
     fn invalid_transitions() {
         let cases = vec![
-            (WorkspaceStatus::Creating, WorkspaceStatus::Ready),
-            (WorkspaceStatus::Creating, WorkspaceStatus::Destroying),
-            (WorkspaceStatus::Starting, WorkspaceStatus::Creating),
-            (WorkspaceStatus::Starting, WorkspaceStatus::Sleeping),
-            (WorkspaceStatus::Ready, WorkspaceStatus::Creating),
-            (WorkspaceStatus::Resetting, WorkspaceStatus::Ready),
-            (WorkspaceStatus::Sleeping, WorkspaceStatus::Ready),
-            (WorkspaceStatus::Sleeping, WorkspaceStatus::Resetting),
-            (WorkspaceStatus::Failed, WorkspaceStatus::Ready),
-            (WorkspaceStatus::Failed, WorkspaceStatus::Sleeping),
-            (WorkspaceStatus::Failed, WorkspaceStatus::Creating),
-            (WorkspaceStatus::Destroying, WorkspaceStatus::Ready),
-            (WorkspaceStatus::Destroying, WorkspaceStatus::Failed),
+            (WorkspaceStatus::Idle, WorkspaceStatus::Active),
+            (WorkspaceStatus::Idle, WorkspaceStatus::Stopping),
+            (WorkspaceStatus::Starting, WorkspaceStatus::Starting),
+            (WorkspaceStatus::Active, WorkspaceStatus::Active),
+            (WorkspaceStatus::Active, WorkspaceStatus::Starting),
+            (WorkspaceStatus::Stopping, WorkspaceStatus::Starting),
+            (WorkspaceStatus::Stopping, WorkspaceStatus::Active),
         ];
 
         for (from, to) in cases {

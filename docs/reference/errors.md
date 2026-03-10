@@ -37,6 +37,8 @@ All non-2xx responses include: `code`, `message`, `details`, `request_id`, `sugg
 
 `capacity_unavailable`, `manifest_invalid`, `manifest_secret_unresolved`, `repo_clone_failed`, `repository_disconnected`, `setup_step_failed`, `service_start_failed`, `service_healthcheck_failed`, `sandbox_unreachable`, `local_docker_unavailable`, `local_port_conflict`, `local_app_not_running`, `operation_timeout`, `unknown`
 
+Failed start attempts return the environment to `workspace.status = idle`; the last failure remains visible through `workspace.failure_reason` and `workspace.failed_at`.
+
 ### `workspace_service.status_reason`
 
 `service_process_exited`, `service_dependency_failed`, `service_port_unreachable`, `unknown`
@@ -52,8 +54,8 @@ All non-2xx responses include: `code`, `message`, `details`, `request_id`, `sugg
 ## Mutation Concurrency
 
 1. Workspace environment status is the concurrency lock:
-   - transitional environment states (`creating`, `starting`, `resetting`, `sleeping`, `destroying`) reject new mutations with `workspace_mutation_locked` error
-   - only `ready`, `sleeping`, and `failed` states accept mutation requests
+   - transitional environment states (`starting`, `stopping`) reject new mutations with `workspace_mutation_locked` error
+   - only `idle` and `active` states accept mutation requests
    - V1 still stores that environment status on `workspace.status`
 2. Concurrency guardrails:
    - Convex OCC handles serialization natively — mutations on the same document are serialized automatically

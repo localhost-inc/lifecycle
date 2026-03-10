@@ -9,15 +9,15 @@ const SetupStepSchema = z.object({
   env_vars: z.record(z.string(), z.string()).optional(),
 });
 
-const HealthCheckSchema = z.discriminatedUnion("type", [
+const HealthCheckSchema = z.discriminatedUnion("kind", [
   z.object({
-    type: z.literal("tcp"),
+    kind: z.literal("tcp"),
     host: z.string(),
     port: z.number().int().positive(),
     timeout_seconds: z.number().int().positive(),
   }),
   z.object({
-    type: z.literal("http"),
+    kind: z.literal("http"),
     url: z.string(),
     timeout_seconds: z.number().int().positive(),
   }),

@@ -2,10 +2,10 @@ export type { ServiceRecord, TerminalRecord, WorkspaceRecord } from "./db";
 export type { ErrorEnvelope } from "./errors";
 export type {
   LifecycleEvent,
+  LifecycleEventKind,
   LifecycleEventOf,
   LifecycleEventInput,
-  LifecycleEventType,
-  SetupStepEventType,
+  SetupStepEventKind,
 } from "./events";
 export type {
   GitBranchPullRequestResult,
@@ -39,7 +39,7 @@ export type {
   WorkspaceMode,
   WorkspaceServiceExposure,
   WorkspaceServicePreviewFailureReason,
-  WorkspaceServicePreviewState,
+  WorkspaceServicePreviewStatus,
   WorkspaceServiceStatus,
   WorkspaceServiceStatusReason,
   WorkspaceStatus,

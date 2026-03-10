@@ -11,7 +11,7 @@ const workspace = {
   git_sha: null,
   worktree_path: "/tmp/workspace_1",
   mode: "local" as const,
-  status: "ready" as const,
+  status: "active" as const,
   failure_reason: null,
   failed_at: null,
   created_by: null,
@@ -28,6 +28,7 @@ describe("WorkspaceTreeItem", () => {
       createElement(WorkspaceTreeItem, {
         workspace,
         selected: false,
+        onDestroy: () => {},
         onSelect: () => {},
       }),
     );
@@ -42,6 +43,7 @@ describe("WorkspaceTreeItem", () => {
         responseReady: true,
         workspace,
         selected: false,
+        onDestroy: () => {},
         onSelect: () => {},
       }),
     );
@@ -53,11 +55,27 @@ describe("WorkspaceTreeItem", () => {
     expect(markup).toContain("lifecycle-motion-soft-pulse");
   });
 
+  test("renders a running spinner in the workspace row", () => {
+    const markup = renderToStaticMarkup(
+      createElement(WorkspaceTreeItem, {
+        running: true,
+        workspace,
+        selected: false,
+        onDestroy: () => {},
+        onSelect: () => {},
+      }),
+    );
+
+    expect(markup).toContain('data-slot="spinner"');
+    expect(markup).toContain("text-[var(--sidebar-muted-foreground)]");
+  });
+
   test("uses the shared selected sidebar treatment", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceTreeItem, {
         workspace,
         selected: true,
+        onDestroy: () => {},
         onSelect: () => {},
       }),
     );
@@ -72,6 +90,7 @@ describe("WorkspaceTreeItem", () => {
       createElement(WorkspaceTreeItem, {
         workspace,
         selected: false,
+        onDestroy: () => {},
         onSelect: () => {},
       }),
     );
@@ -79,5 +98,25 @@ describe("WorkspaceTreeItem", () => {
     expect(markup).toContain("text-[var(--sidebar-foreground)]");
     expect(markup).toContain("hover:bg-[var(--sidebar-hover)]");
     expect(markup).toContain("text-[var(--sidebar-muted-foreground)]");
+  });
+
+  test("swaps the time label out for the archive action on hover", () => {
+    const markup = renderToStaticMarkup(
+      createElement(WorkspaceTreeItem, {
+        workspace,
+        selected: false,
+        onDestroy: () => {},
+        onSelect: () => {},
+      }),
+    );
+
+    expect(markup).toContain('title="Archive workspace"');
+    expect(markup).toContain("pointer-events-none");
+    expect(markup).toContain("group-hover/workspace-item:opacity-0");
+    expect(markup).toContain("group-hover/workspace-item:pointer-events-auto");
+    expect(markup).toContain("group-hover/workspace-item:opacity-100");
+    expect(markup).toContain("disabled:opacity-0");
+    expect(markup).toContain("group-hover/workspace-item:disabled:opacity-50");
+    expect(markup).not.toContain("group-focus-within/menu-item:opacity-100");
   });
 });
