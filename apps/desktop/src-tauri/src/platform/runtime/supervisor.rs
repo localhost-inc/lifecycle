@@ -43,6 +43,7 @@ impl Supervisor {
         service_name: &str,
         service: &ProcessService,
         worktree_path: &str,
+        runtime_env: &HashMap<String, String>,
     ) -> Result<(), LifecycleError> {
         let cwd = if let Some(ref svc_cwd) = service.cwd {
             format!("{}/{}", worktree_path, svc_cwd)
@@ -57,6 +58,9 @@ impl Supervisor {
             for (key, value) in env_vars {
                 cmd.env(key, value);
             }
+        }
+        for (key, value) in runtime_env {
+            cmd.env(key, value);
         }
 
         // Create new process group
@@ -114,14 +118,15 @@ impl Supervisor {
         let mut exposed_ports = HashMap::new();
         let mut port_bindings = HashMap::new();
 
-        if let Some(port) = service.port {
-            let container_port = format!("{}/tcp", port);
+        if let Some(container_port) = service.port {
+            let host_port = service.resolved_port.unwrap_or(container_port);
+            let container_port = format!("{}/tcp", container_port);
             exposed_ports.insert(container_port.clone(), HashMap::<(), ()>::new());
             port_bindings.insert(
                 container_port,
                 Some(vec![bollard::service::PortBinding {
                     host_ip: Some("127.0.0.1".to_string()),
-                    host_port: Some(port.to_string()),
+                    host_port: Some(host_port.to_string()),
                 }]),
             );
         }

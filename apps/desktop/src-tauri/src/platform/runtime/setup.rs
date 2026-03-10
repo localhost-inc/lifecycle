@@ -10,6 +10,7 @@ pub async fn run_setup_steps(
     workspace_id: &str,
     worktree_path: &str,
     steps: &[SetupStep],
+    runtime_env: &std::collections::HashMap<String, String>,
 ) -> Result<(), LifecycleError> {
     for step in steps {
         let cwd = if let Some(ref step_cwd) = step.cwd {
@@ -36,6 +37,9 @@ pub async fn run_setup_steps(
             for (key, value) in env_vars {
                 cmd.env(key, value);
             }
+        }
+        for (key, value) in runtime_env {
+            cmd.env(key, value);
         }
 
         cmd.stdout(std::process::Stdio::piped());

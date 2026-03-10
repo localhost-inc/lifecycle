@@ -109,3 +109,63 @@ Workspace lifecycle is about the durable shell, not whether services are current
 ## Enforcement
 
 Everything not listed above is forbidden and must throw `invalid_state_transition` error with `machine`, `from_state`, `to_state`, and `cause`.
+
+## Workspace Git Action State
+
+Workspace Git actions use a derived state machine rather than imperative transition commands. The machine is computed from:
+
+1. `GitStatusResult`
+2. current-branch pull request context
+3. query loading state for the current branch
+
+This derived state powers the workspace Git split button and any future workspace-scoped Git action surfaces.
+
+### Workspace Git Action States
+
+- `loading`
+- `provider_unavailable`
+- `detached`
+- `needs_stage`
+- `needs_commit`
+- `needs_push`
+- `blocked_behind`
+- `blocked_diverged`
+- `ready_to_create_pull_request`
+- `view_pull_request`
+- `ready_to_merge`
+
+### Workspace Git Action Derivation Order
+
+1. `loading`
+   - use when the current branch is known to be clean/synced enough for PR actions, but the current-branch PR context is still loading
+2. `provider_unavailable`
+   - use when PR support reports unavailable either before branch resolution or after the branch is clean and synced
+3. `detached`
+   - use when no current branch is checked out
+4. `needs_stage`
+   - use when local changes exist but none are staged
+5. `needs_commit`
+   - use when staged changes exist
+6. `needs_push`
+   - use when the branch has no upstream yet or local commits are ahead of upstream
+7. `blocked_behind`
+   - use when the branch is behind its upstream
+8. `blocked_diverged`
+   - use when the branch is both ahead of and behind its upstream
+9. `ready_to_create_pull_request`
+   - use when the branch is clean, synced, pushed, PR support is available, and no open PR exists for the branch
+10. `ready_to_merge`
+   - use when the branch has an open non-draft PR that is currently mergeable
+11. `view_pull_request`
+   - use when the branch has an open PR that should be reviewed/opened rather than merged directly
+
+### Workspace Git Action Invariants
+
+1. Local composition work takes precedence over PR work:
+   - `needs_stage` and `needs_commit` suppress push/create/merge PR primary actions
+2. Remote sync blockers take precedence over PR work on clean branches:
+   - `blocked_behind` and `blocked_diverged` must suppress push/create/merge PR primary actions
+3. `commit_and_push` is only valid when the branch exists and remote sync is not blocked by `behind` or `diverged`
+4. Clean synced branches must not surface PR actions until current-branch PR support/state is known
+5. Pull request actions are branch-scoped:
+   - they derive from the current branch's open PR, not the repository-wide PR list

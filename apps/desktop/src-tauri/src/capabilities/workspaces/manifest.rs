@@ -14,6 +14,7 @@ pub struct LifecycleConfig {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct SetupConfig {
+    pub services: Option<Vec<String>>,
     pub steps: Vec<SetupStep>,
 }
 
@@ -24,6 +25,7 @@ pub struct SetupStep {
     pub timeout_seconds: u64,
     pub cwd: Option<String>,
     pub env_vars: Option<HashMap<String, String>>,
+    pub run_on: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -65,6 +67,13 @@ impl ServiceConfig {
         }
     }
 
+    pub fn share_default(&self) -> bool {
+        match self {
+            Self::Process(s) => s.share_default.unwrap_or(false),
+            Self::Image(s) => s.share_default.unwrap_or(false),
+        }
+    }
+
     pub fn startup_timeout_seconds(&self) -> u64 {
         match self {
             Self::Process(s) => s.startup_timeout_seconds.unwrap_or(60),
@@ -84,6 +93,8 @@ pub struct ProcessService {
     pub health_check: Option<HealthCheck>,
     pub port: Option<u16>,
     pub share_default: Option<bool>,
+    #[serde(skip)]
+    pub resolved_port: Option<u16>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -98,6 +109,8 @@ pub struct ImageService {
     pub health_check: Option<HealthCheck>,
     pub port: Option<u16>,
     pub share_default: Option<bool>,
+    #[serde(skip)]
+    pub resolved_port: Option<u16>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -165,8 +178,10 @@ mod tests {
         }"#;
 
         let config: LifecycleConfig = serde_json::from_str(json).unwrap();
+        assert!(config.setup.services.is_none());
         assert_eq!(config.setup.steps.len(), 1);
         assert_eq!(config.setup.steps[0].name, "install");
+        assert!(config.setup.steps[0].run_on.is_none());
         assert!(matches!(
             config.services.get("api").unwrap(),
             ServiceConfig::Process(_)
@@ -207,8 +222,9 @@ mod tests {
     fn parse_mixed_services() {
         let json = r#"{
             "setup": {
+                "services": ["db"],
                 "steps": [
-                    { "name": "install", "command": "bun install", "timeout_seconds": 120 }
+                    { "name": "install", "command": "bun install", "timeout_seconds": 120, "run_on": "start" }
                 ]
             },
             "services": {
@@ -228,6 +244,8 @@ mod tests {
 
         let config: LifecycleConfig = serde_json::from_str(json).unwrap();
         assert_eq!(config.services.len(), 2);
+        assert_eq!(config.setup.services, Some(vec!["db".to_string()]));
+        assert_eq!(config.setup.steps[0].run_on.as_deref(), Some("start"));
         let api = config.services.get("api").unwrap();
         assert_eq!(api.depends_on(), &["db"]);
     }

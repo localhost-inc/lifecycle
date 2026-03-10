@@ -147,7 +147,10 @@ mod tests {
 
     fn temp_db_path() -> String {
         std::env::temp_dir()
-            .join(format!("lifecycle-destroy-workspace-{}.db", uuid::Uuid::new_v4()))
+            .join(format!(
+                "lifecycle-destroy-workspace-{}.db",
+                uuid::Uuid::new_v4()
+            ))
             .to_string_lossy()
             .into_owned()
     }

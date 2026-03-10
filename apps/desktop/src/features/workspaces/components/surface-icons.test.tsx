@@ -10,7 +10,7 @@ import {
 import { WorkspaceSurfaceTabLeading } from "./surface-icons";
 
 describe("WorkspaceSurfaceTabLeading", () => {
-  test("renders provider iconography and runtime badges for harness tabs", () => {
+  test("renders provider iconography and ready state for harness tabs", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceSurfaceTabLeading, {
         tab: {
@@ -30,10 +30,10 @@ describe("WorkspaceSurfaceTabLeading", () => {
     expect(markup).toContain('data-surface-tab-icon="claude"');
     expect(markup).toContain('data-slot="spinner"');
     expect(markup).toContain('title="Response ready"');
-    expect(markup).toContain('title="active"');
+    expect(markup).not.toContain('title="active"');
   });
 
-  test("omits the spinner for inactive terminal tabs", () => {
+  test("omits the spinner and status dot for inactive terminal tabs", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceSurfaceTabLeading, {
         tab: {
@@ -51,7 +51,7 @@ describe("WorkspaceSurfaceTabLeading", () => {
     );
 
     expect(markup).not.toContain('data-slot="spinner"');
-    expect(markup).toContain('title="detached"');
+    expect(markup).not.toContain('title="detached"');
   });
 
   test("renders distinct visuals for launcher and diff surfaces", () => {

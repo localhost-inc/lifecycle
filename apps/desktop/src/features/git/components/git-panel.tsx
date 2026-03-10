@@ -148,7 +148,7 @@ export function GitPanel({
               gitStatus={gitStatusQuery.data ?? null}
               isCommitting={isCommitting}
               isCreatingPullRequest={isCreatingPullRequest}
-              isLoading={currentPullRequestQuery.isLoading}
+              isLoading={gitStatusQuery.isLoading || currentPullRequestQuery.isLoading}
               isMergingPullRequest={isMergingPullRequest}
               isPushingBranch={isPushingBranch}
               onCommit={handleCommit}

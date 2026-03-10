@@ -94,8 +94,14 @@ pub async fn destroy_workspace(
     terminal_supervisors: State<'_, TerminalSupervisorMap>,
     workspace_id: String,
 ) -> Result<(), LifecycleError> {
-    super::destroy::destroy_workspace(app, db_path, supervisors, terminal_supervisors, workspace_id)
-        .await
+    super::destroy::destroy_workspace(
+        app,
+        db_path,
+        supervisors,
+        terminal_supervisors,
+        workspace_id,
+    )
+    .await
 }
 
 #[tauri::command]

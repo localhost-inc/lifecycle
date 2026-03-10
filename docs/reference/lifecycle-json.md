@@ -8,6 +8,7 @@ Canonical specification for the `lifecycle.json` project runtime configuration f
    - project file `lifecycle.json` (JSONC — JSON with comments)
    - parsed with a JSONC-aware parser; comments and trailing commas are permitted
    - a published JSON Schema provides editor autocomplete and inline validation
+   - target runtime direction beyond this V1 split is captured in [workspace-graph-runtime.md](./workspace-graph-runtime.md)
 2. Required top-level fields:
    - `setup`, `services`
    - optional: `secrets`, `reset`, `mcps`
@@ -15,10 +16,16 @@ Canonical specification for the `lifecycle.json` project runtime configuration f
 
 ## `setup` Contract
 
-- List of deterministic steps (`name`, `command`, `timeout_seconds`, optional `cwd`, optional `env_vars`)
-- Executed exactly once when a new workspace is created
+- Optional `services` list starts those named services, plus their transitive `depends_on` chain, before setup steps run
+- List of deterministic steps (`name`, `command`, `timeout_seconds`, optional `cwd`, optional `env_vars`, optional `run_on`)
+- `run_on` defaults to `create`
+- `run_on=create` steps run on the first successful workspace start only
+- `run_on=start` steps run on every workspace start after any `setup.services` infra is ready
 - Examples: dependency install, schema/bootstrap, fixture preload
 - Setup must not write plaintext secrets to disk (for example `.env` copies with real values)
+- Lifecycle injects reserved discovery env vars into setup steps and process services:
+  - `LIFECYCLE_WORKSPACE_ID`, `LIFECYCLE_WORKSPACE_NAME`, `LIFECYCLE_WORKSPACE_SOURCE_REF`, `LIFECYCLE_WORKSPACE_PATH`, `LIFECYCLE_WORKSPACE_SLUG`
+  - `LIFECYCLE_SERVICE_<SERVICE_NAME>_HOST`, `..._PORT`, and `..._ADDRESS` for every declared service with an assigned local port
 
 ## `services` Contract
 
@@ -26,8 +33,8 @@ Canonical specification for the `lifecycle.json` project runtime configuration f
 - `process` runtime required field: `command`
 - `image` runtime required field: `image`; optional `command`, `args`
 - Shared optional fields: `cwd` (process only), `env_vars`, `depends_on`, `restart_policy`, `startup_timeout_seconds`, `health_check`, `port`, `share_default`
-- `port` is the service's default externally routable port for preview/share behavior
-- `share_default` (`true|false`) controls default `workspace_service.exposure` on workspace create
+- `port` is the service's preferred/default local port; the local provider may assign a different stable host `effective_port` per workspace when the default would collide
+- `share_default` (`true|false`) controls default `workspace_service.exposure` on workspace create (`true -> local`, omitted/`false -> internal`)
 - Services are long-lived runtime processes; they are not one-shot setup commands
 
 ## `health_check` Contract (Service-Level)
@@ -71,11 +78,12 @@ Canonical specification for the `lifecycle.json` project runtime configuration f
 
 ```jsonc
 {
-  // One-time setup steps (run exactly once on workspace create)
+  // Setup infra plus create-time and every-start setup steps
   "setup": {
+    "services": ["postgres", "redis"],
     "steps": [
       { "name": "install", "command": "bun install --frozen-lockfile", "timeout_seconds": 300 },
-      { "name": "migrate", "command": "bun run db:migrate", "timeout_seconds": 120 },
+      { "name": "migrate", "command": "bun run db:migrate", "timeout_seconds": 120, "run_on": "start" },
     ],
   },
 

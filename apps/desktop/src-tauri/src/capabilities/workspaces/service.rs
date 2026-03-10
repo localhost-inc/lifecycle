@@ -1,4 +1,4 @@
-use super::shared::preview_fields_for_service;
+use super::shared::{preview_fields_for_service, resolve_effective_port};
 use crate::platform::db::open_db;
 use crate::shared::errors::{LifecycleError, WorkspaceStatus};
 use rusqlite::params;
@@ -63,11 +63,18 @@ pub async fn update_workspace_service(
         .and_then(|status| WorkspaceStatus::from_str(&status))?;
     validate_mutable_workspace_status(&workspace_status)?;
 
-    let (default_port, service_status) = tx
+    let (current_port_override, default_port, current_effective_port, service_status) = tx
         .query_row(
-            "SELECT default_port, status FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+            "SELECT port_override, default_port, effective_port, status FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
             params![&workspace_id, &service_name],
-            |row| Ok((row.get::<_, Option<i64>>(0)?, row.get::<_, String>(1)?)),
+            |row| {
+                Ok((
+                    row.get::<_, Option<i64>>(0)?,
+                    row.get::<_, Option<i64>>(1)?,
+                    row.get::<_, Option<i64>>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            },
         )
         .map_err(|error| match error {
             rusqlite::Error::QueryReturnedNoRows => LifecycleError::InvalidInput {
@@ -77,7 +84,18 @@ pub async fn update_workspace_service(
             _ => LifecycleError::Database(error.to_string()),
         })?;
 
-    let effective_port = port_override.or(default_port);
+    let effective_port = resolve_effective_port(
+        &tx,
+        &workspace_id,
+        &service_name,
+        default_port,
+        port_override,
+        if current_port_override.is_none() {
+            current_effective_port
+        } else {
+            None
+        },
+    )?;
     let (preview_status, preview_failure_reason, preview_url) = preview_fields_for_service(
         &exposure,
         effective_port,
@@ -127,6 +145,16 @@ mod tests {
         )
     }
 
+    fn unused_port() -> i64 {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("bind temporary port");
+        let port = listener
+            .local_addr()
+            .expect("port should have local addr")
+            .port();
+        drop(listener);
+        i64::from(port)
+    }
+
     fn init_workspace_tables(db_path: &str) {
         let conn = open_db(db_path).expect("open db");
         conn.execute_batch(
@@ -158,6 +186,8 @@ mod tests {
     async fn update_workspace_service_updates_effective_port_and_preview_url() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
+        let default_port = unused_port();
+        let override_port = unused_port();
 
         let conn = open_db(&db_path).expect("open db");
         conn.execute(
@@ -176,9 +206,9 @@ mod tests {
                 "local",
                 Option::<i64>::None,
                 "stopped",
-                Some(3000_i64),
-                Some(3000_i64),
-                Some("http://localhost:3000"),
+                Some(default_port),
+                Some(default_port),
+                Some(format!("http://localhost:{default_port}")),
             ],
         )
         .expect("insert service");
@@ -189,7 +219,7 @@ mod tests {
             "ws_1".to_string(),
             "web".to_string(),
             "internal".to_string(),
-            Some(4310),
+            Some(override_port),
         )
         .await
         .expect("update service");
@@ -216,8 +246,8 @@ mod tests {
             row,
             (
                 "internal".to_string(),
-                Some(4310),
-                Some(4310),
+                Some(override_port),
+                Some(override_port),
                 "disabled".to_string(),
                 Option::<String>::None,
                 Option::<String>::None,
@@ -231,6 +261,8 @@ mod tests {
     async fn update_workspace_service_restores_manifest_port_when_override_is_cleared() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
+        let default_port = unused_port();
+        let override_port = unused_port();
 
         let conn = open_db(&db_path).expect("open db");
         conn.execute(
@@ -247,11 +279,11 @@ mod tests {
                 "ws_2",
                 "api",
                 "local",
-                Some(4310_i64),
+                Some(override_port),
                 "failed",
-                Some(3000_i64),
-                Some(4310_i64),
-                Some("http://localhost:4310"),
+                Some(default_port),
+                Some(override_port),
+                Some(format!("http://localhost:{override_port}")),
             ],
         )
         .expect("insert service");
@@ -290,10 +322,10 @@ mod tests {
             (
                 "local".to_string(),
                 Option::<i64>::None,
-                Some(3000),
+                Some(default_port),
                 "failed".to_string(),
                 Some("service_unreachable".to_string()),
-                Some("http://localhost:3000".to_string()),
+                Some(format!("http://localhost:{default_port}")),
             ),
         );
 

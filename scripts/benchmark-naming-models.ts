@@ -70,6 +70,7 @@ const TASKS: readonly BenchmarkTask[] = [
     id: "terminal-title",
     prompt: `Return JSON only.
 Create a concise 2-4 word terminal session title for this coding task.
+Use plain sentence case text. Capitalize only the first word unless a later word is an acronym or proper noun.
 Task: ${DEFAULT_PROMPT}`,
     schema: TERMINAL_TITLE_SCHEMA,
   },
@@ -79,7 +80,7 @@ Task: ${DEFAULT_PROMPT}`,
 Create concise names for a coding workspace from the user's first task prompt.
 - workspace_title: 2-4 word durable workspace/worktree/branch identity.
 - session_title: 2-4 word terminal session tab title.
-Use plain title case text.
+Use plain sentence case text. Capitalize only the first word unless a later word is an acronym or proper noun.
 Task: ${DEFAULT_PROMPT}`,
     schema: WORKSPACE_IDENTITY_SCHEMA,
   },

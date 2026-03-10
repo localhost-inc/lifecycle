@@ -68,7 +68,7 @@ pub(super) async fn generate_identity_titles(
 }
 
 pub(super) fn fallback_terminal_title(prompt: &str) -> String {
-    title_case_title(&truncate_title(prompt, 48))
+    sentence_case_title(&truncate_title(prompt, 48))
 }
 
 pub(super) fn prompt_preview(prompt: &str) -> String {
@@ -279,25 +279,26 @@ fn schema_payload<'a>(value: &'a Value) -> &'a Value {
 
 fn terminal_title_prompt(prompt: &str) -> String {
     format!(
-        "Return JSON only.\nCreate a concise 2-4 word terminal session title for this coding task.\nUse plain title case text.\nTask: {prompt}"
+        "Return JSON only.\nCreate a concise 2-4 word terminal session title for this coding task.\nUse plain sentence case text. Capitalize only the first word unless a later word is an acronym or proper noun.\nTask: {prompt}"
     )
 }
 
 fn workspace_identity_prompt(prompt: &str) -> String {
     format!(
-        "Return JSON only.\nCreate concise names for a coding workspace from the user's first task prompt.\n- workspace_title: 2-4 word durable workspace/worktree/branch identity.\n- session_title: 2-4 word terminal session tab title.\nUse plain title case text.\nTask: {prompt}"
+        "Return JSON only.\nCreate concise names for a coding workspace from the user's first task prompt.\n- workspace_title: 2-4 word durable workspace/worktree/branch identity.\n- session_title: 2-4 word terminal session tab title.\nUse plain sentence case text. Capitalize only the first word unless a later word is an acronym or proper noun.\nTask: {prompt}"
     )
 }
 
 fn sanitize_generated_title(value: &str) -> String {
     let trimmed = value.trim().trim_matches('"').trim_matches('\'');
     let collapsed = trimmed.split_whitespace().collect::<Vec<_>>().join(" ");
-    title_case_title(&collapsed).chars().take(48).collect()
+    sentence_case_title(&collapsed).chars().take(48).collect()
 }
 
-fn title_case_title(value: &str) -> String {
+fn sentence_case_title(value: &str) -> String {
     let mut titled = String::with_capacity(value.len());
     let mut segment = String::new();
+    let mut saw_segment = false;
 
     for character in value.chars() {
         if character.is_ascii_alphanumeric() {
@@ -306,31 +307,28 @@ fn title_case_title(value: &str) -> String {
         }
 
         if !segment.is_empty() {
-            titled.push_str(&title_case_segment(&segment));
+            titled.push_str(&sentence_case_segment(&segment, saw_segment));
             segment.clear();
+            saw_segment = true;
         }
 
         titled.push(character);
     }
 
     if !segment.is_empty() {
-        titled.push_str(&title_case_segment(&segment));
+        titled.push_str(&sentence_case_segment(&segment, saw_segment));
     }
 
     titled
 }
 
-fn title_case_segment(segment: &str) -> String {
-    let uppercase_or_digit_count = segment
-        .chars()
-        .filter(|character| character.is_ascii_uppercase() || character.is_ascii_digit())
-        .count();
-
-    if uppercase_or_digit_count == segment.len()
-        && uppercase_or_digit_count > 0
-        && segment.len() <= 5
-    {
+fn sentence_case_segment(segment: &str, saw_segment: bool) -> String {
+    if should_preserve_case(segment) {
         return segment.to_string();
+    }
+
+    if saw_segment {
+        return segment.to_ascii_lowercase();
     }
 
     let mut characters = segment.chars();
@@ -346,10 +344,29 @@ fn title_case_segment(segment: &str) -> String {
     titled
 }
 
+fn should_preserve_case(segment: &str) -> bool {
+    let uppercase_or_digit_count = segment
+        .chars()
+        .filter(|character| character.is_ascii_uppercase() || character.is_ascii_digit())
+        .count();
+
+    if uppercase_or_digit_count == segment.len()
+        && uppercase_or_digit_count > 0
+        && segment.len() <= 5
+    {
+        return true;
+    }
+
+    segment
+        .chars()
+        .skip(1)
+        .any(|character| character.is_ascii_uppercase())
+}
+
 fn truncate_title(value: &str, limit: usize) -> String {
     let trimmed = value.trim();
     if trimmed.is_empty() {
-        return "Agent Session".to_string();
+        return "Agent session".to_string();
     }
 
     let chars = trimmed.chars().collect::<Vec<_>>();
@@ -374,22 +391,23 @@ mod tests {
 
     #[test]
     fn fallback_terminal_title_uses_prompt_truncation() {
-        assert_eq!(fallback_terminal_title("what is this"), "What Is This");
+        assert_eq!(fallback_terminal_title("what is this"), "What is this");
         let expected = "X".to_string() + &"x".repeat(44) + "...";
-        assert_eq!(
-            fallback_terminal_title(&"x".repeat(60)),
-            expected
-        );
-        assert_eq!(fallback_terminal_title("   "), "Agent Session");
+        assert_eq!(fallback_terminal_title(&"x".repeat(60)), expected);
+        assert_eq!(fallback_terminal_title("   "), "Agent session");
     }
 
     #[test]
-    fn sanitize_generated_title_normalizes_to_title_case() {
+    fn sanitize_generated_title_normalizes_to_sentence_case() {
         assert_eq!(
             sanitize_generated_title("  notification improvements  "),
-            "Notification Improvements"
+            "Notification improvements"
         );
-        assert_eq!(sanitize_generated_title("API cleanup"), "API Cleanup");
+        assert_eq!(
+            sanitize_generated_title("New Session Setup"),
+            "New session setup"
+        );
+        assert_eq!(sanitize_generated_title("API cleanup"), "API cleanup");
     }
 
     #[test]
@@ -404,7 +422,7 @@ mod tests {
             parse_identity_titles_json(
                 r#"{"workspace_title":"fix auth callback","session_title":"auth callback"}"#
             ),
-            Some(("Fix Auth Callback".to_string(), "Auth Callback".to_string()))
+            Some(("Fix auth callback".to_string(), "Auth callback".to_string()))
         );
         assert!(parse_identity_titles_json(r#"{"workspace_title":"Only One"}"#).is_none());
     }
@@ -413,7 +431,7 @@ mod tests {
     fn parse_title_json_supports_structured_output_wrapper() {
         assert_eq!(
             parse_title_json(r#"{"type":"result","structured_output":{"title":"fix auth flow"}}"#),
-            Some("Fix Auth Flow".to_string())
+            Some("Fix auth flow".to_string())
         );
     }
 
@@ -423,7 +441,7 @@ mod tests {
             parse_identity_titles_json(
                 r#"{"type":"result","structured_output":{"workspace_title":"Auth Callback","session_title":"Fix Callback"}}"#
             ),
-            Some(("Auth Callback".to_string(), "Fix Callback".to_string()))
+            Some(("Auth callback".to_string(), "Fix callback".to_string()))
         );
     }
 

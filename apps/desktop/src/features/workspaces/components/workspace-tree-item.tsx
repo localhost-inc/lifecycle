@@ -1,43 +1,14 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import type { WorkspaceRecord, WorkspaceStatus } from "@lifecycle/contracts";
-import {
-  cn,
-  SidebarMenuAction,
-  sidebarMenuSubButtonVariants,
-  Spinner,
-  StatusDot,
-  type StatusDotTone,
-} from "@lifecycle/ui";
+import type { WorkspaceRecord } from "@lifecycle/contracts";
+import { cn, SidebarMenuAction, sidebarMenuSubButtonVariants } from "@lifecycle/ui";
 import { Archive } from "lucide-react";
-import { ResponseReadyDot } from "../../../components/response-ready-dot";
 import { TypedTitle } from "../../../components/typed-title";
 import { formatCompactRelativeTime } from "../../../lib/format";
 import { renameWorkspace } from "../api";
-
-const dotTone: Record<WorkspaceStatus, StatusDotTone> = {
-  idle: "neutral",
-  starting: "info",
-  active: "success",
-  stopping: "warning",
-};
-
-const dotPulse: Record<WorkspaceStatus, boolean> = {
-  idle: false,
-  starting: true,
-  active: false,
-  stopping: true,
-};
-
-const dotClassName: Partial<Record<WorkspaceStatus, string>> = {
-  idle: "bg-zinc-400",
-};
-
-const dotLabels: Record<WorkspaceStatus, string> = {
-  idle: "Idle",
-  starting: "Starting",
-  active: "Active",
-  stopping: "Stopping",
-};
+import {
+  getWorkspaceSessionStatusState,
+  WorkspaceSessionStatus,
+} from "./workspace-session-status";
 
 interface WorkspaceTreeItemProps {
   running?: boolean;
@@ -58,8 +29,8 @@ export function WorkspaceTreeItem({
   onDestroy,
   destroyDisabled = false,
 }: WorkspaceTreeItemProps) {
-  const status = workspace.status as WorkspaceStatus;
   const timestamp = formatCompactRelativeTime(workspace.last_active_at);
+  const sessionStatusState = getWorkspaceSessionStatusState({ responseReady, running });
   const inputRef = useRef<HTMLInputElement | null>(null);
   const skipBlurCommitRef = useRef(false);
   const [draftName, setDraftName] = useState(workspace.name);
@@ -146,32 +117,30 @@ export function WorkspaceTreeItem({
   };
 
   const rowClassName = cn(
-    sidebarMenuSubButtonVariants({ active: selected }),
-    "relative gap-1.5 pl-[16px] pr-2",
+    sidebarMenuSubButtonVariants({ active: false }),
+    "relative gap-1.5 pl-3 pr-2",
+    selected
+      ? "bg-transparent font-medium text-[var(--sidebar-foreground)] hover:bg-transparent hover:text-[var(--sidebar-foreground)]"
+      : "bg-transparent text-[color-mix(in_srgb,var(--sidebar-foreground)_78%,var(--sidebar-muted-foreground))] hover:bg-transparent hover:text-[var(--sidebar-foreground)]",
     editing ? "cursor-text ring-1 ring-[var(--sidebar-foreground)]/20" : undefined,
   );
 
   const titleText = renameError ?? workspace.source_ref;
+  const trailingMetaClassName = editing
+    ? undefined
+    : "transition-opacity group-hover/workspace-item:opacity-0";
+  const selectedRail = selected ? (
+    <span
+      aria-hidden="true"
+      className="absolute bottom-1 left-[-10px] top-0 w-0.5 rounded-full bg-[var(--primary)]"
+      data-slot="workspace-active-rail"
+    />
+  ) : null;
 
   if (editing) {
     return (
       <div className={rowClassName} title={titleText}>
-        {responseReady && <ResponseReadyDot className="absolute left-1 top-1/2 -translate-y-1/2" />}
-        <StatusDot
-          className={dotClassName[status]}
-          pulse={dotPulse[status]}
-          size="sm"
-          title={dotLabels[status]}
-          tone={dotTone[status]}
-        />
-        {running ? (
-          <Spinner
-            aria-hidden="true"
-            aria-label={undefined}
-            className="size-3.5 shrink-0 text-[var(--sidebar-muted-foreground)]"
-            role={undefined}
-          />
-        ) : null}
+        {selectedRail}
         <input
           ref={inputRef}
           aria-label="Rename workspace"
@@ -199,10 +168,17 @@ export function WorkspaceTreeItem({
           }}
           value={draftName}
         />
-        {timestamp && (
-          <span className="shrink-0 text-[13px] text-[var(--sidebar-foreground)] opacity-70">
+        {sessionStatusState === "hidden" && timestamp ? (
+          <span
+            className={cn(
+              "shrink-0 min-w-9 text-right text-[13px] text-[var(--sidebar-foreground)] opacity-70",
+              trailingMetaClassName,
+            )}
+          >
             {timestamp}
           </span>
+        ) : (
+          <WorkspaceSessionStatus className={trailingMetaClassName} state={sessionStatusState} />
         )}
       </div>
     );
@@ -210,6 +186,7 @@ export function WorkspaceTreeItem({
 
   return (
     <div className="group/workspace-item relative">
+      {selectedRail}
       <button
         className={rowClassName}
         onClick={onSelect}
@@ -220,33 +197,20 @@ export function WorkspaceTreeItem({
         title={titleText}
         type="button"
       >
-        {responseReady && <ResponseReadyDot className="absolute left-1 top-1/2 -translate-y-1/2" />}
-        <StatusDot
-          className={dotClassName[status]}
-          pulse={dotPulse[status]}
-          size="sm"
-          title={dotLabels[status]}
-          tone={dotTone[status]}
-        />
-        {running ? (
-          <Spinner
-            aria-hidden="true"
-            aria-label={undefined}
-            className="size-3.5 shrink-0 text-[var(--sidebar-muted-foreground)]"
-            role={undefined}
-          />
-        ) : null}
         <TypedTitle className="flex-1 truncate text-[13px]" text={workspace.name} />
-        {timestamp && (
+        {sessionStatusState === "hidden" && timestamp ? (
           <span
-            className={`shrink-0 text-[13px] transition-opacity group-hover/workspace-item:opacity-0 ${
+            className={cn(
+              "shrink-0 min-w-9 text-right text-[13px] transition-opacity group-hover/workspace-item:opacity-0",
               selected
                 ? "text-[var(--sidebar-foreground)] opacity-70"
-                : "text-[var(--sidebar-muted-foreground)]"
-            }`}
+                : "text-[var(--sidebar-muted-foreground)]",
+            )}
           >
             {timestamp}
           </span>
+        ) : (
+          <WorkspaceSessionStatus className={trailingMetaClassName} state={sessionStatusState} />
         )}
       </button>
       <SidebarMenuAction

@@ -44,49 +44,53 @@ export function SurfaceLaunchActions({
 }: SurfaceLaunchActionsProps) {
   return (
     <TooltipProvider>
-      <div className="flex shrink-0 items-center gap-1.5 px-0 py-0">
-        {onOpenLauncher && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className="compact-control-standalone compact-control-item compact-control-icon compact-control-tone-muted"
-                onClick={onOpenLauncher}
-              >
-                <svg
-                  fill="none"
-                  height="16"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeWidth="1.5"
-                  viewBox="0 0 16 16"
-                  width="16"
+      <div className="flex shrink-0 items-center px-0 py-0">
+        <div className="compact-control-shell">
+          {onOpenLauncher && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="compact-control-item compact-control-icon compact-control-tone-muted"
+                  onClick={onOpenLauncher}
                 >
-                  <path d="M8 3v10M3 8h10" />
-                </svg>
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>New Tab</TooltipContent>
-          </Tooltip>
-        )}
-        {actions.map((action, index) => (
-          <Tooltip key={action.key}>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                className="compact-control-standalone compact-control-item compact-control-icon compact-control-tone-muted"
-                disabled={action.disabled}
-                onClick={() => onLaunch(action.request)}
-                title={action.title}
-              >
-                {action.loading ? <LoadingDot /> : action.icon}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent align={resolveSurfaceLaunchTooltipAlign(index, actions.length)}>
-              {action.title}
-            </TooltipContent>
-          </Tooltip>
-        ))}
+                  <svg
+                    fill="none"
+                    height="16"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeWidth="1.5"
+                    viewBox="0 0 16 16"
+                    width="16"
+                  >
+                    <path d="M8 3v10M3 8h10" />
+                  </svg>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>New Tab</TooltipContent>
+            </Tooltip>
+          )}
+          {actions.map((action, index) => (
+            <Tooltip key={action.key}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className={`compact-control-item compact-control-icon compact-control-tone-muted ${
+                    onOpenLauncher || index > 0 ? "compact-control-divider" : ""
+                  }`}
+                  disabled={action.disabled}
+                  onClick={() => onLaunch(action.request)}
+                  title={action.title}
+                >
+                  {action.loading ? <LoadingDot /> : action.icon}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent align={resolveSurfaceLaunchTooltipAlign(index, actions.length)}>
+                {action.title}
+              </TooltipContent>
+            </Tooltip>
+          ))}
+        </div>
       </div>
     </TooltipProvider>
   );

@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { Spinner } from "@lifecycle/ui";
 import { FileText, GitBranch, GitCommitHorizontal, Plus } from "lucide-react";
 import { ResponseReadyDot } from "../../../components/response-ready-dot";
-import { TerminalStatusDot } from "../../terminals/components/terminal-status-dot";
 import {
   isChangesDiffDocument,
   isCommitDiffDocument,
@@ -127,11 +126,6 @@ export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceSurfaceTab }
               launchType={tab.launchType}
             />
           )}
-          <TerminalStatusDot
-            className="absolute -bottom-0.5 -right-0.5 ring-2 ring-[var(--background)]"
-            size="sm"
-            status={tab.status}
-          />
         </span>
       </span>
     );

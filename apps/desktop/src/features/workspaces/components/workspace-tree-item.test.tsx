@@ -23,7 +23,7 @@ const workspace = {
 };
 
 describe("WorkspaceTreeItem", () => {
-  test("renders the workspace display name instead of the branch ref", () => {
+  test("renders the workspace display name without a status dot", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceTreeItem, {
         workspace,
@@ -35,9 +35,10 @@ describe("WorkspaceTreeItem", () => {
 
     expect(markup).toContain("Auth Flow Fix");
     expect(markup).not.toContain("lifecycle/ember-atlas-42</span>");
+    expect(markup).not.toContain('title="Active"');
   });
 
-  test("renders a visible response-ready marker without shifting the row layout", () => {
+  test("renders the ready indicator in the right-side session status slot", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceTreeItem, {
         responseReady: true,
@@ -48,14 +49,14 @@ describe("WorkspaceTreeItem", () => {
       }),
     );
 
+    expect(markup).toContain('data-slot="workspace-session-status"');
     expect(markup).toContain('aria-label="Response ready"');
-    expect(markup).toContain("absolute left-1 top-1/2 -translate-y-1/2");
-    expect(markup).toContain("bg-amber-300");
-    expect(markup).toContain("lifecycle-motion-ready-ring");
-    expect(markup).toContain("lifecycle-motion-soft-pulse");
+    expect(markup).toContain("justify-end");
+    expect(markup).not.toContain(">Ready</span>");
+    expect(markup).not.toContain("absolute left-1 top-1/2 -translate-y-1/2");
   });
 
-  test("renders a running spinner in the workspace row", () => {
+  test("renders a loading spinner in the same right-side session status slot", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceTreeItem, {
         running: true,
@@ -66,11 +67,12 @@ describe("WorkspaceTreeItem", () => {
       }),
     );
 
+    expect(markup).toContain('data-slot="workspace-session-status"');
     expect(markup).toContain('data-slot="spinner"');
-    expect(markup).toContain("text-[var(--sidebar-muted-foreground)]");
+    expect(markup).toContain('title="Generating response"');
   });
 
-  test("uses the shared selected sidebar treatment", () => {
+  test("uses text emphasis instead of a filled background for the selected workspace", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceTreeItem, {
         workspace,
@@ -80,12 +82,18 @@ describe("WorkspaceTreeItem", () => {
       }),
     );
 
-    expect(markup).toContain("bg-[var(--sidebar-selected)]");
+    expect(markup).not.toContain("bg-[var(--sidebar-selected)]");
+    expect(markup).toContain("bg-transparent");
+    expect(markup).toContain("font-medium");
     expect(markup).toContain("text-[var(--sidebar-foreground)]");
+    expect(markup).toContain('data-slot="workspace-active-rail"');
+    expect(markup).toContain("bg-[var(--primary)]");
+    expect(markup).toContain("pl-3");
+    expect(markup).toContain("top-0");
     expect(markup).toContain("opacity-70");
   });
 
-  test("uses the shared idle sidebar hover treatment", () => {
+  test("dims inactive workspace text while keeping hover contrast", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceTreeItem, {
         workspace,
@@ -95,9 +103,12 @@ describe("WorkspaceTreeItem", () => {
       }),
     );
 
-    expect(markup).toContain("text-[var(--sidebar-foreground)]");
-    expect(markup).toContain("hover:bg-[var(--sidebar-hover)]");
+    expect(markup).toContain(
+      "text-[color-mix(in_srgb,var(--sidebar-foreground)_78%,var(--sidebar-muted-foreground))]",
+    );
+    expect(markup).toContain("hover:bg-transparent");
     expect(markup).toContain("text-[var(--sidebar-muted-foreground)]");
+    expect(markup).not.toContain('data-slot="workspace-active-rail"');
   });
 
   test("swaps the time label out for the archive action on hover", () => {

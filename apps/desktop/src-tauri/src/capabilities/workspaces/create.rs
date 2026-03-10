@@ -118,6 +118,18 @@ async fn run_workspace_creation(
         }
     };
 
+    if let Err(e) = worktree::copy_local_config_files(project_path, &worktree_path) {
+        let _ = worktree::remove_worktree(project_path, &worktree_path).await;
+        update_workspace_status_db(
+            db_path,
+            workspace_id,
+            &WorkspaceStatus::Idle,
+            Some(&WorkspaceFailureReason::RepoCloneFailed),
+        )?;
+        emit_workspace_status(app, workspace_id, "idle", Some("repo_clone_failed"));
+        return Err(e);
+    }
+
     // Record worktree path + git SHA
     let git_sha = worktree::get_sha(project_path, source_ref)
         .await

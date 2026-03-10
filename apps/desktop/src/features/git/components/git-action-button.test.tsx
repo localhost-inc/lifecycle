@@ -43,6 +43,7 @@ function renderGitActionMenuContent(
         gitStatus: null,
         isCommitting: false,
         isCreatingPullRequest: false,
+        isLoading: false,
         isMergingPullRequest: false,
         isPushingBranch: false,
         onCommit: async () => {},
@@ -151,6 +152,48 @@ describe("GitActionButton", () => {
     expect(markup).toContain("Review changes");
   });
 
+  test("hides commit-and-push when the branch must be synced first", () => {
+    const gitStatus: GitStatusResult = {
+      ahead: 0,
+      behind: 2,
+      branch: "feature/git-panel-prs",
+      files: [
+        {
+          indexStatus: "modified",
+          path: "src/app.tsx",
+          staged: true,
+          stats: { deletions: 0, insertions: 3 },
+          unstaged: false,
+          worktreeStatus: null,
+        },
+      ],
+      headSha: "0123456789abcdef0123456789abcdef01234567",
+      upstream: "origin/feature/git-panel-prs",
+    };
+    const branchPullRequest: GitBranchPullRequestResult = {
+      support: {
+        available: true,
+        message: null,
+        provider: "github",
+        reason: null,
+      },
+      branch: "feature/git-panel-prs",
+      pullRequest: null,
+      suggestedBaseRef: "main",
+      upstream: "origin/feature/git-panel-prs",
+    };
+
+    const markup = renderGitActionMenuContent({
+      branchPullRequest,
+      gitStatus,
+    });
+
+    expect(renderGitActionButton({ branchPullRequest, gitStatus })).toContain(">Commit<");
+    expect(markup).toContain("Commit message");
+    expect(markup).not.toContain("Commit &amp; Push");
+    expect(markup).toContain("Pull the latest remote commits");
+  });
+
   test("shows PR checks when the current branch pull request has them", () => {
     const gitStatus: GitStatusResult = {
       ahead: 0,
@@ -237,5 +280,37 @@ describe("GitActionButton", () => {
     expect(renderGitActionButton({ branchPullRequest, gitStatus: null })).toContain("Git Status");
     expect(markup).toContain("Pull request provider unavailable");
     expect(markup).toContain("Pull request state will come from the cloud provider later.");
+  });
+
+  test("surfaces sync guidance when the clean branch is behind its upstream", () => {
+    const gitStatus: GitStatusResult = {
+      ahead: 0,
+      behind: 1,
+      branch: "feature/git-panel-prs",
+      files: [],
+      headSha: "0123456789abcdef0123456789abcdef01234567",
+      upstream: "origin/feature/git-panel-prs",
+    };
+    const branchPullRequest: GitBranchPullRequestResult = {
+      support: {
+        available: true,
+        message: null,
+        provider: "github",
+        reason: null,
+      },
+      branch: "feature/git-panel-prs",
+      pullRequest: null,
+      suggestedBaseRef: "main",
+      upstream: "origin/feature/git-panel-prs",
+    };
+
+    const markup = renderGitActionMenuContent({
+      branchPullRequest,
+      gitStatus,
+    });
+
+    expect(renderGitActionButton({ branchPullRequest, gitStatus })).toContain("Sync Branch");
+    expect(markup).toContain("Pull the latest remote commits");
+    expect(markup).toContain("Use a terminal session to sync the branch");
   });
 });

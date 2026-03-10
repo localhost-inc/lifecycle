@@ -21,10 +21,7 @@ import { ChevronDown } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import type { HostedOverlayAction } from "../../overlays/overlay-contract";
 import { useHostedOverlay } from "../../overlays/use-hosted-overlay";
-import {
-  buildGitPullRequestPrimaryAction,
-  buildGitPullRequestQuickState,
-} from "../lib/pull-request-state";
+import { buildWorkspaceGitActionState } from "../lib/workspace-git-action-state";
 import { resolveContainedOverlayWidth, useOverlayBoundary } from "../../../lib/overlay-boundary";
 
 interface GitActionButtonProps {
@@ -45,17 +42,16 @@ interface GitActionButtonProps {
   onShowChanges: () => void;
 }
 
-function branchMeta(branchPullRequest: GitBranchPullRequestResult | null): string | null {
-  if (!branchPullRequest?.branch) {
+function branchMeta(branch: string | null, suggestedBaseRef: string | null): string | null {
+  if (!branch) {
     return null;
   }
 
-  const baseRef = branchPullRequest.suggestedBaseRef;
-  if (!baseRef) {
-    return branchPullRequest.branch;
+  if (!suggestedBaseRef) {
+    return branch;
   }
 
-  return `${branchPullRequest.branch} → ${baseRef}`;
+  return `${branch} → ${suggestedBaseRef}`;
 }
 
 interface GitActionMenuContentProps {
@@ -66,6 +62,7 @@ interface GitActionMenuContentProps {
   gitStatus: GitStatusResult | null;
   isCommitting: boolean;
   isCreatingPullRequest: boolean;
+  isLoading: boolean;
   isMergingPullRequest: boolean;
   isPushingBranch: boolean;
   onCommit: (pushAfterCommit: boolean) => Promise<void>;
@@ -111,6 +108,7 @@ export function GitActionMenuContent({
   gitStatus,
   isCommitting,
   isCreatingPullRequest,
+  isLoading,
   isMergingPullRequest,
   isPushingBranch,
   onCommit,
@@ -121,25 +119,26 @@ export function GitActionMenuContent({
   onPushBranch,
   onShowChanges,
 }: GitActionMenuContentProps) {
-  const quickState = buildGitPullRequestQuickState(gitStatus, branchPullRequest);
-  const checks = quickState.pullRequest?.checks ?? null;
-  const meta = branchMeta(branchPullRequest);
+  const actionState = buildWorkspaceGitActionState(gitStatus, branchPullRequest, {
+    isLoading,
+  });
+  const checks = actionState.pullRequest?.checks ?? null;
+  const meta = branchMeta(actionState.branch, actionState.suggestedBaseRef);
   const hasCommitMessage = commitMessage.trim().length > 0;
-  const hasStagedChanges = (gitStatus?.files ?? []).some((file) => file.staged);
-  const hasUnstagedChanges = (gitStatus?.files ?? []).some((file) => file.unstaged);
+  const canPushAfterCommit = actionState.primaryAction.kind === "commit_and_push";
 
   return (
     <>
       <div className="px-2 pb-1 pt-1">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[14px] font-medium text-[var(--foreground)]">{quickState.title}</p>
+            <p className="text-[14px] font-medium text-[var(--foreground)]">{actionState.title}</p>
             <p className="mt-1 text-[12px] leading-5 text-[var(--muted-foreground)]">
-              {quickState.description}
+              {actionState.description}
             </p>
           </div>
-          {quickState.pullRequest && (
-            <Badge variant="outline">#{quickState.pullRequest.number}</Badge>
+          {actionState.pullRequest && (
+            <Badge variant="outline">#{actionState.pullRequest.number}</Badge>
           )}
         </div>
         {meta && <p className="mt-2 text-[12px] text-[var(--muted-foreground)]">{meta}</p>}
@@ -154,7 +153,7 @@ export function GitActionMenuContent({
         </div>
       )}
 
-      {quickState.kind === "needs_stage" && (
+      {actionState.kind === "needs_stage" && (
         <div className="space-y-3 px-2 pb-2">
           <p className="text-[12px] text-[var(--muted-foreground)]">
             Stage the files you want to include from the Changes tab, then commit them here.
@@ -167,7 +166,7 @@ export function GitActionMenuContent({
         </div>
       )}
 
-      {quickState.kind === "needs_commit" && (
+      {actionState.kind === "needs_commit" && (
         <div className="space-y-3 px-2 pb-2">
           <div className="space-y-2">
             <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)]">
@@ -180,27 +179,34 @@ export function GitActionMenuContent({
               value={commitMessage}
             />
           </div>
-          {hasUnstagedChanges && (
+          {actionState.hasUnstagedChanges && (
             <p className="text-[12px] text-[var(--muted-foreground)]">
               Only staged files will be included. Unstaged edits remain in the working tree.
             </p>
           )}
           <div className="flex flex-wrap gap-2">
             <Button
-              disabled={!hasCommitMessage || isCommitting || !hasStagedChanges}
+              disabled={!hasCommitMessage || isCommitting || !actionState.hasStagedChanges}
               onClick={() => void onCommit(false)}
               size="sm"
               variant="outline"
             >
               {isCommitting ? "Committing..." : "Commit"}
             </Button>
-            <Button
-              disabled={!hasCommitMessage || isCommitting || isPushingBranch || !hasStagedChanges}
-              onClick={() => void onCommit(true)}
-              size="sm"
-            >
-              {isCommitting || isPushingBranch ? "Working..." : "Commit & Push"}
-            </Button>
+            {canPushAfterCommit && (
+              <Button
+                disabled={
+                  !hasCommitMessage ||
+                  isCommitting ||
+                  isPushingBranch ||
+                  !actionState.hasStagedChanges
+                }
+                onClick={() => void onCommit(true)}
+                size="sm"
+              >
+                {isCommitting || isPushingBranch ? "Working..." : "Commit & Push"}
+              </Button>
+            )}
             <Button onClick={onShowChanges} size="sm" variant="ghost">
               Review changes
             </Button>
@@ -208,7 +214,7 @@ export function GitActionMenuContent({
         </div>
       )}
 
-      {quickState.kind === "needs_push" && (
+      {actionState.kind === "needs_push" && (
         <div className="px-2 pb-2">
           <Button disabled={isPushingBranch} onClick={() => void onPushBranch()} size="sm">
             {isPushingBranch ? "Pushing..." : "Push branch"}
@@ -216,7 +222,7 @@ export function GitActionMenuContent({
         </div>
       )}
 
-      {quickState.kind === "ready_to_create" && (
+      {actionState.kind === "ready_to_create_pull_request" && (
         <div className="px-2 pb-2">
           <Button
             disabled={isCreatingPullRequest}
@@ -228,45 +234,54 @@ export function GitActionMenuContent({
         </div>
       )}
 
-      {quickState.pullRequest && (
+      {(actionState.kind === "blocked_behind" || actionState.kind === "blocked_diverged") && (
+        <div className="px-2 pb-2">
+          <p className="text-[12px] text-[var(--muted-foreground)]">
+            Use a terminal session to sync the branch, then return here to push or manage the pull
+            request.
+          </p>
+        </div>
+      )}
+
+      {actionState.pullRequest && (
         <div className="space-y-3 px-2 pb-2">
           <div className="space-y-2 rounded-[18px] border border-[var(--border)] bg-[var(--panel)] px-3 py-3">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="truncate text-[13px] font-medium text-[var(--foreground)]">
-                  {quickState.pullRequest.title}
+                  {actionState.pullRequest.title}
                 </p>
                 <p className="mt-1 text-[12px] text-[var(--muted-foreground)]">
-                  {quickState.pullRequest.headRefName} → {quickState.pullRequest.baseRefName}
+                  {actionState.pullRequest.headRefName} → {actionState.pullRequest.baseRefName}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {quickState.pullRequest.isDraft && <Badge variant="muted">Draft</Badge>}
-                {quickState.pullRequest.mergeable === "mergeable" && (
+                {actionState.pullRequest.isDraft && <Badge variant="muted">Draft</Badge>}
+                {actionState.pullRequest.mergeable === "mergeable" && (
                   <Badge variant="success">Mergeable</Badge>
                 )}
-                {quickState.pullRequest.mergeable === "conflicting" && (
+                {actionState.pullRequest.mergeable === "conflicting" && (
                   <Badge variant="info">Conflicting</Badge>
                 )}
               </div>
             </div>
-            {quickState.pullRequest.reviewDecision && (
+            {actionState.pullRequest.reviewDecision && (
               <p className="text-[12px] text-[var(--muted-foreground)]">
-                Review: {quickState.pullRequest.reviewDecision.replaceAll("_", " ")}
+                Review: {actionState.pullRequest.reviewDecision.replaceAll("_", " ")}
               </p>
             )}
             <div className="flex flex-wrap gap-2">
               <Button
-                onClick={() => onOpenPullRequest(quickState.pullRequest!)}
+                onClick={() => onOpenPullRequest(actionState.pullRequest!)}
                 size="sm"
                 variant="outline"
               >
                 Open PR
               </Button>
-              {quickState.kind === "ready_to_merge" && (
+              {actionState.kind === "ready_to_merge" && (
                 <Button
                   disabled={isMergingPullRequest}
-                  onClick={() => void onMergePullRequest(quickState.pullRequest!.number)}
+                  onClick={() => void onMergePullRequest(actionState.pullRequest!.number)}
                   size="sm"
                 >
                   {isMergingPullRequest ? "Merging..." : "Merge PR"}
@@ -322,6 +337,7 @@ export function GitActionButton({
   gitStatus,
   isCommitting,
   isCreatingPullRequest,
+  isLoading,
   isMergingPullRequest,
   isPushingBranch,
   onCommit,
@@ -334,13 +350,9 @@ export function GitActionButton({
   const [open, setOpen] = useState(defaultOpen);
   const [commitMessage, setCommitMessage] = useState("");
   const triggerRef = useRef<HTMLDivElement | null>(null);
-  const quickState = useMemo(
-    () => buildGitPullRequestQuickState(gitStatus, branchPullRequest),
-    [branchPullRequest, gitStatus],
-  );
-  const primaryAction = useMemo(
-    () => buildGitPullRequestPrimaryAction(gitStatus, branchPullRequest),
-    [branchPullRequest, gitStatus],
+  const actionState = useMemo(
+    () => buildWorkspaceGitActionState(gitStatus, branchPullRequest, { isLoading }),
+    [branchPullRequest, gitStatus, isLoading],
   );
   const isBusy = isCommitting || isCreatingPullRequest || isMergingPullRequest || isPushingBranch;
   const overlayBoundary = useOverlayBoundary(triggerRef);
@@ -356,6 +368,7 @@ export function GitActionButton({
       gitStatus,
       isCommitting,
       isCreatingPullRequest,
+      isLoading,
       isMergingPullRequest,
       isPushingBranch,
       kind: "git-actions" as const,
@@ -367,7 +380,7 @@ export function GitActionButton({
         side: "bottom" as const,
         sideOffset: 8,
       },
-      requiresWindowFocus: quickState.kind === "needs_commit",
+      requiresWindowFocus: actionState.kind === "needs_commit",
     }),
     [
       actionError,
@@ -376,9 +389,10 @@ export function GitActionButton({
       gitStatus,
       isCommitting,
       isCreatingPullRequest,
+      isLoading,
       isMergingPullRequest,
       isPushingBranch,
-      quickState.kind,
+      actionState.kind,
     ],
   );
   const hostedOverlay = useHostedOverlay({
@@ -399,8 +413,8 @@ export function GitActionButton({
           void onMergePullRequest(action.pullRequestNumber);
           return;
         case "open-pull-request":
-          if (quickState.pullRequest?.url === action.url) {
-            onOpenPullRequest(quickState.pullRequest);
+          if (actionState.pullRequest?.url === action.url) {
+            onOpenPullRequest(actionState.pullRequest);
           }
           return;
         case "push-branch":
@@ -422,33 +436,36 @@ export function GitActionButton({
   const usesHostedOverlay = hostedOverlay.hosted;
 
   async function handlePrimaryClick(): Promise<void> {
-    if (primaryAction.kind === "show_changes") {
+    if (actionState.primaryAction.kind === "show_changes") {
       onShowChanges();
       return;
     }
 
-    if (primaryAction.kind === "commit" || primaryAction.kind === "commit_and_push") {
+    if (
+      actionState.primaryAction.kind === "commit" ||
+      actionState.primaryAction.kind === "commit_and_push"
+    ) {
       setOpen(true);
       return;
     }
 
-    if (primaryAction.kind === "push") {
+    if (actionState.primaryAction.kind === "push") {
       await onPushBranch();
       return;
     }
 
-    if (primaryAction.kind === "create_pull_request") {
+    if (actionState.primaryAction.kind === "create_pull_request") {
       await onCreatePullRequest();
       return;
     }
 
-    if (primaryAction.kind === "merge_pull_request" && quickState.pullRequest) {
-      await onMergePullRequest(quickState.pullRequest.number);
+    if (actionState.primaryAction.kind === "merge_pull_request" && actionState.pullRequest) {
+      await onMergePullRequest(actionState.pullRequest.number);
       return;
     }
 
-    if (primaryAction.kind === "open_pull_request" && quickState.pullRequest) {
-      onOpenPullRequest(quickState.pullRequest);
+    if (actionState.primaryAction.kind === "open_pull_request" && actionState.pullRequest) {
+      onOpenPullRequest(actionState.pullRequest);
       return;
     }
 
@@ -472,10 +489,10 @@ export function GitActionButton({
       <SplitButtonPrimary
         disabled={isBusy}
         onClick={() => void handlePrimaryClick()}
-        title={quickState.title}
+        title={actionState.title}
         variant="foreground"
       >
-        {primaryAction.label}
+        {actionState.primaryAction.label}
       </SplitButtonPrimary>
       {usesHostedOverlay ? (
         <SplitButtonSecondary
@@ -519,6 +536,7 @@ export function GitActionButton({
           gitStatus={gitStatus}
           isCommitting={isCommitting}
           isCreatingPullRequest={isCreatingPullRequest}
+          isLoading={isLoading}
           isMergingPullRequest={isMergingPullRequest}
           isPushingBranch={isPushingBranch}
           onCommit={handleCommit}

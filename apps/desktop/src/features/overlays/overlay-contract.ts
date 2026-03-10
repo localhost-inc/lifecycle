@@ -41,6 +41,7 @@ export interface HostedGitActionsOverlay extends HostedOverlayBase {
   gitStatus: GitStatusResult | null;
   isCommitting: boolean;
   isCreatingPullRequest: boolean;
+  isLoading: boolean;
   isMergingPullRequest: boolean;
   isPushingBranch: boolean;
   kind: "git-actions";

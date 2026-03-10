@@ -57,6 +57,76 @@ pub async fn remove_worktree(repo_path: &str, worktree_path: &str) -> Result<(),
     Ok(())
 }
 
+pub fn copy_local_config_files(
+    source_repo_path: &str,
+    worktree_path: &str,
+) -> Result<(), LifecycleError> {
+    let source_root = Path::new(source_repo_path);
+    let destination_root = Path::new(worktree_path);
+    copy_local_config_dir(source_root, destination_root, source_root)
+}
+
+fn copy_local_config_dir(
+    source_root: &Path,
+    destination_root: &Path,
+    current_dir: &Path,
+) -> Result<(), LifecycleError> {
+    let entries =
+        std::fs::read_dir(current_dir).map_err(|error| LifecycleError::Io(error.to_string()))?;
+
+    for entry in entries {
+        let entry = entry.map_err(|error| LifecycleError::Io(error.to_string()))?;
+        let entry_path = entry.path();
+        let file_type = entry
+            .file_type()
+            .map_err(|error| LifecycleError::Io(error.to_string()))?;
+        let file_name = entry.file_name();
+        let file_name = file_name.to_string_lossy();
+
+        if file_type.is_dir() {
+            if should_skip_local_config_dir(&file_name) {
+                continue;
+            }
+
+            copy_local_config_dir(source_root, destination_root, &entry_path)?;
+            continue;
+        }
+
+        if !file_type.is_file() || !is_local_config_file(&file_name) {
+            continue;
+        }
+
+        let relative_path = entry_path
+            .strip_prefix(source_root)
+            .map_err(|error| LifecycleError::Io(error.to_string()))?;
+        let destination_path = destination_root.join(relative_path);
+        if destination_path.exists() {
+            continue;
+        }
+
+        if let Some(parent) = destination_path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|error| LifecycleError::Io(error.to_string()))?;
+        }
+
+        std::fs::copy(&entry_path, &destination_path)
+            .map_err(|error| LifecycleError::Io(error.to_string()))?;
+    }
+
+    Ok(())
+}
+
+fn should_skip_local_config_dir(name: &str) -> bool {
+    matches!(
+        name,
+        ".git" | "node_modules" | "target" | ".turbo" | "dist" | "build"
+    )
+}
+
+fn is_local_config_file(name: &str) -> bool {
+    matches!(name, ".env" | ".env.local")
+}
+
 pub async fn move_worktree(
     repo_path: &str,
     current_worktree_path: &str,
@@ -474,6 +544,54 @@ mod tests {
             .expect("worktree cleanup should succeed");
         fs::remove_dir_all(repo_path).expect("remove temp repo");
         fs::remove_dir_all(configured_root).expect("remove configured root");
+    }
+
+    #[test]
+    fn copy_local_config_files_copies_env_files_without_overwriting_existing_targets() {
+        let source_root =
+            std::env::temp_dir().join(format!("lifecycle-source-{}", uuid::Uuid::new_v4()));
+        let destination_root =
+            std::env::temp_dir().join(format!("lifecycle-dest-{}", uuid::Uuid::new_v4()));
+
+        fs::create_dir_all(source_root.join("apps/api")).expect("create source api dir");
+        fs::create_dir_all(source_root.join("apps/web")).expect("create source web dir");
+        fs::create_dir_all(source_root.join("node_modules/pkg")).expect("create source cache dir");
+        fs::create_dir_all(destination_root.join("apps/web")).expect("create destination web dir");
+
+        fs::write(source_root.join("apps/api/.env"), "API_KEY=secret\n").expect("write api env");
+        fs::write(source_root.join("apps/web/.env.local"), "WEB_PORT=3000\n")
+            .expect("write web env local");
+        fs::write(
+            source_root.join("node_modules/pkg/.env"),
+            "SHOULD_NOT_COPY=true\n",
+        )
+        .expect("write skipped env");
+        fs::write(
+            destination_root.join("apps/web/.env.local"),
+            "WEB_PORT=9999\n",
+        )
+        .expect("write destination web env local");
+
+        copy_local_config_files(
+            source_root.to_str().expect("source root utf8"),
+            destination_root.to_str().expect("destination root utf8"),
+        )
+        .expect("copy local config files");
+
+        let copied_api_env = fs::read_to_string(destination_root.join("apps/api/.env"))
+            .expect("copied api env should exist");
+        let existing_web_env = fs::read_to_string(destination_root.join("apps/web/.env.local"))
+            .expect("existing web env should exist");
+
+        assert_eq!(copied_api_env, "API_KEY=secret\n");
+        assert_eq!(existing_web_env, "WEB_PORT=9999\n");
+        assert!(
+            !destination_root.join("node_modules/pkg/.env").exists(),
+            "skipped directories should not be copied"
+        );
+
+        fs::remove_dir_all(source_root).expect("remove source root");
+        fs::remove_dir_all(destination_root).expect("remove destination root");
     }
 
     #[test]

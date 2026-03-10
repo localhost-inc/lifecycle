@@ -367,6 +367,7 @@ function renderGitActionsOverlay(
       gitStatus={overlay.gitStatus}
       isCommitting={overlay.isCommitting}
       isCreatingPullRequest={overlay.isCreatingPullRequest}
+      isLoading={overlay.isLoading}
       isMergingPullRequest={overlay.isMergingPullRequest}
       isPushingBranch={overlay.isPushingBranch}
       onCommit={(pushAfterCommit) =>

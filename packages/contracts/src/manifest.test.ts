@@ -4,9 +4,10 @@ import { getManifestFingerprint, parseManifest } from "./manifest";
 const VALID_CONFIG = `{
   // One-time setup steps
   "setup": {
+    "services": ["postgres"],
     "steps": [
       { "name": "install", "command": "bun install --frozen-lockfile", "timeout_seconds": 300 },
-      { "name": "migrate", "command": "bun run db:migrate", "timeout_seconds": 120 },
+      { "name": "migrate", "command": "bun run db:migrate", "timeout_seconds": 120, "run_on": "start" },
     ],
   },
   "secrets": {
@@ -51,8 +52,10 @@ describe("parseManifest", () => {
     const result = parseManifest(VALID_CONFIG);
     expect(result.valid).toBe(true);
     if (!result.valid) return;
+    expect(result.config.setup.services).toEqual(["postgres"]);
     expect(result.config.setup.steps).toHaveLength(2);
     expect(result.config.setup.steps[0]!.name).toBe("install");
+    expect(result.config.setup.steps[1]!.run_on).toBe("start");
     expect(Object.keys(result.config.services)).toEqual(["postgres", "api"]);
     expect(result.config.services["postgres"]!.runtime).toBe("image");
     expect(result.config.services["api"]!.runtime).toBe("process");
@@ -190,6 +193,24 @@ describe("parseManifest", () => {
     expect(result.valid).toBe(true);
     if (!result.valid) return;
     expect(result.config.reset?.strategy).toBe("reseed");
+  });
+
+  test("accepts setup services for infra required before setup steps", () => {
+    const result = parseManifest(`{
+      "setup": {
+        "services": ["postgres", "redis"],
+        "steps": [{ "name": "migrate", "command": "bun run db:migrate", "timeout_seconds": 60, "run_on": "start" }]
+      },
+      "services": {
+        "postgres": { "runtime": "image", "image": "postgres:16" },
+        "redis": { "runtime": "image", "image": "redis:7" },
+        "api": { "runtime": "process", "command": "bun run dev", "depends_on": ["postgres", "redis"] }
+      }
+    }`);
+    expect(result.valid).toBe(true);
+    if (!result.valid) return;
+    expect(result.config.setup.services).toEqual(["postgres", "redis"]);
+    expect(result.config.setup.steps[0]!.run_on).toBe("start");
   });
 
   test("produces a stable fingerprint independent of object key order", () => {

@@ -5,7 +5,7 @@ use crate::shared::errors::{
     LifecycleError, ServiceStatus, WorkspaceFailureReason, WorkspaceStatus,
 };
 use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
-use rusqlite::params;
+use rusqlite::{params, OptionalExtension};
 use tauri::AppHandle;
 
 pub(super) fn emit_workspace_status(
@@ -151,9 +151,7 @@ fn preview_status_for_service(
         return "ready";
     }
 
-    if service_status == "starting"
-        || *workspace_status == WorkspaceStatus::Starting
-    {
+    if service_status == "starting" || *workspace_status == WorkspaceStatus::Starting {
         return "provisioning";
     }
 
@@ -181,6 +179,90 @@ pub(super) fn preview_fields_for_service(
         preview_failure_reason_for_status(preview_status).map(str::to_string),
         local_preview_url(exposure, effective_port),
     )
+}
+
+fn is_host_port_available(port: i64) -> bool {
+    if !(1..=65535).contains(&port) {
+        return false;
+    }
+
+    std::net::TcpListener::bind(("127.0.0.1", port as u16)).is_ok()
+}
+
+fn load_reserved_effective_ports(
+    conn: &rusqlite::Connection,
+    workspace_id: &str,
+    service_name: &str,
+) -> Result<std::collections::HashSet<i64>, LifecycleError> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT effective_port
+             FROM workspace_service
+             WHERE effective_port IS NOT NULL
+               AND NOT (workspace_id = ?1 AND service_name = ?2)",
+        )
+        .map_err(|error| LifecycleError::Database(error.to_string()))?;
+    let rows = stmt
+        .query_map(params![workspace_id, service_name], |row| {
+            row.get::<_, i64>(0)
+        })
+        .map_err(|error| LifecycleError::Database(error.to_string()))?;
+
+    let mut reserved = std::collections::HashSet::new();
+    for row in rows {
+        reserved.insert(row.map_err(|error| LifecycleError::Database(error.to_string()))?);
+    }
+
+    Ok(reserved)
+}
+
+pub(super) fn resolve_effective_port(
+    conn: &rusqlite::Connection,
+    workspace_id: &str,
+    service_name: &str,
+    default_port: Option<i64>,
+    port_override: Option<i64>,
+    current_effective_port: Option<i64>,
+) -> Result<Option<i64>, LifecycleError> {
+    let Some(default_port) = default_port else {
+        return Ok(None);
+    };
+
+    let reserved_ports = load_reserved_effective_ports(conn, workspace_id, service_name)?;
+
+    let is_port_usable = |candidate: i64| {
+        !reserved_ports.contains(&candidate)
+            && (current_effective_port == Some(candidate) || is_host_port_available(candidate))
+    };
+
+    if let Some(port_override) = port_override {
+        if is_port_usable(port_override) {
+            return Ok(Some(port_override));
+        }
+
+        return Err(LifecycleError::PortConflict {
+            service: service_name.to_string(),
+            port: port_override as u16,
+        });
+    }
+
+    if let Some(current_effective_port) = current_effective_port {
+        if is_port_usable(current_effective_port) {
+            return Ok(Some(current_effective_port));
+        }
+    }
+
+    for offset in 0..=200_i64 {
+        let candidate = default_port + offset;
+        if is_port_usable(candidate) {
+            return Ok(Some(candidate));
+        }
+    }
+
+    Err(LifecycleError::PortConflict {
+        service: service_name.to_string(),
+        port: default_port as u16,
+    })
 }
 
 fn refresh_workspace_preview_rows(
@@ -314,8 +396,33 @@ pub(super) fn reconcile_workspace_services_db(
                 let (exposure, port_override) = existing_rows_by_service
                     .get(service_name)
                     .cloned()
-                    .unwrap_or_else(|| ("local".to_string(), None));
-                let effective_port = port_override.or(default_port);
+                    .unwrap_or_else(|| {
+                        (
+                            if service_config.share_default() {
+                                "local".to_string()
+                            } else {
+                                "internal".to_string()
+                            },
+                            None,
+                        )
+                    });
+                let current_effective_port = tx
+                    .query_row(
+                        "SELECT effective_port FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+                        params![workspace_id, service_name],
+                        |row| row.get::<_, Option<i64>>(0),
+                    )
+                    .optional()
+                    .map_err(|error| LifecycleError::Database(error.to_string()))?
+                    .flatten();
+                let effective_port = resolve_effective_port(
+                    &tx,
+                    workspace_id,
+                    service_name,
+                    default_port,
+                    port_override,
+                    current_effective_port,
+                )?;
                 let (preview_status, preview_failure_reason, preview_url) =
                     preview_fields_for_service(
                         &exposure,
@@ -351,7 +458,7 @@ pub(super) fn reconcile_workspace_services_db(
                 if updated == 0 {
                     let (preview_status, preview_failure_reason, preview_url) =
                         preview_fields_for_service(
-                            "local",
+                            &exposure,
                             effective_port,
                             "stopped",
                             &workspace_status,
@@ -360,11 +467,12 @@ pub(super) fn reconcile_workspace_services_db(
                         "INSERT INTO workspace_service (
                             id, workspace_id, service_name, exposure, status, default_port,
                             effective_port, preview_status, preview_failure_reason, preview_url
-                         ) VALUES (?1, ?2, ?3, 'local', 'stopped', ?4, ?5, ?6, ?7, ?8)",
+                         ) VALUES (?1, ?2, ?3, ?4, 'stopped', ?5, ?6, ?7, ?8, ?9)",
                         params![
                             uuid::Uuid::new_v4().to_string(),
                             workspace_id,
                             service_name,
+                            exposure,
                             default_port,
                             effective_port,
                             preview_status,
@@ -645,6 +753,16 @@ mod tests {
         config.services
     }
 
+    fn unused_port() -> i64 {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("bind temporary port");
+        let port = listener
+            .local_addr()
+            .expect("port should have local addr")
+            .port();
+        drop(listener);
+        i64::from(port)
+    }
+
     #[test]
     fn open_db_enables_foreign_keys() {
         let db_path = temp_db_path();
@@ -884,6 +1002,9 @@ mod tests {
     fn reconcile_workspace_services_db_seeds_and_updates_declared_services() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
+        let web_default_port = unused_port();
+        let admin_default_port = unused_port();
+        let web_override_port = unused_port();
 
         let conn = open_db(&db_path).expect("open db");
         conn.execute(
@@ -901,28 +1022,28 @@ mod tests {
                 "ws_seed",
                 "web",
                 "organization",
-                Some(4310_i64),
+                Some(web_override_port),
                 "failed",
                 Some("unknown"),
-                Some(3000_i64),
-                Some(4310_i64),
+                Some(web_default_port),
+                Some(web_override_port),
                 "disabled",
             ],
         )
         .expect("insert existing service");
         drop(conn);
 
-        let config: LifecycleConfig = serde_json::from_str(
-            r#"{
-                "setup": { "steps": [{ "name": "install", "command": "bun install", "timeout_seconds": 30 }] },
-                "services": {
-                    "web": { "runtime": "process", "command": "bun run dev", "port": 3000 },
-                    "admin": { "runtime": "process", "command": "bun run admin", "port": 4173 },
-                    "worker": { "runtime": "process", "command": "bun run worker" }
-                }
-            }"#,
-        )
-        .expect("valid config");
+        let config_json = format!(
+            r#"{{
+                "setup": {{ "steps": [{{ "name": "install", "command": "bun install", "timeout_seconds": 30 }}] }},
+                "services": {{
+                    "web": {{ "runtime": "process", "command": "bun run dev", "port": {web_default_port} }},
+                    "admin": {{ "runtime": "process", "command": "bun run admin", "port": {admin_default_port}, "share_default": true }},
+                    "worker": {{ "runtime": "process", "command": "bun run worker" }}
+                }}
+            }}"#,
+        );
+        let config: LifecycleConfig = serde_json::from_str(&config_json).expect("valid config");
 
         reconcile_workspace_services_db(&db_path, "ws_seed", Some(&config), Some("fingerprint_1"))
             .expect("reconcile succeeds");
@@ -982,27 +1103,27 @@ mod tests {
                     None,
                     "stopped".to_string(),
                     None,
-                    Some(4173_i64),
-                    Some(4173_i64),
+                    Some(admin_default_port),
+                    Some(admin_default_port),
                     "sleeping".to_string(),
                     None,
-                    Some("http://localhost:4173".to_string()),
+                    Some(format!("http://localhost:{admin_default_port}")),
                 ),
                 (
                     "web".to_string(),
                     "organization".to_string(),
-                    Some(4310_i64),
+                    Some(web_override_port),
                     "stopped".to_string(),
                     None,
-                    Some(3000_i64),
-                    Some(4310_i64),
+                    Some(web_default_port),
+                    Some(web_override_port),
                     "disabled".to_string(),
                     None,
                     None,
                 ),
                 (
                     "worker".to_string(),
-                    "local".to_string(),
+                    "internal".to_string(),
                     None,
                     "stopped".to_string(),
                     None,
@@ -1014,6 +1135,63 @@ mod tests {
                 ),
             ]
         );
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn reconcile_workspace_services_db_assigns_next_available_port_for_conflicting_defaults() {
+        let db_path = temp_db_path();
+        init_workspace_tables(&db_path);
+        let default_port = unused_port();
+
+        let conn = open_db(&db_path).expect("open db");
+        conn.execute(
+            "INSERT INTO workspace (id, status, updated_at) VALUES (?1, ?2, datetime('now')), (?3, ?4, datetime('now'))",
+            rusqlite::params!["ws_a", "idle", "ws_b", "idle"],
+        )
+        .expect("insert workspaces");
+        conn.execute(
+            "INSERT INTO workspace_service (
+                id, workspace_id, service_name, exposure, status, default_port, effective_port,
+                preview_status, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'), datetime('now'))",
+            rusqlite::params![
+                "svc_a",
+                "ws_a",
+                "web",
+                "local",
+                "stopped",
+                Some(default_port),
+                Some(default_port),
+                "sleeping",
+            ],
+        )
+        .expect("insert reserved service");
+        drop(conn);
+
+        let config_json = format!(
+            r#"{{
+                "setup": {{ "steps": [{{ "name": "install", "command": "bun install", "timeout_seconds": 30 }}] }},
+                "services": {{
+                    "web": {{ "runtime": "process", "command": "bun run dev", "port": {default_port}, "share_default": true }}
+                }}
+            }}"#,
+        );
+        let config: LifecycleConfig = serde_json::from_str(&config_json).expect("valid config");
+
+        reconcile_workspace_services_db(&db_path, "ws_b", Some(&config), Some("fingerprint_2"))
+            .expect("reconcile succeeds");
+
+        let conn = open_db(&db_path).expect("re-open db");
+        let row: (Option<i64>, Option<i64>) = conn
+            .query_row(
+                "SELECT port_override, effective_port FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+                rusqlite::params!["ws_b", "web"],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("query service");
+        assert_eq!(row, (None, Some(default_port + 1)));
 
         let _ = std::fs::remove_file(db_path);
     }

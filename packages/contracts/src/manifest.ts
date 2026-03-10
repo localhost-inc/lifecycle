@@ -7,6 +7,12 @@ const SetupStepSchema = z.object({
   timeout_seconds: z.number().int().positive(),
   cwd: z.string().optional(),
   env_vars: z.record(z.string(), z.string()).optional(),
+  run_on: z.enum(["create", "start"]).optional(),
+});
+
+const SetupSchema = z.object({
+  services: z.array(z.string()).optional(),
+  steps: z.array(SetupStepSchema).min(1),
 });
 
 const HealthCheckSchema = z.discriminatedUnion("kind", [
@@ -69,9 +75,7 @@ const ResetSchema = z.object({
 });
 
 export const LifecycleConfigSchema = z.object({
-  setup: z.object({
-    steps: z.array(SetupStepSchema).min(1),
-  }),
+  setup: SetupSchema,
   services: z.record(z.string(), ServiceSchema),
   secrets: z.record(z.string(), SecretSchema).optional(),
   reset: ResetSchema.optional(),

@@ -52,6 +52,7 @@ describe("TitleBar", () => {
     expect(markup).toContain("abcdef12");
     expect(markup).toContain("Open");
     expect(markup).toContain('title="Open in VS Code"');
+    expect(markup).not.toContain("bg-emerald-500");
   });
 
   test("does not render title bar actions for non-interactive workspaces", () => {
