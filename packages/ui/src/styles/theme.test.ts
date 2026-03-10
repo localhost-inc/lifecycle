@@ -43,7 +43,9 @@ describe("theme.css", () => {
     const css = readFileSync(new URL("./theme.css", import.meta.url), "utf8");
 
     expect(css).toContain(".app-panel-title");
-    expect(css).toContain("font-size: 14px;");
+    expect(css).toContain("font-family: var(--font-mono);");
+    expect(css).toContain("font-size: 12px;");
+    expect(css).toContain("font-weight: 500;");
     expect(css).toContain("color: var(--sidebar-muted-foreground);");
   });
 });

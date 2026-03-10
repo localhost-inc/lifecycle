@@ -3,15 +3,19 @@ import { readOverlayViewportSnapshot, subscribeOverlayViewport } from "./overlay
 
 type WindowStub = Pick<
   Window,
-  "addEventListener" | "innerHeight" | "innerWidth" | "removeEventListener" | "visualViewport"
->;
+  "addEventListener" | "removeEventListener"
+> & {
+  innerHeight: number;
+  innerWidth: number;
+  visualViewport: Pick<VisualViewport, "addEventListener" | "removeEventListener"> | null;
+};
 
 const originalWindow = globalThis.window;
 
 function installWindowStub(windowStub: WindowStub): void {
   Object.defineProperty(globalThis, "window", {
     configurable: true,
-    value: windowStub,
+    value: windowStub as unknown as Window,
   });
 }
 
@@ -45,24 +49,24 @@ describe("overlay viewport", () => {
   });
 
   test("subscribes to both window and visual viewport resize events", () => {
-    const windowListeners = new Set<() => void>();
-    const visualViewportListeners = new Set<() => void>();
+    const windowListeners = new Set<EventListenerOrEventListenerObject>();
+    const visualViewportListeners = new Set<EventListenerOrEventListenerObject>();
     const visualViewport = {
-      addEventListener(_type: string, listener: () => void) {
+      addEventListener(_type: string, listener: EventListenerOrEventListenerObject) {
         visualViewportListeners.add(listener);
       },
-      removeEventListener(_type: string, listener: () => void) {
+      removeEventListener(_type: string, listener: EventListenerOrEventListenerObject) {
         visualViewportListeners.delete(listener);
       },
-    } as Window["visualViewport"];
+    } satisfies WindowStub["visualViewport"];
 
     installWindowStub({
-      addEventListener(_type: string, listener: () => void) {
+      addEventListener(_type: string, listener: EventListenerOrEventListenerObject) {
         windowListeners.add(listener);
       },
       innerHeight: 480,
       innerWidth: 640,
-      removeEventListener(_type: string, listener: () => void) {
+      removeEventListener(_type: string, listener: EventListenerOrEventListenerObject) {
         windowListeners.delete(listener);
       },
       visualViewport,

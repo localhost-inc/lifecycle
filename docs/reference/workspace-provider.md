@@ -147,6 +147,7 @@ Git operations follow the same authority rule as terminals and lifecycle mutatio
    - local Git worktree checked out on host filesystem
    - Tauri Rust backend handles process supervision, PTY management, Docker integration, and local state persistence
    - localhost ports for service access
+   - `workspace.name` remains a user-facing label; the managed git branch (`source_ref`) and worktree directory name are derived as kebab-cased Lifecycle-owned identifiers from that label plus the workspace id
 2. Requirements:
    - local workspaces operate without network — Convex connection only required for cloud workspaces and fork-to-cloud
    - Tauri desktop app must be running (the Rust backend IS the local process supervisor — no separate daemon)

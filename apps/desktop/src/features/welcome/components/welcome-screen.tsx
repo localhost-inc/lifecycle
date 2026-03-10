@@ -218,7 +218,6 @@ export function WelcomeScreen({ onAddProject }: WelcomeScreenProps) {
     setAnimKey((k) => k + 1);
   }, []);
 
-  const isBigLogo = phase === "logo" || phase === "pause";
   const isSettling = phase === "settle";
   const pastSettle = phase === "typing" || phase === "reveal" || phase === "complete";
   const showFloat = pastSettle && !prefersReducedMotion;

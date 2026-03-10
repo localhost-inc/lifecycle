@@ -149,7 +149,7 @@ describe("WorkspaceSurfaceTabBar", () => {
     );
 
     expect(markup).not.toContain('data-slot="workspace-tab-separator"');
-    expect(markup).toContain("gap-1");
+    expect(markup).toContain("gap-2");
   });
 
   test("does not render a status dot for a plain terminal tab", () => {

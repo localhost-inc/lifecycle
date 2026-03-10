@@ -70,7 +70,7 @@ export function TypedTitle({ className, text }: TypedTitleProps) {
       {animating ? (
         <span
           aria-hidden
-          className="ml-0.5 inline-block h-[0.95em] w-px animate-pulse rounded-full bg-current opacity-60"
+          className="lifecycle-motion-soft-pulse ml-0.5 inline-block h-[0.95em] w-px rounded-full bg-current opacity-60"
         />
       ) : null}
     </span>

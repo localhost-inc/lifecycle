@@ -18,7 +18,7 @@ const statusDotVariants = cva("inline-block shrink-0 rounded-full", {
       default: "h-2 w-2",
     },
     pulse: {
-      true: "animate-pulse",
+      true: "lifecycle-motion-soft-pulse",
       false: "",
     },
   },

@@ -33,7 +33,7 @@ export function resolveSurfaceLaunchTooltipAlign(
 
 function LoadingDot() {
   return (
-    <span className="block h-[14px] w-[14px] animate-pulse rounded-full bg-current opacity-50" />
+    <span className="lifecycle-motion-soft-pulse block h-[14px] w-[14px] rounded-full bg-current opacity-50" />
   );
 }
 

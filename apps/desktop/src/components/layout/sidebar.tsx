@@ -226,10 +226,10 @@ export function Sidebar({
         )}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-[var(--border)]">
+      <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={onOpenSettings}>
+            <SidebarMenuButton onClick={onOpenSettings} className="text-[var(--muted-foreground)]">
               <Settings size={16} />
               <span>Settings</span>
             </SidebarMenuButton>

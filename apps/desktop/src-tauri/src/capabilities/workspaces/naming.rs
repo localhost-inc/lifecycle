@@ -6,7 +6,9 @@ use std::time::{Duration, Instant};
 use tokio::process::Command;
 use tokio::time::timeout;
 
-const TITLE_GENERATION_TIMEOUT: Duration = Duration::from_secs(8);
+// Shared timeout for the structured Codex requests that generate terminal titles and
+// first-prompt workspace identity.
+const TITLE_GENERATION_TIMEOUT: Duration = Duration::from_secs(15);
 const TERMINAL_TITLE_SCHEMA: &str = r#"{"type":"object","properties":{"title":{"type":"string"}},"required":["title"],"additionalProperties":false}"#;
 const WORKSPACE_IDENTITY_SCHEMA: &str = r#"{"type":"object","properties":{"workspace_title":{"type":"string"},"session_title":{"type":"string"}},"required":["workspace_title","session_title"],"additionalProperties":false}"#;
 

@@ -105,7 +105,7 @@ function AuthorAvatar({ name, email }: { name: string; email: string }) {
       <img
         src={url}
         alt={name}
-        className="h-5 w-5 shrink-0 rounded-full"
+        className="h-6 w-6 shrink-0 rounded-full"
         onError={() => setImgFailed(true)}
       />
     );

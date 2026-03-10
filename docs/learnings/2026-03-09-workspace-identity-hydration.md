@@ -35,6 +35,7 @@ This avoids the previous conflation between UI titles and workspace identity:
 ## Implementation Notes
 
 - `workspace.worktree_path` is now the canonical runtime cwd source.
+- `workspace.name` stays human-readable; the managed branch name and worktree directory are kebab-cased derivatives of that label plus the workspace id.
 - Terminals no longer depend on a copied `launch_worktree_path` field during runtime behavior.
 - `workspace.source_ref_origin` now tracks whether branch identity is still unlocked (`default`) or already locked by generated/manual identity.
 - `workspace.renamed` events now carry `source_ref` so the frontend updates branch display immediately after rename.

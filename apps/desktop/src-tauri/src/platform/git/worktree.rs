@@ -359,6 +359,21 @@ mod tests {
         assert_eq!(slugify_workspace_name("___"), "workspace");
     }
 
+    #[test]
+    fn workspace_branch_and_worktree_names_use_kebab_case_derivatives() {
+        let workspace_id = "1234abcd-ffff-eeee-dddd-000000000000";
+        let workspace_name = "Fix Auth Callback / API";
+
+        assert_eq!(
+            workspace_branch_name(workspace_name, workspace_id),
+            "lifecycle/fix-auth-callback-api-1234abcd"
+        );
+        assert_eq!(
+            worktree_directory_name(workspace_name, workspace_id),
+            "fix-auth-callback-api--1234abcd"
+        );
+    }
+
     #[tokio::test]
     async fn create_worktree_allows_checked_out_source_ref() {
         let repo_path = temp_repo_path();

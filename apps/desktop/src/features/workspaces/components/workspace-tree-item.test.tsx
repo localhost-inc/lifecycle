@@ -48,8 +48,9 @@ describe("WorkspaceTreeItem", () => {
 
     expect(markup).toContain('aria-label="Response ready"');
     expect(markup).toContain("absolute left-1 top-1/2 -translate-y-1/2");
-    expect(markup).toContain("bg-amber-400");
-    expect(markup).toContain("animate-ping");
+    expect(markup).toContain("bg-amber-300");
+    expect(markup).toContain("lifecycle-motion-ready-ring");
+    expect(markup).toContain("lifecycle-motion-soft-pulse");
   });
 
   test("uses the shared selected sidebar treatment", () => {

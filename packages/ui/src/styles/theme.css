@@ -156,6 +156,48 @@
   background: var(--muted);
 }
 
+@keyframes lifecycle-soft-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.94);
+  }
+
+  50% {
+    opacity: 0.92;
+    transform: scale(1);
+  }
+}
+
+@keyframes lifecycle-ready-ring {
+  0% {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+
+  18% {
+    opacity: 0.32;
+  }
+
+  58%,
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
+.lifecycle-motion-soft-pulse {
+  animation: lifecycle-soft-pulse 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  transform-origin: center;
+  will-change: opacity, transform;
+}
+
+.lifecycle-motion-ready-ring {
+  animation: lifecycle-ready-ring 2.8s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  transform-origin: center;
+  will-change: opacity, transform;
+}
+
 .compact-control-underline-tab {
   position: relative;
   display: inline-flex;
@@ -164,8 +206,8 @@
   justify-content: center;
   white-space: nowrap;
   padding: 8px 12px;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   color: var(--muted-foreground);
   box-shadow: inset 0 -1px 0 0 transparent;
 }
@@ -178,4 +220,13 @@
 .compact-control-underline-tab[data-active] {
   color: var(--foreground);
   box-shadow: inset 0 -1px 0 0 var(--foreground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lifecycle-motion-soft-pulse,
+  .lifecycle-motion-ready-ring {
+    animation: none;
+    transform: none;
+    will-change: auto;
+  }
 }

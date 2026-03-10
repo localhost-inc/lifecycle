@@ -134,6 +134,7 @@ describe("WorkspacePanel", () => {
           manifestStatus: {
             state: "valid",
             result: {
+              valid: true,
               config: {
                 setup: { steps: [] },
                 services: {

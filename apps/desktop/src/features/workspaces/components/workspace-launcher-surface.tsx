@@ -63,7 +63,7 @@ export function WorkspaceLauncherSurface({
             disabled={creatingSelection !== null}
             icon={
               creatingSelection === "shell" ? (
-                <span className="block h-7 w-7 animate-pulse rounded-full bg-current opacity-50" />
+                <span className="lifecycle-motion-soft-pulse block h-7 w-7 rounded-full bg-current opacity-50" />
               ) : (
                 <ShellIcon size={28} />
               )
@@ -76,7 +76,7 @@ export function WorkspaceLauncherSurface({
             disabled={creatingSelection !== null}
             icon={
               creatingSelection === "claude" ? (
-                <span className="block h-7 w-7 animate-pulse rounded-full bg-current opacity-50" />
+                <span className="lifecycle-motion-soft-pulse block h-7 w-7 rounded-full bg-current opacity-50" />
               ) : (
                 <ClaudeIcon size={28} />
               )
@@ -89,7 +89,7 @@ export function WorkspaceLauncherSurface({
             disabled={creatingSelection !== null}
             icon={
               creatingSelection === "codex" ? (
-                <span className="block h-7 w-7 animate-pulse rounded-full bg-current opacity-50" />
+                <span className="lifecycle-motion-soft-pulse block h-7 w-7 rounded-full bg-current opacity-50" />
               ) : (
                 <CodexIcon size={28} />
               )

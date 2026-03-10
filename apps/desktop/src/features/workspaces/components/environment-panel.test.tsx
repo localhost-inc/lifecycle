@@ -148,7 +148,7 @@ describe("EnvironmentPanel", () => {
     expect(markup).toContain("Manifest changed. Stop and run again to apply service updates.");
   });
 
-  test("renders service controls and preview metadata", () => {
+  test("renders collapsed service summaries with preview metadata", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
         hasManifest: true,
@@ -162,13 +162,15 @@ describe("EnvironmentPanel", () => {
       }),
     );
 
-    expect(markup).toContain("Exposure");
-    expect(markup).toContain("Port");
+    expect(markup).toContain("web");
+    expect(markup).toContain("api");
     expect(markup).toContain("Preview ready");
     expect(markup).toContain("Preview provisioning");
-    expect(markup).toContain("Open");
-    expect(markup).toContain("Copy URL");
-    expect(markup).toContain("http://localhost:3000");
+    expect(markup).toContain(":3000");
+    expect(markup).toContain(":8787");
+    expect(markup).not.toContain("Exposure");
+    expect(markup).not.toContain("Open");
+    expect(markup).not.toContain("Copy");
   });
 
   test("renders sleeping preview state for local services while the workspace sleeps", () => {
@@ -196,6 +198,7 @@ describe("EnvironmentPanel", () => {
     );
 
     expect(markup).toContain("Preview sleeping");
-    expect(markup).toContain("http://localhost:3000");
+    expect(markup).toContain(":3000");
+    expect(markup).toContain("stopped");
   });
 });

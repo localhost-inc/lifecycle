@@ -206,7 +206,7 @@ function browserPreviewFields(
   };
 }
 
-function shortWorkspaceId(workspaceId: string): string {
+export function shortWorkspaceId(workspaceId: string): string {
   const short = workspaceId
     .split("")
     .filter((char) => /[a-z0-9]/i.test(char))
@@ -215,13 +215,17 @@ function shortWorkspaceId(workspaceId: string): string {
   return short.length > 0 ? short : "workspace";
 }
 
-function slugifyWorkspaceName(value: string): string {
+export function slugifyWorkspaceName(value: string): string {
   const slug = value
     .toLowerCase()
     .replace(/[^a-z0-9\s\-_/.]+/g, "")
     .replace(/[\s\-_/.]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return slug.length > 0 ? slug : "workspace";
+}
+
+export function browserWorktreeDirectoryName(workspaceName: string, workspaceId: string): string {
+  return `${slugifyWorkspaceName(workspaceName)}--${shortWorkspaceId(workspaceId)}`;
 }
 
 function renameBrowserWorktreePath(
@@ -238,11 +242,11 @@ function renameBrowserWorktreePath(
     worktreePath.lastIndexOf("\\"),
   );
   const parent = lastSeparatorIndex >= 0 ? worktreePath.slice(0, lastSeparatorIndex) : "";
-  const nextLeaf = `${slugifyWorkspaceName(workspaceName)}--${shortWorkspaceId(workspaceId)}`;
+  const nextLeaf = browserWorktreeDirectoryName(workspaceName, workspaceId);
   return parent.length > 0 ? `${parent}/${nextLeaf}` : nextLeaf;
 }
 
-function browserWorkspaceSourceRef(workspaceName: string, workspaceId: string): string {
+export function browserWorkspaceSourceRef(workspaceName: string, workspaceId: string): string {
   return `lifecycle/${slugifyWorkspaceName(workspaceName)}-${shortWorkspaceId(workspaceId)}`;
 }
 
@@ -313,13 +317,15 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
   if (!isTauri()) {
     const id = crypto.randomUUID();
     const now = nowIso();
+    const normalizedName = input.workspaceName?.trim() || input.baseRef?.trim() || "Workspace";
+    const worktreeRoot = input.worktreeRoot ?? `${input.projectPath}/.worktrees`;
     const workspace: WorkspaceRecord = {
       id,
       project_id: input.projectId,
-      name: input.workspaceName?.trim() || input.baseRef?.trim() || "Workspace",
-      source_ref: input.baseRef ?? "main",
+      name: normalizedName,
+      source_ref: browserWorkspaceSourceRef(normalizedName, id),
       git_sha: null,
-      worktree_path: `${input.worktreeRoot ?? `${input.projectPath}/.worktrees`}/${id}`,
+      worktree_path: `${worktreeRoot}/${browserWorktreeDirectoryName(normalizedName, id)}`,
       mode: "local",
       manifest_fingerprint: input.manifestFingerprint ?? null,
       status: "sleeping",

@@ -466,7 +466,7 @@ export function WorkspaceSurfaceTabBar({
       />
       <div
         aria-label="Workspace tabs"
-        className="flex items-center gap-1 overflow-x-auto py-1 [&::-webkit-scrollbar]:hidden"
+        className="flex items-center gap-2 overflow-x-auto py-1 [&::-webkit-scrollbar]:hidden"
         role="tablist"
         ref={tabListRef}
         style={tabListStyle}

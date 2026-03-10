@@ -64,6 +64,6 @@ describe("SurfaceLaunchActions", () => {
       }),
     );
 
-    expect(markup).toContain("animate-pulse");
+    expect(markup).toContain("lifecycle-motion-soft-pulse");
   });
 });
