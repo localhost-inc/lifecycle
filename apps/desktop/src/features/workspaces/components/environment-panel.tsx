@@ -1,5 +1,5 @@
 import type { ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
-import { SetupProgress, Tabs, TabsList, TabsTrigger, cn } from "@lifecycle/ui";
+import { Button, SetupProgress, Tabs, TabsList, TabsTrigger } from "@lifecycle/ui";
 import { useState } from "react";
 import { Play, Square } from "lucide-react";
 import { LogsTab } from "./logs-tab";
@@ -92,14 +92,14 @@ export function EnvironmentPanel({
           label: activeAction === "stop" || stopping ? "Stopping..." : "Stop",
           onClick: handleStop,
           title: "Stop workspace services",
-          toneClassName: "compact-control-tone-foreground",
+          variant: "secondary" as const,
         }
       : {
           icon: <Play className="size-3.5 fill-current" strokeWidth={2.2} />,
           label: activeAction === "run" ? "Running..." : "Run",
           onClick: handleRun,
           title: "Run workspace services",
-          toneClassName: "compact-control-tone-active",
+          variant: "default" as const,
         };
 
   const actionDisabled = activeAction !== null || stopping || (!canRun && !canStop);
@@ -113,28 +113,20 @@ export function EnvironmentPanel({
               <span className="app-panel-title">Environment</span>
             </div>
             <div className="flex shrink-0 items-center">
-              <button
-                className={cn(
-                  "compact-control-standalone compact-control-item compact-control-label px-3",
-                  actionConfig.toneClassName,
-                )}
+              <Button
                 disabled={actionDisabled}
                 onClick={() => void actionConfig.onClick()}
+                size="sm"
                 title={actionConfig.title}
-                type="button"
+                variant={actionConfig.variant}
               >
                 {actionConfig.icon}
                 <span>{actionConfig.label}</span>
-              </button>
+              </Button>
             </div>
           </div>
           {workspace.status === "idle" && workspace.failure_reason && (
             <p className="text-xs text-[var(--destructive)]">{workspace.failure_reason}</p>
-          )}
-          {manifestState === "missing" && (
-            <p className="text-xs text-[var(--muted-foreground)]">
-              Add a lifecycle.json file to the project root to configure services and setup steps.
-            </p>
           )}
           {workspace.status === "active" && isManifestStale && (
             <p className="text-xs text-[var(--muted-foreground)]">

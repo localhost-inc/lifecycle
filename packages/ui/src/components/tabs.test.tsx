@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./tabs";
 
 describe("Tabs", () => {
-  test("preserves active state compatibility for consumer class selectors", () => {
+  test("renders the active state contract used by shared tab styling", () => {
     const markup = renderToStaticMarkup(
       createElement(
         Tabs,
@@ -29,7 +29,6 @@ describe("Tabs", () => {
     expect(markup).toContain("compact-control-shell");
     expect(markup).toContain("compact-control-tab");
     expect(markup).toContain("compact-control-divider");
-    expect(markup).toContain("data-active:bg-[var(--surface-selected)]");
     expect(markup).toContain("data-[state=active]:bg-[var(--surface-selected)]");
   });
 
@@ -53,7 +52,6 @@ describe("Tabs", () => {
 
     expect(markup).toContain("flex w-full items-stretch border-b border-[var(--border)]");
     expect(markup).toContain("compact-control-underline-tab");
-    expect(markup).not.toContain("data-active:bg-[var(--surface-selected)]");
     expect(markup).not.toContain("compact-control-shell");
   });
 });

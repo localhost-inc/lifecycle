@@ -112,6 +112,8 @@ describe("EnvironmentPanel", () => {
 
     expect(markup).toContain("Run");
     expect(markup).not.toContain("Stop");
+    expect(markup).toContain('data-slot="button"');
+    expect(markup).toContain("bg-[var(--muted)]");
     expect(markup).toContain("service_start_failed");
     expect(markup).toContain("install");
   });
@@ -138,7 +140,7 @@ describe("EnvironmentPanel", () => {
     expect(markup).toContain('disabled=""');
     expect(markup).toContain("Services");
     expect(markup).toContain("Logs");
-    expect(markup).toContain("Add a lifecycle.json file to the project root");
+    expect(markup).not.toContain("Add a lifecycle.json file to the project root");
   });
 
   test("shows restart guidance when a running workspace manifest is stale", () => {

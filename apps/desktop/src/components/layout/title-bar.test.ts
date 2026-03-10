@@ -15,7 +15,7 @@ function renderTitleBar(selectedWorkspace: Parameters<typeof TitleBar>[0]["selec
           selectedWorkspace,
         }),
       ),
-      storageKey: "lifecycle.desktop.theme.test.v1",
+      storageKey: "lifecycle.desktop.theme.test",
     }),
   );
 }

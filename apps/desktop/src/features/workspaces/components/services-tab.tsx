@@ -238,8 +238,7 @@ function ServiceRow({
 
   const [expanded, setExpanded] = useState(false);
 
-  const showPreviewLine =
-    service.preview_status !== "disabled" && service.exposure !== "internal";
+  const showPreviewLine = service.preview_status !== "disabled" && service.exposure !== "internal";
 
   return (
     <div className="group/row">

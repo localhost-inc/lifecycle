@@ -26,7 +26,7 @@ interface BrowserProjectsState {
   manifestsByPath: Record<string, string>;
 }
 
-const BROWSER_PROJECTS_STORAGE_KEY = "lifecycle.desktop.browser.projects.v1";
+const BROWSER_PROJECTS_STORAGE_KEY = "lifecycle.desktop.browser.projects";
 
 const BROWSER_MANIFEST_TEXT = JSON.stringify({
   setup: {

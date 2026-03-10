@@ -13,7 +13,7 @@ import { ThemeWindowSync } from "./theme/theme-window-sync";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ThemeProvider storageKey="lifecycle.desktop.theme.v1">
+    <ThemeProvider storageKey="lifecycle.desktop.theme">
       <ThemeWindowSync />
       <OverlayHostBootstrap />
       <QueryProvider>

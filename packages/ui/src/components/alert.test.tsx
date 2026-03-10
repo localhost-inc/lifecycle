@@ -42,7 +42,10 @@ describe("Alert", () => {
 
     expect(markup).toContain('data-slot="alert-action"');
     expect(markup).toContain("col-start-2 row-span-2 row-start-1 justify-self-end");
-    expect(markup).toContain("h-8 px-3 text-xs");
+    expect(markup).toContain("text-xs");
+    expect(markup).toContain("h-8");
+    expect(markup).toContain("px-3");
+    expect(markup).toContain("border-[var(--border)]");
     expect(markup).toContain('href="/settings"');
   });
 });

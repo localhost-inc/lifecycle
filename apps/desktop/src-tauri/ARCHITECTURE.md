@@ -28,7 +28,7 @@ This backend follows a capability + platform layout.
     - `workspaces/terminal/attachments.rs`: attachment naming and extension inference.
   - `workspaces/title.rs`: harness-log-driven auto-title generation and provider-specific prompt extraction.
 - `src/platform/`
-  - `db.rs`: SQLite open + FK policy + ordered schema migrations (`schema_migrations` + SQL files under `platform/migrations`).
+  - `db.rs`: SQLite open + FK policy + ordered schema migrations (`schema_migration` + SQL files under `platform/migrations`).
   - `git/worktree.rs`: git worktree/branch/SHA adapters.
   - `git/status.rs`: git status/diff/log/public adapter surface.
     - `git/status/runner.rs`: shared git subprocess execution policy.

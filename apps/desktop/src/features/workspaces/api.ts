@@ -38,11 +38,7 @@ interface BrowserWorkspaceRecord extends WorkspaceRecord {
   source_ref_origin?: "default" | "generated" | "manual";
 }
 
-interface LegacyBrowserServiceRecord extends Partial<ServiceRecord> {
-  preview_state?: ServiceRecord["preview_status"];
-}
-
-const BROWSER_WORKSPACES_STORAGE_KEY = "lifecycle.desktop.browser.workspaces.v1";
+const BROWSER_WORKSPACES_STORAGE_KEY = "lifecycle.desktop.browser.workspaces";
 
 let browserWorkspaceState = readBrowserWorkspaceState();
 
@@ -63,9 +59,7 @@ function readBrowserWorkspaceState(): BrowserWorkspaceState {
         ? parsed.workspaces.map((workspace) => normalizeBrowserWorkspaceRecord(workspace))
         : [],
       services: Array.isArray(parsed.services)
-        ? parsed.services.map((service) =>
-            normalizeBrowserServiceRecord(service as LegacyBrowserServiceRecord),
-          )
+        ? parsed.services.map((service) => normalizeBrowserServiceRecord(service as ServiceRecord))
         : [],
     };
   } catch {
@@ -293,10 +287,10 @@ function normalizeBrowserWorkspaceRecord(
   };
 }
 
-function normalizeBrowserServiceRecord(service: LegacyBrowserServiceRecord): ServiceRecord {
+function normalizeBrowserServiceRecord(service: Partial<ServiceRecord>): ServiceRecord {
   return {
     ...(service as ServiceRecord),
-    preview_status: service.preview_status ?? service.preview_state ?? "disabled",
+    preview_status: service.preview_status ?? "disabled",
     preview_failure_reason: service.preview_failure_reason ?? null,
     preview_url: service.preview_url ?? null,
   };

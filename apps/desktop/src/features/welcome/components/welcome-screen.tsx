@@ -267,7 +267,7 @@ export function WelcomeScreen({ onAddProject }: WelcomeScreenProps) {
       <div className="mt-6 h-10 flex items-center" data-tauri-drag-region>
         {showButton && (
           <div className={prefersReducedMotion ? undefined : "welcome-button-enter"}>
-            <Button data-no-drag variant="secondary" onClick={handleClick}>
+            <Button data-no-drag onClick={handleClick}>
               <FolderOpen size={16} />
               Open project folder
             </Button>

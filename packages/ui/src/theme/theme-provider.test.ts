@@ -28,17 +28,6 @@ describe("readStoredThemePreference", () => {
       theme: "nord",
     });
   });
-
-  test("falls back to default for unrecognized old format", () => {
-    const storage = {
-      getItem: () => '{"preset":"nord","appearance":"dark"}',
-      setItem: () => {},
-    };
-
-    expect(readStoredThemePreference("theme", DEFAULT_THEME_PREFERENCE, storage)).toEqual(
-      DEFAULT_THEME_PREFERENCE,
-    );
-  });
 });
 
 describe("resolveTheme", () => {

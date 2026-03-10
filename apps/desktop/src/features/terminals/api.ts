@@ -104,7 +104,7 @@ interface BrowserTerminalCommandResult {
   output: string;
 }
 
-const BROWSER_TERMINALS_STORAGE_KEY = "lifecycle.desktop.browser.terminals.v1";
+const BROWSER_TERMINALS_STORAGE_KEY = "lifecycle.desktop.browser.terminals";
 const BROWSER_TERMINAL_REPLAY_LIMIT = 400;
 
 let nativeTerminalCapabilitiesPromise: Promise<NativeTerminalCapabilities> | null = null;

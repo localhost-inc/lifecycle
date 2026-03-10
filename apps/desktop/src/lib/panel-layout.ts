@@ -14,13 +14,13 @@ export interface SplitRatioBounds {
 }
 
 export const DASHBOARD_LEFT_SIDEBAR_COLLAPSED_STORAGE_KEY =
-  "lifecycle.desktop.dashboard-left-sidebar-collapsed.v1";
+  "lifecycle.desktop.dashboard-left-sidebar-collapsed";
 export const DASHBOARD_LEFT_SIDEBAR_WIDTH_STORAGE_KEY =
-  "lifecycle.desktop.dashboard-left-sidebar-width.v1";
+  "lifecycle.desktop.dashboard-left-sidebar-width";
 export const DASHBOARD_RIGHT_SIDEBAR_WIDTH_STORAGE_KEY =
-  "lifecycle.desktop.dashboard-right-sidebar-width.v1";
+  "lifecycle.desktop.dashboard-right-sidebar-width";
 export const WORKSPACE_SIDEBAR_TOP_PANEL_RATIO_STORAGE_KEY =
-  "lifecycle.desktop.workspace-sidebar-top-panel-ratio.v1";
+  "lifecycle.desktop.workspace-sidebar-top-panel-ratio";
 
 export const DEFAULT_LEFT_SIDEBAR_WIDTH = 256;
 export const MIN_LEFT_SIDEBAR_WIDTH = 224;
@@ -32,7 +32,7 @@ export const MAX_RIGHT_SIDEBAR_WIDTH = 420;
 
 export const MIN_DASHBOARD_MAIN_PANEL_WIDTH = 480;
 
-export const DIFF_FILE_TREE_WIDTH_STORAGE_KEY = "lifecycle.desktop.diff-file-tree-width.v1";
+export const DIFF_FILE_TREE_WIDTH_STORAGE_KEY = "lifecycle.desktop.diff-file-tree-width";
 export const DEFAULT_DIFF_FILE_TREE_WIDTH = 240;
 export const MIN_DIFF_FILE_TREE_WIDTH = 180;
 export const MAX_DIFF_FILE_TREE_WIDTH = 360;

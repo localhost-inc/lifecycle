@@ -36,7 +36,7 @@ function TabsTrigger({ className, variant = "segmented", ...props }: TabsTrigger
       className={cn(
         variant === "underline"
           ? "compact-control-item compact-control-underline-tab"
-          : "compact-control-item compact-control-tab compact-control-tone-muted compact-control-divider data-active:bg-[var(--surface-selected)] data-active:text-[var(--foreground)] data-[state=active]:bg-[var(--surface-selected)] data-[state=active]:text-[var(--foreground)]",
+          : "compact-control-item compact-control-tab compact-control-tone-muted compact-control-divider data-[state=active]:bg-[var(--surface-selected)] data-[state=active]:text-[var(--foreground)]",
         className,
       )}
       data-slot="tabs-trigger"

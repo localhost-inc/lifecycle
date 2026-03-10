@@ -53,7 +53,7 @@ describe("TitleBarActions", () => {
           children: createElement(TitleBarActions, {
             workspace: interactiveWorkspace,
           }),
-          storageKey: "lifecycle.desktop.theme.test.v1",
+          storageKey: "lifecycle.desktop.theme.test",
         }),
       );
 

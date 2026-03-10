@@ -1,10 +1,12 @@
 CREATE TABLE IF NOT EXISTS terminal (
     id TEXT PRIMARY KEY NOT NULL,
     workspace_id TEXT NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
-    harness TEXT,
+    launch_type TEXT NOT NULL DEFAULT 'shell',
+    harness_provider TEXT,
     harness_session_id TEXT,
     created_by TEXT,
     label TEXT NOT NULL,
+    label_origin TEXT NOT NULL DEFAULT 'manual',
     status TEXT NOT NULL DEFAULT 'detached',
     failure_reason TEXT,
     exit_code INTEGER,

@@ -14,7 +14,7 @@ import {
 
 export const DEFAULT_LIFECYCLE_ROOT = "~/.lifecycle";
 export const DEFAULT_WORKTREE_ROOT = `${DEFAULT_LIFECYCLE_ROOT}/worktrees`;
-const SETTINGS_STORAGE_KEY = "lifecycle.desktop.settings.v1";
+const SETTINGS_STORAGE_KEY = "lifecycle.desktop.settings";
 
 export interface AppSettings {
   terminalFontFamily: string;
