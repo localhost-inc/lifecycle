@@ -1,31 +1,31 @@
-# Native Overlay Boundary Policy - 2026-03-09
+# Native Overlay Surface Policy - 2026-03-09
 
 ## Context
 
-The desktop app now embeds the active terminal as a native `NSView` above the Tauri `WKWebView`. That made the Git action popover fail in the workspace right rail: the popover was wider than the rail, spilled left over the terminal lane, and the native surface occluded part of it.
+The desktop app now embeds the active terminal as a native `NSView` above the Tauri `WKWebView`. That made DOM popovers fail anywhere they crossed into native territory, including the Git action popover in the right rail and title-bar actions above the terminal lane.
 
 ## Observation
 
 1. A React portal only changes DOM placement inside the webview. It does not move content above sibling native views.
-2. Overlay bugs around the native terminal are usually geometry problems, not missing `z-index`.
-3. We need two different overlay paths:
-   - DOM overlays that stay inside a non-native boundary such as the right rail.
-   - Native overlays for actions that must cross over the terminal lane.
+2. The real consistency goal is not a native menu implementation. It is one JS popover system that desktop callers can use without caring about native overlap.
+3. A persistent child `WebviewWindow` can act as a single above-native overlay surface when it is booted with the app and kept separate from popover content ownership.
+4. The main failure mode in earlier attempts was lifecycle design: lazy boot and mixed ownership. The overlay surface has to be infrastructure; the popover UI has to stay in JS.
 
 ## Decision
 
-1. Treat `data-overlay-boundary` regions as safe DOM lanes for popovers, menus, and similar floating UI.
-2. Constrain right-rail overlays to the rail width instead of allowing them to spill into the native terminal area.
-3. Keep the existing native menu/child-window path for overlays that must appear above the terminal surface.
+1. Desktop popovers should default to one persistent hosted overlay window above native surfaces.
+2. JS owns popover rendering, styling, state, and behavior inside that host window.
+3. Native/Tauri windowing owns only z-order, window lifecycle, and viewport alignment to the main app window.
+4. DOM popovers remain a browser fallback, not the primary desktop primitive.
 
 ## Impact on Milestones
 
-1. M5: workspace lifecycle and Git rail actions can keep using custom web UI as long as those overlays stay inside the rail boundary.
-2. M5: title bar actions that need to cross the terminal lane should continue to use native presentation.
-3. M6: future command surfaces should choose their overlay mode up front instead of relying on a later `z-index` fix.
+1. M5: title-bar and right-rail popovers can converge on one desktop overlay channel instead of separate native and DOM policies.
+2. M5: the terminal can stay a native `NSView` without forcing popover authors to reason about native overlap.
+3. M6: future shell and workspace overlays should build on the shared hosted-window manager instead of adding more special-case native menu code.
 
 ## Follow-Up Actions
 
-1. Reuse the boundary-aware overlay path for other right-rail and inspector popovers.
-2. Add a native child-window/panel path for custom overlays that need text input above the terminal lane.
-3. Keep tooltip and menu designs compact near native surfaces so they can remain boundary-contained when possible.
+1. Migrate additional desktop popovers onto the hosted overlay manager until the remaining DOM desktop popovers are gone.
+2. Add a targeted manual smoke test for hosted overlays above the terminal, because the failure mode is visual and cross-surface.
+3. If the shared child-window host proves insufficient in real runtime use, replace only the surface layer with a native `NSPanel`/child `NSWindow` while keeping JS content ownership intact.

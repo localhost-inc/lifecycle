@@ -49,6 +49,17 @@ describe("git panel spacing", () => {
     }
   });
 
+  test("uses underline tabs in the Git rail", () => {
+    const markup = renderGitPanel();
+
+    expect(markup).toContain("flex items-stretch border-b border-[var(--border)]");
+    expect(markup).toContain("-mx-2.5");
+    expect(markup).toContain("w-[calc(100%+1.25rem)]");
+    expect(markup).toContain("flex-1");
+    expect(markup).toContain("data-active:shadow-[inset_0_-3px_0_0_var(--foreground)]");
+    expect(markup).not.toContain("data-active:bg-[var(--surface-selected)]");
+  });
+
   test("describes the broader Git rail in cloud mode", () => {
     const markup = renderGitPanel({
       workspaceMode: "cloud",

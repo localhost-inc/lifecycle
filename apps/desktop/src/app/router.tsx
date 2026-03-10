@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { DashboardLayout } from "../components/layout/dashboard-layout";
 import { DashboardIndexRoute } from "../features/dashboard/routes/dashboard-index-route";
+import { OverlayHostRoute } from "../features/overlays/routes/overlay-host-route";
 import { ProjectSettingsRoute } from "../features/projects/routes/project-settings-route";
 import { SettingsShellLayout } from "../features/settings/layout/settings-shell-layout";
 import { SettingsGeneralRoute } from "../features/settings/routes/settings-general-route";
@@ -10,6 +11,10 @@ import { SettingsWorktreesRoute } from "../features/settings/routes/settings-wor
 import { WorkspaceRoute } from "../features/workspaces/routes/workspace-route";
 
 export const router = createBrowserRouter([
+  {
+    path: "/overlay-host",
+    element: <OverlayHostRoute />,
+  },
   {
     path: "/",
     element: <DashboardLayout />,

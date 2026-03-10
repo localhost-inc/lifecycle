@@ -16,7 +16,7 @@ export const GIT_PANEL_TITLE = "Git";
 export const GIT_PANEL_TABS = [
   { label: "Changes", value: "changes" },
   { label: "History", value: "history" },
-  { label: "PRs", title: "Pull Requests", value: "pull-requests" },
+  { label: "Pulls", title: "Pull Requests", value: "pull-requests" },
 ] as const;
 
 type GitPanelTabValue = (typeof GIT_PANEL_TABS)[number]["value"];
@@ -168,12 +168,13 @@ export function GitPanel({
             onValueChange={(value) => setActiveTab(value as GitPanelTabValue)}
             value={activeTab}
           >
-            <TabsList className="w-full">
+            <TabsList className="-mx-2.5 w-[calc(100%+1.25rem)]" variant="underline">
               {GIT_PANEL_TABS.map((tab) => (
                 <TabsTrigger
                   key={tab.value}
                   title={"title" in tab ? tab.title : tab.label}
                   value={tab.value}
+                  variant="underline"
                 >
                   {tab.label}
                 </TabsTrigger>

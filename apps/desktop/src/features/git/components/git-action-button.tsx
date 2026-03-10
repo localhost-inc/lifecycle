@@ -18,6 +18,8 @@ import {
 } from "@lifecycle/ui";
 import { ChevronDown } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
+import type { HostedOverlayAction } from "../../overlays/overlay-contract";
+import { useHostedOverlay } from "../../overlays/use-hosted-overlay";
 import {
   buildGitPullRequestPrimaryAction,
   buildGitPullRequestQuickState,
@@ -57,6 +59,7 @@ function branchMeta(branchPullRequest: GitBranchPullRequestResult | null): strin
 
 interface GitActionMenuContentProps {
   actionError: string | null;
+  autoFocusCommitMessage?: boolean;
   branchPullRequest: GitBranchPullRequestResult | null;
   commitMessage: string;
   gitStatus: GitStatusResult | null;
@@ -101,6 +104,7 @@ function checkLabel(status: GitPullRequestCheckStatus): string {
 
 export function GitActionMenuContent({
   actionError,
+  autoFocusCommitMessage = false,
   branchPullRequest,
   commitMessage,
   gitStatus,
@@ -154,6 +158,7 @@ export function GitActionMenuContent({
               Commit message
             </p>
             <Input
+              autoFocus={autoFocusCommitMessage}
               onChange={(event) => onCommitMessageChange(event.target.value)}
               placeholder="feat: summarize this workspace change"
               value={commitMessage}
@@ -317,13 +322,82 @@ export function GitActionButton({
     () => buildGitPullRequestPrimaryAction(gitStatus, branchPullRequest),
     [branchPullRequest, gitStatus],
   );
-  const hasCommitMessage = commitMessage.trim().length > 0;
   const isBusy = isCommitting || isCreatingPullRequest || isMergingPullRequest || isPushingBranch;
   const overlayBoundary = useOverlayBoundary(triggerRef);
   const contentWidth = resolveContainedOverlayWidth({
     boundaryWidth: overlayBoundary.width,
     idealWidth: 352,
   });
+  const hostedOverlayPayload = useMemo(
+    () => ({
+      actionError,
+      branchPullRequest,
+      commitMessage,
+      gitStatus,
+      isCommitting,
+      isCreatingPullRequest,
+      isMergingPullRequest,
+      isPushingBranch,
+      kind: "git-actions" as const,
+      placement: {
+        align: "end" as const,
+        estimatedHeight: 560,
+        gutter: 16,
+        preferredWidth: 352,
+        side: "bottom" as const,
+        sideOffset: 8,
+      },
+      requiresWindowFocus: quickState.kind === "needs_commit",
+    }),
+    [
+      actionError,
+      branchPullRequest,
+      commitMessage,
+      gitStatus,
+      isCommitting,
+      isCreatingPullRequest,
+      isMergingPullRequest,
+      isPushingBranch,
+      quickState.kind,
+    ],
+  );
+  const hostedOverlay = useHostedOverlay({
+    anchorRef: triggerRef,
+    onAction: (action: HostedOverlayAction) => {
+      if (action.kind !== "git-actions") {
+        return;
+      }
+
+      switch (action.action) {
+        case "commit":
+          void handleCommit(action.pushAfterCommit, action.message);
+          return;
+        case "create-pull-request":
+          void onCreatePullRequest();
+          return;
+        case "merge-pull-request":
+          void onMergePullRequest(action.pullRequestNumber);
+          return;
+        case "open-pull-request":
+          onOpenPullRequest(action.url);
+          return;
+        case "push-branch":
+          void onPushBranch();
+          return;
+        case "show-changes":
+          onShowChanges();
+          return;
+        default:
+          return;
+      }
+    },
+    onRequestClose: () => {
+      setOpen(false);
+    },
+    open,
+    payload: hostedOverlayPayload,
+  });
+  const usesHostedOverlay = hostedOverlay.hosted;
 
   async function handlePrimaryClick(): Promise<void> {
     if (primaryAction.kind === "commit" || primaryAction.kind === "commit_and_push") {
@@ -354,31 +428,55 @@ export function GitActionButton({
     setOpen(true);
   }
 
-  async function handleCommit(pushAfterCommit: boolean): Promise<void> {
-    if (!hasCommitMessage) {
+  async function handleCommit(
+    pushAfterCommit: boolean,
+    messageValue = commitMessage,
+  ): Promise<void> {
+    const nextMessage = messageValue.trim();
+    if (nextMessage.length === 0) {
       return;
     }
 
-    await onCommit(commitMessage.trim(), pushAfterCommit);
+    await onCommit(nextMessage, pushAfterCommit);
   }
 
-  return (
-    <Popover onOpenChange={setOpen} open={open}>
-      <SplitButton ref={triggerRef}>
-        <SplitButtonPrimary
+  const splitButton = (
+    <SplitButton ref={triggerRef}>
+      <SplitButtonPrimary
+        disabled={isBusy}
+        onClick={() => void handlePrimaryClick()}
+        title={quickState.title}
+        variant="foreground"
+      >
+        {isLoading ? "Loading..." : primaryAction.label}
+      </SplitButtonPrimary>
+      {usesHostedOverlay ? (
+        <SplitButtonSecondary
+          aria-label="Show git actions"
           disabled={isBusy}
-          onClick={() => void handlePrimaryClick()}
-          title={quickState.title}
-          variant="foreground"
+          onClick={() => {
+            setOpen((current) => !current);
+          }}
         >
-          {isLoading ? "Loading..." : primaryAction.label}
-        </SplitButtonPrimary>
+          <ChevronDown className="size-3.5" strokeWidth={2.4} />
+        </SplitButtonSecondary>
+      ) : (
         <PopoverTrigger asChild>
           <SplitButtonSecondary aria-label="Show git actions" disabled={isBusy}>
             <ChevronDown className="size-3.5" strokeWidth={2.4} />
           </SplitButtonSecondary>
         </PopoverTrigger>
-      </SplitButton>
+      )}
+    </SplitButton>
+  );
+
+  if (usesHostedOverlay) {
+    return splitButton;
+  }
+
+  return (
+    <Popover onOpenChange={setOpen} open={open}>
+      {splitButton}
       <PopoverContent
         align="end"
         className="rounded-[22px] border-[var(--border)] bg-[var(--card)] p-3 shadow-[0_20px_64px_rgba(0,0,0,0.18)]"

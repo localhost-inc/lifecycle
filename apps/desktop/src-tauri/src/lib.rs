@@ -69,7 +69,9 @@ pub fn run() {
             }
 
             #[cfg(target_os = "macos")]
-            setup_app_menu(&app.handle()).expect("failed to initialize application menu");
+            {
+                setup_app_menu(&app.handle()).expect("failed to initialize application menu");
+            }
 
             Ok(())
         })
@@ -87,12 +89,6 @@ pub fn run() {
                     return;
                 }
 
-                if capabilities::workspaces::git::handle_workspace_open_in_menu_event(
-                    app,
-                    event.id().as_ref(),
-                ) {
-                    return;
-                }
             }
         })
         .manage(supervisors)
@@ -137,7 +133,6 @@ pub fn run() {
             capabilities::workspaces::commands::open_workspace_file,
             capabilities::workspaces::commands::open_workspace_in_app,
             capabilities::workspaces::commands::list_workspace_open_in_apps,
-            capabilities::workspaces::commands::show_workspace_open_in_menu,
             capabilities::workspaces::commands::stage_workspace_git_files,
             capabilities::workspaces::commands::unstage_workspace_git_files,
             capabilities::workspaces::commands::commit_workspace_git,

@@ -370,7 +370,7 @@ pub fn open_workspace_file(
     workspace_id: String,
     file_path: String,
 ) -> Result<(), LifecycleError> {
-    super::git::open_workspace_file(&app, &db_path.0, workspace_id, file_path)
+    super::open::open_workspace_file(&app, &db_path.0, workspace_id, file_path)
 }
 
 #[tauri::command]
@@ -380,25 +380,13 @@ pub fn open_workspace_in_app(
     workspace_id: String,
     app_id: String,
 ) -> Result<(), LifecycleError> {
-    super::git::open_workspace_in_app(&app, &db_path.0, workspace_id, app_id)
+    super::open::open_workspace_in_app(&app, &db_path.0, workspace_id, app_id)
 }
 
 #[tauri::command]
-pub fn show_workspace_open_in_menu(
-    window: WebviewWindow,
-    workspace_id: String,
-    current_app_id: String,
-    appearance: String,
-    x: f64,
-    y: f64,
-) -> Result<(), LifecycleError> {
-    super::git::show_workspace_open_in_menu(&window, workspace_id, current_app_id, appearance, x, y)
-}
-
-#[tauri::command]
-pub fn list_workspace_open_in_apps() -> Result<Vec<super::git::WorkspaceOpenInApp>, LifecycleError>
+pub fn list_workspace_open_in_apps() -> Result<Vec<super::open::WorkspaceOpenInApp>, LifecycleError>
 {
-    super::git::list_workspace_open_in_apps()
+    super::open::list_workspace_open_in_apps()
 }
 
 #[tauri::command]

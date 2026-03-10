@@ -19,6 +19,12 @@ body {
   font-family: var(--font-sans);
 }
 
+html[data-overlay-host-window="true"],
+html[data-overlay-host-window="true"] body,
+html[data-overlay-host-window="true"] body #root {
+  background-color: transparent;
+}
+
 * {
   border-color: var(--border);
 }

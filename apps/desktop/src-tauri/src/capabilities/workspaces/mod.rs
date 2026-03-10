@@ -5,6 +5,8 @@ mod harness;
 mod identity;
 pub mod manifest;
 mod naming;
+pub mod open;
+mod paths;
 pub mod query;
 pub mod rename;
 mod shared;
