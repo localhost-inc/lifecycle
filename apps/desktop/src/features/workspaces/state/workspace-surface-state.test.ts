@@ -8,8 +8,10 @@ import {
   createChangesDiffTab,
   createCommitDiffTab,
   createDefaultWorkspaceSurfaceState,
+  createFileViewerTab,
   createLauncherTab,
   createPullRequestTab,
+  fileViewerTabKey,
   pullRequestTabKey,
   readLastWorkspaceId,
   readWorkspaceSurfaceState,
@@ -196,6 +198,36 @@ describe("workspace surface state persistence", () => {
             sha: secondCommit.sha,
             shortSha: secondCommit.shortSha,
             timestamp: secondCommit.timestamp,
+          },
+        ],
+      },
+    });
+  });
+
+  test("persists file viewer tabs with normalized repo-relative paths", () => {
+    const storage = new MemoryStorage();
+
+    writeWorkspaceSurfaceState(
+      "ws-1",
+      withDefaultState({
+        activeTabKey: fileViewerTabKey("./docs/../README.md"),
+        documents: [createFileViewerTab("./docs/../README.md"), createFileViewerTab("README.md")],
+      }),
+      storage,
+    );
+
+    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
+      ...createDefaultWorkspaceSurfaceState(),
+      activeTabKey: fileViewerTabKey("README.md"),
+      documents: [createFileViewerTab("README.md")],
+    });
+    expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY) ?? "null")).toEqual({
+      "ws-1": {
+        activeTabKey: fileViewerTabKey("README.md"),
+        documents: [
+          {
+            filePath: "README.md",
+            kind: "file-viewer",
           },
         ],
       },

@@ -6,9 +6,11 @@ import { TerminalSurface } from "../../terminals/components/terminal-surface";
 import { GitDiffSurface } from "../../git/components/git-diff-surface";
 import type { WorkspaceActivityItem } from "../hooks";
 import { PullRequestSurface } from "../../git/components/pull-request-surface";
+import { FileViewer } from "./file-viewer";
 import {
   isChangesDiffDocument,
   isCommitDiffDocument,
+  isFileViewerDocument,
   isLauncherDocument,
   isPullRequestDocument,
   type WorkspaceSurfaceDocument,
@@ -24,6 +26,7 @@ interface WorkspaceSurfacePanelsProps {
   documents: WorkspaceSurfaceDocument[];
   hasVisibleTabs: boolean;
   onCreateTerminal: (input: CreateTerminalRequest, launcherKey?: string) => Promise<void>;
+  onOpenFile: (filePath: string) => void;
   onOpenTerminal: (terminalId: string, launcherKey?: string) => void;
   sessionHistory: TerminalRecord[];
   terminals: TerminalRecord[];
@@ -39,6 +42,7 @@ export function WorkspaceSurfacePanels({
   documents,
   hasVisibleTabs,
   onCreateTerminal,
+  onOpenFile,
   onOpenTerminal,
   sessionHistory,
   terminals,
@@ -93,13 +97,24 @@ export function WorkspaceSurfacePanels({
           >
             {isChangesDiffDocument(tab) ? (
               <GitDiffSurface
+                onOpenFile={onOpenFile}
                 source={{ focusPath: tab.focusPath, mode: "changes" }}
                 workspaceId={workspaceId}
               />
             ) : isCommitDiffDocument(tab) ? (
-              <GitDiffSurface source={{ commit: tab, mode: "commit" }} workspaceId={workspaceId} />
+              <GitDiffSurface
+                onOpenFile={onOpenFile}
+                source={{ commit: tab, mode: "commit" }}
+                workspaceId={workspaceId}
+              />
             ) : isPullRequestDocument(tab) ? (
-              <PullRequestSurface pullRequest={tab} workspaceId={workspaceId} />
+              <PullRequestSurface
+                onOpenFile={onOpenFile}
+                pullRequest={tab}
+                workspaceId={workspaceId}
+              />
+            ) : isFileViewerDocument(tab) ? (
+              <FileViewer filePath={tab.filePath} workspaceId={workspaceId} />
             ) : isLauncherDocument(tab) ? (
               <WorkspaceLauncherSurface
                 activeTerminalId={activeTerminalId}

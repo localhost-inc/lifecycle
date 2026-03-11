@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Button } from "@lifecycle/ui";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Button, Logo } from "@lifecycle/ui";
 import { FolderOpen } from "lucide-react";
 import { usePrefersReducedMotion } from "../../../hooks/use-prefers-reduced-motion";
 import "./welcome-screen.css";
@@ -8,145 +8,23 @@ const LIFECYCLE_TEXT = "lifecycle";
 const TYPE_INTERVAL_MS = 140;
 const SNAKE_DRAW_MS = 2200;
 const PAUSE_MS = 1500;
-const SETTLE_MS = 900;
+const SWELL_MS = 700;
+const SETTLE_MS = 1000;
 const TYPING_DONE_PAUSE_MS = 600;
 
 /**
  * logo     → snake draws big in center
  * pause    → hold, let the logo breathe
- * settle   → shrink + move up
+ * swell    → ease into a slight overshoot
+ * settle   → collapse into the anchored smaller logo
  * typing   → typewriter types "lifecycle", cursor blinks throughout
  * reveal   → brief pause, then button fades in
  * complete → all visible, logo floats, cursor keeps blinking
  */
-type AnimationPhase = "logo" | "pause" | "settle" | "typing" | "reveal" | "complete";
+type AnimationPhase = "logo" | "pause" | "swell" | "settle" | "typing" | "reveal" | "complete";
 
 interface WelcomeScreenProps {
   onAddProject: () => void;
-}
-
-/** Pixel fill path from lifecycle-logo.svg */
-const INFINITY_PIXEL_PATH =
-  "M118.611 342.4V305.2H100V230.8H118.611V193.6H155.833V175H193.056V193.6H230.278V212.2H248.889V230.8H267.5V249.4H286.111V268H304.722V286.6H323.333V305.2H341.944V323.8H379.167V305.2H397.778V230.8H379.167V212.2H341.944V230.8H323.333V249.4H286.111V212.2H304.722V193.6H341.944V175H379.167V193.6H416.389V230.8H435V305.2H416.389V342.4H379.167V361H341.944V342.4H304.722V323.8H286.111V305.2H267.5V286.6H248.889V268H230.278V249.4H211.667V230.8H193.056V212.2H155.833V230.8H137.222V305.2H155.833V323.8H193.056V305.2H211.667V286.6H248.889V323.8H230.278V342.4H193.056V361H155.833V342.4H118.611Z";
-
-/** Left loop: center → top-left → left → bottom-left → center */
-const LEFT_LOOP_PATH = "M 267.5,268 C 267.5,190 118,190 118,268 C 118,346 267.5,346 267.5,268";
-
-/** Right loop: center → top-right → right → bottom-right → center */
-const RIGHT_LOOP_PATH = "M 267.5,268 C 267.5,190 416,190 416,268 C 416,346 267.5,346 267.5,268";
-
-function InfinityLogo({
-  className,
-  animate = false,
-  size = 128,
-}: {
-  className?: string;
-  animate?: boolean;
-  size?: number;
-}) {
-  const leftRef = useRef<SVGPathElement>(null);
-  const rightRef = useRef<SVGPathElement>(null);
-  const [leftLength, setLeftLength] = useState(0);
-  const [rightLength, setRightLength] = useState(0);
-
-  useLayoutEffect(() => {
-    if (!animate) return;
-    if (leftLength === 0 && leftRef.current) {
-      setLeftLength(leftRef.current.getTotalLength());
-    }
-    if (rightLength === 0 && rightRef.current) {
-      setRightLength(rightRef.current.getTotalLength());
-    }
-  }, [animate, leftLength, rightLength]);
-
-  if (!animate) {
-    return (
-      <svg
-        className={className}
-        width={size}
-        height={size}
-        viewBox="0 0 535 535"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path d={INFINITY_PIXEL_PATH} fill="currentColor" />
-      </svg>
-    );
-  }
-
-  const measured = leftLength > 0 && rightLength > 0;
-
-  return (
-    <svg
-      className={className}
-      width={size}
-      height={size}
-      viewBox="0 0 535 535"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <defs>
-        <clipPath id="welcome-clip-left">
-          <rect x="0" y="0" width="267.5" height="535" />
-        </clipPath>
-        <clipPath id="welcome-clip-right">
-          <rect x="267.5" y="0" width="267.5" height="535" />
-        </clipPath>
-        <clipPath id="welcome-clip-pixel">
-          <path d={INFINITY_PIXEL_PATH} />
-        </clipPath>
-      </defs>
-      {measured ? (
-        <g clipPath="url(#welcome-clip-pixel)">
-          <g clipPath="url(#welcome-clip-left)">
-            <path
-              d={LEFT_LOOP_PATH}
-              stroke="currentColor"
-              strokeWidth="100"
-              strokeLinecap="butt"
-              fill="none"
-              className="welcome-snake-draw-left"
-              style={{
-                strokeDasharray: leftLength,
-                strokeDashoffset: leftLength,
-              }}
-            />
-          </g>
-          <g clipPath="url(#welcome-clip-right)">
-            <path
-              d={RIGHT_LOOP_PATH}
-              stroke="currentColor"
-              strokeWidth="100"
-              strokeLinecap="butt"
-              fill="none"
-              className="welcome-snake-draw-right"
-              style={{
-                strokeDasharray: rightLength,
-                strokeDashoffset: rightLength,
-              }}
-            />
-          </g>
-        </g>
-      ) : (
-        <>
-          <path
-            ref={leftRef}
-            d={LEFT_LOOP_PATH}
-            stroke="transparent"
-            strokeWidth="100"
-            fill="none"
-          />
-          <path
-            ref={rightRef}
-            d={RIGHT_LOOP_PATH}
-            stroke="transparent"
-            strokeWidth="100"
-            fill="none"
-          />
-        </>
-      )}
-    </svg>
-  );
 }
 
 export function WelcomeScreen({ onAddProject }: WelcomeScreenProps) {
@@ -175,12 +53,21 @@ export function WelcomeScreen({ onAddProject }: WelcomeScreenProps) {
     return () => clearTimeout(timer);
   }, [phase, prefersReducedMotion]);
 
-  // pause → settle
+  // pause → swell
   useEffect(() => {
     if (prefersReducedMotion || phase !== "pause") return;
     const timer = setTimeout(() => {
-      if (phaseRef.current === "pause") setPhase("settle");
+      if (phaseRef.current === "pause") setPhase("swell");
     }, PAUSE_MS);
+    return () => clearTimeout(timer);
+  }, [phase, prefersReducedMotion]);
+
+  // swell → settle
+  useEffect(() => {
+    if (prefersReducedMotion || phase !== "swell") return;
+    const timer = setTimeout(() => {
+      if (phaseRef.current === "swell") setPhase("settle");
+    }, SWELL_MS);
     return () => clearTimeout(timer);
   }, [phase, prefersReducedMotion]);
 
@@ -218,6 +105,7 @@ export function WelcomeScreen({ onAddProject }: WelcomeScreenProps) {
     setAnimKey((k) => k + 1);
   }, []);
 
+  const isSwelling = phase === "swell";
   const isSettling = phase === "settle";
   const pastSettle = phase === "typing" || phase === "reveal" || phase === "complete";
   const showFloat = pastSettle && !prefersReducedMotion;
@@ -232,18 +120,27 @@ export function WelcomeScreen({ onAddProject }: WelcomeScreenProps) {
       {/* Logo — outer div scales, inner div floats */}
       <div data-tauri-drag-region>
         <div
-          className={isSettling && !prefersReducedMotion ? "welcome-logo-settle" : undefined}
+          className={
+            !prefersReducedMotion
+              ? isSwelling
+                ? "welcome-logo-swell"
+                : isSettling
+                  ? "welcome-logo-settle"
+                  : undefined
+              : undefined
+          }
           style={
             (isSettling || pastSettle) && !prefersReducedMotion
-              ? { transform: "scale(0.55)", marginBottom: -50 }
+              ? { transform: "scale(0.58)", marginBottom: -42 }
               : undefined
           }
         >
           <div className={showFloat ? "welcome-logo-float" : undefined}>
-            <InfinityLogo
+            <Logo
               key={animKey}
-              className="text-[var(--foreground)]"
               animate={!prefersReducedMotion}
+              className="text-[var(--foreground)]"
+              drawDurationMs={SNAKE_DRAW_MS}
               size={220}
             />
           </div>

@@ -49,11 +49,11 @@ describe("SurfaceLaunchActions", () => {
     expect(markup).toContain('title="New shell"');
     expect(markup).toContain('title="New Claude session"');
     expect(markup).toContain('title="New Codex session"');
-    expect(markup).toContain("compact-control-shell");
-    expect(markup).toContain("compact-control-divider");
-    expect(markup).toContain("compact-control-icon");
+    expect(markup).toContain("rounded-xl");
+    expect(markup).toContain("bg-[var(--muted)]");
+    expect(markup).toContain("border-l");
+    expect(markup).toContain("h-8 w-8");
     expect(markup).toContain('class="flex shrink-0 items-center pr-3"');
-    expect(markup).not.toContain("compact-control-standalone");
   });
 
   test("renders loading dot when action is loading", () => {

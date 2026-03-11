@@ -226,17 +226,6 @@ export async function getGitCommitPatch(
   });
 }
 
-export async function openWorkspaceFile(workspaceId: string, filePath: string): Promise<void> {
-  if (!isTauri()) {
-    return;
-  }
-
-  await invoke("open_workspace_file", {
-    workspaceId,
-    filePath,
-  });
-}
-
 export async function stageGitFiles(workspaceId: string, filePaths: string[]): Promise<void> {
   if (filePaths.length === 0) {
     return;

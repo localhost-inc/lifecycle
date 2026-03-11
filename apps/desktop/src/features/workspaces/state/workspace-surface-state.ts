@@ -3,6 +3,11 @@ import type {
   GitPullRequestCheckSummary,
   GitPullRequestSummary,
 } from "@lifecycle/contracts";
+import {
+  normalizeWorkspaceFilePath,
+  workspaceFileBasename,
+  workspaceFileExtension,
+} from "../lib/workspace-file-paths";
 
 const LAST_WORKSPACE_ID_STORAGE_KEY = "lifecycle.desktop.last-workspace-id";
 const WORKSPACE_SURFACE_STATE_STORAGE_KEY = "lifecycle.desktop.workspace-surface";
@@ -32,6 +37,14 @@ export interface PullRequestDocument extends GitPullRequestSummary {
   label: string;
 }
 
+export interface FileViewerDocument {
+  extension: string | null;
+  filePath: string;
+  key: string;
+  kind: "file-viewer";
+  label: string;
+}
+
 export interface LauncherTab {
   key: string;
   kind: "launcher";
@@ -41,6 +54,7 @@ export interface LauncherTab {
 export type WorkspaceSurfaceDocument =
   | ChangesDiffDocument
   | CommitDiffDocument
+  | FileViewerDocument
   | PullRequestDocument
   | LauncherTab;
 
@@ -64,6 +78,11 @@ type PersistedCommitDiffDocument = {
   sha?: unknown;
   shortSha?: unknown;
   timestamp?: unknown;
+};
+
+type PersistedFileViewerDocument = {
+  filePath?: unknown;
+  kind?: unknown;
 };
 
 type PersistedLauncherDocument = {
@@ -154,6 +173,10 @@ export function pullRequestTabKey(pullRequestNumber: number): string {
   return `pull-request:${pullRequestNumber}`;
 }
 
+export function fileViewerTabKey(filePath: string): string {
+  return `file:${normalizeWorkspaceFilePath(filePath)}`;
+}
+
 export function createChangesDiffTab(focusPath: string | null = null): ChangesDiffDocument {
   return {
     focusPath,
@@ -194,6 +217,18 @@ export function createPullRequestTab(input: GitPullRequestSummary): PullRequestD
   };
 }
 
+export function createFileViewerTab(filePath: string): FileViewerDocument {
+  const normalizedFilePath = normalizeWorkspaceFilePath(filePath);
+
+  return {
+    extension: workspaceFileExtension(normalizedFilePath),
+    filePath: normalizedFilePath,
+    key: fileViewerTabKey(normalizedFilePath),
+    kind: "file-viewer",
+    label: workspaceFileBasename(normalizedFilePath),
+  };
+}
+
 export function createLauncherTab(id: string): LauncherTab {
   return {
     key: `launcher:${id}`,
@@ -218,6 +253,12 @@ export function isPullRequestDocument(
   document: WorkspaceSurfaceDocument,
 ): document is PullRequestDocument {
   return document.kind === "pull-request";
+}
+
+export function isFileViewerDocument(
+  document: WorkspaceSurfaceDocument,
+): document is FileViewerDocument {
+  return document.kind === "file-viewer";
 }
 
 export function isLauncherDocument(document: WorkspaceSurfaceDocument): document is LauncherTab {
@@ -314,6 +355,15 @@ function parseCommitDiffDocument(value: Record<string, unknown>): CommitDiffDocu
     shortSha: getOptionalString(value, "shortSha"),
     timestamp: getOptionalString(value, "timestamp"),
   });
+}
+
+function parseFileViewerDocument(value: Record<string, unknown>): FileViewerDocument | null {
+  const filePath = getOptionalString(value, "filePath");
+  if (!filePath) {
+    return null;
+  }
+
+  return createFileViewerTab(filePath);
 }
 
 function parseLauncherDocument(value: Record<string, unknown>): LauncherTab | null {
@@ -471,6 +521,10 @@ function parseWorkspaceSurfaceDocument(value: unknown): WorkspaceSurfaceDocument
     return parseCommitDiffDocument(value as PersistedCommitDiffDocument);
   }
 
+  if (documentKind === "file-viewer") {
+    return parseFileViewerDocument(value as PersistedFileViewerDocument);
+  }
+
   if (documentKind === "pull-request") {
     return parsePullRequestDocument(value as PersistedPullRequestDocument);
   }
@@ -583,6 +637,13 @@ function serializeWorkspaceSurfaceDocument(
   if (isLauncherDocument(document)) {
     return {
       key: document.key,
+      kind: document.kind,
+    };
+  }
+
+  if (isFileViewerDocument(document)) {
+    return {
+      filePath: document.filePath,
       kind: document.kind,
     };
   }

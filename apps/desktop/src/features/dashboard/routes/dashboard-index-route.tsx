@@ -135,64 +135,37 @@ export function DashboardIndexRoute() {
   }
 
   return (
-    <div className="relative flex flex-1 items-center justify-center overflow-hidden px-6 py-8 sm:px-8">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,color-mix(in_srgb,var(--foreground)_9%,transparent),transparent_62%)]" />
-      <div className="relative mx-auto flex w-full max-w-5xl flex-col gap-4">
-        <Card className="overflow-hidden rounded-[28px] border-[color-mix(in_srgb,var(--border)_88%,transparent)] bg-[color-mix(in_srgb,var(--card)_94%,transparent)] shadow-[0_24px_80px_color-mix(in_srgb,var(--foreground)_12%,transparent)] backdrop-blur-sm">
-          <div className="relative px-6 py-8 sm:px-8 sm:py-10">
-            <div className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,color-mix(in_srgb,var(--foreground)_18%,transparent),transparent)]" />
-            <div className="flex flex-col items-center text-center">
-              <div className="flex size-16 items-center justify-center rounded-[22px] border border-[color-mix(in_srgb,var(--border)_85%,transparent)] bg-[color-mix(in_srgb,var(--background)_65%,var(--card))] text-[var(--foreground)] shadow-[inset_0_1px_0_color-mix(in_srgb,var(--foreground)_7%,transparent)]">
-                <Layers className="size-7" />
-              </div>
-              <Badge className="mt-5 border border-[var(--border)]/70" variant="muted">
-                Workspace dashboard
-              </Badge>
-              <h2 className="mt-4 text-[clamp(1.75rem,4vw,2.75rem)] font-semibold tracking-tight text-[var(--foreground)]">
-                {defaultTitle}
-              </h2>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-[var(--muted-foreground)] sm:text-[15px]">
-                {defaultDescription}
-              </p>
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-                <span className="rounded-full border border-[var(--border)] bg-[color-mix(in_srgb,var(--background)_52%,transparent)] px-3 py-1 text-xs text-[var(--muted-foreground)]">
-                  {projects.length} {projects.length === 1 ? "project" : "projects"}
-                </span>
-                <span className="rounded-full border border-[var(--border)] bg-[color-mix(in_srgb,var(--background)_52%,transparent)] px-3 py-1 text-xs text-[var(--muted-foreground)]">
-                  {workspaces.length} {workspaces.length === 1 ? "workspace" : "workspaces"}
-                </span>
-                {hasWorkspaceHistory ? (
-                  <span className="rounded-full border border-[var(--border)] bg-[color-mix(in_srgb,var(--background)_52%,transparent)] px-3 py-1 text-xs text-[var(--muted-foreground)]">
-                    Recent workspaces ready
-                  </span>
-                ) : null}
-              </div>
-            </div>
+    <div className="flex flex-1 items-center justify-center px-6 py-8 sm:px-8">
+      <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+        <div className="flex flex-col items-center text-center px-2 py-6">
+          <div className="flex size-10 items-center justify-center rounded-xl text-[var(--muted-foreground)]">
+            <Layers className="size-5" />
           </div>
-        </Card>
+          <h2 className="mt-4 text-lg font-medium text-[var(--foreground)]">
+            {defaultTitle}
+          </h2>
+          <p className="mt-1.5 max-w-md text-sm leading-6 text-[var(--muted-foreground)]">
+            {defaultDescription}
+          </p>
+        </div>
 
         {hasWorkspaceHistory ? (
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between px-1">
-              <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
-                Recent workspaces
-              </p>
-              <p className="text-xs text-[var(--muted-foreground)]">
-                Pinned from your last session when available
-              </p>
+              <p className="app-panel-title">Recent workspaces</p>
             </div>
             <div className="grid gap-3 lg:grid-cols-2">
               {recentWorkspaces.map((workspace) => (
                 <button
                   key={workspace.id}
                   aria-label={`Open workspace ${workspace.name}`}
-                  className="group rounded-[22px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--card)_92%,transparent)] p-5 text-left transition-transform duration-150 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--foreground)_20%,var(--border))] hover:bg-[color-mix(in_srgb,var(--card)_98%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                  className="group rounded-lg border border-[var(--border)] bg-[var(--card)] p-4 text-left transition-colors hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
                   onClick={() => void navigate(`/workspaces/${workspace.id}`)}
                   type="button"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--background)_60%,var(--card))] text-[var(--foreground)]">
-                      <History className="size-4.5" />
+                    <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg text-[var(--muted-foreground)]">
+                      <History className="size-4" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -211,7 +184,7 @@ export function DashboardIndexRoute() {
                       {workspaceStatusLabel[workspace.status]}
                     </Badge>
                   </div>
-                  <div className="mt-5 flex items-center justify-between gap-3 text-xs text-[var(--muted-foreground)]">
+                  <div className="mt-3 flex items-center justify-between gap-3 text-xs text-[var(--muted-foreground)]">
                     <span>Last active {formatRelativeTime(workspace.last_active_at)}</span>
                     <span className="inline-flex items-center gap-1 text-[var(--foreground)] transition-transform group-hover:translate-x-0.5">
                       Open
@@ -225,29 +198,24 @@ export function DashboardIndexRoute() {
         ) : canQuickCreateWorkspace ? (
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between px-1">
-              <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted-foreground)]">
-                Start from a project
-              </p>
-              <p className="text-xs text-[var(--muted-foreground)]">
-                Create a workspace without leaving this screen
-              </p>
+              <p className="app-panel-title">Start from a project</p>
             </div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {quickCreateProjects.map((project) => (
                 <button
                   key={project.id}
                   aria-label={`Create workspace for ${project.name}`}
-                  className="group rounded-[22px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--card)_92%,transparent)] p-5 text-left transition-transform duration-150 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--foreground)_20%,var(--border))] hover:bg-[color-mix(in_srgb,var(--card)_98%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                  className="group rounded-lg border border-[var(--border)] bg-[var(--card)] p-4 text-left transition-colors hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
                   onClick={() => onCreateWorkspace(project.id)}
                   type="button"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex size-10 items-center justify-center rounded-2xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--background)_60%,var(--card))] text-[var(--foreground)]">
-                      <Sparkles className="size-4.5" />
+                    <div className="flex size-8 items-center justify-center rounded-lg text-[var(--muted-foreground)]">
+                      <Sparkles className="size-4" />
                     </div>
                     <ArrowUpRight className="size-4 text-[var(--muted-foreground)] transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                   </div>
-                  <p className="mt-8 text-sm font-semibold text-[var(--foreground)]">
+                  <p className="mt-4 text-sm font-semibold text-[var(--foreground)]">
                     {project.name}
                   </p>
                   <p className="mt-2 text-xs leading-5 text-[var(--muted-foreground)]">
@@ -259,7 +227,7 @@ export function DashboardIndexRoute() {
             </div>
           </div>
         ) : (
-          <Card className="rounded-[22px] border-dashed bg-[color-mix(in_srgb,var(--card)_88%,transparent)]">
+          <Card className="rounded-lg border-dashed">
             <div className="flex flex-col items-center gap-2 px-6 py-8 text-center">
               <History className="size-5 text-[var(--muted-foreground)]" />
               <p className="text-sm font-medium text-[var(--foreground)]">

@@ -7,6 +7,7 @@ import type {
 import { useMemo } from "react";
 import type { QueryDescriptor, QueryResult } from "../../query";
 import { useQuery } from "../../query";
+import type { WorkspaceFileReadResult } from "./api";
 
 export interface SetupStepState {
   name: string;
@@ -27,6 +28,8 @@ export const workspaceKeys = {
   activity: (workspaceId: string) => ["workspace-activity", workspaceId] as const,
   byProject: () => ["workspaces", "by-project"] as const,
   detail: (workspaceId: string) => ["workspace", workspaceId] as const,
+  file: (workspaceId: string, filePath: string) =>
+    ["workspace-file", workspaceId, filePath] as const,
   services: (workspaceId: string) => ["workspace-services", workspaceId] as const,
   setup: (workspaceId: string) => ["workspace-setup", workspaceId] as const,
 };
@@ -521,6 +524,18 @@ function createWorkspaceServicesQuery(workspaceId: string): QueryDescriptor<Serv
   };
 }
 
+function createWorkspaceFileQuery(
+  workspaceId: string,
+  filePath: string,
+): QueryDescriptor<WorkspaceFileReadResult> {
+  return {
+    key: workspaceKeys.file(workspaceId, filePath),
+    fetch(source) {
+      return source.getWorkspaceFile(workspaceId, filePath);
+    },
+  };
+}
+
 function createWorkspaceSetupQuery(workspaceId: string): QueryDescriptor<SetupStepState[]> {
   return {
     eventKinds: WORKSPACE_SETUP_EVENT_KINDS,
@@ -604,7 +619,9 @@ export function reduceWorkspaceActivity(
   };
 }
 
-function createWorkspaceActivityQuery(workspaceId: string): QueryDescriptor<WorkspaceActivityItem[]> {
+function createWorkspaceActivityQuery(
+  workspaceId: string,
+): QueryDescriptor<WorkspaceActivityItem[]> {
   return {
     eventKinds: WORKSPACE_ACTIVITY_EVENT_KINDS,
     key: workspaceKeys.activity(workspaceId),
@@ -658,6 +675,20 @@ export function useWorkspaceServices(
 
   return useQuery(descriptor, {
     disabledData: undefined,
+  });
+}
+
+export function useWorkspaceFile(
+  workspaceId: string | null,
+  filePath: string | null,
+): QueryResult<WorkspaceFileReadResult | null> {
+  const descriptor = useMemo(
+    () => (workspaceId && filePath ? createWorkspaceFileQuery(workspaceId, filePath) : null),
+    [filePath, workspaceId],
+  );
+
+  return useQuery(descriptor, {
+    disabledData: null,
   });
 }
 

@@ -137,6 +137,7 @@ pub fn run() {
             capabilities::workspaces::commands::get_workspace_git_base_ref,
             capabilities::workspaces::commands::get_workspace_git_ref_diff_patch,
             capabilities::workspaces::commands::get_workspace_git_commit_patch,
+            capabilities::workspaces::commands::read_workspace_file,
             capabilities::workspaces::commands::open_workspace_file,
             capabilities::workspaces::commands::open_workspace_in_app,
             capabilities::workspaces::commands::list_workspace_open_in_apps,

@@ -20,8 +20,10 @@ import {
   createChangesDiffTab,
   createCommitDiffTab,
   createDefaultWorkspaceSurfaceState,
+  createFileViewerTab,
   createLauncherTab,
   createPullRequestTab,
+  fileViewerTabKey,
   pullRequestTabKey,
 } from "../state/workspace-surface-state";
 
@@ -201,6 +203,35 @@ describe("workspaceSurfaceReducer", () => {
       documents: [pullRequest],
       tabOrderKeys: [pullRequestTabKey(42)],
     });
+  });
+
+  test("opens file viewer documents with path-based reuse", () => {
+    const firstState = workspaceSurfaceReducer(createDefaultWorkspaceSurfaceState(), {
+      request: {
+        filePath: "./docs/../README.md",
+        id: "file-1",
+        kind: "file-viewer",
+      },
+      kind: "open-document",
+    });
+
+    expect(firstState).toEqual({
+      ...createDefaultWorkspaceSurfaceState(),
+      activeTabKey: fileViewerTabKey("README.md"),
+      documents: [createFileViewerTab("README.md")],
+      tabOrderKeys: [fileViewerTabKey("README.md")],
+    });
+
+    expect(
+      workspaceSurfaceReducer(firstState, {
+        request: {
+          filePath: "README.md",
+          id: "file-2",
+          kind: "file-viewer",
+        },
+        kind: "open-document",
+      }),
+    ).toEqual(firstState);
   });
 
   test("updates an existing pull request document when reopened", () => {

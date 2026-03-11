@@ -2,6 +2,7 @@ pub mod commands;
 pub mod create;
 pub mod destroy;
 mod environment_graph;
+pub mod file;
 pub mod git;
 mod harness;
 mod identity;

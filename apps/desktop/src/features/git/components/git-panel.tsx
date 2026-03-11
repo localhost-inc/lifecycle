@@ -20,6 +20,7 @@ type GitPanelTabValue = (typeof GIT_PANEL_TABS)[number]["value"];
 
 interface GitPanelProps {
   onOpenDiff: (filePath: string) => void;
+  onOpenFile: (filePath: string) => void;
   onOpenCommitDiff: (entry: GitLogEntry) => void;
   onOpenPullRequest: (pullRequest: GitPullRequestSummary) => void;
   workspaceId: string;
@@ -37,6 +38,7 @@ function GitPanelPlaceholder({ description, title }: { description: string; titl
 
 export function GitPanel({
   onOpenDiff,
+  onOpenFile,
   onOpenCommitDiff,
   onOpenPullRequest,
   workspaceId,
@@ -187,6 +189,7 @@ export function GitPanel({
                 gitStatus={gitStatusQuery.data ?? null}
                 isLoading={gitStatusQuery.isLoading}
                 onOpenDiff={onOpenDiff}
+                onOpenFile={onOpenFile}
                 onRefresh={gitStatusQuery.refresh}
                 workspaceId={workspaceId}
               />

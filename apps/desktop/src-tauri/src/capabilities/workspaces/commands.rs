@@ -444,6 +444,15 @@ pub async fn get_workspace_git_commit_patch(
 }
 
 #[tauri::command]
+pub fn read_workspace_file(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    file_path: String,
+) -> Result<super::file::WorkspaceFileReadResult, LifecycleError> {
+    super::file::read_workspace_file(&db_path.0, workspace_id, file_path)
+}
+
+#[tauri::command]
 pub fn open_workspace_file(
     app: AppHandle,
     db_path: State<'_, DbPath>,

@@ -41,6 +41,7 @@ interface WorkspaceSidebarProps {
     serviceName: string;
   }) => Promise<void>;
   onOpenDiff: (filePath: string) => void;
+  onOpenFile: (filePath: string) => void;
   onOpenCommitDiff: (entry: GitLogEntry) => void;
   onOpenPullRequest: (pullRequest: GitPullRequestSummary) => void;
   setupSteps: SetupStepState[];
@@ -56,6 +57,7 @@ export function WorkspaceSidebar({
   onStop,
   onUpdateService,
   onOpenDiff,
+  onOpenFile,
   onOpenCommitDiff,
   onOpenPullRequest,
   setupSteps,
@@ -216,6 +218,7 @@ export function WorkspaceSidebar({
       >
         <GitPanel
           onOpenDiff={onOpenDiff}
+          onOpenFile={onOpenFile}
           onOpenCommitDiff={onOpenCommitDiff}
           onOpenPullRequest={onOpenPullRequest}
           workspaceId={workspace.id}

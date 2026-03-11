@@ -29,16 +29,6 @@ describe("theme.css", () => {
     expect(css).toContain("cursor: pointer;");
   });
 
-  test("defines the shared compact control treatment for themed button-like surfaces", () => {
-    const css = readFileSync(new URL("./theme.css", import.meta.url), "utf8");
-
-    expect(css).toContain("--control-compact-height: 32px;");
-    expect(css).toContain("--control-compact-radius: var(--radius-xl);");
-    expect(css).toContain(".compact-control-shell");
-    expect(css).toContain(".compact-control-standalone");
-    expect(css).toContain(".compact-control-tone-active");
-  });
-
   test("defines a shared panel title treatment for sidebar and rail headers", () => {
     const css = readFileSync(new URL("./theme.css", import.meta.url), "utf8");
 
@@ -54,5 +44,14 @@ describe("theme.css", () => {
 
     expect(css).toContain('--font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;');
     expect(css).not.toContain("Lifecycle Mono");
+  });
+
+  test("defines shared lifecycle logo stroke animations for reusable loading states", () => {
+    const css = readFileSync(new URL("./theme.css", import.meta.url), "utf8");
+
+    expect(css).toContain("@keyframes lifecycle-logo-draw-left");
+    expect(css).toContain("@keyframes lifecycle-logo-draw-right");
+    expect(css).toContain('[data-lifecycle-logo-path="left"]');
+    expect(css).toContain('[data-lifecycle-logo-path="right"]');
   });
 });

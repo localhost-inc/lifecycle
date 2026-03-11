@@ -45,13 +45,13 @@ export function SurfaceLaunchActions({
   return (
     <TooltipProvider>
       <div className="flex shrink-0 items-center pr-3">
-        <div className="compact-control-shell">
+        <div className="inline-flex items-center overflow-hidden rounded-xl bg-[var(--muted)]">
           {onOpenLauncher && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  className="compact-control-item compact-control-icon compact-control-tone-muted"
+                  className="inline-flex h-8 w-8 items-center justify-center text-[var(--muted-foreground)] outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-[var(--foreground)] focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50"
                   onClick={onOpenLauncher}
                 >
                   <svg
@@ -75,8 +75,8 @@ export function SurfaceLaunchActions({
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  className={`compact-control-item compact-control-icon compact-control-tone-muted ${
-                    onOpenLauncher || index > 0 ? "compact-control-divider" : ""
+                  className={`inline-flex h-8 w-8 items-center justify-center text-[var(--muted-foreground)] outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-[var(--foreground)] focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50 ${
+                    onOpenLauncher || index > 0 ? "border-l border-[var(--background)]" : ""
                   }`}
                   disabled={action.disabled}
                   onClick={() => onLaunch(action.request)}

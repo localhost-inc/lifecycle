@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
 import { Spinner } from "@lifecycle/ui";
-import { FileText, GitBranch, GitCommitHorizontal, Plus } from "lucide-react";
+import { FileText, GitBranch, GitCommitHorizontal, PenTool, Plus } from "lucide-react";
 import { ResponseReadyDot } from "../../../components/response-ready-dot";
 import {
   isChangesDiffDocument,
   isCommitDiffDocument,
+  isFileViewerDocument,
   isLauncherDocument,
   isPullRequestDocument,
 } from "../state/workspace-surface-state";
@@ -76,6 +77,10 @@ function tabIconName(tab: WorkspaceSurfaceTab): string {
     return "launcher";
   }
 
+  if (isFileViewerDocument(tab)) {
+    return tab.extension === "pen" ? "file-viewer-pencil" : "file-viewer";
+  }
+
   if (isCommitDiffDocument(tab)) {
     return "commit-diff";
   }
@@ -135,6 +140,18 @@ export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceSurfaceTab }
     return (
       <SurfaceBubble tab={tab}>
         <Plus className="h-3 w-3" strokeWidth={1.8} />
+      </SurfaceBubble>
+    );
+  }
+
+  if (isFileViewerDocument(tab)) {
+    return (
+      <SurfaceBubble tab={tab}>
+        {tab.extension === "pen" ? (
+          <PenTool className="h-3 w-3" strokeWidth={1.8} />
+        ) : (
+          <FileText className="h-3 w-3" strokeWidth={1.8} />
+        )}
       </SurfaceBubble>
     );
   }

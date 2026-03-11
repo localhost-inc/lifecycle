@@ -32,6 +32,17 @@ function createMockSource() {
     async getWorkspace() {
       return null;
     },
+    async getWorkspaceFile() {
+      return {
+        absolute_path: "/tmp/workspace/README.md",
+        byte_len: 0,
+        content: "",
+        extension: "md",
+        file_path: "README.md",
+        is_binary: false,
+        is_too_large: false,
+      };
+    },
     async getTerminal() {
       return null;
     },

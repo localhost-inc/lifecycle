@@ -1,17 +1,24 @@
-@keyframes welcome-snake-draw {
+@keyframes welcome-logo-swell {
+  from {
+    transform: scale(1);
+    margin-bottom: 0;
+  }
+
   to {
-    stroke-dashoffset: 0;
+    transform: scale(1.06);
+    margin-bottom: 0;
   }
 }
 
 @keyframes welcome-logo-settle {
   from {
-    transform: scale(1);
+    transform: scale(1.06);
     margin-bottom: 0;
   }
+
   to {
-    transform: scale(0.55);
-    margin-bottom: -50px;
+    transform: scale(0.58);
+    margin-bottom: -42px;
   }
 }
 
@@ -55,7 +62,13 @@
 }
 
 .welcome-logo-settle {
-  animation: welcome-logo-settle 900ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: welcome-logo-settle 1000ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  transform-origin: center center;
+}
+
+.welcome-logo-swell {
+  animation: welcome-logo-swell 700ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: center center;
 }
 
 .welcome-logo-float {
@@ -71,8 +84,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .welcome-snake-draw-left,
-  .welcome-snake-draw-right,
+  .welcome-logo-swell,
   .welcome-logo-settle,
   .welcome-logo-float,
   .welcome-button-enter,

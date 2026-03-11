@@ -2,12 +2,15 @@ import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/cn";
 
-const splitButtonPrimaryVariants = cva("compact-control-item compact-control-label", {
-  variants: {
-    variant: {
-      foreground: "compact-control-tone-foreground",
-      active: "compact-control-tone-active",
-    },
+const splitButtonPrimaryVariants = cva(
+  "inline-flex h-8 items-center gap-2 text-xs font-semibold outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50",
+  {
+    variants: {
+      variant: {
+        foreground:
+          "text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]",
+        active: "bg-[var(--muted)] text-[var(--foreground)]",
+      },
     withIcon: {
       true: "pl-2 pr-2.5",
       false: "px-3",
@@ -20,12 +23,18 @@ const splitButtonPrimaryVariants = cva("compact-control-item compact-control-lab
 });
 
 const splitButtonSecondaryVariants = cva(
-  "compact-control-item compact-control-icon compact-control-tone-muted compact-control-divider",
+  "inline-flex h-8 w-8 items-center justify-center text-[var(--muted-foreground)] border-l border-[var(--background)] outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-[var(--foreground)] focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50",
 );
 
 const SplitButton = React.forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef<"div">>(
   function SplitButton({ className, ...props }, ref) {
-    return <div className={cn("compact-control-shell", className)} ref={ref} {...props} />;
+    return (
+      <div
+        className={cn("inline-flex items-center overflow-hidden rounded-xl bg-[var(--muted)]", className)}
+        ref={ref}
+        {...props}
+      />
+    );
   },
 );
 

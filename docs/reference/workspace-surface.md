@@ -53,6 +53,18 @@ The workspace center panel is a shared surface that can host both provider-backe
 3. PR tabs are keyed by pull request number within a workspace and should reuse the existing tab when the same PR is reopened.
 4. Persisted PR tabs may store a last-known snapshot so the surface can render even when live provider detail is temporarily unavailable.
 
+## File Viewer Documents
+
+1. File viewers are document tabs, not runtime tabs.
+2. File-viewer tabs are keyed by normalized repo-relative path (`file:<path>`) and should reuse the existing tab when the same file is reopened.
+3. File content reads must go through the workspace/provider authority boundary rather than direct React-side filesystem access.
+4. Renderer selection is desktop-owned presentation state derived from the file path or payload:
+   - `.md` uses the markdown renderer
+   - `.pen` uses a Pencil-aware structured renderer
+   - all other supported text files fall back to plain text
+5. Unsupported binary files or oversized files may still open as tabs, but the surface should show an explicit fallback state rather than silently failing.
+6. Git-side file open affordances from the Changes tab, diff surfaces, and PR surfaces should request file-viewer documents instead of handing files off to the OS.
+
 ## Forward Compatibility
 
 1. File editor tabs should reuse the same document-tab path as diff tabs.

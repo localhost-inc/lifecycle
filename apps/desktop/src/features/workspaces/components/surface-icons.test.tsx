@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   createChangesDiffTab,
   createCommitDiffTab,
+  createFileViewerTab,
   createLauncherTab,
   createPullRequestTab,
 } from "../state/workspace-surface-state";
@@ -69,6 +70,12 @@ describe("WorkspaceSurfaceTabLeading", () => {
           tab: createCommitDiffTab("abc12345"),
         }),
         createElement(WorkspaceSurfaceTabLeading, {
+          tab: createFileViewerTab("docs/readme.md"),
+        }),
+        createElement(WorkspaceSurfaceTabLeading, {
+          tab: createFileViewerTab("design/mock.pen"),
+        }),
+        createElement(WorkspaceSurfaceTabLeading, {
           tab: createPullRequestTab({
             author: "kyle",
             baseRefName: "main",
@@ -92,6 +99,8 @@ describe("WorkspaceSurfaceTabLeading", () => {
     expect(markup).toContain('data-surface-tab-icon="launcher"');
     expect(markup).toContain('data-surface-tab-icon="changes-diff"');
     expect(markup).toContain('data-surface-tab-icon="commit-diff"');
+    expect(markup).toContain('data-surface-tab-icon="file-viewer"');
+    expect(markup).toContain('data-surface-tab-icon="file-viewer-pencil"');
     expect(markup).toContain('data-surface-tab-icon="pull-request"');
   });
 });

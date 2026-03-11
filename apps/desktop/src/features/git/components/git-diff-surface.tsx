@@ -5,12 +5,9 @@ import { PatchDiff } from "@pierre/diffs/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatRelativeTime } from "../../../lib/format";
 import { GithubAvatar } from "./github-avatar";
-import { getGitChangesPatch, getGitCommitPatch, openWorkspaceFile } from "../api";
+import { getGitChangesPatch, getGitCommitPatch } from "../api";
 import { useGitStatus } from "../hooks";
-import {
-  DEFAULT_GIT_DIFF_STYLE,
-  type GitDiffStyle,
-} from "../lib/diff-style";
+import { DEFAULT_GIT_DIFF_STYLE, type GitDiffStyle } from "../lib/diff-style";
 import { buildPatchRenderCacheKey } from "../lib/diff-virtualization";
 import { DiffStyleToggle } from "./diff-style-toggle";
 import { DiffRenderProvider } from "./diff-render-provider";
@@ -27,6 +24,7 @@ type GitDiffSurfaceSource =
     };
 
 interface GitDiffSurfaceProps {
+  onOpenFile?: (filePath: string) => void;
   source: GitDiffSurfaceSource;
   workspaceId: string;
 }
@@ -92,7 +90,7 @@ export function buildChangesPatchReloadKey(
   return [focusPath ?? "", gitStatus?.headSha ?? "", filesSignature].join("\u0003");
 }
 
-export function GitDiffSurface({ source, workspaceId }: GitDiffSurfaceProps) {
+export function GitDiffSurface({ onOpenFile, source, workspaceId }: GitDiffSurfaceProps) {
   const { resolvedAppearance, resolvedTheme } = useTheme();
   const [diffStyle, setDiffStyle] = useState<GitDiffStyle>(DEFAULT_GIT_DIFF_STYLE);
   const [patch, setPatch] = useState("");
@@ -177,12 +175,6 @@ export function GitDiffSurface({ source, workspaceId }: GitDiffSurfaceProps) {
     }
   }, [commitSha, patch, source.mode, workspaceId]);
 
-  const handleOpenFile = (filePath: string) => {
-    void openWorkspaceFile(workspaceId, filePath).catch((openError) => {
-      setError(String(openError));
-    });
-  };
-
   const diffControlsDisabled = isLoading || error !== null || patch.length === 0;
 
   return (
@@ -219,7 +211,7 @@ export function GitDiffSurface({ source, workspaceId }: GitDiffSurfaceProps) {
             diffStyle={diffStyle}
             files={parsedFiles}
             initialFilePath={focusPath}
-            onOpenFile={handleOpenFile}
+            onOpenFile={onOpenFile}
             theme={diffTheme(resolvedTheme)}
             themeType={resolvedAppearance}
           />

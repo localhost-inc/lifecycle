@@ -21,8 +21,10 @@ import { getTerminal, listWorkspaceTerminals } from "../features/terminals/api";
 import { listProjects, readManifest } from "../features/projects/api/projects";
 import {
   getWorkspaceById,
+  readWorkspaceFile,
   getWorkspaceServices,
   listWorkspacesByProject,
+  type WorkspaceFileReadResult,
 } from "../features/workspaces/api";
 
 export interface QuerySource {
@@ -30,6 +32,7 @@ export interface QuerySource {
   readManifest(projectPath: string): Promise<ManifestStatus>;
   listWorkspacesByProject(): Promise<Record<string, WorkspaceRecord[]>>;
   getWorkspace(workspaceId: string): Promise<WorkspaceRecord | null>;
+  getWorkspaceFile(workspaceId: string, filePath: string): Promise<WorkspaceFileReadResult>;
   getWorkspaceServices(workspaceId: string): Promise<ServiceRecord[]>;
   getWorkspaceGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]>;
   getWorkspaceGitPullRequests(workspaceId: string): Promise<GitPullRequestListResult>;
@@ -49,6 +52,7 @@ export function createQuerySource(): QuerySource {
     readManifest,
     listWorkspacesByProject,
     getWorkspace: getWorkspaceById,
+    getWorkspaceFile: readWorkspaceFile,
     getWorkspaceGitLog: getGitLog,
     getWorkspaceGitPullRequests: getGitPullRequests,
     getWorkspaceGitPullRequest: getGitPullRequest,

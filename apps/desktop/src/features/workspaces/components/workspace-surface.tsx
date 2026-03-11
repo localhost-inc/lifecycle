@@ -237,6 +237,18 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
     });
   }, []);
 
+  const handleOpenFile = useCallback((filePath: string) => {
+    releaseWebviewFocus();
+    dispatch({
+      request: {
+        filePath,
+        id: createWorkspaceLauncherId(),
+        kind: "file-viewer",
+      },
+      kind: "open-document",
+    });
+  }, []);
+
   const handleShowRuntimeTab = useCallback(
     (terminalId: string, launcherKey?: string) => {
       releaseWebviewFocus();
@@ -577,6 +589,7 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
         documents={state.documents}
         hasVisibleTabs={visibleTabs.length > 0}
         onCreateTerminal={handleCreateTerminal}
+        onOpenFile={handleOpenFile}
         onOpenTerminal={handleShowRuntimeTab}
         sessionHistory={sessionHistory}
         terminals={terminals}

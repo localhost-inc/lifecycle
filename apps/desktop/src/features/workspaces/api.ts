@@ -220,6 +220,43 @@ export async function syncWorkspaceManifest(
   });
 }
 
+export interface WorkspaceFileReadResult {
+  absolute_path: string;
+  byte_len: number;
+  content: string | null;
+  extension: string | null;
+  file_path: string;
+  is_binary: boolean;
+  is_too_large: boolean;
+}
+
+export async function readWorkspaceFile(
+  workspaceId: string,
+  filePath: string,
+): Promise<WorkspaceFileReadResult> {
+  if (!isTauri()) {
+    void workspaceId;
+    void filePath;
+    throw new Error("Workspace file reading requires the Tauri desktop shell.");
+  }
+
+  return invoke<WorkspaceFileReadResult>("read_workspace_file", {
+    workspaceId,
+    filePath,
+  });
+}
+
+export async function openWorkspaceFile(workspaceId: string, filePath: string): Promise<void> {
+  if (!isTauri()) {
+    return;
+  }
+
+  await invoke("open_workspace_file", {
+    workspaceId,
+    filePath,
+  });
+}
+
 export type OpenInAppId =
   | "cursor"
   | "finder"

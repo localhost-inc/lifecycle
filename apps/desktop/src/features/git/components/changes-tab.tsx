@@ -1,5 +1,5 @@
 import type { GitFileChangeKind, GitFileStatus, GitStatusResult } from "@lifecycle/contracts";
-import { Button, EmptyState } from "@lifecycle/ui";
+import { Button, EmptyState, Logo } from "@lifecycle/ui";
 import {
   File,
   FileCode,
@@ -9,6 +9,7 @@ import {
   Image as ImageIcon,
   Minus,
   Plus,
+  SquareArrowOutUpRight,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import type React from "react";
@@ -19,6 +20,7 @@ interface ChangesTabProps {
   gitStatus: GitStatusResult | null;
   isLoading: boolean;
   onOpenDiff: (filePath: string) => void;
+  onOpenFile: (filePath: string) => void;
   onRefresh: () => Promise<void>;
   workspaceId: string;
 }
@@ -184,6 +186,7 @@ function FileRow({
   isActionPending,
   onAction,
   onOpen,
+  onOpenFile,
   section,
 }: {
   actionLabel: string;
@@ -191,6 +194,7 @@ function FileRow({
   isActionPending: boolean;
   onAction: () => void;
   onOpen: () => void;
+  onOpenFile: () => void;
   section: ChangesSectionKind;
 }) {
   const dir = dirname(file.path);
@@ -202,6 +206,7 @@ function FileRow({
   const cssVar = statusCssVar(resolveDisplayStatus(file, section));
   const hasDiffStats = (ins !== null && ins > 0) || (del !== null && del > 0);
   const actionTitle = `${actionLabel} ${file.path}`;
+  const openTitle = `Open ${file.path}`;
   const actionVisibilityClass = isActionPending
     ? "pointer-events-none opacity-100"
     : "pointer-events-none opacity-0 group-hover/row:pointer-events-auto group-hover/row:opacity-100 group-focus-within/row:pointer-events-auto group-focus-within/row:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100";
@@ -238,7 +243,7 @@ function FileRow({
       </div>
 
       <div className="ml-auto flex shrink-0 items-center">
-        <div className="relative flex min-h-8 min-w-8 items-center justify-end">
+        <div className="relative flex min-h-8 min-w-16 items-center justify-end">
           {hasDiffStats ? (
             <span
               className={`shrink-0 font-mono text-xs transition-opacity ${statsVisibilityClass}`}
@@ -252,6 +257,22 @@ function FileRow({
               )}
             </span>
           ) : null}
+          <Button
+            aria-label={openTitle}
+            className="absolute top-1/2 right-8 -translate-y-1/2 text-[var(--muted-foreground)] opacity-0 transition-opacity hover:text-[var(--foreground)] group-hover/row:opacity-100 group-focus-within/row:opacity-100"
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenFile();
+            }}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+            }}
+            size="icon"
+            title={openTitle}
+            variant="ghost"
+          >
+            <SquareArrowOutUpRight className="h-3.5 w-3.5" />
+          </Button>
           <Button
             aria-label={actionTitle}
             className={`absolute right-0 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)] ${actionVisibilityClass}`}
@@ -282,6 +303,7 @@ function ChangesSection({
   onActionAll,
   onActionFile,
   onOpenDiff,
+  onOpenFile,
   pendingMutation,
   rowActionLabel,
   title,
@@ -293,6 +315,7 @@ function ChangesSection({
   onActionAll: () => void;
   onActionFile: (filePath: string) => void;
   onOpenDiff: (filePath: string) => void;
+  onOpenFile: (filePath: string) => void;
   pendingMutation: PendingMutation | null;
   rowActionLabel: string;
   title: string;
@@ -321,6 +344,7 @@ function ChangesSection({
             key={`${section}:${file.path}`}
             onAction={() => onActionFile(file.path)}
             onOpen={() => onOpenDiff(file.path)}
+            onOpenFile={() => onOpenFile(file.path)}
             section={section}
           />
         ))}
@@ -334,6 +358,7 @@ export function ChangesTab({
   gitStatus,
   isLoading,
   onOpenDiff,
+  onOpenFile,
   onRefresh,
   workspaceId,
 }: ChangesTabProps) {
@@ -367,7 +392,18 @@ export function ChangesTab({
   }
 
   if (isLoading && !gitStatus) {
-    return <p className="text-xs text-[var(--muted-foreground)]">Loading changes...</p>;
+    return (
+      <div
+        aria-live="polite"
+        className="flex flex-1 items-center justify-center py-8"
+        role="status"
+      >
+        <div className="flex flex-col items-center gap-3 text-center">
+          <Logo animate className="text-[var(--muted-foreground)] opacity-70" repeat size={32} />
+          <p className="text-xs text-[var(--muted-foreground)]">Loading changes...</p>
+        </div>
+      </div>
+    );
   }
 
   if (error) {
@@ -410,6 +446,7 @@ export function ChangesTab({
           void runMutation("stage", [filePath]);
         }}
         onOpenDiff={onOpenDiff}
+        onOpenFile={onOpenFile}
         pendingMutation={pendingMutation}
         rowActionLabel="Stage"
         section="working"
@@ -430,6 +467,7 @@ export function ChangesTab({
           void runMutation("unstage", [filePath]);
         }}
         onOpenDiff={onOpenDiff}
+        onOpenFile={onOpenFile}
         pendingMutation={pendingMutation}
         rowActionLabel="Unstage"
         section="staged"

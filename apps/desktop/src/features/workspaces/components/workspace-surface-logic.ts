@@ -12,10 +12,13 @@ import {
   commitDiffTabKey,
   createChangesDiffTab,
   createCommitDiffTab,
+  createFileViewerTab,
   createLauncherTab,
   createPullRequestTab,
+  fileViewerTabKey,
   isChangesDiffDocument,
   isCommitDiffDocument,
+  isFileViewerDocument,
   isPullRequestDocument,
   readWorkspaceSurfaceState,
   pullRequestTabKey,
@@ -42,9 +45,16 @@ export interface PullRequestOpenRequest {
   kind: "pull-request";
 }
 
+export interface FileViewerOpenRequest {
+  filePath: string;
+  id: string;
+  kind: "file-viewer";
+}
+
 export type OpenDocumentRequest =
   | ChangesDiffOpenRequest
   | CommitDiffOpenRequest
+  | FileViewerOpenRequest
   | PullRequestOpenRequest;
 
 export type RuntimeTab = {
@@ -422,6 +432,10 @@ export function tabTitle(tab: WorkspaceSurfaceTab): string {
     return tab.label;
   }
 
+  if (isFileViewerDocument(tab)) {
+    return tab.filePath;
+  }
+
   if (isChangesDiffDocument(tab)) {
     return tab.label;
   }
@@ -520,18 +534,41 @@ export function workspaceSurfaceReducer(
         };
       }
 
-      const key = pullRequestTabKey(request.pullRequest.number);
-      const nextTab = createPullRequestTab(request.pullRequest);
-      const exists = state.documents.some((tab) => tab.key === key);
+      if (request.kind === "file-viewer") {
+        const key = fileViewerTabKey(request.filePath);
+        const nextTab = createFileViewerTab(request.filePath);
+        const exists = state.documents.some((tab) => tab.key === key);
 
-      return {
-        ...state,
-        activeTabKey: key,
-        documents: exists
-          ? state.documents.map((tab) => (tab.key === key ? nextTab : tab))
-          : [...state.documents, nextTab],
-        tabOrderKeys: exists ? state.tabOrderKeys : appendWorkspaceTabKey(state.tabOrderKeys, key),
-      };
+        return {
+          ...state,
+          activeTabKey: key,
+          documents: exists
+            ? state.documents.map((tab) => (tab.key === key ? nextTab : tab))
+            : [...state.documents, nextTab],
+          tabOrderKeys: exists
+            ? state.tabOrderKeys
+            : appendWorkspaceTabKey(state.tabOrderKeys, key),
+        };
+      }
+
+      if (request.kind === "pull-request") {
+        const key = pullRequestTabKey(request.pullRequest.number);
+        const nextTab = createPullRequestTab(request.pullRequest);
+        const exists = state.documents.some((tab) => tab.key === key);
+
+        return {
+          ...state,
+          activeTabKey: key,
+          documents: exists
+            ? state.documents.map((tab) => (tab.key === key ? nextTab : tab))
+            : [...state.documents, nextTab],
+          tabOrderKeys: exists
+            ? state.tabOrderKeys
+            : appendWorkspaceTabKey(state.tabOrderKeys, key),
+        };
+      }
+
+      return state;
     }
     case "open-launcher": {
       const launcher = createLauncherTab(action.launcherId);

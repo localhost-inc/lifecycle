@@ -24,9 +24,6 @@
   --radius-2xl: 18px;
   --radius-3xl: 24px;
 
-  --control-compact-height: 32px;
-  --control-compact-radius: var(--radius-xl);
-  --control-compact-padding-x: 12px;
 }
 
 :where(button, [role="button"]):where(:not(:disabled)):where(:not([aria-disabled="true"])) {
@@ -40,104 +37,6 @@
   color: var(--sidebar-muted-foreground);
   text-transform: uppercase;
   letter-spacing: 0.1em;
-}
-
-.compact-control-shell {
-  display: inline-flex;
-  align-items: center;
-  overflow: hidden;
-  border-radius: var(--control-compact-radius);
-  background: var(--muted);
-}
-
-.compact-control-standalone {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--control-compact-radius);
-}
-
-.compact-control-item {
-  outline: none;
-  transition:
-    background-color 150ms ease,
-    border-color 150ms ease,
-    color 150ms ease,
-    opacity 150ms ease;
-}
-
-.compact-control-item:focus-visible {
-  box-shadow: 0 0 0 1px var(--ring);
-}
-
-.compact-control-item:disabled,
-.compact-control-item[aria-disabled="true"] {
-  cursor: not-allowed;
-  pointer-events: none;
-  opacity: 0.5;
-}
-
-.compact-control-divider {
-  border-left: 1px solid var(--background);
-}
-
-.compact-control-label {
-  display: inline-flex;
-  height: var(--control-compact-height);
-  align-items: center;
-  gap: 0.5rem;
-  padding-inline: var(--control-compact-padding-x);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.compact-control-icon {
-  display: inline-flex;
-  height: var(--control-compact-height);
-  width: var(--control-compact-height);
-  align-items: center;
-  justify-content: center;
-}
-
-.compact-control-tab {
-  display: inline-flex;
-  height: var(--control-compact-height);
-  align-items: center;
-  justify-content: center;
-  white-space: nowrap;
-  padding-inline: calc(var(--control-compact-padding-x) + 2px);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.compact-control-tone-muted {
-  color: var(--muted-foreground);
-}
-
-.compact-control-standalone.compact-control-tone-muted {
-  border: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
-}
-
-.compact-control-tone-muted:hover:not(:disabled):not([aria-disabled="true"]) {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-  color: var(--foreground);
-}
-
-.compact-control-tone-foreground {
-  color: var(--foreground);
-}
-
-.compact-control-tone-foreground:hover:not(:disabled):not([aria-disabled="true"]) {
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-}
-
-.compact-control-tone-active {
-  background: var(--muted);
-  color: var(--foreground);
-}
-
-.compact-control-tone-active:hover:not(:disabled):not([aria-disabled="true"]) {
-  background: var(--muted);
 }
 
 @keyframes lifecycle-soft-pulse {
@@ -170,6 +69,28 @@
   }
 }
 
+@keyframes lifecycle-logo-draw-left {
+  0% {
+    stroke-dashoffset: 1;
+  }
+
+  50%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes lifecycle-logo-draw-right {
+  0%,
+  50% {
+    stroke-dashoffset: 1;
+  }
+
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
 .lifecycle-motion-soft-pulse {
   animation: lifecycle-soft-pulse 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   transform-origin: center;
@@ -182,31 +103,24 @@
   will-change: opacity, transform;
 }
 
-.compact-control-underline-tab {
-  position: relative;
-  display: inline-flex;
-  flex: 1;
-  align-items: center;
-  justify-content: center;
-  white-space: nowrap;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--muted-foreground);
-  box-shadow: inset 0 -1px 0 0 transparent;
+[data-lifecycle-logo-path="left"] {
+  animation-name: lifecycle-logo-draw-left;
+  will-change: stroke-dashoffset;
 }
 
-.compact-control-underline-tab:hover:not(:disabled) {
-  color: var(--foreground);
-}
-
-.compact-control-underline-tab[data-state="active"],
-.compact-control-underline-tab[data-active] {
-  color: var(--foreground);
-  box-shadow: inset 0 -1px 0 0 var(--foreground);
+[data-lifecycle-logo-path="right"] {
+  animation-name: lifecycle-logo-draw-right;
+  will-change: stroke-dashoffset;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  [data-lifecycle-logo-path="left"],
+  [data-lifecycle-logo-path="right"] {
+    animation: none !important;
+    stroke-dashoffset: 0 !important;
+    will-change: auto;
+  }
+
   .lifecycle-motion-soft-pulse,
   .lifecycle-motion-ready-ring {
     animation: none;

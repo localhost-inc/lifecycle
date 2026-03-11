@@ -92,6 +92,13 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
       kind: "changes-diff",
     });
   }, []);
+  const handleOpenFile = useCallback((filePath: string) => {
+    setOpenDocumentRequest({
+      filePath,
+      id: crypto.randomUUID(),
+      kind: "file-viewer",
+    });
+  }, []);
   const handleOpenCommitDiff = useCallback((entry: GitLogEntry) => {
     setOpenDocumentRequest({
       commit: entry,
@@ -157,6 +164,7 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
             onStop={handleStop}
             onUpdateService={handleUpdateService}
             onOpenDiff={handleOpenDiff}
+            onOpenFile={handleOpenFile}
             onOpenCommitDiff={handleOpenCommitDiff}
             onOpenPullRequest={handleOpenPullRequest}
             setupSteps={setupSteps}
@@ -174,6 +182,7 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
           onStop={handleStop}
           onUpdateService={handleUpdateService}
           onOpenDiff={handleOpenDiff}
+          onOpenFile={handleOpenFile}
           onOpenCommitDiff={handleOpenCommitDiff}
           onOpenPullRequest={handleOpenPullRequest}
           setupSteps={setupSteps}

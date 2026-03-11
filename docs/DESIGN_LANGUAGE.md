@@ -6,32 +6,33 @@ All tokens referenced below are CSS custom properties defined in `packages/ui/sr
 
 ## Surfaces & Containers
 
-- Zero border radius on all elements — buttons, inputs, cards, modals, badges, tooltips
-- Thin 1px borders using `var(--border)` for structure — never shadows
-- No box shadows, no drop shadows, no elevation — use borders and background shifts only
+- Radius scale: `--radius-xs` (2px), `--radius-sm` (4px), `--radius` (6px), `--radius-md` (8px), `--radius-lg` (10px), `--radius-xl` (12px), `--radius-2xl` (18px), `--radius-3xl` (24px). Cards and buttons use `rounded-xl` (12px), inputs use `rounded-lg` (10px), badges use `rounded-full`.
+- Thin 1px borders using `var(--border)` for structure
+- Shadows reserved for floating affordances only — tabs use `var(--tab-shadow)`; general surfaces use borders and background shifts
 - Cards use `var(--card)` bg with 1px border — bordered containers, not floating surfaces
 - Panels use `var(--panel)` bg for recessed/secondary regions
 
 ## Buttons
 
-- Primary: `var(--primary)` bg, `var(--primary-foreground)` text
-- Secondary: `var(--muted)` bg, `var(--foreground)` text
-- Outline: transparent bg, 1px `var(--border)` border
-- Destructive: `var(--destructive)` text, no fill by default
-- Ghost: transparent bg, no border — text only
-- No rounded corners, no pill shapes, no gradients
+- Default: `var(--muted)` bg, `var(--foreground)` text
+- Secondary: 1px border, transparent bg, `var(--muted-foreground)` text
+- Outline: 1px border, transparent bg, `var(--foreground)` text
+- Ghost: transparent, no border
+- Destructive: 1px `var(--destructive)` border, `var(--destructive)` text
+- White: white bg, black text (dark brand surfaces)
+- All buttons use `rounded-xl` (12px), no gradients
 
 ## Form Controls
 
-- Inputs/selects: 1px `var(--border)` border, transparent bg, placeholder in `var(--muted-foreground)`
+- Inputs/selects: 1px `var(--border)` border, `var(--card)` bg, `rounded-lg` (10px), placeholder in `var(--muted-foreground)`
 - Toggles/switches: monochrome — `var(--primary)` track when on, `var(--border)` track when off
-- Segmented controls: 1px bordered container, active segment gets `var(--primary)` fill
-- Checkboxes: square (zero radius), `var(--primary)` fill with `var(--primary-foreground)` check when active
+- Segmented controls: pill container (`var(--muted)` bg, 12px radius), active segment gets `var(--surface-selected)` fill
+- Checkboxes: `var(--primary)` fill with `var(--primary-foreground)` check when active
 
 ## Data Display
 
 - Tables: thin horizontal rules using `var(--border)`, no zebra striping, no cell borders
-- Badges/tags: 1px `var(--border)` border, no fill by default, small text
+- Badges/tags: `rounded-full`, outline default with 1px `var(--border)` border; success/warning/info variants use `color-mix` translucent fills
 - Charts: flat fills, no 3D effects, minimal gridlines, monochrome with one functional accent
 
 ## Feedback & Status
@@ -46,3 +47,7 @@ All tokens referenced below are CSS custom properties defined in `packages/ui/sr
 - Selected/active: `var(--surface-selected)` bg or solid `var(--primary)` fill
 - Focus: `var(--ring)` outline, offset from element, no glow
 - No color/background transitions longer than 150ms
+
+## Panel Titles
+
+- `.app-panel-title`: mono (`var(--font-mono)`), 12px, weight 500, uppercase, 0.1em tracking, `var(--sidebar-muted-foreground)`

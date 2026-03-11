@@ -19,6 +19,7 @@ function renderGitPanel(props: Partial<Parameters<typeof GitPanel>[0]> = {}) {
         children: createElement(GitPanel, {
           onOpenCommitDiff: () => {},
           onOpenDiff: () => {},
+          onOpenFile: () => {},
           onOpenPullRequest: () => {},
           workspaceId: "workspace_1",
           workspaceMode: "local",
@@ -56,9 +57,9 @@ describe("git panel spacing", () => {
     expect(markup).toContain("flex items-stretch border-b border-[var(--border)]");
     expect(markup).toContain("-mx-2.5");
     expect(markup).toContain("w-[calc(100%+1.25rem)]");
-    expect(markup).toContain("compact-control-underline-tab");
+    expect(markup).toContain("shadow-[inset_0_-1px_0_0_transparent]");
     expect(markup).not.toContain("data-active:bg-[var(--surface-selected)]");
-    expect(markup).not.toContain("compact-control-tab");
+    expect(markup).not.toContain("data-[state=active]:bg-[var(--surface-selected)]");
   });
 
   test("describes the broader Git rail in cloud mode", () => {

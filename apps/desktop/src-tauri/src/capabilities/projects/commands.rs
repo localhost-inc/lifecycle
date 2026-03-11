@@ -86,8 +86,15 @@ pub async fn add_project(
 
 #[tauri::command]
 pub async fn remove_project(db_path: State<'_, DbPath>, id: String) -> Result<(), LifecycleError> {
-    let conn = open_db(&db_path.0)?;
-    conn.execute("DELETE FROM project WHERE id = ?1", params![id])
+    let mut conn = open_db(&db_path.0)?;
+    let tx = conn
+        .transaction()
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    tx.execute("DELETE FROM workspace WHERE project_id = ?1", params![id])
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    tx.execute("DELETE FROM project WHERE id = ?1", params![id])
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    tx.commit()
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
     Ok(())
 }

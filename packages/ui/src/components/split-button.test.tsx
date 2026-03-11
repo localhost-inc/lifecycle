@@ -21,9 +21,9 @@ describe("SplitButton", () => {
       }),
     );
 
-    expect(markup).toContain("compact-control-shell");
-    expect(markup).toContain("compact-control-label");
-    expect(markup).toContain("compact-control-divider");
+    expect(markup).toContain("rounded-xl");
+    expect(markup).toContain("bg-[var(--muted)]");
+    expect(markup).toContain("border-l");
     expect(markup).toContain("Open");
   });
 
@@ -45,7 +45,7 @@ describe("SplitButton", () => {
       }),
     );
 
-    expect(markup).toContain("compact-control-tone-active");
+    expect(markup).toContain("bg-[var(--muted)]");
     expect(markup).toContain("Merge PR");
   });
 });

@@ -14,6 +14,7 @@ export { Collapsible, CollapsibleTrigger, CollapsibleContent } from "./component
 export { EmptyState, type EmptyStateProps } from "./components/empty-state";
 export { Input } from "./components/input";
 export { Label } from "./components/label";
+export { Logo, type LogoProps } from "./components/logo";
 export { ScrollArea, ScrollBar } from "./components/scroll-area";
 export {
   ScrollFade,

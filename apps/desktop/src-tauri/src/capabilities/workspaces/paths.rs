@@ -71,11 +71,14 @@ pub(crate) fn resolve_workspace_root_path(
     })
 }
 
-fn normalize_repo_relative_path(repo_relative_path: &str) -> Result<PathBuf, LifecycleError> {
+pub(crate) fn normalize_repo_relative_path(
+    repo_relative_path: &str,
+    operation: &str,
+) -> Result<PathBuf, LifecycleError> {
     let trimmed = repo_relative_path.trim();
     if trimmed.is_empty() {
         return Err(workspace_path_failure(
-            "open workspace file",
+            operation,
             "repo-relative path cannot be empty",
         ));
     }
@@ -83,7 +86,7 @@ fn normalize_repo_relative_path(repo_relative_path: &str) -> Result<PathBuf, Lif
     let path = Path::new(trimmed);
     if path.is_absolute() {
         return Err(workspace_path_failure(
-            "open workspace file",
+            operation,
             format!("path must be repo-relative: {trimmed}"),
         ));
     }
@@ -96,14 +99,14 @@ fn normalize_repo_relative_path(repo_relative_path: &str) -> Result<PathBuf, Lif
             Component::ParentDir => {
                 if !normalized.pop() {
                     return Err(workspace_path_failure(
-                        "open workspace file",
+                        operation,
                         format!("path escapes workspace root: {trimmed}"),
                     ));
                 }
             }
             Component::RootDir | Component::Prefix(_) => {
                 return Err(workspace_path_failure(
-                    "open workspace file",
+                    operation,
                     format!("path must be repo-relative: {trimmed}"),
                 ));
             }
@@ -112,7 +115,7 @@ fn normalize_repo_relative_path(repo_relative_path: &str) -> Result<PathBuf, Lif
 
     if normalized.as_os_str().is_empty() {
         return Err(workspace_path_failure(
-            "open workspace file",
+            operation,
             "repo-relative path cannot resolve to the workspace root",
         ));
     }
@@ -120,30 +123,43 @@ fn normalize_repo_relative_path(repo_relative_path: &str) -> Result<PathBuf, Lif
     Ok(normalized)
 }
 
-pub(crate) fn resolve_workspace_file_path(
+pub(crate) fn resolve_workspace_file_path_for_operation(
     db_path: &str,
     workspace_id: &str,
     repo_relative_path: &str,
+    operation: &str,
 ) -> Result<PathBuf, LifecycleError> {
-    let canonical_worktree =
-        resolve_workspace_root_path(db_path, workspace_id, "open workspace file")?;
-    let relative_path = normalize_repo_relative_path(repo_relative_path)?;
+    let canonical_worktree = resolve_workspace_root_path(db_path, workspace_id, operation)?;
+    let relative_path = normalize_repo_relative_path(repo_relative_path, operation)?;
     let candidate_path = canonical_worktree.join(relative_path);
     let canonical_candidate = std::fs::canonicalize(&candidate_path).map_err(|error| {
         workspace_path_failure(
-            "open workspace file",
+            operation,
             format!("failed to resolve workspace file: {error}"),
         )
     })?;
 
     if !canonical_candidate.starts_with(&canonical_worktree) {
         return Err(workspace_path_failure(
-            "open workspace file",
+            operation,
             format!("path resolves outside workspace root: {repo_relative_path}"),
         ));
     }
 
     Ok(canonical_candidate)
+}
+
+pub(crate) fn resolve_workspace_file_path(
+    db_path: &str,
+    workspace_id: &str,
+    repo_relative_path: &str,
+) -> Result<PathBuf, LifecycleError> {
+    resolve_workspace_file_path_for_operation(
+        db_path,
+        workspace_id,
+        repo_relative_path,
+        "open workspace file",
+    )
 }
 
 #[cfg(test)]

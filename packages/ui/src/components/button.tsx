@@ -5,11 +5,12 @@ import { getAsChildRenderElement } from "../lib/as-child";
 import { cn } from "../lib/cn";
 
 const buttonVariants = cva(
-  "inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-xl text-xs font-semibold transition-colors outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-xl text-xs font-semibold transition-[background-color,border-color,color,opacity,transform] duration-150 ease-in-out outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] active:scale-[0.97] disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-[var(--muted)] text-[var(--foreground)] hover:bg-[var(--muted)]",
+        default:
+          "bg-[var(--muted)] text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--muted),var(--foreground)_8%)]",
         secondary:
           "border border-[var(--border)] bg-transparent text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]",
         outline:

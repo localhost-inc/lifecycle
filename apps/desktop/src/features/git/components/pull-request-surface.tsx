@@ -9,7 +9,7 @@ import { parsePatchFiles } from "@pierre/diffs";
 import { PatchDiff } from "@pierre/diffs/react";
 import { useEffect, useMemo, useState } from "react";
 import { formatRelativeTime } from "../../../lib/format";
-import { getGitRefDiffPatch, openWorkspaceFile } from "../api";
+import { getGitRefDiffPatch } from "../api";
 import { useCurrentGitPullRequest, useGitPullRequest, useGitPullRequests } from "../hooks";
 import { DEFAULT_GIT_DIFF_STYLE, type GitDiffStyle } from "../lib/diff-style";
 import { buildPatchRenderCacheKey } from "../lib/diff-virtualization";
@@ -19,6 +19,7 @@ import { GithubAvatar } from "./github-avatar";
 import { MultiFileDiffLayout } from "./multi-file-diff-layout";
 
 interface PullRequestSurfaceProps {
+  onOpenFile?: (filePath: string) => void;
   pullRequest: GitPullRequestSummary;
   workspaceId: string;
 }
@@ -69,9 +70,7 @@ function CheckDots({ checks }: { checks: GitPullRequestCheckSummary[] | null }) 
         </span>
       ))}
       {overflow > 0 && (
-        <span className="text-[9px] leading-none text-[var(--muted-foreground)]">
-          +{overflow}
-        </span>
+        <span className="text-[9px] leading-none text-[var(--muted-foreground)]">+{overflow}</span>
       )}
     </span>
   );
@@ -134,6 +133,7 @@ export function resolvePullRequestSurfaceState({
 }
 
 export function PullRequestSurface({
+  onOpenFile,
   pullRequest: snapshot,
   workspaceId,
 }: PullRequestSurfaceProps) {
@@ -226,19 +226,16 @@ export function PullRequestSurface({
 
   const parsedFiles = useMemo(() => {
     if (!patch) return [];
-    const cacheKey = buildPatchRenderCacheKey(`pr-diff:${workspaceId}:${pullRequest.number}`, patch);
+    const cacheKey = buildPatchRenderCacheKey(
+      `pr-diff:${workspaceId}:${pullRequest.number}`,
+      patch,
+    );
     try {
       return parsePatchFiles(patch, cacheKey).flatMap((p) => p.files);
     } catch {
       return null;
     }
   }, [patch, pullRequest.number, workspaceId]);
-
-  const handleOpenFile = (filePath: string) => {
-    void openWorkspaceFile(workspaceId, filePath).catch((err) => {
-      setDiffError(String(err));
-    });
-  };
 
   const diffControlsDisabled = isDiffLoading || diffError !== null || patch.length === 0;
 
@@ -343,7 +340,7 @@ export function PullRequestSurface({
           <MultiFileDiffLayout
             diffStyle={diffStyle}
             files={parsedFiles}
-            onOpenFile={handleOpenFile}
+            onOpenFile={onOpenFile}
             theme={diffTheme(resolvedTheme)}
             themeType={resolvedAppearance}
           />
