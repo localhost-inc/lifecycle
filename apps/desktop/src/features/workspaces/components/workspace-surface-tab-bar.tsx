@@ -27,6 +27,7 @@ const TAB_BAR_RIGHT_FADE_WIDTH_PX = 24;
 
 const tabListStyle: CSSProperties = {
   msOverflowStyle: "none",
+  paddingLeft: "var(--control-compact-padding-x)",
   paddingRight: TAB_BAR_RIGHT_FADE_WIDTH_PX,
   scrollbarWidth: "none",
 };

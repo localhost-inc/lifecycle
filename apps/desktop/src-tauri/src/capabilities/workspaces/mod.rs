@@ -1,15 +1,16 @@
 pub mod commands;
 pub mod create;
 pub mod destroy;
+mod environment_graph;
 pub mod git;
 mod harness;
 mod identity;
 pub mod manifest;
 mod naming;
 pub mod open;
+mod paths;
 mod ports;
 mod preview;
-mod paths;
 pub mod query;
 pub mod rename;
 pub mod service;
@@ -17,7 +18,7 @@ mod shared;
 pub mod start;
 pub mod state_machine;
 pub mod stop;
+pub mod terminal;
 #[cfg(test)]
 pub(crate) mod test_support;
-pub mod terminal;
 pub mod title;

@@ -4,6 +4,7 @@ import { parsePatchFiles } from "@pierre/diffs";
 import { PatchDiff } from "@pierre/diffs/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatRelativeTime } from "../../../lib/format";
+import { GithubAvatar } from "./github-avatar";
 import { getGitChangesPatch, getGitCommitPatch, openWorkspaceFile } from "../api";
 import { useGitStatus } from "../hooks";
 import { buildPatchRenderCacheKey } from "../lib/diff-virtualization";
@@ -52,10 +53,13 @@ function header(source: GitDiffSurfaceSource) {
       <p className="text-base font-semibold leading-snug text-[var(--foreground)]">
         {source.commit.message}
       </p>
-      <p className="mt-1.5 text-xs text-[var(--muted-foreground)]">
-        {source.commit.author} · {formatRelativeTime(source.commit.timestamp)} ·{" "}
-        <span className="font-mono">{source.commit.shortSha}</span>
-      </p>
+      <div className="mt-1.5 flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
+        <GithubAvatar name={source.commit.author} email={source.commit.email} size="sm" />
+        <span>
+          {source.commit.author} · {formatRelativeTime(source.commit.timestamp)} ·{" "}
+          <span className="font-mono">{source.commit.shortSha}</span>
+        </span>
+      </div>
     </div>
   );
 }

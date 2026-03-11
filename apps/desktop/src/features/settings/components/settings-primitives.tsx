@@ -12,10 +12,10 @@ export const SettingsSection = forwardRef<HTMLElement, SettingsSectionProps>(fun
   ref,
 ) {
   return (
-    <section className="mt-12 scroll-mt-8" id={id} ref={ref}>
+    <section className="mt-10 scroll-mt-8 border-t border-[var(--border)] pt-10" id={id} ref={ref}>
       <h2 className="app-panel-title text-[var(--muted-foreground)]">{label}</h2>
       {description && <p className="mt-1 text-sm text-[var(--muted-foreground)]">{description}</p>}
-      <div className="mt-4 border-t border-[var(--border)]">{children}</div>
+      <div className="mt-3">{children}</div>
     </section>
   );
 });
@@ -28,7 +28,7 @@ interface SettingsRowProps {
 
 export function SettingsRow({ label, description, children }: SettingsRowProps) {
   return (
-    <div className="grid gap-3 border-b border-[var(--border)] py-4 last:border-b-0 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-4">
+    <div className="grid gap-3 py-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-4">
       <div>
         <h3 className="text-sm font-medium text-[var(--foreground)]">{label}</h3>
         {description && (
@@ -49,7 +49,7 @@ interface SettingsFieldRowProps {
 
 export function SettingsFieldRow({ label, htmlFor, description, children }: SettingsFieldRowProps) {
   return (
-    <div className="border-b border-[var(--border)] py-4 last:border-b-0">
+    <div className="py-2">
       <label
         className="text-sm font-medium text-[var(--foreground)]"
         {...(htmlFor ? { htmlFor } : {})}

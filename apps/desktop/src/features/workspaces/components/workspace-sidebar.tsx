@@ -234,9 +234,9 @@ export function WorkspaceSidebar({
           tabIndex={0}
           onKeyDown={handlePanelSeparatorKeyDown}
           onPointerDown={handlePanelSeparatorPointerDown}
-          className="group absolute inset-x-0 top-1/2 z-10 flex h-3 -translate-y-1/2 cursor-row-resize items-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--primary)]"
+          className="group absolute inset-x-0 top-1/2 z-10 flex h-3 -translate-y-1/2 cursor-row-resize items-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
         >
-          <div className="h-px w-full bg-[var(--border)] transition-colors group-hover:bg-[var(--primary)] group-focus-visible:bg-[var(--primary)]" />
+          <div className="h-px w-full bg-[var(--border)] transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
         </div>
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">

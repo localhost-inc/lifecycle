@@ -1,4 +1,4 @@
-use crate::capabilities::workspaces::manifest::{LifecycleConfig, ServiceConfig};
+use crate::capabilities::workspaces::manifest::LifecycleConfig;
 use crate::capabilities::workspaces::state_machine::validate_workspace_transition;
 use crate::platform::db::open_db;
 use crate::shared::errors::{
@@ -424,92 +424,11 @@ pub(super) fn mark_nonfailed_services_stopped(
     Ok(names)
 }
 
-/// Topologically sort services by depends_on
-pub(super) fn topo_sort_services<'a>(
-    services: &'a std::collections::HashMap<String, ServiceConfig>,
-) -> Result<Vec<(&'a str, &'a ServiceConfig)>, LifecycleError> {
-    use std::collections::{HashMap, HashSet, VecDeque};
-
-    let mut in_degree: HashMap<&str, usize> = HashMap::new();
-    let mut dependents: HashMap<&str, Vec<&str>> = HashMap::new();
-    let mut missing_dependencies: Vec<(String, String)> = Vec::new();
-
-    for name in services.keys() {
-        in_degree.entry(name.as_str()).or_insert(0);
-    }
-
-    for (name, config) in services {
-        for dep in config.depends_on() {
-            if !services.contains_key(dep) {
-                missing_dependencies.push((name.clone(), dep.clone()));
-                continue;
-            }
-
-            dependents
-                .entry(dep.as_str())
-                .or_default()
-                .push(name.as_str());
-            *in_degree.entry(name.as_str()).or_insert(0) += 1;
-        }
-    }
-
-    if let Some((service, dependency)) = missing_dependencies.first() {
-        return Err(LifecycleError::ServiceStartFailed {
-            service: service.clone(),
-            reason: format!("service '{service}' depends on missing service '{dependency}'"),
-        });
-    }
-
-    let mut queue: VecDeque<&str> = VecDeque::new();
-    for (name, &degree) in &in_degree {
-        if degree == 0 {
-            queue.push_back(name);
-        }
-    }
-
-    let mut result = Vec::new();
-    while let Some(name) = queue.pop_front() {
-        result.push((name, services.get(name).unwrap()));
-        if let Some(deps) = dependents.get(name) {
-            for dep in deps {
-                if let Some(degree) = in_degree.get_mut(dep) {
-                    *degree -= 1;
-                    if *degree == 0 {
-                        queue.push_back(dep);
-                    }
-                }
-            }
-        }
-    }
-
-    if result.len() != services.len() {
-        let sorted: HashSet<&str> = result.iter().map(|(name, _)| *name).collect();
-        let mut unresolved: Vec<String> = services
-            .keys()
-            .filter(|name| !sorted.contains(name.as_str()))
-            .cloned()
-            .collect();
-        unresolved.sort();
-
-        let service = unresolved
-            .first()
-            .cloned()
-            .unwrap_or_else(|| "unknown".to_string());
-        return Err(LifecycleError::ServiceStartFailed {
-            service,
-            reason: format!("dependency cycle detected: {}", unresolved.join(", ")),
-        });
-    }
-
-    Ok(result)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::capabilities::workspaces::manifest::LifecycleConfig;
     use crate::capabilities::workspaces::test_support::available_test_port;
-    use std::collections::HashMap;
 
     fn temp_db_path() -> String {
         let path =
@@ -546,11 +465,6 @@ mod tests {
             );",
         )
         .expect("create tables");
-    }
-
-    fn parse_services(json: &str) -> HashMap<String, ServiceConfig> {
-        let config: LifecycleConfig = serde_json::from_str(json).expect("valid config");
-        config.services
     }
 
     #[test]
@@ -984,73 +898,5 @@ mod tests {
         assert_eq!(row, (None, Some(default_port + 1)));
 
         let _ = std::fs::remove_file(db_path);
-    }
-
-    #[test]
-    fn topo_sort_orders_dependencies_before_dependents() {
-        let services = parse_services(
-            r#"{
-                "setup": { "steps": [{ "name": "install", "command": "bun install", "timeout_seconds": 30 }] },
-                "services": {
-                    "api": { "runtime": "process", "command": "bun run dev", "depends_on": ["db"] },
-                    "db": { "runtime": "image", "image": "postgres:16" }
-                }
-            }"#,
-        );
-
-        let sorted = topo_sort_services(&services).expect("topo sort should succeed");
-        let names: Vec<&str> = sorted.iter().map(|(name, _)| *name).collect();
-        let db_index = names
-            .iter()
-            .position(|name| *name == "db")
-            .expect("db exists");
-        let api_index = names
-            .iter()
-            .position(|name| *name == "api")
-            .expect("api exists");
-
-        assert!(db_index < api_index, "db must start before api");
-    }
-
-    #[test]
-    fn topo_sort_fails_when_dependency_is_missing() {
-        let services = parse_services(
-            r#"{
-                "setup": { "steps": [{ "name": "install", "command": "bun install", "timeout_seconds": 30 }] },
-                "services": {
-                    "api": { "runtime": "process", "command": "bun run dev", "depends_on": ["db"] }
-                }
-            }"#,
-        );
-
-        let error = topo_sort_services(&services).expect_err("missing dep should fail");
-        match error {
-            LifecycleError::ServiceStartFailed { service, reason } => {
-                assert_eq!(service, "api");
-                assert!(reason.contains("missing service"));
-            }
-            other => panic!("unexpected error: {other}"),
-        }
-    }
-
-    #[test]
-    fn topo_sort_fails_on_dependency_cycle() {
-        let services = parse_services(
-            r#"{
-                "setup": { "steps": [{ "name": "install", "command": "bun install", "timeout_seconds": 30 }] },
-                "services": {
-                    "api": { "runtime": "process", "command": "bun run dev", "depends_on": ["db"] },
-                    "db": { "runtime": "process", "command": "bun run db", "depends_on": ["api"] }
-                }
-            }"#,
-        );
-
-        let error = topo_sort_services(&services).expect_err("cycle should fail");
-        match error {
-            LifecycleError::ServiceStartFailed { reason, .. } => {
-                assert!(reason.contains("dependency cycle"));
-            }
-            other => panic!("unexpected error: {other}"),
-        }
     }
 }

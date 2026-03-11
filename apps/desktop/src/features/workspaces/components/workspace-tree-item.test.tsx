@@ -86,10 +86,8 @@ describe("WorkspaceTreeItem", () => {
     expect(markup).toContain("bg-transparent");
     expect(markup).toContain("font-medium");
     expect(markup).toContain("text-[var(--sidebar-foreground)]");
-    expect(markup).toContain('data-slot="workspace-active-rail"');
-    expect(markup).toContain("bg-[var(--primary)]");
+    expect(markup).toContain("border-left-color:var(--primary)");
     expect(markup).toContain("pl-3");
-    expect(markup).toContain("top-0");
     expect(markup).toContain("opacity-70");
   });
 
@@ -108,7 +106,7 @@ describe("WorkspaceTreeItem", () => {
     );
     expect(markup).toContain("hover:bg-transparent");
     expect(markup).toContain("text-[var(--sidebar-muted-foreground)]");
-    expect(markup).not.toContain('data-slot="workspace-active-rail"');
+    expect(markup).toContain("border-left-color:var(--border)");
   });
 
   test("swaps the time label out for the archive action on hover", () => {

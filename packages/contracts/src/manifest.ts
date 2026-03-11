@@ -1,13 +1,40 @@
 import { z } from "zod";
 import { parse as parseJsonc, ParseError } from "jsonc-parser";
 
+const SetupWriteFileSchema = z.object({
+  path: z.string(),
+  content: z.string().optional(),
+  lines: z.array(z.string()).min(1).optional(),
+}).superRefine((file, ctx) => {
+  const hasContent = typeof file.content === "string";
+  const hasLines = Array.isArray(file.lines);
+  if (hasContent === hasLines) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Setup write_files entries require exactly one of content or lines",
+      path: hasContent ? ["lines"] : ["content"],
+    });
+  }
+});
+
 const SetupStepSchema = z.object({
   name: z.string(),
-  command: z.string(),
+  command: z.string().optional(),
+  write_files: z.array(SetupWriteFileSchema).min(1).optional(),
   timeout_seconds: z.number().int().positive(),
   cwd: z.string().optional(),
   env_vars: z.record(z.string(), z.string()).optional(),
   run_on: z.enum(["create", "start"]).optional(),
+}).superRefine((step, ctx) => {
+  const hasCommand = typeof step.command === "string";
+  const hasWriteFiles = Array.isArray(step.write_files);
+  if (hasCommand === hasWriteFiles) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Setup steps require exactly one of command or write_files",
+      path: hasCommand ? ["write_files"] : ["command"],
+    });
+  }
 });
 
 const SetupSchema = z.object({
@@ -39,6 +66,17 @@ const BaseServiceFields = {
   share_default: z.boolean().optional(),
 };
 
+const ImageBuildSchema = z.object({
+  context: z.string(),
+  dockerfile: z.string().optional(),
+});
+
+const ImageVolumeSchema = z.object({
+  source: z.string(),
+  target: z.string(),
+  read_only: z.boolean().optional(),
+});
+
 const ProcessServiceSchema = z.object({
   runtime: z.literal("process"),
   command: z.string(),
@@ -48,10 +86,20 @@ const ProcessServiceSchema = z.object({
 
 const ImageServiceSchema = z.object({
   runtime: z.literal("image"),
-  image: z.string(),
+  image: z.string().optional(),
+  build: ImageBuildSchema.optional(),
   command: z.string().optional(),
   args: z.array(z.string()).optional(),
+  volumes: z.array(ImageVolumeSchema).optional(),
   ...BaseServiceFields,
+}).superRefine((service, ctx) => {
+  if (!service.image && !service.build) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Image services require either image or build",
+      path: ["image"],
+    });
+  }
 });
 
 const ServiceSchema = z.discriminatedUnion("runtime", [ProcessServiceSchema, ImageServiceSchema]);

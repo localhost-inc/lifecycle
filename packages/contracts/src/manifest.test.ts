@@ -107,6 +107,41 @@ describe("parseManifest", () => {
     expect(result.errors.some((e) => e.path.includes("steps"))).toBe(true);
   });
 
+  test("returns errors when a setup step omits both command and write_files", () => {
+    const result = parseManifest(`{
+      "setup": { "steps": [{ "name": "a", "timeout_seconds": 10 }] },
+      "services": {}
+    }`);
+    expect(result.valid).toBe(false);
+    if (result.valid) return;
+    expect(result.errors.some((e) => e.path.includes("command"))).toBe(true);
+  });
+
+  test("accepts setup steps that write files", () => {
+    const result = parseManifest(`{
+      "setup": {
+        "steps": [{
+          "name": "write-env",
+          "write_files": [{
+            "path": "apps/api/.env.local",
+            "lines": ["PORT=\${LIFECYCLE_SERVICE_API_PORT}", "HOST=\${LIFECYCLE_SERVICE_API_HOST}"]
+          }],
+          "timeout_seconds": 10,
+          "run_on": "start"
+        }]
+      },
+      "services": {
+        "api": { "runtime": "process", "command": "bun run dev", "port": 3001 }
+      }
+    }`);
+    expect(result.valid).toBe(true);
+    if (!result.valid) return;
+    const step = result.config.setup.steps[0]!;
+    expect(step.command).toBeUndefined();
+    expect(step.write_files).toHaveLength(1);
+    expect(step.write_files?.[0]?.path).toBe("apps/api/.env.local");
+  });
+
   test("returns errors for invalid service runtime", () => {
     const result = parseManifest(`{
       "setup": { "steps": [{ "name": "a", "command": "b", "timeout_seconds": 10 }] },
@@ -171,6 +206,28 @@ describe("parseManifest", () => {
       }
     }`);
     expect(result.valid).toBe(true);
+  });
+
+  test("accepts image services with build and volumes", () => {
+    const result = parseManifest(`{
+      "setup": { "steps": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "services": {
+        "postgres": {
+          "runtime": "image",
+          "build": { "context": "docker", "dockerfile": "docker/Dockerfile.pg.dev" },
+          "volumes": [
+            { "source": "workspace://postgres", "target": "/var/lib/postgresql/data" },
+            { "source": "docker/init.sql", "target": "/docker-entrypoint-initdb.d/init.sql", "read_only": true }
+          ]
+        }
+      }
+    }`);
+    expect(result.valid).toBe(true);
+    if (!result.valid) return;
+    expect(result.config.services["postgres"]!.runtime).toBe("image");
+    if (result.config.services["postgres"]!.runtime !== "image") return;
+    expect(result.config.services["postgres"]!.build?.context).toBe("docker");
+    expect(result.config.services["postgres"]!.volumes).toHaveLength(2);
   });
 
   test("validates secret schema", () => {

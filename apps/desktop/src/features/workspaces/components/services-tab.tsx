@@ -42,6 +42,11 @@ const statusIcon: Record<string, { icon: ReactNode; className: string }> = {
 };
 
 const defaultStatusIcon = statusIcon.stopped!;
+const exposureItems: Array<{ label: string; value: ServiceRecord["exposure"] }> = [
+  { label: "Internal", value: "internal" },
+  { label: "Local", value: "local" },
+  { label: "Organization (Later)", value: "organization" },
+];
 
 function ServiceActionIcon({ service, onOpen }: { service: ServiceRecord; onOpen: () => void }) {
   if (service.status === "ready" && service.preview_status === "ready") {
@@ -291,6 +296,7 @@ function ServiceRow({
                 Exposure
               </span>
               <Select
+                items={exposureItems}
                 value={draftExposure}
                 onValueChange={(value: ServiceRecord["exposure"]) => setDraftExposure(value)}
               >

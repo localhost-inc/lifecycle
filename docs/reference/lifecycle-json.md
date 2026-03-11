@@ -17,25 +17,43 @@ Canonical specification for the `lifecycle.json` project environment configurati
 ## `setup` Contract
 
 - Optional `services` list starts those named services, plus their transitive `depends_on` chain, before setup steps run
-- List of deterministic steps (`name`, `command`, `timeout_seconds`, optional `cwd`, optional `env_vars`, optional `run_on`)
+- List of deterministic steps (`name`, `timeout_seconds`, optional `cwd`, optional `env_vars`, optional `run_on`)
+- Each setup step must define exactly one action:
+  - `command`: run a shell command
+  - `write_files`: materialize one or more non-secret files into the workspace
+- Each `write_files` entry must define:
+  - `path`
+  - exactly one of `content` or `lines`
 - `run_on` defaults to `create`
 - `run_on=create` steps run on the first successful workspace start only
 - `run_on=start` steps run on every workspace start after any `setup.services` infra is ready
 - Examples: dependency install, schema/bootstrap, fixture preload
+- Host-mode apps should prefer direct `env_vars` wiring from reserved `LIFECYCLE_SERVICE_*` values.
+- If a toolchain requires `.env.local` or similar files, materialize them with `setup.steps[].write_files` instead of repo-local helper scripts.
 - Setup must not write plaintext secrets to disk (for example `.env` copies with real values)
 - Lifecycle injects reserved discovery env vars into setup steps and process services:
   - `LIFECYCLE_WORKSPACE_ID`, `LIFECYCLE_WORKSPACE_NAME`, `LIFECYCLE_WORKSPACE_SOURCE_REF`, `LIFECYCLE_WORKSPACE_PATH`, `LIFECYCLE_WORKSPACE_SLUG`
   - `LIFECYCLE_SERVICE_<SERVICE_NAME>_HOST`, `..._PORT`, and `..._ADDRESS` for every declared service with an assigned local port
+- Reserved `LIFECYCLE_*` values may be referenced inside:
+  - setup `write_files.content`
+  - setup `write_files.lines[]`
+  - setup `env_vars`
+  - service `env_vars`
+- Unknown `LIFECYCLE_*` template references fail workspace start with a field-level error.
 
 ## `services` Contract
 
 - Each named service defines `runtime` (`process` or `image`)
 - `process` runtime required field: `command`
-- `image` runtime required field: `image`; optional `command`, `args`
+- `image` runtime requires at least one of `image` or `build`
+- `image.build` supports `{ "context": "<path>", "dockerfile": "<optional path>" }`
+- `image.volumes` supports bind mounts via `{ "source": "<path|workspace://name>", "target": "<container path>", "read_only": true|false }`
 - Shared optional fields: `cwd` (process only), `env_vars`, `depends_on`, `restart_policy`, `startup_timeout_seconds`, `health_check`, `port`, `share_default`
+- `env_vars` may reference reserved `LIFECYCLE_*` values directly, which are expanded by the provider before process or container start
 - `port` is the service's preferred/default local port; the local provider may assign a different stable host `effective_port` per workspace when the default would collide
 - `share_default` (`true|false`) controls default `workspace_service.exposure` on workspace create (`true -> local`, omitted/`false -> internal`)
 - Services are long-lived environment workloads; they are not one-shot setup commands
+- `workspace://<name>` volume sources resolve to persistent workspace-local storage managed by the provider
 
 ## `health_check` Contract (Service-Level)
 
@@ -65,7 +83,8 @@ Canonical specification for the `lifecycle.json` project environment configurati
 
 - `lifecycle.json` defines WHAT to run, not WHERE — the same manifest is consumed by any `WorkspaceProvider`
 - `process` runtime: portable (child process in any provider)
-- `image` runtime: requires Docker (cloud: DinD in sandbox, local: Docker Desktop)
+- `image` runtime: requires Docker-compatible image execution (cloud: DinD in sandbox, local: Docker Desktop)
+- `image.build` and `image.volumes` are part of the local-first contract because real projects often need custom images and persistent state, not just public registry pulls
 - Secrets: resolved via control plane for both providers. Cloud: server-side injection. Local: fetched via CLI auth, injected as env vars.
 - Privileged Docker assumptions are out of scope for the V1 cloud environment
 - Service networking contract is localhost/port readiness, not custom bridge/iptables authoring
@@ -83,6 +102,19 @@ Canonical specification for the `lifecycle.json` project environment configurati
     "services": ["postgres", "redis"],
     "steps": [
       { "name": "install", "command": "bun install --frozen-lockfile", "timeout_seconds": 300 },
+      {
+        "name": "write-web-env",
+        "write_files": [
+          {
+            "path": "apps/web/.env.local",
+            "lines": [
+              "VITE_API_ORIGIN=http://${LIFECYCLE_SERVICE_API_ADDRESS}",
+            ],
+          },
+        ],
+        "timeout_seconds": 10,
+        "run_on": "start",
+      },
       { "name": "migrate", "command": "bun run db:migrate", "timeout_seconds": 120, "run_on": "start" },
     ],
   },
@@ -98,8 +130,12 @@ Canonical specification for the `lifecycle.json` project environment configurati
   "services": {
     "postgres": {
       "runtime": "image",
-      "image": "postgres:16-alpine",
+      "build": { "context": "docker", "dockerfile": "docker/Dockerfile.pg.dev" },
       "startup_timeout_seconds": 45,
+      "volumes": [
+        { "source": "workspace://postgres", "target": "/var/lib/postgresql/data" },
+        { "source": "docker/init.sql", "target": "/docker-entrypoint-initdb.d/init.sql", "read_only": true },
+      ],
       "health_check": { "kind": "tcp", "host": "127.0.0.1", "port": 5432, "timeout_seconds": 45 },
       "env_vars": {
         "POSTGRES_USER": "app",
@@ -130,6 +166,18 @@ Canonical specification for the `lifecycle.json` project environment configurati
       "env_vars": {
         "DATABASE_URL": "postgres://app:${secrets.POSTGRES_PASSWORD}@127.0.0.1:5432/app",
         "REDIS_URL": "redis://:${secrets.REDIS_PASSWORD}@127.0.0.1:6379",
+        "WEBHOOK_BASE_URL": "http://${LIFECYCLE_WORKSPACE_SLUG}.local",
+      },
+    },
+    "web": {
+      "runtime": "process",
+      "command": "bun run dev",
+      "cwd": "apps/web",
+      "depends_on": ["api"],
+      "port": 3000,
+      "share_default": true,
+      "env_vars": {
+        "VITE_API_ORIGIN": "http://${LIFECYCLE_SERVICE_API_ADDRESS}",
       },
     },
   },

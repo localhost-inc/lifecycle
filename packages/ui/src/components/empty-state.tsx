@@ -35,7 +35,7 @@ function EmptyState({ icon, title, description, action, size = "lg", className }
           <div
             className={cn(
               "text-[var(--muted-foreground)]",
-              isSmall ? "opacity-30 [&>svg]:size-12" : "opacity-20 [&>svg]:size-16",
+              isSmall ? "opacity-30 [&>svg]:size-8" : "opacity-20 [&>svg]:size-16",
             )}
           >
             {icon}

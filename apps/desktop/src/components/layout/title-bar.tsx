@@ -84,7 +84,7 @@ export function TitleBar({ selectedWorkspace }: TitleBarProps) {
     <header
       data-tauri-drag-region
       onMouseDown={handleMouseDown}
-      className="flex h-11 shrink-0 items-center bg-[var(--background)] px-3 pt-3 text-[11px] text-[var(--muted-foreground)]"
+      className="flex h-11 shrink-0 items-center bg-[var(--background)] px-3 pt-2 text-[11px] text-[var(--muted-foreground)]"
     >
       <div data-tauri-drag-region className="flex min-w-0 flex-1 items-center gap-3">
         {selectedWorkspace && (

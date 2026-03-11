@@ -21,11 +21,19 @@ pub struct SetupConfig {
 #[derive(Clone, Debug, Deserialize)]
 pub struct SetupStep {
     pub name: String,
-    pub command: String,
+    pub command: Option<String>,
+    pub write_files: Option<Vec<SetupWriteFile>>,
     pub timeout_seconds: u64,
     pub cwd: Option<String>,
     pub env_vars: Option<HashMap<String, String>>,
     pub run_on: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct SetupWriteFile {
+    pub path: String,
+    pub content: Option<String>,
+    pub lines: Option<Vec<String>>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -99,7 +107,8 @@ pub struct ProcessService {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct ImageService {
-    pub image: String,
+    pub image: Option<String>,
+    pub build: Option<ImageBuild>,
     pub command: Option<String>,
     pub args: Option<Vec<String>>,
     pub env_vars: Option<HashMap<String, String>>,
@@ -109,8 +118,22 @@ pub struct ImageService {
     pub health_check: Option<HealthCheck>,
     pub port: Option<u16>,
     pub share_default: Option<bool>,
+    pub volumes: Option<Vec<ImageVolume>>,
     #[serde(skip)]
     pub resolved_port: Option<u16>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ImageBuild {
+    pub context: String,
+    pub dockerfile: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct ImageVolume {
+    pub source: String,
+    pub target: String,
+    pub read_only: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -181,6 +204,11 @@ mod tests {
         assert!(config.setup.services.is_none());
         assert_eq!(config.setup.steps.len(), 1);
         assert_eq!(config.setup.steps[0].name, "install");
+        assert_eq!(
+            config.setup.steps[0].command.as_deref(),
+            Some("bun install")
+        );
+        assert!(config.setup.steps[0].write_files.is_none());
         assert!(config.setup.steps[0].run_on.is_none());
         assert!(matches!(
             config.services.get("api").unwrap(),
@@ -248,5 +276,90 @@ mod tests {
         assert_eq!(config.setup.steps[0].run_on.as_deref(), Some("start"));
         let api = config.services.get("api").unwrap();
         assert_eq!(api.depends_on(), &["db"]);
+    }
+
+    #[test]
+    fn parse_image_service_with_build_and_volumes() {
+        let json = r#"{
+            "setup": {
+                "steps": [
+                    { "name": "install", "command": "bun install", "timeout_seconds": 120 }
+                ]
+            },
+            "services": {
+                "postgres": {
+                    "runtime": "image",
+                    "build": {
+                        "context": "docker",
+                        "dockerfile": "docker/Dockerfile.pg.dev"
+                    },
+                    "volumes": [
+                        { "source": "workspace://postgres", "target": "/var/lib/postgresql/data" },
+                        { "source": "docker/init.sql", "target": "/docker-entrypoint-initdb.d/init.sql", "read_only": true }
+                    ]
+                }
+            }
+        }"#;
+
+        let config: LifecycleConfig = serde_json::from_str(json).unwrap();
+        let service = config
+            .services
+            .get("postgres")
+            .expect("postgres service exists");
+        let ServiceConfig::Image(service) = service else {
+            panic!("expected image service");
+        };
+
+        assert!(service.image.is_none());
+        assert_eq!(
+            service.build.as_ref().map(|build| build.context.as_str()),
+            Some("docker")
+        );
+        assert_eq!(service.volumes.as_ref().map(Vec::len), Some(2));
+    }
+
+    #[test]
+    fn parse_setup_step_with_write_files() {
+        let json = r#"{
+            "setup": {
+                "steps": [
+                    {
+                        "name": "write-env",
+                        "write_files": [
+                            {
+                                "path": "apps/api/.env.local",
+                                "lines": [
+                                    "PORT=${LIFECYCLE_SERVICE_API_PORT}",
+                                    "HOST=${LIFECYCLE_SERVICE_API_HOST}"
+                                ]
+                            }
+                        ],
+                        "timeout_seconds": 10,
+                        "run_on": "start"
+                    }
+                ]
+            },
+            "services": {
+                "api": {
+                    "runtime": "process",
+                    "command": "bun run dev",
+                    "port": 3000
+                }
+            }
+        }"#;
+
+        let config: LifecycleConfig = serde_json::from_str(json).unwrap();
+        let step = &config.setup.steps[0];
+        assert_eq!(step.name, "write-env");
+        assert!(step.command.is_none());
+        assert_eq!(step.run_on.as_deref(), Some("start"));
+        assert_eq!(step.write_files.as_ref().map(Vec::len), Some(1));
+        assert_eq!(
+            step.write_files
+                .as_ref()
+                .and_then(|files| files.first())
+                .map(|file| file.path.as_str()),
+            Some("apps/api/.env.local")
+        );
     }
 }

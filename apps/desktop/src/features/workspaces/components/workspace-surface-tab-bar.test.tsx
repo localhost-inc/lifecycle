@@ -37,7 +37,7 @@ describe("WorkspaceSurfaceTabBar", () => {
     expect(markup).toContain("lead:terminal:term-1");
   });
 
-  test("renders workspace tab items with the compact control shell treatment", () => {
+  test("renders workspace tab items without depending on the shared compact tab primitive", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceSurfaceTabBar, {
         activeTabKey: "terminal:term-1",
@@ -61,8 +61,12 @@ describe("WorkspaceSurfaceTabBar", () => {
     );
 
     expect(markup).toContain("compact-control-standalone");
-    expect(markup).toContain("compact-control-tab");
     expect(markup).toContain("compact-control-tone-active");
+    expect(markup).not.toContain("compact-control-tab");
+    expect(markup).toContain("h-[34px]");
+    expect(markup).toContain("px-[calc(var(--control-compact-padding-x)+2px)]");
+    expect(markup).toContain("text-sm");
+    expect(markup).toContain("font-medium");
   });
 
   test("hides the horizontal scrollbar and reserves a right gutter for the fade", () => {

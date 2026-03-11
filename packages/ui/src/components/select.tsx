@@ -40,7 +40,7 @@ function SelectTrigger({ className, children, ...props }: SelectPrimitive.Trigge
   return (
     <SelectPrimitive.Trigger
       className={cn(
-        "flex h-9 w-full cursor-pointer items-center justify-between gap-2 border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--foreground)] outline-none transition-colors data-placeholder:text-[var(--muted-foreground)] focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-60 rounded-lg [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "flex h-9 w-full cursor-pointer items-center justify-between gap-2 border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--foreground)] outline-none transition-colors data-placeholder:text-[var(--muted-foreground)] focus-visible:ring-1 focus-visible:ring-[var(--ring)] data-[popup-open]:ring-1 data-[popup-open]:ring-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-60 rounded-lg [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className,
       )}
       data-slot="select-trigger"
@@ -121,7 +121,7 @@ function SelectContent({
       >
         <SelectPrimitive.Popup
           className={cn(
-            "relative z-50 max-h-[var(--available-height)] min-w-[8rem] w-[var(--anchor-width)] overflow-x-hidden overflow-y-auto border border-[var(--border)] bg-[var(--panel)] text-[var(--foreground)] shadow-md rounded-lg p-1",
+            "relative z-50 max-h-[var(--available-height)] min-w-[8rem] w-[var(--anchor-width)] overflow-x-hidden overflow-y-auto border border-[var(--border)] bg-[var(--card)] text-[var(--foreground)] shadow-md rounded-lg p-1",
             className,
           )}
           data-slot="select-content"

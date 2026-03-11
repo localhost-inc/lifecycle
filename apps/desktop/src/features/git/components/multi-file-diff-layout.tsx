@@ -389,9 +389,9 @@ function MultiFileDiffLayoutInner({
           aria-orientation="vertical"
           tabIndex={0}
           onPointerDown={handleSeparatorPointerDown}
-          className="group absolute inset-y-0 left-1/2 z-10 flex w-3 -translate-x-1/2 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--primary)]"
+          className="group absolute inset-y-0 left-1/2 z-10 flex w-3 -translate-x-1/2 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
         >
-          <div className="w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--primary)] group-focus-visible:bg-[var(--primary)]" />
+          <div className="w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
         </div>
       </div>
       <div ref={scrollContainerRef} className="min-h-0 min-w-0 flex-1 overflow-auto">

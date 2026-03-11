@@ -30,7 +30,11 @@ export function ProjectItem({
   return (
     <div className="group/menu-item relative flex w-full items-center">
       <CollapsibleTrigger
-        className={cn(sidebarMenuButtonVariants({ active: selected }), "pr-20")}
+        className={cn(
+          sidebarMenuButtonVariants({ active: selected }),
+          "rounded-none px-0 pr-20 hover:bg-transparent",
+          selected ? "opacity-100" : "opacity-80 hover:opacity-100",
+        )}
         onClick={onSelect}
       >
         <FolderClosed size={16} className="shrink-0 group-data-[state=open]/project:hidden" />

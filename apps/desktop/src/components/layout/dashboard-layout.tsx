@@ -594,9 +594,9 @@ export function DashboardLayout() {
                 onDoubleClick={handleLeftSidebarSeparatorDoubleClick}
                 onKeyDown={handleLeftSidebarSeparatorKeyDown}
                 onPointerDown={(event) => handleSidebarResizePointerDown("left", event)}
-                className="group absolute inset-y-0 left-1/2 z-10 flex w-3 -translate-x-1/2 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--primary)]"
+                className="group absolute inset-y-0 left-1/2 z-10 flex w-3 -translate-x-1/2 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
               >
-                <div className="w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--primary)] group-focus-visible:bg-[var(--primary)]" />
+                <div className="w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
               </div>
             </div>
             <SidebarInset>
@@ -619,9 +619,9 @@ export function DashboardLayout() {
                     tabIndex={0}
                     onKeyDown={handleRightSidebarSeparatorKeyDown}
                     onPointerDown={(event) => handleSidebarResizePointerDown("right", event)}
-                    className="group absolute inset-y-0 left-1/2 z-10 flex w-3 -translate-x-1/2 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--primary)]"
+                    className="group absolute inset-y-0 left-1/2 z-10 flex w-3 -translate-x-1/2 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
                   >
-                    <div className="w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--primary)] group-focus-visible:bg-[var(--primary)]" />
+                    <div className="w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
                   </div>
                 </div>
                 <div

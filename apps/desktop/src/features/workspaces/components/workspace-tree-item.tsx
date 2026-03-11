@@ -118,10 +118,8 @@ export function WorkspaceTreeItem({
 
   const rowClassName = cn(
     sidebarMenuSubButtonVariants({ active: false }),
-    "relative gap-1.5 pl-3 pr-2",
-    selected
-      ? "bg-transparent font-medium text-[var(--sidebar-foreground)] hover:bg-transparent hover:text-[var(--sidebar-foreground)]"
-      : "bg-transparent text-[color-mix(in_srgb,var(--sidebar-foreground)_78%,var(--sidebar-muted-foreground))] hover:bg-transparent hover:text-[var(--sidebar-foreground)]",
+    "gap-1.5 rounded-none pl-[30px] pr-2 bg-transparent text-[var(--sidebar-foreground)] hover:bg-transparent",
+    selected ? "font-medium opacity-100" : "opacity-80 hover:opacity-100",
     editing ? "cursor-text ring-1 ring-[var(--sidebar-foreground)]/20" : undefined,
   );
 
@@ -129,18 +127,14 @@ export function WorkspaceTreeItem({
   const trailingMetaClassName = editing
     ? undefined
     : "transition-opacity group-hover/workspace-item:opacity-0";
-  const selectedRail = selected ? (
-    <span
-      aria-hidden="true"
-      className="absolute bottom-1 left-[-10px] top-0 w-0.5 rounded-full bg-[var(--primary)]"
-      data-slot="workspace-active-rail"
-    />
-  ) : null;
+  const borderStyle = {
+    borderLeftWidth: 2,
+    borderLeftColor: selected ? "var(--primary)" : "var(--border)",
+  } as const;
 
   if (editing) {
     return (
-      <div className={rowClassName} title={titleText}>
-        {selectedRail}
+      <div className={rowClassName} style={borderStyle} title={titleText}>
         <input
           ref={inputRef}
           aria-label="Rename workspace"
@@ -185,8 +179,7 @@ export function WorkspaceTreeItem({
   }
 
   return (
-    <div className="group/workspace-item relative">
-      {selectedRail}
+    <div className="group/workspace-item" style={borderStyle}>
       <button
         className={rowClassName}
         onClick={onSelect}
@@ -197,14 +190,11 @@ export function WorkspaceTreeItem({
         title={titleText}
         type="button"
       >
-        <TypedTitle className="flex-1 truncate text-[13px]" text={workspace.name} />
+        <TypedTitle className="flex-1 truncate text-sm" text={workspace.name} />
         {sessionStatusState === "hidden" && timestamp ? (
           <span
             className={cn(
-              "shrink-0 min-w-9 text-right text-[13px] transition-opacity group-hover/workspace-item:opacity-0",
-              selected
-                ? "text-[var(--sidebar-foreground)] opacity-70"
-                : "text-[var(--sidebar-muted-foreground)]",
+              "shrink-0 min-w-9 text-right text-[13px] text-[var(--sidebar-foreground)] opacity-70 transition-opacity group-hover/workspace-item:opacity-0",
             )}
           >
             {timestamp}

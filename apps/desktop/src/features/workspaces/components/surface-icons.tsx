@@ -94,7 +94,7 @@ function tabIconName(tab: WorkspaceSurfaceTab): string {
 function SurfaceBubble({ children, tab }: { children: ReactNode; tab: WorkspaceSurfaceTab }) {
   return (
     <span
-      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--background)]/75 text-current"
+      className="flex h-5 w-5 shrink-0 items-center justify-center text-current"
       data-surface-tab-icon={tabIconName(tab)}
     >
       {children}
@@ -115,7 +115,7 @@ export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceSurfaceTab }
           />
         ) : null}
         <span
-          className="relative flex h-5 w-5 shrink-0 items-center justify-center rounded-[8px] border border-[var(--border)] bg-[var(--background)]/75 text-current"
+          className="relative flex h-5 w-5 shrink-0 items-center justify-center text-current"
           data-surface-tab-icon={tabIconName(tab)}
         >
           {tab.responseReady ? (

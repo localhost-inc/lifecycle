@@ -7,9 +7,11 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  ThemeSelector,
   cn,
   sidebarMenuSubButtonVariants,
+  themeOptions,
+  useTheme,
+  type Theme,
 } from "@lifecycle/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
@@ -37,6 +39,7 @@ export function SettingsShellLayout() {
   const shouldInset = shouldInsetSidebarHeaderForWindowControls(detectPlatformHint(), isTauri());
   const location = useLocation();
   const navigate = useNavigate();
+  const { theme, resolvedAppearance, setTheme } = useTheme();
   const {
     interfaceFontFamily,
     monospaceFontFamily,
@@ -52,6 +55,14 @@ export function SettingsShellLayout() {
   );
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const sectionRefs = useRef<Partial<Record<SettingsSectionSlug, HTMLElement | null>>>({});
+  const themeItems = useMemo(
+    () =>
+      themeOptions.map((option) => ({
+        label: option.label,
+        value: option.value,
+      })),
+    [],
+  );
   const interfaceFontPresets = useMemo(() => getInterfaceFontPresets(), []);
   const monospaceFontPresets = useMemo(() => getMonospaceFontPresets(), []);
   const selectedInterfacePresetId =
@@ -59,11 +70,33 @@ export function SettingsShellLayout() {
     "custom";
   const selectedInterfacePreset =
     interfaceFontPresets.find((preset) => preset.id === selectedInterfacePresetId) ?? null;
+  const interfaceFontPresetItems = useMemo(
+    () => [
+      ...interfaceFontPresets.map((preset) => ({
+        label: preset.label,
+        value: preset.id,
+      })),
+      ...(selectedInterfacePresetId === "custom" ? [{ label: "Custom", value: "custom" }] : []),
+    ],
+    [interfaceFontPresets, selectedInterfacePresetId],
+  );
   const selectedMonospacePresetId =
     monospaceFontPresets.find((preset) => preset.fontFamily === monospaceFontFamily)?.id ??
     "custom";
   const selectedMonospacePreset =
     monospaceFontPresets.find((preset) => preset.id === selectedMonospacePresetId) ?? null;
+  const monospaceFontPresetItems = useMemo(
+    () => [
+      ...monospaceFontPresets.map((preset) => ({
+        label: preset.label,
+        value: preset.id,
+      })),
+      ...(selectedMonospacePresetId === "custom"
+        ? [{ label: "Custom", value: "custom" }]
+        : []),
+    ],
+    [monospaceFontPresets, selectedMonospacePresetId],
+  );
   const normalizedDraftWorktreeRoot = draftWorktreeRoot.trim();
   const hasWorktreeRootChanges =
     normalizedDraftWorktreeRoot.length > 0 && normalizedDraftWorktreeRoot !== worktreeRoot;
@@ -179,8 +212,8 @@ export function SettingsShellLayout() {
           </Button>
         </div>
 
-        <div className="px-4 pb-2 pt-3">
-          <p className="app-panel-title text-[var(--muted-foreground)]">Settings</p>
+        <div className="px-4 pb-3 pt-4">
+          <p className="text-sm font-semibold text-[var(--foreground)]">Settings</p>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2 pb-3">
@@ -205,7 +238,7 @@ export function SettingsShellLayout() {
                     onClick={() => handleSelectSection(section.slug)}
                     type="button"
                   >
-                    <span className="font-mono text-[12px] uppercase tracking-[0.1em]">
+                    <span className="text-sm">
                       {section.label}
                     </span>
                   </button>
@@ -238,15 +271,38 @@ export function SettingsShellLayout() {
               </header>
 
               <SettingsSection
-                description="Theme and typography defaults for the app shell and code surfaces."
                 id="appearance"
                 label="Appearance"
                 ref={(node) => {
                   sectionRefs.current.appearance = node;
                 }}
               >
-                <div className="py-4 space-y-4">
-                  <ThemeSelector />
+                <div className="space-y-3">
+                  <SettingsRow
+                    label="Theme"
+                    description={
+                      theme === "system"
+                        ? `Following the system appearance (${resolvedAppearance}).`
+                        : "Theme preset for the app shell and code surfaces."
+                    }
+                  >
+                    <Select
+                      items={themeItems}
+                      onValueChange={(value: string) => setTheme(value as Theme)}
+                      value={theme}
+                    >
+                      <SelectTrigger className="w-full min-w-0 md:w-48" id="theme-select">
+                        <SelectValue placeholder="Select a theme" />
+                      </SelectTrigger>
+                      <SelectContent alignItemWithTrigger={false}>
+                        {themeOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </SettingsRow>
 
                   <SettingsRow
                     label="Interface font"
@@ -256,6 +312,7 @@ export function SettingsShellLayout() {
                     }
                   >
                     <Select
+                      items={interfaceFontPresetItems}
                       onValueChange={(value: string) => {
                         const preset = interfaceFontPresets.find((item) => item.id === value);
                         if (preset) {
@@ -288,6 +345,7 @@ export function SettingsShellLayout() {
                     }
                   >
                     <Select
+                      items={monospaceFontPresetItems}
                       onValueChange={(value: string) => {
                         const preset = monospaceFontPresets.find((item) => item.id === value);
                         if (preset) {
@@ -312,18 +370,16 @@ export function SettingsShellLayout() {
                     </Select>
                   </SettingsRow>
 
-                  <div className="border border-[var(--border)] bg-[var(--background)] p-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
-                      Preview
-                    </p>
+                  <div className="space-y-3 border-l-4 border-[var(--border)] pl-4">
+                    <p className="app-panel-title text-[var(--muted-foreground)]">Preview</p>
                     <p
-                      className="mt-2 text-sm text-[var(--foreground)]"
+                      className="text-sm text-[var(--foreground)]"
                       style={{ fontFamily: interfaceFontFamily }}
                     >
                       Workspace state stays readable when interface typography is calm and direct.
                     </p>
                     <p
-                      className="mt-3 text-xs text-[var(--foreground)]"
+                      className="text-xs text-[var(--foreground)]"
                       style={{ fontFamily: monospaceFontFamily }}
                     >
                       lifecycle open workspace --id sydney--2c1b1211
@@ -332,14 +388,13 @@ export function SettingsShellLayout() {
 
                   <div className="pt-2">
                     <Button onClick={resetTypography} variant="outline">
-                      Reset typography
+                      Reset to default
                     </Button>
                   </div>
                 </div>
               </SettingsSection>
 
               <SettingsSection
-                description="Choose where new worktrees are created."
                 id="worktrees"
                 label="Worktrees"
                 ref={(node) => {
@@ -359,11 +414,9 @@ export function SettingsShellLayout() {
                   />
                 </SettingsFieldRow>
 
-                <div className="mt-4 border border-[var(--border)] bg-[var(--background)] p-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
-                    Preview
-                  </p>
-                  <p className="mt-1 break-all font-mono text-xs text-[var(--foreground)]">
+                <div className="mt-4 space-y-3 border-l-4 border-[var(--border)] pl-4">
+                  <p className="app-panel-title text-[var(--muted-foreground)]">Preview</p>
+                  <p className="break-all font-mono text-xs text-[var(--foreground)]">
                     {previewPath}
                   </p>
                 </div>

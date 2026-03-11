@@ -205,8 +205,7 @@ export function Sidebar({
                         {workspaces.length > 0 && (
                           <CollapsibleContent>
                             <SidebarMenuSub
-                              className="mt-1 border-l-2"
-                              style={{ borderLeftColor: "var(--border)" }}
+                              className="ml-0 mt-1 gap-0 border-l-0 pl-0"
                             >
                               {workspaces.map((workspace) => (
                                 <SidebarMenuSubItem key={workspace.id}>

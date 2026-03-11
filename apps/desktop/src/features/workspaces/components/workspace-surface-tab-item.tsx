@@ -62,7 +62,7 @@ export function WorkspaceSurfaceTabItem({
   onRenameChange,
   onRenameKeyDown,
 }: WorkspaceSurfaceTabItemProps) {
-  const className = `compact-control-standalone compact-control-item compact-control-tab group relative flex max-w-[300px] shrink-0 touch-none select-none items-center justify-start gap-2 text-left will-change-transform ${
+  const className = `compact-control-standalone compact-control-item group relative flex h-[34px] max-w-[300px] shrink-0 touch-none select-none items-center justify-start gap-2 whitespace-nowrap px-[calc(var(--control-compact-padding-x)+2px)] text-left text-sm font-medium will-change-transform ${
     active ? "compact-control-tone-active" : "compact-control-tone-muted"
   } ${
     isRenaming

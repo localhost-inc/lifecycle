@@ -149,6 +149,7 @@ The current `setup` and `services` manifest structure can remain as authoring in
 4. `services.{name}` lower into `environment.services` service nodes.
 5. Existing service `depends_on` edges remain intact.
 6. Existing provider startup code can migrate behind the lowering layer before the manifest shape changes.
+7. Compatibility may exist at the manifest-input boundary, but the executor should converge on one graph path. Do not keep a second legacy scheduler alive after the lowered path ships.
 
 This allows the environment model to move first without forcing an immediate breaking manifest rewrite.
 
@@ -174,6 +175,7 @@ Kin is the concrete proving ground for this model.
 6. `worker` depends on `migrate`, `redis`, and `pubsub`.
 7. `web` and `admin` depend on `api`.
 8. No extra hooks are needed; ordering lives in `workspace.setup` and `depends_on`.
+9. If Kin needs `.env.local` materialization, that should come from manifest-owned setup file writes or direct service `env_vars`, not repo-local Lifecycle helper scripts.
 
 If Kin requires repo-specific lifecycle hooks outside this graph, the model is still too weak.
 

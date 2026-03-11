@@ -1,12 +1,11 @@
 import { version } from "../../../package.json";
+import { Wordmark } from "../wordmark";
 
 export function AppStatusBar() {
   return (
     <footer className="flex h-8 shrink-0 items-center justify-between border-t border-[var(--border)] bg-[var(--panel)] px-3 text-[11px] text-[var(--muted-foreground)]">
       <div className="flex items-center gap-3">
-        <span className="opacity-70">
-          <kbd className="font-mono">⌘K</kbd> Command Palette
-        </span>
+        <Wordmark className="h-[13px] w-auto" />
       </div>
       <div className="flex items-center gap-3">
         <button
