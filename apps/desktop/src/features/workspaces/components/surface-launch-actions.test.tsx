@@ -49,9 +49,10 @@ describe("SurfaceLaunchActions", () => {
     expect(markup).toContain('title="New shell"');
     expect(markup).toContain('title="New Claude session"');
     expect(markup).toContain('title="New Codex session"');
-    expect(markup).toContain("rounded-xl");
+    expect(markup).toContain("rounded-l-xl");
+    expect(markup).toContain("rounded-r-xl");
     expect(markup).toContain("bg-[var(--muted)]");
-    expect(markup).toContain("border-l");
+    expect(markup).toContain("gap-px");
     expect(markup).toContain("h-8 w-8");
     expect(markup).toContain('class="flex shrink-0 items-center pr-3"');
   });

@@ -45,13 +45,13 @@ export function SurfaceLaunchActions({
   return (
     <TooltipProvider>
       <div className="flex shrink-0 items-center pr-3">
-        <div className="inline-flex items-center overflow-hidden rounded-xl bg-[var(--muted)]">
+        <div className="inline-flex items-center gap-px">
           {onOpenLauncher && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  className="inline-flex h-8 w-8 items-center justify-center text-[var(--muted-foreground)] outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-[var(--foreground)] focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50"
+                  className={`inline-flex h-8 w-8 items-center justify-center bg-[var(--muted)] text-[var(--muted-foreground)] outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out hover:bg-[color-mix(in_srgb,var(--muted),var(--foreground)_8%)] hover:text-[var(--foreground)] focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50 ${actions.length === 0 ? "rounded-xl" : "rounded-l-xl"}`}
                   onClick={onOpenLauncher}
                 >
                   <svg
@@ -70,26 +70,36 @@ export function SurfaceLaunchActions({
               <TooltipContent>New Tab</TooltipContent>
             </Tooltip>
           )}
-          {actions.map((action, index) => (
-            <Tooltip key={action.key}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className={`inline-flex h-8 w-8 items-center justify-center text-[var(--muted-foreground)] outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-[var(--foreground)] focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50 ${
-                    onOpenLauncher || index > 0 ? "border-l border-[var(--background)]" : ""
-                  }`}
-                  disabled={action.disabled}
-                  onClick={() => onLaunch(action.request)}
-                  title={action.title}
-                >
-                  {action.loading ? <LoadingDot /> : action.icon}
-                </button>
-              </TooltipTrigger>
-              <TooltipContent align={resolveSurfaceLaunchTooltipAlign(index, actions.length)}>
-                {action.title}
-              </TooltipContent>
-            </Tooltip>
-          ))}
+          {actions.map((action, index) => {
+            const isFirst = !onOpenLauncher && index === 0;
+            const isLast = index === actions.length - 1;
+            const rounding = isFirst && isLast
+              ? "rounded-xl"
+              : isFirst
+                ? "rounded-l-xl"
+                : isLast
+                  ? "rounded-r-xl"
+                  : "";
+
+            return (
+              <Tooltip key={action.key}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className={`inline-flex h-8 w-8 items-center justify-center bg-[var(--muted)] text-[var(--muted-foreground)] outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out hover:bg-[color-mix(in_srgb,var(--muted),var(--foreground)_8%)] hover:text-[var(--foreground)] focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50 ${rounding}`}
+                    disabled={action.disabled}
+                    onClick={() => onLaunch(action.request)}
+                    title={action.title}
+                  >
+                    {action.loading ? <LoadingDot /> : action.icon}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent align={resolveSurfaceLaunchTooltipAlign(index, actions.length)}>
+                  {action.title}
+                </TooltipContent>
+              </Tooltip>
+            );
+          })}
         </div>
       </div>
     </TooltipProvider>

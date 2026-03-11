@@ -1,6 +1,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  Button,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -8,7 +9,7 @@ import {
   SplitButtonPrimary,
   SplitButtonSecondary,
 } from "@lifecycle/ui";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, GitFork } from "lucide-react";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { isMacPlatform } from "../../app/app-hotkeys";
 import type { HostedOverlayAction } from "../../features/overlays/overlay-contract";
@@ -29,6 +30,7 @@ import {
 
 interface TitleBarActionsProps {
   workspace: WorkspaceRecord;
+  onFork?: () => void;
 }
 
 function describeOpenInError(error: unknown): string {
@@ -53,7 +55,7 @@ function describeOpenInError(error: unknown): string {
   return "Unable to open this workspace in the selected app.";
 }
 
-export function TitleBarActions({ workspace }: TitleBarActionsProps) {
+export function TitleBarActions({ workspace, onFork }: TitleBarActionsProps) {
   const [baseAvailableTargets] = useState(() => listAvailableOpenInTargets(isMacPlatform()));
   const [availableTargets, setAvailableTargets] =
     useState<readonly OpenInTarget[]>(baseAvailableTargets);
@@ -192,6 +194,12 @@ export function TitleBarActions({ workspace }: TitleBarActionsProps) {
 
   return (
     <div className="flex items-center gap-1.5">
+      {onFork && (
+        <Button onClick={onFork} title="Fork workspace">
+          <GitFork size={14} strokeWidth={2.2} />
+          Fork
+        </Button>
+      )}
       <SplitButton>
         <SplitButtonPrimary
           disabled={launchingTarget !== null}

@@ -21,9 +21,10 @@ describe("SplitButton", () => {
       }),
     );
 
-    expect(markup).toContain("rounded-xl");
+    expect(markup).toContain("rounded-l-xl");
+    expect(markup).toContain("rounded-r-xl");
     expect(markup).toContain("bg-[var(--muted)]");
-    expect(markup).toContain("border-l");
+    expect(markup).toContain("gap-px");
     expect(markup).toContain("Open");
   });
 

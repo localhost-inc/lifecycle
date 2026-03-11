@@ -31,9 +31,9 @@ export function ProjectItem({
     <div className="group/menu-item relative flex w-full items-center">
       <CollapsibleTrigger
         className={cn(
-          sidebarMenuButtonVariants({ active: selected }),
+          sidebarMenuButtonVariants({ active: false }),
           "rounded-none px-0 pr-20 hover:bg-transparent",
-          selected ? "opacity-100" : "opacity-80 hover:opacity-100",
+          selected ? "font-medium opacity-100" : "opacity-80 hover:opacity-100",
         )}
         onClick={onSelect}
       >

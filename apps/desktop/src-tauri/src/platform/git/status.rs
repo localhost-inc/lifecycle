@@ -1,7 +1,7 @@
 use crate::platform::git::worktree;
 use crate::shared::errors::LifecycleError;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 #[path = "status/runner.rs"]
@@ -526,6 +526,90 @@ async fn resolve_branch_diff_base(
     Ok(ResolvedBranchDiffBaseRef { diff_base })
 }
 
+fn push_unique_ref_candidate(
+    candidates: &mut Vec<String>,
+    seen: &mut HashSet<String>,
+    candidate: String,
+) {
+    if seen.insert(candidate.clone()) {
+        candidates.push(candidate);
+    }
+}
+
+async fn list_matching_remote_ref_candidates(
+    repo_path: &str,
+    reference: &str,
+) -> Result<Vec<String>, LifecycleError> {
+    let refs = list_refs(
+        repo_path,
+        "list git remote ref candidates",
+        &["for-each-ref", "--format=%(refname:short)", "refs/remotes"],
+    )
+    .await?;
+
+    Ok(prefer_origin_refs(
+        refs.into_iter()
+            .filter(|value| !value.ends_with("/HEAD"))
+            .filter(|value| {
+                value
+                    .split_once('/')
+                    .is_some_and(|(_, branch_name)| branch_name == reference)
+            })
+            .collect(),
+    ))
+}
+
+async fn resolve_git_diff_ref(
+    repo_path: &str,
+    reference: &str,
+) -> Result<Option<String>, LifecycleError> {
+    let mut candidates = Vec::new();
+    let mut seen = HashSet::new();
+
+    if reference.starts_with("refs/") {
+        push_unique_ref_candidate(&mut candidates, &mut seen, reference.to_string());
+    } else {
+        push_unique_ref_candidate(
+            &mut candidates,
+            &mut seen,
+            format!("refs/heads/{reference}"),
+        );
+        push_unique_ref_candidate(
+            &mut candidates,
+            &mut seen,
+            format!("refs/remotes/{reference}"),
+        );
+
+        for remote_ref in list_matching_remote_ref_candidates(repo_path, reference).await? {
+            push_unique_ref_candidate(
+                &mut candidates,
+                &mut seen,
+                format!("refs/remotes/{remote_ref}"),
+            );
+        }
+
+        push_unique_ref_candidate(&mut candidates, &mut seen, reference.to_string());
+    }
+
+    for candidate in candidates {
+        let commitish = format!("{candidate}^{{commit}}");
+        let output = git_output_optional(
+            repo_path,
+            "resolve git diff ref",
+            &["rev-parse", "--verify", "--quiet", commitish.as_str()],
+        )
+        .await?;
+        let resolved = output
+            .map(|stdout| trimmed_stdout(&stdout))
+            .filter(|value| !value.is_empty());
+        if resolved.is_some() {
+            return Ok(resolved);
+        }
+    }
+
+    Ok(None)
+}
+
 fn parse_branch_diff_rename_entries(
     output: &[u8],
 ) -> Result<Vec<BranchDiffRenameEntry>, LifecycleError> {
@@ -859,8 +943,39 @@ pub async fn get_git_ref_diff_patch(
     base_ref: &str,
     head_ref: &str,
 ) -> Result<String, LifecycleError> {
-    let range = format!("{}...{}", base_ref, head_ref);
-    let args = vec!["diff", "--find-renames", "--find-copies", "--binary", &range];
+    let resolved_base_ref = resolve_git_diff_ref(repo_path, base_ref).await?;
+    let resolved_head_ref = resolve_git_diff_ref(repo_path, head_ref).await?;
+
+    if resolved_base_ref.is_none() || resolved_head_ref.is_none() {
+        let mut missing = Vec::new();
+        if resolved_base_ref.is_none() {
+            missing.push(format!("base ref `{base_ref}`"));
+        }
+        if resolved_head_ref.is_none() {
+            missing.push(format!("head ref `{head_ref}`"));
+        }
+
+        return Err(LifecycleError::GitOperationFailed {
+            operation: "read git ref diff patch".to_string(),
+            reason: format!(
+                "unable to resolve {} from local or remote-tracking refs",
+                missing.join(" and ")
+            ),
+        });
+    }
+
+    let range = format!(
+        "{}...{}",
+        resolved_base_ref.expect("resolved base ref checked"),
+        resolved_head_ref.expect("resolved head ref checked")
+    );
+    let args = vec![
+        "diff",
+        "--find-renames",
+        "--find-copies",
+        "--binary",
+        &range,
+    ];
     Ok(
         String::from_utf8_lossy(&git_output(repo_path, "read git ref diff patch", &args).await?)
             .into_owned(),
@@ -1371,6 +1486,69 @@ mod tests {
         assert!(!branch_patch.contains("upstream"));
 
         fs::remove_dir_all(repo_path).expect("remove temp repo");
+    }
+
+    #[tokio::test]
+    async fn get_git_ref_diff_patch_resolves_remote_tracking_pull_request_refs() {
+        let fixture_root = temp_repo_path("lifecycle-git-ref-diff-patch");
+        let seed_path = fixture_root.join("seed");
+        let remote_path = fixture_root.join("remote.git");
+        let repo_path = fixture_root.join("repo");
+        let contributor_path = fixture_root.join("contributor");
+
+        init_repo_with_branch(&seed_path, "main");
+        clone_bare_repo(&seed_path, &remote_path);
+        fs::create_dir_all(&fixture_root).expect("create fixture root");
+
+        let remote = remote_path.to_str().expect("remote path is utf8");
+        let repo = repo_path.to_str().expect("repo path is utf8");
+        let contributor = contributor_path.to_str().expect("contributor path is utf8");
+
+        run_git(fixture_root.as_path(), &["clone", remote, repo]);
+        configure_repo(&repo_path);
+
+        run_git(fixture_root.as_path(), &["clone", remote, contributor]);
+        configure_repo(&contributor_path);
+        run_git(
+            contributor_path.as_path(),
+            &["checkout", "-b", "ron/fix-airlift-stale-auth"],
+        );
+        fs::write(contributor_path.join("README.md"), "seed\nfeature\n")
+            .expect("write contributor change");
+        run_git(
+            contributor_path.as_path(),
+            &["commit", "-am", "feature branch change"],
+        );
+        run_git(
+            contributor_path.as_path(),
+            &["push", "-u", "origin", "ron/fix-airlift-stale-auth"],
+        );
+
+        run_git(repo_path.as_path(), &["fetch", "origin"]);
+        run_git(
+            repo_path.as_path(),
+            &[
+                "checkout",
+                "-b",
+                "workspace/current",
+                "origin/ron/fix-airlift-stale-auth",
+            ],
+        );
+        run_git(repo_path.as_path(), &["branch", "-D", "main"]);
+
+        let patch = get_git_ref_diff_patch(
+            repo_path.to_str().expect("repo path is utf8"),
+            "main",
+            "ron/fix-airlift-stale-auth",
+        )
+        .await
+        .expect("git ref diff patch should resolve remote-tracking refs");
+
+        assert!(patch.contains("diff --git a/README.md b/README.md"));
+        assert!(patch.contains("+++ b/README.md"));
+        assert!(patch.contains("+feature"));
+
+        fs::remove_dir_all(fixture_root).expect("remove fixture root");
     }
 
     #[tokio::test]

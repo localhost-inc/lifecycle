@@ -118,7 +118,7 @@ export function WorkspaceTreeItem({
 
   const rowClassName = cn(
     sidebarMenuSubButtonVariants({ active: false }),
-    "gap-1.5 rounded-none pl-[30px] pr-2 bg-transparent text-[var(--sidebar-foreground)] hover:bg-transparent",
+    "gap-1.5 rounded-none pl-[22px] pr-2 bg-transparent text-[var(--sidebar-foreground)] hover:bg-transparent",
     selected ? "font-medium opacity-100" : "opacity-80 hover:opacity-100",
     editing ? "cursor-text ring-1 ring-[var(--sidebar-foreground)]/20" : undefined,
   );

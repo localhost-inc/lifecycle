@@ -386,6 +386,39 @@ export function DashboardLayout() {
     [client, navigate, projectCatalogQuery.data, projects, worktreeRoot],
   );
 
+  const handleForkWorkspace = useCallback(async () => {
+    if (!selectedWorkspace) return;
+    const project = projects.find((item) => item.id === selectedWorkspace.project_id);
+    if (!project) return;
+    const manifestStatus = projectCatalogQuery.data?.manifestsByProjectId[project.id];
+    const manifestJson =
+      manifestStatus?.state === "valid"
+        ? JSON.stringify(manifestStatus.result.config)
+        : undefined;
+    const manifestFingerprint =
+      manifestStatus?.state === "valid"
+        ? getManifestFingerprint(manifestStatus.result.config)
+        : null;
+
+    try {
+      const newWorkspaceId = await createWorkspace({
+        projectId: project.id,
+        baseRef: selectedWorkspace.source_ref,
+        manifestFingerprint,
+        manifestJson,
+        projectPath: project.path,
+        worktreeRoot,
+      });
+
+      client.invalidate(workspaceKeys.byProject());
+      client.invalidate(workspaceKeys.detail(newWorkspaceId));
+      void navigate(`/workspaces/${newWorkspaceId}`);
+    } catch (err) {
+      console.error("Failed to fork workspace:", err);
+      alert(`Failed to fork workspace: ${err}`);
+    }
+  }, [client, navigate, projectCatalogQuery.data, projects, selectedWorkspace, worktreeRoot]);
+
   const handleRemoveProject = useCallback(
     async (projectId: string) => {
       try {
@@ -600,7 +633,7 @@ export function DashboardLayout() {
               </div>
             </div>
             <SidebarInset>
-              <TitleBar selectedWorkspace={selectedWorkspace} />
+              <TitleBar selectedWorkspace={selectedWorkspace} onFork={handleForkWorkspace} />
               <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
                 <Outlet context={{ onCreateWorkspace: handleCreateWorkspace }} />
               </main>

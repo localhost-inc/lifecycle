@@ -6,8 +6,9 @@ import "./welcome-screen.css";
 
 const LIFECYCLE_TEXT = "lifecycle";
 const TYPE_INTERVAL_MS = 140;
-const SNAKE_DRAW_MS = 2200;
-const PAUSE_MS = 1500;
+const SNAKE_DRAW_MS = 1900;
+const SNAKE_DRAW_TIMING = "cubic-bezier(0.55, 0.085, 0.68, 0.53)";
+const PAUSE_MS = 1200;
 const SWELL_MS = 700;
 const SETTLE_MS = 1000;
 const TYPING_DONE_PAUSE_MS = 600;
@@ -141,6 +142,7 @@ export function WelcomeScreen({ onAddProject }: WelcomeScreenProps) {
               animate={!prefersReducedMotion}
               className="text-[var(--foreground)]"
               drawDurationMs={SNAKE_DRAW_MS}
+              drawTimingFunction={SNAKE_DRAW_TIMING}
               size={220}
             />
           </div>

@@ -3,13 +3,13 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/cn";
 
 const splitButtonPrimaryVariants = cva(
-  "inline-flex h-8 items-center gap-2 text-xs font-semibold outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex h-8 items-center gap-2 rounded-l-xl bg-[var(--muted)] text-xs font-semibold outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
         foreground:
-          "text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)]",
-        active: "bg-[var(--muted)] text-[var(--foreground)]",
+          "text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--muted),var(--foreground)_8%)]",
+        active: "text-[var(--foreground)]",
       },
     withIcon: {
       true: "pl-2 pr-2.5",
@@ -23,14 +23,14 @@ const splitButtonPrimaryVariants = cva(
 });
 
 const splitButtonSecondaryVariants = cva(
-  "inline-flex h-8 w-8 items-center justify-center text-[var(--muted-foreground)] border-l border-[var(--background)] outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-[var(--foreground)] focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex h-8 w-8 items-center justify-center rounded-r-xl bg-[var(--muted)] text-[var(--muted-foreground)] outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out hover:bg-[color-mix(in_srgb,var(--muted),var(--foreground)_8%)] hover:text-[var(--foreground)] focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50",
 );
 
 const SplitButton = React.forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef<"div">>(
   function SplitButton({ className, ...props }, ref) {
     return (
       <div
-        className={cn("inline-flex items-center overflow-hidden rounded-xl bg-[var(--muted)]", className)}
+        className={cn("inline-flex items-center gap-px", className)}
         ref={ref}
         {...props}
       />

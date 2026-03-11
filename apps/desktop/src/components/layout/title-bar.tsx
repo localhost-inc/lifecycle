@@ -10,6 +10,7 @@ import { TitleBarActions } from "./title-bar-actions";
 
 interface TitleBarProps {
   selectedWorkspace?: WorkspaceRecord | null;
+  onFork?: () => void;
 }
 
 function shouldSkipDrag(target: EventTarget | null): boolean {
@@ -31,7 +32,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
   );
 }
 
-export function TitleBar({ selectedWorkspace }: TitleBarProps) {
+export function TitleBar({ selectedWorkspace, onFork }: TitleBarProps) {
   const navigate = useNavigate();
   const { canGoBack, canGoForward } = useHistoryAvailability();
 
@@ -107,7 +108,7 @@ export function TitleBar({ selectedWorkspace }: TitleBarProps) {
       </div>
       <div data-no-drag id="title-bar-actions" className="flex shrink-0 items-center gap-1">
         {selectedWorkspace && workspaceSupportsFilesystemInteraction(selectedWorkspace) && (
-          <TitleBarActions workspace={selectedWorkspace} />
+          <TitleBarActions workspace={selectedWorkspace} onFork={onFork} />
         )}
       </div>
     </header>

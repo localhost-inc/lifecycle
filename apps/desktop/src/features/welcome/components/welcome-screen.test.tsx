@@ -15,6 +15,7 @@ describe("WelcomeScreen", () => {
 
     expect(markup).toContain('data-slot="logo"');
     expect(markup).toContain("text-[var(--foreground)]");
-    expect(markup).toContain("animation-duration:2200ms");
+    expect(markup).toContain("animation-duration:1900ms");
+    expect(markup).toContain("animation-timing-function:cubic-bezier(0.55, 0.085, 0.68, 0.53)");
   });
 });

@@ -76,10 +76,10 @@ export function shouldInsetSidebarHeaderForWindowControls(
 
 export function getSidebarHeaderClassName(shouldInsetForWindowControls: boolean): string {
   if (shouldInsetForWindowControls) {
-    return "flex flex-col gap-3 px-4 pb-3 pt-4";
+    return "flex flex-col gap-3 px-3 pb-3 pt-4";
   }
 
-  return "flex items-center justify-between px-4 py-3";
+  return "flex items-center justify-between px-3 py-3";
 }
 
 export function Sidebar({
@@ -176,7 +176,7 @@ export function Sidebar({
         )}
       </SidebarHeader>
 
-      <SidebarContent className="px-2 py-1">
+      <SidebarContent className="px-3 py-1">
         {isLoading && projects.length === 0 ? (
           <p className="px-3 py-8 text-center text-xs text-[var(--muted-foreground)]">
             Loading projects...
