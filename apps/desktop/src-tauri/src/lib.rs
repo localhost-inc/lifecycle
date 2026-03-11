@@ -133,6 +133,7 @@ pub fn run() {
             capabilities::workspaces::commands::list_workspace_git_log,
             capabilities::workspaces::commands::list_workspace_git_pull_requests,
             capabilities::workspaces::commands::get_workspace_current_git_pull_request,
+            capabilities::workspaces::commands::get_workspace_git_pull_request,
             capabilities::workspaces::commands::get_workspace_git_base_ref,
             capabilities::workspaces::commands::get_workspace_git_commit_patch,
             capabilities::workspaces::commands::open_workspace_file,

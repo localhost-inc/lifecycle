@@ -175,7 +175,7 @@ describe("Sidebar", () => {
                 [project.id]: [workspace],
               },
               selectedProjectId: null,
-              selectedWorkspaceId: workspace.id,
+              selectedWorkspaceId: null,
               onSelectProject: () => {},
               onSelectWorkspace: () => {},
               onAddProject: () => {},
@@ -189,7 +189,7 @@ describe("Sidebar", () => {
       ),
     );
 
-    expect(markup).toContain("border-l-2");
-    expect(markup).toContain('style="border-left-color:var(--border)"');
+    expect(markup).toContain("border-left-width:2px");
+    expect(markup).toContain("border-left-color:var(--border)");
   });
 });

@@ -19,6 +19,7 @@ export type {
   GitFileStats,
   GitFileStatus,
   GitLogEntry,
+  GitPullRequestDetailResult,
   GitPullRequestListResult,
   GitPullRequestMergeable,
   GitPullRequestProvider,

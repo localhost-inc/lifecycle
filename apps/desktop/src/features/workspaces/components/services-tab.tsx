@@ -1,4 +1,5 @@
 import type { ServiceRecord } from "@lifecycle/contracts";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   Button,
   EmptyState,
@@ -226,16 +227,11 @@ function ServiceRow({
   }
 
   function handleOpenPreview(): void {
-    if (
-      !previewUrl ||
-      service.preview_status !== "ready" ||
-      typeof window === "undefined" ||
-      typeof window.open !== "function"
-    ) {
+    if (!previewUrl || service.preview_status !== "ready") {
       return;
     }
 
-    window.open(previewUrl, "_blank", "noopener,noreferrer");
+    openUrl(previewUrl);
   }
 
   const previewStatusLabel = previewLabelFor(service);

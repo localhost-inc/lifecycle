@@ -1,6 +1,7 @@
 import type {
   GitBranchPullRequestResult,
   GitLogEntry,
+  GitPullRequestDetailResult,
   GitPullRequestListResult,
   GitStatusResult,
   ProjectRecord,
@@ -11,6 +12,7 @@ import type {
 import {
   getCurrentGitPullRequest,
   getGitLog,
+  getGitPullRequest,
   getGitPullRequests,
   getGitStatus,
 } from "../features/git/api";
@@ -31,6 +33,10 @@ export interface QuerySource {
   getWorkspaceServices(workspaceId: string): Promise<ServiceRecord[]>;
   getWorkspaceGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]>;
   getWorkspaceGitPullRequests(workspaceId: string): Promise<GitPullRequestListResult>;
+  getWorkspaceGitPullRequest(
+    workspaceId: string,
+    pullRequestNumber: number,
+  ): Promise<GitPullRequestDetailResult>;
   getWorkspaceCurrentGitPullRequest(workspaceId: string): Promise<GitBranchPullRequestResult>;
   getWorkspaceGitStatus(workspaceId: string): Promise<GitStatusResult>;
   listWorkspaceTerminals(workspaceId: string): Promise<TerminalRecord[]>;
@@ -45,6 +51,7 @@ export function createQuerySource(): QuerySource {
     getWorkspace: getWorkspaceById,
     getWorkspaceGitLog: getGitLog,
     getWorkspaceGitPullRequests: getGitPullRequests,
+    getWorkspaceGitPullRequest: getGitPullRequest,
     getWorkspaceCurrentGitPullRequest: getCurrentGitPullRequest,
     getWorkspaceGitStatus: getGitStatus,
     getWorkspaceServices,

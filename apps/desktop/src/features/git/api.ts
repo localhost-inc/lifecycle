@@ -5,6 +5,7 @@ import type {
   GitDiffResult,
   GitDiffScope,
   GitLogEntry,
+  GitPullRequestDetailResult,
   GitPullRequestListResult,
   GitPullRequestSummary,
   GitPushResult,
@@ -39,6 +40,11 @@ const EMPTY_BRANCH_PULL_REQUEST_RESULT: GitBranchPullRequestResult = {
   branch: null,
   upstream: null,
   suggestedBaseRef: null,
+  pullRequest: null,
+};
+
+const EMPTY_PULL_REQUEST_DETAIL_RESULT: GitPullRequestDetailResult = {
+  support: EMPTY_PULL_REQUEST_SUPPORT,
   pullRequest: null,
 };
 
@@ -166,6 +172,20 @@ export async function getCurrentGitPullRequest(
   }
 
   return invoke<GitBranchPullRequestResult>("get_workspace_current_git_pull_request", {
+    workspaceId,
+  });
+}
+
+export async function getGitPullRequest(
+  workspaceId: string,
+  pullRequestNumber: number,
+): Promise<GitPullRequestDetailResult> {
+  if (!isTauri()) {
+    return EMPTY_PULL_REQUEST_DETAIL_RESULT;
+  }
+
+  return invoke<GitPullRequestDetailResult>("get_workspace_git_pull_request", {
+    pullRequestNumber,
     workspaceId,
   });
 }

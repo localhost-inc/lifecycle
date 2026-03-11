@@ -1,7 +1,8 @@
 use super::paths::{require_local_worktree, resolve_workspace_git_context};
 use crate::platform::db::open_db;
 use crate::platform::git::pull_request::{
-    self, GitBranchPullRequestResult, GitPullRequestListResult, GitPullRequestSummary,
+    self, GitBranchPullRequestResult, GitPullRequestDetailResult, GitPullRequestListResult,
+    GitPullRequestSummary,
 };
 use crate::platform::git::status::{
     self, GitCommitDiffResult, GitCommitResult, GitDiffResult, GitLogEntry, GitPushResult,
@@ -172,6 +173,29 @@ pub async fn get_workspace_current_git_pull_request(
     })?;
 
     pull_request::get_current_branch_pull_request(&worktree_path).await
+}
+
+pub async fn get_workspace_git_pull_request(
+    db_path: &str,
+    workspace_id: String,
+    pull_request_number: u64,
+) -> Result<GitPullRequestDetailResult, LifecycleError> {
+    let (mode, worktree_path) = resolve_workspace_git_context(db_path, &workspace_id)?;
+    if mode != "local" {
+        return Ok(GitPullRequestDetailResult {
+            support: pull_request::mode_not_supported(
+                "Cloud workspace pull requests will use the cloud provider once it exists.",
+            ),
+            pull_request: None,
+        });
+    }
+
+    let worktree_path = worktree_path.ok_or_else(|| LifecycleError::GitOperationFailed {
+        operation: "read GitHub pull request".to_string(),
+        reason: format!("workspace {workspace_id} has no local worktree path"),
+    })?;
+
+    pull_request::get_pull_request_detail(&worktree_path, pull_request_number).await
 }
 
 pub async fn get_workspace_git_base_ref(

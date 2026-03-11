@@ -60,7 +60,7 @@ describe("PullRequestsTab", () => {
     expect(markup).toContain("Current");
     expect(markup).toContain("feature/git-panel-prs");
     expect(markup).toContain("Mergeable");
-    expect(markup).toContain("approved");
+    expect(markup).toContain("Approved");
     expect(markup).toContain("Open");
   });
 

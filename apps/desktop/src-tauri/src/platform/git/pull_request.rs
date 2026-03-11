@@ -5,7 +5,7 @@ use tokio::process::Command;
 
 const PULL_REQUEST_LIST_JSON_FIELDS: &str = concat!(
     "number,title,url,state,isDraft,author,headRefName,baseRefName,createdAt,updatedAt,",
-    "mergeable,mergeStateStatus,reviewDecision"
+    "mergeable,mergeStateStatus,reviewDecision,statusCheckRollup"
 );
 
 const PULL_REQUEST_DETAIL_JSON_FIELDS: &str = concat!(
@@ -64,6 +64,13 @@ pub struct GitBranchPullRequestResult {
     pub branch: Option<String>,
     pub upstream: Option<String>,
     pub suggested_base_ref: Option<String>,
+    pub pull_request: Option<GitPullRequestSummary>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitPullRequestDetailResult {
+    pub support: GitPullRequestSupport,
     pub pull_request: Option<GitPullRequestSummary>,
 }
 
@@ -198,6 +205,14 @@ fn classify_support_error(stderr: &[u8]) -> GitPullRequestSupport {
             message
         },
     )
+}
+
+fn is_pull_request_not_found(stderr: &[u8]) -> bool {
+    let message = String::from_utf8_lossy(stderr).trim().to_lowercase();
+
+    message.contains("pull request not found")
+        || message.contains("no pull requests found")
+        || message.contains("could not resolve to a pullrequest")
 }
 
 async fn gh_command(
@@ -551,6 +566,62 @@ pub async fn get_current_branch_pull_request(
     }
 }
 
+pub async fn get_pull_request_detail(
+    repo_path: &str,
+    pull_request_number: u64,
+) -> Result<GitPullRequestDetailResult, LifecycleError> {
+    let pull_request_number_string = pull_request_number.to_string();
+    let output = gh_command(
+        repo_path,
+        "read GitHub pull request",
+        &[
+            "pr",
+            "view",
+            pull_request_number_string.as_str(),
+            "--json",
+            PULL_REQUEST_DETAIL_JSON_FIELDS,
+        ],
+    )
+    .await;
+
+    match output {
+        Ok(output) if output.status.success() => {
+            let pull_request = serde_json::from_slice::<GitHubPullRequest>(&output.stdout)
+                .map_err(|error| LifecycleError::GitOperationFailed {
+                    operation: "read GitHub pull request".to_string(),
+                    reason: format!("failed to parse GitHub response: {error}"),
+                })?;
+
+            Ok(GitPullRequestDetailResult {
+                support: support_available(),
+                pull_request: Some(normalize_pull_request(pull_request)),
+            })
+        }
+        Ok(output) if is_pull_request_not_found(&output.stderr) => Ok(GitPullRequestDetailResult {
+            support: support_available(),
+            pull_request: None,
+        }),
+        Ok(output) => Ok(GitPullRequestDetailResult {
+            support: classify_support_error(&output.stderr),
+            pull_request: None,
+        }),
+        Err(LifecycleError::GitOperationFailed { reason, .. })
+            if reason.to_lowercase().contains("no such file")
+                || reason.to_lowercase().contains("not found") =>
+        {
+            Ok(GitPullRequestDetailResult {
+                support: support_unavailable(
+                    Some("github"),
+                    "provider_unavailable",
+                    "GitHub CLI is required for local pull request actions.",
+                ),
+                pull_request: None,
+            })
+        }
+        Err(error) => Err(error),
+    }
+}
+
 pub async fn create_pull_request(repo_path: &str) -> Result<GitPullRequestSummary, LifecycleError> {
     let git_status = status::get_git_status(repo_path).await?;
     let branch = git_status
@@ -624,6 +695,12 @@ mod tests {
     use super::*;
 
     #[test]
+    fn list_payload_requests_status_check_rollups() {
+        assert!(PULL_REQUEST_LIST_JSON_FIELDS.contains("statusCheckRollup"));
+        assert!(PULL_REQUEST_DETAIL_JSON_FIELDS.contains("statusCheckRollup"));
+    }
+
+    #[test]
     fn normalize_pull_request_maps_github_values_into_contract_values() {
         let pull_request = normalize_pull_request(GitHubPullRequest {
             number: 42,
@@ -678,5 +755,16 @@ mod tests {
         );
         assert_eq!(remote.reason.as_deref(), Some("unsupported_remote"));
         assert_eq!(remote.provider, None);
+    }
+
+    #[test]
+    fn pull_request_not_found_detection_matches_graphql_and_cli_errors() {
+        assert!(is_pull_request_not_found(
+            b"GraphQL: Could not resolve to a PullRequest with the number of 135. (repository.pullRequest)",
+        ));
+        assert!(is_pull_request_not_found(
+            b"no pull requests found for branch \"feature/checks\""
+        ));
+        assert!(!is_pull_request_not_found(b"authentication failed"));
     }
 }

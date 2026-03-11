@@ -60,11 +60,9 @@ describe("WorkspaceSurfaceTabBar", () => {
       }),
     );
 
-    expect(markup).toContain("compact-control-standalone");
-    expect(markup).toContain("compact-control-tone-active");
-    expect(markup).not.toContain("compact-control-tab");
     expect(markup).toContain("h-[34px]");
-    expect(markup).toContain("px-[calc(var(--control-compact-padding-x)+2px)]");
+    expect(markup).toContain("rounded-[var(--radius-xl)]");
+    expect(markup).toContain("bg-[var(--muted)]");
     expect(markup).toContain("text-sm");
     expect(markup).toContain("font-medium");
   });

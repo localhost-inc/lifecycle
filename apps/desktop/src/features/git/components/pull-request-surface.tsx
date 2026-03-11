@@ -1,13 +1,14 @@
 import type {
+  GitBranchPullRequestResult,
   GitPullRequestCheckStatus,
-  GitPullRequestSummary,
+  GitPullRequestDetailResult,
   GitPullRequestMergeable,
   GitPullRequestState,
+  GitPullRequestSummary,
 } from "@lifecycle/contracts";
 import {
   Alert,
   AlertDescription,
-  Badge,
   Button,
   EmptyState,
   StatusDot,
@@ -15,12 +16,31 @@ import {
 } from "@lifecycle/ui";
 import { useMemo } from "react";
 import { formatRelativeTime } from "../../../lib/format";
-import { useCurrentGitPullRequest, useGitPullRequests } from "../hooks";
+import { useCurrentGitPullRequest, useGitPullRequest, useGitPullRequests } from "../hooks";
 
 interface PullRequestSurfaceProps {
   pullRequest: GitPullRequestSummary;
   workspaceId: string;
 }
+
+interface ResolvePullRequestSurfaceStateInput {
+  currentLoading: boolean;
+  currentPullRequestResult: GitBranchPullRequestResult | undefined;
+  detailLoading: boolean;
+  detailResult: GitPullRequestDetailResult | undefined;
+  listLoading?: boolean;
+  listPullRequests?: GitPullRequestSummary[];
+  listSupportMessage?: string | null;
+  snapshot: GitPullRequestSummary;
+}
+
+interface PullRequestSurfaceState {
+  currentBranchPullRequestNumber: number | null;
+  pullRequest: GitPullRequestSummary;
+  snapshotMessage: string | null;
+}
+
+type SurfaceTone = "danger" | "muted" | "success" | "warning";
 
 function checkTone(status: GitPullRequestCheckStatus): StatusDotTone {
   switch (status) {
@@ -48,28 +68,17 @@ function checkLabel(status: GitPullRequestCheckStatus): string {
   }
 }
 
-function mergeableBadgeVariant(mergeable: GitPullRequestMergeable): "info" | "muted" | "success" {
-  if (mergeable === "mergeable") {
-    return "success";
+function toneClassName(tone: SurfaceTone): string {
+  switch (tone) {
+    case "success":
+      return "border-[color-mix(in_srgb,var(--git-status-added)_35%,transparent)] text-[var(--git-status-added)]";
+    case "warning":
+      return "border-[color-mix(in_srgb,var(--git-status-modified)_35%,transparent)] text-[var(--git-status-modified)]";
+    case "danger":
+      return "border-[color-mix(in_srgb,var(--destructive)_35%,transparent)] text-[var(--destructive)]";
+    default:
+      return "border-[var(--border)] text-[var(--muted-foreground)]";
   }
-
-  if (mergeable === "conflicting") {
-    return "info";
-  }
-
-  return "muted";
-}
-
-function stateBadgeVariant(state: GitPullRequestState): "info" | "muted" | "success" {
-  if (state === "merged") {
-    return "success";
-  }
-
-  if (state === "closed") {
-    return "muted";
-  }
-
-  return "info";
 }
 
 function stateLabel(state: GitPullRequestState): string {
@@ -83,8 +92,71 @@ function stateLabel(state: GitPullRequestState): string {
   }
 }
 
+function stateTone(state: GitPullRequestState): SurfaceTone {
+  switch (state) {
+    case "merged":
+      return "success";
+    case "closed":
+      return "muted";
+    default:
+      return "warning";
+  }
+}
+
+function mergeableLabel(mergeable: GitPullRequestMergeable): string {
+  switch (mergeable) {
+    case "mergeable":
+      return "Mergeable";
+    case "conflicting":
+      return "Conflicting";
+    default:
+      return "Mergeability unknown";
+  }
+}
+
+function mergeableTone(mergeable: GitPullRequestMergeable): SurfaceTone {
+  switch (mergeable) {
+    case "mergeable":
+      return "success";
+    case "conflicting":
+      return "danger";
+    default:
+      return "muted";
+  }
+}
+
 function reviewDecisionLabel(reviewDecision: GitPullRequestSummary["reviewDecision"]): string {
-  return reviewDecision ? reviewDecision.replaceAll("_", " ") : "";
+  return reviewDecision ? reviewDecision.replaceAll("_", " ") : "No decision";
+}
+
+function checksSummary(checks: GitPullRequestSummary["checks"]): string {
+  if (!checks || checks.length === 0) {
+    return "No provider check data is available for this pull request yet.";
+  }
+
+  const counts = {
+    failed: 0,
+    neutral: 0,
+    pending: 0,
+    success: 0,
+  };
+
+  for (const check of checks) {
+    counts[check.status] += 1;
+  }
+
+  const parts = [
+    counts.success > 0 ? `${counts.success} passing` : null,
+    counts.pending > 0 ? `${counts.pending} running` : null,
+    counts.failed > 0 ? `${counts.failed} failing` : null,
+    counts.neutral > 0 ? `${counts.neutral} neutral` : null,
+  ].filter((value): value is string => value !== null);
+
+  return parts.length > 0 ? parts.join(" · ") : `${checks.length} checks reported`;
+}
+
+function checkActionLabel(detailsUrl: string | null, status: GitPullRequestCheckStatus): string {
+  return detailsUrl ? "Open" : checkLabel(status);
 }
 
 function liveSnapshotMessage(
@@ -105,7 +177,65 @@ function liveSnapshotMessage(
     return `Showing the last known snapshot for PR #${snapshot.number}. ${supportMessage}`;
   }
 
-  return `Showing the last known snapshot for PR #${snapshot.number}. It may no longer be in the open repository list.`;
+  return `Showing the last known snapshot for PR #${snapshot.number}. It may no longer be available from the provider.`;
+}
+
+export function resolvePullRequestSurfaceState({
+  currentLoading,
+  currentPullRequestResult,
+  detailLoading,
+  detailResult,
+  listLoading = false,
+  listPullRequests,
+  listSupportMessage = null,
+  snapshot,
+}: ResolvePullRequestSurfaceStateInput): PullRequestSurfaceState {
+  const livePullRequest =
+    (detailResult?.pullRequest?.number === snapshot.number ? detailResult.pullRequest : null) ??
+    (currentPullRequestResult?.pullRequest?.number === snapshot.number
+      ? currentPullRequestResult.pullRequest
+      : null) ??
+    listPullRequests?.find((pullRequest) => pullRequest.number === snapshot.number) ??
+    null;
+  const currentBranchPullRequestNumber = currentPullRequestResult?.pullRequest?.number ?? null;
+  const supportMessage =
+    detailResult?.support.message ??
+    currentPullRequestResult?.support.message ??
+    listSupportMessage;
+
+  return {
+    currentBranchPullRequestNumber,
+    pullRequest: livePullRequest ?? snapshot,
+    snapshotMessage: liveSnapshotMessage(
+      currentLoading || detailLoading || listLoading,
+      snapshot,
+      livePullRequest,
+      supportMessage,
+    ),
+  };
+}
+
+function FactCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="bg-[var(--panel)] px-4 py-3">
+      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)]">
+        {label}
+      </p>
+      <p className="mt-1.5 text-sm text-[var(--foreground)]">{value}</p>
+    </div>
+  );
+}
+
+function SurfaceChip({ label, tone }: { label: string; tone: SurfaceTone }) {
+  return (
+    <span
+      className={`inline-flex items-center border px-2 py-1 text-[11px] font-medium uppercase tracking-[0.08em] ${toneClassName(
+        tone,
+      )}`}
+    >
+      {label}
+    </span>
+  );
 }
 
 export function PullRequestSurface({
@@ -114,44 +244,44 @@ export function PullRequestSurface({
 }: PullRequestSurfaceProps) {
   const pullRequestsQuery = useGitPullRequests(workspaceId);
   const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId);
-  const livePullRequest = useMemo(() => {
-    const currentPullRequest = currentPullRequestQuery.data?.pullRequest;
-    if (currentPullRequest?.number === snapshot.number) {
-      return currentPullRequest;
-    }
-
-    return (
-      pullRequestsQuery.data?.pullRequests.find(
-        (pullRequest) => pullRequest.number === snapshot.number,
-      ) ?? null
-    );
-  }, [
-    currentPullRequestQuery.data?.pullRequest,
-    pullRequestsQuery.data?.pullRequests,
-    snapshot.number,
-  ]);
-  const pullRequest = livePullRequest ?? snapshot;
-  const currentBranchPullRequestNumber = currentPullRequestQuery.data?.pullRequest?.number ?? null;
-  const supportMessage =
-    currentPullRequestQuery.data?.support.message ??
-    pullRequestsQuery.data?.support.message ??
-    null;
-  const snapshotMessage = liveSnapshotMessage(
-    pullRequestsQuery.isLoading || currentPullRequestQuery.isLoading,
-    snapshot,
-    livePullRequest,
-    supportMessage,
+  const detailPullRequestQuery = useGitPullRequest(workspaceId, snapshot.number);
+  const surfaceState = useMemo(
+    () =>
+      resolvePullRequestSurfaceState({
+        currentLoading: currentPullRequestQuery.isLoading,
+        currentPullRequestResult: currentPullRequestQuery.data,
+        detailLoading: detailPullRequestQuery.isLoading,
+        detailResult: detailPullRequestQuery.data,
+        listLoading: pullRequestsQuery.isLoading,
+        listPullRequests: pullRequestsQuery.data?.pullRequests,
+        listSupportMessage: pullRequestsQuery.data?.support.message ?? null,
+        snapshot,
+      }),
+    [
+      currentPullRequestQuery.data,
+      currentPullRequestQuery.isLoading,
+      detailPullRequestQuery.data,
+      detailPullRequestQuery.isLoading,
+      pullRequestsQuery.data?.pullRequests,
+      pullRequestsQuery.data?.support.message,
+      pullRequestsQuery.isLoading,
+      snapshot,
+    ],
   );
+  const pullRequest = surfaceState.pullRequest;
+  const currentBranchPullRequestNumber = surfaceState.currentBranchPullRequestNumber;
+  const snapshotMessage = surfaceState.snapshotMessage;
+  const checks = pullRequest.checks ?? [];
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--background)]">
-      <div className="border-b border-[var(--border)] px-5 py-5">
+      <header className="border-b border-[var(--border)] px-4 py-4">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
               Pull Request
             </p>
-            <h2 className="mt-2 text-lg font-semibold leading-snug text-[var(--foreground)]">
+            <h2 className="mt-2 text-xl font-semibold leading-snug text-[var(--foreground)]">
               {pullRequest.title}
             </h2>
             <p className="mt-2 text-sm text-[var(--muted-foreground)]">
@@ -160,6 +290,7 @@ export function PullRequestSurface({
             </p>
           </div>
           <Button
+            className="rounded-none"
             onClick={() => window.open(pullRequest.url, "_blank", "noopener,noreferrer")}
             size="sm"
             variant="outline"
@@ -167,135 +298,143 @@ export function PullRequestSurface({
             Open on GitHub
           </Button>
         </div>
+
         <div className="mt-4 flex flex-wrap gap-2">
-          <Badge variant={stateBadgeVariant(pullRequest.state)}>
-            {stateLabel(pullRequest.state)}
-          </Badge>
-          {pullRequest.isDraft ? <Badge variant="muted">Draft</Badge> : null}
+          <SurfaceChip label={stateLabel(pullRequest.state)} tone={stateTone(pullRequest.state)} />
+          <SurfaceChip
+            label={mergeableLabel(pullRequest.mergeable)}
+            tone={mergeableTone(pullRequest.mergeable)}
+          />
+          {pullRequest.isDraft ? <SurfaceChip label="Draft" tone="muted" /> : null}
           {currentBranchPullRequestNumber === pullRequest.number ? (
-            <Badge variant="info">Current Branch</Badge>
+            <SurfaceChip label="Current Branch" tone="warning" />
           ) : null}
-          <Badge variant={mergeableBadgeVariant(pullRequest.mergeable)}>
-            {pullRequest.mergeable === "mergeable"
-              ? "Mergeable"
-              : pullRequest.mergeable === "conflicting"
-                ? "Conflicting"
-                : "Mergeability unknown"}
-          </Badge>
           {pullRequest.reviewDecision ? (
-            <Badge variant="outline">{reviewDecisionLabel(pullRequest.reviewDecision)}</Badge>
+            <SurfaceChip
+              label={reviewDecisionLabel(pullRequest.reviewDecision)}
+              tone={pullRequest.reviewDecision === "changes_requested" ? "danger" : "muted"}
+            />
           ) : null}
         </div>
-      </div>
+      </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <div className="flex flex-col gap-4">
           {snapshotMessage ? (
-            <Alert>
+            <Alert className="rounded-none">
               <AlertDescription>{snapshotMessage}</AlertDescription>
             </Alert>
           ) : null}
 
-          <div className="flex flex-col gap-4 lg:flex-row">
-            <section className="flex min-w-0 flex-1 flex-col rounded-2xl border border-[var(--border)] bg-[var(--panel)] px-4 py-4">
+          <section className="border border-[var(--border)] bg-[var(--card)]">
+            <div className="border-b border-[var(--border)] px-4 py-3">
               <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-                Branches
+                Overview
               </p>
-              <p className="mt-3 text-sm font-medium text-[var(--foreground)]">
-                {pullRequest.headRefName} → {pullRequest.baseRefName}
+              <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                Current branch mapping, review state, and merge readiness.
               </p>
-              <p className="mt-2 text-sm text-[var(--muted-foreground)]">
-                Created {formatRelativeTime(pullRequest.createdAt)}
-              </p>
-              {pullRequest.mergeStateStatus ? (
-                <p className="mt-2 text-sm text-[var(--muted-foreground)]">
-                  Merge status: {pullRequest.mergeStateStatus}
-                </p>
-              ) : null}
-            </section>
+            </div>
+            <div className="grid gap-px bg-[var(--border)] sm:grid-cols-2 xl:grid-cols-4">
+              <FactCell
+                label="Branches"
+                value={`${pullRequest.headRefName} → ${pullRequest.baseRefName}`}
+              />
+              <FactCell label="Merge status" value={pullRequest.mergeStateStatus ?? "Unknown"} />
+              <FactCell label="Review" value={reviewDecisionLabel(pullRequest.reviewDecision)} />
+              <FactCell
+                label="Workspace branch"
+                value={
+                  currentBranchPullRequestNumber === pullRequest.number
+                    ? "Checked out"
+                    : "Not checked out"
+                }
+              />
+              <FactCell label="Created" value={formatRelativeTime(pullRequest.createdAt)} />
+              <FactCell label="Updated" value={formatRelativeTime(pullRequest.updatedAt)} />
+              <FactCell label="Reported checks" value={String(checks.length)} />
+              <FactCell label="Checks summary" value={checksSummary(pullRequest.checks)} />
+            </div>
+          </section>
 
-            <section className="flex min-w-0 flex-1 flex-col rounded-2xl border border-[var(--border)] bg-[var(--panel)] px-4 py-4">
+          <section className="border border-[var(--border)] bg-[var(--card)]">
+            <div className="border-b border-[var(--border)] px-4 py-3">
               <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-                Checks
+                Check Runs
               </p>
-              {pullRequest.checks && pullRequest.checks.length > 0 ? (
-                <div className="mt-3 flex flex-col gap-2">
-                  {pullRequest.checks.slice(0, 3).map((check) => (
-                    <div
-                      key={`${check.workflowName ?? "check"}:${check.name}`}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)]/70 bg-[var(--background)] px-3 py-2"
-                    >
-                      <span className="flex min-w-0 items-center gap-2">
+              <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                {checksSummary(pullRequest.checks)}
+              </p>
+            </div>
+
+            {checks.length > 0 ? (
+              <div>
+                {checks.map((check, index) => {
+                  const interactive = Boolean(check.detailsUrl);
+                  const className = `flex w-full items-center justify-between gap-4 px-4 py-3 text-left text-sm transition-colors ${
+                    index > 0 ? "border-t border-[var(--border)]" : ""
+                  } ${
+                    interactive
+                      ? "hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
+                      : ""
+                  }`;
+
+                  const content = (
+                    <>
+                      <span className="flex min-w-0 items-start gap-3">
                         <StatusDot
                           pulse={check.status === "pending"}
                           size="sm"
                           tone={checkTone(check.status)}
                         />
-                        <span className="truncate text-sm text-[var(--foreground)]">
-                          {check.name}
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm text-[var(--foreground)]">
+                            {check.name}
+                          </span>
+                          <span className="mt-1 block text-xs text-[var(--muted-foreground)]">
+                            {check.workflowName ?? "Check run"}
+                          </span>
                         </span>
                       </span>
-                      <span className="shrink-0 text-xs text-[var(--muted-foreground)]">
-                        {checkLabel(check.status)}
+                      <span className="shrink-0 text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--muted-foreground)]">
+                        {checkActionLabel(check.detailsUrl, check.status)}
                       </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-[var(--muted-foreground)]">
-                  No check data is available for this pull request yet.
-                </p>
-              )}
-            </section>
-          </div>
+                    </>
+                  );
 
-          <section className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] px-4 py-4">
-            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-              Check Runs
-            </p>
-            {pullRequest.checks && pullRequest.checks.length > 0 ? (
-              <div className="mt-3 flex flex-col gap-2">
-                {pullRequest.checks.map((check) => (
-                  <button
-                    key={`${check.workflowName ?? "check-run"}:${check.name}`}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)]/70 bg-[var(--background)] px-3 py-2 text-left transition hover:bg-[var(--surface-hover)]"
-                    disabled={!check.detailsUrl}
-                    onClick={() => {
-                      if (!check.detailsUrl) {
-                        return;
-                      }
+                  if (!interactive) {
+                    return (
+                      <div
+                        className={className}
+                        key={`${check.workflowName ?? "check"}:${check.name}`}
+                      >
+                        {content}
+                      </div>
+                    );
+                  }
 
-                      window.open(check.detailsUrl, "_blank", "noopener,noreferrer");
-                    }}
-                    type="button"
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <StatusDot
-                        pulse={check.status === "pending"}
-                        size="sm"
-                        tone={checkTone(check.status)}
-                      />
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm text-[var(--foreground)]">
-                          {check.name}
-                        </span>
-                        <span className="block truncate text-xs text-[var(--muted-foreground)]">
-                          {check.workflowName ?? "Check run"}
-                        </span>
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-xs text-[var(--muted-foreground)]">
-                      {check.detailsUrl ? "Open" : checkLabel(check.status)}
-                    </span>
-                  </button>
-                ))}
+                  return (
+                    <button
+                      className={className}
+                      key={`${check.workflowName ?? "check"}:${check.name}`}
+                      onClick={() => {
+                        window.open(check.detailsUrl!, "_blank", "noopener,noreferrer");
+                      }}
+                      type="button"
+                    >
+                      {content}
+                    </button>
+                  );
+                })}
               </div>
             ) : (
-              <EmptyState
-                description="Check runs will appear here when the provider includes them for this pull request."
-                size="sm"
-                title="No checks available"
-              />
+              <div className="px-4 py-10">
+                <EmptyState
+                  description="Check runs will appear here once the provider reports them for this pull request."
+                  size="sm"
+                  title="No checks available"
+                />
+              </div>
             )}
           </section>
         </div>

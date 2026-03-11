@@ -1,3 +1,4 @@
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   getManifestFingerprint,
   type GitLogEntry,
@@ -101,7 +102,7 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
   const handleOpenPullRequest = useCallback(
     (pullRequest: GitPullRequestSummary) => {
       if (!supportsTerminalInteraction) {
-        window.open(pullRequest.url, "_blank", "noopener,noreferrer");
+        openUrl(pullRequest.url);
         return;
       }
 

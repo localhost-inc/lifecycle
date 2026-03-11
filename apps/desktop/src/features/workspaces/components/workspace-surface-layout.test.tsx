@@ -11,7 +11,8 @@ describe("WorkspaceSurface layout", () => {
   test("keeps the tab strip flush on the left edge while preserving action padding", async () => {
     const hooksModule = await import("../hooks");
     const terminalHooksModule = await import("../../terminals/hooks");
-    const responseReadyModule = await import("../../terminals/state/terminal-response-ready-provider");
+    const responseReadyModule =
+      await import("../../terminals/state/terminal-response-ready-provider");
     const panelsModule = await import("./workspace-surface-panels");
     const tabBarModule = await import("./workspace-surface-tab-bar");
 
@@ -41,7 +42,7 @@ describe("WorkspaceSurface layout", () => {
       }),
     );
 
-    expect(markup).toContain('class="flex items-center gap-1 pt-1 pb-3"');
+    expect(markup).toContain('class="flex items-center gap-2 pt-1 pb-3"');
     expect(markup).not.toContain("px-3");
   });
 });

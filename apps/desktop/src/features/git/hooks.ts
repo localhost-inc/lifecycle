@@ -1,6 +1,7 @@
 import type {
   GitBranchPullRequestResult,
   GitLogEntry,
+  GitPullRequestDetailResult,
   GitPullRequestListResult,
   GitStatusResult,
   LifecycleEvent,
@@ -14,6 +15,8 @@ export const gitKeys = {
   currentPullRequest: (workspaceId: string) =>
     ["workspace-git-current-pull-request", workspaceId] as const,
   log: (workspaceId: string, limit: number) => ["workspace-git-log", workspaceId, limit] as const,
+  pullRequest: (workspaceId: string, pullRequestNumber: number) =>
+    ["workspace-git-pull-request", workspaceId, pullRequestNumber] as const,
   pullRequests: (workspaceId: string) => ["workspace-git-pull-requests", workspaceId] as const,
   status: (workspaceId: string) => ["workspace-git-status", workspaceId] as const,
 };
@@ -82,6 +85,22 @@ function createGitPullRequestsQuery(
     key: gitKeys.pullRequests(workspaceId),
     fetch(source) {
       return source.getWorkspaceGitPullRequests(workspaceId);
+    },
+    reduce(_current, event) {
+      return invalidateGitWorkspaceQuery(event, workspaceId);
+    },
+  };
+}
+
+function createGitPullRequestQuery(
+  workspaceId: string,
+  pullRequestNumber: number,
+): QueryDescriptor<GitPullRequestDetailResult> {
+  return {
+    eventKinds: GIT_PULL_REQUEST_EVENT_KINDS,
+    key: gitKeys.pullRequest(workspaceId, pullRequestNumber),
+    fetch(source) {
+      return source.getWorkspaceGitPullRequest(workspaceId, pullRequestNumber);
     },
     reduce(_current, event) {
       return invalidateGitWorkspaceQuery(event, workspaceId);
@@ -167,6 +186,25 @@ export function useGitPullRequests(
   });
 
   usePollingRefresh(query.refresh, Boolean(workspaceId), 15000);
+  return query;
+}
+
+export function useGitPullRequest(
+  workspaceId: string | null,
+  pullRequestNumber: number | null,
+): QueryResult<GitPullRequestDetailResult | undefined> {
+  const descriptor = useMemo(
+    () =>
+      workspaceId && pullRequestNumber !== null
+        ? createGitPullRequestQuery(workspaceId, pullRequestNumber)
+        : null,
+    [pullRequestNumber, workspaceId],
+  );
+  const query = useQuery(descriptor, {
+    disabledData: undefined,
+  });
+
+  usePollingRefresh(query.refresh, Boolean(workspaceId) && pullRequestNumber !== null, 10000);
   return query;
 }
 

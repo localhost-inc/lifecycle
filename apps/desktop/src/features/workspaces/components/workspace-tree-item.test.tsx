@@ -87,7 +87,7 @@ describe("WorkspaceTreeItem", () => {
     expect(markup).toContain("font-medium");
     expect(markup).toContain("text-[var(--sidebar-foreground)]");
     expect(markup).toContain("border-left-color:var(--primary)");
-    expect(markup).toContain("pl-3");
+    expect(markup).toContain("pl-[30px]");
     expect(markup).toContain("opacity-70");
   });
 
@@ -101,11 +101,10 @@ describe("WorkspaceTreeItem", () => {
       }),
     );
 
-    expect(markup).toContain(
-      "text-[color-mix(in_srgb,var(--sidebar-foreground)_78%,var(--sidebar-muted-foreground))]",
-    );
+    expect(markup).toContain("opacity-80");
+    expect(markup).toContain("hover:opacity-100");
     expect(markup).toContain("hover:bg-transparent");
-    expect(markup).toContain("text-[var(--sidebar-muted-foreground)]");
+    expect(markup).toContain("text-[var(--sidebar-foreground)]");
     expect(markup).toContain("border-left-color:var(--border)");
   });
 

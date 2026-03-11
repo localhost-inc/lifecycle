@@ -1,5 +1,11 @@
-import type { GitPullRequestListResult, GitPullRequestSummary } from "@lifecycle/contracts";
-import { Badge, Button, EmptyState } from "@lifecycle/ui";
+import type {
+  GitPullRequestCheckSummary,
+  GitPullRequestListResult,
+  GitPullRequestSummary,
+} from "@lifecycle/contracts";
+import { Badge, EmptyState } from "@lifecycle/ui";
+
+import { GithubAvatar } from "./github-avatar";
 
 interface PullRequestsTabProps {
   currentBranchPullRequestNumber: number | null;
@@ -24,10 +30,132 @@ function formatShortAge(iso: string): string {
   return `${years}y`;
 }
 
-function mergeableBadgeVariant(mergeable: string): "info" | "muted" | "success" {
-  if (mergeable === "mergeable") return "success";
-  if (mergeable === "conflicting") return "info";
-  return "muted";
+function CheckDots({ checks }: { checks: GitPullRequestCheckSummary[] | null }) {
+  if (!checks?.length) return null;
+
+  const colors: Record<string, string> = {
+    success: "var(--git-status-added)",
+    failed: "var(--destructive)",
+    pending: "var(--git-status-modified)",
+    neutral: "var(--muted-foreground)",
+  };
+
+  const passing = checks.filter((c) => c.status === "success").length;
+  const visible = checks.slice(0, 3);
+  const overflow = checks.length - visible.length;
+
+  return (
+    <span
+      className="inline-flex items-center gap-0.5"
+      title={`${passing}/${checks.length} checks passing`}
+    >
+      {visible.map((check) => (
+        <span
+          key={check.name}
+          className="text-[8px] leading-none"
+          style={{ color: colors[check.status] ?? colors.neutral }}
+        >
+          ●
+        </span>
+      ))}
+      {overflow > 0 && (
+        <span className="text-[9px] leading-none text-[var(--muted-foreground)]">
+          +{overflow}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function PullRequestRow({
+  pullRequest,
+  isCurrent,
+  onOpenPullRequest,
+}: {
+  pullRequest: GitPullRequestSummary;
+  isCurrent: boolean;
+  onOpenPullRequest: (pullRequest: GitPullRequestSummary) => void;
+}) {
+  const reviewText =
+    pullRequest.reviewDecision === "approved"
+      ? "Approved"
+      : pullRequest.reviewDecision === "changes_requested"
+        ? "Changes requested"
+        : null;
+
+  const reviewColor =
+    pullRequest.reviewDecision === "approved"
+      ? "var(--git-status-added)"
+      : pullRequest.reviewDecision === "changes_requested"
+        ? "var(--git-status-modified)"
+        : undefined;
+
+  const mergeText =
+    pullRequest.mergeable === "mergeable"
+      ? "Mergeable"
+      : pullRequest.mergeable === "conflicting"
+        ? "Conflicting"
+        : null;
+
+  const mergeColor =
+    pullRequest.mergeable === "mergeable"
+      ? "var(--git-status-added)"
+      : pullRequest.mergeable === "conflicting"
+        ? "var(--git-status-renamed)"
+        : undefined;
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpenPullRequest(pullRequest)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpenPullRequest(pullRequest);
+        }
+      }}
+      className="flex cursor-pointer items-start gap-2 px-2.5 py-2 transition hover:bg-[var(--surface-hover)]"
+      title={`Open pull request #${pullRequest.number}`}
+    >
+      <GithubAvatar
+        name={pullRequest.author}
+        email={`${pullRequest.author}@users.noreply.github.com`}
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-1 text-xs text-[var(--muted-foreground)]">
+          <span className="truncate">
+            {pullRequest.author} · #{pullRequest.number}
+          </span>
+          {pullRequest.isDraft && <Badge variant="muted">Draft</Badge>}
+          {isCurrent && <Badge variant="info">Current</Badge>}
+          <span className="ml-auto shrink-0">{formatShortAge(pullRequest.updatedAt)}</span>
+        </div>
+        <p className="line-clamp-2 text-[13px] leading-snug text-[var(--foreground)]">
+          {pullRequest.title}
+        </p>
+        <div className="mt-0.5 flex items-center gap-1 text-xs text-[var(--muted-foreground)]">
+          <span className="truncate">
+            {pullRequest.headRefName} → {pullRequest.baseRefName}
+          </span>
+          {reviewText && (
+            <>
+              <span>·</span>
+              <span className="shrink-0" style={{ color: reviewColor }}>
+                {reviewText}
+              </span>
+            </>
+          )}
+          <CheckDots checks={pullRequest.checks} />
+          {mergeText && (
+            <span className="ml-auto shrink-0" style={{ color: mergeColor }}>
+              {mergeText}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function PullRequestsTab({
@@ -69,48 +197,14 @@ export function PullRequestsTab({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="-mx-2.5 flex flex-col divide-y divide-[var(--border)]">
       {result.pullRequests.map((pullRequest) => (
-        <div
+        <PullRequestRow
           key={pullRequest.number}
-          className="rounded-lg border border-[var(--border)] bg-[var(--panel)] px-3 py-3"
-        >
-          <div className="flex items-start gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <p className="truncate text-sm font-medium text-[var(--foreground)]">
-                  {pullRequest.title}
-                </p>
-                {pullRequest.isDraft && <Badge variant="muted">Draft</Badge>}
-                {currentBranchPullRequestNumber === pullRequest.number && (
-                  <Badge variant="info">Current</Badge>
-                )}
-              </div>
-              <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                #{pullRequest.number} · {pullRequest.author} ·{" "}
-                {formatShortAge(pullRequest.updatedAt)}
-              </p>
-              <p className="mt-2 text-xs text-[var(--muted-foreground)]">
-                {pullRequest.headRefName} → {pullRequest.baseRefName}
-              </p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Badge variant={mergeableBadgeVariant(pullRequest.mergeable)}>
-                  {pullRequest.mergeable === "mergeable"
-                    ? "Mergeable"
-                    : pullRequest.mergeable === "conflicting"
-                      ? "Conflicting"
-                      : "Unknown"}
-                </Badge>
-                {pullRequest.reviewDecision && (
-                  <Badge variant="outline">{pullRequest.reviewDecision.replaceAll("_", " ")}</Badge>
-                )}
-              </div>
-            </div>
-            <Button onClick={() => onOpenPullRequest(pullRequest)} size="sm" variant="outline">
-              Open
-            </Button>
-          </div>
-        </div>
+          pullRequest={pullRequest}
+          isCurrent={currentBranchPullRequestNumber === pullRequest.number}
+          onOpenPullRequest={onOpenPullRequest}
+        />
       ))}
     </div>
   );

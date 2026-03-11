@@ -62,8 +62,10 @@ export function WorkspaceSurfaceTabItem({
   onRenameChange,
   onRenameKeyDown,
 }: WorkspaceSurfaceTabItemProps) {
-  const className = `compact-control-standalone compact-control-item group relative flex h-[34px] max-w-[300px] shrink-0 touch-none select-none items-center justify-start gap-2 whitespace-nowrap px-[calc(var(--control-compact-padding-x)+2px)] text-left text-sm font-medium will-change-transform ${
-    active ? "compact-control-tone-active" : "compact-control-tone-muted"
+  const className = `group relative flex h-[34px] max-w-[300px] shrink-0 touch-none select-none items-center justify-start gap-2 whitespace-nowrap rounded-[var(--radius-xl)] border border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] px-[14px] text-left text-sm font-medium outline-none will-change-transform focus-visible:shadow-[0_0_0_1px_var(--ring)] ${
+    active
+      ? "bg-[var(--muted)] text-[var(--foreground)]"
+      : "text-[var(--muted-foreground)] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-[var(--foreground)]"
   } ${
     isRenaming
       ? "cursor-text ring-1 ring-[var(--foreground)]/20"
@@ -122,11 +124,7 @@ export function WorkspaceSurfaceTabItem({
           type="button"
           aria-label={`Close ${tab.label}`}
           data-tab-action="close"
-          className={`ml-auto shrink-0 rounded-[8px] p-1 transition hover:bg-[var(--surface-hover)] ${
-            active
-              ? "opacity-100"
-              : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
-          }`}
+          className="ml-auto shrink-0 rounded-[8px] p-1 transition hover:bg-[var(--surface-hover)]"
           onPointerDown={(event) => {
             event.stopPropagation();
           }}

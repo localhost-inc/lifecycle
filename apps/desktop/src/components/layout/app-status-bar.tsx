@@ -1,3 +1,4 @@
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { version } from "../../../package.json";
 import { Wordmark } from "../wordmark";
 
@@ -11,7 +12,7 @@ export function AppStatusBar() {
         <button
           type="button"
           className="hover:text-[var(--foreground)]"
-          onClick={() => window.open("https://github.com/kylealwyn/lifecycle/issues", "_blank")}
+          onClick={() => openUrl("https://github.com/kylealwyn/lifecycle/issues")}
         >
           Feedback
         </button>

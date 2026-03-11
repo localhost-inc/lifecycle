@@ -7,6 +7,7 @@ import type {
   GitDiffResult,
   GitDiffScope,
   GitFileChangeKind,
+  GitPullRequestDetailResult,
   GitPullRequestListResult,
   GitStatusResult,
 } from "./git";
@@ -129,5 +130,42 @@ describe("git contracts", () => {
     expect(currentBranch.pullRequest?.mergeable).toBe("mergeable");
     expect(currentBranch.pullRequest?.checks?.[0]?.status).toBe("success");
     expect(currentBranch.suggestedBaseRef).toBe("main");
+  });
+
+  test("supports pull request detail payloads", () => {
+    const detail: GitPullRequestDetailResult = {
+      support: {
+        available: true,
+        message: null,
+        provider: "github",
+        reason: null,
+      },
+      pullRequest: {
+        author: "kyle",
+        baseRefName: "main",
+        checks: [
+          {
+            detailsUrl: "https://github.com/example/repo/actions/runs/42",
+            name: "build",
+            status: "success",
+            workflowName: "CI",
+          },
+        ],
+        createdAt: "2026-03-09T10:00:00.000Z",
+        headRefName: "feature/git-prs",
+        isDraft: false,
+        mergeStateStatus: "CLEAN",
+        mergeable: "mergeable",
+        number: 42,
+        reviewDecision: "approved",
+        state: "open",
+        title: "feat: add git pull request rail",
+        updatedAt: "2026-03-09T11:00:00.000Z",
+        url: "https://github.com/example/repo/pull/42",
+      },
+    };
+
+    expect(detail.pullRequest?.number).toBe(42);
+    expect(detail.pullRequest?.checks?.[0]?.name).toBe("build");
   });
 });

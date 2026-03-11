@@ -123,6 +123,11 @@ export interface GitPullRequestListResult {
   pullRequests: GitPullRequestSummary[];
 }
 
+export interface GitPullRequestDetailResult {
+  support: GitPullRequestSupport;
+  pullRequest: GitPullRequestSummary | null;
+}
+
 export interface GitBranchPullRequestResult {
   support: GitPullRequestSupport;
   branch: string | null;

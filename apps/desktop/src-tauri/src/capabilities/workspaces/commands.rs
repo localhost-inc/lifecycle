@@ -408,6 +408,15 @@ pub async fn get_workspace_current_git_pull_request(
 }
 
 #[tauri::command]
+pub async fn get_workspace_git_pull_request(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    pull_request_number: u64,
+) -> Result<crate::platform::git::pull_request::GitPullRequestDetailResult, LifecycleError> {
+    super::git::get_workspace_git_pull_request(&db_path.0, workspace_id, pull_request_number).await
+}
+
+#[tauri::command]
 pub async fn get_workspace_git_base_ref(
     db_path: State<'_, DbPath>,
     workspace_id: String,
