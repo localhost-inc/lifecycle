@@ -5,7 +5,6 @@ export type WorkspaceStatus = "idle" | "starting" | "active" | "stopping";
 export type WorkspaceFailureReason =
   | "capacity_unavailable"
   | "manifest_invalid"
-  | "manifest_secret_unresolved"
   | "repo_clone_failed"
   | "repository_disconnected"
   | "setup_step_failed"

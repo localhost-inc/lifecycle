@@ -35,7 +35,7 @@ All non-2xx responses include: `code`, `message`, `details`, `request_id`, `sugg
 
 ### `workspace.failure_reason` (V1 field carrying environment failure in current implementation)
 
-`capacity_unavailable`, `manifest_invalid`, `manifest_secret_unresolved`, `repo_clone_failed`, `repository_disconnected`, `setup_step_failed`, `service_start_failed`, `service_healthcheck_failed`, `sandbox_unreachable`, `local_docker_unavailable`, `local_port_conflict`, `local_app_not_running`, `operation_timeout`, `unknown`
+`capacity_unavailable`, `manifest_invalid`, `repo_clone_failed`, `repository_disconnected`, `setup_step_failed`, `service_start_failed`, `service_healthcheck_failed`, `sandbox_unreachable`, `local_docker_unavailable`, `local_port_conflict`, `local_app_not_running`, `operation_timeout`, `unknown`
 
 Failed start attempts return the environment to `workspace.status = idle`; the last failure remains visible through `workspace.failure_reason` and `workspace.failed_at`.
 

@@ -44,7 +44,6 @@ impl std::fmt::Display for WorkspaceStatus {
 pub enum WorkspaceFailureReason {
     CapacityUnavailable,
     ManifestInvalid,
-    ManifestSecretUnresolved,
     RepoCloneFailed,
     RepositoryDisconnected,
     SetupStepFailed,
@@ -63,7 +62,6 @@ impl WorkspaceFailureReason {
         match self {
             Self::CapacityUnavailable => "capacity_unavailable",
             Self::ManifestInvalid => "manifest_invalid",
-            Self::ManifestSecretUnresolved => "manifest_secret_unresolved",
             Self::RepoCloneFailed => "repo_clone_failed",
             Self::RepositoryDisconnected => "repository_disconnected",
             Self::SetupStepFailed => "setup_step_failed",

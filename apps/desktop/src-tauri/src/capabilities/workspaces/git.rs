@@ -207,6 +207,17 @@ pub async fn get_workspace_git_base_ref(
     status::get_git_base_ref(&worktree_path).await
 }
 
+pub async fn get_workspace_git_ref_diff_patch(
+    db_path: &str,
+    workspace_id: String,
+    base_ref: String,
+    head_ref: String,
+) -> Result<String, LifecycleError> {
+    let worktree_path =
+        require_local_worktree(db_path, &workspace_id, "get workspace git ref diff patch")?;
+    status::get_git_ref_diff_patch(&worktree_path, &base_ref, &head_ref).await
+}
+
 pub async fn get_workspace_git_commit_patch(
     db_path: &str,
     workspace_id: String,

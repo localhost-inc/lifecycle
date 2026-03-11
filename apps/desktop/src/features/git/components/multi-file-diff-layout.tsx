@@ -27,8 +27,10 @@ import {
   readPersistedPanelValue,
   writePersistedPanelValue,
 } from "../../../lib/panel-layout";
+import type { GitDiffStyle } from "../lib/diff-style";
 
 interface MultiFileDiffLayoutProps {
+  diffStyle: GitDiffStyle;
   files: FileDiffMetadata[];
   initialFilePath?: string | null;
   onOpenFile?: ((filePath: string) => void) | null;
@@ -42,6 +44,7 @@ const TREE_BOUNDS = {
 };
 
 export function MultiFileDiffLayout({
+  diffStyle,
   files,
   initialFilePath,
   onOpenFile,
@@ -93,11 +96,12 @@ export function MultiFileDiffLayout({
 
   if (files.length <= 1) {
     return (
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="min-h-0 flex-1 overflow-auto pb-24">
         {files.map((fileDiff, index) => (
           <DiffFileSection
             key={`${fileDiff.prevName ?? ""}:${fileDiff.name}:${index}`}
             collapsed={collapsedPaths.has(fileDiff.name)}
+            diffStyle={diffStyle}
             fileDiff={fileDiff}
             onOpenFile={onOpenFile}
             onToggleCollapse={handleToggleCollapse}
@@ -114,6 +118,7 @@ export function MultiFileDiffLayout({
       files={files}
       onOpenFile={onOpenFile}
       collapsedPaths={collapsedPaths}
+      diffStyle={diffStyle}
       initialFilePath={initialFilePath}
       onToggleCollapse={handleToggleCollapse}
       theme={theme}
@@ -126,6 +131,7 @@ export function MultiFileDiffLayout({
 
 interface InnerProps {
   collapsedPaths: ReadonlySet<string>;
+  diffStyle: GitDiffStyle;
   files: FileDiffMetadata[];
   initialFilePath?: string | null;
   onOpenFile?: ((filePath: string) => void) | null;
@@ -138,6 +144,7 @@ interface InnerProps {
 
 function MultiFileDiffLayoutInner({
   collapsedPaths,
+  diffStyle,
   files,
   initialFilePath,
   onOpenFile,
@@ -217,7 +224,7 @@ function MultiFileDiffLayoutInner({
     setMeasuredHeights((prev) => {
       return Object.keys(prev).length === 0 ? prev : {};
     });
-  }, [files]);
+  }, [diffStyle, files]);
 
   const fileIndexByPath = useMemo(() => {
     const next = new Map<string, number>();
@@ -394,7 +401,7 @@ function MultiFileDiffLayoutInner({
           <div className="w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
         </div>
       </div>
-      <div ref={scrollContainerRef} className="min-h-0 min-w-0 flex-1 overflow-auto">
+      <div ref={scrollContainerRef} className="min-h-0 min-w-0 flex-1 overflow-auto pb-24">
         {topSpacerHeight > 0 && (
           <div aria-hidden="true" style={{ height: `${topSpacerHeight}px` }} />
         )}
@@ -402,6 +409,7 @@ function MultiFileDiffLayoutInner({
           <DiffFileSection
             key={`${fileDiff.prevName ?? ""}:${fileDiff.name}:${virtualRange.startIndex + index}`}
             collapsed={collapsedPaths.has(fileDiff.name)}
+            diffStyle={diffStyle}
             fileDiff={fileDiff}
             onHeightChange={handleSectionHeightChange}
             onOpenFile={onOpenFile}

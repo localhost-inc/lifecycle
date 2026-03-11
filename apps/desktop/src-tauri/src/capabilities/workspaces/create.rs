@@ -1,4 +1,4 @@
-use crate::capabilities::workspaces::manifest::LifecycleConfig;
+use crate::capabilities::workspaces::manifest::parse_lifecycle_config;
 use crate::platform::db::{open_db, DbPath};
 use crate::platform::git::worktree;
 use crate::shared::errors::{LifecycleError, WorkspaceFailureReason, WorkspaceStatus};
@@ -22,10 +22,7 @@ pub async fn create_workspace(
 ) -> Result<String, LifecycleError> {
     let manifest = manifest_json
         .as_deref()
-        .map(|json| {
-            serde_json::from_str::<LifecycleConfig>(json)
-                .map_err(|error| LifecycleError::ManifestInvalid(error.to_string()))
-        })
+        .map(parse_lifecycle_config)
         .transpose()?;
     let workspace_id = uuid::Uuid::new_v4().to_string();
     let workspace_name = workspace_name

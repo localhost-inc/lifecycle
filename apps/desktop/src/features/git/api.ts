@@ -200,6 +200,15 @@ export async function getGitBaseRef(workspaceId: string): Promise<string | null>
   });
 }
 
+export async function getGitRefDiffPatch(
+  workspaceId: string,
+  baseRef: string,
+  headRef: string,
+): Promise<string> {
+  if (!isTauri()) return "";
+  return invoke<string>("get_workspace_git_ref_diff_patch", { workspaceId, baseRef, headRef });
+}
+
 export async function getGitCommitPatch(
   workspaceId: string,
   sha: string,

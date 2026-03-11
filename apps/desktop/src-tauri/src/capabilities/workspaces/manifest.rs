@@ -1,3 +1,5 @@
+use crate::shared::errors::LifecycleError;
+use serde_json::Value;
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -6,8 +8,6 @@ use std::collections::HashMap;
 pub struct LifecycleConfig {
     pub setup: SetupConfig,
     pub services: HashMap<String, ServiceConfig>,
-    #[serde(default)]
-    pub secrets: HashMap<String, SecretConfig>,
     pub reset: Option<ResetConfig>,
     pub mcps: Option<HashMap<String, McpServerConfig>>,
 }
@@ -151,14 +151,6 @@ pub enum HealthCheck {
 
 #[allow(dead_code)]
 #[derive(Clone, Debug, Deserialize)]
-pub struct SecretConfig {
-    #[serde(rename = "ref")]
-    pub secret_ref: String,
-    pub required: bool,
-}
-
-#[allow(dead_code)]
-#[derive(Clone, Debug, Deserialize)]
 pub struct ResetConfig {
     pub strategy: Option<String>,
     pub command: Option<String>,
@@ -174,9 +166,163 @@ pub struct McpServerConfig {
     pub env_vars: Option<HashMap<String, String>>,
 }
 
+const UNSUPPORTED_SECRETS_MESSAGE: &str =
+    "managed secrets are not supported in local lifecycle.json yet; materialize local env files in setup instead";
+const UNSUPPORTED_SECRET_TEMPLATE_MESSAGE: &str =
+    "`${secrets.*}` is not supported in local lifecycle.json; materialize local env files in setup instead";
+
+pub fn parse_lifecycle_config(json: &str) -> Result<LifecycleConfig, LifecycleError> {
+    let value: Value =
+        serde_json::from_str(json).map_err(|error| LifecycleError::ManifestInvalid(error.to_string()))?;
+    validate_manifest_value(&value)?;
+
+    let config: LifecycleConfig = serde_json::from_value(value)
+        .map_err(|error| LifecycleError::ManifestInvalid(error.to_string()))?;
+    config.validate()?;
+    Ok(config)
+}
+
+impl LifecycleConfig {
+    pub fn validate(&self) -> Result<(), LifecycleError> {
+        if self.setup.steps.is_empty() {
+            return manifest_invalid("setup.steps", "must include at least one step");
+        }
+
+        for (index, step) in self.setup.steps.iter().enumerate() {
+            let step_field = format!("setup.steps.{index}");
+            match (step.command.as_deref(), step.write_files.as_ref()) {
+                (Some(_), None) | (None, Some(_)) => {}
+                _ => {
+                    return manifest_invalid(
+                        &step_field,
+                        "requires exactly one of command or write_files",
+                    );
+                }
+            }
+
+            if let Some(run_on) = step.run_on.as_deref() {
+                if !matches!(run_on, "create" | "start") {
+                    return manifest_invalid(
+                        &format!("{step_field}.run_on"),
+                        "must be one of: create, start",
+                    );
+                }
+            }
+
+            if let Some(write_files) = step.write_files.as_ref() {
+                if write_files.is_empty() {
+                    return manifest_invalid(&format!("{step_field}.write_files"), "must not be empty");
+                }
+
+                for (file_index, file) in write_files.iter().enumerate() {
+                    let file_field = format!("{step_field}.write_files.{file_index}");
+                    let has_content = file.content.is_some();
+                    let has_lines = file.lines.is_some();
+                    if has_content == has_lines {
+                        return manifest_invalid(
+                            &file_field,
+                            "requires exactly one of content or lines",
+                        );
+                    }
+                    if file.lines.as_ref().is_some_and(Vec::is_empty) {
+                        return manifest_invalid(&format!("{file_field}.lines"), "must not be empty");
+                    }
+                }
+            }
+        }
+
+        for (service_name, service) in &self.services {
+            if let ServiceConfig::Image(image) = service {
+                if image.image.is_none() && image.build.is_none() {
+                    return manifest_invalid(
+                        &format!("services.{service_name}.image"),
+                        "image services require either image or build",
+                    );
+                }
+            }
+        }
+
+        if let Some(reset) = self.reset.as_ref() {
+            if let Some(strategy) = reset.strategy.as_deref() {
+                if !matches!(strategy, "reseed" | "snapshot") {
+                    return manifest_invalid(
+                        "reset.strategy",
+                        "must be one of: reseed, snapshot",
+                    );
+                }
+            }
+        }
+
+        if let Some(mcps) = self.mcps.as_ref() {
+            for (name, server) in mcps {
+                if !matches!(server.transport.as_str(), "stdio" | "sse") {
+                    return manifest_invalid(
+                        &format!("mcps.{name}.transport"),
+                        "must be one of: stdio, sse",
+                    );
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+fn validate_manifest_value(value: &Value) -> Result<(), LifecycleError> {
+    if let Some(object) = value.as_object() {
+        if object.contains_key("secrets") {
+            return manifest_invalid("secrets", UNSUPPORTED_SECRETS_MESSAGE);
+        }
+    }
+
+    let mut path = Vec::new();
+    validate_manifest_value_inner(value, &mut path)
+}
+
+fn validate_manifest_value_inner(
+    value: &Value,
+    path: &mut Vec<String>,
+) -> Result<(), LifecycleError> {
+    match value {
+        Value::String(content) => {
+            if content.contains("${secrets.") {
+                return manifest_invalid(&path.join("."), UNSUPPORTED_SECRET_TEMPLATE_MESSAGE);
+            }
+        }
+        Value::Array(entries) => {
+            for (index, entry) in entries.iter().enumerate() {
+                path.push(index.to_string());
+                validate_manifest_value_inner(entry, path)?;
+                path.pop();
+            }
+        }
+        Value::Object(entries) => {
+            for (key, entry) in entries {
+                if path.is_empty() && key == "secrets" {
+                    continue;
+                }
+                path.push(key.clone());
+                validate_manifest_value_inner(entry, path)?;
+                path.pop();
+            }
+        }
+        _ => {}
+    }
+
+    Ok(())
+}
+
+fn manifest_invalid<T>(field: &str, reason: &str) -> Result<T, LifecycleError> {
+    Err(LifecycleError::ManifestInvalid(format!("{field}: {reason}")))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn parse_config(json: &str) -> LifecycleConfig {
+        parse_lifecycle_config(json).expect("valid config")
+    }
 
     #[test]
     fn parse_process_service() {
@@ -200,7 +346,7 @@ mod tests {
             }
         }"#;
 
-        let config: LifecycleConfig = serde_json::from_str(json).unwrap();
+        let config = parse_config(json);
         assert!(config.setup.services.is_none());
         assert_eq!(config.setup.steps.len(), 1);
         assert_eq!(config.setup.steps[0].name, "install");
@@ -239,7 +385,7 @@ mod tests {
             }
         }"#;
 
-        let config: LifecycleConfig = serde_json::from_str(json).unwrap();
+        let config = parse_config(json);
         assert!(matches!(
             config.services.get("db").unwrap(),
             ServiceConfig::Image(_)
@@ -270,7 +416,7 @@ mod tests {
             }
         }"#;
 
-        let config: LifecycleConfig = serde_json::from_str(json).unwrap();
+        let config = parse_config(json);
         assert_eq!(config.services.len(), 2);
         assert_eq!(config.setup.services, Some(vec!["db".to_string()]));
         assert_eq!(config.setup.steps[0].run_on.as_deref(), Some("start"));
@@ -301,7 +447,7 @@ mod tests {
             }
         }"#;
 
-        let config: LifecycleConfig = serde_json::from_str(json).unwrap();
+        let config = parse_config(json);
         let service = config
             .services
             .get("postgres")
@@ -348,7 +494,7 @@ mod tests {
             }
         }"#;
 
-        let config: LifecycleConfig = serde_json::from_str(json).unwrap();
+        let config = parse_config(json);
         let step = &config.setup.steps[0];
         assert_eq!(step.name, "write-env");
         assert!(step.command.is_none());
@@ -361,5 +507,61 @@ mod tests {
                 .map(|file| file.path.as_str()),
             Some("apps/api/.env.local")
         );
+    }
+
+    #[test]
+    fn rejects_managed_secrets_blocks() {
+        let error = parse_lifecycle_config(
+            r#"{
+                "setup": {
+                    "steps": [
+                        { "name": "install", "command": "bun install", "timeout_seconds": 60 }
+                    ]
+                },
+                "services": {
+                    "api": { "runtime": "process", "command": "bun run dev" }
+                },
+                "secrets": {
+                    "API_KEY": { "ref": "org/key", "required": true }
+                }
+            }"#,
+        )
+        .expect_err("managed secrets should be rejected");
+
+        assert!(matches!(
+            error,
+            LifecycleError::ManifestInvalid(message)
+            if message.contains("secrets: managed secrets are not supported")
+        ));
+    }
+
+    #[test]
+    fn rejects_secret_template_references() {
+        let error = parse_lifecycle_config(
+            r#"{
+                "setup": {
+                    "steps": [
+                        { "name": "install", "command": "bun install", "timeout_seconds": 60 }
+                    ]
+                },
+                "services": {
+                    "api": {
+                        "runtime": "process",
+                        "command": "bun run dev",
+                        "env_vars": {
+                            "API_KEY": "${secrets.API_KEY}"
+                        }
+                    }
+                }
+            }"#,
+        )
+        .expect_err("secret templates should be rejected");
+
+        assert!(matches!(
+            error,
+            LifecycleError::ManifestInvalid(message)
+            if message.contains("services.api.env_vars.API_KEY")
+                && message.contains("`${secrets.*}` is not supported")
+        ));
     }
 }

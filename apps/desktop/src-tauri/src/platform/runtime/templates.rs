@@ -65,13 +65,13 @@ mod tests {
         let env = HashMap::new();
 
         let rendered = expand_reserved_runtime_templates(
-            "${secrets.API_KEY}",
+            "${EXTERNAL_API_KEY}",
             &env,
             "services.api.env_vars.API_KEY",
         )
         .expect("non-runtime templates are preserved");
 
-        assert_eq!(rendered, "${secrets.API_KEY}");
+        assert_eq!(rendered, "${EXTERNAL_API_KEY}");
     }
 
     #[test]

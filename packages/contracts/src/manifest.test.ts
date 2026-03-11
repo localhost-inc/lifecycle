@@ -7,11 +7,19 @@ const VALID_CONFIG = `{
     "services": ["postgres"],
     "steps": [
       { "name": "install", "command": "bun install --frozen-lockfile", "timeout_seconds": 300 },
+      {
+        "name": "write-api-env",
+        "write_files": [{
+          "path": "apps/api/.env.local",
+          "lines": [
+            "DATABASE_URL=postgres://app:app@127.0.0.1:\${LIFECYCLE_SERVICE_POSTGRES_PORT}/app",
+          ],
+        }],
+        "timeout_seconds": 10,
+        "run_on": "start",
+      },
       { "name": "migrate", "command": "bun run db:migrate", "timeout_seconds": 120, "run_on": "start" },
     ],
-  },
-  "secrets": {
-    "POSTGRES_PASSWORD": { "ref": "acme/dev/postgres_password", "required": true },
   },
   "services": {
     "postgres": {
@@ -21,7 +29,7 @@ const VALID_CONFIG = `{
       "health_check": { "kind": "tcp", "host": "127.0.0.1", "port": 5432, "timeout_seconds": 45 },
       "env_vars": {
         "POSTGRES_USER": "app",
-        "POSTGRES_PASSWORD": "\${secrets.POSTGRES_PASSWORD}",
+        "POSTGRES_PASSWORD": "app",
       },
     },
     "api": {
@@ -53,13 +61,13 @@ describe("parseManifest", () => {
     expect(result.valid).toBe(true);
     if (!result.valid) return;
     expect(result.config.setup.services).toEqual(["postgres"]);
-    expect(result.config.setup.steps).toHaveLength(2);
+    expect(result.config.setup.steps).toHaveLength(3);
     expect(result.config.setup.steps[0]!.name).toBe("install");
     expect(result.config.setup.steps[1]!.run_on).toBe("start");
+    expect(result.config.setup.steps[1]!.write_files?.[0]?.path).toBe("apps/api/.env.local");
     expect(Object.keys(result.config.services)).toEqual(["postgres", "api"]);
     expect(result.config.services["postgres"]!.runtime).toBe("image");
     expect(result.config.services["api"]!.runtime).toBe("process");
-    expect(result.config.secrets?.["POSTGRES_PASSWORD"]?.required).toBe(true);
     expect(result.config.mcps?.["notion"]?.transport).toBe("stdio");
   });
 
@@ -230,15 +238,43 @@ describe("parseManifest", () => {
     expect(result.config.services["postgres"]!.volumes).toHaveLength(2);
   });
 
-  test("validates secret schema", () => {
+  test("rejects managed secrets blocks", () => {
     const result = parseManifest(`{
       "setup": { "steps": [{ "name": "a", "command": "b", "timeout_seconds": 10 }] },
       "services": { "api": { "runtime": "process", "command": "run" } },
       "secrets": { "KEY": { "ref": "org/key", "required": true } }
     }`);
-    expect(result.valid).toBe(true);
-    if (!result.valid) return;
-    expect(result.config.secrets?.["KEY"]?.ref).toBe("org/key");
+    expect(result.valid).toBe(false);
+    if (result.valid) return;
+    expect(result.errors).toEqual([
+      {
+        path: "secrets",
+        message:
+          "Managed secrets are not supported in local lifecycle.json yet. Materialize local env files in setup instead.",
+      },
+    ]);
+  });
+
+  test("rejects `${secrets.*}` references in manifest strings", () => {
+    const result = parseManifest(`{
+      "setup": { "steps": [{ "name": "a", "command": "b", "timeout_seconds": 10 }] },
+      "services": {
+        "api": {
+          "runtime": "process",
+          "command": "run",
+          "env_vars": { "API_KEY": "\${secrets.API_KEY}" }
+        }
+      }
+    }`);
+    expect(result.valid).toBe(false);
+    if (result.valid) return;
+    expect(result.errors).toEqual([
+      {
+        path: "services.api.env_vars.API_KEY",
+        message:
+          "`${secrets.*}` is not supported in local lifecycle.json. Materialize local env files in setup instead.",
+      },
+    ]);
   });
 
   test("validates optional reset field", () => {

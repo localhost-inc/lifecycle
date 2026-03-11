@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { parse as parseJsonc, ParseError } from "jsonc-parser";
 
+const UNSUPPORTED_SECRETS_MESSAGE =
+  "Managed secrets are not supported in local lifecycle.json yet. Materialize local env files in setup instead.";
+
+const UNSUPPORTED_SECRET_TEMPLATE_MESSAGE =
+  "`${secrets.*}` is not supported in local lifecycle.json. Materialize local env files in setup instead.";
+
 const SetupWriteFileSchema = z.object({
   path: z.string(),
   content: z.string().optional(),
@@ -104,11 +110,6 @@ const ImageServiceSchema = z.object({
 
 const ServiceSchema = z.discriminatedUnion("runtime", [ProcessServiceSchema, ImageServiceSchema]);
 
-const SecretSchema = z.object({
-  ref: z.string(),
-  required: z.boolean(),
-});
-
 const McpServerSchema = z.object({
   command: z.string(),
   args: z.array(z.string()).optional(),
@@ -125,7 +126,6 @@ const ResetSchema = z.object({
 export const LifecycleConfigSchema = z.object({
   setup: SetupSchema,
   services: z.record(z.string(), ServiceSchema),
-  secrets: z.record(z.string(), SecretSchema).optional(),
   reset: ResetSchema.optional(),
   mcps: z.record(z.string(), McpServerSchema).optional(),
 });
@@ -140,6 +140,50 @@ export interface FieldError {
 export type ManifestParseResult =
   | { valid: true; config: LifecycleConfig }
   | { valid: false; errors: FieldError[] };
+
+function collectUnsupportedSecretErrors(
+  value: unknown,
+  path: Array<string | number> = [],
+): FieldError[] {
+  const errors: FieldError[] = [];
+
+  if (typeof value === "string") {
+    if (value.includes("${secrets.")) {
+      errors.push({
+        path: path.join("."),
+        message: UNSUPPORTED_SECRET_TEMPLATE_MESSAGE,
+      });
+    }
+    return errors;
+  }
+
+  if (!value || typeof value !== "object") {
+    return errors;
+  }
+
+  if (!Array.isArray(value) && path.length === 0 && Object.hasOwn(value, "secrets")) {
+    errors.push({
+      path: "secrets",
+      message: UNSUPPORTED_SECRETS_MESSAGE,
+    });
+  }
+
+  if (Array.isArray(value)) {
+    for (const [index, entry] of value.entries()) {
+      errors.push(...collectUnsupportedSecretErrors(entry, [...path, index]));
+    }
+    return errors;
+  }
+
+  for (const [key, entry] of Object.entries(value)) {
+    if (path.length === 0 && key === "secrets") {
+      continue;
+    }
+    errors.push(...collectUnsupportedSecretErrors(entry, [...path, key]));
+  }
+
+  return errors;
+}
 
 export function parseManifest(text: string): ManifestParseResult {
   const parseErrors: ParseError[] = [];
@@ -162,6 +206,14 @@ export function parseManifest(text: string): ManifestParseResult {
     return {
       valid: false,
       errors: [{ path: "", message: "Empty or null configuration" }],
+    };
+  }
+
+  const unsupportedSecretErrors = collectUnsupportedSecretErrors(parsed);
+  if (unsupportedSecretErrors.length > 0) {
+    return {
+      valid: false,
+      errors: unsupportedSecretErrors,
     };
   }
 

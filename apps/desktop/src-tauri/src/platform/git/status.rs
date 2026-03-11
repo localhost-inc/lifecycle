@@ -854,6 +854,19 @@ pub async fn get_git_scope_patch(repo_path: &str, scope: &str) -> Result<String,
     Ok(patch)
 }
 
+pub async fn get_git_ref_diff_patch(
+    repo_path: &str,
+    base_ref: &str,
+    head_ref: &str,
+) -> Result<String, LifecycleError> {
+    let range = format!("{}...{}", base_ref, head_ref);
+    let args = vec!["diff", "--find-renames", "--find-copies", "--binary", &range];
+    Ok(
+        String::from_utf8_lossy(&git_output(repo_path, "read git ref diff patch", &args).await?)
+            .into_owned(),
+    )
+}
+
 pub async fn get_git_log(repo_path: &str, limit: u32) -> Result<Vec<GitLogEntry>, LifecycleError> {
     let limit_string = limit.to_string();
     let output = git_output(

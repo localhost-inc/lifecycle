@@ -1,4 +1,6 @@
-use crate::capabilities::workspaces::manifest::{LifecycleConfig, ServiceConfig};
+use crate::capabilities::workspaces::manifest::{
+    parse_lifecycle_config, LifecycleConfig, ServiceConfig,
+};
 use crate::platform::db::{open_db, DbPath};
 use crate::platform::runtime::{health, setup, supervisor};
 use crate::shared::errors::{
@@ -783,8 +785,7 @@ pub async fn start_services(
     manifest_json: String,
     manifest_fingerprint: String,
 ) -> Result<(), LifecycleError> {
-    let config: LifecycleConfig = serde_json::from_str(&manifest_json)
-        .map_err(|e| LifecycleError::ManifestInvalid(e.to_string()))?;
+    let config = parse_lifecycle_config(&manifest_json)?;
 
     // Read workspace row — validate worktree_path is set.
     let worktree_path = {
@@ -843,10 +844,7 @@ pub async fn sync_workspace_manifest(
 ) -> Result<(), LifecycleError> {
     let config = manifest_json
         .as_deref()
-        .map(|json| {
-            serde_json::from_str::<LifecycleConfig>(json)
-                .map_err(|error| LifecycleError::ManifestInvalid(error.to_string()))
-        })
+        .map(parse_lifecycle_config)
         .transpose()?;
 
     let conn = open_db(db_path)?;

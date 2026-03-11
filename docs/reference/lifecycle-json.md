@@ -11,7 +11,7 @@ Canonical specification for the `lifecycle.json` project environment configurati
    - target environment direction beyond this V1 split is captured in [workspace-environment-graph.md](./workspace-environment-graph.md)
 2. Required top-level fields:
    - `setup`, `services`
-   - optional: `secrets`, `reset`, `mcps`
+   - optional: `reset`, `mcps`
    - dropped from wedge: `repository` block (VCS identity is on the `repository` table, not in config), `workspace` block (`idle_timeout_minutes` is now org-level policy)
 
 ## `setup` Contract
@@ -20,7 +20,7 @@ Canonical specification for the `lifecycle.json` project environment configurati
 - List of deterministic steps (`name`, `timeout_seconds`, optional `cwd`, optional `env_vars`, optional `run_on`)
 - Each setup step must define exactly one action:
   - `command`: run a shell command
-  - `write_files`: materialize one or more non-secret files into the workspace
+  - `write_files`: materialize one or more workspace-local files into the workspace
 - Each `write_files` entry must define:
   - `path`
   - exactly one of `content` or `lines`
@@ -30,7 +30,7 @@ Canonical specification for the `lifecycle.json` project environment configurati
 - Examples: dependency install, schema/bootstrap, fixture preload
 - Host-mode apps should prefer direct `env_vars` wiring from reserved `LIFECYCLE_SERVICE_*` values.
 - If a toolchain requires `.env.local` or similar files, materialize them with `setup.steps[].write_files` instead of repo-local helper scripts.
-- Setup must not write plaintext secrets to disk (for example `.env` copies with real values)
+- Local developer secrets remain outside `lifecycle.json`; use setup to copy or materialize developer-managed env files when needed, but do not check secret values into the manifest itself.
 - Lifecycle injects reserved discovery env vars into setup steps and process services:
   - `LIFECYCLE_WORKSPACE_ID`, `LIFECYCLE_WORKSPACE_NAME`, `LIFECYCLE_WORKSPACE_SOURCE_REF`, `LIFECYCLE_WORKSPACE_PATH`, `LIFECYCLE_WORKSPACE_SLUG`
   - `LIFECYCLE_SERVICE_<SERVICE_NAME>_HOST`, `..._PORT`, and `..._ADDRESS` for every declared service with an assigned local port
@@ -60,14 +60,6 @@ Canonical specification for the `lifecycle.json` project environment configurati
 - Optional per-service `health_check` object with readiness criteria via `kind` (`tcp` or `http`)
 - Workspace transitions to `active` only after all defined service health checks pass
 
-## `secrets` Contract
-
-- Optional: declarative mapping from logical keys to managed secret references
-- Each key maps to `{ "ref": "<scope>/<name>", "required": true|false }`
-- No `provider` field — only one provider exists (`lifecycle`); extend schema when a second provider ships
-- Secret values are resolved server-side at runtime and injected into process environment only
-- Secret values must never be persisted to repository files, logs, or workspace metadata
-
 ## `reset` Options
 
 - Optional: `reseed` (rerun deterministic seed commands) or `snapshot` (restore from captured baseline)
@@ -77,7 +69,7 @@ Canonical specification for the `lifecycle.json` project environment configurati
 - Optional: named MCP server declarations with `command`, `args`, `transport` (`stdio` or `sse`), and `env_vars`
 - MCP dependencies are installed during workspace `setup` and cached in R2
 - At terminal start (when harness is set), Lifecycle generates the harness-native MCP config (e.g., `.claude/settings.json`) from these declarations
-- MCP secrets use the same `${secrets.*}` resolution as services
+- MCP credentials are a local environment concern in V1; materialize local env files during setup instead of using managed secret references in the manifest
 
 ## Execution Portability
 
@@ -85,7 +77,7 @@ Canonical specification for the `lifecycle.json` project environment configurati
 - `process` runtime: portable (child process in any provider)
 - `image` runtime: requires Docker-compatible image execution (cloud: DinD in sandbox, local: Docker Desktop)
 - `image.build` and `image.volumes` are part of the local-first contract because real projects often need custom images and persistent state, not just public registry pulls
-- Secrets: resolved via control plane for both providers. Cloud: server-side injection. Local: fetched via CLI auth, injected as env vars.
+- Managed secret resolution is out of scope for the local V1 environment. Local secret handling remains developer-managed through env files and setup steps. A future cloud provider may add first-class secret injection.
 - Privileged Docker assumptions are out of scope for the V1 cloud environment
 - Service networking contract is localhost/port readiness, not custom bridge/iptables authoring
 
@@ -119,13 +111,6 @@ Canonical specification for the `lifecycle.json` project environment configurati
     ],
   },
 
-  // Managed secrets (resolved server-side, injected as env vars)
-  "secrets": {
-    "POSTGRES_PASSWORD": { "ref": "acme/dev/postgres_password", "required": true },
-    "REDIS_PASSWORD": { "ref": "acme/dev/redis_password", "required": true },
-    "NOTION_API_KEY": { "ref": "acme/dev/notion_api_key", "required": false },
-  },
-
   // Long-running services
   "services": {
     "postgres": {
@@ -139,7 +124,7 @@ Canonical specification for the `lifecycle.json` project environment configurati
       "health_check": { "kind": "tcp", "host": "127.0.0.1", "port": 5432, "timeout_seconds": 45 },
       "env_vars": {
         "POSTGRES_USER": "app",
-        "POSTGRES_PASSWORD": "${secrets.POSTGRES_PASSWORD}",
+        "POSTGRES_PASSWORD": "app",
         "POSTGRES_DB": "app",
       },
     },
@@ -147,7 +132,7 @@ Canonical specification for the `lifecycle.json` project environment configurati
       "runtime": "image",
       "image": "redis:7-alpine",
       "command": "redis-server",
-      "args": ["--save", "", "--appendonly", "no", "--requirepass", "${secrets.REDIS_PASSWORD}"],
+      "args": ["--save", "", "--appendonly", "no"],
       "startup_timeout_seconds": 30,
       "health_check": { "kind": "tcp", "host": "127.0.0.1", "port": 6379, "timeout_seconds": 30 },
     },
@@ -164,8 +149,8 @@ Canonical specification for the `lifecycle.json` project environment configurati
         "timeout_seconds": 45,
       },
       "env_vars": {
-        "DATABASE_URL": "postgres://app:${secrets.POSTGRES_PASSWORD}@127.0.0.1:5432/app",
-        "REDIS_URL": "redis://:${secrets.REDIS_PASSWORD}@127.0.0.1:6379",
+        "DATABASE_URL": "postgres://app:app@127.0.0.1:${LIFECYCLE_SERVICE_POSTGRES_PORT}/app",
+        "REDIS_URL": "redis://127.0.0.1:${LIFECYCLE_SERVICE_REDIS_PORT}",
         "WEBHOOK_BASE_URL": "http://${LIFECYCLE_WORKSPACE_SLUG}.local",
       },
     },
@@ -187,18 +172,15 @@ Canonical specification for the `lifecycle.json` project environment configurati
     "notion": {
       "command": "npx",
       "args": ["-y", "@notionhq/notion-mcp-server"],
-      "transport": "stdio",
-      "env_vars": {
-        "NOTION_API_KEY": "${secrets.NOTION_API_KEY}",
-      },
-    },
-  },
+      "transport": "stdio"
+    }
+  }
 }
 ```
 
 ## Validation Rules
 
 - `lifecycle.json` must pass JSON Schema validation before workspace creation
-- When `secrets` is present, all `${secrets.*}` references must resolve to declared secret keys and authorized organization scopes
-- Unresolved or unauthorized secret references fail workspace creation before process startup
+- Top-level `secrets` declarations are not supported in the local V1 contract
+- `${secrets.*}` references are not supported in local manifests; use setup to materialize local env files instead
 - Unsupported runtime/tooling versions are rejected with explicit field-level errors

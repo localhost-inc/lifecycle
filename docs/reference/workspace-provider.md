@@ -23,7 +23,7 @@ In V1, the environment is represented on the workspace record rather than as a s
 ```typescript
 interface WorkspaceProvider {
   createWorkspace(input) → { workspace, worktree_path }
-  startServices(manifest.services, env, secrets) → service_statuses
+  startServices(manifest.services, env) → service_statuses
   healthCheck(manifest.services[].health_check) → pass/fail per service
   stopServices(service_names[]) → void
   runSetup(workspace_id) → void

@@ -7,7 +7,12 @@ import { formatRelativeTime } from "../../../lib/format";
 import { GithubAvatar } from "./github-avatar";
 import { getGitChangesPatch, getGitCommitPatch, openWorkspaceFile } from "../api";
 import { useGitStatus } from "../hooks";
+import {
+  DEFAULT_GIT_DIFF_STYLE,
+  type GitDiffStyle,
+} from "../lib/diff-style";
 import { buildPatchRenderCacheKey } from "../lib/diff-virtualization";
+import { DiffStyleToggle } from "./diff-style-toggle";
 import { DiffRenderProvider } from "./diff-render-provider";
 import { MultiFileDiffLayout } from "./multi-file-diff-layout";
 
@@ -89,6 +94,7 @@ export function buildChangesPatchReloadKey(
 
 export function GitDiffSurface({ source, workspaceId }: GitDiffSurfaceProps) {
   const { resolvedAppearance, resolvedTheme } = useTheme();
+  const [diffStyle, setDiffStyle] = useState<GitDiffStyle>(DEFAULT_GIT_DIFF_STYLE);
   const [patch, setPatch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -177,8 +183,10 @@ export function GitDiffSurface({ source, workspaceId }: GitDiffSurfaceProps) {
     });
   };
 
+  const diffControlsDisabled = isLoading || error !== null || patch.length === 0;
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--background)]">
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--background)]">
       {header(source)}
 
       <DiffRenderProvider theme={diffTheme(resolvedTheme)}>
@@ -195,11 +203,12 @@ export function GitDiffSurface({ source, workspaceId }: GitDiffSurfaceProps) {
             No diff to display.
           </div>
         ) : parsedFiles === null || parsedFiles.length === 0 ? (
-          <div className="min-h-0 flex-1 overflow-auto">
+          <div className="min-h-0 flex-1 overflow-auto pb-24">
             <PatchDiff
               patch={patch}
               options={{
                 disableFileHeader: true,
+                diffStyle,
                 theme: diffTheme(resolvedTheme),
                 themeType: resolvedAppearance,
               }}
@@ -207,6 +216,7 @@ export function GitDiffSurface({ source, workspaceId }: GitDiffSurfaceProps) {
           </div>
         ) : (
           <MultiFileDiffLayout
+            diffStyle={diffStyle}
             files={parsedFiles}
             initialFilePath={focusPath}
             onOpenFile={handleOpenFile}
@@ -215,6 +225,11 @@ export function GitDiffSurface({ source, workspaceId }: GitDiffSurfaceProps) {
           />
         )}
       </DiffRenderProvider>
+      <DiffStyleToggle
+        diffStyle={diffStyle}
+        disabled={diffControlsDisabled}
+        onChange={setDiffStyle}
+      />
     </div>
   );
 }

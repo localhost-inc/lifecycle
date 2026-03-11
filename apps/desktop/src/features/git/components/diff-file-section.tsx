@@ -2,10 +2,12 @@ import { memo, useCallback, useEffect, useRef } from "react";
 import { FileDiff, type FileDiffMetadata } from "@pierre/diffs/react";
 import { GitFileHeader } from "./git-file-header";
 import { getOpenableDiffFilePath } from "./git-diff-file-block";
+import type { GitDiffStyle } from "../lib/diff-style";
 import { estimateDiffBodyHeight } from "../lib/diff-virtualization";
 
 interface DiffFileSectionProps {
   collapsed: boolean;
+  diffStyle: GitDiffStyle;
   fileDiff: FileDiffMetadata;
   onHeightChange?: ((path: string, height: number) => void) | null;
   onOpenFile?: ((filePath: string) => void) | null;
@@ -16,6 +18,7 @@ interface DiffFileSectionProps {
 
 function DiffFileSectionComponent({
   collapsed,
+  diffStyle,
   fileDiff,
   onHeightChange,
   onOpenFile,
@@ -85,6 +88,7 @@ function DiffFileSectionComponent({
             fileDiff={fileDiff}
             options={{
               disableFileHeader: true,
+              diffStyle,
               theme,
               themeType,
             }}

@@ -55,6 +55,11 @@ describe("GitDiffSurface", () => {
     expect(markup).not.toContain("Working");
     expect(markup).not.toContain("Staged");
     expect(markup).not.toContain("Branch");
+    expect(markup).toContain("Diff view mode");
+    expect(markup).toContain("Split");
+    expect(markup).toContain("Unified");
+    expect(markup).toContain("backdrop-blur-xl");
+    expect(markup).toContain('aria-pressed="true"');
   });
 
   test("renders commit metadata through the shared surface", () => {

@@ -1,29 +1,29 @@
 import type {
   GitBranchPullRequestResult,
-  GitPullRequestCheckStatus,
+  GitPullRequestCheckSummary,
   GitPullRequestDetailResult,
-  GitPullRequestMergeable,
-  GitPullRequestState,
   GitPullRequestSummary,
 } from "@lifecycle/contracts";
-import {
-  Alert,
-  AlertDescription,
-  Button,
-  EmptyState,
-  StatusDot,
-  type StatusDotTone,
-} from "@lifecycle/ui";
-import { useMemo } from "react";
+import { Alert, AlertDescription, Badge, Button, diffTheme, useTheme } from "@lifecycle/ui";
+import { parsePatchFiles } from "@pierre/diffs";
+import { PatchDiff } from "@pierre/diffs/react";
+import { useEffect, useMemo, useState } from "react";
 import { formatRelativeTime } from "../../../lib/format";
+import { getGitRefDiffPatch, openWorkspaceFile } from "../api";
 import { useCurrentGitPullRequest, useGitPullRequest, useGitPullRequests } from "../hooks";
+import { DEFAULT_GIT_DIFF_STYLE, type GitDiffStyle } from "../lib/diff-style";
+import { buildPatchRenderCacheKey } from "../lib/diff-virtualization";
+import { DiffStyleToggle } from "./diff-style-toggle";
+import { DiffRenderProvider } from "./diff-render-provider";
+import { GithubAvatar } from "./github-avatar";
+import { MultiFileDiffLayout } from "./multi-file-diff-layout";
 
 interface PullRequestSurfaceProps {
   pullRequest: GitPullRequestSummary;
   workspaceId: string;
 }
 
-interface ResolvePullRequestSurfaceStateInput {
+export interface ResolvePullRequestSurfaceStateInput {
   currentLoading: boolean;
   currentPullRequestResult: GitBranchPullRequestResult | undefined;
   detailLoading: boolean;
@@ -34,129 +34,47 @@ interface ResolvePullRequestSurfaceStateInput {
   snapshot: GitPullRequestSummary;
 }
 
-interface PullRequestSurfaceState {
+export interface PullRequestSurfaceState {
   currentBranchPullRequestNumber: number | null;
   pullRequest: GitPullRequestSummary;
   snapshotMessage: string | null;
 }
 
-type SurfaceTone = "danger" | "muted" | "success" | "warning";
+function CheckDots({ checks }: { checks: GitPullRequestCheckSummary[] | null }) {
+  if (!checks?.length) return null;
 
-function checkTone(status: GitPullRequestCheckStatus): StatusDotTone {
-  switch (status) {
-    case "success":
-      return "success";
-    case "failed":
-      return "danger";
-    case "pending":
-      return "warning";
-    default:
-      return "neutral";
-  }
-}
-
-function checkLabel(status: GitPullRequestCheckStatus): string {
-  switch (status) {
-    case "success":
-      return "Passing";
-    case "failed":
-      return "Failing";
-    case "pending":
-      return "Running";
-    default:
-      return "Neutral";
-  }
-}
-
-function toneClassName(tone: SurfaceTone): string {
-  switch (tone) {
-    case "success":
-      return "border-[color-mix(in_srgb,var(--git-status-added)_35%,transparent)] text-[var(--git-status-added)]";
-    case "warning":
-      return "border-[color-mix(in_srgb,var(--git-status-modified)_35%,transparent)] text-[var(--git-status-modified)]";
-    case "danger":
-      return "border-[color-mix(in_srgb,var(--destructive)_35%,transparent)] text-[var(--destructive)]";
-    default:
-      return "border-[var(--border)] text-[var(--muted-foreground)]";
-  }
-}
-
-function stateLabel(state: GitPullRequestState): string {
-  switch (state) {
-    case "merged":
-      return "Merged";
-    case "closed":
-      return "Closed";
-    default:
-      return "Open";
-  }
-}
-
-function stateTone(state: GitPullRequestState): SurfaceTone {
-  switch (state) {
-    case "merged":
-      return "success";
-    case "closed":
-      return "muted";
-    default:
-      return "warning";
-  }
-}
-
-function mergeableLabel(mergeable: GitPullRequestMergeable): string {
-  switch (mergeable) {
-    case "mergeable":
-      return "Mergeable";
-    case "conflicting":
-      return "Conflicting";
-    default:
-      return "Mergeability unknown";
-  }
-}
-
-function mergeableTone(mergeable: GitPullRequestMergeable): SurfaceTone {
-  switch (mergeable) {
-    case "mergeable":
-      return "success";
-    case "conflicting":
-      return "danger";
-    default:
-      return "muted";
-  }
-}
-
-function reviewDecisionLabel(reviewDecision: GitPullRequestSummary["reviewDecision"]): string {
-  return reviewDecision ? reviewDecision.replaceAll("_", " ") : "No decision";
-}
-
-function checksSummary(checks: GitPullRequestSummary["checks"]): string {
-  if (!checks || checks.length === 0) {
-    return "No provider check data is available for this pull request yet.";
-  }
-
-  const counts = {
-    failed: 0,
-    neutral: 0,
-    pending: 0,
-    success: 0,
+  const colors: Record<string, string> = {
+    success: "var(--git-status-added)",
+    failed: "var(--destructive)",
+    pending: "var(--git-status-modified)",
+    neutral: "var(--muted-foreground)",
   };
 
-  for (const check of checks) {
-    counts[check.status] += 1;
-  }
+  const passing = checks.filter((c) => c.status === "success").length;
+  const visible = checks.slice(0, 5);
+  const overflow = checks.length - visible.length;
 
-  const parts = [
-    counts.success > 0 ? `${counts.success} passing` : null,
-    counts.pending > 0 ? `${counts.pending} running` : null,
-    counts.failed > 0 ? `${counts.failed} failing` : null,
-    counts.neutral > 0 ? `${counts.neutral} neutral` : null,
-  ].filter((value): value is string => value !== null);
-
-  return parts.length > 0 ? parts.join(" · ") : `${checks.length} checks reported`;
-}
-
-function checkActionLabel(detailsUrl: string | null, status: GitPullRequestCheckStatus): string {
-  return detailsUrl ? "Open" : checkLabel(status);
+  return (
+    <span
+      className="inline-flex items-center gap-0.5"
+      title={`${passing}/${checks.length} checks passing`}
+    >
+      {visible.map((check) => (
+        <span
+          key={check.name}
+          className="text-[8px] leading-none"
+          style={{ color: colors[check.status] ?? colors.neutral }}
+        >
+          ●
+        </span>
+      ))}
+      {overflow > 0 && (
+        <span className="text-[9px] leading-none text-[var(--muted-foreground)]">
+          +{overflow}
+        </span>
+      )}
+    </span>
+  );
 }
 
 function liveSnapshotMessage(
@@ -215,33 +133,12 @@ export function resolvePullRequestSurfaceState({
   };
 }
 
-function FactCell({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-[var(--panel)] px-4 py-3">
-      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)]">
-        {label}
-      </p>
-      <p className="mt-1.5 text-sm text-[var(--foreground)]">{value}</p>
-    </div>
-  );
-}
-
-function SurfaceChip({ label, tone }: { label: string; tone: SurfaceTone }) {
-  return (
-    <span
-      className={`inline-flex items-center border px-2 py-1 text-[11px] font-medium uppercase tracking-[0.08em] ${toneClassName(
-        tone,
-      )}`}
-    >
-      {label}
-    </span>
-  );
-}
-
 export function PullRequestSurface({
   pullRequest: snapshot,
   workspaceId,
 }: PullRequestSurfaceProps) {
+  const { resolvedAppearance, resolvedTheme } = useTheme();
+  const [diffStyle, setDiffStyle] = useState<GitDiffStyle>(DEFAULT_GIT_DIFF_STYLE);
   const pullRequestsQuery = useGitPullRequests(workspaceId);
   const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId);
   const detailPullRequestQuery = useGitPullRequest(workspaceId, snapshot.number);
@@ -271,23 +168,134 @@ export function PullRequestSurface({
   const pullRequest = surfaceState.pullRequest;
   const currentBranchPullRequestNumber = surfaceState.currentBranchPullRequestNumber;
   const snapshotMessage = surfaceState.snapshotMessage;
-  const checks = pullRequest.checks ?? [];
+
+  const reviewText =
+    pullRequest.reviewDecision === "approved"
+      ? "Approved"
+      : pullRequest.reviewDecision === "changes_requested"
+        ? "Changes requested"
+        : null;
+
+  const reviewColor =
+    pullRequest.reviewDecision === "approved"
+      ? "var(--git-status-added)"
+      : pullRequest.reviewDecision === "changes_requested"
+        ? "var(--git-status-modified)"
+        : undefined;
+
+  const mergeText =
+    pullRequest.mergeable === "mergeable"
+      ? "Mergeable"
+      : pullRequest.mergeable === "conflicting"
+        ? "Conflicting"
+        : null;
+
+  const mergeColor =
+    pullRequest.mergeable === "mergeable"
+      ? "var(--git-status-added)"
+      : pullRequest.mergeable === "conflicting"
+        ? "var(--git-status-renamed)"
+        : undefined;
+
+  // -- Diff state --
+  const [patch, setPatch] = useState("");
+  const [diffError, setDiffError] = useState<string | null>(null);
+  const [isDiffLoading, setIsDiffLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPatch("");
+    setDiffError(null);
+    setIsDiffLoading(true);
+
+    void getGitRefDiffPatch(workspaceId, pullRequest.baseRefName, pullRequest.headRefName)
+      .then((result) => {
+        if (!cancelled) setPatch(result);
+      })
+      .catch((err) => {
+        if (!cancelled) setDiffError(String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setIsDiffLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pullRequest.number, pullRequest.baseRefName, pullRequest.headRefName, workspaceId]);
+
+  const parsedFiles = useMemo(() => {
+    if (!patch) return [];
+    const cacheKey = buildPatchRenderCacheKey(`pr-diff:${workspaceId}:${pullRequest.number}`, patch);
+    try {
+      return parsePatchFiles(patch, cacheKey).flatMap((p) => p.files);
+    } catch {
+      return null;
+    }
+  }, [patch, pullRequest.number, workspaceId]);
+
+  const handleOpenFile = (filePath: string) => {
+    void openWorkspaceFile(workspaceId, filePath).catch((err) => {
+      setDiffError(String(err));
+    });
+  };
+
+  const diffControlsDisabled = isDiffLoading || diffError !== null || patch.length === 0;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--background)]">
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--background)]">
       <header className="border-b border-[var(--border)] px-4 py-4">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
               Pull Request
             </p>
-            <h2 className="mt-2 text-xl font-semibold leading-snug text-[var(--foreground)]">
+            <h2 className="mt-2 text-base font-semibold leading-snug text-[var(--foreground)]">
               {pullRequest.title}
             </h2>
-            <p className="mt-2 text-sm text-[var(--muted-foreground)]">
-              #{pullRequest.number} opened by {pullRequest.author} · updated{" "}
-              {formatRelativeTime(pullRequest.updatedAt)}
-            </p>
+            <div className="mt-1.5 flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
+              <GithubAvatar
+                name={pullRequest.author}
+                email={`${pullRequest.author}@users.noreply.github.com`}
+                size="sm"
+              />
+              <span>
+                {pullRequest.author} · #{pullRequest.number} · updated{" "}
+                {formatRelativeTime(pullRequest.updatedAt)}
+              </span>
+            </div>
+            <div className="mt-1.5 flex items-center gap-1 text-xs text-[var(--muted-foreground)]">
+              <span className="font-mono text-[var(--foreground)]">{pullRequest.headRefName}</span>
+              <span>→</span>
+              <span className="font-mono text-[var(--foreground)]">{pullRequest.baseRefName}</span>
+              {mergeText && (
+                <>
+                  <span className="ml-1">·</span>
+                  <span className="shrink-0" style={{ color: mergeColor }}>
+                    {mergeText}
+                  </span>
+                </>
+              )}
+              {reviewText && (
+                <>
+                  <span>·</span>
+                  <span className="shrink-0" style={{ color: reviewColor }}>
+                    {reviewText}
+                  </span>
+                </>
+              )}
+              <CheckDots checks={pullRequest.checks} />
+              {pullRequest.isDraft && (
+                <Badge variant="muted" className="ml-1">
+                  Draft
+                </Badge>
+              )}
+              {currentBranchPullRequestNumber === pullRequest.number && (
+                <Badge variant="info" className="ml-0.5">
+                  Current Branch
+                </Badge>
+              )}
+            </div>
           </div>
           <Button
             className="rounded-none"
@@ -299,146 +307,53 @@ export function PullRequestSurface({
           </Button>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          <SurfaceChip label={stateLabel(pullRequest.state)} tone={stateTone(pullRequest.state)} />
-          <SurfaceChip
-            label={mergeableLabel(pullRequest.mergeable)}
-            tone={mergeableTone(pullRequest.mergeable)}
-          />
-          {pullRequest.isDraft ? <SurfaceChip label="Draft" tone="muted" /> : null}
-          {currentBranchPullRequestNumber === pullRequest.number ? (
-            <SurfaceChip label="Current Branch" tone="warning" />
-          ) : null}
-          {pullRequest.reviewDecision ? (
-            <SurfaceChip
-              label={reviewDecisionLabel(pullRequest.reviewDecision)}
-              tone={pullRequest.reviewDecision === "changes_requested" ? "danger" : "muted"}
-            />
-          ) : null}
-        </div>
+        {snapshotMessage ? (
+          <Alert className="mt-3 rounded-none">
+            <AlertDescription>{snapshotMessage}</AlertDescription>
+          </Alert>
+        ) : null}
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        <div className="flex flex-col gap-4">
-          {snapshotMessage ? (
-            <Alert className="rounded-none">
-              <AlertDescription>{snapshotMessage}</AlertDescription>
-            </Alert>
-          ) : null}
-
-          <section className="border border-[var(--border)] bg-[var(--card)]">
-            <div className="border-b border-[var(--border)] px-4 py-3">
-              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-                Overview
-              </p>
-              <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                Current branch mapping, review state, and merge readiness.
-              </p>
-            </div>
-            <div className="grid gap-px bg-[var(--border)] sm:grid-cols-2 xl:grid-cols-4">
-              <FactCell
-                label="Branches"
-                value={`${pullRequest.headRefName} → ${pullRequest.baseRefName}`}
-              />
-              <FactCell label="Merge status" value={pullRequest.mergeStateStatus ?? "Unknown"} />
-              <FactCell label="Review" value={reviewDecisionLabel(pullRequest.reviewDecision)} />
-              <FactCell
-                label="Workspace branch"
-                value={
-                  currentBranchPullRequestNumber === pullRequest.number
-                    ? "Checked out"
-                    : "Not checked out"
-                }
-              />
-              <FactCell label="Created" value={formatRelativeTime(pullRequest.createdAt)} />
-              <FactCell label="Updated" value={formatRelativeTime(pullRequest.updatedAt)} />
-              <FactCell label="Reported checks" value={String(checks.length)} />
-              <FactCell label="Checks summary" value={checksSummary(pullRequest.checks)} />
-            </div>
-          </section>
-
-          <section className="border border-[var(--border)] bg-[var(--card)]">
-            <div className="border-b border-[var(--border)] px-4 py-3">
-              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-                Check Runs
-              </p>
-              <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                {checksSummary(pullRequest.checks)}
-              </p>
-            </div>
-
-            {checks.length > 0 ? (
-              <div>
-                {checks.map((check, index) => {
-                  const interactive = Boolean(check.detailsUrl);
-                  const className = `flex w-full items-center justify-between gap-4 px-4 py-3 text-left text-sm transition-colors ${
-                    index > 0 ? "border-t border-[var(--border)]" : ""
-                  } ${
-                    interactive
-                      ? "hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
-                      : ""
-                  }`;
-
-                  const content = (
-                    <>
-                      <span className="flex min-w-0 items-start gap-3">
-                        <StatusDot
-                          pulse={check.status === "pending"}
-                          size="sm"
-                          tone={checkTone(check.status)}
-                        />
-                        <span className="min-w-0">
-                          <span className="block truncate text-sm text-[var(--foreground)]">
-                            {check.name}
-                          </span>
-                          <span className="mt-1 block text-xs text-[var(--muted-foreground)]">
-                            {check.workflowName ?? "Check run"}
-                          </span>
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--muted-foreground)]">
-                        {checkActionLabel(check.detailsUrl, check.status)}
-                      </span>
-                    </>
-                  );
-
-                  if (!interactive) {
-                    return (
-                      <div
-                        className={className}
-                        key={`${check.workflowName ?? "check"}:${check.name}`}
-                      >
-                        {content}
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <button
-                      className={className}
-                      key={`${check.workflowName ?? "check"}:${check.name}`}
-                      onClick={() => {
-                        window.open(check.detailsUrl!, "_blank", "noopener,noreferrer");
-                      }}
-                      type="button"
-                    >
-                      {content}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="px-4 py-10">
-                <EmptyState
-                  description="Check runs will appear here once the provider reports them for this pull request."
-                  size="sm"
-                  title="No checks available"
-                />
-              </div>
-            )}
-          </section>
-        </div>
-      </div>
+      <DiffRenderProvider theme={diffTheme(resolvedTheme)}>
+        {isDiffLoading && !patch ? (
+          <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
+            Loading diff...
+          </div>
+        ) : diffError ? (
+          <Alert className="m-5" variant="destructive">
+            <AlertDescription>Failed to load diff: {diffError}</AlertDescription>
+          </Alert>
+        ) : !patch ? (
+          <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
+            No diff to display.
+          </div>
+        ) : parsedFiles === null || parsedFiles.length === 0 ? (
+          <div className="min-h-0 flex-1 overflow-auto pb-24">
+            <PatchDiff
+              patch={patch}
+              options={{
+                disableFileHeader: true,
+                diffStyle,
+                theme: diffTheme(resolvedTheme),
+                themeType: resolvedAppearance,
+              }}
+            />
+          </div>
+        ) : (
+          <MultiFileDiffLayout
+            diffStyle={diffStyle}
+            files={parsedFiles}
+            onOpenFile={handleOpenFile}
+            theme={diffTheme(resolvedTheme)}
+            themeType={resolvedAppearance}
+          />
+        )}
+      </DiffRenderProvider>
+      <DiffStyleToggle
+        diffStyle={diffStyle}
+        disabled={diffControlsDisabled}
+        onChange={setDiffStyle}
+      />
     </div>
   );
 }

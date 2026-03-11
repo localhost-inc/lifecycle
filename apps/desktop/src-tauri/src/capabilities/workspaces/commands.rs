@@ -425,6 +425,16 @@ pub async fn get_workspace_git_base_ref(
 }
 
 #[tauri::command]
+pub async fn get_workspace_git_ref_diff_patch(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    base_ref: String,
+    head_ref: String,
+) -> Result<String, LifecycleError> {
+    super::git::get_workspace_git_ref_diff_patch(&db_path.0, workspace_id, base_ref, head_ref).await
+}
+
+#[tauri::command]
 pub async fn get_workspace_git_commit_patch(
     db_path: State<'_, DbPath>,
     workspace_id: String,
