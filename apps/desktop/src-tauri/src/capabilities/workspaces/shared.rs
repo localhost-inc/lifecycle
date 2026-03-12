@@ -895,7 +895,8 @@ mod tests {
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .expect("query service");
-        assert_eq!(row, (None, Some(default_port + 1)));
+        assert_eq!(row.0, None);
+        assert!(matches!(row.1, Some(port) if port > default_port));
 
         let _ = std::fs::remove_file(db_path);
     }

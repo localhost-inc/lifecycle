@@ -1,5 +1,7 @@
 use super::kind::is_root_workspace_kind;
+#[cfg(test)]
 use crate::platform::db::open_db;
+use crate::platform::db::run_blocking_db_read;
 use crate::platform::git::worktree;
 use crate::shared::errors::LifecycleError;
 use rusqlite::params;
@@ -66,6 +68,13 @@ pub struct TerminalRecord {
     pub ended_at: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WorkspaceSnapshotResult {
+    pub workspace: Option<WorkspaceRecord>,
+    pub services: Vec<ServiceRecord>,
+    pub terminals: Vec<TerminalRecord>,
+}
+
 fn map_terminal_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<TerminalRecord> {
     Ok(TerminalRecord {
         id: row.get(0)?,
@@ -121,11 +130,10 @@ fn sort_project_workspaces(workspaces: &mut [WorkspaceRecord]) {
     });
 }
 
-pub async fn get_workspace(
-    db_path: &str,
+fn get_workspace_sync(
+    conn: &rusqlite::Connection,
     project_id: String,
 ) -> Result<Option<WorkspaceRecord>, LifecycleError> {
-    let conn = open_db(db_path)?;
     let mut stmt = conn.prepare(
         "SELECT id, project_id, name, kind, source_ref, git_sha, worktree_path, mode, status, manifest_fingerprint, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at
          FROM workspace
@@ -143,11 +151,20 @@ pub async fn get_workspace(
     }
 }
 
-pub async fn get_workspace_by_id(
+pub async fn get_workspace(
     db_path: &str,
+    project_id: String,
+) -> Result<Option<WorkspaceRecord>, LifecycleError> {
+    run_blocking_db_read(db_path.to_string(), "workspace.get", move |conn| {
+        get_workspace_sync(conn, project_id)
+    })
+    .await
+}
+
+fn get_workspace_by_id_sync(
+    conn: &rusqlite::Connection,
     workspace_id: String,
 ) -> Result<Option<WorkspaceRecord>, LifecycleError> {
-    let conn = open_db(db_path)?;
     let mut stmt = conn.prepare(
         "SELECT id, project_id, name, kind, source_ref, git_sha, worktree_path, mode, status, manifest_fingerprint, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at
          FROM workspace
@@ -164,8 +181,19 @@ pub async fn get_workspace_by_id(
     }
 }
 
-pub async fn list_workspaces(db_path: &str) -> Result<Vec<WorkspaceRecord>, LifecycleError> {
-    let conn = open_db(db_path)?;
+pub async fn get_workspace_by_id(
+    db_path: &str,
+    workspace_id: String,
+) -> Result<Option<WorkspaceRecord>, LifecycleError> {
+    run_blocking_db_read(db_path.to_string(), "workspace.get_by_id", move |conn| {
+        get_workspace_by_id_sync(conn, workspace_id)
+    })
+    .await
+}
+
+fn list_workspaces_sync(
+    conn: &rusqlite::Connection,
+) -> Result<Vec<WorkspaceRecord>, LifecycleError> {
     let mut stmt = conn.prepare(
         "SELECT id, project_id, name, kind, source_ref, git_sha, worktree_path, mode, status, manifest_fingerprint, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at
          FROM workspace
@@ -183,10 +211,14 @@ pub async fn list_workspaces(db_path: &str) -> Result<Vec<WorkspaceRecord>, Life
     Ok(result)
 }
 
-pub async fn list_workspaces_by_project(
-    db_path: &str,
+pub async fn list_workspaces(db_path: &str) -> Result<Vec<WorkspaceRecord>, LifecycleError> {
+    run_blocking_db_read(db_path.to_string(), "workspace.list", list_workspaces_sync).await
+}
+
+fn list_workspaces_by_project_sync(
+    conn: &rusqlite::Connection,
 ) -> Result<HashMap<String, Vec<WorkspaceRecord>>, LifecycleError> {
-    let workspace_rows = list_workspaces(db_path).await?;
+    let workspace_rows = list_workspaces_sync(conn)?;
     let mut grouped: HashMap<String, Vec<WorkspaceRecord>> = HashMap::new();
 
     for workspace in workspace_rows {
@@ -203,11 +235,21 @@ pub async fn list_workspaces_by_project(
     Ok(grouped)
 }
 
-pub async fn get_workspace_services(
+pub async fn list_workspaces_by_project(
     db_path: &str,
+) -> Result<HashMap<String, Vec<WorkspaceRecord>>, LifecycleError> {
+    run_blocking_db_read(
+        db_path.to_string(),
+        "workspace.list_by_project",
+        list_workspaces_by_project_sync,
+    )
+    .await
+}
+
+fn get_workspace_services_sync(
+    conn: &rusqlite::Connection,
     workspace_id: String,
 ) -> Result<Vec<ServiceRecord>, LifecycleError> {
-    let conn = open_db(db_path)?;
     let mut stmt = conn.prepare(
         "SELECT id, workspace_id, service_name, exposure, port_override, status, status_reason, default_port, effective_port, preview_status, preview_failure_reason, preview_url, created_at, updated_at FROM workspace_service WHERE workspace_id = ?1 ORDER BY service_name"
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;
@@ -240,15 +282,49 @@ pub async fn get_workspace_services(
     Ok(result)
 }
 
+pub async fn get_workspace_services(
+    db_path: &str,
+    workspace_id: String,
+) -> Result<Vec<ServiceRecord>, LifecycleError> {
+    run_blocking_db_read(db_path.to_string(), "workspace.services", move |conn| {
+        get_workspace_services_sync(conn, workspace_id)
+    })
+    .await
+}
+
+fn get_workspace_snapshot_sync(
+    conn: &rusqlite::Connection,
+    workspace_id: String,
+) -> Result<WorkspaceSnapshotResult, LifecycleError> {
+    let workspace = get_workspace_by_id_sync(conn, workspace_id.clone())?;
+    let services = get_workspace_services_sync(conn, workspace_id.clone())?;
+    let terminals = list_workspace_terminals_sync(conn, workspace_id)?;
+
+    Ok(WorkspaceSnapshotResult {
+        workspace,
+        services,
+        terminals,
+    })
+}
+
+pub async fn get_workspace_snapshot(
+    db_path: &str,
+    workspace_id: String,
+) -> Result<WorkspaceSnapshotResult, LifecycleError> {
+    run_blocking_db_read(db_path.to_string(), "workspace.snapshot", move |conn| {
+        get_workspace_snapshot_sync(conn, workspace_id)
+    })
+    .await
+}
+
 pub async fn get_current_branch(project_path: String) -> Result<String, LifecycleError> {
     worktree::get_current_branch(&project_path).await
 }
 
-pub async fn list_workspace_terminals(
-    db_path: &str,
+fn list_workspace_terminals_sync(
+    conn: &rusqlite::Connection,
     workspace_id: String,
 ) -> Result<Vec<TerminalRecord>, LifecycleError> {
-    let conn = open_db(db_path)?;
     let mut stmt = conn
         .prepare(
             "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, created_by, label, label_origin, status, failure_reason, exit_code, started_at, last_active_at, ended_at
@@ -270,11 +346,20 @@ pub async fn list_workspace_terminals(
     Ok(result)
 }
 
-pub async fn get_terminal_by_id(
+pub async fn list_workspace_terminals(
     db_path: &str,
+    workspace_id: String,
+) -> Result<Vec<TerminalRecord>, LifecycleError> {
+    run_blocking_db_read(db_path.to_string(), "workspace.terminals", move |conn| {
+        list_workspace_terminals_sync(conn, workspace_id)
+    })
+    .await
+}
+
+fn get_terminal_by_id_sync(
+    conn: &rusqlite::Connection,
     terminal_id: String,
 ) -> Result<Option<TerminalRecord>, LifecycleError> {
-    let conn = open_db(db_path)?;
     let mut stmt = conn
         .prepare(
             "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, created_by, label, label_origin, status, failure_reason, exit_code, started_at, last_active_at, ended_at
@@ -290,6 +375,16 @@ pub async fn get_terminal_by_id(
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(error) => Err(LifecycleError::Database(error.to_string())),
     }
+}
+
+pub async fn get_terminal_by_id(
+    db_path: &str,
+    terminal_id: String,
+) -> Result<Option<TerminalRecord>, LifecycleError> {
+    run_blocking_db_read(db_path.to_string(), "terminal.get_by_id", move |conn| {
+        get_terminal_by_id_sync(conn, terminal_id)
+    })
+    .await
 }
 
 #[cfg(test)]
@@ -366,6 +461,75 @@ mod tests {
             ],
         )
         .expect("insert workspaces");
+    }
+
+    #[tokio::test]
+    async fn get_workspace_snapshot_returns_workspace_services_and_terminals() {
+        let db_path = temp_db_path();
+        run_migrations(&db_path).expect("run migrations");
+
+        let conn = open_db(&db_path).expect("open db");
+        conn.execute(
+            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["project_1", "/tmp/project_1", "Project 1"],
+        )
+        .expect("insert project");
+        conn.execute(
+            "INSERT INTO workspace (
+                id, project_id, name, kind, source_ref, worktree_path, mode, status
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            rusqlite::params![
+                "workspace_1",
+                "project_1",
+                "Workspace 1",
+                "managed",
+                "main",
+                "/tmp/project_1/worktree",
+                "local",
+                "active"
+            ],
+        )
+        .expect("insert workspace");
+        conn.execute(
+            "INSERT INTO workspace_service (
+                id, workspace_id, service_name, exposure, status, default_port, effective_port
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            rusqlite::params![
+                "service_1",
+                "workspace_1",
+                "web",
+                "local",
+                "ready",
+                3000_i64,
+                3000_i64
+            ],
+        )
+        .expect("insert service");
+        conn.execute(
+            "INSERT INTO terminal (id, workspace_id, label, status)
+             VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["terminal_1", "workspace_1", "Shell", "detached"],
+        )
+        .expect("insert terminal");
+        drop(conn);
+
+        let snapshot = get_workspace_snapshot(&db_path, "workspace_1".to_string())
+            .await
+            .expect("query workspace snapshot");
+
+        assert_eq!(
+            snapshot
+                .workspace
+                .as_ref()
+                .map(|workspace| workspace.id.as_str()),
+            Some("workspace_1")
+        );
+        assert_eq!(snapshot.services.len(), 1);
+        assert_eq!(snapshot.services[0].service_name, "web");
+        assert_eq!(snapshot.terminals.len(), 1);
+        assert_eq!(snapshot.terminals[0].id, "terminal_1");
+
+        let _ = std::fs::remove_file(db_path);
     }
 
     #[tokio::test]

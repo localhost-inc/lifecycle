@@ -1,0 +1,181 @@
+.markdown-file-renderer {
+  color: var(--foreground);
+  background: transparent;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.markdown-file-renderer > :first-child {
+  margin-top: 0;
+}
+
+.markdown-file-renderer > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-file-renderer a {
+  color: var(--git-status-renamed);
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
+}
+
+.markdown-file-renderer a:hover {
+  color: color-mix(in srgb, var(--git-status-renamed) 78%, var(--foreground) 22%);
+}
+
+.markdown-file-renderer p,
+.markdown-file-renderer ul,
+.markdown-file-renderer ol,
+.markdown-file-renderer blockquote,
+.markdown-file-renderer pre,
+.markdown-file-renderer table,
+.markdown-file-renderer hr {
+  margin: 0 0 1rem;
+}
+
+.markdown-file-renderer h1,
+.markdown-file-renderer h2,
+.markdown-file-renderer h3,
+.markdown-file-renderer h4,
+.markdown-file-renderer h5,
+.markdown-file-renderer h6 {
+  margin: 1.75rem 0 0.75rem;
+  color: var(--foreground);
+  font-family: var(--font-heading);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.markdown-file-renderer h1,
+.markdown-file-renderer h2 {
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+}
+
+.markdown-file-renderer h1 {
+  font-size: 1.75rem;
+}
+
+.markdown-file-renderer h2 {
+  font-size: 1.4rem;
+}
+
+.markdown-file-renderer h3 {
+  font-size: 1.15rem;
+}
+
+.markdown-file-renderer h4,
+.markdown-file-renderer h5,
+.markdown-file-renderer h6 {
+  font-size: 1rem;
+}
+
+.markdown-file-renderer ul,
+.markdown-file-renderer ol {
+  padding-left: 1.5rem;
+}
+
+.markdown-file-renderer li + li {
+  margin-top: 0.35rem;
+}
+
+.markdown-file-renderer li > p {
+  margin-bottom: 0.5rem;
+}
+
+.markdown-file-renderer input[type="checkbox"] {
+  margin-right: 0.55rem;
+  accent-color: var(--git-status-renamed);
+}
+
+.markdown-file-renderer blockquote {
+  padding: 0.1rem 0 0.1rem 1rem;
+  border-left: 3px solid color-mix(in srgb, var(--git-status-renamed) 24%, var(--border) 76%);
+  color: var(--muted-foreground);
+}
+
+.markdown-file-renderer hr {
+  height: 1px;
+  border: 0;
+  background: color-mix(in srgb, var(--border) 82%, transparent);
+}
+
+.markdown-file-renderer code,
+.markdown-file-renderer kbd,
+.markdown-file-renderer pre {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.markdown-file-renderer code,
+.markdown-file-renderer kbd {
+  padding: 0.16rem 0.42rem;
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+}
+
+.markdown-file-renderer pre {
+  overflow-x: auto;
+  padding: 1rem 1.1rem;
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--panel) 90%, transparent);
+  color: var(--foreground);
+}
+
+.markdown-file-renderer pre code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.markdown-file-renderer table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--panel) 80%, transparent);
+}
+
+.markdown-file-renderer thead {
+  background: color-mix(in srgb, var(--muted) 72%, transparent);
+}
+
+.markdown-file-renderer th,
+.markdown-file-renderer td {
+  padding: 0.7rem 0.9rem;
+  border-right: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown-file-renderer th:last-child,
+.markdown-file-renderer td:last-child {
+  border-right: 0;
+}
+
+.markdown-file-renderer tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.markdown-file-renderer img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 1rem;
+}
+
+.markdown-file-renderer strong {
+  color: var(--foreground);
+  font-weight: 650;
+}

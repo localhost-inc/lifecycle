@@ -21,6 +21,19 @@ Service level objectives, operational limits, and cold-start performance budgets
 - p95 service startup to healthy: <= 45 seconds (app-dependent, same as cloud)
 - desktop app responsiveness: p95 local state update <= 100ms, p95 Convex sync (when signed in) <= 3 seconds
 
+### Desktop Interaction Budgets
+
+- workspace route ready after selecting an already-known local workspace should stay under one human-perceived loading beat; measure this from route start to manifest-ready shell render in dev diagnostics
+- workspace route bootstrap should load the initial shell from a single workspace snapshot read model instead of fan-out reads for workspace, services, and terminals
+- opening heavy workspace documents (diff, pull request, file preview) should fetch and restore their panel without keeping sibling heavy panels mounted
+- expensive git polling should run only while the relevant surface is active and the desktop document is visible
+
+### Measurement Expectations
+
+- desktop webview timing spans should be dev/internal only and cover bootstrap, workspace-route ready, diff patch load, and other high-latency document fetches
+- local SQLite-backed read commands should run through a blocking boundary and log internal timing through the desktop diagnostics channel when dev diagnostics are enabled
+- local runtime diagnostics should record create, setup, service start, and health-check phase timings so local SLO work can be compared to real baselines
+
 ## Limits
 
 - Max active workspaces per user: 5 (default policy)

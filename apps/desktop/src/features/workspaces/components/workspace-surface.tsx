@@ -1,4 +1,4 @@
-import type { TerminalStatus } from "@lifecycle/contracts";
+import type { TerminalRecord, TerminalStatus } from "@lifecycle/contracts";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
@@ -11,11 +11,15 @@ import {
   type CreateTerminalRequest,
   type HarnessProvider,
 } from "../../terminals/api";
-import { terminalKeys, useWorkspaceTerminals } from "../../terminals/hooks";
+import { terminalKeys } from "../../terminals/hooks";
 import { useTerminalResponseReady } from "../../terminals/state/terminal-response-ready-provider";
 import { useWorkspaceActivity } from "../hooks";
 import { subscribeToNativeWorkspaceShortcutEvents } from "../api";
-import { isRuntimeTabKey, writeWorkspaceSurfaceState } from "../state/workspace-surface-state";
+import {
+  isRuntimeTabKey,
+  type WorkspaceSurfaceState,
+  writeWorkspaceSurfaceState,
+} from "../state/workspace-surface-state";
 import { isPullRequestDocument } from "../state/workspace-surface-state";
 import {
   SurfaceLaunchActions,
@@ -51,19 +55,20 @@ import { WorkspaceSurfaceTabBar } from "./workspace-surface-tab-bar";
 interface WorkspaceSurfaceProps {
   openDocumentRequest: OpenDocumentRequest | null;
   onActivePullRequestNumberChange?: (pullRequestNumber: number | null) => void;
+  snapshotTerminals: TerminalRecord[];
   workspaceId: string;
 }
 
 export function WorkspaceSurface({
   openDocumentRequest,
   onActivePullRequestNumberChange,
+  snapshotTerminals,
   workspaceId,
 }: WorkspaceSurfaceProps) {
   const client = useQueryClient();
   const { clearTerminalResponseReady, isTerminalResponseReady, isTerminalTurnRunning } =
     useTerminalResponseReady();
   const activityQuery = useWorkspaceActivity(workspaceId);
-  const terminalsQuery = useWorkspaceTerminals(workspaceId);
   const [creatingSelection, setCreatingSelection] = useState<"shell" | HarnessProvider | null>(
     null,
   );
@@ -79,7 +84,7 @@ export function WorkspaceSurface({
   const closeShortcutTriggeredAtRef = useRef(0);
   const closeShortcutHandledAtRef = useRef(0);
 
-  const sessionHistory = useMemo(() => terminalsQuery.data ?? [], [terminalsQuery.data]);
+  const sessionHistory = useMemo(() => snapshotTerminals, [snapshotTerminals]);
   const terminals = useMemo(
     () =>
       orderWorkspaceTerminals(
@@ -121,6 +126,8 @@ export function WorkspaceSurface({
     state.activeTabKey && isRuntimeTabKey(state.activeTabKey)
       ? state.activeTabKey.slice("terminal:".length)
       : null;
+  const activeTabViewState =
+    state.activeTabKey !== null ? (state.viewStateByTabKey[state.activeTabKey] ?? null) : null;
   const activePullRequestNumber = useMemo(() => {
     if (!state.activeTabKey) {
       return null;
@@ -130,10 +137,7 @@ export function WorkspaceSurface({
     return activeDocument && isPullRequestDocument(activeDocument) ? activeDocument.number : null;
   }, [state.activeTabKey, state.documents]);
   const waitingForActiveRuntimeTab = Boolean(
-    state.activeTabKey &&
-    isRuntimeTabKey(state.activeTabKey) &&
-    terminalsQuery.isLoading &&
-    !visibleTabKeys.includes(state.activeTabKey),
+    state.activeTabKey && isRuntimeTabKey(state.activeTabKey) && !visibleTabKeys.includes(state.activeTabKey),
   );
 
   useEffect(() => {
@@ -177,7 +181,7 @@ export function WorkspaceSurface({
     const nextHiddenRuntimeTabKeys = reconcileHiddenRuntimeTabKeys(
       state.hiddenRuntimeTabKeys,
       knownRuntimeTabKeys,
-      terminalsQuery.status === "ready",
+      true,
     );
 
     if (!areStringArraysEqual(state.hiddenRuntimeTabKeys, nextHiddenRuntimeTabKeys)) {
@@ -186,7 +190,7 @@ export function WorkspaceSurface({
         kind: "set-hidden-runtime-tab-keys",
       });
     }
-  }, [knownRuntimeTabKeys, state.hiddenRuntimeTabKeys, terminalsQuery.status]);
+  }, [knownRuntimeTabKeys, state.hiddenRuntimeTabKeys]);
 
   useEffect(() => {
     if (waitingForActiveRuntimeTab) {
@@ -252,6 +256,21 @@ export function WorkspaceSurface({
       kind: "open-launcher",
     });
   }, []);
+
+  const handleActiveTabViewStateChange = useCallback(
+    (viewState: WorkspaceSurfaceState["viewStateByTabKey"][string] | null) => {
+      if (!state.activeTabKey || isRuntimeTabKey(state.activeTabKey)) {
+        return;
+      }
+
+      dispatch({
+        key: state.activeTabKey,
+        kind: "set-tab-view-state",
+        viewState,
+      });
+    },
+    [state.activeTabKey],
+  );
 
   const handleOpenFile = useCallback((filePath: string) => {
     releaseWebviewFocus();
@@ -584,11 +603,6 @@ export function WorkspaceSurface({
         />
       </div>
 
-      {Boolean(terminalsQuery.error) && (
-        <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-          Failed to load terminals: {String(terminalsQuery.error)}
-        </div>
-      )}
       {error && (
         <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
           {error}
@@ -598,6 +612,7 @@ export function WorkspaceSurface({
       <WorkspaceSurfacePanels
         activeTabKey={state.activeTabKey}
         activeTerminalId={activeTerminalId}
+        activeTabViewState={activeTabViewState}
         activity={activityQuery.data ?? []}
         creatingSelection={creatingSelection}
         documents={state.documents}
@@ -605,6 +620,7 @@ export function WorkspaceSurface({
         onCreateTerminal={handleCreateTerminal}
         onOpenFile={handleOpenFile}
         onOpenTerminal={handleShowRuntimeTab}
+        onTabViewStateChange={handleActiveTabViewStateChange}
         sessionHistory={sessionHistory}
         terminals={terminals}
         waitingForActiveRuntimeTab={waitingForActiveRuntimeTab}

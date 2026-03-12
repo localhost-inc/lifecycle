@@ -1,4 +1,6 @@
+use crate::platform::diagnostics;
 use crate::shared::errors::LifecycleError;
+use std::time::Instant;
 
 const MIGRATIONS: [(&str, &str); 3] = [
     (
@@ -18,12 +20,58 @@ const MIGRATIONS: [(&str, &str); 3] = [
 /// Holds the resolved path to the SQLite database file.
 pub struct DbPath(pub String);
 
+pub fn database_error(error: impl std::fmt::Display) -> LifecycleError {
+    LifecycleError::Database(error.to_string())
+}
+
+pub fn map_database_result<T>(result: rusqlite::Result<T>) -> Result<T, LifecycleError> {
+    result.map_err(database_error)
+}
+
+pub fn optional_database_result<T>(
+    result: rusqlite::Result<T>,
+) -> Result<Option<T>, LifecycleError> {
+    match result {
+        Ok(value) => Ok(Some(value)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(error) => Err(database_error(error)),
+    }
+}
+
 pub fn open_db(db_path: &str) -> Result<rusqlite::Connection, LifecycleError> {
-    let conn =
-        rusqlite::Connection::open(db_path).map_err(|e| LifecycleError::Database(e.to_string()))?;
-    conn.pragma_update(None, "foreign_keys", true)
-        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    let conn = map_database_result(rusqlite::Connection::open(db_path))?;
+    map_database_result(conn.pragma_update(None, "foreign_keys", true))?;
     Ok(conn)
+}
+
+pub async fn run_blocking_db_read<T, F>(
+    db_path: String,
+    label: &'static str,
+    task: F,
+) -> Result<T, LifecycleError>
+where
+    T: Send + 'static,
+    F: FnOnce(&rusqlite::Connection) -> Result<T, LifecycleError> + Send + 'static,
+{
+    let started_at = Instant::now();
+    let result = tokio::task::spawn_blocking(move || {
+        let conn = open_db(&db_path)?;
+        task(&conn)
+    })
+    .await
+    .map_err(|error| {
+        LifecycleError::Database(format!("blocking database task '{label}' failed: {error}"))
+    })?;
+
+    if diagnostics::performance_diagnostics_enabled() {
+        let status = if result.is_ok() { "ok" } else { "error" };
+        diagnostics::append_diagnostic(
+            "db-query",
+            &format!("{label} {status} in {}ms", started_at.elapsed().as_millis()),
+        );
+    }
+
+    result
 }
 
 pub fn run_migrations(db_path: &str) -> Result<(), LifecycleError> {
@@ -47,7 +95,7 @@ fn initialize_migration_table(conn: &rusqlite::Connection) -> Result<(), Lifecyc
         )",
         [],
     )
-    .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    .map_err(database_error)?;
 
     Ok(())
 }
@@ -63,23 +111,20 @@ fn apply_migration(
             [version],
             |row| row.get(0),
         )
-        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+        .map_err(database_error)?;
     if already_applied > 0 {
         return Ok(());
     }
 
-    let tx = conn
-        .transaction()
-        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    let tx = conn.transaction().map_err(database_error)?;
     tx.execute_batch(sql)
-        .map_err(|e| LifecycleError::Database(format!("migration {version} failed: {e}")))?;
+        .map_err(|error| database_error(format!("migration {version} failed: {error}")))?;
     tx.execute(
         "INSERT INTO schema_migration (version) VALUES (?1)",
         [version],
     )
-    .map_err(|e| LifecycleError::Database(e.to_string()))?;
-    tx.commit()
-        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    .map_err(database_error)?;
+    tx.commit().map_err(database_error)?;
 
     Ok(())
 }
@@ -92,10 +137,10 @@ fn reconcile_ephemeral_terminals(conn: &rusqlite::Connection) -> Result<(), Life
              exit_code = NULL,
              ended_at = NULL,
              last_active_at = datetime('now')
-         WHERE status IN ('active', 'detached', 'sleeping')",
+        WHERE status IN ('active', 'detached', 'sleeping')",
         [],
     )
-    .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    .map_err(database_error)?;
 
     Ok(())
 }
@@ -105,16 +150,16 @@ fn reconcile_workspace_environments(conn: &rusqlite::Connection) -> Result<(), L
         .prepare(
             "SELECT id, status FROM workspace WHERE status IN ('starting', 'active', 'stopping')",
         )
-        .map_err(|error| LifecycleError::Database(error.to_string()))?;
+        .map_err(database_error)?;
     let rows = stmt
         .query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         })
-        .map_err(|error| LifecycleError::Database(error.to_string()))?;
+        .map_err(database_error)?;
 
     let mut reconciled = Vec::new();
     for row in rows {
-        reconciled.push(row.map_err(|error| LifecycleError::Database(error.to_string()))?);
+        reconciled.push(row.map_err(database_error)?);
     }
     drop(stmt);
 
@@ -134,7 +179,7 @@ fn reconcile_workspace_environments(conn: &rusqlite::Connection) -> Result<(), L
                  WHERE id = ?2",
                 rusqlite::params![failure_reason, workspace_id],
             )
-            .map_err(|error| LifecycleError::Database(error.to_string()))?;
+            .map_err(database_error)?;
         } else {
             conn.execute(
                 "UPDATE workspace
@@ -145,7 +190,7 @@ fn reconcile_workspace_environments(conn: &rusqlite::Connection) -> Result<(), L
                  WHERE id = ?1",
                 rusqlite::params![workspace_id],
             )
-            .map_err(|error| LifecycleError::Database(error.to_string()))?;
+            .map_err(database_error)?;
         }
 
         conn.execute(
@@ -166,10 +211,10 @@ fn reconcile_workspace_environments(conn: &rusqlite::Connection) -> Result<(), L
                      ELSE NULL
                  END,
                  updated_at = datetime('now')
-             WHERE workspace_id = ?1",
+            WHERE workspace_id = ?1",
             rusqlite::params![workspace_id],
         )
-        .map_err(|error| LifecycleError::Database(error.to_string()))?;
+        .map_err(database_error)?;
     }
 
     Ok(())
@@ -548,6 +593,55 @@ mod tests {
                 .contains("UNIQUE constraint failed: workspace.project_id"),
             "expected root uniqueness violation, got: {second_root_error}"
         );
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[tokio::test]
+    async fn run_blocking_db_read_uses_opened_connection() {
+        let db_path = temp_db_path();
+        run_migrations(&db_path).expect("migration run succeeds");
+
+        let conn = open_db(&db_path).expect("open db");
+        conn.execute(
+            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["project_1", "/tmp/project_1", "Project 1"],
+        )
+        .expect("insert project");
+        drop(conn);
+
+        let project_name = run_blocking_db_read(db_path.clone(), "db.test.read", |conn| {
+            conn.query_row(
+                "SELECT name FROM project WHERE id = ?1",
+                rusqlite::params!["project_1"],
+                |row| row.get::<_, String>(0),
+            )
+            .map_err(LifecycleError::from)
+        })
+        .await
+        .expect("read project name");
+
+        assert_eq!(project_name, "Project 1");
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[tokio::test]
+    async fn run_blocking_db_read_preserves_typed_errors() {
+        let db_path = temp_db_path();
+
+        let error = run_blocking_db_read(db_path.clone(), "db.test.typed_error", |_conn| {
+            Err::<String, LifecycleError>(LifecycleError::WorkspaceNotFound(
+                "workspace_missing".to_string(),
+            ))
+        })
+        .await
+        .expect_err("expected typed error");
+
+        assert!(matches!(
+            error,
+            LifecycleError::WorkspaceNotFound(workspace_id) if workspace_id == "workspace_missing"
+        ));
 
         let _ = std::fs::remove_file(db_path);
     }

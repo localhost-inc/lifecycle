@@ -131,6 +131,16 @@ export class QueryClient {
     await this.fetchEntry(this.ensureEntry(descriptor), true);
   }
 
+  setData<T>(descriptor: QueryDescriptor<T>, data: T): void {
+    const entry = this.ensureEntry(descriptor);
+    entry.snapshot = {
+      data,
+      error: null,
+      status: "ready",
+    };
+    notify(entry);
+  }
+
   invalidate(key: QueryKey): void {
     const keyHash = hashKey(key);
     this.invalidateMatching((entryKey) => hashKey(entryKey) === keyHash);

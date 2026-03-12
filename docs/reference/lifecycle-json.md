@@ -48,7 +48,7 @@ Canonical specification for the `lifecycle.json` project environment configurati
 - `image` runtime requires at least one of `image` or `build`
 - `image.build` supports `{ "context": "<path>", "dockerfile": "<optional path>" }`
 - `image.volumes` supports bind mounts via `{ "source": "<path|workspace://name>", "target": "<container path>", "read_only": true|false }`
-- Shared optional fields: `cwd` (process only), `env_vars`, `depends_on`, `restart_policy`, `startup_timeout_seconds`, `health_check`, `port`, `share_default`
+- Shared optional fields: `cwd` (process only), `env_vars`, `depends_on`, `startup_timeout_seconds`, `health_check`, `port`, `share_default`
 - `env_vars` may reference reserved `LIFECYCLE_*` values directly, which are expanded by the provider before process or container start
 - `port` is the service's preferred/default local port; the local provider may assign a different stable host `effective_port` per workspace when the default would collide
 - `share_default` (`true|false`) controls default `workspace_service.exposure` on workspace create (`true -> local`, omitted/`false -> internal`)

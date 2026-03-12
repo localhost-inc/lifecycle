@@ -1,4 +1,14 @@
-use std::path::Path;
+use crate::platform::db::DbPath;
+use crate::platform::lifecycle_root::resolve_lifecycle_root;
+use crate::shared::errors::LifecycleError;
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+use std::path::{Path, PathBuf};
+use tauri::State;
+
+use super::persistence::{
+    load_terminal_record, load_workspace_runtime, workspace_has_interactive_terminal_context,
+};
+use super::types::SavedTerminalAttachment;
 
 #[cfg(test)]
 const BRACKETED_PASTE_START: &str = "\u{1b}[200~";
@@ -126,12 +136,108 @@ pub(crate) fn build_native_terminal_attachment_paste_payload(
     }
 }
 
+fn persist_terminal_attachment_bytes(
+    db_path: &str,
+    workspace_id: &str,
+    file_name: &str,
+    media_type: Option<&str>,
+    bytes: &[u8],
+) -> Result<SavedTerminalAttachment, LifecycleError> {
+    let workspace = load_workspace_runtime(db_path, workspace_id)?;
+    if !workspace_has_interactive_terminal_context(&workspace) {
+        return Err(LifecycleError::InvalidStateTransition {
+            from: workspace.status.as_str().to_string(),
+            to: "terminal_attachment".to_string(),
+        });
+    }
+
+    let attachment_dir = terminal_attachment_dir(workspace_id)?;
+    std::fs::create_dir_all(&attachment_dir).map_err(|error| {
+        LifecycleError::AttachmentPersistenceFailed(format!(
+            "failed to create attachment directory: {error}"
+        ))
+    })?;
+
+    let stored_file_name = build_terminal_attachment_file_name(file_name, media_type);
+    let attachment_path = attachment_dir.join(&stored_file_name);
+    std::fs::write(&attachment_path, bytes).map_err(|error| {
+        LifecycleError::AttachmentPersistenceFailed(format!(
+            "failed to persist attachment: {error}"
+        ))
+    })?;
+
+    Ok(SavedTerminalAttachment {
+        absolute_path: attachment_path.to_string_lossy().to_string(),
+        file_name: stored_file_name.clone(),
+        relative_path: format!("attachments/{workspace_id}/{stored_file_name}"),
+    })
+}
+
+fn terminal_attachment_dir_for_root(lifecycle_root_dir: &Path, workspace_id: &str) -> PathBuf {
+    lifecycle_root_dir.join("attachments").join(workspace_id)
+}
+
+fn terminal_attachment_dir(workspace_id: &str) -> Result<PathBuf, LifecycleError> {
+    let lifecycle_root_dir = resolve_lifecycle_root().map_err(|error| {
+        LifecycleError::AttachmentPersistenceFailed(format!(
+            "failed to resolve Lifecycle root: {error}"
+        ))
+    })?;
+    Ok(terminal_attachment_dir_for_root(
+        &lifecycle_root_dir,
+        workspace_id,
+    ))
+}
+
+pub(crate) async fn save_terminal_attachment(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    file_name: String,
+    media_type: Option<String>,
+    base64_data: String,
+) -> Result<SavedTerminalAttachment, LifecycleError> {
+    let bytes = STANDARD
+        .decode(base64_data)
+        .map_err(|error| LifecycleError::AttachmentPersistenceFailed(error.to_string()))?;
+    persist_terminal_attachment_bytes(
+        &db_path.0,
+        &workspace_id,
+        &file_name,
+        media_type.as_deref(),
+        &bytes,
+    )
+}
+
+pub(crate) fn prepare_native_terminal_attachment_paste(
+    db_path: &str,
+    terminal_id: &str,
+    file_name: &str,
+    media_type: Option<&str>,
+    bytes: &[u8],
+) -> Result<String, LifecycleError> {
+    let terminal = load_terminal_record(db_path, terminal_id)?
+        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()))?;
+    let attachment = persist_terminal_attachment_bytes(
+        db_path,
+        &terminal.workspace_id,
+        file_name,
+        media_type,
+        bytes,
+    )?;
+    Ok(build_native_terminal_attachment_paste_payload(
+        terminal.harness_provider.as_deref(),
+        &[attachment.absolute_path],
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         build_native_terminal_attachment_paste_payload, build_terminal_attachment_file_name,
         build_terminal_attachment_write_payloads, format_terminal_attachment_insertion,
+        terminal_attachment_dir_for_root,
     };
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn build_terminal_attachment_file_name_sanitizes_the_stem() {
@@ -216,6 +322,17 @@ mod tests {
                 &["/tmp/one.png".to_string()],
             ),
             r#""/tmp/one.png" "#
+        );
+    }
+
+    #[test]
+    fn terminal_attachment_dir_uses_lifecycle_root_storage() {
+        let path =
+            terminal_attachment_dir_for_root(Path::new("/tmp/lifecycle-root"), "workspace-123");
+
+        assert_eq!(
+            path,
+            PathBuf::from("/tmp/lifecycle-root/attachments/workspace-123")
         );
     }
 }

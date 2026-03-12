@@ -1,9 +1,6 @@
 import { Alert, AlertDescription, Badge, Button, EmptyState } from "@lifecycle/ui";
 import { ExternalLink, FileJson, FileText, RefreshCcw } from "lucide-react";
-import { useMemo, useState } from "react";
-import "github-markdown-css/github-markdown-dark.css";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { openWorkspaceFile } from "../api";
 import { useWorkspaceFile } from "../hooks";
 import {
@@ -11,6 +8,11 @@ import {
   workspaceFileDirname,
   workspaceFileExtension,
 } from "../lib/workspace-file-paths";
+
+const MarkdownFileRenderer = lazy(async () => {
+  const module = await import("./markdown-file-renderer");
+  return { default: module.MarkdownFileRenderer };
+});
 
 export type FileViewerRendererKind = "markdown" | "pencil" | "text";
 
@@ -142,14 +144,6 @@ function RendererBadge({ renderer }: { renderer: FileViewerRendererKind }) {
   return <Badge variant="outline">{rendererLabel(renderer)}</Badge>;
 }
 
-function MarkdownFileRenderer({ content }: { content: string }) {
-  return (
-    <article className="markdown-body min-h-0 flex-1 overflow-auto px-5 py-5">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-    </article>
-  );
-}
-
 function SummaryCard({ label, value }: { label: string; value: number | string | null }) {
   return (
     <div className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] px-4 py-3">
@@ -165,7 +159,7 @@ function PencilFileRenderer({ content, filePath }: { content: string; filePath: 
   const summary = useMemo(() => summarizePencilDocument(content), [content]);
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto px-5 py-5">
+    <div className="px-5 py-5">
       {summary ? (
         <>
           <div className="grid gap-3 md:grid-cols-4">
@@ -245,19 +239,38 @@ function PencilFileRenderer({ content, filePath }: { content: string; filePath: 
 
 function TextFileRenderer({ content }: { content: string }) {
   return (
-    <pre className="min-h-0 flex-1 overflow-auto px-5 py-5 font-mono text-xs leading-6 text-[var(--foreground)]">
-      {content}
-    </pre>
+    <pre className="px-5 py-5 font-mono text-xs leading-6 text-[var(--foreground)]">{content}</pre>
   );
 }
 
 interface FileViewerProps {
   filePath: string;
+  initialScrollTop?: number;
+  onScrollTopChange?: (scrollTop: number) => void;
   workspaceId: string;
 }
 
-export function FileViewer({ filePath, workspaceId }: FileViewerProps) {
+export function getFileViewerScrollRestoreKey({
+  filePath,
+  isLoading,
+  renderer,
+}: {
+  filePath: string;
+  isLoading: boolean;
+  renderer: FileViewerRendererKind;
+}): string | null {
+  return isLoading ? null : `${renderer}:${filePath}`;
+}
+
+export function FileViewer({
+  filePath,
+  initialScrollTop = 0,
+  onScrollTopChange,
+  workspaceId,
+}: FileViewerProps) {
   const [openError, setOpenError] = useState<string | null>(null);
+  const restoredScrollKeyRef = useRef<string | null>(null);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
   const fileQuery = useWorkspaceFile(workspaceId, filePath);
   const renderer = resolveFileViewerRenderer(filePath);
   const displayPath = fileQuery.data?.file_path ?? filePath;
@@ -274,6 +287,71 @@ export function FileViewer({ filePath, workspaceId }: FileViewerProps) {
       setOpenError(error instanceof Error ? error.message : String(error));
     }
   };
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    const restoreKey = getFileViewerScrollRestoreKey({
+      filePath: displayPath,
+      isLoading: fileQuery.isLoading,
+      renderer,
+    });
+    if (!viewport || restoreKey === null || restoredScrollKeyRef.current === restoreKey) {
+      return;
+    }
+
+    viewport.scrollTop = initialScrollTop;
+    restoredScrollKeyRef.current = restoreKey;
+  }, [displayPath, fileQuery.isLoading, initialScrollTop, renderer]);
+
+  const handleViewportScroll = (scrollTop: number) => {
+    onScrollTopChange?.(scrollTop);
+  };
+
+  const content = fileQuery.isLoading ? (
+    <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
+      Loading file...
+    </div>
+  ) : fileQuery.error ? (
+    <Alert className="m-5" variant="destructive">
+      <AlertDescription>Failed to load file: {String(fileQuery.error)}</AlertDescription>
+    </Alert>
+  ) : !fileQuery.data ? (
+    <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
+      File unavailable.
+    </div>
+  ) : fileQuery.data.is_too_large ? (
+    <div className="flex flex-1 items-center justify-center p-8">
+      <EmptyState
+        description={`This file is ${Intl.NumberFormat().format(fileQuery.data.byte_len)} bytes. Lifecycle currently previews text files up to 1 MB inline.`}
+        icon={<FileText />}
+        size="sm"
+        title="File too large to preview"
+      />
+    </div>
+  ) : fileQuery.data.is_binary || fileQuery.data.content === null ? (
+    <div className="flex flex-1 items-center justify-center p-8">
+      <EmptyState
+        description="This file does not look like UTF-8 text, so Lifecycle is leaving it to your default app for now."
+        icon={<FileText />}
+        size="sm"
+        title="Binary preview unavailable"
+      />
+    </div>
+  ) : renderer === "markdown" ? (
+    <Suspense
+      fallback={
+        <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
+          Loading markdown preview...
+        </div>
+      }
+    >
+      <MarkdownFileRenderer content={fileQuery.data.content} />
+    </Suspense>
+  ) : renderer === "pencil" ? (
+    <PencilFileRenderer content={fileQuery.data.content} filePath={displayPath} />
+  ) : (
+    <TextFileRenderer content={fileQuery.data.content} />
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--background)]">
@@ -326,43 +404,15 @@ export function FileViewer({ filePath, workspaceId }: FileViewerProps) {
         ) : null}
       </header>
 
-      {fileQuery.isLoading ? (
-        <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
-          Loading file...
-        </div>
-      ) : fileQuery.error ? (
-        <Alert className="m-5" variant="destructive">
-          <AlertDescription>Failed to load file: {String(fileQuery.error)}</AlertDescription>
-        </Alert>
-      ) : !fileQuery.data ? (
-        <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
-          File unavailable.
-        </div>
-      ) : fileQuery.data.is_too_large ? (
-        <div className="flex flex-1 items-center justify-center p-8">
-          <EmptyState
-            description={`This file is ${Intl.NumberFormat().format(fileQuery.data.byte_len)} bytes. Lifecycle currently previews text files up to 1 MB inline.`}
-            icon={<FileText />}
-            size="sm"
-            title="File too large to preview"
-          />
-        </div>
-      ) : fileQuery.data.is_binary || fileQuery.data.content === null ? (
-        <div className="flex flex-1 items-center justify-center p-8">
-          <EmptyState
-            description="This file does not look like UTF-8 text, so Lifecycle is leaving it to your default app for now."
-            icon={<FileText />}
-            size="sm"
-            title="Binary preview unavailable"
-          />
-        </div>
-      ) : renderer === "markdown" ? (
-        <MarkdownFileRenderer content={fileQuery.data.content} />
-      ) : renderer === "pencil" ? (
-        <PencilFileRenderer content={fileQuery.data.content} filePath={displayPath} />
-      ) : (
-        <TextFileRenderer content={fileQuery.data.content} />
-      )}
+      <div
+        ref={viewportRef}
+        className="min-h-0 flex-1 overflow-auto"
+        onScroll={(event) => {
+          handleViewportScroll(event.currentTarget.scrollTop);
+        }}
+      >
+        {content}
+      </div>
     </div>
   );
 }

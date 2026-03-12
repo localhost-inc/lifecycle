@@ -14,6 +14,7 @@ import {
   isLauncherDocument,
   isPullRequestDocument,
   type WorkspaceSurfaceDocument,
+  type WorkspaceSurfaceTabViewState,
 } from "../state/workspace-surface-state";
 import { WorkspaceLauncherSurface } from "./workspace-launcher-surface";
 import { workspaceTabDomId, workspaceTabPanelId } from "./workspace-surface-logic";
@@ -21,6 +22,7 @@ import { workspaceTabDomId, workspaceTabPanelId } from "./workspace-surface-logi
 interface WorkspaceSurfacePanelsProps {
   activeTabKey: string | null;
   activeTerminalId: string | null;
+  activeTabViewState: WorkspaceSurfaceTabViewState | null;
   activity: WorkspaceActivityItem[];
   creatingSelection: "shell" | HarnessProvider | null;
   documents: WorkspaceSurfaceDocument[];
@@ -28,6 +30,7 @@ interface WorkspaceSurfacePanelsProps {
   onCreateTerminal: (input: CreateTerminalRequest, launcherKey?: string) => Promise<void>;
   onOpenFile: (filePath: string) => void;
   onOpenTerminal: (terminalId: string, launcherKey?: string) => void;
+  onTabViewStateChange: (viewState: WorkspaceSurfaceTabViewState | null) => void;
   sessionHistory: TerminalRecord[];
   terminals: TerminalRecord[];
   waitingForActiveRuntimeTab: boolean;
@@ -37,6 +40,7 @@ interface WorkspaceSurfacePanelsProps {
 export function WorkspaceSurfacePanels({
   activeTabKey,
   activeTerminalId,
+  activeTabViewState,
   activity,
   creatingSelection,
   documents,
@@ -44,6 +48,7 @@ export function WorkspaceSurfacePanels({
   onCreateTerminal,
   onOpenFile,
   onOpenTerminal,
+  onTabViewStateChange,
   sessionHistory,
   terminals,
   waitingForActiveRuntimeTab,
@@ -65,76 +70,90 @@ export function WorkspaceSurfacePanels({
     );
   }
 
+  const activeTerminal =
+    activeTabKey === null
+      ? null
+      : terminals.find((terminal) => `terminal:${terminal.id}` === activeTabKey) ?? null;
+  const activeDocument =
+    activeTabKey === null ? null : documents.find((document) => document.key === activeTabKey) ?? null;
+  const activePanelId = activeTabKey ? workspaceTabPanelId(activeTabKey) : undefined;
+  const activeTabDomId = activeTabKey ? workspaceTabDomId(activeTabKey) : undefined;
+
+  if (!activeTerminal && !activeDocument) {
+    return (
+      <EmptyState
+        description="Lifecycle is preparing the selected workspace tab."
+        icon={<TerminalSquare />}
+        title="Loading tab..."
+      />
+    );
+  }
+
   return (
-    <>
-      {terminals.map((terminal) => {
-        const key = `terminal:${terminal.id}`;
-        const active = key === activeTabKey;
-
-        return (
-          <div
-            key={terminal.id}
-            id={workspaceTabPanelId(key)}
-            aria-labelledby={workspaceTabDomId(key)}
-            className={active ? "flex min-h-0 flex-1 flex-col" : "hidden"}
-            role="tabpanel"
-          >
-            <TerminalSurface active={active} terminal={terminal} />
-          </div>
-        );
-      })}
-
-      {documents.map((tab) => {
-        const active = tab.key === activeTabKey;
-
-        return (
-          <div
-            key={tab.key}
-            id={workspaceTabPanelId(tab.key)}
-            aria-labelledby={workspaceTabDomId(tab.key)}
-            className={active ? "flex min-h-0 flex-1 flex-col" : "hidden"}
-            role="tabpanel"
-          >
-            {isChangesDiffDocument(tab) ? (
-              <GitDiffSurface
-                onOpenFile={onOpenFile}
-                source={{ focusPath: tab.focusPath, mode: "changes" }}
-                workspaceId={workspaceId}
-              />
-            ) : isCommitDiffDocument(tab) ? (
-              <GitDiffSurface
-                onOpenFile={onOpenFile}
-                source={{ commit: tab, mode: "commit" }}
-                workspaceId={workspaceId}
-              />
-            ) : isPullRequestDocument(tab) ? (
-              <PullRequestSurface
-                onOpenFile={onOpenFile}
-                pullRequest={tab}
-                workspaceId={workspaceId}
-              />
-            ) : isFileViewerDocument(tab) ? (
-              <FileViewer filePath={tab.filePath} workspaceId={workspaceId} />
-            ) : isLauncherDocument(tab) ? (
-              <WorkspaceLauncherSurface
-                activeTerminalId={activeTerminalId}
-                activity={activity}
-                creatingSelection={creatingSelection}
-                onCreateTerminal={(input) => {
-                  void onCreateTerminal(input, tab.key);
-                }}
-                onOpenTerminal={(terminalId) => {
-                  onOpenTerminal(terminalId, tab.key);
-                }}
-                onResumeTerminal={(input) => {
-                  void onCreateTerminal(input, tab.key);
-                }}
-                terminals={sessionHistory}
-              />
-            ) : null}
-          </div>
-        );
-      })}
-    </>
+    <div
+      id={activePanelId}
+      aria-labelledby={activeTabDomId}
+      className="flex min-h-0 flex-1 flex-col"
+      role="tabpanel"
+    >
+      {activeTerminal ? (
+        <TerminalSurface active terminal={activeTerminal} />
+      ) : activeDocument && isChangesDiffDocument(activeDocument) ? (
+        <GitDiffSurface
+          initialScrollTop={activeTabViewState?.scrollTop ?? 0}
+          onOpenFile={onOpenFile}
+          onScrollTopChange={(scrollTop: number) => {
+            onTabViewStateChange(scrollTop > 0 ? { scrollTop } : null);
+          }}
+          source={{ focusPath: activeDocument.focusPath, mode: "changes" }}
+          workspaceId={workspaceId}
+        />
+      ) : activeDocument && isCommitDiffDocument(activeDocument) ? (
+        <GitDiffSurface
+          initialScrollTop={activeTabViewState?.scrollTop ?? 0}
+          onOpenFile={onOpenFile}
+          onScrollTopChange={(scrollTop: number) => {
+            onTabViewStateChange(scrollTop > 0 ? { scrollTop } : null);
+          }}
+          source={{ commit: activeDocument, mode: "commit" }}
+          workspaceId={workspaceId}
+        />
+      ) : activeDocument && isPullRequestDocument(activeDocument) ? (
+        <PullRequestSurface
+          initialScrollTop={activeTabViewState?.scrollTop ?? 0}
+          onOpenFile={onOpenFile}
+          onScrollTopChange={(scrollTop: number) => {
+            onTabViewStateChange(scrollTop > 0 ? { scrollTop } : null);
+          }}
+          pullRequest={activeDocument}
+          workspaceId={workspaceId}
+        />
+      ) : activeDocument && isFileViewerDocument(activeDocument) ? (
+        <FileViewer
+          filePath={activeDocument.filePath}
+          initialScrollTop={activeTabViewState?.scrollTop ?? 0}
+          onScrollTopChange={(scrollTop: number) => {
+            onTabViewStateChange(scrollTop > 0 ? { scrollTop } : null);
+          }}
+          workspaceId={workspaceId}
+        />
+      ) : activeDocument && isLauncherDocument(activeDocument) ? (
+        <WorkspaceLauncherSurface
+          activeTerminalId={activeTerminalId}
+          activity={activity}
+          creatingSelection={creatingSelection}
+          onCreateTerminal={(input) => {
+            void onCreateTerminal(input, activeDocument.key);
+          }}
+          onOpenTerminal={(terminalId) => {
+            onOpenTerminal(terminalId, activeDocument.key);
+          }}
+          onResumeTerminal={(input) => {
+            void onCreateTerminal(input, activeDocument.key);
+          }}
+          terminals={sessionHistory}
+        />
+      ) : null}
+    </div>
   );
 }

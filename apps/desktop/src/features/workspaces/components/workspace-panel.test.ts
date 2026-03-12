@@ -15,6 +15,13 @@ function renderWorkspacePanel(element: ReturnType<typeof createElement>) {
   );
 }
 
+async function mockWorkspacePanelGitQueries() {
+  const gitHooksModule = await import("../../git/hooks");
+  spyOn(gitHooksModule, "useCurrentGitPullRequest").mockReturnValue({ data: undefined } as never);
+  spyOn(gitHooksModule, "useGitPullRequest").mockReturnValue({ data: undefined } as never);
+  spyOn(gitHooksModule, "useGitPullRequests").mockReturnValue({ data: undefined } as never);
+}
+
 describe("workspaceSupportsFilesystemInteraction", () => {
   test("allows terminals once a worktree exists outside create and destroy", () => {
     expect(
@@ -124,16 +131,12 @@ describe("WorkspacePanel", () => {
     const sidebarModule = await import("./workspace-sidebar");
     const surfaceModule = await import("./workspace-surface");
 
-    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue({ data: services } as never);
     spyOn(hooksModule, "useWorkspaceSetup").mockReturnValue({ data: [] } as never);
     spyOn(sidebarModule, "WorkspaceSidebar").mockImplementation((() =>
       createElement("aside", null, "Workspace Sidebar")) as never);
     spyOn(surfaceModule, "WorkspaceSurface").mockImplementation((() =>
       createElement("div", null, "Workspace Surface")) as never);
-    const gitHooksModule = await import("../../git/hooks");
-    spyOn(gitHooksModule, "useCurrentGitPullRequest").mockReturnValue({ data: undefined } as never);
-    spyOn(gitHooksModule, "useGitPullRequest").mockReturnValue({ data: undefined } as never);
-    spyOn(gitHooksModule, "useGitPullRequests").mockReturnValue({ data: undefined } as never);
+    await mockWorkspacePanelGitQueries();
 
     const { WorkspacePanel } = await import("./workspace-panel");
     const markup = renderWorkspacePanel(
@@ -160,6 +163,11 @@ describe("WorkspacePanel", () => {
           },
         },
         workspace,
+        workspaceSnapshot: {
+          services,
+          terminals: [],
+          workspace,
+        },
       }),
     );
 
@@ -195,7 +203,6 @@ describe("WorkspacePanel", () => {
     const sidebarModule = await import("./workspace-sidebar");
     const surfaceModule = await import("./workspace-surface");
 
-    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue({ data: [] } as never);
     spyOn(hooksModule, "useWorkspaceSetup").mockReturnValue({
       data: [{ name: "install", output: ["bun install"], status: "completed" }],
     } as never);
@@ -203,10 +210,7 @@ describe("WorkspacePanel", () => {
       createElement("aside", null, "Workspace Sidebar")) as never);
     spyOn(surfaceModule, "WorkspaceSurface").mockImplementation((() =>
       createElement("div", null, "Workspace Surface")) as never);
-    const gitHooksModule = await import("../../git/hooks");
-    spyOn(gitHooksModule, "useCurrentGitPullRequest").mockReturnValue({ data: undefined } as never);
-    spyOn(gitHooksModule, "useGitPullRequest").mockReturnValue({ data: undefined } as never);
-    spyOn(gitHooksModule, "useGitPullRequests").mockReturnValue({ data: undefined } as never);
+    await mockWorkspacePanelGitQueries();
 
     const { WorkspacePanel } = await import("./workspace-panel");
     const markup = renderWorkspacePanel(
@@ -230,6 +234,11 @@ describe("WorkspacePanel", () => {
           },
         },
         workspace,
+        workspaceSnapshot: {
+          services: [],
+          terminals: [],
+          workspace,
+        },
       }),
     );
 
@@ -264,14 +273,10 @@ describe("WorkspacePanel", () => {
     const hooksModule = await import("../hooks");
     const sidebarModule = await import("./workspace-sidebar");
 
-    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue({ data: [] } as never);
     spyOn(hooksModule, "useWorkspaceSetup").mockReturnValue({ data: [] } as never);
     spyOn(sidebarModule, "WorkspaceSidebar").mockImplementation((() =>
       createElement("aside", null, "Workspace Sidebar")) as never);
-    const gitHooksModule = await import("../../git/hooks");
-    spyOn(gitHooksModule, "useCurrentGitPullRequest").mockReturnValue({ data: undefined } as never);
-    spyOn(gitHooksModule, "useGitPullRequest").mockReturnValue({ data: undefined } as never);
-    spyOn(gitHooksModule, "useGitPullRequests").mockReturnValue({ data: undefined } as never);
+    await mockWorkspacePanelGitQueries();
 
     const { WorkspacePanel } = await import("./workspace-panel");
     const markup = renderWorkspacePanel(
@@ -280,6 +285,11 @@ describe("WorkspacePanel", () => {
           state: "missing",
         },
         workspace,
+        workspaceSnapshot: {
+          services: [],
+          terminals: [],
+          workspace,
+        },
       }),
     );
 

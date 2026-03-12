@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import type { TerminalRecord } from "@lifecycle/contracts";
+import type { ServiceRecord, TerminalRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import type {
   WorkspaceProvider,
   WorkspaceProviderCreateInput,
   WorkspaceProviderGitDiffInput,
+  WorkspaceProviderWakeInput,
 } from "./provider";
 import { CloudWorkspaceProvider, type CloudWorkspaceClient } from "./workspaces/providers/cloud";
 import { LocalWorkspaceProvider } from "./workspaces/providers/local";
@@ -95,7 +96,7 @@ describe("workspace provider interface", () => {
       stopServices: async () => {},
       runSetup: async () => {},
       sleep: async () => {},
-      wake: async () => {},
+      wake: async (_input: WorkspaceProviderWakeInput) => {},
       destroy: async () => {},
       createTerminal: async () => terminalResult,
       detachTerminal: async () => {},
@@ -292,6 +293,8 @@ describe("workspace provider interface", () => {
           workspaceName: undefined,
           baseRef: "main",
           worktreeRoot: undefined,
+          manifestJson: undefined,
+          manifestFingerprint: undefined,
         },
       },
     ]);
@@ -299,6 +302,228 @@ describe("workspace provider interface", () => {
     expect(result.workspace.kind).toBe("root");
     expect(result.workspace.name).toBe("Root");
     expect(result.workspace.source_ref).toBe("main");
+  });
+
+  test("local provider forwards manifest metadata during workspace creation", async () => {
+    const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
+    const invoke = async (cmd: string, args?: Record<string, unknown>) => {
+      calls.push(args ? { cmd, args } : { cmd });
+      return "ws_1";
+    };
+    const provider = new LocalWorkspaceProvider(invoke);
+
+    await provider.createWorkspace({
+      workspaceId: "ws_1",
+      sourceRef: "main",
+      manifestPath: "/tmp/lifecycle.json",
+      manifestJson: "{\"setup\":{\"steps\":[]},\"services\":{}}",
+      manifestFingerprint: "manifest_1",
+      resolvedSecrets: {},
+      context: {
+        mode: "local",
+        projectId: "project_1",
+        projectPath: "/tmp/project_1",
+      },
+    });
+
+    expect(calls).toEqual([
+      {
+        cmd: "create_workspace",
+        args: {
+          kind: "managed",
+          projectId: "project_1",
+          projectPath: "/tmp/project_1",
+          workspaceName: undefined,
+          baseRef: "main",
+          worktreeRoot: undefined,
+          manifestJson: "{\"setup\":{\"steps\":[]},\"services\":{}}",
+          manifestFingerprint: "manifest_1",
+        },
+      },
+    ]);
+  });
+
+  test("local provider forwards manifest fingerprint when starting services", async () => {
+    const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
+    const invoke = async (cmd: string, args?: Record<string, unknown>) => {
+      calls.push(args ? { cmd, args } : { cmd });
+      return undefined;
+    };
+    const provider = new LocalWorkspaceProvider(invoke);
+    const workspace: WorkspaceRecord = {
+      id: "ws_1",
+      project_id: "project_1",
+      name: "Workspace 1",
+      kind: "managed",
+      source_ref: "lifecycle/workspace-1",
+      git_sha: null,
+      worktree_path: "/tmp/project_1/.worktrees/ws_1",
+      mode: "local",
+      status: "idle",
+      manifest_fingerprint: "manifest_1",
+      failure_reason: null,
+      failed_at: null,
+      created_by: null,
+      source_workspace_id: null,
+      created_at: "2026-03-12T00:00:00.000Z",
+      updated_at: "2026-03-12T00:00:00.000Z",
+      last_active_at: "2026-03-12T00:00:00.000Z",
+      expires_at: null,
+    };
+    const services: ServiceRecord[] = [
+      {
+        id: "svc_1",
+        workspace_id: "ws_1",
+        service_name: "web",
+        exposure: "local",
+        port_override: null,
+        status: "stopped",
+        status_reason: null,
+        default_port: 1420,
+        effective_port: 1420,
+        preview_status: "sleeping",
+        preview_failure_reason: null,
+        preview_url: "http://localhost:1420",
+        created_at: "2026-03-12T00:00:00.000Z",
+        updated_at: "2026-03-12T00:00:00.000Z",
+      },
+    ];
+
+    const result = await provider.startServices({
+      workspace,
+      services,
+      manifestJson: "{\"setup\":{\"steps\":[]},\"services\":{\"web\":{\"runtime\":\"process\",\"command\":\"bun run dev\"}}}",
+      manifestFingerprint: "manifest_1",
+    });
+
+    expect(result).toEqual(services);
+    expect(calls).toEqual([
+      {
+        cmd: "start_services",
+        args: {
+          workspaceId: "ws_1",
+          manifestJson:
+            "{\"setup\":{\"steps\":[]},\"services\":{\"web\":{\"runtime\":\"process\",\"command\":\"bun run dev\"}}}",
+          manifestFingerprint: "manifest_1",
+        },
+      },
+    ]);
+  });
+
+  test("local provider wake reuses the start-services contract", async () => {
+    const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
+    const invoke = async (cmd: string, args?: Record<string, unknown>) => {
+      calls.push(args ? { cmd, args } : { cmd });
+      return undefined;
+    };
+    const provider = new LocalWorkspaceProvider(invoke);
+
+    await provider.wake({
+      workspace: {
+        id: "ws_1",
+        project_id: "project_1",
+        name: "Workspace 1",
+        kind: "managed",
+        source_ref: "lifecycle/workspace-1",
+        git_sha: null,
+        worktree_path: "/tmp/project_1/.worktrees/ws_1",
+        mode: "local",
+        status: "idle",
+        manifest_fingerprint: "manifest_1",
+        failure_reason: null,
+        failed_at: null,
+        created_by: null,
+        source_workspace_id: null,
+        created_at: "2026-03-12T00:00:00.000Z",
+        updated_at: "2026-03-12T00:00:00.000Z",
+        last_active_at: "2026-03-12T00:00:00.000Z",
+        expires_at: null,
+      },
+      services: [],
+      manifestJson: "{\"setup\":{\"steps\":[]},\"services\":{}}",
+      manifestFingerprint: "manifest_1",
+    });
+
+    expect(calls).toEqual([
+      {
+        cmd: "start_services",
+        args: {
+          workspaceId: "ws_1",
+          manifestJson: "{\"setup\":{\"steps\":[]},\"services\":{}}",
+          manifestFingerprint: "manifest_1",
+        },
+      },
+    ]);
+  });
+
+  test("local provider destroys workspaces through the desktop command surface", async () => {
+    const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
+    const invoke = async (cmd: string, args?: Record<string, unknown>) => {
+      calls.push(args ? { cmd, args } : { cmd });
+      return undefined;
+    };
+    const provider = new LocalWorkspaceProvider(invoke);
+
+    await provider.destroy("ws_1");
+
+    expect(calls).toEqual([
+      {
+        cmd: "destroy_workspace",
+        args: {
+          workspaceId: "ws_1",
+        },
+      },
+    ]);
+  });
+
+  test("local provider exposes a service and returns the preview url", async () => {
+    const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
+    const invoke = async (cmd: string, args?: Record<string, unknown>) => {
+      calls.push(args ? { cmd, args } : { cmd });
+      if (cmd === "get_workspace_services") {
+        return [
+          {
+            id: "svc_1",
+            workspace_id: "ws_1",
+            service_name: "web",
+            exposure: "local",
+            port_override: 1420,
+            status: "stopped",
+            status_reason: null,
+            default_port: 1420,
+            effective_port: 1420,
+            preview_status: "sleeping",
+            preview_failure_reason: null,
+            preview_url: "http://localhost:1420",
+            created_at: "2026-03-12T00:00:00.000Z",
+            updated_at: "2026-03-12T00:00:00.000Z",
+          },
+        ] satisfies ServiceRecord[];
+      }
+      return undefined;
+    };
+    const provider = new LocalWorkspaceProvider(invoke);
+
+    const previewUrl = await provider.exposePort("ws_1", "web", 1420);
+
+    expect(previewUrl).toBe("http://localhost:1420");
+    expect(calls).toEqual([
+      {
+        cmd: "update_workspace_service",
+        args: {
+          workspaceId: "ws_1",
+          serviceName: "web",
+          exposure: "local",
+          portOverride: 1420,
+        },
+      },
+      {
+        cmd: "get_workspace_services",
+        args: {
+          workspaceId: "ws_1",
+        },
+      },
+    ]);
   });
 
   test("local provider forwards optional terminal resume session ids", async () => {

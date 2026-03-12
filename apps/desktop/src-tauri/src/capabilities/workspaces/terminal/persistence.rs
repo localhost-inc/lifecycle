@@ -11,6 +11,7 @@ use super::super::rename::TitleOrigin;
 
 pub(crate) struct WorkspaceRuntime {
     pub(crate) status: WorkspaceStatus,
+    pub(crate) project_path: String,
     pub(crate) worktree_path: String,
 }
 
@@ -137,7 +138,7 @@ pub(crate) fn load_terminal_record(
 
 pub(crate) fn workspace_has_interactive_terminal_context(workspace: &WorkspaceRuntime) -> bool {
     let _ = workspace.status;
-    !workspace.worktree_path.is_empty()
+    !workspace.worktree_path.is_empty() || !workspace.project_path.is_empty()
 }
 
 pub(crate) fn load_workspace_runtime(
@@ -145,11 +146,15 @@ pub(crate) fn load_workspace_runtime(
     workspace_id: &str,
 ) -> Result<WorkspaceRuntime, LifecycleError> {
     let conn = open_db(db_path)?;
-    let (status, worktree_path): (String, Option<String>) = conn
+    let (status, project_path, worktree_path): (String, String, Option<String>) = conn
         .query_row(
-            "SELECT status, worktree_path FROM workspace WHERE id = ?1 LIMIT 1",
+            "SELECT workspace.status, project.path, workspace.worktree_path
+             FROM workspace
+             INNER JOIN project ON project.id = workspace.project_id
+             WHERE workspace.id = ?1
+             LIMIT 1",
             params![workspace_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .map_err(|error| match error {
             rusqlite::Error::QueryReturnedNoRows => {
@@ -160,9 +165,8 @@ pub(crate) fn load_workspace_runtime(
 
     Ok(WorkspaceRuntime {
         status: WorkspaceStatus::from_str(&status)?,
-        worktree_path: worktree_path.ok_or_else(|| {
-            LifecycleError::Database("workspace is missing worktree_path".to_string())
-        })?,
+        project_path,
+        worktree_path: worktree_path.unwrap_or_default(),
     })
 }
 
@@ -211,4 +215,46 @@ pub(crate) fn update_terminal_harness_session_id(
 
     load_terminal_record(db_path, terminal_id)?
         .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::shared::errors::WorkspaceStatus;
+
+    use super::{workspace_has_interactive_terminal_context, WorkspaceRuntime};
+
+    #[test]
+    fn interactive_terminal_context_requires_worktree_lifecycle_to_exist() {
+        let interactive_statuses = [
+            WorkspaceStatus::Idle,
+            WorkspaceStatus::Starting,
+            WorkspaceStatus::Active,
+            WorkspaceStatus::Stopping,
+        ];
+
+        for status in interactive_statuses {
+            assert!(workspace_has_interactive_terminal_context(
+                &WorkspaceRuntime {
+                    status,
+                    project_path: String::new(),
+                    worktree_path: "/tmp/worktree".to_string(),
+                }
+            ));
+        }
+
+        assert!(!workspace_has_interactive_terminal_context(
+            &WorkspaceRuntime {
+                status: WorkspaceStatus::Idle,
+                project_path: String::new(),
+                worktree_path: String::new(),
+            }
+        ));
+        assert!(!workspace_has_interactive_terminal_context(
+            &WorkspaceRuntime {
+                status: WorkspaceStatus::Stopping,
+                project_path: String::new(),
+                worktree_path: String::new(),
+            }
+        ));
+    }
 }

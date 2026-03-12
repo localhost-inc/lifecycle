@@ -15,24 +15,26 @@
   "services": {
     "desktop-web": {
       "runtime": "process",
-      "command": "bun --filter @lifecycle/desktop run vite:dev",
+      "command": "bun run vite:dev",
+      "cwd": "apps/desktop",
       "port": 1420,
       "share_default": true,
       "startup_timeout_seconds": 45,
       "health_check": {
-        "type": "http",
-        "url": "http://127.0.0.1:1420",
+        "kind": "http",
+        "url": "http://localhost:1420",
         "timeout_seconds": 5
       }
     },
     "worker": {
       "runtime": "process",
-      "command": "bun --filter @lifecycle/worker run dev",
+      "command": "bun run dev",
+      "cwd": "apps/worker",
       "port": 8787,
       "startup_timeout_seconds": 30,
       "health_check": {
-        "type": "http",
-        "url": "http://127.0.0.1:8787/health",
+        "kind": "http",
+        "url": "http://localhost:8787/health",
         "timeout_seconds": 5
       }
     }

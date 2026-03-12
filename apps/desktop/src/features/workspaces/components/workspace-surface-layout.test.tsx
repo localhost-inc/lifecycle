@@ -37,6 +37,7 @@ describe("WorkspaceSurface layout", () => {
       createElement(QueryProvider, {
         children: createElement(WorkspaceSurface, {
           openDocumentRequest: null,
+          snapshotTerminals: [],
           workspaceId: "workspace-1",
         }),
       }),

@@ -18,6 +18,7 @@ import type {
   WorkspaceProviderGitDiffInput,
   WorkspaceProviderHealthResult,
   WorkspaceProviderStartInput,
+  WorkspaceProviderWakeInput,
 } from "../../provider";
 
 export interface CloudWorkspaceClient {
@@ -27,7 +28,7 @@ export interface CloudWorkspaceClient {
   stopServices(workspaceId: string, serviceNames?: string[]): Promise<void>;
   runSetup(workspaceId: string): Promise<void>;
   sleep(workspaceId: string): Promise<void>;
-  wake(workspaceId: string): Promise<void>;
+  wake(input: WorkspaceProviderWakeInput): Promise<void>;
   destroy(workspaceId: string): Promise<void>;
   createTerminal(input: WorkspaceProviderCreateTerminalInput): Promise<TerminalRecord>;
   detachTerminal(terminalId: string): Promise<void>;
@@ -81,8 +82,8 @@ export class CloudWorkspaceProvider implements WorkspaceProvider {
     return this.client.sleep(workspaceId);
   }
 
-  wake(workspaceId: string): Promise<void> {
-    return this.client.wake(workspaceId);
+  wake(input: WorkspaceProviderWakeInput): Promise<void> {
+    return this.client.wake(input);
   }
 
   destroy(workspaceId: string): Promise<void> {

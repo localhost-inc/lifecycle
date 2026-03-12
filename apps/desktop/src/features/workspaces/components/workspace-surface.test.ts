@@ -184,6 +184,34 @@ describe("workspaceSurfaceReducer", () => {
     });
   });
 
+  test("stores per-tab view state for reopened document tabs", () => {
+    expect(
+      workspaceSurfaceReducer(
+        {
+          ...createDefaultWorkspaceSurfaceState(),
+          activeTabKey: fileViewerTabKey("README.md"),
+          documents: [createFileViewerTab("README.md")],
+        },
+        {
+          key: fileViewerTabKey("README.md"),
+          kind: "set-tab-view-state",
+          viewState: {
+            scrollTop: 144,
+          },
+        },
+      ),
+    ).toEqual({
+      ...createDefaultWorkspaceSurfaceState(),
+      activeTabKey: fileViewerTabKey("README.md"),
+      documents: [createFileViewerTab("README.md")],
+      viewStateByTabKey: {
+        [fileViewerTabKey("README.md")]: {
+          scrollTop: 144,
+        },
+      },
+    });
+  });
+
   test("opens pull request documents from the git panel", () => {
     const pullRequestSummary = createPullRequestSummary();
     const pullRequest = createPullRequestTab(pullRequestSummary);

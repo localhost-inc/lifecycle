@@ -39,6 +39,8 @@ export interface WorkspaceProviderCreateInput {
   workspaceId: string;
   sourceRef: string;
   manifestPath: string;
+  manifestJson?: string | null;
+  manifestFingerprint?: string | null;
   resolvedSecrets: Record<string, string>;
   context: WorkspaceProviderCreateContext;
 }
@@ -52,7 +54,10 @@ export interface WorkspaceProviderStartInput {
   workspace: WorkspaceRecord;
   services: ServiceRecord[];
   manifestJson: string;
+  manifestFingerprint: string;
 }
+
+export type WorkspaceProviderWakeInput = WorkspaceProviderStartInput;
 
 export interface WorkspaceProviderHealthResult {
   healthy: boolean;
@@ -79,7 +84,7 @@ export interface WorkspaceProvider {
   stopServices(workspaceId: string, serviceNames?: string[]): Promise<void>;
   runSetup(workspaceId: string): Promise<void>;
   sleep(workspaceId: string): Promise<void>;
-  wake(workspaceId: string): Promise<void>;
+  wake(input: WorkspaceProviderWakeInput): Promise<void>;
   destroy(workspaceId: string): Promise<void>;
   createTerminal(input: WorkspaceProviderCreateTerminalInput): Promise<TerminalRecord>;
   detachTerminal(terminalId: string): Promise<void>;

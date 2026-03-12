@@ -67,8 +67,8 @@ describe("TerminalSessionHistory", () => {
     expect(markup).toContain("session abcdef");
     expect(markup).toContain(">Current<");
     expect((markup.match(/>Resume</g) ?? []).length).toBe(1);
-    expect(markup).toContain("space-y-1.5");
-    expect(markup).toContain("rounded-2xl");
+    expect(markup).toContain("border-b border-[var(--border)]/40");
+    expect(markup).toContain("text-sm font-medium");
     expect(markup).toContain("bg-[var(--surface-hover)]");
   });
 });

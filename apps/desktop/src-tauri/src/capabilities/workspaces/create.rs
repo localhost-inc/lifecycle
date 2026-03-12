@@ -1,8 +1,10 @@
 use crate::capabilities::workspaces::manifest::parse_lifecycle_config;
-use crate::platform::db::{open_db, DbPath};
+use crate::platform::db::{map_database_result, open_db, optional_database_result, DbPath};
+use crate::platform::diagnostics;
 use crate::platform::git::worktree;
 use crate::shared::errors::{LifecycleError, WorkspaceFailureReason, WorkspaceStatus};
 use rusqlite::params;
+use std::time::Instant;
 use tauri::{AppHandle, State};
 
 use super::kind::{normalize_workspace_kind, ROOT_WORKSPACE_KIND};
@@ -10,38 +12,64 @@ use super::shared::{
     emit_workspace_status, reconcile_workspace_services_db, update_workspace_status_db,
 };
 
+#[derive(Debug, Clone)]
+pub(crate) struct CreateWorkspaceRequest {
+    pub(crate) project_id: String,
+    pub(crate) project_path: String,
+    pub(crate) workspace_name: Option<String>,
+    pub(crate) base_ref: Option<String>,
+    pub(crate) worktree_root: Option<String>,
+    pub(crate) kind: Option<String>,
+    pub(crate) manifest_json: Option<String>,
+    pub(crate) manifest_fingerprint: Option<String>,
+}
+
+struct RootWorkspaceBootstrap<'a> {
+    db_path: &'a str,
+    workspace_id: &'a str,
+    project_path: &'a str,
+    source_ref: &'a str,
+}
+
+struct ManagedWorkspaceCreation<'a> {
+    app: &'a AppHandle,
+    db_path: &'a str,
+    workspace_id: &'a str,
+    source_ref: &'a str,
+    workspace_name: &'a str,
+    project_path: &'a str,
+    base_ref: Option<&'a str>,
+    worktree_root: Option<&'a str>,
+}
+
 pub async fn create_workspace(
     app: AppHandle,
     db_path: State<'_, DbPath>,
-    project_id: String,
-    project_path: String,
-    workspace_name: Option<String>,
-    base_ref: Option<String>,
-    worktree_root: Option<String>,
-    kind: Option<String>,
-    manifest_json: Option<String>,
-    manifest_fingerprint: Option<String>,
+    request: CreateWorkspaceRequest,
 ) -> Result<String, LifecycleError> {
-    let workspace_kind = normalize_workspace_kind(kind.as_deref());
+    let total_started_at = Instant::now();
+    let workspace_kind = normalize_workspace_kind(request.kind.as_deref());
     if workspace_kind == ROOT_WORKSPACE_KIND {
         if let Some(existing_workspace_id) =
-            find_existing_root_workspace_id(&db_path.0, &project_id)?
+            find_existing_root_workspace_id(&db_path.0, &request.project_id)?
         {
             return Ok(existing_workspace_id);
         }
     }
 
-    let manifest = manifest_json
+    let manifest = request
+        .manifest_json
         .as_deref()
         .map(parse_lifecycle_config)
         .transpose()?;
     let root_source_ref = if workspace_kind == ROOT_WORKSPACE_KIND {
-        Some(resolve_base_ref(&project_path, base_ref.as_deref()).await?)
+        Some(resolve_base_ref(&request.project_path, request.base_ref.as_deref()).await?)
     } else {
         None
     };
     let workspace_id = uuid::Uuid::new_v4().to_string();
-    let workspace_name = workspace_name
+    let workspace_name = request
+        .workspace_name
         .and_then(normalize_optional_string)
         .unwrap_or_else(|| {
             if workspace_kind == ROOT_WORKSPACE_KIND {
@@ -62,45 +90,75 @@ pub async fn create_workspace(
     // Insert workspace row
     {
         let conn = open_db(&db)?;
-        conn.execute(
+        map_database_result(conn.execute(
             "INSERT INTO workspace (id, project_id, name, name_origin, source_ref, source_ref_origin, kind, status, mode)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'idle', 'local')",
             params![
                 workspace_id,
-                project_id,
+                request.project_id,
                 workspace_name,
                 name_origin,
                 source_ref,
                 source_ref_origin,
                 workspace_kind,
             ],
-        ).map_err(|e| LifecycleError::Database(e.to_string()))?;
+        ))?;
     }
 
     emit_workspace_status(&app, &workspace_id, "idle", None);
 
+    let provision_started_at = Instant::now();
     if workspace_kind == ROOT_WORKSPACE_KIND {
-        run_root_workspace_creation(&db, &workspace_id, &project_path, &source_ref).await?;
+        run_root_workspace_creation(RootWorkspaceBootstrap {
+            db_path: &db,
+            workspace_id: &workspace_id,
+            project_path: &request.project_path,
+            source_ref: &source_ref,
+        })
+        .await?;
     } else {
-        run_managed_workspace_creation(
-            &app,
-            &db,
-            &workspace_id,
-            &source_ref,
-            &workspace_name,
-            &project_path,
-            base_ref.as_deref(),
-            worktree_root.as_deref(),
-        )
+        run_managed_workspace_creation(ManagedWorkspaceCreation {
+            app: &app,
+            db_path: &db,
+            workspace_id: &workspace_id,
+            source_ref: &source_ref,
+            workspace_name: &workspace_name,
+            project_path: &request.project_path,
+            base_ref: request.base_ref.as_deref(),
+            worktree_root: request.worktree_root.as_deref(),
+        })
         .await?;
     }
+    diagnostics::append_timing(
+        "workspace-create",
+        &format!(
+            "workspace {workspace_id} {}",
+            if workspace_kind == ROOT_WORKSPACE_KIND {
+                "root bootstrap"
+            } else {
+                "worktree create"
+            }
+        ),
+        provision_started_at,
+    );
 
+    let reconcile_started_at = Instant::now();
     reconcile_workspace_services_db(
         &db,
         &workspace_id,
         manifest.as_ref(),
-        manifest_fingerprint.as_deref(),
+        request.manifest_fingerprint.as_deref(),
     )?;
+    diagnostics::append_timing(
+        "workspace-create",
+        &format!("workspace {workspace_id} manifest reconcile"),
+        reconcile_started_at,
+    );
+    diagnostics::append_timing(
+        "workspace-create",
+        &format!("workspace {workspace_id} total"),
+        total_started_at,
+    );
 
     Ok(workspace_id)
 }
@@ -110,20 +168,14 @@ fn find_existing_root_workspace_id(
     project_id: &str,
 ) -> Result<Option<String>, LifecycleError> {
     let conn = open_db(db_path)?;
-    let result = conn.query_row(
+    optional_database_result(conn.query_row(
         "SELECT id
          FROM workspace
          WHERE project_id = ?1 AND kind = 'root'
          LIMIT 1",
         params![project_id],
         |row| row.get::<_, String>(0),
-    );
-
-    match result {
-        Ok(workspace_id) => Ok(Some(workspace_id)),
-        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(error) => Err(LifecycleError::Database(error.to_string())),
-    }
+    ))
 }
 
 async fn resolve_base_ref(
@@ -137,102 +189,126 @@ async fn resolve_base_ref(
 }
 
 async fn run_root_workspace_creation(
-    db_path: &str,
-    workspace_id: &str,
-    project_path: &str,
-    source_ref: &str,
+    bootstrap: RootWorkspaceBootstrap<'_>,
 ) -> Result<(), LifecycleError> {
-    let git_sha = worktree::get_sha(project_path, source_ref)
+    let root_bootstrap_started_at = Instant::now();
+    let git_sha = worktree::get_sha(bootstrap.project_path, bootstrap.source_ref)
         .await
         .unwrap_or_default();
-    let conn = open_db(db_path)?;
-    conn.execute(
+    let conn = open_db(bootstrap.db_path)?;
+    map_database_result(conn.execute(
         "UPDATE workspace
          SET worktree_path = ?1,
              git_sha = ?2,
              updated_at = datetime('now')
          WHERE id = ?3",
-        params![project_path, git_sha, workspace_id],
-    )
-    .map_err(|error| LifecycleError::Database(error.to_string()))?;
+        params![bootstrap.project_path, git_sha, bootstrap.workspace_id],
+    ))?;
+    diagnostics::append_timing(
+        "workspace-create",
+        &format!(
+            "workspace {} root bootstrap data sync",
+            bootstrap.workspace_id
+        ),
+        root_bootstrap_started_at,
+    );
     Ok(())
 }
 
 async fn run_managed_workspace_creation(
-    app: &AppHandle,
-    db_path: &str,
-    workspace_id: &str,
-    source_ref: &str,
-    workspace_name: &str,
-    project_path: &str,
-    base_ref: Option<&str>,
-    worktree_root: Option<&str>,
+    request: ManagedWorkspaceCreation<'_>,
 ) -> Result<(), LifecycleError> {
-    let resolved_base_ref = match resolve_base_ref(project_path, base_ref).await {
+    let resolved_base_ref = match resolve_base_ref(request.project_path, request.base_ref).await {
         Ok(value) => value,
         Err(error) => {
             update_workspace_status_db(
-                db_path,
-                workspace_id,
+                request.db_path,
+                request.workspace_id,
                 &WorkspaceStatus::Idle,
                 Some(&WorkspaceFailureReason::RepoCloneFailed),
             )?;
-            emit_workspace_status(app, workspace_id, "idle", Some("repo_clone_failed"));
+            emit_workspace_status(
+                request.app,
+                request.workspace_id,
+                "idle",
+                Some("repo_clone_failed"),
+            );
             return Err(error);
         }
     };
 
     // Create git worktree
+    let create_worktree_started_at = Instant::now();
     let worktree_path = match worktree::create_worktree(
-        project_path,
+        request.project_path,
         &resolved_base_ref,
-        source_ref,
-        workspace_name,
-        workspace_id,
-        worktree_root,
+        request.source_ref,
+        request.workspace_name,
+        request.workspace_id,
+        request.worktree_root,
     )
     .await
     {
         Ok(path) => path,
         Err(e) => {
             update_workspace_status_db(
-                db_path,
-                workspace_id,
+                request.db_path,
+                request.workspace_id,
                 &WorkspaceStatus::Idle,
                 Some(&WorkspaceFailureReason::RepoCloneFailed),
             )?;
-            emit_workspace_status(app, workspace_id, "idle", Some("repo_clone_failed"));
+            emit_workspace_status(
+                request.app,
+                request.workspace_id,
+                "idle",
+                Some("repo_clone_failed"),
+            );
             return Err(e);
         }
     };
+    diagnostics::append_timing(
+        "workspace-create",
+        &format!("workspace {} git worktree create", request.workspace_id),
+        create_worktree_started_at,
+    );
 
-    if let Err(e) = worktree::copy_local_config_files(project_path, &worktree_path) {
-        let _ = worktree::remove_worktree(project_path, &worktree_path).await;
+    if let Err(e) = worktree::copy_local_config_files(request.project_path, &worktree_path) {
+        let _ = worktree::remove_worktree(request.project_path, &worktree_path).await;
         update_workspace_status_db(
-            db_path,
-            workspace_id,
+            request.db_path,
+            request.workspace_id,
             &WorkspaceStatus::Idle,
             Some(&WorkspaceFailureReason::RepoCloneFailed),
         )?;
-        emit_workspace_status(app, workspace_id, "idle", Some("repo_clone_failed"));
+        emit_workspace_status(
+            request.app,
+            request.workspace_id,
+            "idle",
+            Some("repo_clone_failed"),
+        );
         return Err(e);
     }
 
     // Record worktree path + git SHA
-    let git_sha = worktree::get_sha(project_path, source_ref)
+    let git_sha = worktree::get_sha(request.project_path, request.source_ref)
         .await
         .unwrap_or_default();
     {
-        let conn = open_db(db_path)?;
-        conn.execute(
+        let conn = open_db(request.db_path)?;
+        map_database_result(conn.execute(
             "UPDATE workspace SET worktree_path = ?1, git_sha = ?2, updated_at = datetime('now') WHERE id = ?3",
-            params![worktree_path, git_sha, workspace_id],
-        ).map_err(|e| LifecycleError::Database(e.to_string()))?;
+            params![worktree_path, git_sha, request.workspace_id],
+        ))?;
     }
 
     // Workspace creation completes in the resting idle state.
-    update_workspace_status_db(db_path, workspace_id, &WorkspaceStatus::Idle, None)?;
-    emit_workspace_status(app, workspace_id, "idle", None);
+    update_workspace_status_db(
+        request.db_path,
+        request.workspace_id,
+        &WorkspaceStatus::Idle,
+        None,
+    )?;
+    emit_workspace_status(request.app, request.workspace_id, "idle", None);
 
     Ok(())
 }
@@ -398,9 +474,14 @@ mod tests {
         .expect("insert workspace");
         drop(conn);
 
-        run_root_workspace_creation(&db_path, "workspace_root", repo_path_str, &source_ref)
-            .await
-            .expect("record root workspace state");
+        run_root_workspace_creation(RootWorkspaceBootstrap {
+            db_path: &db_path,
+            workspace_id: "workspace_root",
+            project_path: repo_path_str,
+            source_ref: &source_ref,
+        })
+        .await
+        .expect("record root workspace state");
 
         let conn = open_db(&db_path).expect("re-open db");
         let (worktree_path, git_sha): (Option<String>, Option<String>) = conn

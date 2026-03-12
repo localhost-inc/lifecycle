@@ -5,9 +5,10 @@ import type {
   WorkspaceRecord,
 } from "@lifecycle/contracts";
 import { useMemo } from "react";
+import { reduceWorkspaceTerminals } from "../terminals/hooks";
 import type { QueryDescriptor, QueryResult, QueryUpdate } from "../../query";
 import { useQuery } from "../../query";
-import type { WorkspaceFileReadResult } from "./api";
+import type { WorkspaceFileReadResult, WorkspaceSnapshotResult } from "./api";
 
 export interface SetupStepState {
   name: string;
@@ -21,7 +22,7 @@ export interface WorkspaceActivityItem {
   kind: LifecycleEvent["kind"];
   occurredAt: string;
   title: string;
-  tone: "default" | "danger" | "success" | "warning";
+  tone: "neutral" | "danger" | "success" | "warning";
 }
 
 export const workspaceKeys = {
@@ -30,6 +31,7 @@ export const workspaceKeys = {
   detail: (workspaceId: string) => ["workspace", workspaceId] as const,
   file: (workspaceId: string, filePath: string) =>
     ["workspace-file", workspaceId, filePath] as const,
+  snapshot: (workspaceId: string) => ["workspace-snapshot", workspaceId] as const,
   services: (workspaceId: string) => ["workspace-services", workspaceId] as const,
   setup: (workspaceId: string) => ["workspace-setup", workspaceId] as const,
 };
@@ -50,6 +52,16 @@ const WORKSPACE_EVENT_KINDS = [
 ] as const satisfies readonly LifecycleEventKind[];
 const WORKSPACE_SERVICE_EVENT_KINDS = [
   "service.status_changed",
+  "workspace.status_changed",
+  "workspace.deleted",
+] as const satisfies readonly LifecycleEventKind[];
+const WORKSPACE_SNAPSHOT_EVENT_KINDS = [
+  "git.head_changed",
+  "service.status_changed",
+  "terminal.created",
+  "terminal.status_changed",
+  "terminal.renamed",
+  "workspace.renamed",
   "workspace.status_changed",
   "workspace.deleted",
 ] as const satisfies readonly LifecycleEventKind[];
@@ -169,7 +181,7 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
               ? "success"
               : event.status === "stopping"
                 ? "warning"
-                : "default",
+                : "neutral",
       };
     case "workspace.renamed":
       return {
@@ -178,7 +190,7 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
         kind: event.kind,
         occurredAt: event.occurred_at,
         title: "Workspace renamed",
-        tone: "default",
+        tone: "neutral",
       };
     case "workspace.deleted":
       return {
@@ -203,7 +215,7 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
               ? "success"
               : event.status === "stopped"
                 ? "warning"
-                : "default",
+                : "neutral",
       };
     case "setup.step_progress":
       switch (event.event_kind) {
@@ -225,7 +237,7 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
             kind: event.kind,
             occurredAt: event.occurred_at,
             title: `Setup ${event.step_name} started`,
-            tone: "default",
+            tone: "neutral",
           };
         case "completed":
           return {
@@ -284,7 +296,7 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
               ? "warning"
               : event.status === "active"
                 ? "success"
-                : "default",
+                : "neutral",
       };
     case "terminal.renamed":
       return {
@@ -293,7 +305,7 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
         kind: event.kind,
         occurredAt: event.occurred_at,
         title: "Session renamed",
-        tone: "default",
+        tone: "neutral",
       };
     case "terminal.harness_prompt_submitted":
       return {
@@ -302,7 +314,7 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
         kind: event.kind,
         occurredAt: event.occurred_at,
         title: `${providerLabel(event.harness_provider)} prompt submitted`,
-        tone: "default",
+        tone: "neutral",
       };
     case "terminal.harness_turn_completed":
       return {
@@ -322,7 +334,7 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
         kind: event.kind,
         occurredAt: event.occurred_at,
         title: "Git status refreshed",
-        tone: "default",
+        tone: "neutral",
       };
     case "git.head_changed":
       return {
@@ -336,7 +348,7 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
         kind: event.kind,
         occurredAt: event.occurred_at,
         title: "Git head updated",
-        tone: "default",
+        tone: "neutral",
       };
     case "git.log_changed":
       return {
@@ -345,7 +357,7 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
         kind: event.kind,
         occurredAt: event.occurred_at,
         title: "Git history updated",
-        tone: "default",
+        tone: "neutral",
       };
   }
 }
@@ -359,7 +371,9 @@ const workspacesByProjectQuery: QueryDescriptor<Record<string, WorkspaceRecord[]
   reduce: reduceWorkspacesByProject,
 };
 
-function createWorkspaceQuery(workspaceId: string): QueryDescriptor<WorkspaceRecord | null> {
+export function createWorkspaceQuery(
+  workspaceId: string,
+): QueryDescriptor<WorkspaceRecord | null> {
   return {
     eventKinds: WORKSPACE_EVENT_KINDS,
     key: workspaceKeys.detail(workspaceId),
@@ -552,7 +566,74 @@ export function reduceWorkspaceRecord(
   };
 }
 
-function createWorkspaceServicesQuery(workspaceId: string): QueryDescriptor<ServiceRecord[]> {
+export function createWorkspaceSnapshotQuery(
+  workspaceId: string,
+): QueryDescriptor<WorkspaceSnapshotResult> {
+  return {
+    eventKinds: WORKSPACE_SNAPSHOT_EVENT_KINDS,
+    key: workspaceKeys.snapshot(workspaceId),
+    fetch(source) {
+      return source.getWorkspaceSnapshot(workspaceId);
+    },
+    reduce(current, event) {
+      return reduceWorkspaceSnapshot(current, event, workspaceId);
+    },
+  };
+}
+
+export function reduceWorkspaceSnapshot(
+  current: WorkspaceSnapshotResult | undefined,
+  event: LifecycleEvent,
+  workspaceId: string,
+): QueryUpdate<WorkspaceSnapshotResult> {
+  if (!current) {
+    if (event.kind === "workspace.deleted" && event.workspace_id === workspaceId) {
+      return {
+        kind: "replace",
+        data: {
+          services: [],
+          terminals: [],
+          workspace: null,
+        },
+      };
+    }
+
+    return { kind: "invalidate" };
+  }
+
+  const workspaceUpdate = reduceWorkspaceRecord(current.workspace, event, workspaceId);
+  const servicesUpdate = reduceWorkspaceServices(current.services, event, workspaceId);
+  const terminalsUpdate = reduceWorkspaceTerminals(current.terminals, event, workspaceId);
+
+  if (
+    workspaceUpdate.kind === "invalidate" ||
+    servicesUpdate.kind === "invalidate" ||
+    terminalsUpdate.kind === "invalidate"
+  ) {
+    return { kind: "invalidate" };
+  }
+
+  if (
+    workspaceUpdate.kind === "none" &&
+    servicesUpdate.kind === "none" &&
+    terminalsUpdate.kind === "none"
+  ) {
+    return { kind: "none" };
+  }
+
+  return {
+    kind: "replace",
+    data: {
+      services: servicesUpdate.kind === "replace" ? servicesUpdate.data : current.services,
+      terminals: terminalsUpdate.kind === "replace" ? terminalsUpdate.data : current.terminals,
+      workspace: workspaceUpdate.kind === "replace" ? workspaceUpdate.data : current.workspace,
+    },
+  };
+}
+
+export function createWorkspaceServicesQuery(
+  workspaceId: string,
+): QueryDescriptor<ServiceRecord[]> {
   return {
     eventKinds: WORKSPACE_SERVICE_EVENT_KINDS,
     key: workspaceKeys.services(workspaceId),
@@ -560,39 +641,47 @@ function createWorkspaceServicesQuery(workspaceId: string): QueryDescriptor<Serv
       return source.getWorkspaceServices(workspaceId);
     },
     reduce(current, event) {
-      if (
-        (event.kind === "workspace.status_changed" || event.kind === "workspace.deleted") &&
-        event.workspace_id === workspaceId
-      ) {
-        return { kind: "invalidate" };
-      }
-
-      if (event.kind !== "service.status_changed" || event.workspace_id !== workspaceId) {
-        return { kind: "none" };
-      }
-
-      if (!current) {
-        return { kind: "invalidate" };
-      }
-
-      const next = current.map((service) =>
-        service.service_name === event.service_name
-          ? {
-              ...service,
-              status: event.status,
-              status_reason: event.status_reason,
-            }
-          : service,
-      );
-      const found = next.some((service) => service.service_name === event.service_name);
-
-      if (!found) {
-        return { kind: "invalidate" };
-      }
-
-      return { kind: "replace", data: next };
+      return reduceWorkspaceServices(current, event, workspaceId);
     },
   };
+}
+
+export function reduceWorkspaceServices(
+  current: ServiceRecord[] | undefined,
+  event: LifecycleEvent,
+  workspaceId: string,
+): QueryUpdate<ServiceRecord[]> {
+  if (
+    (event.kind === "workspace.status_changed" || event.kind === "workspace.deleted") &&
+    event.workspace_id === workspaceId
+  ) {
+    return { kind: "invalidate" };
+  }
+
+  if (event.kind !== "service.status_changed" || event.workspace_id !== workspaceId) {
+    return { kind: "none" };
+  }
+
+  if (!current) {
+    return { kind: "invalidate" };
+  }
+
+  const next = current.map((service) =>
+    service.service_name === event.service_name
+      ? {
+          ...service,
+          status: event.status,
+          status_reason: event.status_reason,
+        }
+      : service,
+  );
+  const found = next.some((service) => service.service_name === event.service_name);
+
+  if (!found) {
+    return { kind: "invalidate" };
+  }
+
+  return { kind: "replace", data: next };
 }
 
 function createWorkspaceFileQuery(
@@ -728,6 +817,19 @@ export function useProjectWorkspaces(
 export function useWorkspace(workspaceId: string | null): QueryResult<WorkspaceRecord | null> {
   const descriptor = useMemo(
     () => (workspaceId ? createWorkspaceQuery(workspaceId) : null),
+    [workspaceId],
+  );
+
+  return useQuery(descriptor, {
+    disabledData: null,
+  });
+}
+
+export function useWorkspaceSnapshot(
+  workspaceId: string | null,
+): QueryResult<WorkspaceSnapshotResult | null> {
+  const descriptor = useMemo(
+    () => (workspaceId ? createWorkspaceSnapshotQuery(workspaceId) : null),
     [workspaceId],
   );
 

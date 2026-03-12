@@ -1,26 +1,56 @@
 import { Alert, AlertDescription, AlertTitle } from "@lifecycle/ui";
+import { lazy, Suspense, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
+import type { QueryResult } from "../../../query";
+import { markPerformance, measurePerformance } from "../../../lib/performance";
 import { useProjectManifest } from "../../projects/hooks";
-import { WorkspacePanel } from "../components/workspace-panel";
-import { useWorkspace } from "../hooks";
+import { useWorkspaceSnapshot } from "../hooks";
+
+const WorkspacePanel = lazy(async () => {
+  const module = await import("../components/workspace-panel");
+  return {
+    default: module.WorkspacePanel,
+  };
+});
 
 export function WorkspaceRoute() {
   const { workspaceId } = useParams();
-  const workspaceQuery = useWorkspace(workspaceId ?? null);
-  const manifestQuery = useProjectManifest(workspaceQuery.data?.project_id ?? null);
+  const workspaceSnapshotQuery = useWorkspaceSnapshot(workspaceId ?? null);
+  const readyMeasuredRef = useRef(false);
+  const workspace = workspaceSnapshotQuery.data?.workspace ?? null;
+  const manifestQuery = useProjectManifest(workspace?.project_id ?? null);
 
-  if (workspaceQuery.error) {
+  useEffect(() => {
+    if (!workspaceId) {
+      return;
+    }
+
+    readyMeasuredRef.current = false;
+    markPerformance("workspace-route:start");
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (readyMeasuredRef.current || !workspace || manifestQuery.status !== "ready") {
+      return;
+    }
+
+    readyMeasuredRef.current = true;
+    markPerformance("workspace-route:ready");
+    measurePerformance("workspace-route", "workspace-route:start", "workspace-route:ready");
+  }, [manifestQuery.status, workspace]);
+
+  if (hasBlockingQueryError(workspaceSnapshotQuery)) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <Alert className="max-w-lg" variant="destructive">
           <AlertTitle>Failed to load workspace</AlertTitle>
-          <AlertDescription>{String(workspaceQuery.error)}</AlertDescription>
+          <AlertDescription>{String(workspaceSnapshotQuery.error)}</AlertDescription>
         </Alert>
       </div>
     );
   }
 
-  if (workspaceQuery.isLoading) {
+  if (hasBlockingQueryLoad(workspaceSnapshotQuery)) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-sm text-[var(--muted-foreground)]">Loading workspace...</p>
@@ -28,7 +58,7 @@ export function WorkspaceRoute() {
     );
   }
 
-  if (!workspaceQuery.data) {
+  if (!workspace) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-sm text-[var(--muted-foreground)]">Workspace not found.</p>
@@ -36,7 +66,7 @@ export function WorkspaceRoute() {
     );
   }
 
-  if (manifestQuery.isLoading) {
+  if (hasBlockingQueryLoad(manifestQuery)) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-sm text-[var(--muted-foreground)]">Loading workspace...</p>
@@ -44,7 +74,7 @@ export function WorkspaceRoute() {
     );
   }
 
-  if (manifestQuery.error) {
+  if (hasBlockingQueryError(manifestQuery)) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <Alert className="max-w-lg" variant="destructive">
@@ -56,6 +86,30 @@ export function WorkspaceRoute() {
   }
 
   return (
-    <WorkspacePanel workspace={workspaceQuery.data} manifestStatus={manifestQuery.data ?? null} />
+    <Suspense
+      fallback={
+        <div className="flex flex-1 items-center justify-center p-8">
+          <p className="text-sm text-[var(--muted-foreground)]">Loading workspace...</p>
+        </div>
+      }
+    >
+      <WorkspacePanel
+        manifestStatus={manifestQuery.data ?? null}
+        workspace={workspace}
+        workspaceSnapshot={workspaceSnapshotQuery.data ?? null}
+      />
+    </Suspense>
   );
+}
+
+export function hasBlockingQueryLoad<T>(
+  query: Pick<QueryResult<T>, "data" | "isLoading">,
+): boolean {
+  return query.isLoading && query.data === undefined;
+}
+
+export function hasBlockingQueryError<T>(
+  query: Pick<QueryResult<T>, "data" | "error">,
+): boolean {
+  return query.error !== null && query.error !== undefined && query.data === undefined;
 }

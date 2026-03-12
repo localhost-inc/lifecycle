@@ -1,14 +1,17 @@
 use crate::capabilities::workspaces::manifest::{
     parse_lifecycle_config, LifecycleConfig, ServiceConfig,
 };
-use crate::platform::db::{open_db, DbPath};
+use crate::platform::db::{map_database_result, open_db, DbPath};
+use crate::platform::diagnostics;
 use crate::platform::runtime::{health, setup, supervisor};
 use crate::shared::errors::{
     LifecycleError, ServiceStatus, WorkspaceFailureReason, WorkspaceStatus,
 };
 use crate::{ManagedSupervisor, SupervisorMap};
 use rusqlite::params;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 use tauri::{AppHandle, State};
 
 use super::environment_graph::{
@@ -205,7 +208,7 @@ fn build_runtime_env(
     db_path: &str,
     workspace_id: &str,
     worktree_path: &str,
-) -> Result<std::collections::HashMap<String, String>, LifecycleError> {
+) -> Result<HashMap<String, String>, LifecycleError> {
     let conn = open_db(db_path)?;
     let (workspace_name, source_ref): (String, String) = conn
         .query_row(
@@ -215,7 +218,7 @@ fn build_runtime_env(
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
 
-    let mut env = std::collections::HashMap::from([
+    let mut env = HashMap::from([
         (
             "LIFECYCLE_WORKSPACE_ID".to_string(),
             workspace_id.to_string(),
@@ -294,6 +297,286 @@ async fn stop_managed_supervisor(supervisor: &ManagedSupervisor) {
     supervisor.stop_all().await;
 }
 
+struct WorkspaceStartContext<'a> {
+    app: &'a AppHandle,
+    db_path: &'a str,
+    supervisor: &'a ManagedSupervisor,
+    workspace_id: &'a str,
+    worktree_path: &'a str,
+    storage_root: &'a Path,
+    runtime_env: &'a HashMap<String, String>,
+}
+
+impl WorkspaceStartContext<'_> {
+    async fn abort_if_needed(&self) -> Result<bool, LifecycleError> {
+        abort_start_if_needed(self.db_path, self.workspace_id, self.supervisor).await
+    }
+
+    async fn record_failure(
+        &self,
+        failure_reason: WorkspaceFailureReason,
+    ) -> Result<bool, LifecycleError> {
+        record_start_failure(
+            self.app,
+            self.db_path,
+            self.workspace_id,
+            self.supervisor,
+            failure_reason,
+        )
+        .await
+    }
+
+    async fn execute_service_node(
+        &self,
+        service_name: &str,
+        service: &ServiceConfig,
+    ) -> Result<(), LifecycleError> {
+        if self.abort_if_needed().await? {
+            return Ok(());
+        }
+
+        update_service_status_db(
+            self.db_path,
+            self.workspace_id,
+            service_name,
+            &ServiceStatus::Starting,
+            None,
+        )?;
+        emit_service_status(self.app, self.workspace_id, service_name, "starting", None);
+
+        let service_start_started_at = Instant::now();
+        let start_result = match service {
+            ServiceConfig::Process(process_svc) => {
+                let mut managed = self.supervisor.lock().await;
+                managed
+                    .start_process(
+                        service_name,
+                        process_svc,
+                        self.worktree_path,
+                        self.runtime_env,
+                    )
+                    .await
+            }
+            ServiceConfig::Image(image_svc) => {
+                let mut managed = self.supervisor.lock().await;
+                managed
+                    .start_container(
+                        service_name,
+                        image_svc,
+                        self.workspace_id,
+                        self.worktree_path,
+                        self.storage_root,
+                        self.runtime_env,
+                    )
+                    .await
+            }
+        };
+
+        if let Err(error) = start_result {
+            if self.abort_if_needed().await? {
+                return Ok(());
+            }
+
+            let failed_service_name = service_name_for_start_error(&error, service_name);
+            let service_status_reason = service_status_reason_for_start_error(&error);
+            let workspace_failure_reason = workspace_failure_reason_for_start_error(&error);
+
+            update_service_status_db(
+                self.db_path,
+                self.workspace_id,
+                &failed_service_name,
+                &ServiceStatus::Failed,
+                Some(service_status_reason),
+            )?;
+            emit_service_status(
+                self.app,
+                self.workspace_id,
+                &failed_service_name,
+                "failed",
+                Some(service_status_reason),
+            );
+
+            let recorded = self.record_failure(workspace_failure_reason).await?;
+            if !recorded {
+                return Ok(());
+            }
+
+            return Err(error);
+        }
+
+        diagnostics::append_timing(
+            "workspace-start",
+            &format!(
+                "workspace {} service {service_name} start",
+                self.workspace_id
+            ),
+            service_start_started_at,
+        );
+
+        if service.health_check().is_none() {
+            if matches!(service, ServiceConfig::Process(_)) {
+                tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                if self.abort_if_needed().await? {
+                    return Ok(());
+                }
+
+                let is_running = {
+                    let mut managed = self.supervisor.lock().await;
+                    managed.is_process_running(service_name)
+                };
+
+                if !is_running {
+                    update_service_status_db(
+                        self.db_path,
+                        self.workspace_id,
+                        service_name,
+                        &ServiceStatus::Failed,
+                        Some("service_process_exited"),
+                    )?;
+                    emit_service_status(
+                        self.app,
+                        self.workspace_id,
+                        service_name,
+                        "failed",
+                        Some("service_process_exited"),
+                    );
+                    let recorded = self
+                        .record_failure(WorkspaceFailureReason::ServiceStartFailed)
+                        .await?;
+                    if !recorded {
+                        return Ok(());
+                    }
+
+                    return Err(LifecycleError::ServiceStartFailed {
+                        service: service_name.to_string(),
+                        reason: "process exited before signaling ready".to_string(),
+                    });
+                }
+            }
+
+            if self.abort_if_needed().await? {
+                return Ok(());
+            }
+            update_service_status_db(
+                self.db_path,
+                self.workspace_id,
+                service_name,
+                &ServiceStatus::Ready,
+                None,
+            )?;
+            emit_service_status(self.app, self.workspace_id, service_name, "ready", None);
+            return Ok(());
+        }
+
+        let health_check = service
+            .health_check()
+            .expect("health check already verified to exist");
+        let timeout_secs = service.startup_timeout_seconds();
+        let health_check_started_at = Instant::now();
+        match health::wait_for_health(health_check, timeout_secs).await {
+            Ok(()) => {
+                if self.abort_if_needed().await? {
+                    return Ok(());
+                }
+                update_service_status_db(
+                    self.db_path,
+                    self.workspace_id,
+                    service_name,
+                    &ServiceStatus::Ready,
+                    None,
+                )?;
+                emit_service_status(self.app, self.workspace_id, service_name, "ready", None);
+                diagnostics::append_timing(
+                    "workspace-start",
+                    &format!(
+                        "workspace {} service {service_name} health check",
+                        self.workspace_id
+                    ),
+                    health_check_started_at,
+                );
+            }
+            Err(_) => {
+                if self.abort_if_needed().await? {
+                    return Ok(());
+                }
+                update_service_status_db(
+                    self.db_path,
+                    self.workspace_id,
+                    service_name,
+                    &ServiceStatus::Failed,
+                    Some("service_port_unreachable"),
+                )?;
+                emit_service_status(
+                    self.app,
+                    self.workspace_id,
+                    service_name,
+                    "failed",
+                    Some("service_port_unreachable"),
+                );
+                let recorded = self
+                    .record_failure(WorkspaceFailureReason::ServiceHealthcheckFailed)
+                    .await?;
+                if !recorded {
+                    return Ok(());
+                }
+
+                return Err(LifecycleError::ServiceHealthcheckFailed {
+                    service: service_name.to_string(),
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn execute_task_node(
+        &self,
+        step: &crate::capabilities::workspaces::manifest::SetupStep,
+    ) -> Result<(), LifecycleError> {
+        if self.abort_if_needed().await? {
+            return Ok(());
+        }
+
+        if let Err(error) = setup::run_setup_steps(
+            self.app,
+            self.workspace_id,
+            self.worktree_path,
+            std::slice::from_ref(step),
+            self.runtime_env,
+        )
+        .await
+        {
+            let recorded = self
+                .record_failure(WorkspaceFailureReason::SetupStepFailed)
+                .await?;
+            if !recorded {
+                return Ok(());
+            }
+            return Err(error);
+        }
+
+        Ok(())
+    }
+
+    async fn execute_environment_graph(
+        &self,
+        sorted_nodes: &[(&str, &EnvironmentNode)],
+    ) -> Result<(), LifecycleError> {
+        for (node_name, node) in sorted_nodes {
+            match &node.kind {
+                EnvironmentNodeKind::Task(step) => {
+                    self.execute_task_node(step).await?;
+                }
+                EnvironmentNodeKind::Service(service) => {
+                    self.execute_service_node(node_name, service).await?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
 async fn abort_start_if_needed(
     db_path: &str,
     workspace_id: &str,
@@ -335,289 +618,36 @@ async fn record_start_failure(
     Ok(true)
 }
 
-async fn execute_service_node(
-    app: &AppHandle,
-    db_path: &str,
-    supervisor: &ManagedSupervisor,
-    workspace_id: &str,
-    worktree_path: &str,
-    storage_root: &Path,
-    service_name: &str,
-    service: &ServiceConfig,
-    runtime_env: &std::collections::HashMap<String, String>,
+async fn record_service_graph_failure(
+    ctx: &WorkspaceStartContext<'_>,
+    service_names: &[String],
+    error: LifecycleError,
 ) -> Result<(), LifecycleError> {
-    if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
-        return Ok(());
-    }
-
-    update_service_status_db(
-        db_path,
-        workspace_id,
-        service_name,
-        &ServiceStatus::Starting,
-        None,
+    mark_services_failed(
+        ctx.db_path,
+        ctx.workspace_id,
+        service_names,
+        "service_dependency_failed",
     )?;
-    emit_service_status(app, workspace_id, service_name, "starting", None);
 
-    let start_result = match service {
-        ServiceConfig::Process(process_svc) => {
-            let mut managed = supervisor.lock().await;
-            managed
-                .start_process(service_name, process_svc, worktree_path, runtime_env)
-                .await
-        }
-        ServiceConfig::Image(image_svc) => {
-            let mut managed = supervisor.lock().await;
-            managed
-                .start_container(
-                    service_name,
-                    image_svc,
-                    workspace_id,
-                    worktree_path,
-                    storage_root,
-                    runtime_env,
-                )
-                .await
-        }
-    };
-
-    if let Err(error) = start_result {
-        if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
-            return Ok(());
-        }
-
-        let failed_service_name = service_name_for_start_error(&error, service_name);
-        let service_status_reason = service_status_reason_for_start_error(&error);
-        let workspace_failure_reason = workspace_failure_reason_for_start_error(&error);
-
-        update_service_status_db(
-            db_path,
-            workspace_id,
-            &failed_service_name,
-            &ServiceStatus::Failed,
-            Some(service_status_reason),
-        )?;
+    for service_name in service_names {
         emit_service_status(
-            app,
-            workspace_id,
-            &failed_service_name,
-            "failed",
-            Some(service_status_reason),
-        );
-
-        let recorded = record_start_failure(
-            app,
-            db_path,
-            workspace_id,
-            supervisor,
-            workspace_failure_reason,
-        )
-        .await?;
-        if !recorded {
-            return Ok(());
-        }
-
-        return Err(error);
-    }
-
-    if service.health_check().is_none() {
-        if matches!(service, ServiceConfig::Process(_)) {
-            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-            if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
-                return Ok(());
-            }
-
-            let is_running = {
-                let mut managed = supervisor.lock().await;
-                managed.is_process_running(service_name)
-            };
-
-            if !is_running {
-                update_service_status_db(
-                    db_path,
-                    workspace_id,
-                    service_name,
-                    &ServiceStatus::Failed,
-                    Some("service_process_exited"),
-                )?;
-                emit_service_status(
-                    app,
-                    workspace_id,
-                    service_name,
-                    "failed",
-                    Some("service_process_exited"),
-                );
-                let recorded = record_start_failure(
-                    app,
-                    db_path,
-                    workspace_id,
-                    supervisor,
-                    WorkspaceFailureReason::ServiceStartFailed,
-                )
-                .await?;
-                if !recorded {
-                    return Ok(());
-                }
-
-                return Err(LifecycleError::ServiceStartFailed {
-                    service: service_name.to_string(),
-                    reason: "process exited before signaling ready".to_string(),
-                });
-            }
-        }
-
-        if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
-            return Ok(());
-        }
-        update_service_status_db(
-            db_path,
-            workspace_id,
+            ctx.app,
+            ctx.workspace_id,
             service_name,
-            &ServiceStatus::Ready,
-            None,
-        )?;
-        emit_service_status(app, workspace_id, service_name, "ready", None);
-        return Ok(());
+            "failed",
+            Some("service_dependency_failed"),
+        );
     }
 
-    let health_check = service
-        .health_check()
-        .expect("health check already verified to exist");
-    let timeout_secs = service.startup_timeout_seconds();
-    match health::wait_for_health(health_check, timeout_secs).await {
-        Ok(()) => {
-            if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
-                return Ok(());
-            }
-            update_service_status_db(
-                db_path,
-                workspace_id,
-                service_name,
-                &ServiceStatus::Ready,
-                None,
-            )?;
-            emit_service_status(app, workspace_id, service_name, "ready", None);
-        }
-        Err(_) => {
-            if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
-                return Ok(());
-            }
-            update_service_status_db(
-                db_path,
-                workspace_id,
-                service_name,
-                &ServiceStatus::Failed,
-                Some("service_port_unreachable"),
-            )?;
-            emit_service_status(
-                app,
-                workspace_id,
-                service_name,
-                "failed",
-                Some("service_port_unreachable"),
-            );
-            let recorded = record_start_failure(
-                app,
-                db_path,
-                workspace_id,
-                supervisor,
-                WorkspaceFailureReason::ServiceHealthcheckFailed,
-            )
-            .await?;
-            if !recorded {
-                return Ok(());
-            }
-
-            return Err(LifecycleError::ServiceHealthcheckFailed {
-                service: service_name.to_string(),
-            });
-        }
-    }
-
-    Ok(())
-}
-
-async fn execute_task_node(
-    app: &AppHandle,
-    db_path: &str,
-    supervisor: &ManagedSupervisor,
-    workspace_id: &str,
-    worktree_path: &str,
-    step: &crate::capabilities::workspaces::manifest::SetupStep,
-    runtime_env: &std::collections::HashMap<String, String>,
-) -> Result<(), LifecycleError> {
-    if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
-        return Ok(());
-    }
-
-    if let Err(error) = setup::run_setup_steps(
-        app,
-        workspace_id,
-        worktree_path,
-        std::slice::from_ref(step),
-        runtime_env,
-    )
-    .await
-    {
-        let recorded = record_start_failure(
-            app,
-            db_path,
-            workspace_id,
-            supervisor,
-            WorkspaceFailureReason::SetupStepFailed,
-        )
+    let recorded = ctx
+        .record_failure(WorkspaceFailureReason::ServiceStartFailed)
         .await?;
-        if !recorded {
-            return Ok(());
-        }
-        return Err(error);
+    if !recorded {
+        return Ok(());
     }
 
-    Ok(())
-}
-
-async fn execute_environment_graph(
-    app: &AppHandle,
-    db_path: &str,
-    supervisor: &ManagedSupervisor,
-    workspace_id: &str,
-    worktree_path: &str,
-    storage_root: &Path,
-    sorted_nodes: &[(&str, &EnvironmentNode)],
-    runtime_env: &std::collections::HashMap<String, String>,
-) -> Result<(), LifecycleError> {
-    for (node_name, node) in sorted_nodes {
-        match &node.kind {
-            EnvironmentNodeKind::Task(step) => {
-                execute_task_node(
-                    app,
-                    db_path,
-                    supervisor,
-                    workspace_id,
-                    worktree_path,
-                    step,
-                    runtime_env,
-                )
-                .await?;
-            }
-            EnvironmentNodeKind::Service(service) => {
-                execute_service_node(
-                    app,
-                    db_path,
-                    supervisor,
-                    workspace_id,
-                    worktree_path,
-                    storage_root,
-                    node_name,
-                    service,
-                    runtime_env,
-                )
-                .await?;
-            }
-        }
-    }
-
-    Ok(())
+    Err(error)
 }
 
 async fn start_services_lifecycle(
@@ -629,6 +659,7 @@ async fn start_services_lifecycle(
     config: &LifecycleConfig,
     manifest_fingerprint: &str,
 ) -> Result<(), LifecycleError> {
+    let total_started_at = Instant::now();
     reconcile_workspace_services_db(
         db_path,
         workspace_id,
@@ -678,40 +709,21 @@ async fn start_services_lifecycle(
     };
     let runtime_env = build_runtime_env(db_path, workspace_id, worktree_path)?;
     let storage_root = workspace_volume_root(db_path, workspace_id)?;
+    let ctx = WorkspaceStartContext {
+        app,
+        db_path,
+        supervisor,
+        workspace_id,
+        worktree_path,
+        storage_root: &storage_root,
+        runtime_env: &runtime_env,
+    };
     let sorted_nodes = match topo_sort_environment_nodes(&lowered_graph.environment_nodes) {
         Ok(sorted) => sorted,
         Err(error) => {
             let service_names: Vec<String> = runtime_config.services.keys().cloned().collect();
-            mark_services_failed(
-                db_path,
-                workspace_id,
-                &service_names,
-                "service_dependency_failed",
-            )?;
-
-            for service_name in &service_names {
-                emit_service_status(
-                    app,
-                    workspace_id,
-                    service_name,
-                    "failed",
-                    Some("service_dependency_failed"),
-                );
-            }
-
-            let recorded = record_start_failure(
-                app,
-                db_path,
-                workspace_id,
-                supervisor,
-                WorkspaceFailureReason::ServiceStartFailed,
-            )
-            .await?;
-            if !recorded {
-                return Ok(());
-            }
-
-            return Err(error);
+            record_service_graph_failure(&ctx, &service_names, error).await?;
+            return Ok(());
         }
     };
 
@@ -722,6 +734,7 @@ async fn start_services_lifecycle(
             .any(|node| matches!(node.kind, EnvironmentNodeKind::Task(_)));
 
     if !lowered_graph.workspace_setup.is_empty() {
+        let setup_started_at = Instant::now();
         if let Err(error) = setup::run_setup_steps(
             app,
             workspace_id,
@@ -731,48 +744,44 @@ async fn start_services_lifecycle(
         )
         .await
         {
-            let recorded = record_start_failure(
-                app,
-                db_path,
-                workspace_id,
-                supervisor,
-                WorkspaceFailureReason::SetupStepFailed,
-            )
-            .await?;
+            let recorded = ctx
+                .record_failure(WorkspaceFailureReason::SetupStepFailed)
+                .await?;
             if !recorded {
                 return Ok(());
             }
             return Err(error);
         }
 
-        if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
+        diagnostics::append_timing(
+            "workspace-start",
+            &format!("workspace {workspace_id} setup"),
+            setup_started_at,
+        );
+
+        if ctx.abort_if_needed().await? {
             return Ok(());
         }
     }
 
-    execute_environment_graph(
-        app,
-        db_path,
-        supervisor,
-        workspace_id,
-        worktree_path,
-        &storage_root,
-        &sorted_nodes,
-        &runtime_env,
-    )
-    .await?;
+    ctx.execute_environment_graph(&sorted_nodes).await?;
 
     if !setup_completed && setup_work_ran {
         mark_setup_completed(db_path, workspace_id)?;
     }
 
-    if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
+    if ctx.abort_if_needed().await? {
         return Ok(());
     }
 
     // All healthy -> active.
     update_workspace_status_db(db_path, workspace_id, &WorkspaceStatus::Active, None)?;
     emit_workspace_status(app, workspace_id, "active", None);
+    diagnostics::append_timing(
+        "workspace-start",
+        &format!("workspace {workspace_id} total"),
+        total_started_at,
+    );
 
     Ok(())
 }
@@ -790,13 +799,11 @@ pub async fn start_services(
     // Read workspace row — validate worktree_path is set.
     let worktree_path = {
         let conn = open_db(&db_path.0)?;
-        let path: Option<String> = conn
-            .query_row(
-                "SELECT worktree_path FROM workspace WHERE id = ?1",
-                params![workspace_id],
-                |row| row.get(0),
-            )
-            .map_err(|e| LifecycleError::Database(e.to_string()))?;
+        let path: Option<String> = map_database_result(conn.query_row(
+            "SELECT worktree_path FROM workspace WHERE id = ?1",
+            params![workspace_id],
+            |row| row.get(0),
+        ))?;
         path.ok_or_else(|| {
             LifecycleError::WorkspaceNotFound(format!(
                 "workspace '{}' has no worktree path",

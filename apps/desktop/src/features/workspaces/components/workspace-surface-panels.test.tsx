@@ -27,6 +27,7 @@ describe("WorkspaceSurfacePanels", () => {
       createElement(WorkspaceSurfacePanels, {
         activeTabKey: changesTab.key,
         activeTerminalId: null,
+        activeTabViewState: null,
         activity: [],
         creatingSelection: null,
         documents: [changesTab],
@@ -34,6 +35,7 @@ describe("WorkspaceSurfacePanels", () => {
         onCreateTerminal: async () => {},
         onOpenFile,
         onOpenTerminal: () => {},
+        onTabViewStateChange: () => {},
         sessionHistory: [],
         terminals: [],
         waitingForActiveRuntimeTab: false,

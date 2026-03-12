@@ -22,6 +22,7 @@ export const gitKeys = {
 };
 
 interface GitQueryOptions {
+  enabled?: boolean;
   polling?: boolean;
 }
 
@@ -133,11 +134,30 @@ function usePollingRefresh(
       return;
     }
 
-    const timer = window.setInterval(() => {
+    const refreshIfVisible = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
+        return;
+      }
+
       void refresh();
+    };
+
+    const timer = window.setInterval(() => {
+      refreshIfVisible();
     }, intervalMs);
 
-    return () => window.clearInterval(timer);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshIfVisible();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [enabled, intervalMs, refresh]);
 }
 
@@ -145,80 +165,101 @@ export function useGitStatus(
   workspaceId: string | null,
   options?: GitQueryOptions,
 ): QueryResult<GitStatusResult | undefined> {
+  const enabled = options?.enabled ?? true;
   const descriptor = useMemo(
-    () => (workspaceId ? createGitStatusQuery(workspaceId) : null),
-    [workspaceId],
+    () => (workspaceId && enabled ? createGitStatusQuery(workspaceId) : null),
+    [enabled, workspaceId],
   );
   const query = useQuery(descriptor, {
     disabledData: undefined,
   });
   const polling = options?.polling ?? true;
 
-  usePollingRefresh(query.refresh, Boolean(workspaceId) && polling, 3000);
+  usePollingRefresh(query.refresh, Boolean(workspaceId) && enabled && polling, 3000);
   return query;
 }
 
 export function useGitLog(
   workspaceId: string | null,
   limit = 50,
+  options?: GitQueryOptions,
 ): QueryResult<GitLogEntry[] | undefined> {
+  const enabled = options?.enabled ?? true;
   const descriptor = useMemo(
-    () => (workspaceId ? createGitLogQuery(workspaceId, limit) : null),
-    [limit, workspaceId],
+    () => (workspaceId && enabled ? createGitLogQuery(workspaceId, limit) : null),
+    [enabled, limit, workspaceId],
   );
   const query = useQuery(descriptor, {
     disabledData: undefined,
   });
 
-  usePollingRefresh(query.refresh, Boolean(workspaceId), 10000);
+  usePollingRefresh(query.refresh, Boolean(workspaceId) && enabled && (options?.polling ?? true), 10000);
   return query;
 }
 
 export function useGitPullRequests(
   workspaceId: string | null,
+  options?: GitQueryOptions,
 ): QueryResult<GitPullRequestListResult | undefined> {
+  const enabled = options?.enabled ?? true;
   const descriptor = useMemo(
-    () => (workspaceId ? createGitPullRequestsQuery(workspaceId) : null),
-    [workspaceId],
+    () => (workspaceId && enabled ? createGitPullRequestsQuery(workspaceId) : null),
+    [enabled, workspaceId],
   );
   const query = useQuery(descriptor, {
     disabledData: undefined,
   });
 
-  usePollingRefresh(query.refresh, Boolean(workspaceId), 15000);
+  usePollingRefresh(
+    query.refresh,
+    Boolean(workspaceId) && enabled && (options?.polling ?? true),
+    15000,
+  );
   return query;
 }
 
 export function useGitPullRequest(
   workspaceId: string | null,
   pullRequestNumber: number | null,
+  options?: GitQueryOptions,
 ): QueryResult<GitPullRequestDetailResult | undefined> {
+  const enabled = options?.enabled ?? true;
   const descriptor = useMemo(
     () =>
-      workspaceId && pullRequestNumber !== null
+      workspaceId && pullRequestNumber !== null && enabled
         ? createGitPullRequestQuery(workspaceId, pullRequestNumber)
         : null,
-    [pullRequestNumber, workspaceId],
+    [enabled, pullRequestNumber, workspaceId],
   );
   const query = useQuery(descriptor, {
     disabledData: undefined,
   });
 
-  usePollingRefresh(query.refresh, Boolean(workspaceId) && pullRequestNumber !== null, 10000);
+  usePollingRefresh(
+    query.refresh,
+    Boolean(workspaceId) && pullRequestNumber !== null && enabled && (options?.polling ?? true),
+    10000,
+  );
   return query;
 }
 
 export function useCurrentGitPullRequest(
   workspaceId: string | null,
+  options?: GitQueryOptions,
 ): QueryResult<GitBranchPullRequestResult | undefined> {
+  const enabled = options?.enabled ?? true;
   const descriptor = useMemo(
-    () => (workspaceId ? createCurrentGitPullRequestQuery(workspaceId) : null),
-    [workspaceId],
+    () => (workspaceId && enabled ? createCurrentGitPullRequestQuery(workspaceId) : null),
+    [enabled, workspaceId],
   );
   const query = useQuery(descriptor, {
     disabledData: undefined,
   });
 
-  usePollingRefresh(query.refresh, Boolean(workspaceId), 8000);
+  usePollingRefresh(
+    query.refresh,
+    Boolean(workspaceId) && enabled && (options?.polling ?? true),
+    8000,
+  );
   return query;
 }

@@ -4,6 +4,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
+use std::time::Instant;
 
 static DIAGNOSTIC_LOG_PATH: OnceLock<PathBuf> = OnceLock::new();
 static DIAGNOSTIC_LOG_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -81,4 +82,22 @@ pub fn append_diagnostic(context: &str, message: &str) {
 
 pub fn diagnostic_log_path() -> Option<&'static Path> {
     DIAGNOSTIC_LOG_PATH.get().map(PathBuf::as_path)
+}
+
+pub fn performance_diagnostics_enabled() -> bool {
+    cfg!(debug_assertions)
+}
+
+pub fn append_timing(context: &str, label: &str, started_at: Instant) {
+    if !performance_diagnostics_enabled() {
+        return;
+    }
+
+    append_diagnostic(
+        context,
+        &format!(
+            "{label} completed in {}ms",
+            started_at.elapsed().as_millis()
+        ),
+    );
 }

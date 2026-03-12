@@ -69,7 +69,6 @@ const HealthCheckSchema = z.discriminatedUnion("kind", [
 const BaseServiceFields = {
   env_vars: z.record(z.string(), z.string()).optional(),
   depends_on: z.array(z.string()).optional(),
-  restart_policy: z.string().optional(),
   startup_timeout_seconds: z.number().int().positive().optional(),
   health_check: HealthCheckSchema.optional(),
   port: z.number().int().positive().optional(),

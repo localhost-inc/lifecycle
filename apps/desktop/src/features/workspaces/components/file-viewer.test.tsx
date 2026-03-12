@@ -2,7 +2,13 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ThemeProvider } from "@lifecycle/ui";
-import { FileViewer, resolveFileViewerRenderer, summarizePencilDocument } from "./file-viewer";
+import {
+  FileViewer,
+  getFileViewerScrollRestoreKey,
+  resolveFileViewerRenderer,
+  summarizePencilDocument,
+} from "./file-viewer";
+import { MarkdownFileRenderer } from "./markdown-file-renderer";
 
 describe("FileViewer helpers", () => {
   test("maps supported extensions to custom renderer kinds", () => {
@@ -36,6 +42,32 @@ describe("FileViewer helpers", () => {
       uniqueTypeCount: 3,
       version: "3",
     });
+  });
+
+  test("only restores file viewer scroll after loading a specific renderer/file pair", () => {
+    expect(
+      getFileViewerScrollRestoreKey({
+        filePath: "docs/privacy-notice.md",
+        isLoading: true,
+        renderer: "markdown",
+      }),
+    ).toBeNull();
+
+    expect(
+      getFileViewerScrollRestoreKey({
+        filePath: "docs/privacy-notice.md",
+        isLoading: false,
+        renderer: "markdown",
+      }),
+    ).toBe("markdown:docs/privacy-notice.md");
+
+    expect(
+      getFileViewerScrollRestoreKey({
+        filePath: "design/mock.pen",
+        isLoading: false,
+        renderer: "pencil",
+      }),
+    ).toBe("pencil:design/mock.pen");
   });
 });
 
@@ -75,9 +107,7 @@ describe("FileViewer", () => {
 
     expect(markup).toContain("File Viewer");
     expect(markup).toContain("Markdown");
-    expect(markup).toContain("<h1");
-    expect(markup).toContain("Hello");
-    expect(markup).toContain("first");
+    expect(markup).toContain("Loading markdown preview...");
   });
 
   test("renders .pen files with the pencil summary view", async () => {
@@ -130,5 +160,20 @@ describe("FileViewer", () => {
     expect(markup).toContain("Mockup");
     expect(markup).toContain("rectangle");
     expect(markup).toContain("Raw JSON");
+  });
+});
+
+describe("MarkdownFileRenderer", () => {
+  test("renders markdown content eagerly once loaded", () => {
+    const markup = renderToStaticMarkup(
+      createElement(MarkdownFileRenderer, {
+        content: "# Hello\n\n- first\n- second\n",
+      }),
+    );
+
+    expect(markup).toContain("<h1");
+    expect(markup).toContain("Hello");
+    expect(markup).toContain("first");
+    expect(markup).toContain("markdown-file-renderer");
   });
 });

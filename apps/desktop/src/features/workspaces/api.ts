@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   LifecycleConfig,
   ServiceRecord,
+  TerminalRecord,
   WorkspaceKind,
   WorkspaceRecord,
   WorkspaceServiceExposure,
@@ -67,14 +68,16 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
   }
 
   return invoke<string>("create_workspace", {
-    projectId: input.projectId,
-    projectPath: input.projectPath,
-    workspaceName: input.workspaceName,
-    baseRef: input.baseRef,
-    worktreeRoot: input.worktreeRoot,
-    kind: input.kind ?? "managed",
-    manifestJson: input.manifestJson ?? null,
-    manifestFingerprint: input.manifestFingerprint ?? null,
+    input: {
+      projectId: input.projectId,
+      projectPath: input.projectPath,
+      workspaceName: input.workspaceName,
+      baseRef: input.baseRef,
+      worktreeRoot: input.worktreeRoot,
+      kind: input.kind ?? "managed",
+      manifestJson: input.manifestJson ?? null,
+      manifestFingerprint: input.manifestFingerprint ?? null,
+    },
   });
 }
 
@@ -178,6 +181,27 @@ export async function getWorkspaceServices(workspaceId: string): Promise<Service
   }
 
   return invoke<ServiceRecord[]>("get_workspace_services", { workspaceId });
+}
+
+export interface WorkspaceSnapshotResult {
+  services: ServiceRecord[];
+  terminals: TerminalRecord[];
+  workspace: WorkspaceRecord | null;
+}
+
+export async function getWorkspaceSnapshot(
+  workspaceId: string,
+): Promise<WorkspaceSnapshotResult> {
+  if (!isTauri()) {
+    void workspaceId;
+    return {
+      services: [],
+      terminals: [],
+      workspace: null,
+    };
+  }
+
+  return invoke<WorkspaceSnapshotResult>("get_workspace_snapshot", { workspaceId });
 }
 
 export interface UpdateWorkspaceServiceInput {

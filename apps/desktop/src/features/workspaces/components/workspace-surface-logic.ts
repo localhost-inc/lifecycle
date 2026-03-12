@@ -25,6 +25,7 @@ import {
   type ChangesDiffDocument,
   type WorkspaceSurfaceDocument,
   type WorkspaceSurfaceState,
+  type WorkspaceSurfaceTabViewState,
 } from "../state/workspace-surface-state";
 
 export interface ChangesDiffOpenRequest {
@@ -108,6 +109,7 @@ export type WorkspaceSurfaceAction =
   | { kind: "show-runtime-tab"; key: string; select: boolean }
   | { kind: "set-hidden-runtime-tab-keys"; keys: string[] }
   | { kind: "set-tab-order"; keys: string[] }
+  | { kind: "set-tab-view-state"; key: string; viewState: WorkspaceSurfaceTabViewState | null }
   | { kind: "sync-active"; key: string | null };
 
 function appendWorkspaceTabKey(keys: readonly string[], key: string): string[] {
@@ -116,6 +118,21 @@ function appendWorkspaceTabKey(keys: readonly string[], key: string): string[] {
 
 function removeWorkspaceTabKey(keys: readonly string[], key: string): string[] {
   return keys.filter((existingKey) => existingKey !== key);
+}
+
+function omitWorkspaceTabViewState(
+  viewStateByTabKey: WorkspaceSurfaceState["viewStateByTabKey"],
+  key: string,
+): WorkspaceSurfaceState["viewStateByTabKey"] {
+  if (!(key in viewStateByTabKey)) {
+    return viewStateByTabKey;
+  }
+
+  const nextViewStateByTabKey = {
+    ...viewStateByTabKey,
+  };
+  delete nextViewStateByTabKey[key];
+  return nextViewStateByTabKey;
 }
 
 export function releaseWebviewFocus(): void {
@@ -605,6 +622,7 @@ export function workspaceSurfaceReducer(
         activeTabKey: action.nextActiveKey,
         documents: state.documents.filter((tab) => tab.key !== action.key),
         tabOrderKeys: removeWorkspaceTabKey(state.tabOrderKeys, action.key),
+        viewStateByTabKey: omitWorkspaceTabViewState(state.viewStateByTabKey, action.key),
       };
     case "hide-runtime-tab":
       return {
@@ -612,6 +630,7 @@ export function workspaceSurfaceReducer(
         activeTabKey: action.nextActiveKey,
         hiddenRuntimeTabKeys: appendWorkspaceTabKey(state.hiddenRuntimeTabKeys, action.key),
         tabOrderKeys: removeWorkspaceTabKey(state.tabOrderKeys, action.key),
+        viewStateByTabKey: omitWorkspaceTabViewState(state.viewStateByTabKey, action.key),
       };
     case "show-runtime-tab":
       return {
@@ -634,6 +653,22 @@ export function workspaceSurfaceReducer(
       return areStringArraysEqual(state.tabOrderKeys, action.keys)
         ? state
         : { ...state, tabOrderKeys: action.keys };
+    case "set-tab-view-state": {
+      const nextViewStateByTabKey =
+        action.viewState === null
+          ? omitWorkspaceTabViewState(state.viewStateByTabKey, action.key)
+          : {
+              ...state.viewStateByTabKey,
+              [action.key]: action.viewState,
+            };
+
+      return nextViewStateByTabKey === state.viewStateByTabKey
+        ? state
+        : {
+            ...state,
+            viewStateByTabKey: nextViewStateByTabKey,
+          };
+    }
     default:
       return state;
   }

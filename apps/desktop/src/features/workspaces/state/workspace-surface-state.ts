@@ -63,6 +63,11 @@ export interface WorkspaceSurfaceState {
   documents: WorkspaceSurfaceDocument[];
   hiddenRuntimeTabKeys: string[];
   tabOrderKeys: string[];
+  viewStateByTabKey: Record<string, WorkspaceSurfaceTabViewState>;
+}
+
+export interface WorkspaceSurfaceTabViewState {
+  scrollTop: number;
 }
 
 type PersistedChangesDiffDocument = {
@@ -113,6 +118,7 @@ type PersistedWorkspaceState = {
   documents?: unknown;
   hiddenRuntimeTabKeys?: unknown;
   tabOrderKeys?: unknown;
+  viewStateByTabKey?: unknown;
 };
 
 type PersistedWorkspaceStateMap = Record<string, PersistedWorkspaceState>;
@@ -271,6 +277,7 @@ export function createDefaultWorkspaceSurfaceState(): WorkspaceSurfaceState {
     documents: [],
     hiddenRuntimeTabKeys: [],
     tabOrderKeys: [],
+    viewStateByTabKey: {},
   };
 }
 
@@ -298,6 +305,29 @@ function normalizeTabKeyList(keys: readonly string[]): string[] {
   return [...dedupedKeys];
 }
 
+function normalizeViewStateByTabKey(
+  viewStateByTabKey: WorkspaceSurfaceState["viewStateByTabKey"],
+  knownTabKeys: ReadonlySet<string>,
+): WorkspaceSurfaceState["viewStateByTabKey"] {
+  const normalized: WorkspaceSurfaceState["viewStateByTabKey"] = {};
+
+  for (const [key, viewState] of Object.entries(viewStateByTabKey)) {
+    if (!knownTabKeys.has(key)) {
+      continue;
+    }
+
+    if (!Number.isFinite(viewState.scrollTop) || viewState.scrollTop <= 0) {
+      continue;
+    }
+
+    normalized[key] = {
+      scrollTop: viewState.scrollTop,
+    };
+  }
+
+  return normalized;
+}
+
 function normalizeWorkspaceSurfaceState(state: WorkspaceSurfaceState): WorkspaceSurfaceState {
   const documents = normalizeDocuments(state.documents);
   const hiddenRuntimeTabKeys = normalizeTabKeyList(state.hiddenRuntimeTabKeys).filter(
@@ -308,12 +338,20 @@ function normalizeWorkspaceSurfaceState(state: WorkspaceSurfaceState): Workspace
     (key) => !hiddenRuntimeTabKeySet.has(key),
   );
   const activeTabKey = state.activeTabKey;
+  const knownTabKeys = new Set([
+    ...documents.map((document) => document.key),
+    ...hiddenRuntimeTabKeys,
+    ...tabOrderKeys,
+    ...(activeTabKey ? [activeTabKey] : []),
+  ]);
+  const viewStateByTabKey = normalizeViewStateByTabKey(state.viewStateByTabKey, knownTabKeys);
 
   return {
     activeTabKey: activeTabKey && hiddenRuntimeTabKeySet.has(activeTabKey) ? null : activeTabKey,
     documents,
     hiddenRuntimeTabKeys,
     tabOrderKeys,
+    viewStateByTabKey,
   };
 }
 
@@ -556,12 +594,24 @@ function parseWorkspaceSurfaceState(value: unknown): WorkspaceSurfaceState {
   const tabOrderKeys = Array.isArray(value.tabOrderKeys)
     ? value.tabOrderKeys.filter((key): key is string => typeof key === "string")
     : [];
+  const viewStateByTabKey = isRecord(value.viewStateByTabKey)
+    ? Object.fromEntries(
+        Object.entries(value.viewStateByTabKey).flatMap(([key, nextValue]) => {
+          if (!isRecord(nextValue) || typeof nextValue.scrollTop !== "number") {
+            return [];
+          }
+
+          return [[key, { scrollTop: nextValue.scrollTop }] as const];
+        }),
+      )
+    : {};
 
   return normalizeWorkspaceSurfaceState({
     activeTabKey,
     documents,
     hiddenRuntimeTabKeys,
     tabOrderKeys,
+    viewStateByTabKey,
   });
 }
 
@@ -673,6 +723,10 @@ function serializeWorkspaceSurfaceState(state: WorkspaceSurfaceState): Persisted
     serializedState.hiddenRuntimeTabKeys = normalizedState.hiddenRuntimeTabKeys;
   }
 
+  if (Object.keys(normalizedState.viewStateByTabKey).length > 0) {
+    serializedState.viewStateByTabKey = normalizedState.viewStateByTabKey;
+  }
+
   return serializedState;
 }
 
@@ -713,7 +767,8 @@ export function writeWorkspaceSurfaceState(
     normalizedState.documents.length === 0 &&
     normalizedState.activeTabKey === null &&
     normalizedState.hiddenRuntimeTabKeys.length === 0 &&
-    normalizedState.tabOrderKeys.length === 0
+    normalizedState.tabOrderKeys.length === 0 &&
+    Object.keys(normalizedState.viewStateByTabKey).length === 0
   ) {
     delete nextMap[workspaceId];
   } else {

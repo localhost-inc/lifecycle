@@ -9,6 +9,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { ArrowRight, ArrowUpRight, Check, Circle, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { formatRelativeTime } from "../../../lib/format";
+import { measureAsyncPerformance } from "../../../lib/performance";
 import { getGitPullRequestPatch } from "../api";
 import { useCurrentGitPullRequest, useGitPullRequest, useGitPullRequests } from "../hooks";
 import { useParsedGitPatchFiles } from "../lib/parsed-patch-files";
@@ -16,7 +17,9 @@ import { GitPatchViewer } from "./git-patch-viewer";
 import { GithubAvatar } from "./github-avatar";
 
 interface PullRequestSurfaceProps {
+  initialScrollTop?: number;
   onOpenFile?: (filePath: string) => void;
+  onScrollTopChange?: (scrollTop: number) => void;
   pullRequest: GitPullRequestSummary;
   workspaceId: string;
 }
@@ -184,13 +187,39 @@ export function resolvePullRequestSurfaceState({
 }
 
 export function PullRequestSurface({
+  initialScrollTop = 0,
   onOpenFile,
+  onScrollTopChange,
   pullRequest: snapshot,
   workspaceId,
 }: PullRequestSurfaceProps) {
-  const pullRequestsQuery = useGitPullRequests(workspaceId);
-  const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId);
-  const detailPullRequestQuery = useGitPullRequest(workspaceId, snapshot.number);
+  const [documentVisible, setDocumentVisible] = useState(() =>
+    typeof document === "undefined" ? true : document.visibilityState === "visible",
+  );
+  const pullRequestsQuery = useGitPullRequests(workspaceId, {
+    polling: documentVisible,
+  });
+  const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId, {
+    polling: documentVisible,
+  });
+  const detailPullRequestQuery = useGitPullRequest(workspaceId, snapshot.number, {
+    polling: documentVisible,
+  });
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const syncDocumentVisible = () => {
+      setDocumentVisible(document.visibilityState === "visible");
+    };
+
+    document.addEventListener("visibilitychange", syncDocumentVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", syncDocumentVisible);
+    };
+  }, []);
   const surfaceState = useMemo(
     () =>
       resolvePullRequestSurfaceState({
@@ -258,7 +287,10 @@ export function PullRequestSurface({
     setDiffError(null);
     setIsDiffLoading(true);
 
-    void getGitPullRequestPatch(workspaceId, pullRequest.number)
+    void measureAsyncPerformance(
+      `pull-request-surface.patch:${workspaceId}:${pullRequest.number}`,
+      () => getGitPullRequestPatch(workspaceId, pullRequest.number),
+    )
       .then((result) => {
         if (!cancelled) setPatch(result);
       })
@@ -412,9 +444,11 @@ export function PullRequestSurface({
       <GitPatchViewer
         error={diffError}
         errorMessagePrefix="Failed to load diff"
+        initialScrollTop={initialScrollTop}
         isLoading={isDiffLoading}
         loadingMessage="Loading diff..."
         onOpenFile={onOpenFile}
+        onScrollTopChange={onScrollTopChange}
         parsedFiles={parsedFiles}
         patch={patch}
       />

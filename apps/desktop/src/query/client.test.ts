@@ -32,6 +32,13 @@ function createMockSource() {
     async getWorkspace() {
       return null;
     },
+    async getWorkspaceSnapshot() {
+      return {
+        services: [],
+        terminals: [],
+        workspace: null,
+      };
+    },
     async getWorkspaceFile() {
       return {
         absolute_path: "/tmp/workspace/README.md",
@@ -178,6 +185,28 @@ describe("QueryClient", () => {
       status: "active",
       workspace_id: "ws-1",
     });
+
+    expect(client.getSnapshot(descriptor)).toEqual({
+      data: { id: "ws-1", status: "active" },
+      error: null,
+      status: "ready",
+    });
+  });
+
+  test("can prime query data before subscribers fetch", () => {
+    const source = createMockSource();
+    const subscriber = createMockSubscriber();
+    const client = new QueryClient(source, subscriber.subscribe);
+    cleanup.push(() => client.dispose());
+
+    const descriptor: QueryDescriptor<{ id: string; status: string }> = {
+      key: ["workspace", "ws-1"],
+      async fetch() {
+        return { id: "ws-1", status: "idle" };
+      },
+    };
+
+    client.setData(descriptor, { id: "ws-1", status: "active" });
 
     expect(client.getSnapshot(descriptor)).toEqual({
       data: { id: "ws-1", status: "active" },

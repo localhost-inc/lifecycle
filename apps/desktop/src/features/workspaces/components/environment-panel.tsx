@@ -1,7 +1,19 @@
 import type { ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
-import { Button, SetupProgress, Tabs, TabsList, TabsTrigger } from "@lifecycle/ui";
+import {
+  Button,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  SetupProgress,
+  SplitButton,
+  SplitButtonPrimary,
+  SplitButtonSecondary,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+} from "@lifecycle/ui";
 import { useState } from "react";
-import { Play, Square } from "lucide-react";
+import { ChevronDown, Play, RotateCcw, Square } from "lucide-react";
 import { LogsTab } from "./logs-tab";
 import { ServicesTab } from "./services-tab";
 import type { SetupStepState } from "../hooks";
@@ -17,6 +29,7 @@ interface EnvironmentPanelProps {
   hasManifest: boolean;
   isManifestStale: boolean;
   manifestState: "invalid" | "missing" | "valid";
+  onRestart: () => Promise<void>;
   onRun: () => Promise<void>;
   onStop: () => Promise<void>;
   onUpdateService: (input: {
@@ -33,6 +46,7 @@ export function EnvironmentPanel({
   hasManifest,
   isManifestStale,
   manifestState,
+  onRestart,
   onRun,
   onStop,
   onUpdateService,
@@ -41,10 +55,12 @@ export function EnvironmentPanel({
   workspace,
 }: EnvironmentPanelProps) {
   const [activeTab, setActiveTab] = useState<EnvironmentPanelTabValue>("services");
-  const [activeAction, setActiveAction] = useState<"run" | "stop" | null>(null);
+  const [activeAction, setActiveAction] = useState<"restart" | "run" | "stop" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [restartMenuOpen, setRestartMenuOpen] = useState(false);
   const canRun = workspace.status === "idle" && hasManifest;
   const canStop = workspace.status === "active" || workspace.status === "starting";
+  const canRestart = workspace.status === "active" && hasManifest;
   const stopping = workspace.status === "stopping";
   const showSetupProgress =
     setupSteps.length > 0 &&
@@ -85,6 +101,24 @@ export function EnvironmentPanel({
     }
   }
 
+  async function handleRestart(): Promise<void> {
+    if (!canRestart || activeAction !== null) {
+      return;
+    }
+
+    setActionError(null);
+    setActiveAction("restart");
+    setRestartMenuOpen(false);
+
+    try {
+      await onRestart();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setActiveAction(null);
+    }
+  }
+
   const actionConfig =
     canStop || stopping
       ? {
@@ -113,16 +147,57 @@ export function EnvironmentPanel({
               <span className="app-panel-title">Environment</span>
             </div>
             <div className="flex shrink-0 items-center">
-              <Button
-                disabled={actionDisabled}
-                onClick={() => void actionConfig.onClick()}
-                size="sm"
-                title={actionConfig.title}
-                variant={actionConfig.variant}
-              >
-                {actionConfig.icon}
-                <span>{actionConfig.label}</span>
-              </Button>
+              {canRestart ? (
+                <SplitButton>
+                  <SplitButtonPrimary
+                    disabled={actionDisabled}
+                    leadingIcon={<Square className="size-3.5 fill-current" strokeWidth={2.2} />}
+                    onClick={() => void handleStop()}
+                    title="Stop workspace services"
+                    variant="foreground"
+                  >
+                    {activeAction === "stop" || stopping ? "Stopping..." : "Stop"}
+                  </SplitButtonPrimary>
+                  <Popover onOpenChange={setRestartMenuOpen} open={restartMenuOpen}>
+                    <PopoverTrigger asChild>
+                      <SplitButtonSecondary
+                        aria-label="Show environment actions"
+                        disabled={actionDisabled}
+                        title="More environment actions"
+                      >
+                        <ChevronDown className="size-3.5" strokeWidth={2.4} />
+                      </SplitButtonSecondary>
+                    </PopoverTrigger>
+                    <PopoverContent
+                      align="end"
+                      className="w-44 rounded-lg border-[var(--border)] bg-[var(--panel)] p-1 shadow-[0_12px_32px_rgba(0,0,0,0.18)]"
+                      side="bottom"
+                      sideOffset={8}
+                    >
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[var(--foreground)] transition-colors hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={activeAction !== null}
+                        onClick={() => void handleRestart()}
+                      >
+                        <RotateCcw className="size-3.5" strokeWidth={2.2} />
+                        <span>{activeAction === "restart" ? "Restarting..." : "Restart"}</span>
+                      </button>
+                    </PopoverContent>
+                  </Popover>
+                </SplitButton>
+              ) : (
+                <Button
+                  disabled={actionDisabled}
+                  onClick={() => void actionConfig.onClick()}
+                  size="sm"
+                  title={actionConfig.title}
+                  variant={actionConfig.variant}
+                >
+                  {actionConfig.icon}
+                  <span>{actionConfig.label}</span>
+                </Button>
+              )}
             </div>
           </div>
           {workspace.status === "idle" && workspace.failure_reason && (

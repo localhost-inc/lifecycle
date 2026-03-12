@@ -1,21 +1,9 @@
+import { StatusDot } from "@lifecycle/ui";
 import { formatCompactRelativeTime } from "../../../lib/format";
 import type { WorkspaceActivityItem } from "../hooks";
 
 interface WorkspaceActivityFeedProps {
   items: WorkspaceActivityItem[];
-}
-
-function toneClassName(tone: WorkspaceActivityItem["tone"]): string {
-  switch (tone) {
-    case "success":
-      return "bg-emerald-400";
-    case "warning":
-      return "bg-amber-400";
-    case "danger":
-      return "bg-[var(--destructive)]";
-    default:
-      return "bg-[var(--muted-foreground)]/35";
-  }
 }
 
 export function WorkspaceActivityFeed({ items }: WorkspaceActivityFeedProps) {
@@ -34,10 +22,7 @@ export function WorkspaceActivityFeed({ items }: WorkspaceActivityFeedProps) {
             className={`py-3 ${!isLast ? "border-b border-[var(--border)]/40" : ""}`}
           >
             <div className="flex items-start gap-3">
-              <span
-                aria-hidden="true"
-                className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${toneClassName(item.tone)}`}
-              />
+              <StatusDot tone={item.tone} size="default" className="mt-1.5" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-start gap-3">
                   <p className="min-w-0 flex-1 text-sm font-medium text-[var(--foreground)]">

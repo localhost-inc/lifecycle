@@ -76,6 +76,7 @@ describe("EnvironmentPanel", () => {
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
+        onRestart: async () => {},
         onRun: async () => {},
         onStop: async () => {},
         onUpdateService: async () => {},
@@ -88,6 +89,7 @@ describe("EnvironmentPanel", () => {
     expect(markup).toContain("Environment");
     expect(markup).toContain("Stop");
     expect(markup).not.toContain("Run");
+    expect(markup).toContain('aria-label="Show environment actions"');
     expect(markup).toContain("Services");
     expect(markup).toContain("Logs");
   });
@@ -98,6 +100,7 @@ describe("EnvironmentPanel", () => {
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
+        onRestart: async () => {},
         onRun: async () => {},
         onStop: async () => {},
         onUpdateService: async () => {},
@@ -113,6 +116,7 @@ describe("EnvironmentPanel", () => {
 
     expect(markup).toContain("Run");
     expect(markup).not.toContain("Stop");
+    expect(markup).not.toContain('aria-label="Show environment actions"');
     expect(markup).toContain('data-slot="button"');
     expect(markup).toContain("bg-[var(--muted)]");
     expect(markup).toContain("service_start_failed");
@@ -125,6 +129,7 @@ describe("EnvironmentPanel", () => {
         hasManifest: false,
         isManifestStale: false,
         manifestState: "missing",
+        onRestart: async () => {},
         onRun: async () => {},
         onStop: async () => {},
         onUpdateService: async () => {},
@@ -150,6 +155,7 @@ describe("EnvironmentPanel", () => {
         hasManifest: true,
         isManifestStale: true,
         manifestState: "valid",
+        onRestart: async () => {},
         onRun: async () => {},
         onStop: async () => {},
         onUpdateService: async () => {},
@@ -168,6 +174,7 @@ describe("EnvironmentPanel", () => {
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
+        onRestart: async () => {},
         onRun: async () => {},
         onStop: async () => {},
         onUpdateService: async () => {},
@@ -194,6 +201,7 @@ describe("EnvironmentPanel", () => {
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
+        onRestart: async () => {},
         onRun: async () => {},
         onStop: async () => {},
         onUpdateService: async () => {},

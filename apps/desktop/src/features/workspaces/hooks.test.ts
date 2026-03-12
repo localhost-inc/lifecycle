@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import type { LifecycleEvent, WorkspaceRecord } from "@lifecycle/contracts";
+import type { LifecycleEvent, ServiceRecord, TerminalRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import {
   reduceWorkspaceActivity,
   reduceWorkspaceRecord,
+  reduceWorkspaceSnapshot,
   reduceWorkspacesByProject,
   type WorkspaceActivityItem,
 } from "./hooks";
@@ -201,6 +202,144 @@ describe("reduceWorkspaceRecord", () => {
         ...current,
         source_ref: "HEAD",
         git_sha: null,
+      },
+    });
+  });
+});
+
+describe("reduceWorkspaceSnapshot", () => {
+  test("patches workspace, service, and terminal facts without refetching", () => {
+    const workspace: WorkspaceRecord = {
+      created_at: "2026-03-10T10:00:00.000Z",
+      created_by: null,
+      expires_at: null,
+      failed_at: null,
+      failure_reason: null,
+      git_sha: "aaaaaaaa",
+      id: "ws_1",
+      kind: "root" as const,
+      last_active_at: "2026-03-10T10:00:00.000Z",
+      manifest_fingerprint: null,
+      mode: "local" as const,
+      name: "Root",
+      project_id: "project_1",
+      source_ref: "main",
+      source_workspace_id: null,
+      status: "active" as const,
+      updated_at: "2026-03-10T10:00:00.000Z",
+      worktree_path: "/tmp/project_1",
+    };
+    const services: ServiceRecord[] = [
+      {
+        created_at: "2026-03-10T10:00:00.000Z",
+        default_port: 3000,
+        effective_port: 3000,
+        exposure: "local",
+        id: "svc_1",
+        port_override: null,
+        preview_failure_reason: null,
+        preview_status: "sleeping",
+        preview_url: "http://localhost:3000",
+        service_name: "web",
+        status: "stopped",
+        status_reason: null,
+        updated_at: "2026-03-10T10:00:00.000Z",
+        workspace_id: "ws_1",
+      },
+    ];
+    const terminals: TerminalRecord[] = [
+      {
+        created_by: null,
+        ended_at: null,
+        exit_code: null,
+        failure_reason: null,
+        harness_provider: null,
+        harness_session_id: null,
+        id: "term_1",
+        label: "Shell",
+        last_active_at: "2026-03-10T10:00:00.000Z",
+        launch_type: "shell",
+        started_at: "2026-03-10T10:00:00.000Z",
+        status: "active",
+        workspace_id: "ws_1",
+      },
+    ];
+
+    const current = {
+      services,
+      terminals,
+      workspace,
+    };
+    const service = services[0]!;
+    const terminal = terminals[0]!;
+
+    const serviceResult = reduceWorkspaceSnapshot(current, {
+      id: "event-1",
+      kind: "service.status_changed",
+      occurred_at: "2026-03-10T10:05:00.000Z",
+      service_name: "web",
+      status: "ready",
+      status_reason: null,
+      workspace_id: "ws_1",
+    }, "ws_1");
+    expect(serviceResult).toEqual({
+      kind: "replace",
+        data: {
+          services: [
+            {
+              ...service,
+              status: "ready",
+              status_reason: null,
+            },
+        ],
+        terminals,
+        workspace,
+      },
+    });
+
+    const terminalResult = reduceWorkspaceSnapshot(current, {
+      id: "event-2",
+      kind: "terminal.renamed",
+      label: "Shell 2",
+      occurred_at: "2026-03-10T10:06:00.000Z",
+      terminal_id: "term_1",
+      workspace_id: "ws_1",
+    }, "ws_1");
+    expect(terminalResult).toEqual({
+      kind: "replace",
+        data: {
+          services,
+          terminals: [
+            {
+              ...terminal,
+              label: "Shell 2",
+            },
+        ],
+        workspace,
+      },
+    });
+
+    const workspaceResult = reduceWorkspaceSnapshot(current, {
+      ahead: null,
+      behind: null,
+      branch: "feature/root-live",
+      head_sha: "bbbbbbbb",
+      id: "event-3",
+      kind: "git.head_changed",
+      occurred_at: "2026-03-10T10:07:00.000Z",
+      upstream: null,
+      workspace_id: "ws_1",
+    }, "ws_1");
+    expect(workspaceResult).toEqual({
+      kind: "replace",
+      data: {
+        services,
+        terminals,
+        workspace: {
+          ...workspace,
+          git_sha: "bbbbbbbb",
+          source_ref: "feature/root-live",
+        },
       },
     });
   });

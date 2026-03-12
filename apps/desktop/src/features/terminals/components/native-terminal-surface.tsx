@@ -3,6 +3,7 @@ import { Alert, AlertDescription, EmptyState, themeAppearance, useTheme } from "
 import { TerminalSquare } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { subscribeToShellResize } from "../../../components/layout/shell-resize-provider";
+import { measureAsyncPerformance } from "../../../lib/performance";
 import {
   DEFAULT_MONOSPACE_FONT_FAMILY,
   getNativeMonospaceFontFamily,
@@ -114,21 +115,23 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
       ) {
         document.activeElement.blur();
       }
-      await syncNativeTerminalSurface({
-        appearance: themeAppearance(resolvedTheme),
-        focused: interaction.focused,
-        fontFamily: terminalFontFamily,
-        fontSize: DEFAULT_TERMINAL_FONT_SIZE,
-        height: rect.height,
-        pointerPassthrough: interaction.pointerPassthrough,
-        scaleFactor: window.devicePixelRatio,
-        terminalId: terminal.id,
-        theme: resolveTerminalTheme(host, resolvedTheme),
-        visible: true,
-        width: rect.width,
-        x: rect.left,
-        y: rect.top,
-      });
+      await measureAsyncPerformance(`native-terminal-sync:${terminal.id}`, () =>
+        syncNativeTerminalSurface({
+          appearance: themeAppearance(resolvedTheme),
+          focused: interaction.focused,
+          fontFamily: terminalFontFamily,
+          fontSize: DEFAULT_TERMINAL_FONT_SIZE,
+          height: rect.height,
+          pointerPassthrough: interaction.pointerPassthrough,
+          scaleFactor: window.devicePixelRatio,
+          terminalId: terminal.id,
+          theme: resolveTerminalTheme(host, resolvedTheme),
+          visible: true,
+          width: rect.width,
+          x: rect.left,
+          y: rect.top,
+        }),
+      );
       setError(null);
     } catch (nextError) {
       setError(String(nextError));

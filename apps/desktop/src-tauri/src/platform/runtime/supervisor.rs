@@ -460,7 +460,6 @@ mod tests {
             args: None,
             env_vars: None,
             depends_on: None,
-            restart_policy: None,
             startup_timeout_seconds: None,
             health_check: None,
             port: Some(5432),

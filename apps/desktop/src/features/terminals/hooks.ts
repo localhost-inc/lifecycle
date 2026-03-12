@@ -79,7 +79,9 @@ export function reduceWorkspaceTerminals(
   return { kind: "none" };
 }
 
-function createWorkspaceTerminalsQuery(workspaceId: string): QueryDescriptor<TerminalRecord[]> {
+export function createWorkspaceTerminalsQuery(
+  workspaceId: string,
+): QueryDescriptor<TerminalRecord[]> {
   return {
     eventKinds: TERMINAL_EVENT_KINDS,
     key: terminalKeys.byWorkspace(workspaceId),

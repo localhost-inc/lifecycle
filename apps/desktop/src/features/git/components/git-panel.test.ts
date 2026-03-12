@@ -10,6 +10,8 @@ import {
   GIT_PANEL_TABS,
   GIT_PANEL_TITLE,
   GitPanel,
+  shouldLoadGitHistory,
+  shouldLoadGitPullRequestList,
 } from "./git-panel";
 
 function renderGitPanel(props: Partial<Parameters<typeof GitPanel>[0]> = {}) {
@@ -74,5 +76,13 @@ describe("git panel spacing", () => {
     expect(markup).toContain("Pull Requests");
     expect(markup).toContain("Changes unavailable");
     expect(markup).not.toContain("Checks");
+  });
+
+  test("loads expensive git queries only for the active tab", () => {
+    expect(shouldLoadGitHistory("history", true)).toBe(true);
+    expect(shouldLoadGitHistory("changes", true)).toBe(false);
+    expect(shouldLoadGitHistory("history", false)).toBe(false);
+    expect(shouldLoadGitPullRequestList("pull-requests")).toBe(true);
+    expect(shouldLoadGitPullRequestList("changes")).toBe(false);
   });
 });

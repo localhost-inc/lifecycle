@@ -1,6 +1,7 @@
 import type { GitLogEntry, GitStatusResult } from "@lifecycle/contracts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatRelativeTime } from "../../../lib/format";
+import { measureAsyncPerformance } from "../../../lib/performance";
 import { GithubAvatar } from "./github-avatar";
 import { getGitChangesPatch, getGitCommitPatch } from "../api";
 import { useGitStatus } from "../hooks";
@@ -18,7 +19,9 @@ type GitDiffSurfaceSource =
     };
 
 interface GitDiffSurfaceProps {
+  initialScrollTop?: number;
   onOpenFile?: (filePath: string) => void;
+  onScrollTopChange?: (scrollTop: number) => void;
   source: GitDiffSurfaceSource;
   workspaceId: string;
 }
@@ -78,7 +81,13 @@ export function buildChangesPatchReloadKey(
   return [focusPath ?? "", gitStatus?.headSha ?? "", filesSignature].join("\u0003");
 }
 
-export function GitDiffSurface({ onOpenFile, source, workspaceId }: GitDiffSurfaceProps) {
+export function GitDiffSurface({
+  initialScrollTop = 0,
+  onOpenFile,
+  onScrollTopChange,
+  source,
+  workspaceId,
+}: GitDiffSurfaceProps) {
   const [patch, setPatch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -113,10 +122,11 @@ export function GitDiffSurface({ onOpenFile, source, workspaceId }: GitDiffSurfa
     setError(null);
     setIsLoading(true);
 
-    const patchRequest =
+    const patchRequest = measureAsyncPerformance(`git-diff-surface.patch:${surfaceIdentity}`, () =>
       source.mode === "changes"
         ? getGitChangesPatch(workspaceId)
-        : getGitCommitPatch(workspaceId, commitSha ?? "").then((result) => result.patch);
+        : getGitCommitPatch(workspaceId, commitSha ?? "").then((result) => result.patch),
+    );
 
     void patchRequest
       .then((result) => {
@@ -156,9 +166,11 @@ export function GitDiffSurface({ onOpenFile, source, workspaceId }: GitDiffSurfa
           source.mode === "changes" ? "Failed to load changes" : "Failed to load commit diff"
         }
         initialFilePath={focusPath}
+        initialScrollTop={initialScrollTop}
         isLoading={isLoading}
         loadingMessage={loadingLabel(source)}
         onOpenFile={onOpenFile}
+        onScrollTopChange={onScrollTopChange}
         parsedFiles={parsedFiles}
         patch={patch}
       />

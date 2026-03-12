@@ -1,6 +1,6 @@
+import { Alert, AlertDescription, Loading } from "@lifecycle/ui";
 import type { FileDiffMetadata } from "@pierre/diffs/react";
-import { PatchDiff } from "@pierre/diffs/react";
-import { Alert, AlertDescription, Loading, diffTheme, useTheme } from "@lifecycle/ui";
+import { lazy, Suspense } from "react";
 import { useLocalStorage } from "../../../lib/use-local-storage";
 import {
   DEFAULT_GIT_DIFF_STYLE,
@@ -9,17 +9,22 @@ import {
   type GitDiffStyle,
 } from "../lib/diff-style";
 import { DiffStyleToggle } from "./diff-style-toggle";
-import { DiffRenderProvider } from "./diff-render-provider";
-import { MultiFileDiffLayout } from "./multi-file-diff-layout";
+
+const GitPatchViewerBody = lazy(async () => {
+  const module = await import("./git-patch-viewer-body");
+  return { default: module.GitPatchViewerBody };
+});
 
 interface GitPatchViewerProps {
   emptyMessage?: string;
   error: string | null;
   errorMessagePrefix: string;
   initialFilePath?: string | null;
+  initialScrollTop?: number;
   isLoading: boolean;
   loadingMessage: string;
   onOpenFile?: (filePath: string) => void;
+  onScrollTopChange?: (scrollTop: number) => void;
   parsedFiles: FileDiffMetadata[] | null;
   patch: string;
 }
@@ -29,60 +34,49 @@ export function GitPatchViewer({
   error,
   errorMessagePrefix,
   initialFilePath,
+  initialScrollTop = 0,
   isLoading,
   loadingMessage,
   onOpenFile,
+  onScrollTopChange,
   parsedFiles,
   patch,
 }: GitPatchViewerProps) {
-  const { resolvedAppearance, resolvedTheme } = useTheme();
   const [diffStyle, setDiffStyle] = useLocalStorage(GIT_DIFF_STYLE_STORAGE_KEY, {
     defaultValue: DEFAULT_GIT_DIFF_STYLE,
     parse: (rawValue) => rawValue as GitDiffStyle,
     serialize: (value) => value,
     validate: isGitDiffStyle,
   });
-  const theme = diffTheme(resolvedTheme);
   const diffControlsDisabled = isLoading || error !== null || patch.length === 0;
 
   return (
     <>
-      <DiffRenderProvider theme={theme}>
-        {isLoading && !patch ? (
-          <Loading message={loadingMessage} />
-        ) : error ? (
-          <Alert className="m-5" variant="destructive">
-            <AlertDescription>
-              {errorMessagePrefix}: {error}
-            </AlertDescription>
-          </Alert>
-        ) : !patch ? (
-          <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
-            {emptyMessage}
-          </div>
-        ) : parsedFiles === null || parsedFiles.length === 0 ? (
-          <div className="min-h-0 flex-1 overflow-auto pb-24">
-            <PatchDiff
-              patch={patch}
-              options={{
-                diffStyle,
-                disableFileHeader: true,
-                theme,
-                themeType: resolvedAppearance,
-              }}
-            />
-          </div>
-        ) : (
-          <MultiFileDiffLayout
+      {isLoading && !patch ? (
+        <Loading message={loadingMessage} />
+      ) : error ? (
+        <Alert className="m-5" variant="destructive">
+          <AlertDescription>
+            {errorMessagePrefix}: {error}
+          </AlertDescription>
+        </Alert>
+      ) : !patch ? (
+        <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
+          {emptyMessage}
+        </div>
+      ) : (
+        <Suspense fallback={<Loading message={loadingMessage} />}>
+          <GitPatchViewerBody
             diffStyle={diffStyle}
-            files={parsedFiles}
             initialFilePath={initialFilePath}
+            initialScrollTop={initialScrollTop}
             onOpenFile={onOpenFile}
-            theme={theme}
-            themeType={resolvedAppearance}
+            onScrollTopChange={onScrollTopChange}
+            parsedFiles={parsedFiles}
+            patch={patch}
           />
-        )}
-      </DiffRenderProvider>
+        </Suspense>
+      )}
       <DiffStyleToggle
         diffStyle={diffStyle}
         disabled={diffControlsDisabled}

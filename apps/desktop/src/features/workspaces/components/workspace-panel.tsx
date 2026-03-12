@@ -12,16 +12,17 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useSearchParams } from "react-router-dom";
 import type { ManifestStatus } from "../../projects/api/projects";
 import { useQueryClient } from "../../../query";
-import {
-  useCurrentGitPullRequest,
-  useGitPullRequest,
-  useGitPullRequests,
-} from "../../git/hooks";
+import { useCurrentGitPullRequest, useGitPullRequest, useGitPullRequests } from "../../git/hooks";
 import type { OpenDocumentRequest } from "./workspace-surface-logic";
 import { WorkspaceSidebar } from "./workspace-sidebar";
 import { WorkspaceSurface } from "./workspace-surface";
-import { startServices, stopWorkspace, updateWorkspaceService } from "../api";
-import { useWorkspaceServices, useWorkspaceSetup, workspaceKeys } from "../hooks";
+import {
+  startServices,
+  stopWorkspace,
+  updateWorkspaceService,
+  type WorkspaceSnapshotResult,
+} from "../api";
+import { useWorkspaceSetup, workspaceKeys } from "../hooks";
 import { workspaceSupportsFilesystemInteraction } from "../lib/workspace-capabilities";
 import {
   readWorkspaceRouteState,
@@ -31,10 +32,15 @@ import {
 
 interface WorkspacePanelProps {
   workspace: WorkspaceRecord;
+  workspaceSnapshot: WorkspaceSnapshotResult | null;
   manifestStatus: ManifestStatus | null;
 }
 
-export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProps) {
+export function WorkspacePanel({
+  workspace,
+  workspaceSnapshot,
+  manifestStatus,
+}: WorkspacePanelProps) {
   const client = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [rightRailRoot, setRightRailRoot] = useState<HTMLElement | null>(null);
@@ -44,14 +50,26 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
   const config = hasManifest ? manifestStatus.result.config : null;
   const manifestState = manifestStatus?.state ?? "missing";
   const manifestFingerprint = config ? getManifestFingerprint(config) : null;
-  const servicesQuery = useWorkspaceServices(workspace.id);
   const setupQuery = useWorkspaceSetup(workspace.id);
-  const currentPullRequestQuery = useCurrentGitPullRequest(workspace.id);
-  const pullRequestsQuery = useGitPullRequests(workspace.id);
-  const services = servicesQuery.data ?? [];
+  const services = workspaceSnapshot?.services ?? [];
+  const terminals = workspaceSnapshot?.terminals ?? [];
   const setupSteps = setupQuery.data ?? [];
   const routeState = useMemo(() => readWorkspaceRouteState(searchParams), [searchParams]);
-  const routedPullRequestQuery = useGitPullRequest(workspace.id, routeState.pullRequestNumber);
+  const supportsTerminalInteraction = workspaceSupportsFilesystemInteraction(workspace);
+  const routedPullRequestEnabled =
+    supportsTerminalInteraction && routeState.pullRequestNumber !== null;
+  const routedPullRequestQuery = useGitPullRequest(workspace.id, routeState.pullRequestNumber, {
+    enabled: routedPullRequestEnabled,
+    polling: false,
+  });
+  const currentPullRequestQuery = useCurrentGitPullRequest(workspace.id, {
+    enabled: routedPullRequestEnabled,
+    polling: false,
+  });
+  const pullRequestsQuery = useGitPullRequests(workspace.id, {
+    enabled: routedPullRequestEnabled,
+    polling: false,
+  });
   const routedPullRequest = useMemo(
     () =>
       resolveWorkspaceRoutePullRequest({
@@ -79,6 +97,21 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
     }
   }, [workspace.id, config]);
 
+  const handleRestart = useCallback(async () => {
+    if (!config) {
+      return;
+    }
+
+    try {
+      const manifestJson = JSON.stringify(config);
+      await stopWorkspace(workspace.id);
+      await startServices(workspace.id, manifestJson, getManifestFingerprint(config));
+    } catch (err) {
+      console.error("Failed to restart workspace:", err);
+      throw err;
+    }
+  }, [workspace.id, config]);
+
   const handleStop = useCallback(async () => {
     try {
       await stopWorkspace(workspace.id);
@@ -100,6 +133,7 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
     }) => {
       try {
         await updateWorkspaceService(workspace.id, serviceName, { exposure, portOverride });
+        client.invalidate(workspaceKeys.snapshot(workspace.id));
         client.invalidate(workspaceKeys.services(workspace.id));
       } catch (err) {
         console.error("Failed to update workspace service:", err);
@@ -109,7 +143,6 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
     [client, workspace.id],
   );
 
-  const supportsTerminalInteraction = workspaceSupportsFilesystemInteraction(workspace);
   const isManifestStale =
     manifestState === "valid" &&
     manifestFingerprint !== null &&
@@ -222,6 +255,7 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
           key={workspace.id}
           openDocumentRequest={openDocumentRequest}
           onActivePullRequestNumberChange={handleActivePullRequestNumberChange}
+          snapshotTerminals={terminals}
           workspaceId={workspace.id}
         />
       </div>
@@ -248,6 +282,7 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
             isManifestStale={isManifestStale}
             manifestState={manifestState}
             onActiveGitTabChange={handleGitTabChange}
+            onRestart={handleRestart}
             onRun={handleRun}
             onStop={handleStop}
             onUpdateService={handleUpdateService}
@@ -268,6 +303,7 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
           isManifestStale={isManifestStale}
           manifestState={manifestState}
           onActiveGitTabChange={handleGitTabChange}
+          onRestart={handleRestart}
           onRun={handleRun}
           onStop={handleStop}
           onUpdateService={handleUpdateService}

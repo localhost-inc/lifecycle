@@ -407,15 +407,15 @@ static void lifecycleGhosttyMouseScroll(ghostty_surface_t surface,
   }
 }
 
-static BOOL lifecycleGhosttyReadSelection(ghostty_surface_t surface,
-                                          ghostty_text_s *text,
+static BOOL lifecycleGhosttyBindingAction(ghostty_surface_t surface,
+                                          const char *action,
                                           NSString *context) {
-  if (surface == NULL || text == NULL) {
+  if (surface == NULL || action == NULL) {
     return NO;
   }
 
   @try {
-    return ghostty_surface_read_selection(surface, text);
+    return ghostty_surface_binding_action(surface, action, strlen(action));
   } @catch (NSException *exception) {
     lifecycleLogSurfaceException(context, surface, exception);
     return NO;
@@ -550,25 +550,6 @@ static BOOL lifecycleGhosttyImePoint(ghostty_surface_t surface,
     lifecycleLogSurfaceException(context, surface, exception);
     return NO;
   }
-}
-
-static void lifecycleGhosttyFreeText(ghostty_surface_t surface,
-                                     ghostty_text_s *text,
-                                     NSString *context) {
-  if (surface == NULL || text == NULL) {
-    return;
-  }
-
-  if (text->text == NULL && text->text_len == 0) {
-    return;
-  }
-
-  @try {
-    ghostty_surface_free_text(surface, text);
-  } @catch (NSException *exception) {
-    lifecycleLogSurfaceException(context, surface, exception);
-  }
-  memset(text, 0, sizeof(*text));
 }
 
 static void lifecycleGhosttyFreeSurface(ghostty_surface_t surface, NSString *context) {
@@ -1597,16 +1578,10 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return;
   }
 
-  NSString *string = [pasteboard stringForType:NSPasteboardTypeString];
-  if (string.length == 0) {
+  if (!lifecycleGhosttyBindingAction(self.surface, "paste_from_clipboard",
+                                     @"native terminal paste")) {
     NSBeep();
-    return;
   }
-
-  lifecycleAppendDiagnosticLine([NSString
-      stringWithFormat:@"[paste] terminal=%@ text=%@", self.terminalId,
-                       lifecycleDebugString(string)]);
-  lifecycleGhosttySendText(self.surface, string);
 }
 
 - (void)copy:(id)sender {
@@ -1615,27 +1590,7 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return;
   }
 
-  ghostty_text_s text = {0};
-  if (!lifecycleGhosttyReadSelection(self.surface, &text, @"native terminal copy selection")) {
-    return;
-  }
-
-  @try {
-    NSString *selection = [[NSString alloc] initWithBytes:text.text
-                                                   length:text.text_len
-                                                 encoding:NSUTF8StringEncoding];
-    if (selection.length == 0) {
-      return;
-    }
-
-    NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
-    [pasteboard clearContents];
-    [pasteboard setString:selection forType:NSPasteboardTypeString];
-  } @catch (NSException *exception) {
-    lifecycleLogTerminalException(@"native terminal copy selection", self.terminalId, exception);
-  } @finally {
-    lifecycleGhosttyFreeText(self.surface, &text, @"native terminal copy selection cleanup");
-  }
+  (void)lifecycleGhosttyBindingAction(self.surface, "copy_to_clipboard", @"native terminal copy");
 }
 
 @end
@@ -1651,6 +1606,166 @@ static LifecycleNativeTerminalView *lifecycleTerminalViewForSurface(ghostty_surf
   }
 
   return (__bridge LifecycleNativeTerminalView *)userdata;
+}
+
+static LifecycleNativeTerminalView *lifecycleTerminalViewForUserdata(void *userdata) {
+  if (userdata == NULL) {
+    return nil;
+  }
+
+  return (__bridge LifecycleNativeTerminalView *)userdata;
+}
+
+static void lifecycleRunOnMainThreadSync(dispatch_block_t block) {
+  if (block == nil) {
+    return;
+  }
+
+  if ([NSThread isMainThread]) {
+    block();
+    return;
+  }
+
+  dispatch_sync(dispatch_get_main_queue(), block);
+}
+
+static NSPasteboard *lifecyclePasteboardForGhosttyClipboard(ghostty_clipboard_e location) {
+  switch (location) {
+  case GHOSTTY_CLIPBOARD_STANDARD:
+    return NSPasteboard.generalPasteboard;
+
+  case GHOSTTY_CLIPBOARD_SELECTION:
+    return [NSPasteboard pasteboardWithName:(NSPasteboardName)@"com.mitchellh.ghostty.selection"];
+
+  default:
+    return nil;
+  }
+}
+
+static NSPasteboardType lifecyclePasteboardTypeForMimeType(NSString *mimeType) {
+  if (mimeType.length == 0) {
+    return nil;
+  }
+
+  if ([mimeType isEqualToString:@"text/plain"]) {
+    return NSPasteboardTypeString;
+  }
+
+  if ([mimeType isEqualToString:@"text/html"]) {
+    return NSPasteboardTypeHTML;
+  }
+
+  if ([mimeType isEqualToString:@"image/png"]) {
+    return NSPasteboardTypePNG;
+  }
+
+  return mimeType;
+}
+
+static void lifecycleCompleteClipboardRequest(ghostty_surface_t surface,
+                                              NSString *value,
+                                              void *state,
+                                              BOOL confirmed) {
+  if (surface == NULL || state == NULL) {
+    return;
+  }
+
+  const char *utf8 = (value ?: @"").UTF8String;
+  ghostty_surface_complete_clipboard_request(surface, utf8 == NULL ? "" : utf8, state, confirmed);
+}
+
+static void lifecycleReadClipboard(void *userdata,
+                                   ghostty_clipboard_e location,
+                                   void *state) {
+  LifecycleNativeTerminalView *view = lifecycleTerminalViewForUserdata(userdata);
+  if (view == nil || view.surface == NULL) {
+    lifecycleAppendDiagnosticLine(@"[clipboard] read request received without a valid surface");
+    return;
+  }
+
+  lifecycleRunOnMainThreadSync(^{
+    NSPasteboard *pasteboard = lifecyclePasteboardForGhosttyClipboard(location);
+    NSString *value = [pasteboard stringForType:NSPasteboardTypeString] ?: @"";
+    lifecycleCompleteClipboardRequest(view.surface, value, state, NO);
+  });
+}
+
+static void lifecycleConfirmReadClipboard(void *userdata,
+                                          const char *value,
+                                          void *state,
+                                          ghostty_clipboard_request_e request) {
+  (void)request;
+  LifecycleNativeTerminalView *view = lifecycleTerminalViewForUserdata(userdata);
+  if (view == nil || view.surface == NULL) {
+    lifecycleAppendDiagnosticLine(@"[clipboard] confirm request received without a valid surface");
+    return;
+  }
+
+  NSString *string = value == NULL ? @"" : [NSString stringWithUTF8String:value];
+  lifecycleRunOnMainThreadSync(^{
+    // Lifecycle previously pasted directly from NSPasteboard without a native
+    // confirmation prompt. Keep that permissive behavior until we add real UI.
+    lifecycleCompleteClipboardRequest(view.surface, string, state, YES);
+  });
+}
+
+static void lifecycleWriteClipboard(void *userdata,
+                                    ghostty_clipboard_e location,
+                                    const ghostty_clipboard_content_s *contents,
+                                    size_t len,
+                                    bool confirm) {
+  (void)confirm;
+  LifecycleNativeTerminalView *view = lifecycleTerminalViewForUserdata(userdata);
+  NSString *terminalId = lifecycleResolvedTerminalId(view.terminalId);
+
+  lifecycleRunOnMainThreadSync(^{
+    NSPasteboard *pasteboard = lifecyclePasteboardForGhosttyClipboard(location);
+    if (pasteboard == nil) {
+      lifecycleAppendDiagnosticLine([NSString
+          stringWithFormat:@"[clipboard] terminal=%@ unsupported location=%d", terminalId,
+                           (int)location]);
+      return;
+    }
+
+    if (contents == NULL || len == 0) {
+      lifecycleAppendDiagnosticLine([NSString
+          stringWithFormat:@"[clipboard] terminal=%@ empty write request location=%d", terminalId,
+                           (int)location]);
+      return;
+    }
+
+    NSMutableArray<NSPasteboardType> *types = [NSMutableArray array];
+    NSMutableArray<NSDictionary<NSString *, NSString *> *> *items = [NSMutableArray array];
+    for (size_t index = 0; index < len; index += 1) {
+      const char *mimeBytes = contents[index].mime;
+      const char *dataBytes = contents[index].data;
+      if (mimeBytes == NULL || dataBytes == NULL) {
+        continue;
+      }
+
+      NSString *mimeType = [NSString stringWithUTF8String:mimeBytes];
+      NSString *value = [NSString stringWithUTF8String:dataBytes];
+      NSPasteboardType pasteboardType = lifecyclePasteboardTypeForMimeType(mimeType);
+      if (mimeType.length == 0 || value == nil || pasteboardType == nil) {
+        continue;
+      }
+
+      [types addObject:pasteboardType];
+      [items addObject:@{@"type" : pasteboardType, @"value" : value}];
+    }
+
+    if (items.count == 0) {
+      lifecycleAppendDiagnosticLine([NSString
+          stringWithFormat:@"[clipboard] terminal=%@ write request had no supported items",
+                           terminalId]);
+      return;
+    }
+
+    [pasteboard declareTypes:types owner:nil];
+    for (NSDictionary<NSString *, NSString *> *item in items) {
+      [pasteboard setString:item[@"value"] forType:item[@"type"]];
+    }
+  });
 }
 
 static BOOL lifecycleNativeTerminalHandleWorkspaceShortcut(LifecycleNativeTerminalView *view,
@@ -1804,6 +1919,9 @@ bool lifecycle_native_terminal_initialize(LifecycleNativeTerminalExitCallback ca
       runtime.supports_selection_clipboard = true;
       runtime.wakeup_cb = lifecycleWakeup;
       runtime.action_cb = lifecycleAction;
+      runtime.read_clipboard_cb = lifecycleReadClipboard;
+      runtime.confirm_read_clipboard_cb = lifecycleConfirmReadClipboard;
+      runtime.write_clipboard_cb = lifecycleWriteClipboard;
 
       gGhosttyApp = ghostty_app_new(&runtime, gGhosttyConfig);
       if (gGhosttyApp == NULL) {

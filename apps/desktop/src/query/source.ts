@@ -21,17 +21,21 @@ import { getTerminal, listWorkspaceTerminals } from "../features/terminals/api";
 import { listProjects, readManifest } from "../features/projects/api/projects";
 import {
   getWorkspaceById,
+  getWorkspaceSnapshot,
   readWorkspaceFile,
   getWorkspaceServices,
   listWorkspacesByProject,
   type WorkspaceFileReadResult,
+  type WorkspaceSnapshotResult,
 } from "../features/workspaces/api";
+import { measureAsyncPerformance } from "../lib/performance";
 
 export interface QuerySource {
   listProjects(): Promise<ProjectRecord[]>;
   readManifest(projectPath: string): Promise<ManifestStatus>;
   listWorkspacesByProject(): Promise<Record<string, WorkspaceRecord[]>>;
   getWorkspace(workspaceId: string): Promise<WorkspaceRecord | null>;
+  getWorkspaceSnapshot(workspaceId: string): Promise<WorkspaceSnapshotResult>;
   getWorkspaceFile(workspaceId: string, filePath: string): Promise<WorkspaceFileReadResult>;
   getWorkspaceServices(workspaceId: string): Promise<ServiceRecord[]>;
   getWorkspaceGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]>;
@@ -47,19 +51,69 @@ export interface QuerySource {
 }
 
 export function createQuerySource(): QuerySource {
+  const measureWorkspace = <T>(label: string, workspaceId: string, task: () => Promise<T>) =>
+    measureAsyncPerformance(`${label}:${workspaceId}`, task);
+
   return {
-    listProjects,
-    readManifest,
-    listWorkspacesByProject,
-    getWorkspace: getWorkspaceById,
-    getWorkspaceFile: readWorkspaceFile,
-    getWorkspaceGitLog: getGitLog,
-    getWorkspaceGitPullRequests: getGitPullRequests,
-    getWorkspaceGitPullRequest: getGitPullRequest,
-    getWorkspaceCurrentGitPullRequest: getCurrentGitPullRequest,
-    getWorkspaceGitStatus: getGitStatus,
-    getWorkspaceServices,
-    getTerminal,
-    listWorkspaceTerminals,
+    async listProjects() {
+      return measureAsyncPerformance("query.list-projects", () => listProjects());
+    },
+    async readManifest(projectPath) {
+      return measureAsyncPerformance(`query.read-manifest:${projectPath}`, () =>
+        readManifest(projectPath),
+      );
+    },
+    async listWorkspacesByProject() {
+      return measureAsyncPerformance("query.list-workspaces-by-project", () =>
+        listWorkspacesByProject(),
+      );
+    },
+    async getWorkspace(workspaceId) {
+      return measureWorkspace("query.workspace", workspaceId, () => getWorkspaceById(workspaceId));
+    },
+    async getWorkspaceSnapshot(workspaceId) {
+      return measureWorkspace("query.workspace-snapshot", workspaceId, () =>
+        getWorkspaceSnapshot(workspaceId),
+      );
+    },
+    async getWorkspaceFile(workspaceId, filePath) {
+      return measureWorkspace("query.workspace-file", workspaceId, () =>
+        readWorkspaceFile(workspaceId, filePath),
+      );
+    },
+    async getWorkspaceServices(workspaceId) {
+      return measureWorkspace("query.workspace-services", workspaceId, () =>
+        getWorkspaceServices(workspaceId),
+      );
+    },
+    async getWorkspaceGitLog(workspaceId, limit) {
+      return measureWorkspace("query.git-log", workspaceId, () => getGitLog(workspaceId, limit));
+    },
+    async getWorkspaceGitPullRequests(workspaceId) {
+      return measureWorkspace("query.git-pull-requests", workspaceId, () =>
+        getGitPullRequests(workspaceId),
+      );
+    },
+    async getWorkspaceGitPullRequest(workspaceId, pullRequestNumber) {
+      return measureWorkspace("query.git-pull-request", workspaceId, () =>
+        getGitPullRequest(workspaceId, pullRequestNumber),
+      );
+    },
+    async getWorkspaceCurrentGitPullRequest(workspaceId) {
+      return measureWorkspace("query.git-current-pull-request", workspaceId, () =>
+        getCurrentGitPullRequest(workspaceId),
+      );
+    },
+    async getWorkspaceGitStatus(workspaceId) {
+      return measureWorkspace("query.git-status", workspaceId, () => getGitStatus(workspaceId));
+    },
+    async listWorkspaceTerminals(workspaceId) {
+      return measureWorkspace("query.workspace-terminals", workspaceId, () =>
+        listWorkspaceTerminals(workspaceId),
+      );
+    },
+    async getTerminal(terminalId) {
+      return measureAsyncPerformance(`query.terminal:${terminalId}`, () => getTerminal(terminalId));
+    },
   };
 }

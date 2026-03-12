@@ -19,6 +19,7 @@ import type {
   WorkspaceProviderGitDiffInput,
   WorkspaceProviderHealthResult,
   WorkspaceProviderStartInput,
+  WorkspaceProviderWakeInput,
 } from "../../provider";
 
 interface TauriInvoke {
@@ -43,6 +44,8 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
       workspaceName: context.workspaceName,
       baseRef: context.baseRef ?? input.sourceRef,
       worktreeRoot: context.worktreeRoot,
+      manifestJson: input.manifestJson,
+      manifestFingerprint: input.manifestFingerprint,
     })) as string;
 
     return {
@@ -72,10 +75,7 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
   }
 
   async startServices(input: WorkspaceProviderStartInput): Promise<ServiceRecord[]> {
-    await this.invoke("start_services", {
-      workspaceId: input.workspace.id,
-      manifestJson: input.manifestJson,
-    });
+    await this.invokeStartServices(input);
     return input.services;
   }
 
@@ -99,12 +99,12 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
     await this.invoke("stop_workspace", { workspaceId });
   }
 
-  async wake(_workspaceId: string): Promise<void> {
-    // TODO: M4 — restart services from idle state.
+  async wake(input: WorkspaceProviderWakeInput): Promise<void> {
+    await this.invokeStartServices(input);
   }
 
-  async destroy(_workspaceId: string): Promise<void> {
-    // TODO: M4 — stop + remove worktree + delete records.
+  async destroy(workspaceId: string): Promise<void> {
+    await this.invoke("destroy_workspace", { workspaceId });
   }
 
   async createTerminal(
@@ -127,12 +127,20 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
   }
 
   async exposePort(
-    _workspaceId: string,
-    _serviceName: string,
-    _port: number,
+    workspaceId: string,
+    serviceName: string,
+    port: number,
   ): Promise<string | null> {
-    // TODO: M5.
-    return null;
+    await this.invoke("update_workspace_service", {
+      workspaceId,
+      serviceName,
+      exposure: "local",
+      portOverride: port,
+    });
+    const services = (await this.invoke("get_workspace_services", {
+      workspaceId,
+    })) as ServiceRecord[];
+    return services.find((service) => service.service_name === serviceName)?.preview_url ?? null;
   }
 
   async getGitStatus(workspaceId: string): Promise<GitStatusResult> {
@@ -203,6 +211,14 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
       workspaceId,
       pullRequestNumber,
     }) as Promise<GitPullRequestSummary>;
+  }
+
+  private async invokeStartServices(input: WorkspaceProviderStartInput): Promise<void> {
+    await this.invoke("start_services", {
+      workspaceId: input.workspace.id,
+      manifestJson: input.manifestJson,
+      manifestFingerprint: input.manifestFingerprint,
+    });
   }
 }
 

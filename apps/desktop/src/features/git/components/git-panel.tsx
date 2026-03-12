@@ -1,6 +1,6 @@
 import type { GitLogEntry, GitPullRequestSummary, WorkspaceMode } from "@lifecycle/contracts";
 import { EmptyState, Tabs, TabsList, TabsTrigger, cn } from "@lifecycle/ui";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { commitGit, createGitPullRequest, mergeGitPullRequest, pushGit } from "../api";
 import { useCurrentGitPullRequest, useGitLog, useGitPullRequests, useGitStatus } from "../hooks";
 import { GIT_PANEL_TABS, type GitPanelTabValue } from "../lib/git-panel-tabs";
@@ -33,6 +33,17 @@ function GitPanelPlaceholder({ description, title }: { description: string; titl
   return <EmptyState description={description} size="sm" title={title} />;
 }
 
+export function shouldLoadGitHistory(
+  activeTab: GitPanelTabValue,
+  supportsChangesAndHistory: boolean,
+): boolean {
+  return supportsChangesAndHistory && activeTab === "history";
+}
+
+export function shouldLoadGitPullRequestList(activeTab: GitPanelTabValue): boolean {
+  return activeTab === "pull-requests";
+}
+
 export function GitPanel({
   activeTab,
   onOpenDiff,
@@ -49,11 +60,45 @@ export function GitPanel({
   const [isCreatingPullRequest, setIsCreatingPullRequest] = useState(false);
   const [isMergingPullRequest, setIsMergingPullRequest] = useState(false);
   const [isPushingBranch, setIsPushingBranch] = useState(false);
+  const [documentVisible, setDocumentVisible] = useState(() =>
+    typeof document === "undefined" ? true : document.visibilityState === "visible",
+  );
   const supportsChangesAndHistory = workspaceMode === "local" && worktreePath !== null;
-  const gitStatusQuery = useGitStatus(supportsChangesAndHistory ? workspaceId : null);
-  const gitLogQuery = useGitLog(supportsChangesAndHistory ? workspaceId : null, 50);
-  const pullRequestsQuery = useGitPullRequests(workspaceId);
-  const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId);
+
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    const syncDocumentVisible = () => {
+      setDocumentVisible(document.visibilityState === "visible");
+    };
+
+    document.addEventListener("visibilitychange", syncDocumentVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", syncDocumentVisible);
+    };
+  }, []);
+
+  const gitStatusQuery = useGitStatus(supportsChangesAndHistory ? workspaceId : null, {
+    polling: documentVisible,
+  });
+  const gitLogQuery = useGitLog(
+    shouldLoadGitHistory(activeTab, supportsChangesAndHistory) ? workspaceId : null,
+    50,
+    {
+      polling: documentVisible,
+    },
+  );
+  const pullRequestsQuery = useGitPullRequests(
+    shouldLoadGitPullRequestList(activeTab) ? workspaceId : null,
+    {
+      polling: documentVisible,
+    },
+  );
+  const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId, {
+    polling: documentVisible,
+  });
 
   async function refreshPullRequestState(): Promise<void> {
     await Promise.all([

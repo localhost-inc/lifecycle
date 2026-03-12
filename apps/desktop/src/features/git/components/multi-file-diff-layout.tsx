@@ -33,7 +33,9 @@ interface MultiFileDiffLayoutProps {
   diffStyle: GitDiffStyle;
   files: FileDiffMetadata[];
   initialFilePath?: string | null;
+  initialScrollTop?: number;
   onOpenFile?: ((filePath: string) => void) | null;
+  onScrollTopChange?: (scrollTop: number) => void;
   theme: string;
   themeType: "light" | "dark";
 }
@@ -47,7 +49,9 @@ export function MultiFileDiffLayout({
   diffStyle,
   files,
   initialFilePath,
+  initialScrollTop = 0,
   onOpenFile,
+  onScrollTopChange,
   theme,
   themeType,
 }: MultiFileDiffLayoutProps) {
@@ -117,9 +121,11 @@ export function MultiFileDiffLayout({
     <MultiFileDiffLayoutInner
       files={files}
       onOpenFile={onOpenFile}
+      onScrollTopChange={onScrollTopChange}
       collapsedPaths={collapsedPaths}
       diffStyle={diffStyle}
       initialFilePath={initialFilePath}
+      initialScrollTop={initialScrollTop}
       onToggleCollapse={handleToggleCollapse}
       theme={theme}
       themeType={themeType}
@@ -134,7 +140,9 @@ interface InnerProps {
   diffStyle: GitDiffStyle;
   files: FileDiffMetadata[];
   initialFilePath?: string | null;
+  initialScrollTop: number;
   onOpenFile?: ((filePath: string) => void) | null;
+  onScrollTopChange?: (scrollTop: number) => void;
   onToggleCollapse: (path: string) => void;
   theme: string;
   themeType: "light" | "dark";
@@ -147,7 +155,9 @@ function MultiFileDiffLayoutInner({
   diffStyle,
   files,
   initialFilePath,
+  initialScrollTop,
   onOpenFile,
+  onScrollTopChange,
   onToggleCollapse,
   theme,
   themeType,
@@ -164,6 +174,7 @@ function MultiFileDiffLayoutInner({
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
   const lastAutoFocusedSignatureRef = useRef<string | null>(null);
+  const restoredScrollTopRef = useRef<number | null>(null);
 
   useEffect(() => {
     writePersistedPanelValue(DIFF_FILE_TREE_WIDTH_STORAGE_KEY, treeWidth);
@@ -221,6 +232,10 @@ function MultiFileDiffLayoutInner({
   }, [files]);
 
   useEffect(() => {
+    restoredScrollTopRef.current = initialScrollTop;
+  }, [files, initialScrollTop]);
+
+  useEffect(() => {
     setMeasuredHeights((prev) => {
       return Object.keys(prev).length === 0 ? prev : {};
     });
@@ -243,6 +258,16 @@ function MultiFileDiffLayoutInner({
       }),
     [collapsedPaths, files, measuredHeights],
   );
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current;
+    const nextScrollTop = restoredScrollTopRef.current;
+    if (!scrollContainer || nextScrollTop === null) {
+      return;
+    }
+
+    scrollContainer.scrollTop = nextScrollTop;
+    restoredScrollTopRef.current = null;
+  }, [layout.totalHeight]);
   const virtualRange = useMemo(
     () => getVirtualDiffRange(layout, scrollTop, viewportHeight),
     [layout, scrollTop, viewportHeight],
@@ -257,6 +282,10 @@ function MultiFileDiffLayoutInner({
   const activeFilePath =
     activeFileIndex === -1 ? null : (layout.items[activeFileIndex]?.path ?? null);
   const deferredActiveFilePath = useDeferredValue(activeFilePath);
+
+  useEffect(() => {
+    onScrollTopChange?.(scrollTop);
+  }, [onScrollTopChange, scrollTop]);
 
   const handleSelectFile = useCallback(
     (path: string, behavior: ScrollBehavior = "smooth") => {

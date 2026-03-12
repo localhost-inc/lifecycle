@@ -36,13 +36,13 @@ In V1, the environment is represented on the workspace record rather than as a s
 
 ```typescript
 interface WorkspaceProvider {
-  createWorkspace(input) → { workspace, worktree_path }
-  startServices(manifest.services, env) → service_statuses
+  createWorkspace(input + manifest_json? + manifest_fingerprint?) → { workspace, worktree_path }
+  startServices(workspace + manifest_json + manifest_fingerprint) → service_statuses
   healthCheck(manifest.services[].health_check) → pass/fail per service
   stopServices(service_names[]) → void
   runSetup(workspace_id) → void
   sleep(workspace_id) → void
-  wake(workspace_id) → void
+  wake(workspace + manifest_json + manifest_fingerprint) → void
   destroy(workspace_id) → void
   createTerminal(workspace_id, launch_type, harness_provider?, harness_session_id?) → terminal
   detachTerminal(terminal_id) → void
@@ -65,8 +65,9 @@ Provider-specific runtime detail should not be stuffed into a generic `mode_stat
 
 1. `createWorkspace` and `destroy` are workspace-lifecycle operations.
 2. `startServices`, `stopServices`, `sleep`, `wake`, and reset flows operate on the environment attached to that workspace.
-3. Future archive/unarchive flows are workspace-lifecycle operations that must drive the environment down or back up as needed.
-4. The provider boundary should expose one coherent workspace-scoped API even when the underlying behavior targets the environment or a service within it.
+3. Local create/start/wake flows must carry the exact manifest content plus `manifest_fingerprint`; the provider must not infer lifecycle state from stale cached service rows.
+4. Future archive/unarchive flows are workspace-lifecycle operations that must drive the environment down or back up as needed.
+5. The provider boundary should expose one coherent workspace-scoped API even when the underlying behavior targets the environment or a service within it.
 
 ## Execution Model
 

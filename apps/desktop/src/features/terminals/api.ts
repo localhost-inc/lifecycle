@@ -111,19 +111,21 @@ export async function syncNativeTerminalSurface(
   }
 
   await invoke<void>("sync_native_terminal_surface", {
-    appearance: input.appearance,
-    focused: input.focused,
-    fontFamily: input.fontFamily,
-    fontSize: input.fontSize,
-    height: input.height,
-    pointerPassthrough: input.pointerPassthrough,
-    scaleFactor: input.scaleFactor,
-    terminalId: input.terminalId,
-    theme: input.theme,
-    visible: input.visible,
-    width: input.width,
-    x: input.x,
-    y: input.y,
+    input: {
+      appearance: input.appearance,
+      focused: input.focused,
+      fontFamily: input.fontFamily,
+      fontSize: input.fontSize,
+      height: input.height,
+      pointerPassthrough: input.pointerPassthrough,
+      scaleFactor: input.scaleFactor,
+      terminalId: input.terminalId,
+      theme: input.theme,
+      visible: input.visible,
+      width: input.width,
+      x: input.x,
+      y: input.y,
+    },
   });
 }
 

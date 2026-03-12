@@ -36,6 +36,7 @@ interface WorkspaceSidebarProps {
   isManifestStale: boolean;
   manifestState: "invalid" | "missing" | "valid";
   onActiveGitTabChange: (tab: GitPanelTabValue) => void;
+  onRestart: () => Promise<void>;
   onRun: () => Promise<void>;
   onStop: () => Promise<void>;
   onUpdateService: (input: {
@@ -58,6 +59,7 @@ export function WorkspaceSidebar({
   isManifestStale,
   manifestState,
   onActiveGitTabChange,
+  onRestart,
   onRun,
   onStop,
   onUpdateService,
@@ -254,6 +256,7 @@ export function WorkspaceSidebar({
           hasManifest={hasManifest}
           isManifestStale={isManifestStale}
           manifestState={manifestState}
+          onRestart={onRestart}
           onRun={onRun}
           onStop={onStop}
           onUpdateService={onUpdateService}

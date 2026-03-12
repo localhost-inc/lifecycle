@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { getManifestFingerprint, parseManifest } from "./manifest";
 
 const VALID_CONFIG = `{
@@ -304,6 +305,16 @@ describe("parseManifest", () => {
     if (!result.valid) return;
     expect(result.config.setup.services).toEqual(["postgres", "redis"]);
     expect(result.config.setup.steps[0]!.run_on).toBe("start");
+  });
+
+  test("keeps the checked-in repo lifecycle.json valid", () => {
+    const manifestPath = new URL("../../../lifecycle.json", import.meta.url);
+    const result = parseManifest(readFileSync(manifestPath, "utf8"));
+
+    expect(result.valid).toBe(true);
+    if (!result.valid) {
+      expect(result.errors).toEqual([]);
+    }
   });
 
   test("produces a stable fingerprint independent of object key order", () => {

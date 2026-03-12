@@ -234,6 +234,54 @@ describe("workspace surface state persistence", () => {
     });
   });
 
+  test("persists per-tab view state for reopened document tabs", () => {
+    const storage = new MemoryStorage();
+
+    writeWorkspaceSurfaceState(
+      "ws-1",
+      withDefaultState({
+        activeTabKey: fileViewerTabKey("README.md"),
+        documents: [createFileViewerTab("README.md")],
+        viewStateByTabKey: {
+          [fileViewerTabKey("README.md")]: {
+            scrollTop: 128,
+          },
+          "terminal:term-1": {
+            scrollTop: 64,
+          },
+        },
+      }),
+      storage,
+    );
+
+    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
+      ...createDefaultWorkspaceSurfaceState(),
+      activeTabKey: fileViewerTabKey("README.md"),
+      documents: [createFileViewerTab("README.md")],
+      viewStateByTabKey: {
+        [fileViewerTabKey("README.md")]: {
+          scrollTop: 128,
+        },
+      },
+    });
+    expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY) ?? "null")).toEqual({
+      "ws-1": {
+        activeTabKey: fileViewerTabKey("README.md"),
+        documents: [
+          {
+            filePath: "README.md",
+            kind: "file-viewer",
+          },
+        ],
+        viewStateByTabKey: {
+          [fileViewerTabKey("README.md")]: {
+            scrollTop: 128,
+          },
+        },
+      },
+    });
+  });
+
   test("persists pull request tabs with number-based dedupe", () => {
     const storage = new MemoryStorage();
     const firstPullRequest = createPullRequestSummary();

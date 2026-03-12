@@ -1,16 +1,59 @@
+import { Suspense, lazy, type ReactNode } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { DashboardLayout } from "../components/layout/dashboard-layout";
-import { DashboardIndexRoute } from "../features/dashboard/routes/dashboard-index-route";
-import { OverlayHostRoute } from "../features/overlays/routes/overlay-host-route";
-import { ProjectSettingsRoute } from "../features/projects/routes/project-settings-route";
-import { SettingsShellLayout } from "../features/settings/layout/settings-shell-layout";
-import { WorkspaceRoute } from "../features/workspaces/routes/workspace-route";
+
+const DashboardIndexRoute = lazy(async () => {
+  const module = await import("../features/dashboard/routes/dashboard-index-route");
+  return {
+    default: module.DashboardIndexRoute,
+  };
+});
+const OverlayHostRoute = lazy(async () => {
+  const module = await import("../features/overlays/routes/overlay-host-route");
+  return {
+    default: module.OverlayHostRoute,
+  };
+});
+const ProjectSettingsRoute = lazy(async () => {
+  const module = await import("../features/projects/routes/project-settings-route");
+  return {
+    default: module.ProjectSettingsRoute,
+  };
+});
+const SettingsShellLayout = lazy(async () => {
+  const module = await import("../features/settings/layout/settings-shell-layout");
+  return {
+    default: module.SettingsShellLayout,
+  };
+});
+const WorkspaceRoute = lazy(async () => {
+  const module = await import("../features/workspaces/routes/workspace-route");
+  return {
+    default: module.WorkspaceRoute,
+  };
+});
+
+function RouteFallback() {
+  return (
+    <div className="flex flex-1 items-center justify-center p-8">
+      <p className="text-sm text-[var(--muted-foreground)]">Loading...</p>
+    </div>
+  );
+}
+
+function LazyRoute({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<RouteFallback />}>{children}</Suspense>;
+}
 
 function createRouter() {
   return createBrowserRouter([
     {
       path: "/overlay-host",
-      element: <OverlayHostRoute />,
+      element: (
+        <LazyRoute>
+          <OverlayHostRoute />
+        </LazyRoute>
+      ),
     },
     {
       path: "/",
@@ -18,15 +61,27 @@ function createRouter() {
       children: [
         {
           index: true,
-          element: <DashboardIndexRoute />,
+          element: (
+            <LazyRoute>
+              <DashboardIndexRoute />
+            </LazyRoute>
+          ),
         },
         {
           path: "workspaces/:workspaceId",
-          element: <WorkspaceRoute />,
+          element: (
+            <LazyRoute>
+              <WorkspaceRoute />
+            </LazyRoute>
+          ),
         },
         {
           path: "projects/:projectId/settings",
-          element: <ProjectSettingsRoute />,
+          element: (
+            <LazyRoute>
+              <ProjectSettingsRoute />
+            </LazyRoute>
+          ),
         },
         {
           path: "*",
@@ -36,7 +91,11 @@ function createRouter() {
     },
     {
       path: "/settings",
-      element: <SettingsShellLayout />,
+      element: (
+        <LazyRoute>
+          <SettingsShellLayout />
+        </LazyRoute>
+      ),
     },
     {
       path: "/settings/*",
