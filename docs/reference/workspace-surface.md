@@ -21,6 +21,7 @@ The workspace center panel is a shared surface that can host both provider-backe
 4. Visible mixed-tab ordering (`tabOrderKeys`) and hidden-runtime presentation (`hiddenRuntimeTabKeys`) are desktop-owned surface state.
 5. Side-panel actions may request opening a document tab, but they do not own tab state.
 6. Mixed tab bars must render from normalized tab records rather than terminal-specific component state.
+7. Route/search state may mirror the currently focused workspace view (for example the active Git rail tab or pull request number) so hot reload can restore the same surface, but that URL state must stay identifier-only rather than replacing local document snapshots.
 
 ## Runtime Mount Semantics
 
@@ -52,6 +53,7 @@ The workspace center panel is a shared surface that can host both provider-backe
 2. Git-panel PR actions may request opening a PR tab, but the workspace surface owns the resulting tab lifecycle.
 3. PR tabs are keyed by pull request number within a workspace and should reuse the existing tab when the same PR is reopened.
 4. Persisted PR tabs may store a last-known snapshot so the surface can render even when live provider detail is temporarily unavailable.
+5. Router-backed PR focus should carry only the PR number needed to reopen the surface; the rendered snapshot and tab ordering remain desktop-owned state.
 
 ## File Viewer Documents
 

@@ -65,6 +65,7 @@ describe("WorkspaceSurfaceTabBar", () => {
     expect(markup).toContain("bg-[var(--muted)]");
     expect(markup).toContain("text-sm");
     expect(markup).toContain("font-medium");
+    expect(markup).not.toContain("shadow-[");
   });
 
   test("hides the horizontal scrollbar and reserves a right gutter for the fade", () => {

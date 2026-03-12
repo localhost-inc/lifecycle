@@ -16,6 +16,7 @@ import {
   SplitButtonSecondary,
   StatusDot,
   type StatusDotTone,
+  useTheme,
 } from "@lifecycle/ui";
 import { ChevronDown } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
@@ -347,6 +348,7 @@ export function GitActionButton({
   onPushBranch,
   onShowChanges,
 }: GitActionButtonProps) {
+  const { resolvedTheme } = useTheme();
   const [open, setOpen] = useState(defaultOpen);
   const [commitMessage, setCommitMessage] = useState("");
   const triggerRef = useRef<HTMLDivElement | null>(null);
@@ -380,6 +382,7 @@ export function GitActionButton({
         side: "bottom" as const,
         sideOffset: 8,
       },
+      resolvedTheme,
       requiresWindowFocus: actionState.kind === "needs_commit",
     }),
     [
@@ -393,6 +396,7 @@ export function GitActionButton({
       isMergingPullRequest,
       isPushingBranch,
       actionState.kind,
+      resolvedTheme,
     ],
   );
   const hostedOverlay = useHostedOverlay({

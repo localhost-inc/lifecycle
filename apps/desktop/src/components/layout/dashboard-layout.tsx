@@ -27,6 +27,7 @@ import {
   clampPanelSize,
   DASHBOARD_LEFT_SIDEBAR_COLLAPSED_STORAGE_KEY,
   DASHBOARD_LEFT_SIDEBAR_WIDTH_STORAGE_KEY,
+  DASHBOARD_RIGHT_SIDEBAR_COLLAPSED_STORAGE_KEY,
   DASHBOARD_RIGHT_SIDEBAR_WIDTH_STORAGE_KEY,
   DEFAULT_LEFT_SIDEBAR_WIDTH,
   DEFAULT_RIGHT_SIDEBAR_WIDTH,
@@ -87,6 +88,13 @@ export function DashboardLayout() {
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(() => {
     try {
       return localStorage.getItem(DASHBOARD_LEFT_SIDEBAR_COLLAPSED_STORAGE_KEY) === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [rightSidebarCollapsed, setRightSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(DASHBOARD_RIGHT_SIDEBAR_COLLAPSED_STORAGE_KEY) === "true";
     } catch {
       return false;
     }
@@ -248,6 +256,17 @@ export function DashboardLayout() {
       // best-effort
     }
   }, [leftSidebarCollapsed]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        DASHBOARD_RIGHT_SIDEBAR_COLLAPSED_STORAGE_KEY,
+        String(rightSidebarCollapsed),
+      );
+    } catch {
+      // best-effort
+    }
+  }, [rightSidebarCollapsed]);
 
   useEffect(() => {
     if (activeSidebarResize === null) {
@@ -494,6 +513,10 @@ export function DashboardLayout() {
     setLeftSidebarCollapsed((c) => !c);
   }, []);
 
+  const handleToggleRightSidebar = useCallback(() => {
+    setRightSidebarCollapsed((c) => !c);
+  }, []);
+
   const handleSidebarResizePointerDown = useCallback(
     (side: "left" | "right", event: ReactPointerEvent<HTMLDivElement>) => {
       if (event.button !== 0) {
@@ -633,42 +656,56 @@ export function DashboardLayout() {
               </div>
             </div>
             <SidebarInset>
-              <TitleBar selectedWorkspace={selectedWorkspace} onFork={handleForkWorkspace} />
+              <TitleBar
+                selectedWorkspace={selectedWorkspace}
+                leftSidebarCollapsed={leftSidebarCollapsed}
+                onFork={handleForkWorkspace}
+                onToggleRightSidebar={handleToggleRightSidebar}
+                rightSidebarCollapsed={rightSidebarCollapsed}
+              />
               <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
                 <Outlet context={{ onCreateWorkspace: handleCreateWorkspace }} />
               </main>
             </SidebarInset>
             {showRightSidebar && (
               <>
-                <div className="relative w-px shrink-0">
-                  <div
-                    role="separator"
-                    aria-label="Resize workspace details sidebar"
-                    aria-orientation="vertical"
-                    aria-valuemax={rightSidebarBounds.maxSize}
-                    aria-valuemin={rightSidebarBounds.minSize}
-                    aria-valuenow={rightSidebarWidth}
-                    data-no-drag
-                    tabIndex={0}
-                    onKeyDown={handleRightSidebarSeparatorKeyDown}
-                    onPointerDown={(event) => handleSidebarResizePointerDown("right", event)}
-                    className="group absolute inset-y-0 left-1/2 z-10 flex w-3 -translate-x-1/2 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
-                  >
-                    <div className="w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
+                {!rightSidebarCollapsed && (
+                  <div className="relative w-px shrink-0">
+                    <div
+                      role="separator"
+                      aria-label="Resize workspace details sidebar"
+                      aria-orientation="vertical"
+                      aria-valuemax={rightSidebarBounds.maxSize}
+                      aria-valuemin={rightSidebarBounds.minSize}
+                      aria-valuenow={rightSidebarWidth}
+                      data-no-drag
+                      tabIndex={0}
+                      onKeyDown={handleRightSidebarSeparatorKeyDown}
+                      onPointerDown={(event) => handleSidebarResizePointerDown("right", event)}
+                      className="group absolute inset-y-0 left-1/2 z-10 flex w-3 -translate-x-1/2 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
+                    >
+                      <div className="w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
+                    </div>
                   </div>
-                </div>
+                )}
                 <div
                   id="workspace-right-rail"
-                  className="relative flex min-h-0 shrink-0 bg-[var(--panel)]"
+                  className={`relative flex min-h-0 shrink-0 overflow-hidden bg-[var(--panel)]${activeSidebarResize === "right" ? "" : " transition-[width,transform] duration-200 ease-linear"}`}
                   data-overlay-boundary
-                  style={{ width: `${rightSidebarWidth}px` }}
+                  style={{
+                    width: rightSidebarCollapsed ? 0 : `${rightSidebarWidth}px`,
+                    transform: rightSidebarCollapsed ? `translateX(${rightSidebarWidth}px)` : undefined,
+                  }}
                 />
               </>
             )}
           </div>
         </ShellResizeProvider>
       </div>
-      <AppStatusBar />
+      <AppStatusBar
+        leftSidebarCollapsed={leftSidebarCollapsed}
+        onToggleLeftSidebar={handleLeftSidebarSeparatorDoubleClick}
+      />
     </div>
   );
 }

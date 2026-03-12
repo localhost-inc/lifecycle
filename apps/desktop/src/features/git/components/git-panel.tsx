@@ -3,26 +3,23 @@ import { EmptyState, Tabs, TabsList, TabsTrigger, cn } from "@lifecycle/ui";
 import { useState } from "react";
 import { commitGit, createGitPullRequest, mergeGitPullRequest, pushGit } from "../api";
 import { useCurrentGitPullRequest, useGitLog, useGitPullRequests, useGitStatus } from "../hooks";
+import { GIT_PANEL_TABS, type GitPanelTabValue } from "../lib/git-panel-tabs";
 import { ChangesTab } from "./changes-tab";
 import { GitActionButton } from "./git-action-button";
 import { HistoryTab } from "./history-tab";
 import { PullRequestsTab } from "./pull-requests-tab";
 
 export const GIT_PANEL_TITLE = "Git";
-
-export const GIT_PANEL_TABS = [
-  { label: "Changes", value: "changes" },
-  { label: "History", value: "history" },
-  { label: "Pulls", title: "Pull Requests", value: "pull-requests" },
-] as const;
-
-type GitPanelTabValue = (typeof GIT_PANEL_TABS)[number]["value"];
+export { GIT_PANEL_TABS };
+export type { GitPanelTabValue };
 
 interface GitPanelProps {
+  activeTab: GitPanelTabValue;
   onOpenDiff: (filePath: string) => void;
   onOpenFile: (filePath: string) => void;
   onOpenCommitDiff: (entry: GitLogEntry) => void;
   onOpenPullRequest: (pullRequest: GitPullRequestSummary) => void;
+  onActiveTabChange: (tab: GitPanelTabValue) => void;
   workspaceId: string;
   workspaceMode: WorkspaceMode;
   worktreePath: string | null;
@@ -37,15 +34,16 @@ function GitPanelPlaceholder({ description, title }: { description: string; titl
 }
 
 export function GitPanel({
+  activeTab,
   onOpenDiff,
   onOpenFile,
   onOpenCommitDiff,
   onOpenPullRequest,
+  onActiveTabChange,
   workspaceId,
   workspaceMode,
   worktreePath,
 }: GitPanelProps) {
-  const [activeTab, setActiveTab] = useState<GitPanelTabValue>("changes");
   const [actionError, setActionError] = useState<string | null>(null);
   const [isCommitting, setIsCommitting] = useState(false);
   const [isCreatingPullRequest, setIsCreatingPullRequest] = useState(false);
@@ -98,7 +96,7 @@ export function GitPanel({
       }
 
       await refreshPullRequestState();
-      setActiveTab("history");
+      onActiveTabChange("history");
     } catch (error) {
       if (committed) {
         await refreshPullRequestState().catch(() => undefined);
@@ -116,7 +114,7 @@ export function GitPanel({
       const pullRequest = await createGitPullRequest(workspaceId);
       await refreshPullRequestState();
       onOpenPullRequest(pullRequest);
-      setActiveTab("pull-requests");
+      onActiveTabChange("pull-requests");
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -158,11 +156,11 @@ export function GitPanel({
               onMergePullRequest={handleMergePullRequest}
               onOpenPullRequest={onOpenPullRequest}
               onPushBranch={handlePushBranch}
-              onShowChanges={() => setActiveTab("changes")}
+              onShowChanges={() => onActiveTabChange("changes")}
             />
           </div>
           <Tabs
-            onValueChange={(value) => setActiveTab(value as GitPanelTabValue)}
+            onValueChange={(value) => onActiveTabChange(value as GitPanelTabValue)}
             value={activeTab}
           >
             <TabsList className="-mx-2.5 w-[calc(100%+1.25rem)]" variant="underline">

@@ -23,6 +23,7 @@ import type {
   ServiceRecord,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
+import type { GitPanelTabValue } from "../../git/lib/git-panel-tabs";
 import { EnvironmentPanel } from "./environment-panel";
 import { GitPanel } from "../../git/components/git-panel";
 import type { SetupStepState } from "../hooks";
@@ -30,9 +31,11 @@ import type { SetupStepState } from "../hooks";
 const PANEL_SEPARATOR_STEP_PX = 32;
 
 interface WorkspaceSidebarProps {
+  activeGitTab: GitPanelTabValue;
   hasManifest: boolean;
   isManifestStale: boolean;
   manifestState: "invalid" | "missing" | "valid";
+  onActiveGitTabChange: (tab: GitPanelTabValue) => void;
   onRun: () => Promise<void>;
   onStop: () => Promise<void>;
   onUpdateService: (input: {
@@ -50,9 +53,11 @@ interface WorkspaceSidebarProps {
 }
 
 export function WorkspaceSidebar({
+  activeGitTab,
   hasManifest,
   isManifestStale,
   manifestState,
+  onActiveGitTabChange,
   onRun,
   onStop,
   onUpdateService,
@@ -217,10 +222,12 @@ export function WorkspaceSidebar({
         style={{ flexBasis: `${clampedTopPanelRatio * 100}%` }}
       >
         <GitPanel
+          activeTab={activeGitTab}
           onOpenDiff={onOpenDiff}
           onOpenFile={onOpenFile}
           onOpenCommitDiff={onOpenCommitDiff}
           onOpenPullRequest={onOpenPullRequest}
+          onActiveTabChange={onActiveGitTabChange}
           workspaceId={workspace.id}
           workspaceMode={workspace.mode}
           worktreePath={workspace.worktree_path}

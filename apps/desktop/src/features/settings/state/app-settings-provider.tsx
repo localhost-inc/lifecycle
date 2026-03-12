@@ -12,6 +12,14 @@ import {
   DEFAULT_MONOSPACE_FONT_FAMILY,
   normalizeFontFamily,
 } from "../../../lib/typography";
+import {
+  DEFAULT_TURN_NOTIFICATION_MODE,
+  DEFAULT_TURN_NOTIFICATION_SOUND,
+  normalizeTurnNotificationMode,
+  normalizeTurnNotificationSound,
+  type TurnNotificationMode,
+  type TurnNotificationSound,
+} from "../../notifications/lib/notification-settings";
 
 export const DEFAULT_LIFECYCLE_ROOT = "~/.lifecycle";
 export const DEFAULT_WORKTREE_ROOT = `${DEFAULT_LIFECYCLE_ROOT}/worktrees`;
@@ -20,6 +28,8 @@ const SETTINGS_STORAGE_KEY = "lifecycle.desktop.settings";
 export interface AppSettings {
   interfaceFontFamily: string;
   monospaceFontFamily: string;
+  turnNotificationsMode: TurnNotificationMode;
+  turnNotificationSound: TurnNotificationSound;
   worktreeRoot: string;
 }
 
@@ -27,6 +37,8 @@ interface SettingsContextValue extends AppSettings {
   resetTypography: () => void;
   setInterfaceFontFamily: (value: string) => void;
   setMonospaceFontFamily: (value: string) => void;
+  setTurnNotificationSound: (value: TurnNotificationSound) => void;
+  setTurnNotificationsMode: (value: TurnNotificationMode) => void;
   setWorktreeRoot: (value: string) => void;
 }
 
@@ -67,15 +79,14 @@ function buildDefaultSettings(): AppSettings {
   return {
     interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
     monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
+    turnNotificationsMode: DEFAULT_TURN_NOTIFICATION_MODE,
+    turnNotificationSound: DEFAULT_TURN_NOTIFICATION_SOUND,
     worktreeRoot: DEFAULT_WORKTREE_ROOT,
   };
 }
 
-function readStoredSettings(): AppSettings {
+export function parseStoredSettings(raw: string | null | undefined): AppSettings {
   const defaults = buildDefaultSettings();
-  if (typeof window === "undefined") return defaults;
-
-  const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
   if (!raw) return defaults;
 
   try {
@@ -89,11 +100,25 @@ function readStoredSettings(): AppSettings {
         parsed.monospaceFontFamily,
         defaults.monospaceFontFamily,
       ),
+      turnNotificationsMode: normalizeTurnNotificationMode(
+        parsed.turnNotificationsMode,
+        defaults.turnNotificationsMode,
+      ),
+      turnNotificationSound: normalizeTurnNotificationSound(
+        parsed.turnNotificationSound,
+        defaults.turnNotificationSound,
+      ),
       worktreeRoot: normalizeWorktreeRoot(parsed.worktreeRoot),
     };
   } catch {
     return defaults;
   }
+}
+
+function readStoredSettings(): AppSettings {
+  if (typeof window === "undefined") return buildDefaultSettings();
+
+  return parseStoredSettings(window.localStorage.getItem(SETTINGS_STORAGE_KEY));
 }
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
@@ -147,6 +172,38 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [persistSettings],
   );
 
+  const setTurnNotificationsMode = useCallback(
+    (value: TurnNotificationMode) => {
+      setSettings((prev) => {
+        const next = {
+          ...prev,
+          turnNotificationsMode: normalizeTurnNotificationMode(
+            value,
+            DEFAULT_TURN_NOTIFICATION_MODE,
+          ),
+        };
+        return persistSettings(next);
+      });
+    },
+    [persistSettings],
+  );
+
+  const setTurnNotificationSound = useCallback(
+    (value: TurnNotificationSound) => {
+      setSettings((prev) => {
+        const next = {
+          ...prev,
+          turnNotificationSound: normalizeTurnNotificationSound(
+            value,
+            DEFAULT_TURN_NOTIFICATION_SOUND,
+          ),
+        };
+        return persistSettings(next);
+      });
+    },
+    [persistSettings],
+  );
+
   const resetTypography = useCallback(() => {
     setSettings((prev) => {
       const next: AppSettings = {
@@ -165,16 +222,24 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       resetTypography,
       setInterfaceFontFamily,
       setMonospaceFontFamily,
+      setTurnNotificationSound,
+      setTurnNotificationsMode,
+      turnNotificationSound: settings.turnNotificationSound,
+      turnNotificationsMode: settings.turnNotificationsMode,
       worktreeRoot: settings.worktreeRoot,
       setWorktreeRoot,
     }),
     [
       settings.interfaceFontFamily,
       settings.monospaceFontFamily,
+      settings.turnNotificationSound,
+      settings.turnNotificationsMode,
       settings.worktreeRoot,
       resetTypography,
       setInterfaceFontFamily,
       setMonospaceFontFamily,
+      setTurnNotificationSound,
+      setTurnNotificationsMode,
       setWorktreeRoot,
     ],
   );

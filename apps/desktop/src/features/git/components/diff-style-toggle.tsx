@@ -7,11 +7,7 @@ interface DiffStyleToggleProps {
   onChange: (nextDiffStyle: GitDiffStyle) => void;
 }
 
-export function DiffStyleToggle({
-  diffStyle,
-  disabled,
-  onChange,
-}: DiffStyleToggleProps) {
+export function DiffStyleToggle({ diffStyle, disabled, onChange }: DiffStyleToggleProps) {
   return (
     <div className="pointer-events-none absolute bottom-4 right-4 z-20">
       <div

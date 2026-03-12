@@ -8,8 +8,9 @@ import {
   SplitButton,
   SplitButtonPrimary,
   SplitButtonSecondary,
+  useTheme,
 } from "@lifecycle/ui";
-import { ChevronDown, GitFork } from "lucide-react";
+import { ChevronDown, GitFork, PanelRight, PanelRightClose } from "lucide-react";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { isMacPlatform } from "../../app/app-hotkeys";
 import type { HostedOverlayAction } from "../../features/overlays/overlay-contract";
@@ -31,6 +32,8 @@ import {
 interface TitleBarActionsProps {
   workspace: WorkspaceRecord;
   onFork?: () => void;
+  rightSidebarCollapsed?: boolean;
+  onToggleRightSidebar?: () => void;
 }
 
 function describeOpenInError(error: unknown): string {
@@ -55,7 +58,13 @@ function describeOpenInError(error: unknown): string {
   return "Unable to open this workspace in the selected app.";
 }
 
-export function TitleBarActions({ workspace, onFork }: TitleBarActionsProps) {
+export function TitleBarActions({
+  workspace,
+  onFork,
+  rightSidebarCollapsed,
+  onToggleRightSidebar,
+}: TitleBarActionsProps) {
+  const { resolvedTheme } = useTheme();
   const [baseAvailableTargets] = useState(() => listAvailableOpenInTargets(isMacPlatform()));
   const [availableTargets, setAvailableTargets] =
     useState<readonly OpenInTarget[]>(baseAvailableTargets);
@@ -160,9 +169,17 @@ export function TitleBarActions({ workspace, onFork }: TitleBarActionsProps) {
         side: "bottom" as const,
         sideOffset: 8,
       },
+      resolvedTheme,
       requiresWindowFocus: openInKeyboardMode,
     }),
-    [availableTargets, defaultTarget.id, launchError, launchingTarget, openInKeyboardMode],
+    [
+      availableTargets,
+      defaultTarget.id,
+      launchError,
+      launchingTarget,
+      openInKeyboardMode,
+      resolvedTheme,
+    ],
   );
 
   const hostedOpenIn = useHostedOverlay({
@@ -281,6 +298,18 @@ export function TitleBarActions({ workspace, onFork }: TitleBarActionsProps) {
           </Popover>
         )}
       </SplitButton>
+      {onToggleRightSidebar && (
+        <Button
+          onClick={onToggleRightSidebar}
+          title={rightSidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+        >
+          {rightSidebarCollapsed ? (
+            <PanelRight size={14} strokeWidth={2.2} />
+          ) : (
+            <PanelRightClose size={14} strokeWidth={2.2} />
+          )}
+        </Button>
+      )}
     </div>
   );
 }

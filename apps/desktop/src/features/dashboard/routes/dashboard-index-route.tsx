@@ -141,9 +141,7 @@ export function DashboardIndexRoute() {
           <div className="flex size-10 items-center justify-center rounded-xl text-[var(--muted-foreground)]">
             <Layers className="size-5" />
           </div>
-          <h2 className="mt-4 text-lg font-medium text-[var(--foreground)]">
-            {defaultTitle}
-          </h2>
+          <h2 className="mt-4 text-lg font-medium text-[var(--foreground)]">{defaultTitle}</h2>
           <p className="mt-1.5 max-w-md text-sm leading-6 text-[var(--muted-foreground)]">
             {defaultDescription}
           </p>

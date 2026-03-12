@@ -73,13 +73,14 @@ export function SurfaceLaunchActions({
           {actions.map((action, index) => {
             const isFirst = !onOpenLauncher && index === 0;
             const isLast = index === actions.length - 1;
-            const rounding = isFirst && isLast
-              ? "rounded-xl"
-              : isFirst
-                ? "rounded-l-xl"
-                : isLast
-                  ? "rounded-r-xl"
-                  : "";
+            const rounding =
+              isFirst && isLast
+                ? "rounded-xl"
+                : isFirst
+                  ? "rounded-l-xl"
+                  : isLast
+                    ? "rounded-r-xl"
+                    : "";
 
             return (
               <Tooltip key={action.key}>

@@ -11,16 +11,17 @@ const splitButtonPrimaryVariants = cva(
           "text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--muted),var(--foreground)_8%)]",
         active: "text-[var(--foreground)]",
       },
-    withIcon: {
-      true: "pl-2 pr-2.5",
-      false: "px-3",
+      withIcon: {
+        true: "pl-2 pr-2.5",
+        false: "px-3",
+      },
+    },
+    defaultVariants: {
+      variant: "foreground",
+      withIcon: false,
     },
   },
-  defaultVariants: {
-    variant: "foreground",
-    withIcon: false,
-  },
-});
+);
 
 const splitButtonSecondaryVariants = cva(
   "inline-flex h-8 w-8 items-center justify-center rounded-r-xl bg-[var(--muted)] text-[var(--muted-foreground)] outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out hover:bg-[color-mix(in_srgb,var(--muted),var(--foreground)_8%)] hover:text-[var(--foreground)] focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50",
@@ -29,11 +30,7 @@ const splitButtonSecondaryVariants = cva(
 const SplitButton = React.forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef<"div">>(
   function SplitButton({ className, ...props }, ref) {
     return (
-      <div
-        className={cn("inline-flex items-center gap-px", className)}
-        ref={ref}
-        {...props}
-      />
+      <div className={cn("inline-flex items-center gap-px", className)} ref={ref} {...props} />
     );
   },
 );

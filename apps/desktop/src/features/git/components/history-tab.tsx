@@ -1,5 +1,5 @@
 import type { GitLogEntry } from "@lifecycle/contracts";
-import { EmptyState } from "@lifecycle/ui";
+import { EmptyState, Loading } from "@lifecycle/ui";
 import { History } from "lucide-react";
 import { GithubAvatar } from "./github-avatar";
 
@@ -116,7 +116,7 @@ function CommitRow({
 
 export function HistoryTab({ error, isLoading, entries, onOpenCommit }: HistoryTabProps) {
   if (isLoading && entries.length === 0) {
-    return <p className="text-xs text-[var(--muted-foreground)]">Loading history...</p>;
+    return <Loading message="Loading history..." />;
   }
 
   if (error) {

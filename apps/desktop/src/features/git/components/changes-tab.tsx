@@ -1,5 +1,5 @@
 import type { GitFileChangeKind, GitFileStatus, GitStatusResult } from "@lifecycle/contracts";
-import { Button, EmptyState, Logo } from "@lifecycle/ui";
+import { Button, EmptyState, Loading } from "@lifecycle/ui";
 import {
   File,
   FileCode,
@@ -392,18 +392,7 @@ export function ChangesTab({
   }
 
   if (isLoading && !gitStatus) {
-    return (
-      <div
-        aria-live="polite"
-        className="flex flex-1 items-center justify-center py-8"
-        role="status"
-      >
-        <div className="flex flex-col items-center gap-3 text-center">
-          <Logo animate className="text-[var(--muted-foreground)] opacity-70" repeat size={32} />
-          <p className="text-xs text-[var(--muted-foreground)]">Loading changes...</p>
-        </div>
-      </div>
-    );
+    return <Loading delay={0} message="Loading changes..." />;
   }
 
   if (error) {

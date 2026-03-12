@@ -1,4 +1,5 @@
 import type { GitBranchPullRequestResult, GitStatusResult } from "@lifecycle/contracts";
+import type { ResolvedTheme } from "@lifecycle/ui";
 import type { OpenInAppId } from "../workspaces/api";
 import type { OpenInTarget } from "../workspaces/lib/open-in-targets";
 
@@ -23,6 +24,7 @@ interface HostedOverlayBase {
   overlayId: string;
   ownerWindowLabel: string;
   placement: HostedOverlayPlacement;
+  resolvedTheme: ResolvedTheme;
   requiresWindowFocus: boolean;
 }
 

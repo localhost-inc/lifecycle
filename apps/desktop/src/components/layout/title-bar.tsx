@@ -10,7 +10,10 @@ import { TitleBarActions } from "./title-bar-actions";
 
 interface TitleBarProps {
   selectedWorkspace?: WorkspaceRecord | null;
+  leftSidebarCollapsed?: boolean;
   onFork?: () => void;
+  onToggleRightSidebar?: () => void;
+  rightSidebarCollapsed?: boolean;
 }
 
 function shouldSkipDrag(target: EventTarget | null): boolean {
@@ -32,7 +35,13 @@ function isEditableTarget(target: EventTarget | null): boolean {
   );
 }
 
-export function TitleBar({ selectedWorkspace, onFork }: TitleBarProps) {
+export function TitleBar({
+  selectedWorkspace,
+  leftSidebarCollapsed,
+  onFork,
+  onToggleRightSidebar,
+  rightSidebarCollapsed,
+}: TitleBarProps) {
   const navigate = useNavigate();
   const { canGoBack, canGoForward } = useHistoryAvailability();
 
@@ -85,7 +94,8 @@ export function TitleBar({ selectedWorkspace, onFork }: TitleBarProps) {
     <header
       data-tauri-drag-region
       onMouseDown={handleMouseDown}
-      className="flex h-11 shrink-0 items-center bg-[var(--background)] px-3 pt-2 text-[11px] text-[var(--muted-foreground)]"
+      className="flex h-11 shrink-0 items-center bg-[var(--background)] pr-3 pt-2 text-[11px] text-[var(--muted-foreground)]"
+      style={{ paddingLeft: leftSidebarCollapsed ? 80 : 12 }}
     >
       <div data-tauri-drag-region className="flex min-w-0 flex-1 items-center gap-3">
         {selectedWorkspace && (
@@ -108,7 +118,12 @@ export function TitleBar({ selectedWorkspace, onFork }: TitleBarProps) {
       </div>
       <div data-no-drag id="title-bar-actions" className="flex shrink-0 items-center gap-1">
         {selectedWorkspace && workspaceSupportsFilesystemInteraction(selectedWorkspace) && (
-          <TitleBarActions workspace={selectedWorkspace} onFork={onFork} />
+          <TitleBarActions
+            workspace={selectedWorkspace}
+            onFork={onFork}
+            rightSidebarCollapsed={rightSidebarCollapsed}
+            onToggleRightSidebar={onToggleRightSidebar}
+          />
         )}
       </div>
     </header>

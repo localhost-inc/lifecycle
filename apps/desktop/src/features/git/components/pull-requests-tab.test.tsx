@@ -58,10 +58,10 @@ describe("PullRequestsTab", () => {
     expect(markup).toContain("feat: add pull request rail");
     expect(markup).toContain("Draft");
     expect(markup).toContain("Current");
-    expect(markup).toContain("feature/git-panel-prs");
-    expect(markup).toContain("Mergeable");
+    expect(markup).toContain("#42");
+    expect(markup).toContain("kyle");
     expect(markup).toContain("Approved");
-    expect(markup).toContain("Open");
+    expect(markup).toContain("Open pull request #42");
   });
 
   test("renders provider-unavailable state for unsupported modes", () => {

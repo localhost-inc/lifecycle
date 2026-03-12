@@ -17,10 +17,12 @@ function renderGitPanel(props: Partial<Parameters<typeof GitPanel>[0]> = {}) {
     createElement(QueryProvider, {
       children: createElement(ThemeProvider, {
         children: createElement(GitPanel, {
+          activeTab: "changes",
           onOpenCommitDiff: () => {},
           onOpenDiff: () => {},
           onOpenFile: () => {},
           onOpenPullRequest: () => {},
+          onActiveTabChange: () => {},
           workspaceId: "workspace_1",
           workspaceMode: "local",
           worktreePath: "/tmp/lifecycle",

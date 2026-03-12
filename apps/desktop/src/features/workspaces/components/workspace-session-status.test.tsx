@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import {
-  getWorkspaceSessionStatusState,
-  WorkspaceSessionStatus,
-} from "./workspace-session-status";
+import { getWorkspaceSessionStatusState, WorkspaceSessionStatus } from "./workspace-session-status";
 
 describe("getWorkspaceSessionStatusState", () => {
   test("prefers ready over loading when both flags are present", () => {

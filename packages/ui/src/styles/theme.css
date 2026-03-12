@@ -23,7 +23,6 @@
   --radius-xl: 12px;
   --radius-2xl: 18px;
   --radius-3xl: 24px;
-
 }
 
 :where(button, [role="button"]):where(:not(:disabled)):where(:not([aria-disabled="true"])) {
@@ -74,20 +73,30 @@
     stroke-dashoffset: 1;
   }
 
-  50%,
-  100% {
+  25%,
+  50% {
     stroke-dashoffset: 0;
+  }
+
+  75%,
+  100% {
+    stroke-dashoffset: 1;
   }
 }
 
 @keyframes lifecycle-logo-draw-right {
   0%,
-  50% {
+  25% {
     stroke-dashoffset: 1;
   }
 
-  100% {
+  50%,
+  75% {
     stroke-dashoffset: 0;
+  }
+
+  100% {
+    stroke-dashoffset: 1;
   }
 }
 

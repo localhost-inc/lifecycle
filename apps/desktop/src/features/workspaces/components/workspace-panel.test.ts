@@ -2,8 +2,18 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import type { ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter } from "react-router-dom";
 import { QueryProvider } from "../../../query";
 import { workspaceSupportsFilesystemInteraction } from "../lib/workspace-capabilities";
+
+function renderWorkspacePanel(element: ReturnType<typeof createElement>) {
+  return renderToStaticMarkup(
+    createElement(MemoryRouter, {
+      initialEntries: ["/workspaces/workspace_1"],
+      children: createElement(QueryProvider, { children: element }),
+    }),
+  );
+}
 
 describe("workspaceSupportsFilesystemInteraction", () => {
   test("allows terminals once a worktree exists outside create and destroy", () => {
@@ -119,34 +129,36 @@ describe("WorkspacePanel", () => {
       createElement("aside", null, "Workspace Sidebar")) as never);
     spyOn(surfaceModule, "WorkspaceSurface").mockImplementation((() =>
       createElement("div", null, "Workspace Surface")) as never);
+    const gitHooksModule = await import("../../git/hooks");
+    spyOn(gitHooksModule, "useCurrentGitPullRequest").mockReturnValue({ data: undefined } as never);
+    spyOn(gitHooksModule, "useGitPullRequest").mockReturnValue({ data: undefined } as never);
+    spyOn(gitHooksModule, "useGitPullRequests").mockReturnValue({ data: undefined } as never);
 
     const { WorkspacePanel } = await import("./workspace-panel");
-    const markup = renderToStaticMarkup(
-      createElement(QueryProvider, {
-        children: createElement(WorkspacePanel, {
-          manifestStatus: {
-            state: "valid",
-            result: {
-              valid: true,
-              config: {
-                setup: { steps: [] },
-                services: {
-                  "desktop-web": {
-                    runtime: "process",
-                    command: "bun run dev",
-                    port: 1420,
-                  },
-                  worker: {
-                    runtime: "process",
-                    command: "bun run worker",
-                    port: 8787,
-                  },
+    const markup = renderWorkspacePanel(
+      createElement(WorkspacePanel, {
+        manifestStatus: {
+          state: "valid",
+          result: {
+            valid: true,
+            config: {
+              setup: { steps: [] },
+              services: {
+                "desktop-web": {
+                  runtime: "process",
+                  command: "bun run dev",
+                  port: 1420,
+                },
+                worker: {
+                  runtime: "process",
+                  command: "bun run worker",
+                  port: 8787,
                 },
               },
             },
           },
-          workspace,
-        }),
+        },
+        workspace,
       }),
     );
 
@@ -189,31 +201,33 @@ describe("WorkspacePanel", () => {
       createElement("aside", null, "Workspace Sidebar")) as never);
     spyOn(surfaceModule, "WorkspaceSurface").mockImplementation((() =>
       createElement("div", null, "Workspace Surface")) as never);
+    const gitHooksModule = await import("../../git/hooks");
+    spyOn(gitHooksModule, "useCurrentGitPullRequest").mockReturnValue({ data: undefined } as never);
+    spyOn(gitHooksModule, "useGitPullRequest").mockReturnValue({ data: undefined } as never);
+    spyOn(gitHooksModule, "useGitPullRequests").mockReturnValue({ data: undefined } as never);
 
     const { WorkspacePanel } = await import("./workspace-panel");
-    const markup = renderToStaticMarkup(
-      createElement(QueryProvider, {
-        children: createElement(WorkspacePanel, {
-          manifestStatus: {
-            state: "valid",
-            result: {
-              valid: true,
-              config: {
-                setup: {
-                  steps: [{ command: "bun install", name: "install", timeout_seconds: 60 }],
-                },
-                services: {
-                  "desktop-web": {
-                    runtime: "process",
-                    command: "bun run dev",
-                    port: 1420,
-                  },
+    const markup = renderWorkspacePanel(
+      createElement(WorkspacePanel, {
+        manifestStatus: {
+          state: "valid",
+          result: {
+            valid: true,
+            config: {
+              setup: {
+                steps: [{ command: "bun install", name: "install", timeout_seconds: 60 }],
+              },
+              services: {
+                "desktop-web": {
+                  runtime: "process",
+                  command: "bun run dev",
+                  port: 1420,
                 },
               },
             },
           },
-          workspace,
-        }),
+        },
+        workspace,
       }),
     );
 
@@ -251,16 +265,18 @@ describe("WorkspacePanel", () => {
     spyOn(hooksModule, "useWorkspaceSetup").mockReturnValue({ data: [] } as never);
     spyOn(sidebarModule, "WorkspaceSidebar").mockImplementation((() =>
       createElement("aside", null, "Workspace Sidebar")) as never);
+    const gitHooksModule = await import("../../git/hooks");
+    spyOn(gitHooksModule, "useCurrentGitPullRequest").mockReturnValue({ data: undefined } as never);
+    spyOn(gitHooksModule, "useGitPullRequest").mockReturnValue({ data: undefined } as never);
+    spyOn(gitHooksModule, "useGitPullRequests").mockReturnValue({ data: undefined } as never);
 
     const { WorkspacePanel } = await import("./workspace-panel");
-    const markup = renderToStaticMarkup(
-      createElement(QueryProvider, {
-        children: createElement(WorkspacePanel, {
-          manifestStatus: {
-            state: "missing",
-          },
-          workspace,
-        }),
+    const markup = renderWorkspacePanel(
+      createElement(WorkspacePanel, {
+        manifestStatus: {
+          state: "missing",
+        },
+        workspace,
       }),
     );
 

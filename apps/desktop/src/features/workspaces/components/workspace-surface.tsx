@@ -18,6 +18,7 @@ import { useTerminalResponseReady } from "../../terminals/state/terminal-respons
 import { useWorkspaceActivity } from "../hooks";
 import { subscribeToNativeWorkspaceShortcutEvents } from "../api";
 import { isRuntimeTabKey, writeWorkspaceSurfaceState } from "../state/workspace-surface-state";
+import { isPullRequestDocument } from "../state/workspace-surface-state";
 import {
   SurfaceLaunchActions,
   type SurfaceLaunchAction,
@@ -51,10 +52,15 @@ import { WorkspaceSurfaceTabBar } from "./workspace-surface-tab-bar";
 
 interface WorkspaceSurfaceProps {
   openDocumentRequest: OpenDocumentRequest | null;
+  onActivePullRequestNumberChange?: (pullRequestNumber: number | null) => void;
   workspaceId: string;
 }
 
-export function WorkspaceSurface({ openDocumentRequest, workspaceId }: WorkspaceSurfaceProps) {
+export function WorkspaceSurface({
+  openDocumentRequest,
+  onActivePullRequestNumberChange,
+  workspaceId,
+}: WorkspaceSurfaceProps) {
   const client = useQueryClient();
   const { clearTerminalResponseReady, isTerminalResponseReady, isTerminalTurnRunning } =
     useTerminalResponseReady();
@@ -117,6 +123,14 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
     state.activeTabKey && isRuntimeTabKey(state.activeTabKey)
       ? state.activeTabKey.slice("terminal:".length)
       : null;
+  const activePullRequestNumber = useMemo(() => {
+    if (!state.activeTabKey) {
+      return null;
+    }
+
+    const activeDocument = state.documents.find((document) => document.key === state.activeTabKey);
+    return activeDocument && isPullRequestDocument(activeDocument) ? activeDocument.number : null;
+  }, [state.activeTabKey, state.documents]);
   const waitingForActiveRuntimeTab = Boolean(
     state.activeTabKey &&
     isRuntimeTabKey(state.activeTabKey) &&
@@ -138,6 +152,10 @@ export function WorkspaceSurface({ openDocumentRequest, workspaceId }: Workspace
   useEffect(() => {
     writeWorkspaceSurfaceState(workspaceId, state);
   }, [state, workspaceId]);
+
+  useEffect(() => {
+    onActivePullRequestNumberChange?.(activePullRequestNumber);
+  }, [activePullRequestNumber, onActivePullRequestNumberChange]);
 
   useEffect(() => {
     const syncDocumentVisible = () => {

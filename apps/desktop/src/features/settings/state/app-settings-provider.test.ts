@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import {
+  DEFAULT_INTERFACE_FONT_FAMILY,
+  DEFAULT_MONOSPACE_FONT_FAMILY,
+} from "../../../lib/typography";
 
-import { applyFontSettings } from "./app-settings-provider";
+import { applyFontSettings, parseStoredSettings } from "./app-settings-provider";
 
 describe("applyFontSettings", () => {
   test("writes interface and monospace font tokens to the root style", () => {
@@ -22,5 +26,50 @@ describe("applyFontSettings", () => {
     expect(properties.get("--font-heading")).toBe('"Geist", system-ui, sans-serif');
     expect(properties.get("--font-body")).toBe('"Geist", system-ui, sans-serif');
     expect(properties.get("--font-mono")).toBe('"Geist Mono", ui-monospace, monospace');
+  });
+});
+
+describe("parseStoredSettings", () => {
+  test("returns defaults when storage is empty", () => {
+    expect(parseStoredSettings(null)).toEqual({
+      interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
+      monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
+      turnNotificationSound: "glass",
+      turnNotificationsMode: "when-unfocused",
+      worktreeRoot: "~/.lifecycle/worktrees",
+    });
+  });
+
+  test("keeps valid notification settings and normalizes invalid ones", () => {
+    expect(
+      parseStoredSettings(
+        JSON.stringify({
+          turnNotificationSound: "signal",
+          turnNotificationsMode: "always",
+          worktreeRoot: "  ~/workspace-root  ",
+        }),
+      ),
+    ).toEqual({
+      interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
+      monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
+      turnNotificationSound: "signal",
+      turnNotificationsMode: "always",
+      worktreeRoot: "~/workspace-root",
+    });
+
+    expect(
+      parseStoredSettings(
+        JSON.stringify({
+          turnNotificationSound: "broken",
+          turnNotificationsMode: "broken",
+        }),
+      ),
+    ).toEqual({
+      interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
+      monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
+      turnNotificationSound: "glass",
+      turnNotificationsMode: "when-unfocused",
+      worktreeRoot: "~/.lifecycle/worktrees",
+    });
   });
 });

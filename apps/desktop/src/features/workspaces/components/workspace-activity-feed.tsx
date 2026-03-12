@@ -20,9 +20,7 @@ function toneClassName(tone: WorkspaceActivityItem["tone"]): string {
 
 export function WorkspaceActivityFeed({ items }: WorkspaceActivityFeedProps) {
   if (items.length === 0) {
-    return (
-      <p className="py-3 text-xs text-[var(--muted-foreground)]/60">No activity yet.</p>
-    );
+    return <p className="py-3 text-xs text-[var(--muted-foreground)]/60">No activity yet.</p>;
   }
 
   return (

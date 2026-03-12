@@ -1,6 +1,7 @@
 import { Alert, AlertDescription, Badge, Button, EmptyState } from "@lifecycle/ui";
 import { ExternalLink, FileJson, FileText, RefreshCcw } from "lucide-react";
 import { useMemo, useState } from "react";
+import "github-markdown-css/github-markdown-dark.css";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { openWorkspaceFile } from "../api";
@@ -143,76 +144,8 @@ function RendererBadge({ renderer }: { renderer: FileViewerRendererKind }) {
 
 function MarkdownFileRenderer({ content }: { content: string }) {
   return (
-    <article className="prose prose-invert max-w-none px-5 py-5 text-sm text-[var(--foreground)]">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          a: ({ ...props }) => (
-            <a
-              {...props}
-              className="text-[var(--foreground)] underline decoration-[var(--border)] underline-offset-4"
-              rel="noreferrer noopener"
-              target="_blank"
-            />
-          ),
-          blockquote: ({ ...props }) => (
-            <blockquote
-              {...props}
-              className="border-l-2 border-[var(--border)] pl-4 text-[var(--muted-foreground)]"
-            />
-          ),
-          code: ({ className, ...props }) => (
-            <code
-              {...props}
-              className={`rounded bg-[var(--surface-hover)] px-1.5 py-0.5 font-mono text-[0.9em] ${className ?? ""}`}
-            />
-          ),
-          h1: ({ ...props }) => (
-            <h1
-              {...props}
-              className="mb-4 text-3xl font-semibold tracking-tight text-[var(--foreground)]"
-            />
-          ),
-          h2: ({ ...props }) => (
-            <h2
-              {...props}
-              className="mb-3 mt-8 text-2xl font-semibold tracking-tight text-[var(--foreground)]"
-            />
-          ),
-          h3: ({ ...props }) => (
-            <h3
-              {...props}
-              className="mb-2 mt-6 text-xl font-semibold tracking-tight text-[var(--foreground)]"
-            />
-          ),
-          hr: ({ ...props }) => <hr {...props} className="my-6 border-[var(--border)]" />,
-          li: ({ ...props }) => <li {...props} className="my-1" />,
-          p: ({ ...props }) => <p {...props} className="my-3 leading-7 text-[var(--foreground)]" />,
-          pre: ({ ...props }) => (
-            <pre
-              {...props}
-              className="my-4 overflow-x-auto rounded-2xl border border-[var(--border)] bg-[var(--panel)] p-4 text-sm"
-            />
-          ),
-          table: ({ ...props }) => (
-            <div className="my-4 overflow-x-auto">
-              <table {...props} className="min-w-full border-collapse text-left text-sm" />
-            </div>
-          ),
-          td: ({ ...props }) => (
-            <td {...props} className="border border-[var(--border)] px-3 py-2 align-top" />
-          ),
-          th: ({ ...props }) => (
-            <th
-              {...props}
-              className="border border-[var(--border)] bg-[var(--panel)] px-3 py-2 font-medium"
-            />
-          ),
-          ul: ({ ...props }) => <ul {...props} className="my-3 list-disc pl-6" />,
-        }}
-      >
-        {content}
-      </ReactMarkdown>
+    <article className="markdown-body min-h-0 flex-1 overflow-auto px-5 py-5">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
     </article>
   );
 }

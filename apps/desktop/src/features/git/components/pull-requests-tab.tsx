@@ -1,9 +1,5 @@
-import type {
-  GitPullRequestCheckSummary,
-  GitPullRequestListResult,
-  GitPullRequestSummary,
-} from "@lifecycle/contracts";
-import { Badge, EmptyState } from "@lifecycle/ui";
+import type { GitPullRequestListResult, GitPullRequestSummary } from "@lifecycle/contracts";
+import { Badge, EmptyState, Loading } from "@lifecycle/ui";
 
 import { GithubAvatar } from "./github-avatar";
 
@@ -30,43 +26,6 @@ function formatShortAge(iso: string): string {
   return `${years}y`;
 }
 
-function CheckDots({ checks }: { checks: GitPullRequestCheckSummary[] | null }) {
-  if (!checks?.length) return null;
-
-  const colors: Record<string, string> = {
-    success: "var(--git-status-added)",
-    failed: "var(--destructive)",
-    pending: "var(--git-status-modified)",
-    neutral: "var(--muted-foreground)",
-  };
-
-  const passing = checks.filter((c) => c.status === "success").length;
-  const visible = checks.slice(0, 3);
-  const overflow = checks.length - visible.length;
-
-  return (
-    <span
-      className="inline-flex items-center gap-0.5"
-      title={`${passing}/${checks.length} checks passing`}
-    >
-      {visible.map((check) => (
-        <span
-          key={check.name}
-          className="text-[8px] leading-none"
-          style={{ color: colors[check.status] ?? colors.neutral }}
-        >
-          ●
-        </span>
-      ))}
-      {overflow > 0 && (
-        <span className="text-[9px] leading-none text-[var(--muted-foreground)]">
-          +{overflow}
-        </span>
-      )}
-    </span>
-  );
-}
-
 function PullRequestRow({
   pullRequest,
   isCurrent,
@@ -76,33 +35,27 @@ function PullRequestRow({
   isCurrent: boolean;
   onOpenPullRequest: (pullRequest: GitPullRequestSummary) => void;
 }) {
-  const reviewText =
-    pullRequest.reviewDecision === "approved"
-      ? "Approved"
-      : pullRequest.reviewDecision === "changes_requested"
-        ? "Changes requested"
-        : null;
+  const statusText =
+    pullRequest.mergeable === "conflicting"
+      ? "Conflicting"
+      : pullRequest.reviewDecision === "approved"
+        ? "Approved"
+        : pullRequest.reviewDecision === "changes_requested"
+          ? "Changes requested"
+          : pullRequest.mergeable === "mergeable"
+            ? "Mergeable"
+            : null;
 
-  const reviewColor =
-    pullRequest.reviewDecision === "approved"
-      ? "var(--git-status-added)"
-      : pullRequest.reviewDecision === "changes_requested"
-        ? "var(--git-status-modified)"
-        : undefined;
-
-  const mergeText =
-    pullRequest.mergeable === "mergeable"
-      ? "Mergeable"
-      : pullRequest.mergeable === "conflicting"
-        ? "Conflicting"
-        : null;
-
-  const mergeColor =
-    pullRequest.mergeable === "mergeable"
-      ? "var(--git-status-added)"
-      : pullRequest.mergeable === "conflicting"
-        ? "var(--git-status-renamed)"
-        : undefined;
+  const statusColor =
+    pullRequest.mergeable === "conflicting"
+      ? "var(--muted-foreground)"
+      : pullRequest.reviewDecision === "approved"
+        ? "var(--git-status-added)"
+        : pullRequest.reviewDecision === "changes_requested"
+          ? "var(--git-status-modified)"
+          : pullRequest.mergeable === "mergeable"
+            ? "var(--git-status-added)"
+            : undefined;
 
   return (
     <div
@@ -115,7 +68,7 @@ function PullRequestRow({
           onOpenPullRequest(pullRequest);
         }
       }}
-      className="flex cursor-pointer items-start gap-2 px-2.5 py-2 transition hover:bg-[var(--surface-hover)]"
+      className="flex cursor-pointer gap-3 px-2.5 py-2.5 transition hover:bg-[var(--surface-hover)]"
       title={`Open pull request #${pullRequest.number}`}
     >
       <GithubAvatar
@@ -123,36 +76,32 @@ function PullRequestRow({
         email={`${pullRequest.author}@users.noreply.github.com`}
       />
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-1 text-xs text-[var(--muted-foreground)]">
+        <p className="line-clamp-1 text-[13px] leading-snug text-[var(--foreground)]">
+          {pullRequest.title}
+        </p>
+        <div className="mt-1 flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
           <span className="truncate">
-            {pullRequest.author} · #{pullRequest.number}
+            #{pullRequest.number} · {pullRequest.author}
           </span>
           {pullRequest.isDraft && <Badge variant="muted">Draft</Badge>}
           {isCurrent && <Badge variant="info">Current</Badge>}
-          <span className="ml-auto shrink-0">{formatShortAge(pullRequest.updatedAt)}</span>
         </div>
-        <p className="line-clamp-2 text-[13px] leading-snug text-[var(--foreground)]">
-          {pullRequest.title}
-        </p>
-        <div className="mt-0.5 flex items-center gap-1 text-xs text-[var(--muted-foreground)]">
-          <span className="truncate">
-            {pullRequest.headRefName} → {pullRequest.baseRefName}
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <span className="text-xs text-[var(--muted-foreground)]">
+          {formatShortAge(pullRequest.updatedAt)}
+        </span>
+        {statusText && (
+          <span
+            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium"
+            style={{
+              color: statusColor,
+              backgroundColor: `color-mix(in srgb, ${statusColor ?? "transparent"} 10%, transparent)`,
+            }}
+          >
+            {statusText}
           </span>
-          {reviewText && (
-            <>
-              <span>·</span>
-              <span className="shrink-0" style={{ color: reviewColor }}>
-                {reviewText}
-              </span>
-            </>
-          )}
-          <CheckDots checks={pullRequest.checks} />
-          {mergeText && (
-            <span className="ml-auto shrink-0" style={{ color: mergeColor }}>
-              {mergeText}
-            </span>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
@@ -166,7 +115,7 @@ export function PullRequestsTab({
   onOpenPullRequest,
 }: PullRequestsTabProps) {
   if (isLoading && !result) {
-    return <p className="text-xs text-[var(--muted-foreground)]">Loading pull requests...</p>;
+    return <Loading message="Loading pull requests..." />;
   }
 
   if (error) {

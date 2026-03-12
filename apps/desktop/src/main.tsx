@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
 import { router } from "./app/router";
+import { TurnNotificationListener } from "./features/notifications/turn-notification-listener";
 import { OverlayHostBootstrap } from "./features/overlays/overlay-host-bootstrap";
 import { ProjectManifestWatcher } from "./features/projects/components/project-manifest-watcher";
 import { SettingsProvider } from "./features/settings/state/app-settings-provider";
@@ -19,6 +20,7 @@ createRoot(document.getElementById("root")!).render(
       <QueryProvider>
         <ProjectManifestWatcher />
         <SettingsProvider>
+          <TurnNotificationListener />
           <TerminalResponseReadyProvider>
             <RouterProvider router={router} />
           </TerminalResponseReadyProvider>

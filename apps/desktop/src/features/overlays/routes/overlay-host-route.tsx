@@ -3,6 +3,7 @@ import type { EventTarget } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { applyThemeToRoot } from "@lifecycle/ui";
 import { GitActionMenuContent } from "../../git/components/git-action-button";
 import { WorkspaceOpenInMenu } from "../../workspaces/components/workspace-open-in-menu";
 import type {
@@ -188,6 +189,14 @@ export function OverlayHostRoute() {
     draftOverlayIdRef.current = overlay.overlayId;
     setDraftCommitMessage(overlay.commitMessage);
   }, [overlay]);
+
+  useEffect(() => {
+    if (!overlay) {
+      return;
+    }
+
+    applyThemeToRoot(overlay.resolvedTheme);
+  }, [overlay?.resolvedTheme]);
 
   useEffect(() => {
     if (!isTauri()) {

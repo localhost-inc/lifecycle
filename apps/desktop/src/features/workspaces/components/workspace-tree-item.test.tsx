@@ -87,7 +87,7 @@ describe("WorkspaceTreeItem", () => {
     expect(markup).toContain("font-medium");
     expect(markup).toContain("text-[var(--sidebar-foreground)]");
     expect(markup).toContain("border-left-color:var(--primary)");
-    expect(markup).toContain("pl-[30px]");
+    expect(markup).toContain("pl-[22px]");
     expect(markup).toContain("opacity-70");
   });
 

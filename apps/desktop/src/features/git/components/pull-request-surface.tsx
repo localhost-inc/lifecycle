@@ -4,21 +4,16 @@ import type {
   GitPullRequestDetailResult,
   GitPullRequestSummary,
 } from "@lifecycle/contracts";
-import { Alert, AlertDescription, Badge, Button, diffTheme, useTheme } from "@lifecycle/ui";
+import { Alert, AlertDescription, Badge } from "@lifecycle/ui";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ArrowRight, ArrowUpRight, Check, Circle, X } from "lucide-react";
-import { parsePatchFiles } from "@pierre/diffs";
-import { PatchDiff } from "@pierre/diffs/react";
 import { useEffect, useMemo, useState } from "react";
 import { formatRelativeTime } from "../../../lib/format";
 import { getGitPullRequestPatch } from "../api";
 import { useCurrentGitPullRequest, useGitPullRequest, useGitPullRequests } from "../hooks";
-import { DEFAULT_GIT_DIFF_STYLE, type GitDiffStyle } from "../lib/diff-style";
-import { buildPatchRenderCacheKey } from "../lib/diff-virtualization";
-import { DiffStyleToggle } from "./diff-style-toggle";
-import { DiffRenderProvider } from "./diff-render-provider";
+import { useParsedGitPatchFiles } from "../lib/parsed-patch-files";
+import { GitPatchViewer } from "./git-patch-viewer";
 import { GithubAvatar } from "./github-avatar";
-import { MultiFileDiffLayout } from "./multi-file-diff-layout";
 
 interface PullRequestSurfaceProps {
   onOpenFile?: (filePath: string) => void;
@@ -111,10 +106,7 @@ function ChecksList({ checks }: { checks: GitPullRequestCheckSummary[] | null })
   return (
     <div className="flex flex-col">
       {checks.map((check) => (
-        <div
-          key={check.name}
-          className="flex items-center justify-between py-1.5"
-        >
+        <div key={check.name} className="flex items-center justify-between py-1.5">
           <div className="flex items-center gap-2.5">
             <CheckStatusIcon status={check.status} />
             <span className="text-[13px] text-[var(--muted-foreground)]">{check.name}</span>
@@ -196,8 +188,6 @@ export function PullRequestSurface({
   pullRequest: snapshot,
   workspaceId,
 }: PullRequestSurfaceProps) {
-  const { resolvedAppearance, resolvedTheme } = useTheme();
-  const [diffStyle, setDiffStyle] = useState<GitDiffStyle>(DEFAULT_GIT_DIFF_STYLE);
   const pullRequestsQuery = useGitPullRequests(workspaceId);
   const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId);
   const detailPullRequestQuery = useGitPullRequest(workspaceId, snapshot.number);
@@ -254,7 +244,7 @@ export function PullRequestSurface({
     pullRequest.mergeable === "mergeable"
       ? "var(--git-status-added)"
       : pullRequest.mergeable === "conflicting"
-        ? "var(--git-status-renamed)"
+        ? "var(--muted-foreground)"
         : undefined;
 
   // -- Diff state --
@@ -283,74 +273,26 @@ export function PullRequestSurface({
       cancelled = true;
     };
   }, [diffReloadKey, pullRequest.number, workspaceId]);
-
-  const parsedFiles = useMemo(() => {
-    if (!patch) return [];
-    const cacheKey = buildPatchRenderCacheKey(
-      `pr-diff:${workspaceId}:${pullRequest.number}`,
-      patch,
-    );
-    try {
-      return parsePatchFiles(patch, cacheKey).flatMap((p) => p.files);
-    } catch {
-      return null;
-    }
-  }, [patch, pullRequest.number, workspaceId]);
-
-  const diffControlsDisabled = isDiffLoading || diffError !== null || patch.length === 0;
+  const parsedFiles = useParsedGitPatchFiles(`pr-diff:${workspaceId}:${pullRequest.number}`, patch);
   const [checksExpanded, setChecksExpanded] = useState(false);
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--background)]">
       <header className="flex flex-col gap-0 border-b border-[var(--border)] px-5 pt-4 pb-0">
         {/* Section title row */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <span className="app-panel-title text-[var(--muted-foreground)]">Pull Request</span>
-            <span className="font-mono text-[11px] text-[var(--muted-foreground)]">
-              #{pullRequest.number}
-            </span>
-            <span className="text-[11px] text-[var(--muted-foreground)]">
-              · updated {formatRelativeTime(pullRequest.updatedAt)}
-            </span>
-            {pullRequest.isDraft && <Badge variant="muted">Draft</Badge>}
-            {currentBranchPullRequestNumber === pullRequest.number && (
-              <Badge variant="info">Current Branch</Badge>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            {mergeText && (
-              <div className="flex items-center gap-1.5">
-                <span
-                  className="size-1.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: mergeColor }}
-                />
-                <span className="font-mono text-[11px] font-medium tracking-wide" style={{ color: mergeColor }}>
-                  {mergeText}
-                </span>
-              </div>
-            )}
-            {reviewText && !mergeText && (
-              <div className="flex items-center gap-1.5">
-                <span
-                  className="size-1.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: reviewColor }}
-                />
-                <span className="font-mono text-[11px] font-medium tracking-wide" style={{ color: reviewColor }}>
-                  {reviewText}
-                </span>
-              </div>
-            )}
-            <Button
-              className="h-6 gap-1 rounded-md px-2.5 text-[11px]"
-              onClick={() => openUrl(pullRequest.url)}
-              size="sm"
-              variant="outline"
-            >
-              Open on GitHub
-              <ArrowUpRight className="size-3" />
-            </Button>
-          </div>
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            className="app-panel-title flex cursor-pointer items-center gap-1.5 bg-transparent text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+            onClick={() => openUrl(pullRequest.url)}
+          >
+            Pull Request #{pullRequest.number}
+            <ArrowUpRight className="size-3" />
+          </button>
+          {pullRequest.isDraft && <Badge variant="muted">Draft</Badge>}
+          {currentBranchPullRequestNumber === pullRequest.number && (
+            <Badge variant="info">Current Branch</Badge>
+          )}
         </div>
 
         {/* PR title */}
@@ -414,14 +356,46 @@ export function PullRequestSurface({
             </button>
           )}
 
-          {reviewText && (
+          {(mergeText || reviewText) && (
             <div className="flex flex-col gap-1.5">
-              <span className="app-panel-title text-[var(--muted-foreground)]">Review</span>
-              <span className="text-[13px]" style={{ color: reviewColor }}>
-                {reviewText}
-              </span>
+              <span className="app-panel-title text-[var(--muted-foreground)]">Status</span>
+              <div className="flex items-center gap-1.5">
+                {mergeText && (
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[12px] font-medium"
+                    style={{
+                      color: mergeColor,
+                      backgroundColor: `color-mix(in srgb, ${mergeColor ?? "transparent"} 10%, transparent)`,
+                    }}
+                  >
+                    <span
+                      className="size-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: mergeColor }}
+                    />
+                    {mergeText}
+                  </span>
+                )}
+                {reviewText && (
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[12px] font-medium"
+                    style={{
+                      color: reviewColor,
+                      backgroundColor: `color-mix(in srgb, ${reviewColor ?? "transparent"} 10%, transparent)`,
+                    }}
+                  >
+                    {reviewText}
+                  </span>
+                )}
+              </div>
             </div>
           )}
+
+          <div className="flex flex-col gap-1.5">
+            <span className="app-panel-title text-[var(--muted-foreground)]">Updated</span>
+            <span className="text-[13px] text-[var(--muted-foreground)]">
+              {formatRelativeTime(pullRequest.updatedAt)}
+            </span>
+          </div>
         </div>
 
         {/* Checks detail list (toggle) */}
@@ -433,48 +407,16 @@ export function PullRequestSurface({
             </div>
           </>
         )}
-
       </header>
 
-      <DiffRenderProvider theme={diffTheme(resolvedTheme)}>
-        {isDiffLoading && !patch ? (
-          <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
-            Loading diff...
-          </div>
-        ) : diffError ? (
-          <Alert className="m-5" variant="destructive">
-            <AlertDescription>Failed to load diff: {diffError}</AlertDescription>
-          </Alert>
-        ) : !patch ? (
-          <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
-            No diff to display.
-          </div>
-        ) : parsedFiles === null || parsedFiles.length === 0 ? (
-          <div className="min-h-0 flex-1 overflow-auto pb-24">
-            <PatchDiff
-              patch={patch}
-              options={{
-                disableFileHeader: true,
-                diffStyle,
-                theme: diffTheme(resolvedTheme),
-                themeType: resolvedAppearance,
-              }}
-            />
-          </div>
-        ) : (
-          <MultiFileDiffLayout
-            diffStyle={diffStyle}
-            files={parsedFiles}
-            onOpenFile={onOpenFile}
-            theme={diffTheme(resolvedTheme)}
-            themeType={resolvedAppearance}
-          />
-        )}
-      </DiffRenderProvider>
-      <DiffStyleToggle
-        diffStyle={diffStyle}
-        disabled={diffControlsDisabled}
-        onChange={setDiffStyle}
+      <GitPatchViewer
+        error={diffError}
+        errorMessagePrefix="Failed to load diff"
+        isLoading={isDiffLoading}
+        loadingMessage="Loading diff..."
+        onOpenFile={onOpenFile}
+        parsedFiles={parsedFiles}
+        patch={patch}
       />
     </div>
   );

@@ -1,17 +1,11 @@
-import { Alert, AlertDescription, diffTheme, useTheme } from "@lifecycle/ui";
 import type { GitLogEntry, GitStatusResult } from "@lifecycle/contracts";
-import { parsePatchFiles } from "@pierre/diffs";
-import { PatchDiff } from "@pierre/diffs/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatRelativeTime } from "../../../lib/format";
 import { GithubAvatar } from "./github-avatar";
 import { getGitChangesPatch, getGitCommitPatch } from "../api";
 import { useGitStatus } from "../hooks";
-import { DEFAULT_GIT_DIFF_STYLE, type GitDiffStyle } from "../lib/diff-style";
-import { buildPatchRenderCacheKey } from "../lib/diff-virtualization";
-import { DiffStyleToggle } from "./diff-style-toggle";
-import { DiffRenderProvider } from "./diff-render-provider";
-import { MultiFileDiffLayout } from "./multi-file-diff-layout";
+import { useParsedGitPatchFiles } from "../lib/parsed-patch-files";
+import { GitPatchViewer } from "./git-patch-viewer";
 
 type GitDiffSurfaceSource =
   | {
@@ -31,12 +25,6 @@ interface GitDiffSurfaceProps {
 
 function loadingLabel(source: GitDiffSurfaceSource): string {
   return source.mode === "changes" ? "Loading changes..." : "Loading commit diff...";
-}
-
-function errorLabel(source: GitDiffSurfaceSource, error: string): string {
-  return source.mode === "changes"
-    ? `Failed to load changes: ${error}`
-    : `Failed to load commit diff: ${error}`;
 }
 
 function header(source: GitDiffSurfaceSource) {
@@ -91,8 +79,6 @@ export function buildChangesPatchReloadKey(
 }
 
 export function GitDiffSurface({ onOpenFile, source, workspaceId }: GitDiffSurfaceProps) {
-  const { resolvedAppearance, resolvedTheme } = useTheme();
-  const [diffStyle, setDiffStyle] = useState<GitDiffStyle>(DEFAULT_GIT_DIFF_STYLE);
   const [patch, setPatch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -108,6 +94,8 @@ export function GitDiffSurface({ onOpenFile, source, workspaceId }: GitDiffSurfa
         : null,
     [changesStatusQuery.data, focusPath, source.mode],
   );
+  const diffCacheKeyPrefix =
+    source.mode === "changes" ? `changes-diff:${workspaceId}` : `commit-diff:${workspaceId}:${commitSha}`;
   const previousSurfaceIdentityRef = useRef<string | null>(null);
   const surfaceIdentity =
     source.mode === "changes" ? `changes:${workspaceId}` : `commit:${workspaceId}:${commitSha}`;
@@ -157,70 +145,22 @@ export function GitDiffSurface({ onOpenFile, source, workspaceId }: GitDiffSurfa
       cancelled = true;
     };
   }, [changesPatchReloadKey, commitSha, source.mode, surfaceIdentity, workspaceId]);
-
-  const parsedFiles = useMemo(() => {
-    if (!patch) {
-      return [];
-    }
-
-    const cacheKey =
-      source.mode === "changes"
-        ? buildPatchRenderCacheKey(`changes-diff:${workspaceId}`, patch)
-        : buildPatchRenderCacheKey(`commit-diff:${workspaceId}:${commitSha}`, patch);
-
-    try {
-      return parsePatchFiles(patch, cacheKey).flatMap((parsedPatch) => parsedPatch.files);
-    } catch {
-      return null;
-    }
-  }, [commitSha, patch, source.mode, workspaceId]);
-
-  const diffControlsDisabled = isLoading || error !== null || patch.length === 0;
+  const parsedFiles = useParsedGitPatchFiles(diffCacheKeyPrefix, patch);
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--background)]">
       {header(source)}
-
-      <DiffRenderProvider theme={diffTheme(resolvedTheme)}>
-        {isLoading && !patch ? (
-          <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
-            {loadingLabel(source)}
-          </div>
-        ) : error ? (
-          <Alert className="m-5" variant="destructive">
-            <AlertDescription>{errorLabel(source, error)}</AlertDescription>
-          </Alert>
-        ) : !patch ? (
-          <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
-            No diff to display.
-          </div>
-        ) : parsedFiles === null || parsedFiles.length === 0 ? (
-          <div className="min-h-0 flex-1 overflow-auto pb-24">
-            <PatchDiff
-              patch={patch}
-              options={{
-                disableFileHeader: true,
-                diffStyle,
-                theme: diffTheme(resolvedTheme),
-                themeType: resolvedAppearance,
-              }}
-            />
-          </div>
-        ) : (
-          <MultiFileDiffLayout
-            diffStyle={diffStyle}
-            files={parsedFiles}
-            initialFilePath={focusPath}
-            onOpenFile={onOpenFile}
-            theme={diffTheme(resolvedTheme)}
-            themeType={resolvedAppearance}
-          />
-        )}
-      </DiffRenderProvider>
-      <DiffStyleToggle
-        diffStyle={diffStyle}
-        disabled={diffControlsDisabled}
-        onChange={setDiffStyle}
+      <GitPatchViewer
+        error={error}
+        errorMessagePrefix={
+          source.mode === "changes" ? "Failed to load changes" : "Failed to load commit diff"
+        }
+        initialFilePath={focusPath}
+        isLoading={isLoading}
+        loadingMessage={loadingLabel(source)}
+        onOpenFile={onOpenFile}
+        parsedFiles={parsedFiles}
+        patch={patch}
       />
     </div>
   );

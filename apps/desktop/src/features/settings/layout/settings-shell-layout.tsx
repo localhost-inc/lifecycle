@@ -17,14 +17,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { version } from "../../../../package.json";
 import { AppHotkeyListener } from "../../../app/app-hotkey-listener";
-import {
-  getInterfaceFontPresets,
-  getMonospaceFontPresets,
-} from "../../../lib/typography";
+import { getInterfaceFontPresets, getMonospaceFontPresets } from "../../../lib/typography";
 import {
   detectPlatformHint,
   shouldInsetSidebarHeaderForWindowControls,
 } from "../../../components/layout/sidebar";
+import {
+  turnNotificationModeOptions,
+  turnNotificationSoundOptions,
+  type TurnNotificationMode,
+  type TurnNotificationSound,
+} from "../../notifications/lib/notification-settings";
+import { playTurnNotificationSound } from "../../notifications/lib/turn-notification-runtime";
 import { SettingsFieldRow, SettingsRow, SettingsSection } from "../components/settings-primitives";
 import { DEFAULT_WORKTREE_ROOT, useSettings } from "../state/app-settings-provider";
 import {
@@ -46,7 +50,11 @@ export function SettingsShellLayout() {
     resetTypography,
     setInterfaceFontFamily,
     setMonospaceFontFamily,
+    setTurnNotificationSound,
+    setTurnNotificationsMode,
     setWorktreeRoot,
+    turnNotificationSound,
+    turnNotificationsMode,
     worktreeRoot,
   } = useSettings();
   const [draftWorktreeRoot, setDraftWorktreeRoot] = useState(worktreeRoot);
@@ -63,8 +71,28 @@ export function SettingsShellLayout() {
       })),
     [],
   );
+  const turnNotificationModeItems = useMemo(
+    () =>
+      turnNotificationModeOptions.map((option) => ({
+        label: option.label,
+        value: option.value,
+      })),
+    [],
+  );
+  const turnNotificationSoundItems = useMemo(
+    () =>
+      turnNotificationSoundOptions.map((option) => ({
+        label: option.label,
+        value: option.value,
+      })),
+    [],
+  );
   const interfaceFontPresets = useMemo(() => getInterfaceFontPresets(), []);
   const monospaceFontPresets = useMemo(() => getMonospaceFontPresets(), []);
+  const selectedTurnNotificationMode =
+    turnNotificationModeOptions.find((option) => option.value === turnNotificationsMode) ?? null;
+  const selectedTurnNotificationSound =
+    turnNotificationSoundOptions.find((option) => option.value === turnNotificationSound) ?? null;
   const selectedInterfacePresetId =
     interfaceFontPresets.find((preset) => preset.fontFamily === interfaceFontFamily)?.id ??
     "custom";
@@ -91,9 +119,7 @@ export function SettingsShellLayout() {
         label: preset.label,
         value: preset.id,
       })),
-      ...(selectedMonospacePresetId === "custom"
-        ? [{ label: "Custom", value: "custom" }]
-        : []),
+      ...(selectedMonospacePresetId === "custom" ? [{ label: "Custom", value: "custom" }] : []),
     ],
     [monospaceFontPresets, selectedMonospacePresetId],
   );
@@ -238,9 +264,7 @@ export function SettingsShellLayout() {
                     onClick={() => handleSelectSection(section.slug)}
                     type="button"
                   >
-                    <span className="text-sm">
-                      {section.label}
-                    </span>
+                    <span className="text-sm">{section.label}</span>
                   </button>
                 </div>
               </li>
@@ -266,7 +290,7 @@ export function SettingsShellLayout() {
                   Settings
                 </h1>
                 <p className="mt-2 max-w-2xl text-sm text-[var(--muted-foreground)]">
-                  Appearance and workspace defaults.
+                  Appearance, notifications, and workspace defaults.
                 </p>
               </header>
 
@@ -390,6 +414,96 @@ export function SettingsShellLayout() {
                     <Button onClick={resetTypography} variant="outline">
                       Reset to default
                     </Button>
+                  </div>
+                </div>
+              </SettingsSection>
+
+              <SettingsSection
+                id="notifications"
+                label="Notifications"
+                ref={(node) => {
+                  sectionRefs.current.notifications = node;
+                }}
+              >
+                <div className="space-y-3">
+                  <SettingsRow
+                    label="Turn completion"
+                    description={
+                      selectedTurnNotificationMode?.description ??
+                      "Desktop notifications for completed harness turns."
+                    }
+                  >
+                    <Select
+                      items={turnNotificationModeItems}
+                      onValueChange={(value: string) =>
+                        setTurnNotificationsMode(value as TurnNotificationMode)
+                      }
+                      value={turnNotificationsMode}
+                    >
+                      <SelectTrigger className="w-full min-w-0 md:w-48" id="turn-notification-mode">
+                        <SelectValue placeholder="Select a notification mode" />
+                      </SelectTrigger>
+                      <SelectContent alignItemWithTrigger={false}>
+                        {turnNotificationModeOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </SettingsRow>
+
+                  <SettingsRow
+                    label="Notification sound"
+                    description={
+                      selectedTurnNotificationSound?.description ??
+                      "Choose the sound that plays when a turn completes."
+                    }
+                  >
+                    <Select
+                      items={turnNotificationSoundItems}
+                      onValueChange={(value: string) =>
+                        setTurnNotificationSound(value as TurnNotificationSound)
+                      }
+                      value={turnNotificationSound}
+                    >
+                      <SelectTrigger
+                        className="w-full min-w-0 md:w-48"
+                        id="turn-notification-sound"
+                      >
+                        <SelectValue placeholder="Select a notification sound" />
+                      </SelectTrigger>
+                      <SelectContent alignItemWithTrigger={false}>
+                        {turnNotificationSoundOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </SettingsRow>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <Button
+                      disabled={turnNotificationSound === "silent"}
+                      onClick={() => {
+                        void playTurnNotificationSound(turnNotificationSound);
+                      }}
+                      variant="outline"
+                    >
+                      Play preview
+                    </Button>
+                  </div>
+
+                  <div className="space-y-3 border-l-4 border-[var(--border)] pl-4">
+                    <p className="app-panel-title text-[var(--muted-foreground)]">Notes</p>
+                    <p className="text-sm text-[var(--foreground)]">
+                      Notifications trigger when Claude or Codex finish a turn. Lifecycle may ask
+                      for system notification permission the first time one fires.
+                    </p>
+                    <p className="text-xs text-[var(--muted-foreground)]">
+                      Tab response indicators still work even when desktop notifications are off.
+                    </p>
                   </div>
                 </div>
               </SettingsSection>

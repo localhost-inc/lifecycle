@@ -5,10 +5,7 @@ import { Archive } from "lucide-react";
 import { TypedTitle } from "../../../components/typed-title";
 import { formatCompactRelativeTime } from "../../../lib/format";
 import { renameWorkspace } from "../api";
-import {
-  getWorkspaceSessionStatusState,
-  WorkspaceSessionStatus,
-} from "./workspace-session-status";
+import { getWorkspaceSessionStatusState, WorkspaceSessionStatus } from "./workspace-session-status";
 
 interface WorkspaceTreeItemProps {
   running?: boolean;

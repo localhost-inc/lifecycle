@@ -17,6 +17,8 @@ export const DASHBOARD_LEFT_SIDEBAR_COLLAPSED_STORAGE_KEY =
   "lifecycle.desktop.dashboard-left-sidebar-collapsed";
 export const DASHBOARD_LEFT_SIDEBAR_WIDTH_STORAGE_KEY =
   "lifecycle.desktop.dashboard-left-sidebar-width";
+export const DASHBOARD_RIGHT_SIDEBAR_COLLAPSED_STORAGE_KEY =
+  "lifecycle.desktop.dashboard-right-sidebar-collapsed";
 export const DASHBOARD_RIGHT_SIDEBAR_WIDTH_STORAGE_KEY =
   "lifecycle.desktop.dashboard-right-sidebar-width";
 export const WORKSPACE_SIDEBAR_TOP_PANEL_RATIO_STORAGE_KEY =

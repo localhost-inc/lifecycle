@@ -8,15 +8,26 @@ import {
 } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
 import { createPortal } from "react-dom";
-import { useCallback, useLayoutEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import type { ManifestStatus } from "../../projects/api/projects";
 import { useQueryClient } from "../../../query";
+import {
+  useCurrentGitPullRequest,
+  useGitPullRequest,
+  useGitPullRequests,
+} from "../../git/hooks";
 import type { OpenDocumentRequest } from "./workspace-surface-logic";
 import { WorkspaceSidebar } from "./workspace-sidebar";
 import { WorkspaceSurface } from "./workspace-surface";
 import { startServices, stopWorkspace, updateWorkspaceService } from "../api";
 import { useWorkspaceServices, useWorkspaceSetup, workspaceKeys } from "../hooks";
 import { workspaceSupportsFilesystemInteraction } from "../lib/workspace-capabilities";
+import {
+  readWorkspaceRouteState,
+  resolveWorkspaceRoutePullRequest,
+  updateWorkspaceRouteState,
+} from "../lib/workspace-route-state";
 
 interface WorkspacePanelProps {
   workspace: WorkspaceRecord;
@@ -25,16 +36,37 @@ interface WorkspacePanelProps {
 
 export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProps) {
   const client = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [rightRailRoot, setRightRailRoot] = useState<HTMLElement | null>(null);
   const [openDocumentRequest, setOpenDocumentRequest] = useState<OpenDocumentRequest | null>(null);
+  const routedPullRequestMarkerRef = useRef<string | null>(null);
   const hasManifest = manifestStatus?.state === "valid";
   const config = hasManifest ? manifestStatus.result.config : null;
   const manifestState = manifestStatus?.state ?? "missing";
   const manifestFingerprint = config ? getManifestFingerprint(config) : null;
   const servicesQuery = useWorkspaceServices(workspace.id);
   const setupQuery = useWorkspaceSetup(workspace.id);
+  const currentPullRequestQuery = useCurrentGitPullRequest(workspace.id);
+  const pullRequestsQuery = useGitPullRequests(workspace.id);
   const services = servicesQuery.data ?? [];
   const setupSteps = setupQuery.data ?? [];
+  const routeState = useMemo(() => readWorkspaceRouteState(searchParams), [searchParams]);
+  const routedPullRequestQuery = useGitPullRequest(workspace.id, routeState.pullRequestNumber);
+  const routedPullRequest = useMemo(
+    () =>
+      resolveWorkspaceRoutePullRequest({
+        currentPullRequestResult: currentPullRequestQuery.data,
+        detailPullRequestResult: routedPullRequestQuery.data,
+        listPullRequestsResult: pullRequestsQuery.data,
+        pullRequestNumber: routeState.pullRequestNumber,
+      }),
+    [
+      currentPullRequestQuery.data,
+      pullRequestsQuery.data,
+      routeState.pullRequestNumber,
+      routedPullRequestQuery.data,
+    ],
+  );
 
   const handleRun = useCallback(async () => {
     if (!config) return;
@@ -85,6 +117,18 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
     workspace.manifest_fingerprint !== undefined &&
     workspace.manifest_fingerprint !== manifestFingerprint;
 
+  const updateRoute = useCallback(
+    (patch: Parameters<typeof updateWorkspaceRouteState>[1]) => {
+      const nextSearchParams = updateWorkspaceRouteState(searchParams, patch);
+      if (nextSearchParams.toString() === searchParams.toString()) {
+        return;
+      }
+
+      setSearchParams(nextSearchParams, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
   const handleOpenDiff = useCallback((filePath: string) => {
     setOpenDocumentRequest({
       focusPath: filePath,
@@ -113,14 +157,55 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
         return;
       }
 
+      updateRoute({
+        gitTab: "pull-requests",
+        pullRequestNumber: pullRequest.number,
+      });
       setOpenDocumentRequest({
         id: crypto.randomUUID(),
         pullRequest,
         kind: "pull-request",
       });
     },
-    [supportsTerminalInteraction],
+    [supportsTerminalInteraction, updateRoute],
   );
+
+  const handleGitTabChange = useCallback(
+    (gitTab: ReturnType<typeof readWorkspaceRouteState>["gitTab"]) => {
+      updateRoute({ gitTab });
+    },
+    [updateRoute],
+  );
+
+  const handleActivePullRequestNumberChange = useCallback(
+    (pullRequestNumber: number | null) => {
+      updateRoute({ pullRequestNumber });
+    },
+    [updateRoute],
+  );
+
+  useEffect(() => {
+    if (routeState.pullRequestNumber === null) {
+      routedPullRequestMarkerRef.current = null;
+      return;
+    }
+
+    if (!supportsTerminalInteraction || !routedPullRequest) {
+      return;
+    }
+
+    const marker = `${routedPullRequest.number}:${routedPullRequest.updatedAt}`;
+    if (routedPullRequestMarkerRef.current === marker) {
+      return;
+    }
+
+    routedPullRequestMarkerRef.current = marker;
+    setOpenDocumentRequest({
+      id: crypto.randomUUID(),
+      pullRequest: routedPullRequest,
+      kind: "pull-request",
+    });
+  }, [routeState.pullRequestNumber, routedPullRequest, supportsTerminalInteraction]);
 
   useLayoutEffect(() => {
     if (typeof document === "undefined") {
@@ -136,6 +221,7 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
         <WorkspaceSurface
           key={workspace.id}
           openDocumentRequest={openDocumentRequest}
+          onActivePullRequestNumberChange={handleActivePullRequestNumberChange}
           workspaceId={workspace.id}
         />
       </div>
@@ -157,9 +243,11 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
       {rightRailRoot ? (
         createPortal(
           <WorkspaceSidebar
+            activeGitTab={routeState.gitTab}
             hasManifest={hasManifest}
             isManifestStale={isManifestStale}
             manifestState={manifestState}
+            onActiveGitTabChange={handleGitTabChange}
             onRun={handleRun}
             onStop={handleStop}
             onUpdateService={handleUpdateService}
@@ -175,9 +263,11 @@ export function WorkspacePanel({ workspace, manifestStatus }: WorkspacePanelProp
         )
       ) : (
         <WorkspaceSidebar
+          activeGitTab={routeState.gitTab}
           hasManifest={hasManifest}
           isManifestStale={isManifestStale}
           manifestState={manifestState}
+          onActiveGitTabChange={handleGitTabChange}
           onRun={handleRun}
           onStop={handleStop}
           onUpdateService={handleUpdateService}

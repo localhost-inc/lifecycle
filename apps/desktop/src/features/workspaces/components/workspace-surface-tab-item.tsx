@@ -62,16 +62,16 @@ export function WorkspaceSurfaceTabItem({
   onRenameChange,
   onRenameKeyDown,
 }: WorkspaceSurfaceTabItemProps) {
-  const className = `group relative flex h-[34px] max-w-[300px] shrink-0 touch-none select-none items-center justify-start gap-2 whitespace-nowrap rounded-[var(--radius-xl)] border border-[color-mix(in_srgb,var(--foreground)_8%,transparent)] px-[14px] text-left text-sm font-medium outline-none will-change-transform focus-visible:shadow-[0_0_0_1px_var(--ring)] ${
+  const className = `group relative flex h-[34px] max-w-[300px] shrink-0 touch-none select-none items-center justify-start gap-2 whitespace-nowrap rounded-[var(--radius-xl)] px-[14px] text-left text-sm font-medium shadow-none outline-none ring-0 will-change-transform focus-visible:ring-1 focus-visible:ring-[var(--ring)] ${
     active
       ? "bg-[var(--muted)] text-[var(--foreground)]"
-      : "text-[var(--muted-foreground)] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-[var(--foreground)]"
+      : "bg-transparent text-[var(--muted-foreground)] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-[var(--foreground)]"
   } ${
     isRenaming
       ? "cursor-text ring-1 ring-[var(--foreground)]/20"
       : isDraggedTab
-        ? "pointer-events-none z-20 cursor-grabbing opacity-90 shadow-[var(--tab-shadow-drag)] transition-none"
-        : "cursor-grab transition-[background-color,color,box-shadow,opacity,transform] duration-200 ease-out"
+        ? "pointer-events-none z-20 cursor-grabbing opacity-90 transition-none"
+        : "cursor-grab transition-[background-color,border-color,color,opacity,transform] duration-200 ease-out"
   } ${isDropTarget ? "ring-1 ring-[var(--foreground)]/35" : ""}`;
 
   return (

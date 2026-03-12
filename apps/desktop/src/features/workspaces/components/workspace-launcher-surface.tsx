@@ -118,9 +118,7 @@ export function WorkspaceLauncherSurface({
                   terminals={terminals}
                 />
               ) : (
-                <p className="py-3 text-xs text-[var(--muted-foreground)]/60">
-                  No sessions yet.
-                </p>
+                <p className="py-3 text-xs text-[var(--muted-foreground)]/60">No sessions yet.</p>
               )}
             </div>
           </div>

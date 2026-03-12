@@ -7,18 +7,23 @@ interface SettingsSectionProps {
   children?: ReactNode;
 }
 
-export const SettingsSection = forwardRef<HTMLElement, SettingsSectionProps>(function SettingsSection(
-  { id, label, description, children },
-  ref,
-) {
-  return (
-    <section className="mt-10 scroll-mt-8 border-t border-[var(--border)] pt-10" id={id} ref={ref}>
-      <h2 className="app-panel-title text-[var(--muted-foreground)]">{label}</h2>
-      {description && <p className="mt-1 text-sm text-[var(--muted-foreground)]">{description}</p>}
-      <div className="mt-3">{children}</div>
-    </section>
-  );
-});
+export const SettingsSection = forwardRef<HTMLElement, SettingsSectionProps>(
+  function SettingsSection({ id, label, description, children }, ref) {
+    return (
+      <section
+        className="mt-10 scroll-mt-8 border-t border-[var(--border)] pt-10"
+        id={id}
+        ref={ref}
+      >
+        <h2 className="app-panel-title text-[var(--muted-foreground)]">{label}</h2>
+        {description && (
+          <p className="mt-1 text-sm text-[var(--muted-foreground)]">{description}</p>
+        )}
+        <div className="mt-3">{children}</div>
+      </section>
+    );
+  },
+);
 
 interface SettingsRowProps {
   label: string;
