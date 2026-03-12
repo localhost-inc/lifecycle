@@ -4,7 +4,10 @@ import type {
   GitPullRequestDetailResult,
   GitPullRequestSummary,
 } from "@lifecycle/contracts";
-import { resolvePullRequestSurfaceState } from "./pull-request-surface";
+import {
+  buildPullRequestDiffReloadKey,
+  resolvePullRequestSurfaceState,
+} from "./pull-request-surface";
 
 function createPullRequestSummary(
   overrides: Partial<GitPullRequestSummary> = {},
@@ -61,6 +64,20 @@ function createPullRequestDetailResult(
 }
 
 describe("resolvePullRequestSurfaceState", () => {
+  test("diff reload key changes when the live pull request timestamp changes", () => {
+    const pullRequest = createPullRequestSummary();
+
+    const initialKey = buildPullRequestDiffReloadKey("workspace-1", pullRequest);
+    const updatedKey = buildPullRequestDiffReloadKey(
+      "workspace-1",
+      createPullRequestSummary({
+        updatedAt: "2026-03-10T11:05:00.000Z",
+      }),
+    );
+
+    expect(updatedKey).not.toBe(initialKey);
+  });
+
   test("prefers current-branch detail when the snapshot matches the current branch PR", () => {
     const snapshot = createPullRequestSummary({
       checks: null,

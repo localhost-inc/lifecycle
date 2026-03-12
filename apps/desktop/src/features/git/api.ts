@@ -209,6 +209,20 @@ export async function getGitRefDiffPatch(
   return invoke<string>("get_workspace_git_ref_diff_patch", { workspaceId, baseRef, headRef });
 }
 
+export async function getGitPullRequestPatch(
+  workspaceId: string,
+  pullRequestNumber: number,
+): Promise<string> {
+  if (!isTauri()) {
+    return "";
+  }
+
+  return invoke<string>("get_workspace_git_pull_request_patch", {
+    pullRequestNumber,
+    workspaceId,
+  });
+}
+
 export async function getGitCommitPatch(
   workspaceId: string,
   sha: string,

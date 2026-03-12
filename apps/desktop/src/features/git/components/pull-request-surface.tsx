@@ -5,11 +5,13 @@ import type {
   GitPullRequestSummary,
 } from "@lifecycle/contracts";
 import { Alert, AlertDescription, Badge, Button, diffTheme, useTheme } from "@lifecycle/ui";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { ArrowRight, ArrowUpRight, Check, Circle, X } from "lucide-react";
 import { parsePatchFiles } from "@pierre/diffs";
 import { PatchDiff } from "@pierre/diffs/react";
 import { useEffect, useMemo, useState } from "react";
 import { formatRelativeTime } from "../../../lib/format";
-import { getGitRefDiffPatch } from "../api";
+import { getGitPullRequestPatch } from "../api";
 import { useCurrentGitPullRequest, useGitPullRequest, useGitPullRequests } from "../hooks";
 import { DEFAULT_GIT_DIFF_STYLE, type GitDiffStyle } from "../lib/diff-style";
 import { buildPatchRenderCacheKey } from "../lib/diff-virtualization";
@@ -41,38 +43,95 @@ export interface PullRequestSurfaceState {
   snapshotMessage: string | null;
 }
 
-function CheckDots({ checks }: { checks: GitPullRequestCheckSummary[] | null }) {
-  if (!checks?.length) return null;
+export function buildPullRequestDiffReloadKey(
+  workspaceId: string,
+  pullRequest: Pick<GitPullRequestSummary, "number" | "updatedAt">,
+): string {
+  return [workspaceId, pullRequest.number, pullRequest.updatedAt].join(":");
+}
 
-  const colors: Record<string, string> = {
-    success: "var(--git-status-added)",
-    failed: "var(--destructive)",
-    pending: "var(--git-status-modified)",
-    neutral: "var(--muted-foreground)",
-  };
+const checkStatusColors: Record<string, string> = {
+  success: "var(--git-status-added)",
+  failed: "var(--destructive)",
+  pending: "var(--git-status-modified)",
+  neutral: "var(--muted-foreground)",
+};
 
-  const passing = checks.filter((c) => c.status === "success").length;
-  const visible = checks.slice(0, 5);
-  const overflow = checks.length - visible.length;
+function CheckStatusIcon({ status }: { status: string }) {
+  const color = checkStatusColors[status] ?? checkStatusColors.neutral;
+
+  if (status === "success") {
+    return (
+      <span className="relative flex size-3.5 shrink-0 items-center justify-center">
+        <Circle className="absolute size-3.5" style={{ color }} strokeWidth={1.5} />
+        <Check className="size-2" style={{ color }} strokeWidth={2.5} />
+      </span>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <span className="relative flex size-3.5 shrink-0 items-center justify-center">
+        <Circle className="absolute size-3.5" style={{ color }} strokeWidth={1.5} />
+        <X className="size-2" style={{ color }} strokeWidth={2.5} />
+      </span>
+    );
+  }
 
   return (
-    <span
-      className="inline-flex items-center gap-0.5"
-      title={`${passing}/${checks.length} checks passing`}
-    >
-      {visible.map((check) => (
-        <span
-          key={check.name}
-          className="text-[8px] leading-none"
-          style={{ color: colors[check.status] ?? colors.neutral }}
-        >
-          ●
-        </span>
-      ))}
-      {overflow > 0 && (
-        <span className="text-[9px] leading-none text-[var(--muted-foreground)]">+{overflow}</span>
-      )}
+    <span className="relative flex size-3.5 shrink-0 items-center justify-center">
+      <Circle className="size-2" style={{ color }} fill={color} strokeWidth={0} />
     </span>
+  );
+}
+
+function ChecksSummary({ checks }: { checks: GitPullRequestCheckSummary[] | null }) {
+  if (!checks?.length) return null;
+  const passing = checks.filter((c) => c.status === "success").length;
+  const failing = checks.filter((c) => c.status === "failed").length;
+  const allPassing = passing === checks.length;
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <CheckStatusIcon status={allPassing ? "success" : failing > 0 ? "failed" : "pending"} />
+      <span className="text-[13px] text-[var(--muted-foreground)]">
+        {allPassing
+          ? `${passing} passed`
+          : failing > 0
+            ? `${failing} failed`
+            : `${passing}/${checks.length} passed`}
+      </span>
+    </div>
+  );
+}
+
+function ChecksList({ checks }: { checks: GitPullRequestCheckSummary[] | null }) {
+  if (!checks?.length) return null;
+
+  return (
+    <div className="flex flex-col">
+      {checks.map((check) => (
+        <div
+          key={check.name}
+          className="flex items-center justify-between py-1.5"
+        >
+          <div className="flex items-center gap-2.5">
+            <CheckStatusIcon status={check.status} />
+            <span className="text-[13px] text-[var(--muted-foreground)]">{check.name}</span>
+          </div>
+          {check.detailsUrl && (
+            <a
+              href={check.detailsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[11px] font-mono text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+            >
+              Details
+            </a>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -168,6 +227,7 @@ export function PullRequestSurface({
   const pullRequest = surfaceState.pullRequest;
   const currentBranchPullRequestNumber = surfaceState.currentBranchPullRequestNumber;
   const snapshotMessage = surfaceState.snapshotMessage;
+  const diffReloadKey = buildPullRequestDiffReloadKey(workspaceId, pullRequest);
 
   const reviewText =
     pullRequest.reviewDecision === "approved"
@@ -208,7 +268,7 @@ export function PullRequestSurface({
     setDiffError(null);
     setIsDiffLoading(true);
 
-    void getGitRefDiffPatch(workspaceId, pullRequest.baseRefName, pullRequest.headRefName)
+    void getGitPullRequestPatch(workspaceId, pullRequest.number)
       .then((result) => {
         if (!cancelled) setPatch(result);
       })
@@ -222,7 +282,7 @@ export function PullRequestSurface({
     return () => {
       cancelled = true;
     };
-  }, [pullRequest.number, pullRequest.baseRefName, pullRequest.headRefName, workspaceId]);
+  }, [diffReloadKey, pullRequest.number, workspaceId]);
 
   const parsedFiles = useMemo(() => {
     if (!patch) return [];
@@ -238,70 +298,75 @@ export function PullRequestSurface({
   }, [patch, pullRequest.number, workspaceId]);
 
   const diffControlsDisabled = isDiffLoading || diffError !== null || patch.length === 0;
+  const [checksExpanded, setChecksExpanded] = useState(false);
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--background)]">
-      <header className="border-b border-[var(--border)] px-4 py-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-              Pull Request
-            </p>
-            <h2 className="mt-2 text-base font-semibold leading-snug text-[var(--foreground)]">
-              {pullRequest.title}
-            </h2>
-            <div className="mt-1.5 flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
-              <GithubAvatar
-                name={pullRequest.author}
-                email={`${pullRequest.author}@users.noreply.github.com`}
-                size="sm"
-              />
-              <span>
-                {pullRequest.author} · #{pullRequest.number} · updated{" "}
-                {formatRelativeTime(pullRequest.updatedAt)}
-              </span>
-            </div>
-            <div className="mt-1.5 flex items-center gap-1 text-xs text-[var(--muted-foreground)]">
-              <span className="font-mono text-[var(--foreground)]">{pullRequest.headRefName}</span>
-              <span>→</span>
-              <span className="font-mono text-[var(--foreground)]">{pullRequest.baseRefName}</span>
-              {mergeText && (
-                <>
-                  <span className="ml-1">·</span>
-                  <span className="shrink-0" style={{ color: mergeColor }}>
-                    {mergeText}
-                  </span>
-                </>
-              )}
-              {reviewText && (
-                <>
-                  <span>·</span>
-                  <span className="shrink-0" style={{ color: reviewColor }}>
-                    {reviewText}
-                  </span>
-                </>
-              )}
-              <CheckDots checks={pullRequest.checks} />
-              {pullRequest.isDraft && (
-                <Badge variant="muted" className="ml-1">
-                  Draft
-                </Badge>
-              )}
-              {currentBranchPullRequestNumber === pullRequest.number && (
-                <Badge variant="info" className="ml-0.5">
-                  Current Branch
-                </Badge>
-              )}
-            </div>
+      <header className="flex flex-col gap-0 border-b border-[var(--border)] px-5 pt-4 pb-0">
+        {/* Section title row */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className="app-panel-title text-[var(--muted-foreground)]">Pull Request</span>
+            <span className="font-mono text-[11px] text-[var(--muted-foreground)]">
+              #{pullRequest.number}
+            </span>
+            <span className="text-[11px] text-[var(--muted-foreground)]">
+              · updated {formatRelativeTime(pullRequest.updatedAt)}
+            </span>
+            {pullRequest.isDraft && <Badge variant="muted">Draft</Badge>}
+            {currentBranchPullRequestNumber === pullRequest.number && (
+              <Badge variant="info">Current Branch</Badge>
+            )}
           </div>
-          <Button
-            className="rounded-none"
-            onClick={() => window.open(pullRequest.url, "_blank", "noopener,noreferrer")}
-            size="sm"
-            variant="outline"
-          >
-            Open on GitHub
-          </Button>
+          <div className="flex items-center gap-3">
+            {mergeText && (
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="size-1.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: mergeColor }}
+                />
+                <span className="font-mono text-[11px] font-medium tracking-wide" style={{ color: mergeColor }}>
+                  {mergeText}
+                </span>
+              </div>
+            )}
+            {reviewText && !mergeText && (
+              <div className="flex items-center gap-1.5">
+                <span
+                  className="size-1.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: reviewColor }}
+                />
+                <span className="font-mono text-[11px] font-medium tracking-wide" style={{ color: reviewColor }}>
+                  {reviewText}
+                </span>
+              </div>
+            )}
+            <Button
+              className="h-6 gap-1 rounded-md px-2.5 text-[11px]"
+              onClick={() => openUrl(pullRequest.url)}
+              size="sm"
+              variant="outline"
+            >
+              Open on GitHub
+              <ArrowUpRight className="size-3" />
+            </Button>
+          </div>
+        </div>
+
+        {/* PR title */}
+        <h2 className="mt-3 text-lg font-medium leading-snug tracking-tight text-[var(--foreground)]">
+          {pullRequest.title}
+        </h2>
+
+        {/* Branch flow */}
+        <div className="mt-2.5 flex items-center gap-2">
+          <span className="rounded bg-[var(--muted)] px-2 py-0.5 font-mono text-xs text-[var(--muted-foreground)]">
+            {pullRequest.headRefName}
+          </span>
+          <ArrowRight className="size-3.5 text-[var(--muted-foreground)]" />
+          <span className="rounded bg-[var(--muted)] px-2 py-0.5 font-mono text-xs text-[var(--muted-foreground)]">
+            {pullRequest.baseRefName}
+          </span>
         </div>
 
         {snapshotMessage ? (
@@ -309,6 +374,66 @@ export function PullRequestSurface({
             <AlertDescription>{snapshotMessage}</AlertDescription>
           </Alert>
         ) : null}
+
+        {/* Divider */}
+        <div className="mt-3 border-t border-[var(--border)]" />
+
+        {/* Meta row */}
+        <div className="flex items-start gap-10 py-3">
+          <div className="flex flex-col gap-1.5">
+            <span className="app-panel-title text-[var(--muted-foreground)]">Author</span>
+            <div className="flex items-center gap-2">
+              <GithubAvatar
+                name={pullRequest.author}
+                email={`${pullRequest.author}@users.noreply.github.com`}
+                size="md"
+              />
+              <span className="text-[13px] text-[var(--muted-foreground)]">
+                {pullRequest.author}
+              </span>
+            </div>
+          </div>
+
+          {parsedFiles && parsedFiles.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <span className="app-panel-title text-[var(--muted-foreground)]">Changes</span>
+              <span className="font-mono text-[13px] text-[var(--muted-foreground)]">
+                {parsedFiles.length} {parsedFiles.length === 1 ? "file" : "files"}
+              </span>
+            </div>
+          )}
+
+          {pullRequest.checks && pullRequest.checks.length > 0 && (
+            <button
+              type="button"
+              className="flex cursor-pointer flex-col gap-1.5 bg-transparent text-left"
+              onClick={() => setChecksExpanded((v) => !v)}
+            >
+              <span className="app-panel-title text-[var(--muted-foreground)]">Checks</span>
+              <ChecksSummary checks={pullRequest.checks} />
+            </button>
+          )}
+
+          {reviewText && (
+            <div className="flex flex-col gap-1.5">
+              <span className="app-panel-title text-[var(--muted-foreground)]">Review</span>
+              <span className="text-[13px]" style={{ color: reviewColor }}>
+                {reviewText}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Checks detail list (toggle) */}
+        {checksExpanded && pullRequest.checks && pullRequest.checks.length > 0 && (
+          <>
+            <div className="border-t border-[var(--border)]" />
+            <div className="py-3">
+              <ChecksList checks={pullRequest.checks} />
+            </div>
+          </>
+        )}
+
       </header>
 
       <DiffRenderProvider theme={diffTheme(resolvedTheme)}>

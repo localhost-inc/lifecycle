@@ -218,6 +218,28 @@ pub async fn get_workspace_git_ref_diff_patch(
     status::get_git_ref_diff_patch(&worktree_path, &base_ref, &head_ref).await
 }
 
+pub async fn get_workspace_git_pull_request_patch(
+    db_path: &str,
+    workspace_id: String,
+    pull_request_number: u64,
+) -> Result<String, LifecycleError> {
+    let (mode, worktree_path) = resolve_workspace_git_context(db_path, &workspace_id)?;
+    if mode != "local" {
+        return Err(LifecycleError::GitOperationFailed {
+            operation: "read GitHub pull request diff patch".to_string(),
+            reason: "Cloud workspace pull request diffs will use the cloud provider once it exists."
+                .to_string(),
+        });
+    }
+
+    let worktree_path = worktree_path.ok_or_else(|| LifecycleError::GitOperationFailed {
+        operation: "read GitHub pull request diff patch".to_string(),
+        reason: format!("workspace {workspace_id} has no local worktree path"),
+    })?;
+
+    pull_request::get_pull_request_patch(&worktree_path, pull_request_number).await
+}
+
 pub async fn get_workspace_git_commit_patch(
     db_path: &str,
     workspace_id: String,

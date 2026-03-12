@@ -422,6 +422,17 @@ async fn load_pull_request_detail(
     Ok(normalize_pull_request(pull_request))
 }
 
+fn build_pull_request_diff_args(pull_request_number: u64) -> Vec<String> {
+    vec![
+        "pr".to_string(),
+        "diff".to_string(),
+        pull_request_number.to_string(),
+        "--patch".to_string(),
+        "--color".to_string(),
+        "never".to_string(),
+    ]
+}
+
 pub async fn list_open_pull_requests(
     repo_path: &str,
 ) -> Result<GitPullRequestListResult, LifecycleError> {
@@ -622,6 +633,29 @@ pub async fn get_pull_request_detail(
     }
 }
 
+pub async fn get_pull_request_patch(
+    repo_path: &str,
+    pull_request_number: u64,
+) -> Result<String, LifecycleError> {
+    let args = build_pull_request_diff_args(pull_request_number);
+    let arg_refs = args.iter().map(String::as_str).collect::<Vec<_>>();
+    let output = gh_command(
+        repo_path,
+        "read GitHub pull request diff patch",
+        &arg_refs,
+    )
+    .await?;
+
+    if !output.status.success() {
+        return Err(github_failure(
+            "read GitHub pull request diff patch",
+            &output.stderr,
+        ));
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
 pub async fn create_pull_request(repo_path: &str) -> Result<GitPullRequestSummary, LifecycleError> {
     let git_status = status::get_git_status(repo_path).await?;
     let branch = git_status
@@ -698,6 +732,16 @@ mod tests {
     fn list_payload_requests_status_check_rollups() {
         assert!(PULL_REQUEST_LIST_JSON_FIELDS.contains("statusCheckRollup"));
         assert!(PULL_REQUEST_DETAIL_JSON_FIELDS.contains("statusCheckRollup"));
+    }
+
+    #[test]
+    fn pull_request_diff_payload_requests_patch_without_color() {
+        let args = build_pull_request_diff_args(42);
+
+        assert_eq!(
+            args,
+            vec!["pr", "diff", "42", "--patch", "--color", "never"]
+        );
     }
 
     #[test]
