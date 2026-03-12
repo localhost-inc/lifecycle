@@ -96,6 +96,7 @@ describe("GitActionButton", () => {
         reason: null,
       },
       branch: "feature/git-panel-prs",
+      hasPullRequestChanges: true,
       pullRequest: null,
       suggestedBaseRef: "main",
       upstream: "origin/feature/git-panel-prs",
@@ -137,6 +138,7 @@ describe("GitActionButton", () => {
         reason: null,
       },
       branch: "feature/git-panel-prs",
+      hasPullRequestChanges: true,
       pullRequest: null,
       suggestedBaseRef: "main",
       upstream: "origin/feature/git-panel-prs",
@@ -178,6 +180,7 @@ describe("GitActionButton", () => {
         reason: null,
       },
       branch: "feature/git-panel-prs",
+      hasPullRequestChanges: true,
       pullRequest: null,
       suggestedBaseRef: "main",
       upstream: "origin/feature/git-panel-prs",
@@ -211,6 +214,7 @@ describe("GitActionButton", () => {
         reason: null,
       },
       branch: "feature/git-panel-prs",
+      hasPullRequestChanges: true,
       pullRequest: {
         author: "kyle",
         baseRefName: "main",
@@ -267,6 +271,7 @@ describe("GitActionButton", () => {
         reason: "mode_not_supported",
       },
       branch: null,
+      hasPullRequestChanges: null,
       pullRequest: null,
       suggestedBaseRef: null,
       upstream: null,
@@ -299,6 +304,7 @@ describe("GitActionButton", () => {
         reason: null,
       },
       branch: "feature/git-panel-prs",
+      hasPullRequestChanges: true,
       pullRequest: null,
       suggestedBaseRef: "main",
       upstream: "origin/feature/git-panel-prs",
@@ -312,5 +318,39 @@ describe("GitActionButton", () => {
     expect(renderGitActionButton({ branchPullRequest, gitStatus })).toContain("Sync Branch");
     expect(markup).toContain("Pull the latest remote commits");
     expect(markup).toContain("Use a terminal session to sync the branch");
+  });
+
+  test("suppresses create-pr when the branch matches its base", () => {
+    const gitStatus: GitStatusResult = {
+      ahead: 0,
+      behind: 0,
+      branch: "feature/git-panel-prs",
+      files: [],
+      headSha: "0123456789abcdef0123456789abcdef01234567",
+      upstream: "origin/feature/git-panel-prs",
+    };
+    const branchPullRequest: GitBranchPullRequestResult = {
+      support: {
+        available: true,
+        message: null,
+        provider: "github",
+        reason: null,
+      },
+      branch: "feature/git-panel-prs",
+      hasPullRequestChanges: false,
+      pullRequest: null,
+      suggestedBaseRef: "main",
+      upstream: "origin/feature/git-panel-prs",
+    };
+
+    const markup = renderGitActionMenuContent({
+      branchPullRequest,
+      gitStatus,
+    });
+
+    expect(renderGitActionButton({ branchPullRequest, gitStatus })).toContain("No PR Changes");
+    expect(markup).toContain("No pull request changes");
+    expect(markup).toContain("matches main");
+    expect(markup).not.toContain("Create PR");
   });
 });

@@ -42,9 +42,7 @@ describe("workspace route state", () => {
       pullRequestNumber: null,
     });
 
-    expect(
-      readWorkspaceRouteState(new URLSearchParams("git=unknown&pr=not-a-number")),
-    ).toEqual({
+    expect(readWorkspaceRouteState(new URLSearchParams("git=unknown&pr=not-a-number"))).toEqual({
       gitTab: "changes",
       pullRequestNumber: null,
     });
@@ -81,6 +79,7 @@ describe("workspace route state", () => {
       resolveWorkspaceRoutePullRequest({
         currentPullRequestResult: {
           branch: "feature/router-pr-state",
+          hasPullRequestChanges: true,
           pullRequest: currentPullRequest,
           suggestedBaseRef: "main",
           support: availableSupport,
@@ -102,6 +101,7 @@ describe("workspace route state", () => {
       resolveWorkspaceRoutePullRequest({
         currentPullRequestResult: {
           branch: "feature/router-pr-state",
+          hasPullRequestChanges: true,
           pullRequest: currentPullRequest,
           suggestedBaseRef: "main",
           support: availableSupport,
@@ -123,6 +123,7 @@ describe("workspace route state", () => {
       resolveWorkspaceRoutePullRequest({
         currentPullRequestResult: {
           branch: "feature/router-pr-state",
+          hasPullRequestChanges: true,
           pullRequest: createPullRequestSummary({ number: 7, title: "Other current" }),
           suggestedBaseRef: "main",
           support: availableSupport,

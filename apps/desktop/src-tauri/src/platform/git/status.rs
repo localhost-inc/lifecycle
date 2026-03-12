@@ -501,7 +501,14 @@ async fn resolve_branch_diff_base(
             reason: "unable to resolve branch diff base ref".to_string(),
         })?;
 
-    let fork_point_args = vec!["merge-base", "--fork-point", label.as_str(), "HEAD"];
+    resolve_branch_diff_base_from_label(repo_path, &label).await
+}
+
+async fn resolve_branch_diff_base_from_label(
+    repo_path: &str,
+    label: &str,
+) -> Result<ResolvedBranchDiffBaseRef, LifecycleError> {
+    let fork_point_args = vec!["merge-base", "--fork-point", label, "HEAD"];
     let diff_base = git_output_optional(repo_path, "resolve git fork point", &fork_point_args)
         .await?
         .map(|stdout| trimmed_stdout(&stdout))
@@ -510,7 +517,7 @@ async fn resolve_branch_diff_base(
     let diff_base = match diff_base {
         Some(value) => value,
         None => {
-            let merge_base_args = vec!["merge-base", label.as_str(), "HEAD"];
+            let merge_base_args = vec!["merge-base", label, "HEAD"];
             let output = git_output(repo_path, "resolve git merge base", &merge_base_args).await?;
             let value = trimmed_stdout(&output);
             if value.is_empty() {
@@ -724,6 +731,31 @@ pub async fn get_git_status(repo_path: &str) -> Result<GitStatusResult, Lifecycl
 
 pub async fn get_git_base_ref(repo_path: &str) -> Result<Option<String>, LifecycleError> {
     resolve_branch_base_ref_label(repo_path).await
+}
+
+pub async fn has_git_pull_request_changes(repo_path: &str) -> Result<Option<bool>, LifecycleError> {
+    let Some(label) = resolve_branch_base_ref_label(repo_path).await? else {
+        return Ok(None);
+    };
+
+    let diff_base = resolve_branch_diff_base_from_label(repo_path, &label).await?;
+    let output = git_output_allow_exit(
+        repo_path,
+        "check git pull request changes",
+        &[
+            "diff",
+            "--quiet",
+            "--find-renames",
+            "--find-copies",
+            "--binary",
+            diff_base.diff_base.as_str(),
+            "HEAD",
+        ],
+        &[1],
+    )
+    .await?;
+
+    Ok(Some(!output.status.success()))
 }
 
 fn is_untracked_working_file(file_status: Option<&GitFileStatus>, scope: &str) -> bool {
@@ -1416,6 +1448,30 @@ mod tests {
         assert_eq!(base_ref.as_deref(), Some("origin/trunk"));
 
         fs::remove_dir_all(fixture_root).expect("remove fixture root");
+    }
+
+    #[tokio::test]
+    async fn has_git_pull_request_changes_tracks_branch_diff_against_base() {
+        let repo_path = temp_repo_path("lifecycle-git-pull-request-changes");
+        init_repo_with_branch(&repo_path, "trunk");
+        run_git(repo_path.as_path(), &["checkout", "-b", "lifecycle/test"]);
+
+        let no_changes =
+            has_git_pull_request_changes(repo_path.to_str().expect("repo path is utf8"))
+                .await
+                .expect("pull request change status should resolve");
+        assert_eq!(no_changes, Some(false));
+
+        fs::write(repo_path.join("README.md"), "seed\nbranch\n").expect("write branch change");
+        run_git(repo_path.as_path(), &["commit", "-am", "branch change"]);
+
+        let has_changes =
+            has_git_pull_request_changes(repo_path.to_str().expect("repo path is utf8"))
+                .await
+                .expect("pull request change status should resolve after branch commit");
+        assert_eq!(has_changes, Some(true));
+
+        fs::remove_dir_all(repo_path).expect("remove temp repo");
     }
 
     #[tokio::test]

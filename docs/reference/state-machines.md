@@ -130,6 +130,7 @@ This derived state powers the workspace Git split button and any future workspac
 - `needs_push`
 - `blocked_behind`
 - `blocked_diverged`
+- `no_pull_request_changes`
 - `ready_to_create_pull_request`
 - `view_pull_request`
 - `ready_to_merge`
@@ -152,11 +153,13 @@ This derived state powers the workspace Git split button and any future workspac
    - use when the branch is behind its upstream
 8. `blocked_diverged`
    - use when the branch is both ahead of and behind its upstream
-9. `ready_to_create_pull_request`
-   - use when the branch is clean, synced, pushed, PR support is available, and no open PR exists for the branch
-10. `ready_to_merge`
+9. `no_pull_request_changes`
+   - use when the branch is clean, synced, pushed, PR support is available, no open PR exists for the branch, and the current branch has no committed diff against its base branch
+10. `ready_to_create_pull_request`
+   - use when the branch is clean, synced, pushed, PR support is available, no open PR exists for the branch, and the current branch has committed diff against its base branch
+11. `ready_to_merge`
    - use when the branch has an open non-draft PR that is currently mergeable
-11. `view_pull_request`
+12. `view_pull_request`
    - use when the branch has an open PR that should be reviewed/opened rather than merged directly
 
 ### Workspace Git Action Invariants
@@ -167,5 +170,6 @@ This derived state powers the workspace Git split button and any future workspac
    - `blocked_behind` and `blocked_diverged` must suppress push/create/merge PR primary actions
 3. `commit_and_push` is only valid when the branch exists and remote sync is not blocked by `behind` or `diverged`
 4. Clean synced branches must not surface PR actions until current-branch PR support/state is known
-5. Pull request actions are branch-scoped:
+5. `ready_to_create_pull_request` requires committed branch diff against the resolved base branch
+6. Pull request actions are branch-scoped:
    - they derive from the current branch's open PR, not the repository-wide PR list

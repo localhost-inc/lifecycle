@@ -90,6 +90,7 @@ function createMockSource() {
           reason: "mode_not_supported",
         },
         branch: null,
+        hasPullRequestChanges: null,
         upstream: null,
         suggestedBaseRef: null,
         pullRequest: null,

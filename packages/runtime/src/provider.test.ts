@@ -135,6 +135,7 @@ describe("workspace provider interface", () => {
           reason: null,
         },
         branch: "feature/version-control",
+        hasPullRequestChanges: true,
         upstream: "origin/feature/version-control",
         suggestedBaseRef: "main",
         pullRequest: null,
@@ -316,7 +317,7 @@ describe("workspace provider interface", () => {
       workspaceId: "ws_1",
       sourceRef: "main",
       manifestPath: "/tmp/lifecycle.json",
-      manifestJson: "{\"setup\":{\"steps\":[]},\"services\":{}}",
+      manifestJson: '{"setup":{"steps":[]},"services":{}}',
       manifestFingerprint: "manifest_1",
       resolvedSecrets: {},
       context: {
@@ -336,7 +337,7 @@ describe("workspace provider interface", () => {
           workspaceName: undefined,
           baseRef: "main",
           worktreeRoot: undefined,
-          manifestJson: "{\"setup\":{\"steps\":[]},\"services\":{}}",
+          manifestJson: '{"setup":{"steps":[]},"services":{}}',
           manifestFingerprint: "manifest_1",
         },
       },
@@ -392,7 +393,8 @@ describe("workspace provider interface", () => {
     const result = await provider.startServices({
       workspace,
       services,
-      manifestJson: "{\"setup\":{\"steps\":[]},\"services\":{\"web\":{\"runtime\":\"process\",\"command\":\"bun run dev\"}}}",
+      manifestJson:
+        '{"setup":{"steps":[]},"services":{"web":{"runtime":"process","command":"bun run dev"}}}',
       manifestFingerprint: "manifest_1",
     });
 
@@ -403,7 +405,7 @@ describe("workspace provider interface", () => {
         args: {
           workspaceId: "ws_1",
           manifestJson:
-            "{\"setup\":{\"steps\":[]},\"services\":{\"web\":{\"runtime\":\"process\",\"command\":\"bun run dev\"}}}",
+            '{"setup":{"steps":[]},"services":{"web":{"runtime":"process","command":"bun run dev"}}}',
           manifestFingerprint: "manifest_1",
         },
       },
@@ -440,7 +442,7 @@ describe("workspace provider interface", () => {
         expires_at: null,
       },
       services: [],
-      manifestJson: "{\"setup\":{\"steps\":[]},\"services\":{}}",
+      manifestJson: '{"setup":{"steps":[]},"services":{}}',
       manifestFingerprint: "manifest_1",
     });
 
@@ -449,7 +451,7 @@ describe("workspace provider interface", () => {
         cmd: "start_services",
         args: {
           workspaceId: "ws_1",
-          manifestJson: "{\"setup\":{\"steps\":[]},\"services\":{}}",
+          manifestJson: '{"setup":{"steps":[]},"services":{}}',
           manifestFingerprint: "manifest_1",
         },
       },
@@ -619,6 +621,7 @@ describe("workspace provider interface", () => {
               reason: null,
             },
             branch: "feature/version-control",
+            hasPullRequestChanges: true,
             upstream: "origin/feature/version-control",
             suggestedBaseRef: "main",
             pullRequest: null,

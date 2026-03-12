@@ -63,6 +63,7 @@ pub struct GitBranchPullRequestResult {
     pub support: GitPullRequestSupport,
     pub branch: Option<String>,
     pub upstream: Option<String>,
+    pub has_pull_request_changes: Option<bool>,
     pub suggested_base_ref: Option<String>,
     pub pull_request: Option<GitPullRequestSummary>,
 }
@@ -494,11 +495,17 @@ pub async fn get_current_branch_pull_request(
 ) -> Result<GitBranchPullRequestResult, LifecycleError> {
     let status = status::get_git_status(repo_path).await?;
     let suggested_base_ref = status::get_git_base_ref(repo_path).await?;
+    let has_pull_request_changes = if status.branch.is_some() {
+        status::has_git_pull_request_changes(repo_path).await?
+    } else {
+        None
+    };
 
     let Some(branch) = status.branch.clone() else {
         return Ok(GitBranchPullRequestResult {
             support: support_available(),
             branch: None,
+            has_pull_request_changes,
             upstream: status.upstream,
             suggested_base_ref,
             pull_request: None,
@@ -545,6 +552,7 @@ pub async fn get_current_branch_pull_request(
             Ok(GitBranchPullRequestResult {
                 support: support_available(),
                 branch: Some(branch),
+                has_pull_request_changes,
                 upstream: status.upstream,
                 suggested_base_ref,
                 pull_request,
@@ -553,6 +561,7 @@ pub async fn get_current_branch_pull_request(
         Ok(output) => Ok(GitBranchPullRequestResult {
             support: classify_support_error(&output.stderr),
             branch: Some(branch),
+            has_pull_request_changes,
             upstream: status.upstream,
             suggested_base_ref,
             pull_request: None,
@@ -568,6 +577,7 @@ pub async fn get_current_branch_pull_request(
                     "GitHub CLI is required for local pull request actions.",
                 ),
                 branch: Some(branch),
+                has_pull_request_changes,
                 upstream: status.upstream,
                 suggested_base_ref,
                 pull_request: None,
@@ -660,6 +670,28 @@ pub async fn create_pull_request(repo_path: &str) -> Result<GitPullRequestSummar
             reason: "unable to resolve current branch".to_string(),
         })?;
     let suggested_base_ref = status::get_git_base_ref(repo_path).await?;
+    if matches!(
+        status::has_git_pull_request_changes(repo_path).await?,
+        Some(false)
+    ) {
+        let reason = suggested_base_ref
+            .as_deref()
+            .map(|base_ref| {
+                format!(
+                    "{branch} has no committed changes relative to {base_ref}. Commit and push branch changes before opening a pull request."
+                )
+            })
+            .unwrap_or_else(|| {
+                format!(
+                    "{branch} has no committed changes to open in a pull request. Commit and push branch changes before opening a pull request."
+                )
+            });
+
+        return Err(LifecycleError::GitOperationFailed {
+            operation: "create GitHub pull request".to_string(),
+            reason,
+        });
+    }
 
     let mut owned_args = vec![
         "pr".to_string(),

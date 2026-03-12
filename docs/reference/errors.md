@@ -50,6 +50,11 @@ Failed start attempts return the environment to `workspace.status = idle`; the l
 
 `harness_process_exit_nonzero`, `attach_failed`, `workspace_destroyed`, `unknown`
 
+Notes:
+
+1. `attach_failed` is for authoritative terminal attach/runtime failures, not every desktop-local presentation hiccup.
+2. Helper launch failures, token expiry, and transient cloud transport reconnect loops should usually surface as local attach/presentation errors unless the provider also marks the terminal session failed.
+
 ## Mutation Concurrency
 
 1. Workspace environment status is the concurrency lock:

@@ -165,6 +165,7 @@ Git operations follow the same authority rule as terminals and lifecycle mutatio
    - per-branch Cloudflare Sandbox instances
    - sandbox-owned PTY sessions for terminal runtime
    - desktop terminal attach via provider-minted credentials and a provider-owned remote attach transport
+   - on native-hosted desktop platforms, an ephemeral local attach helper bridges the native terminal surface to that remote transport without becoming the authoritative terminal runtime
    - shared terminal fan-in/fan-out via Durable Object multiplexer when collaboration is enabled
    - preview URLs via Cloudflare Workers routing
    - ephemeral test data and fixtures

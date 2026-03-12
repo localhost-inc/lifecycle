@@ -19,6 +19,7 @@ const baseBranchPullRequest: GitBranchPullRequestResult = {
     reason: null,
   },
   branch: "feature/git-prs",
+  hasPullRequestChanges: true,
   pullRequest: null,
   suggestedBaseRef: "main",
   upstream: "origin/feature/git-prs",
@@ -110,6 +111,17 @@ describe("buildWorkspaceGitActionState", () => {
     expect(state.kind).toBe("ready_to_create_pull_request");
     expect(state.description).toContain("main");
     expect(state.primaryAction.label).toBe("Create PR");
+  });
+
+  test("suppresses create-pr when the branch has no committed diff against base", () => {
+    const state = buildWorkspaceGitActionState(baseStatus, {
+      ...baseBranchPullRequest,
+      hasPullRequestChanges: false,
+    });
+
+    expect(state.kind).toBe("no_pull_request_changes");
+    expect(state.description).toContain("matches main");
+    expect(state.primaryAction.label).toBe("No PR Changes");
   });
 
   test("prefers merge when the current branch pull request is mergeable", () => {

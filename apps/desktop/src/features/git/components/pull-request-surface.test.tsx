@@ -42,6 +42,7 @@ function createCurrentPullRequestResult(
       reason: null,
     },
     branch: pullRequest?.headRefName ?? "feature/pr-surface",
+    hasPullRequestChanges: true,
     pullRequest,
     suggestedBaseRef: "main",
     upstream: "origin/feature/pr-surface",

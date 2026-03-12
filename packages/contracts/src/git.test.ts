@@ -121,6 +121,7 @@ describe("git contracts", () => {
     const currentBranch: GitBranchPullRequestResult = {
       support: pullRequests.support,
       branch: "feature/git-prs",
+      hasPullRequestChanges: true,
       upstream: "origin/feature/git-prs",
       suggestedBaseRef: "main",
       pullRequest: pullRequests.pullRequests[0] ?? null,
@@ -129,6 +130,7 @@ describe("git contracts", () => {
     expect(pullRequests.pullRequests[0]?.number).toBe(42);
     expect(currentBranch.pullRequest?.mergeable).toBe("mergeable");
     expect(currentBranch.pullRequest?.checks?.[0]?.status).toBe("success");
+    expect(currentBranch.hasPullRequestChanges).toBeTrue();
     expect(currentBranch.suggestedBaseRef).toBe("main");
   });
 

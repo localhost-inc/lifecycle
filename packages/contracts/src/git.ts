@@ -132,6 +132,7 @@ export interface GitBranchPullRequestResult {
   support: GitPullRequestSupport;
   branch: string | null;
   upstream: string | null;
+  hasPullRequestChanges: boolean | null;
   suggestedBaseRef: string | null;
   pullRequest: GitPullRequestSummary | null;
 }

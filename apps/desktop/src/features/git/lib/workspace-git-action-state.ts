@@ -19,6 +19,7 @@ export type WorkspaceGitActionStateKind =
   | "needs_push"
   | "blocked_behind"
   | "blocked_diverged"
+  | "no_pull_request_changes"
   | "provider_unavailable"
   | "ready_to_create_pull_request"
   | "view_pull_request"
@@ -144,6 +145,7 @@ export function buildWorkspaceGitActionState(
 ): WorkspaceGitActionState {
   const branch = branchPullRequest?.branch ?? gitStatus?.branch ?? null;
   const pullRequest = branchPullRequest?.pullRequest ?? null;
+  const hasPullRequestChanges = branchPullRequest?.hasPullRequestChanges ?? null;
   const support = branchPullRequest?.support ?? null;
   const suggestedBaseRef = branchPullRequest?.suggestedBaseRef ?? null;
   const { hasLocalChanges, hasStagedChanges, hasUnstagedChanges } =
@@ -348,6 +350,23 @@ export function buildWorkspaceGitActionState(
       suggestedBaseRef,
       syncKind: sync.kind,
       title: "Pull request provider unavailable",
+    };
+  }
+
+  if (!pullRequest && hasPullRequestChanges === false) {
+    const baseRef = suggestedBaseRef ?? "the base branch";
+    return {
+      branch,
+      description: `${branch} matches ${baseRef}, so there is nothing to open as a pull request yet.`,
+      hasLocalChanges,
+      hasStagedChanges,
+      hasUnstagedChanges,
+      kind: "no_pull_request_changes",
+      primaryAction: disabledAction("No PR Changes"),
+      pullRequest: null,
+      suggestedBaseRef,
+      syncKind: sync.kind,
+      title: "No pull request changes",
     };
   }
 

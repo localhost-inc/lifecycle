@@ -38,6 +38,7 @@ const EMPTY_PULL_REQUEST_LIST_RESULT: GitPullRequestListResult = {
 const EMPTY_BRANCH_PULL_REQUEST_RESULT: GitBranchPullRequestResult = {
   support: EMPTY_PULL_REQUEST_SUPPORT,
   branch: null,
+  hasPullRequestChanges: null,
   upstream: null,
   suggestedBaseRef: null,
   pullRequest: null,

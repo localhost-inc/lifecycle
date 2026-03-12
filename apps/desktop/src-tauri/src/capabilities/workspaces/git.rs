@@ -170,6 +170,7 @@ pub async fn get_workspace_current_git_pull_request(
                 "Cloud workspace pull requests will use the cloud provider once it exists.",
             ),
             branch: None,
+            has_pull_request_changes: None,
             upstream: None,
             suggested_base_ref: None,
             pull_request: None,
