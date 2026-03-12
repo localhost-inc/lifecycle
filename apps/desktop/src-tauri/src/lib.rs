@@ -54,6 +54,23 @@ pub fn run() {
             let db_path = app_data_dir.join("lifecycle.db");
             let db_path_str = db_path.to_string_lossy().to_string();
 
+            #[cfg(target_os = "macos")]
+            match crate::platform::user_shell_env::hydrate_process_environment() {
+                Ok(summary) => crate::platform::diagnostics::append_diagnostic(
+                    "startup-shell-env",
+                    &format!(
+                        "hydrated login-shell environment from {} (imported={} skipped={} path_changed={})",
+                        summary.shell_path,
+                        summary.imported_keys,
+                        summary.skipped_keys,
+                        summary.path_changed
+                    ),
+                ),
+                Err(error) => {
+                    crate::platform::diagnostics::append_error("startup-shell-env", error);
+                }
+            }
+
             run_migrations(&db_path_str).expect("failed to run migrations");
             app.manage(DbPath(db_path_str.clone()));
 

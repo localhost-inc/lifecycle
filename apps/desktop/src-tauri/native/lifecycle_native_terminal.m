@@ -160,6 +160,42 @@ static void lifecycleSetLastErrorFromException(NSString *context, NSException *e
   lifecycleSetLastError([NSString stringWithFormat:@"%@: %@ (%@)", context, reason, name]);
 }
 
+static NSString *lifecycleResolvedTerminalId(NSString *terminalId) {
+  return terminalId.length > 0 ? terminalId : @"<unknown>";
+}
+
+static NSString *lifecycleTerminalIdForSurface(ghostty_surface_t surface) {
+  if (surface == NULL) {
+    return @"<unknown>";
+  }
+
+  id view = lifecycleTerminalViewForSurface(surface);
+  if (view == nil) {
+    return @"<unknown>";
+  }
+
+  return lifecycleResolvedTerminalId([view valueForKey:@"terminalId"]);
+}
+
+static void lifecycleLogTerminalException(NSString *context,
+                                          NSString *terminalId,
+                                          NSException *exception) {
+  NSString *resolvedTerminalId = lifecycleResolvedTerminalId(terminalId);
+  NSString *name = exception.name ?: @"NSException";
+  NSString *reason = exception.reason ?: @"(no reason provided)";
+  lifecycleSetLastErrorFromException(
+      [NSString stringWithFormat:@"%@ for terminal %@", context, resolvedTerminalId], exception);
+  lifecycleAppendDiagnosticLine([NSString
+      stringWithFormat:@"[exception] %@ terminal=%@ threw: %@ (%@)", context,
+                       resolvedTerminalId, reason, name]);
+}
+
+static void lifecycleLogSurfaceException(NSString *context,
+                                         ghostty_surface_t surface,
+                                         NSException *exception) {
+  lifecycleLogTerminalException(context, lifecycleTerminalIdForSurface(surface), exception);
+}
+
 static BOOL lifecycleIsHexColorString(NSString *value) {
   if (value.length != 7 || ![value hasPrefix:@"#"]) {
     return NO;
@@ -219,8 +255,18 @@ static NSEvent *lifecycleGhosttyTranslationEvent(ghostty_surface_t surface, NSEv
     return event;
   }
 
-  ghostty_input_mods_e translatedGhosttyMods =
-      ghostty_surface_key_translation_mods(surface, lifecycleGhosttyMods(event.modifierFlags));
+  ghostty_input_mods_e translatedGhosttyMods = lifecycleGhosttyMods(event.modifierFlags);
+  @try {
+    translatedGhosttyMods =
+        ghostty_surface_key_translation_mods(surface, lifecycleGhosttyMods(event.modifierFlags));
+  } @catch (NSException *exception) {
+    NSString *name = exception.name ?: @"NSException";
+    NSString *reason = exception.reason ?: @"(no reason provided)";
+    lifecycleAppendDiagnosticLine(
+        [NSString stringWithFormat:@"[exception] native terminal key translation threw: %@ (%@)",
+                                   reason, name]);
+    return event;
+  }
   NSEventModifierFlags translatedFlags = lifecycleEventModifierFlags(translatedGhosttyMods);
   NSEventModifierFlags modifierFlags = event.modifierFlags;
 
@@ -309,11 +355,70 @@ static void lifecycleGhosttySendText(ghostty_surface_t surface, NSString *text) 
   @try {
     ghostty_surface_text(surface, utf8, strlen(utf8));
   } @catch (NSException *exception) {
-    NSString *name = exception.name ?: @"NSException";
-    NSString *reason = exception.reason ?: @"(no reason provided)";
-    lifecycleAppendDiagnosticLine(
-        [NSString stringWithFormat:@"[exception] native terminal text input threw: %@ (%@)",
-                                   reason, name]);
+    lifecycleLogSurfaceException(@"native terminal text input", surface, exception);
+  }
+}
+
+static void lifecycleGhosttyMousePosition(ghostty_surface_t surface,
+                                          double x,
+                                          double y,
+                                          ghostty_input_mods_e mods,
+                                          NSString *context) {
+  if (surface == NULL) {
+    return;
+  }
+
+  @try {
+    ghostty_surface_mouse_pos(surface, x, y, mods);
+  } @catch (NSException *exception) {
+    lifecycleLogSurfaceException(context, surface, exception);
+  }
+}
+
+static void lifecycleGhosttyMouseButton(ghostty_surface_t surface,
+                                        ghostty_input_mouse_state_e state,
+                                        ghostty_input_mouse_button_e button,
+                                        ghostty_input_mods_e mods,
+                                        NSString *context) {
+  if (surface == NULL) {
+    return;
+  }
+
+  @try {
+    (void)ghostty_surface_mouse_button(surface, state, button, mods);
+  } @catch (NSException *exception) {
+    lifecycleLogSurfaceException(context, surface, exception);
+  }
+}
+
+static void lifecycleGhosttyMouseScroll(ghostty_surface_t surface,
+                                        double deltaX,
+                                        double deltaY,
+                                        ghostty_input_scroll_mods_t mods,
+                                        NSString *context) {
+  if (surface == NULL) {
+    return;
+  }
+
+  @try {
+    ghostty_surface_mouse_scroll(surface, deltaX, deltaY, mods);
+  } @catch (NSException *exception) {
+    lifecycleLogSurfaceException(context, surface, exception);
+  }
+}
+
+static BOOL lifecycleGhosttyReadSelection(ghostty_surface_t surface,
+                                          ghostty_text_s *text,
+                                          NSString *context) {
+  if (surface == NULL || text == NULL) {
+    return NO;
+  }
+
+  @try {
+    return ghostty_surface_read_selection(surface, text);
+  } @catch (NSException *exception) {
+    lifecycleLogSurfaceException(context, surface, exception);
+    return NO;
   }
 }
 
@@ -391,11 +496,7 @@ static BOOL lifecycleGhosttyKeyAction(ghostty_surface_t surface,
   @try {
     handled = ghostty_surface_key(surface, keyEvent);
   } @catch (NSException *exception) {
-    NSString *name = exception.name ?: @"NSException";
-    NSString *reason = exception.reason ?: @"(no reason provided)";
-    lifecycleAppendDiagnosticLine(
-        [NSString stringWithFormat:@"[exception] native terminal key input threw: %@ (%@)",
-                                   reason, name]);
+    lifecycleLogTerminalException(@"native terminal key input", terminalId, exception);
     handled = NO;
   }
   lifecycleAppendDiagnosticLine([NSString
@@ -783,8 +884,9 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   }
 
   NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
-  ghostty_surface_mouse_pos(self.surface, point.x, self.bounds.size.height - point.y,
-                            lifecycleGhosttyMods(event.modifierFlags));
+  lifecycleGhosttyMousePosition(self.surface, point.x, self.bounds.size.height - point.y,
+                                lifecycleGhosttyMods(event.modifierFlags),
+                                @"native terminal mouse move");
 }
 
 - (void)mouseEntered:(NSEvent *)event {
@@ -797,7 +899,8 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return;
   }
 
-  ghostty_surface_mouse_pos(self.surface, -1, -1, GHOSTTY_MODS_NONE);
+  lifecycleGhosttyMousePosition(self.surface, -1, -1, GHOSTTY_MODS_NONE,
+                                @"native terminal mouse exit");
 }
 
 - (void)mouseDragged:(NSEvent *)event {
@@ -819,8 +922,9 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   }
 
   [[self window] makeFirstResponder:self];
-  ghostty_surface_mouse_button(self.surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_LEFT,
-                               lifecycleGhosttyMods(event.modifierFlags));
+  lifecycleGhosttyMouseButton(self.surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_LEFT,
+                              lifecycleGhosttyMods(event.modifierFlags),
+                              @"native terminal mouse down");
   [self mouseMoved:event];
 }
 
@@ -830,8 +934,9 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return;
   }
 
-  ghostty_surface_mouse_button(self.surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_LEFT,
-                               lifecycleGhosttyMods(event.modifierFlags));
+  lifecycleGhosttyMouseButton(self.surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_LEFT,
+                              lifecycleGhosttyMods(event.modifierFlags),
+                              @"native terminal mouse up");
   [self mouseMoved:event];
 }
 
@@ -842,8 +947,9 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   }
 
   [[self window] makeFirstResponder:self];
-  ghostty_surface_mouse_button(self.surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_RIGHT,
-                               lifecycleGhosttyMods(event.modifierFlags));
+  lifecycleGhosttyMouseButton(self.surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_RIGHT,
+                              lifecycleGhosttyMods(event.modifierFlags),
+                              @"native terminal right mouse down");
   [self mouseMoved:event];
 }
 
@@ -853,8 +959,9 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return;
   }
 
-  ghostty_surface_mouse_button(self.surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_RIGHT,
-                               lifecycleGhosttyMods(event.modifierFlags));
+  lifecycleGhosttyMouseButton(self.surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_RIGHT,
+                              lifecycleGhosttyMods(event.modifierFlags),
+                              @"native terminal right mouse up");
   [self mouseMoved:event];
 }
 
@@ -865,8 +972,9 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   }
 
   [[self window] makeFirstResponder:self];
-  ghostty_surface_mouse_button(self.surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_MIDDLE,
-                               lifecycleGhosttyMods(event.modifierFlags));
+  lifecycleGhosttyMouseButton(self.surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_MIDDLE,
+                              lifecycleGhosttyMods(event.modifierFlags),
+                              @"native terminal middle mouse down");
   [self mouseMoved:event];
 }
 
@@ -876,8 +984,9 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return;
   }
 
-  ghostty_surface_mouse_button(self.surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_MIDDLE,
-                               lifecycleGhosttyMods(event.modifierFlags));
+  lifecycleGhosttyMouseButton(self.surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_MIDDLE,
+                              lifecycleGhosttyMods(event.modifierFlags),
+                              @"native terminal middle mouse up");
   [self mouseMoved:event];
 }
 
@@ -894,8 +1003,9 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     deltaY *= 2.0;
   }
 
-  ghostty_surface_mouse_scroll(self.surface, deltaX, deltaY,
-                               lifecycleGhosttyMods(event.modifierFlags));
+  lifecycleGhosttyMouseScroll(self.surface, deltaX, deltaY,
+                              lifecycleGhosttyMods(event.modifierFlags),
+                              @"native terminal mouse scroll");
 }
 
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
@@ -1305,7 +1415,7 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   }
 
   ghostty_text_s text = {0};
-  if (!ghostty_surface_read_selection(self.surface, &text)) {
+  if (!lifecycleGhosttyReadSelection(self.surface, &text, @"native terminal copy selection")) {
     return;
   }
 
