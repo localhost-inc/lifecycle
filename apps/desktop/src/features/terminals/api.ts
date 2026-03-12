@@ -1,26 +1,11 @@
-import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
-import type { UnlistenFn } from "@tauri-apps/api/event";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { TerminalRecord, TerminalStatus } from "@lifecycle/contracts";
 
 export type HarnessProvider = "claude" | "codex";
-export const DEFAULT_TERMINAL_COLS = 120;
-export const DEFAULT_TERMINAL_ROWS = 32;
 const TERMINAL_RUNTIME_UNAVAILABLE_MESSAGE = "Terminal runtime requires the Tauri desktop shell.";
 
 export function terminalHasLiveSession(status: TerminalStatus): boolean {
   return status !== "failed" && status !== "finished";
-}
-
-export interface TerminalStreamChunk {
-  cursor: string;
-  data: string;
-  kind: "replay" | "live";
-}
-
-interface CreateTerminalBaseInput {
-  workspaceId: string;
-  cols: number;
-  rows: number;
 }
 
 export type CreateTerminalRequest =
@@ -31,12 +16,7 @@ export type CreateTerminalRequest =
       harnessSessionId?: string | null;
     };
 
-export type CreateTerminalInput = CreateTerminalBaseInput & CreateTerminalRequest;
-
-export interface AttachTerminalResult {
-  replayCursor: string | null;
-  terminal: TerminalRecord;
-}
+export type CreateTerminalInput = { workspaceId: string } & CreateTerminalRequest;
 
 export interface SaveTerminalAttachmentInput {
   base64Data: string;
@@ -103,16 +83,13 @@ export async function getTerminal(terminalId: string): Promise<TerminalRecord | 
 export async function createTerminal(input: CreateTerminalInput): Promise<TerminalRecord> {
   requireNativeTerminalRuntime();
 
-  const result = await invoke<AttachTerminalResult>("create_terminal", {
-    cols: input.cols,
+  return invoke<TerminalRecord>("create_terminal", {
     launchType: input.launchType,
     harnessProvider: input.launchType === "harness" ? input.harnessProvider : null,
-    rows: input.rows,
     harnessSessionId:
       input.launchType === "harness" ? input.harnessSessionId?.trim() || null : null,
     workspaceId: input.workspaceId,
   });
-  return result.terminal;
 }
 
 export async function renameTerminal(terminalId: string, label: string): Promise<TerminalRecord> {
@@ -158,35 +135,6 @@ export async function hideNativeTerminalSurface(terminalId: string): Promise<voi
   await invoke<void>("hide_native_terminal_surface", { terminalId });
 }
 
-export async function attachTerminalStream(
-  terminalId: string,
-  cols: number,
-  rows: number,
-  replayCursor: string | null,
-  callback: (chunk: TerminalStreamChunk) => void,
-): Promise<UnlistenFn> {
-  requireNativeTerminalRuntime();
-
-  const channel = new Channel<TerminalStreamChunk>();
-  channel.onmessage = callback;
-  await invoke<AttachTerminalResult>("attach_terminal", {
-    cols,
-    handler: channel,
-    replayCursor,
-    rows,
-    terminalId,
-  });
-  return () => {
-    void detachTerminal(terminalId);
-  };
-}
-
-export async function writeTerminal(terminalId: string, data: string): Promise<void> {
-  requireNativeTerminalRuntime();
-
-  await invoke<void>("write_terminal", { data, terminalId });
-}
-
 export async function saveTerminalAttachment(
   input: SaveTerminalAttachmentInput,
 ): Promise<SavedTerminalAttachment> {
@@ -200,16 +148,6 @@ export async function saveTerminalAttachment(
     mediaType: input.mediaType ?? null,
     workspaceId: input.workspaceId,
   });
-}
-
-export async function resizeTerminal(
-  terminalId: string,
-  cols: number,
-  rows: number,
-): Promise<void> {
-  requireNativeTerminalRuntime();
-
-  await invoke<void>("resize_terminal", { cols, rows, terminalId });
 }
 
 export async function detachTerminal(terminalId: string): Promise<void> {

@@ -37,6 +37,7 @@ export type { ProjectRecord } from "./project";
 export type { TerminalFailureReason, TerminalStatus, TerminalType } from "./terminal";
 export type {
   WorkspaceFailureReason,
+  WorkspaceKind,
   WorkspaceMode,
   WorkspaceServiceExposure,
   WorkspaceServicePreviewFailureReason,

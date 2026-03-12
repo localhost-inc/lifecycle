@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import type { TerminalRecord } from "@lifecycle/contracts";
 import type {
   WorkspaceProvider,
-  WorkspaceProviderAttachTerminalResult,
   WorkspaceProviderCreateInput,
   WorkspaceProviderGitDiffInput,
 } from "./provider";
@@ -21,9 +21,6 @@ describe("workspace provider interface", () => {
       "wake",
       "destroy",
       "createTerminal",
-      "attachTerminal",
-      "writeTerminal",
-      "resizeTerminal",
       "detachTerminal",
       "killTerminal",
       "exposePort",
@@ -41,7 +38,7 @@ describe("workspace provider interface", () => {
       "mergeGitPullRequest",
     ];
 
-    expect(requiredMethods).toHaveLength(27);
+    expect(requiredMethods).toHaveLength(24);
   });
 
   test("local provider exposes the full contract surface", () => {
@@ -56,9 +53,6 @@ describe("workspace provider interface", () => {
     expect(typeof provider.wake).toBe("function");
     expect(typeof provider.destroy).toBe("function");
     expect(typeof provider.createTerminal).toBe("function");
-    expect(typeof provider.attachTerminal).toBe("function");
-    expect(typeof provider.writeTerminal).toBe("function");
-    expect(typeof provider.resizeTerminal).toBe("function");
     expect(typeof provider.detachTerminal).toBe("function");
     expect(typeof provider.killTerminal).toBe("function");
     expect(typeof provider.exposePort).toBe("function");
@@ -77,23 +71,20 @@ describe("workspace provider interface", () => {
   });
 
   test("cloud provider delegates the full contract surface", () => {
-    const terminalResult: WorkspaceProviderAttachTerminalResult = {
-      replayCursor: null,
-      terminal: {
-        id: "term_1",
-        workspace_id: "ws_1",
-        launch_type: "shell",
-        harness_provider: null,
-        harness_session_id: null,
-        created_by: null,
-        label: "Terminal 1",
-        status: "active",
-        failure_reason: null,
-        exit_code: null,
-        started_at: "2026-03-05T08:00:00.000Z",
-        last_active_at: "2026-03-05T08:00:00.000Z",
-        ended_at: null,
-      },
+    const terminalResult: TerminalRecord = {
+      id: "term_1",
+      workspace_id: "ws_1",
+      launch_type: "shell",
+      harness_provider: null,
+      harness_session_id: null,
+      created_by: null,
+      label: "Terminal 1",
+      status: "active",
+      failure_reason: null,
+      exit_code: null,
+      started_at: "2026-03-05T08:00:00.000Z",
+      last_active_at: "2026-03-05T08:00:00.000Z",
+      ended_at: null,
     };
     const client: CloudWorkspaceClient = {
       createWorkspace: async () => {
@@ -107,9 +98,6 @@ describe("workspace provider interface", () => {
       wake: async () => {},
       destroy: async () => {},
       createTerminal: async () => terminalResult,
-      attachTerminal: async () => terminalResult,
-      writeTerminal: async () => {},
-      resizeTerminal: async () => {},
       detachTerminal: async () => {},
       killTerminal: async () => {},
       exposePort: async () => null,
@@ -206,9 +194,6 @@ describe("workspace provider interface", () => {
     expect(typeof provider.wake).toBe("function");
     expect(typeof provider.destroy).toBe("function");
     expect(typeof provider.createTerminal).toBe("function");
-    expect(typeof provider.attachTerminal).toBe("function");
-    expect(typeof provider.writeTerminal).toBe("function");
-    expect(typeof provider.resizeTerminal).toBe("function");
     expect(typeof provider.detachTerminal).toBe("function");
     expect(typeof provider.killTerminal).toBe("function");
     expect(typeof provider.exposePort).toBe("function");
@@ -276,6 +261,46 @@ describe("workspace provider interface", () => {
     ).rejects.toThrow("LocalWorkspaceProvider requires context.mode='local'");
   });
 
+  test("local provider forwards root workspace kind and returns root defaults", async () => {
+    const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
+    const invoke = async (cmd: string, args?: Record<string, unknown>) => {
+      calls.push(args ? { cmd, args } : { cmd });
+      return "ws_root_1";
+    };
+    const provider = new LocalWorkspaceProvider(invoke);
+
+    const result = await provider.createWorkspace({
+      workspaceId: "ws_root_1",
+      sourceRef: "main",
+      manifestPath: "/tmp/lifecycle.json",
+      resolvedSecrets: {},
+      context: {
+        mode: "local",
+        kind: "root",
+        projectId: "project_1",
+        projectPath: "/tmp/project_1",
+      },
+    });
+
+    expect(calls).toEqual([
+      {
+        cmd: "create_workspace",
+        args: {
+          kind: "root",
+          projectId: "project_1",
+          projectPath: "/tmp/project_1",
+          workspaceName: undefined,
+          baseRef: "main",
+          worktreeRoot: undefined,
+        },
+      },
+    ]);
+    expect(result.workspace.id).toBe("ws_root_1");
+    expect(result.workspace.kind).toBe("root");
+    expect(result.workspace.name).toBe("Root");
+    expect(result.workspace.source_ref).toBe("main");
+  });
+
   test("local provider forwards optional terminal resume session ids", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
@@ -285,22 +310,19 @@ describe("workspace provider interface", () => {
         calls.push({ cmd });
       }
       return {
-        replayCursor: null,
-        terminal: {
-          id: "term_1",
-          workspace_id: "ws_1",
-          launch_type: "harness",
-          harness_provider: "claude",
-          harness_session_id: "session-123",
-          created_by: null,
-          label: "Claude · Session 1",
-          status: "detached",
-          failure_reason: null,
-          exit_code: null,
-          started_at: "2026-03-05T08:00:00.000Z",
-          last_active_at: "2026-03-05T08:00:00.000Z",
-          ended_at: null,
-        },
+        id: "term_1",
+        workspace_id: "ws_1",
+        launch_type: "harness",
+        harness_provider: "claude",
+        harness_session_id: "session-123",
+        created_by: null,
+        label: "Claude · Session 1",
+        status: "detached",
+        failure_reason: null,
+        exit_code: null,
+        started_at: "2026-03-05T08:00:00.000Z",
+        last_active_at: "2026-03-05T08:00:00.000Z",
+        ended_at: null,
       };
     };
     const provider = new LocalWorkspaceProvider(invoke);
@@ -310,8 +332,6 @@ describe("workspace provider interface", () => {
       launchType: "harness",
       harnessProvider: "claude",
       harnessSessionId: "session-123",
-      cols: 120,
-      rows: 32,
     });
 
     expect(calls).toEqual([
@@ -322,8 +342,6 @@ describe("workspace provider interface", () => {
           launchType: "harness",
           harnessProvider: "claude",
           harnessSessionId: "session-123",
-          cols: 120,
-          rows: 32,
         },
       },
     ]);

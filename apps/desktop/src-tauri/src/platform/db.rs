@@ -1,6 +1,6 @@
 use crate::shared::errors::LifecycleError;
 
-const MIGRATIONS: [(&str, &str); 2] = [
+const MIGRATIONS: [(&str, &str); 3] = [
     (
         "0001_initial_schema",
         include_str!("migrations/0001_initial_schema.sql"),
@@ -8,6 +8,10 @@ const MIGRATIONS: [(&str, &str); 2] = [
     (
         "0002_terminal_schema",
         include_str!("migrations/0002_terminal_schema.sql"),
+    ),
+    (
+        "0003_workspace_kind",
+        include_str!("migrations/0003_workspace_kind.sql"),
     ),
 ];
 
@@ -208,6 +212,7 @@ mod tests {
         assert!(column_exists(&conn, "workspace", "name_origin"));
         assert!(column_exists(&conn, "workspace", "source_ref_origin"));
         assert!(column_exists(&conn, "workspace", "source_workspace_id"));
+        assert!(column_exists(&conn, "workspace", "kind"));
         assert!(column_exists(&conn, "workspace", "setup_completed_at"));
         assert!(column_exists(&conn, "workspace", "manifest_fingerprint"));
         assert!(column_exists(&conn, "workspace_service", "preview_status"));
@@ -233,6 +238,7 @@ mod tests {
             vec![
                 "0001_initial_schema".to_string(),
                 "0002_terminal_schema".to_string(),
+                "0003_workspace_kind".to_string(),
             ]
         );
 
@@ -487,6 +493,60 @@ mod tests {
                     None,
                 ),
             ]
+        );
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn run_migrations_enforces_single_root_workspace_per_project() {
+        let db_path = temp_db_path();
+        run_migrations(&db_path).expect("migration run succeeds");
+
+        let conn = open_db(&db_path).expect("open db");
+        conn.execute(
+            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["project_root", "/tmp/project_root", "Project Root"],
+        )
+        .expect("insert project");
+        conn.execute(
+            "INSERT INTO workspace (id, project_id, kind, source_ref, status)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params!["workspace_root_1", "project_root", "root", "main", "idle"],
+        )
+        .expect("insert first root workspace");
+        conn.execute(
+            "INSERT INTO workspace (id, project_id, kind, source_ref, status)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![
+                "workspace_managed",
+                "project_root",
+                "managed",
+                "lifecycle/managed",
+                "idle"
+            ],
+        )
+        .expect("insert managed workspace");
+
+        let second_root_error = conn
+            .execute(
+                "INSERT INTO workspace (id, project_id, kind, source_ref, status)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params![
+                    "workspace_root_2",
+                    "project_root",
+                    "root",
+                    "develop",
+                    "idle"
+                ],
+            )
+            .expect_err("second root workspace should violate unique index");
+
+        assert!(
+            second_root_error
+                .to_string()
+                .contains("UNIQUE constraint failed: workspace.project_id"),
+            "expected root uniqueness violation, got: {second_root_error}"
         );
 
         let _ = std::fs::remove_file(db_path);

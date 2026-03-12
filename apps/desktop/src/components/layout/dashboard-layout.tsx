@@ -11,13 +11,18 @@ import { getManifestFingerprint } from "@lifecycle/contracts";
 import { SidebarInset } from "@lifecycle/ui";
 import { Outlet, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppHotkeyListener } from "../../app/app-hotkey-listener";
-import { addProjectFromDirectory, removeProject } from "../../features/projects/api/projects";
+import {
+  addProjectFromDirectory,
+  readManifest,
+  removeProject,
+} from "../../features/projects/api/projects";
 import { getGitStatus } from "../../features/git/api";
 import { WelcomeScreen } from "../../features/welcome/components/welcome-screen";
 import { projectKeys, useProjectCatalog } from "../../features/projects/hooks";
 import { useSettings } from "../../features/settings/state/app-settings-provider";
 import { createWorkspace, destroyWorkspace, getCurrentBranch } from "../../features/workspaces/api";
 import { useWorkspacesByProject, workspaceKeys } from "../../features/workspaces/hooks";
+import { getWorkspaceDisplayName } from "../../features/workspaces/lib/workspace-display";
 import {
   clearLastWorkspaceId,
   readLastWorkspaceId,
@@ -358,13 +363,39 @@ export function DashboardLayout() {
   );
 
   const handleAddProject = useCallback(async () => {
+    let importedProjectId: string | null = null;
     try {
       const project = await addProjectFromDirectory();
       if (!project) return;
+      importedProjectId = project.id;
       client.invalidate(projectKeys.catalog());
-      void navigate(`/?project=${project.id}`);
+      const manifestStatus = await readManifest(project.path);
+      const manifestJson =
+        manifestStatus.state === "valid" ? JSON.stringify(manifestStatus.result.config) : undefined;
+      const manifestFingerprint =
+        manifestStatus.state === "valid"
+          ? getManifestFingerprint(manifestStatus.result.config)
+          : null;
+      const branch = await getCurrentBranch(project.path);
+      const workspaceId = await createWorkspace({
+        kind: "root",
+        projectId: project.id,
+        baseRef: branch,
+        manifestFingerprint,
+        manifestJson,
+        projectPath: project.path,
+      });
+      client.invalidate(workspaceKeys.byProject());
+      client.invalidate(workspaceKeys.detail(workspaceId));
+      void navigate(`/workspaces/${workspaceId}`);
     } catch (err) {
       console.error("Failed to add project:", err);
+      if (importedProjectId) {
+        void navigate(`/?project=${importedProjectId}`);
+        alert(`Project was added, but the root workspace could not be created: ${err}`);
+        return;
+      }
+
       alert(`Failed to add project: ${err}`);
     }
   }, [client, navigate]);
@@ -373,6 +404,10 @@ export function DashboardLayout() {
     async (projectId: string) => {
       const project = projects.find((item) => item.id === projectId);
       if (!project) return;
+      const existingWorkspaces = workspacesByProjectId[project.id] ?? [];
+      const kind = existingWorkspaces.some((workspace) => workspace.kind === "root")
+        ? "managed"
+        : "root";
       const manifestStatus = projectCatalogQuery.data?.manifestsByProjectId[project.id];
       const manifestJson =
         manifestStatus?.state === "valid"
@@ -386,6 +421,7 @@ export function DashboardLayout() {
       try {
         const branch = await getCurrentBranch(project.path);
         const workspaceId = await createWorkspace({
+          kind,
           projectId: project.id,
           baseRef: branch,
           manifestFingerprint,
@@ -402,7 +438,7 @@ export function DashboardLayout() {
         alert(`Failed to create workspace: ${err}`);
       }
     },
-    [client, navigate, projectCatalogQuery.data, projects, worktreeRoot],
+    [client, navigate, projectCatalogQuery.data, projects, workspacesByProjectId, worktreeRoot],
   );
 
   const handleForkWorkspace = useCallback(async () => {
@@ -411,18 +447,21 @@ export function DashboardLayout() {
     if (!project) return;
     const manifestStatus = projectCatalogQuery.data?.manifestsByProjectId[project.id];
     const manifestJson =
-      manifestStatus?.state === "valid"
-        ? JSON.stringify(manifestStatus.result.config)
-        : undefined;
+      manifestStatus?.state === "valid" ? JSON.stringify(manifestStatus.result.config) : undefined;
     const manifestFingerprint =
       manifestStatus?.state === "valid"
         ? getManifestFingerprint(manifestStatus.result.config)
         : null;
 
     try {
+      const baseRef =
+        selectedWorkspace.kind === "root"
+          ? await getCurrentBranch(project.path)
+          : selectedWorkspace.source_ref;
       const newWorkspaceId = await createWorkspace({
+        kind: "managed",
         projectId: project.id,
-        baseRef: selectedWorkspace.source_ref,
+        baseRef,
         manifestFingerprint,
         manifestJson,
         projectPath: project.path,
@@ -467,8 +506,9 @@ export function DashboardLayout() {
         if (workspace.mode === "local" && workspace.worktree_path) {
           const gitStatus = await getGitStatus(workspace.id);
           if (gitStatus.files.length > 0) {
+            const workspaceLabel = getWorkspaceDisplayName(workspace);
             const shouldProceed = window.confirm(
-              `"${workspace.name}" has uncommitted work. Archive the workspace anyway?`,
+              `"${workspaceLabel}" has uncommitted work. Archive the workspace anyway?`,
             );
             if (!shouldProceed) {
               return;
@@ -694,7 +734,9 @@ export function DashboardLayout() {
                   data-overlay-boundary
                   style={{
                     width: rightSidebarCollapsed ? 0 : `${rightSidebarWidth}px`,
-                    transform: rightSidebarCollapsed ? `translateX(${rightSidebarWidth}px)` : undefined,
+                    transform: rightSidebarCollapsed
+                      ? `translateX(${rightSidebarWidth}px)`
+                      : undefined,
                   }}
                 />
               </>

@@ -8,11 +8,10 @@ import type {
   GitPushResult,
   GitStatusResult,
   ServiceRecord,
+  TerminalRecord,
 } from "@lifecycle/contracts";
 import type {
   LocalWorkspaceProviderCreateContext,
-  WorkspaceProviderAttachTerminalInput,
-  WorkspaceProviderAttachTerminalResult,
   WorkspaceProvider,
   WorkspaceProviderCreateTerminalInput,
   WorkspaceProviderCreateInput,
@@ -38,6 +37,7 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
   ): Promise<WorkspaceProviderCreateResult> {
     const context = requireLocalContext(input.context);
     const workspaceId = (await this.invoke("create_workspace", {
+      kind: context.kind ?? "managed",
       projectId: context.projectId,
       projectPath: context.projectPath,
       workspaceName: context.workspaceName,
@@ -49,7 +49,10 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
       workspace: {
         id: workspaceId,
         project_id: context.projectId,
-        name: context.workspaceName ?? input.sourceRef,
+        name:
+          context.workspaceName ??
+          (context.kind === "root" ? "Root" : input.sourceRef),
+        kind: context.kind ?? "managed",
         source_ref: input.sourceRef,
         git_sha: null,
         worktree_path: null,
@@ -106,33 +109,13 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
 
   async createTerminal(
     input: WorkspaceProviderCreateTerminalInput,
-  ): Promise<WorkspaceProviderAttachTerminalResult> {
+  ): Promise<TerminalRecord> {
     return this.invoke("create_terminal", {
       workspaceId: input.workspaceId,
       launchType: input.launchType,
       harnessProvider: input.harnessProvider,
       harnessSessionId: input.harnessSessionId,
-      cols: input.cols,
-      rows: input.rows,
-    }) as Promise<WorkspaceProviderAttachTerminalResult>;
-  }
-
-  async attachTerminal(
-    input: WorkspaceProviderAttachTerminalInput,
-  ): Promise<WorkspaceProviderAttachTerminalResult> {
-    return this.invoke("attach_terminal", {
-      terminalId: input.terminalId,
-      cols: input.cols,
-      rows: input.rows,
-    }) as Promise<WorkspaceProviderAttachTerminalResult>;
-  }
-
-  async writeTerminal(terminalId: string, data: string): Promise<void> {
-    await this.invoke("write_terminal", { terminalId, data });
-  }
-
-  async resizeTerminal(terminalId: string, cols: number, rows: number): Promise<void> {
-    await this.invoke("resize_terminal", { terminalId, cols, rows });
+    }) as Promise<TerminalRecord>;
   }
 
   async detachTerminal(terminalId: string): Promise<void> {

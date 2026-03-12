@@ -18,6 +18,20 @@ Lifecycle should model three layers explicitly:
 
 In V1, the environment is represented on the workspace record rather than as a separate table because there is exactly one environment per workspace.
 
+## Workspace Kind (Local)
+
+`workspace.kind` captures how a local workspace gets its git context.
+
+1. `root`
+   - backed directly by `project.path`
+   - `workspace.worktree_path` resolves to the repo root so a newly added project is immediately usable as-is
+2. `managed`
+   - backed by a Lifecycle-created derived git worktree
+   - Lifecycle owns the derived branch/worktree naming and cleanup lifecycle
+3. `kind` is distinct from `workspace.mode`
+   - `mode` answers who is authoritative (`local|cloud`)
+   - `kind` answers how the local workspace's git context is sourced
+
 ## Interface
 
 ```typescript
@@ -30,10 +44,7 @@ interface WorkspaceProvider {
   sleep(workspace_id) → void
   wake(workspace_id) → void
   destroy(workspace_id) → void
-  createTerminal(workspace_id, launch_type, cols, rows, harness_provider?, harness_session_id?) → { terminal, attachment? }
-  attachTerminal(terminal_id, cols, rows) → terminal_connection
-  writeTerminal(terminal_id, data) → void
-  resizeTerminal(terminal_id, cols, rows) → void
+  createTerminal(workspace_id, launch_type, harness_provider?, harness_session_id?) → terminal
   detachTerminal(terminal_id) → void
   killTerminal(terminal_id) → void
   exposePort(workspace_id, service, port) → access_url | null
@@ -75,7 +86,7 @@ Normative event and hook rules live in [events.md](./events.md).
 1. Provider-owned lifecycle mutations publish normalized fact events into the Lifecycle event foundation.
 2. The desktop query cache, notifications, metrics, and future plugins are consumers of that foundation, not independent sources of truth.
 3. Commands may expose `before|after|failed` hooks, but blocking hooks remain Lifecycle-owned until a plugin trust model exists.
-4. High-frequency streams such as PTY output remain on dedicated transports rather than the generic event foundation.
+4. High-frequency terminal rendering, input, and output stay inside the native terminal host rather than the generic event foundation.
 
 Execution-state facts should follow the thing that changed:
 
@@ -83,19 +94,15 @@ Execution-state facts should follow the thing that changed:
 2. environment facts describe start/stop/reset/sleep/wake/fail transitions
 3. service facts describe per-service runtime changes
 
-## Terminal Stream Contract (M3+)
+## Terminal Session Contract (M3+)
 
-Terminal transport is split between control-plane mutations and ordered data streaming.
+Terminal control stays split between typed lifecycle mutations and native surface synchronization.
 
-1. Control-plane operations stay typed and imperative (`create`, `attach`, `write`, `resize`, `detach`, `kill`).
-2. `writeTerminal(terminal_id, data)` transports terminal input data that has already been encoded by the active terminal surface. Providers should treat it as terminal input bytes/data, not as abstract key events to reinterpret.
-3. Terminal output is an ordered PTY data stream exposed as ordered chunks, not a coarse lifecycle fact.
-4. Local mode should use Tauri `Channel` for PTY output streaming.
-5. Semantic terminal facts remain appropriate for metadata/status changes, not high-frequency byte output.
-6. Replay buffers are provider-owned implementation detail as long as attach/replay ordering is preserved.
-7. Collaborative terminal viewing should attach multiple clients to the same authoritative PTY output stream. Viewer/watch mode consumes output plus replay, while control mode additionally sends input through `writeTerminal`.
-8. Providers must not try to reconstruct remote terminal state by mirroring another user's key events into a separate terminal instance. Shared terminal state comes from the authoritative PTY output stream.
-9. Native terminal renderers that require a locally-owned child process may bridge remote PTYs through a local attach/proxy command, but the authoritative terminal state still belongs to the remote PTY.
+1. Control-plane operations stay typed and imperative (`create`, `detach`, `kill`).
+2. `createTerminal(...)` provisions a native-backed terminal session and returns typed terminal metadata; once created, input and output are owned by the native host rather than a JS byte-stream contract.
+3. Desktop-only geometry, visibility, focus, theme, and font synchronization for native surfaces stay outside the provider interface.
+4. `detachTerminal(terminal_id)` hides the active native surface without terminating the running session.
+5. `killTerminal(terminal_id)` is the only normal terminal-level action that intentionally ends a live session.
 
 ## Mode, Authority, and Aggregation
 
@@ -164,8 +171,10 @@ Git operations follow the same authority rule as terminals and lifecycle mutatio
 
 1. Local execution plane:
    - local Git worktree checked out on host filesystem
-   - Tauri Rust backend handles process supervision, PTY management, Docker integration, and local state persistence
+   - Tauri Rust backend handles process supervision, libghostty integration, Docker integration, and local state persistence
    - localhost ports for service access
+   - `workspace.kind=root` uses `project.path` as `workspace.worktree_path`, so adding a project yields an immediately usable repo-backed workspace without creating a derived worktree first
+   - `workspace.kind=managed` uses a Lifecycle-owned derived git worktree and managed branch identity
    - `workspace.name` remains a user-facing label; the managed git branch (`source_ref`) and worktree directory name are derived as kebab-cased Lifecycle-owned identifiers from that label plus the workspace id
    - worktree creation mirrors existing local `.env` and `.env.local` files from the source repo when the destination path does not already exist, so developer-owned local config remains available inside managed workspaces
 2. Requirements:

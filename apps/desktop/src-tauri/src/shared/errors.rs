@@ -187,8 +187,6 @@ impl std::fmt::Display for TerminalStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TerminalFailureReason {
-    PtySpawnFailed,
-    LocalPtySpawnFailed,
     HarnessProcessExitNonzero,
     AttachFailed,
     WorkspaceDestroyed,
@@ -198,8 +196,6 @@ pub enum TerminalFailureReason {
 impl TerminalFailureReason {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::PtySpawnFailed => "pty_spawn_failed",
-            Self::LocalPtySpawnFailed => "local_pty_spawn_failed",
             Self::HarnessProcessExitNonzero => "harness_process_exit_nonzero",
             Self::AttachFailed => "attach_failed",
             Self::WorkspaceDestroyed => "workspace_destroyed",
@@ -245,9 +241,6 @@ pub enum LifecycleError {
 
     #[error("Database error: {0}")]
     Database(String),
-
-    #[error("Local PTY spawn failed: {0}")]
-    LocalPtySpawnFailed(String),
 
     #[error("Terminal attach failed: {0}")]
     AttachFailed(String),

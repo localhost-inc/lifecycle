@@ -49,20 +49,29 @@ pub fn read_workspace_file(
     )?;
 
     let metadata = fs::metadata(&resolved_path).map_err(|error| {
-        workspace_file_failure("read workspace file", format!("failed to inspect file: {error}"))
+        workspace_file_failure(
+            "read workspace file",
+            format!("failed to inspect file: {error}"),
+        )
     })?;
 
     if !metadata.is_file() {
         return Err(workspace_file_failure(
             "read workspace file",
-            format!("path is not a regular file: {}", normalized_path.to_string_lossy()),
+            format!(
+                "path is not a regular file: {}",
+                normalized_path.to_string_lossy()
+            ),
         ));
     }
 
     let byte_len = usize::try_from(metadata.len()).map_err(|_| {
         workspace_file_failure(
             "read workspace file",
-            format!("file is too large to inspect: {}", normalized_path.to_string_lossy()),
+            format!(
+                "file is too large to inspect: {}",
+                normalized_path.to_string_lossy()
+            ),
         )
     })?;
 
@@ -83,7 +92,10 @@ pub fn read_workspace_file(
     }
 
     let bytes = fs::read(&resolved_path).map_err(|error| {
-        workspace_file_failure("read workspace file", format!("failed to read file: {error}"))
+        workspace_file_failure(
+            "read workspace file",
+            format!("failed to read file: {error}"),
+        )
     })?;
     let is_binary = looks_binary(&bytes);
 

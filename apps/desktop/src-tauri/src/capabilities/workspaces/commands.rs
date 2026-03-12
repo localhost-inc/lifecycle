@@ -1,6 +1,7 @@
 use crate::platform::db::DbPath;
 use crate::shared::errors::LifecycleError;
-use crate::{SupervisorMap, TerminalSupervisorMap};
+use crate::RootGitWatcherMap;
+use crate::SupervisorMap;
 use std::collections::HashMap;
 use tauri::{AppHandle, State, WebviewWindow};
 
@@ -8,26 +9,41 @@ use tauri::{AppHandle, State, WebviewWindow};
 pub async fn create_workspace(
     app: AppHandle,
     db_path: State<'_, DbPath>,
+    root_git_watchers: State<'_, RootGitWatcherMap>,
     project_id: String,
     project_path: String,
     workspace_name: Option<String>,
     base_ref: Option<String>,
     worktree_root: Option<String>,
+    kind: Option<String>,
     manifest_json: Option<String>,
     manifest_fingerprint: Option<String>,
 ) -> Result<String, LifecycleError> {
-    super::create::create_workspace(
-        app,
+    let db_path_value = db_path.0.clone();
+    let workspace_id = super::create::create_workspace(
+        app.clone(),
         db_path,
         project_id,
         project_path,
         workspace_name,
         base_ref,
         worktree_root,
+        kind,
         manifest_json,
         manifest_fingerprint,
     )
-    .await
+    .await?;
+
+    if let Err(error) = super::git_watcher::ensure_root_git_watcher(
+        &app,
+        &db_path_value,
+        &root_git_watchers,
+        &workspace_id,
+    ) {
+        crate::platform::diagnostics::append_error("root-git-watcher-create", error);
+    }
+
+    Ok(workspace_id)
 }
 
 #[tauri::command]
@@ -90,18 +106,12 @@ pub async fn stop_workspace(
 pub async fn destroy_workspace(
     app: AppHandle,
     db_path: State<'_, DbPath>,
+    root_git_watchers: State<'_, RootGitWatcherMap>,
     supervisors: State<'_, SupervisorMap>,
-    terminal_supervisors: State<'_, TerminalSupervisorMap>,
     workspace_id: String,
 ) -> Result<(), LifecycleError> {
-    super::destroy::destroy_workspace(
-        app,
-        db_path,
-        supervisors,
-        terminal_supervisors,
-        workspace_id,
-    )
-    .await
+    super::destroy::destroy_workspace(app, db_path, root_git_watchers, supervisors, workspace_id)
+        .await
 }
 
 #[tauri::command]
@@ -195,61 +205,20 @@ pub async fn rename_terminal(
 pub async fn create_terminal(
     app: AppHandle,
     db_path: State<'_, DbPath>,
-    terminal_supervisors: State<'_, TerminalSupervisorMap>,
     workspace_id: String,
     launch_type: String,
     harness_provider: Option<String>,
     harness_session_id: Option<String>,
-    cols: u16,
-    rows: u16,
-) -> Result<super::terminal::TerminalAttachResult, LifecycleError> {
+) -> Result<super::query::TerminalRecord, LifecycleError> {
     super::terminal::create_terminal(
         app,
         db_path,
-        terminal_supervisors,
         workspace_id,
         launch_type,
         harness_provider,
         harness_session_id,
-        cols,
-        rows,
     )
     .await
-}
-
-#[tauri::command]
-pub async fn attach_terminal(
-    app: AppHandle,
-    db_path: State<'_, DbPath>,
-    terminal_supervisors: State<'_, TerminalSupervisorMap>,
-    terminal_id: String,
-    cols: u16,
-    rows: u16,
-    replay_cursor: Option<String>,
-    handler: tauri::ipc::Channel<crate::platform::runtime::terminal::TerminalStreamChunk>,
-) -> Result<super::terminal::TerminalAttachResult, LifecycleError> {
-    super::terminal::attach_terminal(
-        app,
-        db_path,
-        terminal_supervisors,
-        terminal_id,
-        cols,
-        rows,
-        replay_cursor,
-        handler,
-    )
-    .await
-}
-
-#[tauri::command]
-pub async fn write_terminal(
-    app: AppHandle,
-    db_path: State<'_, DbPath>,
-    terminal_supervisors: State<'_, TerminalSupervisorMap>,
-    terminal_id: String,
-    data: String,
-) -> Result<(), LifecycleError> {
-    super::terminal::write_terminal(app, db_path, terminal_supervisors, terminal_id, data).await
 }
 
 #[tauri::command]
@@ -318,33 +287,21 @@ pub async fn hide_native_terminal_surface(
 }
 
 #[tauri::command]
-pub async fn resize_terminal(
-    terminal_supervisors: State<'_, TerminalSupervisorMap>,
-    terminal_id: String,
-    cols: u16,
-    rows: u16,
-) -> Result<(), LifecycleError> {
-    super::terminal::resize_terminal(terminal_supervisors, terminal_id, cols, rows).await
-}
-
-#[tauri::command]
 pub async fn detach_terminal(
     app: AppHandle,
     db_path: State<'_, DbPath>,
-    terminal_supervisors: State<'_, TerminalSupervisorMap>,
     terminal_id: String,
 ) -> Result<(), LifecycleError> {
-    super::terminal::detach_terminal(app, db_path, terminal_supervisors, terminal_id).await
+    super::terminal::detach_terminal(app, db_path, terminal_id).await
 }
 
 #[tauri::command]
 pub async fn kill_terminal(
     app: AppHandle,
     db_path: State<'_, DbPath>,
-    terminal_supervisors: State<'_, TerminalSupervisorMap>,
     terminal_id: String,
 ) -> Result<(), LifecycleError> {
-    super::terminal::kill_terminal(app, db_path, terminal_supervisors, terminal_id).await
+    super::terminal::kill_terminal(app, db_path, terminal_id).await
 }
 
 #[tauri::command]

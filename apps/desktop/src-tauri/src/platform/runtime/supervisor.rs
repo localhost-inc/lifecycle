@@ -492,10 +492,7 @@ mod tests {
 
     #[test]
     fn resolve_service_env_vars_preserves_non_runtime_templates() {
-        let env_vars = HashMap::from([(
-            "API_KEY".to_string(),
-            "${EXTERNAL_API_KEY}".to_string(),
-        )]);
+        let env_vars = HashMap::from([("API_KEY".to_string(), "${EXTERNAL_API_KEY}".to_string())]);
 
         let resolved = resolve_service_env_vars("api", Some(&env_vars), &HashMap::new())
             .expect("non-runtime templates remain untouched");

@@ -5,7 +5,7 @@ import type {
   WorkspaceRecord,
 } from "@lifecycle/contracts";
 import { useMemo } from "react";
-import type { QueryDescriptor, QueryResult } from "../../query";
+import type { QueryDescriptor, QueryResult, QueryUpdate } from "../../query";
 import { useQuery } from "../../query";
 import type { WorkspaceFileReadResult } from "./api";
 
@@ -37,11 +37,13 @@ export const workspaceKeys = {
 const WORKSPACE_ACTIVITY_LIMIT = 32;
 
 const WORKSPACES_BY_PROJECT_EVENT_KINDS = [
+  "git.head_changed",
   "workspace.renamed",
   "workspace.status_changed",
   "workspace.deleted",
 ] as const satisfies readonly LifecycleEventKind[];
 const WORKSPACE_EVENT_KINDS = [
+  "git.head_changed",
   "workspace.renamed",
   "workspace.status_changed",
   "workspace.deleted",
@@ -354,53 +356,51 @@ const workspacesByProjectQuery: QueryDescriptor<Record<string, WorkspaceRecord[]
   fetch(source) {
     return source.listWorkspacesByProject();
   },
-  reduce(current, event) {
-    if (event.kind === "workspace.renamed" && current) {
-      let found = false;
-      const next = Object.fromEntries(
-        Object.entries(current).map(([projectId, workspaces]) => [
-          projectId,
-          workspaces.map((workspace) => {
-            if (workspace.id !== event.workspace_id) {
-              return workspace;
-            }
+  reduce: reduceWorkspacesByProject,
+};
 
-            found = true;
-            return {
-              ...workspace,
-              name: event.name,
-              source_ref: event.source_ref,
-              worktree_path: event.worktree_path,
-            };
-          }),
-        ]),
-      );
+function createWorkspaceQuery(workspaceId: string): QueryDescriptor<WorkspaceRecord | null> {
+  return {
+    eventKinds: WORKSPACE_EVENT_KINDS,
+    key: workspaceKeys.detail(workspaceId),
+    fetch(source) {
+      return source.getWorkspace(workspaceId);
+    },
+    reduce(current, event) {
+      return reduceWorkspaceRecord(current, event, workspaceId);
+    },
+  };
+}
 
-      return found ? { kind: "replace", data: next } : { kind: "invalidate" };
-    }
+export function reduceWorkspacesByProject(
+  current: Record<string, WorkspaceRecord[]> | undefined,
+  event: LifecycleEvent,
+): QueryUpdate<Record<string, WorkspaceRecord[]>> {
+  if (event.kind === "workspace.renamed" && current) {
+    let found = false;
+    const next = Object.fromEntries(
+      Object.entries(current).map(([projectId, workspaces]) => [
+        projectId,
+        workspaces.map((workspace) => {
+          if (workspace.id !== event.workspace_id) {
+            return workspace;
+          }
 
-    if (event.kind !== "workspace.status_changed" || !current) {
-      if (event.kind !== "workspace.deleted" || !current) {
-        return { kind: "none" };
-      }
+          found = true;
+          return {
+            ...workspace,
+            name: event.name,
+            source_ref: event.source_ref,
+            worktree_path: event.worktree_path,
+          };
+        }),
+      ]),
+    );
 
-      let found = false;
-      const next = Object.fromEntries(
-        Object.entries(current).map(([projectId, workspaces]) => [
-          projectId,
-          workspaces.filter((workspace) => {
-            const matches = workspace.id === event.workspace_id;
-            if (matches) {
-              found = true;
-            }
-            return !matches;
-          }),
-        ]),
-      );
+    return found ? { kind: "replace", data: next } : { kind: "invalidate" };
+  }
 
-      return found ? { kind: "replace", data: next } : { kind: "none" };
-    }
-
+  if (event.kind === "git.head_changed" && current) {
     let changed = false;
     let found = false;
     const next = Object.fromEntries(
@@ -412,59 +412,107 @@ const workspacesByProjectQuery: QueryDescriptor<Record<string, WorkspaceRecord[]
           }
 
           found = true;
+          const nextSourceRef = event.branch ?? workspace.source_ref;
+          const nextGitSha = event.head_sha;
+          if (workspace.source_ref === nextSourceRef && workspace.git_sha === nextGitSha) {
+            return workspace;
+          }
+
           changed = true;
           return {
             ...workspace,
-            failure_reason: event.failure_reason,
-            status: event.status,
+            source_ref: nextSourceRef,
+            git_sha: nextGitSha,
           };
         }),
       ]),
     );
 
     if (!found) {
-      return { kind: "invalidate" };
+      return { kind: "none" };
     }
 
     return changed ? { kind: "replace", data: next } : { kind: "none" };
-  },
-};
+  }
 
-function createWorkspaceQuery(workspaceId: string): QueryDescriptor<WorkspaceRecord | null> {
-  return {
-    eventKinds: WORKSPACE_EVENT_KINDS,
-    key: workspaceKeys.detail(workspaceId),
-    fetch(source) {
-      return source.getWorkspace(workspaceId);
-    },
-    reduce(current, event) {
-      if (event.kind !== "workspace.status_changed" || event.workspace_id !== workspaceId) {
-        if (event.kind === "workspace.renamed" && event.workspace_id === workspaceId) {
-          if (!current) {
-            return { kind: "invalidate" };
+  if (event.kind !== "workspace.status_changed" || !current) {
+    if (event.kind !== "workspace.deleted" || !current) {
+      return { kind: "none" };
+    }
+
+    let found = false;
+    const next = Object.fromEntries(
+      Object.entries(current).map(([projectId, workspaces]) => [
+        projectId,
+        workspaces.filter((workspace) => {
+          const matches = workspace.id === event.workspace_id;
+          if (matches) {
+            found = true;
           }
+          return !matches;
+        }),
+      ]),
+    );
 
-          return {
-            kind: "replace",
-            data: {
-              ...current,
-              name: event.name,
-              source_ref: event.source_ref,
-              worktree_path: event.worktree_path,
-            },
-          };
+    return found ? { kind: "replace", data: next } : { kind: "none" };
+  }
+
+  let changed = false;
+  let found = false;
+  const next = Object.fromEntries(
+    Object.entries(current).map(([projectId, workspaces]) => [
+      projectId,
+      workspaces.map((workspace) => {
+        if (workspace.id !== event.workspace_id) {
+          return workspace;
         }
 
-        if (event.kind === "workspace.deleted" && event.workspace_id === workspaceId) {
-          return {
-            kind: "replace",
-            data: null,
-          };
-        }
+        found = true;
+        changed = true;
+        return {
+          ...workspace,
+          failure_reason: event.failure_reason,
+          status: event.status,
+        };
+      }),
+    ]),
+  );
 
-        return { kind: "none" };
-      }
+  if (!found) {
+    return { kind: "invalidate" };
+  }
 
+  return changed ? { kind: "replace", data: next } : { kind: "none" };
+}
+
+export function reduceWorkspaceRecord(
+  current: WorkspaceRecord | null | undefined,
+  event: LifecycleEvent,
+  workspaceId: string,
+): QueryUpdate<WorkspaceRecord | null> {
+  if (event.kind === "git.head_changed" && event.workspace_id === workspaceId) {
+    if (!current) {
+      return { kind: "invalidate" };
+    }
+
+    const nextSourceRef = event.branch ?? current.source_ref;
+    const nextGitSha = event.head_sha;
+    if (current.source_ref === nextSourceRef && current.git_sha === nextGitSha) {
+      return { kind: "none" };
+    }
+
+    return {
+      kind: "replace",
+      data: {
+        ...current,
+        source_ref: nextSourceRef,
+        git_sha: nextGitSha,
+      },
+    };
+  }
+
+  if (event.kind !== "workspace.status_changed" || event.workspace_id !== workspaceId) {
+    if (event.kind === "workspace.renamed" && event.workspace_id === workspaceId) {
       if (!current) {
         return { kind: "invalidate" };
       }
@@ -473,10 +521,33 @@ function createWorkspaceQuery(workspaceId: string): QueryDescriptor<WorkspaceRec
         kind: "replace",
         data: {
           ...current,
-          failure_reason: event.failure_reason,
-          status: event.status,
+          name: event.name,
+          source_ref: event.source_ref,
+          worktree_path: event.worktree_path,
         },
       };
+    }
+
+    if (event.kind === "workspace.deleted" && event.workspace_id === workspaceId) {
+      return {
+        kind: "replace",
+        data: null,
+      };
+    }
+
+    return { kind: "none" };
+  }
+
+  if (!current) {
+    return { kind: "invalidate" };
+  }
+
+  return {
+    kind: "replace",
+    data: {
+      ...current,
+      failure_reason: event.failure_reason,
+      status: event.status,
     },
   };
 }

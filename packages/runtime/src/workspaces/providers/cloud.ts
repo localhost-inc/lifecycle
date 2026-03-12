@@ -8,10 +8,9 @@ import type {
   GitPushResult,
   GitStatusResult,
   ServiceRecord,
+  TerminalRecord,
 } from "@lifecycle/contracts";
 import type {
-  WorkspaceProviderAttachTerminalInput,
-  WorkspaceProviderAttachTerminalResult,
   WorkspaceProvider,
   WorkspaceProviderCreateTerminalInput,
   WorkspaceProviderCreateInput,
@@ -30,14 +29,7 @@ export interface CloudWorkspaceClient {
   sleep(workspaceId: string): Promise<void>;
   wake(workspaceId: string): Promise<void>;
   destroy(workspaceId: string): Promise<void>;
-  createTerminal(
-    input: WorkspaceProviderCreateTerminalInput,
-  ): Promise<WorkspaceProviderAttachTerminalResult>;
-  attachTerminal(
-    input: WorkspaceProviderAttachTerminalInput,
-  ): Promise<WorkspaceProviderAttachTerminalResult>;
-  writeTerminal(terminalId: string, data: string): Promise<void>;
-  resizeTerminal(terminalId: string, cols: number, rows: number): Promise<void>;
+  createTerminal(input: WorkspaceProviderCreateTerminalInput): Promise<TerminalRecord>;
   detachTerminal(terminalId: string): Promise<void>;
   killTerminal(terminalId: string): Promise<void>;
   exposePort(workspaceId: string, serviceName: string, port: number): Promise<string | null>;
@@ -99,22 +91,8 @@ export class CloudWorkspaceProvider implements WorkspaceProvider {
 
   createTerminal(
     input: WorkspaceProviderCreateTerminalInput,
-  ): Promise<WorkspaceProviderAttachTerminalResult> {
+  ): Promise<TerminalRecord> {
     return this.client.createTerminal(input);
-  }
-
-  attachTerminal(
-    input: WorkspaceProviderAttachTerminalInput,
-  ): Promise<WorkspaceProviderAttachTerminalResult> {
-    return this.client.attachTerminal(input);
-  }
-
-  writeTerminal(terminalId: string, data: string): Promise<void> {
-    return this.client.writeTerminal(terminalId, data);
-  }
-
-  resizeTerminal(terminalId: string, cols: number, rows: number): Promise<void> {
-    return this.client.resizeTerminal(terminalId, cols, rows);
   }
 
   detachTerminal(terminalId: string): Promise<void> {

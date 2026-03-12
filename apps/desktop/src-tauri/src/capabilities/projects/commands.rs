@@ -1,5 +1,6 @@
 use crate::platform::db::{open_db, DbPath};
 use crate::shared::errors::LifecycleError;
+use crate::RootGitWatcherMap;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -85,7 +86,17 @@ pub async fn add_project(
 }
 
 #[tauri::command]
-pub async fn remove_project(db_path: State<'_, DbPath>, id: String) -> Result<(), LifecycleError> {
+pub async fn remove_project(
+    db_path: State<'_, DbPath>,
+    root_git_watchers: State<'_, RootGitWatcherMap>,
+    id: String,
+) -> Result<(), LifecycleError> {
+    crate::capabilities::workspaces::git_watcher::stop_root_git_watchers_for_project(
+        &db_path.0,
+        &root_git_watchers,
+        &id,
+    )?;
+
     let mut conn = open_db(&db_path.0)?;
     let tx = conn
         .transaction()

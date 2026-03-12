@@ -1,6 +1,6 @@
 use crate::shared::errors::LifecycleError;
-use serde_json::Value;
 use serde::Deserialize;
+use serde_json::Value;
 use std::collections::HashMap;
 
 #[allow(dead_code)]
@@ -172,8 +172,8 @@ const UNSUPPORTED_SECRET_TEMPLATE_MESSAGE: &str =
     "`${secrets.*}` is not supported in local lifecycle.json; materialize local env files in setup instead";
 
 pub fn parse_lifecycle_config(json: &str) -> Result<LifecycleConfig, LifecycleError> {
-    let value: Value =
-        serde_json::from_str(json).map_err(|error| LifecycleError::ManifestInvalid(error.to_string()))?;
+    let value: Value = serde_json::from_str(json)
+        .map_err(|error| LifecycleError::ManifestInvalid(error.to_string()))?;
     validate_manifest_value(&value)?;
 
     let config: LifecycleConfig = serde_json::from_value(value)
@@ -211,7 +211,10 @@ impl LifecycleConfig {
 
             if let Some(write_files) = step.write_files.as_ref() {
                 if write_files.is_empty() {
-                    return manifest_invalid(&format!("{step_field}.write_files"), "must not be empty");
+                    return manifest_invalid(
+                        &format!("{step_field}.write_files"),
+                        "must not be empty",
+                    );
                 }
 
                 for (file_index, file) in write_files.iter().enumerate() {
@@ -225,7 +228,10 @@ impl LifecycleConfig {
                         );
                     }
                     if file.lines.as_ref().is_some_and(Vec::is_empty) {
-                        return manifest_invalid(&format!("{file_field}.lines"), "must not be empty");
+                        return manifest_invalid(
+                            &format!("{file_field}.lines"),
+                            "must not be empty",
+                        );
                     }
                 }
             }
@@ -245,10 +251,7 @@ impl LifecycleConfig {
         if let Some(reset) = self.reset.as_ref() {
             if let Some(strategy) = reset.strategy.as_deref() {
                 if !matches!(strategy, "reseed" | "snapshot") {
-                    return manifest_invalid(
-                        "reset.strategy",
-                        "must be one of: reseed, snapshot",
-                    );
+                    return manifest_invalid("reset.strategy", "must be one of: reseed, snapshot");
                 }
             }
         }
@@ -313,7 +316,9 @@ fn validate_manifest_value_inner(
 }
 
 fn manifest_invalid<T>(field: &str, reason: &str) -> Result<T, LifecycleError> {
-    Err(LifecycleError::ManifestInvalid(format!("{field}: {reason}")))
+    Err(LifecycleError::ManifestInvalid(format!(
+        "{field}: {reason}"
+    )))
 }
 
 #[cfg(test)]

@@ -1,6 +1,7 @@
 import type { TerminalFailureReason, TerminalStatus, TerminalType } from "./terminal";
 import type {
   WorkspaceFailureReason,
+  WorkspaceKind,
   WorkspaceMode,
   WorkspaceServiceExposure,
   WorkspaceServicePreviewFailureReason,
@@ -14,6 +15,7 @@ export interface WorkspaceRecord {
   id: string;
   project_id: string;
   name: string;
+  kind: WorkspaceKind;
   source_ref: string;
   git_sha: string | null;
   worktree_path: string | null;

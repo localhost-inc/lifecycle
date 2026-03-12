@@ -26,8 +26,7 @@ All non-2xx responses include: `code`, `message`, `details`, `request_id`, `sugg
 | `preview_route_failed`           |  502 | preview route bind/reconcile failed  |
 | `local_docker_unavailable`       |  503 | Docker Desktop not running (local)   |
 | `local_port_conflict`            |  409 | requested port already in use        |
-| `local_app_not_running`          |  503 | Tauri desktop app not running         |
-| `local_pty_spawn_failed`         |  500 | local PTY process spawn failed       |
+| `local_app_not_running`          |  503 | Tauri desktop app not running        |
 | `repository_disconnected`        |  409 | GitHub App uninstalled or repo access revoked |
 | `internal_error`                 |  500 | unexpected server failure            |
 
@@ -49,7 +48,7 @@ Failed start attempts return the environment to `workspace.status = idle`; the l
 
 ### `terminal.failure_reason`
 
-`pty_spawn_failed`, `local_pty_spawn_failed`, `harness_process_exit_nonzero`, `attach_failed`, `workspace_destroyed`, `unknown`
+`harness_process_exit_nonzero`, `attach_failed`, `workspace_destroyed`, `unknown`
 
 ## Mutation Concurrency
 

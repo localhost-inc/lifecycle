@@ -1,0 +1,33 @@
+import type { WorkspaceRecord } from "@lifecycle/contracts";
+
+type WorkspaceDisplayRecord = Pick<WorkspaceRecord, "kind" | "name" | "source_ref">;
+
+export function isRootWorkspace(workspace: Pick<WorkspaceRecord, "kind">): boolean {
+  return workspace.kind === "root";
+}
+
+export function canInlineRenameWorkspace(workspace: Pick<WorkspaceRecord, "kind">): boolean {
+  return !isRootWorkspace(workspace);
+}
+
+export function getWorkspaceDisplayName(
+  workspace: WorkspaceDisplayRecord,
+  activeBranchName?: string | null,
+): string {
+  if (!isRootWorkspace(workspace)) {
+    return workspace.name;
+  }
+
+  const normalizedActiveBranchName = activeBranchName?.trim();
+  if (normalizedActiveBranchName) {
+    return normalizedActiveBranchName;
+  }
+
+  const normalizedSourceRef = workspace.source_ref.trim();
+  if (normalizedSourceRef) {
+    return normalizedSourceRef;
+  }
+
+  const normalizedName = workspace.name.trim();
+  return normalizedName || "Root";
+}

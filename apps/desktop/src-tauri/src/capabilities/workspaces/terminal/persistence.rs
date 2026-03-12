@@ -36,15 +36,6 @@ pub(crate) fn next_terminal_label(
     Ok(label)
 }
 
-pub(crate) fn touch_terminal(db_path: &str, terminal_id: &str) -> Result<(), LifecycleError> {
-    let conn = open_db(db_path)?;
-    conn.execute(
-        "UPDATE terminal SET last_active_at = datetime('now') WHERE id = ?1",
-        params![terminal_id],
-    )?;
-    Ok(())
-}
-
 pub(crate) fn insert_terminal_record(
     db_path: &str,
     terminal_id: &str,

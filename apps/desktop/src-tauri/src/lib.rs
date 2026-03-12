@@ -5,21 +5,21 @@ mod shared;
 use crate::platform::db::{run_migrations, DbPath};
 use crate::platform::native_terminal;
 use crate::platform::runtime::supervisor::Supervisor;
-use crate::platform::runtime::terminal::TerminalSupervisor;
 #[cfg(target_os = "macos")]
 use serde::Serialize;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex as StdMutex};
 #[cfg(target_os = "macos")]
 use tauri::Emitter;
 use tauri::Manager;
-use tokio::sync::Mutex;
+use tokio::sync::Mutex as AsyncMutex;
 
 pub use shared::errors::LifecycleError;
 
-pub type ManagedSupervisor = Arc<Mutex<Supervisor>>;
-pub type SupervisorMap = Arc<Mutex<HashMap<String, ManagedSupervisor>>>;
-pub type TerminalSupervisorMap = Arc<Mutex<HashMap<String, TerminalSupervisor>>>;
+pub(crate) type ManagedSupervisor = Arc<AsyncMutex<Supervisor>>;
+pub(crate) type SupervisorMap = Arc<AsyncMutex<HashMap<String, ManagedSupervisor>>>;
+pub(crate) type RootGitWatcherMap =
+    Arc<StdMutex<HashMap<String, capabilities::workspaces::git_watcher::RootGitWatcher>>>;
 
 #[cfg(target_os = "macos")]
 const APP_HOTKEY_EVENT_NAME: &str = "app:shortcut";
@@ -36,15 +36,16 @@ struct AppShortcutEvent {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let supervisors: SupervisorMap = Arc::new(Mutex::new(HashMap::new()));
-    let terminal_supervisors: TerminalSupervisorMap = Arc::new(Mutex::new(HashMap::new()));
+    let supervisors: SupervisorMap = Arc::new(AsyncMutex::new(HashMap::new()));
+    let root_git_watchers: RootGitWatcherMap = Arc::new(StdMutex::new(HashMap::new()));
+    let root_git_watchers_for_setup = root_git_watchers.clone();
 
     let run_result = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
-        .setup(|app| {
+        .setup(move |app| {
             let app_data_dir = app
                 .path()
                 .app_data_dir()
@@ -73,6 +74,14 @@ pub fn run() {
 
             run_migrations(&db_path_str).expect("failed to run migrations");
             app.manage(DbPath(db_path_str.clone()));
+
+            if let Err(error) = capabilities::workspaces::git_watcher::start_root_git_watchers(
+                &app.handle(),
+                &db_path_str,
+                &root_git_watchers_for_setup,
+            ) {
+                crate::platform::diagnostics::append_error("root-git-watchers", error);
+            }
 
             if let Err(error) = disable_main_webview_scroll_elasticity(&app.handle()) {
                 crate::platform::diagnostics::append_error("main-webview-scroll-elasticity", error);
@@ -110,7 +119,7 @@ pub fn run() {
             }
         })
         .manage(supervisors)
-        .manage(terminal_supervisors)
+        .manage(root_git_watchers)
         .invoke_handler(tauri::generate_handler![
             capabilities::app::commands::set_window_accepts_mouse_moved_events,
             capabilities::app::commands::set_window_pointing_cursor,
@@ -136,12 +145,9 @@ pub fn run() {
             capabilities::workspaces::commands::get_terminal,
             capabilities::workspaces::commands::rename_terminal,
             capabilities::workspaces::commands::create_terminal,
-            capabilities::workspaces::commands::attach_terminal,
-            capabilities::workspaces::commands::write_terminal,
             capabilities::workspaces::commands::save_terminal_attachment,
             capabilities::workspaces::commands::sync_native_terminal_surface,
             capabilities::workspaces::commands::hide_native_terminal_surface,
-            capabilities::workspaces::commands::resize_terminal,
             capabilities::workspaces::commands::detach_terminal,
             capabilities::workspaces::commands::kill_terminal,
             capabilities::workspaces::commands::get_workspace_git_status,

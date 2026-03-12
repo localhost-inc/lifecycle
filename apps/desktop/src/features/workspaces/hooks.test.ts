@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import type { LifecycleEvent } from "@lifecycle/contracts";
-import { reduceWorkspaceActivity, type WorkspaceActivityItem } from "./hooks";
+import type { LifecycleEvent, WorkspaceRecord } from "@lifecycle/contracts";
+import {
+  reduceWorkspaceActivity,
+  reduceWorkspaceRecord,
+  reduceWorkspacesByProject,
+  type WorkspaceActivityItem,
+} from "./hooks";
 
 function applyActivityEvent(
   current: WorkspaceActivityItem[] | undefined,
@@ -95,5 +100,108 @@ describe("reduceWorkspaceActivity", () => {
     expect(current).toHaveLength(32);
     expect(current?.[0]?.id).toBe("event-39");
     expect(current?.[31]?.id).toBe("event-8");
+  });
+});
+
+describe("reduceWorkspacesByProject", () => {
+  test("applies git head changes to matching workspace records", () => {
+    const rootWorkspace: WorkspaceRecord = {
+      created_at: "2026-03-10T10:00:00.000Z",
+      created_by: null,
+      expires_at: null,
+      failed_at: null,
+      failure_reason: null,
+      git_sha: "aaaaaaaa",
+      id: "ws_1",
+      kind: "root",
+      last_active_at: "2026-03-10T10:00:00.000Z",
+      manifest_fingerprint: null,
+      mode: "local",
+      name: "Root",
+      project_id: "project_1",
+      source_ref: "main",
+      source_workspace_id: null,
+      status: "active",
+      updated_at: "2026-03-10T10:00:00.000Z",
+      worktree_path: "/tmp/project_1",
+    };
+    const current: Record<string, WorkspaceRecord[]> = {
+      project_1: [rootWorkspace],
+    };
+
+    const result = reduceWorkspacesByProject(current, {
+      ahead: 0,
+      behind: 0,
+      branch: "feature/root-live",
+      head_sha: "bbbbbbbb",
+      id: "event-1",
+      kind: "git.head_changed",
+      occurred_at: "2026-03-10T10:05:00.000Z",
+      upstream: "origin/feature/root-live",
+      workspace_id: "ws_1",
+    });
+
+    expect(result).toEqual({
+      kind: "replace",
+      data: {
+        project_1: [
+          {
+            ...rootWorkspace,
+            source_ref: "feature/root-live",
+            git_sha: "bbbbbbbb",
+          },
+        ],
+      },
+    });
+  });
+});
+
+describe("reduceWorkspaceRecord", () => {
+  test("applies git head changes to the selected workspace record", () => {
+    const current: WorkspaceRecord = {
+      created_at: "2026-03-10T10:00:00.000Z",
+      created_by: null,
+      expires_at: null,
+      failed_at: null,
+      failure_reason: null,
+      git_sha: "aaaaaaaa",
+      id: "ws_1",
+      kind: "root" as const,
+      last_active_at: "2026-03-10T10:00:00.000Z",
+      manifest_fingerprint: null,
+      mode: "local" as const,
+      name: "Root",
+      project_id: "project_1",
+      source_ref: "main",
+      source_workspace_id: null,
+      status: "active" as const,
+      updated_at: "2026-03-10T10:00:00.000Z",
+      worktree_path: "/tmp/project_1",
+    };
+
+    const result = reduceWorkspaceRecord(
+      current,
+      {
+        ahead: null,
+        behind: null,
+        branch: "HEAD",
+        head_sha: null,
+        id: "event-1",
+        kind: "git.head_changed",
+        occurred_at: "2026-03-10T10:05:00.000Z",
+        upstream: null,
+        workspace_id: "ws_1",
+      },
+      "ws_1",
+    );
+
+    expect(result).toEqual({
+      kind: "replace",
+      data: {
+        ...current,
+        source_ref: "HEAD",
+        git_sha: null,
+      },
+    });
   });
 });

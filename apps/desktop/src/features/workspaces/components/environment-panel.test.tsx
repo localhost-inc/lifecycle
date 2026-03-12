@@ -9,6 +9,7 @@ const baseWorkspace: WorkspaceRecord = {
   id: "workspace_1",
   project_id: "project_1",
   name: "Environment Panel",
+  kind: "managed",
   source_ref: "lifecycle/environment-panel",
   git_sha: "abcdef1234567890",
   worktree_path: "/tmp/workspace_1",

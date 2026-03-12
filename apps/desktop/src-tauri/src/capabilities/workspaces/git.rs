@@ -13,6 +13,15 @@ use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
 use rusqlite::params;
 use tauri::AppHandle;
 
+fn normalized_git_branch(status: Option<&GitStatusResult>) -> Option<String> {
+    match status.and_then(|value| value.branch.clone()) {
+        Some(branch) => Some(branch),
+        None => status
+            .and_then(|value| value.head_sha.as_ref())
+            .map(|_| "HEAD".to_string()),
+    }
+}
+
 fn update_workspace_git_sha(
     db_path: &str,
     workspace_id: &str,
@@ -36,7 +45,7 @@ fn emit_git_repository_events(
     include_status_changed: bool,
     fallback_head_sha: Option<&str>,
 ) {
-    let branch = status.and_then(|value| value.branch.clone());
+    let branch = normalized_git_branch(status);
     let head_sha = status
         .and_then(|value| value.head_sha.clone())
         .or_else(|| fallback_head_sha.map(|value| value.to_string()));
@@ -227,8 +236,9 @@ pub async fn get_workspace_git_pull_request_patch(
     if mode != "local" {
         return Err(LifecycleError::GitOperationFailed {
             operation: "read GitHub pull request diff patch".to_string(),
-            reason: "Cloud workspace pull request diffs will use the cloud provider once it exists."
-                .to_string(),
+            reason:
+                "Cloud workspace pull request diffs will use the cloud provider once it exists."
+                    .to_string(),
         });
     }
 

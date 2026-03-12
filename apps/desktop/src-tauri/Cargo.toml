@@ -36,8 +36,8 @@ reqwest = { version = "0.12", features = ["rustls-tls"], default-features = fals
 rusqlite = { version = "0.32", features = ["bundled"] }
 futures-util = "0.3"
 libc = "0.2"
-portable-pty = "0.9"
 base64 = "0.22"
+notify = "8"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-app-kit = { version = "0.3.2", default-features = false, features = [

@@ -7,6 +7,7 @@ const workspace = {
   id: "workspace_1",
   project_id: "project_1",
   name: "Auth Flow Fix",
+  kind: "managed" as const,
   source_ref: "lifecycle/ember-atlas-42",
   git_sha: null,
   worktree_path: "/tmp/workspace_1",
@@ -126,5 +127,27 @@ describe("WorkspaceTreeItem", () => {
     expect(markup).toContain("disabled:opacity-0");
     expect(markup).toContain("group-hover/workspace-item:disabled:opacity-50");
     expect(markup).not.toContain("group-focus-within/menu-item:opacity-100");
+  });
+
+  test("renders root workspaces with the branch name and root indicator", () => {
+    const markup = renderToStaticMarkup(
+      createElement(WorkspaceTreeItem, {
+        workspace: {
+          ...workspace,
+          kind: "root",
+          name: "Root",
+          source_ref: "main",
+        },
+        selected: false,
+        onDestroy: () => {},
+        onSelect: () => {},
+      }),
+    );
+
+    expect(markup).toContain('data-slot="workspace-root-indicator"');
+    expect(markup).toContain('title="Root workspace"');
+    expect(markup).toContain(">main<");
+    expect(markup).not.toContain(">Root<");
+    expect(markup).toContain('aria-label="Archive workspace main"');
   });
 });

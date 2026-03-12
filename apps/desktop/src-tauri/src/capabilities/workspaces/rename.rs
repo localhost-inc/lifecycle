@@ -4,6 +4,7 @@ use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
 use rusqlite::params;
 use tauri::AppHandle;
 
+use super::kind::is_root_workspace_kind;
 use super::query::{self, TerminalRecord, WorkspaceRecord};
 use super::terminal::load_terminal_record;
 
@@ -28,6 +29,7 @@ impl TitleOrigin {
 struct WorkspaceIdentityContext {
     current_name: String,
     name_origin: String,
+    kind: String,
     current_source_ref: String,
     source_ref_origin: String,
     project_path: String,
@@ -74,6 +76,9 @@ pub async fn maybe_apply_generated_workspace_identity(
     name: &str,
 ) -> Result<Option<WorkspaceRecord>, LifecycleError> {
     let context = load_workspace_identity_context(db_path, workspace_id)?;
+    if is_root_workspace_kind(&context.kind) {
+        return Ok(None);
+    }
     if context.name_origin != TitleOrigin::Default.as_str()
         || context.source_ref_origin != TitleOrigin::Default.as_str()
     {
@@ -122,7 +127,7 @@ async fn update_workspace_identity(
     if context.current_name == next_name
         && context.name_origin == origin.as_str()
         && context.current_source_ref == expected_source_ref
-        && context.source_ref_origin == origin.as_str()
+        && next_source_ref_origin(&context, origin) == context.source_ref_origin
     {
         return query::get_workspace_by_id(db_path, workspace_id.to_string())
             .await?
@@ -130,7 +135,7 @@ async fn update_workspace_identity(
     }
 
     let mut next_worktree_path = context.worktree_path.clone();
-    if context.current_name != next_name {
+    if !is_root_workspace_kind(&context.kind) && context.current_name != next_name {
         if let Some(current_worktree_path) = context.worktree_path.as_deref() {
             next_worktree_path = Some(
                 worktree::move_worktree(
@@ -212,7 +217,7 @@ async fn update_workspace_identity(
             next_name,
             origin.as_str(),
             persisted_source_ref,
-            origin.as_str(),
+            next_source_ref_origin(&context, origin),
             next_worktree_path,
             workspace_id
         ],
@@ -229,6 +234,12 @@ async fn determine_workspace_branch_rename_disposition(
     workspace_id: &str,
     next_source_ref: &str,
 ) -> Result<WorkspaceBranchRenameDisposition, LifecycleError> {
+    if is_root_workspace_kind(&context.kind) {
+        return Ok(WorkspaceBranchRenameDisposition::Skip(
+            "root workspaces do not rename the project branch",
+        ));
+    }
+
     if context.current_source_ref == next_source_ref {
         return Ok(WorkspaceBranchRenameDisposition::Skip(
             "branch already matches identity",
@@ -261,6 +272,14 @@ async fn determine_workspace_branch_rename_disposition(
     }
 
     Ok(WorkspaceBranchRenameDisposition::Rename)
+}
+
+fn next_source_ref_origin(context: &WorkspaceIdentityContext, origin: TitleOrigin) -> String {
+    if is_root_workspace_kind(&context.kind) {
+        context.source_ref_origin.clone()
+    } else {
+        origin.as_str().to_string()
+    }
 }
 
 fn update_terminal_label(
@@ -300,7 +319,7 @@ fn load_workspace_identity_context(
 ) -> Result<WorkspaceIdentityContext, LifecycleError> {
     let conn = open_db(db_path)?;
     conn.query_row(
-        "SELECT workspace.name, workspace.name_origin, workspace.source_ref, workspace.source_ref_origin, workspace.worktree_path, project.path
+        "SELECT workspace.name, workspace.name_origin, workspace.kind, workspace.source_ref, workspace.source_ref_origin, workspace.worktree_path, project.path
          FROM workspace
          INNER JOIN project ON project.id = workspace.project_id
          WHERE workspace.id = ?1
@@ -310,10 +329,11 @@ fn load_workspace_identity_context(
             Ok(WorkspaceIdentityContext {
                 current_name: row.get(0)?,
                 name_origin: row.get(1)?,
-                current_source_ref: row.get(2)?,
-                source_ref_origin: row.get(3)?,
-                worktree_path: row.get(4)?,
-                project_path: row.get(5)?,
+                kind: row.get(2)?,
+                current_source_ref: row.get(3)?,
+                source_ref_origin: row.get(4)?,
+                worktree_path: row.get(5)?,
+                project_path: row.get(6)?,
             })
         },
     )
@@ -466,6 +486,7 @@ mod tests {
         repo_path: &Path,
         workspace_name: &str,
         workspace_id: &str,
+        kind: &str,
         name_origin: &str,
         source_ref_origin: &str,
     ) -> (String, String) {
@@ -498,13 +519,14 @@ mod tests {
         )
         .expect("insert project");
         conn.execute(
-            "INSERT INTO workspace (id, project_id, name, name_origin, source_ref, source_ref_origin, worktree_path, status, mode)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'sleeping', 'local')",
+            "INSERT INTO workspace (id, project_id, name, name_origin, kind, source_ref, source_ref_origin, worktree_path, status, mode)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'sleeping', 'local')",
             rusqlite::params![
                 workspace_id,
                 "project_1",
                 workspace_name,
                 name_origin,
+                kind,
                 source_ref,
                 source_ref_origin,
                 worktree_path
@@ -552,6 +574,7 @@ mod tests {
             &repo_path,
             "amber-atlas",
             workspace_id,
+            "managed",
             "default",
             "default",
         )
@@ -629,6 +652,7 @@ mod tests {
             &repo_path,
             "amber-atlas",
             workspace_id,
+            "managed",
             "manual",
             "manual",
         )
@@ -690,12 +714,140 @@ mod tests {
         let _ = fs::remove_file(db_path);
     }
 
+    #[tokio::test]
+    async fn root_workspace_rename_preserves_source_ref_and_worktree_path() {
+        let repo_path = temp_repo_path();
+        let db_path = temp_db_path();
+        init_repo(&repo_path);
+        run_migrations(&db_path).expect("run migrations");
+
+        let repo_path_str = repo_path.to_str().expect("repo path is utf8");
+        let source_ref = worktree::get_current_branch(repo_path_str)
+            .await
+            .expect("get current branch");
+        let conn = open_db(&db_path).expect("open db");
+        conn.execute(
+            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["project_1", repo_path_str, "Project 1"],
+        )
+        .expect("insert project");
+        conn.execute(
+            "INSERT INTO workspace (
+                id, project_id, name, name_origin, kind, source_ref, source_ref_origin, worktree_path, status, mode
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            rusqlite::params![
+                "workspace_root",
+                "project_1",
+                "Root",
+                "manual",
+                "root",
+                source_ref,
+                "manual",
+                repo_path_str,
+                "sleeping",
+                "local"
+            ],
+        )
+        .expect("insert root workspace");
+        drop(conn);
+
+        let workspace = update_workspace_identity(
+            &db_path,
+            "workspace_root",
+            "Repo Control",
+            TitleOrigin::Manual,
+        )
+        .await
+        .expect("rename root workspace");
+
+        assert_eq!(workspace.name, "Repo Control");
+        assert_eq!(workspace.source_ref, source_ref);
+        assert_eq!(workspace.worktree_path.as_deref(), Some(repo_path_str));
+
+        let conn = open_db(&db_path).expect("re-open db");
+        let origins: (String, String) = conn
+            .query_row(
+                "SELECT name_origin, source_ref_origin
+                 FROM workspace
+                 WHERE id = ?1",
+                rusqlite::params!["workspace_root"],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("load origins");
+        assert_eq!(origins.0, "manual");
+        assert_eq!(origins.1, "manual");
+
+        let _ = fs::remove_dir_all(repo_path);
+        let _ = fs::remove_file(db_path);
+    }
+
+    #[tokio::test]
+    async fn root_workspace_generated_identity_is_skipped() {
+        let repo_path = temp_repo_path();
+        let db_path = temp_db_path();
+        init_repo(&repo_path);
+        run_migrations(&db_path).expect("run migrations");
+
+        let repo_path_str = repo_path.to_str().expect("repo path is utf8");
+        let source_ref = worktree::get_current_branch(repo_path_str)
+            .await
+            .expect("get current branch");
+        let conn = open_db(&db_path).expect("open db");
+        conn.execute(
+            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["project_1", repo_path_str, "Project 1"],
+        )
+        .expect("insert project");
+        conn.execute(
+            "INSERT INTO workspace (
+                id, project_id, name, name_origin, kind, source_ref, source_ref_origin, worktree_path, status, mode
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            rusqlite::params![
+                "workspace_root",
+                "project_1",
+                "Root",
+                "default",
+                "root",
+                source_ref,
+                "default",
+                repo_path_str,
+                "sleeping",
+                "local"
+            ],
+        )
+        .expect("insert root workspace");
+        drop(conn);
+
+        let result =
+            maybe_update_generated_workspace_identity(&db_path, "workspace_root", "Auth Flow")
+                .await
+                .expect("generated identity attempt succeeds");
+        assert!(
+            result.is_none(),
+            "root workspace identity should stay fixed"
+        );
+
+        let workspace = query::get_workspace_by_id(&db_path, "workspace_root".to_string())
+            .await
+            .expect("load workspace")
+            .expect("workspace exists");
+        assert_eq!(workspace.name, "Root");
+        assert_eq!(workspace.source_ref, source_ref);
+        assert_eq!(workspace.worktree_path.as_deref(), Some(repo_path_str));
+
+        let _ = fs::remove_dir_all(repo_path);
+        let _ = fs::remove_file(db_path);
+    }
+
     async fn maybe_update_generated_workspace_identity(
         db_path: &str,
         workspace_id: &str,
         name: &str,
     ) -> Result<Option<WorkspaceRecord>, LifecycleError> {
         let context = load_workspace_identity_context(db_path, workspace_id)?;
+        if is_root_workspace_kind(&context.kind) {
+            return Ok(None);
+        }
         if context.name_origin != TitleOrigin::Default.as_str()
             || context.source_ref_origin != TitleOrigin::Default.as_str()
         {

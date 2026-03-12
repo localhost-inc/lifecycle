@@ -27,6 +27,7 @@ const workspace = {
   id: "workspace_1",
   project_id: "project_1",
   name: "ion-junction",
+  kind: "managed" as const,
   source_ref: "lifecycle/ion-junction",
   git_sha: null,
   worktree_path: "/tmp/workspace_1",

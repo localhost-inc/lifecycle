@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   LifecycleConfig,
   ServiceRecord,
+  WorkspaceKind,
   WorkspaceRecord,
   WorkspaceServiceExposure,
 } from "@lifecycle/contracts";
@@ -49,6 +50,7 @@ export function browserWorkspaceSourceRef(workspaceName: string, workspaceId: st
 }
 
 export interface CreateWorkspaceInput {
+  kind?: WorkspaceKind;
   projectId: string;
   projectPath: string;
   workspaceName?: string;
@@ -70,6 +72,7 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
     workspaceName: input.workspaceName,
     baseRef: input.baseRef,
     worktreeRoot: input.worktreeRoot,
+    kind: input.kind ?? "managed",
     manifestJson: input.manifestJson ?? null,
     manifestFingerprint: input.manifestFingerprint ?? null,
   });

@@ -4,8 +4,6 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useQueryClient } from "../../../query";
 import {
-  DEFAULT_TERMINAL_COLS,
-  DEFAULT_TERMINAL_ROWS,
   createTerminal,
   detachTerminal,
   renameTerminal,
@@ -289,9 +287,7 @@ export function WorkspaceSurface({
 
       try {
         const terminal = await createTerminal({
-          cols: DEFAULT_TERMINAL_COLS,
           ...input,
-          rows: DEFAULT_TERMINAL_ROWS,
           workspaceId,
         });
         client.invalidate(terminalKeys.byWorkspace(workspaceId));

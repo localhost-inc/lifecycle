@@ -33,6 +33,7 @@ describe("TitleBar", () => {
       id: "workspace_1",
       project_id: "project_1",
       name: "Fix Landing Hero",
+      kind: "managed",
       source_ref: "lifecycle/fix-landing-hero",
       git_sha: "abcdef1234567890",
       worktree_path: "/tmp/workspace_1",
@@ -60,6 +61,7 @@ describe("TitleBar", () => {
       id: "workspace_1",
       project_id: "project_1",
       name: "Cloud Preview",
+      kind: "managed",
       source_ref: "main",
       git_sha: null,
       worktree_path: null,
@@ -76,5 +78,32 @@ describe("TitleBar", () => {
     });
 
     expect(markup).not.toContain('title="Open in VS Code"');
+  });
+
+  test("renders root workspaces with the live branch name and root indicator", () => {
+    const markup = renderTitleBar({
+      id: "workspace_root",
+      project_id: "project_1",
+      name: "Root",
+      kind: "root",
+      source_ref: "main",
+      git_sha: "abcdef1234567890",
+      worktree_path: "/tmp/project_1",
+      mode: "local",
+      status: "active",
+      failure_reason: null,
+      failed_at: null,
+      created_by: null,
+      source_workspace_id: null,
+      created_at: "2026-03-08T10:00:00.000Z",
+      updated_at: "2026-03-08T10:00:00.000Z",
+      last_active_at: "2026-03-08T10:00:00.000Z",
+      expires_at: null,
+    });
+
+    expect(markup).toContain('data-slot="workspace-root-indicator"');
+    expect(markup).toContain("main");
+    expect(markup).not.toContain(">Root<");
+    expect(markup).toContain('title="main"');
   });
 });

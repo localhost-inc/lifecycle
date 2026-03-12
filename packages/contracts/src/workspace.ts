@@ -1,5 +1,7 @@
 export type WorkspaceMode = "local" | "cloud";
 
+export type WorkspaceKind = "root" | "managed";
+
 export type WorkspaceStatus = "idle" | "starting" | "active" | "stopping";
 
 export type WorkspaceFailureReason =

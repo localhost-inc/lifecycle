@@ -422,6 +422,167 @@ static BOOL lifecycleGhosttyReadSelection(ghostty_surface_t surface,
   }
 }
 
+static BOOL lifecycleGhosttySurfaceKey(ghostty_surface_t surface,
+                                       ghostty_input_key_s keyEvent,
+                                       NSString *context) {
+  if (surface == NULL) {
+    return NO;
+  }
+
+  @try {
+    return ghostty_surface_key(surface, keyEvent);
+  } @catch (NSException *exception) {
+    lifecycleLogSurfaceException(context, surface, exception);
+    return NO;
+  }
+}
+
+static BOOL lifecycleGhosttySurfaceKeyIsBinding(ghostty_surface_t surface,
+                                                ghostty_input_key_s keyEvent,
+                                                ghostty_binding_flags_e *flags,
+                                                NSString *context) {
+  if (flags != NULL) {
+    *flags = 0;
+  }
+  if (surface == NULL) {
+    return NO;
+  }
+
+  @try {
+    return ghostty_surface_key_is_binding(surface, keyEvent, flags);
+  } @catch (NSException *exception) {
+    lifecycleLogSurfaceException(context, surface, exception);
+    return NO;
+  }
+}
+
+static void lifecycleGhosttySetSize(ghostty_surface_t surface,
+                                    uint32_t width,
+                                    uint32_t height,
+                                    NSString *context) {
+  if (surface == NULL) {
+    return;
+  }
+
+  @try {
+    ghostty_surface_set_size(surface, width, height);
+  } @catch (NSException *exception) {
+    lifecycleLogSurfaceException(context, surface, exception);
+  }
+}
+
+static void lifecycleGhosttySetContentScale(ghostty_surface_t surface,
+                                            double xScale,
+                                            double yScale,
+                                            NSString *context) {
+  if (surface == NULL) {
+    return;
+  }
+
+  @try {
+    ghostty_surface_set_content_scale(surface, xScale, yScale);
+  } @catch (NSException *exception) {
+    lifecycleLogSurfaceException(context, surface, exception);
+  }
+}
+
+static void lifecycleGhosttySetFocus(ghostty_surface_t surface,
+                                     BOOL focused,
+                                     NSString *context) {
+  if (surface == NULL) {
+    return;
+  }
+
+  @try {
+    ghostty_surface_set_focus(surface, focused);
+  } @catch (NSException *exception) {
+    lifecycleLogSurfaceException(context, surface, exception);
+  }
+}
+
+static void lifecycleGhosttyAppSetFocus(ghostty_app_t app,
+                                        BOOL focused,
+                                        NSString *context) {
+  if (app == NULL) {
+    return;
+  }
+
+  @try {
+    ghostty_app_set_focus(app, focused);
+  } @catch (NSException *exception) {
+    lifecycleSetLastErrorFromException(context, exception);
+    NSString *name = exception.name ?: @"NSException";
+    NSString *reason = exception.reason ?: @"(no reason provided)";
+    lifecycleAppendDiagnosticLine(
+        [NSString stringWithFormat:@"[exception] %@ threw: %@ (%@)", context, reason, name]);
+  }
+}
+
+static void lifecycleGhosttyPreedit(ghostty_surface_t surface,
+                                    const char *utf8,
+                                    size_t utf8Length,
+                                    NSString *context) {
+  if (surface == NULL) {
+    return;
+  }
+
+  @try {
+    ghostty_surface_preedit(surface, utf8, utf8Length);
+  } @catch (NSException *exception) {
+    lifecycleLogSurfaceException(context, surface, exception);
+  }
+}
+
+static BOOL lifecycleGhosttyImePoint(ghostty_surface_t surface,
+                                     double *x,
+                                     double *y,
+                                     double *width,
+                                     double *height,
+                                     NSString *context) {
+  if (surface == NULL || x == NULL || y == NULL || width == NULL || height == NULL) {
+    return NO;
+  }
+
+  @try {
+    ghostty_surface_ime_point(surface, x, y, width, height);
+    return YES;
+  } @catch (NSException *exception) {
+    lifecycleLogSurfaceException(context, surface, exception);
+    return NO;
+  }
+}
+
+static void lifecycleGhosttyFreeText(ghostty_surface_t surface,
+                                     ghostty_text_s *text,
+                                     NSString *context) {
+  if (surface == NULL || text == NULL) {
+    return;
+  }
+
+  if (text->text == NULL && text->text_len == 0) {
+    return;
+  }
+
+  @try {
+    ghostty_surface_free_text(surface, text);
+  } @catch (NSException *exception) {
+    lifecycleLogSurfaceException(context, surface, exception);
+  }
+  memset(text, 0, sizeof(*text));
+}
+
+static void lifecycleGhosttyFreeSurface(ghostty_surface_t surface, NSString *context) {
+  if (surface == NULL) {
+    return;
+  }
+
+  @try {
+    ghostty_surface_free(surface);
+  } @catch (NSException *exception) {
+    lifecycleLogSurfaceException(context, surface, exception);
+  }
+}
+
 static ghostty_input_key_s lifecycleGhosttyKeyEvent(NSEvent *event,
                                                     ghostty_input_action_e action,
                                                     NSEventModifierFlags translationFlags) {
@@ -667,7 +828,7 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
 - (void)dealloc {
   [self unregisterWindowNotifications];
   if (_surface != NULL) {
-    ghostty_surface_free(_surface);
+    lifecycleGhosttyFreeSurface(_surface, @"native terminal dealloc");
     _surface = NULL;
   }
 }
@@ -689,7 +850,8 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return;
   }
 
-  ghostty_surface_set_size(self.surface, (uint32_t)width, (uint32_t)height);
+  lifecycleGhosttySetSize(self.surface, (uint32_t)width, (uint32_t)height,
+                          @"native terminal resize");
   self.lastSurfaceWidth = width;
   self.lastSurfaceHeight = height;
 }
@@ -701,7 +863,8 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
 
   NSScreen *screen = self.window.screen ?: NSScreen.mainScreen;
   const double scaleFactor = screen ? screen.backingScaleFactor : 2.0;
-  ghostty_surface_set_content_scale(self.surface, scaleFactor, scaleFactor);
+  lifecycleGhosttySetContentScale(self.surface, scaleFactor, scaleFactor,
+                                  @"native terminal content scale");
   self.layer.contentsScale = scaleFactor;
 }
 
@@ -800,12 +963,9 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   BOOL surfaceFocused =
       wantsSurfaceFocus && lifecycleWindowFirstResponderBelongsToView(self.window, self);
 
-  if (self.surface != NULL) {
-    ghostty_surface_set_focus(self.surface, surfaceFocused);
-  }
-  if (gGhosttyApp != NULL) {
-    ghostty_app_set_focus(gGhosttyApp, lifecycleGhosttyAppShouldBeFocused());
-  }
+  lifecycleGhosttySetFocus(self.surface, surfaceFocused, @"native terminal focus sync");
+  lifecycleGhosttyAppSetFocus(gGhosttyApp, lifecycleGhosttyAppShouldBeFocused(),
+                              @"native terminal app focus sync");
 }
 
 - (void)requestFocusIfNeeded {
@@ -883,10 +1043,14 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return;
   }
 
-  NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
-  lifecycleGhosttyMousePosition(self.surface, point.x, self.bounds.size.height - point.y,
-                                lifecycleGhosttyMods(event.modifierFlags),
-                                @"native terminal mouse move");
+  @try {
+    NSPoint point = [self convertPoint:event.locationInWindow fromView:nil];
+    lifecycleGhosttyMousePosition(self.surface, point.x, self.bounds.size.height - point.y,
+                                  lifecycleGhosttyMods(event.modifierFlags),
+                                  @"native terminal mouse move");
+  } @catch (NSException *exception) {
+    lifecycleLogTerminalException(@"native terminal mouse move", self.terminalId, exception);
+  }
 }
 
 - (void)mouseEntered:(NSEvent *)event {
@@ -899,8 +1063,12 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return;
   }
 
-  lifecycleGhosttyMousePosition(self.surface, -1, -1, GHOSTTY_MODS_NONE,
-                                @"native terminal mouse exit");
+  @try {
+    lifecycleGhosttyMousePosition(self.surface, -1, -1, GHOSTTY_MODS_NONE,
+                                  @"native terminal mouse exit");
+  } @catch (NSException *exception) {
+    lifecycleLogTerminalException(@"native terminal mouse exit", self.terminalId, exception);
+  }
 }
 
 - (void)mouseDragged:(NSEvent *)event {
@@ -921,11 +1089,15 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return;
   }
 
-  [[self window] makeFirstResponder:self];
-  lifecycleGhosttyMouseButton(self.surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_LEFT,
-                              lifecycleGhosttyMods(event.modifierFlags),
-                              @"native terminal mouse down");
-  [self mouseMoved:event];
+  @try {
+    [[self window] makeFirstResponder:self];
+    lifecycleGhosttyMouseButton(self.surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_LEFT,
+                                lifecycleGhosttyMods(event.modifierFlags),
+                                @"native terminal mouse down");
+    [self mouseMoved:event];
+  } @catch (NSException *exception) {
+    lifecycleLogTerminalException(@"native terminal mouse down", self.terminalId, exception);
+  }
 }
 
 - (void)mouseUp:(NSEvent *)event {
@@ -934,10 +1106,14 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return;
   }
 
-  lifecycleGhosttyMouseButton(self.surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_LEFT,
-                              lifecycleGhosttyMods(event.modifierFlags),
-                              @"native terminal mouse up");
-  [self mouseMoved:event];
+  @try {
+    lifecycleGhosttyMouseButton(self.surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_LEFT,
+                                lifecycleGhosttyMods(event.modifierFlags),
+                                @"native terminal mouse up");
+    [self mouseMoved:event];
+  } @catch (NSException *exception) {
+    lifecycleLogTerminalException(@"native terminal mouse up", self.terminalId, exception);
+  }
 }
 
 - (void)rightMouseDown:(NSEvent *)event {
@@ -946,11 +1122,15 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return;
   }
 
-  [[self window] makeFirstResponder:self];
-  lifecycleGhosttyMouseButton(self.surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_RIGHT,
-                              lifecycleGhosttyMods(event.modifierFlags),
-                              @"native terminal right mouse down");
-  [self mouseMoved:event];
+  @try {
+    [[self window] makeFirstResponder:self];
+    lifecycleGhosttyMouseButton(self.surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_RIGHT,
+                                lifecycleGhosttyMods(event.modifierFlags),
+                                @"native terminal right mouse down");
+    [self mouseMoved:event];
+  } @catch (NSException *exception) {
+    lifecycleLogTerminalException(@"native terminal right mouse down", self.terminalId, exception);
+  }
 }
 
 - (void)rightMouseUp:(NSEvent *)event {
@@ -959,10 +1139,14 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return;
   }
 
-  lifecycleGhosttyMouseButton(self.surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_RIGHT,
-                              lifecycleGhosttyMods(event.modifierFlags),
-                              @"native terminal right mouse up");
-  [self mouseMoved:event];
+  @try {
+    lifecycleGhosttyMouseButton(self.surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_RIGHT,
+                                lifecycleGhosttyMods(event.modifierFlags),
+                                @"native terminal right mouse up");
+    [self mouseMoved:event];
+  } @catch (NSException *exception) {
+    lifecycleLogTerminalException(@"native terminal right mouse up", self.terminalId, exception);
+  }
 }
 
 - (void)otherMouseDown:(NSEvent *)event {
@@ -971,11 +1155,16 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return;
   }
 
-  [[self window] makeFirstResponder:self];
-  lifecycleGhosttyMouseButton(self.surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_MIDDLE,
-                              lifecycleGhosttyMods(event.modifierFlags),
-                              @"native terminal middle mouse down");
-  [self mouseMoved:event];
+  @try {
+    [[self window] makeFirstResponder:self];
+    lifecycleGhosttyMouseButton(self.surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_MIDDLE,
+                                lifecycleGhosttyMods(event.modifierFlags),
+                                @"native terminal middle mouse down");
+    [self mouseMoved:event];
+  } @catch (NSException *exception) {
+    lifecycleLogTerminalException(@"native terminal middle mouse down", self.terminalId,
+                                  exception);
+  }
 }
 
 - (void)otherMouseUp:(NSEvent *)event {
@@ -984,10 +1173,14 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return;
   }
 
-  lifecycleGhosttyMouseButton(self.surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_MIDDLE,
-                              lifecycleGhosttyMods(event.modifierFlags),
-                              @"native terminal middle mouse up");
-  [self mouseMoved:event];
+  @try {
+    lifecycleGhosttyMouseButton(self.surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_MIDDLE,
+                                lifecycleGhosttyMods(event.modifierFlags),
+                                @"native terminal middle mouse up");
+    [self mouseMoved:event];
+  } @catch (NSException *exception) {
+    lifecycleLogTerminalException(@"native terminal middle mouse up", self.terminalId, exception);
+  }
 }
 
 - (void)scrollWheel:(NSEvent *)event {
@@ -996,16 +1189,20 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return;
   }
 
-  double deltaX = event.scrollingDeltaX;
-  double deltaY = event.scrollingDeltaY;
-  if (event.hasPreciseScrollingDeltas) {
-    deltaX *= 2.0;
-    deltaY *= 2.0;
-  }
+  @try {
+    double deltaX = event.scrollingDeltaX;
+    double deltaY = event.scrollingDeltaY;
+    if (event.hasPreciseScrollingDeltas) {
+      deltaX *= 2.0;
+      deltaY *= 2.0;
+    }
 
-  lifecycleGhosttyMouseScroll(self.surface, deltaX, deltaY,
-                              lifecycleGhosttyMods(event.modifierFlags),
-                              @"native terminal mouse scroll");
+    lifecycleGhosttyMouseScroll(self.surface, deltaX, deltaY,
+                                lifecycleGhosttyMods(event.modifierFlags),
+                                @"native terminal mouse scroll");
+  } @catch (NSException *exception) {
+    lifecycleLogTerminalException(@"native terminal mouse scroll", self.terminalId, exception);
+  }
 }
 
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
@@ -1036,7 +1233,8 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   }
 
   ghostty_binding_flags_e bindingFlags = 0;
-  if (ghostty_surface_key_is_binding(self.surface, bindingEvent, &bindingFlags)) {
+  if (lifecycleGhosttySurfaceKeyIsBinding(self.surface, bindingEvent, &bindingFlags,
+                                          @"native terminal key binding lookup")) {
     BOOL consumed = (bindingFlags & GHOSTTY_BINDING_FLAGS_CONSUMED) != 0;
     BOOL all = (bindingFlags & GHOSTTY_BINDING_FLAGS_ALL) != 0;
     BOOL performable = (bindingFlags & GHOSTTY_BINDING_FLAGS_PERFORMABLE) != 0;
@@ -1139,7 +1337,7 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   }
 
   ghostty_input_key_s keyEvent = lifecycleGhosttyKeyEvent(event, action, event.modifierFlags);
-  ghostty_surface_key(self.surface, keyEvent);
+  (void)lifecycleGhosttySurfaceKey(self.surface, keyEvent, @"native terminal modifier input");
 }
 
 - (void)syncPreeditClearIfNeeded:(BOOL)clearIfNeeded {
@@ -1151,10 +1349,10 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     NSString *text = self.markedText.string;
     const char *utf8 = text.UTF8String;
     if (utf8 != NULL) {
-      ghostty_surface_preedit(self.surface, utf8, strlen(utf8));
+      lifecycleGhosttyPreedit(self.surface, utf8, strlen(utf8), @"native terminal preedit");
     }
   } else if (clearIfNeeded) {
-    ghostty_surface_preedit(self.surface, NULL, 0);
+    lifecycleGhosttyPreedit(self.surface, NULL, 0, @"native terminal preedit clear");
   }
 }
 
@@ -1224,7 +1422,7 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
 
   ghostty_input_key_s keyEvent =
       lifecycleGhosttyKeyEvent(event, GHOSTTY_ACTION_RELEASE, event.modifierFlags);
-  ghostty_surface_key(self.surface, keyEvent);
+  (void)lifecycleGhosttySurfaceKey(self.surface, keyEvent, @"native terminal key release");
 }
 
 - (void)insertText:(id)string replacementRange:(NSRange)replacementRange {
@@ -1354,7 +1552,10 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   double y = 0;
   double width = 0;
   double height = 0;
-  ghostty_surface_ime_point(self.surface, &x, &y, &width, &height);
+  if (!lifecycleGhosttyImePoint(self.surface, &x, &y, &width, &height,
+                                @"native terminal ime point")) {
+    return [self.window convertRectToScreen:self.bounds];
+  }
 
   NSRect localRect = NSMakeRect(x, self.bounds.size.height - y - height, width, height);
   NSRect windowRect = [self convertRect:localRect toView:nil];
@@ -1419,17 +1620,22 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
     return;
   }
 
-  NSString *selection = [[NSString alloc] initWithBytes:text.text
-                                                 length:text.text_len
-                                               encoding:NSUTF8StringEncoding];
-  ghostty_surface_free_text(self.surface, &text);
-  if (selection.length == 0) {
-    return;
-  }
+  @try {
+    NSString *selection = [[NSString alloc] initWithBytes:text.text
+                                                   length:text.text_len
+                                                 encoding:NSUTF8StringEncoding];
+    if (selection.length == 0) {
+      return;
+    }
 
-  NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
-  [pasteboard clearContents];
-  [pasteboard setString:selection forType:NSPasteboardTypeString];
+    NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
+    [pasteboard clearContents];
+    [pasteboard setString:selection forType:NSPasteboardTypeString];
+  } @catch (NSException *exception) {
+    lifecycleLogTerminalException(@"native terminal copy selection", self.terminalId, exception);
+  } @finally {
+    lifecycleGhosttyFreeText(self.surface, &text, @"native terminal copy selection cleanup");
+  }
 }
 
 @end

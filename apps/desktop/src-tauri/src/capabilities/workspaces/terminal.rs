@@ -1,26 +1,23 @@
 use crate::platform::db::DbPath;
 use crate::platform::lifecycle_root::resolve_lifecycle_root;
-use crate::platform::native_terminal::{self, NativeTerminalFrame};
-use crate::platform::runtime::terminal::{
-    TerminalExitOutcome, TerminalStreamChunk, TerminalSupervisor,
+use crate::platform::native_terminal::{
+    self, NativeTerminalFrame, NativeTerminalSurfaceSyncRequest,
 };
 #[cfg(test)]
 use crate::shared::errors::WorkspaceStatus;
 use crate::shared::errors::{LifecycleError, TerminalFailureReason, TerminalStatus, TerminalType};
 use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
-use crate::TerminalSupervisorMap;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use portable_pty::CommandBuilder;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, SystemTime};
-use tauri::{ipc::Channel, AppHandle, Manager, State, WebviewWindow};
+use tauri::{AppHandle, Manager, State, WebviewWindow};
 
 use super::harness::{self, HarnessAdapter};
 use super::query::TerminalRecord;
@@ -38,25 +35,15 @@ use attachments::{
 };
 #[cfg(test)]
 use native_surface::build_native_terminal_theme_config;
-use native_surface::{
-    parse_native_terminal_color_scheme, run_native_terminal_on_main_thread,
-    sync_native_terminal_in_webview, write_native_terminal_theme_override,
-};
+use native_surface::{parse_native_terminal_color_scheme, write_native_terminal_theme_override};
 pub(crate) use persistence::load_terminal_record;
 #[cfg(test)]
 use persistence::WorkspaceRuntime;
 use persistence::{
     insert_terminal_record, load_claimed_harness_session_ids, load_workspace_runtime,
-    next_terminal_label, touch_terminal, update_terminal_harness_session_id, update_terminal_state,
+    next_terminal_label, update_terminal_harness_session_id, update_terminal_state,
     workspace_has_interactive_terminal_context,
 };
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TerminalAttachResult {
-    pub terminal: TerminalRecord,
-    pub replay_cursor: Option<String>,
-}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -95,14 +82,11 @@ fn harness_completion_watch_registry() -> &'static Mutex<HashSet<String>> {
 pub async fn create_terminal(
     app: AppHandle,
     db_path: State<'_, DbPath>,
-    terminal_supervisors: State<'_, TerminalSupervisorMap>,
     workspace_id: String,
     launch_type: String,
     harness_provider: Option<String>,
     harness_session_id: Option<String>,
-    cols: u16,
-    rows: u16,
-) -> Result<TerminalAttachResult, LifecycleError> {
+) -> Result<TerminalRecord, LifecycleError> {
     let db = db_path.0.clone();
     let workspace = load_workspace_runtime(&db, &workspace_id)?;
     if !workspace_has_interactive_terminal_context(&workspace) {
@@ -120,62 +104,17 @@ pub async fn create_terminal(
         harness_provider.as_deref(),
     )?;
     let terminal_id = uuid::Uuid::new_v4().to_string();
-    let launch = resolve_terminal_launch(
+    resolve_terminal_launch(
         &launch_type,
         harness_provider.as_deref(),
         harness_session_id.as_deref(),
     )?;
 
-    if native_terminal::is_available() {
-        let terminal = insert_terminal_record(
-            &db,
-            &terminal_id,
-            &workspace_id,
-            &launch_type,
-            harness_provider.as_deref(),
-            harness_session_id.as_deref(),
-            &label,
-            TitleOrigin::Default,
-            TerminalStatus::Detached,
-        )?;
-        emit_terminal_created(&app, &terminal);
-        return Ok(TerminalAttachResult {
-            replay_cursor: None,
-            terminal,
-        });
+    if !native_terminal::is_available() {
+        return Err(LifecycleError::AttachFailed(
+            "native terminal runtime is unavailable".to_string(),
+        ));
     }
-
-    let mut command = build_command(&launch, &workspace.worktree_path);
-    command.cwd(&workspace.worktree_path);
-    command.env("TERM", "xterm-256color");
-    command.env("COLORTERM", "truecolor");
-    let launch_started_at = SystemTime::now();
-
-    let app_for_exit = app.clone();
-    let db_for_exit = db.clone();
-    let terminal_id_for_exit = terminal_id.clone();
-    let workspace_id_for_exit = workspace_id.clone();
-    let supervisor = TerminalSupervisor::spawn(
-        command,
-        cols,
-        rows,
-        launch.treat_nonzero_as_failure,
-        Arc::new(move |outcome| {
-            if let Err(error) = complete_terminal_exit(
-                &app_for_exit,
-                &db_for_exit,
-                &terminal_id_for_exit,
-                &workspace_id_for_exit,
-                &outcome,
-            ) {
-                tracing::error!(
-                    "failed to finalize terminal exit {}: {error}",
-                    terminal_id_for_exit
-                );
-            }
-        }),
-    )?;
-    let replay_cursor = supervisor.replay_cursor();
 
     let terminal = insert_terminal_record(
         &db,
@@ -189,116 +128,8 @@ pub async fn create_terminal(
         TerminalStatus::Detached,
     )?;
 
-    {
-        let mut terminals = terminal_supervisors.lock().await;
-        terminals.insert(terminal_id.clone(), supervisor);
-    }
-
     emit_terminal_created(&app, &terminal);
-    maybe_schedule_harness_observers(
-        &app,
-        &db,
-        &terminal,
-        &workspace.worktree_path,
-        launch_started_at,
-    );
-
-    Ok(TerminalAttachResult {
-        replay_cursor,
-        terminal,
-    })
-}
-
-pub async fn attach_terminal(
-    app: AppHandle,
-    db_path: State<'_, DbPath>,
-    terminal_supervisors: State<'_, TerminalSupervisorMap>,
-    terminal_id: String,
-    cols: u16,
-    rows: u16,
-    replay_cursor: Option<String>,
-    handler: Channel<TerminalStreamChunk>,
-) -> Result<TerminalAttachResult, LifecycleError> {
-    let db = db_path.0.clone();
-    let mut terminal = load_terminal_record(&db, &terminal_id)?
-        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.clone()))?;
-    let workspace = load_workspace_runtime(&db, &terminal.workspace_id)?;
-    if !workspace_has_interactive_terminal_context(&workspace) {
-        return Err(LifecycleError::InvalidStateTransition {
-            from: workspace.status.as_str().to_string(),
-            to: "terminal_access".to_string(),
-        });
-    }
-
-    let supervisor = {
-        let terminals = terminal_supervisors.lock().await;
-        terminals.get(&terminal_id).cloned()
-    };
-
-    if let Some(supervisor) = supervisor {
-        supervisor.resize(cols, rows)?;
-        let next_replay_cursor = supervisor.attach(handler, replay_cursor.as_deref())?;
-        if terminal.status != TerminalStatus::Finished.as_str()
-            && terminal.status != TerminalStatus::Failed.as_str()
-        {
-            terminal = update_terminal_state(
-                &db,
-                &terminal_id,
-                TerminalStatus::Active,
-                None,
-                None,
-                false,
-            )?;
-            emit_terminal_status(&app, &terminal);
-        }
-
-        return Ok(TerminalAttachResult {
-            replay_cursor: next_replay_cursor,
-            terminal,
-        });
-    } else if terminal.status != TerminalStatus::Finished.as_str()
-        && terminal.status != TerminalStatus::Failed.as_str()
-    {
-        terminal = update_terminal_state(
-            &db,
-            &terminal_id,
-            TerminalStatus::Failed,
-            Some(&TerminalFailureReason::AttachFailed),
-            terminal.exit_code,
-            true,
-        )?;
-        emit_terminal_status(&app, &terminal);
-        return Ok(TerminalAttachResult {
-            replay_cursor: None,
-            terminal,
-        });
-    }
-
-    Ok(TerminalAttachResult {
-        replay_cursor: None,
-        terminal,
-    })
-}
-
-pub async fn write_terminal(
-    _app: AppHandle,
-    db_path: State<'_, DbPath>,
-    terminal_supervisors: State<'_, TerminalSupervisorMap>,
-    terminal_id: String,
-    data: String,
-) -> Result<(), LifecycleError> {
-    let db = db_path.0.clone();
-    load_terminal_record(&db, &terminal_id)?
-        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.clone()))?;
-    let supervisor = {
-        let terminals = terminal_supervisors.lock().await;
-        terminals.get(&terminal_id).cloned()
-    }
-    .ok_or_else(|| LifecycleError::AttachFailed("terminal session is unavailable".to_string()))?;
-
-    supervisor.write(&data)?;
-    touch_terminal(&db, &terminal_id)?;
-    Ok(())
+    Ok(terminal)
 }
 
 fn persist_terminal_attachment_bytes(
@@ -425,7 +256,7 @@ pub async fn sync_native_terminal_surface(
     if terminal.status == TerminalStatus::Finished.as_str()
         || terminal.status == TerminalStatus::Failed.as_str()
     {
-        native_terminal::hide_surface(&terminal_id)?;
+        native_terminal::hide_surface(&window.app_handle(), &terminal_id)?;
         return Ok(());
     }
 
@@ -449,28 +280,28 @@ pub async fn sync_native_terminal_surface(
     let terminal_id_for_surface = terminal_id.clone();
     let theme_override_path = theme_override_path.to_string_lossy().to_string();
     let worktree_path = workspace.worktree_path.clone();
-    sync_native_terminal_in_webview(&window, move |webview_view| {
-        native_terminal::sync_surface(
-            webview_view,
-            &terminal_id_for_surface,
-            &worktree_path,
-            &command_line,
-            NativeTerminalFrame {
+    native_terminal::sync_surface(
+        &window,
+        NativeTerminalSurfaceSyncRequest {
+            background_color: &theme.background,
+            color_scheme,
+            command: &command_line,
+            focused,
+            font_size,
+            frame: NativeTerminalFrame {
                 x,
                 y,
                 width,
                 height,
             },
-            visible,
-            focused,
             pointer_passthrough,
-            &theme.background,
-            &theme_override_path,
-            font_size,
             scale_factor,
-            color_scheme,
-        )
-    })?;
+            terminal_id: &terminal_id_for_surface,
+            theme_config_path: &theme_override_path,
+            visible,
+            working_directory: &worktree_path,
+        },
+    )?;
     maybe_schedule_harness_observers(
         window.app_handle(),
         &db,
@@ -848,9 +679,7 @@ pub async fn hide_native_terminal_surface(
     }
 
     let terminal_id_for_surface = terminal_id.clone();
-    run_native_terminal_on_main_thread(&app, move || {
-        native_terminal::hide_surface(&terminal_id_for_surface)
-    })?;
+    native_terminal::hide_surface(&app, &terminal_id_for_surface)?;
     let db = db_path.0.clone();
     let Some(terminal) = load_terminal_record(&db, &terminal_id)? else {
         return Ok(());
@@ -870,136 +699,39 @@ pub async fn hide_native_terminal_surface(
     Ok(())
 }
 
-pub async fn resize_terminal(
-    terminal_supervisors: State<'_, TerminalSupervisorMap>,
-    terminal_id: String,
-    cols: u16,
-    rows: u16,
-) -> Result<(), LifecycleError> {
-    let supervisor = {
-        let terminals = terminal_supervisors.lock().await;
-        terminals.get(&terminal_id).cloned()
-    }
-    .ok_or_else(|| LifecycleError::AttachFailed("terminal session is unavailable".to_string()))?;
-
-    supervisor.resize(cols, rows)?;
-    Ok(())
-}
-
 pub async fn detach_terminal(
     app: AppHandle,
     db_path: State<'_, DbPath>,
-    terminal_supervisors: State<'_, TerminalSupervisorMap>,
     terminal_id: String,
 ) -> Result<(), LifecycleError> {
-    if native_terminal::is_available() {
-        return hide_native_terminal_surface(app, db_path, terminal_id).await;
-    }
-
-    let db = db_path.0.clone();
-    let terminal = load_terminal_record(&db, &terminal_id)?
-        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.clone()))?;
-    if terminal.status == TerminalStatus::Finished.as_str()
-        || terminal.status == TerminalStatus::Failed.as_str()
-    {
-        return Ok(());
-    }
-
-    let supervisor = {
-        let terminals = terminal_supervisors.lock().await;
-        terminals.get(&terminal_id).cloned()
-    };
-    if let Some(supervisor) = supervisor {
-        supervisor.detach();
-    }
-
-    let terminal = update_terminal_state(
-        &db,
-        &terminal_id,
-        TerminalStatus::Detached,
-        None,
-        None,
-        false,
-    )?;
-    emit_terminal_status(&app, &terminal);
-    Ok(())
+    hide_native_terminal_surface(app, db_path, terminal_id).await
 }
 
 pub async fn kill_terminal(
     app: AppHandle,
     db_path: State<'_, DbPath>,
-    terminal_supervisors: State<'_, TerminalSupervisorMap>,
     terminal_id: String,
 ) -> Result<(), LifecycleError> {
-    if native_terminal::is_available() {
-        let terminal_id_for_surface = terminal_id.clone();
-        run_native_terminal_on_main_thread(&app, move || {
-            native_terminal::destroy_surface(&terminal_id_for_surface)
-        })?;
-        let db = db_path.0.clone();
-        if let Some(terminal) = load_terminal_record(&db, &terminal_id)? {
-            if terminal.status != TerminalStatus::Finished.as_str()
-                && terminal.status != TerminalStatus::Failed.as_str()
-            {
-                let terminal = update_terminal_state(
-                    &db,
-                    &terminal_id,
-                    TerminalStatus::Finished,
-                    None,
-                    Some(130),
-                    true,
-                )?;
-                emit_terminal_status(&app, &terminal);
-            }
+    let terminal_id_for_surface = terminal_id.clone();
+    native_terminal::destroy_surface(&app, &terminal_id_for_surface)?;
+    let db = db_path.0.clone();
+    if let Some(terminal) = load_terminal_record(&db, &terminal_id)? {
+        if terminal.status != TerminalStatus::Finished.as_str()
+            && terminal.status != TerminalStatus::Failed.as_str()
+        {
+            let terminal = update_terminal_state(
+                &db,
+                &terminal_id,
+                TerminalStatus::Finished,
+                None,
+                Some(130),
+                true,
+            )?;
+            emit_terminal_status(&app, &terminal);
         }
-
-        return Ok(());
-    }
-
-    let supervisor = {
-        let terminals = terminal_supervisors.lock().await;
-        terminals.get(&terminal_id).cloned()
-    };
-
-    if let Some(supervisor) = supervisor {
-        supervisor.kill()?;
     }
 
     Ok(())
-}
-
-fn complete_terminal_exit(
-    app: &AppHandle,
-    db_path: &str,
-    terminal_id: &str,
-    workspace_id: &str,
-    outcome: &TerminalExitOutcome,
-) -> Result<(), LifecycleError> {
-    let terminal = update_terminal_state(
-        db_path,
-        terminal_id,
-        outcome.status.clone(),
-        outcome.failure_reason.as_ref(),
-        outcome.exit_code,
-        true,
-    )?;
-
-    emit_terminal_status(app, &terminal);
-    tracing::debug!(
-        "terminal {} in workspace {} exited",
-        terminal_id,
-        workspace_id
-    );
-    Ok(())
-}
-
-fn build_command(launch: &TerminalLaunchSpec, worktree_path: &str) -> CommandBuilder {
-    let mut command = CommandBuilder::new(&launch.program);
-    if !launch.args.is_empty() {
-        command.args(launch.args.iter().map(String::as_str));
-    }
-    command.cwd(worktree_path);
-    command
 }
 
 fn shell_command_line(launch: &TerminalLaunchSpec) -> String {
@@ -1047,10 +779,10 @@ fn resolve_terminal_launch(
     harness_session_id: Option<&str>,
 ) -> Result<TerminalLaunchSpec, LifecycleError> {
     match (launch_type, harness_provider, harness_session_id) {
-        (TerminalType::Shell, Some(_), _) => Err(LifecycleError::LocalPtySpawnFailed(
+        (TerminalType::Shell, Some(_), _) => Err(LifecycleError::AttachFailed(
             "shell terminals do not accept harness providers".to_string(),
         )),
-        (TerminalType::Shell, None, Some(_)) => Err(LifecycleError::LocalPtySpawnFailed(
+        (TerminalType::Shell, None, Some(_)) => Err(LifecycleError::AttachFailed(
             "shell terminals do not support harness session ids".to_string(),
         )),
         (TerminalType::Shell, None, None) => Ok(TerminalLaunchSpec {
@@ -1058,14 +790,12 @@ fn resolve_terminal_launch(
             args: Vec::new(),
             treat_nonzero_as_failure: false,
         }),
-        (TerminalType::Harness, None, _) => Err(LifecycleError::LocalPtySpawnFailed(
+        (TerminalType::Harness, None, _) => Err(LifecycleError::AttachFailed(
             "harness terminals require a harness provider".to_string(),
         )),
         (TerminalType::Harness, Some(provider), harness_session_id) => {
             let provider = harness::resolve_harness_adapter(Some(provider)).ok_or_else(|| {
-                LifecycleError::LocalPtySpawnFailed(format!(
-                    "unsupported harness provider: {provider}"
-                ))
+                LifecycleError::AttachFailed(format!("unsupported harness provider: {provider}"))
             })?;
             Ok(TerminalLaunchSpec {
                 program: provider.program.to_string(),
@@ -1080,7 +810,7 @@ fn resolve_terminal_launch(
                 treat_nonzero_as_failure: true,
             })
         }
-        (other, _, _) => Err(LifecycleError::LocalPtySpawnFailed(format!(
+        (other, _, _) => Err(LifecycleError::AttachFailed(format!(
             "unsupported terminal type: {}",
             other.as_str()
         ))),
@@ -1209,7 +939,7 @@ mod tests {
         let error = resolve_terminal_launch(&TerminalType::Harness, Some("unsupported"), None)
             .expect_err("must fail");
         match error {
-            LifecycleError::LocalPtySpawnFailed(message) => {
+            LifecycleError::AttachFailed(message) => {
                 assert!(message.contains("unsupported harness"));
             }
             other => panic!("unexpected error: {other}"),
@@ -1236,7 +966,7 @@ mod tests {
         let error = resolve_terminal_launch(&TerminalType::Shell, None, Some("session-123"))
             .expect_err("shell resume fails");
         match error {
-            LifecycleError::LocalPtySpawnFailed(message) => {
+            LifecycleError::AttachFailed(message) => {
                 assert!(message.contains("do not support harness session ids"));
             }
             other => panic!("unexpected error: {other}"),

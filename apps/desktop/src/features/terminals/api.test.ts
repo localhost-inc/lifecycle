@@ -1,15 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
-  attachTerminalStream,
   createTerminal,
   detachTerminal,
   getTerminal,
   killTerminal,
   listWorkspaceTerminals,
   renameTerminal,
-  resizeTerminal,
   terminalHasLiveSession,
-  writeTerminal,
 } from "./api";
 
 const TERMINAL_RUNTIME_UNAVAILABLE_MESSAGE = "Terminal runtime requires the Tauri desktop shell.";
@@ -40,15 +37,10 @@ describe("terminal api", () => {
   test("requires tauri for terminal runtime mutations", async () => {
     await expectTerminalRuntimeError(
       createTerminal({
-        cols: 120,
         launchType: "shell",
-        rows: 32,
         workspaceId: "workspace_1",
       }),
     );
-    await expectTerminalRuntimeError(attachTerminalStream("terminal_1", 120, 32, null, () => {}));
-    await expectTerminalRuntimeError(writeTerminal("terminal_1", "help\r"));
-    await expectTerminalRuntimeError(resizeTerminal("terminal_1", 120, 32));
     await expectTerminalRuntimeError(detachTerminal("terminal_1"));
     await expectTerminalRuntimeError(killTerminal("terminal_1"));
   });

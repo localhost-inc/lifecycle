@@ -5,7 +5,13 @@ import { Archive } from "lucide-react";
 import { TypedTitle } from "../../../components/typed-title";
 import { formatCompactRelativeTime } from "../../../lib/format";
 import { renameWorkspace } from "../api";
+import {
+  canInlineRenameWorkspace,
+  getWorkspaceDisplayName,
+  isRootWorkspace,
+} from "../lib/workspace-display";
 import { getWorkspaceSessionStatusState, WorkspaceSessionStatus } from "./workspace-session-status";
+import { WorkspaceRootIndicator } from "./workspace-root-indicator";
 
 interface WorkspaceTreeItemProps {
   running?: boolean;
@@ -30,6 +36,8 @@ export function WorkspaceTreeItem({
   const sessionStatusState = getWorkspaceSessionStatusState({ responseReady, running });
   const inputRef = useRef<HTMLInputElement | null>(null);
   const skipBlurCommitRef = useRef(false);
+  const displayName = getWorkspaceDisplayName(workspace);
+  const inlineRenameEnabled = canInlineRenameWorkspace(workspace);
   const [draftName, setDraftName] = useState(workspace.name);
   const [editing, setEditing] = useState(false);
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -53,6 +61,9 @@ export function WorkspaceTreeItem({
   }, [editing, workspace.name]);
 
   const startEditing = () => {
+    if (!inlineRenameEnabled) {
+      return;
+    }
     skipBlurCommitRef.current = false;
     setDraftName(workspace.name);
     setRenameError(null);
@@ -67,6 +78,11 @@ export function WorkspaceTreeItem({
   };
 
   const commitRename = async () => {
+    if (!inlineRenameEnabled) {
+      cancelEditing();
+      return;
+    }
+
     if (saving) {
       return;
     }
@@ -187,7 +203,8 @@ export function WorkspaceTreeItem({
         title={titleText}
         type="button"
       >
-        <TypedTitle className="flex-1 truncate text-sm" text={workspace.name} />
+        {isRootWorkspace(workspace) && <WorkspaceRootIndicator className="mr-0.5" />}
+        <TypedTitle className="flex-1 truncate text-sm" text={displayName} />
         {sessionStatusState === "hidden" && timestamp ? (
           <span
             className={cn(
@@ -201,7 +218,7 @@ export function WorkspaceTreeItem({
         )}
       </button>
       <SidebarMenuAction
-        aria-label={`Archive workspace ${workspace.name}`}
+        aria-label={`Archive workspace ${displayName}`}
         className="pointer-events-none opacity-0 transition-opacity disabled:opacity-0 group-hover/workspace-item:pointer-events-auto group-hover/workspace-item:opacity-100 group-hover/workspace-item:disabled:opacity-50"
         disabled={destroyDisabled}
         onClick={(event) => {

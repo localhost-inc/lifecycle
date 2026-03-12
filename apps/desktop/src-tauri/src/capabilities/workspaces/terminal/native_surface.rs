@@ -4,7 +4,6 @@ use std::collections::hash_map::DefaultHasher;
 use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
-use tauri::{AppHandle, WebviewWindow};
 
 use super::NativeTerminalTheme;
 
@@ -125,48 +124,4 @@ pub(crate) fn parse_native_terminal_color_scheme(
             "unsupported native terminal appearance: {other}"
         ))),
     }
-}
-
-pub(crate) fn run_native_terminal_on_main_thread<T: Send + 'static>(
-    app: &AppHandle,
-    task: impl FnOnce() -> Result<T, LifecycleError> + Send + 'static,
-) -> Result<T, LifecycleError> {
-    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
-    app.run_on_main_thread(move || {
-        let _ = sender.send(task());
-    })
-    .map_err(|error| LifecycleError::AttachFailed(error.to_string()))?;
-
-    receiver.recv().map_err(|_| {
-        LifecycleError::AttachFailed(
-            "native terminal main-thread task did not complete".to_string(),
-        )
-    })?
-}
-
-#[cfg(target_os = "macos")]
-pub(crate) fn sync_native_terminal_in_webview<T: Send + 'static>(
-    window: &WebviewWindow,
-    task: impl FnOnce(*mut std::ffi::c_void) -> Result<T, LifecycleError> + Send + 'static,
-) -> Result<T, LifecycleError> {
-    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
-    window
-        .with_webview(move |webview| {
-            let _ = sender.send(task(webview.inner()));
-        })
-        .map_err(|error| LifecycleError::AttachFailed(error.to_string()))?;
-
-    receiver.recv().map_err(|_| {
-        LifecycleError::AttachFailed("native terminal webview task did not complete".to_string())
-    })?
-}
-
-#[cfg(not(target_os = "macos"))]
-pub(crate) fn sync_native_terminal_in_webview<T: Send + 'static>(
-    _window: &WebviewWindow,
-    _task: impl FnOnce(*mut std::ffi::c_void) -> Result<T, LifecycleError> + Send + 'static,
-) -> Result<T, LifecycleError> {
-    Err(LifecycleError::AttachFailed(
-        "native terminal webview integration is unavailable on this platform".to_string(),
-    ))
 }

@@ -3,9 +3,14 @@ import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  getWorkspaceDisplayName,
+  isRootWorkspace,
+} from "../../features/workspaces/lib/workspace-display";
 import { useHistoryAvailability } from "../../app/history-stack";
 import { TypedTitle } from "../typed-title";
 import { workspaceSupportsFilesystemInteraction } from "../../features/workspaces/lib/workspace-capabilities";
+import { WorkspaceRootIndicator } from "../../features/workspaces/components/workspace-root-indicator";
 import { TitleBarActions } from "./title-bar-actions";
 
 interface TitleBarProps {
@@ -90,6 +95,16 @@ export function TitleBar({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [goBack, goForward]);
 
+  const workspaceDisplayName = selectedWorkspace
+    ? getWorkspaceDisplayName(selectedWorkspace)
+    : null;
+  const workspaceTitle =
+    selectedWorkspace && workspaceDisplayName
+      ? isRootWorkspace(selectedWorkspace)
+        ? workspaceDisplayName
+        : selectedWorkspace.source_ref
+      : undefined;
+
   return (
     <header
       data-tauri-drag-region
@@ -99,14 +114,13 @@ export function TitleBar({
     >
       <div data-tauri-drag-region className="flex min-w-0 flex-1 items-center gap-3">
         {selectedWorkspace && (
-          <div
-            data-no-drag
-            className="flex min-w-0 items-center gap-2.5"
-            title={selectedWorkspace.source_ref}
-          >
+          <div data-no-drag className="flex min-w-0 items-center gap-2.5" title={workspaceTitle}>
+            {isRootWorkspace(selectedWorkspace) && (
+              <WorkspaceRootIndicator className="text-[var(--foreground)]/65" />
+            )}
             <TypedTitle
               className="font-mono text-[13px] font-medium text-[var(--foreground)]"
-              text={selectedWorkspace.name}
+              text={workspaceDisplayName ?? selectedWorkspace.name}
             />
             {selectedWorkspace.git_sha && (
               <span className="font-mono text-xs text-[var(--muted-foreground)]">

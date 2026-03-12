@@ -11,8 +11,8 @@ describe("terminal contracts", () => {
   });
 
   test("keeps canonical terminal failure reasons", () => {
-    const failureReason: TerminalFailureReason = "local_pty_spawn_failed";
-    expect(failureReason).toBe("local_pty_spawn_failed");
+    const failureReason: TerminalFailureReason = "attach_failed";
+    expect(failureReason).toBe("attach_failed");
   });
 
   test("keeps canonical terminal type values", () => {

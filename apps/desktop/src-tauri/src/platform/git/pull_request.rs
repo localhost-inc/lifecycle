@@ -639,12 +639,7 @@ pub async fn get_pull_request_patch(
 ) -> Result<String, LifecycleError> {
     let args = build_pull_request_diff_args(pull_request_number);
     let arg_refs = args.iter().map(String::as_str).collect::<Vec<_>>();
-    let output = gh_command(
-        repo_path,
-        "read GitHub pull request diff patch",
-        &arg_refs,
-    )
-    .await?;
+    let output = gh_command(repo_path, "read GitHub pull request diff patch", &arg_refs).await?;
 
     if !output.status.success() {
         return Err(github_failure(

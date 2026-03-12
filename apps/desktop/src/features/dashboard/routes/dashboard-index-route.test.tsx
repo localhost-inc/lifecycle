@@ -30,9 +30,11 @@ let workspacesByProjectState: {
 
 function createWorkspaceRecord(input: {
   id: string;
+  kind?: "managed" | "root";
   lastActiveAt: string;
   name: string;
   projectId: string;
+  sourceRef?: string;
   status?: "active" | "idle" | "starting" | "stopping";
 }) {
   return {
@@ -43,12 +45,13 @@ function createWorkspaceRecord(input: {
     failure_reason: null,
     git_sha: null,
     id: input.id,
+    kind: input.kind ?? "managed",
     last_active_at: input.lastActiveAt,
     manifest_fingerprint: null,
     mode: "local" as const,
     name: input.name,
     project_id: input.projectId,
-    source_ref: `refs/heads/${input.name.toLowerCase().replace(/\s+/g, "-")}`,
+    source_ref: input.sourceRef ?? `refs/heads/${input.name.toLowerCase().replace(/\s+/g, "-")}`,
     source_workspace_id: null,
     status: input.status ?? "active",
     updated_at: "2026-03-08T10:00:00.000Z",
@@ -159,6 +162,32 @@ describe("DashboardIndexRoute", () => {
     expect(markup).toContain("kin");
     expect(markup).toContain("orbit");
     expect(markup.indexOf("Alpha Workspace")).toBeLessThan(markup.indexOf("Beta Workspace"));
+  });
+
+  test("renders root workspaces in recent history using the branch label and root indicator", () => {
+    searchParamsState = new URLSearchParams("");
+    workspacesByProjectState = {
+      data: {
+        project_1: [
+          createWorkspaceRecord({
+            id: "workspace_root",
+            kind: "root",
+            lastActiveAt: "2026-03-10T10:00:00.000Z",
+            name: "Root",
+            projectId: "project_1",
+            sourceRef: "main",
+          }),
+        ],
+      },
+      isLoading: false,
+    };
+
+    const markup = renderToStaticMarkup(createElement(DashboardIndexRoute));
+
+    expect(markup).toContain('data-slot="workspace-root-indicator"');
+    expect(markup).toContain(">main<");
+    expect(markup).not.toContain(">Root<");
+    expect(markup).toContain('aria-label="Open workspace main"');
   });
 
   test("renders quick-create project actions when there are no workspaces yet", () => {

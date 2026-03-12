@@ -7,6 +7,7 @@ use std::time::Instant;
 use tauri::AppHandle;
 
 use super::harness::normalize_prompt_text;
+use super::kind::is_root_workspace_kind;
 use super::naming;
 use super::rename;
 use super::title;
@@ -203,7 +204,7 @@ fn should_hydrate_workspace_identity(
 ) -> Result<bool, LifecycleError> {
     let conn = open_db(db_path)?;
     conn.query_row(
-        "SELECT workspace.name_origin, workspace.source_ref_origin
+        "SELECT workspace.name_origin, workspace.source_ref_origin, workspace.kind
          FROM terminal
          INNER JOIN workspace ON workspace.id = terminal.workspace_id
          WHERE terminal.id = ?1
@@ -213,7 +214,9 @@ fn should_hydrate_workspace_identity(
         |row| {
             let name_origin: String = row.get(0)?;
             let source_ref_origin: String = row.get(1)?;
-            Ok(name_origin == rename::TitleOrigin::Default.as_str()
+            let workspace_kind: String = row.get(2)?;
+            Ok(!is_root_workspace_kind(&workspace_kind)
+                && name_origin == rename::TitleOrigin::Default.as_str()
                 && source_ref_origin == rename::TitleOrigin::Default.as_str())
         },
     )

@@ -3,11 +3,15 @@ use crate::platform::git::worktree;
 use crate::platform::lifecycle_root::resolve_lifecycle_root;
 use crate::shared::errors::LifecycleError;
 use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
-use crate::{SupervisorMap, TerminalSupervisorMap};
+use crate::RootGitWatcherMap;
+use crate::SupervisorMap;
 use rusqlite::params;
 use tauri::{AppHandle, State};
 
+use super::kind::is_root_workspace_kind;
+
 struct DestroyWorkspaceContext {
+    kind: String,
     mode: String,
     project_path: String,
     terminal_ids: Vec<String>,
@@ -19,9 +23,9 @@ fn load_destroy_workspace_context(
     workspace_id: &str,
 ) -> Result<DestroyWorkspaceContext, LifecycleError> {
     let conn = open_db(db_path)?;
-    let (mode, project_path, worktree_path) = conn
+    let (kind, mode, project_path, worktree_path) = conn
         .query_row(
-            "SELECT workspace.mode, project.path, workspace.worktree_path
+            "SELECT workspace.kind, workspace.mode, project.path, workspace.worktree_path
              FROM workspace
              INNER JOIN project ON project.id = workspace.project_id
              WHERE workspace.id = ?1
@@ -31,7 +35,8 @@ fn load_destroy_workspace_context(
                 Ok((
                     row.get::<_, String>(0)?,
                     row.get::<_, String>(1)?,
-                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, Option<String>>(3)?,
                 ))
             },
         )
@@ -53,6 +58,7 @@ fn load_destroy_workspace_context(
     }
 
     Ok(DestroyWorkspaceContext {
+        kind,
         mode,
         project_path,
         terminal_ids,
@@ -73,10 +79,7 @@ fn destroy_native_terminal_surfaces(app: &AppHandle, terminal_ids: &[String]) {
     }
 
     for terminal_id in terminal_ids {
-        let terminal_id = terminal_id.clone();
-        let _ = app.run_on_main_thread(move || {
-            let _ = crate::platform::native_terminal::destroy_surface(&terminal_id);
-        });
+        let _ = crate::platform::native_terminal::destroy_surface(app, terminal_id);
     }
 }
 
@@ -100,11 +103,15 @@ fn emit_workspace_deleted(app: &AppHandle, workspace_id: &str) {
 pub async fn destroy_workspace(
     app: AppHandle,
     db_path: State<'_, DbPath>,
+    root_git_watchers: State<'_, RootGitWatcherMap>,
     supervisors: State<'_, SupervisorMap>,
-    terminal_supervisors: State<'_, TerminalSupervisorMap>,
     workspace_id: String,
 ) -> Result<(), LifecycleError> {
     let context = load_destroy_workspace_context(&db_path.0, &workspace_id)?;
+
+    if is_root_workspace_kind(&context.kind) {
+        super::git_watcher::stop_root_git_watcher(&root_git_watchers, &workspace_id);
+    }
 
     {
         let mut supervisors = supervisors.lock().await;
@@ -116,19 +123,7 @@ pub async fn destroy_workspace(
 
     destroy_native_terminal_surfaces(&app, &context.terminal_ids);
 
-    let removed_terminal_supervisors = {
-        let mut terminal_supervisors = terminal_supervisors.lock().await;
-        context
-            .terminal_ids
-            .iter()
-            .filter_map(|terminal_id| terminal_supervisors.remove(terminal_id))
-            .collect::<Vec<_>>()
-    };
-    for supervisor in removed_terminal_supervisors {
-        let _ = supervisor.kill();
-    }
-
-    if context.mode == "local" {
+    if context.mode == "local" && !is_root_workspace_kind(&context.kind) {
         if let Some(worktree_path) = context.worktree_path.as_deref() {
             worktree::remove_worktree(&context.project_path, worktree_path).await?;
         }
@@ -164,11 +159,12 @@ mod tests {
         )
         .expect("insert project");
         conn.execute(
-            "INSERT INTO workspace (id, project_id, source_ref, worktree_path, mode, status)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO workspace (id, project_id, kind, source_ref, worktree_path, mode, status)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 "workspace_1",
                 "project_1",
+                "managed",
                 "lifecycle/test",
                 "/tmp/project_1/.worktrees/workspace_1",
                 "local",
@@ -198,6 +194,7 @@ mod tests {
         let context =
             load_destroy_workspace_context(&db_path, "workspace_1").expect("load destroy context");
 
+        assert_eq!(context.kind, "managed");
         assert_eq!(context.mode, "local");
         assert_eq!(context.project_path, "/tmp/project_1");
         assert_eq!(

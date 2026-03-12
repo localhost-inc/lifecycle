@@ -9,6 +9,7 @@ const interactiveWorkspace: WorkspaceRecord = {
   id: "workspace_1",
   project_id: "project_1",
   name: "Fix Landing Hero",
+  kind: "managed",
   source_ref: "lifecycle/fix-landing-hero",
   git_sha: "abcdef1234567890",
   worktree_path: "/tmp/workspace_1",

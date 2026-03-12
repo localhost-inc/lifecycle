@@ -5,7 +5,9 @@ import { ArrowUpRight, History, Layers, Sparkles } from "lucide-react";
 import { Badge, Button, Card, EmptyState } from "@lifecycle/ui";
 import { formatRelativeTime } from "../../../lib/format";
 import { useProjectCatalog } from "../../projects/hooks";
+import { WorkspaceRootIndicator } from "../../workspaces/components/workspace-root-indicator";
 import { useWorkspacesByProject } from "../../workspaces/hooks";
+import { getWorkspaceDisplayName, isRootWorkspace } from "../../workspaces/lib/workspace-display";
 import { readLastWorkspaceId } from "../../workspaces/state/workspace-surface-state";
 
 interface DashboardOutletContext {
@@ -153,44 +155,51 @@ export function DashboardIndexRoute() {
               <p className="app-panel-title">Recent workspaces</p>
             </div>
             <div className="grid gap-3 lg:grid-cols-2">
-              {recentWorkspaces.map((workspace) => (
-                <button
-                  key={workspace.id}
-                  aria-label={`Open workspace ${workspace.name}`}
-                  className="group rounded-lg border border-[var(--border)] bg-[var(--card)] p-4 text-left transition-colors hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
-                  onClick={() => void navigate(`/workspaces/${workspace.id}`)}
-                  type="button"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg text-[var(--muted-foreground)]">
-                      <History className="size-4" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-[var(--foreground)]">
-                          {workspace.name}
-                        </p>
-                        {workspace.id === lastWorkspaceId ? (
-                          <Badge variant="secondary">Last opened</Badge>
-                        ) : null}
+              {recentWorkspaces.map((workspace) =>
+                (() => {
+                  const displayName = getWorkspaceDisplayName(workspace);
+
+                  return (
+                    <button
+                      key={workspace.id}
+                      aria-label={`Open workspace ${displayName}`}
+                      className="group rounded-lg border border-[var(--border)] bg-[var(--card)] p-4 text-left transition-colors hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]"
+                      onClick={() => void navigate(`/workspaces/${workspace.id}`)}
+                      type="button"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg text-[var(--muted-foreground)]">
+                          <History className="size-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {isRootWorkspace(workspace) && <WorkspaceRootIndicator />}
+                            <p className="truncate text-sm font-semibold text-[var(--foreground)]">
+                              {displayName}
+                            </p>
+                            {workspace.id === lastWorkspaceId ? (
+                              <Badge variant="secondary">Last opened</Badge>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 truncate text-xs text-[var(--muted-foreground)]">
+                            {projectNameById.get(workspace.project_id) ?? "Unknown project"}
+                          </p>
+                        </div>
+                        <Badge variant={workspaceStatusBadgeVariant[workspace.status]}>
+                          {workspaceStatusLabel[workspace.status]}
+                        </Badge>
                       </div>
-                      <p className="mt-1 truncate text-xs text-[var(--muted-foreground)]">
-                        {projectNameById.get(workspace.project_id) ?? "Unknown project"}
-                      </p>
-                    </div>
-                    <Badge variant={workspaceStatusBadgeVariant[workspace.status]}>
-                      {workspaceStatusLabel[workspace.status]}
-                    </Badge>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between gap-3 text-xs text-[var(--muted-foreground)]">
-                    <span>Last active {formatRelativeTime(workspace.last_active_at)}</span>
-                    <span className="inline-flex items-center gap-1 text-[var(--foreground)] transition-transform group-hover:translate-x-0.5">
-                      Open
-                      <ArrowUpRight className="size-3.5" />
-                    </span>
-                  </div>
-                </button>
-              ))}
+                      <div className="mt-3 flex items-center justify-between gap-3 text-xs text-[var(--muted-foreground)]">
+                        <span>Last active {formatRelativeTime(workspace.last_active_at)}</span>
+                        <span className="inline-flex items-center gap-1 text-[var(--foreground)] transition-transform group-hover:translate-x-0.5">
+                          Open
+                          <ArrowUpRight className="size-3.5" />
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })(),
+              )}
             </div>
           </div>
         ) : canQuickCreateWorkspace ? (

@@ -78,7 +78,7 @@ Detail spec: [docs/milestones/m3.md](./milestones/m3.md)
 - [x] Terminal entity and lifecycle states are implemented
 - [x] Local terminal architecture (native Ghostty desktop host) is operational
 - [x] Harness launch/resume flows are integrated
-- [x] Terminal tabs support attach/detach/reattach and replay
+- [x] Terminal tabs support native hide/detach/restore within the running desktop session
 - [x] Workspace and terminal titles support inline rename plus first-prompt auto-titles
 - [x] Terminal lifecycle coverage is tested
 

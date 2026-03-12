@@ -10,11 +10,13 @@ import type {
   GitStatusResult,
   ServiceRecord,
   TerminalRecord,
+  WorkspaceKind,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
 
 export interface LocalWorkspaceProviderCreateContext {
   mode: "local";
+  kind?: WorkspaceKind;
   projectId: string;
   projectPath: string;
   workspaceName?: string;
@@ -62,19 +64,6 @@ export interface WorkspaceProviderCreateTerminalInput {
   launchType: "shell" | "harness";
   harnessProvider?: string | null;
   harnessSessionId?: string | null;
-  cols: number;
-  rows: number;
-}
-
-export interface WorkspaceProviderAttachTerminalInput {
-  terminalId: string;
-  cols: number;
-  rows: number;
-}
-
-export interface WorkspaceProviderAttachTerminalResult {
-  terminal: TerminalRecord;
-  replayCursor: string | null;
 }
 
 export interface WorkspaceProviderGitDiffInput {
@@ -92,14 +81,7 @@ export interface WorkspaceProvider {
   sleep(workspaceId: string): Promise<void>;
   wake(workspaceId: string): Promise<void>;
   destroy(workspaceId: string): Promise<void>;
-  createTerminal(
-    input: WorkspaceProviderCreateTerminalInput,
-  ): Promise<WorkspaceProviderAttachTerminalResult>;
-  attachTerminal(
-    input: WorkspaceProviderAttachTerminalInput,
-  ): Promise<WorkspaceProviderAttachTerminalResult>;
-  writeTerminal(terminalId: string, data: string): Promise<void>;
-  resizeTerminal(terminalId: string, cols: number, rows: number): Promise<void>;
+  createTerminal(input: WorkspaceProviderCreateTerminalInput): Promise<TerminalRecord>;
   detachTerminal(terminalId: string): Promise<void>;
   killTerminal(terminalId: string): Promise<void>;
   exposePort(workspaceId: string, serviceName: string, port: number): Promise<string | null>;
