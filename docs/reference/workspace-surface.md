@@ -30,6 +30,7 @@ The workspace center panel is a shared surface that can host both provider-backe
 3. Switching tabs should hide or detach runtime presentation without implicitly destroying the runtime resource.
 4. Closing a runtime tab from the strip should detach or hide it, not kill the runtime.
 5. Document tabs may mount on demand because they are render-only views over workspace data.
+6. Runtime tab semantics must stay mode-agnostic: a cloud terminal may attach through a provider bridge while a local terminal talks directly to the host runtime, but both remain the same runtime-tab class in the workspace surface.
 
 ## Launcher Tabs
 
@@ -72,3 +73,4 @@ The workspace center panel is a shared surface that can host both provider-backe
 1. File editor tabs should reuse the same document-tab path as diff tabs.
 2. Future agent/workspace-native sessions should plug into the runtime-tab path rather than replacing the tab model again.
 3. The surface contract must work for both `workspace.mode=local` and `workspace.mode=cloud`; only the provider-backed runtime/document data source changes.
+4. On desktop platforms with a native terminal host, cloud terminals should reuse the same native-host lane as local terminals; provider attach transport should change underneath that surface rather than reintroducing a browser terminal worldview.

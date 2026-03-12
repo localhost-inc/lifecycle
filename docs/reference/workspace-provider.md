@@ -97,13 +97,17 @@ Execution-state facts should follow the thing that changed:
 
 ## Terminal Session Contract (M3+)
 
-Terminal control stays split between typed lifecycle mutations and native surface synchronization.
+Terminal control stays split between typed lifecycle mutations and desktop surface synchronization.
 
 1. Control-plane operations stay typed and imperative (`create`, `detach`, `kill`).
-2. `createTerminal(...)` provisions a native-backed terminal session and returns typed terminal metadata; once created, input and output are owned by the native host rather than a JS byte-stream contract.
-3. Desktop-only geometry, visibility, focus, theme, and font synchronization for native surfaces stay outside the provider interface.
-4. `detachTerminal(terminal_id)` hides the active native surface without terminating the running session.
-5. `killTerminal(terminal_id)` is the only normal terminal-level action that intentionally ends a live session.
+2. `createTerminal(...)` provisions a provider-owned terminal session and returns typed terminal metadata.
+3. Session runtime stays provider-owned:
+   - local mode runs a native libghostty-owned session on the host machine
+   - cloud mode runs a sandbox-owned PTY session and may add a shared-session multiplexer
+4. When the desktop app has a native terminal host available, both local and cloud terminals should render through that host; cloud attach transport may use a provider-specific bridge or proxy path rather than reviving a browser renderer contract inside the main app.
+5. Desktop-only geometry, visibility, focus, theme, and font synchronization for native surfaces stay outside the provider interface.
+6. `detachTerminal(terminal_id)` hides the active surface without terminating the running session.
+7. `killTerminal(terminal_id)` is the only normal terminal-level action that intentionally ends a live session.
 
 ## Mode, Authority, and Aggregation
 
@@ -159,7 +163,9 @@ Git operations follow the same authority rule as terminals and lifecycle mutatio
 
 1. Cloud sandbox plane:
    - per-branch Cloudflare Sandbox instances
-   - terminal access via sandbox terminal API
+   - sandbox-owned PTY sessions for terminal runtime
+   - desktop terminal attach via provider-minted credentials and a provider-owned remote attach transport
+   - shared terminal fan-in/fan-out via Durable Object multiplexer when collaboration is enabled
    - preview URLs via Cloudflare Workers routing
    - ephemeral test data and fixtures
 2. Capacity pools:

@@ -70,7 +70,7 @@ github.handleWebhook(payload, signature) # HTTP action for Worker
 - `workspaces.run` / `workspaces.reset`: no args beyond workspace id; returns updated workspace
 - `github.listRepositories`: search/list available GitHub repos for the authenticated user's org
 - `terminals.create`: `workspaceId`, optional `harness`; returns `terminalId`
-- `terminals.mintAttachToken`: `terminalId`; returns `{ attachToken, expiresAt, wssUrl, role }` (cloud only — local uses Tauri IPC). `role` is `editor` for workspace creator, or the role from the user's `workspace_invite` record.
+- `terminals.mintAttachToken`: `terminalId`; returns `{ attachToken, expiresAt, wssUrl, role }` (cloud only — local uses Tauri IPC). `role` is `editor` for workspace creator, or the role from the user's `workspace_invite` record. Desktop clients redeem this through the cloud terminal attach transport; on native-hosted platforms that transport may run behind a local attach/proxy bridge rather than a browser terminal renderer.
 - `workspaceInvites.create`: `workspaceId`, optional `role` (`viewer|editor`, default `viewer`); creates a shareable invite scoped to `{organization_id, workspace_id}`. Returns `{ token, expiresAt }`. Token expires after 24 hours or on explicit revoke. Workspace owner only.
 - `workspaceInvites.join`: `token`; validates invite, checks org membership and `workspaces:read` permission. Returns `{ workspaceId, role }`. Single-use for join handshake.
 - `workspaceInvites.setRole`: `workspaceId`, `userId`, `role` (`viewer|editor`); host-only. Workspace creator always retains `editor` and cannot be demoted.
@@ -79,8 +79,8 @@ github.handleWebhook(payload, signature) # HTTP action for Worker
 
 ## Terminal Transport
 
-- **Cloud (solo)**: Convex action mints attach token → desktop app connects WebSocket directly to Cloudflare Sandbox PTY
-- **Cloud (shared)**: Convex action mints attach token with role → desktop app connects WebSocket to Durable Object session multiplexer → multiplexer fans in stdin from `editor` clients to PTY, fans out stdout to all clients. Viewer stdin is rejected at protocol level.
+- **Cloud (solo)**: Convex action mints attach token → desktop app attaches through the cloud terminal transport to the Cloudflare Sandbox PTY. On platforms with a native terminal host, the native surface may launch a local attach/proxy helper that redeems the token and bridges remote stdin/stdout without reintroducing a browser renderer in the main app.
+- **Cloud (shared)**: Convex action mints attach token with role → desktop app attaches to the Durable Object session multiplexer through the same cloud terminal transport → multiplexer fans in stdin from `editor` clients to PTY, fans out stdout to all clients. Viewer stdin is rejected at protocol level.
 - **Local**: macOS hosts a native Ghostty terminal surface inside the Tauri window and syncs it from the DOM shell over Tauri IPC. Shared sessions are not supported in local mode.
 
 ## Terminal Auth (Cloud Only)
@@ -95,7 +95,7 @@ github.handleWebhook(payload, signature) # HTTP action for Worker
 ## Streaming and Real-Time
 
 - Workspace state changes, activity feeds, and service status are all push-based via Convex reactive queries (`useQuery`) — no polling
-- Terminal PTY attach uses WebSocket to the authoritative workspace environment (cloud: Cloudflare Sandbox with attach token) or Tauri IPC (local)
+- Terminal PTY attach uses the authoritative provider transport under the active terminal host (cloud: WebSocket-backed attach to Sandbox or Durable Object with attach token; local: Tauri IPC to the native host runtime)
 - Test execution streaming is expansion-scope (testing.md)
 
 ## Event Foundation Alignment
