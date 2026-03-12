@@ -53,7 +53,7 @@ mod tests {
         let rendered = expand_reserved_runtime_templates(
             "http://${LIFECYCLE_SERVICE_API_ADDRESS}",
             &env,
-            "services.web.env_vars.VITE_API_ORIGIN",
+            "environment.web.env.VITE_API_ORIGIN",
         )
         .expect("runtime template expansion succeeds");
 
@@ -67,7 +67,7 @@ mod tests {
         let rendered = expand_reserved_runtime_templates(
             "${EXTERNAL_API_KEY}",
             &env,
-            "services.api.env_vars.API_KEY",
+            "environment.api.env.API_KEY",
         )
         .expect("non-runtime templates are preserved");
 
@@ -81,13 +81,13 @@ mod tests {
         let error = expand_reserved_runtime_templates(
             "${LIFECYCLE_SERVICE_API_ADDRESS}",
             &env,
-            "services.web.env_vars.VITE_API_ORIGIN",
+            "environment.web.env.VITE_API_ORIGIN",
         )
         .expect_err("unknown runtime templates should fail");
 
         match error {
             LifecycleError::InvalidInput { field, reason } => {
-                assert_eq!(field, "services.web.env_vars.VITE_API_ORIGIN");
+                assert_eq!(field, "environment.web.env.VITE_API_ORIGIN");
                 assert!(reason.contains("unknown runtime variable"));
             }
             other => panic!("unexpected error: {other}"),

@@ -24,8 +24,8 @@ use super::shared::{
     update_service_status_db, update_workspace_status_db, workspace_failure_reason_for_start_error,
 };
 
-fn set_port_env(env_vars: &mut Option<std::collections::HashMap<String, String>>, port: u16) {
-    let vars = env_vars.get_or_insert_with(std::collections::HashMap::new);
+fn set_port_env(env: &mut Option<std::collections::HashMap<String, String>>, port: u16) {
+    let vars = env.get_or_insert_with(std::collections::HashMap::new);
     vars.insert("PORT".to_string(), port.to_string());
 }
 
@@ -113,7 +113,7 @@ fn apply_port_override(service: &mut ServiceConfig, override_port: u16) {
         ServiceConfig::Process(process) => {
             let previous_port = process.port;
             process.resolved_port = Some(override_port);
-            set_port_env(&mut process.env_vars, override_port);
+            set_port_env(&mut process.env, override_port);
             rewrite_health_check_port(&mut process.health_check, previous_port, override_port);
         }
         ServiceConfig::Image(image) => {
@@ -151,7 +151,7 @@ fn config_with_workspace_overrides(
         let Ok(port_override) = u16::try_from(port_override) else {
             continue;
         };
-        let Some(service) = next.services.get_mut(&service_name) else {
+        let Some(service) = next.service_mut(&service_name) else {
             continue;
         };
         apply_port_override(service, port_override);
@@ -531,18 +531,21 @@ impl WorkspaceStartContext<'_> {
 
     async fn execute_task_node(
         &self,
+        node_name: &str,
         step: &crate::capabilities::workspaces::manifest::SetupStep,
     ) -> Result<(), LifecycleError> {
         if self.abort_if_needed().await? {
             return Ok(());
         }
 
-        if let Err(error) = setup::run_setup_steps(
+        let step_field = format!("environment.{node_name}");
+        if let Err(error) = setup::run_steps(
             self.app,
             self.workspace_id,
             self.worktree_path,
             std::slice::from_ref(step),
             self.runtime_env,
+            &step_field,
         )
         .await
         {
@@ -565,7 +568,7 @@ impl WorkspaceStartContext<'_> {
         for (node_name, node) in sorted_nodes {
             match &node.kind {
                 EnvironmentNodeKind::Task(step) => {
-                    self.execute_task_node(step).await?;
+                    self.execute_task_node(node_name, step).await?;
                 }
                 EnvironmentNodeKind::Service(service) => {
                     self.execute_service_node(node_name, service).await?;
@@ -674,7 +677,7 @@ async fn start_services_lifecycle(
     let lowered_graph = match lower_environment_graph(&runtime_config, setup_completed) {
         Ok(graph) => graph,
         Err(error) => {
-            let service_names: Vec<String> = runtime_config.services.keys().cloned().collect();
+            let service_names = runtime_config.declared_service_names();
             mark_services_failed(
                 db_path,
                 workspace_id,
@@ -721,7 +724,7 @@ async fn start_services_lifecycle(
     let sorted_nodes = match topo_sort_environment_nodes(&lowered_graph.environment_nodes) {
         Ok(sorted) => sorted,
         Err(error) => {
-            let service_names: Vec<String> = runtime_config.services.keys().cloned().collect();
+            let service_names = runtime_config.declared_service_names();
             record_service_graph_failure(&ctx, &service_names, error).await?;
             return Ok(());
         }
@@ -735,12 +738,13 @@ async fn start_services_lifecycle(
 
     if !lowered_graph.workspace_setup.is_empty() {
         let setup_started_at = Instant::now();
-        if let Err(error) = setup::run_setup_steps(
+        if let Err(error) = setup::run_steps(
             app,
             workspace_id,
             worktree_path,
             &lowered_graph.workspace_setup,
             &runtime_env,
+            "workspace.setup",
         )
         .await
         {

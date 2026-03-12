@@ -2,11 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { readManifestFromFs } from "./projects";
 
 const VALID_MANIFEST = JSON.stringify({
-  setup: {
-    steps: [{ name: "install", command: "bun install", timeout_seconds: 120 }],
+  workspace: {
+    setup: [{ name: "install", command: "bun install", timeout_seconds: 120 }],
   },
-  services: {
+  environment: {
     api: {
+      kind: "service",
       runtime: "process",
       command: "bun run dev",
     },

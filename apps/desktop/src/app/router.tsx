@@ -1,5 +1,6 @@
 import { Suspense, lazy, type ReactNode } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
+import { Loading } from "@lifecycle/ui";
 import { DashboardLayout } from "../components/layout/dashboard-layout";
 
 const DashboardIndexRoute = lazy(async () => {
@@ -34,11 +35,7 @@ const WorkspaceRoute = lazy(async () => {
 });
 
 function RouteFallback() {
-  return (
-    <div className="flex flex-1 items-center justify-center p-8">
-      <p className="text-sm text-[var(--muted-foreground)]">Loading...</p>
-    </div>
-  );
+  return <Loading />;
 }
 
 function LazyRoute({ children }: { children: ReactNode }) {

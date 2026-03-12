@@ -13,4 +13,10 @@ describe("formatCompactRelativeTime", () => {
   test("keeps compact minute output for older timestamps", () => {
     expect(formatCompactRelativeTime(new Date(Date.now() - 5 * 60_000).toISOString())).toBe("5m");
   });
+
+  test("treats bare SQLite datetime strings as UTC", () => {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60_000);
+    const sqliteFormat = fiveMinutesAgo.toISOString().replace("T", " ").replace("Z", "").split(".")[0];
+    expect(formatCompactRelativeTime(sqliteFormat)).toBe("5m");
+  });
 });

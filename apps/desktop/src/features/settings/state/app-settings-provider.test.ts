@@ -34,7 +34,7 @@ describe("parseStoredSettings", () => {
     expect(parseStoredSettings(null)).toEqual({
       interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
       monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
-      turnNotificationSound: "glass",
+      turnNotificationSound: "orbit",
       turnNotificationsMode: "when-unfocused",
       worktreeRoot: "~/.lifecycle/worktrees",
     });
@@ -67,7 +67,7 @@ describe("parseStoredSettings", () => {
     ).toEqual({
       interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
       monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
-      turnNotificationSound: "glass",
+      turnNotificationSound: "orbit",
       turnNotificationsMode: "when-unfocused",
       worktreeRoot: "~/.lifecycle/worktrees",
     });

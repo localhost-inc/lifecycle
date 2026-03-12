@@ -193,7 +193,11 @@ export function useGitLog(
     disabledData: undefined,
   });
 
-  usePollingRefresh(query.refresh, Boolean(workspaceId) && enabled && (options?.polling ?? true), 10000);
+  usePollingRefresh(
+    query.refresh,
+    Boolean(workspaceId) && enabled && (options?.polling ?? true),
+    10000,
+  );
   return query;
 }
 

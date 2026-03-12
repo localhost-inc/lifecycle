@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import type { LifecycleEvent, ServiceRecord, TerminalRecord, WorkspaceRecord } from "@lifecycle/contracts";
+import type {
+  LifecycleEvent,
+  ServiceRecord,
+  TerminalRecord,
+  WorkspaceRecord,
+} from "@lifecycle/contracts";
 import {
+  createWorkspaceManifestQuery,
   reduceWorkspaceActivity,
   reduceWorkspaceRecord,
   reduceWorkspaceSnapshot,
@@ -207,6 +213,24 @@ describe("reduceWorkspaceRecord", () => {
   });
 });
 
+describe("createWorkspaceManifestQuery", () => {
+  test("reads lifecycle.json from the selected workspace worktree path", async () => {
+    const descriptor = createWorkspaceManifestQuery("ws_1", "/tmp/frost-grove");
+    const manifestReads: string[] = [];
+
+    const result = await descriptor.fetch({
+      readManifest: async (dirPath: string) => {
+        manifestReads.push(dirPath);
+        return { state: "missing" } as const;
+      },
+    } as never);
+
+    expect(descriptor.key).toEqual(["workspace-manifest", "ws_1"]);
+    expect(manifestReads).toEqual(["/tmp/frost-grove"]);
+    expect(result).toEqual({ state: "missing" });
+  });
+});
+
 describe("reduceWorkspaceSnapshot", () => {
   test("patches workspace, service, and terminal facts without refetching", () => {
     const workspace: WorkspaceRecord = {
@@ -273,63 +297,75 @@ describe("reduceWorkspaceSnapshot", () => {
     const service = services[0]!;
     const terminal = terminals[0]!;
 
-    const serviceResult = reduceWorkspaceSnapshot(current, {
-      id: "event-1",
-      kind: "service.status_changed",
-      occurred_at: "2026-03-10T10:05:00.000Z",
-      service_name: "web",
-      status: "ready",
-      status_reason: null,
-      workspace_id: "ws_1",
-    }, "ws_1");
+    const serviceResult = reduceWorkspaceSnapshot(
+      current,
+      {
+        id: "event-1",
+        kind: "service.status_changed",
+        occurred_at: "2026-03-10T10:05:00.000Z",
+        service_name: "web",
+        status: "ready",
+        status_reason: null,
+        workspace_id: "ws_1",
+      },
+      "ws_1",
+    );
     expect(serviceResult).toEqual({
       kind: "replace",
-        data: {
-          services: [
-            {
-              ...service,
-              status: "ready",
-              status_reason: null,
-            },
+      data: {
+        services: [
+          {
+            ...service,
+            status: "ready",
+            status_reason: null,
+          },
         ],
         terminals,
         workspace,
       },
     });
 
-    const terminalResult = reduceWorkspaceSnapshot(current, {
-      id: "event-2",
-      kind: "terminal.renamed",
-      label: "Shell 2",
-      occurred_at: "2026-03-10T10:06:00.000Z",
-      terminal_id: "term_1",
-      workspace_id: "ws_1",
-    }, "ws_1");
+    const terminalResult = reduceWorkspaceSnapshot(
+      current,
+      {
+        id: "event-2",
+        kind: "terminal.renamed",
+        label: "Shell 2",
+        occurred_at: "2026-03-10T10:06:00.000Z",
+        terminal_id: "term_1",
+        workspace_id: "ws_1",
+      },
+      "ws_1",
+    );
     expect(terminalResult).toEqual({
       kind: "replace",
-        data: {
-          services,
-          terminals: [
-            {
-              ...terminal,
-              label: "Shell 2",
-            },
+      data: {
+        services,
+        terminals: [
+          {
+            ...terminal,
+            label: "Shell 2",
+          },
         ],
         workspace,
       },
     });
 
-    const workspaceResult = reduceWorkspaceSnapshot(current, {
-      ahead: null,
-      behind: null,
-      branch: "feature/root-live",
-      head_sha: "bbbbbbbb",
-      id: "event-3",
-      kind: "git.head_changed",
-      occurred_at: "2026-03-10T10:07:00.000Z",
-      upstream: null,
-      workspace_id: "ws_1",
-    }, "ws_1");
+    const workspaceResult = reduceWorkspaceSnapshot(
+      current,
+      {
+        ahead: null,
+        behind: null,
+        branch: "feature/root-live",
+        head_sha: "bbbbbbbb",
+        id: "event-3",
+        kind: "git.head_changed",
+        occurred_at: "2026-03-10T10:07:00.000Z",
+        upstream: null,
+        workspace_id: "ws_1",
+      },
+      "ws_1",
+    );
     expect(workspaceResult).toEqual({
       kind: "replace",
       data: {

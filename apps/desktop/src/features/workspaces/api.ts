@@ -189,9 +189,7 @@ export interface WorkspaceSnapshotResult {
   workspace: WorkspaceRecord | null;
 }
 
-export async function getWorkspaceSnapshot(
-  workspaceId: string,
-): Promise<WorkspaceSnapshotResult> {
+export async function getWorkspaceSnapshot(workspaceId: string): Promise<WorkspaceSnapshotResult> {
   if (!isTauri()) {
     void workspaceId;
     return {

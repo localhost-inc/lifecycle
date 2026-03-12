@@ -1,6 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { exists, readTextFile } from "@tauri-apps/plugin-fs";
 import { parseManifest } from "@lifecycle/contracts";
 import type { ManifestParseResult, ProjectRecord } from "@lifecycle/contracts";
 
@@ -49,11 +48,6 @@ interface ManifestFileReader {
   readTextFile: (path: string) => Promise<string>;
 }
 
-const tauriManifestFileReader: ManifestFileReader = {
-  exists,
-  readTextFile,
-};
-
 function manifestReadError(error: unknown): ManifestParseResult & { valid: false } {
   const message = error instanceof Error ? error.message : String(error);
   return {
@@ -94,7 +88,17 @@ export async function readManifest(dirPath: string): Promise<ManifestStatus> {
     return { state: "missing" };
   }
 
-  return readManifestFromFs(dirPath, tauriManifestFileReader);
+  const text = await invoke<string | null>("read_manifest_text", { dirPath });
+  if (text === null) {
+    return { state: "missing" };
+  }
+
+  const result = parseManifest(text);
+  if (result.valid) {
+    return { state: "valid", result };
+  }
+
+  return { state: "invalid", result };
 }
 
 export async function listProjects(): Promise<ProjectRecord[]> {

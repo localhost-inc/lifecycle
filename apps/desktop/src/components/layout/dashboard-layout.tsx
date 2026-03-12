@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import { getManifestFingerprint } from "@lifecycle/contracts";
-import { SidebarInset } from "@lifecycle/ui";
+import { Loading, SidebarInset } from "@lifecycle/ui";
 import { Outlet, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppHotkeyListener } from "../../app/app-hotkey-listener";
 import {
@@ -634,6 +634,7 @@ export function DashboardLayout() {
     return (
       <div className="flex h-full w-full bg-[var(--background)]">
         <AppHotkeyListener />
+        <Loading />
       </div>
     );
   }

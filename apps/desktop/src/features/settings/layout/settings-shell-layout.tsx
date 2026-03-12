@@ -2,6 +2,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import {
   Button,
   Input,
+  ScrollFade,
   Select,
   SelectContent,
   SelectItem,
@@ -13,6 +14,7 @@ import {
   useTheme,
   type Theme,
 } from "@lifecycle/ui";
+import { Volume2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { version } from "../../../../package.json";
@@ -28,7 +30,10 @@ import {
   type TurnNotificationMode,
   type TurnNotificationSound,
 } from "../../notifications/lib/notification-settings";
-import { playTurnNotificationSound } from "../../notifications/lib/turn-notification-runtime";
+import {
+  playTurnNotificationSound,
+  warmAudioContext,
+} from "../../notifications/lib/turn-notification-runtime";
 import { SettingsFieldRow, SettingsRow, SettingsSection } from "../components/settings-primitives";
 import { DEFAULT_WORKTREE_ROOT, useSettings } from "../state/app-settings-provider";
 import {
@@ -278,282 +283,304 @@ export function SettingsShellLayout() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="h-11 shrink-0" data-tauri-drag-region />
         <main className="flex min-h-0 flex-1">
-          <div
-            className="min-h-0 flex-1 overflow-y-auto px-6 py-8 md:px-12 md:py-10"
-            ref={scrollContainerRef}
-          >
-            <div className="mx-auto w-full max-w-3xl">
-              <header>
-                <h1 className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">
-                  Settings
-                </h1>
-                <p className="mt-2 max-w-2xl text-sm text-[var(--muted-foreground)]">
-                  Appearance, notifications, and workspace defaults.
-                </p>
-              </header>
+          <div className="min-h-0 flex-1 overflow-y-auto" ref={scrollContainerRef}>
+            <ScrollFade
+              aria-hidden="true"
+              className="sticky top-0 z-10 -mb-11 h-11"
+              data-tauri-drag-region
+              direction="top"
+              size={44}
+            />
+            <div className="px-6 pb-8 pt-14 md:px-12 md:pb-10 md:pt-16">
+              <div className="mx-auto w-full max-w-3xl">
+                <header>
+                  <h1 className="text-2xl font-semibold tracking-tight text-[var(--foreground)]">
+                    Settings
+                  </h1>
+                  <p className="mt-2 max-w-2xl text-sm text-[var(--muted-foreground)]">
+                    Appearance, notifications, and workspace defaults.
+                  </p>
+                </header>
 
-              <SettingsSection
-                id="appearance"
-                label="Appearance"
-                ref={(node) => {
-                  sectionRefs.current.appearance = node;
-                }}
-              >
-                <div className="space-y-3">
-                  <SettingsRow
-                    label="Theme"
-                    description={
-                      theme === "system"
-                        ? `Following the system appearance (${resolvedAppearance}).`
-                        : "Theme preset for the app shell and code surfaces."
-                    }
-                  >
-                    <Select
-                      items={themeItems}
-                      onValueChange={(value: string) => setTheme(value as Theme)}
-                      value={theme}
-                    >
-                      <SelectTrigger className="w-full min-w-0 md:w-48" id="theme-select">
-                        <SelectValue placeholder="Select a theme" />
-                      </SelectTrigger>
-                      <SelectContent alignItemWithTrigger={false}>
-                        {themeOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </SettingsRow>
-
-                  <SettingsRow
-                    label="Interface font"
-                    description={
-                      selectedInterfacePreset?.description ??
-                      "Using a custom app font-family stack."
-                    }
-                  >
-                    <Select
-                      items={interfaceFontPresetItems}
-                      onValueChange={(value: string) => {
-                        const preset = interfaceFontPresets.find((item) => item.id === value);
-                        if (preset) {
-                          setInterfaceFontFamily(preset.fontFamily);
-                        }
-                      }}
-                      value={selectedInterfacePresetId}
-                    >
-                      <SelectTrigger className="w-full min-w-0 md:w-48" id="interface-font-preset">
-                        <SelectValue placeholder="Select a preset" />
-                      </SelectTrigger>
-                      <SelectContent alignItemWithTrigger={false}>
-                        {interfaceFontPresets.map((preset) => (
-                          <SelectItem key={preset.id} value={preset.id}>
-                            {preset.label}
-                          </SelectItem>
-                        ))}
-                        {selectedInterfacePresetId === "custom" ? (
-                          <SelectItem value="custom">Custom</SelectItem>
-                        ) : null}
-                      </SelectContent>
-                    </Select>
-                  </SettingsRow>
-
-                  <SettingsRow
-                    label="Monospace font"
-                    description={
-                      selectedMonospacePreset?.description ??
-                      "Using a custom monospace font-family stack."
-                    }
-                  >
-                    <Select
-                      items={monospaceFontPresetItems}
-                      onValueChange={(value: string) => {
-                        const preset = monospaceFontPresets.find((item) => item.id === value);
-                        if (preset) {
-                          setMonospaceFontFamily(preset.fontFamily);
-                        }
-                      }}
-                      value={selectedMonospacePresetId}
-                    >
-                      <SelectTrigger className="w-full min-w-0 md:w-48" id="monospace-font-preset">
-                        <SelectValue placeholder="Select a preset" />
-                      </SelectTrigger>
-                      <SelectContent alignItemWithTrigger={false}>
-                        {monospaceFontPresets.map((preset) => (
-                          <SelectItem key={preset.id} value={preset.id}>
-                            {preset.label}
-                          </SelectItem>
-                        ))}
-                        {selectedMonospacePresetId === "custom" ? (
-                          <SelectItem value="custom">Custom</SelectItem>
-                        ) : null}
-                      </SelectContent>
-                    </Select>
-                  </SettingsRow>
-
-                  <div className="space-y-3 border-l-4 border-[var(--border)] pl-4">
-                    <p className="app-panel-title text-[var(--muted-foreground)]">Preview</p>
-                    <p
-                      className="text-sm text-[var(--foreground)]"
-                      style={{ fontFamily: interfaceFontFamily }}
-                    >
-                      Workspace state stays readable when interface typography is calm and direct.
-                    </p>
-                    <p
-                      className="text-xs text-[var(--foreground)]"
-                      style={{ fontFamily: monospaceFontFamily }}
-                    >
-                      lifecycle open workspace --id sydney--2c1b1211
-                    </p>
-                  </div>
-
-                  <div className="pt-2">
-                    <Button onClick={resetTypography} variant="outline">
-                      Reset to default
-                    </Button>
-                  </div>
-                </div>
-              </SettingsSection>
-
-              <SettingsSection
-                id="notifications"
-                label="Notifications"
-                ref={(node) => {
-                  sectionRefs.current.notifications = node;
-                }}
-              >
-                <div className="space-y-3">
-                  <SettingsRow
-                    label="Turn completion"
-                    description={
-                      selectedTurnNotificationMode?.description ??
-                      "Desktop notifications for completed harness turns."
-                    }
-                  >
-                    <Select
-                      items={turnNotificationModeItems}
-                      onValueChange={(value: string) =>
-                        setTurnNotificationsMode(value as TurnNotificationMode)
+                <SettingsSection
+                  id="appearance"
+                  label="Appearance"
+                  ref={(node) => {
+                    sectionRefs.current.appearance = node;
+                  }}
+                >
+                  <div className="space-y-3">
+                    <SettingsRow
+                      label="Theme"
+                      description={
+                        theme === "system"
+                          ? `Following the system appearance (${resolvedAppearance}).`
+                          : "Theme preset for the app shell and code surfaces."
                       }
-                      value={turnNotificationsMode}
                     >
-                      <SelectTrigger className="w-full min-w-0 md:w-48" id="turn-notification-mode">
-                        <SelectValue placeholder="Select a notification mode" />
-                      </SelectTrigger>
-                      <SelectContent alignItemWithTrigger={false}>
-                        {turnNotificationModeOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </SettingsRow>
-
-                  <SettingsRow
-                    label="Notification sound"
-                    description={
-                      selectedTurnNotificationSound?.description ??
-                      "Choose the sound that plays when a turn completes."
-                    }
-                  >
-                    <Select
-                      items={turnNotificationSoundItems}
-                      onValueChange={(value: string) =>
-                        setTurnNotificationSound(value as TurnNotificationSound)
-                      }
-                      value={turnNotificationSound}
-                    >
-                      <SelectTrigger
-                        className="w-full min-w-0 md:w-48"
-                        id="turn-notification-sound"
+                      <Select
+                        items={themeItems}
+                        onValueChange={(value: string) => setTheme(value as Theme)}
+                        value={theme}
                       >
-                        <SelectValue placeholder="Select a notification sound" />
-                      </SelectTrigger>
-                      <SelectContent alignItemWithTrigger={false}>
-                        {turnNotificationSoundOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </SettingsRow>
+                        <SelectTrigger className="w-full min-w-0 md:w-48" id="theme-select">
+                          <SelectValue placeholder="Select a theme" />
+                        </SelectTrigger>
+                        <SelectContent alignItemWithTrigger={false}>
+                          {themeOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </SettingsRow>
+
+                    <SettingsRow
+                      label="Interface font"
+                      description={
+                        selectedInterfacePreset?.description ??
+                        "Using a custom app font-family stack."
+                      }
+                    >
+                      <Select
+                        items={interfaceFontPresetItems}
+                        onValueChange={(value: string) => {
+                          const preset = interfaceFontPresets.find((item) => item.id === value);
+                          if (preset) {
+                            setInterfaceFontFamily(preset.fontFamily);
+                          }
+                        }}
+                        value={selectedInterfacePresetId}
+                      >
+                        <SelectTrigger
+                          className="w-full min-w-0 md:w-48"
+                          id="interface-font-preset"
+                        >
+                          <SelectValue placeholder="Select a preset" />
+                        </SelectTrigger>
+                        <SelectContent alignItemWithTrigger={false}>
+                          {interfaceFontPresets.map((preset) => (
+                            <SelectItem key={preset.id} value={preset.id}>
+                              {preset.label}
+                            </SelectItem>
+                          ))}
+                          {selectedInterfacePresetId === "custom" ? (
+                            <SelectItem value="custom">Custom</SelectItem>
+                          ) : null}
+                        </SelectContent>
+                      </Select>
+                    </SettingsRow>
+
+                    <SettingsRow
+                      label="Monospace font"
+                      description={
+                        selectedMonospacePreset?.description ??
+                        "Using a custom monospace font-family stack."
+                      }
+                    >
+                      <Select
+                        items={monospaceFontPresetItems}
+                        onValueChange={(value: string) => {
+                          const preset = monospaceFontPresets.find((item) => item.id === value);
+                          if (preset) {
+                            setMonospaceFontFamily(preset.fontFamily);
+                          }
+                        }}
+                        value={selectedMonospacePresetId}
+                      >
+                        <SelectTrigger
+                          className="w-full min-w-0 md:w-48"
+                          id="monospace-font-preset"
+                        >
+                          <SelectValue placeholder="Select a preset" />
+                        </SelectTrigger>
+                        <SelectContent alignItemWithTrigger={false}>
+                          {monospaceFontPresets.map((preset) => (
+                            <SelectItem key={preset.id} value={preset.id}>
+                              {preset.label}
+                            </SelectItem>
+                          ))}
+                          {selectedMonospacePresetId === "custom" ? (
+                            <SelectItem value="custom">Custom</SelectItem>
+                          ) : null}
+                        </SelectContent>
+                      </Select>
+                    </SettingsRow>
+
+                    <div className="space-y-3 border-l-4 border-[var(--border)] pl-4">
+                      <p className="app-panel-title text-[var(--muted-foreground)]">Preview</p>
+                      <p
+                        className="text-sm text-[var(--foreground)]"
+                        style={{ fontFamily: interfaceFontFamily }}
+                      >
+                        Workspace state stays readable when interface typography is calm and direct.
+                      </p>
+                      <p
+                        className="text-xs text-[var(--foreground)]"
+                        style={{ fontFamily: monospaceFontFamily }}
+                      >
+                        lifecycle open workspace --id sydney--2c1b1211
+                      </p>
+                    </div>
+
+                    <div className="pt-2">
+                      <Button onClick={resetTypography} variant="outline">
+                        Reset to default
+                      </Button>
+                    </div>
+                  </div>
+                </SettingsSection>
+
+                <SettingsSection
+                  id="notifications"
+                  label="Notifications"
+                  ref={(node) => {
+                    sectionRefs.current.notifications = node;
+                  }}
+                >
+                  <div className="space-y-3">
+                    <SettingsRow
+                      label="Turn completion"
+                      description={
+                        selectedTurnNotificationMode?.description ??
+                        "Desktop notifications for completed harness turns."
+                      }
+                    >
+                      <Select
+                        items={turnNotificationModeItems}
+                        onValueChange={(value: string) =>
+                          setTurnNotificationsMode(value as TurnNotificationMode)
+                        }
+                        value={turnNotificationsMode}
+                      >
+                        <SelectTrigger
+                          className="w-full min-w-0 md:w-48"
+                          id="turn-notification-mode"
+                        >
+                          <SelectValue placeholder="Select a notification mode" />
+                        </SelectTrigger>
+                        <SelectContent alignItemWithTrigger={false}>
+                          {turnNotificationModeOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </SettingsRow>
+
+                    <SettingsRow
+                      label="Notification sound"
+                      description={
+                        selectedTurnNotificationSound?.description ??
+                        "Choose the sound that plays when a turn completes."
+                      }
+                    >
+                      <div className="flex items-center gap-2">
+                        <button
+                          aria-label="Play preview"
+                          className="shrink-0 rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] disabled:pointer-events-none disabled:opacity-40"
+                          disabled={turnNotificationSound === "silent"}
+                          onClick={() => {
+                            void playTurnNotificationSound(turnNotificationSound);
+                          }}
+                          onPointerDown={warmAudioContext}
+                          type="button"
+                        >
+                          <Volume2 className="size-4" />
+                        </button>
+                        <Select
+                          items={turnNotificationSoundItems}
+                          onValueChange={(value: string) =>
+                            setTurnNotificationSound(value as TurnNotificationSound)
+                          }
+                          value={turnNotificationSound}
+                        >
+                          <SelectTrigger
+                            className="w-full min-w-0 md:w-48"
+                            id="turn-notification-sound"
+                          >
+                            <SelectValue placeholder="Select a notification sound" />
+                          </SelectTrigger>
+                          <SelectContent alignItemWithTrigger={false}>
+                            {turnNotificationSoundOptions.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </SettingsRow>
+
+                    <div className="space-y-3 border-l-4 border-[var(--border)] pl-4">
+                      <p className="app-panel-title text-[var(--muted-foreground)]">Notes</p>
+                      <p className="text-sm text-[var(--foreground)]">
+                        Notifications trigger when Claude or Codex finish a turn. Lifecycle may ask
+                        for system notification permission the first time one fires.
+                      </p>
+                      <p className="text-xs text-[var(--muted-foreground)]">
+                        Tab response indicators still work even when desktop notifications are off.
+                      </p>
+                    </div>
+                  </div>
+                </SettingsSection>
+
+                <SettingsSection
+                  id="worktrees"
+                  label="Worktrees"
+                  ref={(node) => {
+                    sectionRefs.current.worktrees = node;
+                  }}
+                >
+                  <SettingsFieldRow
+                    label="Worktree root path"
+                    htmlFor="worktree-root"
+                    description="Supports ~. Existing workspaces stay where they are; this applies to new workspaces only."
+                  >
+                    <Input
+                      id="worktree-root"
+                      onChange={(event) => setDraftWorktreeRoot(event.target.value)}
+                      placeholder={DEFAULT_WORKTREE_ROOT}
+                      value={draftWorktreeRoot}
+                    />
+                  </SettingsFieldRow>
+
+                  <div className="mt-4 space-y-3 border-l-4 border-[var(--border)] pl-4">
+                    <p className="app-panel-title text-[var(--muted-foreground)]">Preview</p>
+                    <p className="break-all font-mono text-xs text-[var(--foreground)]">
+                      {previewPath}
+                    </p>
+                  </div>
 
                   <div className="mt-4 flex flex-wrap items-center gap-2">
                     <Button
-                      disabled={turnNotificationSound === "silent"}
+                      disabled={!hasWorktreeRootChanges}
+                      onClick={() => setWorktreeRoot(normalizedDraftWorktreeRoot)}
+                    >
+                      Save
+                    </Button>
+                    <Button
                       onClick={() => {
-                        void playTurnNotificationSound(turnNotificationSound);
+                        setDraftWorktreeRoot(DEFAULT_WORKTREE_ROOT);
+                        setWorktreeRoot(DEFAULT_WORKTREE_ROOT);
                       }}
                       variant="outline"
                     >
-                      Play preview
+                      Reset to default
                     </Button>
                   </div>
-
-                  <div className="space-y-3 border-l-4 border-[var(--border)] pl-4">
-                    <p className="app-panel-title text-[var(--muted-foreground)]">Notes</p>
-                    <p className="text-sm text-[var(--foreground)]">
-                      Notifications trigger when Claude or Codex finish a turn. Lifecycle may ask
-                      for system notification permission the first time one fires.
-                    </p>
-                    <p className="text-xs text-[var(--muted-foreground)]">
-                      Tab response indicators still work even when desktop notifications are off.
-                    </p>
-                  </div>
-                </div>
-              </SettingsSection>
-
-              <SettingsSection
-                id="worktrees"
-                label="Worktrees"
-                ref={(node) => {
-                  sectionRefs.current.worktrees = node;
-                }}
-              >
-                <SettingsFieldRow
-                  label="Worktree root path"
-                  htmlFor="worktree-root"
-                  description="Supports ~. Existing workspaces stay where they are; this applies to new workspaces only."
-                >
-                  <Input
-                    id="worktree-root"
-                    onChange={(event) => setDraftWorktreeRoot(event.target.value)}
-                    placeholder={DEFAULT_WORKTREE_ROOT}
-                    value={draftWorktreeRoot}
-                  />
-                </SettingsFieldRow>
-
-                <div className="mt-4 space-y-3 border-l-4 border-[var(--border)] pl-4">
-                  <p className="app-panel-title text-[var(--muted-foreground)]">Preview</p>
-                  <p className="break-all font-mono text-xs text-[var(--foreground)]">
-                    {previewPath}
-                  </p>
-                </div>
-
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <Button
-                    disabled={!hasWorktreeRootChanges}
-                    onClick={() => setWorktreeRoot(normalizedDraftWorktreeRoot)}
-                  >
-                    Save
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setDraftWorktreeRoot(DEFAULT_WORKTREE_ROOT);
-                      setWorktreeRoot(DEFAULT_WORKTREE_ROOT);
-                    }}
-                    variant="outline"
-                  >
-                    Reset to default
-                  </Button>
-                </div>
-              </SettingsSection>
+                </SettingsSection>
+              </div>
             </div>
+            <ScrollFade
+              aria-hidden="true"
+              className="sticky bottom-0 z-10 -mt-11 h-11"
+              direction="bottom"
+              size={44}
+            />
           </div>
         </main>
       </div>

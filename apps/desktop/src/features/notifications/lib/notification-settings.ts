@@ -12,7 +12,7 @@ export interface TurnNotificationAttentionState {
 }
 
 export const DEFAULT_TURN_NOTIFICATION_MODE: TurnNotificationMode = "when-unfocused";
-export const DEFAULT_TURN_NOTIFICATION_SOUND: TurnNotificationSound = "glass";
+export const DEFAULT_TURN_NOTIFICATION_SOUND: TurnNotificationSound = "orbit";
 
 export const turnNotificationModeOptions: Array<{
   description: string;

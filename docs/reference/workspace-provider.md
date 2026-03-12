@@ -38,7 +38,7 @@ In V1, the environment is represented on the workspace record rather than as a s
 interface WorkspaceProvider {
   createWorkspace(input + manifest_json? + manifest_fingerprint?) → { workspace, worktree_path }
   startServices(workspace + manifest_json + manifest_fingerprint) → service_statuses
-  healthCheck(manifest.services[].health_check) → pass/fail per service
+  healthCheck(manifest.environment[kind=service].health_check) → pass/fail per service
   stopServices(service_names[]) → void
   runSetup(workspace_id) → void
   sleep(workspace_id) → void
@@ -189,6 +189,14 @@ Git operations follow the same authority rule as terminals and lifecycle mutatio
    - local workspaces operate without network — Convex connection only required for cloud workspaces and fork-to-cloud
    - Tauri desktop app must be running (the Rust backend IS the local process supervisor — no separate daemon)
    - Docker Desktop required for `image` runtime services
+
+### Default Local Environment Posture
+
+For portable checked-in manifests, local development should prefer workspace-owned mutable services over shared project-level infrastructure.
+
+1. The default local contract is that each workspace owns its full execution environment, including stateful sidecars like Postgres, Redis, or emulators when they are declared in the manifest.
+2. Share caches and immutable artifacts when useful, but do not make machine-global mutable infrastructure part of the default portable workflow.
+3. Project-level shared substrates may exist later as provider-managed optimizations or explicit opt-in bindings, not as the default manifest assumption.
 
 ### Future Local Targets
 

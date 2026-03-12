@@ -1,13 +1,17 @@
 import { isTauri } from "@tauri-apps/api/core";
-import type { LifecycleConfig } from "@lifecycle/contracts";
+import type { LifecycleConfig, WorkspaceRecord } from "@lifecycle/contracts";
 import { watch, type UnwatchFn } from "@tauri-apps/plugin-fs";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useQueryClient } from "../../../query";
 import { syncWorkspaceManifest } from "../../workspaces/api";
 import { useWorkspacesByProject, workspaceKeys } from "../../workspaces/hooks";
-import { readManifest } from "../api/projects";
+import { readManifest, type ManifestStatus } from "../api/projects";
 import { useProjects, projectKeys } from "../hooks";
 import { watchEventTouchesManifest } from "../lib/manifest-watch";
+
+function configFromManifestStatus(manifestStatus: ManifestStatus): LifecycleConfig | null {
+  return manifestStatus.state === "valid" ? manifestStatus.result.config : null;
+}
 
 export function ProjectManifestWatcher() {
   const client = useQueryClient();
@@ -15,6 +19,18 @@ export function ProjectManifestWatcher() {
   const workspacesByProjectQuery = useWorkspacesByProject();
   const projects = projectsQuery.data;
   const workspacesByProject = workspacesByProjectQuery.data;
+  const workspaces = useMemo(
+    () =>
+      workspacesByProject
+        ? Object.values(workspacesByProject)
+            .flat()
+            .filter(
+              (workspace): workspace is WorkspaceRecord & { worktree_path: string } =>
+                workspace.worktree_path !== null,
+            )
+        : null,
+    [workspacesByProject],
+  );
 
   useEffect(() => {
     if (!isTauri() || !projects || projects.length === 0) {
@@ -37,21 +53,6 @@ export function ProjectManifestWatcher() {
               void (async () => {
                 client.invalidate(projectKeys.manifest(project.id));
                 client.invalidate(projectKeys.catalog());
-
-                const manifestStatus = await readManifest(project.path);
-                const config: LifecycleConfig | null =
-                  manifestStatus.state === "valid" ? manifestStatus.result.config : null;
-                const workspaces = workspacesByProject?.[project.id] ?? [];
-
-                await Promise.all(
-                  workspaces.map(async (workspace) => {
-                    await syncWorkspaceManifest(workspace.id, config);
-                    client.invalidate(workspaceKeys.detail(workspace.id));
-                    client.invalidate(workspaceKeys.services(workspace.id));
-                  }),
-                );
-
-                client.invalidate(workspaceKeys.byProject());
               })();
             },
             { delayMs: 150, recursive: false },
@@ -75,7 +76,60 @@ export function ProjectManifestWatcher() {
         unwatch();
       }
     };
-  }, [client, projects, workspacesByProject]);
+  }, [client, projects]);
+
+  useEffect(() => {
+    if (!isTauri() || !workspaces || workspaces.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    const unwatchFns: UnwatchFn[] = [];
+
+    void Promise.all(
+      workspaces.map(async (workspace) => {
+        try {
+          const unwatch = await watch(
+            workspace.worktree_path,
+            (event) => {
+              if (!watchEventTouchesManifest(workspace.worktree_path, event.paths)) {
+                return;
+              }
+
+              void (async () => {
+                client.invalidate(workspaceKeys.manifest(workspace.id));
+
+                const manifestStatus = await readManifest(workspace.worktree_path);
+                await syncWorkspaceManifest(workspace.id, configFromManifestStatus(manifestStatus));
+
+                client.invalidate(workspaceKeys.detail(workspace.id));
+                client.invalidate(workspaceKeys.snapshot(workspace.id));
+                client.invalidate(workspaceKeys.services(workspace.id));
+                client.invalidate(workspaceKeys.byProject());
+              })();
+            },
+            { delayMs: 150, recursive: false },
+          );
+
+          if (cancelled) {
+            unwatch();
+            return;
+          }
+
+          unwatchFns.push(unwatch);
+        } catch (error) {
+          console.error("Failed to watch workspace manifest:", workspace.worktree_path, error);
+        }
+      }),
+    );
+
+    return () => {
+      cancelled = true;
+      for (const unwatch of unwatchFns) {
+        unwatch();
+      }
+    };
+  }, [client, workspaces]);
 
   return null;
 }

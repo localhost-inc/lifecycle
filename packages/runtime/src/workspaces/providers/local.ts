@@ -52,9 +52,7 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
       workspace: {
         id: workspaceId,
         project_id: context.projectId,
-        name:
-          context.workspaceName ??
-          (context.kind === "root" ? "Root" : input.sourceRef),
+        name: context.workspaceName ?? (context.kind === "root" ? "Root" : input.sourceRef),
         kind: context.kind ?? "managed",
         source_ref: input.sourceRef,
         git_sha: null,
@@ -107,9 +105,7 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
     await this.invoke("destroy_workspace", { workspaceId });
   }
 
-  async createTerminal(
-    input: WorkspaceProviderCreateTerminalInput,
-  ): Promise<TerminalRecord> {
+  async createTerminal(input: WorkspaceProviderCreateTerminalInput): Promise<TerminalRecord> {
     return this.invoke("create_terminal", {
       workspaceId: input.workspaceId,
       launchType: input.launchType,
@@ -126,11 +122,7 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
     await this.invoke("kill_terminal", { terminalId });
   }
 
-  async exposePort(
-    workspaceId: string,
-    serviceName: string,
-    port: number,
-  ): Promise<string | null> {
+  async exposePort(workspaceId: string, serviceName: string, port: number): Promise<string | null> {
     await this.invoke("update_workspace_service", {
       workspaceId,
       serviceName,

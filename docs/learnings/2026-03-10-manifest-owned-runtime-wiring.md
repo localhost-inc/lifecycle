@@ -9,7 +9,7 @@ Kin exposed a practical gap in the local environment model: reserved Lifecycle s
 Use `lifecycle.json` as the wiring surface.
 
 1. Setup steps may materialize non-secret workspace files with `write_files`.
-2. Setup `env_vars` and service `env_vars` may reference reserved `LIFECYCLE_*` values directly.
+2. Setup `env` and service `env` may reference reserved `LIFECYCLE_*` values directly.
 3. Provider-owned runtime interpolation should handle reserved `LIFECYCLE_*` values.
 4. Repo-local Lifecycle helper scripts are the wrong abstraction for ordinary environment wiring.
 

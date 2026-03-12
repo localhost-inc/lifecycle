@@ -127,6 +127,7 @@ pub fn run() {
             capabilities::projects::commands::list_projects,
             capabilities::projects::commands::add_project,
             capabilities::projects::commands::remove_project,
+            capabilities::projects::commands::read_manifest_text,
             capabilities::projects::commands::update_manifest_status,
             capabilities::workspaces::commands::create_workspace,
             capabilities::workspaces::commands::rename_workspace,

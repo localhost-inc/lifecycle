@@ -3,6 +3,7 @@ use crate::shared::errors::LifecycleError;
 use crate::RootGitWatcherMap;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use tauri::State;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -123,4 +124,19 @@ pub async fn update_manifest_status(
     )
     .map_err(|e| LifecycleError::Database(e.to_string()))?;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn read_manifest_text(dir_path: String) -> Result<Option<String>, LifecycleError> {
+    let manifest_path = PathBuf::from(dir_path).join("lifecycle.json");
+
+    match std::fs::read_to_string(&manifest_path) {
+        Ok(content) => Ok(Some(content)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(LifecycleError::Io(format!(
+            "failed to read {}: {}",
+            manifest_path.display(),
+            error
+        ))),
+    }
 }

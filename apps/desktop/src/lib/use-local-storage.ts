@@ -61,10 +61,7 @@ function emitStorageKey(storageKey: string) {
   }
 }
 
-export function readLocalStorageValue<T>(
-  storageKey: string,
-  options: LocalStorageOptions<T>,
-): T {
+export function readLocalStorageValue<T>(storageKey: string, options: LocalStorageOptions<T>): T {
   const { defaultValue, parse, storage, validate } = options;
   const resolvedStorage = resolveStorage(storage);
   if (!resolvedStorage) {

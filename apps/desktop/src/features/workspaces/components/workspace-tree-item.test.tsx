@@ -88,7 +88,7 @@ describe("WorkspaceTreeItem", () => {
     expect(markup).toContain("font-medium");
     expect(markup).toContain("text-[var(--sidebar-foreground)]");
     expect(markup).toContain("border-left-color:var(--primary)");
-    expect(markup).toContain("pl-[22px]");
+    expect(markup).toContain("pl-3");
     expect(markup).toContain("opacity-70");
   });
 
@@ -129,7 +129,7 @@ describe("WorkspaceTreeItem", () => {
     expect(markup).not.toContain("group-focus-within/menu-item:opacity-100");
   });
 
-  test("renders root workspaces with the branch name and root indicator", () => {
+  test("renders root workspaces with the branch name and a kind icon", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceTreeItem, {
         workspace: {
@@ -144,10 +144,23 @@ describe("WorkspaceTreeItem", () => {
       }),
     );
 
-    expect(markup).toContain('data-slot="workspace-root-indicator"');
-    expect(markup).toContain('title="Root workspace"');
+    expect(markup).toContain("<svg");
     expect(markup).toContain(">main<");
     expect(markup).not.toContain(">Root<");
     expect(markup).toContain('aria-label="Archive workspace main"');
+  });
+
+  test("renders managed workspaces with a kind icon", () => {
+    const markup = renderToStaticMarkup(
+      createElement(WorkspaceTreeItem, {
+        workspace,
+        selected: false,
+        onDestroy: () => {},
+        onSelect: () => {},
+      }),
+    );
+
+    expect(markup).toContain("<svg");
+    expect(markup).toContain(">Auth Flow Fix<");
   });
 });

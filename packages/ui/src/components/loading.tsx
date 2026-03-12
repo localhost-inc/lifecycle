@@ -31,9 +31,7 @@ function Loading({ message, delay = DEFAULT_DELAY_MS, className }: LoadingProps)
     >
       <div className="flex flex-col items-center gap-1.5 text-center">
         <Logo animate className="text-[var(--muted-foreground)] opacity-70" repeat size={24} />
-        {message && (
-          <p className="text-xs text-[var(--muted-foreground)]">{message}</p>
-        )}
+        {message && <p className="text-xs text-[var(--muted-foreground)]">{message}</p>}
       </div>
     </div>
   );

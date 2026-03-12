@@ -104,7 +104,9 @@ export function GitDiffSurface({
     [changesStatusQuery.data, focusPath, source.mode],
   );
   const diffCacheKeyPrefix =
-    source.mode === "changes" ? `changes-diff:${workspaceId}` : `commit-diff:${workspaceId}:${commitSha}`;
+    source.mode === "changes"
+      ? `changes-diff:${workspaceId}`
+      : `commit-diff:${workspaceId}:${commitSha}`;
   const previousSurfaceIdentityRef = useRef<string | null>(null);
   const surfaceIdentity =
     source.mode === "changes" ? `changes:${workspaceId}` : `commit:${workspaceId}:${commitSha}`;

@@ -73,9 +73,11 @@ export function WorkspaceSurfacePanels({
   const activeTerminal =
     activeTabKey === null
       ? null
-      : terminals.find((terminal) => `terminal:${terminal.id}` === activeTabKey) ?? null;
+      : (terminals.find((terminal) => `terminal:${terminal.id}` === activeTabKey) ?? null);
   const activeDocument =
-    activeTabKey === null ? null : documents.find((document) => document.key === activeTabKey) ?? null;
+    activeTabKey === null
+      ? null
+      : (documents.find((document) => document.key === activeTabKey) ?? null);
   const activePanelId = activeTabKey ? workspaceTabPanelId(activeTabKey) : undefined;
   const activeTabDomId = activeTabKey ? workspaceTabDomId(activeTabKey) : undefined;
 

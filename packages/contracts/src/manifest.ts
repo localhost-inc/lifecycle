@@ -1,11 +1,43 @@
-import { z } from "zod";
 import { parse as parseJsonc, ParseError } from "jsonc-parser";
+import { z } from "zod";
 
 const UNSUPPORTED_SECRETS_MESSAGE =
-  "Managed secrets are not supported in local lifecycle.json yet. Materialize local env files in setup instead.";
+  "Managed secrets are not supported in local lifecycle.json yet. Materialize local env files in workspace setup instead.";
 
 const UNSUPPORTED_SECRET_TEMPLATE_MESSAGE =
-  "`${secrets.*}` is not supported in local lifecycle.json. Materialize local env files in setup instead.";
+  "`${secrets.*}` is not supported in local lifecycle.json. Materialize local env files in workspace setup instead.";
+
+const UNSUPPORTED_RESET_MESSAGE =
+  "`reset` is not part of the current lifecycle.json contract yet. Remove it from the manifest for now.";
+
+const UNSUPPORTED_MCPS_MESSAGE =
+  "`mcps` is not part of the current lifecycle.json contract yet. Remove it from the manifest for now.";
+
+const RunOnSchema = z.enum(["create", "start"]);
+
+function validateStepAction(
+  step: {
+    command?: string | undefined;
+    write_files?:
+      | {
+          path: string;
+          content?: string | undefined;
+          lines?: string[] | undefined;
+        }[]
+      | undefined;
+  },
+  ctx: z.RefinementCtx,
+): void {
+  const hasCommand = typeof step.command === "string";
+  const hasWriteFiles = Array.isArray(step.write_files);
+  if (hasCommand === hasWriteFiles) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Workspace steps require exactly one of command or write_files",
+      path: hasCommand ? ["write_files"] : ["command"],
+    });
+  }
+}
 
 const SetupWriteFileSchema = z
   .object({
@@ -19,38 +51,62 @@ const SetupWriteFileSchema = z
     if (hasContent === hasLines) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Setup write_files entries require exactly one of content or lines",
+        message: "Workspace write_files entries require exactly one of content or lines",
         path: hasContent ? ["lines"] : ["content"],
       });
     }
   });
 
-const SetupStepSchema = z
+const StepActionFields = {
+  command: z.string().optional(),
+  write_files: z.array(SetupWriteFileSchema).min(1).optional(),
+  timeout_seconds: z.number().int().positive(),
+  cwd: z.string().optional(),
+  env: z.record(z.string(), z.string()).optional(),
+};
+
+const WorkspaceStepSchema = z
   .object({
     name: z.string(),
-    command: z.string().optional(),
-    write_files: z.array(SetupWriteFileSchema).min(1).optional(),
-    timeout_seconds: z.number().int().positive(),
-    cwd: z.string().optional(),
-    env_vars: z.record(z.string(), z.string()).optional(),
-    run_on: z.enum(["create", "start"]).optional(),
+    ...StepActionFields,
+    depends_on: z.array(z.string()).optional(),
+    run_on: RunOnSchema.optional(),
   })
-  .superRefine((step, ctx) => {
-    const hasCommand = typeof step.command === "string";
-    const hasWriteFiles = Array.isArray(step.write_files);
-    if (hasCommand === hasWriteFiles) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Setup steps require exactly one of command or write_files",
-        path: hasCommand ? ["write_files"] : ["command"],
-      });
-    }
-  });
+  .superRefine(validateStepAction);
 
-const SetupSchema = z.object({
-  services: z.array(z.string()).optional(),
-  steps: z.array(SetupStepSchema).min(1),
-});
+const WorkspaceSchema = z
+  .object({
+    setup: z.array(WorkspaceStepSchema).default([]),
+    teardown: z.array(WorkspaceStepSchema).optional(),
+  })
+  .superRefine((workspace, ctx) => {
+    workspace.setup.forEach((step, index) => {
+      if (step.depends_on) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "workspace.setup steps cannot declare depends_on",
+          path: ["setup", index, "depends_on"],
+        });
+      }
+    });
+
+    workspace.teardown?.forEach((step, index) => {
+      if (step.depends_on) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "workspace.teardown steps cannot declare depends_on",
+          path: ["teardown", index, "depends_on"],
+        });
+      }
+      if (step.run_on) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "workspace.teardown steps cannot declare run_on",
+          path: ["teardown", index, "run_on"],
+        });
+      }
+    });
+  });
 
 const HealthCheckSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -67,7 +123,7 @@ const HealthCheckSchema = z.discriminatedUnion("kind", [
 ]);
 
 const BaseServiceFields = {
-  env_vars: z.record(z.string(), z.string()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
   depends_on: z.array(z.string()).optional(),
   startup_timeout_seconds: z.number().int().positive().optional(),
   health_check: HealthCheckSchema.optional(),
@@ -86,15 +142,26 @@ const ImageVolumeSchema = z.object({
   read_only: z.boolean().optional(),
 });
 
-const ProcessServiceSchema = z.object({
+const TaskNodeSchema = z
+  .object({
+    kind: z.literal("task"),
+    ...StepActionFields,
+    depends_on: z.array(z.string()).optional(),
+    run_on: RunOnSchema.optional(),
+  })
+  .superRefine(validateStepAction);
+
+const ProcessServiceNodeSchema = z.object({
+  kind: z.literal("service"),
   runtime: z.literal("process"),
   command: z.string(),
   cwd: z.string().optional(),
   ...BaseServiceFields,
 });
 
-const ImageServiceSchema = z
+const ImageServiceNodeSchema = z
   .object({
+    kind: z.literal("service"),
     runtime: z.literal("image"),
     image: z.string().optional(),
     build: ImageBuildSchema.optional(),
@@ -113,26 +180,15 @@ const ImageServiceSchema = z
     }
   });
 
-const ServiceSchema = z.discriminatedUnion("runtime", [ProcessServiceSchema, ImageServiceSchema]);
-
-const McpServerSchema = z.object({
-  command: z.string(),
-  args: z.array(z.string()).optional(),
-  transport: z.enum(["stdio", "sse"]),
-  env_vars: z.record(z.string(), z.string()).optional(),
-});
-
-const ResetSchema = z.object({
-  strategy: z.enum(["reseed", "snapshot"]).optional(),
-  command: z.string().optional(),
-  timeout_seconds: z.number().int().positive().optional(),
-});
+const ServiceNodeSchema = z.union([
+  TaskNodeSchema,
+  ProcessServiceNodeSchema,
+  ImageServiceNodeSchema,
+]);
 
 export const LifecycleConfigSchema = z.object({
-  setup: SetupSchema,
-  services: z.record(z.string(), ServiceSchema),
-  reset: ResetSchema.optional(),
-  mcps: z.record(z.string(), McpServerSchema).optional(),
+  workspace: WorkspaceSchema,
+  environment: z.record(z.string(), ServiceNodeSchema),
 });
 
 export type LifecycleConfig = z.infer<typeof LifecycleConfigSchema>;
@@ -146,7 +202,7 @@ export type ManifestParseResult =
   | { valid: true; config: LifecycleConfig }
   | { valid: false; errors: FieldError[] };
 
-function collectUnsupportedSecretErrors(
+function collectUnsupportedManifestErrors(
   value: unknown,
   path: Array<string | number> = [],
 ): FieldError[] {
@@ -166,25 +222,39 @@ function collectUnsupportedSecretErrors(
     return errors;
   }
 
-  if (!Array.isArray(value) && path.length === 0 && Object.hasOwn(value, "secrets")) {
-    errors.push({
-      path: "secrets",
-      message: UNSUPPORTED_SECRETS_MESSAGE,
-    });
+  if (!Array.isArray(value) && path.length === 0) {
+    if (Object.hasOwn(value, "secrets")) {
+      errors.push({
+        path: "secrets",
+        message: UNSUPPORTED_SECRETS_MESSAGE,
+      });
+    }
+    if (Object.hasOwn(value, "reset")) {
+      errors.push({
+        path: "reset",
+        message: UNSUPPORTED_RESET_MESSAGE,
+      });
+    }
+    if (Object.hasOwn(value, "mcps")) {
+      errors.push({
+        path: "mcps",
+        message: UNSUPPORTED_MCPS_MESSAGE,
+      });
+    }
   }
 
   if (Array.isArray(value)) {
     for (const [index, entry] of value.entries()) {
-      errors.push(...collectUnsupportedSecretErrors(entry, [...path, index]));
+      errors.push(...collectUnsupportedManifestErrors(entry, [...path, index]));
     }
     return errors;
   }
 
   for (const [key, entry] of Object.entries(value)) {
-    if (path.length === 0 && key === "secrets") {
+    if (path.length === 0 && (key === "secrets" || key === "reset" || key === "mcps")) {
       continue;
     }
-    errors.push(...collectUnsupportedSecretErrors(entry, [...path, key]));
+    errors.push(...collectUnsupportedManifestErrors(entry, [...path, key]));
   }
 
   return errors;
@@ -214,11 +284,11 @@ export function parseManifest(text: string): ManifestParseResult {
     };
   }
 
-  const unsupportedSecretErrors = collectUnsupportedSecretErrors(parsed);
-  if (unsupportedSecretErrors.length > 0) {
+  const unsupportedManifestErrors = collectUnsupportedManifestErrors(parsed);
+  if (unsupportedManifestErrors.length > 0) {
     return {
       valid: false,
-      errors: unsupportedSecretErrors,
+      errors: unsupportedManifestErrors,
     };
   }
 

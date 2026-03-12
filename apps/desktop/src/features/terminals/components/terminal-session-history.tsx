@@ -80,13 +80,13 @@ export function TerminalSessionHistory({
               onClick={handleClick}
               className={`flex w-full items-start gap-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:opacity-50 ${
                 !isLast ? "border-b border-[var(--border)]/40" : ""
-              } ${
-                isCurrent
-                  ? "bg-[var(--surface-hover)]"
-                  : "hover:bg-[var(--surface-hover)]"
-              }`}
+              } ${isCurrent ? "bg-[var(--surface-hover)]" : "hover:bg-[var(--surface-hover)]"}`}
             >
-              <TerminalStatusDot className="mt-1.5 shrink-0" size="default" status={terminal.status} />
+              <TerminalStatusDot
+                className="mt-1.5 shrink-0"
+                size="default"
+                status={terminal.status}
+              />
               <div className="min-w-0 flex-1">
                 <div className="flex items-start gap-3">
                   <p className="min-w-0 flex-1 text-sm font-medium text-[var(--foreground)]">

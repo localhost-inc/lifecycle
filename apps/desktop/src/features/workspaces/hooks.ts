@@ -8,6 +8,7 @@ import { useMemo } from "react";
 import { reduceWorkspaceTerminals } from "../terminals/hooks";
 import type { QueryDescriptor, QueryResult, QueryUpdate } from "../../query";
 import { useQuery } from "../../query";
+import type { ManifestStatus } from "../projects/api/projects";
 import type { WorkspaceFileReadResult, WorkspaceSnapshotResult } from "./api";
 
 export interface SetupStepState {
@@ -31,6 +32,7 @@ export const workspaceKeys = {
   detail: (workspaceId: string) => ["workspace", workspaceId] as const,
   file: (workspaceId: string, filePath: string) =>
     ["workspace-file", workspaceId, filePath] as const,
+  manifest: (workspaceId: string) => ["workspace-manifest", workspaceId] as const,
   snapshot: (workspaceId: string) => ["workspace-snapshot", workspaceId] as const,
   services: (workspaceId: string) => ["workspace-services", workspaceId] as const,
   setup: (workspaceId: string) => ["workspace-setup", workspaceId] as const,
@@ -371,9 +373,7 @@ const workspacesByProjectQuery: QueryDescriptor<Record<string, WorkspaceRecord[]
   reduce: reduceWorkspacesByProject,
 };
 
-export function createWorkspaceQuery(
-  workspaceId: string,
-): QueryDescriptor<WorkspaceRecord | null> {
+export function createWorkspaceQuery(workspaceId: string): QueryDescriptor<WorkspaceRecord | null> {
   return {
     eventKinds: WORKSPACE_EVENT_KINDS,
     key: workspaceKeys.detail(workspaceId),
@@ -577,6 +577,18 @@ export function createWorkspaceSnapshotQuery(
     },
     reduce(current, event) {
       return reduceWorkspaceSnapshot(current, event, workspaceId);
+    },
+  };
+}
+
+export function createWorkspaceManifestQuery(
+  workspaceId: string,
+  worktreePath: string,
+): QueryDescriptor<ManifestStatus> {
+  return {
+    key: workspaceKeys.manifest(workspaceId),
+    fetch(source) {
+      return source.readManifest(worktreePath);
     },
   };
 }
@@ -831,6 +843,21 @@ export function useWorkspaceSnapshot(
   const descriptor = useMemo(
     () => (workspaceId ? createWorkspaceSnapshotQuery(workspaceId) : null),
     [workspaceId],
+  );
+
+  return useQuery(descriptor, {
+    disabledData: null,
+  });
+}
+
+export function useWorkspaceManifest(
+  workspaceId: string | null,
+  worktreePath: string | null,
+): QueryResult<ManifestStatus | null> {
+  const descriptor = useMemo(
+    () =>
+      workspaceId && worktreePath ? createWorkspaceManifestQuery(workspaceId, worktreePath) : null,
+    [workspaceId, worktreePath],
   );
 
   return useQuery(descriptor, {

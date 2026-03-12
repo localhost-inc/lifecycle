@@ -1,5 +1,7 @@
 # Setup Services And Start-Scoped Steps
 
+Superseded on 2026-03-12 by the graph-native `workspace` + `environment` manifest boundary. Service-dependent setup now belongs in `environment` task nodes instead of `setup.services`.
+
 ## Context
 
 Kin exposed a gap in the local workspace environment model: setup always ran before managed services existed, and setup only ran once per workspace.

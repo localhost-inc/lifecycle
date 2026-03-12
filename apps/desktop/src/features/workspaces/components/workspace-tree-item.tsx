@@ -1,17 +1,22 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import type { WorkspaceRecord } from "@lifecycle/contracts";
+import type { WorkspaceKind, WorkspaceRecord } from "@lifecycle/contracts";
 import { cn, SidebarMenuAction, sidebarMenuSubButtonVariants } from "@lifecycle/ui";
-import { Archive } from "lucide-react";
+import { Archive, FolderGit2, GitBranch, type LucideIcon } from "lucide-react";
 import { TypedTitle } from "../../../components/typed-title";
 import { formatCompactRelativeTime } from "../../../lib/format";
 import { renameWorkspace } from "../api";
-import {
-  canInlineRenameWorkspace,
-  getWorkspaceDisplayName,
-  isRootWorkspace,
-} from "../lib/workspace-display";
+import { canInlineRenameWorkspace, getWorkspaceDisplayName } from "../lib/workspace-display";
 import { getWorkspaceSessionStatusState, WorkspaceSessionStatus } from "./workspace-session-status";
-import { WorkspaceRootIndicator } from "./workspace-root-indicator";
+
+const workspaceKindIcons: Record<WorkspaceKind, LucideIcon> = {
+  root: FolderGit2,
+  managed: GitBranch,
+};
+
+function WorkspaceKindIcon({ kind, className }: { kind: WorkspaceKind; className?: string }) {
+  const Icon = workspaceKindIcons[kind];
+  return <Icon className={className} size={10} strokeWidth={2} />;
+}
 
 interface WorkspaceTreeItemProps {
   running?: boolean;
@@ -131,7 +136,7 @@ export function WorkspaceTreeItem({
 
   const rowClassName = cn(
     sidebarMenuSubButtonVariants({ active: false }),
-    "gap-1.5 rounded-none pl-[22px] pr-2 bg-transparent text-[var(--sidebar-foreground)] hover:bg-transparent",
+    "gap-1.5 rounded-none pl-3 pr-0 bg-transparent text-[var(--sidebar-foreground)] hover:bg-transparent",
     selected ? "font-medium opacity-100" : "opacity-80 hover:opacity-100",
     editing ? "cursor-text ring-1 ring-[var(--sidebar-foreground)]/20" : undefined,
   );
@@ -203,7 +208,7 @@ export function WorkspaceTreeItem({
         title={titleText}
         type="button"
       >
-        {isRootWorkspace(workspace) && <WorkspaceRootIndicator className="mr-0.5" />}
+        <WorkspaceKindIcon className={cn("mr-0.5 shrink-0", selected ? "text-[var(--sidebar-foreground)]" : "text-[var(--muted-foreground)]")} kind={workspace.kind} />
         <TypedTitle className="flex-1 truncate text-sm" text={displayName} />
         {sessionStatusState === "hidden" && timestamp ? (
           <span
@@ -219,7 +224,7 @@ export function WorkspaceTreeItem({
       </button>
       <SidebarMenuAction
         aria-label={`Archive workspace ${displayName}`}
-        className="pointer-events-none opacity-0 transition-opacity disabled:opacity-0 group-hover/workspace-item:pointer-events-auto group-hover/workspace-item:opacity-100 group-hover/workspace-item:disabled:opacity-50"
+        className="right-0 pointer-events-none opacity-0 transition-opacity disabled:opacity-0 group-hover/workspace-item:pointer-events-auto group-hover/workspace-item:opacity-100 group-hover/workspace-item:disabled:opacity-50"
         disabled={destroyDisabled}
         onClick={(event) => {
           event.stopPropagation();

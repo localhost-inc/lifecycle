@@ -56,8 +56,7 @@ impl Supervisor {
         let mut cmd = Command::new("sh");
         cmd.args(["-c", &service.command]).current_dir(&cwd);
 
-        let resolved_env =
-            resolve_service_env_vars(service_name, service.env_vars.as_ref(), runtime_env)?;
+        let resolved_env = resolve_service_env(service_name, service.env.as_ref(), runtime_env)?;
         for (key, value) in &resolved_env {
             cmd.env(key, value);
         }
@@ -125,11 +124,10 @@ impl Supervisor {
         }
 
         // Build env vars
-        let env: Vec<String> =
-            resolve_service_env_vars(service_name, service.env_vars.as_ref(), runtime_env)?
-                .into_iter()
-                .map(|(key, value)| format!("{key}={value}"))
-                .collect();
+        let env: Vec<String> = resolve_service_env(service_name, service.env.as_ref(), runtime_env)?
+            .into_iter()
+            .map(|(key, value)| format!("{key}={value}"))
+            .collect();
 
         // Build cmd
         let cmd: Option<Vec<String>> = if let Some(ref command) = service.command {
@@ -373,22 +371,22 @@ impl Supervisor {
     }
 }
 
-fn resolve_service_env_vars(
+fn resolve_service_env(
     service_name: &str,
-    env_vars: Option<&HashMap<String, String>>,
+    env: Option<&HashMap<String, String>>,
     runtime_env: &HashMap<String, String>,
 ) -> Result<HashMap<String, String>, LifecycleError> {
     let mut resolved = HashMap::new();
 
-    let Some(env_vars) = env_vars else {
+    let Some(env) = env else {
         return Ok(resolved);
     };
 
-    for (key, value) in env_vars {
+    for (key, value) in env {
         let expanded = expand_reserved_runtime_templates(
             value,
             runtime_env,
-            &format!("services.{service_name}.env_vars.{key}"),
+            &format!("environment.{service_name}.env.{key}"),
         )?;
         resolved.insert(key.clone(), expanded);
     }
@@ -458,7 +456,7 @@ mod tests {
             build: None,
             command: None,
             args: None,
-            env_vars: None,
+            env: None,
             depends_on: None,
             startup_timeout_seconds: None,
             health_check: None,
@@ -470,8 +468,8 @@ mod tests {
     }
 
     #[test]
-    fn resolve_service_env_vars_expands_reserved_runtime_templates() {
-        let env_vars = HashMap::from([(
+    fn resolve_service_env_expands_reserved_runtime_templates() {
+        let env = HashMap::from([(
             "VITE_API_ORIGIN".to_string(),
             "http://${LIFECYCLE_SERVICE_API_ADDRESS}".to_string(),
         )]);
@@ -480,8 +478,8 @@ mod tests {
             "127.0.0.1:3001".to_string(),
         )]);
 
-        let resolved = resolve_service_env_vars("web", Some(&env_vars), &runtime_env)
-            .expect("service env vars resolve");
+        let resolved =
+            resolve_service_env("web", Some(&env), &runtime_env).expect("service env resolves");
 
         assert_eq!(
             resolved.get("VITE_API_ORIGIN").map(String::as_str),
@@ -490,10 +488,10 @@ mod tests {
     }
 
     #[test]
-    fn resolve_service_env_vars_preserves_non_runtime_templates() {
-        let env_vars = HashMap::from([("API_KEY".to_string(), "${EXTERNAL_API_KEY}".to_string())]);
+    fn resolve_service_env_preserves_non_runtime_templates() {
+        let env = HashMap::from([("API_KEY".to_string(), "${EXTERNAL_API_KEY}".to_string())]);
 
-        let resolved = resolve_service_env_vars("api", Some(&env_vars), &HashMap::new())
+        let resolved = resolve_service_env("api", Some(&env), &HashMap::new())
             .expect("non-runtime templates remain untouched");
 
         assert_eq!(

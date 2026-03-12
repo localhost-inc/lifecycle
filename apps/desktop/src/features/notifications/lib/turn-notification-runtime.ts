@@ -119,6 +119,18 @@ function getSharedAudioContext(): AudioContext | null {
   return sharedAudioContext;
 }
 
+/**
+ * Warm the shared AudioContext so subsequent playTurnNotificationSound calls
+ * start instantly. Call this on any user interaction (click, pointer-down) to
+ * prevent the browser/webview from auto-suspending the context between plays.
+ */
+export function warmAudioContext(): void {
+  const context = getSharedAudioContext();
+  if (context?.state === "suspended") {
+    void context.resume();
+  }
+}
+
 export async function playTurnNotificationSound(sound: TurnNotificationSound): Promise<void> {
   const profile = getTurnNotificationSoundProfile(sound);
   if (profile.tones.length === 0) {
@@ -130,40 +142,38 @@ export async function playTurnNotificationSound(sound: TurnNotificationSound): P
     return;
   }
 
+  if (context.state === "suspended") {
+    await context.resume();
+  }
+
   const output = context.createGain();
   output.gain.value = 0.8;
   output.connect(context.destination);
 
-  try {
-    if (context.state === "suspended") {
-      await context.resume();
-    }
+  const startTime = context.currentTime;
 
-    const startTime = context.currentTime + 0.01;
+  for (const tone of profile.tones) {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const toneStart = startTime + tone.at;
+    const toneEnd = toneStart + tone.duration;
 
-    for (const tone of profile.tones) {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      const toneStart = startTime + tone.at;
-      const toneEnd = toneStart + tone.duration;
+    oscillator.type = tone.type;
+    oscillator.frequency.setValueAtTime(tone.frequency, toneStart);
 
-      oscillator.type = tone.type;
-      oscillator.frequency.setValueAtTime(tone.frequency, toneStart);
+    gain.gain.setValueAtTime(0.0001, toneStart);
+    gain.gain.exponentialRampToValueAtTime(tone.gain, toneStart + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, toneEnd);
 
-      gain.gain.setValueAtTime(0.0001, toneStart);
-      gain.gain.exponentialRampToValueAtTime(tone.gain, toneStart + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, toneEnd);
-
-      oscillator.connect(gain);
-      gain.connect(output);
-      oscillator.start(toneStart);
-      oscillator.stop(toneEnd + 0.02);
-    }
-  } finally {
-    const disconnectAt =
-      (profile.tones.at(-1)?.at ?? 0) + (profile.tones.at(-1)?.duration ?? 0) + 0.2;
-    window.setTimeout(() => {
-      output.disconnect();
-    }, disconnectAt * 1000);
+    oscillator.connect(gain);
+    gain.connect(output);
+    oscillator.start(toneStart);
+    oscillator.stop(toneEnd + 0.02);
   }
+
+  const disconnectAt =
+    (profile.tones.at(-1)?.at ?? 0) + (profile.tones.at(-1)?.duration ?? 0) + 0.2;
+  window.setTimeout(() => {
+    output.disconnect();
+  }, disconnectAt * 1000);
 }

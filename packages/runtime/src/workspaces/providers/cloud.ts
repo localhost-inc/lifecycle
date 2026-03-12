@@ -90,9 +90,7 @@ export class CloudWorkspaceProvider implements WorkspaceProvider {
     return this.client.destroy(workspaceId);
   }
 
-  createTerminal(
-    input: WorkspaceProviderCreateTerminalInput,
-  ): Promise<TerminalRecord> {
+  createTerminal(input: WorkspaceProviderCreateTerminalInput): Promise<TerminalRecord> {
     return this.client.createTerminal(input);
   }
 

@@ -11,7 +11,7 @@ export const SettingsSection = forwardRef<HTMLElement, SettingsSectionProps>(
   function SettingsSection({ id, label, description, children }, ref) {
     return (
       <section
-        className="mt-10 scroll-mt-8 border-t border-[var(--border)] pt-10"
+        className="mt-10 scroll-mt-16 border-t border-[var(--border)] pt-10"
         id={id}
         ref={ref}
       >

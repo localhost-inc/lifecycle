@@ -2,7 +2,7 @@ import type { WorkspaceRecord, WorkspaceStatus } from "@lifecycle/contracts";
 import { useMemo } from "react";
 import { useNavigate, useOutletContext, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, History, Layers, Sparkles } from "lucide-react";
-import { Badge, Button, Card, EmptyState } from "@lifecycle/ui";
+import { Badge, Button, Card, EmptyState, Loading } from "@lifecycle/ui";
 import { formatRelativeTime } from "../../../lib/format";
 import { useProjectCatalog } from "../../projects/hooks";
 import { WorkspaceRootIndicator } from "../../workspaces/components/workspace-root-indicator";
@@ -98,11 +98,7 @@ export function DashboardIndexRoute() {
     : "Choose a workspace from the sidebar to view status, setup output, and services.";
 
   if (projectCatalogQuery.isLoading) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-sm text-[var(--muted-foreground)]">Loading projects...</p>
-      </div>
-    );
+    return <Loading message="Loading projects..." />;
   }
 
   if (projects.length === 0) {

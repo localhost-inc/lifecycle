@@ -1,5 +1,7 @@
 # Workspace Environment Graph Target - 2026-03-10
 
+Shipped on 2026-03-12. The manifest boundary now matches the model in this note, with a flat `environment` node map instead of a separate top-level `services` bag.
+
 ## Context
 
 The current manifest and startup flow separate one-shot `setup` from long-lived `services`.
@@ -34,6 +36,6 @@ Lifecycle should converge on an explicit workspace lifecycle plus a workspace-sc
 
 ## Follow-Up Actions
 
-1. Add an environment-graph reference doc that distinguishes target architecture from the current V1 manifest contract.
-2. Refactor provider startup behind a lowering layer from current `setup` and `services` into `workspace.setup` plus `environment.services`.
-3. Make workspace network, ingress, and persistent volumes first-class environment concepts before claiming durable local multi-service support.
+1. Done on 2026-03-12: the manifest boundary now ships as `workspace` plus flat `environment`.
+2. Done on 2026-03-12: provider startup now executes the graph-native contract directly instead of lowering from `setup.services`.
+3. Continue making ingress and persistent storage first-class environment concepts before claiming durable local multi-service support.

@@ -7,89 +7,41 @@ import {
   Select,
   SelectContent,
   SelectItem,
-  Spinner,
   SelectTrigger,
   SelectValue,
+  StatusDot,
+  type StatusDotTone,
 } from "@lifecycle/ui";
-import {
-  AlertTriangle,
-  Check,
-  Circle,
-  ExternalLink,
-  FileJson,
-  Layers,
-  RotateCcw,
-  Settings,
-} from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { ExternalLink, FileJson, Layers } from "lucide-react";
+import { useState } from "react";
 
-const statusIcon: Record<string, { icon: ReactNode; className: string }> = {
-  stopped: {
-    icon: <Circle className="size-4" />,
-    className: "text-[var(--muted-foreground)]",
-  },
-  starting: {
-    icon: <Spinner className="size-4" />,
-    className: "text-blue-400",
-  },
-  ready: {
-    icon: <Check className="size-4" strokeWidth={2.5} />,
-    className: "text-emerald-400",
-  },
-  failed: {
-    icon: <AlertTriangle className="size-4" />,
-    className: "text-red-400",
-  },
+const SERVICE_STATUS_TONES: Record<string, StatusDotTone> = {
+  stopped: "neutral",
+  starting: "info",
+  ready: "success",
+  failed: "danger",
 };
 
-const defaultStatusIcon = statusIcon.stopped!;
+function ServiceStatusBadge({ status }: { status: string }) {
+  const isFailed = status === "failed";
+  return (
+    <span
+      className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] ${
+        isFailed
+          ? "border-[var(--destructive)]/40 text-[var(--destructive)]"
+          : "border-[var(--border)] text-[var(--foreground)]/70"
+      }`}
+    >
+      {status}
+    </span>
+  );
+}
+
 const exposureItems: Array<{ label: string; value: ServiceRecord["exposure"] }> = [
   { label: "Internal", value: "internal" },
   { label: "Local", value: "local" },
   { label: "Organization (Later)", value: "organization" },
 ];
-
-function ServiceActionIcon({ service, onOpen }: { service: ServiceRecord; onOpen: () => void }) {
-  if (service.status === "ready" && service.preview_status === "ready") {
-    return (
-      <button
-        className="flex h-6 w-6 items-center justify-center rounded text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
-        onClick={(e) => {
-          e.stopPropagation();
-          onOpen();
-        }}
-        title="Open preview"
-        type="button"
-      >
-        <ExternalLink className="size-3.5" />
-      </button>
-    );
-  }
-
-  if (service.status === "failed") {
-    return (
-      <span
-        className="flex h-6 w-6 items-center justify-center text-[var(--muted-foreground)]"
-        title="Retry by restarting the environment"
-      >
-        <RotateCcw className="size-3.5" />
-      </span>
-    );
-  }
-
-  return (
-    <button
-      className="flex h-6 w-6 items-center justify-center rounded text-[var(--muted-foreground)] opacity-0 transition-opacity group-hover/row:opacity-100 hover:text-[var(--foreground)]"
-      onClick={(e) => {
-        e.stopPropagation();
-      }}
-      title="Service settings"
-      type="button"
-    >
-      <Settings className="size-3.5" />
-    </button>
-  );
-}
 
 interface ServicesTabProps {
   manifestState: "invalid" | "missing" | "valid";
@@ -180,8 +132,6 @@ function ServiceRow({
 
   const parsedPort = parsePortDraft(draftPort);
   const previewUrl = resolvePreviewUrl(service);
-  const { icon: leftIcon, className: iconClassName } =
-    statusIcon[service.status] ?? defaultStatusIcon;
   const isDirty = draftExposure !== service.exposure || parsedPort.value !== service.port_override;
 
   async function handleSave(): Promise<void> {
@@ -243,42 +193,43 @@ function ServiceRow({
 
   return (
     <div className="group/row">
-      <div
-        role="button"
-        tabIndex={0}
-        className="flex w-full items-center gap-2.5 rounded px-2 py-2 text-left transition-colors hover:bg-[var(--surface-hover)] cursor-pointer"
+      <button
+        className="flex w-full items-start gap-3 px-2 py-2.5 text-left transition-colors hover:bg-[var(--surface-hover)] cursor-pointer"
         onClick={() => setExpanded(!expanded)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            setExpanded(!expanded);
-          }
-        }}
+        type="button"
       >
-        <span className={`flex shrink-0 items-center justify-center ${iconClassName}`}>
-          {leftIcon}
-        </span>
+        <StatusDot
+          className="mt-1.5 shrink-0"
+          pulse={service.status === "starting"}
+          tone={SERVICE_STATUS_TONES[service.status] ?? "neutral"}
+        />
         <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-2">
-            <span className="truncate text-[13px] font-medium text-[var(--foreground)]">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-medium text-[var(--foreground)]">
               {service.service_name}
             </span>
-            <span className="ml-auto shrink-0 text-[11px] text-[var(--muted-foreground)]">
-              {service.status}
-            </span>
+            <ServiceStatusBadge status={service.status} />
+            {canOpenPreview && (
+              <ExternalLink
+                className="size-3 shrink-0 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleOpenPreview();
+                }}
+              />
+            )}
           </div>
           {(showPreviewLine || service.effective_port !== null) && (
-            <div className="flex items-baseline gap-1.5 text-[11px] text-[var(--muted-foreground)]">
+            <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--muted-foreground)]/45">
               {service.effective_port !== null && (
-                <span className="font-mono">:{service.effective_port}</span>
+                <span>:{service.effective_port}</span>
               )}
-              {showPreviewLine && service.effective_port !== null && <span>·</span>}
+              {showPreviewLine && service.effective_port !== null && <span> · </span>}
               {showPreviewLine && <span>{previewStatusLabel}</span>}
-            </div>
+            </p>
           )}
         </div>
-        <ServiceActionIcon service={service} onOpen={handleOpenPreview} />
-      </div>
+      </button>
 
       {service.status_reason && (
         <p className="px-2 pl-7 text-[11px] text-[var(--destructive)]">{service.status_reason}</p>
@@ -383,7 +334,7 @@ function ServiceRow({
 export function ServicesTab({ manifestState, onUpdateService, services }: ServicesTabProps) {
   if (services.length > 0) {
     return (
-      <div className="flex flex-col gap-0.5">
+      <div className="flex flex-col divide-y divide-[var(--border)]/40">
         {services.map((service) => (
           <ServiceRow
             key={`${service.id}:${service.updated_at}`}

@@ -15,15 +15,6 @@ interface TurnNotificationSoundProfileDefinition {
 
 export const turnNotificationSoundProfiles = [
   {
-    description: "A bright two-note glass tap.",
-    label: "Glass",
-    tones: [
-      { at: 0, duration: 0.18, frequency: 1046.5, gain: 0.12, type: "triangle" },
-      { at: 0.12, duration: 0.26, frequency: 1567.98, gain: 0.08, type: "sine" },
-    ],
-    value: "glass",
-  },
-  {
     description: "A softer rising chime.",
     label: "Orbit",
     tones: [
@@ -42,6 +33,57 @@ export const turnNotificationSoundProfiles = [
       { at: 0.28, duration: 0.14, frequency: 1174.66, gain: 0.06, type: "square" },
     ],
     value: "signal",
+  },
+  {
+    description: "A quick descending water drop.",
+    label: "Droplet",
+    tones: [
+      { at: 0, duration: 0.1, frequency: 1396.91, gain: 0.1, type: "sine" },
+      { at: 0.07, duration: 0.14, frequency: 880, gain: 0.07, type: "sine" },
+    ],
+    value: "droplet",
+  },
+  {
+    description: "A single warm thud.",
+    label: "Pulse",
+    tones: [{ at: 0, duration: 0.12, frequency: 261.63, gain: 0.1, type: "triangle" }],
+    value: "pulse",
+  },
+  {
+    description: "A soft doorbell ding-dong.",
+    label: "Bells",
+    tones: [
+      { at: 0, duration: 0.3, frequency: 659.25, gain: 0.09, type: "sine" },
+      { at: 0.15, duration: 0.35, frequency: 523.25, gain: 0.08, type: "sine" },
+    ],
+    value: "bells",
+  },
+  {
+    description: "A subtle sci-fi ping.",
+    label: "Radar",
+    tones: [
+      { at: 0, duration: 0.2, frequency: 1174.66, gain: 0.1, type: "sine" },
+      { at: 0.12, duration: 0.18, frequency: 1174.66, gain: 0.06, type: "sine" },
+    ],
+    value: "radar",
+  },
+  {
+    description: "A dry percussive knock.",
+    label: "Woodblock",
+    tones: [
+      { at: 0, duration: 0.05, frequency: 783.99, gain: 0.09, type: "square" },
+      { at: 0.1, duration: 0.05, frequency: 783.99, gain: 0.07, type: "square" },
+    ],
+    value: "woodblock",
+  },
+  {
+    description: "A deep resonant hum.",
+    label: "Baritone",
+    tones: [
+      { at: 0, duration: 0.22, frequency: 146.83, gain: 0.13, type: "triangle" },
+      { at: 0.03, duration: 0.28, frequency: 220, gain: 0.08, type: "sine" },
+    ],
+    value: "baritone",
   },
   {
     description: "No sound.",

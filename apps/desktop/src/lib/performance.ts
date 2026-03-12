@@ -66,4 +66,3 @@ export async function measureAsyncPerformance<T>(
     measurePerformance(name, start, end);
   }
 }
-

@@ -41,7 +41,7 @@ export function ProjectItem({
         <FolderOpen size={16} className="hidden shrink-0 group-data-[state=open]/project:block" />
         <span className="truncate">{project.name}</span>
       </CollapsibleTrigger>
-      <div className="pointer-events-none absolute right-1 top-1/2 z-10 flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition-opacity group-hover/menu-item:pointer-events-auto group-hover/menu-item:opacity-100 group-focus-within/menu-item:pointer-events-auto group-focus-within/menu-item:opacity-100">
+      <div className="pointer-events-none absolute right-0 top-1/2 z-10 flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition-opacity group-hover/menu-item:pointer-events-auto group-hover/menu-item:opacity-100 group-focus-within/menu-item:pointer-events-auto group-focus-within/menu-item:opacity-100">
         <button
           type="button"
           className="flex size-6 items-center justify-center rounded-md text-[var(--sidebar-muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"

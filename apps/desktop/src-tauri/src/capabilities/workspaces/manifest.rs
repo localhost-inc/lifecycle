@@ -6,16 +6,15 @@ use std::collections::HashMap;
 #[allow(dead_code)]
 #[derive(Clone, Debug, Deserialize)]
 pub struct LifecycleConfig {
-    pub setup: SetupConfig,
-    pub services: HashMap<String, ServiceConfig>,
-    pub reset: Option<ResetConfig>,
-    pub mcps: Option<HashMap<String, McpServerConfig>>,
+    pub workspace: WorkspaceConfig,
+    pub environment: HashMap<String, EnvironmentNodeConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct SetupConfig {
-    pub services: Option<Vec<String>>,
-    pub steps: Vec<SetupStep>,
+pub struct WorkspaceConfig {
+    #[serde(default)]
+    pub setup: Vec<SetupStep>,
+    pub teardown: Option<Vec<SetupStep>>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -25,8 +24,39 @@ pub struct SetupStep {
     pub write_files: Option<Vec<SetupWriteFile>>,
     pub timeout_seconds: u64,
     pub cwd: Option<String>,
-    pub env_vars: Option<HashMap<String, String>>,
+    pub env: Option<HashMap<String, String>>,
+    pub depends_on: Option<Vec<String>>,
     pub run_on: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct TaskConfig {
+    pub command: Option<String>,
+    pub write_files: Option<Vec<SetupWriteFile>>,
+    pub timeout_seconds: u64,
+    pub cwd: Option<String>,
+    pub env: Option<HashMap<String, String>>,
+    pub depends_on: Option<Vec<String>>,
+    pub run_on: Option<String>,
+}
+
+impl TaskConfig {
+    pub fn depends_on(&self) -> &[String] {
+        self.depends_on.as_deref().unwrap_or_default()
+    }
+
+    pub fn into_setup_step(self, name: String) -> SetupStep {
+        SetupStep {
+            name,
+            command: self.command,
+            write_files: self.write_files,
+            timeout_seconds: self.timeout_seconds,
+            cwd: self.cwd,
+            env: self.env,
+            depends_on: self.depends_on,
+            run_on: self.run_on,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -34,6 +64,34 @@ pub struct SetupWriteFile {
     pub path: String,
     pub content: Option<String>,
     pub lines: Option<Vec<String>>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(tag = "kind")]
+pub enum EnvironmentNodeConfig {
+    #[serde(rename = "task")]
+    Task(TaskConfig),
+    #[serde(rename = "service")]
+    Service {
+        #[serde(flatten)]
+        config: ServiceConfig,
+    },
+}
+
+impl EnvironmentNodeConfig {
+    pub fn service(&self) -> Option<&ServiceConfig> {
+        match self {
+            Self::Task(_) => None,
+            Self::Service { config } => Some(config),
+        }
+    }
+
+    pub fn service_mut(&mut self) -> Option<&mut ServiceConfig> {
+        match self {
+            Self::Task(_) => None,
+            Self::Service { config } => Some(config),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -47,10 +105,10 @@ pub enum ServiceConfig {
 
 impl ServiceConfig {
     #[allow(dead_code)]
-    pub fn env_vars(&self) -> Option<&HashMap<String, String>> {
+    pub fn env(&self) -> Option<&HashMap<String, String>> {
         match self {
-            Self::Process(s) => s.env_vars.as_ref(),
-            Self::Image(s) => s.env_vars.as_ref(),
+            Self::Process(s) => s.env.as_ref(),
+            Self::Image(s) => s.env.as_ref(),
         }
     }
 
@@ -94,7 +152,7 @@ impl ServiceConfig {
 pub struct ProcessService {
     pub command: String,
     pub cwd: Option<String>,
-    pub env_vars: Option<HashMap<String, String>>,
+    pub env: Option<HashMap<String, String>>,
     pub depends_on: Option<Vec<String>>,
     pub startup_timeout_seconds: Option<u64>,
     pub health_check: Option<HealthCheck>,
@@ -110,7 +168,7 @@ pub struct ImageService {
     pub build: Option<ImageBuild>,
     pub command: Option<String>,
     pub args: Option<Vec<String>>,
-    pub env_vars: Option<HashMap<String, String>>,
+    pub env: Option<HashMap<String, String>>,
     pub depends_on: Option<Vec<String>>,
     pub startup_timeout_seconds: Option<u64>,
     pub health_check: Option<HealthCheck>,
@@ -147,27 +205,14 @@ pub enum HealthCheck {
     Http { url: String, timeout_seconds: u64 },
 }
 
-#[allow(dead_code)]
-#[derive(Clone, Debug, Deserialize)]
-pub struct ResetConfig {
-    pub strategy: Option<String>,
-    pub command: Option<String>,
-    pub timeout_seconds: Option<u64>,
-}
-
-#[allow(dead_code)]
-#[derive(Clone, Debug, Deserialize)]
-pub struct McpServerConfig {
-    pub command: String,
-    pub args: Option<Vec<String>>,
-    pub transport: String,
-    pub env_vars: Option<HashMap<String, String>>,
-}
-
 const UNSUPPORTED_SECRETS_MESSAGE: &str =
-    "managed secrets are not supported in local lifecycle.json yet; materialize local env files in setup instead";
+    "managed secrets are not supported in local lifecycle.json yet; materialize local env files in workspace setup instead";
 const UNSUPPORTED_SECRET_TEMPLATE_MESSAGE: &str =
-    "`${secrets.*}` is not supported in local lifecycle.json; materialize local env files in setup instead";
+    "`${secrets.*}` is not supported in local lifecycle.json; materialize local env files in workspace setup instead";
+const UNSUPPORTED_RESET_MESSAGE: &str =
+    "`reset` is not part of the current lifecycle.json contract yet; remove it from the manifest for now";
+const UNSUPPORTED_MCPS_MESSAGE: &str =
+    "`mcps` is not part of the current lifecycle.json contract yet; remove it from the manifest for now";
 
 pub fn parse_lifecycle_config(json: &str) -> Result<LifecycleConfig, LifecycleError> {
     let value: Value = serde_json::from_str(json)
@@ -181,86 +226,49 @@ pub fn parse_lifecycle_config(json: &str) -> Result<LifecycleConfig, LifecycleEr
 }
 
 impl LifecycleConfig {
+    pub fn declared_services(&self) -> impl Iterator<Item = (&String, &ServiceConfig)> + '_ {
+        self.environment
+            .iter()
+            .filter_map(|(name, node)| node.service().map(|config| (name, config)))
+    }
+
+    pub fn declared_service_names(&self) -> Vec<String> {
+        self.declared_services()
+            .map(|(name, _)| name.clone())
+            .collect()
+    }
+
+    pub fn service_mut(&mut self, service_name: &str) -> Option<&mut ServiceConfig> {
+        self.environment
+            .get_mut(service_name)
+            .and_then(EnvironmentNodeConfig::service_mut)
+    }
+
     pub fn validate(&self) -> Result<(), LifecycleError> {
-        if self.setup.steps.is_empty() {
-            return manifest_invalid("setup.steps", "must include at least one step");
+        for (index, step) in self.workspace.setup.iter().enumerate() {
+            validate_step(step, &format!("workspace.setup.{index}"), false, true)?;
         }
 
-        for (index, step) in self.setup.steps.iter().enumerate() {
-            let step_field = format!("setup.steps.{index}");
-            match (step.command.as_deref(), step.write_files.as_ref()) {
-                (Some(_), None) | (None, Some(_)) => {}
-                _ => {
-                    return manifest_invalid(
-                        &step_field,
-                        "requires exactly one of command or write_files",
-                    );
-                }
+        if let Some(teardown_steps) = self.workspace.teardown.as_ref() {
+            for (index, step) in teardown_steps.iter().enumerate() {
+                validate_step(step, &format!("workspace.teardown.{index}"), false, false)?;
             }
+        }
 
-            if let Some(run_on) = step.run_on.as_deref() {
-                if !matches!(run_on, "create" | "start") {
-                    return manifest_invalid(
-                        &format!("{step_field}.run_on"),
-                        "must be one of: create, start",
-                    );
+        for (node_name, node) in &self.environment {
+            match node {
+                EnvironmentNodeConfig::Task(step) => {
+                    validate_task(step, &format!("environment.{node_name}"))?;
                 }
-            }
-
-            if let Some(write_files) = step.write_files.as_ref() {
-                if write_files.is_empty() {
-                    return manifest_invalid(
-                        &format!("{step_field}.write_files"),
-                        "must not be empty",
-                    );
-                }
-
-                for (file_index, file) in write_files.iter().enumerate() {
-                    let file_field = format!("{step_field}.write_files.{file_index}");
-                    let has_content = file.content.is_some();
-                    let has_lines = file.lines.is_some();
-                    if has_content == has_lines {
-                        return manifest_invalid(
-                            &file_field,
-                            "requires exactly one of content or lines",
-                        );
+                EnvironmentNodeConfig::Service { config } => {
+                    if let ServiceConfig::Image(image) = config {
+                        if image.image.is_none() && image.build.is_none() {
+                            return manifest_invalid(
+                                &format!("environment.{node_name}.image"),
+                                "image services require either image or build",
+                            );
+                        }
                     }
-                    if file.lines.as_ref().is_some_and(Vec::is_empty) {
-                        return manifest_invalid(
-                            &format!("{file_field}.lines"),
-                            "must not be empty",
-                        );
-                    }
-                }
-            }
-        }
-
-        for (service_name, service) in &self.services {
-            if let ServiceConfig::Image(image) = service {
-                if image.image.is_none() && image.build.is_none() {
-                    return manifest_invalid(
-                        &format!("services.{service_name}.image"),
-                        "image services require either image or build",
-                    );
-                }
-            }
-        }
-
-        if let Some(reset) = self.reset.as_ref() {
-            if let Some(strategy) = reset.strategy.as_deref() {
-                if !matches!(strategy, "reseed" | "snapshot") {
-                    return manifest_invalid("reset.strategy", "must be one of: reseed, snapshot");
-                }
-            }
-        }
-
-        if let Some(mcps) = self.mcps.as_ref() {
-            for (name, server) in mcps {
-                if !matches!(server.transport.as_str(), "stdio" | "sse") {
-                    return manifest_invalid(
-                        &format!("mcps.{name}.transport"),
-                        "must be one of: stdio, sse",
-                    );
                 }
             }
         }
@@ -269,10 +277,101 @@ impl LifecycleConfig {
     }
 }
 
+fn validate_step(
+    step: &SetupStep,
+    field: &str,
+    allow_depends_on: bool,
+    allow_run_on: bool,
+) -> Result<(), LifecycleError> {
+    match (step.command.as_deref(), step.write_files.as_ref()) {
+        (Some(_), None) | (None, Some(_)) => {}
+        _ => {
+            return manifest_invalid(field, "requires exactly one of command or write_files");
+        }
+    }
+
+    if !allow_depends_on && step.depends_on.is_some() {
+        return manifest_invalid(
+            &format!("{field}.depends_on"),
+            "cannot declare depends_on in this context",
+        );
+    }
+
+    if let Some(run_on) = step.run_on.as_deref() {
+        if !allow_run_on {
+            return manifest_invalid(&format!("{field}.run_on"), "cannot declare run_on here");
+        }
+        if !matches!(run_on, "create" | "start") {
+            return manifest_invalid(&format!("{field}.run_on"), "must be one of: create, start");
+        }
+    }
+
+    if let Some(write_files) = step.write_files.as_ref() {
+        if write_files.is_empty() {
+            return manifest_invalid(&format!("{field}.write_files"), "must not be empty");
+        }
+
+        for (file_index, file) in write_files.iter().enumerate() {
+            let file_field = format!("{field}.write_files.{file_index}");
+            let has_content = file.content.is_some();
+            let has_lines = file.lines.is_some();
+            if has_content == has_lines {
+                return manifest_invalid(&file_field, "requires exactly one of content or lines");
+            }
+            if file.lines.as_ref().is_some_and(Vec::is_empty) {
+                return manifest_invalid(&format!("{file_field}.lines"), "must not be empty");
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_task(step: &TaskConfig, field: &str) -> Result<(), LifecycleError> {
+    match (step.command.as_deref(), step.write_files.as_ref()) {
+        (Some(_), None) | (None, Some(_)) => {}
+        _ => {
+            return manifest_invalid(field, "requires exactly one of command or write_files");
+        }
+    }
+
+    if let Some(run_on) = step.run_on.as_deref() {
+        if !matches!(run_on, "create" | "start") {
+            return manifest_invalid(&format!("{field}.run_on"), "must be one of: create, start");
+        }
+    }
+
+    if let Some(write_files) = step.write_files.as_ref() {
+        if write_files.is_empty() {
+            return manifest_invalid(&format!("{field}.write_files"), "must not be empty");
+        }
+
+        for (file_index, file) in write_files.iter().enumerate() {
+            let file_field = format!("{field}.write_files.{file_index}");
+            let has_content = file.content.is_some();
+            let has_lines = file.lines.is_some();
+            if has_content == has_lines {
+                return manifest_invalid(&file_field, "requires exactly one of content or lines");
+            }
+            if file.lines.as_ref().is_some_and(Vec::is_empty) {
+                return manifest_invalid(&format!("{file_field}.lines"), "must not be empty");
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn validate_manifest_value(value: &Value) -> Result<(), LifecycleError> {
     if let Some(object) = value.as_object() {
         if object.contains_key("secrets") {
             return manifest_invalid("secrets", UNSUPPORTED_SECRETS_MESSAGE);
+        }
+        if object.contains_key("reset") {
+            return manifest_invalid("reset", UNSUPPORTED_RESET_MESSAGE);
+        }
+        if object.contains_key("mcps") {
+            return manifest_invalid("mcps", UNSUPPORTED_MCPS_MESSAGE);
         }
     }
 
@@ -299,7 +398,7 @@ fn validate_manifest_value_inner(
         }
         Value::Object(entries) => {
             for (key, entry) in entries {
-                if path.is_empty() && key == "secrets" {
+                if path.is_empty() && matches!(key.as_str(), "secrets" | "reset" | "mcps") {
                     continue;
                 }
                 path.push(key.clone());
@@ -328,15 +427,26 @@ mod tests {
     }
 
     #[test]
-    fn parse_process_service() {
+    fn parse_process_service_and_task_nodes() {
         let json = r#"{
-            "setup": {
-                "steps": [
+            "workspace": {
+                "setup": [
                     { "name": "install", "command": "bun install", "timeout_seconds": 120 }
+                ],
+                "teardown": [
+                    { "name": "cleanup", "command": "rm -f .env.local", "timeout_seconds": 10 }
                 ]
             },
-            "services": {
+            "environment": {
+                "migrate": {
+                    "kind": "task",
+                    "command": "bun run db:migrate",
+                    "depends_on": ["api"],
+                    "timeout_seconds": 60,
+                    "run_on": "start"
+                },
                 "api": {
+                    "kind": "service",
                     "runtime": "process",
                     "command": "bun run dev",
                     "port": 3000,
@@ -350,31 +460,29 @@ mod tests {
         }"#;
 
         let config = parse_config(json);
-        assert!(config.setup.services.is_none());
-        assert_eq!(config.setup.steps.len(), 1);
-        assert_eq!(config.setup.steps[0].name, "install");
-        assert_eq!(
-            config.setup.steps[0].command.as_deref(),
-            Some("bun install")
-        );
-        assert!(config.setup.steps[0].write_files.is_none());
-        assert!(config.setup.steps[0].run_on.is_none());
+        assert_eq!(config.workspace.setup.len(), 1);
+        assert_eq!(config.workspace.teardown.as_ref().map(Vec::len), Some(1));
         assert!(matches!(
-            config.services.get("api").unwrap(),
-            ServiceConfig::Process(_)
+            config.environment.get("api").unwrap(),
+            EnvironmentNodeConfig::Service { .. }
+        ));
+        assert!(matches!(
+            config.environment.get("migrate").unwrap(),
+            EnvironmentNodeConfig::Task(_)
         ));
     }
 
     #[test]
     fn parse_image_service() {
         let json = r#"{
-            "setup": {
-                "steps": [
+            "workspace": {
+                "setup": [
                     { "name": "init", "command": "echo hello", "timeout_seconds": 10 }
                 ]
             },
-            "services": {
+            "environment": {
                 "db": {
+                    "kind": "service",
                     "runtime": "image",
                     "image": "postgres:16",
                     "port": 5432,
@@ -390,53 +498,22 @@ mod tests {
 
         let config = parse_config(json);
         assert!(matches!(
-            config.services.get("db").unwrap(),
-            ServiceConfig::Image(_)
+            config.environment.get("db").unwrap(),
+            EnvironmentNodeConfig::Service { .. }
         ));
-    }
-
-    #[test]
-    fn parse_mixed_services() {
-        let json = r#"{
-            "setup": {
-                "services": ["db"],
-                "steps": [
-                    { "name": "install", "command": "bun install", "timeout_seconds": 120, "run_on": "start" }
-                ]
-            },
-            "services": {
-                "api": {
-                    "runtime": "process",
-                    "command": "bun run dev",
-                    "port": 3000,
-                    "depends_on": ["db"]
-                },
-                "db": {
-                    "runtime": "image",
-                    "image": "postgres:16",
-                    "port": 5432
-                }
-            }
-        }"#;
-
-        let config = parse_config(json);
-        assert_eq!(config.services.len(), 2);
-        assert_eq!(config.setup.services, Some(vec!["db".to_string()]));
-        assert_eq!(config.setup.steps[0].run_on.as_deref(), Some("start"));
-        let api = config.services.get("api").unwrap();
-        assert_eq!(api.depends_on(), &["db"]);
     }
 
     #[test]
     fn parse_image_service_with_build_and_volumes() {
         let json = r#"{
-            "setup": {
-                "steps": [
+            "workspace": {
+                "setup": [
                     { "name": "install", "command": "bun install", "timeout_seconds": 120 }
                 ]
             },
-            "services": {
+            "environment": {
                 "postgres": {
+                    "kind": "service",
                     "runtime": "image",
                     "build": {
                         "context": "docker",
@@ -451,10 +528,11 @@ mod tests {
         }"#;
 
         let config = parse_config(json);
-        let service = config
-            .services
-            .get("postgres")
-            .expect("postgres service exists");
+        let EnvironmentNodeConfig::Service { config: service } =
+            config.environment.get("postgres").expect("postgres exists")
+        else {
+            panic!("expected service node");
+        };
         let ServiceConfig::Image(service) = service else {
             panic!("expected image service");
         };
@@ -468,10 +546,10 @@ mod tests {
     }
 
     #[test]
-    fn parse_setup_step_with_write_files() {
+    fn parse_workspace_step_with_write_files() {
         let json = r#"{
-            "setup": {
-                "steps": [
+            "workspace": {
+                "setup": [
                     {
                         "name": "write-env",
                         "write_files": [
@@ -488,8 +566,9 @@ mod tests {
                     }
                 ]
             },
-            "services": {
+            "environment": {
                 "api": {
+                    "kind": "service",
                     "runtime": "process",
                     "command": "bun run dev",
                     "port": 3000
@@ -498,73 +577,151 @@ mod tests {
         }"#;
 
         let config = parse_config(json);
-        let step = &config.setup.steps[0];
+        let step = &config.workspace.setup[0];
         assert_eq!(step.name, "write-env");
         assert!(step.command.is_none());
         assert_eq!(step.run_on.as_deref(), Some("start"));
         assert_eq!(step.write_files.as_ref().map(Vec::len), Some(1));
-        assert_eq!(
-            step.write_files
-                .as_ref()
-                .and_then(|files| files.first())
-                .map(|file| file.path.as_str()),
-            Some("apps/api/.env.local")
-        );
+    }
+
+    #[test]
+    fn rejects_workspace_setup_depends_on() {
+        let error = parse_lifecycle_config(
+            r#"{
+                "workspace": {
+                    "setup": [
+                        {
+                            "name": "install",
+                            "command": "bun install",
+                            "timeout_seconds": 10,
+                            "depends_on": ["postgres"]
+                        }
+                    ]
+                },
+                "environment": {
+                    "postgres": { "kind": "service", "runtime": "image", "image": "postgres:16" }
+                }
+            }"#,
+        )
+        .expect_err("depends_on should be rejected");
+
+        match error {
+            LifecycleError::ManifestInvalid(message) => {
+                assert!(message.contains("workspace.setup.0.depends_on"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
     }
 
     #[test]
     fn rejects_managed_secrets_blocks() {
         let error = parse_lifecycle_config(
             r#"{
-                "setup": {
-                    "steps": [
-                        { "name": "install", "command": "bun install", "timeout_seconds": 60 }
+                "workspace": {
+                    "setup": [
+                        { "name": "install", "command": "bun install", "timeout_seconds": 10 }
                     ]
                 },
-                "services": {
-                    "api": { "runtime": "process", "command": "bun run dev" }
+                "environment": {
+                    "api": { "kind": "service", "runtime": "process", "command": "run" }
                 },
-                "secrets": {
-                    "API_KEY": { "ref": "org/key", "required": true }
-                }
+                "secrets": { "KEY": { "ref": "org/key", "required": true } }
             }"#,
         )
-        .expect_err("managed secrets should be rejected");
+        .expect_err("managed secrets should fail");
 
-        assert!(matches!(
-            error,
-            LifecycleError::ManifestInvalid(message)
-            if message.contains("secrets: managed secrets are not supported")
-        ));
+        match error {
+            LifecycleError::ManifestInvalid(message) => {
+                assert!(message.contains("managed secrets are not supported"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
     }
 
     #[test]
-    fn rejects_secret_template_references() {
+    fn rejects_secret_templates_in_env() {
         let error = parse_lifecycle_config(
             r#"{
-                "setup": {
-                    "steps": [
-                        { "name": "install", "command": "bun install", "timeout_seconds": 60 }
+                "workspace": {
+                    "setup": [
+                        { "name": "install", "command": "bun install", "timeout_seconds": 10 }
                     ]
                 },
-                "services": {
+                "environment": {
                     "api": {
+                        "kind": "service",
                         "runtime": "process",
-                        "command": "bun run dev",
-                        "env_vars": {
-                            "API_KEY": "${secrets.API_KEY}"
-                        }
+                        "command": "run",
+                        "env": { "API_KEY": "${secrets.API_KEY}" }
                     }
                 }
             }"#,
         )
-        .expect_err("secret templates should be rejected");
+        .expect_err("secret template should fail");
 
-        assert!(matches!(
-            error,
-            LifecycleError::ManifestInvalid(message)
-            if message.contains("services.api.env_vars.API_KEY")
-                && message.contains("`${secrets.*}` is not supported")
-        ));
+        match error {
+            LifecycleError::ManifestInvalid(message) => {
+                assert!(message.contains("environment.api.env.API_KEY"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn rejects_top_level_reset_blocks() {
+        let error = parse_lifecycle_config(
+            r#"{
+                "workspace": {
+                    "setup": [
+                        { "name": "install", "command": "bun install", "timeout_seconds": 10 }
+                    ]
+                },
+                "environment": {
+                    "api": { "kind": "service", "runtime": "process", "command": "run" }
+                },
+                "reset": { "strategy": "reseed", "command": "bun run seed", "timeout_seconds": 60 }
+            }"#,
+        )
+        .expect_err("reset config should fail");
+
+        match error {
+            LifecycleError::ManifestInvalid(message) => {
+                assert!(message.contains("reset"));
+                assert!(message.contains("not part of the current lifecycle.json contract"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn rejects_top_level_mcps_blocks() {
+        let error = parse_lifecycle_config(
+            r#"{
+                "workspace": {
+                    "setup": [
+                        { "name": "install", "command": "bun install", "timeout_seconds": 10 }
+                    ]
+                },
+                "environment": {
+                    "api": { "kind": "service", "runtime": "process", "command": "run" }
+                },
+                "mcps": {
+                    "notion": {
+                        "command": "npx",
+                        "args": ["-y", "@notionhq/notion-mcp-server"],
+                        "transport": "stdio"
+                    }
+                }
+            }"#,
+        )
+        .expect_err("mcp config should fail");
+
+        match error {
+            LifecycleError::ManifestInvalid(message) => {
+                assert!(message.contains("mcps"));
+                assert!(message.contains("not part of the current lifecycle.json contract"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
     }
 }

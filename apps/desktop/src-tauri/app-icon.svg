@@ -8,11 +8,29 @@
 <stop stop-color="white"/>
 <stop offset="1" stop-color="#525252"/>
 </linearGradient>
+<linearGradient id="icon-surface" x1="256" y1="44" x2="256" y2="232" gradientUnits="userSpaceOnUse">
+<stop stop-color="white" stop-opacity="0.1"/>
+<stop offset="0.18" stop-color="white" stop-opacity="0.035"/>
+<stop offset="1" stop-color="white" stop-opacity="0"/>
+</linearGradient>
+<radialGradient id="icon-shadow-far" cx="0.5" cy="0.5" r="0.5">
+<stop offset="0" stop-color="black" stop-opacity="0.14"/>
+<stop offset="0.68" stop-color="black" stop-opacity="0.045"/>
+<stop offset="1" stop-color="black" stop-opacity="0"/>
+</radialGradient>
+<radialGradient id="icon-shadow-near" cx="0.5" cy="0.5" r="0.5">
+<stop offset="0" stop-color="black" stop-opacity="0.1"/>
+<stop offset="0.62" stop-color="black" stop-opacity="0.03"/>
+<stop offset="1" stop-color="black" stop-opacity="0"/>
+</radialGradient>
 <clipPath id="icon-clip">
 <rect x="44" y="44" width="424" height="424" rx="104"/>
 </clipPath>
 </defs>
+<ellipse cx="256" cy="456" rx="212" ry="64" fill="url(#icon-shadow-far)"/>
+<ellipse cx="256" cy="448" rx="188" ry="48" fill="url(#icon-shadow-near)"/>
 <rect x="44" y="44" width="424" height="424" rx="104" fill="url(#icon-bg)"/>
+<rect x="44" y="44" width="424" height="424" rx="104" fill="url(#icon-surface)"/>
 <g clip-path="url(#icon-clip)">
 <svg x="44" y="44" width="424" height="424" viewBox="0 0 535 535" fill="none">
 <rect width="535" height="535" fill="#131313"/>

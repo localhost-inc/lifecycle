@@ -8,7 +8,7 @@ import {
 describe("turn notification settings", () => {
   test("normalizes invalid notification values to defaults", () => {
     expect(normalizeTurnNotificationMode("broken")).toBe("when-unfocused");
-    expect(normalizeTurnNotificationSound("broken")).toBe("glass");
+    expect(normalizeTurnNotificationSound("broken")).toBe("orbit");
   });
 
   test("keeps valid notification values", () => {

@@ -56,12 +56,12 @@ pub(super) fn update_workspace_status_db(
 
     if failure_reason.is_some() {
         conn.execute(
-            "UPDATE workspace SET status = ?1, failure_reason = ?2, failed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?3",
+            "UPDATE workspace SET status = ?1, failure_reason = ?2, failed_at = datetime('now'), updated_at = datetime('now'), last_active_at = datetime('now') WHERE id = ?3",
             params![status.as_str(), failure_str, workspace_id],
         ).map_err(|e| LifecycleError::Database(e.to_string()))?;
     } else {
         conn.execute(
-            "UPDATE workspace SET status = ?1, failure_reason = NULL, failed_at = NULL, updated_at = datetime('now') WHERE id = ?2",
+            "UPDATE workspace SET status = ?1, failure_reason = NULL, failed_at = NULL, updated_at = datetime('now'), last_active_at = datetime('now') WHERE id = ?2",
             params![status.as_str(), workspace_id],
         ).map_err(|e| LifecycleError::Database(e.to_string()))?;
     }
@@ -167,7 +167,10 @@ pub(super) fn reconcile_workspace_services_db(
             }
             drop(existing_rows);
 
-            let mut service_names: Vec<&str> = config.services.keys().map(String::as_str).collect();
+            let mut service_names = config
+                .declared_services()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>();
             service_names.sort_unstable();
 
             if service_names.is_empty() {
@@ -190,7 +193,7 @@ pub(super) fn reconcile_workspace_services_db(
                     .map_err(|e| LifecycleError::Database(e.to_string()))?;
             }
 
-            for (service_name, service_config) in &config.services {
+            for (service_name, service_config) in config.declared_services() {
                 let default_port = service_config.port().map(|port| port as i64);
                 let (exposure, port_override) = existing_rows_by_service
                     .get(service_name)
@@ -328,7 +331,7 @@ pub(super) fn transition_workspace_to_starting(
         validate_workspace_transition(&current_status, &WorkspaceStatus::Starting)?;
 
         conn.execute(
-            "UPDATE workspace SET status = 'starting', failure_reason = NULL, failed_at = NULL, updated_at = datetime('now') WHERE id = ?1",
+            "UPDATE workspace SET status = 'starting', failure_reason = NULL, failed_at = NULL, updated_at = datetime('now'), last_active_at = datetime('now') WHERE id = ?1",
             params![workspace_id],
         ).map_err(|e| LifecycleError::Database(e.to_string()))?;
         refresh_workspace_preview_rows(&conn, workspace_id, &WorkspaceStatus::Starting)?;
@@ -445,7 +448,8 @@ mod tests {
                 manifest_fingerprint TEXT,
                 failure_reason TEXT,
                 failed_at TEXT,
-                updated_at TEXT
+                updated_at TEXT,
+                last_active_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
             CREATE TABLE workspace_service (
                 id TEXT PRIMARY KEY NOT NULL,
@@ -739,11 +743,14 @@ mod tests {
 
         let config_json = format!(
             r#"{{
-                "setup": {{ "steps": [{{ "name": "install", "command": "bun install", "timeout_seconds": 30 }}] }},
-                "services": {{
-                    "web": {{ "runtime": "process", "command": "bun run dev", "port": {web_default_port} }},
-                    "admin": {{ "runtime": "process", "command": "bun run admin", "port": {admin_default_port}, "share_default": true }},
-                    "worker": {{ "runtime": "process", "command": "bun run worker" }}
+                "workspace": {{
+                    "setup": [{{ "name": "install", "command": "bun install", "timeout_seconds": 30 }}]
+                }},
+                "environment": {{
+                    "web": {{ "kind": "service", "runtime": "process", "command": "bun run dev", "port": {web_default_port} }},
+                    "admin": {{ "kind": "service", "runtime": "process", "command": "bun run admin", "port": {admin_default_port}, "share_default": true }},
+                    "migrate": {{ "kind": "task", "command": "bun run db:migrate", "depends_on": ["web"], "timeout_seconds": 30 }},
+                    "worker": {{ "kind": "service", "runtime": "process", "command": "bun run worker" }}
                 }}
             }}"#,
         );
@@ -876,9 +883,11 @@ mod tests {
 
         let config_json = format!(
             r#"{{
-                "setup": {{ "steps": [{{ "name": "install", "command": "bun install", "timeout_seconds": 30 }}] }},
-                "services": {{
-                    "web": {{ "runtime": "process", "command": "bun run dev", "port": {default_port}, "share_default": true }}
+                "workspace": {{
+                    "setup": [{{ "name": "install", "command": "bun install", "timeout_seconds": 30 }}]
+                }},
+                "environment": {{
+                    "web": {{ "kind": "service", "runtime": "process", "command": "bun run dev", "port": {default_port}, "share_default": true }}
                 }}
             }}"#,
         );

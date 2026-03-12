@@ -18,6 +18,21 @@ import { LogsTab } from "./logs-tab";
 import { ServicesTab } from "./services-tab";
 import type { SetupStepState } from "../hooks";
 
+const FAILURE_REASON_LABELS: Record<string, string> = {
+  capacity_unavailable: "No capacity available to run this workspace.",
+  local_app_not_running: "Stopped because the app was quit while running.",
+  local_docker_unavailable: "Docker is not available on this machine.",
+  local_port_conflict: "A required port is already in use.",
+  manifest_invalid: "lifecycle.json is invalid.",
+  operation_timeout: "The operation timed out.",
+  repo_clone_failed: "Failed to clone the repository.",
+  repository_disconnected: "Lost connection to the repository.",
+  sandbox_unreachable: "The sandbox is unreachable.",
+  service_healthcheck_failed: "A service health check failed.",
+  service_start_failed: "A service failed to start.",
+  setup_step_failed: "A setup step failed.",
+};
+
 const ENVIRONMENT_PANEL_TABS = [
   { label: "Services", value: "services" },
   { label: "Logs", value: "logs" },
@@ -201,7 +216,9 @@ export function EnvironmentPanel({
             </div>
           </div>
           {workspace.status === "idle" && workspace.failure_reason && (
-            <p className="text-xs text-[var(--destructive)]">{workspace.failure_reason}</p>
+            <p className="text-xs text-[var(--destructive)]">
+              {FAILURE_REASON_LABELS[workspace.failure_reason] ?? workspace.failure_reason}
+            </p>
           )}
           {workspace.status === "active" && isManifestStale && (
             <p className="text-xs text-[var(--muted-foreground)]">

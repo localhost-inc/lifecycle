@@ -4,6 +4,7 @@ import {
   Button,
   Collapsible,
   CollapsibleContent,
+  Loading,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
@@ -178,9 +179,7 @@ export function Sidebar({
 
       <SidebarContent className="px-3 py-1">
         {isLoading && projects.length === 0 ? (
-          <p className="px-3 py-8 text-center text-xs text-[var(--muted-foreground)]">
-            Loading projects...
-          </p>
+          <Loading message="Loading projects..." className="py-4" />
         ) : projects.length === 0 ? (
           <p className="px-3 py-8 text-center text-xs text-[var(--muted-foreground)]">
             No projects yet
@@ -204,7 +203,7 @@ export function Sidebar({
 
                         {workspaces.length > 0 && (
                           <CollapsibleContent>
-                            <SidebarMenuSub className="ml-0 mt-1 gap-0 border-l-0 pl-0">
+                            <SidebarMenuSub className="ml-0 mt-0 gap-0 border-l-0 pl-0">
                               {workspaces.map((workspace) => (
                                 <SidebarMenuSubItem key={workspace.id}>
                                   <WorkspaceTreeItem

@@ -146,14 +146,16 @@ describe("WorkspacePanel", () => {
           result: {
             valid: true,
             config: {
-              setup: { steps: [] },
-              services: {
+              workspace: { setup: [], teardown: [] },
+              environment: {
                 "desktop-web": {
+                  kind: "service",
                   runtime: "process",
                   command: "bun run dev",
                   port: 1420,
                 },
                 worker: {
+                  kind: "service",
                   runtime: "process",
                   command: "bun run worker",
                   port: 8787,
@@ -220,11 +222,13 @@ describe("WorkspacePanel", () => {
           result: {
             valid: true,
             config: {
-              setup: {
-                steps: [{ command: "bun install", name: "install", timeout_seconds: 60 }],
+              workspace: {
+                setup: [{ command: "bun install", name: "install", timeout_seconds: 60 }],
+                teardown: [],
               },
-              services: {
+              environment: {
                 "desktop-web": {
+                  kind: "service",
                   runtime: "process",
                   command: "bun run dev",
                   port: 1420,

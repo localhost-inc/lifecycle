@@ -137,7 +137,9 @@ export function WorkspaceSurface({
     return activeDocument && isPullRequestDocument(activeDocument) ? activeDocument.number : null;
   }, [state.activeTabKey, state.documents]);
   const waitingForActiveRuntimeTab = Boolean(
-    state.activeTabKey && isRuntimeTabKey(state.activeTabKey) && !visibleTabKeys.includes(state.activeTabKey),
+    state.activeTabKey &&
+    isRuntimeTabKey(state.activeTabKey) &&
+    !visibleTabKeys.includes(state.activeTabKey),
   );
 
   useEffect(() => {

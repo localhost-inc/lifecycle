@@ -15,4 +15,14 @@ describe("ScrollFade", () => {
     expect(markup).not.toContain("bg-red-500");
     expect(markup).not.toContain("z-10");
   });
+
+  test("renders matching vertical fades with the same low overlay z-index", () => {
+    const markup = renderToStaticMarkup(
+      createElement(ScrollFade, { direction: "vertical" }, createElement("div", null, "content")),
+    );
+
+    expect(markup).toContain("bg-gradient-to-b");
+    expect(markup).toContain("bg-gradient-to-t");
+    expect(markup).toContain("z-[1]");
+  });
 });

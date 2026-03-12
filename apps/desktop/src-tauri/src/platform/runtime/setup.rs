@@ -8,16 +8,18 @@ use tauri::AppHandle;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
-pub async fn run_setup_steps(
+pub async fn run_steps(
     app: &AppHandle,
     workspace_id: &str,
     worktree_path: &str,
     steps: &[SetupStep],
     runtime_env: &HashMap<String, String>,
+    step_field_prefix: &str,
 ) -> Result<(), LifecycleError> {
     for step in steps {
         let cwd = step_cwd(worktree_path, step.cwd.as_deref());
-        let step_env = build_step_env(step, runtime_env)?;
+        let step_field = format!("{step_field_prefix}.{}", step.name);
+        let step_env = build_step_env(step, runtime_env, &step_field)?;
 
         publish_setup_step_event(app, workspace_id, &step.name, "started", None);
 
@@ -34,6 +36,7 @@ pub async fn run_setup_steps(
                     &cwd,
                     write_files,
                     &step_env,
+                    &step_field,
                 )
                 .await?;
             }
@@ -46,7 +49,7 @@ pub async fn run_setup_steps(
                     Some("setup step requires exactly one of command or write_files".to_string()),
                 );
                 return Err(LifecycleError::InvalidInput {
-                    field: format!("setup.steps.{}", step.name),
+                    field: step_field,
                     reason: "setup step requires exactly one of command or write_files".to_string(),
                 });
             }
@@ -61,14 +64,15 @@ pub async fn run_setup_steps(
 fn build_step_env(
     step: &SetupStep,
     runtime_env: &HashMap<String, String>,
+    step_field: &str,
 ) -> Result<HashMap<String, String>, LifecycleError> {
     let mut env = runtime_env.clone();
-    if let Some(step_env_vars) = step.env_vars.as_ref() {
-        for (key, value) in step_env_vars {
+    if let Some(step_env) = step.env.as_ref() {
+        for (key, value) in step_env {
             let expanded = expand_reserved_runtime_templates(
                 value,
                 runtime_env,
-                &format!("setup.steps.{}.env_vars.{key}", step.name),
+                &format!("{step_field}.env.{key}"),
             )?;
             env.insert(key.clone(), expanded);
         }
@@ -211,18 +215,19 @@ async fn run_write_files_step(
     cwd: &Path,
     write_files: &[SetupWriteFile],
     step_env: &HashMap<String, String>,
+    step_field: &str,
 ) -> Result<(), LifecycleError> {
     let write_future = async {
         let normalized_worktree = normalize_path(Path::new(worktree_path));
         for file in write_files {
             let target_path =
-                resolve_write_target_path(&normalized_worktree, cwd, &file.path, &step.name)?;
+                resolve_write_target_path(&normalized_worktree, cwd, &file.path, step_field)?;
             let rendered_path = target_path
                 .strip_prefix(&normalized_worktree)
                 .unwrap_or(&target_path)
                 .display()
                 .to_string();
-            let content = render_write_file_content(file, step_env, &step.name)?;
+            let content = render_write_file_content(file, step_env, step_field)?;
 
             if let Some(parent) = target_path.parent() {
                 tokio::fs::create_dir_all(parent).await.map_err(|error| {
@@ -284,7 +289,7 @@ fn resolve_write_target_path(
     normalized_worktree: &Path,
     cwd: &Path,
     raw_path: &str,
-    step_name: &str,
+    step_field: &str,
 ) -> Result<PathBuf, LifecycleError> {
     let interpolated_path = Path::new(raw_path);
     let target_path = if interpolated_path.is_absolute() {
@@ -296,7 +301,7 @@ fn resolve_write_target_path(
 
     if !normalized_target.starts_with(normalized_worktree) {
         return Err(LifecycleError::InvalidInput {
-            field: format!("setup.steps.{step_name}.write_files.path"),
+            field: format!("{step_field}.write_files.path"),
             reason: format!(
                 "path must stay inside workspace worktree: {}",
                 normalized_target.display()
@@ -310,27 +315,25 @@ fn resolve_write_target_path(
 fn render_write_file_content(
     file: &SetupWriteFile,
     env: &HashMap<String, String>,
-    step_name: &str,
+    step_field: &str,
 ) -> Result<String, LifecycleError> {
     match (&file.content, &file.lines) {
-        (Some(content), None) => expand_setup_template(
-            content,
-            env,
-            &format!("setup.steps.{step_name}.write_files.content"),
-        ),
+        (Some(content), None) => {
+            expand_setup_template(content, env, &format!("{step_field}.write_files.content"))
+        }
         (None, Some(lines)) => {
             let mut rendered_lines = Vec::with_capacity(lines.len());
             for line in lines {
                 rendered_lines.push(expand_setup_template(
                     line,
                     env,
-                    &format!("setup.steps.{step_name}.write_files.lines"),
+                    &format!("{step_field}.write_files.lines"),
                 )?);
             }
             Ok(rendered_lines.join("\n") + "\n")
         }
         _ => Err(LifecycleError::InvalidInput {
-            field: format!("setup.steps.{step_name}.write_files"),
+            field: format!("{step_field}.write_files"),
             reason: "write_files entries require exactly one of content or lines".to_string(),
         }),
     }
@@ -394,10 +397,11 @@ mod tests {
             write_files: None,
             timeout_seconds: 10,
             cwd: None,
-            env_vars: Some(HashMap::from([(
+            env: Some(HashMap::from([(
                 "API_ORIGIN".to_string(),
                 "http://${LIFECYCLE_SERVICE_API_ADDRESS}".to_string(),
             )])),
+            depends_on: None,
             run_on: None,
         };
         let runtime_env = HashMap::from([(
@@ -405,7 +409,8 @@ mod tests {
             "127.0.0.1:3001".to_string(),
         )]);
 
-        let env = build_step_env(&step, &runtime_env).expect("step env builds");
+        let env = build_step_env(&step, &runtime_env, "workspace.setup.write-env")
+            .expect("step env builds");
 
         assert_eq!(
             env.get("API_ORIGIN").map(String::as_str),
@@ -414,7 +419,7 @@ mod tests {
     }
 
     #[test]
-    fn expand_setup_template_substitutes_env_vars() {
+    fn expand_setup_template_substitutes_env() {
         let env = HashMap::from([
             (
                 "LIFECYCLE_WORKSPACE_SLUG".to_string(),
@@ -426,7 +431,7 @@ mod tests {
         let rendered = expand_setup_template(
             "NAMESPACE=${LIFECYCLE_WORKSPACE_SLUG}\nPORT=${LIFECYCLE_SERVICE_API_PORT}",
             &env,
-            "setup.steps.write-env.write_files.lines",
+            "workspace.setup.write-env.write_files.lines",
         )
         .expect("template expansion succeeds");
 
@@ -439,13 +444,13 @@ mod tests {
         let error = expand_setup_template(
             "PORT=${LIFECYCLE_SERVICE_API_PORT}",
             &env,
-            "setup.steps.write-env.write_files.lines",
+            "workspace.setup.write-env.write_files.lines",
         )
         .expect_err("missing vars should fail");
 
         match error {
             LifecycleError::InvalidInput { field, reason } => {
-                assert_eq!(field, "setup.steps.write-env.write_files.lines");
+                assert_eq!(field, "workspace.setup.write-env.write_files.lines");
                 assert!(reason.contains("unknown template variable"));
             }
             other => panic!("unexpected error: {other}"),
@@ -461,8 +466,8 @@ mod tests {
             lines: Some(vec!["NAME=${NAME}".to_string()]),
         };
 
-        let rendered =
-            render_write_file_content(&file, &env, "write-env").expect("line rendering succeeds");
+        let rendered = render_write_file_content(&file, &env, "workspace.setup.write-env")
+            .expect("line rendering succeeds");
 
         assert_eq!(rendered, "NAME=kin\n");
     }
@@ -471,12 +476,17 @@ mod tests {
     fn resolve_write_target_path_rejects_paths_outside_worktree() {
         let worktree = normalize_path(Path::new("/tmp/worktree"));
         let cwd = worktree.join("apps/api");
-        let error = resolve_write_target_path(&worktree, &cwd, "../../../outside.env", "write-env")
-            .expect_err("outside path should fail");
+        let error = resolve_write_target_path(
+            &worktree,
+            &cwd,
+            "../../../outside.env",
+            "workspace.setup.write-env",
+        )
+        .expect_err("outside path should fail");
 
         match error {
             LifecycleError::InvalidInput { field, reason } => {
-                assert_eq!(field, "setup.steps.write-env.write_files.path");
+                assert_eq!(field, "workspace.setup.write-env.write_files.path");
                 assert!(reason.contains("path must stay inside workspace worktree"));
             }
             other => panic!("unexpected error: {other}"),

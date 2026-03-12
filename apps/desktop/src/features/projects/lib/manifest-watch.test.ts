@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { getProjectManifestPath, watchEventTouchesManifest } from "./manifest-watch";
+import { getManifestPath, watchEventTouchesManifest } from "./manifest-watch";
 
 describe("manifest watch helpers", () => {
-  test("builds the canonical lifecycle.json path for a project", () => {
-    expect(getProjectManifestPath("/Users/kyle/dev/lifecycle")).toBe(
+  test("builds the canonical lifecycle.json path for any watched directory", () => {
+    expect(getManifestPath("/Users/kyle/dev/lifecycle")).toBe(
       "/users/kyle/dev/lifecycle/lifecycle.json",
     );
-    expect(getProjectManifestPath("C:\\Code\\Lifecycle\\")).toBe(
+    expect(getManifestPath("C:\\Code\\Lifecycle\\")).toBe(
       "c:/code/lifecycle/lifecycle.json",
     );
   });

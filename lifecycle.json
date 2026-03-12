@@ -1,7 +1,7 @@
 {
   // One-time workspace bootstrap for this repo.
-  "setup": {
-    "steps": [
+  "workspace": {
+    "setup": [
       {
         "name": "install",
         "command": "bun install --frozen-lockfile",
@@ -12,8 +12,9 @@
 
   // Explicit long-lived services. We model the previewable web surfaces directly
   // instead of delegating orchestration to the repo-level `bun run dev` fanout.
-  "services": {
+  "environment": {
     "desktop-web": {
+      "kind": "service",
       "runtime": "process",
       "command": "bun run vite:dev",
       "cwd": "apps/desktop",
@@ -27,6 +28,7 @@
       }
     },
     "worker": {
+      "kind": "service",
       "runtime": "process",
       "command": "bun run dev",
       "cwd": "apps/worker",

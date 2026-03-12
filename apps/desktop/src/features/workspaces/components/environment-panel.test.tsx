@@ -119,7 +119,7 @@ describe("EnvironmentPanel", () => {
     expect(markup).not.toContain('aria-label="Show environment actions"');
     expect(markup).toContain('data-slot="button"');
     expect(markup).toContain("bg-[var(--muted)]");
-    expect(markup).toContain("service_start_failed");
+    expect(markup).toContain("A service failed to start.");
     expect(markup).toContain("install");
   });
 
@@ -190,7 +190,7 @@ describe("EnvironmentPanel", () => {
     expect(markup).toContain("Preview provisioning");
     expect(markup).toContain(":3000");
     expect(markup).toContain(":8787");
-    expect(markup).toContain('data-slot="spinner"');
+    expect(markup).toContain("lifecycle-motion-soft-pulse");
     expect(markup).not.toContain("Exposure");
     expect(markup).not.toContain("Copy");
   });

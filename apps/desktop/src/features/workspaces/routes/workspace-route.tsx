@@ -1,10 +1,9 @@
-import { Alert, AlertDescription, AlertTitle } from "@lifecycle/ui";
+import { Alert, AlertDescription, AlertTitle, Loading } from "@lifecycle/ui";
 import { lazy, Suspense, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import type { QueryResult } from "../../../query";
 import { markPerformance, measurePerformance } from "../../../lib/performance";
-import { useProjectManifest } from "../../projects/hooks";
-import { useWorkspaceSnapshot } from "../hooks";
+import { useWorkspaceManifest, useWorkspaceSnapshot } from "../hooks";
 
 const WorkspacePanel = lazy(async () => {
   const module = await import("../components/workspace-panel");
@@ -18,7 +17,7 @@ export function WorkspaceRoute() {
   const workspaceSnapshotQuery = useWorkspaceSnapshot(workspaceId ?? null);
   const readyMeasuredRef = useRef(false);
   const workspace = workspaceSnapshotQuery.data?.workspace ?? null;
-  const manifestQuery = useProjectManifest(workspace?.project_id ?? null);
+  const manifestQuery = useWorkspaceManifest(workspace?.id ?? null, workspace?.worktree_path ?? null);
 
   useEffect(() => {
     if (!workspaceId) {
@@ -51,11 +50,7 @@ export function WorkspaceRoute() {
   }
 
   if (hasBlockingQueryLoad(workspaceSnapshotQuery)) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-sm text-[var(--muted-foreground)]">Loading workspace...</p>
-      </div>
-    );
+    return <Loading message="Loading workspace..." />;
   }
 
   if (!workspace) {
@@ -67,11 +62,7 @@ export function WorkspaceRoute() {
   }
 
   if (hasBlockingQueryLoad(manifestQuery)) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-sm text-[var(--muted-foreground)]">Loading workspace...</p>
-      </div>
-    );
+    return <Loading message="Loading workspace..." />;
   }
 
   if (hasBlockingQueryError(manifestQuery)) {
@@ -86,13 +77,7 @@ export function WorkspaceRoute() {
   }
 
   return (
-    <Suspense
-      fallback={
-        <div className="flex flex-1 items-center justify-center p-8">
-          <p className="text-sm text-[var(--muted-foreground)]">Loading workspace...</p>
-        </div>
-      }
-    >
+    <Suspense fallback={<Loading message="Loading workspace..." />}>
       <WorkspacePanel
         manifestStatus={manifestQuery.data ?? null}
         workspace={workspace}
@@ -108,8 +93,6 @@ export function hasBlockingQueryLoad<T>(
   return query.isLoading && query.data === undefined;
 }
 
-export function hasBlockingQueryError<T>(
-  query: Pick<QueryResult<T>, "data" | "error">,
-): boolean {
+export function hasBlockingQueryError<T>(query: Pick<QueryResult<T>, "data" | "error">): boolean {
   return query.error !== null && query.error !== undefined && query.data === undefined;
 }
