@@ -17,7 +17,10 @@ export function WorkspaceRoute() {
   const workspaceSnapshotQuery = useWorkspaceSnapshot(workspaceId ?? null);
   const readyMeasuredRef = useRef(false);
   const workspace = workspaceSnapshotQuery.data?.workspace ?? null;
-  const manifestQuery = useWorkspaceManifest(workspace?.id ?? null, workspace?.worktree_path ?? null);
+  const manifestQuery = useWorkspaceManifest(
+    workspace?.id ?? null,
+    workspace?.worktree_path ?? null,
+  );
 
   useEffect(() => {
     if (!workspaceId) {

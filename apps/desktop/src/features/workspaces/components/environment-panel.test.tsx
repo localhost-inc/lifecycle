@@ -73,6 +73,7 @@ describe("EnvironmentPanel", () => {
   test("renders environment controls and tabs for an active workspace", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
+        config: null,
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
@@ -87,16 +88,21 @@ describe("EnvironmentPanel", () => {
     );
 
     expect(markup).toContain("Environment");
-    expect(markup).toContain("Stop");
-    expect(markup).not.toContain("Run");
+    expect(markup).toContain(">Stop<");
+    expect(markup).not.toContain(">Run<");
     expect(markup).toContain('aria-label="Show environment actions"');
-    expect(markup).toContain("Services");
+    expect(markup).toContain("Overview");
+    expect(markup).toContain("Setup");
     expect(markup).toContain("Logs");
+    expect(markup).not.toContain(">Graph<");
+    expect(markup).toContain('aria-label="Overview list view"');
+    expect(markup).toContain('aria-label="Overview topology view"');
   });
 
   test("renders rerun affordance and failure details for an idle workspace with a failure", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
+        config: null,
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
@@ -114,18 +120,19 @@ describe("EnvironmentPanel", () => {
       }),
     );
 
-    expect(markup).toContain("Run");
-    expect(markup).not.toContain("Stop");
+    expect(markup).toContain(">Run<");
+    expect(markup).not.toContain(">Stop<");
     expect(markup).not.toContain('aria-label="Show environment actions"');
     expect(markup).toContain('data-slot="button"');
-    expect(markup).toContain("bg-[var(--muted)]");
     expect(markup).toContain("A service failed to start.");
-    expect(markup).toContain("install");
+    expect(markup).toContain("Setup");
+    expect(markup).not.toContain("View details");
   });
 
   test("keeps the run action disabled when no lifecycle.json is present", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
+        config: null,
         hasManifest: false,
         isManifestStale: false,
         manifestState: "missing",
@@ -142,9 +149,10 @@ describe("EnvironmentPanel", () => {
       }),
     );
 
-    expect(markup).toContain("Run");
+    expect(markup).toContain(">Run<");
     expect(markup).toContain('disabled=""');
-    expect(markup).toContain("Services");
+    expect(markup).toContain("Overview");
+    expect(markup).toContain("Setup");
     expect(markup).toContain("Logs");
     expect(markup).not.toContain("Add a lifecycle.json file to the project root");
   });
@@ -152,6 +160,7 @@ describe("EnvironmentPanel", () => {
   test("shows restart guidance when a running workspace manifest is stale", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
+        config: null,
         hasManifest: true,
         isManifestStale: true,
         manifestState: "valid",
@@ -165,12 +174,13 @@ describe("EnvironmentPanel", () => {
       }),
     );
 
-    expect(markup).toContain("Manifest changed. Stop and run again to apply service updates.");
+    expect(markup).toContain("Manifest changed. Stop and run again to apply environment updates.");
   });
 
   test("renders collapsed service summaries with preview metadata", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
+        config: null,
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
@@ -186,11 +196,10 @@ describe("EnvironmentPanel", () => {
 
     expect(markup).toContain("web");
     expect(markup).toContain("api");
-    expect(markup).toContain("Preview ready");
-    expect(markup).toContain("Preview provisioning");
     expect(markup).toContain(":3000");
     expect(markup).toContain(":8787");
-    expect(markup).toContain("lifecycle-motion-soft-pulse");
+    expect(markup).toContain("lucide-external-link");
+    expect(markup).toContain("lucide-loader-circle");
     expect(markup).not.toContain("Exposure");
     expect(markup).not.toContain("Copy");
   });
@@ -198,6 +207,7 @@ describe("EnvironmentPanel", () => {
   test("renders sleeping preview state for local services while the workspace sleeps", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
+        config: null,
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
@@ -221,8 +231,79 @@ describe("EnvironmentPanel", () => {
       }),
     );
 
-    expect(markup).toContain("Preview sleeping");
+    expect(markup).toContain("web");
     expect(markup).toContain(":3000");
-    expect(markup).toContain("stopped");
+    expect(markup).toContain("bg-slate-500/30");
+    expect(markup).not.toContain("lucide-external-link");
+  });
+
+  test("shows environment loading state while declared services are reconciling", () => {
+    const markup = renderToStaticMarkup(
+      createElement(EnvironmentPanel, {
+        config: {
+          workspace: { setup: [], teardown: [] },
+          environment: {
+            redis: {
+              kind: "service",
+              runtime: "image",
+              image: "redis:latest",
+            },
+          },
+        },
+        hasManifest: true,
+        isManifestStale: false,
+        manifestState: "valid",
+        onRestart: async () => {},
+        onRun: async () => {},
+        onStop: async () => {},
+        onUpdateService: async () => {},
+        setupSteps: [],
+        services: [],
+        workspace: {
+          ...baseWorkspace,
+          status: "idle",
+        },
+      }),
+    );
+
+    expect(markup).toContain("Loading environment");
+    expect(markup).toContain("reconciling service nodes declared under environment");
+  });
+
+  test("shows starting status in the header action and setup tab label", () => {
+    const markup = renderToStaticMarkup(
+      createElement(EnvironmentPanel, {
+        config: null,
+        hasManifest: true,
+        isManifestStale: false,
+        manifestState: "valid",
+        onRestart: async () => {},
+        onRun: async () => {},
+        onStop: async () => {},
+        onUpdateService: async () => {},
+        setupSteps: [
+          {
+            name: "install",
+            output: ["bun install"],
+            status: "completed",
+          },
+          {
+            name: "migrate",
+            output: ["bun run db:migrate"],
+            status: "running",
+          },
+        ],
+        services,
+        workspace: {
+          ...baseWorkspace,
+          status: "starting",
+        },
+      }),
+    );
+
+    expect(markup).toContain("Starting...");
+    expect(markup).toContain("Setup");
+    expect(markup).toContain("lucide-loader-circle");
+    expect(markup).not.toContain("View details");
   });
 });

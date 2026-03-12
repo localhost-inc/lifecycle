@@ -6,9 +6,7 @@ describe("manifest watch helpers", () => {
     expect(getManifestPath("/Users/kyle/dev/lifecycle")).toBe(
       "/users/kyle/dev/lifecycle/lifecycle.json",
     );
-    expect(getManifestPath("C:\\Code\\Lifecycle\\")).toBe(
-      "c:/code/lifecycle/lifecycle.json",
-    );
+    expect(getManifestPath("C:\\Code\\Lifecycle\\")).toBe("c:/code/lifecycle/lifecycle.json");
   });
 
   test("matches manifest save events for unix and windows paths", () => {

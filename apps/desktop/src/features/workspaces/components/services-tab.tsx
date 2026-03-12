@@ -9,33 +9,56 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  StatusDot,
-  type StatusDotTone,
 } from "@lifecycle/ui";
-import { ExternalLink, FileJson, Layers } from "lucide-react";
+import { ExternalLink, FileJson, Layers, Loader2 } from "lucide-react";
+import type { CSSProperties } from "react";
 import { useState } from "react";
 
-const SERVICE_STATUS_TONES: Record<string, StatusDotTone> = {
-  stopped: "neutral",
-  starting: "info",
-  ready: "success",
-  failed: "danger",
-};
-
-function ServiceStatusBadge({ status }: { status: string }) {
-  const isFailed = status === "failed";
-  return (
-    <span
-      className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] ${
-        isFailed
-          ? "border-[var(--destructive)]/40 text-[var(--destructive)]"
-          : "border-[var(--border)] text-[var(--foreground)]/70"
-      }`}
-    >
-      {status}
-    </span>
-  );
+interface StatusStyles {
+  dotClassName: string;
+  dotStyle?: CSSProperties;
+  nameClassName: string;
+  portClassName: string;
+  rowStyle: CSSProperties;
 }
+
+const STATUS_STYLES: Record<string, StatusStyles> = {
+  stopped: {
+    dotClassName: "bg-slate-500/30",
+    nameClassName: "text-[var(--foreground)]/30",
+    portClassName: "text-slate-500/20",
+    rowStyle: {},
+  },
+  starting: {
+    dotClassName: "",
+    nameClassName: "text-[var(--foreground)]",
+    portClassName: "text-blue-500/45",
+    rowStyle: {
+      backgroundImage:
+        "linear-gradient(90deg, rgba(59, 130, 246, 0.07) 0%, rgba(59, 130, 246, 0.01) 100%)",
+    },
+  },
+  ready: {
+    dotClassName: "bg-emerald-500",
+    dotStyle: { boxShadow: "0 0 6px rgba(16, 185, 129, 0.5)" },
+    nameClassName: "text-[var(--foreground)]",
+    portClassName: "text-emerald-500/50",
+    rowStyle: {
+      backgroundImage:
+        "linear-gradient(90deg, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0.02) 100%)",
+    },
+  },
+  failed: {
+    dotClassName: "bg-red-500",
+    dotStyle: { boxShadow: "0 0 6px rgba(239, 68, 68, 0.4)" },
+    nameClassName: "text-[var(--foreground)]",
+    portClassName: "text-red-500/40",
+    rowStyle: {
+      backgroundImage:
+        "linear-gradient(90deg, rgba(239, 68, 68, 0.08) 0%, rgba(239, 68, 68, 0.02) 100%)",
+    },
+  },
+};
 
 const exposureItems: Array<{ label: string; value: ServiceRecord["exposure"] }> = [
   { label: "Internal", value: "internal" },
@@ -44,6 +67,7 @@ const exposureItems: Array<{ label: string; value: ServiceRecord["exposure"] }> 
 ];
 
 interface ServicesTabProps {
+  declaredServiceCount: number;
   manifestState: "invalid" | "missing" | "valid";
   onUpdateService: (input: {
     exposure: ServiceRecord["exposure"];
@@ -86,35 +110,6 @@ function resolvePreviewUrl(service: ServiceRecord): string | null {
   }
 
   return `http://localhost:${service.effective_port}`;
-}
-
-function previewLabelFor(service: ServiceRecord): string {
-  if (service.exposure === "internal") {
-    return "Internal only";
-  }
-
-  if (service.exposure === "organization") {
-    return "Tunnel deferred";
-  }
-
-  if (service.effective_port === null) {
-    return "No preview port";
-  }
-
-  switch (service.preview_status) {
-    case "ready":
-      return "Preview ready";
-    case "provisioning":
-      return "Preview provisioning";
-    case "sleeping":
-      return "Preview sleeping";
-    case "failed":
-      return "Preview failed";
-    case "expired":
-      return "Preview expired";
-    default:
-      return "Preview off";
-  }
 }
 
 function ServiceRow({
@@ -184,59 +179,59 @@ function ServiceRow({
     openUrl(previewUrl);
   }
 
-  const previewStatusLabel = previewLabelFor(service);
   const canOpenPreview = previewUrl !== null && service.preview_status === "ready";
-
   const [expanded, setExpanded] = useState(false);
-
-  const showPreviewLine = service.preview_status !== "disabled" && service.exposure !== "internal";
+  // biome-ignore lint: indexing a known-populated record
+  const styles = (STATUS_STYLES[service.status] ?? STATUS_STYLES.stopped)!;
 
   return (
     <div className="group/row">
       <button
-        className="flex w-full items-start gap-3 px-2 py-2.5 text-left transition-colors hover:bg-[var(--surface-hover)] cursor-pointer"
+        className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-[var(--surface-hover)] cursor-pointer"
         onClick={() => setExpanded(!expanded)}
+        style={styles.rowStyle}
         type="button"
       >
-        <StatusDot
-          className="mt-1.5 shrink-0"
-          pulse={service.status === "starting"}
-          tone={SERVICE_STATUS_TONES[service.status] ?? "neutral"}
-        />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium text-[var(--foreground)]">
-              {service.service_name}
-            </span>
-            <ServiceStatusBadge status={service.status} />
-            {canOpenPreview && (
-              <ExternalLink
-                className="size-3 shrink-0 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleOpenPreview();
-                }}
-              />
-            )}
-          </div>
-          {(showPreviewLine || service.effective_port !== null) && (
-            <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--muted-foreground)]/45">
-              {service.effective_port !== null && (
-                <span>:{service.effective_port}</span>
-              )}
-              {showPreviewLine && service.effective_port !== null && <span> · </span>}
-              {showPreviewLine && <span>{previewStatusLabel}</span>}
-            </p>
+        <div className="flex size-3.5 shrink-0 items-center justify-center">
+          {service.status === "starting" ? (
+            <Loader2 className="size-3.5 animate-spin text-blue-500" strokeWidth={2.5} />
+          ) : (
+            <span
+              className={`inline-block size-[7px] rounded-full ${styles.dotClassName}`}
+              style={styles.dotStyle}
+            />
           )}
         </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <span
+              className={`truncate font-mono text-[13px] font-semibold tracking-[-0.02em] ${styles.nameClassName}`}
+            >
+              {service.service_name}
+            </span>
+            {service.effective_port !== null && (
+              <span className={`shrink-0 font-mono text-[11px] ${styles.portClassName}`}>
+                :{service.effective_port}
+              </span>
+            )}
+          </div>
+          {service.status_reason && (
+            <p className="mt-1 text-[10px] text-red-500/55">{service.status_reason}</p>
+          )}
+        </div>
+        {canOpenPreview && (
+          <ExternalLink
+            className="size-3.5 shrink-0 text-[var(--muted-foreground)]/40 transition-colors hover:text-[var(--foreground)]"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenPreview();
+            }}
+          />
+        )}
       </button>
 
-      {service.status_reason && (
-        <p className="px-2 pl-7 text-[11px] text-[var(--destructive)]">{service.status_reason}</p>
-      )}
-
       {expanded && (
-        <div className="flex flex-col gap-2 px-2 pb-2 pl-7 pt-1">
+        <div className="flex flex-col gap-2 px-3 pb-3 pl-[38px] pt-1">
           <div className="flex items-end gap-2">
             <label className="flex min-w-0 flex-1 flex-col gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted-foreground)]">
@@ -331,10 +326,15 @@ function ServiceRow({
   );
 }
 
-export function ServicesTab({ manifestState, onUpdateService, services }: ServicesTabProps) {
+export function ServicesTab({
+  declaredServiceCount,
+  manifestState,
+  onUpdateService,
+  services,
+}: ServicesTabProps) {
   if (services.length > 0) {
     return (
-      <div className="flex flex-col divide-y divide-[var(--border)]/40">
+      <div className="flex flex-col gap-1">
         {services.map((service) => (
           <ServiceRow
             key={`${service.id}:${service.updated_at}`}
@@ -349,7 +349,7 @@ export function ServicesTab({ manifestState, onUpdateService, services }: Servic
   if (manifestState === "missing") {
     return (
       <EmptyState
-        description="Add a lifecycle.json to configure services."
+        description="Add a lifecycle.json to configure this workspace environment."
         icon={<FileJson />}
         size="sm"
         title="No lifecycle.json"
@@ -360,7 +360,7 @@ export function ServicesTab({ manifestState, onUpdateService, services }: Servic
   if (manifestState === "invalid") {
     return (
       <EmptyState
-        description="Fix lifecycle.json to register services for this workspace."
+        description="Fix lifecycle.json to register environment nodes for this workspace."
         icon={<FileJson />}
         size="sm"
         title="Invalid lifecycle.json"
@@ -368,12 +368,23 @@ export function ServicesTab({ manifestState, onUpdateService, services }: Servic
     );
   }
 
+  if (declaredServiceCount > 0) {
+    return (
+      <EmptyState
+        description="Lifecycle is reconciling service nodes declared under environment for this workspace."
+        icon={<Layers />}
+        size="sm"
+        title="Loading environment"
+      />
+    );
+  }
+
   return (
     <EmptyState
-      description="Define services in lifecycle.json to see them here."
+      description="Declare service nodes under environment in lifecycle.json to see them here."
       icon={<Layers />}
       size="sm"
-      title="No services defined"
+      title="No environment services declared"
     />
   );
 }

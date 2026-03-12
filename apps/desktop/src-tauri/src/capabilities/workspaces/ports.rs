@@ -1,5 +1,9 @@
 use crate::shared::errors::LifecycleError;
 use rusqlite::params;
+use std::hash::{DefaultHasher, Hash, Hasher};
+
+const RANDOMIZED_PORT_RANGE_START: i64 = 41_000;
+const RANDOMIZED_PORT_RANGE_END: i64 = 48_999;
 
 fn is_host_port_available(port: i64) -> bool {
     if !(1..=65535).contains(&port) {
@@ -43,6 +47,8 @@ pub(crate) fn resolve_effective_port(
     default_port: Option<i64>,
     port_override: Option<i64>,
     current_effective_port: Option<i64>,
+    allow_bound_current_port: bool,
+    prefer_randomized_port_assignment: bool,
 ) -> Result<Option<i64>, LifecycleError> {
     let Some(default_port) = default_port else {
         return Ok(None);
@@ -52,7 +58,11 @@ pub(crate) fn resolve_effective_port(
 
     let is_port_usable = |candidate: i64| {
         !reserved_ports.contains(&candidate)
-            && (current_effective_port == Some(candidate) || is_host_port_available(candidate))
+            && if current_effective_port == Some(candidate) {
+                allow_bound_current_port || is_host_port_available(candidate)
+            } else {
+                is_host_port_available(candidate)
+            }
     };
 
     if let Some(port_override) = port_override {
@@ -72,6 +82,14 @@ pub(crate) fn resolve_effective_port(
         }
     }
 
+    if prefer_randomized_port_assignment {
+        if let Some(candidate) =
+            resolve_randomized_port(workspace_id, service_name, default_port, &is_port_usable)
+        {
+            return Ok(Some(candidate));
+        }
+    }
+
     for offset in 0..=200_i64 {
         let candidate = default_port + offset;
         if is_port_usable(candidate) {
@@ -83,4 +101,31 @@ pub(crate) fn resolve_effective_port(
         service: service_name.to_string(),
         port: default_port as u16,
     })
+}
+
+fn resolve_randomized_port(
+    workspace_id: &str,
+    service_name: &str,
+    default_port: i64,
+    is_port_usable: &dyn Fn(i64) -> bool,
+) -> Option<i64> {
+    let span = RANDOMIZED_PORT_RANGE_END - RANDOMIZED_PORT_RANGE_START + 1;
+    if span <= 0 {
+        return None;
+    }
+
+    let mut hasher = DefaultHasher::new();
+    workspace_id.hash(&mut hasher);
+    service_name.hash(&mut hasher);
+    default_port.hash(&mut hasher);
+    let offset = (hasher.finish() % span as u64) as i64;
+
+    for step in 0..span {
+        let candidate = RANDOMIZED_PORT_RANGE_START + ((offset + step) % span);
+        if is_port_usable(candidate) {
+            return Some(candidate);
+        }
+    }
+
+    None
 }

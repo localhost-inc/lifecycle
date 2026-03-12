@@ -1,6 +1,7 @@
 import { isTauri } from "@tauri-apps/api/core";
-import { useCallback, useEffect } from "react";
+import { useCallback, useContext, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { CommandPaletteContext } from "../features/command-palette/command-palette-context";
 import {
   isEditableTarget,
   isMacPlatform,
@@ -13,6 +14,7 @@ export function AppHotkeyListener() {
   const location = useLocation();
   const navigate = useNavigate();
   const macPlatform = isMacPlatform();
+  const commandPalette = useContext(CommandPaletteContext);
 
   const handleAction = useCallback(
     (action: AppHotkeyAction) => {
@@ -22,9 +24,18 @@ export function AppHotkeyListener() {
             void navigate("/settings");
           }
           return;
+        case "open-command-palette":
+          if (commandPalette) {
+            if (commandPalette.isOpen) {
+              commandPalette.close();
+            } else {
+              commandPalette.open();
+            }
+          }
+          return;
       }
     },
-    [location.pathname, navigate],
+    [commandPalette, location.pathname, navigate],
   );
 
   useEffect(() => {

@@ -15,7 +15,8 @@ const DAY = 24 * HOUR;
  * local UTC offset. Appending "Z" forces UTC interpretation.
  */
 function parseUtcTimestamp(value: string): number {
-  const normalized = value.includes("T") || value.endsWith("Z") ? value : `${value.replace(" ", "T")}Z`;
+  const normalized =
+    value.includes("T") || value.endsWith("Z") ? value : `${value.replace(" ", "T")}Z`;
   return new Date(normalized).getTime();
 }
 

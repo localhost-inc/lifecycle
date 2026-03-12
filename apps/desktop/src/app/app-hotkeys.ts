@@ -3,7 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export const APP_HOTKEY_EVENT_NAME = "app:shortcut";
 
-export type AppHotkeyAction = "open-settings";
+export type AppHotkeyAction = "open-settings" | "open-command-palette";
 
 export interface AppHotkeyEvent {
   action: AppHotkeyAction;
@@ -53,16 +53,29 @@ export function readAppHotkeyAction(
   event: AppHotkeyKeyEvent,
   macPlatform: boolean,
 ): AppHotkeyAction | null {
-  const isComma = event.code === "Comma" || event.key === ",";
-  if (!isComma || event.shiftKey || event.altKey) {
+  if (event.shiftKey || event.altKey) {
     return null;
   }
 
-  if (macPlatform) {
-    return event.metaKey && !event.ctrlKey ? "open-settings" : null;
+  const isComma = event.code === "Comma" || event.key === ",";
+  const isK = event.code === "KeyK" || event.key === "k";
+  const hasMod = macPlatform
+    ? event.metaKey && !event.ctrlKey
+    : event.ctrlKey && !event.metaKey;
+
+  if (!hasMod) {
+    return null;
   }
 
-  return event.ctrlKey && !event.metaKey ? "open-settings" : null;
+  if (isComma) {
+    return "open-settings";
+  }
+
+  if (isK) {
+    return "open-command-palette";
+  }
+
+  return null;
 }
 
 export async function subscribeToAppHotkeyEvents(

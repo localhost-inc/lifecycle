@@ -15,6 +15,7 @@ export interface SetupProgressStep {
 
 interface SetupProgressProps {
   className?: string;
+  expandOutputByDefault?: boolean;
   steps: SetupProgressStep[];
 }
 
@@ -33,18 +34,32 @@ const statusMap: Record<
   timeout: { glyph: "\u2715", tone: "danger" },
 };
 
-export function SetupProgress({ className, steps }: SetupProgressProps) {
+export function SetupProgress({
+  className,
+  expandOutputByDefault = false,
+  steps,
+}: SetupProgressProps) {
   return (
     <div className={cn("space-y-2", className)}>
       {steps.map((step) => (
-        <SetupProgressStepRow key={step.name} step={step} />
+        <SetupProgressStepRow
+          expandOutputByDefault={expandOutputByDefault}
+          key={step.name}
+          step={step}
+        />
       ))}
     </div>
   );
 }
 
-function SetupProgressStepRow({ step }: { step: SetupProgressStep }) {
-  const [open, setOpen] = useState(false);
+function SetupProgressStepRow({
+  expandOutputByDefault,
+  step,
+}: {
+  expandOutputByDefault: boolean;
+  step: SetupProgressStep;
+}) {
+  const [open, setOpen] = useState(expandOutputByDefault);
   const hasOutput = step.output.length > 0;
   const status = statusMap[step.status];
 

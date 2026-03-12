@@ -16,7 +16,12 @@ describe("formatCompactRelativeTime", () => {
 
   test("treats bare SQLite datetime strings as UTC", () => {
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60_000);
-    const sqliteFormat = fiveMinutesAgo.toISOString().replace("T", " ").replace("Z", "").split(".")[0];
-    expect(formatCompactRelativeTime(sqliteFormat)).toBe("5m");
+    const sqliteFormat = fiveMinutesAgo
+      .toISOString()
+      .replace("T", " ")
+      .replace("Z", "")
+      .split(".")[0];
+    expect(sqliteFormat).toBeDefined();
+    expect(formatCompactRelativeTime(sqliteFormat!)).toBe("5m");
   });
 });

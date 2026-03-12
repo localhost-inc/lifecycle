@@ -11,7 +11,16 @@ export {
   CardTitle,
 } from "./components/card";
 export { Collapsible, CollapsibleTrigger, CollapsibleContent } from "./components/collapsible";
+export {
+  Dialog,
+  DialogBackdrop,
+  DialogClose,
+  DialogDescription,
+  DialogPopup,
+  DialogTitle,
+} from "./components/dialog";
 export { EmptyState, type EmptyStateProps } from "./components/empty-state";
+export { FloatingToggle, type FloatingToggleOption } from "./components/floating-toggle";
 export { Input } from "./components/input";
 export { Label } from "./components/label";
 export { Loading, type LoadingProps } from "./components/loading";

@@ -105,6 +105,7 @@ impl Supervisor {
             .await?;
 
         let container_name = format!("lifecycle-{}-{}", workspace_id, service_name);
+        self.remove_container_if_exists(&container_name).await;
 
         // Build port bindings
         let mut exposed_ports = HashMap::new();
@@ -181,6 +182,19 @@ impl Supervisor {
             .start_container::<String>(&container.id, None)
             .await
             .map_err(|e| {
+                let docker = docker.clone();
+                let container_id = container.id.clone();
+                tokio::spawn(async move {
+                    let _ = docker
+                        .remove_container(
+                            &container_id,
+                            Some(RemoveContainerOptions {
+                                force: true,
+                                ..Default::default()
+                            }),
+                        )
+                        .await;
+                });
                 if is_port_conflict_error(&e.to_string()) && service.port.is_some() {
                     return LifecycleError::PortConflict {
                         service: service_name.to_string(),
@@ -197,6 +211,22 @@ impl Supervisor {
         self.containers
             .insert(service_name.to_string(), container.id);
         Ok(())
+    }
+
+    async fn remove_container_if_exists(&mut self, container_ref: &str) {
+        let Ok(docker) = self.ensure_docker().await.cloned() else {
+            return;
+        };
+
+        let _ = docker
+            .remove_container(
+                container_ref,
+                Some(RemoveContainerOptions {
+                    force: true,
+                    ..Default::default()
+                }),
+            )
+            .await;
     }
 
     async fn resolve_image_ref(

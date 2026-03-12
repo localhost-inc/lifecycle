@@ -39,4 +39,23 @@ describe("SetupProgress", () => {
     expect(markup).toContain("disabled");
     expect(markup).not.toContain("▶");
   });
+
+  test("renders output inline when expandOutputByDefault is enabled", () => {
+    const markup = renderToStaticMarkup(
+      createElement(SetupProgress, {
+        expandOutputByDefault: true,
+        steps: [
+          {
+            name: "Install dependencies",
+            output: ["bun install"],
+            status: "running",
+          },
+        ],
+      }),
+    );
+
+    expect(markup).toContain("Install dependencies");
+    expect(markup).toContain("bun install");
+    expect(markup).toContain("▼");
+  });
 });

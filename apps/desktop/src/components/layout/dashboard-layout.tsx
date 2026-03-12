@@ -11,6 +11,7 @@ import { getManifestFingerprint } from "@lifecycle/contracts";
 import { Loading, SidebarInset } from "@lifecycle/ui";
 import { Outlet, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppHotkeyListener } from "../../app/app-hotkey-listener";
+import { CommandPaletteProvider } from "../../features/command-palette";
 import {
   addProjectFromDirectory,
   readManifest,
@@ -477,6 +478,15 @@ export function DashboardLayout() {
     }
   }, [client, navigate, projectCatalogQuery.data, projects, selectedWorkspace, worktreeRoot]);
 
+  useEffect(() => {
+    const handleForkFromPalette = () => {
+      void handleForkWorkspace();
+    };
+    document.addEventListener("command-palette:fork-workspace", handleForkFromPalette);
+    return () =>
+      document.removeEventListener("command-palette:fork-workspace", handleForkFromPalette);
+  }, [handleForkWorkspace]);
+
   const handleRemoveProject = useCallback(
     async (projectId: string) => {
       try {
@@ -649,6 +659,7 @@ export function DashboardLayout() {
   }
 
   return (
+    <CommandPaletteProvider>
     <div className="flex h-full w-full flex-col bg-[var(--background)] text-[var(--foreground)]">
       <AppHotkeyListener />
       <div ref={layoutRowRef} className="flex min-h-0 flex-1">
@@ -750,5 +761,6 @@ export function DashboardLayout() {
         onToggleLeftSidebar={handleLeftSidebarSeparatorDoubleClick}
       />
     </div>
+    </CommandPaletteProvider>
   );
 }

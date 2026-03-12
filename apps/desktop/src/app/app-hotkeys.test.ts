@@ -34,6 +34,22 @@ describe("readAppHotkeyAction", () => {
     ).toBe("open-settings");
   });
 
+  test("reads Command+K as open-command-palette on macOS", () => {
+    expect(
+      readAppHotkeyAction(
+        {
+          altKey: false,
+          code: "KeyK",
+          ctrlKey: false,
+          key: "k",
+          metaKey: true,
+          shiftKey: false,
+        },
+        true,
+      ),
+    ).toBe("open-command-palette");
+  });
+
   test("ignores modified or unrelated keys", () => {
     expect(
       readAppHotkeyAction(
@@ -53,9 +69,9 @@ describe("readAppHotkeyAction", () => {
       readAppHotkeyAction(
         {
           altKey: false,
-          code: "KeyK",
+          code: "KeyJ",
           ctrlKey: false,
-          key: "k",
+          key: "j",
           metaKey: true,
           shiftKey: false,
         },

@@ -87,7 +87,11 @@ describe("GitPatchViewer", () => {
         ),
     );
 
-    expect(markup).toMatch(/<button[^>]*aria-pressed="false"[^>]*>Split<\/button>/);
-    expect(markup).toMatch(/<button[^>]*aria-pressed="true"[^>]*>Unified<\/button>/);
+    expect(markup).toMatch(
+      /<button[^>]*aria-label="Split"[^>]*aria-pressed="false"[\s\S]*?<span[^>]*>Split<\/span><\/button>/,
+    );
+    expect(markup).toMatch(
+      /<button[^>]*aria-label="Unified"[^>]*aria-pressed="true"[\s\S]*?<span[^>]*>Unified<\/span><\/button>/,
+    );
   });
 });

@@ -144,7 +144,7 @@ pub(super) fn reconcile_workspace_services_db(
         Some(config) => {
             let mut existing_rows = tx
                 .prepare(
-                    "SELECT service_name, exposure, port_override
+                    "SELECT service_name, exposure, port_override, status
                      FROM workspace_service
                      WHERE workspace_id = ?1",
                 )
@@ -155,15 +155,16 @@ pub(super) fn reconcile_workspace_services_db(
                         row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
                         row.get::<_, Option<i64>>(2)?,
+                        row.get::<_, String>(3)?,
                     ))
                 })
                 .map_err(|e| LifecycleError::Database(e.to_string()))?;
 
             let mut existing_rows_by_service = std::collections::HashMap::new();
             for row in existing {
-                let (service_name, exposure, port_override) =
+                let (service_name, exposure, port_override, status) =
                     row.map_err(|e| LifecycleError::Database(e.to_string()))?;
-                existing_rows_by_service.insert(service_name, (exposure, port_override));
+                existing_rows_by_service.insert(service_name, (exposure, port_override, status));
             }
             drop(existing_rows);
 
@@ -195,7 +196,7 @@ pub(super) fn reconcile_workspace_services_db(
 
             for (service_name, service_config) in config.declared_services() {
                 let default_port = service_config.port().map(|port| port as i64);
-                let (exposure, port_override) = existing_rows_by_service
+                let (exposure, port_override, current_status) = existing_rows_by_service
                     .get(service_name)
                     .cloned()
                     .unwrap_or_else(|| {
@@ -206,8 +207,16 @@ pub(super) fn reconcile_workspace_services_db(
                                 "internal".to_string()
                             },
                             None,
+                            "stopped".to_string(),
                         )
                     });
+                let allow_bound_current_port = matches!(
+                    (workspace_status.clone(), current_status.as_str()),
+                    (WorkspaceStatus::Active | WorkspaceStatus::Starting, "ready" | "starting")
+                );
+                let prefer_randomized_port_assignment =
+                    matches!(service_config, crate::capabilities::workspaces::manifest::ServiceConfig::Image(_))
+                        && !service_config.share_default();
                 let current_effective_port = tx
                     .query_row(
                         "SELECT effective_port FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
@@ -224,6 +233,8 @@ pub(super) fn reconcile_workspace_services_db(
                     default_port,
                     port_override,
                     current_effective_port,
+                    allow_bound_current_port,
+                    prefer_randomized_port_assignment,
                 )?;
                 let (preview_status, preview_failure_reason, preview_url) =
                     preview_fields_for_service(
@@ -906,6 +917,117 @@ mod tests {
             .expect("query service");
         assert_eq!(row.0, None);
         assert!(matches!(row.1, Some(port) if port > default_port));
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn reconcile_workspace_services_db_reassigns_stale_effective_port_when_workspace_is_idle() {
+        let db_path = temp_db_path();
+        init_workspace_tables(&db_path);
+        let default_port = available_test_port();
+        let port_guard =
+            std::net::TcpListener::bind(("127.0.0.1", default_port as u16)).expect("bind port");
+
+        let conn = open_db(&db_path).expect("open db");
+        conn.execute(
+            "INSERT INTO workspace (id, status, updated_at) VALUES (?1, ?2, datetime('now'))",
+            rusqlite::params!["ws_idle", "idle"],
+        )
+        .expect("insert workspace");
+        conn.execute(
+            "INSERT INTO workspace_service (
+                id, workspace_id, service_name, exposure, status, default_port, effective_port,
+                preview_status, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'), datetime('now'))",
+            rusqlite::params![
+                "svc_idle",
+                "ws_idle",
+                "postgres",
+                "internal",
+                "stopped",
+                Some(default_port),
+                Some(default_port),
+                "disabled",
+            ],
+        )
+        .expect("insert existing service");
+        drop(conn);
+
+        let config_json = format!(
+            r#"{{
+                "workspace": {{
+                    "setup": [{{ "name": "install", "command": "bun install", "timeout_seconds": 30 }}]
+                }},
+                "environment": {{
+                    "postgres": {{ "kind": "service", "runtime": "image", "image": "postgres:16", "port": {default_port} }}
+                }}
+            }}"#,
+        );
+        let config: LifecycleConfig = serde_json::from_str(&config_json).expect("valid config");
+
+        reconcile_workspace_services_db(&db_path, "ws_idle", Some(&config), Some("fingerprint_3"))
+            .expect("reconcile succeeds");
+
+        let conn = open_db(&db_path).expect("re-open db");
+        let effective_port: Option<i64> = conn
+            .query_row(
+                "SELECT effective_port FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+                rusqlite::params!["ws_idle", "postgres"],
+                |row| row.get(0),
+            )
+            .expect("query service");
+        assert!(matches!(effective_port, Some(port) if (41_000..=48_999).contains(&port)));
+
+        drop(port_guard);
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn reconcile_workspace_services_db_assigns_internal_image_services_from_high_port_range() {
+        let db_path = temp_db_path();
+        init_workspace_tables(&db_path);
+
+        let conn = open_db(&db_path).expect("open db");
+        conn.execute(
+            "INSERT INTO workspace (id, status, updated_at) VALUES (?1, ?2, datetime('now'))",
+            rusqlite::params!["ws_image", "idle"],
+        )
+        .expect("insert workspace");
+        drop(conn);
+
+        let config_json = r#"{
+            "workspace": {
+                "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 30 }]
+            },
+            "environment": {
+                "postgres": { "kind": "service", "runtime": "image", "image": "postgres:16", "port": 5432 },
+                "web": { "kind": "service", "runtime": "process", "command": "bun run dev", "port": 3000, "share_default": true }
+            }
+        }"#;
+        let config: LifecycleConfig = serde_json::from_str(config_json).expect("valid config");
+
+        reconcile_workspace_services_db(&db_path, "ws_image", Some(&config), Some("fingerprint_4"))
+            .expect("reconcile succeeds");
+
+        let conn = open_db(&db_path).expect("re-open db");
+        let postgres_port: Option<i64> = conn
+            .query_row(
+                "SELECT effective_port FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+                rusqlite::params!["ws_image", "postgres"],
+                |row| row.get(0),
+            )
+            .expect("query postgres");
+        let web_port: Option<i64> = conn
+            .query_row(
+                "SELECT effective_port FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+                rusqlite::params!["ws_image", "web"],
+                |row| row.get(0),
+            )
+            .expect("query web");
+
+        assert!(matches!(postgres_port, Some(port) if (41_000..=48_999).contains(&port)));
+        assert_eq!(web_port, Some(3000));
 
         let _ = std::fs::remove_file(db_path);
     }

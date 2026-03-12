@@ -208,7 +208,13 @@ export function WorkspaceTreeItem({
         title={titleText}
         type="button"
       >
-        <WorkspaceKindIcon className={cn("mr-0.5 shrink-0", selected ? "text-[var(--sidebar-foreground)]" : "text-[var(--muted-foreground)]")} kind={workspace.kind} />
+        <WorkspaceKindIcon
+          className={cn(
+            "mr-0.5 shrink-0",
+            selected ? "text-[var(--sidebar-foreground)]" : "text-[var(--muted-foreground)]",
+          )}
+          kind={workspace.kind}
+        />
         <TypedTitle className="flex-1 truncate text-sm" text={displayName} />
         {sessionStatusState === "hidden" && timestamp ? (
           <span

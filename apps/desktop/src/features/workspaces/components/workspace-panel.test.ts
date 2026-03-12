@@ -1,9 +1,14 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
-import type { ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
+import {
+  getManifestFingerprint,
+  type ServiceRecord,
+  type WorkspaceRecord,
+} from "@lifecycle/contracts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { QueryProvider } from "../../../query";
+import { shouldSyncWorkspaceManifest } from "./workspace-panel";
 import { workspaceSupportsFilesystemInteraction } from "../lib/workspace-capabilities";
 
 function renderWorkspacePanel(element: ReturnType<typeof createElement>) {
@@ -300,5 +305,80 @@ describe("WorkspacePanel", () => {
     expect(markup).toContain("Workspace surface unavailable");
     expect(markup).not.toContain("No lifecycle.json found");
     expect(markup).not.toContain("Add a lifecycle.json file to the project root");
+  });
+});
+
+describe("shouldSyncWorkspaceManifest", () => {
+  test("syncs idle workspaces when a valid manifest declares services but none are persisted", () => {
+    expect(
+      shouldSyncWorkspaceManifest(
+        {
+          manifest_fingerprint: null,
+          status: "idle",
+        } as Pick<WorkspaceRecord, "manifest_fingerprint" | "status">,
+        {
+          state: "valid",
+          result: {
+            valid: true,
+            config: {
+              workspace: { setup: [], teardown: [] },
+              environment: {
+                api: {
+                  kind: "service",
+                  runtime: "process",
+                  command: "bun run dev",
+                  port: 3000,
+                },
+              },
+            },
+          },
+        },
+        0,
+      ),
+    ).toBeTrue();
+  });
+
+  test("does not sync when the idle workspace already matches the valid manifest and has services", () => {
+    const config = {
+      workspace: { setup: [], teardown: [] },
+      environment: {
+        api: {
+          kind: "service" as const,
+          runtime: "process" as const,
+          command: "bun run dev",
+          port: 3000,
+        },
+      },
+    };
+
+    expect(
+      shouldSyncWorkspaceManifest(
+        {
+          manifest_fingerprint: getManifestFingerprint(config),
+          status: "idle",
+        } as Pick<WorkspaceRecord, "manifest_fingerprint" | "status">,
+        {
+          state: "valid",
+          result: {
+            valid: true,
+            config,
+          },
+        },
+        1,
+      ),
+    ).toBeFalse();
+  });
+
+  test("syncs missing or invalid manifests when persisted service state needs cleanup", () => {
+    expect(
+      shouldSyncWorkspaceManifest(
+        {
+          manifest_fingerprint: "stale-manifest",
+          status: "idle",
+        } as Pick<WorkspaceRecord, "manifest_fingerprint" | "status">,
+        { state: "missing" },
+        2,
+      ),
+    ).toBeTrue();
   });
 });

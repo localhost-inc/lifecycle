@@ -1,6 +1,7 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   getManifestFingerprint,
+  type LifecycleConfig,
   type GitLogEntry,
   type GitPullRequestSummary,
   type ServiceRecord,
@@ -17,6 +18,7 @@ import type { OpenDocumentRequest } from "./workspace-surface-logic";
 import { WorkspaceSidebar } from "./workspace-sidebar";
 import { WorkspaceSurface } from "./workspace-surface";
 import {
+  syncWorkspaceManifest,
   startServices,
   stopWorkspace,
   updateWorkspaceService,
@@ -34,6 +36,36 @@ interface WorkspacePanelProps {
   workspace: WorkspaceRecord;
   workspaceSnapshot: WorkspaceSnapshotResult | null;
   manifestStatus: ManifestStatus | null;
+}
+
+function countDeclaredServices(config: LifecycleConfig | null): number {
+  if (!config) {
+    return 0;
+  }
+
+  return Object.values(config.environment).filter((node) => node.kind === "service").length;
+}
+
+export function shouldSyncWorkspaceManifest(
+  workspace: Pick<WorkspaceRecord, "manifest_fingerprint" | "status">,
+  manifestStatus: ManifestStatus | null,
+  persistedServiceCount: number,
+): boolean {
+  if (workspace.status !== "idle") {
+    return false;
+  }
+
+  if (manifestStatus?.state === "valid") {
+    const manifestFingerprint = getManifestFingerprint(manifestStatus.result.config);
+    const declaredServiceCount = countDeclaredServices(manifestStatus.result.config);
+
+    return (
+      workspace.manifest_fingerprint !== manifestFingerprint ||
+      (declaredServiceCount > 0 && persistedServiceCount === 0)
+    );
+  }
+
+  return workspace.manifest_fingerprint !== null || persistedServiceCount > 0;
 }
 
 export function WorkspacePanel({
@@ -149,6 +181,24 @@ export function WorkspacePanel({
     workspace.manifest_fingerprint !== null &&
     workspace.manifest_fingerprint !== undefined &&
     workspace.manifest_fingerprint !== manifestFingerprint;
+
+  useEffect(() => {
+    if (!shouldSyncWorkspaceManifest(workspace, manifestStatus, services.length)) {
+      return;
+    }
+
+    const configToSync = manifestStatus?.state === "valid" ? manifestStatus.result.config : null;
+    void (async () => {
+      try {
+        await syncWorkspaceManifest(workspace.id, configToSync);
+        client.invalidate(workspaceKeys.detail(workspace.id));
+        client.invalidate(workspaceKeys.snapshot(workspace.id));
+        client.invalidate(workspaceKeys.services(workspace.id));
+      } catch (error) {
+        console.error("Failed to sync workspace manifest:", error);
+      }
+    })();
+  }, [client, manifestStatus, services.length, workspace]);
 
   const updateRoute = useCallback(
     (patch: Parameters<typeof updateWorkspaceRouteState>[1]) => {
@@ -278,6 +328,7 @@ export function WorkspacePanel({
         createPortal(
           <WorkspaceSidebar
             activeGitTab={routeState.gitTab}
+            config={config}
             hasManifest={hasManifest}
             isManifestStale={isManifestStale}
             manifestState={manifestState}
@@ -299,6 +350,7 @@ export function WorkspacePanel({
       ) : (
         <WorkspaceSidebar
           activeGitTab={routeState.gitTab}
+          config={config}
           hasManifest={hasManifest}
           isManifestStale={isManifestStale}
           manifestState={manifestState}

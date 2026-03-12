@@ -41,6 +41,11 @@
   --terminal-ansi-bright-magenta: #c4a7e7;
   --terminal-ansi-bright-cyan: #ebbcba;
   --terminal-ansi-bright-white: #e0def4;
+  --status-neutral: #6e6a86;
+  --status-info: #c4a7e7;
+  --status-success: #9ccfd8;
+  --status-warning: #f6c177;
+  --status-danger: #eb6f92;
   --git-status-added: #9ccfd8;
   --git-status-modified: #f6c177;
   --git-status-deleted: #eb6f92;

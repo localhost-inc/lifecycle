@@ -96,6 +96,13 @@ pub async fn update_workspace_service(
         } else {
             None
         },
+        matches!(
+            (workspace_status.clone(), service_status.as_str()),
+            (WorkspaceStatus::Active | WorkspaceStatus::Starting, "ready" | "starting")
+        ),
+        current_effective_port
+            .map(|port| (41_000..=48_999).contains(&port))
+            .unwrap_or(false),
     )?;
     let (preview_status, preview_failure_reason, preview_url) = preview_fields_for_service(
         &exposure,

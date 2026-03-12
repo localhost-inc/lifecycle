@@ -20,6 +20,7 @@ import {
 import type {
   GitLogEntry,
   GitPullRequestSummary,
+  LifecycleConfig,
   ServiceRecord,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
@@ -32,6 +33,7 @@ const PANEL_SEPARATOR_STEP_PX = 32;
 
 interface WorkspaceSidebarProps {
   activeGitTab: GitPanelTabValue;
+  config: LifecycleConfig | null;
   hasManifest: boolean;
   isManifestStale: boolean;
   manifestState: "invalid" | "missing" | "valid";
@@ -55,6 +57,7 @@ interface WorkspaceSidebarProps {
 
 export function WorkspaceSidebar({
   activeGitTab,
+  config,
   hasManifest,
   isManifestStale,
   manifestState,
@@ -253,6 +256,7 @@ export function WorkspaceSidebar({
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
         <EnvironmentPanel
+          config={config}
           hasManifest={hasManifest}
           isManifestStale={isManifestStale}
           manifestState={manifestState}
