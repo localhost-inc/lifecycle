@@ -3,6 +3,7 @@ import { useCallback, useContext, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { CommandPaletteContext } from "../features/command-palette/command-palette-context";
 import {
+  shouldHandleDomAppHotkey,
   isEditableTarget,
   isMacPlatform,
   readAppHotkeyAction,
@@ -13,6 +14,7 @@ import {
 export function AppHotkeyListener() {
   const location = useLocation();
   const navigate = useNavigate();
+  const tauriApp = isTauri();
   const macPlatform = isMacPlatform();
   const commandPalette = useContext(CommandPaletteContext);
 
@@ -25,12 +27,11 @@ export function AppHotkeyListener() {
           }
           return;
         case "open-command-palette":
-          if (commandPalette) {
-            if (commandPalette.isOpen) {
-              commandPalette.close();
-            } else {
-              commandPalette.open();
-            }
+          commandPalette?.toggle("commands");
+          return;
+        case "open-file-picker":
+          if (commandPalette?.canOpenFiles) {
+            commandPalette.toggle("files");
           }
           return;
       }
@@ -39,17 +40,19 @@ export function AppHotkeyListener() {
   );
 
   useEffect(() => {
-    if (isTauri() && macPlatform) {
-      return;
-    }
-
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || isEditableTarget(event.target)) {
         return;
       }
 
       const action = readAppHotkeyAction(event, macPlatform);
-      if (!action) {
+      if (
+        !action ||
+        !shouldHandleDomAppHotkey(action, {
+          isTauriApp: tauriApp,
+          macPlatform,
+        })
+      ) {
         return;
       }
 
@@ -59,7 +62,7 @@ export function AppHotkeyListener() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleAction, macPlatform]);
+  }, [handleAction, macPlatform, tauriApp]);
 
   useEffect(() => {
     let disposed = false;

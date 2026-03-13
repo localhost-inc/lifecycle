@@ -4,9 +4,15 @@ interface CommandPaletteInputProps {
   value: string;
   onChange: (value: string) => void;
   onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
+  placeholder: string;
 }
 
-export function CommandPaletteInput({ value, onChange, onKeyDown }: CommandPaletteInputProps) {
+export function CommandPaletteInput({
+  value,
+  onChange,
+  onKeyDown,
+  placeholder,
+}: CommandPaletteInputProps) {
   return (
     <div className="px-4 py-3.5">
       <input
@@ -14,7 +20,7 @@ export function CommandPaletteInput({ value, onChange, onKeyDown }: CommandPalet
         autoFocus
         autoComplete="off"
         spellCheck={false}
-        placeholder="Type a command or search..."
+        placeholder={placeholder}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={onKeyDown}

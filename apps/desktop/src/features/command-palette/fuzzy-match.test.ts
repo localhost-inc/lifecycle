@@ -78,6 +78,21 @@ describe("filterAndSort", () => {
     expect(result).toHaveLength(3);
   });
 
+  it("uses priority to rank empty-query results", () => {
+    const result = filterAndSort("", [
+      {
+        ...commands[0]!,
+        priority: 10,
+      },
+      {
+        ...commands[1]!,
+        priority: 120,
+      },
+    ]);
+
+    expect(result[0]?.id).toBe("open-settings");
+  });
+
   it("filters to matching commands", () => {
     const result = filterAndSort("settings", commands);
     expect(result.length).toBe(1);
@@ -93,5 +108,29 @@ describe("filterAndSort", () => {
   it("ranks better matches first", () => {
     const result = filterAndSort("main", commands);
     expect(result[0]?.id).toBe("ws-1");
+  });
+
+  it("uses priority as a tie-breaker for similar matches", () => {
+    const result = filterAndSort("read", [
+      {
+        id: "readme",
+        category: "workspace",
+        label: "README.md",
+        keywords: ["README.md"],
+        icon: icon as unknown as CommandPaletteCommand["icon"],
+        onExecute: () => {},
+        priority: 120,
+      },
+      {
+        id: "readme-copy",
+        category: "workspace",
+        label: "README copy.md",
+        keywords: ["README copy.md"],
+        icon: icon as unknown as CommandPaletteCommand["icon"],
+        onExecute: () => {},
+      },
+    ]);
+
+    expect(result[0]?.id).toBe("readme");
   });
 });

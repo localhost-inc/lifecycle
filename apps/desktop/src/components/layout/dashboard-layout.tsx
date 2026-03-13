@@ -22,13 +22,18 @@ import { WelcomeScreen } from "../../features/welcome/components/welcome-screen"
 import { projectKeys, useProjectCatalog } from "../../features/projects/hooks";
 import { useSettings } from "../../features/settings/state/app-settings-provider";
 import { createWorkspace, destroyWorkspace, getCurrentBranch } from "../../features/workspaces/api";
-import { useWorkspacesByProject, workspaceKeys } from "../../features/workspaces/hooks";
+import {
+  createWorkspacesByProjectQuery,
+  useWorkspacesByProject,
+  workspaceKeys,
+} from "../../features/workspaces/hooks";
 import { getWorkspaceDisplayName } from "../../features/workspaces/lib/workspace-display";
 import {
   clearLastWorkspaceId,
   readLastWorkspaceId,
   writeLastWorkspaceId,
 } from "../../features/workspaces/state/workspace-surface-state";
+import { WorkspaceOpenRequestsProvider } from "../../features/workspaces/state/workspace-open-requests";
 import {
   clampPanelSize,
   DASHBOARD_LEFT_SIDEBAR_COLLAPSED_STORAGE_KEY,
@@ -128,6 +133,14 @@ export function DashboardLayout() {
         ? (workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null)
         : null,
     [selectedWorkspaceId, workspaces],
+  );
+  const sourceWorkspace = useMemo(
+    () =>
+      selectedWorkspace?.source_workspace_id
+        ? (workspaces.find((workspace) => workspace.id === selectedWorkspace.source_workspace_id) ??
+          null)
+        : null,
+    [selectedWorkspace, workspaces],
   );
   const selectedProjectFromQuery = searchParams.get("project");
   const fallbackSelectedProjectId =
@@ -363,6 +376,18 @@ export function DashboardLayout() {
     [navigate, workspacesByProjectId],
   );
 
+  const refreshWorkspaceList = useCallback(
+    async (context: string) => {
+      try {
+        await client.refetch(createWorkspacesByProjectQuery());
+      } catch (error) {
+        console.warn(`Failed to refresh workspace list after ${context}:`, error);
+        client.invalidate(workspaceKeys.byProject());
+      }
+    },
+    [client],
+  );
+
   const handleAddProject = useCallback(async () => {
     let importedProjectId: string | null = null;
     try {
@@ -386,8 +411,7 @@ export function DashboardLayout() {
         manifestJson,
         projectPath: project.path,
       });
-      client.invalidate(workspaceKeys.byProject());
-      client.invalidate(workspaceKeys.detail(workspaceId));
+      await refreshWorkspaceList("creating root workspace");
       void navigate(`/workspaces/${workspaceId}`);
     } catch (err) {
       console.error("Failed to add project:", err);
@@ -399,7 +423,7 @@ export function DashboardLayout() {
 
       alert(`Failed to add project: ${err}`);
     }
-  }, [client, navigate]);
+  }, [client, navigate, refreshWorkspaceList]);
 
   const handleCreateWorkspace = useCallback(
     async (projectId: string) => {
@@ -431,15 +455,21 @@ export function DashboardLayout() {
           worktreeRoot,
         });
 
-        client.invalidate(workspaceKeys.byProject());
-        client.invalidate(workspaceKeys.detail(workspaceId));
+        await refreshWorkspaceList("creating workspace");
         void navigate(`/workspaces/${workspaceId}`);
       } catch (err) {
         console.error("Failed to create workspace:", err);
         alert(`Failed to create workspace: ${err}`);
       }
     },
-    [client, navigate, projectCatalogQuery.data, projects, workspacesByProjectId, worktreeRoot],
+    [
+      navigate,
+      projectCatalogQuery.data,
+      projects,
+      refreshWorkspaceList,
+      workspacesByProjectId,
+      worktreeRoot,
+    ],
   );
 
   const handleForkWorkspace = useCallback(async () => {
@@ -469,23 +499,20 @@ export function DashboardLayout() {
         worktreeRoot,
       });
 
-      client.invalidate(workspaceKeys.byProject());
-      client.invalidate(workspaceKeys.detail(newWorkspaceId));
+      await refreshWorkspaceList("forking workspace");
       void navigate(`/workspaces/${newWorkspaceId}`);
     } catch (err) {
       console.error("Failed to fork workspace:", err);
       alert(`Failed to fork workspace: ${err}`);
     }
-  }, [client, navigate, projectCatalogQuery.data, projects, selectedWorkspace, worktreeRoot]);
-
-  useEffect(() => {
-    const handleForkFromPalette = () => {
-      void handleForkWorkspace();
-    };
-    document.addEventListener("command-palette:fork-workspace", handleForkFromPalette);
-    return () =>
-      document.removeEventListener("command-palette:fork-workspace", handleForkFromPalette);
-  }, [handleForkWorkspace]);
+  }, [
+    navigate,
+    projectCatalogQuery.data,
+    projects,
+    refreshWorkspaceList,
+    selectedWorkspace,
+    worktreeRoot,
+  ]);
 
   const handleRemoveProject = useCallback(
     async (projectId: string) => {
@@ -659,108 +686,111 @@ export function DashboardLayout() {
   }
 
   return (
-    <CommandPaletteProvider>
-    <div className="flex h-full w-full flex-col bg-[var(--background)] text-[var(--foreground)]">
-      <AppHotkeyListener />
-      <div ref={layoutRowRef} className="flex min-h-0 flex-1">
-        <ShellResizeProvider resizing={activeSidebarResize !== null}>
-          <div className="flex min-h-0 w-full flex-1">
-            <div
-              className={getLeftSidebarRailClassName(activeSidebarResize === "left")}
-              style={{
-                width: getLeftSidebarRailWidth({
-                  collapsed: leftSidebarCollapsed,
-                  width: leftSidebarWidth,
-                }),
-              }}
-            >
-              <Sidebar
-                isLoading={projectCatalogQuery.isLoading || workspacesByProjectQuery.isLoading}
-                projects={projects}
-                workspacesByProjectId={workspacesByProjectId}
-                selectedProjectId={activeProjectId}
-                selectedWorkspaceId={selectedWorkspaceId}
-                onSelectProject={handleSelectProject}
-                onSelectWorkspace={handleSelectWorkspace}
-                onAddProject={handleAddProject}
-                onCreateWorkspace={handleCreateWorkspace}
-                onRemoveProject={handleRemoveProject}
-                onDestroyWorkspace={handleDestroyWorkspace}
-                onOpenSettings={handleOpenSettings}
-              />
-            </div>
-            <div className="relative w-px shrink-0">
-              <div
-                role="separator"
-                aria-label="Resize workspace list sidebar"
-                aria-orientation="vertical"
-                aria-valuemax={leftSidebarBounds.maxSize}
-                aria-valuemin={leftSidebarBounds.minSize}
-                aria-valuenow={leftSidebarCollapsed ? 0 : leftSidebarWidth}
-                data-no-drag
-                tabIndex={0}
-                onDoubleClick={handleLeftSidebarSeparatorDoubleClick}
-                onKeyDown={handleLeftSidebarSeparatorKeyDown}
-                onPointerDown={(event) => handleSidebarResizePointerDown("left", event)}
-                className="group absolute inset-y-0 left-1/2 z-10 flex w-3 -translate-x-1/2 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
-              >
-                <div className="w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
-              </div>
-            </div>
-            <SidebarInset>
-              <TitleBar
-                selectedWorkspace={selectedWorkspace}
-                leftSidebarCollapsed={leftSidebarCollapsed}
-                onFork={handleForkWorkspace}
-                onToggleRightSidebar={handleToggleRightSidebar}
-                rightSidebarCollapsed={rightSidebarCollapsed}
-              />
-              <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-                <Outlet context={{ onCreateWorkspace: handleCreateWorkspace }} />
-              </main>
-            </SidebarInset>
-            {showRightSidebar && (
-              <>
-                {!rightSidebarCollapsed && (
-                  <div className="relative w-px shrink-0">
-                    <div
-                      role="separator"
-                      aria-label="Resize workspace details sidebar"
-                      aria-orientation="vertical"
-                      aria-valuemax={rightSidebarBounds.maxSize}
-                      aria-valuemin={rightSidebarBounds.minSize}
-                      aria-valuenow={rightSidebarWidth}
-                      data-no-drag
-                      tabIndex={0}
-                      onKeyDown={handleRightSidebarSeparatorKeyDown}
-                      onPointerDown={(event) => handleSidebarResizePointerDown("right", event)}
-                      className="group absolute inset-y-0 left-1/2 z-10 flex w-3 -translate-x-1/2 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
-                    >
-                      <div className="w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
-                    </div>
-                  </div>
-                )}
+    <WorkspaceOpenRequestsProvider>
+      <CommandPaletteProvider onForkWorkspace={handleForkWorkspace}>
+        <div className="flex h-full w-full flex-col bg-[var(--background)] text-[var(--foreground)]">
+          <AppHotkeyListener />
+          <div ref={layoutRowRef} className="flex min-h-0 flex-1">
+            <ShellResizeProvider resizing={activeSidebarResize !== null}>
+              <div className="flex min-h-0 w-full flex-1">
                 <div
-                  id="workspace-right-rail"
-                  className={`relative flex min-h-0 shrink-0 overflow-hidden bg-[var(--panel)]${activeSidebarResize === "right" ? "" : " transition-[width,transform] duration-200 ease-linear"}`}
-                  data-overlay-boundary
+                  className={getLeftSidebarRailClassName(activeSidebarResize === "left")}
                   style={{
-                    width: rightSidebarCollapsed ? 0 : `${rightSidebarWidth}px`,
-                    transform: rightSidebarCollapsed
-                      ? `translateX(${rightSidebarWidth}px)`
-                      : undefined,
+                    width: getLeftSidebarRailWidth({
+                      collapsed: leftSidebarCollapsed,
+                      width: leftSidebarWidth,
+                    }),
                   }}
-                />
-              </>
-            )}
+                >
+                  <Sidebar
+                    isLoading={projectCatalogQuery.isLoading || workspacesByProjectQuery.isLoading}
+                    projects={projects}
+                    workspacesByProjectId={workspacesByProjectId}
+                    selectedProjectId={activeProjectId}
+                    selectedWorkspaceId={selectedWorkspaceId}
+                    onSelectProject={handleSelectProject}
+                    onSelectWorkspace={handleSelectWorkspace}
+                    onAddProject={handleAddProject}
+                    onCreateWorkspace={handleCreateWorkspace}
+                    onRemoveProject={handleRemoveProject}
+                    onDestroyWorkspace={handleDestroyWorkspace}
+                    onOpenSettings={handleOpenSettings}
+                  />
+                </div>
+                <div className="relative w-px shrink-0">
+                  <div
+                    role="separator"
+                    aria-label="Resize workspace list sidebar"
+                    aria-orientation="vertical"
+                    aria-valuemax={leftSidebarBounds.maxSize}
+                    aria-valuemin={leftSidebarBounds.minSize}
+                    aria-valuenow={leftSidebarCollapsed ? 0 : leftSidebarWidth}
+                    data-no-drag
+                    tabIndex={0}
+                    onDoubleClick={handleLeftSidebarSeparatorDoubleClick}
+                    onKeyDown={handleLeftSidebarSeparatorKeyDown}
+                    onPointerDown={(event) => handleSidebarResizePointerDown("left", event)}
+                    className="group absolute inset-y-0 left-1/2 z-10 flex w-3 -translate-x-1/2 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
+                  >
+                    <div className="w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
+                  </div>
+                </div>
+                <SidebarInset>
+                  <TitleBar
+                    selectedWorkspace={selectedWorkspace}
+                    sourceWorkspace={sourceWorkspace}
+                    leftSidebarCollapsed={leftSidebarCollapsed}
+                    onFork={handleForkWorkspace}
+                    onToggleRightSidebar={handleToggleRightSidebar}
+                    rightSidebarCollapsed={rightSidebarCollapsed}
+                  />
+                  <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                    <Outlet context={{ onCreateWorkspace: handleCreateWorkspace }} />
+                  </main>
+                </SidebarInset>
+                {showRightSidebar && (
+                  <>
+                    {!rightSidebarCollapsed && (
+                      <div className="relative w-px shrink-0">
+                        <div
+                          role="separator"
+                          aria-label="Resize workspace details sidebar"
+                          aria-orientation="vertical"
+                          aria-valuemax={rightSidebarBounds.maxSize}
+                          aria-valuemin={rightSidebarBounds.minSize}
+                          aria-valuenow={rightSidebarWidth}
+                          data-no-drag
+                          tabIndex={0}
+                          onKeyDown={handleRightSidebarSeparatorKeyDown}
+                          onPointerDown={(event) => handleSidebarResizePointerDown("right", event)}
+                          className="group absolute inset-y-0 left-1/2 z-10 flex w-3 -translate-x-1/2 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
+                        >
+                          <div className="w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
+                        </div>
+                      </div>
+                    )}
+                    <div
+                      id="workspace-right-rail"
+                      className={`relative flex min-h-0 shrink-0 overflow-hidden bg-[var(--panel)]${activeSidebarResize === "right" ? "" : " transition-[width,transform] duration-200 ease-linear"}`}
+                      data-overlay-boundary
+                      style={{
+                        width: rightSidebarCollapsed ? 0 : `${rightSidebarWidth}px`,
+                        transform: rightSidebarCollapsed
+                          ? `translateX(${rightSidebarWidth}px)`
+                          : undefined,
+                      }}
+                    />
+                  </>
+                )}
+              </div>
+            </ShellResizeProvider>
           </div>
-        </ShellResizeProvider>
-      </div>
-      <AppStatusBar
-        leftSidebarCollapsed={leftSidebarCollapsed}
-        onToggleLeftSidebar={handleLeftSidebarSeparatorDoubleClick}
-      />
-    </div>
-    </CommandPaletteProvider>
+          <AppStatusBar
+            leftSidebarCollapsed={leftSidebarCollapsed}
+            onToggleLeftSidebar={handleLeftSidebarSeparatorDoubleClick}
+          />
+        </div>
+      </CommandPaletteProvider>
+    </WorkspaceOpenRequestsProvider>
   );
 }

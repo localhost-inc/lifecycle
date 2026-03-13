@@ -8,6 +8,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { QueryProvider } from "../../../query";
+import { WorkspaceOpenRequestsProvider } from "../state/workspace-open-requests";
 import { shouldSyncWorkspaceManifest } from "./workspace-panel";
 import { workspaceSupportsFilesystemInteraction } from "../lib/workspace-capabilities";
 
@@ -15,7 +16,11 @@ function renderWorkspacePanel(element: ReturnType<typeof createElement>) {
   return renderToStaticMarkup(
     createElement(MemoryRouter, {
       initialEntries: ["/workspaces/workspace_1"],
-      children: createElement(QueryProvider, { children: element }),
+      children: createElement(QueryProvider, {
+        children: createElement(WorkspaceOpenRequestsProvider, {
+          children: element,
+        }),
+      }),
     }),
   );
 }
@@ -136,6 +141,7 @@ describe("WorkspacePanel", () => {
     const sidebarModule = await import("./workspace-sidebar");
     const surfaceModule = await import("./workspace-surface");
 
+    spyOn(hooksModule, "useWorkspaceEnvironmentTasks").mockReturnValue({ data: [] } as never);
     spyOn(hooksModule, "useWorkspaceSetup").mockReturnValue({ data: [] } as never);
     spyOn(sidebarModule, "WorkspaceSidebar").mockImplementation((() =>
       createElement("aside", null, "Workspace Sidebar")) as never);
@@ -210,6 +216,7 @@ describe("WorkspacePanel", () => {
     const sidebarModule = await import("./workspace-sidebar");
     const surfaceModule = await import("./workspace-surface");
 
+    spyOn(hooksModule, "useWorkspaceEnvironmentTasks").mockReturnValue({ data: [] } as never);
     spyOn(hooksModule, "useWorkspaceSetup").mockReturnValue({
       data: [{ name: "install", output: ["bun install"], status: "completed" }],
     } as never);
@@ -282,6 +289,7 @@ describe("WorkspacePanel", () => {
     const hooksModule = await import("../hooks");
     const sidebarModule = await import("./workspace-sidebar");
 
+    spyOn(hooksModule, "useWorkspaceEnvironmentTasks").mockReturnValue({ data: [] } as never);
     spyOn(hooksModule, "useWorkspaceSetup").mockReturnValue({ data: [] } as never);
     spyOn(sidebarModule, "WorkspaceSidebar").mockImplementation((() =>
       createElement("aside", null, "Workspace Sidebar")) as never);

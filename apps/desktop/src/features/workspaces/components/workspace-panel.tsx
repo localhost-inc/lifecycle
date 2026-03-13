@@ -14,7 +14,6 @@ import { useSearchParams } from "react-router-dom";
 import type { ManifestStatus } from "../../projects/api/projects";
 import { useQueryClient } from "../../../query";
 import { useCurrentGitPullRequest, useGitPullRequest, useGitPullRequests } from "../../git/hooks";
-import type { OpenDocumentRequest } from "./workspace-surface-logic";
 import { WorkspaceSidebar } from "./workspace-sidebar";
 import { WorkspaceSurface } from "./workspace-surface";
 import {
@@ -24,13 +23,14 @@ import {
   updateWorkspaceService,
   type WorkspaceSnapshotResult,
 } from "../api";
-import { useWorkspaceSetup, workspaceKeys } from "../hooks";
+import { useWorkspaceEnvironmentTasks, useWorkspaceSetup, workspaceKeys } from "../hooks";
 import { workspaceSupportsFilesystemInteraction } from "../lib/workspace-capabilities";
 import {
   readWorkspaceRouteState,
   resolveWorkspaceRoutePullRequest,
   updateWorkspaceRouteState,
 } from "../lib/workspace-route-state";
+import { useWorkspaceOpenRequests } from "../state/workspace-open-requests";
 
 interface WorkspacePanelProps {
   workspace: WorkspaceRecord;
@@ -76,15 +76,18 @@ export function WorkspacePanel({
   const client = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [rightRailRoot, setRightRailRoot] = useState<HTMLElement | null>(null);
-  const [openDocumentRequest, setOpenDocumentRequest] = useState<OpenDocumentRequest | null>(null);
   const routedPullRequestMarkerRef = useRef<string | null>(null);
+  const { clearDocumentRequest, openDocument, requestsByWorkspaceId } = useWorkspaceOpenRequests();
+  const openDocumentRequest = requestsByWorkspaceId[workspace.id] ?? null;
   const hasManifest = manifestStatus?.state === "valid";
   const config = hasManifest ? manifestStatus.result.config : null;
   const manifestState = manifestStatus?.state ?? "missing";
   const manifestFingerprint = config ? getManifestFingerprint(config) : null;
+  const environmentTasksQuery = useWorkspaceEnvironmentTasks(workspace.id);
   const setupQuery = useWorkspaceSetup(workspace.id);
   const services = workspaceSnapshot?.services ?? [];
   const terminals = workspaceSnapshot?.terminals ?? [];
+  const environmentTasks = environmentTasksQuery.data ?? [];
   const setupSteps = setupQuery.data ?? [];
   const routeState = useMemo(() => readWorkspaceRouteState(searchParams), [searchParams]);
   const supportsTerminalInteraction = workspaceSupportsFilesystemInteraction(workspace);
@@ -212,27 +215,36 @@ export function WorkspacePanel({
     [searchParams, setSearchParams],
   );
 
-  const handleOpenDiff = useCallback((filePath: string) => {
-    setOpenDocumentRequest({
-      focusPath: filePath,
-      id: crypto.randomUUID(),
-      kind: "changes-diff",
-    });
-  }, []);
-  const handleOpenFile = useCallback((filePath: string) => {
-    setOpenDocumentRequest({
-      filePath,
-      id: crypto.randomUUID(),
-      kind: "file-viewer",
-    });
-  }, []);
-  const handleOpenCommitDiff = useCallback((entry: GitLogEntry) => {
-    setOpenDocumentRequest({
-      commit: entry,
-      id: crypto.randomUUID(),
-      kind: "commit-diff",
-    });
-  }, []);
+  const handleOpenDiff = useCallback(
+    (filePath: string) => {
+      openDocument(workspace.id, {
+        focusPath: filePath,
+        id: crypto.randomUUID(),
+        kind: "changes-diff",
+      });
+    },
+    [openDocument, workspace.id],
+  );
+  const handleOpenFile = useCallback(
+    (filePath: string) => {
+      openDocument(workspace.id, {
+        filePath,
+        id: crypto.randomUUID(),
+        kind: "file-viewer",
+      });
+    },
+    [openDocument, workspace.id],
+  );
+  const handleOpenCommitDiff = useCallback(
+    (entry: GitLogEntry) => {
+      openDocument(workspace.id, {
+        commit: entry,
+        id: crypto.randomUUID(),
+        kind: "commit-diff",
+      });
+    },
+    [openDocument, workspace.id],
+  );
   const handleOpenPullRequest = useCallback(
     (pullRequest: GitPullRequestSummary) => {
       if (!supportsTerminalInteraction) {
@@ -244,13 +256,13 @@ export function WorkspacePanel({
         gitTab: "pull-requests",
         pullRequestNumber: pullRequest.number,
       });
-      setOpenDocumentRequest({
+      openDocument(workspace.id, {
         id: crypto.randomUUID(),
         pullRequest,
         kind: "pull-request",
       });
     },
-    [supportsTerminalInteraction, updateRoute],
+    [openDocument, supportsTerminalInteraction, updateRoute, workspace.id],
   );
 
   const handleGitTabChange = useCallback(
@@ -283,12 +295,18 @@ export function WorkspacePanel({
     }
 
     routedPullRequestMarkerRef.current = marker;
-    setOpenDocumentRequest({
+    openDocument(workspace.id, {
       id: crypto.randomUUID(),
       pullRequest: routedPullRequest,
       kind: "pull-request",
     });
-  }, [routeState.pullRequestNumber, routedPullRequest, supportsTerminalInteraction]);
+  }, [
+    openDocument,
+    routeState.pullRequestNumber,
+    routedPullRequest,
+    supportsTerminalInteraction,
+    workspace.id,
+  ]);
 
   useLayoutEffect(() => {
     if (typeof document === "undefined") {
@@ -304,6 +322,9 @@ export function WorkspacePanel({
         <WorkspaceSurface
           key={workspace.id}
           openDocumentRequest={openDocumentRequest}
+          onOpenDocumentRequestHandled={(requestId) =>
+            clearDocumentRequest(workspace.id, requestId)
+          }
           onActivePullRequestNumberChange={handleActivePullRequestNumberChange}
           snapshotTerminals={terminals}
           workspaceId={workspace.id}
@@ -341,6 +362,7 @@ export function WorkspacePanel({
             onOpenFile={handleOpenFile}
             onOpenCommitDiff={handleOpenCommitDiff}
             onOpenPullRequest={handleOpenPullRequest}
+            environmentTasks={environmentTasks}
             setupSteps={setupSteps}
             services={services}
             workspace={workspace}
@@ -363,6 +385,7 @@ export function WorkspacePanel({
           onOpenFile={handleOpenFile}
           onOpenCommitDiff={handleOpenCommitDiff}
           onOpenPullRequest={handleOpenPullRequest}
+          environmentTasks={environmentTasks}
           setupSteps={setupSteps}
           services={services}
           workspace={workspace}

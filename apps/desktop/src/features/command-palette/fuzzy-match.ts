@@ -1,4 +1,8 @@
-import type { CommandPaletteCommand } from "./types";
+interface SearchablePaletteItem {
+  keywords: string[];
+  label: string;
+  priority?: number;
+}
 
 export interface FuzzyMatchResult {
   match: boolean;
@@ -61,29 +65,31 @@ export function fuzzyMatch(query: string, text: string): FuzzyMatchResult {
   return { match: true, score };
 }
 
-export function filterAndSort(
-  query: string,
-  commands: CommandPaletteCommand[],
-): CommandPaletteCommand[] {
+export function filterAndSort<T extends SearchablePaletteItem>(query: string, items: T[]): T[] {
   if (query.trim().length === 0) {
-    return commands;
+    return [...items].sort(
+      (left, right) =>
+        (right.priority ?? 0) - (left.priority ?? 0) || left.label.localeCompare(right.label),
+    );
   }
 
-  const scored = commands
-    .map((command) => {
-      const labelResult = fuzzyMatch(query, command.label);
-      const keywordResults = command.keywords.map((keyword) => fuzzyMatch(query, keyword));
+  const scored = items
+    .map((item) => {
+      const labelResult = fuzzyMatch(query, item.label);
+      const keywordResults = item.keywords.map((keyword) => fuzzyMatch(query, keyword));
       const bestKeyword = keywordResults.reduce(
         (best, result) => (result.score > best.score ? result : best),
         { match: false, score: 0 },
       );
-      const bestScore = Math.max(labelResult.score, bestKeyword.score * 0.8);
+      const bestScore = Math.max(labelResult.score, bestKeyword.score * 0.8) + (item.priority ?? 0);
       const isMatch = labelResult.match || bestKeyword.match;
 
-      return { command, score: bestScore, isMatch };
+      return { item, score: bestScore, isMatch };
     })
     .filter((entry) => entry.isMatch);
 
-  scored.sort((a, b) => b.score - a.score);
-  return scored.map((entry) => entry.command);
+  scored.sort(
+    (left, right) => right.score - left.score || left.item.label.localeCompare(right.item.label),
+  );
+  return scored.map((entry) => entry.item);
 }

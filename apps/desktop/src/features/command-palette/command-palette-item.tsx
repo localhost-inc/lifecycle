@@ -44,7 +44,14 @@ export function CommandPaletteItem({
       onPointerEnter={onPointerEnter}
     >
       <Icon className="size-[18px] shrink-0 text-[var(--muted-foreground)]" />
-      <span className="min-w-0 flex-1 truncate text-[var(--foreground)]">{command.label}</span>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[var(--foreground)]">{command.label}</div>
+        {command.description ? (
+          <div className="truncate text-xs text-[var(--muted-foreground)]">
+            {command.description}
+          </div>
+        ) : null}
+      </div>
       {command.shortcut && <ShortcutKeys shortcut={command.shortcut} />}
     </div>
   );

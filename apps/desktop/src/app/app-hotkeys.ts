@@ -3,7 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export const APP_HOTKEY_EVENT_NAME = "app:shortcut";
 
-export type AppHotkeyAction = "open-settings" | "open-command-palette";
+export type AppHotkeyAction = "open-settings" | "open-command-palette" | "open-file-picker";
 
 export interface AppHotkeyEvent {
   action: AppHotkeyAction;
@@ -59,9 +59,8 @@ export function readAppHotkeyAction(
 
   const isComma = event.code === "Comma" || event.key === ",";
   const isK = event.code === "KeyK" || event.key === "k";
-  const hasMod = macPlatform
-    ? event.metaKey && !event.ctrlKey
-    : event.ctrlKey && !event.metaKey;
+  const isP = event.code === "KeyP" || event.key === "p";
+  const hasMod = macPlatform ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
 
   if (!hasMod) {
     return null;
@@ -75,7 +74,33 @@ export function readAppHotkeyAction(
     return "open-command-palette";
   }
 
+  if (isP) {
+    return "open-file-picker";
+  }
+
   return null;
+}
+
+export function formatAppHotkeyLabel(action: AppHotkeyAction, macPlatform: boolean): string {
+  const modifier = macPlatform ? "Cmd" : "Ctrl";
+  switch (action) {
+    case "open-settings":
+      return `${modifier}+,`;
+    case "open-command-palette":
+      return `${modifier}+K`;
+    case "open-file-picker":
+      return `${modifier}+P`;
+  }
+}
+
+export function shouldHandleDomAppHotkey(
+  action: AppHotkeyAction,
+  options: {
+    isTauriApp: boolean;
+    macPlatform: boolean;
+  },
+): boolean {
+  return !(action === "open-settings" && options.isTauriApp && options.macPlatform);
 }
 
 export async function subscribeToAppHotkeyEvents(

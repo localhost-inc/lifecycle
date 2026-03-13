@@ -3,6 +3,8 @@ import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useQueryClient } from "../../../query";
+import { collectWorkspacePaneLeaves, findWorkspacePaneById } from "../lib/workspace-surface-panes";
+import { recordWorkspaceFileUsage } from "../../files/lib/workspace-file-usage";
 import {
   createTerminal,
   detachTerminal,
@@ -21,19 +23,15 @@ import {
   writeWorkspaceSurfaceState,
 } from "../state/workspace-surface-state";
 import { isPullRequestDocument } from "../state/workspace-surface-state";
-import {
-  SurfaceLaunchActions,
-  type SurfaceLaunchAction,
-  type SurfaceLaunchRequest,
-} from "./surface-launch-actions";
-import { ClaudeIcon, CodexIcon, ShellIcon, WorkspaceSurfaceTabLeading } from "./surface-icons";
+import { type SurfaceLaunchAction, type SurfaceLaunchRequest } from "./surface-launch-actions";
+import { ClaudeIcon, CodexIcon, ShellIcon } from "./surface-icons";
 import {
   areStringArraysEqual,
   createInitialWorkspaceSurfaceState,
   createWorkspaceLauncherId,
-  getRightmostWorkspaceTabKey,
   getWorkspaceAdjacentTabKey,
-  getWorkspaceTabClosePlan,
+  createWorkspacePaneId,
+  createWorkspaceSplitId,
   getWorkspaceTabKeyByIndex,
   isEditableTarget,
   isMacPlatform,
@@ -49,12 +47,17 @@ import {
   type RuntimeTab,
   type WorkspaceTabHotkeyAction,
 } from "./workspace-surface-logic";
-import { WorkspaceSurfacePanels } from "./workspace-surface-panels";
-import { WorkspaceSurfaceTabBar } from "./workspace-surface-tab-bar";
+import {
+  hasFileViewerConflict,
+  isFileViewerDirty,
+  type FileViewerSessionState,
+} from "../../files/lib/file-session";
+import { WorkspaceSurfacePaneTree } from "./workspace-surface-pane-tree";
 
 interface WorkspaceSurfaceProps {
   openDocumentRequest: OpenDocumentRequest | null;
   onActivePullRequestNumberChange?: (pullRequestNumber: number | null) => void;
+  onOpenDocumentRequestHandled?: (requestId: string) => void;
   snapshotTerminals: TerminalRecord[];
   workspaceId: string;
 }
@@ -62,6 +65,7 @@ interface WorkspaceSurfaceProps {
 export function WorkspaceSurface({
   openDocumentRequest,
   onActivePullRequestNumberChange,
+  onOpenDocumentRequestHandled,
   snapshotTerminals,
   workspaceId,
 }: WorkspaceSurfaceProps) {
@@ -73,6 +77,9 @@ export function WorkspaceSurface({
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  const [fileSessionsByTabKey, setFileSessionsByTabKey] = useState<
+    Record<string, FileViewerSessionState>
+  >({});
   const [documentVisible, setDocumentVisible] = useState(() =>
     typeof document === "undefined" ? true : document.visibilityState === "visible",
   );
@@ -107,51 +114,97 @@ export function WorkspaceSurface({
       })),
     [isTerminalResponseReady, isTerminalTurnRunning, terminals],
   );
-  const visibleTabs = useMemo(
+  const paneLeaves = useMemo(() => collectWorkspacePaneLeaves(state.rootPane), [state.rootPane]);
+  const activePane =
+    (state.activePaneId ? findWorkspacePaneById(state.rootPane, state.activePaneId) : null) ??
+    paneLeaves[0] ??
+    null;
+  const activePaneId = activePane?.id ?? null;
+  const visibleTabsByPaneId = useMemo(
     () =>
-      resolveWorkspaceVisibleTabs(
-        runtimeTabs,
-        state.documents,
-        state.tabOrderKeys,
-        state.hiddenRuntimeTabKeys,
+      Object.fromEntries(
+        paneLeaves.map((pane) => [
+          pane.id,
+          resolveWorkspaceVisibleTabs(
+            runtimeTabs,
+            state.documents,
+            pane.tabOrderKeys,
+            state.hiddenRuntimeTabKeys,
+          ),
+        ]),
       ),
-    [runtimeTabs, state.documents, state.hiddenRuntimeTabKeys, state.tabOrderKeys],
+    [paneLeaves, runtimeTabs, state.documents, state.hiddenRuntimeTabKeys],
   );
-  const visibleTabKeys = useMemo(() => visibleTabs.map((tab) => tab.key), [visibleTabs]);
+  const activePaneVisibleTabs = activePane ? (visibleTabsByPaneId[activePane.id] ?? []) : [];
+  const activePaneVisibleTabKeys = useMemo(
+    () => activePaneVisibleTabs.map((tab) => tab.key),
+    [activePaneVisibleTabs],
+  );
   const knownRuntimeTabKeys = useMemo(
     () => sessionHistory.map((terminal) => `terminal:${terminal.id}`),
     [sessionHistory],
   );
+  const assignedPaneTabKeys = useMemo(
+    () => new Set(paneLeaves.flatMap((pane) => pane.tabOrderKeys)),
+    [paneLeaves],
+  );
+  const activeTabKey = activePane?.activeTabKey ?? null;
   const activeTerminalId =
-    state.activeTabKey && isRuntimeTabKey(state.activeTabKey)
-      ? state.activeTabKey.slice("terminal:".length)
-      : null;
-  const activeTabViewState =
-    state.activeTabKey !== null ? (state.viewStateByTabKey[state.activeTabKey] ?? null) : null;
+    activeTabKey && isRuntimeTabKey(activeTabKey) ? activeTabKey.slice("terminal:".length) : null;
   const activePullRequestNumber = useMemo(() => {
-    if (!state.activeTabKey) {
+    if (!activeTabKey) {
       return null;
     }
 
-    const activeDocument = state.documents.find((document) => document.key === state.activeTabKey);
+    const activeDocument = state.documents.find((document) => document.key === activeTabKey);
     return activeDocument && isPullRequestDocument(activeDocument) ? activeDocument.number : null;
-  }, [state.activeTabKey, state.documents]);
-  const waitingForActiveRuntimeTab = Boolean(
-    state.activeTabKey &&
-    isRuntimeTabKey(state.activeTabKey) &&
-    !visibleTabKeys.includes(state.activeTabKey),
+  }, [activeTabKey, state.documents]);
+  const waitingForRuntimePaneIds = useMemo(
+    () =>
+      new Set(
+        paneLeaves.flatMap((pane) =>
+          pane.activeTabKey &&
+          isRuntimeTabKey(pane.activeTabKey) &&
+          !(visibleTabsByPaneId[pane.id] ?? []).some((tab) => tab.key === pane.activeTabKey)
+            ? [pane.id]
+            : [],
+        ),
+      ),
+    [paneLeaves, visibleTabsByPaneId],
   );
+
+  useEffect(() => {
+    const openFileTabKeys = new Set(
+      state.documents
+        .filter((document) => document.kind === "file-viewer")
+        .map((document) => document.key),
+    );
+
+    setFileSessionsByTabKey((current) => {
+      const nextEntries = Object.entries(current).filter(([key]) => openFileTabKeys.has(key));
+      if (nextEntries.length === Object.keys(current).length) {
+        return current;
+      }
+
+      return Object.fromEntries(nextEntries);
+    });
+  }, [state.documents]);
 
   useEffect(() => {
     if (!openDocumentRequest) {
       return;
     }
 
+    if (openDocumentRequest.kind === "file-viewer") {
+      recordWorkspaceFileUsage(workspaceId, openDocumentRequest.filePath);
+    }
+
     dispatch({
       request: openDocumentRequest,
       kind: "open-document",
     });
-  }, [openDocumentRequest]);
+    onOpenDocumentRequestHandled?.(openDocumentRequest.id);
+  }, [onOpenDocumentRequestHandled, openDocumentRequest]);
 
   useEffect(() => {
     writeWorkspaceSurfaceState(workspaceId, state);
@@ -174,12 +227,6 @@ export function WorkspaceSurface({
   }, []);
 
   useEffect(() => {
-    if (!areStringArraysEqual(state.tabOrderKeys, visibleTabKeys)) {
-      dispatch({ keys: visibleTabKeys, kind: "set-tab-order" });
-    }
-  }, [state.tabOrderKeys, visibleTabKeys]);
-
-  useEffect(() => {
     const nextHiddenRuntimeTabKeys = reconcileHiddenRuntimeTabKeys(
       state.hiddenRuntimeTabKeys,
       knownRuntimeTabKeys,
@@ -195,39 +242,87 @@ export function WorkspaceSurface({
   }, [knownRuntimeTabKeys, state.hiddenRuntimeTabKeys]);
 
   useEffect(() => {
-    if (waitingForActiveRuntimeTab) {
+    const targetPaneId = activePaneId ?? paneLeaves[0]?.id ?? null;
+    if (!targetPaneId) {
       return;
     }
 
-    if (visibleTabs.length === 0) {
-      if (state.activeTabKey !== null) {
-        dispatch({ key: null, kind: "sync-active" });
-      }
+    const unassignedRuntimeKeys = knownRuntimeTabKeys.filter(
+      (key) => !assignedPaneTabKeys.has(key) && !state.hiddenRuntimeTabKeys.includes(key),
+    );
+    if (unassignedRuntimeKeys.length === 0) {
       return;
     }
 
-    if (!state.activeTabKey) {
-      dispatch({ key: getRightmostWorkspaceTabKey(visibleTabs), kind: "sync-active" });
-      return;
-    }
-
-    if (!visibleTabs.some((tab) => tab.key === state.activeTabKey)) {
-      dispatch({ key: getRightmostWorkspaceTabKey(visibleTabs), kind: "sync-active" });
-    }
-  }, [state.activeTabKey, visibleTabs, waitingForActiveRuntimeTab]);
-
-  useEffect(() => {
-    if (waitingForActiveRuntimeTab) {
-      return;
-    }
-
-    if (visibleTabs.length === 0 && !state.documents.some((tab) => tab.kind === "launcher")) {
+    for (const key of unassignedRuntimeKeys) {
       dispatch({
-        launcherId: createWorkspaceLauncherId(),
-        kind: "open-launcher",
+        key,
+        kind: "show-runtime-tab",
+        paneId: targetPaneId,
+        select: false,
       });
     }
-  }, [state.documents, visibleTabs.length, waitingForActiveRuntimeTab]);
+  }, [
+    activePaneId,
+    assignedPaneTabKeys,
+    knownRuntimeTabKeys,
+    paneLeaves,
+    state.hiddenRuntimeTabKeys,
+  ]);
+
+  useEffect(() => {
+    for (const pane of paneLeaves) {
+      if (waitingForRuntimePaneIds.has(pane.id)) {
+        continue;
+      }
+
+      const visibleTabs = visibleTabsByPaneId[pane.id] ?? [];
+      if (visibleTabs.length === 0) {
+        const hasLauncher = state.documents.some(
+          (document) => document.kind === "launcher" && pane.tabOrderKeys.includes(document.key),
+        );
+
+        if (pane.activeTabKey !== null) {
+          dispatch({
+            key: null,
+            kind: "sync-pane-active",
+            paneId: pane.id,
+          });
+          return;
+        }
+
+        if (!hasLauncher) {
+          dispatch({
+            launcherId: createWorkspaceLauncherId(),
+            kind: "open-launcher",
+            paneId: pane.id,
+          });
+          return;
+        }
+
+        continue;
+      }
+
+      const rightmostKey = visibleTabs.at(-1)?.key ?? null;
+      if (!pane.activeTabKey) {
+        dispatch({
+          key: rightmostKey,
+          kind: "sync-pane-active",
+          paneId: pane.id,
+        });
+        return;
+      }
+
+      if (!visibleTabs.some((tab) => tab.key === pane.activeTabKey)) {
+        dispatch({
+          key: rightmostKey,
+          kind: "sync-pane-active",
+          paneId: pane.id,
+        });
+        return;
+      }
+    }
+  }, [paneLeaves, state.documents, visibleTabsByPaneId, waitingForRuntimePaneIds]);
 
   useEffect(() => {
     if (!activeTerminalId || !documentVisible) {
@@ -241,67 +336,91 @@ export function WorkspaceSurface({
     clearTerminalResponseReady(activeTerminalId);
   }, [activeTerminalId, clearTerminalResponseReady, documentVisible, isTerminalResponseReady]);
 
+  const handleSelectPane = useCallback((paneId: string) => {
+    dispatch({ kind: "select-pane", paneId });
+  }, []);
+
   const handleSelectTab = useCallback(
-    (key: string) => {
+    (paneId: string, key: string) => {
+      if (!paneId) {
+        return;
+      }
+
       releaseWebviewFocus();
       if (isRuntimeTabKey(key)) {
         clearTerminalResponseReady(key.slice("terminal:".length));
       }
-      dispatch({ key, kind: "select-tab" });
+      dispatch({ key, kind: "select-tab", paneId });
     },
     [clearTerminalResponseReady],
   );
 
-  const handleOpenLauncher = useCallback(() => {
+  const handleOpenLauncher = useCallback((paneId?: string) => {
     dispatch({
       launcherId: createWorkspaceLauncherId(),
       kind: "open-launcher",
+      paneId,
     });
   }, []);
 
   const handleActiveTabViewStateChange = useCallback(
-    (viewState: WorkspaceSurfaceState["viewStateByTabKey"][string] | null) => {
-      if (!state.activeTabKey || isRuntimeTabKey(state.activeTabKey)) {
-        return;
-      }
-
+    (tabKey: string, viewState: WorkspaceSurfaceState["viewStateByTabKey"][string] | null) => {
       dispatch({
-        key: state.activeTabKey,
+        key: tabKey,
         kind: "set-tab-view-state",
         viewState,
       });
     },
-    [state.activeTabKey],
+    [],
   );
 
-  const handleOpenFile = useCallback((filePath: string) => {
-    releaseWebviewFocus();
-    dispatch({
-      request: {
-        filePath,
-        id: createWorkspaceLauncherId(),
-        kind: "file-viewer",
-      },
-      kind: "open-document",
-    });
-  }, []);
+  const handleOpenFile = useCallback(
+    (filePath: string) => {
+      releaseWebviewFocus();
+      recordWorkspaceFileUsage(workspaceId, filePath);
+      dispatch({
+        request: {
+          filePath,
+          id: createWorkspaceLauncherId(),
+          kind: "file-viewer",
+        },
+        kind: "open-document",
+      });
+    },
+    [workspaceId],
+  );
+
+  const confirmCloseFileSession = useCallback(
+    (tabKey: string, label: string) => {
+      const session = fileSessionsByTabKey[tabKey];
+      if (!isFileViewerDirty(session)) {
+        return true;
+      }
+
+      const message = hasFileViewerConflict(session)
+        ? `"${label}" has unsaved edits and changed on disk. Close the tab and discard your local draft?`
+        : `"${label}" has unsaved edits. Close the tab and discard them?`;
+      return window.confirm(message);
+    },
+    [fileSessionsByTabKey],
+  );
 
   const handleShowRuntimeTab = useCallback(
-    (terminalId: string, launcherKey?: string) => {
+    (terminalId: string, launcherKey?: string, paneId?: string) => {
       releaseWebviewFocus();
       clearTerminalResponseReady(terminalId);
       const runtimeKey = `terminal:${terminalId}`;
       dispatch(
         launcherKey
           ? { launcherKey, tabKey: runtimeKey, kind: "replace-launcher-with-tab" }
-          : { key: runtimeKey, select: true, kind: "show-runtime-tab" },
+          : { key: runtimeKey, kind: "show-runtime-tab", paneId, select: true },
       );
     },
     [clearTerminalResponseReady],
   );
 
   const handleCreateTerminal = useCallback(
-    async (input: CreateTerminalRequest, launcherKey?: string) => {
+    async (input: CreateTerminalRequest, launcherKey?: string, paneId?: string) => {
       setCreatingSelection(input.launchType === "harness" ? input.harnessProvider : "shell");
       setError(null);
       releaseWebviewFocus();
@@ -313,7 +432,7 @@ export function WorkspaceSurface({
         });
         client.invalidate(terminalKeys.byWorkspace(workspaceId));
         client.invalidate(terminalKeys.detail(terminal.id));
-        handleShowRuntimeTab(terminal.id, launcherKey);
+        handleShowRuntimeTab(terminal.id, launcherKey, paneId);
       } catch (createError) {
         setError(String(createError));
       } finally {
@@ -324,10 +443,10 @@ export function WorkspaceSurface({
   );
 
   const handleLaunchSurface = useCallback(
-    (request: SurfaceLaunchRequest) => {
+    (paneId: string, request: SurfaceLaunchRequest) => {
       switch (request.kind) {
         case "terminal":
-          void handleCreateTerminal(request);
+          void handleCreateTerminal(request, undefined, paneId);
           break;
       }
     },
@@ -366,75 +485,91 @@ export function WorkspaceSurface({
 
   const handleCloseRuntimeTab = useCallback(
     async (tabKey: string, terminalId: string) => {
-      const launcherId = createWorkspaceLauncherId();
-      const closePlan =
-        state.activeTabKey === tabKey
-          ? getWorkspaceTabClosePlan(visibleTabKeys, tabKey, `launcher:${launcherId}`)
-          : {
-              nextActiveKey: state.activeTabKey,
-              openLauncher: false,
-            };
-
       try {
         await detachTerminal(terminalId);
         client.invalidate(terminalKeys.byWorkspace(workspaceId));
         client.invalidate(terminalKeys.detail(terminalId));
-        if (closePlan.openLauncher) {
-          dispatch({
-            launcherId,
-            kind: "open-launcher",
-          });
-        }
         dispatch({
           key: tabKey,
-          nextActiveKey: closePlan.nextActiveKey,
           kind: "hide-runtime-tab",
         });
       } catch (closeError) {
         setError(String(closeError));
       }
     },
-    [client, state.activeTabKey, visibleTabKeys, workspaceId],
+    [client, workspaceId],
   );
 
   const handleCloseDocumentTab = useCallback(
     (tabKey: string) => {
-      const launcherId = createWorkspaceLauncherId();
-      const closePlan =
-        state.activeTabKey === tabKey
-          ? getWorkspaceTabClosePlan(visibleTabKeys, tabKey, `launcher:${launcherId}`)
-          : {
-              nextActiveKey: state.activeTabKey,
-              openLauncher: false,
-            };
-
-      if (closePlan.openLauncher) {
-        dispatch({
-          launcherId,
-          kind: "open-launcher",
-        });
+      const closingDocument = state.documents.find((document) => document.key === tabKey) ?? null;
+      if (
+        closingDocument?.kind === "file-viewer" &&
+        !confirmCloseFileSession(closingDocument.key, closingDocument.label)
+      ) {
+        return;
       }
+
       dispatch({
         key: tabKey,
-        nextActiveKey: closePlan.nextActiveKey,
         kind: "close-document",
       });
+      setFileSessionsByTabKey((current) => {
+        if (!(tabKey in current)) {
+          return current;
+        }
+
+        const next = { ...current };
+        delete next[tabKey];
+        return next;
+      });
     },
-    [state.activeTabKey, visibleTabKeys],
+    [confirmCloseFileSession, state.documents],
+  );
+
+  const handleFileSessionStateChange = useCallback(
+    (tabKey: string, nextState: FileViewerSessionState | null) => {
+      setFileSessionsByTabKey((current) => {
+        if (nextState === null) {
+          if (!(tabKey in current)) {
+            return current;
+          }
+
+          const next = { ...current };
+          delete next[tabKey];
+          return next;
+        }
+
+        const previous = current[tabKey];
+        if (
+          previous?.draftContent === nextState.draftContent &&
+          previous?.savedContent === nextState.savedContent &&
+          previous?.conflictDiskContent === nextState.conflictDiskContent
+        ) {
+          return current;
+        }
+
+        return {
+          ...current,
+          [tabKey]: nextState,
+        };
+      });
+    },
+    [],
   );
 
   const handleWorkspaceTabHotkeyAction = useCallback(
     (action: WorkspaceTabHotkeyAction) => {
       switch (action.kind) {
         case "new-tab":
-          handleOpenLauncher();
+          handleOpenLauncher(activePaneId ?? undefined);
           return;
         case "close-active-tab": {
-          if (!state.activeTabKey) {
+          if (!activeTabKey) {
             return;
           }
 
-          const activeTab = visibleTabs.find((tab) => tab.key === state.activeTabKey);
+          const activeTab = activePaneVisibleTabs.find((tab) => tab.key === activeTabKey);
           if (!activeTab) {
             return;
           }
@@ -449,39 +584,44 @@ export function WorkspaceSurface({
           return;
         }
         case "next-tab": {
-          const nextKey = getWorkspaceAdjacentTabKey(visibleTabKeys, state.activeTabKey, "next");
+          const nextKey = getWorkspaceAdjacentTabKey(
+            activePaneVisibleTabKeys,
+            activeTabKey,
+            "next",
+          );
           if (nextKey) {
-            handleSelectTab(nextKey);
+            handleSelectTab(activePaneId ?? "", nextKey);
           }
           return;
         }
         case "previous-tab": {
           const previousKey = getWorkspaceAdjacentTabKey(
-            visibleTabKeys,
-            state.activeTabKey,
+            activePaneVisibleTabKeys,
+            activeTabKey,
             "previous",
           );
           if (previousKey) {
-            handleSelectTab(previousKey);
+            handleSelectTab(activePaneId ?? "", previousKey);
           }
           return;
         }
         case "select-tab-index": {
-          const selectedKey = getWorkspaceTabKeyByIndex(visibleTabKeys, action.index);
+          const selectedKey = getWorkspaceTabKeyByIndex(activePaneVisibleTabKeys, action.index);
           if (selectedKey) {
-            handleSelectTab(selectedKey);
+            handleSelectTab(activePaneId ?? "", selectedKey);
           }
         }
       }
     },
     [
+      activePaneId,
+      activePaneVisibleTabKeys,
+      activePaneVisibleTabs,
+      activeTabKey,
       handleCloseDocumentTab,
       handleCloseRuntimeTab,
       handleOpenLauncher,
       handleSelectTab,
-      state.activeTabKey,
-      visibleTabKeys,
-      visibleTabs,
     ],
   );
 
@@ -554,8 +694,8 @@ export function WorkspaceSurface({
       .onCloseRequested((event) => {
         const now = Date.now();
         if (
-          !state.activeTabKey ||
-          visibleTabs.length === 0 ||
+          !activeTabKey ||
+          activePaneVisibleTabs.length === 0 ||
           !shouldTreatWindowCloseAsTabClose(closeShortcutTriggeredAtRef.current, now)
         ) {
           return;
@@ -581,51 +721,100 @@ export function WorkspaceSurface({
       disposed = true;
       unlisten?.();
     };
-  }, [handleWorkspaceTabHotkeyAction, state.activeTabKey, visibleTabs.length]);
+  }, [activePaneVisibleTabs.length, activeTabKey, handleWorkspaceTabHotkeyAction]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="flex items-center gap-2 pt-1 pb-3">
-        <WorkspaceSurfaceTabBar
-          activeTabKey={state.activeTabKey}
-          onCloseDocumentTab={handleCloseDocumentTab}
-          onCloseRuntimeTab={handleCloseRuntimeTab}
-          onRenameRuntimeTab={(terminalId, label) => renameTerminal(terminalId, label)}
-          onSelectTab={handleSelectTab}
-          onSetTabOrder={(keys) => {
-            dispatch({ keys, kind: "set-tab-order" });
-          }}
-          renderTabLeading={(tab) => <WorkspaceSurfaceTabLeading tab={tab} />}
-          visibleTabs={visibleTabs}
-        />
-        <SurfaceLaunchActions
-          actions={surfaceActions}
-          onLaunch={handleLaunchSurface}
-          onOpenLauncher={handleOpenLauncher}
-        />
-      </div>
-
       {error && (
         <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
           {error}
         </div>
       )}
 
-      <WorkspaceSurfacePanels
-        activeTabKey={state.activeTabKey}
-        activeTerminalId={activeTerminalId}
-        activeTabViewState={activeTabViewState}
+      <WorkspaceSurfacePaneTree
+        activePaneId={activePaneId}
         activity={activityQuery.data ?? []}
         creatingSelection={creatingSelection}
         documents={state.documents}
-        hasVisibleTabs={visibleTabs.length > 0}
+        fileSessionsByTabKey={fileSessionsByTabKey}
+        onCloseDocumentTab={handleCloseDocumentTab}
+        onClosePane={(paneId) => {
+          dispatch({ kind: "close-pane", paneId });
+        }}
+        onCloseRuntimeTab={handleCloseRuntimeTab}
         onCreateTerminal={handleCreateTerminal}
+        onFileSessionStateChange={handleFileSessionStateChange}
+        onLaunchSurface={handleLaunchSurface}
+        onMoveTabToPane={(
+          key,
+          sourcePaneId,
+          targetPaneId,
+          targetKey,
+          placement,
+          splitDirection,
+          splitPlacement,
+        ) => {
+          if (splitDirection && splitPlacement) {
+            const newPaneId = createWorkspacePaneId();
+            dispatch({
+              direction: splitDirection,
+              kind: "split-pane",
+              launcherId: createWorkspaceLauncherId(),
+              newPaneId,
+              paneId: targetPaneId,
+              placement: splitPlacement,
+              splitId: createWorkspaceSplitId(),
+            });
+            dispatch({
+              key,
+              kind: "move-tab-to-pane",
+              sourcePaneId,
+              targetPaneId: newPaneId,
+            });
+            return;
+          }
+
+          dispatch({
+            key,
+            kind: "move-tab-to-pane",
+            placement,
+            sourcePaneId,
+            targetKey,
+            targetPaneId,
+          });
+        }}
         onOpenFile={handleOpenFile}
+        onOpenLauncher={handleOpenLauncher}
         onOpenTerminal={handleShowRuntimeTab}
+        onRenameRuntimeTab={(terminalId, label) => renameTerminal(terminalId, label)}
+        onSelectPane={handleSelectPane}
+        onSelectTab={handleSelectTab}
+        onSetPaneTabOrder={(paneId, keys) => {
+          dispatch({ keys, kind: "set-pane-tab-order", paneId });
+        }}
+        onSetSplitRatio={(splitId, ratio) => {
+          dispatch({ kind: "set-split-ratio", ratio, splitId });
+        }}
+        onSplitPane={(paneId, direction) => {
+          dispatch({
+            direction,
+            kind: "split-pane",
+            launcherId: createWorkspaceLauncherId(),
+            newPaneId: createWorkspacePaneId(),
+            paneId,
+            placement: "after",
+            splitId: createWorkspaceSplitId(),
+          });
+        }}
         onTabViewStateChange={handleActiveTabViewStateChange}
+        paneCount={paneLeaves.length}
+        rootPane={state.rootPane}
         sessionHistory={sessionHistory}
+        surfaceActions={surfaceActions}
         terminals={terminals}
-        waitingForActiveRuntimeTab={waitingForActiveRuntimeTab}
+        visibleTabsByPaneId={visibleTabsByPaneId}
+        viewStateByTabKey={state.viewStateByTabKey}
+        waitingForRuntimePaneIds={waitingForRuntimePaneIds}
         workspaceId={workspaceId}
       />
     </div>

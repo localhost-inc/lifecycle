@@ -1,9 +1,13 @@
 import { createContext, useContext } from "react";
+import type { CommandPaletteMode } from "./types";
 
 export interface CommandPaletteContextValue {
+  canOpenFiles: boolean;
   isOpen: boolean;
-  open: () => void;
+  mode: CommandPaletteMode;
+  open: (mode?: CommandPaletteMode) => void;
   close: () => void;
+  toggle: (mode?: CommandPaletteMode) => void;
 }
 
 export const CommandPaletteContext = createContext<CommandPaletteContextValue | null>(null);
