@@ -735,7 +735,7 @@ export function DashboardLayout() {
                     <div className="w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
                   </div>
                 </div>
-                <SidebarInset>
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                   <TitleBar
                     selectedWorkspace={selectedWorkspace}
                     sourceWorkspace={sourceWorkspace}
@@ -744,44 +744,50 @@ export function DashboardLayout() {
                     onToggleRightSidebar={handleToggleRightSidebar}
                     rightSidebarCollapsed={rightSidebarCollapsed}
                   />
-                  <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
-                    <Outlet context={{ onCreateWorkspace: handleCreateWorkspace }} />
-                  </main>
-                </SidebarInset>
-                {showRightSidebar && (
-                  <>
-                    {!rightSidebarCollapsed && (
-                      <div className="relative w-px shrink-0">
+                  <div className="flex min-h-0 min-w-0 flex-1">
+                    <SidebarInset>
+                      <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+                        <Outlet context={{ onCreateWorkspace: handleCreateWorkspace }} />
+                      </main>
+                    </SidebarInset>
+                    {showRightSidebar && (
+                      <>
+                        {!rightSidebarCollapsed && (
+                          <div className="relative w-px shrink-0">
+                            <div
+                              role="separator"
+                              aria-label="Resize workspace details sidebar"
+                              aria-orientation="vertical"
+                              aria-valuemax={rightSidebarBounds.maxSize}
+                              aria-valuemin={rightSidebarBounds.minSize}
+                              aria-valuenow={rightSidebarWidth}
+                              data-no-drag
+                              tabIndex={0}
+                              onKeyDown={handleRightSidebarSeparatorKeyDown}
+                              onPointerDown={(event) =>
+                                handleSidebarResizePointerDown("right", event)
+                              }
+                              className="group absolute inset-y-0 left-1/2 z-10 flex w-3 -translate-x-1/2 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
+                            >
+                              <div className="w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
+                            </div>
+                          </div>
+                        )}
                         <div
-                          role="separator"
-                          aria-label="Resize workspace details sidebar"
-                          aria-orientation="vertical"
-                          aria-valuemax={rightSidebarBounds.maxSize}
-                          aria-valuemin={rightSidebarBounds.minSize}
-                          aria-valuenow={rightSidebarWidth}
-                          data-no-drag
-                          tabIndex={0}
-                          onKeyDown={handleRightSidebarSeparatorKeyDown}
-                          onPointerDown={(event) => handleSidebarResizePointerDown("right", event)}
-                          className="group absolute inset-y-0 left-1/2 z-10 flex w-3 -translate-x-1/2 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
-                        >
-                          <div className="w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
-                        </div>
-                      </div>
+                          id="workspace-right-rail"
+                          className={`relative flex min-h-0 shrink-0 overflow-hidden bg-[var(--panel)]${activeSidebarResize === "right" ? "" : " transition-[width,transform] duration-200 ease-linear"}`}
+                          data-overlay-boundary
+                          style={{
+                            width: rightSidebarCollapsed ? 0 : `${rightSidebarWidth}px`,
+                            transform: rightSidebarCollapsed
+                              ? `translateX(${rightSidebarWidth}px)`
+                              : undefined,
+                          }}
+                        />
+                      </>
                     )}
-                    <div
-                      id="workspace-right-rail"
-                      className={`relative flex min-h-0 shrink-0 overflow-hidden bg-[var(--panel)]${activeSidebarResize === "right" ? "" : " transition-[width,transform] duration-200 ease-linear"}`}
-                      data-overlay-boundary
-                      style={{
-                        width: rightSidebarCollapsed ? 0 : `${rightSidebarWidth}px`,
-                        transform: rightSidebarCollapsed
-                          ? `translateX(${rightSidebarWidth}px)`
-                          : undefined,
-                      }}
-                    />
-                  </>
-                )}
+                  </div>
+                </div>
               </div>
             </ShellResizeProvider>
           </div>

@@ -598,7 +598,7 @@ function PaneDropPreview({
   }
 
   const baseClassName =
-    "pointer-events-none absolute z-10 rounded-[calc(var(--radius-xl)-4px)] border border-[var(--ring)]/70 bg-[color-mix(in_srgb,var(--ring),transparent_84%)] shadow-[0_0_0_1px_color-mix(in_srgb,var(--ring),transparent_55%)]";
+    "pointer-events-none absolute z-10 border border-[var(--ring)]/70 bg-[color-mix(in_srgb,var(--ring),transparent_84%)] shadow-[0_0_0_1px_color-mix(in_srgb,var(--ring),transparent_55%)]";
 
   if (intent.kind === "insert" && intent.surface === "body") {
     return <div className={`${baseClassName} inset-3`} />;
@@ -840,7 +840,7 @@ export function WorkspaceSurfacePaneTree({
         <section
           key={node.id}
           ref={(element) => setPaneElement(node.id, element)}
-          className={`relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[var(--radius-xl)] border ${isDropTargetPane ? "border-[var(--ring)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--ring),transparent_50%)]" : isActivePane ? "border-[var(--ring)]/60 shadow-[0_0_0_1px_color-mix(in_srgb,var(--ring),transparent_65%)]" : "border-[var(--border)]"}`}
+          className={`relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden border ${isDropTargetPane ? "border-[var(--ring)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--ring),transparent_50%)]" : isActivePane ? "border-[var(--ring)]/60 shadow-[0_0_0_1px_color-mix(in_srgb,var(--ring),transparent_65%)]" : "border-[var(--border)]"}`}
           data-workspace-pane-id={node.id}
           onPointerDownCapture={(event) => {
             if (!isActivePane && shouldAutoSelectWorkspacePaneFromPointerTarget(event.target)) {
