@@ -118,7 +118,7 @@ export function TitleBar({
     <header
       data-tauri-drag-region
       onMouseDown={handleMouseDown}
-      className="flex h-11 shrink-0 items-center border-b border-[var(--border)] bg-[var(--background)] pr-3 pt-2 text-[11px] text-[var(--muted-foreground)]"
+      className="flex h-12 shrink-0 items-center border-b border-[var(--border)] bg-[var(--background)] pr-3 text-[11px] text-[var(--muted-foreground)]"
       style={{ paddingLeft: leftSidebarCollapsed ? 80 : 12 }}
     >
       <div data-tauri-drag-region className="flex min-w-0 flex-1 items-center gap-3">
