@@ -136,13 +136,17 @@ function formatStatusReason(reason: ServiceRecord["status_reason"]): string | nu
   return STATUS_REASON_LABELS[reason] ?? reason;
 }
 
-function ServiceRow({
+export function ServiceRow({
   onUpdateService,
   runtime,
   service,
 }: {
-  onUpdateService: ServicesTabProps["onUpdateService"];
-  runtime: ServiceRuntime | null;
+  onUpdateService: (input: {
+    exposure: ServiceRecord["exposure"];
+    portOverride: number | null;
+    serviceName: string;
+  }) => Promise<void>;
+  runtime: "image" | "process" | null;
   service: ServiceRecord;
 }) {
   const [draftExposure, setDraftExposure] = useState<ServiceRecord["exposure"]>(service.exposure);
@@ -240,7 +244,7 @@ function ServiceRow({
             <span className="inline-flex min-w-0 items-center gap-1.5">
               {runtimeIcon}
               <span
-                className={`truncate font-mono text-[13px] font-semibold tracking-[-0.02em] ${styles.nameClassName}`}
+                className={`truncate text-[13px] font-medium ${styles.nameClassName}`}
               >
                 {service.service_name}
               </span>

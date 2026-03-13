@@ -1,9 +1,6 @@
 import { useState } from "react";
 import { cn } from "../lib/cn";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./collapsible";
-import { Separator } from "./separator";
-import { StatusDot, type StatusDotTone } from "./status-dot";
-import { Card } from "./card";
 
 export type SetupProgressStepStatus = "pending" | "running" | "completed" | "failed" | "timeout";
 
@@ -19,19 +16,20 @@ interface SetupProgressProps {
   steps: SetupProgressStep[];
 }
 
-const statusMap: Record<
-  SetupProgressStepStatus,
-  {
-    glyph: string;
-    pulse?: boolean;
-    tone: StatusDotTone;
-  }
-> = {
-  pending: { glyph: "\u25cb", tone: "neutral" },
-  running: { glyph: "\u27f3", pulse: true, tone: "info" },
-  completed: { glyph: "\u2713", tone: "success" },
-  failed: { glyph: "\u2715", tone: "danger" },
-  timeout: { glyph: "\u2715", tone: "danger" },
+const dotClassName: Record<SetupProgressStepStatus, string> = {
+  pending: "bg-[var(--muted-foreground)]/40",
+  running: "bg-blue-500 lifecycle-motion-soft-pulse",
+  completed: "bg-emerald-500",
+  failed: "bg-red-500",
+  timeout: "bg-red-500",
+};
+
+const nameClassName: Record<SetupProgressStepStatus, string> = {
+  pending: "text-[var(--muted-foreground)]",
+  running: "text-[var(--foreground)]",
+  completed: "text-[var(--foreground)]",
+  failed: "text-[var(--foreground)]",
+  timeout: "text-[var(--foreground)]",
 };
 
 export function SetupProgress({
@@ -40,7 +38,7 @@ export function SetupProgress({
   steps,
 }: SetupProgressProps) {
   return (
-    <div className={cn("space-y-2", className)}>
+    <div className={cn("flex flex-col gap-1", className)}>
       {steps.map((step) => (
         <SetupProgressStepRow
           expandOutputByDefault={expandOutputByDefault}
@@ -61,34 +59,30 @@ function SetupProgressStepRow({
 }) {
   const [open, setOpen] = useState(expandOutputByDefault);
   const hasOutput = step.output.length > 0;
-  const status = statusMap[step.status];
 
   return (
     <Collapsible onOpenChange={setOpen} open={hasOutput ? open : false}>
-      <Card className="overflow-hidden">
+      <div className="group/row">
         <CollapsibleTrigger asChild>
           <button
-            className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-[var(--surface-hover)]"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-[var(--surface-hover)] cursor-pointer"
             disabled={!hasOutput}
             type="button"
           >
-            <span className="flex items-center gap-2">
-              <StatusDot pulse={status.pulse} size="sm" tone={status.tone} />
+            <div className="flex size-3.5 shrink-0 items-center justify-center">
               <span
-                className={cn(
-                  "text-sm",
-                  step.status === "completed" && "text-emerald-500",
-                  step.status === "running" && "animate-spin text-blue-500",
-                  (step.status === "failed" || step.status === "timeout") && "text-red-500",
-                  step.status === "pending" && "text-[var(--muted-foreground)]",
-                )}
+                className={`inline-block size-[7px] rounded-full ${dotClassName[step.status]}`}
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <span
+                className={`truncate text-[13px] font-medium ${nameClassName[step.status]}`}
               >
-                {status.glyph}
+                {step.name}
               </span>
-            </span>
-            <span className="text-sm font-medium text-[var(--foreground)]">{step.name}</span>
+            </div>
             {hasOutput ? (
-              <span className="ml-auto text-xs text-[var(--muted-foreground)]">
+              <span className="text-xs text-[var(--muted-foreground)]">
                 {open ? "\u25bc" : "\u25b6"}
               </span>
             ) : null}
@@ -96,15 +90,14 @@ function SetupProgressStepRow({
         </CollapsibleTrigger>
         {hasOutput ? (
           <CollapsibleContent>
-            <Separator />
-            <div className="bg-[var(--muted)] px-4 py-3">
+            <div className="rounded-lg bg-[var(--muted)] px-3 py-2.5 ml-[38px] mb-1">
               <pre className="max-h-48 overflow-auto whitespace-pre-wrap font-mono text-xs text-[var(--muted-foreground)]">
                 {step.output.join("\n")}
               </pre>
             </div>
           </CollapsibleContent>
         ) : null}
-      </Card>
+      </div>
     </Collapsible>
   );
 }

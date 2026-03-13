@@ -101,11 +101,11 @@ describe("EnvironmentPanel", () => {
     expect(markup).not.toContain(">Start<");
     expect(markup).toContain('aria-label="Show environment actions"');
     expect(markup).toContain("Overview");
+    expect(markup).toContain("Topology");
     expect(markup).toContain("Logs");
-    expect(markup).toContain("Workspace setup");
-    expect(markup).not.toContain(">Graph<");
-    expect(markup).toContain('aria-label="Overview list view"');
-    expect(markup).toContain('aria-label="Overview topology view"');
+    expect(markup).toContain("Setup");
+    expect(markup).toContain("Tasks");
+    expect(markup).toContain("Services");
   });
 
   test("renders start affordance and failure details for an idle workspace with a failure", () => {
@@ -135,7 +135,7 @@ describe("EnvironmentPanel", () => {
     expect(markup).not.toContain('aria-label="Show environment actions"');
     expect(markup).toContain('data-slot="button"');
     expect(markup).toContain("A service failed to start.");
-    expect(markup).toContain("Workspace setup");
+    expect(markup).toContain("Setup");
     expect(markup).not.toContain("View details");
   });
 
@@ -164,8 +164,9 @@ describe("EnvironmentPanel", () => {
     expect(markup).toContain('disabled=""');
     expect(markup).toContain("Overview");
     expect(markup).toContain("Logs");
-    expect(markup).toContain("Workspace setup");
-    expect(markup).not.toContain("Add a lifecycle.json file to the project root");
+    expect(markup).toContain("Setup");
+    expect(markup).toContain("Tasks");
+    expect(markup).toContain("Services");
   });
 
   test("shows restart guidance when a running workspace manifest is stale", () => {
@@ -251,40 +252,6 @@ describe("EnvironmentPanel", () => {
     expect(markup).not.toContain("lucide-external-link");
   });
 
-  test("shows environment loading state while declared services are reconciling", () => {
-    const markup = renderToStaticMarkup(
-      createElement(EnvironmentPanel, {
-        config: {
-          workspace: { setup: [], teardown: [] },
-          environment: {
-            redis: {
-              kind: "service",
-              runtime: "image",
-              image: "redis:latest",
-            },
-          },
-        },
-        hasManifest: true,
-        isManifestStale: false,
-        manifestState: "valid",
-        onRestart: async () => {},
-        onRun: async () => {},
-        onStop: async () => {},
-        onUpdateService: async () => {},
-        environmentTasks: [],
-        setupSteps: [],
-        services: [],
-        workspace: {
-          ...baseWorkspace,
-          status: "idle",
-        },
-      }),
-    );
-
-    expect(markup).toContain("Loading environment");
-    expect(markup).toContain("reconciling environment nodes declared in lifecycle.json");
-  });
-
   test("shows starting status in the header action and overview sections", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
@@ -355,10 +322,11 @@ describe("EnvironmentPanel", () => {
     );
 
     expect(markup).toContain("Starting...");
-    expect(markup).toContain("Workspace setup");
-    expect(markup).toContain("Environment tasks");
-    expect(markup).toContain("Image services");
-    expect(markup).toContain("Process services");
+    expect(markup).toContain("Setup");
+    expect(markup).toContain("Tasks");
+    expect(markup).toContain("Services");
+    expect(markup).toContain("postgres");
+    expect(markup).toContain("api");
     expect(markup).toContain("lucide-loader-circle");
     expect(markup).not.toContain("View details");
   });
@@ -392,8 +360,8 @@ describe("EnvironmentPanel", () => {
     );
 
     expect(markup).toContain("An environment task failed.");
-    expect(markup).toContain("Environment tasks");
-    expect(markup).toContain("Workspace setup");
-    expect(markup).toContain("No setup activity yet");
+    expect(markup).toContain("Tasks");
+    expect(markup).toContain("migrate");
+    expect(markup).toContain("Setup");
   });
 });

@@ -2,7 +2,7 @@ import type { ServiceRecord } from "@lifecycle/contracts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
-import { ServicesTab } from "./services-tab";
+import { ServiceRow } from "./services-tab";
 
 const failedService: ServiceRecord = {
   created_at: "2026-03-12T10:00:00.000Z",
@@ -21,17 +21,13 @@ const failedService: ServiceRecord = {
   workspace_id: "ws-1",
 };
 
-describe("ServicesTab", () => {
+describe("ServiceRow", () => {
   test("renders a friendly failed-service status reason", () => {
     const markup = renderToStaticMarkup(
-      createElement(ServicesTab, {
-        declaredTaskCount: 0,
-        declaredServiceCount: 1,
-        environmentTasks: [],
-        manifestState: "valid",
+      createElement(ServiceRow, {
         onUpdateService: async () => {},
-        serviceRuntimeByName: { postgres: "image" },
-        services: [failedService],
+        runtime: "image",
+        service: failedService,
       }),
     );
 
@@ -39,61 +35,16 @@ describe("ServicesTab", () => {
     expect(markup).not.toContain("service_start_failed");
   });
 
-  test("renders environment tasks above services in overview", () => {
+  test("renders the service name and port", () => {
     const markup = renderToStaticMarkup(
-      createElement(ServicesTab, {
-        declaredTaskCount: 1,
-        declaredServiceCount: 1,
-        environmentTasks: [
-          {
-            name: "migrate",
-            output: ["bun run db:migrate"],
-            status: "running",
-          },
-        ],
-        manifestState: "valid",
+      createElement(ServiceRow, {
         onUpdateService: async () => {},
-        serviceRuntimeByName: { postgres: "image" },
-        services: [failedService],
+        runtime: "image",
+        service: failedService,
       }),
     );
 
-    expect(markup).toContain("Environment tasks");
-    expect(markup).toContain("Image services");
-    expect(markup).toContain("migrate");
     expect(markup).toContain("postgres");
-  });
-
-  test("groups process and image services separately when runtime metadata is available", () => {
-    const markup = renderToStaticMarkup(
-      createElement(ServicesTab, {
-        declaredTaskCount: 0,
-        declaredServiceCount: 2,
-        environmentTasks: [],
-        manifestState: "valid",
-        onUpdateService: async () => {},
-        serviceRuntimeByName: {
-          api: "process",
-          postgres: "image",
-        },
-        services: [
-          failedService,
-          {
-            ...failedService,
-            id: "svc-api",
-            service_name: "api",
-            default_port: 3001,
-            effective_port: 3001,
-            status: "ready",
-            status_reason: null,
-            updated_at: "2026-03-12T10:00:01.000Z",
-          },
-        ],
-      }),
-    );
-
-    expect(markup).toContain("Services");
-    expect(markup).toContain("Image services");
-    expect(markup).toContain("Process services");
+    expect(markup).toContain(":44446");
   });
 });
