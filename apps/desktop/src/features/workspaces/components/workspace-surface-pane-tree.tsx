@@ -4,12 +4,14 @@ import {
   getSplitRatioBounds,
   getVerticalSplitRatioFromPointer,
 } from "../../../lib/panel-layout";
+import { notifyShellResizeListeners } from "../../../components/layout/shell-resize-provider";
 import {
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
@@ -344,14 +346,16 @@ function ResizeHandle({
   onKeyDown,
   onPointerDown,
   ratio,
+  style,
 }: {
   direction: "column" | "row";
   onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
   ratio: number;
+  style?: CSSProperties;
 }) {
   return direction === "row" ? (
-    <div className="relative h-full w-px shrink-0">
+    <div className="pointer-events-none absolute inset-y-0 z-20" style={style}>
       <div
         role="separator"
         aria-label="Resize workspace panes"
@@ -359,10 +363,11 @@ function ResizeHandle({
         aria-valuemax={100}
         aria-valuemin={0}
         aria-valuenow={Math.round(ratio * 100)}
+        data-workspace-split-resizer="row"
         tabIndex={0}
         onKeyDown={onKeyDown}
         onPointerDown={onPointerDown}
-        className="group absolute inset-y-0 left-1/2 z-10 flex w-3 -translate-x-1/2 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
+        className="group pointer-events-auto absolute inset-y-0 -left-2 flex w-4 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
       >
         <div className="h-full w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
       </div>
@@ -467,19 +472,33 @@ function WorkspaceSurfaceSplitNode({
     };
 
     const handlePointerUp = () => {
+      notifyShellResizeListeners(false);
       setIsResizing(false);
     };
 
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
     window.addEventListener("pointercancel", handlePointerUp);
+    window.addEventListener("blur", handlePointerUp);
 
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
+      window.removeEventListener("blur", handlePointerUp);
     };
   }, [direction, isResizing, onSetSplitRatio, splitId]);
+
+  useEffect(() => {
+    if (!isResizing) {
+      return;
+    }
+
+    notifyShellResizeListeners(true);
+    return () => {
+      notifyShellResizeListeners(false);
+    };
+  }, [isResizing]);
 
   useEffect(() => {
     if (!isResizing) {
@@ -503,6 +522,8 @@ function WorkspaceSurfaceSplitNode({
     }
 
     event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
     setIsResizing(true);
   }, []);
 
@@ -534,7 +555,7 @@ function WorkspaceSurfaceSplitNode({
   return (
     <div
       ref={containerRef}
-      className={`flex min-h-0 flex-1 overflow-hidden ${direction === "row" ? "flex-row" : "flex-col"}`}
+      className={`relative flex min-h-0 flex-1 overflow-hidden ${direction === "row" ? "flex-row" : "flex-col"}`}
     >
       <div
         className="min-h-0 min-w-0 shrink-0 overflow-hidden"
@@ -546,13 +567,24 @@ function WorkspaceSurfaceSplitNode({
       >
         {children[0]}
       </div>
-      <ResizeHandle
-        direction={direction}
-        onKeyDown={handleSeparatorKeyDown}
-        onPointerDown={handleSeparatorPointerDown}
-        ratio={clampedRatio}
-      />
+      {direction === "column" ? (
+        <ResizeHandle
+          direction={direction}
+          onKeyDown={handleSeparatorKeyDown}
+          onPointerDown={handleSeparatorPointerDown}
+          ratio={clampedRatio}
+        />
+      ) : null}
       <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{children[1]}</div>
+      {direction === "row" ? (
+        <ResizeHandle
+          direction={direction}
+          onKeyDown={handleSeparatorKeyDown}
+          onPointerDown={handleSeparatorPointerDown}
+          ratio={clampedRatio}
+          style={{ left: `${clampedRatio * 100}%` }}
+        />
+      ) : null}
     </div>
   );
 }

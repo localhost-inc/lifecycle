@@ -462,6 +462,168 @@ describe("workspace surface state persistence", () => {
     });
   });
 
+  test("persists split pane ratios as part of the workspace pane tree", () => {
+    const storage = new MemoryStorage();
+    const launcher = createLauncherTab("launcher-1");
+
+    writeWorkspaceSurfaceState(
+      "ws-1",
+      {
+        ...createDefaultWorkspaceSurfaceState(),
+        activePaneId: "pane-2",
+        documents: [launcher, createChangesDiffTab("src/app.ts")],
+        hiddenRuntimeTabKeys: [],
+        rootPane: {
+          direction: "row",
+          first: {
+            activeTabKey: launcher.key,
+            id: "pane-root",
+            kind: "leaf",
+            tabOrderKeys: [launcher.key],
+          },
+          id: "split-1",
+          kind: "split",
+          ratio: 0.62,
+          second: {
+            activeTabKey: CHANGES_DIFF_TAB_KEY,
+            id: "pane-2",
+            kind: "leaf",
+            tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+          },
+        },
+        viewStateByTabKey: {},
+      },
+      storage,
+    );
+
+    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
+      ...createDefaultWorkspaceSurfaceState(),
+      activePaneId: "pane-2",
+      documents: [launcher, createChangesDiffTab("src/app.ts")],
+      hiddenRuntimeTabKeys: [],
+      rootPane: {
+        direction: "row",
+        first: {
+          activeTabKey: launcher.key,
+          id: "pane-root",
+          kind: "leaf",
+          tabOrderKeys: [launcher.key],
+        },
+        id: "split-1",
+        kind: "split",
+        ratio: 0.62,
+        second: {
+          activeTabKey: CHANGES_DIFF_TAB_KEY,
+          id: "pane-2",
+          kind: "leaf",
+          tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+        },
+      },
+      viewStateByTabKey: {},
+    });
+    expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY) ?? "null")).toEqual({
+      "ws-1": {
+        activePaneId: "pane-2",
+        documents: [
+          {
+            key: launcher.key,
+            kind: "launcher",
+          },
+          {
+            focusPath: "src/app.ts",
+            kind: "changes-diff",
+          },
+        ],
+        rootPane: {
+          direction: "row",
+          first: {
+            activeTabKey: launcher.key,
+            id: "pane-root",
+            kind: "leaf",
+            tabOrderKeys: [launcher.key],
+          },
+          id: "split-1",
+          kind: "split",
+          ratio: 0.62,
+          second: {
+            activeTabKey: CHANGES_DIFF_TAB_KEY,
+            id: "pane-2",
+            kind: "leaf",
+            tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+          },
+        },
+      },
+    });
+  });
+
+  test("normalizes invalid persisted split ratios back to a centered split", () => {
+    const storage = new MemoryStorage();
+    const launcher = createLauncherTab("launcher-1");
+
+    storage.setItem(
+      WORKSPACE_SURFACE_STATE_STORAGE_KEY,
+      JSON.stringify({
+        "ws-1": {
+          activePaneId: "pane-2",
+          documents: [
+            {
+              key: launcher.key,
+              kind: "launcher",
+            },
+            {
+              focusPath: "src/app.ts",
+              kind: "changes-diff",
+            },
+          ],
+          rootPane: {
+            direction: "row",
+            first: {
+              activeTabKey: launcher.key,
+              id: "pane-root",
+              kind: "leaf",
+              tabOrderKeys: [launcher.key],
+            },
+            id: "split-1",
+            kind: "split",
+            ratio: 99,
+            second: {
+              activeTabKey: CHANGES_DIFF_TAB_KEY,
+              id: "pane-2",
+              kind: "leaf",
+              tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+            },
+          },
+        },
+      }),
+    );
+
+    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
+      ...createDefaultWorkspaceSurfaceState(),
+      activePaneId: "pane-2",
+      documents: [launcher, createChangesDiffTab("src/app.ts")],
+      hiddenRuntimeTabKeys: [],
+      rootPane: {
+        direction: "row",
+        first: {
+          activeTabKey: launcher.key,
+          id: "pane-root",
+          kind: "leaf",
+          tabOrderKeys: [launcher.key],
+        },
+        id: "split-1",
+        kind: "split",
+        ratio: 0.5,
+        second: {
+          activeTabKey: CHANGES_DIFF_TAB_KEY,
+          id: "pane-2",
+          kind: "leaf",
+          tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+        },
+      },
+      viewStateByTabKey: {},
+    });
+  });
+
   test("keeps hidden runtime tabs separate from visible order and clears invalid active runtime keys", () => {
     const storage = new MemoryStorage();
 

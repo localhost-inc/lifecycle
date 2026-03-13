@@ -250,6 +250,96 @@ describe("workspaceSurfaceReducer", () => {
     });
   });
 
+  test("updates only the targeted split ratio", () => {
+    const splitState = {
+      activePaneId: "pane-3",
+      documents: [
+        createChangesDiffTab("src/app.tsx"),
+        createLauncherTab("launcher-2"),
+        createFileViewerTab("README.md"),
+      ],
+      hiddenRuntimeTabKeys: [],
+      rootPane: {
+        direction: "row" as const,
+        first: {
+          activeTabKey: CHANGES_DIFF_TAB_KEY,
+          id: "pane-root",
+          kind: "leaf" as const,
+          tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+        },
+        id: "split-1",
+        kind: "split" as const,
+        ratio: 0.35,
+        second: {
+          direction: "column" as const,
+          first: {
+            activeTabKey: "launcher:launcher-2",
+            id: "pane-2",
+            kind: "leaf" as const,
+            tabOrderKeys: ["launcher:launcher-2"],
+          },
+          id: "split-2",
+          kind: "split" as const,
+          ratio: 0.5,
+          second: {
+            activeTabKey: fileViewerTabKey("README.md"),
+            id: "pane-3",
+            kind: "leaf" as const,
+            tabOrderKeys: [fileViewerTabKey("README.md")],
+          },
+        },
+      },
+      viewStateByTabKey: {},
+    };
+
+    expect(
+      workspaceSurfaceReducer(splitState, {
+        kind: "set-split-ratio",
+        ratio: 0.72,
+        splitId: "split-2",
+      }),
+    ).toEqual({
+      activePaneId: "pane-3",
+      documents: [
+        createChangesDiffTab("src/app.tsx"),
+        createLauncherTab("launcher-2"),
+        createFileViewerTab("README.md"),
+      ],
+      hiddenRuntimeTabKeys: [],
+      rootPane: {
+        direction: "row",
+        first: {
+          activeTabKey: CHANGES_DIFF_TAB_KEY,
+          id: "pane-root",
+          kind: "leaf",
+          tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+        },
+        id: "split-1",
+        kind: "split",
+        ratio: 0.35,
+        second: {
+          direction: "column",
+          first: {
+            activeTabKey: "launcher:launcher-2",
+            id: "pane-2",
+            kind: "leaf",
+            tabOrderKeys: ["launcher:launcher-2"],
+          },
+          id: "split-2",
+          kind: "split",
+          ratio: 0.72,
+          second: {
+            activeTabKey: fileViewerTabKey("README.md"),
+            id: "pane-3",
+            kind: "leaf",
+            tabOrderKeys: [fileViewerTabKey("README.md")],
+          },
+        },
+      },
+      viewStateByTabKey: {},
+    });
+  });
+
   test("closes a pane by merging its tabs into the sibling pane", () => {
     const splitState = {
       activePaneId: "pane-2",

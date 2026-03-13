@@ -35,7 +35,7 @@ The workspace center panel is a shared surface that can host both provider-backe
 8. Dragging a tab into a pane that currently only shows a launcher placeholder should replace that placeholder with the moved tab.
 9. Dragging a tab onto an existing tab strip may position it before or after the hovered target tab inside that destination pane.
 10. Dragging a tab to the left, right, top, or bottom edge of a pane should create a new split pane on that side, following the editor-group model rather than opening a mirrored view.
-11. Local restore should persist the split tree and per-pane selection state. Legacy flat snapshots (`activeTabKey` + `tabOrderKeys`) should migrate into a single root leaf on read.
+11. Local restore should persist the split tree, split ratios, and per-pane selection state. Legacy flat snapshots (`activeTabKey` + `tabOrderKeys`) should migrate into a single root leaf on read.
 
 ## Runtime Mount Semantics
 
