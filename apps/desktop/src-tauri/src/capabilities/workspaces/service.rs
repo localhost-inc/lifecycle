@@ -1,8 +1,50 @@
 use super::ports::resolve_effective_port;
 use super::preview::preview_fields_for_service;
+use super::query::ServiceRecord;
+use super::shared::emit_service_configuration;
 use crate::platform::db::open_db;
 use crate::shared::errors::{LifecycleError, WorkspaceStatus};
 use rusqlite::params;
+use tauri::AppHandle;
+
+fn load_workspace_service_record(
+    db_path: &str,
+    workspace_id: &str,
+    service_name: &str,
+) -> Result<ServiceRecord, LifecycleError> {
+    let conn = open_db(db_path)?;
+    conn.query_row(
+        "SELECT id, workspace_id, service_name, exposure, port_override, status, status_reason, default_port, effective_port, preview_status, preview_failure_reason, preview_url, created_at, updated_at
+         FROM workspace_service
+         WHERE workspace_id = ?1 AND service_name = ?2",
+        params![workspace_id, service_name],
+        |row| {
+            Ok(ServiceRecord {
+                id: row.get(0)?,
+                workspace_id: row.get(1)?,
+                service_name: row.get(2)?,
+                exposure: row.get(3)?,
+                port_override: row.get(4)?,
+                status: row.get(5)?,
+                status_reason: row.get(6)?,
+                default_port: row.get(7)?,
+                effective_port: row.get(8)?,
+                preview_status: row.get(9)?,
+                preview_failure_reason: row.get(10)?,
+                preview_url: row.get(11)?,
+                created_at: row.get(12)?,
+                updated_at: row.get(13)?,
+            })
+        },
+    )
+    .map_err(|error| match error {
+        rusqlite::Error::QueryReturnedNoRows => LifecycleError::InvalidInput {
+            field: "service_name".to_string(),
+            reason: format!("unknown service '{service_name}'"),
+        },
+        _ => LifecycleError::Database(error.to_string()),
+    })
+}
 
 fn normalize_exposure(exposure: String) -> Result<String, LifecycleError> {
     let normalized = exposure.trim().to_ascii_lowercase();
@@ -36,12 +78,13 @@ fn validate_mutable_workspace_status(status: &WorkspaceStatus) -> Result<(), Lif
 }
 
 pub async fn update_workspace_service(
+    app: Option<&AppHandle>,
     db_path: &str,
     workspace_id: String,
     service_name: String,
     exposure: String,
     port_override: Option<i64>,
-) -> Result<(), LifecycleError> {
+) -> Result<ServiceRecord, LifecycleError> {
     let exposure = normalize_exposure(exposure)?;
     let port_override = normalize_port_override(port_override)?;
     let mut conn = open_db(db_path)?;
@@ -140,7 +183,12 @@ pub async fn update_workspace_service(
     tx.commit()
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
 
-    Ok(())
+    let service = load_workspace_service_record(db_path, &workspace_id, &service_name)?;
+    if let Some(app) = app {
+        emit_service_configuration(app, &workspace_id, &service);
+    }
+
+    Ok(service)
 }
 
 #[cfg(test)]
@@ -172,11 +220,13 @@ mod tests {
                 exposure TEXT NOT NULL DEFAULT 'local',
                 port_override INTEGER,
                 status TEXT NOT NULL,
+                status_reason TEXT,
                 default_port INTEGER,
                 effective_port INTEGER,
                 preview_status TEXT NOT NULL DEFAULT 'disabled',
                 preview_failure_reason TEXT,
                 preview_url TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT
             );
             ",
@@ -217,6 +267,7 @@ mod tests {
         drop(conn);
 
         update_workspace_service(
+            None,
             &db_path,
             "ws_1".to_string(),
             "web".to_string(),
@@ -292,6 +343,7 @@ mod tests {
         drop(conn);
 
         update_workspace_service(
+            None,
             &db_path,
             "ws_2".to_string(),
             "api".to_string(),
@@ -365,6 +417,7 @@ mod tests {
         drop(conn);
 
         let error = update_workspace_service(
+            None,
             &db_path,
             "ws_3".to_string(),
             "web".to_string(),

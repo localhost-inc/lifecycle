@@ -1,5 +1,6 @@
 use crate::platform::db::DbPath;
 use crate::shared::errors::LifecycleError;
+use crate::WorkspaceControllerRegistryHandle;
 use tauri::{AppHandle, State, WebviewWindow};
 
 #[tauri::command]
@@ -22,10 +23,17 @@ pub async fn get_terminal(
 pub async fn rename_terminal(
     app: AppHandle,
     db_path: State<'_, DbPath>,
+    workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
     terminal_id: String,
     label: String,
 ) -> Result<super::super::query::TerminalRecord, LifecycleError> {
-    super::super::rename::rename_terminal(&app, &db_path.0, &terminal_id, &label)
+    let terminal = super::super::query::get_terminal_by_id(&db_path.0, terminal_id.clone())
+        .await?
+        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.clone()))?;
+    let _mutation_guard = workspace_controllers
+        .acquire_mutation_guard(&terminal.workspace_id)
+        .await?;
+    super::super::rename::rename_terminal(&app, &db_path.0, &terminal_id, &label).await
 }
 
 #[tauri::command]
@@ -51,11 +59,15 @@ pub async fn create_terminal(
 #[tauri::command]
 pub async fn save_terminal_attachment(
     db_path: State<'_, DbPath>,
+    workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
     workspace_id: String,
     file_name: String,
     media_type: Option<String>,
     base64_data: String,
 ) -> Result<super::super::terminal::SavedTerminalAttachment, LifecycleError> {
+    let _mutation_guard = workspace_controllers
+        .acquire_mutation_guard(&workspace_id)
+        .await?;
     super::super::terminal::save_terminal_attachment(
         db_path,
         workspace_id,

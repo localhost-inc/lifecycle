@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Map, Value};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -260,12 +261,194 @@ pub enum LifecycleError {
     Io(String),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LifecycleErrorEnvelope {
+    pub code: String,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<Map<String, Value>>,
+    pub request_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub suggested_action: Option<String>,
+    pub retryable: bool,
+}
+
+impl LifecycleError {
+    fn envelope(&self) -> LifecycleErrorEnvelope {
+        let (code, details, suggested_action, retryable) = match self {
+            Self::InvalidStateTransition { from, to } => (
+                "invalid_state_transition",
+                Some(Map::from_iter([
+                    ("from".to_string(), Value::String(from.clone())),
+                    ("to".to_string(), Value::String(to.clone())),
+                ])),
+                Some("Wait for the current workspace transition to finish, then retry.".to_string()),
+                false,
+            ),
+            Self::WorkspaceMutationLocked { status } => (
+                "workspace_mutation_locked",
+                Some(Map::from_iter([(
+                    "status".to_string(),
+                    Value::String(status.clone()),
+                )])),
+                Some("Wait for the current workspace lifecycle action to finish and try again.".to_string()),
+                true,
+            ),
+            Self::WorkspaceNotFound(workspace_id) => (
+                "not_found",
+                Some(Map::from_iter([(
+                    "workspaceId".to_string(),
+                    Value::String(workspace_id.clone()),
+                )])),
+                Some("Refresh the workspace list and retry the action.".to_string()),
+                false,
+            ),
+            Self::RepoCloneFailed(reason) => (
+                "internal_error",
+                Some(Map::from_iter([(
+                    "reason".to_string(),
+                    Value::String(reason.clone()),
+                )])),
+                Some("Check repository access and retry the workspace creation.".to_string()),
+                false,
+            ),
+            Self::SetupStepFailed { step, exit_code } => (
+                "setup_step_failed",
+                Some(Map::from_iter([
+                    ("step".to_string(), Value::String(step.clone())),
+                    ("exitCode".to_string(), json!(*exit_code)),
+                ])),
+                Some("Inspect the setup step output, fix the failure, and retry.".to_string()),
+                false,
+            ),
+            Self::SetupStepTimeout { step } => (
+                "setup_step_failed",
+                Some(Map::from_iter([
+                    ("step".to_string(), Value::String(step.clone())),
+                    ("timeout".to_string(), Value::Bool(true)),
+                ])),
+                Some("Inspect the setup step output and increase the timeout or fix the step before retrying.".to_string()),
+                true,
+            ),
+            Self::ServiceStartFailed { service, reason } => (
+                "service_start_failed",
+                Some(Map::from_iter([
+                    ("service".to_string(), Value::String(service.clone())),
+                    ("reason".to_string(), Value::String(reason.clone())),
+                ])),
+                Some("Inspect the service logs, fix the startup failure, and retry.".to_string()),
+                true,
+            ),
+            Self::ServiceHealthcheckFailed { service } => (
+                "service_healthcheck_failed",
+                Some(Map::from_iter([(
+                    "service".to_string(),
+                    Value::String(service.clone()),
+                )])),
+                Some("Inspect the service health checks and retry once the service is reachable.".to_string()),
+                true,
+            ),
+            Self::DockerUnavailable(reason) => (
+                "local_docker_unavailable",
+                Some(Map::from_iter([(
+                    "reason".to_string(),
+                    Value::String(reason.clone()),
+                )])),
+                Some("Start Docker Desktop and retry the workspace action.".to_string()),
+                true,
+            ),
+            Self::PortConflict { service, port } => (
+                "local_port_conflict",
+                Some(Map::from_iter([
+                    ("service".to_string(), Value::String(service.clone())),
+                    ("port".to_string(), json!(*port)),
+                ])),
+                Some("Choose a different port or stop the conflicting process, then retry.".to_string()),
+                true,
+            ),
+            Self::ManifestInvalid(reason) => (
+                "validation_failed",
+                Some(Map::from_iter([
+                    ("field".to_string(), Value::String("manifest".to_string())),
+                    ("reason".to_string(), Value::String(reason.clone())),
+                ])),
+                Some("Fix lifecycle.json validation errors and retry.".to_string()),
+                false,
+            ),
+            Self::Database(reason) => (
+                "internal_error",
+                Some(Map::from_iter([(
+                    "reason".to_string(),
+                    Value::String(reason.clone()),
+                )])),
+                None,
+                false,
+            ),
+            Self::AttachFailed(reason) => (
+                "internal_error",
+                Some(Map::from_iter([(
+                    "reason".to_string(),
+                    Value::String(reason.clone()),
+                )])),
+                Some("Retry the terminal action. If it keeps failing, recreate the session.".to_string()),
+                true,
+            ),
+            Self::AttachmentPersistenceFailed(reason) => (
+                "internal_error",
+                Some(Map::from_iter([(
+                    "reason".to_string(),
+                    Value::String(reason.clone()),
+                )])),
+                Some("Retry saving the attachment. If it keeps failing, check workspace disk access.".to_string()),
+                true,
+            ),
+            Self::GitOperationFailed { operation, reason } => (
+                "internal_error",
+                Some(Map::from_iter([
+                    ("operation".to_string(), Value::String(operation.clone())),
+                    ("reason".to_string(), Value::String(reason.clone())),
+                ])),
+                Some("Inspect the git operation output and retry once the repository state is corrected.".to_string()),
+                true,
+            ),
+            Self::InvalidInput { field, reason } => (
+                "validation_failed",
+                Some(Map::from_iter([
+                    ("field".to_string(), Value::String(field.clone())),
+                    ("reason".to_string(), Value::String(reason.clone())),
+                ])),
+                Some("Correct the invalid input and retry.".to_string()),
+                false,
+            ),
+            Self::Io(reason) => (
+                "internal_error",
+                Some(Map::from_iter([(
+                    "reason".to_string(),
+                    Value::String(reason.clone()),
+                )])),
+                None,
+                true,
+            ),
+        };
+
+        LifecycleErrorEnvelope {
+            code: code.to_string(),
+            message: self.to_string(),
+            details,
+            request_id: uuid::Uuid::new_v4().to_string(),
+            suggested_action,
+            retryable,
+        }
+    }
+}
+
 impl Serialize for LifecycleError {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        serializer.serialize_str(&self.to_string())
+        self.envelope().serialize(serializer)
     }
 }
 
@@ -322,5 +505,56 @@ mod tests {
             let parsed = TerminalStatus::from_str(s).unwrap();
             assert_eq!(status, parsed);
         }
+    }
+
+    #[test]
+    fn lifecycle_errors_serialize_to_typed_envelopes() {
+        let value = serde_json::to_value(LifecycleError::WorkspaceMutationLocked {
+            status: "stopping".to_string(),
+        })
+        .expect("serialize typed lifecycle error");
+
+        assert_eq!(
+            value.get("code"),
+            Some(&Value::String("workspace_mutation_locked".into()))
+        );
+        assert_eq!(
+            value.get("message"),
+            Some(&Value::String(
+                "Workspace mutation locked while environment status is 'stopping'".into()
+            ))
+        );
+        assert_eq!(
+            value.pointer("/details/status"),
+            Some(&Value::String("stopping".into()))
+        );
+        assert_eq!(value.get("retryable"), Some(&Value::Bool(true)));
+        assert!(matches!(
+            value.get("requestId"),
+            Some(Value::String(request_id)) if !request_id.is_empty()
+        ));
+    }
+
+    #[test]
+    fn invalid_input_errors_keep_field_level_details() {
+        let value = serde_json::to_value(LifecycleError::InvalidInput {
+            field: "port_override".to_string(),
+            reason: "must be between 1 and 65535".to_string(),
+        })
+        .expect("serialize invalid input lifecycle error");
+
+        assert_eq!(
+            value.get("code"),
+            Some(&Value::String("validation_failed".into()))
+        );
+        assert_eq!(
+            value.pointer("/details/field"),
+            Some(&Value::String("port_override".into()))
+        );
+        assert_eq!(
+            value.pointer("/details/reason"),
+            Some(&Value::String("must be between 1 and 65535".into()))
+        );
+        assert_eq!(value.get("retryable"), Some(&Value::Bool(false)));
     }
 }

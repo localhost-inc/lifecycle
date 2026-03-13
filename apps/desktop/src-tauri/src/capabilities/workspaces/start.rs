@@ -3,25 +3,27 @@ use crate::capabilities::workspaces::manifest::{
 };
 use crate::platform::db::{map_database_result, open_db, DbPath};
 use crate::platform::diagnostics;
-use crate::platform::runtime::{health, setup, supervisor};
+use crate::platform::runtime::{health, setup};
 use crate::shared::errors::{
     LifecycleError, ServiceStatus, WorkspaceFailureReason, WorkspaceStatus,
 };
-use crate::{ManagedSupervisor, SupervisorMap};
+use crate::WorkspaceControllerRegistryHandle;
 use rusqlite::params;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use tauri::{AppHandle, State};
 
+use super::controller::{ManagedWorkspaceController, WorkspaceControllerToken};
 use super::environment_graph::{
     lower_environment_graph, topo_sort_environment_nodes, EnvironmentNode, EnvironmentNodeKind,
 };
 use super::shared::{
-    emit_service_status, emit_workspace_status, mark_nonfailed_services_stopped,
-    mark_services_failed, reconcile_workspace_services_db, service_name_for_start_error,
-    service_status_reason_for_start_error, transition_workspace_to_starting,
-    update_service_status_db, update_workspace_status_db, workspace_failure_reason_for_start_error,
+    emit_service_status, emit_workspace_manifest_synced, emit_workspace_status,
+    mark_nonfailed_services_stopped, mark_services_failed, reconcile_workspace_services_db,
+    service_name_for_start_error, service_status_reason_for_start_error,
+    transition_workspace_to_starting, update_service_status_db, update_workspace_status_db,
+    workspace_failure_reason_for_start_error,
 };
 
 fn set_port_env(env: &mut Option<std::collections::HashMap<String, String>>, port: u16) {
@@ -292,15 +294,11 @@ fn workspace_volume_root(db_path: &str, workspace_id: &str) -> Result<PathBuf, L
     Ok(root)
 }
 
-async fn stop_managed_supervisor(supervisor: &ManagedSupervisor) {
-    let mut supervisor = supervisor.lock().await;
-    supervisor.stop_all().await;
-}
-
 struct WorkspaceStartContext<'a> {
     app: &'a AppHandle,
+    controller: &'a ManagedWorkspaceController,
     db_path: &'a str,
-    supervisor: &'a ManagedSupervisor,
+    start_token: WorkspaceControllerToken,
     workspace_id: &'a str,
     worktree_path: &'a str,
     storage_root: &'a Path,
@@ -309,7 +307,13 @@ struct WorkspaceStartContext<'a> {
 
 impl WorkspaceStartContext<'_> {
     async fn abort_if_needed(&self) -> Result<bool, LifecycleError> {
-        abort_start_if_needed(self.db_path, self.workspace_id, self.supervisor).await
+        abort_start_if_needed(
+            self.db_path,
+            self.workspace_id,
+            self.controller,
+            &self.start_token,
+        )
+        .await
     }
 
     async fn record_failure(
@@ -318,9 +322,10 @@ impl WorkspaceStartContext<'_> {
     ) -> Result<bool, LifecycleError> {
         record_start_failure(
             self.app,
+            self.controller,
             self.db_path,
+            &self.start_token,
             self.workspace_id,
-            self.supervisor,
             failure_reason,
         )
         .await
@@ -347,7 +352,8 @@ impl WorkspaceStartContext<'_> {
         let service_start_started_at = Instant::now();
         let start_result = match service {
             ServiceConfig::Process(process_svc) => {
-                let mut managed = self.supervisor.lock().await;
+                let supervisor = self.controller.supervisor();
+                let mut managed = supervisor.lock().await;
                 managed
                     .start_process(
                         service_name,
@@ -358,7 +364,8 @@ impl WorkspaceStartContext<'_> {
                     .await
             }
             ServiceConfig::Image(image_svc) => {
-                let mut managed = self.supervisor.lock().await;
+                let supervisor = self.controller.supervisor();
+                let mut managed = supervisor.lock().await;
                 managed
                     .start_container(
                         service_name,
@@ -421,7 +428,8 @@ impl WorkspaceStartContext<'_> {
                 }
 
                 let is_running = {
-                    let mut managed = self.supervisor.lock().await;
+                    let supervisor = self.controller.supervisor();
+                    let mut managed = supervisor.lock().await;
                     managed.is_process_running(service_name)
                 };
 
@@ -473,8 +481,15 @@ impl WorkspaceStartContext<'_> {
             .expect("health check already verified to exist");
         let timeout_secs = service.startup_timeout_seconds();
         let health_check_started_at = Instant::now();
-        match health::wait_for_health(health_check, timeout_secs).await {
-            Ok(()) => {
+        let health_result = {
+            let mut start_token = self.start_token.clone();
+            tokio::select! {
+                result = health::wait_for_health(health_check, timeout_secs) => Some(result),
+                _ = start_token.cancelled() => None,
+            }
+        };
+        match health_result {
+            Some(Ok(())) => {
                 if self.abort_if_needed().await? {
                     return Ok(());
                 }
@@ -495,7 +510,7 @@ impl WorkspaceStartContext<'_> {
                     health_check_started_at,
                 );
             }
-            Err(_) => {
+            Some(Err(_)) => {
                 if self.abort_if_needed().await? {
                     return Ok(());
                 }
@@ -524,6 +539,7 @@ impl WorkspaceStartContext<'_> {
                     service: service_name.to_string(),
                 });
             }
+            None => return Ok(()),
         }
 
         Ok(())
@@ -539,7 +555,7 @@ impl WorkspaceStartContext<'_> {
         }
 
         let step_field = format!("environment.{node_name}");
-        if let Err(error) = setup::run_steps(
+        match setup::run_steps(
             self.app,
             self.workspace_id,
             self.worktree_path,
@@ -547,16 +563,21 @@ impl WorkspaceStartContext<'_> {
             self.runtime_env,
             &step_field,
             setup::StepProgressTarget::EnvironmentTask,
+            Some(self.start_token.clone()),
         )
         .await
         {
-            let recorded = self
-                .record_failure(WorkspaceFailureReason::EnvironmentTaskFailed)
-                .await?;
-            if !recorded {
-                return Ok(());
+            Ok(setup::StepRunOutcome::Completed) => {}
+            Ok(setup::StepRunOutcome::Cancelled) => return Ok(()),
+            Err(error) => {
+                let recorded = self
+                    .record_failure(WorkspaceFailureReason::EnvironmentTaskFailed)
+                    .await?;
+                if !recorded {
+                    return Ok(());
+                }
+                return Err(error);
             }
-            return Err(error);
         }
 
         Ok(())
@@ -584,24 +605,28 @@ impl WorkspaceStartContext<'_> {
 async fn abort_start_if_needed(
     db_path: &str,
     workspace_id: &str,
-    supervisor: &ManagedSupervisor,
+    controller: &ManagedWorkspaceController,
+    start_token: &WorkspaceControllerToken,
 ) -> Result<bool, LifecycleError> {
-    if load_workspace_status(db_path, workspace_id)? == WorkspaceStatus::Starting {
+    if !start_token.is_cancelled()
+        && load_workspace_status(db_path, workspace_id)? == WorkspaceStatus::Starting
+    {
         return Ok(false);
     }
 
-    stop_managed_supervisor(supervisor).await;
+    controller.stop_runtime().await;
     Ok(true)
 }
 
 async fn record_start_failure(
     app: &AppHandle,
+    controller: &ManagedWorkspaceController,
     db_path: &str,
+    start_token: &WorkspaceControllerToken,
     workspace_id: &str,
-    supervisor: &ManagedSupervisor,
     failure_reason: WorkspaceFailureReason,
 ) -> Result<bool, LifecycleError> {
-    if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
+    if abort_start_if_needed(db_path, workspace_id, controller, start_token).await? {
         return Ok(false);
     }
 
@@ -612,7 +637,8 @@ async fn record_start_failure(
         Some(&failure_reason),
     )?;
     emit_workspace_status(app, workspace_id, "idle", Some(failure_reason.as_str()));
-    stop_managed_supervisor(supervisor).await;
+    controller.finish_start(start_token).await;
+    controller.stop_runtime().await;
 
     let stopped_services = mark_nonfailed_services_stopped(db_path, workspace_id)?;
     for service_name in stopped_services {
@@ -656,8 +682,9 @@ async fn record_service_graph_failure(
 
 async fn start_services_lifecycle(
     app: &AppHandle,
+    controller: &ManagedWorkspaceController,
     db_path: &str,
-    supervisor: &ManagedSupervisor,
+    start_token: WorkspaceControllerToken,
     workspace_id: &str,
     worktree_path: &str,
     config: &LifecycleConfig,
@@ -670,7 +697,7 @@ async fn start_services_lifecycle(
         Some(config),
         Some(manifest_fingerprint),
     )?;
-    if abort_start_if_needed(db_path, workspace_id, supervisor).await? {
+    if abort_start_if_needed(db_path, workspace_id, controller, &start_token).await? {
         return Ok(());
     }
     let runtime_config = config_with_workspace_overrides(db_path, workspace_id, config)?;
@@ -698,9 +725,10 @@ async fn start_services_lifecycle(
 
             let recorded = record_start_failure(
                 app,
+                controller,
                 db_path,
+                &start_token,
                 workspace_id,
-                supervisor,
                 WorkspaceFailureReason::ServiceStartFailed,
             )
             .await?;
@@ -715,8 +743,9 @@ async fn start_services_lifecycle(
     let storage_root = workspace_volume_root(db_path, workspace_id)?;
     let ctx = WorkspaceStartContext {
         app,
+        controller,
         db_path,
-        supervisor,
+        start_token: start_token.clone(),
         workspace_id,
         worktree_path,
         storage_root: &storage_root,
@@ -739,7 +768,7 @@ async fn start_services_lifecycle(
 
     if !lowered_graph.workspace_setup.is_empty() {
         let setup_started_at = Instant::now();
-        if let Err(error) = setup::run_steps(
+        match setup::run_steps(
             app,
             workspace_id,
             worktree_path,
@@ -747,16 +776,21 @@ async fn start_services_lifecycle(
             &runtime_env,
             "workspace.setup",
             setup::StepProgressTarget::WorkspaceSetup,
+            Some(start_token.clone()),
         )
         .await
         {
-            let recorded = ctx
-                .record_failure(WorkspaceFailureReason::SetupStepFailed)
-                .await?;
-            if !recorded {
-                return Ok(());
+            Ok(setup::StepRunOutcome::Completed) => {}
+            Ok(setup::StepRunOutcome::Cancelled) => return Ok(()),
+            Err(error) => {
+                let recorded = ctx
+                    .record_failure(WorkspaceFailureReason::SetupStepFailed)
+                    .await?;
+                if !recorded {
+                    return Ok(());
+                }
+                return Err(error);
             }
-            return Err(error);
         }
 
         diagnostics::append_timing(
@@ -783,6 +817,7 @@ async fn start_services_lifecycle(
     // All healthy -> active.
     update_workspace_status_db(db_path, workspace_id, &WorkspaceStatus::Active, None)?;
     emit_workspace_status(app, workspace_id, "active", None);
+    controller.finish_start(&start_token).await;
     diagnostics::append_timing(
         "workspace-start",
         &format!("workspace {workspace_id} total"),
@@ -795,12 +830,15 @@ async fn start_services_lifecycle(
 pub async fn start_services(
     app: AppHandle,
     db_path: State<'_, DbPath>,
-    supervisors: State<'_, SupervisorMap>,
+    workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
     workspace_id: String,
     manifest_json: String,
     manifest_fingerprint: String,
 ) -> Result<(), LifecycleError> {
     let config = parse_lifecycle_config(&manifest_json)?;
+    let _mutation_guard = workspace_controllers
+        .acquire_mutation_guard(&workspace_id)
+        .await?;
 
     // Read workspace row — validate worktree_path is set.
     let worktree_path = {
@@ -823,18 +861,16 @@ pub async fn start_services(
     emit_workspace_status(&app, &workspace_id, "starting", None);
 
     let db = db_path.0.clone();
-    let supervisor = std::sync::Arc::new(tokio::sync::Mutex::new(supervisor::Supervisor::new()));
-    {
-        let mut supervisors = supervisors.lock().await;
-        supervisors.insert(workspace_id.clone(), supervisor.clone());
-    }
+    let controller = workspace_controllers.get_or_create(&workspace_id).await;
+    let start_token = controller.begin_start().await?;
     let ws_id = workspace_id.clone();
 
     tokio::spawn(async move {
         if let Err(e) = start_services_lifecycle(
             &app,
+            &controller,
             &db,
-            &supervisor,
+            start_token,
             &ws_id,
             &worktree_path,
             &config,
@@ -850,6 +886,7 @@ pub async fn start_services(
 }
 
 pub async fn sync_workspace_manifest(
+    app: Option<&AppHandle>,
     db_path: &str,
     workspace_id: String,
     manifest_json: Option<String>,
@@ -883,6 +920,16 @@ pub async fn sync_workspace_manifest(
             config.as_ref(),
             manifest_fingerprint.as_deref(),
         )?;
+        if let Some(app) = app {
+            let services =
+                super::query::get_workspace_services(db_path, workspace_id.clone()).await?;
+            emit_workspace_manifest_synced(
+                app,
+                &workspace_id,
+                manifest_fingerprint.as_deref(),
+                &services,
+            );
+        }
     }
 
     Ok(())

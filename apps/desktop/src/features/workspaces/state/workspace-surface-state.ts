@@ -53,18 +53,11 @@ export interface FileViewerDocument {
   label: string;
 }
 
-export interface LauncherTab {
-  key: string;
-  kind: "launcher";
-  label: string;
-}
-
 export type WorkspaceSurfaceDocument =
   | ChangesDiffDocument
   | CommitDiffDocument
   | FileViewerDocument
-  | PullRequestDocument
-  | LauncherTab;
+  | PullRequestDocument;
 
 export interface WorkspacePaneLeaf {
   activeTabKey: string | null;
@@ -114,11 +107,6 @@ type PersistedCommitDiffDocument = {
 
 type PersistedFileViewerDocument = {
   filePath?: unknown;
-  kind?: unknown;
-};
-
-type PersistedLauncherDocument = {
-  key?: unknown;
   kind?: unknown;
 };
 
@@ -264,14 +252,6 @@ export function createFileViewerTab(filePath: string): FileViewerDocument {
   };
 }
 
-export function createLauncherTab(id: string): LauncherTab {
-  return {
-    key: `launcher:${id}`,
-    kind: "launcher",
-    label: "New Tab",
-  };
-}
-
 export function isChangesDiffDocument(
   document: WorkspaceSurfaceDocument,
 ): document is ChangesDiffDocument {
@@ -294,10 +274,6 @@ export function isFileViewerDocument(
   document: WorkspaceSurfaceDocument,
 ): document is FileViewerDocument {
   return document.kind === "file-viewer";
-}
-
-export function isLauncherDocument(document: WorkspaceSurfaceDocument): document is LauncherTab {
-  return document.kind === "launcher";
 }
 
 export function createDefaultWorkspaceSurfaceState(): WorkspaceSurfaceState {
@@ -336,6 +312,7 @@ function normalizeTabKeyList(keys: readonly string[]): string[] {
 
 function normalizeWorkspacePaneNode(
   node: WorkspacePaneNode,
+  knownDocumentKeys: ReadonlySet<string>,
   hiddenRuntimeTabKeySet: ReadonlySet<string>,
   seenNodeIds: Set<string>,
   seenTabKeys: Set<string>,
@@ -351,7 +328,11 @@ function normalizeWorkspacePaneNode(
 
     const tabOrderKeys: string[] = [];
     for (const key of normalizeTabKeyList(node.tabOrderKeys)) {
-      if (hiddenRuntimeTabKeySet.has(key) || seenTabKeys.has(key)) {
+      if (
+        hiddenRuntimeTabKeySet.has(key) ||
+        seenTabKeys.has(key) ||
+        (!isRuntimeTabKey(key) && !knownDocumentKeys.has(key))
+      ) {
         continue;
       }
 
@@ -362,7 +343,8 @@ function normalizeWorkspacePaneNode(
     const requestedActiveTabKey =
       typeof node.activeTabKey === "string" &&
       node.activeTabKey.length > 0 &&
-      !hiddenRuntimeTabKeySet.has(node.activeTabKey)
+      !hiddenRuntimeTabKeySet.has(node.activeTabKey) &&
+      (isRuntimeTabKey(node.activeTabKey) || knownDocumentKeys.has(node.activeTabKey))
         ? node.activeTabKey
         : null;
     let activeTabKey =
@@ -395,6 +377,7 @@ function normalizeWorkspacePaneNode(
     direction: node.direction === "column" ? "column" : "row",
     first: normalizeWorkspacePaneNode(
       node.first,
+      knownDocumentKeys,
       hiddenRuntimeTabKeySet,
       seenNodeIds,
       seenTabKeys,
@@ -411,6 +394,7 @@ function normalizeWorkspacePaneNode(
         : 0.5,
     second: normalizeWorkspacePaneNode(
       node.second,
+      knownDocumentKeys,
       hiddenRuntimeTabKeySet,
       seenNodeIds,
       seenTabKeys,
@@ -450,12 +434,14 @@ function normalizeViewStateByTabKey(
 
 function normalizeWorkspaceSurfaceState(state: WorkspaceSurfaceState): WorkspaceSurfaceState {
   const documents = normalizeDocuments(state.documents);
+  const knownDocumentKeys = new Set(documents.map((document) => document.key));
   const hiddenRuntimeTabKeys = normalizeTabKeyList(state.hiddenRuntimeTabKeys).filter(
     isRuntimeTabKey,
   );
   const hiddenRuntimeTabKeySet = new Set(hiddenRuntimeTabKeys);
   const rootPane = normalizeWorkspacePaneNode(
     state.rootPane,
+    knownDocumentKeys,
     hiddenRuntimeTabKeySet,
     new Set<string>(),
     new Set<string>(),
@@ -530,15 +516,6 @@ function parseFileViewerDocument(value: Record<string, unknown>): FileViewerDocu
   }
 
   return createFileViewerTab(filePath);
-}
-
-function parseLauncherDocument(value: Record<string, unknown>): LauncherTab | null {
-  const key = getOptionalString(value, "key");
-  if (!key || !key.startsWith("launcher:")) {
-    return null;
-  }
-
-  return createLauncherTab(key.slice("launcher:".length));
 }
 
 function isValidPullRequestState(value: unknown): value is PullRequestDocument["state"] {
@@ -693,10 +670,6 @@ function parseWorkspaceSurfaceDocument(value: unknown): WorkspaceSurfaceDocument
 
   if (documentKind === "pull-request") {
     return parsePullRequestDocument(value as PersistedPullRequestDocument);
-  }
-
-  if (documentKind === "launcher") {
-    return parseLauncherDocument(value as PersistedLauncherDocument);
   }
 
   return null;
@@ -864,13 +837,6 @@ function serializeWorkspaceSurfaceDocument(
         };
   }
 
-  if (isLauncherDocument(document)) {
-    return {
-      key: document.key,
-      kind: document.kind,
-    };
-  }
-
   if (isFileViewerDocument(document)) {
     return {
       filePath: document.filePath,
@@ -959,13 +925,20 @@ export function writeWorkspaceSurfaceState(
     {};
   const nextMap: PersistedWorkspaceStateMap = { ...persistedMap };
   const normalizedState = normalizeWorkspaceSurfaceState(state);
-  const panesAreEmpty = collectWorkspacePaneLeaves(normalizedState.rootPane).every(
+  const paneLeaves = collectWorkspacePaneLeaves(normalizedState.rootPane);
+  const panesAreEmpty = paneLeaves.every(
     (pane) => pane.activeTabKey === null && pane.tabOrderKeys.length === 0,
   );
+  const usesDefaultSinglePaneLayout =
+    normalizedState.rootPane.kind === "leaf" &&
+    normalizedState.rootPane.id === DEFAULT_WORKSPACE_PANE_ID &&
+    normalizedState.activePaneId === DEFAULT_WORKSPACE_PANE_ID &&
+    paneLeaves.length === 1;
 
   if (
     normalizedState.documents.length === 0 &&
     panesAreEmpty &&
+    usesDefaultSinglePaneLayout &&
     normalizedState.hiddenRuntimeTabKeys.length === 0 &&
     Object.keys(normalizedState.viewStateByTabKey).length === 0
   ) {

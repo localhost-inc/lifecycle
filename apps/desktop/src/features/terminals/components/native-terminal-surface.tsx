@@ -39,6 +39,8 @@ interface NativeTerminalSurfaceLease {
   pendingHideFrameId: number | null;
 }
 
+type NativeTerminalSurfaceSyncResultAction = "apply" | "hide" | "ignore";
+
 // DOM splitters cannot stack above the sibling native NSView, so keep the
 // embedded surface slightly inset from the shell seams.
 const NATIVE_TERMINAL_EDGE_GUTTER_PX = 6;
@@ -116,7 +118,11 @@ export function scheduleNativeTerminalSurfaceLeaseHide(
 
   const frameId = requestFrame(() => {
     const pendingLease = registry.get(terminalId);
-    if (!pendingLease || pendingLease.owner !== owner || pendingLease.pendingHideFrameId !== frameId) {
+    if (
+      !pendingLease ||
+      pendingLease.owner !== owner ||
+      pendingLease.pendingHideFrameId !== frameId
+    ) {
       return;
     }
 
@@ -130,6 +136,24 @@ export function scheduleNativeTerminalSurfaceLeaseHide(
   });
 
   return frameId;
+}
+
+export function resolveNativeTerminalSurfaceSyncResultAction({
+  currentLifecycleToken,
+  lifecycleToken,
+  registry,
+  terminalId,
+}: {
+  currentLifecycleToken: number;
+  lifecycleToken: number;
+  registry: Map<string, NativeTerminalSurfaceLease>;
+  terminalId: string;
+}): NativeTerminalSurfaceSyncResultAction {
+  if (currentLifecycleToken === lifecycleToken) {
+    return "apply";
+  }
+
+  return registry.has(terminalId) ? "ignore" : "hide";
 }
 
 function readNativeTerminalResolvedTheme(): ResolvedTheme {
@@ -165,6 +189,7 @@ export function NativeTerminalSurface({
   const ownerRef = useRef(Symbol("native-terminal-surface-owner"));
   const hostRef = useRef<HTMLDivElement | null>(null);
   const frameIdRef = useRef<number | null>(null);
+  const lifecycleTokenRef = useRef(0);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const shellResizeInProgressRef = useRef(false);
   const [attachState, setAttachState] = useState<NativeTerminalSurfaceAttachState>(() =>
@@ -201,6 +226,7 @@ export function NativeTerminalSurface({
       return;
     }
 
+    const lifecycleToken = lifecycleTokenRef.current;
     const rect = host.getBoundingClientRect();
     const visible = shouldShowNativeTerminalSurface({
       hasLiveSession,
@@ -246,9 +272,35 @@ export function NativeTerminalSurface({
           y: rect.top,
         }),
       );
+      const resultAction = resolveNativeTerminalSurfaceSyncResultAction({
+        currentLifecycleToken: lifecycleTokenRef.current,
+        lifecycleToken,
+        registry: nativeTerminalSurfaceLeaseRegistry,
+        terminalId: terminal.id,
+      });
+      if (resultAction === "hide") {
+        await hideNativeTerminalSurface(terminal.id);
+        return;
+      }
+
+      if (resultAction === "ignore") {
+        return;
+      }
+
       setAttachState("attached");
       setError(null);
     } catch (nextError) {
+      if (
+        resolveNativeTerminalSurfaceSyncResultAction({
+          currentLifecycleToken: lifecycleTokenRef.current,
+          lifecycleToken,
+          registry: nativeTerminalSurfaceLeaseRegistry,
+          terminalId: terminal.id,
+        }) !== "apply"
+      ) {
+        return;
+      }
+
       setAttachState("failed");
       setError(String(nextError));
     }
@@ -269,6 +321,14 @@ export function NativeTerminalSurface({
     setAttachState(hasLiveSession ? "attaching" : "attached");
     setError(null);
   }, [hasLiveSession, terminal.id]);
+
+  useEffect(() => {
+    lifecycleTokenRef.current += 1;
+
+    return () => {
+      lifecycleTokenRef.current += 1;
+    };
+  }, [terminal.id]);
 
   useEffect(() => {
     claimNativeTerminalSurfaceLease(
@@ -341,10 +401,7 @@ export function NativeTerminalSurface({
             className="relative h-full w-full"
             style={{ paddingInline: `${NATIVE_TERMINAL_EDGE_GUTTER_PX}px` }}
           >
-            <div
-              ref={hostRef}
-              className="h-full w-full bg-[var(--terminal-surface-background)]"
-            />
+            <div ref={hostRef} className="h-full w-full bg-[var(--terminal-surface-background)]" />
             {showAttachOverlay ? (
               <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
                 <div className="flex max-w-sm flex-col items-center gap-3">

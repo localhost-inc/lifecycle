@@ -1,7 +1,8 @@
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { parseManifest } from "@lifecycle/contracts";
 import type { ManifestParseResult, ProjectRecord } from "@lifecycle/contracts";
+import { invokeTauri } from "../../../lib/tauri-error";
 
 export type ManifestStatus =
   | { state: "valid"; result: ManifestParseResult & { valid: true } }
@@ -88,7 +89,7 @@ export async function readManifest(dirPath: string): Promise<ManifestStatus> {
     return { state: "missing" };
   }
 
-  const text = await invoke<string | null>("read_manifest_text", { dirPath });
+  const text = await invokeTauri<string | null>("read_manifest_text", { dirPath });
   if (text === null) {
     return { state: "missing" };
   }
@@ -106,7 +107,7 @@ export async function listProjects(): Promise<ProjectRecord[]> {
     return [];
   }
 
-  const rows = await invoke<ProjectRow[]>("list_projects");
+  const rows = await invokeTauri<ProjectRow[]>("list_projects");
   return rows.map(rowToRecord);
 }
 
@@ -123,7 +124,7 @@ export async function addProjectFromDirectory(): Promise<ProjectRecord | null> {
   const manifestValid = status.state === "valid";
   const id = generateId();
 
-  const row = await invoke<ProjectRow>("add_project", {
+  const row = await invokeTauri<ProjectRow>("add_project", {
     id,
     path: dirPath,
     name,
@@ -138,5 +139,5 @@ export async function removeProject(id: string): Promise<void> {
     return;
   }
 
-  await invoke("remove_project", { id });
+  await invokeTauri("remove_project", { id });
 }

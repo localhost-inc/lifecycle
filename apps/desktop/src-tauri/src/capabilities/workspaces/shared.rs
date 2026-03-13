@@ -10,6 +10,7 @@ use tauri::AppHandle;
 
 use super::ports::resolve_effective_port;
 use super::preview::{preview_fields_for_service, refresh_workspace_preview_rows};
+use super::query::ServiceRecord;
 
 pub(super) fn emit_workspace_status(
     app: &AppHandle,
@@ -41,6 +42,36 @@ pub(super) fn emit_service_status(
             service_name: service_name.to_string(),
             status: status.to_string(),
             status_reason: reason.map(|s| s.to_string()),
+        },
+    );
+}
+
+pub(super) fn emit_service_configuration(
+    app: &AppHandle,
+    workspace_id: &str,
+    service: &ServiceRecord,
+) {
+    publish_lifecycle_event(
+        app,
+        LifecycleEvent::ServiceConfigurationChanged {
+            workspace_id: workspace_id.to_string(),
+            service: service.clone(),
+        },
+    );
+}
+
+pub(super) fn emit_workspace_manifest_synced(
+    app: &AppHandle,
+    workspace_id: &str,
+    manifest_fingerprint: Option<&str>,
+    services: &[ServiceRecord],
+) {
+    publish_lifecycle_event(
+        app,
+        LifecycleEvent::WorkspaceManifestSynced {
+            workspace_id: workspace_id.to_string(),
+            manifest_fingerprint: manifest_fingerprint.map(|value| value.to_string()),
+            services: services.to_vec(),
         },
     );
 }

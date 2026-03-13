@@ -1,7 +1,7 @@
 use crate::platform::db::DbPath;
 use crate::shared::errors::LifecycleError;
 use crate::RootGitWatcherMap;
-use crate::SupervisorMap;
+use crate::WorkspaceControllerRegistryHandle;
 use serde::Deserialize;
 use std::collections::HashMap;
 use tauri::{AppHandle, State};
@@ -59,9 +59,13 @@ pub async fn create_workspace(
 pub async fn rename_workspace(
     app: AppHandle,
     db_path: State<'_, DbPath>,
+    workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
     workspace_id: String,
     name: String,
 ) -> Result<super::super::query::WorkspaceRecord, LifecycleError> {
+    let _mutation_guard = workspace_controllers
+        .acquire_mutation_guard(&workspace_id)
+        .await?;
     super::super::rename::rename_workspace(app, &db_path.0, &workspace_id, &name).await
 }
 
@@ -69,15 +73,18 @@ pub async fn rename_workspace(
 pub async fn start_services(
     app: AppHandle,
     db_path: State<'_, DbPath>,
-    supervisors: State<'_, SupervisorMap>,
+    workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
     workspace_id: String,
     manifest_json: String,
     manifest_fingerprint: String,
 ) -> Result<(), LifecycleError> {
+    let _mutation_guard = workspace_controllers
+        .acquire_mutation_guard(&workspace_id)
+        .await?;
     super::super::start::start_services(
         app,
         db_path,
-        supervisors,
+        workspace_controllers,
         workspace_id,
         manifest_json,
         manifest_fingerprint,
@@ -87,12 +94,18 @@ pub async fn start_services(
 
 #[tauri::command]
 pub async fn sync_workspace_manifest(
+    app: AppHandle,
     db_path: State<'_, DbPath>,
+    workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
     workspace_id: String,
     manifest_json: Option<String>,
     manifest_fingerprint: Option<String>,
 ) -> Result<(), LifecycleError> {
+    let _mutation_guard = workspace_controllers
+        .acquire_mutation_guard(&workspace_id)
+        .await?;
     super::super::start::sync_workspace_manifest(
+        Some(&app),
         &db_path.0,
         workspace_id,
         manifest_json,
@@ -105,10 +118,10 @@ pub async fn sync_workspace_manifest(
 pub async fn stop_workspace(
     app: AppHandle,
     db_path: State<'_, DbPath>,
-    supervisors: State<'_, SupervisorMap>,
+    workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
     workspace_id: String,
 ) -> Result<(), LifecycleError> {
-    super::super::stop::stop_workspace(app, db_path, supervisors, workspace_id).await
+    super::super::stop::stop_workspace(app, db_path, workspace_controllers, workspace_id).await
 }
 
 #[tauri::command]
@@ -116,14 +129,14 @@ pub async fn destroy_workspace(
     app: AppHandle,
     db_path: State<'_, DbPath>,
     root_git_watchers: State<'_, RootGitWatcherMap>,
-    supervisors: State<'_, SupervisorMap>,
+    workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
     workspace_id: String,
 ) -> Result<(), LifecycleError> {
     super::super::destroy::destroy_workspace(
         app,
         db_path,
         root_git_watchers,
-        supervisors,
+        workspace_controllers,
         workspace_id,
     )
     .await
@@ -177,20 +190,27 @@ pub async fn get_workspace_services(
 
 #[tauri::command]
 pub async fn update_workspace_service(
+    app: AppHandle,
     db_path: State<'_, DbPath>,
+    workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
     workspace_id: String,
     service_name: String,
     exposure: String,
     port_override: Option<i64>,
 ) -> Result<(), LifecycleError> {
-    super::super::service::update_workspace_service(
+    let _mutation_guard = workspace_controllers
+        .acquire_mutation_guard(&workspace_id)
+        .await?;
+    let _service = super::super::service::update_workspace_service(
+        Some(&app),
         &db_path.0,
         workspace_id,
         service_name,
         exposure,
         port_override,
     )
-    .await
+    .await?;
+    Ok(())
 }
 
 #[tauri::command]

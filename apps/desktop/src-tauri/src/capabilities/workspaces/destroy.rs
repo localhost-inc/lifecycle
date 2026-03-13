@@ -4,7 +4,7 @@ use crate::platform::lifecycle_root::resolve_lifecycle_root;
 use crate::shared::errors::LifecycleError;
 use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
 use crate::RootGitWatcherMap;
-use crate::SupervisorMap;
+use crate::WorkspaceControllerRegistryHandle;
 use rusqlite::params;
 use tauri::{AppHandle, State};
 
@@ -104,22 +104,24 @@ pub async fn destroy_workspace(
     app: AppHandle,
     db_path: State<'_, DbPath>,
     root_git_watchers: State<'_, RootGitWatcherMap>,
-    supervisors: State<'_, SupervisorMap>,
+    workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
     workspace_id: String,
 ) -> Result<(), LifecycleError> {
-    let context = load_destroy_workspace_context(&db_path.0, &workspace_id)?;
+    let controller = workspace_controllers.get_or_create(&workspace_id).await;
+    controller.request_destroy().await;
+    let context = match load_destroy_workspace_context(&db_path.0, &workspace_id) {
+        Ok(context) => context,
+        Err(error) => {
+            let _ = workspace_controllers.remove(&workspace_id).await;
+            return Err(error);
+        }
+    };
 
     if is_root_workspace_kind(&context.kind) {
         super::git_watcher::stop_root_git_watcher(&root_git_watchers, &workspace_id);
     }
 
-    {
-        let mut supervisors = supervisors.lock().await;
-        if let Some(supervisor) = supervisors.remove(&workspace_id) {
-            let mut supervisor = supervisor.lock().await;
-            supervisor.stop_all().await;
-        }
-    }
+    controller.stop_runtime().await;
 
     destroy_native_terminal_surfaces(&app, &context.terminal_ids);
 
@@ -130,6 +132,7 @@ pub async fn destroy_workspace(
     }
 
     delete_workspace_record(&db_path.0, &workspace_id)?;
+    let _ = workspace_controllers.remove(&workspace_id).await;
     remove_workspace_attachments(&workspace_id);
     emit_workspace_deleted(&app, &workspace_id);
     Ok(())

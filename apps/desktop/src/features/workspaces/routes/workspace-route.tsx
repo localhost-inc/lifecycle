@@ -2,6 +2,7 @@ import { Alert, AlertDescription, AlertTitle, Loading } from "@lifecycle/ui";
 import { lazy, Suspense, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { markPerformance, measurePerformance } from "../../../lib/performance";
+import { toErrorEnvelope } from "../../../lib/tauri-error";
 import { useWorkspaceManifest, useWorkspaceSnapshot } from "../hooks";
 import { hasBlockingQueryError, hasBlockingQueryLoad } from "./workspace-route-query-state";
 
@@ -46,7 +47,9 @@ export function WorkspaceRoute() {
       <div className="flex flex-1 items-center justify-center p-8">
         <Alert className="max-w-lg" variant="destructive">
           <AlertTitle>Failed to load workspace</AlertTitle>
-          <AlertDescription>{String(workspaceSnapshotQuery.error)}</AlertDescription>
+          <AlertDescription>
+            {toErrorEnvelope(workspaceSnapshotQuery.error).message}
+          </AlertDescription>
         </Alert>
       </div>
     );
@@ -73,7 +76,7 @@ export function WorkspaceRoute() {
       <div className="flex flex-1 items-center justify-center p-8">
         <Alert className="max-w-lg" variant="destructive">
           <AlertTitle>Failed to load manifest</AlertTitle>
-          <AlertDescription>{String(manifestQuery.error)}</AlertDescription>
+          <AlertDescription>{toErrorEnvelope(manifestQuery.error).message}</AlertDescription>
         </Alert>
       </div>
     );

@@ -3,6 +3,7 @@ use crate::platform::native_terminal::{
     self, NativeTerminalFrame, NativeTerminalSurfaceSyncRequest,
 };
 use crate::shared::errors::{LifecycleError, TerminalFailureReason, TerminalStatus, TerminalType};
+use crate::WorkspaceControllerRegistryHandle;
 use std::time::SystemTime;
 use tauri::{AppHandle, Manager, State, WebviewWindow};
 
@@ -21,6 +22,7 @@ use super::persistence::{
     update_terminal_state, workspace_has_interactive_terminal_context,
 };
 use super::types::NativeTerminalSurfaceSyncInput;
+use crate::capabilities::workspaces::controller::ManagedWorkspaceController;
 
 fn terminal_status(record: &TerminalRecord) -> Result<TerminalStatus, LifecycleError> {
     TerminalStatus::from_str(&record.status)
@@ -42,6 +44,14 @@ fn require_interactive_workspace_runtime(
     Ok(workspace)
 }
 
+async fn lookup_workspace_controller(
+    app: &AppHandle,
+    workspace_id: &str,
+) -> ManagedWorkspaceController {
+    let workspace_controllers = app.state::<WorkspaceControllerRegistryHandle>();
+    workspace_controllers.get_or_create(workspace_id).await
+}
+
 pub(crate) async fn create_terminal(
     app: AppHandle,
     db_path: State<'_, DbPath>,
@@ -51,6 +61,9 @@ pub(crate) async fn create_terminal(
     harness_session_id: Option<String>,
 ) -> Result<TerminalRecord, LifecycleError> {
     let db = db_path.0.clone();
+    let workspace_controllers = app.state::<WorkspaceControllerRegistryHandle>();
+    let controller = workspace_controllers.get_or_create(&workspace_id).await;
+    let _mutation_guard = controller.acquire_mutation_guard().await?;
     require_interactive_workspace_runtime(&db, &workspace_id, "terminal_access")?;
 
     let launch_type = TerminalType::from_str(&launch_type)?;
@@ -113,6 +126,8 @@ pub(crate) async fn sync_native_terminal_surface(
 
     let workspace =
         require_interactive_workspace_runtime(&db, &terminal.workspace_id, "terminal_access")?;
+    let controller = lookup_workspace_controller(window.app_handle(), &terminal.workspace_id).await;
+    let _mutation_guard = controller.acquire_mutation_guard().await?;
     let launch_type = TerminalType::from_str(&terminal.launch_type)?;
     let launch = resolve_terminal_launch(
         &launch_type,
@@ -213,10 +228,12 @@ pub(crate) async fn kill_terminal(
     db_path: State<'_, DbPath>,
     terminal_id: String,
 ) -> Result<(), LifecycleError> {
-    let terminal_id_for_surface = terminal_id.clone();
-    native_terminal::destroy_surface(&app, &terminal_id_for_surface)?;
     let db = db_path.0.clone();
     if let Some(terminal) = load_terminal_record(&db, &terminal_id)? {
+        let controller = lookup_workspace_controller(&app, &terminal.workspace_id).await;
+        let _mutation_guard = controller.acquire_mutation_guard().await?;
+        let terminal_id_for_surface = terminal_id.clone();
+        native_terminal::destroy_surface(&app, &terminal_id_for_surface)?;
         if !matches!(
             terminal_status(&terminal)?,
             TerminalStatus::Finished | TerminalStatus::Failed
@@ -231,6 +248,9 @@ pub(crate) async fn kill_terminal(
             )?;
             emit_terminal_status(&app, &terminal);
         }
+    } else {
+        let terminal_id_for_surface = terminal_id.clone();
+        native_terminal::destroy_surface(&app, &terminal_id_for_surface)?;
     }
 
     Ok(())
@@ -280,4 +300,9 @@ pub(crate) fn complete_native_terminal_exit(
     )?;
     emit_terminal_status(app, &terminal);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
 }

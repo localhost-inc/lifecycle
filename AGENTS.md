@@ -32,10 +32,11 @@ Use this section to route work before implementation.
 ### Destination-to-Milestone Mapping
 
 1. Center terminal workspace (tabbed sessions, harness flows, attach/detach) -> M3.
-2. Workspace lifecycle controls, service runtime states, sleep/wake/destroy UX -> M5.
-3. CLI-centric workspace control and observability flows -> M6.
-4. Org/workspace hierarchy, cloud surfaces, activity, previews, PR actions -> M7.
-5. Deferred agent workspace/native runtime concepts -> `docs/backlog/*` (not active milestone work).
+2. Workspace lifecycle controls, service runtime states, local preview exposure, sleep/wake/destroy UX -> M4.
+3. CLI-centric workspace control and observability flows -> M5.
+4. Org/workspace hierarchy, auth, cloud surfaces, activity, previews, and PR actions -> M6.
+5. Cloud lifecycle hardening (sleep/wake restore, TTL, quotas) -> M7.
+6. Deferred agent workspace/native runtime concepts -> `docs/backlog/*` (not active milestone work).
 
 ### Frontend Organization Rules
 

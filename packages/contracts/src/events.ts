@@ -1,4 +1,4 @@
-import type { TerminalRecord } from "./db";
+import type { ServiceRecord, TerminalRecord } from "./db";
 import type { TerminalFailureReason, TerminalStatus } from "./terminal";
 import type {
   WorkspaceFailureReason,
@@ -51,11 +51,26 @@ export type LifecycleEvent =
   | {
       id: string;
       occurred_at: string;
+      kind: "service.configuration_changed";
+      workspace_id: string;
+      service: ServiceRecord;
+    }
+  | {
+      id: string;
+      occurred_at: string;
       kind: "workspace.setup_progress";
       workspace_id: string;
       step_name: string;
       event_kind: SetupStepEventKind;
       data: string | null;
+    }
+  | {
+      id: string;
+      occurred_at: string;
+      kind: "workspace.manifest_synced";
+      workspace_id: string;
+      manifest_fingerprint: string | null;
+      services: ServiceRecord[];
     }
   | {
       id: string;

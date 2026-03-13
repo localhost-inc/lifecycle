@@ -16,6 +16,7 @@ import type { CSSProperties } from "react";
 import { useState } from "react";
 import { EnvironmentSection } from "./environment-section";
 import type { EnvironmentTaskState } from "../hooks";
+import { formatWorkspaceError } from "../lib/workspace-errors";
 
 type ServiceRuntime = "image" | "process";
 
@@ -175,7 +176,7 @@ export function ServiceRow({
         serviceName: service.service_name,
       });
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : String(error));
+      setSaveError(formatWorkspaceError(error, "Failed to update service settings."));
     } finally {
       setIsSaving(false);
     }
@@ -243,9 +244,7 @@ export function ServiceRow({
           <div className="flex items-baseline gap-2">
             <span className="inline-flex min-w-0 items-center gap-1.5">
               {runtimeIcon}
-              <span
-                className={`truncate text-[13px] font-medium ${styles.nameClassName}`}
-              >
+              <span className={`truncate text-[13px] font-medium ${styles.nameClassName}`}>
                 {service.service_name}
               </span>
             </span>
@@ -385,7 +384,11 @@ export function ServicesTab({
     (service) => serviceRuntimeByName[service.service_name] === undefined,
   );
 
-  function renderServiceGroup(title: string, runtime: ServiceRuntime | null, group: ServiceRecord[]) {
+  function renderServiceGroup(
+    title: string,
+    runtime: ServiceRuntime | null,
+    group: ServiceRecord[],
+  ) {
     if (group.length === 0) {
       return null;
     }
@@ -417,12 +420,18 @@ export function ServicesTab({
     return (
       <div className="flex flex-col gap-4">
         {environmentTasks.length > 0 ? (
-          <EnvironmentSection icon={<Loader2 className="size-3.5" strokeWidth={2.2} />} title="Environment tasks">
+          <EnvironmentSection
+            icon={<Loader2 className="size-3.5" strokeWidth={2.2} />}
+            title="Environment tasks"
+          >
             <SetupProgress expandOutputByDefault steps={environmentTasks} />
           </EnvironmentSection>
         ) : null}
         {services.length > 0 ? (
-          <EnvironmentSection icon={<Layers className="size-3.5" strokeWidth={2.2} />} title="Services">
+          <EnvironmentSection
+            icon={<Layers className="size-3.5" strokeWidth={2.2} />}
+            title="Services"
+          >
             <div className="flex flex-col gap-4">
               {renderServiceGroup("Image services", "image", imageServices)}
               {renderServiceGroup("Process services", "process", processServices)}

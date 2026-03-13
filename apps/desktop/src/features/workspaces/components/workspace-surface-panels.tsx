@@ -4,7 +4,6 @@ import { TerminalSquare } from "lucide-react";
 import type { CreateTerminalRequest, HarnessProvider } from "../../terminals/api";
 import { TerminalSurface } from "../../terminals/components/terminal-surface";
 import { GitDiffSurface } from "../../git/components/git-diff-surface";
-import type { WorkspaceActivityItem } from "../hooks";
 import { PullRequestSurface } from "../../git/components/pull-request-surface";
 import { FileSurface } from "../../files/components/file-surface";
 import type { FileViewerSessionState } from "../../files/lib/file-session";
@@ -12,31 +11,26 @@ import {
   isChangesDiffDocument,
   isCommitDiffDocument,
   isFileViewerDocument,
-  isLauncherDocument,
   isPullRequestDocument,
   type WorkspaceSurfaceDocument,
   type WorkspaceSurfaceTabViewState,
 } from "../state/workspace-surface-state";
-import { WorkspaceLauncherSurface } from "./workspace-launcher-surface";
+import { WorkspaceEmptyPaneState } from "./workspace-empty-pane-state";
 import { workspaceTabDomId, workspaceTabPanelId } from "./workspace-surface-logic";
 
 interface WorkspaceSurfacePanelsProps {
   activeTabKey: string | null;
-  activeTerminalId: string | null;
   activeTabViewState: WorkspaceSurfaceTabViewState | null;
   activeFileSessionState: FileViewerSessionState | null;
-  activity: WorkspaceActivityItem[];
   creatingSelection: "shell" | HarnessProvider | null;
   documents: WorkspaceSurfaceDocument[];
   hasVisibleTabs: boolean;
   onFileSessionStateChange: (tabKey: string, state: FileViewerSessionState | null) => void;
-  onCreateTerminal: (input: CreateTerminalRequest, launcherKey?: string) => Promise<void>;
+  onCreateTerminal: (input: CreateTerminalRequest) => Promise<void>;
   onOpenFile: (filePath: string) => void;
-  onOpenTerminal: (terminalId: string, launcherKey?: string) => void;
   onTabViewStateChange: (tabKey: string, viewState: WorkspaceSurfaceTabViewState | null) => void;
   paneDragInProgress: boolean;
   paneFocused: boolean;
-  sessionHistory: TerminalRecord[];
   terminals: TerminalRecord[];
   waitingForActiveRuntimeTab: boolean;
   workspaceId: string;
@@ -44,21 +38,17 @@ interface WorkspaceSurfacePanelsProps {
 
 export function WorkspaceSurfacePanels({
   activeTabKey,
-  activeTerminalId,
   activeTabViewState,
   activeFileSessionState,
-  activity,
   creatingSelection,
   documents,
   hasVisibleTabs,
   onFileSessionStateChange,
   onCreateTerminal,
   onOpenFile,
-  onOpenTerminal,
   onTabViewStateChange,
   paneDragInProgress,
   paneFocused,
-  sessionHistory,
   terminals,
   waitingForActiveRuntimeTab,
   workspaceId,
@@ -71,10 +61,11 @@ export function WorkspaceSurfacePanels({
         title="Opening terminal..."
       />
     ) : (
-      <EmptyState
-        description="Lifecycle is preparing a launcher tab for this workspace."
-        icon={<TerminalSquare />}
-        title="Preparing workspace tabs"
+      <WorkspaceEmptyPaneState
+        creatingSelection={creatingSelection}
+        onCreateTerminal={(input) => {
+          void onCreateTerminal(input);
+        }}
       />
     );
   }
@@ -149,7 +140,9 @@ export function WorkspaceSurfacePanels({
           initialMode={activeTabViewState?.fileMode}
           initialScrollTop={activeTabViewState?.scrollTop ?? 0}
           onOpenFile={onOpenFile}
-          onSessionStateChange={(nextState) => onFileSessionStateChange(activeDocument.key, nextState)}
+          onSessionStateChange={(nextState) =>
+            onFileSessionStateChange(activeDocument.key, nextState)
+          }
           onScrollTopChange={(scrollTop: number) => {
             onTabViewStateChange(
               activeDocument.key,
@@ -173,22 +166,6 @@ export function WorkspaceSurfacePanels({
           }}
           sessionState={activeFileSessionState}
           workspaceId={workspaceId}
-        />
-      ) : activeDocument && isLauncherDocument(activeDocument) ? (
-        <WorkspaceLauncherSurface
-          activeTerminalId={activeTerminalId}
-          activity={activity}
-          creatingSelection={creatingSelection}
-          onCreateTerminal={(input) => {
-            void onCreateTerminal(input, activeDocument.key);
-          }}
-          onOpenTerminal={(terminalId) => {
-            onOpenTerminal(terminalId, activeDocument.key);
-          }}
-          onResumeTerminal={(input) => {
-            void onCreateTerminal(input, activeDocument.key);
-          }}
-          terminals={sessionHistory}
         />
       ) : null}
     </div>

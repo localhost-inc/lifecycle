@@ -8,16 +8,13 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import {
-  isCommitDiffDocument,
-  isLauncherDocument,
-  isPullRequestDocument,
-} from "../state/workspace-surface-state";
+import { isCommitDiffDocument, isPullRequestDocument } from "../state/workspace-surface-state";
 import {
   getWorkspaceTabDragShiftDirection,
   type WorkspaceSurfaceTab,
   type WorkspaceTabPlacement,
 } from "./workspace-surface-logic";
+import { formatWorkspaceError } from "../lib/workspace-errors";
 import { WorkspaceSurfaceTabItem } from "./workspace-surface-tab-item";
 
 const TAB_DRAG_GAP_PX = 2;
@@ -132,14 +129,6 @@ export function hasStartedWorkspaceTabDrag(
 export function renderWorkspaceSurfaceDefaultTabLeading(tab: WorkspaceSurfaceTab) {
   if (tab.kind === "terminal") {
     return null;
-  }
-
-  if (isLauncherDocument(tab)) {
-    return (
-      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--background)]/70 text-[11px] text-[var(--muted-foreground)]">
-        +
-      </span>
-    );
   }
 
   return (
@@ -496,7 +485,7 @@ export function WorkspaceSurfaceTabBar({
         current
           ? {
               ...current,
-              error: error instanceof Error ? error.message : "Session rename failed.",
+              error: formatWorkspaceError(error, "Session rename failed."),
               saving: false,
             }
           : current,
@@ -546,9 +535,8 @@ export function WorkspaceSurfaceTabBar({
             previewShiftDirection === 0 || !dragPreview
               ? 0
               : previewShiftDirection * (dragPreview.draggedWidth + TAB_DRAG_GAP_PX);
-          const style = previewShiftPx === 0
-              ? undefined
-              : { transform: `translateX(${previewShiftPx}px)` };
+          const style =
+            previewShiftPx === 0 ? undefined : { transform: `translateX(${previewShiftPx}px)` };
 
           return (
             <WorkspaceSurfaceTabItem

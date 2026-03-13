@@ -6,6 +6,7 @@ import { TypedTitle } from "../../../components/typed-title";
 import { formatCompactRelativeTime } from "../../../lib/format";
 import { renameWorkspace } from "../api";
 import { canInlineRenameWorkspace, getWorkspaceDisplayName } from "../lib/workspace-display";
+import { formatWorkspaceError } from "../lib/workspace-errors";
 import { getWorkspaceSessionStatusState, WorkspaceSessionStatus } from "./workspace-session-status";
 
 const workspaceKindIcons: Record<WorkspaceKind, LucideIcon> = {
@@ -112,7 +113,7 @@ export function WorkspaceTreeItem({
       await renameWorkspace(workspace.id, normalizedName);
       setEditing(false);
     } catch (error) {
-      setRenameError(error instanceof Error ? error.message : "Workspace rename failed.");
+      setRenameError(formatWorkspaceError(error, "Workspace rename failed."));
       inputRef.current?.focus();
       inputRef.current?.select();
     } finally {

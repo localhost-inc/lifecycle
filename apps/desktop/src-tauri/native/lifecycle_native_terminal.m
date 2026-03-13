@@ -2052,9 +2052,25 @@ static BOOL lifecycleApplySurfaceTheme(LifecycleNativeTerminalView *view,
 
 static NSRect lifecycleFrameForConfig(NSView *webview, const LifecycleNativeTerminalConfig *config) {
   NSRect webviewFrame = webview.frame;
-  return NSMakeRect(webviewFrame.origin.x + config->x,
-                    webviewFrame.origin.y + webviewFrame.size.height - config->y - config->height,
-                    config->width, config->height);
+  NSRect frame =
+      NSMakeRect(webviewFrame.origin.x + config->x,
+                 webviewFrame.origin.y + webviewFrame.size.height - config->y - config->height,
+                 config->width, config->height);
+  NSView *container = webview.superview;
+  if (container == nil) {
+    return frame;
+  }
+
+  return [container backingAlignedRect:frame options:NSAlignAllEdgesNearest];
+}
+
+static double lifecycleResolvedScaleFactor(double requestedScaleFactor) {
+  if (requestedScaleFactor > 0.0) {
+    return requestedScaleFactor;
+  }
+
+  NSScreen *screen = NSScreen.mainScreen;
+  return screen ? screen.backingScaleFactor : 2.0;
 }
 
 static LifecycleNativeTerminalView *lifecycleCreateTerminalView(
@@ -2067,7 +2083,7 @@ static LifecycleNativeTerminalView *lifecycleCreateTerminalView(
   surfaceConfig.platform_tag = GHOSTTY_PLATFORM_MACOS;
   surfaceConfig.platform.macos.nsview = (__bridge void *)view;
   surfaceConfig.userdata = (__bridge void *)view;
-  surfaceConfig.scale_factor = config->scale_factor;
+  surfaceConfig.scale_factor = lifecycleResolvedScaleFactor(config->scale_factor);
   surfaceConfig.font_size = (float)config->font_size;
   surfaceConfig.working_directory = config->working_directory;
   surfaceConfig.command = config->command;
@@ -2088,6 +2104,50 @@ static LifecycleNativeTerminalView *lifecycleCreateTerminalView(
     return nil;
   }
   return view;
+}
+
+bool lifecycle_native_terminal_create(const LifecycleNativeTerminalConfig *config) {
+  @autoreleasepool {
+    @try {
+      if (gGhosttyApp == NULL) {
+        lifecycleSetLastError(@"Ghostty runtime is not initialized.");
+        return false;
+      }
+
+      if (config == NULL || config->terminal_id == NULL || config->working_directory == NULL) {
+        lifecycleSetLastError(@"Native terminal create received incomplete arguments.");
+        return false;
+      }
+
+      NSString *terminalId = [NSString stringWithUTF8String:config->terminal_id];
+      LifecycleNativeTerminalView *existingView =
+          (LifecycleNativeTerminalView *)gTerminalViews[terminalId];
+      if (existingView != nil) {
+        gLastError = nil;
+        return true;
+      }
+
+      LifecycleNativeTerminalView *view = lifecycleCreateTerminalView(config);
+      if (view == nil) {
+        return false;
+      }
+
+      view.pointerPassthrough = YES;
+      view.wantsFocus = NO;
+      view.hidden = YES;
+      if (view.surface != NULL) {
+        ghostty_surface_set_focus(view.surface, false);
+        ghostty_surface_set_occlusion(view.surface, true);
+      }
+
+      gTerminalViews[terminalId] = view;
+      gLastError = nil;
+      return true;
+    } @catch (NSException *exception) {
+      lifecycleSetLastErrorFromException(@"Native terminal create threw an exception", exception);
+      return false;
+    }
+  }
 }
 
 bool lifecycle_native_terminal_sync(void *webview_view,

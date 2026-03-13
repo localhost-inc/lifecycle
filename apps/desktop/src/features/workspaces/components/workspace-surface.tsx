@@ -15,8 +15,8 @@ import {
 } from "../../terminals/api";
 import { terminalKeys } from "../../terminals/hooks";
 import { useTerminalResponseReady } from "../../terminals/state/terminal-response-ready-provider";
-import { useWorkspaceActivity } from "../hooks";
 import { subscribeToNativeWorkspaceShortcutEvents } from "../api";
+import { formatWorkspaceError } from "../lib/workspace-errors";
 import {
   isRuntimeTabKey,
   type WorkspaceSurfaceState,
@@ -28,7 +28,7 @@ import { ClaudeIcon, CodexIcon, ShellIcon } from "./surface-icons";
 import {
   areStringArraysEqual,
   createInitialWorkspaceSurfaceState,
-  createWorkspaceLauncherId,
+  createWorkspaceSurfaceId,
   getWorkspaceAdjacentTabKey,
   createWorkspacePaneId,
   createWorkspaceSplitId,
@@ -78,7 +78,6 @@ export function WorkspaceSurface({
   const client = useQueryClient();
   const { clearTerminalResponseReady, isTerminalResponseReady, isTerminalTurnRunning } =
     useTerminalResponseReady();
-  const activityQuery = useWorkspaceActivity(workspaceId);
   const [creatingSelection, setCreatingSelection] = useState<"shell" | HarnessProvider | null>(
     null,
   );
@@ -310,14 +309,6 @@ export function WorkspaceSurface({
     [clearTerminalResponseReady],
   );
 
-  const handleOpenLauncher = useCallback((paneId?: string) => {
-    dispatch({
-      launcherId: createWorkspaceLauncherId(),
-      kind: "open-launcher",
-      paneId,
-    });
-  }, []);
-
   const handleActiveTabViewStateChange = useCallback(
     (tabKey: string, viewState: WorkspaceSurfaceState["viewStateByTabKey"][string] | null) => {
       dispatch({
@@ -336,7 +327,7 @@ export function WorkspaceSurface({
       dispatch({
         request: {
           filePath,
-          id: createWorkspaceLauncherId(),
+          id: createWorkspaceSurfaceId(),
           kind: "file-viewer",
         },
         kind: "open-document",
@@ -361,21 +352,17 @@ export function WorkspaceSurface({
   );
 
   const handleShowRuntimeTab = useCallback(
-    (terminalId: string, launcherKey?: string, paneId?: string) => {
+    (terminalId: string, paneId?: string) => {
       releaseWebviewFocus();
       clearTerminalResponseReady(terminalId);
       const runtimeKey = `terminal:${terminalId}`;
-      dispatch(
-        launcherKey
-          ? { launcherKey, tabKey: runtimeKey, kind: "replace-launcher-with-tab" }
-          : { key: runtimeKey, kind: "show-runtime-tab", paneId, select: true },
-      );
+      dispatch({ key: runtimeKey, kind: "show-runtime-tab", paneId, select: true });
     },
     [clearTerminalResponseReady],
   );
 
   const handleCreateTerminal = useCallback(
-    async (input: CreateTerminalRequest, launcherKey?: string, paneId?: string) => {
+    async (input: CreateTerminalRequest, paneId?: string) => {
       setCreatingSelection(input.launchType === "harness" ? input.harnessProvider : "shell");
       setError(null);
       releaseWebviewFocus();
@@ -387,9 +374,9 @@ export function WorkspaceSurface({
         });
         client.invalidate(terminalKeys.byWorkspace(workspaceId));
         client.invalidate(terminalKeys.detail(terminal.id));
-        handleShowRuntimeTab(terminal.id, launcherKey, paneId);
+        handleShowRuntimeTab(terminal.id, paneId);
       } catch (createError) {
-        setError(String(createError));
+        setError(formatWorkspaceError(createError, "Failed to create session."));
       } finally {
         setCreatingSelection(null);
       }
@@ -401,7 +388,7 @@ export function WorkspaceSurface({
     (paneId: string, request: SurfaceLaunchRequest) => {
       switch (request.kind) {
         case "terminal":
-          void handleCreateTerminal(request, undefined, paneId);
+          void handleCreateTerminal(request, paneId);
           break;
       }
     },
@@ -517,7 +504,7 @@ export function WorkspaceSurface({
     (action: WorkspaceTabHotkeyAction) => {
       switch (action.kind) {
         case "new-tab":
-          handleOpenLauncher(activePaneId ?? undefined);
+          void handleCreateTerminal({ launchType: "shell" }, activePaneId ?? undefined);
           return;
         case "close-active-tab": {
           if (!activeTabKey) {
@@ -575,7 +562,7 @@ export function WorkspaceSurface({
       activeTabKey,
       handleCloseDocumentTab,
       handleCloseRuntimeTab,
-      handleOpenLauncher,
+      handleCreateTerminal,
       handleSelectTab,
     ],
   );
@@ -688,7 +675,6 @@ export function WorkspaceSurface({
 
       <WorkspaceSurfacePaneTree
         activePaneId={activePaneId}
-        activity={activityQuery.data ?? []}
         creatingSelection={creatingSelection}
         documents={state.documents}
         fileSessionsByTabKey={fileSessionsByTabKey}
@@ -714,7 +700,6 @@ export function WorkspaceSurface({
             dispatch({
               direction: splitDirection,
               kind: "split-pane",
-              launcherId: createWorkspaceLauncherId(),
               newPaneId,
               paneId: targetPaneId,
               placement: splitPlacement,
@@ -739,8 +724,6 @@ export function WorkspaceSurface({
           });
         }}
         onOpenFile={handleOpenFile}
-        onOpenLauncher={handleOpenLauncher}
-        onOpenTerminal={handleShowRuntimeTab}
         onRenameRuntimeTab={(terminalId, label) => renameTerminal(terminalId, label)}
         onSelectPane={handleSelectPane}
         onSelectTab={handleSelectTab}
@@ -754,7 +737,6 @@ export function WorkspaceSurface({
           dispatch({
             direction,
             kind: "split-pane",
-            launcherId: createWorkspaceLauncherId(),
             newPaneId: createWorkspacePaneId(),
             paneId,
             placement: "after",
@@ -765,7 +747,6 @@ export function WorkspaceSurface({
         paneCount={paneLeaves.length}
         rootPane={state.rootPane}
         resolvedActiveTabKeyByPaneId={resolvedActiveTabKeyByPaneId}
-        sessionHistory={sessionHistory}
         surfaceActions={surfaceActions}
         terminals={terminals}
         visibleTabsByPaneId={visibleTabsByPaneId}

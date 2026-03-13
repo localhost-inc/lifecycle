@@ -1,7 +1,6 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   getManifestFingerprint,
-  type LifecycleConfig,
   type GitLogEntry,
   type GitPullRequestSummary,
   type ServiceRecord,
@@ -12,7 +11,6 @@ import { createPortal } from "react-dom";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { ManifestStatus } from "../../projects/api/projects";
-import { useQueryClient } from "../../../query";
 import { useCurrentGitPullRequest, useGitPullRequest, useGitPullRequests } from "../../git/hooks";
 import { WorkspaceSidebar } from "./workspace-sidebar";
 import { WorkspaceSurface } from "./workspace-surface";
@@ -23,7 +21,7 @@ import {
   updateWorkspaceService,
   type WorkspaceSnapshotResult,
 } from "../api";
-import { useWorkspaceEnvironmentTasks, useWorkspaceSetup, workspaceKeys } from "../hooks";
+import { useWorkspaceEnvironmentTasks, useWorkspaceSetup } from "../hooks";
 import { workspaceSupportsFilesystemInteraction } from "../lib/workspace-capabilities";
 import {
   readWorkspaceRouteState,
@@ -44,7 +42,6 @@ export function WorkspacePanel({
   workspaceSnapshot,
   manifestStatus,
 }: WorkspacePanelProps) {
-  const client = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [rightRailRoot, setRightRailRoot] = useState<HTMLElement | null>(null);
   const routedPullRequestMarkerRef = useRef<string | null>(null);
@@ -139,14 +136,12 @@ export function WorkspacePanel({
     }) => {
       try {
         await updateWorkspaceService(workspace.id, serviceName, { exposure, portOverride });
-        client.invalidate(workspaceKeys.snapshot(workspace.id));
-        client.invalidate(workspaceKeys.services(workspace.id));
       } catch (err) {
         console.error("Failed to update workspace service:", err);
         throw err;
       }
     },
-    [client, workspace.id],
+    [workspace.id],
   );
 
   const isManifestStale =
@@ -165,14 +160,11 @@ export function WorkspacePanel({
     void (async () => {
       try {
         await syncWorkspaceManifest(workspace.id, configToSync);
-        client.invalidate(workspaceKeys.detail(workspace.id));
-        client.invalidate(workspaceKeys.snapshot(workspace.id));
-        client.invalidate(workspaceKeys.services(workspace.id));
       } catch (error) {
         console.error("Failed to sync workspace manifest:", error);
       }
     })();
-  }, [client, manifestStatus, services.length, workspace]);
+  }, [manifestStatus, services.length, workspace]);
 
   const updateRoute = useCallback(
     (patch: Parameters<typeof updateWorkspaceRouteState>[1]) => {

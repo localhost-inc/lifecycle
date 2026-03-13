@@ -101,11 +101,6 @@ export function ProjectManifestWatcher() {
 
                 const manifestStatus = await readManifest(workspace.worktree_path);
                 await syncWorkspaceManifest(workspace.id, configFromManifestStatus(manifestStatus));
-
-                client.invalidate(workspaceKeys.detail(workspace.id));
-                client.invalidate(workspaceKeys.snapshot(workspace.id));
-                client.invalidate(workspaceKeys.services(workspace.id));
-                client.invalidate(workspaceKeys.byProject());
               })();
             },
             { delayMs: 150, recursive: false },

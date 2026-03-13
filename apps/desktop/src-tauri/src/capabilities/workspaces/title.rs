@@ -117,7 +117,9 @@ pub fn maybe_schedule_terminal_auto_title_from_prompt(
             &db_path,
             &terminal_id,
             &generated_title.title,
-        ) {
+        )
+        .await
+        {
             Ok(Some(_)) => {
                 tracing::info!(
                     terminal_id,

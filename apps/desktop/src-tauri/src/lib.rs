@@ -17,7 +17,8 @@ use tokio::sync::Mutex as AsyncMutex;
 pub use shared::errors::LifecycleError;
 
 pub(crate) type ManagedSupervisor = Arc<AsyncMutex<Supervisor>>;
-pub(crate) type SupervisorMap = Arc<AsyncMutex<HashMap<String, ManagedSupervisor>>>;
+pub(crate) type WorkspaceControllerRegistryHandle =
+    Arc<capabilities::workspaces::controller::WorkspaceControllerRegistry>;
 pub(crate) type RootGitWatcherMap =
     Arc<StdMutex<HashMap<String, capabilities::workspaces::git_watcher::RootGitWatcher>>>;
 
@@ -36,7 +37,8 @@ struct AppShortcutEvent {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let supervisors: SupervisorMap = Arc::new(AsyncMutex::new(HashMap::new()));
+    let workspace_controllers: WorkspaceControllerRegistryHandle =
+        Arc::new(capabilities::workspaces::controller::WorkspaceControllerRegistry::new());
     let root_git_watchers: RootGitWatcherMap = Arc::new(StdMutex::new(HashMap::new()));
     let root_git_watchers_for_setup = root_git_watchers.clone();
 
@@ -118,7 +120,7 @@ pub fn run() {
                 }
             }
         })
-        .manage(supervisors)
+        .manage(workspace_controllers)
         .manage(root_git_watchers)
         .invoke_handler(tauri::generate_handler![
             capabilities::app::commands::set_window_accepts_mouse_moved_events,

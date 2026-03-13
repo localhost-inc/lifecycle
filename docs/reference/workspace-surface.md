@@ -10,7 +10,7 @@ The workspace center panel is a shared surface that can host both provider-backe
    - identity is provider-owned (`terminal_id`, future `agent_session_id`)
 2. Document tabs:
    - backed by workspace content or derived workspace artifacts
-   - examples: launcher, git diff, pull request, file editor, preview-specific documents
+   - examples: git diff, pull request, file editor, preview-specific documents
    - identity is client-owned and derived from document intent (`diff:changes`, `diff:commit:<sha>`, `pull-request:<number>`, future `file:path`)
 
 ## Ownership Rules
@@ -29,10 +29,10 @@ The workspace center panel is a shared surface that can host both provider-backe
 2. Leaf panes own `activeTabKey` plus ordered `tabOrderKeys`; split nodes own `direction` (`row|column`) plus `ratio`.
 3. `activePaneId` is the keyboard and launch target when an action does not name a destination pane explicitly.
 4. Tabs belong to exactly one pane at a time. Reopening an existing document or runtime should select the owning pane instead of cloning the tab into a second pane.
-5. Splitting a pane creates a sibling leaf pane and should seed that new pane with a launcher so the user has an immediate destination for the new surface.
+5. Splitting a pane creates a sibling leaf pane that starts empty and renders a pane-local empty state with quick launch actions.
 6. Closing a pane removes that leaf from the tree and merges its tab order into the surviving sibling pane instead of silently discarding tabs.
 7. Panes are separate tab groups. Moving a tab into another pane should transfer ownership to that pane rather than mirroring the tab across both panes.
-8. Dragging a tab into a pane that currently only shows a launcher placeholder should replace that placeholder with the moved tab.
+8. Dragging a tab into an empty pane should move the tab there and leave the source pane empty when it no longer owns any tabs.
 9. Dragging a tab onto an existing tab strip may position it before or after the hovered target tab inside that destination pane.
 10. Dragging a tab to the left, right, top, or bottom edge of a pane should create a new split pane on that side, following the editor-group model rather than opening a mirrored view.
 11. Local restore should persist the split tree, split ratios, and per-pane selection state. Legacy flat snapshots (`activeTabKey` + `tabOrderKeys`) should migrate into a single root leaf on read.
@@ -47,14 +47,14 @@ The workspace center panel is a shared surface that can host both provider-backe
 6. Runtime tab semantics must stay mode-agnostic: a cloud terminal may attach through a provider bridge while a local terminal talks directly to the host runtime, but both remain the same runtime-tab class in the workspace surface.
 7. A runtime tab may remain visible inside a non-focused pane, but only the focused pane's active runtime surface should receive native focus or pointer ownership.
 
-## Launcher Tabs
+## Empty Pane State
 
-1. The launcher is a workspace-owned tab, not a provider-backed runtime.
-2. `Cmd/Ctrl + T` should open a launcher tab.
-3. A newly opened workspace should default to a launcher tab when no visible tab state exists yet.
-4. Opening a launcher without an explicit destination should place it in the active pane.
-5. Launcher tabs may create new runtime tabs or reopen prior sessions, but they do not own runtime lifecycle.
-6. Launcher tabs may surface recent sessions and a workspace-scoped lifecycle activity feed sourced from normalized events.
+1. An empty pane is a first-class surface state, not a synthetic workspace-owned tab.
+2. A newly opened workspace may restore with no tabs visible; in that case the active pane renders the empty state directly.
+3. The empty state should expose quick actions for creating a shell or supported harness session in that pane.
+4. `Cmd/Ctrl + T` should create a new shell tab in the active pane.
+5. Empty panes do not own runtime lifecycle; they are only a launch surface for the next runtime or document tab.
+6. Local restore should preserve non-default split layouts even when every pane is empty.
 
 ## Git Diff Documents
 

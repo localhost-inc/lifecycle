@@ -1,5 +1,6 @@
 use crate::platform::db::DbPath;
 use crate::shared::errors::LifecycleError;
+use crate::WorkspaceControllerRegistryHandle;
 use tauri::{AppHandle, State};
 
 #[tauri::command]
@@ -12,12 +13,16 @@ pub fn read_workspace_file(
 }
 
 #[tauri::command]
-pub fn write_workspace_file(
+pub async fn write_workspace_file(
     db_path: State<'_, DbPath>,
+    workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
     workspace_id: String,
     file_path: String,
     content: String,
 ) -> Result<super::super::file::WorkspaceFileReadResult, LifecycleError> {
+    let _mutation_guard = workspace_controllers
+        .acquire_mutation_guard(&workspace_id)
+        .await?;
     super::super::file::write_workspace_file(&db_path.0, workspace_id, file_path, content)
 }
 

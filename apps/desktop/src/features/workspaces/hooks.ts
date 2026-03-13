@@ -54,27 +54,33 @@ const WORKSPACE_ACTIVITY_LIMIT = 32;
 
 const WORKSPACES_BY_PROJECT_EVENT_KINDS = [
   "git.head_changed",
+  "workspace.manifest_synced",
   "workspace.renamed",
   "workspace.status_changed",
   "workspace.deleted",
 ] as const satisfies readonly LifecycleEventKind[];
 const WORKSPACE_EVENT_KINDS = [
   "git.head_changed",
+  "workspace.manifest_synced",
   "workspace.renamed",
   "workspace.status_changed",
   "workspace.deleted",
 ] as const satisfies readonly LifecycleEventKind[];
 const WORKSPACE_SERVICE_EVENT_KINDS = [
+  "service.configuration_changed",
   "service.status_changed",
+  "workspace.manifest_synced",
   "workspace.status_changed",
   "workspace.deleted",
 ] as const satisfies readonly LifecycleEventKind[];
 const WORKSPACE_SNAPSHOT_EVENT_KINDS = [
   "git.head_changed",
+  "service.configuration_changed",
   "service.status_changed",
   "terminal.created",
   "terminal.status_changed",
   "terminal.renamed",
+  "workspace.manifest_synced",
   "workspace.renamed",
   "workspace.status_changed",
   "workspace.deleted",
@@ -93,6 +99,8 @@ const WORKSPACE_ACTIVITY_EVENT_KINDS = [
   "workspace.status_changed",
   "workspace.renamed",
   "workspace.deleted",
+  "workspace.manifest_synced",
+  "service.configuration_changed",
   "service.status_changed",
   "workspace.setup_progress",
   "environment.task_progress",
@@ -236,6 +244,33 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
               : event.status === "stopped"
                 ? "warning"
                 : "neutral",
+      };
+    case "service.configuration_changed":
+      return {
+        detail: joinActivityDetail([
+          `exposure ${event.service.exposure}`,
+          event.service.effective_port !== null ? `port ${event.service.effective_port}` : null,
+          event.service.preview_status !== "disabled"
+            ? `preview ${humanizeToken(event.service.preview_status).toLowerCase()}`
+            : null,
+        ]),
+        id: event.id,
+        kind: event.kind,
+        occurredAt: event.occurred_at,
+        title: `Service ${event.service.service_name} configuration updated`,
+        tone: "neutral",
+      };
+    case "workspace.manifest_synced":
+      return {
+        detail: joinActivityDetail([
+          event.manifest_fingerprint,
+          `${event.services.length} service${event.services.length === 1 ? "" : "s"}`,
+        ]),
+        id: event.id,
+        kind: event.kind,
+        occurredAt: event.occurred_at,
+        title: "Workspace manifest synced",
+        tone: "neutral",
       };
     case "workspace.setup_progress":
     case "environment.task_progress": {
@@ -415,6 +450,38 @@ export function reduceWorkspacesByProject(
   current: Record<string, WorkspaceRecord[]> | undefined,
   event: LifecycleEvent,
 ): QueryUpdate<Record<string, WorkspaceRecord[]>> {
+  if (event.kind === "workspace.manifest_synced" && current) {
+    let changed = false;
+    let found = false;
+    const next = Object.fromEntries(
+      Object.entries(current).map(([projectId, workspaces]) => [
+        projectId,
+        workspaces.map((workspace) => {
+          if (workspace.id !== event.workspace_id) {
+            return workspace;
+          }
+
+          found = true;
+          if (workspace.manifest_fingerprint === event.manifest_fingerprint) {
+            return workspace;
+          }
+
+          changed = true;
+          return {
+            ...workspace,
+            manifest_fingerprint: event.manifest_fingerprint,
+          };
+        }),
+      ]),
+    );
+
+    if (!found) {
+      return { kind: "none" };
+    }
+
+    return changed ? { kind: "replace", data: next } : { kind: "none" };
+  }
+
   if (event.kind === "workspace.renamed" && current) {
     let found = false;
     const next = Object.fromEntries(
@@ -529,6 +596,24 @@ export function reduceWorkspaceRecord(
   event: LifecycleEvent,
   workspaceId: string,
 ): QueryUpdate<WorkspaceRecord | null> {
+  if (event.kind === "workspace.manifest_synced" && event.workspace_id === workspaceId) {
+    if (!current) {
+      return { kind: "invalidate" };
+    }
+
+    if (current.manifest_fingerprint === event.manifest_fingerprint) {
+      return { kind: "none" };
+    }
+
+    return {
+      kind: "replace",
+      data: {
+        ...current,
+        manifest_fingerprint: event.manifest_fingerprint,
+      },
+    };
+  }
+
   if (event.kind === "git.head_changed" && event.workspace_id === workspaceId) {
     if (!current) {
       return { kind: "invalidate" };
@@ -688,6 +773,10 @@ export function reduceWorkspaceServices(
   event: LifecycleEvent,
   workspaceId: string,
 ): QueryUpdate<ServiceRecord[]> {
+  if (event.kind === "workspace.manifest_synced" && event.workspace_id === workspaceId) {
+    return { kind: "replace", data: event.services };
+  }
+
   if (
     (event.kind === "workspace.status_changed" || event.kind === "workspace.deleted") &&
     event.workspace_id === workspaceId
@@ -695,7 +784,11 @@ export function reduceWorkspaceServices(
     return { kind: "invalidate" };
   }
 
-  if (event.kind !== "service.status_changed" || event.workspace_id !== workspaceId) {
+  if (event.kind !== "service.status_changed" && event.kind !== "service.configuration_changed") {
+    return { kind: "none" };
+  }
+
+  if (event.workspace_id !== workspaceId) {
     return { kind: "none" };
   }
 
@@ -703,16 +796,25 @@ export function reduceWorkspaceServices(
     return { kind: "invalidate" };
   }
 
-  const next = current.map((service) =>
-    service.service_name === event.service_name
-      ? {
-          ...service,
-          status: event.status,
-          status_reason: event.status_reason,
-        }
-      : service,
-  );
-  const found = next.some((service) => service.service_name === event.service_name);
+  const serviceName =
+    event.kind === "service.status_changed" ? event.service_name : event.service.service_name;
+  let found = false;
+  const next = current.map((service) => {
+    if (service.service_name !== serviceName) {
+      return service;
+    }
+
+    found = true;
+    if (event.kind === "service.status_changed") {
+      return {
+        ...service,
+        status: event.status,
+        status_reason: event.status_reason,
+      };
+    }
+
+    return event.service;
+  });
 
   if (!found) {
     return { kind: "invalidate" };

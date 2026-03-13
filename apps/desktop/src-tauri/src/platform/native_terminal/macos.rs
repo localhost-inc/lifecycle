@@ -1,4 +1,6 @@
-use super::{NativeTerminalColorScheme, NativeTerminalSurfaceSyncRequest};
+use super::{
+    NativeTerminalColorScheme, NativeTerminalSessionCreateRequest, NativeTerminalSurfaceSyncRequest,
+};
 use crate::capabilities::workspaces::terminal::{
     complete_native_terminal_exit, prepare_native_terminal_attachment_paste,
 };
@@ -61,6 +63,7 @@ unsafe extern "C" {
         webview_view: *mut c_void,
         config: *const LifecycleNativeTerminalConfig,
     ) -> bool;
+    fn lifecycle_native_terminal_create(config: *const LifecycleNativeTerminalConfig) -> bool;
     fn lifecycle_native_terminal_install_diagnostics(log_path: *const c_char);
     fn lifecycle_native_terminal_hide(terminal_id: *const c_char) -> bool;
     fn lifecycle_native_terminal_close(terminal_id: *const c_char) -> bool;
@@ -292,6 +295,44 @@ pub(super) fn initialize(
             )
         },
         "failed to initialize native terminal runtime",
+    )
+}
+
+pub(super) fn create_session(
+    request: &NativeTerminalSessionCreateRequest,
+) -> Result<(), LifecycleError> {
+    let terminal_id = cstring(&request.terminal_id, "terminal id")?;
+    let working_directory = cstring(&request.working_directory, "working directory")?;
+    let command = if request.command.trim().is_empty() {
+        None
+    } else {
+        Some(cstring(&request.command, "command")?)
+    };
+    let background_color = cstring(&request.background_color, "background color")?;
+    let theme_config_path = cstring(&request.theme_config_path, "theme config path")?;
+    let config = LifecycleNativeTerminalConfig {
+        terminal_id: terminal_id.as_ptr(),
+        working_directory: working_directory.as_ptr(),
+        command: command
+            .as_ref()
+            .map_or(std::ptr::null(), |value| value.as_ptr()),
+        background_color: background_color.as_ptr(),
+        theme_config_path: theme_config_path.as_ptr(),
+        x: 0.0,
+        y: 0.0,
+        width: 1.0,
+        height: 1.0,
+        font_size: request.font_size,
+        scale_factor: request.scale_factor,
+        focused: false,
+        pointer_passthrough: true,
+        hidden: true,
+        dark: matches!(request.color_scheme, NativeTerminalColorScheme::Dark),
+    };
+
+    with_error(
+        || unsafe { lifecycle_native_terminal_create(&config) },
+        "failed to create native terminal session",
     )
 }
 

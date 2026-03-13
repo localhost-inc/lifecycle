@@ -19,7 +19,6 @@ export interface SurfaceLaunchAction {
 interface SurfaceLaunchActionsProps {
   actions: SurfaceLaunchAction[];
   onLaunch: (request: SurfaceLaunchRequest) => void;
-  onOpenLauncher?: () => void;
 }
 
 export function resolveSurfaceLaunchTooltipAlign(
@@ -37,41 +36,13 @@ function LoadingDot() {
   );
 }
 
-export function SurfaceLaunchActions({
-  actions,
-  onLaunch,
-  onOpenLauncher,
-}: SurfaceLaunchActionsProps) {
+export function SurfaceLaunchActions({ actions, onLaunch }: SurfaceLaunchActionsProps) {
   return (
     <TooltipProvider>
       <div className="flex shrink-0 items-center pr-3">
         <div className="inline-flex items-center gap-px">
-          {onOpenLauncher && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className={`inline-flex h-8 w-8 items-center justify-center bg-[var(--muted)] text-[var(--muted-foreground)] outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out hover:bg-[color-mix(in_srgb,var(--muted),var(--foreground)_8%)] hover:text-[var(--foreground)] focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50 ${actions.length === 0 ? "rounded-xl" : "rounded-l-xl"}`}
-                  onClick={onOpenLauncher}
-                >
-                  <svg
-                    fill="none"
-                    height="16"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeWidth="1.5"
-                    viewBox="0 0 16 16"
-                    width="16"
-                  >
-                    <path d="M8 3v10M3 8h10" />
-                  </svg>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent>New Tab</TooltipContent>
-            </Tooltip>
-          )}
           {actions.map((action, index) => {
-            const isFirst = !onOpenLauncher && index === 0;
+            const isFirst = index === 0;
             const isLast = index === actions.length - 1;
             const rounding =
               isFirst && isLast

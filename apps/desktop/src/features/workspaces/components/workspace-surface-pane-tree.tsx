@@ -30,7 +30,6 @@ import {
   type WorkspaceSurfaceTabBarDragPreview,
   type WorkspaceSurfaceTabDrag,
 } from "./workspace-surface-tab-bar";
-import type { WorkspaceActivityItem } from "../hooks";
 import type { FileViewerSessionState } from "../../files/lib/file-session";
 import type {
   WorkspacePaneNode,
@@ -49,18 +48,13 @@ const PANE_RESIZE_STEP_PX = 32;
 
 interface WorkspaceSurfacePaneTreeProps {
   activePaneId: string | null;
-  activity: WorkspaceActivityItem[];
   creatingSelection: "shell" | HarnessProvider | null;
   documents: WorkspaceSurfaceDocument[];
   fileSessionsByTabKey: Record<string, FileViewerSessionState>;
   onCloseDocumentTab: (tabKey: string) => void;
   onClosePane: (paneId: string) => void;
   onCloseRuntimeTab: (tabKey: string, terminalId: string) => Promise<void>;
-  onCreateTerminal: (
-    input: CreateTerminalRequest,
-    launcherKey?: string,
-    paneId?: string,
-  ) => Promise<void>;
+  onCreateTerminal: (input: CreateTerminalRequest, paneId?: string) => Promise<void>;
   onFileSessionStateChange: (tabKey: string, state: FileViewerSessionState | null) => void;
   onLaunchSurface: (paneId: string, request: SurfaceLaunchRequest) => void;
   onMoveTabToPane: (
@@ -73,8 +67,6 @@ interface WorkspaceSurfacePaneTreeProps {
     splitPlacement?: "after" | "before",
   ) => void;
   onOpenFile: (filePath: string) => void;
-  onOpenLauncher: (paneId: string) => void;
-  onOpenTerminal: (terminalId: string, launcherKey?: string, paneId?: string) => void;
   onRenameRuntimeTab: (terminalId: string, label: string) => Promise<unknown> | unknown;
   onSelectPane: (paneId: string) => void;
   onSelectTab: (paneId: string, key: string) => void;
@@ -85,7 +77,6 @@ interface WorkspaceSurfacePaneTreeProps {
   paneCount: number;
   resolvedActiveTabKeyByPaneId: Record<string, string | null>;
   rootPane: WorkspacePaneNode;
-  sessionHistory: TerminalRecord[];
   surfaceActions: SurfaceLaunchAction[];
   terminals: TerminalRecord[];
   visibleTabsByPaneId: Record<string, WorkspaceSurfaceTab[]>;
@@ -602,8 +593,7 @@ function getWorkspaceSurfaceTabBarDragPreview(
     return {
       draggedKey: drag.tabKey,
       draggedWidth: drag.draggedWidth,
-      placement:
-        intent?.kind === "reorder" && intent.paneId === paneId ? intent.placement : null,
+      placement: intent?.kind === "reorder" && intent.paneId === paneId ? intent.placement : null,
       targetKey: intent?.kind === "reorder" && intent.paneId === paneId ? intent.targetKey : null,
     };
   }
@@ -620,11 +610,7 @@ function getWorkspaceSurfaceTabBarDragPreview(
   return null;
 }
 
-function PaneDropPreview({
-  intent,
-}: {
-  intent: WorkspaceSurfacePaneDropIntent | null;
-}) {
+function PaneDropPreview({ intent }: { intent: WorkspaceSurfacePaneDropIntent | null }) {
   if (!intent || intent.kind === "reorder") {
     return null;
   }
@@ -682,7 +668,9 @@ function WorkspaceSurfaceTabDragGhost({
   );
 }
 
-export function shouldAutoSelectWorkspacePaneFromPointerTarget(target: EventTarget | null): boolean {
+export function shouldAutoSelectWorkspacePaneFromPointerTarget(
+  target: EventTarget | null,
+): boolean {
   return !(
     target instanceof Element &&
     target.closest("button, input, textarea, select, [role='button'], [data-tab-action]") !== null
@@ -691,7 +679,6 @@ export function shouldAutoSelectWorkspacePaneFromPointerTarget(target: EventTarg
 
 export function WorkspaceSurfacePaneTree({
   activePaneId,
-  activity,
   creatingSelection,
   documents,
   fileSessionsByTabKey,
@@ -703,8 +690,6 @@ export function WorkspaceSurfacePaneTree({
   onLaunchSurface,
   onMoveTabToPane,
   onOpenFile,
-  onOpenLauncher,
-  onOpenTerminal,
   onRenameRuntimeTab,
   onSelectPane,
   onSelectTab,
@@ -715,7 +700,6 @@ export function WorkspaceSurfacePaneTree({
   paneCount,
   resolvedActiveTabKeyByPaneId,
   rootPane,
-  sessionHistory,
   surfaceActions,
   terminals,
   visibleTabsByPaneId,
@@ -728,9 +712,9 @@ export function WorkspaceSurfacePaneTree({
   const draggedTab =
     activeTabDrag === null
       ? null
-      : Object.values(visibleTabsByPaneId)
+      : (Object.values(visibleTabsByPaneId)
           .flat()
-          .find((tab) => tab.key === activeTabDrag.drag.tabKey) ?? null;
+          .find((tab) => tab.key === activeTabDrag.drag.tabKey) ?? null);
 
   const setPaneElement = useCallback((paneId: string, element: HTMLElement | null) => {
     if (element) {
@@ -763,8 +747,7 @@ export function WorkspaceSurfacePaneTree({
 
     const paneRect = paneElement.getBoundingClientRect();
 
-    const tabBarElement =
-      pointedElement.closest<HTMLElement>("[data-workspace-tab-bar]") ?? null;
+    const tabBarElement = pointedElement.closest<HTMLElement>("[data-workspace-tab-bar]") ?? null;
     const pointerOverTabBar = Boolean(tabBarElement && paneElement.contains(tabBarElement));
     const tabRects =
       pointerOverTabBar && tabBarElement
@@ -863,7 +846,8 @@ export function WorkspaceSurfacePaneTree({
           ? (fileSessionsByTabKey[activeTabKey] ?? null)
           : null;
       const isActivePane = node.id === activePaneId;
-      const paneDropIntent = activeTabDrag?.intent?.paneId === node.id ? activeTabDrag.intent : null;
+      const paneDropIntent =
+        activeTabDrag?.intent?.paneId === node.id ? activeTabDrag.intent : null;
       const tabBarDragPreview = getWorkspaceSurfaceTabBarDragPreview(activeTabDrag, node.id);
       const isDropTargetPane =
         paneDropIntent?.kind === "insert" && paneDropIntent.surface === "body";
@@ -896,7 +880,6 @@ export function WorkspaceSurfacePaneTree({
             <SurfaceLaunchActions
               actions={surfaceActions}
               onLaunch={(request) => onLaunchSurface(node.id, request)}
-              onOpenLauncher={() => onOpenLauncher(node.id)}
             />
             <div className="flex shrink-0 items-center gap-px pr-3">
               <PaneControlButton label="Split Right" onClick={() => onSplitPane(node.id, "row")}>
@@ -918,23 +901,15 @@ export function WorkspaceSurfacePaneTree({
               activeFileSessionState={activeFileSessionState}
               activeTabKey={activeTabKey}
               activeTabViewState={activeTabViewState}
-              activeTerminalId={
-                activeTabKey?.startsWith("terminal:") ? activeTabKey.slice("terminal:".length) : null
-              }
-              activity={activity}
               creatingSelection={creatingSelection}
               documents={documents}
               hasVisibleTabs={visibleTabs.length > 0}
-              onCreateTerminal={(input, launcherKey) => onCreateTerminal(input, launcherKey, node.id)}
+              onCreateTerminal={(input) => onCreateTerminal(input, node.id)}
               onFileSessionStateChange={onFileSessionStateChange}
               onOpenFile={onOpenFile}
-              onOpenTerminal={(terminalId, launcherKey) =>
-                onOpenTerminal(terminalId, launcherKey, node.id)
-              }
               onTabViewStateChange={onTabViewStateChange}
               paneDragInProgress={activeTabDrag !== null}
               paneFocused={isActivePane}
-              sessionHistory={sessionHistory}
               terminals={terminals}
               waitingForActiveRuntimeTab={waitingForRuntimePaneIds.has(node.id)}
               workspaceId={workspaceId}
@@ -947,7 +922,6 @@ export function WorkspaceSurfacePaneTree({
     [
       activePaneId,
       activeTabDrag,
-      activity,
       creatingSelection,
       documents,
       fileSessionsByTabKey,
@@ -959,8 +933,6 @@ export function WorkspaceSurfacePaneTree({
       onLaunchSurface,
       onMoveTabToPane,
       onOpenFile,
-      onOpenLauncher,
-      onOpenTerminal,
       onRenameRuntimeTab,
       onSelectPane,
       onSelectTab,
@@ -971,7 +943,6 @@ export function WorkspaceSurfacePaneTree({
       paneCount,
       resolvedActiveTabKeyByPaneId,
       setPaneElement,
-      sessionHistory,
       surfaceActions,
       terminals,
       visibleTabsByPaneId,

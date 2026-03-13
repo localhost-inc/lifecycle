@@ -1,8 +1,9 @@
 use crate::platform::{db::open_db, git::worktree};
 use crate::shared::errors::LifecycleError;
 use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
+use crate::WorkspaceControllerRegistryHandle;
 use rusqlite::params;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use super::kind::is_root_workspace_kind;
 use super::query::{self, TerminalRecord, WorkspaceRecord};
@@ -54,18 +55,28 @@ pub async fn rename_workspace(
     workspace_id: &str,
     name: &str,
 ) -> Result<WorkspaceRecord, LifecycleError> {
+    let workspace_controllers = app.state::<WorkspaceControllerRegistryHandle>();
+    let _mutation_guard = workspace_controllers
+        .acquire_mutation_guard(workspace_id)
+        .await?;
     let workspace =
         update_workspace_identity(db_path, workspace_id, name, TitleOrigin::Manual).await?;
     emit_workspace_renamed(&app, &workspace);
     Ok(workspace)
 }
 
-pub fn rename_terminal(
+pub async fn rename_terminal(
     app: &AppHandle,
     db_path: &str,
     terminal_id: &str,
     label: &str,
 ) -> Result<TerminalRecord, LifecycleError> {
+    let terminal = load_terminal_record(db_path, terminal_id)?
+        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()))?;
+    let workspace_controllers = app.state::<WorkspaceControllerRegistryHandle>();
+    let _mutation_guard = workspace_controllers
+        .acquire_mutation_guard(&terminal.workspace_id)
+        .await?;
     update_terminal_label(app, db_path, terminal_id, label, TitleOrigin::Manual)
 }
 
@@ -75,6 +86,10 @@ pub async fn maybe_apply_generated_workspace_identity(
     workspace_id: &str,
     name: &str,
 ) -> Result<Option<WorkspaceRecord>, LifecycleError> {
+    let workspace_controllers = app.state::<WorkspaceControllerRegistryHandle>();
+    let _mutation_guard = workspace_controllers
+        .acquire_mutation_guard(workspace_id)
+        .await?;
     let context = load_workspace_identity_context(db_path, workspace_id)?;
     if is_root_workspace_kind(&context.kind) {
         return Ok(None);
@@ -92,12 +107,18 @@ pub async fn maybe_apply_generated_workspace_identity(
     Ok(Some(workspace))
 }
 
-pub fn maybe_apply_generated_terminal_label(
+pub async fn maybe_apply_generated_terminal_label(
     app: &AppHandle,
     db_path: &str,
     terminal_id: &str,
     label: &str,
 ) -> Result<Option<TerminalRecord>, LifecycleError> {
+    let terminal = load_terminal_record(db_path, terminal_id)?
+        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()))?;
+    let workspace_controllers = app.state::<WorkspaceControllerRegistryHandle>();
+    let _mutation_guard = workspace_controllers
+        .acquire_mutation_guard(&terminal.workspace_id)
+        .await?;
     let context = load_terminal_rename_context(db_path, terminal_id)?;
     if context.label_origin == TitleOrigin::Manual.as_str() {
         return Ok(None);

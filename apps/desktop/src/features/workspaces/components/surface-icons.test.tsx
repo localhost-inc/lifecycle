@@ -5,7 +5,6 @@ import {
   createChangesDiffTab,
   createCommitDiffTab,
   createFileViewerTab,
-  createLauncherTab,
   createPullRequestTab,
 } from "../state/workspace-surface-state";
 import { WorkspaceSurfaceTabLeading } from "./surface-icons";
@@ -55,14 +54,11 @@ describe("WorkspaceSurfaceTabLeading", () => {
     expect(markup).not.toContain('title="detached"');
   });
 
-  test("renders distinct visuals for launcher and diff surfaces", () => {
+  test("renders distinct visuals for document surface types", () => {
     const markup = renderToStaticMarkup(
       createElement(
         "div",
         null,
-        createElement(WorkspaceSurfaceTabLeading, {
-          tab: createLauncherTab("launcher-1"),
-        }),
         createElement(WorkspaceSurfaceTabLeading, {
           tab: createChangesDiffTab("src/app.tsx"),
         }),
@@ -96,7 +92,6 @@ describe("WorkspaceSurfaceTabLeading", () => {
       ),
     );
 
-    expect(markup).toContain('data-surface-tab-icon="launcher"');
     expect(markup).toContain('data-surface-tab-icon="changes-diff"');
     expect(markup).toContain('data-surface-tab-icon="commit-diff"');
     expect(markup).toContain('data-surface-tab-icon="file-viewer"');

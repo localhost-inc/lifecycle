@@ -9,14 +9,12 @@ describe("WorkspaceSurface layout", () => {
   });
 
   test("renders pane headers flush on the left edge while preserving right-side controls", async () => {
-    const hooksModule = await import("../hooks");
     const terminalHooksModule = await import("../../terminals/hooks");
     const responseReadyModule =
       await import("../../terminals/state/terminal-response-ready-provider");
     const panelsModule = await import("./workspace-surface-panels");
     const tabBarModule = await import("./workspace-surface-tab-bar");
 
-    spyOn(hooksModule, "useWorkspaceActivity").mockReturnValue({ data: [] } as never);
     spyOn(terminalHooksModule, "useWorkspaceTerminals").mockReturnValue({
       data: [],
       isLoading: false,
@@ -61,7 +59,6 @@ describe("WorkspaceSurface layout", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceSurfacePaneTree, {
         activePaneId: "pane-root",
-        activity: [],
         creatingSelection: null,
         documents: [],
         fileSessionsByTabKey: {},
@@ -73,8 +70,6 @@ describe("WorkspaceSurface layout", () => {
         onLaunchSurface: () => {},
         onMoveTabToPane: () => {},
         onOpenFile: () => {},
-        onOpenLauncher: () => {},
-        onOpenTerminal: () => {},
         onRenameRuntimeTab: async () => {},
         onSelectPane: () => {},
         onSelectTab: () => {},
@@ -105,7 +100,6 @@ describe("WorkspaceSurface layout", () => {
             tabOrderKeys: [],
           },
         },
-        sessionHistory: [],
         surfaceActions: [],
         terminals: [],
         viewStateByTabKey: {},

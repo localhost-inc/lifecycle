@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   claimNativeTerminalSurfaceLease,
   createNativeTerminalSurfaceLeaseRegistry,
+  resolveNativeTerminalSurfaceSyncResultAction,
   resolveNativeTerminalSurfaceInteraction,
   scheduleNativeTerminalSurfaceLeaseHide,
   shouldShowNativeTerminalSurface,
@@ -192,5 +193,51 @@ describe("native terminal lease coordination", () => {
 
     expect(hiddenTerminalIds).toEqual(["term-1"]);
     expect(registry.has("term-1")).toBeFalse();
+  });
+});
+
+describe("resolveNativeTerminalSurfaceSyncResultAction", () => {
+  test("applies the sync result while the same surface lifetime is active", () => {
+    const registry = createNativeTerminalSurfaceLeaseRegistry();
+
+    expect(
+      resolveNativeTerminalSurfaceSyncResultAction({
+        currentLifecycleToken: 4,
+        lifecycleToken: 4,
+        registry,
+        terminalId: "term-1",
+      }),
+    ).toBe("apply");
+  });
+
+  test("hides a stale sync result after the terminal lease has been released", () => {
+    const registry = createNativeTerminalSurfaceLeaseRegistry();
+
+    expect(
+      resolveNativeTerminalSurfaceSyncResultAction({
+        currentLifecycleToken: 5,
+        lifecycleToken: 4,
+        registry,
+        terminalId: "term-1",
+      }),
+    ).toBe("hide");
+  });
+
+  test("ignores a stale sync result when another lease still owns the terminal", () => {
+    const registry = createNativeTerminalSurfaceLeaseRegistry();
+
+    registry.set("term-1", {
+      owner: Symbol("replacement"),
+      pendingHideFrameId: null,
+    });
+
+    expect(
+      resolveNativeTerminalSurfaceSyncResultAction({
+        currentLifecycleToken: 6,
+        lifecycleToken: 4,
+        registry,
+        terminalId: "term-1",
+      }),
+    ).toBe("ignore");
   });
 });

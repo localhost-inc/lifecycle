@@ -1,3 +1,4 @@
+use crate::capabilities::workspaces::controller::WorkspaceControllerToken;
 use crate::capabilities::workspaces::manifest::{SetupStep, SetupWriteFile};
 use crate::platform::runtime::templates::expand_reserved_runtime_templates;
 use crate::shared::errors::LifecycleError;
@@ -14,6 +15,12 @@ pub enum StepProgressTarget {
     EnvironmentTask,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StepRunOutcome {
+    Cancelled,
+    Completed,
+}
+
 pub async fn run_steps(
     app: &AppHandle,
     workspace_id: &str,
@@ -22,8 +29,17 @@ pub async fn run_steps(
     runtime_env: &HashMap<String, String>,
     step_field_prefix: &str,
     progress_target: StepProgressTarget,
-) -> Result<(), LifecycleError> {
+    cancellation_token: Option<WorkspaceControllerToken>,
+) -> Result<StepRunOutcome, LifecycleError> {
     for step in steps {
+        if cancellation_token
+            .as_ref()
+            .map(WorkspaceControllerToken::is_cancelled)
+            .unwrap_or(false)
+        {
+            return Ok(StepRunOutcome::Cancelled);
+        }
+
         let cwd = step_cwd(worktree_path, step.cwd.as_deref());
         let step_field = format!("{step_field_prefix}.{}", step.name);
         let step_env = build_step_env(step, runtime_env, &step_field)?;
@@ -47,6 +63,7 @@ pub async fn run_steps(
                     &cwd,
                     command,
                     &step_env,
+                    cancellation_token.clone(),
                 )
                 .await?;
             }
@@ -61,6 +78,7 @@ pub async fn run_steps(
                     write_files,
                     &step_env,
                     &step_field,
+                    cancellation_token.clone(),
                 )
                 .await?;
             }
@@ -90,7 +108,7 @@ pub async fn run_steps(
         );
     }
 
-    Ok(())
+    Ok(StepRunOutcome::Completed)
 }
 
 fn build_step_env(
@@ -152,7 +170,8 @@ async fn run_command_step(
     cwd: &Path,
     command: &str,
     step_env: &HashMap<String, String>,
-) -> Result<(), LifecycleError> {
+    cancellation_token: Option<WorkspaceControllerToken>,
+) -> Result<StepRunOutcome, LifecycleError> {
     let mut cmd = Command::new("sh");
     cmd.args(["-c", command]).current_dir(cwd);
 
@@ -215,9 +234,10 @@ async fn run_command_step(
         })
     });
 
-    let result = tokio::time::timeout(
+    let result = wait_for_command_exit(
+        &mut child,
         std::time::Duration::from_secs(step.timeout_seconds),
-        child.wait(),
+        cancellation_token,
     )
     .await;
 
@@ -229,9 +249,9 @@ async fn run_command_step(
     }
 
     match result {
-        Ok(Ok(exit_status)) => {
+        CommandStepWaitResult::Exited(Ok(exit_status)) => {
             if exit_status.success() {
-                Ok(())
+                Ok(StepRunOutcome::Completed)
             } else {
                 let exit_code = exit_status.code().unwrap_or(-1);
                 publish_step_progress_event(
@@ -248,12 +268,12 @@ async fn run_command_step(
                 })
             }
         }
-        Ok(Err(_)) => Err(LifecycleError::SetupStepFailed {
+        CommandStepWaitResult::Exited(Err(_)) => Err(LifecycleError::SetupStepFailed {
             step: step.name.clone(),
             exit_code: -1,
         }),
-        Err(_) => {
-            let _ = child.kill().await;
+        CommandStepWaitResult::Cancelled => Ok(StepRunOutcome::Cancelled),
+        CommandStepWaitResult::TimedOut => {
             publish_step_progress_event(
                 app,
                 workspace_id,
@@ -279,10 +299,18 @@ async fn run_write_files_step(
     write_files: &[SetupWriteFile],
     step_env: &HashMap<String, String>,
     step_field: &str,
-) -> Result<(), LifecycleError> {
+    cancellation_token: Option<WorkspaceControllerToken>,
+) -> Result<StepRunOutcome, LifecycleError> {
     let write_future = async {
         let normalized_worktree = normalize_path(Path::new(worktree_path));
         for file in write_files {
+            if cancellation_token
+                .as_ref()
+                .map(WorkspaceControllerToken::is_cancelled)
+                .unwrap_or(false)
+            {
+                return Ok::<StepRunOutcome, LifecycleError>(StepRunOutcome::Cancelled);
+            }
             let target_path =
                 resolve_write_target_path(&normalized_worktree, cwd, &file.path, step_field)?;
             let rendered_path = target_path
@@ -319,7 +347,7 @@ async fn run_write_files_step(
             );
         }
 
-        Ok::<(), LifecycleError>(())
+        Ok::<StepRunOutcome, LifecycleError>(StepRunOutcome::Completed)
     };
 
     match tokio::time::timeout(
@@ -353,6 +381,57 @@ async fn run_write_files_step(
             Err(LifecycleError::SetupStepTimeout {
                 step: step.name.clone(),
             })
+        }
+    }
+}
+
+enum CommandStepWaitResult {
+    Cancelled,
+    Exited(Result<std::process::ExitStatus, std::io::Error>),
+    TimedOut,
+}
+
+async fn wait_for_command_exit(
+    child: &mut tokio::process::Child,
+    timeout_duration: std::time::Duration,
+    mut cancellation_token: Option<WorkspaceControllerToken>,
+) -> CommandStepWaitResult {
+    if cancellation_token
+        .as_ref()
+        .map(WorkspaceControllerToken::is_cancelled)
+        .unwrap_or(false)
+    {
+        let _ = child.kill().await;
+        let _ = child.wait().await;
+        return CommandStepWaitResult::Cancelled;
+    }
+
+    if let Some(cancellation_token) = cancellation_token.as_mut() {
+        tokio::select! {
+            result = tokio::time::timeout(timeout_duration, child.wait()) => {
+                match result {
+                    Ok(result) => CommandStepWaitResult::Exited(result),
+                    Err(_) => {
+                        let _ = child.kill().await;
+                        let _ = child.wait().await;
+                        CommandStepWaitResult::TimedOut
+                    }
+                }
+            }
+            _ = cancellation_token.cancelled() => {
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+                CommandStepWaitResult::Cancelled
+            }
+        }
+    } else {
+        match tokio::time::timeout(timeout_duration, child.wait()).await {
+            Ok(result) => CommandStepWaitResult::Exited(result),
+            Err(_) => {
+                let _ = child.kill().await;
+                let _ = child.wait().await;
+                CommandStepWaitResult::TimedOut
+            }
         }
     }
 }
@@ -460,6 +539,7 @@ fn normalize_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::capabilities::workspaces::controller::WorkspaceController;
 
     #[test]
     fn build_step_env_expands_reserved_runtime_templates() {
@@ -563,5 +643,23 @@ mod tests {
             }
             other => panic!("unexpected error: {other}"),
         }
+    }
+
+    #[tokio::test]
+    async fn wait_for_command_exit_returns_cancelled_when_controller_requests_stop() {
+        let controller = WorkspaceController::new();
+        let token = controller.begin_start().await.expect("start token");
+        let mut child = Command::new("sh")
+            .args(["-c", "sleep 30"])
+            .spawn()
+            .expect("spawn command");
+
+        controller.request_stop().await;
+
+        let result =
+            wait_for_command_exit(&mut child, std::time::Duration::from_secs(30), Some(token))
+                .await;
+
+        assert!(matches!(result, CommandStepWaitResult::Cancelled));
     }
 }

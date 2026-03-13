@@ -7,6 +7,7 @@ import type {
 } from "@lifecycle/contracts";
 import {
   createWorkspaceManifestQuery,
+  reduceWorkspaceServices,
   reduceWorkspaceActivity,
   reduceWorkspaceRecord,
   reduceWorkspaceSnapshot,
@@ -211,6 +212,50 @@ describe("reduceWorkspaceRecord", () => {
       },
     });
   });
+
+  test("patches manifest fingerprints from manifest sync facts", () => {
+    const current: WorkspaceRecord = {
+      created_at: "2026-03-10T10:00:00.000Z",
+      created_by: null,
+      expires_at: null,
+      failed_at: null,
+      failure_reason: null,
+      git_sha: "aaaaaaaa",
+      id: "ws_1",
+      kind: "root" as const,
+      last_active_at: "2026-03-10T10:00:00.000Z",
+      manifest_fingerprint: "manifest-old",
+      mode: "local" as const,
+      name: "Root",
+      project_id: "project_1",
+      source_ref: "main",
+      source_workspace_id: null,
+      status: "active" as const,
+      updated_at: "2026-03-10T10:00:00.000Z",
+      worktree_path: "/tmp/project_1",
+    };
+
+    const result = reduceWorkspaceRecord(
+      current,
+      {
+        id: "event-2",
+        kind: "workspace.manifest_synced",
+        manifest_fingerprint: "manifest-new",
+        occurred_at: "2026-03-10T10:06:00.000Z",
+        services: [],
+        workspace_id: "ws_1",
+      },
+      "ws_1",
+    );
+
+    expect(result).toEqual({
+      kind: "replace",
+      data: {
+        ...current,
+        manifest_fingerprint: "manifest-new",
+      },
+    });
+  });
 });
 
 describe("createWorkspaceManifestQuery", () => {
@@ -378,5 +423,100 @@ describe("reduceWorkspaceSnapshot", () => {
         },
       },
     });
+  });
+});
+
+describe("reduceWorkspaceServices", () => {
+  test("patches service configuration facts without refetching", () => {
+    const current: ServiceRecord[] = [
+      {
+        created_at: "2026-03-10T10:00:00.000Z",
+        default_port: 3000,
+        effective_port: 3000,
+        exposure: "local",
+        id: "svc_1",
+        port_override: null,
+        preview_failure_reason: null,
+        preview_status: "ready",
+        preview_url: "http://localhost:3000",
+        service_name: "web",
+        status: "ready",
+        status_reason: null,
+        updated_at: "2026-03-10T10:00:00.000Z",
+        workspace_id: "ws_1",
+      },
+    ];
+    const currentService = current[0]!;
+
+    const result = reduceWorkspaceServices(
+      current,
+      {
+        id: "event-3",
+        kind: "service.configuration_changed",
+        occurred_at: "2026-03-10T10:07:00.000Z",
+        service: {
+          ...currentService,
+          effective_port: 4100,
+          exposure: "internal",
+          port_override: 4100,
+          preview_failure_reason: null,
+          preview_status: "disabled",
+          preview_url: null,
+        },
+        workspace_id: "ws_1",
+      },
+      "ws_1",
+    );
+
+    expect(result).toEqual({
+      kind: "replace",
+      data: [
+        {
+          ...currentService,
+          effective_port: 4100,
+          exposure: "internal",
+          port_override: 4100,
+          preview_failure_reason: null,
+          preview_status: "disabled",
+          preview_url: null,
+        },
+      ],
+    });
+  });
+
+  test("replaces services on manifest sync outcomes", () => {
+    const nextServices: ServiceRecord[] = [
+      {
+        created_at: "2026-03-10T10:08:00.000Z",
+        default_port: 4100,
+        effective_port: 4100,
+        exposure: "internal",
+        id: "svc_2",
+        port_override: null,
+        preview_failure_reason: null,
+        preview_status: "disabled",
+        preview_url: null,
+        service_name: "api",
+        status: "stopped",
+        status_reason: null,
+        updated_at: "2026-03-10T10:08:00.000Z",
+        workspace_id: "ws_1",
+      },
+    ];
+
+    expect(
+      reduceWorkspaceServices(
+        [],
+        {
+          id: "event-4",
+          kind: "workspace.manifest_synced",
+          manifest_fingerprint: "manifest-next",
+          occurred_at: "2026-03-10T10:08:00.000Z",
+          services: nextServices,
+          workspace_id: "ws_1",
+        },
+        "ws_1",
+      ),
+    ).toEqual({ kind: "replace", data: nextServices });
   });
 });

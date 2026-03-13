@@ -7,6 +7,34 @@ use std::path::PathBuf;
 
 use super::types::NativeTerminalTheme;
 
+pub(crate) fn default_native_terminal_theme() -> NativeTerminalTheme {
+    NativeTerminalTheme {
+        background: "#09090b".to_string(),
+        cursor_color: "#93c5fd".to_string(),
+        foreground: "#fafaf9".to_string(),
+        palette: vec![
+            "#27272a".to_string(),
+            "#f43f5e".to_string(),
+            "#4ade80".to_string(),
+            "#facc15".to_string(),
+            "#60a5fa".to_string(),
+            "#c084fc".to_string(),
+            "#22d3ee".to_string(),
+            "#f4f4f5".to_string(),
+            "#52525b".to_string(),
+            "#fb7185".to_string(),
+            "#86efac".to_string(),
+            "#fde047".to_string(),
+            "#93c5fd".to_string(),
+            "#d8b4fe".to_string(),
+            "#67e8f9".to_string(),
+            "#fafafa".to_string(),
+        ],
+        selection_background: "#27272a".to_string(),
+        selection_foreground: "#fafaf9".to_string(),
+    }
+}
+
 fn validate_native_terminal_theme_value(
     field: &str,
     value: &str,

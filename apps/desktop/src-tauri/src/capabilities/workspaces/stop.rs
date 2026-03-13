@@ -1,7 +1,7 @@
 use crate::capabilities::workspaces::state_machine::validate_workspace_transition;
 use crate::platform::db::{open_db, DbPath};
 use crate::shared::errors::{LifecycleError, WorkspaceStatus};
-use crate::SupervisorMap;
+use crate::WorkspaceControllerRegistryHandle;
 use rusqlite::params;
 use tauri::{AppHandle, State};
 
@@ -10,7 +10,7 @@ use super::shared::{emit_service_status, emit_workspace_status, update_workspace
 pub async fn stop_workspace(
     app: AppHandle,
     db_path: State<'_, DbPath>,
-    supervisors: State<'_, SupervisorMap>,
+    workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
     workspace_id: String,
 ) -> Result<(), LifecycleError> {
     let db = db_path.0.clone();
@@ -43,16 +43,14 @@ pub async fn stop_workspace(
         WorkspaceStatus::from_str(&status)?
     };
     validate_workspace_transition(&current_status, &WorkspaceStatus::Stopping)?;
+
     update_workspace_status_db(&db, &workspace_id, &WorkspaceStatus::Stopping, None)?;
     emit_workspace_status(&app, &workspace_id, "stopping", None);
 
-    // Stop all services
-    {
-        let mut sups = supervisors.lock().await;
-        if let Some(sup) = sups.remove(&workspace_id) {
-            let mut sup = sup.lock().await;
-            sup.stop_all().await;
-        }
+    // Stop all services after the stopping transition is visible to DB- and UI-based callers.
+    if let Some(controller) = workspace_controllers.get(&workspace_id).await {
+        controller.request_stop().await;
+        controller.stop_runtime().await;
     }
 
     // Update service statuses

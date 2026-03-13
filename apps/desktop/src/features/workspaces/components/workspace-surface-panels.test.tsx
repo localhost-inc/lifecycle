@@ -27,20 +27,16 @@ describe("WorkspaceSurfacePanels", () => {
       createElement(WorkspaceSurfacePanels, {
         activeTabKey: changesTab.key,
         activeFileSessionState: null,
-        activeTerminalId: null,
         activeTabViewState: null,
-        activity: [],
         creatingSelection: null,
         documents: [changesTab],
         hasVisibleTabs: true,
         onCreateTerminal: async () => {},
         onFileSessionStateChange: () => {},
         onOpenFile,
-        onOpenTerminal: () => {},
         paneDragInProgress: false,
         paneFocused: true,
         onTabViewStateChange: () => {},
-        sessionHistory: [],
         terminals: [],
         waitingForActiveRuntimeTab: false,
         workspaceId: "workspace-1",
@@ -63,20 +59,16 @@ describe("WorkspaceSurfacePanels", () => {
       createElement(WorkspaceSurfacePanels, {
         activeTabKey: "terminal:term-1",
         activeFileSessionState: null,
-        activeTerminalId: "term-1",
         activeTabViewState: null,
-        activity: [],
         creatingSelection: null,
         documents: [],
         hasVisibleTabs: true,
         onCreateTerminal: async () => {},
         onFileSessionStateChange: () => {},
         onOpenFile: () => {},
-        onOpenTerminal: () => {},
         onTabViewStateChange: () => {},
         paneDragInProgress: false,
         paneFocused: true,
-        sessionHistory: [],
         terminals: [
           {
             created_by: null,
@@ -102,5 +94,33 @@ describe("WorkspaceSurfacePanels", () => {
     expect(markup).toContain('role="tabpanel"');
     expect(markup).toContain('class="flex h-full min-h-0 flex-1 flex-col"');
     expect(markup).toContain('data-slot="terminal-surface"');
+  });
+
+  test("renders empty-pane quick actions when no tabs are visible", async () => {
+    const { WorkspaceSurfacePanels } = await import("./workspace-surface-panels");
+    const markup = renderToStaticMarkup(
+      createElement(WorkspaceSurfacePanels, {
+        activeTabKey: null,
+        activeFileSessionState: null,
+        activeTabViewState: null,
+        creatingSelection: null,
+        documents: [],
+        hasVisibleTabs: false,
+        onCreateTerminal: async () => {},
+        onFileSessionStateChange: () => {},
+        onOpenFile: () => {},
+        onTabViewStateChange: () => {},
+        paneDragInProgress: false,
+        paneFocused: true,
+        terminals: [],
+        waitingForActiveRuntimeTab: false,
+        workspaceId: "workspace-1",
+      }),
+    );
+
+    expect(markup).toContain("No tabs in this pane");
+    expect(markup).toContain("Shell");
+    expect(markup).toContain("Claude");
+    expect(markup).toContain("Codex");
   });
 });

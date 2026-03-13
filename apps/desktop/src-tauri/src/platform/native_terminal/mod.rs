@@ -15,6 +15,18 @@ pub enum NativeTerminalColorScheme {
     Light,
 }
 
+#[derive(Debug, Clone)]
+pub struct NativeTerminalSessionCreateRequest {
+    pub background_color: String,
+    pub color_scheme: NativeTerminalColorScheme,
+    pub command: String,
+    pub font_size: f64,
+    pub scale_factor: f64,
+    pub terminal_id: String,
+    pub theme_config_path: String,
+    pub working_directory: String,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct NativeTerminalSurfaceSyncRequest<'a> {
     pub background_color: &'a str,
@@ -68,6 +80,13 @@ pub fn initialize(app: AppHandle, db_path: String) -> Result<(), LifecycleError>
         db_path,
         crate::platform::diagnostics::diagnostic_log_path(),
     )
+}
+
+pub fn create_session(
+    app: &AppHandle,
+    request: NativeTerminalSessionCreateRequest,
+) -> Result<(), LifecycleError> {
+    run_on_main_thread(app, move || platform::create_session(&request))
 }
 
 pub fn sync_surface(

@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod controller;
 pub mod create;
 pub mod destroy;
 mod environment_graph;

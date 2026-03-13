@@ -119,7 +119,8 @@ pub fn maybe_schedule_workspace_identity_from_prompt(
                     &generated.session_title,
                     generated.source,
                     elapsed_ms,
-                );
+                )
+                .await;
 
                 match rename::maybe_apply_generated_workspace_identity(
                     app.clone(),
@@ -173,7 +174,8 @@ pub fn maybe_schedule_workspace_identity_from_prompt(
                     &fallback_title,
                     "fallback",
                     elapsed_ms,
-                );
+                )
+                .await;
             }
             Err(error) => {
                 tracing::warn!(
@@ -191,7 +193,8 @@ pub fn maybe_schedule_workspace_identity_from_prompt(
                     &fallback_title,
                     "fallback",
                     elapsed_ms,
-                );
+                )
+                .await;
             }
         }
     });
@@ -228,7 +231,7 @@ fn should_hydrate_workspace_identity(
     })
 }
 
-fn apply_generated_terminal_title(
+async fn apply_generated_terminal_title(
     app: &AppHandle,
     db_path: &str,
     terminal_id: &str,
@@ -237,7 +240,7 @@ fn apply_generated_terminal_title(
     source: &str,
     elapsed_ms: u64,
 ) {
-    match rename::maybe_apply_generated_terminal_label(app, db_path, terminal_id, title) {
+    match rename::maybe_apply_generated_terminal_label(app, db_path, terminal_id, title).await {
         Ok(Some(_)) => {
             tracing::info!(
                 terminal_id,

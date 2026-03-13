@@ -1,12 +1,11 @@
 import type { ReactNode } from "react";
 import { Spinner } from "@lifecycle/ui";
-import { FileText, GitBranch, GitCommitHorizontal, PenTool, Plus } from "lucide-react";
+import { FileText, GitBranch, GitCommitHorizontal, PenTool } from "lucide-react";
 import { ResponseReadyDot } from "../../../components/response-ready-dot";
 import {
   isChangesDiffDocument,
   isCommitDiffDocument,
   isFileViewerDocument,
-  isLauncherDocument,
   isPullRequestDocument,
 } from "../state/workspace-surface-state";
 import type { HarnessProvider } from "../../terminals/api";
@@ -73,10 +72,6 @@ function tabIconName(tab: WorkspaceSurfaceTab): string {
     return "shell";
   }
 
-  if (isLauncherDocument(tab)) {
-    return "launcher";
-  }
-
   if (isFileViewerDocument(tab)) {
     return tab.extension === "pen" ? "file-viewer-pencil" : "file-viewer";
   }
@@ -133,14 +128,6 @@ export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceSurfaceTab }
           )}
         </span>
       </span>
-    );
-  }
-
-  if (isLauncherDocument(tab)) {
-    return (
-      <SurfaceBubble tab={tab}>
-        <Plus className="h-3 w-3" strokeWidth={1.8} />
-      </SurfaceBubble>
     );
   }
 

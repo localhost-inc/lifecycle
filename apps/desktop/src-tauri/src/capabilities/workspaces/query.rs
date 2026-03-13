@@ -30,7 +30,7 @@ pub struct WorkspaceRecord {
     pub expires_at: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceRecord {
     pub id: String,
     pub workspace_id: String,

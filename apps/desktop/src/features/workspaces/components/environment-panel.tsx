@@ -17,6 +17,7 @@ import { GraphTab } from "./graph-tab";
 import { LogsTab } from "./logs-tab";
 import { OverviewTab } from "./overview-tab";
 import type { EnvironmentTaskState, SetupStepState } from "../hooks";
+import { formatWorkspaceError } from "../lib/workspace-errors";
 
 const FAILURE_REASON_LABELS: Record<string, string> = {
   capacity_unavailable: "No capacity available to run this workspace.",
@@ -87,7 +88,7 @@ export function EnvironmentPanel({
           entry,
         ): entry is [
           string,
-          Extract<LifecycleConfig["environment"][string], { kind: "service" }>
+          Extract<LifecycleConfig["environment"][string], { kind: "service" }>,
         ] => entry[1].kind === "service",
       )
       .map(([name, node]) => [name, node.runtime]),
@@ -107,7 +108,7 @@ export function EnvironmentPanel({
     try {
       await onRun();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error));
+      setActionError(formatWorkspaceError(error, "Failed to start workspace."));
     } finally {
       setActiveAction(null);
     }
@@ -124,7 +125,7 @@ export function EnvironmentPanel({
     try {
       await onStop();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error));
+      setActionError(formatWorkspaceError(error, "Failed to stop workspace."));
     } finally {
       setActiveAction(null);
     }
@@ -142,7 +143,7 @@ export function EnvironmentPanel({
     try {
       await onRestart();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error));
+      setActionError(formatWorkspaceError(error, "Failed to restart workspace."));
     } finally {
       setActiveAction(null);
     }
@@ -281,9 +282,7 @@ export function EnvironmentPanel({
               workspace={workspace}
             />
           )}
-          {activeTab === "topology" && (
-            <GraphTab config={config} services={services} />
-          )}
+          {activeTab === "topology" && <GraphTab config={config} services={services} />}
           {activeTab === "logs" && <LogsTab />}
         </div>
       </div>

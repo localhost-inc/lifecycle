@@ -1,4 +1,4 @@
-use crate::capabilities::workspaces::query::TerminalRecord;
+use crate::capabilities::workspaces::query::{ServiceRecord, TerminalRecord};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
@@ -39,12 +39,23 @@ pub enum LifecycleEvent {
         status: String,
         status_reason: Option<String>,
     },
+    #[serde(rename = "service.configuration_changed")]
+    ServiceConfigurationChanged {
+        workspace_id: String,
+        service: ServiceRecord,
+    },
     #[serde(rename = "workspace.setup_progress")]
     WorkspaceSetupProgress {
         workspace_id: String,
         step_name: String,
         event_kind: String,
         data: Option<String>,
+    },
+    #[serde(rename = "workspace.manifest_synced")]
+    WorkspaceManifestSynced {
+        workspace_id: String,
+        manifest_fingerprint: Option<String>,
+        services: Vec<ServiceRecord>,
     },
     #[serde(rename = "environment.task_progress")]
     EnvironmentTaskProgress {

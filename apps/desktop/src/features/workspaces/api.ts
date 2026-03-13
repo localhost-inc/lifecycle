@@ -1,4 +1,4 @@
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   LifecycleConfig,
@@ -9,6 +9,7 @@ import type {
   WorkspaceServiceExposure,
 } from "@lifecycle/contracts";
 import { getManifestFingerprint } from "@lifecycle/contracts";
+import { invokeTauri } from "../../lib/tauri-error";
 
 export type WorkspaceShortcutAction =
   | "close-active-tab"
@@ -67,7 +68,7 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
     throw new Error("Workspace runtime requires the Tauri desktop shell.");
   }
 
-  return invoke<string>("create_workspace", {
+  return invokeTauri<string>("create_workspace", {
     input: {
       projectId: input.projectId,
       projectPath: input.projectPath,
@@ -92,7 +93,7 @@ export async function renameWorkspace(workspaceId: string, name: string): Promis
     throw new Error("Workspace rename requires the Tauri desktop shell.");
   }
 
-  return invoke<WorkspaceRecord>("rename_workspace", { workspaceId, name: normalizedName });
+  return invokeTauri<WorkspaceRecord>("rename_workspace", { workspaceId, name: normalizedName });
 }
 
 export async function subscribeToNativeWorkspaceShortcutEvents(
@@ -119,7 +120,7 @@ export async function startServices(
     throw new Error("Workspace runtime requires the Tauri desktop shell.");
   }
 
-  return invoke<void>("start_services", { workspaceId, manifestJson, manifestFingerprint });
+  return invokeTauri<void>("start_services", { workspaceId, manifestJson, manifestFingerprint });
 }
 
 export async function stopWorkspace(workspaceId: string): Promise<void> {
@@ -128,7 +129,7 @@ export async function stopWorkspace(workspaceId: string): Promise<void> {
     throw new Error("Workspace runtime requires the Tauri desktop shell.");
   }
 
-  return invoke<void>("stop_workspace", { workspaceId });
+  return invokeTauri<void>("stop_workspace", { workspaceId });
 }
 
 export async function destroyWorkspace(workspaceId: string): Promise<void> {
@@ -137,7 +138,7 @@ export async function destroyWorkspace(workspaceId: string): Promise<void> {
     throw new Error("Workspace runtime requires the Tauri desktop shell.");
   }
 
-  return invoke<void>("destroy_workspace", { workspaceId });
+  return invokeTauri<void>("destroy_workspace", { workspaceId });
 }
 
 export async function getWorkspace(projectId: string): Promise<WorkspaceRecord | null> {
@@ -146,7 +147,7 @@ export async function getWorkspace(projectId: string): Promise<WorkspaceRecord |
     return null;
   }
 
-  return invoke<WorkspaceRecord | null>("get_workspace", { projectId });
+  return invokeTauri<WorkspaceRecord | null>("get_workspace", { projectId });
 }
 
 export async function getWorkspaceById(workspaceId: string): Promise<WorkspaceRecord | null> {
@@ -155,7 +156,7 @@ export async function getWorkspaceById(workspaceId: string): Promise<WorkspaceRe
     return null;
   }
 
-  return invoke<WorkspaceRecord | null>("get_workspace_by_id", { workspaceId });
+  return invokeTauri<WorkspaceRecord | null>("get_workspace_by_id", { workspaceId });
 }
 
 export async function listWorkspaces(): Promise<WorkspaceRecord[]> {
@@ -163,7 +164,7 @@ export async function listWorkspaces(): Promise<WorkspaceRecord[]> {
     return [];
   }
 
-  return invoke<WorkspaceRecord[]>("list_workspaces");
+  return invokeTauri<WorkspaceRecord[]>("list_workspaces");
 }
 
 export async function listWorkspacesByProject(): Promise<Record<string, WorkspaceRecord[]>> {
@@ -171,7 +172,7 @@ export async function listWorkspacesByProject(): Promise<Record<string, Workspac
     return {};
   }
 
-  return invoke<Record<string, WorkspaceRecord[]>>("list_workspaces_by_project");
+  return invokeTauri<Record<string, WorkspaceRecord[]>>("list_workspaces_by_project");
 }
 
 export async function getWorkspaceServices(workspaceId: string): Promise<ServiceRecord[]> {
@@ -180,7 +181,7 @@ export async function getWorkspaceServices(workspaceId: string): Promise<Service
     return [];
   }
 
-  return invoke<ServiceRecord[]>("get_workspace_services", { workspaceId });
+  return invokeTauri<ServiceRecord[]>("get_workspace_services", { workspaceId });
 }
 
 export interface WorkspaceSnapshotResult {
@@ -199,7 +200,7 @@ export async function getWorkspaceSnapshot(workspaceId: string): Promise<Workspa
     };
   }
 
-  return invoke<WorkspaceSnapshotResult>("get_workspace_snapshot", { workspaceId });
+  return invokeTauri<WorkspaceSnapshotResult>("get_workspace_snapshot", { workspaceId });
 }
 
 export interface UpdateWorkspaceServiceInput {
@@ -219,7 +220,7 @@ export async function updateWorkspaceService(
     throw new Error("Workspace runtime requires the Tauri desktop shell.");
   }
 
-  return invoke<void>("update_workspace_service", {
+  return invokeTauri<void>("update_workspace_service", {
     workspaceId,
     serviceName,
     exposure: input.exposure,
@@ -238,7 +239,7 @@ export async function syncWorkspaceManifest(
     return;
   }
 
-  return invoke<void>("sync_workspace_manifest", {
+  return invokeTauri<void>("sync_workspace_manifest", {
     workspaceId,
     manifestJson,
     manifestFingerprint,
@@ -270,7 +271,7 @@ export async function readWorkspaceFile(
     throw new Error("Workspace file reading requires the Tauri desktop shell.");
   }
 
-  return invoke<WorkspaceFileReadResult>("read_workspace_file", {
+  return invokeTauri<WorkspaceFileReadResult>("read_workspace_file", {
     workspaceId,
     filePath,
   });
@@ -288,7 +289,7 @@ export async function writeWorkspaceFile(
     throw new Error("Workspace file editing requires the Tauri desktop shell.");
   }
 
-  return invoke<WorkspaceFileReadResult>("write_workspace_file", {
+  return invokeTauri<WorkspaceFileReadResult>("write_workspace_file", {
     workspaceId,
     filePath,
     content,
@@ -301,7 +302,7 @@ export async function listWorkspaceFiles(workspaceId: string): Promise<Workspace
     throw new Error("Workspace file listing requires the Tauri desktop shell.");
   }
 
-  return invoke<WorkspaceFileTreeEntry[]>("list_workspace_files", {
+  return invokeTauri<WorkspaceFileTreeEntry[]>("list_workspace_files", {
     workspaceId,
   });
 }
@@ -311,7 +312,7 @@ export async function openWorkspaceFile(workspaceId: string, filePath: string): 
     return;
   }
 
-  await invoke("open_workspace_file", {
+  await invokeTauri<void>("open_workspace_file", {
     workspaceId,
     filePath,
   });
@@ -341,7 +342,7 @@ export async function openWorkspaceInApp(workspaceId: string, appId: OpenInAppId
     return;
   }
 
-  return invoke<void>("open_workspace_in_app", { workspaceId, appId });
+  return invokeTauri<void>("open_workspace_in_app", { workspaceId, appId });
 }
 
 export async function listWorkspaceOpenInApps(): Promise<WorkspaceOpenInAppInfo[]> {
@@ -349,7 +350,7 @@ export async function listWorkspaceOpenInApps(): Promise<WorkspaceOpenInAppInfo[
     return [];
   }
 
-  return invoke<WorkspaceOpenInAppInfo[]>("list_workspace_open_in_apps");
+  return invokeTauri<WorkspaceOpenInAppInfo[]>("list_workspace_open_in_apps");
 }
 
 export async function getCurrentBranch(projectPath: string): Promise<string> {
@@ -357,5 +358,5 @@ export async function getCurrentBranch(projectPath: string): Promise<string> {
     return "main";
   }
 
-  return invoke<string>("get_current_branch", { projectPath });
+  return invokeTauri<string>("get_current_branch", { projectPath });
 }
