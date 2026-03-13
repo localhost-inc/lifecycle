@@ -136,11 +136,27 @@ const ImageBuildSchema = z.object({
   dockerfile: z.string().optional(),
 });
 
-const ImageVolumeSchema = z.object({
-  source: z.string(),
-  target: z.string(),
-  read_only: z.boolean().optional(),
-});
+const NamedVolumeSourceSchema = z
+  .string()
+  .regex(
+    /^[A-Za-z0-9][A-Za-z0-9_.-]*$/,
+    "Named volumes must start with an alphanumeric character and contain only letters, numbers, dots, underscores, or dashes",
+  );
+
+const ImageVolumeSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("bind"),
+    source: z.string().min(1),
+    target: z.string().min(1),
+    read_only: z.boolean().optional(),
+  }),
+  z.object({
+    type: z.literal("volume"),
+    source: NamedVolumeSourceSchema,
+    target: z.string().min(1),
+    read_only: z.boolean().optional(),
+  }),
+]);
 
 const TaskNodeSchema = z
   .object({

@@ -94,4 +94,21 @@ describe("GitPatchViewer", () => {
       /<button[^>]*aria-label="Unified"[^>]*aria-pressed="true"[\s\S]*?<span[^>]*>Unified<\/span><\/button>/,
     );
   });
+
+  test("surfaces parsed patch failures instead of falling back to raw rendering", () => {
+    const markup = withWindowStorage({}, () =>
+      renderViewer(
+        createElement(GitPatchViewer, {
+          error: null,
+          errorMessagePrefix: "Failed to load diff",
+          isLoading: false,
+          loadingMessage: "Loading diff...",
+          parsedFiles: null,
+          patch: "diff --git a/file.txt b/file.txt",
+        }),
+      ),
+    );
+
+    expect(markup).toContain("Failed to parse diff: Unable to parse diff patch.");
+  });
 });

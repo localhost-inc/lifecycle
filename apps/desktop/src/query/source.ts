@@ -22,9 +22,11 @@ import { listProjects, readManifest } from "../features/projects/api/projects";
 import {
   getWorkspaceById,
   getWorkspaceSnapshot,
+  listWorkspaceFiles,
   readWorkspaceFile,
   getWorkspaceServices,
   listWorkspacesByProject,
+  type WorkspaceFileTreeEntry,
   type WorkspaceFileReadResult,
   type WorkspaceSnapshotResult,
 } from "../features/workspaces/api";
@@ -37,6 +39,7 @@ export interface QuerySource {
   getWorkspace(workspaceId: string): Promise<WorkspaceRecord | null>;
   getWorkspaceSnapshot(workspaceId: string): Promise<WorkspaceSnapshotResult>;
   getWorkspaceFile(workspaceId: string, filePath: string): Promise<WorkspaceFileReadResult>;
+  listWorkspaceFiles(workspaceId: string): Promise<WorkspaceFileTreeEntry[]>;
   getWorkspaceServices(workspaceId: string): Promise<ServiceRecord[]>;
   getWorkspaceGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]>;
   getWorkspaceGitPullRequests(workspaceId: string): Promise<GitPullRequestListResult>;
@@ -79,6 +82,11 @@ export function createQuerySource(): QuerySource {
     async getWorkspaceFile(workspaceId, filePath) {
       return measureWorkspace("query.workspace-file", workspaceId, () =>
         readWorkspaceFile(workspaceId, filePath),
+      );
+    },
+    async listWorkspaceFiles(workspaceId) {
+      return measureWorkspace("query.workspace-file-tree", workspaceId, () =>
+        listWorkspaceFiles(workspaceId),
       );
     },
     async getWorkspaceServices(workspaceId) {

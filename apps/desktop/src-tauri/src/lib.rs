@@ -165,6 +165,8 @@ pub fn run() {
             capabilities::workspaces::commands::get_workspace_git_pull_request_patch,
             capabilities::workspaces::commands::get_workspace_git_commit_patch,
             capabilities::workspaces::commands::read_workspace_file,
+            capabilities::workspaces::commands::write_workspace_file,
+            capabilities::workspaces::commands::list_workspace_files,
             capabilities::workspaces::commands::open_workspace_file,
             capabilities::workspaces::commands::open_workspace_in_app,
             capabilities::workspaces::commands::list_workspace_open_in_apps,
@@ -222,7 +224,58 @@ fn expand_main_window_for_dev(_app: &tauri::AppHandle) -> Result<(), LifecycleEr
 }
 
 #[cfg(target_os = "macos")]
-fn setup_app_menu(app: &tauri::AppHandle) -> Result<(), LifecycleError> {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum EditMenuItem {
+    Copy,
+    Cut,
+    Paste,
+    Redo,
+    SelectAll,
+    Separator,
+    Undo,
+}
+
+#[cfg(target_os = "macos")]
+const EDIT_MENU_ITEMS: &[EditMenuItem] = &[
+    EditMenuItem::Undo,
+    EditMenuItem::Redo,
+    EditMenuItem::Separator,
+    EditMenuItem::Cut,
+    EditMenuItem::Copy,
+    EditMenuItem::Paste,
+    EditMenuItem::Separator,
+    EditMenuItem::SelectAll,
+];
+
+#[cfg(target_os = "macos")]
+fn build_edit_menu<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Result<tauri::menu::Submenu<R>, LifecycleError> {
+    use tauri::menu::SubmenuBuilder;
+
+    EDIT_MENU_ITEMS
+        .iter()
+        .copied()
+        .fold(
+            SubmenuBuilder::new(app, "Edit"),
+            |builder, item| match item {
+                EditMenuItem::Undo => builder.undo(),
+                EditMenuItem::Redo => builder.redo(),
+                EditMenuItem::Separator => builder.separator(),
+                EditMenuItem::Cut => builder.cut(),
+                EditMenuItem::Copy => builder.copy(),
+                EditMenuItem::Paste => builder.paste(),
+                EditMenuItem::SelectAll => builder.select_all(),
+            },
+        )
+        .build()
+        .map_err(|error| LifecycleError::AttachFailed(format!("failed to build app menu: {error}")))
+}
+
+#[cfg(target_os = "macos")]
+fn build_app_menu<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+) -> Result<tauri::menu::Menu<R>, LifecycleError> {
     use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 
     let settings_item = MenuItemBuilder::with_id(APP_MENU_ITEM_OPEN_SETTINGS, "Settings...")
@@ -248,16 +301,48 @@ fn setup_app_menu(app: &tauri::AppHandle) -> Result<(), LifecycleError> {
             LifecycleError::AttachFailed(format!("failed to build app menu: {error}"))
         })?;
 
+    let edit_menu = build_edit_menu(app)?;
+
     let menu = MenuBuilder::new(app)
         .item(&lifecycle_menu)
+        .item(&edit_menu)
         .build()
         .map_err(|error| {
             LifecycleError::AttachFailed(format!("failed to build root menu: {error}"))
         })?;
+
+    Ok(menu)
+}
+
+#[cfg(target_os = "macos")]
+fn setup_app_menu(app: &tauri::AppHandle) -> Result<(), LifecycleError> {
+    let menu = build_app_menu(app)?;
 
     menu.set_as_app_menu().map_err(|error| {
         LifecycleError::AttachFailed(format!("failed to install app menu: {error}"))
     })?;
 
     Ok(())
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use super::{EditMenuItem, EDIT_MENU_ITEMS};
+
+    #[test]
+    fn app_menu_includes_standard_edit_actions() {
+        assert_eq!(
+            EDIT_MENU_ITEMS,
+            &[
+                EditMenuItem::Undo,
+                EditMenuItem::Redo,
+                EditMenuItem::Separator,
+                EditMenuItem::Cut,
+                EditMenuItem::Copy,
+                EditMenuItem::Paste,
+                EditMenuItem::Separator,
+                EditMenuItem::SelectAll,
+            ]
+        );
+    }
 }

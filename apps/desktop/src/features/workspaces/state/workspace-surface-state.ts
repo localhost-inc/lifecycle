@@ -3,6 +3,14 @@ import type {
   GitPullRequestCheckSummary,
   GitPullRequestSummary,
 } from "@lifecycle/contracts";
+import type { FileViewerMode } from "../../files/lib/file-view-mode";
+import {
+  DEFAULT_WORKSPACE_PANE_ID,
+  collectWorkspacePaneLeaves,
+  createWorkspacePane,
+  getFirstWorkspacePane,
+  isWorkspacePaneLeaf,
+} from "../lib/workspace-surface-panes";
 import {
   normalizeWorkspaceFilePath,
   workspaceFileBasename,
@@ -58,16 +66,35 @@ export type WorkspaceSurfaceDocument =
   | PullRequestDocument
   | LauncherTab;
 
-export interface WorkspaceSurfaceState {
+export interface WorkspacePaneLeaf {
   activeTabKey: string | null;
+  id: string;
+  kind: "leaf";
+  tabOrderKeys: string[];
+}
+
+export interface WorkspacePaneSplit {
+  direction: "column" | "row";
+  first: WorkspacePaneNode;
+  id: string;
+  kind: "split";
+  ratio: number;
+  second: WorkspacePaneNode;
+}
+
+export type WorkspacePaneNode = WorkspacePaneLeaf | WorkspacePaneSplit;
+
+export interface WorkspaceSurfaceState {
+  activePaneId: string | null;
   documents: WorkspaceSurfaceDocument[];
   hiddenRuntimeTabKeys: string[];
-  tabOrderKeys: string[];
+  rootPane: WorkspacePaneNode;
   viewStateByTabKey: Record<string, WorkspaceSurfaceTabViewState>;
 }
 
 export interface WorkspaceSurfaceTabViewState {
-  scrollTop: number;
+  fileMode?: FileViewerMode;
+  scrollTop?: number;
 }
 
 type PersistedChangesDiffDocument = {
@@ -114,9 +141,11 @@ type PersistedPullRequestDocument = {
 };
 
 type PersistedWorkspaceState = {
+  activePaneId?: unknown;
   activeTabKey?: unknown;
   documents?: unknown;
   hiddenRuntimeTabKeys?: unknown;
+  rootPane?: unknown;
   tabOrderKeys?: unknown;
   viewStateByTabKey?: unknown;
 };
@@ -273,10 +302,10 @@ export function isLauncherDocument(document: WorkspaceSurfaceDocument): document
 
 export function createDefaultWorkspaceSurfaceState(): WorkspaceSurfaceState {
   return {
-    activeTabKey: null,
+    activePaneId: DEFAULT_WORKSPACE_PANE_ID,
     documents: [],
     hiddenRuntimeTabKeys: [],
-    tabOrderKeys: [],
+    rootPane: createWorkspacePane(),
     viewStateByTabKey: {},
   };
 }
@@ -305,6 +334,91 @@ function normalizeTabKeyList(keys: readonly string[]): string[] {
   return [...dedupedKeys];
 }
 
+function normalizeWorkspacePaneNode(
+  node: WorkspacePaneNode,
+  hiddenRuntimeTabKeySet: ReadonlySet<string>,
+  seenNodeIds: Set<string>,
+  seenTabKeys: Set<string>,
+  path: string,
+): WorkspacePaneNode {
+  if (isWorkspacePaneLeaf(node)) {
+    const fallbackId = path === "root" ? DEFAULT_WORKSPACE_PANE_ID : `pane-${path}`;
+    const id =
+      typeof node.id === "string" && node.id.length > 0 && !seenNodeIds.has(node.id)
+        ? node.id
+        : fallbackId;
+    seenNodeIds.add(id);
+
+    const tabOrderKeys: string[] = [];
+    for (const key of normalizeTabKeyList(node.tabOrderKeys)) {
+      if (hiddenRuntimeTabKeySet.has(key) || seenTabKeys.has(key)) {
+        continue;
+      }
+
+      seenTabKeys.add(key);
+      tabOrderKeys.push(key);
+    }
+
+    const requestedActiveTabKey =
+      typeof node.activeTabKey === "string" &&
+      node.activeTabKey.length > 0 &&
+      !hiddenRuntimeTabKeySet.has(node.activeTabKey)
+        ? node.activeTabKey
+        : null;
+    let activeTabKey =
+      requestedActiveTabKey && tabOrderKeys.includes(requestedActiveTabKey)
+        ? requestedActiveTabKey
+        : null;
+
+    if (requestedActiveTabKey && activeTabKey === null && !seenTabKeys.has(requestedActiveTabKey)) {
+      seenTabKeys.add(requestedActiveTabKey);
+      tabOrderKeys.push(requestedActiveTabKey);
+      activeTabKey = requestedActiveTabKey;
+    }
+
+    return {
+      activeTabKey,
+      id,
+      kind: "leaf",
+      tabOrderKeys,
+    };
+  }
+
+  const fallbackId = `split-${path}`;
+  const id =
+    typeof node.id === "string" && node.id.length > 0 && !seenNodeIds.has(node.id)
+      ? node.id
+      : fallbackId;
+  seenNodeIds.add(id);
+
+  return {
+    direction: node.direction === "column" ? "column" : "row",
+    first: normalizeWorkspacePaneNode(
+      node.first,
+      hiddenRuntimeTabKeySet,
+      seenNodeIds,
+      seenTabKeys,
+      `${path}-first`,
+    ),
+    id,
+    kind: "split",
+    ratio:
+      typeof node.ratio === "number" &&
+      Number.isFinite(node.ratio) &&
+      node.ratio > 0 &&
+      node.ratio < 1
+        ? node.ratio
+        : 0.5,
+    second: normalizeWorkspacePaneNode(
+      node.second,
+      hiddenRuntimeTabKeySet,
+      seenNodeIds,
+      seenTabKeys,
+      `${path}-second`,
+    ),
+  };
+}
+
 function normalizeViewStateByTabKey(
   viewStateByTabKey: WorkspaceSurfaceState["viewStateByTabKey"],
   knownTabKeys: ReadonlySet<string>,
@@ -316,13 +430,19 @@ function normalizeViewStateByTabKey(
       continue;
     }
 
-    if (!Number.isFinite(viewState.scrollTop) || viewState.scrollTop <= 0) {
-      continue;
+    const nextViewState: WorkspaceSurfaceTabViewState = {};
+
+    if (viewState.fileMode === "view" || viewState.fileMode === "edit") {
+      nextViewState.fileMode = viewState.fileMode;
     }
 
-    normalized[key] = {
-      scrollTop: viewState.scrollTop,
-    };
+    if (Number.isFinite(viewState.scrollTop) && (viewState.scrollTop ?? 0) > 0) {
+      nextViewState.scrollTop = viewState.scrollTop;
+    }
+
+    if (nextViewState.fileMode || typeof nextViewState.scrollTop === "number") {
+      normalized[key] = nextViewState;
+    }
   }
 
   return normalized;
@@ -334,23 +454,31 @@ function normalizeWorkspaceSurfaceState(state: WorkspaceSurfaceState): Workspace
     isRuntimeTabKey,
   );
   const hiddenRuntimeTabKeySet = new Set(hiddenRuntimeTabKeys);
-  const tabOrderKeys = normalizeTabKeyList(state.tabOrderKeys).filter(
-    (key) => !hiddenRuntimeTabKeySet.has(key),
+  const rootPane = normalizeWorkspacePaneNode(
+    state.rootPane,
+    hiddenRuntimeTabKeySet,
+    new Set<string>(),
+    new Set<string>(),
+    "root",
   );
-  const activeTabKey = state.activeTabKey;
+  const paneLeaves = collectWorkspacePaneLeaves(rootPane);
+  const activePaneId =
+    state.activePaneId && paneLeaves.some((pane) => pane.id === state.activePaneId)
+      ? state.activePaneId
+      : getFirstWorkspacePane(rootPane).id;
   const knownTabKeys = new Set([
     ...documents.map((document) => document.key),
     ...hiddenRuntimeTabKeys,
-    ...tabOrderKeys,
-    ...(activeTabKey ? [activeTabKey] : []),
+    ...paneLeaves.flatMap((pane) => pane.tabOrderKeys),
+    ...paneLeaves.flatMap((pane) => (pane.activeTabKey ? [pane.activeTabKey] : [])),
   ]);
   const viewStateByTabKey = normalizeViewStateByTabKey(state.viewStateByTabKey, knownTabKeys);
 
   return {
-    activeTabKey: activeTabKey && hiddenRuntimeTabKeySet.has(activeTabKey) ? null : activeTabKey,
+    activePaneId,
     documents,
     hiddenRuntimeTabKeys,
-    tabOrderKeys,
+    rootPane,
     viewStateByTabKey,
   };
 }
@@ -574,12 +702,48 @@ function parseWorkspaceSurfaceDocument(value: unknown): WorkspaceSurfaceDocument
   return null;
 }
 
+function parseWorkspacePaneNode(value: unknown, fallbackPath: string): WorkspacePaneNode | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const kind = getOptionalString(value, "kind");
+  if (kind === "leaf") {
+    return {
+      activeTabKey: getOptionalString(value, "activeTabKey") ?? null,
+      id: getOptionalString(value, "id") ?? `pane-${fallbackPath}`,
+      kind: "leaf",
+      tabOrderKeys: Array.isArray(value.tabOrderKeys)
+        ? value.tabOrderKeys.filter((key): key is string => typeof key === "string")
+        : [],
+    };
+  }
+
+  if (kind === "split") {
+    const first = parseWorkspacePaneNode(value.first, `${fallbackPath}-first`);
+    const second = parseWorkspacePaneNode(value.second, `${fallbackPath}-second`);
+    if (!first || !second) {
+      return null;
+    }
+
+    return {
+      direction: value.direction === "column" ? "column" : "row",
+      first,
+      id: getOptionalString(value, "id") ?? `split-${fallbackPath}`,
+      kind: "split",
+      ratio: typeof value.ratio === "number" ? value.ratio : 0.5,
+      second,
+    };
+  }
+
+  return null;
+}
+
 function parseWorkspaceSurfaceState(value: unknown): WorkspaceSurfaceState {
   if (!isRecord(value)) {
     return createDefaultWorkspaceSurfaceState();
   }
 
-  const activeTabKey = typeof value.activeTabKey === "string" ? value.activeTabKey : null;
   const documents = Array.isArray(value.documents)
     ? normalizeDocuments(
         value.documents
@@ -591,26 +755,42 @@ function parseWorkspaceSurfaceState(value: unknown): WorkspaceSurfaceState {
   const hiddenRuntimeTabKeys = Array.isArray(value.hiddenRuntimeTabKeys)
     ? value.hiddenRuntimeTabKeys.filter((key): key is string => typeof key === "string")
     : [];
-  const tabOrderKeys = Array.isArray(value.tabOrderKeys)
-    ? value.tabOrderKeys.filter((key): key is string => typeof key === "string")
-    : [];
+  const rootPane = parseWorkspacePaneNode(value.rootPane, "root") ?? {
+    activeTabKey: typeof value.activeTabKey === "string" ? value.activeTabKey : null,
+    id: DEFAULT_WORKSPACE_PANE_ID,
+    kind: "leaf" as const,
+    tabOrderKeys: Array.isArray(value.tabOrderKeys)
+      ? value.tabOrderKeys.filter((key): key is string => typeof key === "string")
+      : [],
+  };
   const viewStateByTabKey = isRecord(value.viewStateByTabKey)
     ? Object.fromEntries(
         Object.entries(value.viewStateByTabKey).flatMap(([key, nextValue]) => {
-          if (!isRecord(nextValue) || typeof nextValue.scrollTop !== "number") {
+          if (!isRecord(nextValue)) {
             return [];
           }
 
-          return [[key, { scrollTop: nextValue.scrollTop }] as const];
+          const viewState: WorkspaceSurfaceTabViewState = {};
+
+          if (typeof nextValue.scrollTop === "number") {
+            viewState.scrollTop = nextValue.scrollTop;
+          }
+
+          if (nextValue.fileMode === "view" || nextValue.fileMode === "edit") {
+            viewState.fileMode = nextValue.fileMode;
+          }
+
+          return Object.keys(viewState).length > 0 ? [[key, viewState] as const] : [];
         }),
       )
     : {};
 
   return normalizeWorkspaceSurfaceState({
-    activeTabKey,
+    activePaneId:
+      typeof value.activePaneId === "string" ? value.activePaneId : DEFAULT_WORKSPACE_PANE_ID,
     documents,
     hiddenRuntimeTabKeys,
-    tabOrderKeys,
+    rootPane,
     viewStateByTabKey,
   });
 }
@@ -705,19 +885,36 @@ function serializeWorkspaceSurfaceDocument(
   return serializeCommitDiffDocument(document);
 }
 
+function serializeWorkspacePaneNode(node: WorkspacePaneNode): Record<string, unknown> {
+  if (isWorkspacePaneLeaf(node)) {
+    return {
+      activeTabKey: node.activeTabKey,
+      id: node.id,
+      kind: node.kind,
+      tabOrderKeys: node.tabOrderKeys,
+    };
+  }
+
+  return {
+    direction: node.direction,
+    first: serializeWorkspacePaneNode(node.first),
+    id: node.id,
+    kind: node.kind,
+    ratio: node.ratio,
+    second: serializeWorkspacePaneNode(node.second),
+  };
+}
+
 function serializeWorkspaceSurfaceState(state: WorkspaceSurfaceState): PersistedWorkspaceState {
   const normalizedState = normalizeWorkspaceSurfaceState(state);
 
   const serializedState: PersistedWorkspaceState = {
-    activeTabKey: normalizedState.activeTabKey,
+    activePaneId: normalizedState.activePaneId,
     documents: normalizedState.documents.map((document) =>
       serializeWorkspaceSurfaceDocument(document),
     ),
+    rootPane: serializeWorkspacePaneNode(normalizedState.rootPane),
   };
-
-  if (normalizedState.tabOrderKeys.length > 0) {
-    serializedState.tabOrderKeys = normalizedState.tabOrderKeys;
-  }
 
   if (normalizedState.hiddenRuntimeTabKeys.length > 0) {
     serializedState.hiddenRuntimeTabKeys = normalizedState.hiddenRuntimeTabKeys;
@@ -762,12 +959,14 @@ export function writeWorkspaceSurfaceState(
     {};
   const nextMap: PersistedWorkspaceStateMap = { ...persistedMap };
   const normalizedState = normalizeWorkspaceSurfaceState(state);
+  const panesAreEmpty = collectWorkspacePaneLeaves(normalizedState.rootPane).every(
+    (pane) => pane.activeTabKey === null && pane.tabOrderKeys.length === 0,
+  );
 
   if (
     normalizedState.documents.length === 0 &&
-    normalizedState.activeTabKey === null &&
+    panesAreEmpty &&
     normalizedState.hiddenRuntimeTabKeys.length === 0 &&
-    normalizedState.tabOrderKeys.length === 0 &&
     Object.keys(normalizedState.viewStateByTabKey).length === 0
   ) {
     delete nextMap[workspaceId];

@@ -50,6 +50,9 @@ function createMockSource() {
         is_too_large: false,
       };
     },
+    async listWorkspaceFiles() {
+      return [];
+    },
     async getTerminal() {
       return null;
     },

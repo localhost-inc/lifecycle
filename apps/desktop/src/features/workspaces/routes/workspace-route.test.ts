@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { hasBlockingQueryError, hasBlockingQueryLoad } from "./workspace-route";
+import { hasBlockingQueryError, hasBlockingQueryLoad } from "./workspace-route-query-state";
 
 describe("workspace route query gating", () => {
   test("treats only an undefined data load as route-blocking", () => {

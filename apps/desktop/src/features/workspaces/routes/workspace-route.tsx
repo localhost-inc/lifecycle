@@ -1,9 +1,9 @@
 import { Alert, AlertDescription, AlertTitle, Loading } from "@lifecycle/ui";
 import { lazy, Suspense, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
-import type { QueryResult } from "../../../query";
 import { markPerformance, measurePerformance } from "../../../lib/performance";
 import { useWorkspaceManifest, useWorkspaceSnapshot } from "../hooks";
+import { hasBlockingQueryError, hasBlockingQueryLoad } from "./workspace-route-query-state";
 
 const WorkspacePanel = lazy(async () => {
   const module = await import("../components/workspace-panel");
@@ -88,14 +88,4 @@ export function WorkspaceRoute() {
       />
     </Suspense>
   );
-}
-
-export function hasBlockingQueryLoad<T>(
-  query: Pick<QueryResult<T>, "data" | "isLoading">,
-): boolean {
-  return query.isLoading && query.data === undefined;
-}
-
-export function hasBlockingQueryError<T>(query: Pick<QueryResult<T>, "data" | "error">): boolean {
-  return query.error !== null && query.error !== undefined && query.data === undefined;
 }

@@ -1,4 +1,5 @@
 import type {
+  CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
   ReactNode,
@@ -30,7 +31,7 @@ interface WorkspaceSurfaceTabItemProps {
   renameSaving: boolean;
   renameValue: string;
   showFloatingReadyDot: boolean;
-  style?: { transform: string };
+  style?: CSSProperties;
   tab: WorkspaceSurfaceTab;
   tabIndex: number;
   onRenameBlur: () => void;
@@ -65,12 +66,12 @@ export function WorkspaceSurfaceTabItem({
   const className = `group relative flex h-[34px] max-w-[300px] shrink-0 touch-none select-none items-center justify-start gap-2 whitespace-nowrap rounded-[var(--radius-xl)] px-[14px] text-left text-sm font-medium shadow-none outline-none ring-0 will-change-transform focus-visible:ring-1 focus-visible:ring-[var(--ring)] ${
     active
       ? "bg-[var(--muted)] text-[var(--foreground)]"
-      : "bg-transparent text-[var(--muted-foreground)] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-[var(--foreground)]"
+      : "border border-[var(--border)] bg-transparent text-[var(--muted-foreground)] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-[var(--foreground)]"
   } ${
     isRenaming
       ? "cursor-text ring-1 ring-[var(--foreground)]/20"
       : isDraggedTab
-        ? "pointer-events-none z-20 cursor-grabbing opacity-90 transition-none"
+        ? "pointer-events-none cursor-grabbing opacity-0 transition-none"
         : "cursor-grab transition-[background-color,border-color,color,opacity,transform] duration-200 ease-out"
   } ${isDropTarget ? "ring-1 ring-[var(--foreground)]/35" : ""}`;
 
@@ -81,6 +82,7 @@ export function WorkspaceSurfaceTabItem({
       aria-controls={isRenaming ? undefined : workspaceTabPanelId(tab.key)}
       aria-selected={isRenaming ? undefined : active}
       className={className}
+      data-workspace-tab-key={tab.key}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onKeyDown={onKeyDown}

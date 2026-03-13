@@ -15,7 +15,6 @@ import {
 } from "../state/workspace-surface-state";
 import {
   getWorkspaceTabDragShiftDirection,
-  reorderWorkspaceTabKeys,
   type WorkspaceSurfaceTab,
   type WorkspaceTabPlacement,
 } from "./workspace-surface-logic";
@@ -32,29 +31,48 @@ const tabListStyle: CSSProperties = {
   scrollbarWidth: "none",
 };
 
-interface WorkspaceTabDragState {
-  draggedKey: string;
-  draggedWidth: number;
-  placement: WorkspaceTabPlacement | null;
-  pointerDeltaX: number;
-  targetKey: string | null;
-}
-
 interface WorkspaceTabPointerSession {
+  draggedHeight: number;
   draggedKey: string;
   draggedWidth: number;
+  grabOffsetX: number;
+  grabOffsetY: number;
   initialPointerX: number;
+  initialPointerY: number;
   pointerId: number;
   started: boolean;
 }
 
+export interface WorkspaceSurfaceTabDrag {
+  draggedHeight: number;
+  draggedWidth: number;
+  grabOffsetX: number;
+  grabOffsetY: number;
+  paneId: string;
+  pointerDeltaX: number;
+  pointerDeltaY: number;
+  pointerX: number;
+  pointerY: number;
+  tabKey: string;
+}
+
+export interface WorkspaceSurfaceTabBarDragPreview {
+  draggedKey: string;
+  draggedWidth: number;
+  placement: WorkspaceTabPlacement | null;
+  targetKey: string | null;
+}
+
 interface WorkspaceSurfaceTabBarProps {
   activeTabKey: string | null;
+  dragPreview?: WorkspaceSurfaceTabBarDragPreview | null;
   onCloseDocumentTab: (tabKey: string) => void;
   onCloseRuntimeTab: (tabKey: string, terminalId: string) => void;
   onRenameRuntimeTab?: (terminalId: string, label: string) => Promise<unknown> | unknown;
   onSelectTab: (key: string) => void;
-  onSetTabOrder: (keys: string[]) => void;
+  onTabDrag?: (drag: WorkspaceSurfaceTabDrag | null) => void;
+  onTabDragCommit?: (drag: WorkspaceSurfaceTabDrag) => void;
+  paneId?: string;
   renderTabLeading?: (tab: WorkspaceSurfaceTab) => ReactNode;
   visibleTabs: WorkspaceSurfaceTab[];
 }
@@ -103,7 +121,15 @@ export function getWorkspaceActiveTabScrollLeft(
   return null;
 }
 
-function defaultTabLeading(tab: WorkspaceSurfaceTab) {
+export function hasStartedWorkspaceTabDrag(
+  pointerDeltaX: number,
+  pointerDeltaY: number,
+  thresholdPx: number = TAB_DRAG_START_THRESHOLD_PX,
+): boolean {
+  return Math.hypot(pointerDeltaX, pointerDeltaY) >= thresholdPx;
+}
+
+export function renderWorkspaceSurfaceDefaultTabLeading(tab: WorkspaceSurfaceTab) {
   if (tab.kind === "terminal") {
     return null;
   }
@@ -125,40 +151,40 @@ function defaultTabLeading(tab: WorkspaceSurfaceTab) {
 
 export function WorkspaceSurfaceTabBar({
   activeTabKey,
+  dragPreview = null,
   onCloseDocumentTab,
   onCloseRuntimeTab,
   onRenameRuntimeTab,
   onSelectTab,
-  onSetTabOrder,
+  onTabDrag,
+  onTabDragCommit,
+  paneId = "pane-root",
   renderTabLeading,
   visibleTabs,
 }: WorkspaceSurfaceTabBarProps) {
-  const [dragState, setDragState] = useState<WorkspaceTabDragState | null>(null);
   const [renameState, setRenameState] = useState<WorkspaceTabRenameState | null>(null);
   const dragSessionRef = useRef<WorkspaceTabPointerSession | null>(null);
-  const dragStateRef = useRef<WorkspaceTabDragState | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const skipRenameBlurRef = useRef(false);
   const tabListRef = useRef<HTMLDivElement | null>(null);
   const tabElementsRef = useRef(new Map<string, HTMLDivElement>());
-  const onSetTabOrderRef = useRef(onSetTabOrder);
+  const onTabDragRef = useRef(onTabDrag);
+  const onTabDragCommitRef = useRef(onTabDragCommit);
+  const bodyUserSelectRef = useRef<string | null>(null);
+  const rootUserSelectRef = useRef<string | null>(null);
+  const selectionCleanupRef = useRef<(() => void) | null>(null);
   const suppressClickRef = useRef<string | null>(null);
   const visibleTabKeys = visibleTabs.map((tab) => tab.key);
   const visibleTabLayoutKey = visibleTabKeys.join("\u0000");
   const activeTabLabel = visibleTabs.find((tab) => tab.key === activeTabKey)?.label ?? null;
-  const visibleTabKeysRef = useRef(visibleTabKeys);
 
   useEffect(() => {
-    dragStateRef.current = dragState;
-  }, [dragState]);
+    onTabDragRef.current = onTabDrag;
+  }, [onTabDrag]);
 
   useEffect(() => {
-    onSetTabOrderRef.current = onSetTabOrder;
-  }, [onSetTabOrder]);
-
-  useEffect(() => {
-    visibleTabKeysRef.current = visibleTabKeys;
-  }, [visibleTabKeys]);
+    onTabDragCommitRef.current = onTabDragCommit;
+  }, [onTabDragCommit]);
 
   useEffect(() => {
     if (!renameState) {
@@ -222,24 +248,51 @@ export function WorkspaceSurfaceTabBar({
     tabElementsRef.current.delete(key);
   }, []);
 
-  const resolveDragTarget = useCallback((pointerX: number, draggedKey: string) => {
-    const orderedKeys = visibleTabKeysRef.current.filter((key) => key !== draggedKey);
-    let trailingKey: string | null = null;
-
-    for (const key of orderedKeys) {
-      const element = tabElementsRef.current.get(key);
-      if (!element) {
-        continue;
-      }
-
-      trailingKey = key;
-      const rect = element.getBoundingClientRect();
-      if (pointerX < rect.left + rect.width / 2) {
-        return { placement: "before" as const, targetKey: key };
-      }
+  const disableBodySelection = useCallback(() => {
+    if (typeof document === "undefined") {
+      return;
     }
 
-    return trailingKey ? { placement: "after" as const, targetKey: trailingKey } : null;
+    if (bodyUserSelectRef.current === null) {
+      bodyUserSelectRef.current = document.body.style.userSelect;
+    }
+    if (rootUserSelectRef.current === null) {
+      rootUserSelectRef.current = document.documentElement.style.userSelect;
+    }
+
+    document.body.style.userSelect = "none";
+    document.documentElement.style.userSelect = "none";
+    window.getSelection()?.removeAllRanges();
+
+    if (selectionCleanupRef.current !== null) {
+      return;
+    }
+
+    const preventSelection = (event: Event) => {
+      event.preventDefault();
+    };
+
+    document.addEventListener("selectstart", preventSelection, true);
+    document.addEventListener("dragstart", preventSelection, true);
+    selectionCleanupRef.current = () => {
+      document.removeEventListener("selectstart", preventSelection, true);
+      document.removeEventListener("dragstart", preventSelection, true);
+    };
+  }, []);
+
+  const restoreBodySelection = useCallback(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    selectionCleanupRef.current?.();
+    selectionCleanupRef.current = null;
+
+    document.body.style.userSelect = bodyUserSelectRef.current ?? "";
+    document.documentElement.style.userSelect = rootUserSelectRef.current ?? "";
+    bodyUserSelectRef.current = null;
+    rootUserSelectRef.current = null;
+    window.getSelection()?.removeAllRanges();
   }, []);
 
   useEffect(() => {
@@ -250,33 +303,23 @@ export function WorkspaceSurfaceTabBar({
       }
 
       const pointerDeltaX = event.clientX - session.initialPointerX;
-      if (!session.started && Math.abs(pointerDeltaX) < TAB_DRAG_START_THRESHOLD_PX) {
+      const pointerDeltaY = event.clientY - session.initialPointerY;
+      if (!session.started && !hasStartedWorkspaceTabDrag(pointerDeltaX, pointerDeltaY)) {
         return;
       }
 
-      const nextTarget = resolveDragTarget(event.clientX, session.draggedKey);
       session.started = true;
-      document.body.style.userSelect = "none";
-      setDragState((current) => {
-        const nextState: WorkspaceTabDragState = {
-          draggedKey: session.draggedKey,
-          draggedWidth: session.draggedWidth,
-          placement: nextTarget?.placement ?? null,
-          pointerDeltaX,
-          targetKey: nextTarget?.targetKey ?? null,
-        };
-
-        if (
-          current?.draggedKey === nextState.draggedKey &&
-          current.draggedWidth === nextState.draggedWidth &&
-          current.placement === nextState.placement &&
-          current.pointerDeltaX === nextState.pointerDeltaX &&
-          current.targetKey === nextState.targetKey
-        ) {
-          return current;
-        }
-
-        return nextState;
+      onTabDragRef.current?.({
+        draggedHeight: session.draggedHeight,
+        draggedWidth: session.draggedWidth,
+        grabOffsetX: session.grabOffsetX,
+        grabOffsetY: session.grabOffsetY,
+        paneId,
+        pointerDeltaX,
+        pointerDeltaY,
+        pointerX: event.clientX,
+        pointerY: event.clientY,
+        tabKey: session.draggedKey,
       });
     };
 
@@ -286,26 +329,25 @@ export function WorkspaceSurfaceTabBar({
         return;
       }
 
-      const finalDragState = dragStateRef.current;
       if (session.started) {
         suppressClickRef.current = session.draggedKey;
-      }
-
-      if (session.started && finalDragState?.targetKey && finalDragState.placement) {
-        onSetTabOrderRef.current(
-          reorderWorkspaceTabKeys(
-            visibleTabKeysRef.current,
-            session.draggedKey,
-            finalDragState.targetKey,
-            finalDragState.placement,
-          ),
-        );
+        onTabDragCommitRef.current?.({
+          draggedWidth: session.draggedWidth,
+          draggedHeight: session.draggedHeight,
+          grabOffsetX: session.grabOffsetX,
+          grabOffsetY: session.grabOffsetY,
+          paneId,
+          pointerDeltaX: event.clientX - session.initialPointerX,
+          pointerDeltaY: event.clientY - session.initialPointerY,
+          pointerX: event.clientX,
+          pointerY: event.clientY,
+          tabKey: session.draggedKey,
+        });
       }
 
       dragSessionRef.current = null;
-      dragStateRef.current = null;
-      document.body.style.userSelect = "";
-      setDragState(null);
+      restoreBodySelection();
+      onTabDragRef.current?.(null);
     };
 
     window.addEventListener("pointermove", handlePointerMove);
@@ -316,29 +358,32 @@ export function WorkspaceSurfaceTabBar({
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerFinish);
       window.removeEventListener("pointercancel", handlePointerFinish);
-      document.body.style.userSelect = "";
+      restoreBodySelection();
     };
-  }, [resolveDragTarget]);
+  }, [paneId, restoreBodySelection]);
 
   const handleTabPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>, key: string) => {
-      if (renameState?.key === key) {
+      if (renameState?.key === key || event.button !== 0) {
         return;
       }
 
-      if (event.button !== 0) {
-        return;
-      }
+      disableBodySelection();
+      const targetRect = event.currentTarget.getBoundingClientRect();
 
       dragSessionRef.current = {
+        draggedHeight: targetRect.height,
         draggedKey: key,
-        draggedWidth: event.currentTarget.getBoundingClientRect().width,
+        draggedWidth: targetRect.width,
+        grabOffsetX: event.clientX - targetRect.left,
+        grabOffsetY: event.clientY - targetRect.top,
         initialPointerX: event.clientX,
+        initialPointerY: event.clientY,
         pointerId: event.pointerId,
         started: false,
       };
     },
-    [renameState],
+    [disableBodySelection, renameState],
   );
 
   const handleTabClick = useCallback(
@@ -380,9 +425,8 @@ export function WorkspaceSurfaceTabBar({
       }
 
       dragSessionRef.current = null;
-      dragStateRef.current = null;
-      document.body.style.userSelect = "";
-      setDragState(null);
+      restoreBodySelection();
+      onTabDragRef.current?.(null);
       skipRenameBlurRef.current = false;
       setRenameState({
         error: null,
@@ -393,7 +437,7 @@ export function WorkspaceSurfaceTabBar({
       });
       onSelectTab(tab.key);
     },
-    [onRenameRuntimeTab, onSelectTab],
+    [onRenameRuntimeTab, onSelectTab, restoreBodySelection],
   );
 
   const cancelTabRename = useCallback(() => {
@@ -472,6 +516,7 @@ export function WorkspaceSurfaceTabBar({
       <div
         aria-label="Workspace tabs"
         className="flex items-center gap-2 overflow-x-auto py-1 [&::-webkit-scrollbar]:hidden"
+        data-workspace-tab-bar
         role="tablist"
         ref={tabListRef}
         style={tabListStyle}
@@ -480,26 +525,30 @@ export function WorkspaceSurfaceTabBar({
           const active = tab.key === activeTabKey;
           const isTerminal = tab.kind === "terminal";
           const isRenaming = renameState?.key === tab.key;
-          const isDropTarget = dragState?.targetKey === tab.key;
-          const isDraggedTab = dragState?.draggedKey === tab.key;
-          const leading = renderTabLeading ? renderTabLeading(tab) : defaultTabLeading(tab);
+          const isDropTarget = dragPreview?.targetKey === tab.key;
+          const isDraggedTab = dragPreview?.draggedKey === tab.key;
+          const leading = renderTabLeading
+            ? renderTabLeading(tab)
+            : renderWorkspaceSurfaceDefaultTabLeading(tab);
           const showFloatingReadyDot =
             isTerminal && tab.responseReady && !active && !renderTabLeading;
           const previewShiftDirection =
-            dragState?.targetKey && dragState.placement
+            dragPreview?.targetKey && dragPreview.placement
               ? getWorkspaceTabDragShiftDirection(
                   visibleTabKeys,
-                  dragState.draggedKey,
-                  dragState.targetKey,
-                  dragState.placement,
+                  dragPreview.draggedKey,
+                  dragPreview.targetKey,
+                  dragPreview.placement,
                   tab.key,
                 )
               : 0;
           const previewShiftPx =
-            previewShiftDirection === 0 || !dragState
+            previewShiftDirection === 0 || !dragPreview
               ? 0
-              : previewShiftDirection * (dragState.draggedWidth + TAB_DRAG_GAP_PX);
-          const translateX = isDraggedTab ? (dragState?.pointerDeltaX ?? 0) : previewShiftPx;
+              : previewShiftDirection * (dragPreview.draggedWidth + TAB_DRAG_GAP_PX);
+          const style = previewShiftPx === 0
+              ? undefined
+              : { transform: `translateX(${previewShiftPx}px)` };
 
           return (
             <WorkspaceSurfaceTabItem
@@ -542,7 +591,7 @@ export function WorkspaceSurfaceTabBar({
               renameSaving={renameState?.saving ?? false}
               renameValue={renameState?.value ?? tab.label}
               showFloatingReadyDot={showFloatingReadyDot}
-              style={translateX === 0 ? undefined : { transform: `translateX(${translateX}px)` }}
+              style={style}
               tab={tab}
               tabIndex={isRenaming ? -1 : active ? 0 : -1}
               onRenameBlur={() => {

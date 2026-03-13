@@ -186,10 +186,34 @@ pub struct ImageBuild {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-pub struct ImageVolume {
-    pub source: String,
-    pub target: String,
-    pub read_only: Option<bool>,
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum ImageVolume {
+    Bind {
+        source: String,
+        target: String,
+        read_only: Option<bool>,
+    },
+    Volume {
+        source: String,
+        target: String,
+        read_only: Option<bool>,
+    },
+}
+
+impl ImageVolume {
+    pub fn target(&self) -> &str {
+        match self {
+            Self::Bind { target, .. } | Self::Volume { target, .. } => target,
+        }
+    }
+
+    pub fn read_only(&self) -> bool {
+        match self {
+            Self::Bind { read_only, .. } | Self::Volume { read_only, .. } => {
+                read_only.unwrap_or(false)
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -267,6 +291,14 @@ impl LifecycleConfig {
                                 &format!("environment.{node_name}.image"),
                                 "image services require either image or build",
                             );
+                        }
+                        if let Some(volumes) = image.volumes.as_ref() {
+                            for (index, volume) in volumes.iter().enumerate() {
+                                validate_image_volume(
+                                    volume,
+                                    &format!("environment.{node_name}.volumes.{index}"),
+                                )?;
+                            }
                         }
                     }
                 }
@@ -360,6 +392,43 @@ fn validate_task(step: &TaskConfig, field: &str) -> Result<(), LifecycleError> {
     }
 
     Ok(())
+}
+
+fn validate_image_volume(volume: &ImageVolume, field: &str) -> Result<(), LifecycleError> {
+    if volume.target().trim().is_empty() {
+        return manifest_invalid(&format!("{field}.target"), "must not be empty");
+    }
+
+    match volume {
+        ImageVolume::Bind { source, .. } => {
+            if source.trim().is_empty() {
+                return manifest_invalid(&format!("{field}.source"), "must not be empty");
+            }
+        }
+        ImageVolume::Volume { source, .. } => {
+            if !is_valid_named_volume_source(source) {
+                return manifest_invalid(
+                    &format!("{field}.source"),
+                    "named volumes must start with an alphanumeric character and contain only letters, numbers, dots, underscores, or dashes",
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+pub(crate) fn is_valid_named_volume_source(value: &str) -> bool {
+    let mut chars = value.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+
+    if !first.is_ascii_alphanumeric() {
+        return false;
+    }
+
+    chars.all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '.' | '_' | '-'))
 }
 
 fn validate_manifest_value(value: &Value) -> Result<(), LifecycleError> {
@@ -520,8 +589,8 @@ mod tests {
                         "dockerfile": "docker/Dockerfile.pg.dev"
                     },
                     "volumes": [
-                        { "source": "workspace://postgres", "target": "/var/lib/postgresql/data" },
-                        { "source": "docker/init.sql", "target": "/docker-entrypoint-initdb.d/init.sql", "read_only": true }
+                        { "type": "volume", "source": "postgres", "target": "/var/lib/postgresql/data" },
+                        { "type": "bind", "source": "docker/init.sql", "target": "/docker-entrypoint-initdb.d/init.sql", "read_only": true }
                     ]
                 }
             }
@@ -543,6 +612,37 @@ mod tests {
             Some("docker")
         );
         assert_eq!(service.volumes.as_ref().map(Vec::len), Some(2));
+    }
+
+    #[test]
+    fn rejects_invalid_named_volume_sources() {
+        let error = parse_lifecycle_config(
+            r#"{
+                "workspace": {
+                    "setup": [
+                        { "name": "install", "command": "bun install", "timeout_seconds": 120 }
+                    ]
+                },
+                "environment": {
+                    "postgres": {
+                        "kind": "service",
+                        "runtime": "image",
+                        "image": "postgres:16",
+                        "volumes": [
+                            { "type": "volume", "source": "../postgres", "target": "/var/lib/postgresql/data" }
+                        ]
+                    }
+                }
+            }"#,
+        )
+        .expect_err("invalid named volume should be rejected");
+
+        match error {
+            LifecycleError::ManifestInvalid(message) => {
+                assert!(message.contains("environment.postgres.volumes.0.source"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
     }
 
     #[test]

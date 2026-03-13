@@ -6,7 +6,8 @@ import { TerminalSurface } from "../../terminals/components/terminal-surface";
 import { GitDiffSurface } from "../../git/components/git-diff-surface";
 import type { WorkspaceActivityItem } from "../hooks";
 import { PullRequestSurface } from "../../git/components/pull-request-surface";
-import { FileViewer } from "./file-viewer";
+import { FileSurface } from "../../files/components/file-surface";
+import type { FileViewerSessionState } from "../../files/lib/file-session";
 import {
   isChangesDiffDocument,
   isCommitDiffDocument,
@@ -23,14 +24,18 @@ interface WorkspaceSurfacePanelsProps {
   activeTabKey: string | null;
   activeTerminalId: string | null;
   activeTabViewState: WorkspaceSurfaceTabViewState | null;
+  activeFileSessionState: FileViewerSessionState | null;
   activity: WorkspaceActivityItem[];
   creatingSelection: "shell" | HarnessProvider | null;
   documents: WorkspaceSurfaceDocument[];
   hasVisibleTabs: boolean;
+  onFileSessionStateChange: (tabKey: string, state: FileViewerSessionState | null) => void;
   onCreateTerminal: (input: CreateTerminalRequest, launcherKey?: string) => Promise<void>;
   onOpenFile: (filePath: string) => void;
   onOpenTerminal: (terminalId: string, launcherKey?: string) => void;
-  onTabViewStateChange: (viewState: WorkspaceSurfaceTabViewState | null) => void;
+  onTabViewStateChange: (tabKey: string, viewState: WorkspaceSurfaceTabViewState | null) => void;
+  paneDragInProgress: boolean;
+  paneFocused: boolean;
   sessionHistory: TerminalRecord[];
   terminals: TerminalRecord[];
   waitingForActiveRuntimeTab: boolean;
@@ -41,14 +46,18 @@ export function WorkspaceSurfacePanels({
   activeTabKey,
   activeTerminalId,
   activeTabViewState,
+  activeFileSessionState,
   activity,
   creatingSelection,
   documents,
   hasVisibleTabs,
+  onFileSessionStateChange,
   onCreateTerminal,
   onOpenFile,
   onOpenTerminal,
   onTabViewStateChange,
+  paneDragInProgress,
+  paneFocused,
   sessionHistory,
   terminals,
   waitingForActiveRuntimeTab,
@@ -95,17 +104,21 @@ export function WorkspaceSurfacePanels({
     <div
       id={activePanelId}
       aria-labelledby={activeTabDomId}
-      className="flex min-h-0 flex-1 flex-col"
+      className="flex h-full min-h-0 flex-1 flex-col"
       role="tabpanel"
     >
       {activeTerminal ? (
-        <TerminalSurface active terminal={activeTerminal} />
+        <TerminalSurface
+          focused={paneFocused}
+          tabDragInProgress={paneDragInProgress}
+          terminal={activeTerminal}
+        />
       ) : activeDocument && isChangesDiffDocument(activeDocument) ? (
         <GitDiffSurface
           initialScrollTop={activeTabViewState?.scrollTop ?? 0}
           onOpenFile={onOpenFile}
           onScrollTopChange={(scrollTop: number) => {
-            onTabViewStateChange(scrollTop > 0 ? { scrollTop } : null);
+            onTabViewStateChange(activeDocument.key, scrollTop > 0 ? { scrollTop } : null);
           }}
           source={{ focusPath: activeDocument.focusPath, mode: "changes" }}
           workspaceId={workspaceId}
@@ -115,7 +128,7 @@ export function WorkspaceSurfacePanels({
           initialScrollTop={activeTabViewState?.scrollTop ?? 0}
           onOpenFile={onOpenFile}
           onScrollTopChange={(scrollTop: number) => {
-            onTabViewStateChange(scrollTop > 0 ? { scrollTop } : null);
+            onTabViewStateChange(activeDocument.key, scrollTop > 0 ? { scrollTop } : null);
           }}
           source={{ commit: activeDocument, mode: "commit" }}
           workspaceId={workspaceId}
@@ -125,18 +138,40 @@ export function WorkspaceSurfacePanels({
           initialScrollTop={activeTabViewState?.scrollTop ?? 0}
           onOpenFile={onOpenFile}
           onScrollTopChange={(scrollTop: number) => {
-            onTabViewStateChange(scrollTop > 0 ? { scrollTop } : null);
+            onTabViewStateChange(activeDocument.key, scrollTop > 0 ? { scrollTop } : null);
           }}
           pullRequest={activeDocument}
           workspaceId={workspaceId}
         />
       ) : activeDocument && isFileViewerDocument(activeDocument) ? (
-        <FileViewer
+        <FileSurface
           filePath={activeDocument.filePath}
+          initialMode={activeTabViewState?.fileMode}
           initialScrollTop={activeTabViewState?.scrollTop ?? 0}
+          onOpenFile={onOpenFile}
+          onSessionStateChange={(nextState) => onFileSessionStateChange(activeDocument.key, nextState)}
           onScrollTopChange={(scrollTop: number) => {
-            onTabViewStateChange(scrollTop > 0 ? { scrollTop } : null);
+            onTabViewStateChange(
+              activeDocument.key,
+              scrollTop > 0 || activeTabViewState?.fileMode
+                ? {
+                    ...(activeTabViewState?.fileMode
+                      ? { fileMode: activeTabViewState.fileMode }
+                      : {}),
+                    ...(scrollTop > 0 ? { scrollTop } : {}),
+                  }
+                : null,
+            );
           }}
+          onModeChange={(fileMode) => {
+            onTabViewStateChange(activeDocument.key, {
+              ...(activeTabViewState?.scrollTop && activeTabViewState.scrollTop > 0
+                ? { scrollTop: activeTabViewState.scrollTop }
+                : {}),
+              fileMode,
+            });
+          }}
+          sessionState={activeFileSessionState}
           workspaceId={workspaceId}
         />
       ) : activeDocument && isLauncherDocument(activeDocument) ? (

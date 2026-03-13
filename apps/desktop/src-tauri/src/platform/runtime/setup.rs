@@ -28,7 +28,14 @@ pub async fn run_steps(
         let step_field = format!("{step_field_prefix}.{}", step.name);
         let step_env = build_step_env(step, runtime_env, &step_field)?;
 
-        publish_step_progress_event(app, workspace_id, &step.name, progress_target, "started", None);
+        publish_step_progress_event(
+            app,
+            workspace_id,
+            &step.name,
+            progress_target,
+            "started",
+            None,
+        );
 
         match (step.command.as_deref(), step.write_files.as_deref()) {
             (Some(command), None) => {
@@ -73,7 +80,14 @@ pub async fn run_steps(
             }
         }
 
-        publish_step_progress_event(app, workspace_id, &step.name, progress_target, "completed", None);
+        publish_step_progress_event(
+            app,
+            workspace_id,
+            &step.name,
+            progress_target,
+            "completed",
+            None,
+        );
     }
 
     Ok(())

@@ -255,6 +255,11 @@ export interface WorkspaceFileReadResult {
   is_too_large: boolean;
 }
 
+export interface WorkspaceFileTreeEntry {
+  extension: string | null;
+  file_path: string;
+}
+
 export async function readWorkspaceFile(
   workspaceId: string,
   filePath: string,
@@ -268,6 +273,36 @@ export async function readWorkspaceFile(
   return invoke<WorkspaceFileReadResult>("read_workspace_file", {
     workspaceId,
     filePath,
+  });
+}
+
+export async function writeWorkspaceFile(
+  workspaceId: string,
+  filePath: string,
+  content: string,
+): Promise<WorkspaceFileReadResult> {
+  if (!isTauri()) {
+    void workspaceId;
+    void filePath;
+    void content;
+    throw new Error("Workspace file editing requires the Tauri desktop shell.");
+  }
+
+  return invoke<WorkspaceFileReadResult>("write_workspace_file", {
+    workspaceId,
+    filePath,
+    content,
+  });
+}
+
+export async function listWorkspaceFiles(workspaceId: string): Promise<WorkspaceFileTreeEntry[]> {
+  if (!isTauri()) {
+    void workspaceId;
+    throw new Error("Workspace file listing requires the Tauri desktop shell.");
+  }
+
+  return invoke<WorkspaceFileTreeEntry[]>("list_workspace_files", {
+    workspaceId,
   });
 }
 

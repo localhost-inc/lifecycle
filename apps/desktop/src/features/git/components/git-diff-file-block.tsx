@@ -1,14 +1,7 @@
 import { useState } from "react";
 import { FileDiff, type FileDiffMetadata } from "@pierre/diffs/react";
 import { GitFileHeader } from "./git-file-header";
-
-export function getOpenableDiffFilePath(fileDiff: FileDiffMetadata): string | null {
-  if (fileDiff.type === "deleted") {
-    return null;
-  }
-
-  return fileDiff.name;
-}
+import { getOpenableDiffFilePath } from "./git-diff-rendering";
 
 interface GitDiffFileBlockProps {
   fileDiff: FileDiffMetadata;

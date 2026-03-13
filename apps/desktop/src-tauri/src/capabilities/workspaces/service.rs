@@ -98,7 +98,10 @@ pub async fn update_workspace_service(
         },
         matches!(
             (workspace_status.clone(), service_status.as_str()),
-            (WorkspaceStatus::Active | WorkspaceStatus::Starting, "ready" | "starting")
+            (
+                WorkspaceStatus::Active | WorkspaceStatus::Starting,
+                "ready" | "starting"
+            )
         ),
         current_effective_port
             .map(|port| (41_000..=48_999).contains(&port))

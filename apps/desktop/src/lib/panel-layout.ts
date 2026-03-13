@@ -147,6 +147,20 @@ export function getVerticalSplitRatioFromPointer(
   return clampSplitRatio((pointerClientY - containerTop) / containerHeight, bounds);
 }
 
+export function getHorizontalSplitRatioFromPointer(
+  pointerClientX: number,
+  containerLeft: number,
+  containerWidth: number,
+  minPanelSize: number,
+): number {
+  const bounds = getSplitRatioBounds(containerWidth, minPanelSize);
+  if (bounds.minRatio === bounds.maxRatio) {
+    return bounds.minRatio;
+  }
+
+  return clampSplitRatio((pointerClientX - containerLeft) / containerWidth, bounds);
+}
+
 export function readPersistedPanelValue(
   storageKey: string,
   defaultValue: number,

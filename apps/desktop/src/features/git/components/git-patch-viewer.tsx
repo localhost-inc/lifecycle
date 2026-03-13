@@ -48,19 +48,23 @@ export function GitPatchViewer({
     serialize: (value) => value,
     validate: isGitDiffStyle,
   });
-  const diffControlsDisabled = isLoading || error !== null || patch.length === 0;
+  const parseError = patch.length > 0 && parsedFiles === null ? "Unable to parse diff patch." : null;
+  const displayError = error ?? parseError;
+  const displayErrorPrefix = error !== null ? errorMessagePrefix : "Failed to parse diff";
+  const hasRenderableDiff = parsedFiles !== null && parsedFiles.length > 0;
+  const diffControlsDisabled = isLoading || displayError !== null || !hasRenderableDiff;
 
   return (
     <>
       {isLoading && !patch ? (
         <Loading message={loadingMessage} />
-      ) : error ? (
+      ) : displayError ? (
         <Alert className="m-5" variant="destructive">
           <AlertDescription>
-            {errorMessagePrefix}: {error}
+            {displayErrorPrefix}: {displayError}
           </AlertDescription>
         </Alert>
-      ) : !patch ? (
+      ) : !hasRenderableDiff ? (
         <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
           {emptyMessage}
         </div>
@@ -73,7 +77,6 @@ export function GitPatchViewer({
             onOpenFile={onOpenFile}
             onScrollTopChange={onScrollTopChange}
             parsedFiles={parsedFiles}
-            patch={patch}
           />
         </Suspense>
       )}

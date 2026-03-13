@@ -149,6 +149,42 @@ pub(crate) fn resolve_workspace_file_path_for_operation(
     Ok(canonical_candidate)
 }
 
+pub(crate) fn resolve_workspace_write_path_for_operation(
+    db_path: &str,
+    workspace_id: &str,
+    repo_relative_path: &str,
+    operation: &str,
+) -> Result<PathBuf, LifecycleError> {
+    let canonical_worktree = resolve_workspace_root_path(db_path, workspace_id, operation)?;
+    let relative_path = normalize_repo_relative_path(repo_relative_path, operation)?;
+    let candidate_path = canonical_worktree.join(&relative_path);
+
+    let existing_scope = if candidate_path.exists() {
+        candidate_path.clone()
+    } else {
+        candidate_path
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| canonical_worktree.clone())
+    };
+
+    let canonical_scope = std::fs::canonicalize(&existing_scope).map_err(|error| {
+        workspace_path_failure(
+            operation,
+            format!("failed to resolve workspace file scope: {error}"),
+        )
+    })?;
+
+    if !canonical_scope.starts_with(&canonical_worktree) {
+        return Err(workspace_path_failure(
+            operation,
+            format!("path resolves outside workspace root: {repo_relative_path}"),
+        ));
+    }
+
+    Ok(candidate_path)
+}
+
 pub(crate) fn resolve_workspace_file_path(
     db_path: &str,
     workspace_id: &str,
@@ -245,6 +281,71 @@ mod tests {
             LifecycleError::GitOperationFailed { operation, reason } => {
                 assert_eq!(operation, "open workspace file");
                 assert!(reason.contains("escapes workspace root"));
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+
+        let _ = fs::remove_dir_all(root);
+        let _ = fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn resolve_workspace_write_path_allows_new_files_inside_worktree() {
+        let root = temp_fixture_root();
+        let worktree_path = root.join("worktree");
+        let existing_dir = worktree_path.join("docs");
+        let db_path = temp_db_path();
+
+        fs::create_dir_all(&existing_dir).expect("create existing dir");
+        seed_workspace(&db_path, "workspace_1", &worktree_path);
+
+        let resolved = resolve_workspace_write_path_for_operation(
+            &db_path,
+            "workspace_1",
+            "docs/new-file.md",
+            "write workspace file",
+        )
+        .expect("resolve write target");
+
+        assert_eq!(
+            resolved,
+            std::fs::canonicalize(&existing_dir)
+                .expect("canonicalize existing dir")
+                .join("new-file.md")
+        );
+
+        let _ = fs::remove_dir_all(root);
+        let _ = fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn resolve_workspace_write_path_rejects_symlink_escapes() {
+        let root = temp_fixture_root();
+        let worktree_path = root.join("worktree");
+        let docs_path = worktree_path.join("docs");
+        let outside_path = root.join("outside");
+        let db_path = temp_db_path();
+
+        fs::create_dir_all(&worktree_path).expect("create worktree");
+        fs::create_dir_all(&outside_path).expect("create outside dir");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&outside_path, &docs_path).expect("create symlink");
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_dir(&outside_path, &docs_path).expect("create symlink");
+        seed_workspace(&db_path, "workspace_1", &worktree_path);
+
+        let error = resolve_workspace_write_path_for_operation(
+            &db_path,
+            "workspace_1",
+            "docs/new-file.md",
+            "write workspace file",
+        )
+        .expect_err("reject symlink escape");
+
+        match error {
+            LifecycleError::GitOperationFailed { operation, reason } => {
+                assert_eq!(operation, "write workspace file");
+                assert!(reason.contains("outside workspace root"));
             }
             other => panic!("unexpected error: {other:?}"),
         }

@@ -1,5 +1,15 @@
 import type { TerminalRecord } from "@lifecycle/contracts";
-import { Alert, AlertDescription, EmptyState, themeAppearance, useTheme } from "@lifecycle/ui";
+import {
+  Alert,
+  AlertDescription,
+  EmptyState,
+  DEFAULT_THEME_PREFERENCE,
+  getSystemThemeAppearance,
+  isTheme,
+  resolveTheme,
+  themeAppearance,
+  type ResolvedTheme,
+} from "@lifecycle/ui";
 import { TerminalSquare } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { subscribeToShellResize } from "../../../components/layout/shell-resize-provider";
@@ -15,56 +25,155 @@ import {
 } from "../api";
 import { DEFAULT_TERMINAL_FONT_SIZE } from "../terminal-display";
 import { resolveTerminalTheme } from "../terminal-theme";
-import { useSettings } from "../../settings/state/app-settings-provider";
 
 interface NativeTerminalSurfaceProps {
-  active: boolean;
+  focused: boolean;
+  tabDragInProgress?: boolean;
   terminal: TerminalRecord;
+}
+
+type NativeTerminalSurfaceAttachState = "attached" | "attaching" | "failed";
+
+interface NativeTerminalSurfaceLease {
+  owner: symbol;
+  pendingHideFrameId: number | null;
 }
 
 // DOM splitters cannot stack above the sibling native NSView, so keep the
 // embedded surface slightly inset from the shell seams.
 const NATIVE_TERMINAL_EDGE_GUTTER_PX = 6;
+const nativeTerminalSurfaceLeaseRegistry = createNativeTerminalSurfaceLeaseRegistry();
 
 export function shouldShowNativeTerminalSurface({
-  active,
   hasLiveSession,
   height,
   width,
 }: {
-  active: boolean;
   hasLiveSession: boolean;
   height: number;
   width: number;
 }): boolean {
-  return active && hasLiveSession && width > 1 && height > 1;
+  return hasLiveSession && width > 1 && height > 1;
 }
 
 export function resolveNativeTerminalSurfaceInteraction({
+  focused,
   shellResizeInProgress,
+  tabDragInProgress,
   visible,
 }: {
+  focused: boolean;
   shellResizeInProgress: boolean;
+  tabDragInProgress: boolean;
   visible: boolean;
 }): { focused: boolean; pointerPassthrough: boolean } {
   return {
-    focused: visible && !shellResizeInProgress,
-    pointerPassthrough: shellResizeInProgress,
+    focused: visible && focused && !shellResizeInProgress && !tabDragInProgress,
+    pointerPassthrough: shellResizeInProgress || tabDragInProgress || !focused,
   };
 }
 
-export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfaceProps) {
+export function createNativeTerminalSurfaceLeaseRegistry(): Map<
+  string,
+  NativeTerminalSurfaceLease
+> {
+  return new Map<string, NativeTerminalSurfaceLease>();
+}
+
+export function claimNativeTerminalSurfaceLease(
+  registry: Map<string, NativeTerminalSurfaceLease>,
+  terminalId: string,
+  owner: symbol,
+  cancelFrame: (frameId: number) => void,
+): void {
+  const existingLease = registry.get(terminalId);
+  if (existingLease && existingLease.pendingHideFrameId !== null) {
+    cancelFrame(existingLease.pendingHideFrameId);
+  }
+
+  registry.set(terminalId, {
+    owner,
+    pendingHideFrameId: null,
+  });
+}
+
+export function scheduleNativeTerminalSurfaceLeaseHide(
+  registry: Map<string, NativeTerminalSurfaceLease>,
+  terminalId: string,
+  owner: symbol,
+  requestFrame: (callback: FrameRequestCallback) => number,
+  cancelFrame: (frameId: number) => void,
+  hideSurface: (terminalId: string) => void,
+): number | null {
+  const existingLease = registry.get(terminalId);
+  if (!existingLease || existingLease.owner !== owner) {
+    return null;
+  }
+
+  if (existingLease.pendingHideFrameId !== null) {
+    cancelFrame(existingLease.pendingHideFrameId);
+  }
+
+  const frameId = requestFrame(() => {
+    const pendingLease = registry.get(terminalId);
+    if (!pendingLease || pendingLease.owner !== owner || pendingLease.pendingHideFrameId !== frameId) {
+      return;
+    }
+
+    registry.delete(terminalId);
+    hideSurface(terminalId);
+  });
+
+  registry.set(terminalId, {
+    owner,
+    pendingHideFrameId: frameId,
+  });
+
+  return frameId;
+}
+
+function readNativeTerminalResolvedTheme(): ResolvedTheme {
+  if (typeof document === "undefined") {
+    return resolveTheme(DEFAULT_THEME_PREFERENCE.theme, getSystemThemeAppearance(null));
+  }
+
+  const rootTheme = document.documentElement.dataset.theme;
+  if (isTheme(rootTheme) && rootTheme !== "system") {
+    return rootTheme;
+  }
+
+  return resolveTheme(DEFAULT_THEME_PREFERENCE.theme, getSystemThemeAppearance());
+}
+
+function readNativeTerminalMonospaceFontFamily(): string {
+  if (typeof document === "undefined" || typeof getComputedStyle !== "function") {
+    return getNativeMonospaceFontFamily(DEFAULT_MONOSPACE_FONT_FAMILY);
+  }
+
+  const configuredFontFamily = getComputedStyle(document.documentElement)
+    .getPropertyValue("--font-mono")
+    .trim();
+
+  return getNativeMonospaceFontFamily(configuredFontFamily || DEFAULT_MONOSPACE_FONT_FAMILY);
+}
+
+export function NativeTerminalSurface({
+  focused,
+  tabDragInProgress = false,
+  terminal,
+}: NativeTerminalSurfaceProps) {
+  const ownerRef = useRef(Symbol("native-terminal-surface-owner"));
   const hostRef = useRef<HTMLDivElement | null>(null);
   const frameIdRef = useRef<number | null>(null);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const shellResizeInProgressRef = useRef(false);
-  const [error, setError] = useState<string | null>(null);
-  const { monospaceFontFamily } = useSettings();
-  const { resolvedTheme } = useTheme();
-  const hasLiveSession = terminalHasLiveSession(terminal.status);
-  const terminalFontFamily = getNativeMonospaceFontFamily(
-    monospaceFontFamily || DEFAULT_MONOSPACE_FONT_FAMILY,
+  const [attachState, setAttachState] = useState<NativeTerminalSurfaceAttachState>(() =>
+    terminalHasLiveSession(terminal.status) ? "attaching" : "attached",
   );
+  const [error, setError] = useState<string | null>(null);
+  const hasLiveSession = terminalHasLiveSession(terminal.status);
+  const resolvedTheme = readNativeTerminalResolvedTheme();
+  const terminalFontFamily = readNativeTerminalMonospaceFontFamily();
 
   const cancelScheduledSync = () => {
     if (frameIdRef.current === null) {
@@ -78,8 +187,10 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
   const hideSurface = async () => {
     try {
       await hideNativeTerminalSurface(terminal.id);
+      setAttachState(hasLiveSession ? "attaching" : "attached");
       setError(null);
     } catch (nextError) {
+      setAttachState("failed");
       setError(String(nextError));
     }
   };
@@ -92,19 +203,21 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
 
     const rect = host.getBoundingClientRect();
     const visible = shouldShowNativeTerminalSurface({
-      active,
       hasLiveSession,
       height: rect.height,
       width: rect.width,
     });
     if (!visible) {
+      setAttachState(hasLiveSession ? "attaching" : "attached");
       await hideSurface();
       return;
     }
 
     try {
       const interaction = resolveNativeTerminalSurfaceInteraction({
+        focused,
         shellResizeInProgress: shellResizeInProgressRef.current,
+        tabDragInProgress,
         visible,
       });
 
@@ -115,6 +228,7 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
       ) {
         document.activeElement.blur();
       }
+
       await measureAsyncPerformance(`native-terminal-sync:${terminal.id}`, () =>
         syncNativeTerminalSurface({
           appearance: themeAppearance(resolvedTheme),
@@ -132,8 +246,10 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
           y: rect.top,
         }),
       );
+      setAttachState("attached");
       setError(null);
     } catch (nextError) {
+      setAttachState("failed");
       setError(String(nextError));
     }
   };
@@ -150,6 +266,20 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
   };
 
   useEffect(() => {
+    setAttachState(hasLiveSession ? "attaching" : "attached");
+    setError(null);
+  }, [hasLiveSession, terminal.id]);
+
+  useEffect(() => {
+    claimNativeTerminalSurfaceLease(
+      nativeTerminalSurfaceLeaseRegistry,
+      terminal.id,
+      ownerRef.current,
+      window.cancelAnimationFrame,
+    );
+  }, [terminal.id]);
+
+  useEffect(() => {
     const unsubscribe = subscribeToShellResize((resizing) => {
       shellResizeInProgressRef.current = resizing;
       cancelScheduledSync();
@@ -159,7 +289,7 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
     return () => {
       unsubscribe();
     };
-  }, [active, hasLiveSession, resolvedTheme, terminal.id, terminalFontFamily]);
+  }, [focused, hasLiveSession, resolvedTheme, tabDragInProgress, terminal.id, terminalFontFamily]);
 
   useEffect(() => {
     if (!hostRef.current) {
@@ -183,9 +313,20 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
       window.removeEventListener("resize", scheduleSync);
       window.removeEventListener("scroll", scheduleSync, true);
       document.removeEventListener("visibilitychange", scheduleSync);
-      void hideSurface();
+      scheduleNativeTerminalSurfaceLeaseHide(
+        nativeTerminalSurfaceLeaseRegistry,
+        terminal.id,
+        ownerRef.current,
+        window.requestAnimationFrame,
+        window.cancelAnimationFrame,
+        (terminalId) => {
+          void hideNativeTerminalSurface(terminalId);
+        },
+      );
     };
-  }, [active, hasLiveSession, resolvedTheme, terminal.id, terminalFontFamily]);
+  }, [focused, hasLiveSession, resolvedTheme, tabDragInProgress, terminal.id, terminalFontFamily]);
+
+  const showAttachOverlay = hasLiveSession && attachState !== "attached";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[var(--terminal-surface-background)]">
@@ -197,10 +338,32 @@ export function NativeTerminalSurface({ active, terminal }: NativeTerminalSurfac
       <div className="min-h-0 flex-1 overflow-hidden bg-[var(--terminal-surface-background)]">
         {hasLiveSession ? (
           <div
-            className="h-full w-full"
+            className="relative h-full w-full"
             style={{ paddingInline: `${NATIVE_TERMINAL_EDGE_GUTTER_PX}px` }}
           >
-            <div ref={hostRef} className="h-full w-full bg-[var(--terminal-surface-background)]" />
+            <div
+              ref={hostRef}
+              className="h-full w-full bg-[var(--terminal-surface-background)]"
+            />
+            {showAttachOverlay ? (
+              <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
+                <div className="flex max-w-sm flex-col items-center gap-3">
+                  <div className="text-[var(--muted-foreground)] opacity-40">
+                    <TerminalSquare />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-[var(--foreground)]">
+                      {attachState === "failed" ? "Terminal unavailable" : "Opening terminal..."}
+                    </p>
+                    <p className="text-xs text-[var(--muted-foreground)]">
+                      {attachState === "failed"
+                        ? "Lifecycle could not attach the native terminal surface."
+                        : "Lifecycle is attaching the native terminal surface."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : (
           <EmptyState

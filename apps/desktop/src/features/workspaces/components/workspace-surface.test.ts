@@ -25,9 +25,36 @@ import {
   createPullRequestTab,
   fileViewerTabKey,
   pullRequestTabKey,
+  type WorkspaceSurfaceState,
 } from "../state/workspace-surface-state";
 
 const CHANGES_DIFF_TAB_KEY = changesDiffTabKey();
+
+function withSinglePaneState(
+  overrides: Partial<WorkspaceSurfaceState> & {
+    activeTabKey?: string | null;
+    tabOrderKeys?: string[];
+  } = {},
+): WorkspaceSurfaceState {
+  const base = createDefaultWorkspaceSurfaceState();
+  const baseRootPane = base.rootPane.kind === "leaf" ? base.rootPane : null;
+  const { activeTabKey = null, tabOrderKeys = [], ...rest } = overrides;
+
+  return {
+    ...base,
+    ...rest,
+    rootPane: {
+      activeTabKey,
+      id: baseRootPane?.id ?? "pane-root",
+      kind: "leaf",
+      tabOrderKeys,
+    },
+  };
+}
+
+function rootPane(state: WorkspaceSurfaceState) {
+  return state.rootPane.kind === "leaf" ? state.rootPane : null;
+}
 
 function createPullRequestSummary(
   overrides: Partial<GitPullRequestSummary> = {},
@@ -57,11 +84,11 @@ describe("workspaceSurfaceReducer", () => {
 
     expect(
       workspaceSurfaceReducer(
-        {
-          ...createDefaultWorkspaceSurfaceState(),
+        withSinglePaneState({
           activeTabKey: changesTab.key,
           documents: [changesTab],
-        },
+          tabOrderKeys: [changesTab.key],
+        }),
         {
           request: {
             id: "req-2",
@@ -71,12 +98,13 @@ describe("workspaceSurfaceReducer", () => {
           kind: "open-document",
         },
       ),
-    ).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
-      activeTabKey: CHANGES_DIFF_TAB_KEY,
-      documents: [createChangesDiffTab("README.md")],
-      tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
-    });
+    ).toEqual(
+      withSinglePaneState({
+        activeTabKey: CHANGES_DIFF_TAB_KEY,
+        documents: [createChangesDiffTab("README.md")],
+        tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+      }),
+    );
   });
 
   test("opens a single changes tab when requested from the git panel", () => {
@@ -89,12 +117,13 @@ describe("workspaceSurfaceReducer", () => {
         },
         kind: "open-document",
       }),
-    ).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
-      activeTabKey: CHANGES_DIFF_TAB_KEY,
-      documents: [createChangesDiffTab("src/app.tsx")],
-      tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
-    });
+    ).toEqual(
+      withSinglePaneState({
+        activeTabKey: CHANGES_DIFF_TAB_KEY,
+        documents: [createChangesDiffTab("src/app.tsx")],
+        tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+      }),
+    );
   });
 
   test("opens launcher tabs as workspace-owned documents", () => {
@@ -103,9 +132,9 @@ describe("workspaceSurfaceReducer", () => {
       kind: "open-launcher",
     });
 
-    expect(state.activeTabKey).toBe("launcher:launcher-1");
+    expect(rootPane(state)?.activeTabKey).toBe("launcher:launcher-1");
     expect(state.documents).toEqual([createLauncherTab("launcher-1")]);
-    expect(state.tabOrderKeys).toEqual(["launcher:launcher-1"]);
+    expect(rootPane(state)?.tabOrderKeys).toEqual(["launcher:launcher-1"]);
   });
 
   test("replaces a launcher tab with a runtime tab key when opening from the launcher", () => {
@@ -113,85 +142,471 @@ describe("workspaceSurfaceReducer", () => {
 
     expect(
       workspaceSurfaceReducer(
-        {
-          ...createDefaultWorkspaceSurfaceState(),
+        withSinglePaneState({
           activeTabKey: launcher.key,
           documents: [launcher],
           hiddenRuntimeTabKeys: ["terminal:term-1"],
           tabOrderKeys: [launcher.key],
-        },
+        }),
         {
           launcherKey: launcher.key,
           tabKey: "terminal:term-1",
           kind: "replace-launcher-with-tab",
         },
       ),
+    ).toEqual(
+      withSinglePaneState({
+        activeTabKey: "terminal:term-1",
+        documents: [],
+        hiddenRuntimeTabKeys: [],
+        tabOrderKeys: ["terminal:term-1"],
+      }),
+    );
+  });
+
+  test("splits the active pane into a new launcher pane", () => {
+    const initialState = withSinglePaneState({
+      activeTabKey: CHANGES_DIFF_TAB_KEY,
+      documents: [createChangesDiffTab("src/app.tsx")],
+      tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+    });
+
+    expect(
+      workspaceSurfaceReducer(initialState, {
+        direction: "row",
+        kind: "split-pane",
+        launcherId: "launcher-2",
+        newPaneId: "pane-2",
+        paneId: "pane-root",
+        placement: "after",
+        splitId: "split-1",
+      }),
     ).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
-      activeTabKey: "terminal:term-1",
-      documents: [],
+      activePaneId: "pane-2",
+      documents: [createChangesDiffTab("src/app.tsx"), createLauncherTab("launcher-2")],
       hiddenRuntimeTabKeys: [],
-      tabOrderKeys: ["terminal:term-1"],
+      rootPane: {
+        direction: "row",
+        first: {
+          activeTabKey: CHANGES_DIFF_TAB_KEY,
+          id: "pane-root",
+          kind: "leaf",
+          tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+        },
+        id: "split-1",
+        kind: "split",
+        ratio: 0.5,
+        second: {
+          activeTabKey: "launcher:launcher-2",
+          id: "pane-2",
+          kind: "leaf",
+          tabOrderKeys: ["launcher:launcher-2"],
+        },
+      },
+      viewStateByTabKey: {},
+    });
+  });
+
+  test("can split a pane before the existing pane for left-or-top drop targets", () => {
+    const initialState = withSinglePaneState({
+      activeTabKey: CHANGES_DIFF_TAB_KEY,
+      documents: [createChangesDiffTab("src/app.tsx")],
+      tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+    });
+
+    expect(
+      workspaceSurfaceReducer(initialState, {
+        direction: "row",
+        kind: "split-pane",
+        launcherId: "launcher-left",
+        newPaneId: "pane-left",
+        paneId: "pane-root",
+        placement: "before",
+        splitId: "split-left",
+      }),
+    ).toEqual({
+      activePaneId: "pane-left",
+      documents: [createChangesDiffTab("src/app.tsx"), createLauncherTab("launcher-left")],
+      hiddenRuntimeTabKeys: [],
+      rootPane: {
+        direction: "row",
+        first: {
+          activeTabKey: "launcher:launcher-left",
+          id: "pane-left",
+          kind: "leaf",
+          tabOrderKeys: ["launcher:launcher-left"],
+        },
+        id: "split-left",
+        kind: "split",
+        ratio: 0.5,
+        second: {
+          activeTabKey: CHANGES_DIFF_TAB_KEY,
+          id: "pane-root",
+          kind: "leaf",
+          tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+        },
+      },
+      viewStateByTabKey: {},
+    });
+  });
+
+  test("closes a pane by merging its tabs into the sibling pane", () => {
+    const splitState = {
+      activePaneId: "pane-2",
+      documents: [createChangesDiffTab("src/app.tsx"), createLauncherTab("launcher-2")],
+      hiddenRuntimeTabKeys: [],
+      rootPane: {
+        direction: "row" as const,
+        first: {
+          activeTabKey: CHANGES_DIFF_TAB_KEY,
+          id: "pane-root",
+          kind: "leaf" as const,
+          tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+        },
+        id: "split-1",
+        kind: "split" as const,
+        ratio: 0.5,
+        second: {
+          activeTabKey: "launcher:launcher-2",
+          id: "pane-2",
+          kind: "leaf" as const,
+          tabOrderKeys: ["launcher:launcher-2"],
+        },
+      },
+      viewStateByTabKey: {},
+    };
+
+    expect(
+      workspaceSurfaceReducer(splitState, {
+        kind: "close-pane",
+        paneId: "pane-2",
+      }),
+    ).toEqual(
+      withSinglePaneState({
+        activeTabKey: "launcher:launcher-2",
+        documents: [createChangesDiffTab("src/app.tsx"), createLauncherTab("launcher-2")],
+        tabOrderKeys: [CHANGES_DIFF_TAB_KEY, "launcher:launcher-2"],
+      }),
+    );
+  });
+
+  test("moves a tab into another pane and activates the target pane", () => {
+    const pullRequest = createPullRequestTab(createPullRequestSummary());
+    const splitState = {
+      activePaneId: "pane-root",
+      documents: [
+        createChangesDiffTab("src/app.tsx"),
+        pullRequest,
+        createFileViewerTab("README.md"),
+      ],
+      hiddenRuntimeTabKeys: [],
+      rootPane: {
+        direction: "row" as const,
+        first: {
+          activeTabKey: pullRequest.key,
+          id: "pane-root",
+          kind: "leaf" as const,
+          tabOrderKeys: [CHANGES_DIFF_TAB_KEY, pullRequest.key],
+        },
+        id: "split-1",
+        kind: "split" as const,
+        ratio: 0.5,
+        second: {
+          activeTabKey: fileViewerTabKey("README.md"),
+          id: "pane-2",
+          kind: "leaf" as const,
+          tabOrderKeys: [fileViewerTabKey("README.md")],
+        },
+      },
+      viewStateByTabKey: {},
+    };
+
+    expect(
+      workspaceSurfaceReducer(splitState, {
+        key: pullRequest.key,
+        kind: "move-tab-to-pane",
+        sourcePaneId: "pane-root",
+        targetPaneId: "pane-2",
+      }),
+    ).toEqual({
+      activePaneId: "pane-2",
+      documents: [
+        createChangesDiffTab("src/app.tsx"),
+        pullRequest,
+        createFileViewerTab("README.md"),
+      ],
+      hiddenRuntimeTabKeys: [],
+      rootPane: {
+        direction: "row",
+        first: {
+          activeTabKey: CHANGES_DIFF_TAB_KEY,
+          id: "pane-root",
+          kind: "leaf",
+          tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+        },
+        id: "split-1",
+        kind: "split",
+        ratio: 0.5,
+        second: {
+          activeTabKey: pullRequest.key,
+          id: "pane-2",
+          kind: "leaf",
+          tabOrderKeys: [fileViewerTabKey("README.md"), pullRequest.key],
+        },
+      },
+      viewStateByTabKey: {},
+    });
+  });
+
+  test("replaces a placeholder launcher when moving a tab into another pane", () => {
+    const fileTab = createFileViewerTab("README.md");
+    const launcher = createLauncherTab("launcher-2");
+    const splitState = {
+      activePaneId: "pane-root",
+      documents: [fileTab, launcher],
+      hiddenRuntimeTabKeys: [],
+      rootPane: {
+        direction: "row" as const,
+        first: {
+          activeTabKey: fileTab.key,
+          id: "pane-root",
+          kind: "leaf" as const,
+          tabOrderKeys: [fileTab.key],
+        },
+        id: "split-1",
+        kind: "split" as const,
+        ratio: 0.5,
+        second: {
+          activeTabKey: launcher.key,
+          id: "pane-2",
+          kind: "leaf" as const,
+          tabOrderKeys: [launcher.key],
+        },
+      },
+      viewStateByTabKey: {},
+    };
+
+    const result = workspaceSurfaceReducer(splitState, {
+      key: fileTab.key,
+      kind: "move-tab-to-pane",
+      sourcePaneId: "pane-root",
+      targetPaneId: "pane-2",
+    });
+
+    expect(result.activePaneId).toBe("pane-2");
+    expect(result.hiddenRuntimeTabKeys).toEqual([]);
+    expect(result.viewStateByTabKey).toEqual({});
+    expect(result.rootPane).toMatchObject({
+      direction: "row",
+      first: {
+        id: "pane-root",
+        kind: "leaf",
+      },
+      id: "split-1",
+      kind: "split",
+      ratio: 0.5,
+      second: {
+        activeTabKey: fileTab.key,
+        id: "pane-2",
+        kind: "leaf",
+        tabOrderKeys: [fileTab.key],
+      },
+    });
+    const sourcePane = result.rootPane.kind === "split" ? result.rootPane.first : null;
+    expect(sourcePane?.kind).toBe("leaf");
+    if (!sourcePane || sourcePane.kind !== "leaf") {
+      throw new Error("expected source pane leaf");
+    }
+    expect(sourcePane.activeTabKey?.startsWith("launcher:")).toBeTrue();
+    expect(sourcePane.tabOrderKeys).toEqual([sourcePane.activeTabKey ?? ""]);
+    expect(result.documents).toEqual([
+      fileTab,
+      createLauncherTab((sourcePane.activeTabKey ?? "").replace("launcher:", "")),
+    ]);
+  });
+
+  test("inserts a moved tab before an existing target tab in the destination pane", () => {
+    const pullRequest = createPullRequestTab(createPullRequestSummary());
+    const fileTab = createFileViewerTab("README.md");
+    const changesTab = createChangesDiffTab("src/app.tsx");
+    const splitState = {
+      activePaneId: "pane-root",
+      documents: [pullRequest, fileTab, changesTab],
+      hiddenRuntimeTabKeys: [],
+      rootPane: {
+        direction: "row" as const,
+        first: {
+          activeTabKey: pullRequest.key,
+          id: "pane-root",
+          kind: "leaf" as const,
+          tabOrderKeys: [pullRequest.key],
+        },
+        id: "split-1",
+        kind: "split" as const,
+        ratio: 0.5,
+        second: {
+          activeTabKey: changesTab.key,
+          id: "pane-2",
+          kind: "leaf" as const,
+          tabOrderKeys: [fileTab.key, changesTab.key],
+        },
+      },
+      viewStateByTabKey: {},
+    };
+
+    const result = workspaceSurfaceReducer(splitState, {
+      key: pullRequest.key,
+      kind: "move-tab-to-pane",
+      placement: "before",
+      sourcePaneId: "pane-root",
+      targetKey: changesTab.key,
+      targetPaneId: "pane-2",
+    });
+
+    expect(result.activePaneId).toBe("pane-2");
+    expect(result.hiddenRuntimeTabKeys).toEqual([]);
+    expect(result.viewStateByTabKey).toEqual({});
+    expect(result.rootPane).toMatchObject({
+      direction: "row",
+      first: {
+        id: "pane-root",
+        kind: "leaf",
+      },
+      id: "split-1",
+      kind: "split",
+      ratio: 0.5,
+      second: {
+        activeTabKey: pullRequest.key,
+        id: "pane-2",
+        kind: "leaf",
+        tabOrderKeys: [fileTab.key, pullRequest.key, changesTab.key],
+      },
+    });
+    const sourcePane = result.rootPane.kind === "split" ? result.rootPane.first : null;
+    expect(sourcePane?.kind).toBe("leaf");
+    if (!sourcePane || sourcePane.kind !== "leaf") {
+      throw new Error("expected source pane leaf");
+    }
+    expect(sourcePane.activeTabKey?.startsWith("launcher:")).toBeTrue();
+    expect(sourcePane.tabOrderKeys).toEqual([sourcePane.activeTabKey ?? ""]);
+    expect(result.documents).toEqual([
+      pullRequest,
+      fileTab,
+      changesTab,
+      createLauncherTab((sourcePane.activeTabKey ?? "").replace("launcher:", "")),
+    ]);
+  });
+
+  test("creates a split pane that owns only the dragged tab", () => {
+    const changesTab = createChangesDiffTab("src/app.tsx");
+    const fileTab = createFileViewerTab("README.md");
+    const splitState = workspaceSurfaceReducer(
+      withSinglePaneState({
+        activeTabKey: fileTab.key,
+        documents: [changesTab, fileTab],
+        tabOrderKeys: [changesTab.key, fileTab.key],
+      }),
+      {
+        direction: "column",
+        kind: "split-pane",
+        launcherId: "launcher-split",
+        newPaneId: "pane-split",
+        paneId: "pane-root",
+        placement: "after",
+        splitId: "split-surface",
+      },
+    );
+
+    expect(
+      workspaceSurfaceReducer(splitState, {
+        key: fileTab.key,
+        kind: "move-tab-to-pane",
+        sourcePaneId: "pane-root",
+        targetPaneId: "pane-split",
+      }),
+    ).toEqual({
+      activePaneId: "pane-split",
+      documents: [changesTab, fileTab],
+      hiddenRuntimeTabKeys: [],
+      rootPane: {
+        direction: "column",
+        first: {
+          activeTabKey: changesTab.key,
+          id: "pane-root",
+          kind: "leaf",
+          tabOrderKeys: [changesTab.key],
+        },
+        id: "split-surface",
+        kind: "split",
+        ratio: 0.5,
+        second: {
+          activeTabKey: fileTab.key,
+          id: "pane-split",
+          kind: "leaf",
+          tabOrderKeys: [fileTab.key],
+        },
+      },
+      viewStateByTabKey: {},
     });
   });
 
   test("hides runtime tabs instead of removing terminal ownership from state", () => {
     expect(
       workspaceSurfaceReducer(
-        {
-          ...createDefaultWorkspaceSurfaceState(),
+        withSinglePaneState({
           activeTabKey: "terminal:term-2",
           documents: [createCommitDiffTab("abc12345")],
           tabOrderKeys: ["terminal:term-1", "terminal:term-2", "diff:commit:abc12345"],
-        },
+        }),
         {
           key: "terminal:term-2",
-          nextActiveKey: "diff:commit:abc12345",
           kind: "hide-runtime-tab",
         },
       ),
-    ).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
-      activeTabKey: "diff:commit:abc12345",
-      documents: [createCommitDiffTab("abc12345")],
-      hiddenRuntimeTabKeys: ["terminal:term-2"],
-      tabOrderKeys: ["terminal:term-1", "diff:commit:abc12345"],
-    });
+    ).toEqual(
+      withSinglePaneState({
+        activeTabKey: "diff:commit:abc12345",
+        documents: [createCommitDiffTab("abc12345")],
+        hiddenRuntimeTabKeys: ["terminal:term-2"],
+        tabOrderKeys: ["terminal:term-1", "diff:commit:abc12345"],
+      }),
+    );
   });
 
   test("restores hidden runtime tabs at the right edge when reopened", () => {
     expect(
       workspaceSurfaceReducer(
-        {
-          ...createDefaultWorkspaceSurfaceState(),
+        withSinglePaneState({
           activeTabKey: CHANGES_DIFF_TAB_KEY,
           documents: [createChangesDiffTab("src/app.tsx")],
           hiddenRuntimeTabKeys: ["terminal:term-2"],
           tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
-        },
+        }),
         {
           key: "terminal:term-2",
+          paneId: "pane-root",
           select: true,
           kind: "show-runtime-tab",
         },
       ),
-    ).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
-      activeTabKey: "terminal:term-2",
-      documents: [createChangesDiffTab("src/app.tsx")],
-      hiddenRuntimeTabKeys: [],
-      tabOrderKeys: [CHANGES_DIFF_TAB_KEY, "terminal:term-2"],
-    });
+    ).toEqual(
+      withSinglePaneState({
+        activeTabKey: "terminal:term-2",
+        documents: [createChangesDiffTab("src/app.tsx")],
+        hiddenRuntimeTabKeys: [],
+        tabOrderKeys: [CHANGES_DIFF_TAB_KEY, "terminal:term-2"],
+      }),
+    );
   });
 
   test("stores per-tab view state for reopened document tabs", () => {
     expect(
       workspaceSurfaceReducer(
-        {
-          ...createDefaultWorkspaceSurfaceState(),
+        withSinglePaneState({
           activeTabKey: fileViewerTabKey("README.md"),
           documents: [createFileViewerTab("README.md")],
-        },
+          tabOrderKeys: [fileViewerTabKey("README.md")],
+        }),
         {
           key: fileViewerTabKey("README.md"),
           kind: "set-tab-view-state",
@@ -200,16 +615,18 @@ describe("workspaceSurfaceReducer", () => {
           },
         },
       ),
-    ).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
-      activeTabKey: fileViewerTabKey("README.md"),
-      documents: [createFileViewerTab("README.md")],
-      viewStateByTabKey: {
-        [fileViewerTabKey("README.md")]: {
-          scrollTop: 144,
+    ).toEqual(
+      withSinglePaneState({
+        activeTabKey: fileViewerTabKey("README.md"),
+        documents: [createFileViewerTab("README.md")],
+        tabOrderKeys: [fileViewerTabKey("README.md")],
+        viewStateByTabKey: {
+          [fileViewerTabKey("README.md")]: {
+            scrollTop: 144,
+          },
         },
-      },
-    });
+      }),
+    );
   });
 
   test("opens pull request documents from the git panel", () => {
@@ -225,12 +642,13 @@ describe("workspaceSurfaceReducer", () => {
         },
         kind: "open-document",
       }),
-    ).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
-      activeTabKey: pullRequestTabKey(42),
-      documents: [pullRequest],
-      tabOrderKeys: [pullRequestTabKey(42)],
-    });
+    ).toEqual(
+      withSinglePaneState({
+        activeTabKey: pullRequestTabKey(42),
+        documents: [pullRequest],
+        tabOrderKeys: [pullRequestTabKey(42)],
+      }),
+    );
   });
 
   test("opens file viewer documents with path-based reuse", () => {
@@ -243,12 +661,13 @@ describe("workspaceSurfaceReducer", () => {
       kind: "open-document",
     });
 
-    expect(firstState).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
-      activeTabKey: fileViewerTabKey("README.md"),
-      documents: [createFileViewerTab("README.md")],
-      tabOrderKeys: [fileViewerTabKey("README.md")],
-    });
+    expect(firstState).toEqual(
+      withSinglePaneState({
+        activeTabKey: fileViewerTabKey("README.md"),
+        documents: [createFileViewerTab("README.md")],
+        tabOrderKeys: [fileViewerTabKey("README.md")],
+      }),
+    );
 
     expect(
       workspaceSurfaceReducer(firstState, {
@@ -289,12 +708,11 @@ describe("workspaceSurfaceReducer", () => {
 
     expect(
       workspaceSurfaceReducer(
-        {
-          ...createDefaultWorkspaceSurfaceState(),
+        withSinglePaneState({
           activeTabKey: firstPullRequest.key,
           documents: [firstPullRequest],
           tabOrderKeys: [firstPullRequest.key],
-        },
+        }),
         {
           request: {
             id: "pr-2",
@@ -304,12 +722,13 @@ describe("workspaceSurfaceReducer", () => {
           kind: "open-document",
         },
       ),
-    ).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
-      activeTabKey: firstPullRequest.key,
-      documents: [updatedPullRequest],
-      tabOrderKeys: [firstPullRequest.key],
-    });
+    ).toEqual(
+      withSinglePaneState({
+        activeTabKey: firstPullRequest.key,
+        documents: [updatedPullRequest],
+        tabOrderKeys: [firstPullRequest.key],
+      }),
+    );
   });
 });
 
@@ -381,6 +800,46 @@ describe("workspace tab helpers", () => {
         ["terminal:term-2"],
       ).map((tab) => tab.key),
     ).toEqual(["launcher:launcher-1", CHANGES_DIFF_TAB_KEY, "terminal:term-1"]);
+  });
+
+  test("resolves only the tabs assigned to each pane instead of mirroring global tabs", () => {
+    const runtimeTabs = [
+      {
+        harnessProvider: null,
+        key: "terminal:term-1",
+        kind: "terminal" as const,
+        label: "Terminal 1",
+        launchType: "shell" as const,
+        responseReady: false,
+        status: "active" as const,
+        terminalId: "term-1",
+      },
+      {
+        harnessProvider: null,
+        key: "terminal:term-2",
+        kind: "terminal" as const,
+        label: "Terminal 2",
+        launchType: "shell" as const,
+        responseReady: false,
+        status: "active" as const,
+        terminalId: "term-2",
+      },
+    ];
+    const documents = [createChangesDiffTab("src/app.tsx"), createLauncherTab("launcher-1")];
+
+    expect(
+      resolveWorkspaceVisibleTabs(
+        runtimeTabs,
+        documents,
+        ["terminal:term-1", "launcher:launcher-1"],
+        [],
+      ).map((tab) => tab.key),
+    ).toEqual(["terminal:term-1", "launcher:launcher-1"]);
+    expect(
+      resolveWorkspaceVisibleTabs(runtimeTabs, documents, [CHANGES_DIFF_TAB_KEY, "terminal:term-2"], []).map(
+        (tab) => tab.key,
+      ),
+    ).toEqual([CHANGES_DIFF_TAB_KEY, "terminal:term-2"]);
   });
 
   test("returns the key for the rightmost tab", () => {

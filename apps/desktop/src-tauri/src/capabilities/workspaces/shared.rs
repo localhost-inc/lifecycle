@@ -212,11 +212,15 @@ pub(super) fn reconcile_workspace_services_db(
                     });
                 let allow_bound_current_port = matches!(
                     (workspace_status.clone(), current_status.as_str()),
-                    (WorkspaceStatus::Active | WorkspaceStatus::Starting, "ready" | "starting")
+                    (
+                        WorkspaceStatus::Active | WorkspaceStatus::Starting,
+                        "ready" | "starting"
+                    )
                 );
-                let prefer_randomized_port_assignment =
-                    matches!(service_config, crate::capabilities::workspaces::manifest::ServiceConfig::Image(_))
-                        && !service_config.share_default();
+                let prefer_randomized_port_assignment = matches!(
+                    service_config,
+                    crate::capabilities::workspaces::manifest::ServiceConfig::Image(_)
+                ) && !service_config.share_default();
                 let current_effective_port = tx
                     .query_row(
                         "SELECT effective_port FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
@@ -373,7 +377,8 @@ pub(super) fn workspace_failure_reason_for_start_error(
 pub(super) fn service_status_reason_for_start_error(error: &LifecycleError) -> &'static str {
     match error {
         LifecycleError::PortConflict { .. } => "service_port_unreachable",
-        _ => "unknown",
+        LifecycleError::ServiceStartFailed { .. } => "service_start_failed",
+        _ => "service_start_failed",
     }
 }
 
@@ -443,6 +448,19 @@ mod tests {
     use super::*;
     use crate::capabilities::workspaces::manifest::LifecycleConfig;
     use crate::capabilities::workspaces::test_support::available_test_port;
+
+    #[test]
+    fn maps_service_start_errors_to_service_start_failed_reason() {
+        let error = LifecycleError::ServiceStartFailed {
+            service: "postgres".to_string(),
+            reason: "container exited".to_string(),
+        };
+
+        assert_eq!(
+            service_status_reason_for_start_error(&error),
+            "service_start_failed"
+        );
+    }
 
     fn temp_db_path() -> String {
         let path =

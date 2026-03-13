@@ -15,6 +15,7 @@ import {
   pullRequestTabKey,
   readLastWorkspaceId,
   readWorkspaceSurfaceState,
+  type WorkspaceSurfaceState,
   writeLastWorkspaceId,
   writeWorkspaceSurfaceState,
 } from "./workspace-surface-state";
@@ -38,10 +39,25 @@ class MemoryStorage implements StorageLike {
   }
 }
 
-function withDefaultState(state: Partial<ReturnType<typeof createDefaultWorkspaceSurfaceState>>) {
+function withDefaultState(
+  state: Partial<WorkspaceSurfaceState> & {
+    activeTabKey?: string | null;
+    tabOrderKeys?: string[];
+  },
+): WorkspaceSurfaceState {
+  const base = createDefaultWorkspaceSurfaceState();
+  const baseRootPane = base.rootPane.kind === "leaf" ? base.rootPane : null;
+  const { activeTabKey = null, tabOrderKeys = [], ...rest } = state;
+
   return {
-    ...createDefaultWorkspaceSurfaceState(),
-    ...state,
+    ...base,
+    ...rest,
+    rootPane: {
+      activeTabKey,
+      id: baseRootPane?.id ?? "pane-root",
+      kind: "leaf",
+      tabOrderKeys,
+    },
   };
 }
 
@@ -113,11 +129,11 @@ describe("workspace surface state persistence", () => {
       }),
     );
 
-    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
+    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual(withDefaultState({
       activeTabKey: CHANGES_DIFF_TAB_KEY,
       documents: [createChangesDiffTab("src/app.ts"), createCommitDiffTab(commit)],
-    });
+      tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+    }));
   });
 
   test("persists a single changes diff tab with fixed labeling and focus path", () => {
@@ -132,20 +148,26 @@ describe("workspace surface state persistence", () => {
       storage,
     );
 
-    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
+    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual(withDefaultState({
       activeTabKey: CHANGES_DIFF_TAB_KEY,
       documents: [createChangesDiffTab("README.md")],
-    });
+      tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+    }));
     expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY) ?? "null")).toEqual({
       "ws-1": {
-        activeTabKey: CHANGES_DIFF_TAB_KEY,
+        activePaneId: "pane-root",
         documents: [
           {
             focusPath: "README.md",
             kind: "changes-diff",
           },
         ],
+        rootPane: {
+          activeTabKey: CHANGES_DIFF_TAB_KEY,
+          id: "pane-root",
+          kind: "leaf",
+          tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+        },
       },
     });
   });
@@ -174,14 +196,14 @@ describe("workspace surface state persistence", () => {
       storage,
     );
 
-    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
+    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual(withDefaultState({
       activeTabKey: commitDiffTabKey(firstCommit.sha),
       documents: [createCommitDiffTab(firstCommit), createCommitDiffTab(secondCommit)],
-    });
+      tabOrderKeys: [commitDiffTabKey(firstCommit.sha)],
+    }));
     expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY) ?? "null")).toEqual({
       "ws-1": {
-        activeTabKey: commitDiffTabKey(firstCommit.sha),
+        activePaneId: "pane-root",
         documents: [
           {
             author: firstCommit.author,
@@ -200,6 +222,12 @@ describe("workspace surface state persistence", () => {
             timestamp: secondCommit.timestamp,
           },
         ],
+        rootPane: {
+          activeTabKey: commitDiffTabKey(firstCommit.sha),
+          id: "pane-root",
+          kind: "leaf",
+          tabOrderKeys: [commitDiffTabKey(firstCommit.sha)],
+        },
       },
     });
   });
@@ -216,20 +244,26 @@ describe("workspace surface state persistence", () => {
       storage,
     );
 
-    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
+    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual(withDefaultState({
       activeTabKey: fileViewerTabKey("README.md"),
       documents: [createFileViewerTab("README.md")],
-    });
+      tabOrderKeys: [fileViewerTabKey("README.md")],
+    }));
     expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY) ?? "null")).toEqual({
       "ws-1": {
-        activeTabKey: fileViewerTabKey("README.md"),
+        activePaneId: "pane-root",
         documents: [
           {
             filePath: "README.md",
             kind: "file-viewer",
           },
         ],
+        rootPane: {
+          activeTabKey: fileViewerTabKey("README.md"),
+          id: "pane-root",
+          kind: "leaf",
+          tabOrderKeys: [fileViewerTabKey("README.md")],
+        },
       },
     });
   });
@@ -254,25 +288,31 @@ describe("workspace surface state persistence", () => {
       storage,
     );
 
-    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
+    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual(withDefaultState({
       activeTabKey: fileViewerTabKey("README.md"),
       documents: [createFileViewerTab("README.md")],
+      tabOrderKeys: [fileViewerTabKey("README.md")],
       viewStateByTabKey: {
         [fileViewerTabKey("README.md")]: {
           scrollTop: 128,
         },
       },
-    });
+    }));
     expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY) ?? "null")).toEqual({
       "ws-1": {
-        activeTabKey: fileViewerTabKey("README.md"),
+        activePaneId: "pane-root",
         documents: [
           {
             filePath: "README.md",
             kind: "file-viewer",
           },
         ],
+        rootPane: {
+          activeTabKey: fileViewerTabKey("README.md"),
+          id: "pane-root",
+          kind: "leaf",
+          tabOrderKeys: [fileViewerTabKey("README.md")],
+        },
         viewStateByTabKey: {
           [fileViewerTabKey("README.md")]: {
             scrollTop: 128,
@@ -311,14 +351,14 @@ describe("workspace surface state persistence", () => {
       storage,
     );
 
-    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
+    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual(withDefaultState({
       activeTabKey: pullRequestTabKey(firstPullRequest.number),
       documents: [createPullRequestTab(secondPullRequest)],
-    });
+      tabOrderKeys: [pullRequestTabKey(firstPullRequest.number)],
+    }));
     expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY) ?? "null")).toEqual({
       "ws-1": {
-        activeTabKey: pullRequestTabKey(firstPullRequest.number),
+        activePaneId: "pane-root",
         documents: [
           {
             author: secondPullRequest.author,
@@ -338,6 +378,12 @@ describe("workspace surface state persistence", () => {
             url: secondPullRequest.url,
           },
         ],
+        rootPane: {
+          activeTabKey: pullRequestTabKey(firstPullRequest.number),
+          id: "pane-root",
+          kind: "leaf",
+          tabOrderKeys: [pullRequestTabKey(firstPullRequest.number)],
+        },
       },
     });
   });
@@ -354,15 +400,21 @@ describe("workspace surface state persistence", () => {
       storage,
     );
 
-    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
+    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual(withDefaultState({
       activeTabKey: "terminal:term-42",
       documents: [],
-    });
+      tabOrderKeys: ["terminal:term-42"],
+    }));
     expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY) ?? "null")).toEqual({
       "ws-1": {
-        activeTabKey: "terminal:term-42",
+        activePaneId: "pane-root",
         documents: [],
+        rootPane: {
+          activeTabKey: "terminal:term-42",
+          id: "pane-root",
+          kind: "leaf",
+          tabOrderKeys: ["terminal:term-42"],
+        },
       },
     });
   });
@@ -381,16 +433,15 @@ describe("workspace surface state persistence", () => {
       storage,
     );
 
-    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
+    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual(withDefaultState({
       activeTabKey: launcher.key,
       documents: [launcher, createChangesDiffTab("src/app.ts")],
       hiddenRuntimeTabKeys: [],
       tabOrderKeys: [launcher.key, CHANGES_DIFF_TAB_KEY, "terminal:term-2"],
-    });
+    }));
     expect(JSON.parse(storage.getItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY) ?? "null")).toEqual({
       "ws-1": {
-        activeTabKey: launcher.key,
+        activePaneId: "pane-root",
         documents: [
           {
             key: launcher.key,
@@ -401,7 +452,12 @@ describe("workspace surface state persistence", () => {
             kind: "changes-diff",
           },
         ],
-        tabOrderKeys: [launcher.key, CHANGES_DIFF_TAB_KEY, "terminal:term-2"],
+        rootPane: {
+          activeTabKey: launcher.key,
+          id: "pane-root",
+          kind: "leaf",
+          tabOrderKeys: [launcher.key, CHANGES_DIFF_TAB_KEY, "terminal:term-2"],
+        },
       },
     });
   });
@@ -421,13 +477,12 @@ describe("workspace surface state persistence", () => {
       }),
     );
 
-    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
+    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual(withDefaultState({
       activeTabKey: null,
       documents: [createLauncherTab("launcher-1")],
       hiddenRuntimeTabKeys: ["terminal:term-hidden"],
       tabOrderKeys: ["launcher:launcher-1", CHANGES_DIFF_TAB_KEY],
-    });
+    }));
   });
 
   test("filters invalid persisted payloads while preserving valid current documents", () => {
@@ -479,11 +534,11 @@ describe("workspace surface state persistence", () => {
       }),
     );
 
-    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
+    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual(withDefaultState({
       activeTabKey: CHANGES_DIFF_TAB_KEY,
       documents: [createChangesDiffTab("src/existing.ts"), createCommitDiffTab(commit)],
-    });
+      tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+    }));
   });
 
   test("preserves persisted runtime active tabs while filtering invalid documents", () => {
@@ -504,11 +559,11 @@ describe("workspace surface state persistence", () => {
       }),
     );
 
-    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual({
-      ...createDefaultWorkspaceSurfaceState(),
+    expect(readWorkspaceSurfaceState("ws-1", storage)).toEqual(withDefaultState({
       activeTabKey: "terminal:term-42",
       documents: [],
-    });
+      tabOrderKeys: ["terminal:term-42"],
+    }));
   });
 
   test("removes empty workspace state snapshots", () => {
@@ -519,6 +574,7 @@ describe("workspace surface state persistence", () => {
       withDefaultState({
         activeTabKey: CHANGES_DIFF_TAB_KEY,
         documents: [createChangesDiffTab("src/app.ts")],
+        tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
       }),
       storage,
     );

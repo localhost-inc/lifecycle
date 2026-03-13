@@ -1,7 +1,7 @@
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useCallback, useEffect, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   getWorkspaceDisplayName,
@@ -15,6 +15,7 @@ import { TitleBarActions } from "./title-bar-actions";
 
 interface TitleBarProps {
   selectedWorkspace?: WorkspaceRecord | null;
+  sourceWorkspace?: WorkspaceRecord | null;
   leftSidebarCollapsed?: boolean;
   onFork?: () => void;
   onToggleRightSidebar?: () => void;
@@ -42,6 +43,7 @@ function isEditableTarget(target: EventTarget | null): boolean {
 
 export function TitleBar({
   selectedWorkspace,
+  sourceWorkspace,
   leftSidebarCollapsed,
   onFork,
   onToggleRightSidebar,
@@ -98,6 +100,13 @@ export function TitleBar({
   const workspaceDisplayName = selectedWorkspace
     ? getWorkspaceDisplayName(selectedWorkspace)
     : null;
+  const sourceWorkspaceDisplayName = useMemo(() => {
+    if (!selectedWorkspace?.source_workspace_id || !sourceWorkspace) {
+      return null;
+    }
+
+    return getWorkspaceDisplayName(sourceWorkspace);
+  }, [selectedWorkspace?.source_workspace_id, sourceWorkspace]);
   const workspaceTitle =
     selectedWorkspace && workspaceDisplayName
       ? isRootWorkspace(selectedWorkspace)
@@ -122,6 +131,11 @@ export function TitleBar({
               className="font-mono text-[13px] font-medium text-[var(--foreground)]"
               text={workspaceDisplayName ?? selectedWorkspace.name}
             />
+            {sourceWorkspaceDisplayName && (
+              <span className="truncate font-mono text-[12px] text-[var(--muted-foreground)]">
+                from {sourceWorkspaceDisplayName}
+              </span>
+            )}
             {selectedWorkspace.git_sha && (
               <span className="font-mono text-xs text-[var(--muted-foreground)]">
                 {selectedWorkspace.git_sha.slice(0, 8)}

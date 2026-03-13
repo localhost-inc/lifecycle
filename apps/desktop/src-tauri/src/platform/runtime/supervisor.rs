@@ -1,4 +1,6 @@
-use crate::capabilities::workspaces::manifest::{ImageService, ProcessService};
+use crate::capabilities::workspaces::manifest::{
+    is_valid_named_volume_source, ImageService, ImageVolume, ProcessService,
+};
 use crate::platform::runtime::templates::expand_reserved_runtime_templates;
 use crate::shared::errors::LifecycleError;
 use bollard::container::{Config, CreateContainerOptions, RemoveContainerOptions};
@@ -125,10 +127,11 @@ impl Supervisor {
         }
 
         // Build env vars
-        let env: Vec<String> = resolve_service_env(service_name, service.env.as_ref(), runtime_env)?
-            .into_iter()
-            .map(|(key, value)| format!("{key}={value}"))
-            .collect();
+        let env: Vec<String> =
+            resolve_service_env(service_name, service.env.as_ref(), runtime_env)?
+                .into_iter()
+                .map(|(key, value)| format!("{key}={value}"))
+                .collect();
 
         // Build cmd
         let cmd: Option<Vec<String>> = if let Some(ref command) = service.command {
@@ -322,30 +325,31 @@ impl Supervisor {
         let mut binds = Vec::new();
 
         for volume in service.volumes.as_deref().unwrap_or_default() {
-            let host_path = if let Some(workspace_name) = volume.source.strip_prefix("workspace://")
-            {
-                let volume_name = workspace_name.trim().trim_matches('/');
-                if volume_name.is_empty() {
-                    return Err(LifecycleError::ServiceStartFailed {
-                        service: service_name.to_string(),
-                        reason: "workspace volume source cannot be empty".to_string(),
-                    });
+            let host_path = match volume {
+                ImageVolume::Bind { source, .. } => {
+                    resolve_host_path(service_name, worktree_path, source)?
                 }
-
-                let path = storage_root.join(volume_name);
-                std::fs::create_dir_all(&path).map_err(|error| {
-                    LifecycleError::ServiceStartFailed {
-                        service: service_name.to_string(),
-                        reason: format!("failed to create workspace volume: {error}"),
+                ImageVolume::Volume { source, .. } => {
+                    if !is_valid_named_volume_source(source) {
+                        return Err(LifecycleError::ServiceStartFailed {
+                            service: service_name.to_string(),
+                            reason: "named volume source is invalid".to_string(),
+                        });
                     }
-                })?;
-                path
-            } else {
-                resolve_host_path(service_name, worktree_path, &volume.source)?
+
+                    let path = storage_root.join(source);
+                    std::fs::create_dir_all(&path).map_err(|error| {
+                        LifecycleError::ServiceStartFailed {
+                            service: service_name.to_string(),
+                            reason: format!("failed to create named volume: {error}"),
+                        }
+                    })?;
+                    path
+                }
             };
 
-            let mut bind = format!("{}:{}", host_path.display(), volume.target);
-            if volume.read_only.unwrap_or(false) {
+            let mut bind = format!("{}:{}", host_path.display(), volume.target());
+            if volume.read_only() {
                 bind.push_str(":ro");
             }
             binds.push(bind);
@@ -543,12 +547,12 @@ mod tests {
         std::fs::write(&init_sql, "select 1;").expect("write init.sql");
 
         let service = image_service_with_volumes(vec![
-            crate::capabilities::workspaces::manifest::ImageVolume {
-                source: "workspace://postgres".to_string(),
+            crate::capabilities::workspaces::manifest::ImageVolume::Volume {
+                source: "postgres".to_string(),
                 target: "/var/lib/postgresql/data".to_string(),
                 read_only: None,
             },
-            crate::capabilities::workspaces::manifest::ImageVolume {
+            crate::capabilities::workspaces::manifest::ImageVolume::Bind {
                 source: "docker/init.sql".to_string(),
                 target: "/docker-entrypoint-initdb.d/init.sql".to_string(),
                 read_only: Some(true),
@@ -584,7 +588,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_volume_binds_rejects_empty_workspace_source() {
+    fn resolve_volume_binds_rejects_invalid_named_volume_sources() {
         let root =
             std::env::temp_dir().join(format!("lifecycle-supervisor-{}", uuid::Uuid::new_v4()));
         let worktree = root.join("worktree");
@@ -593,8 +597,8 @@ mod tests {
         std::fs::create_dir_all(&storage_root).expect("create storage root");
 
         let service = image_service_with_volumes(vec![
-            crate::capabilities::workspaces::manifest::ImageVolume {
-                source: "workspace://".to_string(),
+            crate::capabilities::workspaces::manifest::ImageVolume::Volume {
+                source: "../postgres".to_string(),
                 target: "/data".to_string(),
                 read_only: None,
             },
@@ -607,12 +611,12 @@ mod tests {
                 worktree.to_str().expect("utf8 worktree path"),
                 &storage_root,
             )
-            .expect_err("empty workspace volume should fail");
+            .expect_err("invalid named volume should fail");
 
         match error {
             LifecycleError::ServiceStartFailed { service, reason } => {
                 assert_eq!(service, "postgres");
-                assert!(reason.contains("workspace volume source cannot be empty"));
+                assert!(reason.contains("named volume source is invalid"));
             }
             other => panic!("unexpected error: {other}"),
         }

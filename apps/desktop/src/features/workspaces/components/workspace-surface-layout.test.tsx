@@ -8,7 +8,7 @@ describe("WorkspaceSurface layout", () => {
     mock.restore();
   });
 
-  test("keeps the tab strip flush on the left edge while preserving action padding", async () => {
+  test("renders pane headers flush on the left edge while preserving right-side controls", async () => {
     const hooksModule = await import("../hooks");
     const terminalHooksModule = await import("../../terminals/hooks");
     const responseReadyModule =
@@ -43,7 +43,8 @@ describe("WorkspaceSurface layout", () => {
       }),
     );
 
-    expect(markup).toContain('class="flex items-center gap-2 pt-1 pb-3"');
+    expect(markup).toContain('class="flex items-center gap-2 border-b');
+    expect(markup).toContain('data-slot="workspace-tab-bar"');
     expect(markup).not.toContain("px-3");
   });
 });

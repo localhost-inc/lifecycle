@@ -2,7 +2,8 @@ import type { TerminalRecord } from "@lifecycle/contracts";
 import { NativeTerminalSurface } from "./native-terminal-surface";
 
 interface TerminalSurfaceProps {
-  active: boolean;
+  focused: boolean;
+  tabDragInProgress?: boolean;
   terminal: TerminalRecord;
 }
 

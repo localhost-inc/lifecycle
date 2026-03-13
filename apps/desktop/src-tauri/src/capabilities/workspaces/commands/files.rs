@@ -12,6 +12,24 @@ pub fn read_workspace_file(
 }
 
 #[tauri::command]
+pub fn write_workspace_file(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    file_path: String,
+    content: String,
+) -> Result<super::super::file::WorkspaceFileReadResult, LifecycleError> {
+    super::super::file::write_workspace_file(&db_path.0, workspace_id, file_path, content)
+}
+
+#[tauri::command]
+pub fn list_workspace_files(
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+) -> Result<Vec<super::super::file::WorkspaceFileTreeEntry>, LifecycleError> {
+    super::super::file::list_workspace_files(&db_path.0, workspace_id)
+}
+
+#[tauri::command]
 pub fn open_workspace_file(
     app: AppHandle,
     db_path: State<'_, DbPath>,

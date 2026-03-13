@@ -3,6 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   getWorkspaceActiveTabScrollLeft,
+  hasStartedWorkspaceTabDrag,
   WorkspaceSurfaceTabBar,
 } from "./workspace-surface-tab-bar";
 
@@ -15,7 +16,6 @@ describe("WorkspaceSurfaceTabBar", () => {
         onCloseRuntimeTab: async () => {},
 
         onSelectTab: () => {},
-        onSetTabOrder: () => {},
         renderTabLeading: (tab) =>
           createElement("span", { "data-slot": "custom-leading" }, `lead:${tab.key}`),
         visibleTabs: [
@@ -44,7 +44,6 @@ describe("WorkspaceSurfaceTabBar", () => {
         onCloseDocumentTab: () => {},
         onCloseRuntimeTab: async () => {},
         onSelectTab: () => {},
-        onSetTabOrder: () => {},
         visibleTabs: [
           {
             key: "terminal:term-1",
@@ -75,7 +74,6 @@ describe("WorkspaceSurfaceTabBar", () => {
         onCloseDocumentTab: () => {},
         onCloseRuntimeTab: async () => {},
         onSelectTab: () => {},
-        onSetTabOrder: () => {},
         visibleTabs: [
           {
             key: "terminal:term-1",
@@ -115,7 +113,6 @@ describe("WorkspaceSurfaceTabBar", () => {
         onCloseDocumentTab: () => {},
         onCloseRuntimeTab: async () => {},
         onSelectTab: () => {},
-        onSetTabOrder: () => {},
         visibleTabs: [
           {
             key: "terminal:term-1",
@@ -163,7 +160,6 @@ describe("WorkspaceSurfaceTabBar", () => {
         onCloseRuntimeTab: async () => {},
 
         onSelectTab: () => {},
-        onSetTabOrder: () => {},
         visibleTabs: [
           {
             key: "terminal:term-1",
@@ -191,7 +187,6 @@ describe("WorkspaceSurfaceTabBar", () => {
         onCloseRuntimeTab: async () => {},
 
         onSelectTab: () => {},
-        onSetTabOrder: () => {},
         visibleTabs: [
           {
             key: "terminal:term-1",
@@ -220,7 +215,6 @@ describe("WorkspaceSurfaceTabBar", () => {
         onCloseRuntimeTab: async () => {},
 
         onSelectTab: () => {},
-        onSetTabOrder: () => {},
         visibleTabs: [
           {
             key: "terminal:term-1",
@@ -296,5 +290,12 @@ describe("getWorkspaceActiveTabScrollLeft", () => {
         },
       ),
     ).toBe(32);
+  });
+});
+
+describe("hasStartedWorkspaceTabDrag", () => {
+  test("starts a drag from vertical movement, not only horizontal movement", () => {
+    expect(hasStartedWorkspaceTabDrag(0, 7)).toBe(true);
+    expect(hasStartedWorkspaceTabDrag(5, 0)).toBe(false);
   });
 });

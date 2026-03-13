@@ -225,7 +225,7 @@ function FileRow({
           onOpen();
         }
       }}
-      className="group/row flex min-h-8 items-center gap-3 px-4 py-1.5 transition hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
+      className="group/row flex min-h-8 items-center gap-3 px-4 py-1 transition hover:bg-[var(--surface-hover)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
       title={file.path}
     >
       <span
@@ -236,7 +236,7 @@ function FileRow({
       </span>
 
       <div className="flex min-w-0 flex-1 items-baseline gap-1">
-        <span className="shrink-0 text-sm font-medium text-[var(--foreground)]">{name}</span>
+        <span className="shrink-0 text-sm text-[var(--foreground)]">{name}</span>
         {dir && (
           <span className="truncate text-sm text-[var(--muted-foreground)] opacity-60">{dir}</span>
         )}

@@ -166,10 +166,12 @@ Required fields:
 Additional service fields:
 
 - `image.build`: `{ "context": "<path>", "dockerfile": "<optional path>" }`
-- `volumes`: `{ "source": "<path|workspace://name>", "target": "<container path>", "read_only": true|false }`
+- `volumes` entries use explicit mount types:
+  - bind mount: `{ "type": "bind", "source": "<workspace path>", "target": "<container path>", "read_only": true|false }`
+  - named volume: `{ "type": "volume", "source": "<name>", "target": "<container path>", "read_only": true|false }`
 - `port`: preferred/default local port; provider may assign a different stable `effective_port` when needed
 - `share_default`: default `workspace_service.exposure` on create (`true -> local`, omitted/`false -> internal`)
-- `workspace://<name>` volume sources resolve to provider-managed persistent workspace storage
+- named volumes resolve to provider-managed persistent workspace storage for that workspace
 
 ### `health_check`
 
@@ -209,8 +211,8 @@ Materialize local env files in workspace setup instead.
       "build": { "context": "docker", "dockerfile": "docker/Dockerfile.pg.dev" },
       "startup_timeout_seconds": 45,
       "volumes": [
-        { "source": "workspace://postgres", "target": "/var/lib/postgresql/data" },
-        { "source": "docker/init.sql", "target": "/docker-entrypoint-initdb.d/init.sql", "read_only": true }
+        { "type": "volume", "source": "postgres", "target": "/var/lib/postgresql/data" },
+        { "type": "bind", "source": "docker/init.sql", "target": "/docker-entrypoint-initdb.d/init.sql", "read_only": true }
       ],
       "health_check": { "kind": "tcp", "host": "127.0.0.1", "port": 5432, "timeout_seconds": 45 },
       "env": {

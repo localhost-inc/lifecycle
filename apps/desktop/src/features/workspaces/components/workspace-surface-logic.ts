@@ -8,6 +8,18 @@ import type { DragEvent as ReactDragEvent } from "react";
 import type { HarnessProvider } from "../../terminals/api";
 import type { WorkspaceShortcutEvent } from "../api";
 import {
+  closeWorkspacePane,
+  collectWorkspacePaneLeaves,
+  countWorkspacePanes,
+  createWorkspacePane,
+  findWorkspacePaneById,
+  findWorkspacePaneContainingTab,
+  getFirstWorkspacePane,
+  splitWorkspacePane,
+  updateWorkspacePane,
+  updateWorkspaceSplit,
+} from "../lib/workspace-surface-panes";
+import {
   changesDiffTabKey,
   commitDiffTabKey,
   createChangesDiffTab,
@@ -19,10 +31,11 @@ import {
   isChangesDiffDocument,
   isCommitDiffDocument,
   isFileViewerDocument,
+  isLauncherDocument,
   isPullRequestDocument,
   readWorkspaceSurfaceState,
   pullRequestTabKey,
-  type ChangesDiffDocument,
+  type WorkspacePaneLeaf,
   type WorkspaceSurfaceDocument,
   type WorkspaceSurfaceState,
   type WorkspaceSurfaceTabViewState,
@@ -101,16 +114,36 @@ export const WORKSPACE_CLOSE_SHORTCUT_GRACE_MS = 250;
 
 export type WorkspaceSurfaceAction =
   | { kind: "open-document"; request: OpenDocumentRequest }
-  | { kind: "open-launcher"; launcherId: string }
+  | { kind: "open-launcher"; launcherId: string; paneId?: string }
   | { kind: "replace-launcher-with-tab"; launcherKey: string; tabKey: string }
-  | { kind: "select-tab"; key: string | null }
-  | { kind: "close-document"; key: string; nextActiveKey: string | null }
-  | { kind: "hide-runtime-tab"; key: string; nextActiveKey: string | null }
-  | { kind: "show-runtime-tab"; key: string; select: boolean }
+  | { kind: "select-pane"; paneId: string }
+  | { kind: "select-tab"; key: string | null; paneId: string }
+  | { kind: "close-document"; key: string }
+  | { kind: "hide-runtime-tab"; key: string }
+  | { kind: "show-runtime-tab"; key: string; paneId?: string; select: boolean }
   | { kind: "set-hidden-runtime-tab-keys"; keys: string[] }
-  | { kind: "set-tab-order"; keys: string[] }
+  | { kind: "set-pane-tab-order"; keys: string[]; paneId: string }
   | { kind: "set-tab-view-state"; key: string; viewState: WorkspaceSurfaceTabViewState | null }
-  | { kind: "sync-active"; key: string | null };
+  | { kind: "sync-pane-active"; key: string | null; paneId: string }
+  | {
+      key: string;
+      kind: "move-tab-to-pane";
+      placement?: WorkspaceTabPlacement;
+      sourcePaneId: string;
+      targetKey?: string;
+      targetPaneId: string;
+    }
+  | {
+      direction: "column" | "row";
+      kind: "split-pane";
+      launcherId: string;
+      newPaneId: string;
+      paneId: string;
+      placement: "after" | "before";
+      splitId: string;
+    }
+  | { kind: "close-pane"; paneId: string }
+  | { kind: "set-split-ratio"; ratio: number; splitId: string };
 
 function appendWorkspaceTabKey(keys: readonly string[], key: string): string[] {
   return [...keys.filter((existingKey) => existingKey !== key), key];
@@ -118,6 +151,22 @@ function appendWorkspaceTabKey(keys: readonly string[], key: string): string[] {
 
 function removeWorkspaceTabKey(keys: readonly string[], key: string): string[] {
   return keys.filter((existingKey) => existingKey !== key);
+}
+
+function insertWorkspaceTabKey(
+  keys: readonly string[],
+  key: string,
+  targetKey: string,
+  placement: WorkspaceTabPlacement,
+): string[] {
+  const nextKeys = removeWorkspaceTabKey(keys, key);
+  const targetIndex = nextKeys.indexOf(targetKey);
+  if (targetIndex < 0) {
+    return appendWorkspaceTabKey(nextKeys, key);
+  }
+
+  const insertIndex = placement === "before" ? targetIndex : targetIndex + 1;
+  return [...nextKeys.slice(0, insertIndex), key, ...nextKeys.slice(insertIndex)];
 }
 
 function omitWorkspaceTabViewState(
@@ -135,6 +184,107 @@ function omitWorkspaceTabViewState(
   return nextViewStateByTabKey;
 }
 
+function appendWorkspaceTabKeys(keys: readonly string[], nextKeys: readonly string[]): string[] {
+  return nextKeys.reduce((current, key) => appendWorkspaceTabKey(current, key), [...keys]);
+}
+
+function resolveWorkspaceTargetPaneId(state: WorkspaceSurfaceState, paneId?: string): string {
+  if (paneId) {
+    const requestedPane = findWorkspacePaneById(state.rootPane, paneId);
+    if (requestedPane) {
+      return requestedPane.id;
+    }
+  }
+
+  if (state.activePaneId) {
+    const activePane = findWorkspacePaneById(state.rootPane, state.activePaneId);
+    if (activePane) {
+      return activePane.id;
+    }
+  }
+
+  return getFirstWorkspacePane(state.rootPane).id;
+}
+
+function selectWorkspacePaneTab(
+  state: WorkspaceSurfaceState,
+  paneId: string,
+  activeTabKey: string | null,
+): WorkspaceSurfaceState {
+  return {
+    ...state,
+    activePaneId: paneId,
+    rootPane: updateWorkspacePane(state.rootPane, paneId, (pane) => ({
+      ...pane,
+      activeTabKey,
+    })),
+  };
+}
+
+function ensureWorkspacePaneLauncher(
+  state: WorkspaceSurfaceState,
+  paneId: string,
+  launcherId: string,
+  select: boolean = true,
+): WorkspaceSurfaceState {
+  const launcher = createLauncherTab(launcherId);
+
+  return {
+    ...state,
+    activePaneId: select ? paneId : state.activePaneId,
+    documents: [...state.documents, launcher],
+    rootPane: updateWorkspacePane(state.rootPane, paneId, (pane) => ({
+      ...pane,
+      activeTabKey: launcher.key,
+      tabOrderKeys: appendWorkspaceTabKey(pane.tabOrderKeys, launcher.key),
+    })),
+  };
+}
+
+function resolveWorkspacePanePlaceholderLauncherKeys(
+  state: WorkspaceSurfaceState,
+  pane: WorkspacePaneLeaf,
+): string[] {
+  return pane.tabOrderKeys.length === 1 &&
+    state.documents.some(
+      (document) => document.key === pane.tabOrderKeys[0] && isLauncherDocument(document),
+    )
+    ? [...pane.tabOrderKeys]
+    : [];
+}
+
+function removeHiddenRuntimeTabsFromPaneTree(
+  rootPane: WorkspaceSurfaceState["rootPane"],
+  hiddenRuntimeTabKeySet: ReadonlySet<string>,
+): WorkspaceSurfaceState["rootPane"] {
+  if (rootPane.kind === "leaf") {
+    const activeTabKey =
+      rootPane.activeTabKey && hiddenRuntimeTabKeySet.has(rootPane.activeTabKey)
+        ? null
+        : rootPane.activeTabKey;
+    const tabOrderKeys = rootPane.tabOrderKeys.filter((key) => !hiddenRuntimeTabKeySet.has(key));
+
+    return activeTabKey === rootPane.activeTabKey &&
+      areStringArraysEqual(tabOrderKeys, rootPane.tabOrderKeys)
+      ? rootPane
+      : {
+          ...rootPane,
+          activeTabKey,
+          tabOrderKeys,
+        };
+  }
+
+  const first = removeHiddenRuntimeTabsFromPaneTree(rootPane.first, hiddenRuntimeTabKeySet);
+  const second = removeHiddenRuntimeTabsFromPaneTree(rootPane.second, hiddenRuntimeTabKeySet);
+  return first === rootPane.first && second === rootPane.second
+    ? rootPane
+    : {
+        ...rootPane,
+        first,
+        second,
+      };
+}
+
 export function releaseWebviewFocus(): void {
   if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
     document.activeElement.blur();
@@ -147,6 +297,14 @@ export function createWorkspaceLauncherId(): string {
   }
 
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+export function createWorkspacePaneId(): string {
+  return `pane:${createWorkspaceLauncherId()}`;
+}
+
+export function createWorkspaceSplitId(): string {
+  return `split:${createWorkspaceLauncherId()}`;
 }
 
 export function isMacPlatform(): boolean {
@@ -226,9 +384,15 @@ export function resolveWorkspaceVisibleTabs(
   hiddenRuntimeTabKeys: readonly string[],
 ): WorkspaceSurfaceTab[] {
   const hiddenRuntimeTabKeySet = new Set(hiddenRuntimeTabKeys);
+  const assignedTabKeySet = new Set(tabOrderKeys);
 
   return orderWorkspaceTabs(
-    [...runtimeTabs.filter((tab) => !hiddenRuntimeTabKeySet.has(tab.key)), ...documents],
+    [
+      ...runtimeTabs.filter(
+        (tab) => assignedTabKeySet.has(tab.key) && !hiddenRuntimeTabKeySet.has(tab.key),
+      ),
+      ...documents.filter((tab) => assignedTabKeySet.has(tab.key)),
+    ],
     tabOrderKeys,
   );
 }
@@ -504,155 +668,374 @@ export function workspaceSurfaceReducer(
   switch (action.kind) {
     case "open-document": {
       const request = action.request;
+      const existingPaneForChanges =
+        request.kind === "changes-diff"
+          ? findWorkspacePaneContainingTab(state.rootPane, changesDiffTabKey())
+          : null;
+      const existingPaneForFile =
+        request.kind === "file-viewer"
+          ? findWorkspacePaneContainingTab(state.rootPane, fileViewerTabKey(request.filePath))
+          : null;
+      const existingPaneForCommit =
+        request.kind === "commit-diff"
+          ? findWorkspacePaneContainingTab(state.rootPane, commitDiffTabKey(request.commit.sha))
+          : null;
+      const existingPaneForPullRequest =
+        request.kind === "pull-request"
+          ? findWorkspacePaneContainingTab(
+              state.rootPane,
+              pullRequestTabKey(request.pullRequest.number),
+            )
+          : null;
 
       if (request.kind === "changes-diff") {
         const key = changesDiffTabKey();
-        const existing = state.documents.find(
-          (tab): tab is ChangesDiffDocument => isChangesDiffDocument(tab) && tab.key === key,
-        );
-
-        if (existing) {
-          return {
-            ...state,
-            activeTabKey: key,
-            documents: state.documents.map((tab) =>
-              tab.key === key && isChangesDiffDocument(tab)
-                ? { ...tab, focusPath: request.focusPath }
-                : tab,
-            ),
-            tabOrderKeys: state.tabOrderKeys.includes(key)
-              ? state.tabOrderKeys
-              : appendWorkspaceTabKey(state.tabOrderKeys, key),
-          };
-        }
+        const existingPane = existingPaneForChanges;
+        const targetPaneId = existingPane?.id ?? resolveWorkspaceTargetPaneId(state);
+        const hasDocument = state.documents.some((tab) => tab.key === key);
 
         return {
           ...state,
-          activeTabKey: key,
-          documents: [...state.documents, createChangesDiffTab(request.focusPath)],
-          tabOrderKeys: appendWorkspaceTabKey(state.tabOrderKeys, key),
+          activePaneId: targetPaneId,
+          documents: hasDocument
+            ? state.documents.map((tab) =>
+                tab.key === key && isChangesDiffDocument(tab)
+                  ? { ...tab, focusPath: request.focusPath }
+                  : tab,
+              )
+            : [...state.documents, createChangesDiffTab(request.focusPath)],
+          rootPane: updateWorkspacePane(state.rootPane, targetPaneId, (pane) => ({
+            ...pane,
+            activeTabKey: key,
+            tabOrderKeys: existingPane
+              ? pane.tabOrderKeys
+              : appendWorkspaceTabKey(pane.tabOrderKeys, key),
+          })),
         };
       }
 
       if (request.kind === "commit-diff") {
         const key = commitDiffTabKey(request.commit.sha);
+        const existingPane = existingPaneForCommit;
+        const targetPaneId = existingPane?.id ?? resolveWorkspaceTargetPaneId(state);
         const nextTab = createCommitDiffTab(request.commit);
         const exists = state.documents.some((tab) => tab.key === key);
 
         return {
           ...state,
-          activeTabKey: key,
+          activePaneId: targetPaneId,
           documents: exists
             ? state.documents.map((tab) => (tab.key === key ? nextTab : tab))
             : [...state.documents, nextTab],
-          tabOrderKeys: exists
-            ? state.tabOrderKeys
-            : appendWorkspaceTabKey(state.tabOrderKeys, key),
+          rootPane: updateWorkspacePane(state.rootPane, targetPaneId, (pane) => ({
+            ...pane,
+            activeTabKey: key,
+            tabOrderKeys: existingPane
+              ? pane.tabOrderKeys
+              : appendWorkspaceTabKey(pane.tabOrderKeys, key),
+          })),
         };
       }
 
       if (request.kind === "file-viewer") {
         const key = fileViewerTabKey(request.filePath);
+        const existingPane = existingPaneForFile;
+        const targetPaneId = existingPane?.id ?? resolveWorkspaceTargetPaneId(state);
         const nextTab = createFileViewerTab(request.filePath);
         const exists = state.documents.some((tab) => tab.key === key);
 
         return {
           ...state,
-          activeTabKey: key,
+          activePaneId: targetPaneId,
           documents: exists
             ? state.documents.map((tab) => (tab.key === key ? nextTab : tab))
             : [...state.documents, nextTab],
-          tabOrderKeys: exists
-            ? state.tabOrderKeys
-            : appendWorkspaceTabKey(state.tabOrderKeys, key),
+          rootPane: updateWorkspacePane(state.rootPane, targetPaneId, (pane) => ({
+            ...pane,
+            activeTabKey: key,
+            tabOrderKeys: existingPane
+              ? pane.tabOrderKeys
+              : appendWorkspaceTabKey(pane.tabOrderKeys, key),
+          })),
         };
       }
 
       if (request.kind === "pull-request") {
         const key = pullRequestTabKey(request.pullRequest.number);
+        const existingPane = existingPaneForPullRequest;
+        const targetPaneId = existingPane?.id ?? resolveWorkspaceTargetPaneId(state);
         const nextTab = createPullRequestTab(request.pullRequest);
         const exists = state.documents.some((tab) => tab.key === key);
 
         return {
           ...state,
-          activeTabKey: key,
+          activePaneId: targetPaneId,
           documents: exists
             ? state.documents.map((tab) => (tab.key === key ? nextTab : tab))
             : [...state.documents, nextTab],
-          tabOrderKeys: exists
-            ? state.tabOrderKeys
-            : appendWorkspaceTabKey(state.tabOrderKeys, key),
+          rootPane: updateWorkspacePane(state.rootPane, targetPaneId, (pane) => ({
+            ...pane,
+            activeTabKey: key,
+            tabOrderKeys: existingPane
+              ? pane.tabOrderKeys
+              : appendWorkspaceTabKey(pane.tabOrderKeys, key),
+          })),
         };
       }
 
       return state;
     }
     case "open-launcher": {
-      const launcher = createLauncherTab(action.launcherId);
-      return {
-        ...state,
-        activeTabKey: launcher.key,
-        documents: [...state.documents, launcher],
-        tabOrderKeys: appendWorkspaceTabKey(state.tabOrderKeys, launcher.key),
-      };
+      return ensureWorkspacePaneLauncher(
+        state,
+        resolveWorkspaceTargetPaneId(state, action.paneId),
+        action.launcherId,
+      );
     }
     case "replace-launcher-with-tab": {
-      const tabOrderKeys = state.tabOrderKeys.includes(action.launcherKey)
-        ? state.tabOrderKeys.map((key) => (key === action.launcherKey ? action.tabKey : key))
-        : appendWorkspaceTabKey(state.tabOrderKeys, action.tabKey);
+      const pane = findWorkspacePaneContainingTab(state.rootPane, action.launcherKey);
+      const targetPaneId = pane?.id ?? resolveWorkspaceTargetPaneId(state);
 
       return {
         ...state,
-        activeTabKey:
-          state.activeTabKey === action.launcherKey ? action.tabKey : state.activeTabKey,
+        activePaneId: targetPaneId,
         documents: state.documents.filter((tab) => tab.key !== action.launcherKey),
         hiddenRuntimeTabKeys: removeWorkspaceTabKey(state.hiddenRuntimeTabKeys, action.tabKey),
-        tabOrderKeys,
+        rootPane: updateWorkspacePane(state.rootPane, targetPaneId, (nextPane) => ({
+          ...nextPane,
+          activeTabKey:
+            nextPane.activeTabKey === action.launcherKey ? action.tabKey : action.tabKey,
+          tabOrderKeys: nextPane.tabOrderKeys.includes(action.launcherKey)
+            ? nextPane.tabOrderKeys.map((key) => (key === action.launcherKey ? action.tabKey : key))
+            : appendWorkspaceTabKey(nextPane.tabOrderKeys, action.tabKey),
+        })),
       };
     }
+    case "select-pane":
+      return findWorkspacePaneById(state.rootPane, action.paneId)
+        ? {
+            ...state,
+            activePaneId: action.paneId,
+          }
+        : state;
     case "select-tab":
-    case "sync-active":
-      return {
-        ...state,
-        activeTabKey: action.key,
-      };
-    case "close-document":
-      return {
-        ...state,
-        activeTabKey: action.nextActiveKey,
-        documents: state.documents.filter((tab) => tab.key !== action.key),
-        tabOrderKeys: removeWorkspaceTabKey(state.tabOrderKeys, action.key),
-        viewStateByTabKey: omitWorkspaceTabViewState(state.viewStateByTabKey, action.key),
-      };
-    case "hide-runtime-tab":
-      return {
-        ...state,
-        activeTabKey: action.nextActiveKey,
-        hiddenRuntimeTabKeys: appendWorkspaceTabKey(state.hiddenRuntimeTabKeys, action.key),
-        tabOrderKeys: removeWorkspaceTabKey(state.tabOrderKeys, action.key),
-        viewStateByTabKey: omitWorkspaceTabViewState(state.viewStateByTabKey, action.key),
-      };
-    case "show-runtime-tab":
-      return {
-        ...state,
-        activeTabKey: action.select ? action.key : state.activeTabKey,
-        hiddenRuntimeTabKeys: removeWorkspaceTabKey(state.hiddenRuntimeTabKeys, action.key),
-        tabOrderKeys: appendWorkspaceTabKey(state.tabOrderKeys, action.key),
-      };
-    case "set-hidden-runtime-tab-keys": {
-      const activeTabKey =
-        state.activeTabKey && action.keys.includes(state.activeTabKey) ? null : state.activeTabKey;
+    case "sync-pane-active":
+      return selectWorkspacePaneTab(state, action.paneId, action.key);
+    case "close-document": {
+      const pane = findWorkspacePaneContainingTab(state.rootPane, action.key);
+      if (!pane) {
+        return {
+          ...state,
+          documents: state.documents.filter((tab) => tab.key !== action.key),
+          viewStateByTabKey: omitWorkspaceTabViewState(state.viewStateByTabKey, action.key),
+        };
+      }
 
+      const nextActiveKey =
+        pane.activeTabKey === action.key
+          ? getWorkspaceTabKeyAfterClose(pane.tabOrderKeys, action.key)
+          : pane.activeTabKey;
+      let nextState: WorkspaceSurfaceState = {
+        ...state,
+        documents: state.documents.filter((tab) => tab.key !== action.key),
+        rootPane: updateWorkspacePane(state.rootPane, pane.id, (nextPane) => ({
+          ...nextPane,
+          activeTabKey: pane.activeTabKey === action.key ? nextActiveKey : nextPane.activeTabKey,
+          tabOrderKeys: removeWorkspaceTabKey(nextPane.tabOrderKeys, action.key),
+        })),
+        viewStateByTabKey: omitWorkspaceTabViewState(state.viewStateByTabKey, action.key),
+      };
+
+      const nextPane = findWorkspacePaneById(nextState.rootPane, pane.id);
+      if (!nextPane) {
+        return nextState;
+      }
+
+      if (nextPane.tabOrderKeys.length === 0) {
+        return ensureWorkspacePaneLauncher(
+          nextState,
+          pane.id,
+          createWorkspaceLauncherId(),
+          state.activePaneId === pane.id,
+        );
+      }
+
+      if (state.activePaneId === pane.id && pane.activeTabKey === action.key) {
+        return selectWorkspacePaneTab(nextState, pane.id, nextActiveKey);
+      }
+
+      return nextState;
+    }
+    case "hide-runtime-tab": {
+      const pane = findWorkspacePaneContainingTab(state.rootPane, action.key);
+      if (!pane) {
+        return {
+          ...state,
+          hiddenRuntimeTabKeys: appendWorkspaceTabKey(state.hiddenRuntimeTabKeys, action.key),
+          viewStateByTabKey: omitWorkspaceTabViewState(state.viewStateByTabKey, action.key),
+        };
+      }
+
+      const nextActiveKey =
+        pane.activeTabKey === action.key
+          ? getWorkspaceTabKeyAfterClose(pane.tabOrderKeys, action.key)
+          : pane.activeTabKey;
+      let nextState: WorkspaceSurfaceState = {
+        ...state,
+        hiddenRuntimeTabKeys: appendWorkspaceTabKey(state.hiddenRuntimeTabKeys, action.key),
+        rootPane: updateWorkspacePane(state.rootPane, pane.id, (nextPane) => ({
+          ...nextPane,
+          activeTabKey: pane.activeTabKey === action.key ? nextActiveKey : nextPane.activeTabKey,
+          tabOrderKeys: removeWorkspaceTabKey(nextPane.tabOrderKeys, action.key),
+        })),
+        viewStateByTabKey: omitWorkspaceTabViewState(state.viewStateByTabKey, action.key),
+      };
+
+      const nextPane = findWorkspacePaneById(nextState.rootPane, pane.id);
+      if (!nextPane) {
+        return nextState;
+      }
+
+      if (nextPane.tabOrderKeys.length === 0) {
+        return ensureWorkspacePaneLauncher(
+          nextState,
+          pane.id,
+          createWorkspaceLauncherId(),
+          state.activePaneId === pane.id,
+        );
+      }
+
+      if (state.activePaneId === pane.id && pane.activeTabKey === action.key) {
+        return selectWorkspacePaneTab(nextState, pane.id, nextActiveKey);
+      }
+
+      return nextState;
+    }
+    case "show-runtime-tab": {
+      const existingPane = findWorkspacePaneContainingTab(state.rootPane, action.key);
+      if (existingPane) {
+        const nextState = {
+          ...state,
+          activePaneId: action.select ? existingPane.id : state.activePaneId,
+          hiddenRuntimeTabKeys: removeWorkspaceTabKey(state.hiddenRuntimeTabKeys, action.key),
+          rootPane: updateWorkspacePane(state.rootPane, existingPane.id, (pane) => ({
+            ...pane,
+            activeTabKey: action.select ? action.key : pane.activeTabKey,
+          })),
+        };
+
+        return nextState;
+      }
+
+      const targetPaneId = resolveWorkspaceTargetPaneId(state, action.paneId);
       return {
         ...state,
-        activeTabKey,
+        activePaneId: action.select ? targetPaneId : state.activePaneId,
+        hiddenRuntimeTabKeys: removeWorkspaceTabKey(state.hiddenRuntimeTabKeys, action.key),
+        rootPane: updateWorkspacePane(state.rootPane, targetPaneId, (pane) => ({
+          ...pane,
+          activeTabKey: action.select ? action.key : pane.activeTabKey,
+          tabOrderKeys: appendWorkspaceTabKey(pane.tabOrderKeys, action.key),
+        })),
+      };
+    }
+    case "set-hidden-runtime-tab-keys": {
+      return {
+        ...state,
+        rootPane: removeHiddenRuntimeTabsFromPaneTree(state.rootPane, new Set(action.keys)),
         hiddenRuntimeTabKeys: action.keys,
       };
     }
-    case "set-tab-order":
-      return areStringArraysEqual(state.tabOrderKeys, action.keys)
-        ? state
-        : { ...state, tabOrderKeys: action.keys };
+    case "set-pane-tab-order": {
+      const pane = findWorkspacePaneById(state.rootPane, action.paneId);
+      if (!pane) {
+        return state;
+      }
+
+      const preservedKeys = pane.tabOrderKeys.filter((key) => !action.keys.includes(key));
+      const nextKeys = appendWorkspaceTabKeys(action.keys, preservedKeys);
+      if (areStringArraysEqual(pane.tabOrderKeys, nextKeys)) {
+        return state;
+      }
+
+      return {
+        ...state,
+        rootPane: updateWorkspacePane(state.rootPane, action.paneId, (nextPane) => ({
+          ...nextPane,
+          tabOrderKeys: nextKeys,
+        })),
+      };
+    }
+    case "move-tab-to-pane": {
+      if (action.sourcePaneId === action.targetPaneId) {
+        return state;
+      }
+
+      const sourcePane = findWorkspacePaneById(state.rootPane, action.sourcePaneId);
+      const targetPane = findWorkspacePaneById(state.rootPane, action.targetPaneId);
+      if (!sourcePane || !targetPane || !sourcePane.tabOrderKeys.includes(action.key)) {
+        return state;
+      }
+
+      const targetPlaceholderLauncherKeys = resolveWorkspacePanePlaceholderLauncherKeys(
+        state,
+        targetPane,
+      );
+      const nextDocuments =
+        targetPlaceholderLauncherKeys.length === 0
+          ? state.documents
+          : state.documents.filter(
+              (document) => !targetPlaceholderLauncherKeys.includes(document.key),
+            );
+      const nextSourceActiveKey =
+        sourcePane.activeTabKey === action.key
+          ? getWorkspaceTabKeyAfterClose(sourcePane.tabOrderKeys, action.key)
+          : sourcePane.activeTabKey;
+      const nextRootAfterSource = updateWorkspacePane(
+        state.rootPane,
+        sourcePane.id,
+        (nextPane) => ({
+          ...nextPane,
+          activeTabKey: nextSourceActiveKey,
+          tabOrderKeys: removeWorkspaceTabKey(nextPane.tabOrderKeys, action.key),
+        }),
+      );
+      const nextRootPane = updateWorkspacePane(nextRootAfterSource, targetPane.id, (nextPane) => ({
+        ...nextPane,
+        activeTabKey: action.key,
+        tabOrderKeys:
+          action.targetKey && action.placement
+            ? insertWorkspaceTabKey(
+                nextPane.tabOrderKeys.filter((key) => !targetPlaceholderLauncherKeys.includes(key)),
+                action.key,
+                action.targetKey,
+                action.placement,
+              )
+            : appendWorkspaceTabKey(
+                nextPane.tabOrderKeys.filter((key) => !targetPlaceholderLauncherKeys.includes(key)),
+                action.key,
+              ),
+      }));
+
+      const nextState: WorkspaceSurfaceState = {
+        ...state,
+        activePaneId: targetPane.id,
+        documents: nextDocuments,
+        rootPane: nextRootPane,
+      };
+
+      const nextSourcePane = findWorkspacePaneById(nextState.rootPane, sourcePane.id);
+      if (!nextSourcePane || nextSourcePane.tabOrderKeys.length > 0) {
+        return nextState;
+      }
+
+      return ensureWorkspacePaneLauncher(
+        nextState,
+        sourcePane.id,
+        createWorkspaceLauncherId(),
+        false,
+      );
+    }
     case "set-tab-view-state": {
       const nextViewStateByTabKey =
         action.viewState === null
@@ -669,6 +1052,76 @@ export function workspaceSurfaceReducer(
             viewStateByTabKey: nextViewStateByTabKey,
           };
     }
+    case "split-pane": {
+      const pane = findWorkspacePaneById(state.rootPane, action.paneId);
+      if (!pane) {
+        return state;
+      }
+
+      const launcher = createLauncherTab(action.launcherId);
+      const nextPane: WorkspacePaneLeaf = {
+        ...createWorkspacePane(action.newPaneId),
+        activeTabKey: launcher.key,
+        tabOrderKeys: [launcher.key],
+      };
+
+      return {
+        ...state,
+        activePaneId: nextPane.id,
+        documents: [...state.documents, launcher],
+        rootPane: splitWorkspacePane(state.rootPane, action.paneId, {
+          direction: action.direction,
+          first: action.placement === "before" ? nextPane : pane,
+          id: action.splitId,
+          kind: "split",
+          ratio: 0.5,
+          second: action.placement === "before" ? pane : nextPane,
+        }),
+      };
+    }
+    case "close-pane": {
+      if (countWorkspacePanes(state.rootPane) <= 1) {
+        return state;
+      }
+
+      const pane = findWorkspacePaneById(state.rootPane, action.paneId);
+      if (!pane) {
+        return state;
+      }
+
+      const closed = closeWorkspacePane(state.rootPane, action.paneId);
+      if (!closed.siblingPaneId) {
+        return state;
+      }
+
+      const nextRootPane = updateWorkspacePane(
+        closed.nextRoot,
+        closed.siblingPaneId,
+        (sibling) => ({
+          ...sibling,
+          activeTabKey:
+            state.activePaneId === action.paneId && pane.activeTabKey
+              ? pane.activeTabKey
+              : sibling.activeTabKey,
+          tabOrderKeys: appendWorkspaceTabKeys(sibling.tabOrderKeys, pane.tabOrderKeys),
+        }),
+      );
+
+      return {
+        ...state,
+        activePaneId:
+          state.activePaneId === action.paneId ? closed.siblingPaneId : state.activePaneId,
+        rootPane: nextRootPane,
+      };
+    }
+    case "set-split-ratio":
+      return {
+        ...state,
+        rootPane: updateWorkspaceSplit(state.rootPane, action.splitId, (split) => ({
+          ...split,
+          ratio: action.ratio,
+        })),
+      };
     default:
       return state;
   }
@@ -677,9 +1130,10 @@ export function workspaceSurfaceReducer(
 export function createInitialWorkspaceSurfaceState(workspaceId: string): WorkspaceSurfaceState {
   const restoredState = readWorkspaceSurfaceState(workspaceId);
   if (
-    restoredState.activeTabKey !== null ||
     restoredState.documents.length > 0 ||
-    restoredState.tabOrderKeys.length > 0
+    collectWorkspacePaneLeaves(restoredState.rootPane).some(
+      (pane) => pane.activeTabKey !== null || pane.tabOrderKeys.length > 0,
+    )
   ) {
     return restoredState;
   }
@@ -687,5 +1141,6 @@ export function createInitialWorkspaceSurfaceState(workspaceId: string): Workspa
   return workspaceSurfaceReducer(restoredState, {
     launcherId: createWorkspaceLauncherId(),
     kind: "open-launcher",
+    paneId: getFirstWorkspacePane(restoredState.rootPane).id,
   });
 }

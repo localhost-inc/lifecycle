@@ -1,14 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import {
+  claimNativeTerminalSurfaceLease,
+  createNativeTerminalSurfaceLeaseRegistry,
   resolveNativeTerminalSurfaceInteraction,
+  scheduleNativeTerminalSurfaceLeaseHide,
   shouldShowNativeTerminalSurface,
 } from "./native-terminal-surface";
 
 describe("shouldShowNativeTerminalSurface", () => {
-  test("requires an active live session with measurable bounds", () => {
+  test("requires a live session with measurable bounds", () => {
     expect(
       shouldShowNativeTerminalSurface({
-        active: true,
         hasLiveSession: true,
         height: 640,
         width: 960,
@@ -16,15 +18,6 @@ describe("shouldShowNativeTerminalSurface", () => {
     ).toBeTrue();
     expect(
       shouldShowNativeTerminalSurface({
-        active: false,
-        hasLiveSession: true,
-        height: 640,
-        width: 960,
-      }),
-    ).toBeFalse();
-    expect(
-      shouldShowNativeTerminalSurface({
-        active: true,
         hasLiveSession: false,
         height: 640,
         width: 960,
@@ -32,7 +25,6 @@ describe("shouldShowNativeTerminalSurface", () => {
     ).toBeFalse();
     expect(
       shouldShowNativeTerminalSurface({
-        active: true,
         hasLiveSession: true,
         height: 1,
         width: 960,
@@ -45,7 +37,9 @@ describe("resolveNativeTerminalSurfaceInteraction", () => {
   test("keeps the native surface visible but non-interactive during shell drags", () => {
     expect(
       resolveNativeTerminalSurfaceInteraction({
+        focused: true,
         shellResizeInProgress: true,
+        tabDragInProgress: false,
         visible: true,
       }),
     ).toEqual({
@@ -57,12 +51,146 @@ describe("resolveNativeTerminalSurfaceInteraction", () => {
   test("restores focus when shell dragging is inactive", () => {
     expect(
       resolveNativeTerminalSurfaceInteraction({
+        focused: true,
         shellResizeInProgress: false,
+        tabDragInProgress: false,
         visible: true,
       }),
     ).toEqual({
       focused: true,
       pointerPassthrough: false,
     });
+  });
+
+  test("keeps the native surface click-through while a tab drag is active", () => {
+    expect(
+      resolveNativeTerminalSurfaceInteraction({
+        focused: true,
+        shellResizeInProgress: false,
+        tabDragInProgress: true,
+        visible: true,
+      }),
+    ).toEqual({
+      focused: false,
+      pointerPassthrough: true,
+    });
+  });
+
+  test("keeps background terminals visible but click-through", () => {
+    expect(
+      resolveNativeTerminalSurfaceInteraction({
+        focused: false,
+        shellResizeInProgress: false,
+        tabDragInProgress: false,
+        visible: true,
+      }),
+    ).toEqual({
+      focused: false,
+      pointerPassthrough: true,
+    });
+  });
+});
+
+describe("native terminal lease coordination", () => {
+  test("claiming a lease cancels a pending hide for the same terminal", () => {
+    const registry = createNativeTerminalSurfaceLeaseRegistry();
+    const cancelledFrameIds: number[] = [];
+
+    registry.set("term-1", {
+      owner: Symbol("previous"),
+      pendingHideFrameId: 42,
+    });
+
+    claimNativeTerminalSurfaceLease(registry, "term-1", Symbol("next"), (frameId) => {
+      cancelledFrameIds.push(frameId);
+    });
+
+    expect(cancelledFrameIds).toEqual([42]);
+    expect(registry.get("term-1")?.pendingHideFrameId).toBeNull();
+  });
+
+  test("a stale owner cannot schedule a hide after another owner claims the terminal", () => {
+    const registry = createNativeTerminalSurfaceLeaseRegistry();
+    const ownerA = Symbol("owner-a");
+    const ownerB = Symbol("owner-b");
+
+    claimNativeTerminalSurfaceLease(registry, "term-1", ownerA, () => {});
+    claimNativeTerminalSurfaceLease(registry, "term-1", ownerB, () => {});
+
+    const scheduled = scheduleNativeTerminalSurfaceLeaseHide(
+      registry,
+      "term-1",
+      ownerA,
+      () => 7,
+      () => {},
+      () => {},
+    );
+
+    expect(scheduled).toBeNull();
+    expect(registry.get("term-1")?.owner).toBe(ownerB);
+  });
+
+  test("a replacement owner prevents a previously scheduled hide from running", () => {
+    const registry = createNativeTerminalSurfaceLeaseRegistry();
+    const ownerA = Symbol("owner-a");
+    const ownerB = Symbol("owner-b");
+    let scheduledCallback: ((timestamp: number) => void) | null = null;
+    const hiddenTerminalIds: string[] = [];
+    const cancelledFrameIds: number[] = [];
+
+    claimNativeTerminalSurfaceLease(registry, "term-1", ownerA, () => {});
+    const scheduled = scheduleNativeTerminalSurfaceLeaseHide(
+      registry,
+      "term-1",
+      ownerA,
+      (callback) => {
+        scheduledCallback = callback;
+        return 11;
+      },
+      (frameId) => {
+        cancelledFrameIds.push(frameId);
+      },
+      (terminalId) => {
+        hiddenTerminalIds.push(terminalId);
+      },
+    );
+
+    claimNativeTerminalSurfaceLease(registry, "term-1", ownerB, (frameId) => {
+      cancelledFrameIds.push(frameId);
+    });
+    const replacementHideCallback = scheduledCallback as unknown as (timestamp: number) => void;
+    replacementHideCallback(0);
+
+    expect(scheduled).toBe(11);
+    expect(cancelledFrameIds).toEqual([11]);
+    expect(hiddenTerminalIds).toEqual([]);
+    expect(registry.get("term-1")?.owner).toBe(ownerB);
+  });
+
+  test("the final owner unmount still hides the terminal", () => {
+    const registry = createNativeTerminalSurfaceLeaseRegistry();
+    const owner = Symbol("owner");
+    let scheduledCallback: ((timestamp: number) => void) | null = null;
+    const hiddenTerminalIds: string[] = [];
+
+    claimNativeTerminalSurfaceLease(registry, "term-1", owner, () => {});
+    scheduleNativeTerminalSurfaceLeaseHide(
+      registry,
+      "term-1",
+      owner,
+      (callback) => {
+        scheduledCallback = callback;
+        return 19;
+      },
+      () => {},
+      (terminalId) => {
+        hiddenTerminalIds.push(terminalId);
+      },
+    );
+    const finalHideCallback = scheduledCallback as unknown as (timestamp: number) => void;
+    finalHideCallback(0);
+
+    expect(hiddenTerminalIds).toEqual(["term-1"]);
+    expect(registry.has("term-1")).toBeFalse();
   });
 });

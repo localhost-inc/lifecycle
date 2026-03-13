@@ -293,8 +293,8 @@ describe("parseManifest", () => {
           "runtime": "image",
           "build": { "context": "docker", "dockerfile": "docker/Dockerfile.pg.dev" },
           "volumes": [
-            { "source": "workspace://postgres", "target": "/var/lib/postgresql/data" },
-            { "source": "docker/init.sql", "target": "/docker-entrypoint-initdb.d/init.sql", "read_only": true }
+            { "type": "volume", "source": "postgres", "target": "/var/lib/postgresql/data" },
+            { "type": "bind", "source": "docker/init.sql", "target": "/docker-entrypoint-initdb.d/init.sql", "read_only": true }
           ]
         }
       }
@@ -307,6 +307,31 @@ describe("parseManifest", () => {
     if (result.config.environment["postgres"]!.runtime !== "image") return;
     expect(result.config.environment["postgres"]!.build?.context).toBe("docker");
     expect(result.config.environment["postgres"]!.volumes).toHaveLength(2);
+  });
+
+  test("rejects invalid named volume sources", () => {
+    const result = parseManifest(`{
+      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "environment": {
+        "postgres": {
+          "kind": "service",
+          "runtime": "image",
+          "image": "postgres:16",
+          "volumes": [
+            { "type": "volume", "source": "../postgres", "target": "/var/lib/postgresql/data" }
+          ]
+        }
+      }
+    }`);
+    expect(result.valid).toBe(false);
+    if (result.valid) return;
+    expect(
+      result.errors.some(
+        (error) =>
+          error.path === "environment.postgres.volumes.0.source" &&
+          error.message.includes("Named volumes must start"),
+      ),
+    ).toBe(true);
   });
 
   test("rejects managed secrets blocks", () => {

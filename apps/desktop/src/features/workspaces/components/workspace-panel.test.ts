@@ -9,8 +9,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { QueryProvider } from "../../../query";
 import { WorkspaceOpenRequestsProvider } from "../state/workspace-open-requests";
-import { shouldSyncWorkspaceManifest } from "./workspace-panel";
 import { workspaceSupportsFilesystemInteraction } from "../lib/workspace-capabilities";
+import { shouldSyncWorkspaceManifest } from "../lib/workspace-manifest-sync";
 
 function renderWorkspacePanel(element: ReturnType<typeof createElement>) {
   return renderToStaticMarkup(
