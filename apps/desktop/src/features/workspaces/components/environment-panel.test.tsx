@@ -3,7 +3,7 @@ import type { ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { EnvironmentPanel } from "./environment-panel";
-import type { SetupStepState } from "../hooks";
+import type { EnvironmentTaskState, SetupStepState } from "../hooks";
 
 const baseWorkspace: WorkspaceRecord = {
   id: "workspace_1",
@@ -69,6 +69,14 @@ const setupSteps: SetupStepState[] = [
   },
 ];
 
+const environmentTasks: EnvironmentTaskState[] = [
+  {
+    name: "migrate",
+    output: ["bun run db:migrate"],
+    status: "running",
+  },
+];
+
 describe("EnvironmentPanel", () => {
   test("renders environment controls and tabs for an active workspace", () => {
     const markup = renderToStaticMarkup(
@@ -81,6 +89,7 @@ describe("EnvironmentPanel", () => {
         onRun: async () => {},
         onStop: async () => {},
         onUpdateService: async () => {},
+        environmentTasks: [],
         setupSteps: [],
         services,
         workspace: baseWorkspace,
@@ -89,17 +98,17 @@ describe("EnvironmentPanel", () => {
 
     expect(markup).toContain("Environment");
     expect(markup).toContain(">Stop<");
-    expect(markup).not.toContain(">Run<");
+    expect(markup).not.toContain(">Start<");
     expect(markup).toContain('aria-label="Show environment actions"');
     expect(markup).toContain("Overview");
-    expect(markup).toContain("Setup");
     expect(markup).toContain("Logs");
+    expect(markup).toContain("Workspace setup");
     expect(markup).not.toContain(">Graph<");
     expect(markup).toContain('aria-label="Overview list view"');
     expect(markup).toContain('aria-label="Overview topology view"');
   });
 
-  test("renders rerun affordance and failure details for an idle workspace with a failure", () => {
+  test("renders start affordance and failure details for an idle workspace with a failure", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
         config: null,
@@ -110,6 +119,7 @@ describe("EnvironmentPanel", () => {
         onRun: async () => {},
         onStop: async () => {},
         onUpdateService: async () => {},
+        environmentTasks: [],
         setupSteps: setupSteps,
         services,
         workspace: {
@@ -120,16 +130,16 @@ describe("EnvironmentPanel", () => {
       }),
     );
 
-    expect(markup).toContain(">Run<");
+    expect(markup).toContain(">Start<");
     expect(markup).not.toContain(">Stop<");
     expect(markup).not.toContain('aria-label="Show environment actions"');
     expect(markup).toContain('data-slot="button"');
     expect(markup).toContain("A service failed to start.");
-    expect(markup).toContain("Setup");
+    expect(markup).toContain("Workspace setup");
     expect(markup).not.toContain("View details");
   });
 
-  test("keeps the run action disabled when no lifecycle.json is present", () => {
+  test("keeps the start action disabled when no lifecycle.json is present", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
         config: null,
@@ -140,6 +150,7 @@ describe("EnvironmentPanel", () => {
         onRun: async () => {},
         onStop: async () => {},
         onUpdateService: async () => {},
+        environmentTasks: [],
         setupSteps: [],
         services: [],
         workspace: {
@@ -149,11 +160,11 @@ describe("EnvironmentPanel", () => {
       }),
     );
 
-    expect(markup).toContain(">Run<");
+    expect(markup).toContain(">Start<");
     expect(markup).toContain('disabled=""');
     expect(markup).toContain("Overview");
-    expect(markup).toContain("Setup");
     expect(markup).toContain("Logs");
+    expect(markup).toContain("Workspace setup");
     expect(markup).not.toContain("Add a lifecycle.json file to the project root");
   });
 
@@ -168,13 +179,14 @@ describe("EnvironmentPanel", () => {
         onRun: async () => {},
         onStop: async () => {},
         onUpdateService: async () => {},
+        environmentTasks: [],
         setupSteps: [],
         services,
         workspace: baseWorkspace,
       }),
     );
 
-    expect(markup).toContain("Manifest changed. Stop and run again to apply environment updates.");
+    expect(markup).toContain("Manifest changed. Stop and start again to apply environment updates.");
   });
 
   test("renders collapsed service summaries with preview metadata", () => {
@@ -188,6 +200,7 @@ describe("EnvironmentPanel", () => {
         onRun: async () => {},
         onStop: async () => {},
         onUpdateService: async () => {},
+        environmentTasks: [],
         setupSteps: [],
         services,
         workspace: baseWorkspace,
@@ -215,6 +228,7 @@ describe("EnvironmentPanel", () => {
         onRun: async () => {},
         onStop: async () => {},
         onUpdateService: async () => {},
+        environmentTasks: [],
         setupSteps: [],
         services: [
           {
@@ -257,6 +271,7 @@ describe("EnvironmentPanel", () => {
         onRun: async () => {},
         onStop: async () => {},
         onUpdateService: async () => {},
+        environmentTasks: [],
         setupSteps: [],
         services: [],
         workspace: {
@@ -267,13 +282,32 @@ describe("EnvironmentPanel", () => {
     );
 
     expect(markup).toContain("Loading environment");
-    expect(markup).toContain("reconciling service nodes declared under environment");
+    expect(markup).toContain("reconciling environment nodes declared in lifecycle.json");
   });
 
-  test("shows starting status in the header action and setup tab label", () => {
+  test("shows starting status in the header action and overview sections", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
-        config: null,
+        config: {
+          workspace: { setup: [], teardown: [] },
+          environment: {
+            api: {
+              kind: "service",
+              runtime: "process",
+              command: "bun run api",
+            },
+            postgres: {
+              kind: "service",
+              runtime: "image",
+              image: "postgres:16",
+            },
+            migrate: {
+              kind: "task",
+              command: "bun run db:migrate",
+              timeout_seconds: 60,
+            },
+          },
+        },
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
@@ -281,6 +315,7 @@ describe("EnvironmentPanel", () => {
         onRun: async () => {},
         onStop: async () => {},
         onUpdateService: async () => {},
+        environmentTasks,
         setupSteps: [
           {
             name: "install",
@@ -293,7 +328,25 @@ describe("EnvironmentPanel", () => {
             status: "running",
           },
         ],
-        services,
+        services: [
+          services[1]!,
+          {
+            id: "svc-postgres",
+            workspace_id: "workspace_1",
+            service_name: "postgres",
+            exposure: "internal",
+            port_override: null,
+            status: "ready",
+            status_reason: null,
+            default_port: 5432,
+            effective_port: 5432,
+            preview_status: "disabled",
+            preview_failure_reason: null,
+            preview_url: null,
+            created_at: "2026-03-09T10:00:00.000Z",
+            updated_at: "2026-03-09T10:00:01.000Z",
+          },
+        ],
         workspace: {
           ...baseWorkspace,
           status: "starting",
@@ -302,8 +355,45 @@ describe("EnvironmentPanel", () => {
     );
 
     expect(markup).toContain("Starting...");
-    expect(markup).toContain("Setup");
+    expect(markup).toContain("Workspace setup");
+    expect(markup).toContain("Environment tasks");
+    expect(markup).toContain("Image services");
+    expect(markup).toContain("Process services");
     expect(markup).toContain("lucide-loader-circle");
     expect(markup).not.toContain("View details");
+  });
+
+  test("renders an environment task failure banner separately from setup", () => {
+    const markup = renderToStaticMarkup(
+      createElement(EnvironmentPanel, {
+        config: null,
+        hasManifest: true,
+        isManifestStale: false,
+        manifestState: "valid",
+        onRestart: async () => {},
+        onRun: async () => {},
+        onStop: async () => {},
+        onUpdateService: async () => {},
+        environmentTasks: [
+          {
+            name: "migrate",
+            output: ["Exit code: 1"],
+            status: "failed",
+          },
+        ],
+        setupSteps: [],
+        services: [],
+        workspace: {
+          ...baseWorkspace,
+          failure_reason: "environment_task_failed",
+          status: "idle",
+        },
+      }),
+    );
+
+    expect(markup).toContain("An environment task failed.");
+    expect(markup).toContain("Environment tasks");
+    expect(markup).toContain("Workspace setup");
+    expect(markup).toContain("No setup activity yet");
   });
 });

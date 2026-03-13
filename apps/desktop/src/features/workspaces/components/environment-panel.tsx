@@ -14,14 +14,16 @@ import {
 } from "@lifecycle/ui";
 import { useState } from "react";
 import { ChevronDown, List, LoaderCircle, Map, Play, RotateCcw, Square } from "lucide-react";
+import { EnvironmentSection } from "./environment-section";
 import { GraphTab } from "./graph-tab";
 import { LogsTab } from "./logs-tab";
 import { SetupTab } from "./setup-tab";
 import { ServicesTab } from "./services-tab";
-import type { SetupStepState } from "../hooks";
+import type { EnvironmentTaskState, SetupStepState } from "../hooks";
 
 const FAILURE_REASON_LABELS: Record<string, string> = {
   capacity_unavailable: "No capacity available to run this workspace.",
+  environment_task_failed: "An environment task failed.",
   local_app_not_running: "Stopped because the app was quit while running.",
   local_docker_unavailable: "Docker is not available on this machine.",
   local_port_conflict: "A required port is already in use.",
@@ -37,7 +39,6 @@ const FAILURE_REASON_LABELS: Record<string, string> = {
 
 const ENVIRONMENT_PANEL_TABS = [
   { label: "Overview", value: "overview" },
-  { label: "Setup", value: "setup" },
   { label: "Logs", value: "logs" },
 ] as const;
 
@@ -57,6 +58,7 @@ interface EnvironmentPanelProps {
     portOverride: number | null;
     serviceName: string;
   }) => Promise<void>;
+  environmentTasks: EnvironmentTaskState[];
   setupSteps: SetupStepState[];
   services: ServiceRecord[];
   workspace: WorkspaceRecord;
@@ -71,30 +73,40 @@ export function EnvironmentPanel({
   onRun,
   onStop,
   onUpdateService,
+  environmentTasks,
   setupSteps,
   services,
   workspace,
 }: EnvironmentPanelProps) {
   const [activeTab, setActiveTab] = useState<EnvironmentPanelTabValue>("overview");
-  const [activeAction, setActiveAction] = useState<"restart" | "run" | "stop" | null>(null);
+  const [activeAction, setActiveAction] = useState<"restart" | "start" | "stop" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [overviewView, setOverviewView] = useState<EnvironmentOverviewView>("list");
   const [restartMenuOpen, setRestartMenuOpen] = useState(false);
+  const declaredSetupStepNames = (config?.workspace.setup ?? []).map((step) => step.name);
+  const serviceRuntimeByName = Object.fromEntries(
+    Object.entries(config?.environment ?? {})
+      .filter(
+        (
+          entry,
+        ): entry is [
+          string,
+          Extract<LifecycleConfig["environment"][string], { kind: "service" }>
+        ] => entry[1].kind === "service",
+      )
+      .map(([name, node]) => [name, node.runtime]),
+  );
   const canRun = workspace.status === "idle" && hasManifest;
   const canStop = workspace.status === "active" || workspace.status === "starting";
   const canRestart = workspace.status === "active" && hasManifest;
   const stopping = workspace.status === "stopping";
-  const setupTabRunning =
-    workspace.status === "starting" &&
-    setupSteps.some((step) => step.status === "pending" || step.status === "running");
-
-  async function handleRun(): Promise<void> {
+  async function handleStart(): Promise<void> {
     if (!canRun || activeAction !== null) {
       return;
     }
 
     setActionError(null);
-    setActiveAction("run");
+    setActiveAction("start");
 
     try {
       await onRun();
@@ -159,9 +171,9 @@ export function EnvironmentPanel({
           }
         : {
             icon: <Play className="size-3.5 fill-current" strokeWidth={2.2} />,
-            label: activeAction === "run" ? "Running..." : "Run",
-            onClick: handleRun,
-            title: "Run workspace services",
+            label: activeAction === "start" ? "Starting..." : "Start",
+            onClick: handleStart,
+            title: "Start workspace environment",
             variant: "default" as const,
           };
 
@@ -236,7 +248,7 @@ export function EnvironmentPanel({
           )}
           {workspace.status === "active" && isManifestStale && (
             <p className="text-xs text-[var(--muted-foreground)]">
-              Manifest changed. Stop and run again to apply environment updates.
+              Manifest changed. Stop and start again to apply environment updates.
             </p>
           )}
           {workspace.status === "active" && manifestState === "invalid" && (
@@ -252,14 +264,7 @@ export function EnvironmentPanel({
             <TabsList className="-mx-2.5 w-[calc(100%+1.25rem)]" variant="underline">
               {ENVIRONMENT_PANEL_TABS.map((tab) => (
                 <TabsTrigger key={tab.value} value={tab.value} variant="underline">
-                  {tab.value === "setup" && setupTabRunning ? (
-                    <span className="inline-flex items-center gap-1.5">
-                      <LoaderCircle className="size-3.5 animate-spin" strokeWidth={2.2} />
-                      <span>{tab.label}</span>
-                    </span>
-                  ) : (
-                    tab.label
-                  )}
+                  {tab.label}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -270,6 +275,41 @@ export function EnvironmentPanel({
         <div className="flex min-h-0 flex-1 flex-col px-2.5 pb-4 pt-1">
           {activeTab === "overview" && (
             <div className="relative flex min-h-0 flex-1 flex-col">
+              <div className="flex min-h-0 flex-1 flex-col gap-4 pb-12">
+                <EnvironmentSection
+                  icon={<LoaderCircle className="size-3.5" strokeWidth={2.2} />}
+                  title="Workspace setup"
+                >
+                  <SetupTab
+                    declaredStepNames={declaredSetupStepNames}
+                    setupSteps={setupSteps}
+                    workspace={workspace}
+                  />
+                </EnvironmentSection>
+                {overviewView === "list" ? (
+                  <ServicesTab
+                    declaredTaskCount={
+                      config
+                        ? Object.values(config.environment).filter((node) => node.kind === "task")
+                            .length
+                        : 0
+                    }
+                    declaredServiceCount={
+                      config
+                        ? Object.values(config.environment).filter((node) => node.kind === "service")
+                            .length
+                        : 0
+                    }
+                    environmentTasks={environmentTasks}
+                    manifestState={manifestState}
+                    onUpdateService={onUpdateService}
+                    serviceRuntimeByName={serviceRuntimeByName}
+                    services={services}
+                  />
+                ) : (
+                  <GraphTab config={config} services={services} />
+                )}
+              </div>
               <FloatingToggle
                 ariaLabel="Environment overview view"
                 onValueChange={(value) => {
@@ -277,7 +317,7 @@ export function EnvironmentPanel({
                     setOverviewView(value);
                   }
                 }}
-                wrapperClassName="bottom-3 right-3"
+                wrapperClassName="bottom-4 right-4"
                 options={
                   [
                     {
@@ -298,24 +338,8 @@ export function EnvironmentPanel({
                 }
                 value={overviewView}
               />
-              {overviewView === "list" ? (
-                <ServicesTab
-                  declaredServiceCount={
-                    config
-                      ? Object.values(config.environment).filter((node) => node.kind === "service")
-                          .length
-                      : 0
-                  }
-                  manifestState={manifestState}
-                  onUpdateService={onUpdateService}
-                  services={services}
-                />
-              ) : (
-                <GraphTab config={config} services={services} />
-              )}
             </div>
           )}
-          {activeTab === "setup" && <SetupTab setupSteps={setupSteps} workspace={workspace} />}
           {activeTab === "logs" && <LogsTab />}
         </div>
       </div>

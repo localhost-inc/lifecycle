@@ -43,6 +43,7 @@ impl std::fmt::Display for WorkspaceStatus {
 #[serde(rename_all = "snake_case")]
 pub enum WorkspaceFailureReason {
     CapacityUnavailable,
+    EnvironmentTaskFailed,
     ManifestInvalid,
     RepoCloneFailed,
     RepositoryDisconnected,
@@ -61,6 +62,7 @@ impl WorkspaceFailureReason {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::CapacityUnavailable => "capacity_unavailable",
+            Self::EnvironmentTaskFailed => "environment_task_failed",
             Self::ManifestInvalid => "manifest_invalid",
             Self::RepoCloneFailed => "repo_clone_failed",
             Self::RepositoryDisconnected => "repository_disconnected",

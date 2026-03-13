@@ -39,8 +39,15 @@ pub enum LifecycleEvent {
         status: String,
         status_reason: Option<String>,
     },
-    #[serde(rename = "setup.step_progress")]
-    SetupStepProgress {
+    #[serde(rename = "workspace.setup_progress")]
+    WorkspaceSetupProgress {
+        workspace_id: String,
+        step_name: String,
+        event_kind: String,
+        data: Option<String>,
+    },
+    #[serde(rename = "environment.task_progress")]
+    EnvironmentTaskProgress {
         workspace_id: String,
         step_name: String,
         event_kind: String,

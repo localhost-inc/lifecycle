@@ -9,10 +9,15 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SetupProgress,
 } from "@lifecycle/ui";
-import { ExternalLink, FileJson, Layers, Loader2 } from "lucide-react";
+import { ExternalLink, FileJson, Layers, Loader2, TerminalSquare } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useState } from "react";
+import { EnvironmentSection } from "./environment-section";
+import type { EnvironmentTaskState } from "../hooks";
+
+type ServiceRuntime = "image" | "process";
 
 interface StatusStyles {
   dotClassName: string;
@@ -66,14 +71,25 @@ const exposureItems: Array<{ label: string; value: ServiceRecord["exposure"] }> 
   { label: "Organization (Later)", value: "organization" },
 ];
 
+const STATUS_REASON_LABELS: Partial<Record<NonNullable<ServiceRecord["status_reason"]>, string>> = {
+  service_start_failed: "Failed to start",
+  service_process_exited: "Process exited before ready",
+  service_dependency_failed: "Dependency failed",
+  service_port_unreachable: "Port unreachable",
+  unknown: "Failed to start",
+};
+
 interface ServicesTabProps {
+  declaredTaskCount: number;
   declaredServiceCount: number;
+  environmentTasks: EnvironmentTaskState[];
   manifestState: "invalid" | "missing" | "valid";
   onUpdateService: (input: {
     exposure: ServiceRecord["exposure"];
     portOverride: number | null;
     serviceName: string;
   }) => Promise<void>;
+  serviceRuntimeByName: Partial<Record<string, ServiceRuntime>>;
   services: ServiceRecord[];
 }
 
@@ -112,11 +128,21 @@ function resolvePreviewUrl(service: ServiceRecord): string | null {
   return `http://localhost:${service.effective_port}`;
 }
 
+function formatStatusReason(reason: ServiceRecord["status_reason"]): string | null {
+  if (!reason) {
+    return null;
+  }
+
+  return STATUS_REASON_LABELS[reason] ?? reason;
+}
+
 function ServiceRow({
   onUpdateService,
+  runtime,
   service,
 }: {
   onUpdateService: ServicesTabProps["onUpdateService"];
+  runtime: ServiceRuntime | null;
   service: ServiceRecord;
 }) {
   const [draftExposure, setDraftExposure] = useState<ServiceRecord["exposure"]>(service.exposure);
@@ -128,6 +154,7 @@ function ServiceRow({
   const parsedPort = parsePortDraft(draftPort);
   const previewUrl = resolvePreviewUrl(service);
   const isDirty = draftExposure !== service.exposure || parsedPort.value !== service.port_override;
+  const statusReasonLabel = formatStatusReason(service.status_reason);
 
   async function handleSave(): Promise<void> {
     if (isSaving || !isDirty || parsedPort.error) {
@@ -183,6 +210,12 @@ function ServiceRow({
   const [expanded, setExpanded] = useState(false);
   // biome-ignore lint: indexing a known-populated record
   const styles = (STATUS_STYLES[service.status] ?? STATUS_STYLES.stopped)!;
+  const runtimeIcon =
+    runtime === "image" ? (
+      <Layers className="size-3 text-[var(--muted-foreground)]/70" strokeWidth={2.2} />
+    ) : runtime === "process" ? (
+      <TerminalSquare className="size-3 text-[var(--muted-foreground)]/70" strokeWidth={2.2} />
+    ) : null;
 
   return (
     <div className="group/row">
@@ -204,10 +237,13 @@ function ServiceRow({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
-            <span
-              className={`truncate font-mono text-[13px] font-semibold tracking-[-0.02em] ${styles.nameClassName}`}
-            >
-              {service.service_name}
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              {runtimeIcon}
+              <span
+                className={`truncate font-mono text-[13px] font-semibold tracking-[-0.02em] ${styles.nameClassName}`}
+              >
+                {service.service_name}
+              </span>
             </span>
             {service.effective_port !== null && (
               <span className={`shrink-0 font-mono text-[11px] ${styles.portClassName}`}>
@@ -215,8 +251,8 @@ function ServiceRow({
               </span>
             )}
           </div>
-          {service.status_reason && (
-            <p className="mt-1 text-[10px] text-red-500/55">{service.status_reason}</p>
+          {statusReasonLabel && (
+            <p className="mt-1 text-[10px] text-red-500/55">{statusReasonLabel}</p>
           )}
         </div>
         {canOpenPreview && (
@@ -232,8 +268,8 @@ function ServiceRow({
 
       {expanded && (
         <div className="flex flex-col gap-2 px-3 pb-3 pl-[38px] pt-1">
-          <div className="flex items-end gap-2">
-            <label className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_6rem_auto] sm:items-end">
+            <label className="flex min-w-0 flex-col gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted-foreground)]">
                 Exposure
               </span>
@@ -253,7 +289,7 @@ function ServiceRow({
               </Select>
             </label>
 
-            <label className="flex w-24 flex-col gap-1">
+            <label className="flex min-w-0 flex-col gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted-foreground)]">
                 Port
               </span>
@@ -266,7 +302,7 @@ function ServiceRow({
               />
             </label>
 
-            <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1 sm:justify-end">
               <Button
                 disabled={!isDirty || Boolean(parsedPort.error) || isSaving}
                 onClick={() => void handleSave()}
@@ -327,21 +363,69 @@ function ServiceRow({
 }
 
 export function ServicesTab({
+  declaredTaskCount,
   declaredServiceCount,
+  environmentTasks,
   manifestState,
   onUpdateService,
+  serviceRuntimeByName,
   services,
 }: ServicesTabProps) {
-  if (services.length > 0) {
+  const imageServices = services.filter(
+    (service) => serviceRuntimeByName[service.service_name] === "image",
+  );
+  const processServices = services.filter(
+    (service) => serviceRuntimeByName[service.service_name] === "process",
+  );
+  const untypedServices = services.filter(
+    (service) => serviceRuntimeByName[service.service_name] === undefined,
+  );
+
+  function renderServiceGroup(title: string, runtime: ServiceRuntime | null, group: ServiceRecord[]) {
+    if (group.length === 0) {
+      return null;
+    }
+
+    const icon =
+      runtime === "image" ? (
+        <Layers className="size-3.5" strokeWidth={2.2} />
+      ) : runtime === "process" ? (
+        <TerminalSquare className="size-3.5" strokeWidth={2.2} />
+      ) : undefined;
+
     return (
-      <div className="flex flex-col gap-1">
-        {services.map((service) => (
-          <ServiceRow
-            key={`${service.id}:${service.updated_at}`}
-            onUpdateService={onUpdateService}
-            service={service}
-          />
-        ))}
+      <EnvironmentSection icon={icon} title={title}>
+        <div className="flex flex-col gap-1">
+          {group.map((service) => (
+            <ServiceRow
+              key={`${service.id}:${service.updated_at}`}
+              onUpdateService={onUpdateService}
+              runtime={runtime}
+              service={service}
+            />
+          ))}
+        </div>
+      </EnvironmentSection>
+    );
+  }
+
+  if (services.length > 0 || environmentTasks.length > 0) {
+    return (
+      <div className="flex flex-col gap-4">
+        {environmentTasks.length > 0 ? (
+          <EnvironmentSection icon={<Loader2 className="size-3.5" strokeWidth={2.2} />} title="Environment tasks">
+            <SetupProgress expandOutputByDefault steps={environmentTasks} />
+          </EnvironmentSection>
+        ) : null}
+        {services.length > 0 ? (
+          <EnvironmentSection icon={<Layers className="size-3.5" strokeWidth={2.2} />} title="Services">
+            <div className="flex flex-col gap-4">
+              {renderServiceGroup("Image services", "image", imageServices)}
+              {renderServiceGroup("Process services", "process", processServices)}
+              {renderServiceGroup("Services", null, untypedServices)}
+            </div>
+          </EnvironmentSection>
+        ) : null}
       </div>
     );
   }
@@ -371,7 +455,7 @@ export function ServicesTab({
   if (declaredServiceCount > 0) {
     return (
       <EmptyState
-        description="Lifecycle is reconciling service nodes declared under environment for this workspace."
+        description="Lifecycle is reconciling environment nodes declared in lifecycle.json for this workspace."
         icon={<Layers />}
         size="sm"
         title="Loading environment"
@@ -379,12 +463,23 @@ export function ServicesTab({
     );
   }
 
+  if (declaredTaskCount > 0) {
+    return (
+      <EmptyState
+        description="Environment task output appears here while this workspace starts."
+        icon={<Layers />}
+        size="sm"
+        title="No active environment tasks"
+      />
+    );
+  }
+
   return (
     <EmptyState
-      description="Declare service nodes under environment in lifecycle.json to see them here."
+      description="Declare task or service nodes under environment in lifecycle.json to see them here."
       icon={<Layers />}
       size="sm"
-      title="No environment services declared"
+      title="No environment nodes declared"
     />
   );
 }

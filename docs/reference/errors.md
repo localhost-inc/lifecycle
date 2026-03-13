@@ -21,6 +21,7 @@ All non-2xx responses include: `code`, `message`, `details`, `request_id`, `sugg
 | `workspace_capacity_unavailable` |  503 | provider cannot allocate capacity    |
 | `provider_api_error`             |  502 | upstream provider API failure        |
 | `setup_step_failed`              |  500 | setup command failed                 |
+| `environment_task_failed`        |  500 | environment task failed during boot  |
 | `service_start_failed`           |  500 | service startup failed               |
 | `service_healthcheck_failed`     |  500 | service health gate failed           |
 | `preview_route_failed`           |  502 | preview route bind/reconcile failed  |
@@ -34,7 +35,7 @@ All non-2xx responses include: `code`, `message`, `details`, `request_id`, `sugg
 
 ### `workspace.failure_reason` (V1 field carrying environment failure in current implementation)
 
-`capacity_unavailable`, `manifest_invalid`, `repo_clone_failed`, `repository_disconnected`, `setup_step_failed`, `service_start_failed`, `service_healthcheck_failed`, `sandbox_unreachable`, `local_docker_unavailable`, `local_port_conflict`, `local_app_not_running`, `operation_timeout`, `unknown`
+`capacity_unavailable`, `environment_task_failed`, `manifest_invalid`, `repo_clone_failed`, `repository_disconnected`, `setup_step_failed`, `service_start_failed`, `service_healthcheck_failed`, `sandbox_unreachable`, `local_docker_unavailable`, `local_port_conflict`, `local_app_not_running`, `operation_timeout`, `unknown`
 
 Failed start attempts return the environment to `workspace.status = idle`; the last failure remains visible through `workspace.failure_reason` and `workspace.failed_at`.
 

@@ -72,7 +72,7 @@ describe("reduceWorkspaceActivity", () => {
       data: "pulling dependencies",
       event_kind: "stdout",
       id: "event-2",
-      kind: "setup.step_progress",
+      kind: "workspace.setup_progress",
       occurred_at: "2026-03-10T10:00:05.000Z",
       step_name: "Install",
       workspace_id: "ws_1",

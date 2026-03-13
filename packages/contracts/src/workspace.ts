@@ -6,6 +6,7 @@ export type WorkspaceStatus = "idle" | "starting" | "active" | "stopping";
 
 export type WorkspaceFailureReason =
   | "capacity_unavailable"
+  | "environment_task_failed"
   | "manifest_invalid"
   | "repo_clone_failed"
   | "repository_disconnected"
@@ -22,6 +23,7 @@ export type WorkspaceFailureReason =
 export type WorkspaceServiceStatus = "starting" | "ready" | "failed" | "stopped";
 
 export type WorkspaceServiceStatusReason =
+  | "service_start_failed"
   | "service_process_exited"
   | "service_dependency_failed"
   | "service_port_unreachable"

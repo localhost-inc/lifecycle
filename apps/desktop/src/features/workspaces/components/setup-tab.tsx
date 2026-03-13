@@ -50,7 +50,7 @@ export function deriveSetupPresentation(
       completedSteps,
       currentStepIndex: failedIndex >= 0 ? failedIndex : 0,
       currentStepName: failedStep.name,
-      description: "Setup stopped before the workspace environment could finish booting.",
+      description: "Workspace setup stopped before the environment could finish booting.",
       phase: "failed",
       title: `${failedStep.name} failed`,
       totalSteps,
@@ -82,8 +82,7 @@ export function deriveSetupPresentation(
       completedSteps,
       currentStepIndex: totalSteps - 1,
       currentStepName: lastStep.name,
-      description:
-        "Environment prerequisites finished and the workspace is ready to continue booting.",
+      description: "Workspace preparation finished.",
       phase: "completed",
       title: "Setup complete",
       totalSteps,
@@ -94,6 +93,7 @@ export function deriveSetupPresentation(
 }
 
 interface SetupTabProps {
+  declaredStepNames?: string[];
   setupSteps: SetupStepState[];
   workspace: Pick<WorkspaceRecord, "failure_reason" | "status">;
 }
@@ -122,13 +122,21 @@ const PHASE_META = {
   },
 } as const;
 
-export function SetupTab({ setupSteps, workspace }: SetupTabProps) {
+export function SetupTab({ declaredStepNames = [], setupSteps, workspace }: SetupTabProps) {
   const presentation = deriveSetupPresentation(setupSteps, workspace);
+  const declaredSteps =
+    setupSteps.length === 0
+      ? declaredStepNames.map((name) => ({ name, output: [], status: "pending" as const }))
+      : [];
 
   if (!presentation) {
+    if (declaredSteps.length > 0) {
+      return <SetupProgress steps={declaredSteps} />;
+    }
+
     return (
       <EmptyState
-        description="Setup steps and command output will appear here the next time this workspace needs environment preparation."
+        description="Workspace setup steps and output will appear here the next time this workspace needs preparation."
         icon={<Wrench />}
         size="sm"
         title="No setup activity yet"

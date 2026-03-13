@@ -42,6 +42,7 @@ describe("SetupTab", () => {
   test("shows an empty state when no setup steps exist", () => {
     const markup = renderToStaticMarkup(
       createElement(SetupTab, {
+        declaredStepNames: [],
         setupSteps: [],
         workspace: {
           failure_reason: null,
@@ -51,6 +52,23 @@ describe("SetupTab", () => {
     );
 
     expect(markup).toContain("No setup activity yet");
+  });
+
+  test("falls back to declared setup steps when no activity was captured yet", () => {
+    const markup = renderToStaticMarkup(
+      createElement(SetupTab, {
+        declaredStepNames: ["install", "write-local-env"],
+        setupSteps: [],
+        workspace: {
+          failure_reason: null,
+          status: "idle",
+        },
+      }),
+    );
+
+    expect(markup).toContain("install");
+    expect(markup).toContain("write-local-env");
+    expect(markup).not.toContain("No setup activity yet");
   });
 });
 

@@ -27,7 +27,7 @@ import type {
 import type { GitPanelTabValue } from "../../git/lib/git-panel-tabs";
 import { EnvironmentPanel } from "./environment-panel";
 import { GitPanel } from "../../git/components/git-panel";
-import type { SetupStepState } from "../hooks";
+import type { EnvironmentTaskState, SetupStepState } from "../hooks";
 
 const PANEL_SEPARATOR_STEP_PX = 32;
 
@@ -50,6 +50,7 @@ interface WorkspaceSidebarProps {
   onOpenFile: (filePath: string) => void;
   onOpenCommitDiff: (entry: GitLogEntry) => void;
   onOpenPullRequest: (pullRequest: GitPullRequestSummary) => void;
+  environmentTasks: EnvironmentTaskState[];
   setupSteps: SetupStepState[];
   services: ServiceRecord[];
   workspace: WorkspaceRecord;
@@ -70,6 +71,7 @@ export function WorkspaceSidebar({
   onOpenFile,
   onOpenCommitDiff,
   onOpenPullRequest,
+  environmentTasks,
   setupSteps,
   services,
   workspace,
@@ -264,6 +266,7 @@ export function WorkspaceSidebar({
           onRun={onRun}
           onStop={onStop}
           onUpdateService={onUpdateService}
+          environmentTasks={environmentTasks}
           setupSteps={setupSteps}
           services={services}
           workspace={workspace}

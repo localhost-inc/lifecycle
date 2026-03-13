@@ -8,6 +8,12 @@ use tauri::AppHandle;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
+#[derive(Clone, Copy)]
+pub enum StepProgressTarget {
+    WorkspaceSetup,
+    EnvironmentTask,
+}
+
 pub async fn run_steps(
     app: &AppHandle,
     workspace_id: &str,
@@ -15,23 +21,34 @@ pub async fn run_steps(
     steps: &[SetupStep],
     runtime_env: &HashMap<String, String>,
     step_field_prefix: &str,
+    progress_target: StepProgressTarget,
 ) -> Result<(), LifecycleError> {
     for step in steps {
         let cwd = step_cwd(worktree_path, step.cwd.as_deref());
         let step_field = format!("{step_field_prefix}.{}", step.name);
         let step_env = build_step_env(step, runtime_env, &step_field)?;
 
-        publish_setup_step_event(app, workspace_id, &step.name, "started", None);
+        publish_step_progress_event(app, workspace_id, &step.name, progress_target, "started", None);
 
         match (step.command.as_deref(), step.write_files.as_deref()) {
             (Some(command), None) => {
-                run_command_step(app, workspace_id, step, &cwd, command, &step_env).await?;
+                run_command_step(
+                    app,
+                    workspace_id,
+                    step,
+                    progress_target,
+                    &cwd,
+                    command,
+                    &step_env,
+                )
+                .await?;
             }
             (None, Some(write_files)) => {
                 run_write_files_step(
                     app,
                     workspace_id,
                     step,
+                    progress_target,
                     worktree_path,
                     &cwd,
                     write_files,
@@ -41,10 +58,11 @@ pub async fn run_steps(
                 .await?;
             }
             _ => {
-                publish_setup_step_event(
+                publish_step_progress_event(
                     app,
                     workspace_id,
                     &step.name,
+                    progress_target,
                     "failed",
                     Some("setup step requires exactly one of command or write_files".to_string()),
                 );
@@ -55,7 +73,7 @@ pub async fn run_steps(
             }
         }
 
-        publish_setup_step_event(app, workspace_id, &step.name, "completed", None);
+        publish_step_progress_event(app, workspace_id, &step.name, progress_target, "completed", None);
     }
 
     Ok(())
@@ -87,28 +105,36 @@ fn step_cwd(worktree_path: &str, step_cwd: Option<&str>) -> PathBuf {
     }
 }
 
-fn publish_setup_step_event(
+fn publish_step_progress_event(
     app: &AppHandle,
     workspace_id: &str,
     step_name: &str,
+    progress_target: StepProgressTarget,
     event_kind: &str,
     data: Option<String>,
 ) {
-    publish_lifecycle_event(
-        app,
-        LifecycleEvent::SetupStepProgress {
+    let event = match progress_target {
+        StepProgressTarget::WorkspaceSetup => LifecycleEvent::WorkspaceSetupProgress {
             workspace_id: workspace_id.to_string(),
             step_name: step_name.to_string(),
             event_kind: event_kind.to_string(),
             data,
         },
-    );
+        StepProgressTarget::EnvironmentTask => LifecycleEvent::EnvironmentTaskProgress {
+            workspace_id: workspace_id.to_string(),
+            step_name: step_name.to_string(),
+            event_kind: event_kind.to_string(),
+            data,
+        },
+    };
+    publish_lifecycle_event(app, event);
 }
 
 async fn run_command_step(
     app: &AppHandle,
     workspace_id: &str,
     step: &SetupStep,
+    progress_target: StepProgressTarget,
     cwd: &Path,
     command: &str,
     step_env: &HashMap<String, String>,
@@ -143,7 +169,14 @@ async fn run_command_step(
             let reader = BufReader::new(stdout);
             let mut lines = reader.lines();
             while let Ok(Some(line)) = lines.next_line().await {
-                publish_setup_step_event(&app_clone, &ws_id, &step_name, "stdout", Some(line));
+                publish_step_progress_event(
+                    &app_clone,
+                    &ws_id,
+                    &step_name,
+                    progress_target,
+                    "stdout",
+                    Some(line),
+                );
             }
         })
     });
@@ -156,7 +189,14 @@ async fn run_command_step(
             let reader = BufReader::new(stderr);
             let mut lines = reader.lines();
             while let Ok(Some(line)) = lines.next_line().await {
-                publish_setup_step_event(&app_clone, &ws_id, &step_name, "stderr", Some(line));
+                publish_step_progress_event(
+                    &app_clone,
+                    &ws_id,
+                    &step_name,
+                    progress_target,
+                    "stderr",
+                    Some(line),
+                );
             }
         })
     });
@@ -180,10 +220,11 @@ async fn run_command_step(
                 Ok(())
             } else {
                 let exit_code = exit_status.code().unwrap_or(-1);
-                publish_setup_step_event(
+                publish_step_progress_event(
                     app,
                     workspace_id,
                     &step.name,
+                    progress_target,
                     "failed",
                     Some(format!("Exit code: {exit_code}")),
                 );
@@ -199,7 +240,14 @@ async fn run_command_step(
         }),
         Err(_) => {
             let _ = child.kill().await;
-            publish_setup_step_event(app, workspace_id, &step.name, "timeout", None);
+            publish_step_progress_event(
+                app,
+                workspace_id,
+                &step.name,
+                progress_target,
+                "timeout",
+                None,
+            );
             Err(LifecycleError::SetupStepTimeout {
                 step: step.name.clone(),
             })
@@ -211,6 +259,7 @@ async fn run_write_files_step(
     app: &AppHandle,
     workspace_id: &str,
     step: &SetupStep,
+    progress_target: StepProgressTarget,
     worktree_path: &str,
     cwd: &Path,
     write_files: &[SetupWriteFile],
@@ -246,10 +295,11 @@ async fn run_write_files_step(
                     ))
                 })?;
 
-            publish_setup_step_event(
+            publish_step_progress_event(
                 app,
                 workspace_id,
                 &step.name,
+                progress_target,
                 "stdout",
                 Some(format!("wrote {}", rendered_path)),
             );
@@ -266,10 +316,11 @@ async fn run_write_files_step(
     {
         Ok(result) => {
             if let Err(error) = &result {
-                publish_setup_step_event(
+                publish_step_progress_event(
                     app,
                     workspace_id,
                     &step.name,
+                    progress_target,
                     "failed",
                     Some(error.to_string()),
                 );
@@ -277,7 +328,14 @@ async fn run_write_files_step(
             result
         }
         Err(_) => {
-            publish_setup_step_event(app, workspace_id, &step.name, "timeout", None);
+            publish_step_progress_event(
+                app,
+                workspace_id,
+                &step.name,
+                progress_target,
+                "timeout",
+                None,
+            );
             Err(LifecycleError::SetupStepTimeout {
                 step: step.name.clone(),
             })

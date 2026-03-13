@@ -51,7 +51,16 @@ export type LifecycleEvent =
   | {
       id: string;
       occurred_at: string;
-      kind: "setup.step_progress";
+      kind: "workspace.setup_progress";
+      workspace_id: string;
+      step_name: string;
+      event_kind: SetupStepEventKind;
+      data: string | null;
+    }
+  | {
+      id: string;
+      occurred_at: string;
+      kind: "environment.task_progress";
       workspace_id: string;
       step_name: string;
       event_kind: SetupStepEventKind;

@@ -546,11 +546,12 @@ impl WorkspaceStartContext<'_> {
             std::slice::from_ref(step),
             self.runtime_env,
             &step_field,
+            setup::StepProgressTarget::EnvironmentTask,
         )
         .await
         {
             let recorded = self
-                .record_failure(WorkspaceFailureReason::SetupStepFailed)
+                .record_failure(WorkspaceFailureReason::EnvironmentTaskFailed)
                 .await?;
             if !recorded {
                 return Ok(());
@@ -745,6 +746,7 @@ async fn start_services_lifecycle(
             &lowered_graph.workspace_setup,
             &runtime_env,
             "workspace.setup",
+            setup::StepProgressTarget::WorkspaceSetup,
         )
         .await
         {

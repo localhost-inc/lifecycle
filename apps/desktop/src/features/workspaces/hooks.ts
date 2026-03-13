@@ -9,9 +9,19 @@ import { reduceWorkspaceTerminals } from "../terminals/hooks";
 import type { QueryDescriptor, QueryResult, QueryUpdate } from "../../query";
 import { useQuery } from "../../query";
 import type { ManifestStatus } from "../projects/api/projects";
-import type { WorkspaceFileReadResult, WorkspaceSnapshotResult } from "./api";
+import type {
+  WorkspaceFileReadResult,
+  WorkspaceFileTreeEntry,
+  WorkspaceSnapshotResult,
+} from "./api";
 
 export interface SetupStepState {
+  name: string;
+  output: string[];
+  status: "pending" | "running" | "completed" | "failed" | "timeout";
+}
+
+export interface EnvironmentTaskState {
   name: string;
   output: string[];
   status: "pending" | "running" | "completed" | "failed" | "timeout";
@@ -32,9 +42,11 @@ export const workspaceKeys = {
   detail: (workspaceId: string) => ["workspace", workspaceId] as const,
   file: (workspaceId: string, filePath: string) =>
     ["workspace-file", workspaceId, filePath] as const,
+  fileTree: (workspaceId: string) => ["workspace-file-tree", workspaceId] as const,
   manifest: (workspaceId: string) => ["workspace-manifest", workspaceId] as const,
   snapshot: (workspaceId: string) => ["workspace-snapshot", workspaceId] as const,
   services: (workspaceId: string) => ["workspace-services", workspaceId] as const,
+  environmentTasks: (workspaceId: string) => ["workspace-environment-tasks", workspaceId] as const,
   setup: (workspaceId: string) => ["workspace-setup", workspaceId] as const,
 };
 
@@ -70,14 +82,20 @@ const WORKSPACE_SNAPSHOT_EVENT_KINDS = [
 const WORKSPACE_SETUP_EVENT_KINDS = [
   "workspace.status_changed",
   "workspace.deleted",
-  "setup.step_progress",
+  "workspace.setup_progress",
+] as const satisfies readonly LifecycleEventKind[];
+const WORKSPACE_ENVIRONMENT_TASK_EVENT_KINDS = [
+  "workspace.status_changed",
+  "workspace.deleted",
+  "environment.task_progress",
 ] as const satisfies readonly LifecycleEventKind[];
 const WORKSPACE_ACTIVITY_EVENT_KINDS = [
   "workspace.status_changed",
   "workspace.renamed",
   "workspace.deleted",
   "service.status_changed",
-  "setup.step_progress",
+  "workspace.setup_progress",
+  "environment.task_progress",
   "terminal.created",
   "terminal.status_changed",
   "terminal.renamed",
@@ -219,7 +237,9 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
                 ? "warning"
                 : "neutral",
       };
-    case "setup.step_progress":
+    case "workspace.setup_progress":
+    case "environment.task_progress": {
+      const label = event.kind === "workspace.setup_progress" ? "Setup" : "Task";
       switch (event.event_kind) {
         case "stdout":
           return null;
@@ -229,7 +249,7 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
             id: event.id,
             kind: event.kind,
             occurredAt: event.occurred_at,
-            title: `Setup ${event.step_name} stderr`,
+            title: `${label} ${event.step_name} stderr`,
             tone: "warning",
           };
         case "started":
@@ -238,7 +258,7 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
             id: event.id,
             kind: event.kind,
             occurredAt: event.occurred_at,
-            title: `Setup ${event.step_name} started`,
+            title: `${label} ${event.step_name} started`,
             tone: "neutral",
           };
         case "completed":
@@ -247,7 +267,7 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
             id: event.id,
             kind: event.kind,
             occurredAt: event.occurred_at,
-            title: `Setup ${event.step_name} completed`,
+            title: `${label} ${event.step_name} completed`,
             tone: "success",
           };
         case "failed":
@@ -256,7 +276,7 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
             id: event.id,
             kind: event.kind,
             occurredAt: event.occurred_at,
-            title: `Setup ${event.step_name} failed`,
+            title: `${label} ${event.step_name} failed`,
             tone: "danger",
           };
         case "timeout":
@@ -265,10 +285,11 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
             id: event.id,
             kind: event.kind,
             occurredAt: event.occurred_at,
-            title: `Setup ${event.step_name} timed out`,
+            title: `${label} ${event.step_name} timed out`,
             tone: "warning",
           };
       }
+    }
     case "terminal.created":
       return {
         detail: event.terminal.label,
@@ -364,14 +385,18 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
   }
 }
 
-const workspacesByProjectQuery: QueryDescriptor<Record<string, WorkspaceRecord[]>> = {
-  eventKinds: WORKSPACES_BY_PROJECT_EVENT_KINDS,
-  key: workspaceKeys.byProject(),
-  fetch(source) {
-    return source.listWorkspacesByProject();
-  },
-  reduce: reduceWorkspacesByProject,
-};
+export function createWorkspacesByProjectQuery(): QueryDescriptor<
+  Record<string, WorkspaceRecord[]>
+> {
+  return {
+    eventKinds: WORKSPACES_BY_PROJECT_EVENT_KINDS,
+    key: workspaceKeys.byProject(),
+    fetch(source) {
+      return source.listWorkspacesByProject();
+    },
+    reduce: reduceWorkspacesByProject,
+  };
+}
 
 export function createWorkspaceQuery(workspaceId: string): QueryDescriptor<WorkspaceRecord | null> {
   return {
@@ -708,6 +733,17 @@ function createWorkspaceFileQuery(
   };
 }
 
+function createWorkspaceFileTreeQuery(
+  workspaceId: string,
+): QueryDescriptor<WorkspaceFileTreeEntry[]> {
+  return {
+    key: workspaceKeys.fileTree(workspaceId),
+    fetch(source) {
+      return source.listWorkspaceFiles(workspaceId);
+    },
+  };
+}
+
 function createWorkspaceSetupQuery(workspaceId: string): QueryDescriptor<SetupStepState[]> {
   return {
     eventKinds: WORKSPACE_SETUP_EVENT_KINDS,
@@ -728,44 +764,88 @@ function createWorkspaceSetupQuery(workspaceId: string): QueryDescriptor<SetupSt
         return { kind: "replace", data: [] };
       }
 
-      if (event.kind !== "setup.step_progress" || event.workspace_id !== workspaceId) {
+      if (event.kind !== "workspace.setup_progress" || event.workspace_id !== workspaceId) {
         return { kind: "none" };
       }
 
-      const previous = current ?? [];
-      const existing = previous.find((step) => step.name === event.step_name);
-      const steps = existing
-        ? previous
-        : [...previous, { name: event.step_name, output: [], status: "pending" as const }];
-
-      return {
-        kind: "replace",
-        data: steps.map((step) => {
-          if (step.name !== event.step_name) {
-            return step;
-          }
-
-          switch (event.event_kind) {
-            case "started":
-              return { ...step, status: "running" as const };
-            case "stdout":
-            case "stderr":
-              return { ...step, output: [...step.output, event.data ?? ""] };
-            case "completed":
-              return { ...step, status: "completed" as const };
-            case "failed":
-              return {
-                ...step,
-                output: [...step.output, event.data ?? ""],
-                status: "failed" as const,
-              };
-            case "timeout":
-              return { ...step, status: "timeout" as const };
-          }
-        }),
-      };
+      return { kind: "replace", data: reduceStepProgressState(current, event) };
     },
   };
+}
+
+function createWorkspaceEnvironmentTasksQuery(
+  workspaceId: string,
+): QueryDescriptor<EnvironmentTaskState[]> {
+  return {
+    eventKinds: WORKSPACE_ENVIRONMENT_TASK_EVENT_KINDS,
+    key: workspaceKeys.environmentTasks(workspaceId),
+    async fetch() {
+      return [];
+    },
+    reduce(current, event) {
+      if (event.kind === "workspace.deleted" && event.workspace_id === workspaceId) {
+        return { kind: "replace", data: [] };
+      }
+
+      if (
+        event.kind === "workspace.status_changed" &&
+        event.workspace_id === workspaceId &&
+        event.status === "starting"
+      ) {
+        return { kind: "replace", data: [] };
+      }
+
+      if (event.kind !== "environment.task_progress" || event.workspace_id !== workspaceId) {
+        return { kind: "none" };
+      }
+
+      return { kind: "replace", data: reduceStepProgressState(current, event) };
+    },
+  };
+}
+
+type StepProgressState = {
+  name: string;
+  output: string[];
+  status: SetupStepState["status"];
+};
+
+function reduceStepProgressState(
+  current: StepProgressState[] | undefined,
+  event: Extract<
+    LifecycleEvent,
+    { kind: "workspace.setup_progress" | "environment.task_progress" }
+  >,
+): StepProgressState[] {
+  const previous = current ?? [];
+  const existing = previous.find((step) => step.name === event.step_name);
+  const steps = existing
+    ? previous
+    : [...previous, { name: event.step_name, output: [], status: "pending" as const }];
+
+  return steps.map((step) => {
+    if (step.name !== event.step_name) {
+      return step;
+    }
+
+    switch (event.event_kind) {
+      case "started":
+        return { ...step, status: "running" as const };
+      case "stdout":
+      case "stderr":
+        return { ...step, output: [...step.output, event.data ?? ""] };
+      case "completed":
+        return { ...step, status: "completed" as const };
+      case "failed":
+        return {
+          ...step,
+          output: [...step.output, event.data ?? ""],
+          status: "failed" as const,
+        };
+      case "timeout":
+        return { ...step, status: "timeout" as const };
+    }
+  });
 }
 
 export function reduceWorkspaceActivity(
@@ -807,7 +887,7 @@ function createWorkspaceActivityQuery(
 }
 
 export function useWorkspacesByProject() {
-  return useQuery(workspacesByProjectQuery, {
+  return useQuery(createWorkspacesByProjectQuery(), {
     disabledData: undefined,
   });
 }
@@ -892,11 +972,37 @@ export function useWorkspaceFile(
   });
 }
 
+export function useWorkspaceFileTree(
+  workspaceId: string | null,
+): QueryResult<WorkspaceFileTreeEntry[] | undefined> {
+  const descriptor = useMemo(
+    () => (workspaceId ? createWorkspaceFileTreeQuery(workspaceId) : null),
+    [workspaceId],
+  );
+
+  return useQuery(descriptor, {
+    disabledData: undefined,
+  });
+}
+
 export function useWorkspaceSetup(
   workspaceId: string | null,
 ): QueryResult<SetupStepState[] | undefined> {
   const descriptor = useMemo(
     () => (workspaceId ? createWorkspaceSetupQuery(workspaceId) : null),
+    [workspaceId],
+  );
+
+  return useQuery(descriptor, {
+    disabledData: undefined,
+  });
+}
+
+export function useWorkspaceEnvironmentTasks(
+  workspaceId: string | null,
+): QueryResult<EnvironmentTaskState[] | undefined> {
+  const descriptor = useMemo(
+    () => (workspaceId ? createWorkspaceEnvironmentTasksQuery(workspaceId) : null),
     [workspaceId],
   );
 
