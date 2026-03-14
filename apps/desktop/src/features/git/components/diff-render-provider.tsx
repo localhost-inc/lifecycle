@@ -1,9 +1,12 @@
 import { useWorkerPool, WorkerPoolContextProvider } from "@pierre/diffs/react";
 import { useEffect, useMemo, type ReactNode } from "react";
+import { ensureLifecycleDiffThemesRegistered } from "../lib/lifecycle-diff-themes";
 
 const DEFAULT_DIFF_RENDER_CACHE_SIZE = 300;
 const MAX_DIFF_RENDER_WORKERS = 4;
 const MIN_DIFF_RENDER_WORKERS = 2;
+
+ensureLifecycleDiffThemesRegistered();
 
 interface DiffRenderProviderProps {
   children: ReactNode;

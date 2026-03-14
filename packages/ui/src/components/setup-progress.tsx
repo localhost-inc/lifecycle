@@ -75,9 +75,7 @@ function SetupProgressStepRow({
               />
             </div>
             <div className="min-w-0 flex-1">
-              <span
-                className={`truncate text-[13px] font-medium ${nameClassName[step.status]}`}
-              >
+              <span className={`truncate text-[13px] font-medium ${nameClassName[step.status]}`}>
                 {step.name}
               </span>
             </div>

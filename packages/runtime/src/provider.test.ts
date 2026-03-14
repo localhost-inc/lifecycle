@@ -413,14 +413,16 @@ describe("workspace provider interface", () => {
       {
         cmd: "create_workspace",
         args: {
-          kind: "root",
-          projectId: "project_1",
-          projectPath: "/tmp/project_1",
-          workspaceName: undefined,
-          baseRef: "main",
-          worktreeRoot: undefined,
-          manifestJson: undefined,
-          manifestFingerprint: undefined,
+          input: {
+            kind: "root",
+            projectId: "project_1",
+            projectPath: "/tmp/project_1",
+            workspaceName: undefined,
+            baseRef: "main",
+            worktreeRoot: undefined,
+            manifestJson: undefined,
+            manifestFingerprint: undefined,
+          },
         },
       },
     ]);
@@ -456,14 +458,16 @@ describe("workspace provider interface", () => {
       {
         cmd: "create_workspace",
         args: {
-          kind: "managed",
-          projectId: "project_1",
-          projectPath: "/tmp/project_1",
-          workspaceName: undefined,
-          baseRef: "main",
-          worktreeRoot: undefined,
-          manifestJson: '{"setup":{"steps":[]},"services":{}}',
-          manifestFingerprint: "manifest_1",
+          input: {
+            kind: "managed",
+            projectId: "project_1",
+            projectPath: "/tmp/project_1",
+            workspaceName: undefined,
+            baseRef: "main",
+            worktreeRoot: undefined,
+            manifestJson: '{"setup":{"steps":[]},"services":{}}',
+            manifestFingerprint: "manifest_1",
+          },
         },
       },
     ]);

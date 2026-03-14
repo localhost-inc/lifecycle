@@ -18,13 +18,8 @@ import {
   DEFAULT_MONOSPACE_FONT_FAMILY,
   getNativeMonospaceFontFamily,
 } from "../../../lib/typography";
-import {
-  terminalHasLiveSession,
-} from "../api";
-import {
-  hideNativeTerminalSurface,
-  syncNativeTerminalSurface,
-} from "../native-surface-api";
+import { terminalHasLiveSession } from "../api";
+import { hideNativeTerminalSurface, syncNativeTerminalSurface } from "../native-surface-api";
 import { DEFAULT_TERMINAL_FONT_SIZE } from "../terminal-display";
 import { resolveTerminalTheme } from "../terminal-theme";
 
@@ -380,6 +375,12 @@ export function NativeTerminalSurface({
       return;
     }
 
+    claimNativeTerminalSurfaceLease(
+      nativeTerminalSurfaceLeaseRegistry,
+      terminal.id,
+      ownerRef.current,
+      window.cancelAnimationFrame,
+    );
     scheduleSync();
     resizeObserverRef.current?.disconnect();
     resizeObserverRef.current = new ResizeObserver(() => {

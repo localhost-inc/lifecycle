@@ -2,12 +2,11 @@ import type { GitLogEntry, GitPullRequestSummary, WorkspaceMode } from "@lifecyc
 import { EmptyState, Tabs, TabsList, TabsTrigger, cn } from "@lifecycle/ui";
 import { useEffect, useState } from "react";
 import { commitGit, createGitPullRequest, mergeGitPullRequest, pushGit } from "../api";
-import { useCurrentGitPullRequest, useGitLog, useGitPullRequests, useGitStatus } from "../hooks";
+import { useCurrentGitPullRequest, useGitLog, useGitStatus } from "../hooks";
 import { GIT_PANEL_TABS, type GitPanelTabValue } from "../lib/git-panel-tabs";
 import { ChangesTab } from "./changes-tab";
 import { GitActionButton } from "./git-action-button";
 import { HistoryTab } from "./history-tab";
-import { PullRequestsTab } from "./pull-requests-tab";
 
 export const GIT_PANEL_TITLE = "Git";
 export { GIT_PANEL_TABS };
@@ -38,10 +37,6 @@ export function shouldLoadGitHistory(
   supportsChangesAndHistory: boolean,
 ): boolean {
   return supportsChangesAndHistory && activeTab === "history";
-}
-
-export function shouldLoadGitPullRequestList(activeTab: GitPanelTabValue): boolean {
-  return activeTab === "pull-requests";
 }
 
 export function GitPanel({
@@ -90,12 +85,6 @@ export function GitPanel({
       polling: documentVisible,
     },
   );
-  const pullRequestsQuery = useGitPullRequests(
-    shouldLoadGitPullRequestList(activeTab) ? workspaceId : null,
-    {
-      polling: documentVisible,
-    },
-  );
   const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId, {
     polling: documentVisible,
   });
@@ -104,7 +93,6 @@ export function GitPanel({
     await Promise.all([
       gitStatusQuery.refresh(),
       gitLogQuery.refresh(),
-      pullRequestsQuery.refresh(),
       currentPullRequestQuery.refresh(),
     ]);
   }
@@ -159,7 +147,6 @@ export function GitPanel({
       const pullRequest = await createGitPullRequest(workspaceId);
       await refreshPullRequestState();
       onOpenPullRequest(pullRequest);
-      onActiveTabChange("pull-requests");
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -212,7 +199,7 @@ export function GitPanel({
               {GIT_PANEL_TABS.map((tab) => (
                 <TabsTrigger
                   key={tab.value}
-                  title={"title" in tab ? tab.title : tab.label}
+                  title={tab.label}
                   value={tab.value}
                   variant="underline"
                 >
@@ -260,17 +247,6 @@ export function GitPanel({
                 />
               </div>
             ))}
-          {activeTab === "pull-requests" && (
-            <PullRequestsTab
-              currentBranchPullRequestNumber={
-                currentPullRequestQuery.data?.pullRequest?.number ?? null
-              }
-              error={pullRequestsQuery.error}
-              isLoading={pullRequestsQuery.isLoading}
-              onOpenPullRequest={onOpenPullRequest}
-              result={pullRequestsQuery.data ?? null}
-            />
-          )}
         </div>
       </div>
     </section>

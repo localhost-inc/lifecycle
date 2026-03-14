@@ -104,7 +104,7 @@ function PaneControlButton({
     <button
       type="button"
       aria-label={label}
-      className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--muted)] text-[var(--muted-foreground)] outline-none transition-[background-color,color] duration-150 ease-in-out hover:bg-[color-mix(in_srgb,var(--muted),var(--foreground)_8%)] hover:text-[var(--foreground)] focus-visible:shadow-[0_0_0_1px_var(--ring)]"
+      className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[var(--muted-foreground)] outline-none transition-colors duration-150 hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] focus-visible:shadow-[0_0_0_1px_var(--ring)]"
       onClick={onClick}
       title={label}
     >
@@ -456,7 +456,7 @@ function WorkspaceSurfaceTabDragGhost({
       }}
     >
       <div
-        className="flex items-center gap-2 whitespace-nowrap rounded-[var(--radius-xl)] border border-[var(--border)] bg-[color-mix(in_srgb,var(--muted),var(--background)_8%)] px-[14px] text-sm font-medium text-[var(--foreground)] shadow-[0_18px_40px_-20px_rgba(15,23,42,0.75)] opacity-95"
+        className="flex items-center gap-2 whitespace-nowrap border-x border-[var(--border)] bg-[var(--background)] px-3 text-sm font-semibold text-[var(--foreground)] shadow-[0_18px_40px_-20px_rgba(15,23,42,0.75)] opacity-95"
         style={{
           height: drag.draggedHeight,
           width: drag.draggedWidth,
@@ -698,7 +698,7 @@ export function WorkspaceSurfacePaneTree({
         <section
           key={node.id}
           ref={(element) => setPaneElement(node.id, element)}
-          className={`relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden border ${isDropTargetPane ? "border-[var(--ring)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--ring),transparent_50%)]" : isActivePane ? "border-[var(--ring)]/60 shadow-[0_0_0_1px_color-mix(in_srgb,var(--ring),transparent_65%)]" : "border-[var(--border)]"}`}
+          className={`relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${isDropTargetPane ? "border border-[var(--ring)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--ring),transparent_50%)]" : isActivePane ? "shadow-[0_0_0_1px_color-mix(in_srgb,var(--ring),transparent_65%)]" : ""}`}
           data-workspace-pane-id={node.id}
           onPointerDownCapture={(event) => {
             if (!isActivePane && shouldAutoSelectWorkspacePaneFromPointerTarget(event.target)) {
@@ -707,7 +707,7 @@ export function WorkspaceSurfacePaneTree({
           }}
         >
           <div
-            className="flex items-center gap-2 border-b border-[var(--border)]/80 bg-[color-mix(in_srgb,var(--panel),var(--background)_28%)] py-1"
+            className="flex h-10 items-stretch gap-0 border-b border-[var(--border)] bg-[var(--panel)]"
             data-workspace-pane-header
           >
             <WorkspaceSurfaceTabBar
@@ -722,11 +722,13 @@ export function WorkspaceSurfacePaneTree({
               paneId={node.id}
               visibleTabs={visibleTabs}
             />
-            <SurfaceLaunchActions
-              actions={surfaceActions}
-              onLaunch={(request) => onLaunchSurface(node.id, request)}
-            />
-            <div className="flex shrink-0 items-center gap-px pr-3">
+            <div className="flex shrink-0 items-center border-l border-[var(--border)] px-1">
+              <SurfaceLaunchActions
+                actions={surfaceActions}
+                onLaunch={(request) => onLaunchSurface(node.id, request)}
+              />
+            </div>
+            <div className="flex shrink-0 items-center gap-px border-l border-[var(--border)] px-2">
               <PaneControlButton label="Split Right" onClick={() => onSplitPane(node.id, "row")}>
                 <SplitRightIcon />
               </PaneControlButton>

@@ -6,11 +6,9 @@ import type {
   RefObject,
 } from "react";
 import { ResponseReadyDot } from "../../../components/response-ready-dot";
+import { TabChip } from "../../../components/tab-chip";
 import { TypedTitle } from "../../../components/typed-title";
-import {
-  tabTitle,
-  type WorkspaceSurfaceTab,
-} from "./workspace-surface-tabs";
+import { tabTitle, type WorkspaceSurfaceTab } from "./workspace-surface-tabs";
 import { workspaceTabDomId, workspaceTabPanelId } from "./workspace-surface-ids";
 
 interface WorkspaceSurfaceTabItemProps {
@@ -62,39 +60,42 @@ export function WorkspaceSurfaceTabItem({
   onRenameChange,
   onRenameKeyDown,
 }: WorkspaceSurfaceTabItemProps) {
-  const className = `group relative flex h-[34px] max-w-[300px] shrink-0 touch-none select-none items-center justify-start gap-2 whitespace-nowrap rounded-[var(--radius-xl)] px-[14px] text-left text-sm font-medium shadow-none outline-none ring-0 will-change-transform focus-visible:ring-1 focus-visible:ring-[var(--ring)] ${
-    active
-      ? "bg-[var(--muted)] text-[var(--foreground)]"
-      : "border border-[var(--border)] bg-transparent text-[var(--muted-foreground)] hover:bg-[color-mix(in_srgb,var(--foreground)_8%,transparent)] hover:text-[var(--foreground)]"
-  } ${
-    isRenaming
-      ? "cursor-text ring-1 ring-[var(--foreground)]/20"
-      : isDraggedTab
-        ? "pointer-events-none cursor-grabbing opacity-0 transition-none"
-        : "cursor-grab transition-[background-color,border-color,color,opacity,transform] duration-200 ease-out"
-  } ${isDropTarget ? "ring-1 ring-[var(--foreground)]/35" : ""}`;
+  const dragDropClasses = [
+    isRenaming ? "cursor-text" : "",
+    isDraggedTab ? "pointer-events-none cursor-grabbing opacity-0 transition-none" : "",
+    !isRenaming && !isDraggedTab ? "cursor-grab" : "",
+    isDropTarget ? "ring-1 ring-[var(--foreground)]/35" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <div
-      ref={refCallback}
+    <TabChip
+      active={active}
+      className={`max-w-[300px] touch-none select-none ${dragDropClasses}`}
+      closable={!isRenaming}
       id={workspaceTabDomId(tab.key)}
-      aria-controls={isRenaming ? undefined : workspaceTabPanelId(tab.key)}
-      aria-selected={isRenaming ? undefined : active}
-      className={className}
-      data-workspace-tab-key={tab.key}
+      indicator={
+        showFloatingReadyDot ? (
+          <ResponseReadyDot className="pointer-events-none absolute right-3 top-1.5" />
+        ) : undefined
+      }
+      label={tab.label}
+      leading={leading}
       onClick={onClick}
+      onClose={onClose}
       onDoubleClick={onDoubleClick}
       onKeyDown={onKeyDown}
       onPointerDown={onPointerDown}
-      role={isRenaming ? undefined : "tab"}
+      refCallback={refCallback}
       style={style}
       tabIndex={tabIndex}
       title={tabTitle(tab)}
+      ariaControls={isRenaming ? undefined : workspaceTabPanelId(tab.key)}
+      ariaSelected={isRenaming ? undefined : active}
+      role={isRenaming ? undefined : "tab"}
+      dataAttributes={{ "workspace-tab-key": tab.key }}
     >
-      {showFloatingReadyDot ? (
-        <ResponseReadyDot className="pointer-events-none absolute right-3 top-1.5" />
-      ) : null}
-      {leading}
       {isRenaming ? (
         <input
           ref={renameInputRef}
@@ -118,35 +119,11 @@ export function WorkspaceSurfaceTabItem({
           value={renameValue}
         />
       ) : (
-        <TypedTitle className="min-w-0 flex-1 truncate" text={tab.label} />
+        <TypedTitle
+          className={`min-w-0 flex-1 truncate leading-none ${active ? "font-semibold" : "font-medium"}`}
+          text={tab.label}
+        />
       )}
-      {!isRenaming ? (
-        <button
-          type="button"
-          aria-label={`Close ${tab.label}`}
-          data-tab-action="close"
-          className="ml-auto shrink-0 rounded-[8px] p-1 transition hover:bg-[var(--surface-hover)]"
-          onPointerDown={(event) => {
-            event.stopPropagation();
-          }}
-          onClick={(event) => {
-            event.stopPropagation();
-            onClose();
-          }}
-        >
-          <svg
-            fill="none"
-            height="12"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeWidth="1.5"
-            viewBox="0 0 12 12"
-            width="12"
-          >
-            <path d="M3 3l6 6M9 3l-6 6" />
-          </svg>
-        </button>
-      ) : null}
-    </div>
+    </TabChip>
   );
 }

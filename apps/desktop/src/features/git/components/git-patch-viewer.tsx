@@ -48,7 +48,8 @@ export function GitPatchViewer({
     serialize: (value) => value,
     validate: isGitDiffStyle,
   });
-  const parseError = patch.length > 0 && parsedFiles === null ? "Unable to parse diff patch." : null;
+  const parseError =
+    patch.length > 0 && parsedFiles === null ? "Unable to parse diff patch." : null;
   const displayError = error ?? parseError;
   const displayErrorPrefix = error !== null ? errorMessagePrefix : "Failed to parse diff";
   const hasRenderableDiff = parsedFiles !== null && parsedFiles.length > 0;

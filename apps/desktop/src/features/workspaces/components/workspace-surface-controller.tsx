@@ -20,7 +20,6 @@ import { inspectWorkspacePaneLayout, requireWorkspacePane } from "../lib/workspa
 import { formatWorkspaceError } from "../lib/workspace-errors";
 import {
   getWorkspaceDocument,
-  isPullRequestDocument,
   isRuntimeTabKey,
   listWorkspaceDocuments,
   listWorkspaceHiddenRuntimeTabKeys,
@@ -66,7 +65,6 @@ import {
 
 export interface WorkspaceSurfaceControllerInput {
   openDocumentRequest: OpenDocumentRequest | null;
-  onActivePullRequestNumberChange?: (pullRequestNumber: number | null) => void;
   onOpenDocumentRequestHandled?: (requestId: string) => void;
   snapshotTerminals: TerminalRecord[];
   workspaceId: string;
@@ -74,7 +72,6 @@ export interface WorkspaceSurfaceControllerInput {
 
 export function useWorkspaceSurfaceController({
   openDocumentRequest,
-  onActivePullRequestNumberChange,
   onOpenDocumentRequestHandled,
   snapshotTerminals,
   workspaceId,
@@ -182,14 +179,6 @@ export function useWorkspaceSurfaceController({
   const activeTabKey = activePane ? (renderedActiveTabKeyByPaneId[activePane.id] ?? null) : null;
   const activeTerminalId =
     activeTabKey && isRuntimeTabKey(activeTabKey) ? activeTabKey.slice("terminal:".length) : null;
-  const activePullRequestNumber = useMemo(() => {
-    if (!activeTabKey) {
-      return null;
-    }
-
-    const activeDocument = getWorkspaceDocument(state.documentsByKey, activeTabKey);
-    return activeDocument && isPullRequestDocument(activeDocument) ? activeDocument.number : null;
-  }, [activeTabKey, state.documentsByKey]);
   const paneIdsWaitingForSelectedRuntimeTab = useMemo(
     () =>
       getWorkspacePaneIdsWaitingForSelectedRuntimeTab(
@@ -232,10 +221,6 @@ export function useWorkspaceSurfaceController({
   useEffect(() => {
     writeWorkspaceSurfaceState(workspaceId, state);
   }, [state, workspaceId]);
-
-  useEffect(() => {
-    onActivePullRequestNumberChange?.(activePullRequestNumber);
-  }, [activePullRequestNumber, onActivePullRequestNumberChange]);
 
   useEffect(() => {
     const syncDocumentVisible = () => {
@@ -353,6 +338,9 @@ export function useWorkspaceSurfaceController({
 
   const handleCreateTerminal = useCallback(
     async (input: CreateTerminalRequest, paneId?: string) => {
+      if (paneId) {
+        dispatch({ kind: "select-pane", paneId });
+      }
       setCreatingSelection(input.launchType === "harness" ? input.harnessProvider : "shell");
       setError(null);
       releaseWebviewFocus();

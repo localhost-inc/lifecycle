@@ -187,7 +187,9 @@ describe("EnvironmentPanel", () => {
       }),
     );
 
-    expect(markup).toContain("Manifest changed. Stop and start again to apply environment updates.");
+    expect(markup).toContain(
+      "Manifest changed. Stop and start again to apply environment updates.",
+    );
   });
 
   test("renders collapsed service summaries with preview metadata", () => {

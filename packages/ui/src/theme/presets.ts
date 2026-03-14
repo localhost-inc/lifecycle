@@ -10,6 +10,9 @@ export type Theme =
 
 export type ResolvedTheme = Exclude<Theme, "system">;
 
+export const LIFECYCLE_LIGHT_DIFF_THEME = "lifecycle-light-diff";
+export const LIFECYCLE_DARK_DIFF_THEME = "lifecycle-dark-diff";
+
 export const themeOptions: Array<{
   label: string;
   value: Theme;
@@ -21,9 +24,14 @@ export const themeOptions: Array<{
     label: "Lifecycle Light",
     value: "light",
     appearance: "light",
-    shikiTheme: "github-light-default",
+    shikiTheme: LIFECYCLE_LIGHT_DIFF_THEME,
   },
-  { label: "Lifecycle Dark", value: "dark", appearance: "dark", shikiTheme: "github-dark-default" },
+  {
+    label: "Lifecycle Dark",
+    value: "dark",
+    appearance: "dark",
+    shikiTheme: LIFECYCLE_DARK_DIFF_THEME,
+  },
   { label: "Nord", value: "nord", appearance: "dark", shikiTheme: "nord" },
   { label: "Monokai", value: "monokai", appearance: "dark", shikiTheme: "monokai" },
   { label: "Catppuccin", value: "catppuccin", appearance: "dark", shikiTheme: "catppuccin-mocha" },

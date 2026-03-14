@@ -1,21 +1,25 @@
+import type { GitPullRequestSummary } from "@lifecycle/contracts";
 import { Alert, AlertDescription, AlertTitle, Loading } from "@lifecycle/ui";
-import { lazy, Suspense, useEffect, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { Suspense, lazy, useEffect, useRef } from "react";
 import { markPerformance, measurePerformance } from "../../../lib/performance";
 import { toErrorEnvelope } from "../../../lib/tauri-error";
 import { useWorkspaceManifest, useWorkspaceSnapshot } from "../hooks";
-import { hasBlockingQueryError, hasBlockingQueryLoad } from "./workspace-route-query-state";
+import { hasBlockingQueryError, hasBlockingQueryLoad } from "../routes/workspace-route-query-state";
 
 const WorkspacePanel = lazy(async () => {
-  const module = await import("../components/workspace-panel");
+  const module = await import("./workspace-panel");
   return {
     default: module.WorkspacePanel,
   };
 });
 
-export function WorkspaceRoute() {
-  const { workspaceId } = useParams();
-  const workspaceSnapshotQuery = useWorkspaceSnapshot(workspaceId ?? null);
+interface WorkspaceTabContentProps {
+  onOpenPullRequest?: (pullRequest: GitPullRequestSummary) => void;
+  workspaceId: string;
+}
+
+export function WorkspaceTabContent({ onOpenPullRequest, workspaceId }: WorkspaceTabContentProps) {
+  const workspaceSnapshotQuery = useWorkspaceSnapshot(workspaceId);
   const readyMeasuredRef = useRef(false);
   const workspace = workspaceSnapshotQuery.data?.workspace ?? null;
   const manifestQuery = useWorkspaceManifest(
@@ -24,10 +28,6 @@ export function WorkspaceRoute() {
   );
 
   useEffect(() => {
-    if (!workspaceId) {
-      return;
-    }
-
     readyMeasuredRef.current = false;
     markPerformance("workspace-route:start");
   }, [workspaceId]);
@@ -86,6 +86,7 @@ export function WorkspaceRoute() {
     <Suspense fallback={<Loading message="Loading workspace..." />}>
       <WorkspacePanel
         manifestStatus={manifestQuery.data ?? null}
+        onOpenPullRequest={onOpenPullRequest}
         workspace={workspace}
         workspaceSnapshot={workspaceSnapshotQuery.data ?? null}
       />

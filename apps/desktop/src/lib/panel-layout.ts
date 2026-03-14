@@ -21,6 +21,14 @@ export const DASHBOARD_RIGHT_SIDEBAR_COLLAPSED_STORAGE_KEY =
   "lifecycle.desktop.dashboard-right-sidebar-collapsed";
 export const DASHBOARD_RIGHT_SIDEBAR_WIDTH_STORAGE_KEY =
   "lifecycle.desktop.dashboard-right-sidebar-width";
+export const PROJECT_SHELL_SIDEBAR_COLLAPSED_STORAGE_KEY =
+  "lifecycle.desktop.project-shell-sidebar-collapsed";
+export const PROJECT_SHELL_SIDEBAR_WIDTH_STORAGE_KEY =
+  "lifecycle.desktop.project-shell-sidebar-width";
+export const PROJECT_WORKSPACE_PANEL_COLLAPSED_STORAGE_KEY =
+  "lifecycle.desktop.project-workspace-panel-collapsed";
+export const PROJECT_WORKSPACE_PANEL_WIDTH_STORAGE_KEY =
+  "lifecycle.desktop.project-workspace-panel-width";
 export const WORKSPACE_SIDEBAR_TOP_PANEL_RATIO_STORAGE_KEY =
   "lifecycle.desktop.workspace-sidebar-top-panel-ratio";
 

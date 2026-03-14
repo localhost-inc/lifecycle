@@ -184,6 +184,67 @@ describe("native terminal lease coordination", () => {
     expect(registry.get("term-1")?.owner).toBe(ownerB);
   });
 
+  test("re-claiming with the same owner cancels a rerender hide but preserves final unmount cleanup", () => {
+    const registry = createNativeTerminalSurfaceLeaseRegistry();
+    const owner = Symbol("owner");
+    const cancelledFrameIds: number[] = [];
+    const hiddenTerminalIds: string[] = [];
+    let firstScheduledCallback: ((timestamp: number) => void) | null = null;
+    let finalScheduledCallback: ((timestamp: number) => void) | null = null;
+
+    claimNativeTerminalSurfaceLease(registry, "term-1", owner, () => {});
+    scheduleNativeTerminalSurfaceLeaseHide(
+      registry,
+      "term-1",
+      owner,
+      (callback) => {
+        firstScheduledCallback = callback;
+        return 23;
+      },
+      (frameId) => {
+        cancelledFrameIds.push(frameId);
+      },
+      (terminalId) => {
+        hiddenTerminalIds.push(terminalId);
+      },
+    );
+
+    claimNativeTerminalSurfaceLease(registry, "term-1", owner, (frameId) => {
+      cancelledFrameIds.push(frameId);
+    });
+    const rerenderHideCallback = firstScheduledCallback as unknown as (timestamp: number) => void;
+    rerenderHideCallback(0);
+
+    expect(cancelledFrameIds).toEqual([23]);
+    expect(hiddenTerminalIds).toEqual([]);
+    expect(registry.get("term-1")).toEqual({
+      owner,
+      pendingHideFrameId: null,
+    });
+
+    scheduleNativeTerminalSurfaceLeaseHide(
+      registry,
+      "term-1",
+      owner,
+      (callback) => {
+        finalScheduledCallback = callback;
+        return 29;
+      },
+      (frameId) => {
+        cancelledFrameIds.push(frameId);
+      },
+      (terminalId) => {
+        hiddenTerminalIds.push(terminalId);
+      },
+    );
+    const finalHideCallback = finalScheduledCallback as unknown as (timestamp: number) => void;
+    finalHideCallback(0);
+
+    expect(cancelledFrameIds).toEqual([23]);
+    expect(hiddenTerminalIds).toEqual(["term-1"]);
+    expect(registry.has("term-1")).toBeFalse();
+  });
+
   test("the final owner unmount still hides the terminal", () => {
     const registry = createNativeTerminalSurfaceLeaseRegistry();
     const owner = Symbol("owner");

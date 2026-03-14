@@ -1,6 +1,6 @@
-use crate::shared::lifecycle_events::{LifecycleEnvelope, LifecycleEvent};
 use crate::platform::runtime::supervisor::Supervisor;
 use crate::shared::errors::LifecycleError;
+use crate::shared::lifecycle_events::{LifecycleEnvelope, LifecycleEvent};
 use crate::ManagedSupervisor;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -267,7 +267,11 @@ impl WorkspaceControllerRegistry {
         controllers.remove(workspace_id)
     }
 
-    pub(crate) fn record_lifecycle_envelope(&self, workspace_id: &str, envelope: LifecycleEnvelope) {
+    pub(crate) fn record_lifecycle_envelope(
+        &self,
+        workspace_id: &str,
+        envelope: LifecycleEnvelope,
+    ) {
         let controller = {
             let mut controllers = self.controllers.lock().expect("workspace controller lock");
             controllers

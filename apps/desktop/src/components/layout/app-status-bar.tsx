@@ -4,31 +4,37 @@ import { version } from "../../../package.json";
 import { Wordmark } from "../wordmark";
 
 interface AppStatusBarProps {
-  leftSidebarCollapsed?: boolean;
-  onToggleLeftSidebar?: () => void;
+  onToggleProjectNavigation?: () => void;
+  projectNavigationCollapsed?: boolean;
 }
 
-export function AppStatusBar({ leftSidebarCollapsed, onToggleLeftSidebar }: AppStatusBarProps) {
+export function AppStatusBar({
+  onToggleProjectNavigation,
+  projectNavigationCollapsed,
+}: AppStatusBarProps) {
   return (
-    <footer className="flex h-8 shrink-0 items-center justify-between border-t border-[var(--border)] bg-[var(--panel)] px-3 text-[11px] text-[var(--muted-foreground)]">
-      <div className="flex items-center gap-2">
-        {onToggleLeftSidebar && (
+    <footer
+      className="flex h-7 shrink-0 items-center justify-between border-t border-[var(--border)] bg-[var(--background)] px-2.5 text-[11px] text-[var(--muted-foreground)]"
+      data-slot="app-status-bar"
+    >
+      <div className="flex items-center gap-1.5">
+        {onToggleProjectNavigation && (
           <button
             type="button"
-            className="flex translate-y-px items-center justify-center text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-            onClick={onToggleLeftSidebar}
-            title={leftSidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+            className="flex items-center justify-center text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+            onClick={onToggleProjectNavigation}
+            title={projectNavigationCollapsed ? "Show sidebar" : "Hide sidebar"}
           >
-            {leftSidebarCollapsed ? (
-              <PanelLeft size={13} strokeWidth={2} />
+            {projectNavigationCollapsed ? (
+              <PanelLeft size={12} strokeWidth={2} />
             ) : (
-              <PanelLeftClose size={13} strokeWidth={2} />
+              <PanelLeftClose size={12} strokeWidth={2} />
             )}
           </button>
         )}
-        <Wordmark className="h-[13px] w-auto" />
+        <Wordmark className="h-[11px] w-auto" />
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
         <button
           type="button"
           className="hover:text-[var(--foreground)]"

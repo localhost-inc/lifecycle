@@ -1,7 +1,6 @@
 export const GIT_PANEL_TABS = [
   { label: "Changes", value: "changes" },
   { label: "History", value: "history" },
-  { label: "Pulls", title: "Pull Requests", value: "pull-requests" },
 ] as const;
 
 export type GitPanelTabValue = (typeof GIT_PANEL_TABS)[number]["value"];

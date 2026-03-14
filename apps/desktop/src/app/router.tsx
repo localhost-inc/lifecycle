@@ -1,12 +1,13 @@
 import { Suspense, lazy, type ReactNode } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { Loading } from "@lifecycle/ui";
-import { DashboardLayout } from "../components/layout/dashboard-layout";
+import { AppShellLayout } from "../components/layout/app-shell-layout";
+import { RouteErrorPage } from "./route-error-page";
 
-const DashboardIndexRoute = lazy(async () => {
-  const module = await import("../features/dashboard/routes/dashboard-index-route");
+const HomeRoute = lazy(async () => {
+  const module = await import("../features/projects/routes/home-route");
   return {
-    default: module.DashboardIndexRoute,
+    default: module.HomeRoute,
   };
 });
 const OverlayHostRoute = lazy(async () => {
@@ -21,16 +22,16 @@ const ProjectSettingsRoute = lazy(async () => {
     default: module.ProjectSettingsRoute,
   };
 });
+const ProjectRoute = lazy(async () => {
+  const module = await import("../features/projects/routes/project-route");
+  return {
+    default: module.ProjectRoute,
+  };
+});
 const SettingsShellLayout = lazy(async () => {
   const module = await import("../features/settings/layout/settings-shell-layout");
   return {
     default: module.SettingsShellLayout,
-  };
-});
-const WorkspaceRoute = lazy(async () => {
-  const module = await import("../features/workspaces/routes/workspace-route");
-  return {
-    default: module.WorkspaceRoute,
   };
 });
 
@@ -45,58 +46,63 @@ function LazyRoute({ children }: { children: ReactNode }) {
 function createRouter() {
   return createBrowserRouter([
     {
-      path: "/overlay-host",
-      element: (
-        <LazyRoute>
-          <OverlayHostRoute />
-        </LazyRoute>
-      ),
-    },
-    {
-      path: "/",
-      element: <DashboardLayout />,
+      errorElement: <RouteErrorPage />,
       children: [
         {
-          index: true,
+          path: "/overlay-host",
           element: (
             <LazyRoute>
-              <DashboardIndexRoute />
+              <OverlayHostRoute />
             </LazyRoute>
           ),
         },
         {
-          path: "workspaces/:workspaceId",
+          path: "/",
+          element: <AppShellLayout />,
+          children: [
+            {
+              index: true,
+              element: (
+                <LazyRoute>
+                  <HomeRoute />
+                </LazyRoute>
+              ),
+            },
+            {
+              path: "projects/:projectId",
+              element: (
+                <LazyRoute>
+                  <ProjectRoute />
+                </LazyRoute>
+              ),
+            },
+            {
+              path: "projects/:projectId/settings",
+              element: (
+                <LazyRoute>
+                  <ProjectSettingsRoute />
+                </LazyRoute>
+              ),
+            },
+            {
+              path: "*",
+              element: <Navigate to="/" replace />,
+            },
+          ],
+        },
+        {
+          path: "/settings",
           element: (
             <LazyRoute>
-              <WorkspaceRoute />
+              <SettingsShellLayout />
             </LazyRoute>
           ),
         },
         {
-          path: "projects/:projectId/settings",
-          element: (
-            <LazyRoute>
-              <ProjectSettingsRoute />
-            </LazyRoute>
-          ),
-        },
-        {
-          path: "*",
-          element: <Navigate to="/" replace />,
+          path: "/settings/*",
+          element: <Navigate to="/settings" replace />,
         },
       ],
-    },
-    {
-      path: "/settings",
-      element: (
-        <LazyRoute>
-          <SettingsShellLayout />
-        </LazyRoute>
-      ),
-    },
-    {
-      path: "/settings/*",
-      element: <Navigate to="/settings" replace />,
     },
   ]);
 }

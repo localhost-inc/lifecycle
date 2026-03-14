@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { diffTheme, isTheme, themeAppearance, themeOptions } from "./presets";
+import {
+  diffTheme,
+  isTheme,
+  LIFECYCLE_DARK_DIFF_THEME,
+  LIFECYCLE_LIGHT_DIFF_THEME,
+  themeAppearance,
+  themeOptions,
+} from "./presets";
 
 describe("theme presets", () => {
   test("contains all theme options", () => {
@@ -44,8 +51,8 @@ describe("theme presets", () => {
   });
 
   test("maps themes to shiki theme names", () => {
-    expect(diffTheme("light")).toBe("github-light-default");
-    expect(diffTheme("dark")).toBe("github-dark-default");
+    expect(diffTheme("light")).toBe(LIFECYCLE_LIGHT_DIFF_THEME);
+    expect(diffTheme("dark")).toBe(LIFECYCLE_DARK_DIFF_THEME);
     expect(diffTheme("nord")).toBe("nord");
     expect(diffTheme("monokai")).toBe("monokai");
     expect(diffTheme("catppuccin")).toBe("catppuccin-mocha");

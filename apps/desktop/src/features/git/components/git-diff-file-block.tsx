@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FileDiff, type FileDiffMetadata } from "@pierre/diffs/react";
 import { GitFileHeader } from "./git-file-header";
-import { getOpenableDiffFilePath } from "./git-diff-rendering";
+import { getOpenableDiffFilePath, withCopyableGitDiffOptions } from "./git-diff-rendering";
 
 interface GitDiffFileBlockProps {
   fileDiff: FileDiffMetadata;
@@ -14,7 +14,7 @@ export function GitDiffFileBlock({ fileDiff, onOpenFile, themeType }: GitDiffFil
   const openablePath = getOpenableDiffFilePath(fileDiff);
 
   return (
-    <section className="overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--panel)]/70">
+    <section className="overflow-hidden rounded-lg border border-[var(--border)] bg-transparent">
       <GitFileHeader
         collapsed={collapsed}
         fileDiff={fileDiff}
@@ -28,10 +28,10 @@ export function GitDiffFileBlock({ fileDiff, onOpenFile, themeType }: GitDiffFil
         >
           <FileDiff
             fileDiff={fileDiff}
-            options={{
+            options={withCopyableGitDiffOptions({
               disableFileHeader: true,
               themeType,
-            }}
+            })}
           />
         </div>
       )}

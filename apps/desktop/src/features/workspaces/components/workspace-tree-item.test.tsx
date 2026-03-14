@@ -73,7 +73,7 @@ describe("WorkspaceTreeItem", () => {
     expect(markup).toContain('title="Generating response"');
   });
 
-  test("uses text emphasis instead of a filled background for the selected workspace", () => {
+  test("uses a subtle pill background for the selected workspace", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceTreeItem, {
         workspace,
@@ -84,12 +84,9 @@ describe("WorkspaceTreeItem", () => {
     );
 
     expect(markup).not.toContain("bg-[var(--sidebar-selected)]");
-    expect(markup).toContain("bg-transparent");
-    expect(markup).toContain("font-medium");
+    expect(markup).toContain("bg-[var(--muted)]");
+    expect(markup).toContain("opacity-100");
     expect(markup).toContain("text-[var(--sidebar-foreground)]");
-    expect(markup).toContain("border-left-color:var(--primary)");
-    expect(markup).toContain("pl-3");
-    expect(markup).toContain("opacity-70");
   });
 
   test("dims inactive workspace text while keeping hover contrast", () => {
@@ -104,9 +101,9 @@ describe("WorkspaceTreeItem", () => {
 
     expect(markup).toContain("opacity-80");
     expect(markup).toContain("hover:opacity-100");
-    expect(markup).toContain("hover:bg-transparent");
+    expect(markup).toContain("hover:bg-[var(--surface-hover)]");
+    expect(markup).toContain("bg-transparent");
     expect(markup).toContain("text-[var(--sidebar-foreground)]");
-    expect(markup).toContain("border-left-color:var(--border)");
   });
 
   test("swaps the time label out for the archive action on hover", () => {

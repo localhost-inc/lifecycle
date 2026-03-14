@@ -160,7 +160,9 @@ export interface WorkspaceProvider {
   getWorkspace(workspaceId: string): Promise<WorkspaceRecord | null>;
   getWorkspaceServices(workspaceId: string): Promise<ServiceRecord[]>;
   getWorkspaceSnapshot(workspaceId: string): Promise<WorkspaceProviderSnapshotResult>;
-  getWorkspaceRuntimeProjection(workspaceId: string): Promise<WorkspaceProviderRuntimeProjectionResult>;
+  getWorkspaceRuntimeProjection(
+    workspaceId: string,
+  ): Promise<WorkspaceProviderRuntimeProjectionResult>;
   updateWorkspaceService(input: WorkspaceProviderUpdateServiceInput): Promise<void>;
   syncWorkspaceManifest(input: WorkspaceProviderSyncManifestInput): Promise<void>;
   createTerminal(input: WorkspaceProviderCreateTerminalInput): Promise<TerminalRecord>;
@@ -172,7 +174,10 @@ export interface WorkspaceProvider {
   ): Promise<WorkspaceProviderSavedTerminalAttachment>;
   detachTerminal(terminalId: string): Promise<void>;
   killTerminal(terminalId: string): Promise<void>;
-  readWorkspaceFile(workspaceId: string, filePath: string): Promise<WorkspaceProviderFileReadResult>;
+  readWorkspaceFile(
+    workspaceId: string,
+    filePath: string,
+  ): Promise<WorkspaceProviderFileReadResult>;
   writeWorkspaceFile(
     workspaceId: string,
     filePath: string,

@@ -41,9 +41,10 @@ describe("WorkspaceSurface layout", () => {
       }),
     );
 
-    expect(markup).toContain('class="flex items-center gap-2 border-b');
+    expect(markup).toContain('data-workspace-pane-header="true"');
+    expect(markup).toContain('class="flex h-10 items-stretch gap-0 border-b');
     expect(markup).toContain('data-slot="workspace-tab-bar"');
-    expect(markup).not.toContain("px-3");
+    expect(markup).toContain('class="flex shrink-0 items-center gap-px border-l border-[var(--border)] px-2"');
   });
 
   test("renders a visible vertical resize gutter between side-by-side pane groups", async () => {

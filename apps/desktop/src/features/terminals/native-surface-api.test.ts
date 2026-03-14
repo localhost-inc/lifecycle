@@ -31,7 +31,8 @@ mock.module("../../lib/tauri-error", () => ({
   },
 }));
 
-const { hideNativeTerminalSurface, syncNativeTerminalSurface } = await import("./native-surface-api");
+const { hideNativeTerminalSurface, syncNativeTerminalSurface } =
+  await import("./native-surface-api");
 
 describe("native terminal surface api", () => {
   beforeEach(() => {

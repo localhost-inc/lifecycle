@@ -15,9 +15,10 @@ Use these as external contracts, without duplicating their full detail here:
 1. `README.md`
 2. `docs/vision.md`
 3. `docs/plan.md`
-4. `docs/reference/*.md`
-5. `docs/milestones/*.md`
-6. `docs/BRAND.md`
+4. `docs/VOCABULARY.md`
+5. `docs/reference/*.md`
+6. `docs/milestones/*.md`
+7. `docs/BRAND.md`
 
 When behavior changes and docs are now wrong, update docs in the same change.
 
@@ -63,11 +64,12 @@ Use this section to route work before implementation.
 ## Engineering Invariants
 
 1. Use `workspace` as the canonical noun across code, APIs, and docs.
-2. Do not introduce ad-hoc state values; follow canonical state machines.
-3. Use typed errors/failure reasons; do not introduce untyped string-only failures.
-4. Preserve local-first operation for local workflows (no mandatory auth/network dependency).
-5. Keep provider boundaries explicit; avoid leaking provider-specific behavior across interfaces.
-6. Do not add silent fallback paths that hide failures or misconfiguration.
+2. Use the terms in `docs/VOCABULARY.md` for shell, project, workspace, pane, and surface concepts; do not invent new synonyms for core concepts without updating that doc.
+3. Do not introduce ad-hoc state values; follow canonical state machines.
+4. Use typed errors/failure reasons; do not introduce untyped string-only failures.
+5. Preserve local-first operation for local workflows (no mandatory auth/network dependency).
+6. Keep provider boundaries explicit; avoid leaking provider-specific behavior across interfaces.
+7. Do not add silent fallback paths that hide failures or misconfiguration.
 
 ## Change Workflow
 

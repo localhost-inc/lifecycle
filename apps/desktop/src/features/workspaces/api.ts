@@ -154,12 +154,7 @@ export interface WorkspaceSnapshotResult {
   workspace: WorkspaceRecord | null;
 }
 
-export type WorkspaceProgressStatus =
-  | "pending"
-  | "running"
-  | "completed"
-  | "failed"
-  | "timeout";
+export type WorkspaceProgressStatus = "pending" | "running" | "completed" | "failed" | "timeout";
 
 export interface WorkspaceStepProgressSnapshot {
   name: string;

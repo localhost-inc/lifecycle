@@ -34,7 +34,7 @@ function DiffFileTreeComponent({
   };
 
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden">
+    <div className="flex h-full w-full flex-col overflow-hidden bg-[var(--background)]">
       <div className="flex min-h-11 items-center gap-2 border-b border-[var(--border)] px-3 py-3">
         <span className="text-xs font-semibold text-[var(--foreground)]">
           Files Changed

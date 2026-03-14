@@ -123,6 +123,7 @@ pub fn run() {
         .manage(workspace_controllers)
         .manage(root_git_watchers)
         .invoke_handler(tauri::generate_handler![
+            capabilities::app::commands::get_auth_session,
             capabilities::app::commands::set_window_accepts_mouse_moved_events,
             capabilities::app::commands::set_window_pointing_cursor,
             capabilities::app::commands::get_window_mouse_position,

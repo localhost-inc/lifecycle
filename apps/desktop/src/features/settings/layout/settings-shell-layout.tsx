@@ -19,11 +19,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { version } from "../../../../package.json";
 import { AppHotkeyListener } from "../../../app/app-hotkey-listener";
-import { getInterfaceFontPresets, getMonospaceFontPresets } from "../../../lib/typography";
 import {
   detectPlatformHint,
-  shouldInsetSidebarHeaderForWindowControls,
-} from "../../../components/layout/sidebar";
+  shouldInsetForWindowControls,
+} from "../../../components/layout/window-controls";
+import { getInterfaceFontPresets, getMonospaceFontPresets } from "../../../lib/typography";
+import { AuthSessionSettingsPanel } from "../../auth/components/auth-session-settings-panel";
+import { useAuthSession } from "../../auth/state/auth-session-provider";
 import {
   turnNotificationModeOptions,
   turnNotificationSoundOptions,
@@ -45,10 +47,16 @@ import {
 const ACTIVE_SECTION_OFFSET = 112;
 
 export function SettingsShellLayout() {
-  const shouldInset = shouldInsetSidebarHeaderForWindowControls(detectPlatformHint(), isTauri());
+  const tauriApp = isTauri();
+  const shouldInset = shouldInsetForWindowControls(detectPlatformHint(), tauriApp);
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, resolvedAppearance, setTheme } = useTheme();
+  const {
+    isLoading: authSessionLoading,
+    refresh: refreshAuthSession,
+    session: authSession,
+  } = useAuthSession();
   const {
     interfaceFontFamily,
     monospaceFontFamily,
@@ -136,6 +144,13 @@ export function SettingsShellLayout() {
       normalizedDraftWorktreeRoot.length > 0 ? normalizedDraftWorktreeRoot : worktreeRoot;
     return `${root}/sydney--2c1b1211`;
   }, [normalizedDraftWorktreeRoot, worktreeRoot]);
+  const authSessionEnvironmentLabel = useMemo(() => {
+    if (import.meta.env.DEV) {
+      return tauriApp ? "Vite dev bridge in desktop" : "Vite dev bridge in browser";
+    }
+
+    return tauriApp ? "Desktop control plane" : "Browser fallback";
+  }, [tauriApp]);
 
   useEffect(() => {
     setDraftWorktreeRoot(worktreeRoot);
@@ -299,9 +314,27 @@ export function SettingsShellLayout() {
                     Settings
                   </h1>
                   <p className="mt-2 max-w-2xl text-sm text-[var(--muted-foreground)]">
-                    Appearance, notifications, and workspace defaults.
+                    Account state, appearance, notifications, and workspace defaults.
                   </p>
                 </header>
+
+                <SettingsSection
+                  description="Visualize the active account, where lifecycle resolved it from, and the runtime path currently driving auth."
+                  id="account"
+                  label="Account"
+                  ref={(node) => {
+                    sectionRefs.current.account = node;
+                  }}
+                >
+                  <AuthSessionSettingsPanel
+                    environmentLabel={authSessionEnvironmentLabel}
+                    isLoading={authSessionLoading}
+                    onRefresh={() => {
+                      void refreshAuthSession();
+                    }}
+                    session={authSession}
+                  />
+                </SettingsSection>
 
                 <SettingsSection
                   id="appearance"

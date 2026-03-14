@@ -3,6 +3,7 @@ import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
 import { router } from "./app/router";
+import { AuthSessionProvider } from "./features/auth/state/auth-session-provider";
 import { TurnNotificationListener } from "./features/notifications/turn-notification-listener";
 import { OverlayHostBootstrap } from "./features/overlays/overlay-host-bootstrap";
 import { ProjectManifestWatcher } from "./features/projects/components/project-manifest-watcher";
@@ -31,13 +32,15 @@ createRoot(document.getElementById("root")!).render(
       <ThemeWindowSync />
       <OverlayHostBootstrap />
       <QueryProvider>
-        <ProjectManifestWatcher />
-        <SettingsProvider>
-          <TurnNotificationListener />
-          <TerminalResponseReadyProvider>
-            <RouterProvider router={router} />
-          </TerminalResponseReadyProvider>
-        </SettingsProvider>
+        <AuthSessionProvider>
+          <ProjectManifestWatcher />
+          <SettingsProvider>
+            <TurnNotificationListener />
+            <TerminalResponseReadyProvider>
+              <RouterProvider router={router} />
+            </TerminalResponseReadyProvider>
+          </SettingsProvider>
+        </AuthSessionProvider>
       </QueryProvider>
     </ThemeProvider>
   </StrictMode>,

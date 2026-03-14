@@ -17,13 +17,12 @@ import {
 import { formatWorkspaceError } from "../lib/workspace-errors";
 import { WorkspaceSurfaceTabItem } from "./workspace-surface-tab-item";
 
-const TAB_DRAG_GAP_PX = 2;
+const TAB_DRAG_GAP_PX = 0;
 const TAB_DRAG_START_THRESHOLD_PX = 6;
 const TAB_BAR_RIGHT_FADE_WIDTH_PX = 24;
 
 const tabListStyle: CSSProperties = {
   msOverflowStyle: "none",
-  paddingLeft: "12px",
   paddingRight: TAB_BAR_RIGHT_FADE_WIDTH_PX,
   scrollbarWidth: "none",
 };
@@ -499,12 +498,12 @@ export function WorkspaceSurfaceTabBar({
     <div className="relative min-w-0 flex-1">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 right-0 z-[1] bg-gradient-to-l from-[var(--background)] to-transparent"
+        className="pointer-events-none absolute inset-y-0 right-0 z-[1] bg-gradient-to-l from-[var(--panel)] to-transparent"
         style={{ width: TAB_BAR_RIGHT_FADE_WIDTH_PX }}
       />
       <div
         aria-label="Workspace tabs"
-        className="flex items-center gap-2 overflow-x-auto py-1 [&::-webkit-scrollbar]:hidden"
+        className="flex h-full items-stretch gap-0 overflow-x-auto [&::-webkit-scrollbar]:hidden"
         data-workspace-tab-bar
         role="tablist"
         ref={tabListRef}

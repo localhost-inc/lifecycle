@@ -333,8 +333,7 @@ function closeWorkspacePaneIfEmpty(
 
   return {
     ...state,
-    activePaneId:
-      state.activePaneId === pane.id ? closeResult.survivingPaneId : state.activePaneId,
+    activePaneId: state.activePaneId === pane.id ? closeResult.survivingPaneId : state.activePaneId,
     paneTabStateById: omitWorkspacePaneTabState(state.paneTabStateById, pane.id),
     rootPane: closeResult.nextRoot,
   };
@@ -528,7 +527,10 @@ export function workspaceSurfaceReducer(
       };
 
       if (state.activePaneId === paneId && paneTabState.activeTabKey === action.key) {
-        return closeWorkspacePaneIfEmpty(selectWorkspacePaneTab(nextState, paneId, nextActiveKey), paneId);
+        return closeWorkspacePaneIfEmpty(
+          selectWorkspacePaneTab(nextState, paneId, nextActiveKey),
+          paneId,
+        );
       }
 
       return closeWorkspacePaneIfEmpty(nextState, paneId);
@@ -571,7 +573,10 @@ export function workspaceSurfaceReducer(
       };
 
       if (state.activePaneId === paneId && paneTabState.activeTabKey === action.key) {
-        return closeWorkspacePaneIfEmpty(selectWorkspacePaneTab(nextState, paneId, nextActiveKey), paneId);
+        return closeWorkspacePaneIfEmpty(
+          selectWorkspacePaneTab(nextState, paneId, nextActiveKey),
+          paneId,
+        );
       }
 
       return closeWorkspacePaneIfEmpty(nextState, paneId);
@@ -582,17 +587,55 @@ export function workspaceSurfaceReducer(
         state.paneTabStateById,
         action.key,
       );
+      const requestedPaneId = action.paneId
+        ? resolveWorkspaceTargetPaneId(state, action.paneId)
+        : null;
+      const restoredTabState = state.tabStateByKey[action.key]?.viewState
+        ? { viewState: state.tabStateByKey[action.key]?.viewState }
+        : null;
       if (existingPaneId) {
+        if (requestedPaneId && requestedPaneId !== existingPaneId) {
+          const existingPaneTabState = getWorkspacePaneTabState(
+            state.paneTabStateById,
+            existingPaneId,
+          );
+          const nextExistingActiveKey =
+            existingPaneTabState.activeTabKey === action.key
+              ? getWorkspaceTabKeyAfterClose(existingPaneTabState.tabOrderKeys, action.key)
+              : existingPaneTabState.activeTabKey;
+          const nextPaneTabStateById = updateWorkspacePaneTabState(
+            updateWorkspacePaneTabState(state.paneTabStateById, existingPaneId, (pane) => ({
+              ...pane,
+              activeTabKey:
+                existingPaneTabState.activeTabKey === action.key
+                  ? nextExistingActiveKey
+                  : pane.activeTabKey,
+              tabOrderKeys: removeWorkspaceTabKey(pane.tabOrderKeys, action.key),
+            })),
+            requestedPaneId,
+            (pane) => ({
+              ...pane,
+              activeTabKey: action.select ? action.key : pane.activeTabKey,
+              tabOrderKeys: appendWorkspaceTabKey(pane.tabOrderKeys, action.key),
+            }),
+          );
+
+          return {
+            ...state,
+            activePaneId: action.select ? requestedPaneId : state.activePaneId,
+            tabStateByKey: updateWorkspaceTabState(
+              state.tabStateByKey,
+              action.key,
+              restoredTabState,
+            ),
+            paneTabStateById: nextPaneTabStateById,
+          };
+        }
+
         return {
           ...state,
           activePaneId: action.select ? existingPaneId : state.activePaneId,
-          tabStateByKey: updateWorkspaceTabState(
-            state.tabStateByKey,
-            action.key,
-            state.tabStateByKey[action.key]?.viewState
-              ? { viewState: state.tabStateByKey[action.key]?.viewState }
-              : null,
-          ),
+          tabStateByKey: updateWorkspaceTabState(state.tabStateByKey, action.key, restoredTabState),
           paneTabStateById: updateWorkspacePaneTabState(
             state.paneTabStateById,
             existingPaneId,
@@ -608,13 +651,7 @@ export function workspaceSurfaceReducer(
       return {
         ...state,
         activePaneId: action.select ? targetPaneId : state.activePaneId,
-        tabStateByKey: updateWorkspaceTabState(
-          state.tabStateByKey,
-          action.key,
-          state.tabStateByKey[action.key]?.viewState
-            ? { viewState: state.tabStateByKey[action.key]?.viewState }
-            : null,
-        ),
+        tabStateByKey: updateWorkspaceTabState(state.tabStateByKey, action.key, restoredTabState),
         paneTabStateById: updateWorkspacePaneTabState(
           state.paneTabStateById,
           targetPaneId,

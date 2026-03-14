@@ -909,6 +909,67 @@ describe("workspaceSurfaceReducer", () => {
     );
   });
 
+  test("moves an auto-assigned runtime tab into the explicitly requested pane", () => {
+    const splitState = withWorkspaceState({
+      activePaneId: "pane-root",
+      documents: [createChangesDiffTab("src/app.tsx")],
+      hiddenRuntimeTabKeys: [],
+      rootPane: {
+        direction: "row" as const,
+        first: {
+          activeTabKey: "terminal:term-1",
+          id: "pane-root",
+          kind: "leaf" as const,
+          tabOrderKeys: [CHANGES_DIFF_TAB_KEY, "terminal:term-1"],
+        },
+        id: "split-1",
+        kind: "split" as const,
+        ratio: 0.5,
+        second: {
+          activeTabKey: null,
+          id: "pane-2",
+          kind: "leaf" as const,
+          tabOrderKeys: [],
+        },
+      },
+      viewStateByTabKey: {},
+    });
+
+    expect(
+      workspaceSurfaceReducer(splitState, {
+        key: "terminal:term-1",
+        kind: "show-runtime-tab",
+        paneId: "pane-2",
+        select: true,
+      }),
+    ).toEqual(
+      withWorkspaceState({
+        activePaneId: "pane-2",
+        documents: [createChangesDiffTab("src/app.tsx")],
+        hiddenRuntimeTabKeys: [],
+        rootPane: {
+          direction: "row",
+          first: {
+            activeTabKey: CHANGES_DIFF_TAB_KEY,
+            id: "pane-root",
+            kind: "leaf",
+            tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+          },
+          id: "split-1",
+          kind: "split",
+          ratio: 0.5,
+          second: {
+            activeTabKey: "terminal:term-1",
+            id: "pane-2",
+            kind: "leaf",
+            tabOrderKeys: ["terminal:term-1"],
+          },
+        },
+        viewStateByTabKey: {},
+      }),
+    );
+  });
+
   test("stores per-tab view state for reopened document tabs", () => {
     expect(
       workspaceSurfaceReducer(

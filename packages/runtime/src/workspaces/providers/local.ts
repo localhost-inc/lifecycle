@@ -50,14 +50,16 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
   ): Promise<WorkspaceProviderCreateResult> {
     const context = requireLocalContext(input.context);
     const workspaceId = (await this.invoke("create_workspace", {
-      kind: context.kind ?? "managed",
-      projectId: context.projectId,
-      projectPath: context.projectPath,
-      workspaceName: context.workspaceName,
-      baseRef: context.baseRef ?? input.sourceRef,
-      worktreeRoot: context.worktreeRoot,
-      manifestJson: input.manifestJson,
-      manifestFingerprint: input.manifestFingerprint,
+      input: {
+        kind: context.kind ?? "managed",
+        projectId: context.projectId,
+        projectPath: context.projectPath,
+        workspaceName: context.workspaceName,
+        baseRef: context.baseRef ?? input.sourceRef,
+        worktreeRoot: context.worktreeRoot,
+        manifestJson: input.manifestJson,
+        manifestFingerprint: input.manifestFingerprint,
+      },
     })) as string;
 
     return {
@@ -309,11 +311,7 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
     return this.invoke("get_workspace_git_base_ref", { workspaceId }) as Promise<string | null>;
   }
 
-  async getGitRefDiffPatch(
-    workspaceId: string,
-    baseRef: string,
-    headRef: string,
-  ): Promise<string> {
+  async getGitRefDiffPatch(workspaceId: string, baseRef: string, headRef: string): Promise<string> {
     return this.invoke("get_workspace_git_ref_diff_patch", {
       workspaceId,
       baseRef,

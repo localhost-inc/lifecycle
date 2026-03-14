@@ -4,6 +4,7 @@ import { readSettingsSectionHash, settingsSections } from "./settings-sections";
 describe("settingsSections", () => {
   test("lists only live settings sections", () => {
     expect(settingsSections.map((section) => section.slug)).toEqual([
+      "account",
       "appearance",
       "notifications",
       "worktrees",
@@ -13,6 +14,7 @@ describe("settingsSections", () => {
 
 describe("readSettingsSectionHash", () => {
   test("parses valid section hashes", () => {
+    expect(readSettingsSectionHash("#account")).toBe("account");
     expect(readSettingsSectionHash("#appearance")).toBe("appearance");
     expect(readSettingsSectionHash("#notifications")).toBe("notifications");
     expect(readSettingsSectionHash("worktrees")).toBe("worktrees");

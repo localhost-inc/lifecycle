@@ -32,14 +32,7 @@ function loadingLabel(source: GitDiffSurfaceSource): string {
 
 function header(source: GitDiffSurfaceSource) {
   if (source.mode === "changes") {
-    return (
-      <div className="border-b border-[var(--border)] px-4 py-4">
-        <p className="text-base font-semibold leading-snug text-[var(--foreground)]">Changes</p>
-        <p className="mt-1.5 text-xs text-[var(--muted-foreground)]">
-          Current local edits across the workspace
-        </p>
-      </div>
-    );
+    return null;
   }
 
   return (

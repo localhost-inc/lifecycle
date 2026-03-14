@@ -1,5 +1,11 @@
 # Workspace Surface Contract
 
+## Status
+
+1. This is the **current implementation contract** for the desktop workspace center panel.
+2. The target successor direction is [workspace-workbench.md](./workspace-workbench.md), which defines the future split-only workspace interior for the project-shell model.
+3. Until that migration lands, this document remains authoritative for the existing mixed runtime/document tab behavior.
+
 The workspace center panel is a shared surface that can host both provider-backed runtime tabs and client-owned document tabs.
 
 ## Tab Classes

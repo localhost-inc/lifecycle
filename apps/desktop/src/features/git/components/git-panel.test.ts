@@ -11,7 +11,6 @@ import {
   GIT_PANEL_TITLE,
   GitPanel,
   shouldLoadGitHistory,
-  shouldLoadGitPullRequestList,
 } from "./git-panel";
 
 function renderGitPanel(props: Partial<Parameters<typeof GitPanel>[0]> = {}) {
@@ -73,7 +72,6 @@ describe("git panel spacing", () => {
     });
 
     expect(markup).toContain(GIT_PANEL_TITLE);
-    expect(markup).toContain("Pull Requests");
     expect(markup).toContain("Changes unavailable");
     expect(markup).not.toContain("Checks");
   });
@@ -82,7 +80,5 @@ describe("git panel spacing", () => {
     expect(shouldLoadGitHistory("history", true)).toBe(true);
     expect(shouldLoadGitHistory("changes", true)).toBe(false);
     expect(shouldLoadGitHistory("history", false)).toBe(false);
-    expect(shouldLoadGitPullRequestList("pull-requests")).toBe(true);
-    expect(shouldLoadGitPullRequestList("changes")).toBe(false);
   });
 });

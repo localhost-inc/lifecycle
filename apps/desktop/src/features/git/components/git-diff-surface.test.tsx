@@ -40,7 +40,7 @@ function createGitStatus(overrides: Partial<GitStatusResult> = {}): GitStatusRes
 }
 
 describe("GitDiffSurface", () => {
-  test("renders a static changes header without scope controls", () => {
+  test("renders changes mode without scope controls while keeping the diff view toggle", () => {
     const markup = renderSurface(
       createElement(GitDiffSurface, {
         source: {
@@ -51,7 +51,6 @@ describe("GitDiffSurface", () => {
       }),
     );
 
-    expect(markup).toContain("Changes");
     expect(markup).not.toContain("Working");
     expect(markup).not.toContain("Staged");
     expect(markup).not.toContain("Branch");

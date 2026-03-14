@@ -195,8 +195,6 @@ describe("deriveSetupPresentation", () => {
   });
 
   test("returns null for empty steps", () => {
-    expect(
-      deriveSetupPresentation([], { failure_reason: null, status: "idle" }),
-    ).toBeNull();
+    expect(deriveSetupPresentation([], { failure_reason: null, status: "idle" })).toBeNull();
   });
 });

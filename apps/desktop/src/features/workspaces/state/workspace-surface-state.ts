@@ -1108,6 +1108,29 @@ export function writeWorkspaceSurfaceState(
   }
 }
 
+export function clearWorkspaceSurfaceState(workspaceId: string, storage?: StorageLike): void {
+  const resolvedStorage = getStorage(storage);
+  if (!resolvedStorage) {
+    return;
+  }
+
+  const persistedMap =
+    readPersistedWorkspaceSurfaceStateMap(resolvedStorage, WORKSPACE_SURFACE_STATE_STORAGE_KEY) ??
+    {};
+  if (!(workspaceId in persistedMap)) {
+    return;
+  }
+
+  const nextMap: PersistedWorkspaceStateMap = { ...persistedMap };
+  delete nextMap[workspaceId];
+
+  if (Object.keys(nextMap).length === 0) {
+    resolvedStorage.removeItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY);
+  } else {
+    resolvedStorage.setItem(WORKSPACE_SURFACE_STATE_STORAGE_KEY, JSON.stringify(nextMap));
+  }
+}
+
 export function readLastWorkspaceId(storage?: StorageLike): string | null {
   return getStorage(storage)?.getItem(LAST_WORKSPACE_ID_STORAGE_KEY) ?? null;
 }

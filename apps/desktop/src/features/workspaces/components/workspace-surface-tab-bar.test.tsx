@@ -59,11 +59,11 @@ describe("WorkspaceSurfaceTabBar", () => {
       }),
     );
 
-    expect(markup).toContain("h-[34px]");
-    expect(markup).toContain("rounded-[var(--radius-xl)]");
-    expect(markup).toContain("bg-[var(--muted)]");
+    expect(markup).toContain("h-full");
+    expect(markup).toContain("border-x");
+    expect(markup).toContain("bg-[var(--background)]");
     expect(markup).toContain("text-sm");
-    expect(markup).toContain("font-medium");
+    expect(markup).toContain("font-semibold");
     expect(markup).not.toContain("shadow-[");
   });
 
@@ -149,7 +149,7 @@ describe("WorkspaceSurfaceTabBar", () => {
     );
 
     expect(markup).not.toContain('data-slot="workspace-tab-separator"');
-    expect(markup).toContain("gap-2");
+    expect(markup).toContain("gap-0");
   });
 
   test("does not render a status dot for a plain terminal tab", () => {

@@ -9,6 +9,11 @@ pub struct WindowMousePosition {
 }
 
 #[tauri::command]
+pub async fn get_auth_session() -> Result<crate::platform::auth::AuthSession, LifecycleError> {
+    crate::platform::auth::read_auth_session().await
+}
+
+#[tauri::command]
 pub async fn set_window_accepts_mouse_moved_events(
     window: WebviewWindow,
     enabled: bool,

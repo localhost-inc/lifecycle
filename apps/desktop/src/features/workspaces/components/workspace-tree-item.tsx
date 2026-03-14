@@ -137,8 +137,8 @@ export function WorkspaceTreeItem({
 
   const rowClassName = cn(
     sidebarMenuSubButtonVariants({ active: false }),
-    "gap-1.5 rounded-none pl-3 pr-0 bg-transparent text-[var(--sidebar-foreground)] hover:bg-transparent",
-    selected ? "font-medium opacity-100" : "opacity-80 hover:opacity-100",
+    "gap-1.5 rounded-md pl-2 pr-1 text-[var(--sidebar-foreground)] hover:bg-[var(--surface-hover)]",
+    selected ? "bg-[var(--muted)] opacity-100" : "bg-transparent opacity-80 hover:opacity-100",
     editing ? "cursor-text ring-1 ring-[var(--sidebar-foreground)]/20" : undefined,
   );
 
@@ -146,14 +146,10 @@ export function WorkspaceTreeItem({
   const trailingMetaClassName = editing
     ? undefined
     : "transition-opacity group-hover/workspace-item:opacity-0";
-  const borderStyle = {
-    borderLeftWidth: 2,
-    borderLeftColor: selected ? "var(--primary)" : "var(--border)",
-  } as const;
 
   if (editing) {
     return (
-      <div className={rowClassName} style={borderStyle} title={titleText}>
+      <div className={rowClassName} title={titleText}>
         <input
           ref={inputRef}
           aria-label="Rename workspace"
@@ -198,7 +194,7 @@ export function WorkspaceTreeItem({
   }
 
   return (
-    <div className="group/workspace-item" style={borderStyle}>
+    <div className="group/workspace-item relative">
       <button
         className={rowClassName}
         onClick={onSelect}

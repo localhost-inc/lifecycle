@@ -15,7 +15,7 @@ import { shouldSyncWorkspaceManifest } from "../lib/workspace-manifest-sync";
 function renderWorkspacePanel(element: ReturnType<typeof createElement>) {
   return renderToStaticMarkup(
     createElement(MemoryRouter, {
-      initialEntries: ["/workspaces/workspace_1"],
+      initialEntries: ["/projects/project_1?workspace=workspace_1"],
       children: createElement(QueryProvider, {
         children: createElement(WorkspaceOpenRequestsProvider, {
           children: element,

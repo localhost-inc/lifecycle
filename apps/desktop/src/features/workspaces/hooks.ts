@@ -47,7 +47,8 @@ export const workspaceKeys = {
     ["workspace-file", workspaceId, filePath] as const,
   fileTree: (workspaceId: string) => ["workspace-file-tree", workspaceId] as const,
   manifest: (workspaceId: string) => ["workspace-manifest", workspaceId] as const,
-  runtimeProjection: (workspaceId: string) => ["workspace-runtime-projection", workspaceId] as const,
+  runtimeProjection: (workspaceId: string) =>
+    ["workspace-runtime-projection", workspaceId] as const,
   snapshot: (workspaceId: string) => ["workspace-snapshot", workspaceId] as const,
   services: (workspaceId: string) => ["workspace-services", workspaceId] as const,
   setup: (workspaceId: string) => ["workspace-setup", workspaceId] as const,

@@ -88,6 +88,8 @@ export {
   diffTheme,
   themeOptions,
   isTheme,
+  LIFECYCLE_DARK_DIFF_THEME,
+  LIFECYCLE_LIGHT_DIFF_THEME,
   themeAppearance,
   type Theme,
   type ResolvedTheme,

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Spinner } from "@lifecycle/ui";
-import { FileText, GitBranch, GitCommitHorizontal, PenTool } from "lucide-react";
+import { FileDiff, FileText, GitBranch, GitCommitHorizontal, PenTool } from "lucide-react";
 import { ResponseReadyDot } from "../../../components/response-ready-dot";
 import {
   isChangesDiffDocument,
@@ -155,6 +155,14 @@ export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceSurfaceTab }
     return (
       <SurfaceBubble tab={tab}>
         <GitBranch className="h-3 w-3" strokeWidth={1.8} />
+      </SurfaceBubble>
+    );
+  }
+
+  if (isChangesDiffDocument(tab)) {
+    return (
+      <SurfaceBubble tab={tab}>
+        <FileDiff className="h-3 w-3" strokeWidth={1.8} />
       </SurfaceBubble>
     );
   }

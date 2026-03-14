@@ -1,4 +1,5 @@
 export const settingsSections = [
+  { slug: "account", label: "Account" },
   { slug: "appearance", label: "Appearance" },
   { slug: "notifications", label: "Notifications" },
   { slug: "worktrees", label: "Worktrees" },

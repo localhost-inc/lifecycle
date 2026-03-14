@@ -64,7 +64,8 @@ mock.module("../../lib/tauri-error", () => ({
   },
 }));
 
-const { getProjectWorkspace, listWorkspaces, listWorkspacesByProject } = await import("./catalog-api");
+const { getProjectWorkspace, listWorkspaces, listWorkspacesByProject } =
+  await import("./catalog-api");
 
 describe("workspace catalog api", () => {
   beforeEach(() => {
