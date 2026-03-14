@@ -140,6 +140,7 @@ pub fn run() {
             capabilities::workspaces::commands::get_workspace,
             capabilities::workspaces::commands::get_workspace_by_id,
             capabilities::workspaces::commands::get_workspace_snapshot,
+            capabilities::workspaces::commands::get_workspace_runtime_projection,
             capabilities::workspaces::commands::list_workspaces,
             capabilities::workspaces::commands::list_workspaces_by_project,
             capabilities::workspaces::commands::get_workspace_services,

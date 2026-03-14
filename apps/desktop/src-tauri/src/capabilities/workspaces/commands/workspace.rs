@@ -167,6 +167,18 @@ pub async fn get_workspace_snapshot(
 }
 
 #[tauri::command]
+pub async fn get_workspace_runtime_projection(
+    workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
+    workspace_id: String,
+) -> Result<super::super::controller::WorkspaceRuntimeProjectionSnapshot, LifecycleError> {
+    Ok(workspace_controllers
+        .get(&workspace_id)
+        .await
+        .map(|controller| controller.runtime_projection_snapshot())
+        .unwrap_or_default())
+}
+
+#[tauri::command]
 pub async fn list_workspaces(
     db_path: State<'_, DbPath>,
 ) -> Result<Vec<super::super::query::WorkspaceRecord>, LifecycleError> {

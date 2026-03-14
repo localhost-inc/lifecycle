@@ -2106,50 +2106,6 @@ static LifecycleNativeTerminalView *lifecycleCreateTerminalView(
   return view;
 }
 
-bool lifecycle_native_terminal_create(const LifecycleNativeTerminalConfig *config) {
-  @autoreleasepool {
-    @try {
-      if (gGhosttyApp == NULL) {
-        lifecycleSetLastError(@"Ghostty runtime is not initialized.");
-        return false;
-      }
-
-      if (config == NULL || config->terminal_id == NULL || config->working_directory == NULL) {
-        lifecycleSetLastError(@"Native terminal create received incomplete arguments.");
-        return false;
-      }
-
-      NSString *terminalId = [NSString stringWithUTF8String:config->terminal_id];
-      LifecycleNativeTerminalView *existingView =
-          (LifecycleNativeTerminalView *)gTerminalViews[terminalId];
-      if (existingView != nil) {
-        gLastError = nil;
-        return true;
-      }
-
-      LifecycleNativeTerminalView *view = lifecycleCreateTerminalView(config);
-      if (view == nil) {
-        return false;
-      }
-
-      view.pointerPassthrough = YES;
-      view.wantsFocus = NO;
-      view.hidden = YES;
-      if (view.surface != NULL) {
-        ghostty_surface_set_focus(view.surface, false);
-        ghostty_surface_set_occlusion(view.surface, true);
-      }
-
-      gTerminalViews[terminalId] = view;
-      gLastError = nil;
-      return true;
-    } @catch (NSException *exception) {
-      lifecycleSetLastErrorFromException(@"Native terminal create threw an exception", exception);
-      return false;
-    }
-  }
-}
-
 bool lifecycle_native_terminal_sync(void *webview_view,
                                     const LifecycleNativeTerminalConfig *config) {
   @autoreleasepool {

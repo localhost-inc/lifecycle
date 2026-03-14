@@ -93,12 +93,17 @@ export function WorkspacePanel({
     if (!config) return;
     try {
       const manifestJson = JSON.stringify(config);
-      await startServices(workspace.id, manifestJson, getManifestFingerprint(config));
+      await startServices({
+        workspace,
+        services,
+        manifestJson,
+        manifestFingerprint: getManifestFingerprint(config),
+      });
     } catch (err) {
       console.error("Failed to start services:", err);
       throw err;
     }
-  }, [workspace.id, config]);
+  }, [config, services, workspace]);
 
   const handleRestart = useCallback(async () => {
     if (!config) {
@@ -108,12 +113,17 @@ export function WorkspacePanel({
     try {
       const manifestJson = JSON.stringify(config);
       await stopWorkspace(workspace.id);
-      await startServices(workspace.id, manifestJson, getManifestFingerprint(config));
+      await startServices({
+        workspace,
+        services,
+        manifestJson,
+        manifestFingerprint: getManifestFingerprint(config),
+      });
     } catch (err) {
       console.error("Failed to restart workspace:", err);
       throw err;
     }
-  }, [workspace.id, config]);
+  }, [config, services, workspace]);
 
   const handleStop = useCallback(async () => {
     try {

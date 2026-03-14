@@ -38,7 +38,7 @@ describe("WorkspaceSurfacePanels", () => {
         paneFocused: true,
         onTabViewStateChange: () => {},
         terminals: [],
-        waitingForActiveRuntimeTab: false,
+        waitingForSelectedRuntimeTab: false,
         workspaceId: "workspace-1",
       }),
     );
@@ -86,7 +86,7 @@ describe("WorkspaceSurfacePanels", () => {
             workspace_id: "workspace-1",
           },
         ],
-        waitingForActiveRuntimeTab: false,
+        waitingForSelectedRuntimeTab: false,
         workspaceId: "workspace-1",
       }),
     );
@@ -113,7 +113,7 @@ describe("WorkspaceSurfacePanels", () => {
         paneDragInProgress: false,
         paneFocused: true,
         terminals: [],
-        waitingForActiveRuntimeTab: false,
+        waitingForSelectedRuntimeTab: false,
         workspaceId: "workspace-1",
       }),
     );

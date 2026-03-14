@@ -19,10 +19,12 @@ import {
   getNativeMonospaceFontFamily,
 } from "../../../lib/typography";
 import {
-  hideNativeTerminalSurface,
-  syncNativeTerminalSurface,
   terminalHasLiveSession,
 } from "../api";
+import {
+  hideNativeTerminalSurface,
+  syncNativeTerminalSurface,
+} from "../native-surface-api";
 import { DEFAULT_TERMINAL_FONT_SIZE } from "../terminal-display";
 import { resolveTerminalTheme } from "../terminal-theme";
 
@@ -58,20 +60,32 @@ export function shouldShowNativeTerminalSurface({
   return hasLiveSession && width > 1 && height > 1;
 }
 
+export function shouldHideNativeTerminalSurfaceForTabDrag({
+  hasLiveSession,
+  height,
+  tabDragInProgress,
+  width,
+}: {
+  hasLiveSession: boolean;
+  height: number;
+  tabDragInProgress: boolean;
+  width: number;
+}): boolean {
+  return hasLiveSession && width > 1 && height > 1 && tabDragInProgress;
+}
+
 export function resolveNativeTerminalSurfaceInteraction({
   focused,
   shellResizeInProgress,
-  tabDragInProgress,
   visible,
 }: {
   focused: boolean;
   shellResizeInProgress: boolean;
-  tabDragInProgress: boolean;
   visible: boolean;
 }): { focused: boolean; pointerPassthrough: boolean } {
   return {
-    focused: visible && focused && !shellResizeInProgress && !tabDragInProgress,
-    pointerPassthrough: shellResizeInProgress || tabDragInProgress || !focused,
+    focused: visible && focused && !shellResizeInProgress,
+    pointerPassthrough: shellResizeInProgress || !focused,
   };
 }
 
@@ -233,6 +247,17 @@ export function NativeTerminalSurface({
       height: rect.height,
       width: rect.width,
     });
+    const hiddenForTabDrag = shouldHideNativeTerminalSurfaceForTabDrag({
+      hasLiveSession,
+      height: rect.height,
+      tabDragInProgress,
+      width: rect.width,
+    });
+    if (hiddenForTabDrag) {
+      await hideNativeTerminalSurface(terminal.id);
+      return;
+    }
+
     if (!visible) {
       setAttachState(hasLiveSession ? "attaching" : "attached");
       await hideSurface();
@@ -243,7 +268,6 @@ export function NativeTerminalSurface({
       const interaction = resolveNativeTerminalSurfaceInteraction({
         focused,
         shellResizeInProgress: shellResizeInProgressRef.current,
-        tabDragInProgress,
         visible,
       });
 
@@ -386,7 +410,7 @@ export function NativeTerminalSurface({
     };
   }, [focused, hasLiveSession, resolvedTheme, tabDragInProgress, terminal.id, terminalFontFamily]);
 
-  const showAttachOverlay = hasLiveSession && attachState !== "attached";
+  const showAttachOverlay = hasLiveSession && attachState !== "attached" && !tabDragInProgress;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-[var(--terminal-surface-background)]">

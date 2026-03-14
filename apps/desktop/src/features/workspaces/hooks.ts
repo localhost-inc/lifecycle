@@ -12,6 +12,8 @@ import type { ManifestStatus } from "../projects/api/projects";
 import type {
   WorkspaceFileReadResult,
   WorkspaceFileTreeEntry,
+  WorkspaceRuntimeProjectionResult,
+  WorkspaceStepProgressSnapshot,
   WorkspaceSnapshotResult,
 } from "./api";
 
@@ -40,13 +42,14 @@ export const workspaceKeys = {
   activity: (workspaceId: string) => ["workspace-activity", workspaceId] as const,
   byProject: () => ["workspaces", "by-project"] as const,
   detail: (workspaceId: string) => ["workspace", workspaceId] as const,
+  environmentTasks: (workspaceId: string) => ["workspace-environment-tasks", workspaceId] as const,
   file: (workspaceId: string, filePath: string) =>
     ["workspace-file", workspaceId, filePath] as const,
   fileTree: (workspaceId: string) => ["workspace-file-tree", workspaceId] as const,
   manifest: (workspaceId: string) => ["workspace-manifest", workspaceId] as const,
+  runtimeProjection: (workspaceId: string) => ["workspace-runtime-projection", workspaceId] as const,
   snapshot: (workspaceId: string) => ["workspace-snapshot", workspaceId] as const,
   services: (workspaceId: string) => ["workspace-services", workspaceId] as const,
-  environmentTasks: (workspaceId: string) => ["workspace-environment-tasks", workspaceId] as const,
   setup: (workspaceId: string) => ["workspace-setup", workspaceId] as const,
 };
 
@@ -84,16 +87,6 @@ const WORKSPACE_SNAPSHOT_EVENT_KINDS = [
   "workspace.renamed",
   "workspace.status_changed",
   "workspace.deleted",
-] as const satisfies readonly LifecycleEventKind[];
-const WORKSPACE_SETUP_EVENT_KINDS = [
-  "workspace.status_changed",
-  "workspace.deleted",
-  "workspace.setup_progress",
-] as const satisfies readonly LifecycleEventKind[];
-const WORKSPACE_ENVIRONMENT_TASK_EVENT_KINDS = [
-  "workspace.status_changed",
-  "workspace.deleted",
-  "environment.task_progress",
 ] as const satisfies readonly LifecycleEventKind[];
 const WORKSPACE_ACTIVITY_EVENT_KINDS = [
   "workspace.status_changed",
@@ -846,79 +839,105 @@ function createWorkspaceFileTreeQuery(
   };
 }
 
-function createWorkspaceSetupQuery(workspaceId: string): QueryDescriptor<SetupStepState[]> {
+function emptyWorkspaceRuntimeProjection(): WorkspaceRuntimeProjectionResult {
   return {
-    eventKinds: WORKSPACE_SETUP_EVENT_KINDS,
-    key: workspaceKeys.setup(workspaceId),
-    async fetch() {
-      return [];
-    },
-    reduce(current, event) {
-      if (event.kind === "workspace.deleted" && event.workspace_id === workspaceId) {
-        return { kind: "replace", data: [] };
-      }
-
-      if (
-        event.kind === "workspace.status_changed" &&
-        event.workspace_id === workspaceId &&
-        event.status === "starting"
-      ) {
-        return { kind: "replace", data: [] };
-      }
-
-      if (event.kind !== "workspace.setup_progress" || event.workspace_id !== workspaceId) {
-        return { kind: "none" };
-      }
-
-      return { kind: "replace", data: reduceStepProgressState(current, event) };
-    },
+    activity: [],
+    environmentTasks: [],
+    setup: [],
   };
 }
 
-function createWorkspaceEnvironmentTasksQuery(
+function createWorkspaceRuntimeProjectionQuery(
   workspaceId: string,
-): QueryDescriptor<EnvironmentTaskState[]> {
+): QueryDescriptor<WorkspaceRuntimeProjectionResult> {
   return {
-    eventKinds: WORKSPACE_ENVIRONMENT_TASK_EVENT_KINDS,
-    key: workspaceKeys.environmentTasks(workspaceId),
-    async fetch() {
-      return [];
+    eventKinds: WORKSPACE_ACTIVITY_EVENT_KINDS,
+    key: workspaceKeys.runtimeProjection(workspaceId),
+    fetch(source) {
+      return source.getWorkspaceRuntimeProjection(workspaceId);
     },
     reduce(current, event) {
-      if (event.kind === "workspace.deleted" && event.workspace_id === workspaceId) {
-        return { kind: "replace", data: [] };
-      }
-
-      if (
-        event.kind === "workspace.status_changed" &&
-        event.workspace_id === workspaceId &&
-        event.status === "starting"
-      ) {
-        return { kind: "replace", data: [] };
-      }
-
-      if (event.kind !== "environment.task_progress" || event.workspace_id !== workspaceId) {
-        return { kind: "none" };
-      }
-
-      return { kind: "replace", data: reduceStepProgressState(current, event) };
+      return reduceWorkspaceRuntimeProjection(current, event, workspaceId);
     },
   };
 }
 
-type StepProgressState = {
-  name: string;
-  output: string[];
-  status: SetupStepState["status"];
-};
+type StepProgressEvent = Extract<
+  LifecycleEvent,
+  { kind: "workspace.setup_progress" | "environment.task_progress" }
+>;
+
+export function reduceWorkspaceRuntimeProjection(
+  current: WorkspaceRuntimeProjectionResult | undefined,
+  event: LifecycleEvent,
+  workspaceId: string,
+): QueryUpdate<WorkspaceRuntimeProjectionResult> {
+  if (event.workspace_id !== workspaceId) {
+    return { kind: "none" };
+  }
+
+  const previous = current ?? emptyWorkspaceRuntimeProjection();
+  const nextSetup = reduceWorkspaceStepProgressProjection(
+    previous.setup,
+    event,
+    workspaceId,
+    "workspace.setup_progress",
+  );
+  const nextEnvironmentTasks = reduceWorkspaceStepProgressProjection(
+    previous.environmentTasks,
+    event,
+    workspaceId,
+    "environment.task_progress",
+  );
+  const nextActivity = reduceWorkspaceActivityEvents(previous.activity, event, workspaceId);
+
+  if (
+    nextSetup === previous.setup &&
+    nextEnvironmentTasks === previous.environmentTasks &&
+    nextActivity === previous.activity
+  ) {
+    return { kind: "none" };
+  }
+
+  return {
+    kind: "replace",
+    data: {
+      activity: nextActivity,
+      environmentTasks: nextEnvironmentTasks,
+      setup: nextSetup,
+    },
+  };
+}
+
+function reduceWorkspaceStepProgressProjection(
+  current: WorkspaceStepProgressSnapshot[],
+  event: LifecycleEvent,
+  workspaceId: string,
+  progressKind: StepProgressEvent["kind"],
+): WorkspaceStepProgressSnapshot[] {
+  if (event.kind === "workspace.deleted" && event.workspace_id === workspaceId) {
+    return current.length > 0 ? [] : current;
+  }
+
+  if (
+    event.kind === "workspace.status_changed" &&
+    event.workspace_id === workspaceId &&
+    event.status === "starting"
+  ) {
+    return current.length > 0 ? [] : current;
+  }
+
+  if (event.kind !== progressKind || event.workspace_id !== workspaceId) {
+    return current;
+  }
+
+  return reduceStepProgressState(current, event);
+}
 
 function reduceStepProgressState(
-  current: StepProgressState[] | undefined,
-  event: Extract<
-    LifecycleEvent,
-    { kind: "workspace.setup_progress" | "environment.task_progress" }
-  >,
-): StepProgressState[] {
+  current: WorkspaceStepProgressSnapshot[] | undefined,
+  event: StepProgressEvent,
+): WorkspaceStepProgressSnapshot[] {
   const previous = current ?? [];
   const existing = previous.find((step) => step.name === event.step_name);
   const steps = existing
@@ -950,6 +969,36 @@ function reduceStepProgressState(
   });
 }
 
+function eventContributesToWorkspaceActivity(event: LifecycleEvent): boolean {
+  return !(
+    (event.kind === "workspace.setup_progress" || event.kind === "environment.task_progress") &&
+    (event.event_kind === "stdout" || event.event_kind === "stderr")
+  );
+}
+
+function reduceWorkspaceActivityEvents(
+  current: LifecycleEvent[],
+  event: LifecycleEvent,
+  workspaceId: string,
+): LifecycleEvent[] {
+  if (event.workspace_id !== workspaceId || !eventContributesToWorkspaceActivity(event)) {
+    return current;
+  }
+
+  return [event, ...current.filter((item) => item.id !== event.id)].slice(
+    0,
+    WORKSPACE_ACTIVITY_LIMIT,
+  );
+}
+
+export function buildWorkspaceActivityItems(
+  events: LifecycleEvent[] | undefined,
+): WorkspaceActivityItem[] {
+  return (events ?? [])
+    .map((event) => summarizeWorkspaceActivity(event))
+    .filter((item): item is WorkspaceActivityItem => item !== null);
+}
+
 export function reduceWorkspaceActivity(
   current: WorkspaceActivityItem[] | undefined,
   event: LifecycleEvent,
@@ -970,21 +1019,6 @@ export function reduceWorkspaceActivity(
       0,
       WORKSPACE_ACTIVITY_LIMIT,
     ),
-  };
-}
-
-function createWorkspaceActivityQuery(
-  workspaceId: string,
-): QueryDescriptor<WorkspaceActivityItem[]> {
-  return {
-    eventKinds: WORKSPACE_ACTIVITY_EVENT_KINDS,
-    key: workspaceKeys.activity(workspaceId),
-    async fetch() {
-      return [];
-    },
-    reduce(current, event) {
-      return reduceWorkspaceActivity(current, event, workspaceId);
-    },
   };
 }
 
@@ -1087,41 +1121,57 @@ export function useWorkspaceFileTree(
   });
 }
 
-export function useWorkspaceSetup(
+function useWorkspaceRuntimeProjection(
   workspaceId: string | null,
-): QueryResult<SetupStepState[] | undefined> {
+): QueryResult<WorkspaceRuntimeProjectionResult | undefined> {
   const descriptor = useMemo(
-    () => (workspaceId ? createWorkspaceSetupQuery(workspaceId) : null),
+    () => (workspaceId ? createWorkspaceRuntimeProjectionQuery(workspaceId) : null),
     [workspaceId],
   );
 
   return useQuery(descriptor, {
     disabledData: undefined,
   });
+}
+
+export function useWorkspaceSetup(
+  workspaceId: string | null,
+): QueryResult<SetupStepState[] | undefined> {
+  const query = useWorkspaceRuntimeProjection(workspaceId);
+
+  return useMemo(
+    () => ({
+      ...query,
+      data: query.data?.setup,
+    }),
+    [query],
+  );
 }
 
 export function useWorkspaceEnvironmentTasks(
   workspaceId: string | null,
 ): QueryResult<EnvironmentTaskState[] | undefined> {
-  const descriptor = useMemo(
-    () => (workspaceId ? createWorkspaceEnvironmentTasksQuery(workspaceId) : null),
-    [workspaceId],
-  );
+  const query = useWorkspaceRuntimeProjection(workspaceId);
 
-  return useQuery(descriptor, {
-    disabledData: undefined,
-  });
+  return useMemo(
+    () => ({
+      ...query,
+      data: query.data?.environmentTasks,
+    }),
+    [query],
+  );
 }
 
 export function useWorkspaceActivity(
   workspaceId: string | null,
 ): QueryResult<WorkspaceActivityItem[] | undefined> {
-  const descriptor = useMemo(
-    () => (workspaceId ? createWorkspaceActivityQuery(workspaceId) : null),
-    [workspaceId],
-  );
+  const query = useWorkspaceRuntimeProjection(workspaceId);
 
-  return useQuery(descriptor, {
-    disabledData: undefined,
-  });
+  return useMemo(
+    () => ({
+      ...query,
+      data: query.data ? buildWorkspaceActivityItems(query.data.activity) : undefined,
+    }),
+    [query],
+  );
 }

@@ -1,5 +1,5 @@
-import type { WorkspacePaneLeaf } from "../state/workspace-surface-state";
-import type { RuntimeTab } from "./workspace-surface-logic";
+import type { WorkspacePaneTabSnapshot } from "../state/workspace-surface-state";
+import type { RuntimeTab } from "./workspace-surface-tabs";
 
 export function getWorkspaceLiveRuntimeTabKeys(
   runtimeTabs: readonly Pick<RuntimeTab, "key">[],
@@ -7,18 +7,18 @@ export function getWorkspaceLiveRuntimeTabKeys(
   return runtimeTabs.map((tab) => tab.key);
 }
 
-export function getWorkspaceResolvedPaneActiveTabKeys(
-  paneLeaves: readonly Pick<WorkspacePaneLeaf, "activeTabKey" | "id">[],
+export function getWorkspaceRenderedPaneActiveTabKeys(
+  paneSnapshots: readonly Pick<WorkspacePaneTabSnapshot, "activeTabKey" | "id">[],
   visibleTabsByPaneId: Record<string, readonly Pick<RuntimeTab, "key">[]>,
 ): Record<string, string | null> {
   return Object.fromEntries(
-    paneLeaves.map((pane) => {
+    paneSnapshots.map((pane) => {
       const visibleTabs = visibleTabsByPaneId[pane.id] ?? [];
-      const resolvedActiveTabKey =
+      const renderedActiveTabKey =
         pane.activeTabKey && visibleTabs.some((tab) => tab.key === pane.activeTabKey)
           ? pane.activeTabKey
           : (visibleTabs.at(-1)?.key ?? null);
-      return [pane.id, resolvedActiveTabKey];
+      return [pane.id, renderedActiveTabKey];
     }),
   );
 }
@@ -34,16 +34,16 @@ export function getWorkspaceUnassignedLiveRuntimeTabKeys(
   );
 }
 
-export function getWorkspaceWaitingForRuntimePaneIds(
-  paneLeaves: readonly Pick<WorkspacePaneLeaf, "activeTabKey" | "id">[],
+export function getWorkspacePaneIdsWaitingForSelectedRuntimeTab(
+  paneSnapshots: readonly Pick<WorkspacePaneTabSnapshot, "activeTabKey" | "id">[],
   visibleTabsByPaneId: Record<string, readonly Pick<RuntimeTab, "key">[]>,
   liveRuntimeTabKeySet: ReadonlySet<string>,
 ): Set<string> {
   return new Set(
-    paneLeaves.flatMap((pane) =>
+    paneSnapshots.flatMap((pane) =>
       pane.activeTabKey &&
       liveRuntimeTabKeySet.has(pane.activeTabKey) &&
-      !(visibleTabsByPaneId[pane.id] ?? []).some((tab) => tab.key === pane.activeTabKey)
+      (visibleTabsByPaneId[pane.id] ?? []).length === 0
         ? [pane.id]
         : [],
     ),

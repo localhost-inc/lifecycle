@@ -6,10 +6,12 @@ import type {
   WorkspaceRecord,
 } from "@lifecycle/contracts";
 import {
+  buildWorkspaceActivityItems,
   createWorkspaceManifestQuery,
   reduceWorkspaceServices,
   reduceWorkspaceActivity,
   reduceWorkspaceRecord,
+  reduceWorkspaceRuntimeProjection,
   reduceWorkspaceSnapshot,
   reduceWorkspacesByProject,
   type WorkspaceActivityItem,
@@ -108,6 +110,138 @@ describe("reduceWorkspaceActivity", () => {
     expect(current).toHaveLength(32);
     expect(current?.[0]?.id).toBe("event-39");
     expect(current?.[31]?.id).toBe("event-8");
+  });
+});
+
+describe("reduceWorkspaceRuntimeProjection", () => {
+  test("hydrates activity items from a fetched runtime projection", () => {
+    const items = buildWorkspaceActivityItems([
+      {
+        failure_reason: null,
+        id: "event-1",
+        kind: "workspace.status_changed",
+        occurred_at: "2026-03-10T10:00:00.000Z",
+        status: "starting",
+        workspace_id: "ws_1",
+      },
+      {
+        id: "event-2",
+        kind: "service.status_changed",
+        occurred_at: "2026-03-10T10:01:00.000Z",
+        service_name: "web",
+        status: "ready",
+        status_reason: null,
+        workspace_id: "ws_1",
+      },
+    ]);
+
+    expect(items).toEqual([
+      {
+        detail: null,
+        id: "event-1",
+        kind: "workspace.status_changed",
+        occurredAt: "2026-03-10T10:00:00.000Z",
+        title: "Workspace starting",
+        tone: "neutral",
+      },
+      {
+        detail: null,
+        id: "event-2",
+        kind: "service.status_changed",
+        occurredAt: "2026-03-10T10:01:00.000Z",
+        title: "Service web ready",
+        tone: "success",
+      },
+    ]);
+  });
+
+  test("keeps runtime projection recoverable across late events", () => {
+    const current = {
+      activity: [
+        {
+          failure_reason: null,
+          id: "event-1",
+          kind: "workspace.status_changed",
+          occurred_at: "2026-03-10T10:00:00.000Z",
+          status: "starting",
+          workspace_id: "ws_1",
+        },
+      ] satisfies LifecycleEvent[],
+      environmentTasks: [
+        {
+          name: "Install deps",
+          output: ["cached"],
+          status: "completed" as const,
+        },
+      ],
+      setup: [
+        {
+          name: "Clone repository",
+          output: [],
+          status: "completed" as const,
+        },
+      ],
+    };
+
+    const taskUpdate = reduceWorkspaceRuntimeProjection(
+      current,
+      {
+        data: "linking packages",
+        event_kind: "stdout",
+        id: "event-2",
+        kind: "environment.task_progress",
+        occurred_at: "2026-03-10T10:01:00.000Z",
+        step_name: "Install deps",
+        workspace_id: "ws_1",
+      },
+      "ws_1",
+    );
+    expect(taskUpdate).toEqual({
+      kind: "replace",
+      data: {
+        activity: current.activity,
+        environmentTasks: [
+          {
+            name: "Install deps",
+            output: ["cached", "linking packages"],
+            status: "completed",
+          },
+        ],
+        setup: current.setup,
+      },
+    });
+
+    const restartUpdate = reduceWorkspaceRuntimeProjection(
+      taskUpdate.kind === "replace" ? taskUpdate.data : undefined,
+      {
+        failure_reason: null,
+        id: "event-3",
+        kind: "workspace.status_changed",
+        occurred_at: "2026-03-10T10:02:00.000Z",
+        status: "starting",
+        workspace_id: "ws_1",
+      },
+      "ws_1",
+    );
+
+    expect(restartUpdate).toEqual({
+      kind: "replace",
+      data: {
+        activity: [
+          {
+            failure_reason: null,
+            id: "event-3",
+            kind: "workspace.status_changed",
+            occurred_at: "2026-03-10T10:02:00.000Z",
+            status: "starting",
+            workspace_id: "ws_1",
+          },
+          ...current.activity,
+        ],
+        environmentTasks: [],
+        setup: [],
+      },
+    });
   });
 });
 

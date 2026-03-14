@@ -19,15 +19,17 @@ import {
 import type { ManifestStatus } from "../features/projects/api/projects";
 import { getTerminal, listWorkspaceTerminals } from "../features/terminals/api";
 import { listProjects, readManifest } from "../features/projects/api/projects";
+import { listWorkspacesByProject } from "../features/workspaces/catalog-api";
 import {
   getWorkspaceById,
+  getWorkspaceRuntimeProjection,
   getWorkspaceSnapshot,
   listWorkspaceFiles,
   readWorkspaceFile,
   getWorkspaceServices,
-  listWorkspacesByProject,
   type WorkspaceFileTreeEntry,
   type WorkspaceFileReadResult,
+  type WorkspaceRuntimeProjectionResult,
   type WorkspaceSnapshotResult,
 } from "../features/workspaces/api";
 import { measureAsyncPerformance } from "../lib/performance";
@@ -38,6 +40,7 @@ export interface QuerySource {
   listWorkspacesByProject(): Promise<Record<string, WorkspaceRecord[]>>;
   getWorkspace(workspaceId: string): Promise<WorkspaceRecord | null>;
   getWorkspaceSnapshot(workspaceId: string): Promise<WorkspaceSnapshotResult>;
+  getWorkspaceRuntimeProjection(workspaceId: string): Promise<WorkspaceRuntimeProjectionResult>;
   getWorkspaceFile(workspaceId: string, filePath: string): Promise<WorkspaceFileReadResult>;
   listWorkspaceFiles(workspaceId: string): Promise<WorkspaceFileTreeEntry[]>;
   getWorkspaceServices(workspaceId: string): Promise<ServiceRecord[]>;
@@ -77,6 +80,11 @@ export function createQuerySource(): QuerySource {
     async getWorkspaceSnapshot(workspaceId) {
       return measureWorkspace("query.workspace-snapshot", workspaceId, () =>
         getWorkspaceSnapshot(workspaceId),
+      );
+    },
+    async getWorkspaceRuntimeProjection(workspaceId) {
+      return measureWorkspace("query.workspace-runtime-projection", workspaceId, () =>
+        getWorkspaceRuntimeProjection(workspaceId),
       );
     },
     async getWorkspaceFile(workspaceId, filePath) {

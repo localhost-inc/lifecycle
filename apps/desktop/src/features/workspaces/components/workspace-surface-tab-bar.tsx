@@ -13,7 +13,7 @@ import {
   getWorkspaceTabDragShiftDirection,
   type WorkspaceSurfaceTab,
   type WorkspaceTabPlacement,
-} from "./workspace-surface-logic";
+} from "./workspace-surface-tabs";
 import { formatWorkspaceError } from "../lib/workspace-errors";
 import { WorkspaceSurfaceTabItem } from "./workspace-surface-tab-item";
 

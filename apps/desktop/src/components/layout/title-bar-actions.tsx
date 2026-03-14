@@ -20,7 +20,7 @@ import {
   openWorkspaceInApp,
   type WorkspaceOpenInAppInfo,
   type OpenInAppId,
-} from "../../features/workspaces/api";
+} from "../../features/workspaces/open-in-api";
 import { OpenInAppIcon } from "../../features/workspaces/components/open-in-app-icon";
 import { WorkspaceOpenInMenu } from "../../features/workspaces/components/workspace-open-in-menu";
 import {

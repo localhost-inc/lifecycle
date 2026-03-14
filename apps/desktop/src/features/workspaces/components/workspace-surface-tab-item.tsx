@@ -9,10 +9,9 @@ import { ResponseReadyDot } from "../../../components/response-ready-dot";
 import { TypedTitle } from "../../../components/typed-title";
 import {
   tabTitle,
-  workspaceTabDomId,
-  workspaceTabPanelId,
   type WorkspaceSurfaceTab,
-} from "./workspace-surface-logic";
+} from "./workspace-surface-tabs";
+import { workspaceTabDomId, workspaceTabPanelId } from "./workspace-surface-ids";
 
 interface WorkspaceSurfaceTabItemProps {
   active: boolean;

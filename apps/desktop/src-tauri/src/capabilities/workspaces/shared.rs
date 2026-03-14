@@ -974,9 +974,13 @@ mod tests {
     fn reconcile_workspace_services_db_reassigns_stale_effective_port_when_workspace_is_idle() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
-        let default_port = available_test_port();
-        let port_guard =
-            std::net::TcpListener::bind(("127.0.0.1", default_port as u16)).expect("bind port");
+        let port_guard = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("bind port");
+        let default_port = i64::from(
+            port_guard
+                .local_addr()
+                .expect("port should have local addr")
+                .port(),
+        );
 
         let conn = open_db(&db_path).expect("open db");
         conn.execute(

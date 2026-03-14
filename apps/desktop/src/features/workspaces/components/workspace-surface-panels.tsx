@@ -16,7 +16,7 @@ import {
   type WorkspaceSurfaceTabViewState,
 } from "../state/workspace-surface-state";
 import { WorkspaceEmptyPaneState } from "./workspace-empty-pane-state";
-import { workspaceTabDomId, workspaceTabPanelId } from "./workspace-surface-logic";
+import { workspaceTabDomId, workspaceTabPanelId } from "./workspace-surface-ids";
 
 interface WorkspaceSurfacePanelsProps {
   activeTabKey: string | null;
@@ -32,7 +32,7 @@ interface WorkspaceSurfacePanelsProps {
   paneDragInProgress: boolean;
   paneFocused: boolean;
   terminals: TerminalRecord[];
-  waitingForActiveRuntimeTab: boolean;
+  waitingForSelectedRuntimeTab: boolean;
   workspaceId: string;
 }
 
@@ -50,11 +50,11 @@ export function WorkspaceSurfacePanels({
   paneDragInProgress,
   paneFocused,
   terminals,
-  waitingForActiveRuntimeTab,
+  waitingForSelectedRuntimeTab,
   workspaceId,
 }: WorkspaceSurfacePanelsProps) {
   if (!hasVisibleTabs) {
-    return waitingForActiveRuntimeTab ? (
+    return waitingForSelectedRuntimeTab ? (
       <EmptyState
         description="Lifecycle is opening your selected terminal tab."
         icon={<TerminalSquare />}

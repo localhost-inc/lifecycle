@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
   getWorkspaceLiveRuntimeTabKeys,
-  getWorkspaceResolvedPaneActiveTabKeys,
+  getWorkspacePaneIdsWaitingForSelectedRuntimeTab,
+  getWorkspaceRenderedPaneActiveTabKeys,
   getWorkspaceUnassignedLiveRuntimeTabKeys,
-  getWorkspaceWaitingForRuntimePaneIds,
 } from "./workspace-surface-runtime-state";
 
 describe("workspace surface runtime helpers", () => {
@@ -23,7 +23,7 @@ describe("workspace surface runtime helpers", () => {
 
   test("marks panes as waiting only for live runtime tabs that have not rendered yet", () => {
     expect(
-      getWorkspaceWaitingForRuntimePaneIds(
+      getWorkspacePaneIdsWaitingForSelectedRuntimeTab(
         [
           { activeTabKey: "terminal:term-1", id: "pane-a" },
           { activeTabKey: "file:README.md", id: "pane-b" },
@@ -39,7 +39,7 @@ describe("workspace surface runtime helpers", () => {
 
   test("does not wait on non-live runtime tabs that no longer have a live session", () => {
     expect(
-      getWorkspaceWaitingForRuntimePaneIds(
+      getWorkspacePaneIdsWaitingForSelectedRuntimeTab(
         [{ activeTabKey: "terminal:term-9", id: "pane-a" }],
         { "pane-a": [] },
         new Set(["terminal:term-1"]),
@@ -47,9 +47,19 @@ describe("workspace surface runtime helpers", () => {
     ).toEqual(new Set());
   });
 
+  test("does not mark a pane as waiting when a visible fallback tab is already rendering", () => {
+    expect(
+      getWorkspacePaneIdsWaitingForSelectedRuntimeTab(
+        [{ activeTabKey: "terminal:term-1", id: "pane-a" }],
+        { "pane-a": [{ key: "file:README.md" }] },
+        new Set(["terminal:term-1"]),
+      ),
+    ).toEqual(new Set());
+  });
+
   test("resolves each pane's active tab from currently visible tabs", () => {
     expect(
-      getWorkspaceResolvedPaneActiveTabKeys(
+      getWorkspaceRenderedPaneActiveTabKeys(
         [
           { activeTabKey: "terminal:missing", id: "pane-a" },
           { activeTabKey: "file:README.md", id: "pane-b" },

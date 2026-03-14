@@ -1,4 +1,4 @@
-use super::{NativeTerminalSessionCreateRequest, NativeTerminalSurfaceSyncRequest};
+use super::NativeTerminalSurfaceSyncRequest;
 use crate::shared::errors::LifecycleError;
 use tauri::{AppHandle, WebviewWindow};
 
@@ -8,14 +8,6 @@ pub(super) fn initialize(
     _diagnostics_log_path: Option<&std::path::Path>,
 ) -> Result<(), LifecycleError> {
     Ok(())
-}
-
-pub(super) fn create_session(
-    _request: &NativeTerminalSessionCreateRequest,
-) -> Result<(), LifecycleError> {
-    Err(LifecycleError::AttachFailed(
-        "native terminal runtime is unavailable".to_string(),
-    ))
 }
 
 pub(super) fn sync_surface(

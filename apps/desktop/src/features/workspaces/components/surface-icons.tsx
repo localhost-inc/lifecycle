@@ -9,7 +9,7 @@ import {
   isPullRequestDocument,
 } from "../state/workspace-surface-state";
 import type { HarnessProvider } from "../../terminals/api";
-import type { WorkspaceSurfaceTab } from "./workspace-surface-logic";
+import type { WorkspaceSurfaceTab } from "./workspace-surface-tabs";
 
 export function ShellIcon({ size = 14 }: { size?: number }) {
   return (

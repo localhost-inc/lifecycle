@@ -37,6 +37,7 @@ In V1, the environment is represented on the workspace record rather than as a s
 ```typescript
 interface WorkspaceProvider {
   createWorkspace(input + manifest_json? + manifest_fingerprint?) → { workspace, worktree_path }
+  renameWorkspace(workspace_id, name) → workspace
   startServices(workspace + manifest_json + manifest_fingerprint) → service_statuses
   healthCheck(manifest.environment[kind=service].health_check) → pass/fail per service
   stopServices(service_names[]) → void
@@ -44,14 +45,36 @@ interface WorkspaceProvider {
   sleep(workspace_id) → void
   wake(workspace + manifest_json + manifest_fingerprint) → void
   destroy(workspace_id) → void
+  getWorkspace(workspace_id) → workspace | null
+  getWorkspaceServices(workspace_id) → workspace_services[]
+  getWorkspaceSnapshot(workspace_id) → { workspace, services, terminals }
+  getWorkspaceRuntimeProjection(workspace_id) → { setup, environment_tasks, activity }
+  updateWorkspaceService(workspace_id, service, exposure, port_override?) → void
+  syncWorkspaceManifest(workspace_id, manifest_json?, manifest_fingerprint?) → void
   createTerminal(workspace_id, launch_type, harness_provider?, harness_session_id?) → terminal
+  listWorkspaceTerminals(workspace_id) → terminals[]
+  getTerminal(terminal_id) → terminal | null
+  renameTerminal(terminal_id, label) → terminal
+  saveTerminalAttachment(workspace_id, file_name, base64_data, media_type?) → attachment
   detachTerminal(terminal_id) → void
   killTerminal(terminal_id) → void
+  readWorkspaceFile(workspace_id, file_path) → file
+  writeWorkspaceFile(workspace_id, file_path, content) → file
+  listWorkspaceFiles(workspace_id) → file_entries[]
+  openWorkspaceFile(workspace_id, file_path) → void
   exposePort(workspace_id, service, port) → access_url | null
   getGitStatus(workspace_id) → git_status
+  getGitScopePatch(workspace_id, scope) → unified_diff
   getGitChangesPatch(workspace_id) → unified_diff
   getGitDiff(workspace_id, file_path, scope) → unified_diff
   listGitLog(workspace_id, limit) → git_log_entries
+  listGitPullRequests(workspace_id) → pull_request_list
+  getGitPullRequest(workspace_id, pull_request_number) → pull_request_detail
+  getCurrentGitPullRequest(workspace_id) → branch_pull_request
+  getGitBaseRef(workspace_id) → base_ref | null
+  getGitRefDiffPatch(workspace_id, base_ref, head_ref) → unified_diff
+  getGitPullRequestPatch(workspace_id, pull_request_number) → unified_diff
+  getGitCommitPatch(workspace_id, sha) → commit_diff
   stageGitFiles(workspace_id, file_paths[]) → void
   unstageGitFiles(workspace_id, file_paths[]) → void
   commitGit(workspace_id, message) → commit_result
@@ -68,6 +91,8 @@ Provider-specific runtime detail should not be stuffed into a generic `mode_stat
 3. Local create/start/wake flows must carry the exact manifest content plus `manifest_fingerprint`; the provider must not infer lifecycle state from stale cached service rows.
 4. Future archive/unarchive flows are workspace-lifecycle operations that must drive the environment down or back up as needed.
 5. The provider boundary should expose one coherent workspace-scoped API even when the underlying behavior targets the environment or a service within it.
+6. Workspace-scoped read models such as runtime projection, snapshot, terminal lists, and workspace file access should also route through the provider when they materially depend on the authoritative execution context.
+7. Aggregate control-plane queries such as "list all workspaces by project" may stay outside the provider as long as they operate on normalized domain records rather than provider-specific transport rows.
 
 ## Execution Model
 
@@ -89,6 +114,11 @@ Normative event and hook rules live in [events.md](./events.md).
 3. Commands may expose `before|after|failed` hooks, but blocking hooks remain Lifecycle-owned until a plugin trust model exists.
 4. High-frequency terminal rendering, input, and output stay inside the native terminal host rather than the generic event foundation.
 
+Desktop-only native terminal surface synchronization and app-launch helpers stay outside the provider boundary:
+
+1. native surface geometry, visibility, focus, font, and theme sync are presentation concerns
+2. app-launch helpers such as "open in VS Code" are host-shell integration, not provider authority
+
 Execution-state facts should follow the thing that changed:
 
 1. workspace facts describe durable workspace lifecycle and metadata
@@ -104,10 +134,11 @@ Terminal control stays split between typed lifecycle mutations and desktop surfa
 3. Session runtime stays provider-owned:
    - local mode runs a native libghostty-owned session on the host machine
    - cloud mode runs a sandbox-owned PTY session and may add a shared-session multiplexer
-4. When the desktop app has a native terminal host available, both local and cloud terminals should render through that host; cloud attach transport may use a provider-specific bridge or proxy path rather than reviving a browser renderer contract inside the main app.
-5. Desktop-only geometry, visibility, focus, theme, and font synchronization for native surfaces stay outside the provider interface.
-6. `detachTerminal(terminal_id)` hides the active surface without terminating the running session.
-7. `killTerminal(terminal_id)` is the only normal terminal-level action that intentionally ends a live session.
+4. Terminal metadata mutations such as rename and workspace-scoped attachment persistence are also provider-owned terminal operations.
+5. When the desktop app has a native terminal host available, both local and cloud terminals should render through that host; cloud attach transport may use a provider-specific bridge or proxy path rather than reviving a browser renderer contract inside the main app.
+6. Desktop-only geometry, visibility, focus, theme, and font synchronization for native surfaces stay outside the provider interface.
+7. `detachTerminal(terminal_id)` hides the active surface without terminating the running session.
+8. `killTerminal(terminal_id)` is the only normal terminal-level action that intentionally ends a live session.
 
 ## Mode, Authority, and Aggregation
 

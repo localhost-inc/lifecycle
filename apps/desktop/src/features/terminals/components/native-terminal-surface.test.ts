@@ -5,6 +5,7 @@ import {
   resolveNativeTerminalSurfaceSyncResultAction,
   resolveNativeTerminalSurfaceInteraction,
   scheduleNativeTerminalSurfaceLeaseHide,
+  shouldHideNativeTerminalSurfaceForTabDrag,
   shouldShowNativeTerminalSurface,
 } from "./native-terminal-surface";
 
@@ -40,7 +41,6 @@ describe("resolveNativeTerminalSurfaceInteraction", () => {
       resolveNativeTerminalSurfaceInteraction({
         focused: true,
         shellResizeInProgress: true,
-        tabDragInProgress: false,
         visible: true,
       }),
     ).toEqual({
@@ -54,7 +54,6 @@ describe("resolveNativeTerminalSurfaceInteraction", () => {
       resolveNativeTerminalSurfaceInteraction({
         focused: true,
         shellResizeInProgress: false,
-        tabDragInProgress: false,
         visible: true,
       }),
     ).toEqual({
@@ -63,12 +62,11 @@ describe("resolveNativeTerminalSurfaceInteraction", () => {
     });
   });
 
-  test("keeps the native surface click-through while a tab drag is active", () => {
+  test("keeps background terminals visible but click-through", () => {
     expect(
       resolveNativeTerminalSurfaceInteraction({
-        focused: true,
+        focused: false,
         shellResizeInProgress: false,
-        tabDragInProgress: true,
         visible: true,
       }),
     ).toEqual({
@@ -76,19 +74,37 @@ describe("resolveNativeTerminalSurfaceInteraction", () => {
       pointerPassthrough: true,
     });
   });
+});
 
-  test("keeps background terminals visible but click-through", () => {
+describe("shouldHideNativeTerminalSurfaceForTabDrag", () => {
+  test("hides the native surface while a tab drag is active over a live terminal pane", () => {
     expect(
-      resolveNativeTerminalSurfaceInteraction({
-        focused: false,
-        shellResizeInProgress: false,
-        tabDragInProgress: false,
-        visible: true,
+      shouldHideNativeTerminalSurfaceForTabDrag({
+        hasLiveSession: true,
+        height: 640,
+        tabDragInProgress: true,
+        width: 960,
       }),
-    ).toEqual({
-      focused: false,
-      pointerPassthrough: true,
-    });
+    ).toBeTrue();
+  });
+
+  test("keeps the native surface eligible when the pane cannot show a live session", () => {
+    expect(
+      shouldHideNativeTerminalSurfaceForTabDrag({
+        hasLiveSession: false,
+        height: 640,
+        tabDragInProgress: true,
+        width: 960,
+      }),
+    ).toBeFalse();
+    expect(
+      shouldHideNativeTerminalSurfaceForTabDrag({
+        hasLiveSession: true,
+        height: 1,
+        tabDragInProgress: true,
+        width: 960,
+      }),
+    ).toBeFalse();
   });
 });
 

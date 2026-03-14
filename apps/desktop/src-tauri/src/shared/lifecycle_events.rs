@@ -1,6 +1,7 @@
 use crate::capabilities::workspaces::query::{ServiceRecord, TerminalRecord};
+use crate::WorkspaceControllerRegistryHandle;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use uuid::Uuid;
 
@@ -126,6 +127,39 @@ pub enum LifecycleEvent {
     },
 }
 
+impl LifecycleEvent {
+    pub fn workspace_id(&self) -> &str {
+        match self {
+            Self::WorkspaceStatusChanged { workspace_id, .. }
+            | Self::WorkspaceRenamed { workspace_id, .. }
+            | Self::WorkspaceDeleted { workspace_id }
+            | Self::ServiceStatusChanged { workspace_id, .. }
+            | Self::ServiceConfigurationChanged { workspace_id, .. }
+            | Self::WorkspaceSetupProgress { workspace_id, .. }
+            | Self::WorkspaceManifestSynced { workspace_id, .. }
+            | Self::EnvironmentTaskProgress { workspace_id, .. }
+            | Self::TerminalCreated { workspace_id, .. }
+            | Self::TerminalStatusChanged { workspace_id, .. }
+            | Self::TerminalRenamed { workspace_id, .. }
+            | Self::TerminalHarnessPromptSubmitted { workspace_id, .. }
+            | Self::TerminalHarnessTurnCompleted { workspace_id, .. }
+            | Self::GitStatusChanged { workspace_id, .. }
+            | Self::GitHeadChanged { workspace_id, .. }
+            | Self::GitLogChanged { workspace_id, .. } => workspace_id,
+        }
+    }
+
+    pub fn contributes_to_activity(&self) -> bool {
+        match self {
+            Self::WorkspaceSetupProgress { event_kind, .. }
+            | Self::EnvironmentTaskProgress { event_kind, .. } => {
+                !matches!(event_kind.as_str(), "stdout" | "stderr")
+            }
+            _ => true,
+        }
+    }
+}
+
 pub fn publish_lifecycle_event(app: &AppHandle, event: LifecycleEvent) {
     let occurred_at = OffsetDateTime::now_utc()
         .format(&Rfc3339)
@@ -135,6 +169,12 @@ pub fn publish_lifecycle_event(app: &AppHandle, event: LifecycleEvent) {
         occurred_at,
         event,
     };
+
+    if let Some(workspace_controllers) = app.try_state::<WorkspaceControllerRegistryHandle>() {
+        workspace_controllers
+            .inner()
+            .record_lifecycle_envelope(envelope.event.workspace_id(), envelope.clone());
+    }
 
     let _ = app.emit(LIFECYCLE_EVENT_NAME, envelope);
 }

@@ -1,6 +1,6 @@
 import { isTauri } from "@tauri-apps/api/core";
 import type { TerminalRecord, TerminalStatus } from "@lifecycle/contracts";
-import { invokeTauri } from "../../lib/tauri-error";
+import { getWorkspaceProvider } from "../../lib/workspace-provider";
 
 export type HarnessProvider = "claude" | "codex";
 const TERMINAL_RUNTIME_UNAVAILABLE_MESSAGE = "Terminal runtime requires the Tauri desktop shell.";
@@ -32,31 +32,6 @@ export interface SavedTerminalAttachment {
   relativePath: string;
 }
 
-export interface NativeTerminalTheme {
-  background: string;
-  cursorColor: string;
-  foreground: string;
-  palette: string[];
-  selectionBackground: string;
-  selectionForeground: string;
-}
-
-export interface SyncNativeTerminalSurfaceInput {
-  appearance: "dark" | "light";
-  focused: boolean;
-  fontFamily: string;
-  fontSize: number;
-  height: number;
-  pointerPassthrough: boolean;
-  scaleFactor: number;
-  terminalId: string;
-  theme: NativeTerminalTheme;
-  visible: boolean;
-  width: number;
-  x: number;
-  y: number;
-}
-
 function requireNativeTerminalRuntime(): void {
   if (!isTauri()) {
     throw new Error(TERMINAL_RUNTIME_UNAVAILABLE_MESSAGE);
@@ -69,7 +44,7 @@ export async function listWorkspaceTerminals(workspaceId: string): Promise<Termi
     return [];
   }
 
-  return invokeTauri<TerminalRecord[]>("list_workspace_terminals", { workspaceId });
+  return getWorkspaceProvider().listWorkspaceTerminals(workspaceId);
 }
 
 export async function getTerminal(terminalId: string): Promise<TerminalRecord | null> {
@@ -78,13 +53,13 @@ export async function getTerminal(terminalId: string): Promise<TerminalRecord | 
     return null;
   }
 
-  return invokeTauri<TerminalRecord | null>("get_terminal", { terminalId });
+  return getWorkspaceProvider().getTerminal(terminalId);
 }
 
 export async function createTerminal(input: CreateTerminalInput): Promise<TerminalRecord> {
   requireNativeTerminalRuntime();
 
-  return invokeTauri<TerminalRecord>("create_terminal", {
+  return getWorkspaceProvider().createTerminal({
     launchType: input.launchType,
     harnessProvider: input.launchType === "harness" ? input.harnessProvider : null,
     harnessSessionId:
@@ -101,41 +76,7 @@ export async function renameTerminal(terminalId: string, label: string): Promise
 
   requireNativeTerminalRuntime();
 
-  return invokeTauri<TerminalRecord>("rename_terminal", { terminalId, label: normalizedLabel });
-}
-
-export async function syncNativeTerminalSurface(
-  input: SyncNativeTerminalSurfaceInput,
-): Promise<void> {
-  if (!isTauri()) {
-    return;
-  }
-
-  await invokeTauri<void>("sync_native_terminal_surface", {
-    input: {
-      appearance: input.appearance,
-      focused: input.focused,
-      fontFamily: input.fontFamily,
-      fontSize: input.fontSize,
-      height: input.height,
-      pointerPassthrough: input.pointerPassthrough,
-      scaleFactor: input.scaleFactor,
-      terminalId: input.terminalId,
-      theme: input.theme,
-      visible: input.visible,
-      width: input.width,
-      x: input.x,
-      y: input.y,
-    },
-  });
-}
-
-export async function hideNativeTerminalSurface(terminalId: string): Promise<void> {
-  if (!isTauri()) {
-    return;
-  }
-
-  await invokeTauri<void>("hide_native_terminal_surface", { terminalId });
+  return getWorkspaceProvider().renameTerminal(terminalId, normalizedLabel);
 }
 
 export async function saveTerminalAttachment(
@@ -145,22 +86,17 @@ export async function saveTerminalAttachment(
     throw new Error("Image paste and drop are only available in the desktop app.");
   }
 
-  return invokeTauri<SavedTerminalAttachment>("save_terminal_attachment", {
-    base64Data: input.base64Data,
-    fileName: input.fileName,
-    mediaType: input.mediaType ?? null,
-    workspaceId: input.workspaceId,
-  });
+  return getWorkspaceProvider().saveTerminalAttachment(input);
 }
 
 export async function detachTerminal(terminalId: string): Promise<void> {
   requireNativeTerminalRuntime();
 
-  await invokeTauri<void>("detach_terminal", { terminalId });
+  await getWorkspaceProvider().detachTerminal(terminalId);
 }
 
 export async function killTerminal(terminalId: string): Promise<void> {
   requireNativeTerminalRuntime();
 
-  await invokeTauri<void>("kill_terminal", { terminalId });
+  await getWorkspaceProvider().killTerminal(terminalId);
 }

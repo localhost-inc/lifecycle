@@ -68,15 +68,6 @@ pub(crate) fn insert_terminal_record(
         .ok_or_else(|| LifecycleError::Database("terminal insert did not persist".to_string()))
 }
 
-pub(crate) fn delete_terminal_record(
-    db_path: &str,
-    terminal_id: &str,
-) -> Result<(), LifecycleError> {
-    let conn = open_db(db_path)?;
-    conn.execute("DELETE FROM terminal WHERE id = ?1", params![terminal_id])?;
-    Ok(())
-}
-
 pub(crate) fn update_terminal_state(
     db_path: &str,
     terminal_id: &str,

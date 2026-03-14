@@ -25,6 +25,12 @@ import {
 } from "./surface-launch-actions";
 import { WorkspaceSurfacePanels } from "./workspace-surface-panels";
 import {
+  WorkspaceSurfacePaneDropOverlay,
+  resolveWorkspaceSurfacePaneDropStateFromGeometry,
+  type WorkspaceSurfaceActiveTabDropState,
+  type WorkspaceSurfacePaneDropGeometry,
+} from "./workspace-surface-drop-zones";
+import {
   WorkspaceSurfaceTabBar,
   renderWorkspaceSurfaceDefaultTabLeading,
   type WorkspaceSurfaceTabBarDragPreview,
@@ -40,14 +46,13 @@ import {
   reorderWorkspaceTabKeys,
   type WorkspaceSurfaceTab,
   type WorkspaceTabPlacement,
-} from "./workspace-surface-logic";
+} from "./workspace-surface-tabs";
 
 const MIN_WORKSPACE_PANE_SIZE = 240;
-const PANE_DROP_CENTER_ZONE_RATIO = 0.18;
 const PANE_RESIZE_STEP_PX = 32;
 
 interface WorkspaceSurfacePaneTreeProps {
-  activePaneId: string | null;
+  activePaneId: string;
   creatingSelection: "shell" | HarnessProvider | null;
   documents: WorkspaceSurfaceDocument[];
   fileSessionsByTabKey: Record<string, FileViewerSessionState>;
@@ -65,201 +70,25 @@ interface WorkspaceSurfacePaneTreeProps {
     placement?: WorkspaceTabPlacement,
     splitDirection?: "column" | "row",
     splitPlacement?: "after" | "before",
+    splitRatio?: number,
   ) => void;
   onOpenFile: (filePath: string) => void;
   onRenameRuntimeTab: (terminalId: string, label: string) => Promise<unknown> | unknown;
   onSelectPane: (paneId: string) => void;
   onSelectTab: (paneId: string, key: string) => void;
-  onSetPaneTabOrder: (paneId: string, keys: string[]) => void;
+  onReconcilePaneVisibleTabOrder: (paneId: string, keys: string[]) => void;
   onSetSplitRatio: (splitId: string, ratio: number) => void;
   onSplitPane: (paneId: string, direction: "column" | "row") => void;
   onTabViewStateChange: (tabKey: string, viewState: WorkspaceSurfaceTabViewState | null) => void;
   paneCount: number;
-  resolvedActiveTabKeyByPaneId: Record<string, string | null>;
+  renderedActiveTabKeyByPaneId: Record<string, string | null>;
   rootPane: WorkspacePaneNode;
   surfaceActions: SurfaceLaunchAction[];
   terminals: TerminalRecord[];
   visibleTabsByPaneId: Record<string, WorkspaceSurfaceTab[]>;
   viewStateByTabKey: Record<string, WorkspaceSurfaceTabViewState>;
-  waitingForRuntimePaneIds: ReadonlySet<string>;
+  paneIdsWaitingForSelectedRuntimeTab: ReadonlySet<string>;
   workspaceId: string;
-}
-
-interface WorkspaceSurfaceActiveTabDrag {
-  drag: WorkspaceSurfaceTabDrag;
-  intent: WorkspaceSurfacePaneDropIntent | null;
-}
-
-interface WorkspaceSurfacePaneInsertTarget {
-  kind: "insert";
-  paneId: string;
-  placement: WorkspaceTabPlacement | null;
-  surface: "body" | "tab-bar";
-  targetKey: string | null;
-}
-
-interface WorkspaceSurfacePaneSplitTarget {
-  kind: "split";
-  paneId: string;
-  splitDirection: "column" | "row";
-  splitPlacement: "after" | "before";
-}
-
-type WorkspaceSurfacePaneDropIntent =
-  | WorkspaceSurfacePaneInsertTarget
-  | WorkspaceSurfacePaneSplitTarget
-  | {
-      kind: "reorder";
-      paneId: string;
-      placement: WorkspaceTabPlacement;
-      targetKey: string;
-    };
-
-interface WorkspaceSurfacePaneRect {
-  bottom: number;
-  height: number;
-  left: number;
-  right: number;
-  top: number;
-  width: number;
-}
-
-interface WorkspaceSurfacePaneTabRect {
-  key: string;
-  left: number;
-  width: number;
-}
-
-interface ResolveWorkspaceSurfacePaneDropTargetInput {
-  candidatePaneId: string;
-  draggedKey: string;
-  paneId: string;
-  paneRect: WorkspaceSurfacePaneRect;
-  pointerOverTabBar: boolean;
-  tabRects?: readonly WorkspaceSurfacePaneTabRect[];
-  pointerX: number;
-  pointerY: number;
-}
-
-export function resolveWorkspaceSurfaceTabStripDropTarget({
-  draggedKey,
-  pointerX,
-  tabRects,
-}: {
-  draggedKey: string;
-  pointerX: number;
-  tabRects: readonly WorkspaceSurfacePaneTabRect[];
-}): { placement: WorkspaceTabPlacement; targetKey: string } | null {
-  const orderedRects = [...tabRects]
-    .filter((tabRect) => tabRect.key !== draggedKey)
-    .sort((left, right) => left.left - right.left);
-
-  if (orderedRects.length === 0) {
-    return null;
-  }
-
-  let trailingTabKey: string | null = null;
-  for (const tabRect of orderedRects) {
-    trailingTabKey = tabRect.key;
-    if (pointerX < tabRect.left + tabRect.width / 2) {
-      return {
-        placement: "before",
-        targetKey: tabRect.key,
-      };
-    }
-  }
-
-  return trailingTabKey
-    ? {
-        placement: "after",
-        targetKey: trailingTabKey,
-      }
-    : null;
-}
-
-export function resolveWorkspaceSurfacePaneDropIntent({
-  candidatePaneId,
-  draggedKey,
-  paneId,
-  paneRect,
-  pointerOverTabBar,
-  tabRects = [],
-  pointerX,
-  pointerY,
-}: ResolveWorkspaceSurfacePaneDropTargetInput): WorkspaceSurfacePaneDropIntent | null {
-  if (
-    pointerX < paneRect.left ||
-    pointerX > paneRect.right ||
-    pointerY < paneRect.top ||
-    pointerY > paneRect.bottom
-  ) {
-    return null;
-  }
-
-  if (pointerOverTabBar) {
-    const stripTarget = resolveWorkspaceSurfaceTabStripDropTarget({
-      draggedKey,
-      pointerX,
-      tabRects,
-    });
-    if (candidatePaneId === paneId) {
-      return stripTarget
-        ? {
-            kind: "reorder",
-            paneId: candidatePaneId,
-            placement: stripTarget.placement,
-            targetKey: stripTarget.targetKey,
-          }
-        : null;
-    }
-
-    return {
-      kind: "insert",
-      paneId: candidatePaneId,
-      placement: stripTarget?.placement ?? null,
-      surface: "tab-bar",
-      targetKey: stripTarget?.targetKey ?? null,
-    };
-  }
-
-  if (paneRect.width <= 0 || paneRect.height <= 0) {
-    return null;
-  }
-
-  const relativePointerX = (pointerX - paneRect.left) / paneRect.width;
-  const relativePointerY = (pointerY - paneRect.top) / paneRect.height;
-  const centerDistanceX = Math.abs(relativePointerX - 0.5);
-  const centerDistanceY = Math.abs(relativePointerY - 0.5);
-  const withinCenterZone =
-    candidatePaneId !== paneId &&
-    centerDistanceX <= PANE_DROP_CENTER_ZONE_RATIO &&
-    centerDistanceY <= PANE_DROP_CENTER_ZONE_RATIO;
-
-  if (withinCenterZone) {
-    return {
-      kind: "insert",
-      paneId: candidatePaneId,
-      placement: null,
-      surface: "body",
-      targetKey: null,
-    };
-  }
-
-  if (centerDistanceX > centerDistanceY) {
-    return {
-      kind: "split",
-      paneId: candidatePaneId,
-      splitDirection: "row",
-      splitPlacement: relativePointerX < 0.5 ? "before" : "after",
-    };
-  }
-
-  return {
-    kind: "split",
-    paneId: candidatePaneId,
-    splitDirection: "column",
-    splitPlacement: relativePointerY < 0.5 ? "before" : "after",
-  };
 }
 
 function PaneControlButton({
@@ -549,7 +378,7 @@ function WorkspaceSurfaceSplitNode({
       className={`relative flex min-h-0 flex-1 overflow-hidden ${direction === "row" ? "flex-row" : "flex-col"}`}
     >
       <div
-        className="min-h-0 min-w-0 shrink-0 overflow-hidden"
+        className="flex min-h-0 min-w-0 shrink-0 overflow-hidden"
         style={
           direction === "row"
             ? { flexBasis: `${clampedRatio * 100}%` }
@@ -566,7 +395,7 @@ function WorkspaceSurfaceSplitNode({
           ratio={clampedRatio}
         />
       ) : null}
-      <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{children[1]}</div>
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">{children[1]}</div>
       {direction === "row" ? (
         <ResizeHandle
           direction={direction}
@@ -581,7 +410,7 @@ function WorkspaceSurfaceSplitNode({
 }
 
 function getWorkspaceSurfaceTabBarDragPreview(
-  activeDrag: WorkspaceSurfaceActiveTabDrag | null,
+  activeDrag: WorkspaceSurfaceActiveTabDropState | null,
   paneId: string,
 ): WorkspaceSurfaceTabBarDragPreview | null {
   if (!activeDrag) {
@@ -608,34 +437,6 @@ function getWorkspaceSurfaceTabBarDragPreview(
   }
 
   return null;
-}
-
-function PaneDropPreview({ intent }: { intent: WorkspaceSurfacePaneDropIntent | null }) {
-  if (!intent || intent.kind === "reorder") {
-    return null;
-  }
-
-  const baseClassName =
-    "pointer-events-none absolute z-10 border border-[var(--ring)]/70 bg-[color-mix(in_srgb,var(--ring),transparent_84%)] shadow-[0_0_0_1px_color-mix(in_srgb,var(--ring),transparent_55%)]";
-
-  if (intent.kind === "insert" && intent.surface === "body") {
-    return <div className={`${baseClassName} inset-3`} />;
-  }
-
-  if (intent.kind !== "split") {
-    return null;
-  }
-
-  const splitClassName =
-    intent.splitDirection === "row"
-      ? intent.splitPlacement === "before"
-        ? "inset-y-3 left-3 w-[calc(50%-12px)]"
-        : "inset-y-3 right-3 w-[calc(50%-12px)]"
-      : intent.splitPlacement === "before"
-        ? "inset-x-3 top-3 h-[calc(50%-12px)]"
-        : "inset-x-3 bottom-3 h-[calc(50%-12px)]";
-
-  return <div className={`${baseClassName} ${splitClassName}`} />;
 }
 
 function WorkspaceSurfaceTabDragGhost({
@@ -693,21 +494,24 @@ export function WorkspaceSurfacePaneTree({
   onRenameRuntimeTab,
   onSelectPane,
   onSelectTab,
-  onSetPaneTabOrder,
+  onReconcilePaneVisibleTabOrder,
   onSetSplitRatio,
   onSplitPane,
   onTabViewStateChange,
   paneCount,
-  resolvedActiveTabKeyByPaneId,
+  renderedActiveTabKeyByPaneId,
   rootPane,
   surfaceActions,
   terminals,
   visibleTabsByPaneId,
   viewStateByTabKey,
-  waitingForRuntimePaneIds,
+  paneIdsWaitingForSelectedRuntimeTab,
   workspaceId,
 }: WorkspaceSurfacePaneTreeProps) {
-  const [activeTabDrag, setActiveTabDrag] = useState<WorkspaceSurfaceActiveTabDrag | null>(null);
+  const [activeTabDrag, setActiveTabDrag] = useState<WorkspaceSurfaceActiveTabDropState | null>(
+    null,
+  );
+  const activeTabDragRef = useRef<WorkspaceSurfaceActiveTabDropState | null>(null);
   const paneElementsRef = useRef(new Map<string, HTMLElement>());
   const draggedTab =
     activeTabDrag === null
@@ -725,32 +529,18 @@ export function WorkspaceSurfacePaneTree({
     paneElementsRef.current.delete(paneId);
   }, []);
 
-  const resolveDropIntent = useCallback((drag: WorkspaceSurfaceTabDrag) => {
-    if (typeof document === "undefined") {
-      return null;
-    }
+  const getPaneDropGeometries = useCallback((): WorkspaceSurfacePaneDropGeometry[] => {
+    return [...paneElementsRef.current.entries()].flatMap(([paneId, paneElement]) => {
+      const paneRect = paneElement.getBoundingClientRect();
+      if (paneRect.width <= 0 || paneRect.height <= 0) {
+        return [];
+      }
 
-    const pointedElement = document.elementFromPoint(drag.pointerX, drag.pointerY);
-    if (!(pointedElement instanceof Element)) {
-      return null;
-    }
-
-    const paneElement = pointedElement.closest<HTMLElement>("[data-workspace-pane-id]");
-    if (!paneElement) {
-      return null;
-    }
-
-    const candidatePaneId = paneElement.dataset.workspacePaneId;
-    if (!candidatePaneId || !paneElementsRef.current.has(candidatePaneId)) {
-      return null;
-    }
-
-    const paneRect = paneElement.getBoundingClientRect();
-
-    const tabBarElement = pointedElement.closest<HTMLElement>("[data-workspace-tab-bar]") ?? null;
-    const pointerOverTabBar = Boolean(tabBarElement && paneElement.contains(tabBarElement));
-    const tabRects =
-      pointerOverTabBar && tabBarElement
+      const bodyElement = paneElement.querySelector<HTMLElement>("[data-workspace-pane-body]");
+      const tabBarElement = paneElement.querySelector<HTMLElement>("[data-workspace-tab-bar]");
+      const bodyRect = bodyElement?.getBoundingClientRect();
+      const tabBarRect = tabBarElement?.getBoundingClientRect();
+      const tabRects = tabBarElement
         ? [...tabBarElement.querySelectorAll<HTMLElement>("[data-workspace-tab-key]")]
             .filter((element) => paneElement.contains(element))
             .map((element) => ({
@@ -761,41 +551,92 @@ export function WorkspaceSurfacePaneTree({
             .filter((tabRect) => tabRect.key.length > 0)
         : [];
 
-    return resolveWorkspaceSurfacePaneDropIntent({
-      candidatePaneId,
-      draggedKey: drag.tabKey,
-      paneId: drag.paneId,
-      paneRect: {
-        bottom: paneRect.bottom,
-        height: paneRect.height,
-        left: paneRect.left,
-        right: paneRect.right,
-        top: paneRect.top,
-        width: paneRect.width,
-      },
-      pointerOverTabBar,
-      pointerX: drag.pointerX,
-      pointerY: drag.pointerY,
-      tabRects,
+      return [
+        {
+          ...(bodyRect
+            ? {
+                bodyRect: {
+                  bottom: bodyRect.bottom,
+                  height: bodyRect.height,
+                  left: bodyRect.left,
+                  right: bodyRect.right,
+                  top: bodyRect.top,
+                  width: bodyRect.width,
+                },
+              }
+            : {}),
+          paneId,
+          paneRect: {
+            bottom: paneRect.bottom,
+            height: paneRect.height,
+            left: paneRect.left,
+            right: paneRect.right,
+            top: paneRect.top,
+            width: paneRect.width,
+          },
+          ...(tabBarRect
+            ? {
+                tabBarRect: {
+                  bottom: tabBarRect.bottom,
+                  height: tabBarRect.height,
+                  left: tabBarRect.left,
+                  right: tabBarRect.right,
+                  top: tabBarRect.top,
+                  width: tabBarRect.width,
+                },
+              }
+            : {}),
+          ...(tabRects.length > 0 ? { tabRects } : {}),
+        },
+      ];
     });
   }, []);
+
+  const resolveDropIntent = useCallback(
+    (drag: WorkspaceSurfaceTabDrag) => {
+      const paneGeometries = getPaneDropGeometries();
+      const { hoveredPaneId, intent } = resolveWorkspaceSurfacePaneDropStateFromGeometry({
+        draggedKey: drag.tabKey,
+        paneGeometries,
+        paneId: drag.paneId,
+        pointerX: drag.pointerX,
+        pointerY: drag.pointerY,
+      });
+      return {
+        hoveredPaneId,
+        intent,
+        paneGeometries,
+      };
+    },
+    [getPaneDropGeometries],
+  );
 
   const handleTabDrag = useCallback(
     (drag: WorkspaceSurfaceTabDrag | null) => {
       if (!drag) {
+        activeTabDragRef.current = null;
         setActiveTabDrag(null);
         return;
       }
 
-      const intent = resolveDropIntent(drag);
-      setActiveTabDrag({ drag, intent });
+      const nextActiveDrag = {
+        drag,
+        ...resolveDropIntent(drag),
+      };
+      activeTabDragRef.current = nextActiveDrag;
+      setActiveTabDrag(nextActiveDrag);
     },
     [resolveDropIntent],
   );
 
   const handleTabDragCommit = useCallback(
     (drag: WorkspaceSurfaceTabDrag) => {
-      const intent = resolveDropIntent(drag);
+      const intent =
+        activeTabDragRef.current?.drag.tabKey === drag.tabKey &&
+        activeTabDragRef.current.drag.paneId === drag.paneId
+          ? activeTabDragRef.current.intent
+          : resolveDropIntent(drag).intent;
+      activeTabDragRef.current = null;
       setActiveTabDrag(null);
       if (!intent) {
         return;
@@ -803,7 +644,7 @@ export function WorkspaceSurfacePaneTree({
 
       if (intent.kind === "reorder") {
         const visibleTabKeys = (visibleTabsByPaneId[intent.paneId] ?? []).map((tab) => tab.key);
-        onSetPaneTabOrder(
+        onReconcilePaneVisibleTabOrder(
           intent.paneId,
           reorderWorkspaceTabKeys(visibleTabKeys, drag.tabKey, intent.targetKey, intent.placement),
         );
@@ -818,9 +659,10 @@ export function WorkspaceSurfacePaneTree({
         intent.kind === "insert" ? (intent.placement ?? undefined) : undefined,
         intent.kind === "split" ? intent.splitDirection : undefined,
         intent.kind === "split" ? intent.splitPlacement : undefined,
+        intent.kind === "split" ? intent.splitRatio : undefined,
       );
     },
-    [onMoveTabToPane, onSetPaneTabOrder, resolveDropIntent, visibleTabsByPaneId],
+    [onMoveTabToPane, onReconcilePaneVisibleTabOrder, resolveDropIntent, visibleTabsByPaneId],
   );
 
   const renderNode = useCallback(
@@ -839,7 +681,7 @@ export function WorkspaceSurfacePaneTree({
       }
 
       const visibleTabs = visibleTabsByPaneId[node.id] ?? [];
-      const activeTabKey = resolvedActiveTabKeyByPaneId[node.id] ?? null;
+      const activeTabKey = renderedActiveTabKeyByPaneId[node.id] ?? null;
       const activeTabViewState = activeTabKey ? (viewStateByTabKey[activeTabKey] ?? null) : null;
       const activeFileSessionState =
         activeTabKey && activeTabKey in fileSessionsByTabKey
@@ -864,7 +706,10 @@ export function WorkspaceSurfacePaneTree({
             }
           }}
         >
-          <div className="flex items-center gap-2 border-b border-[var(--border)]/80 bg-[color-mix(in_srgb,var(--panel),var(--background)_28%)] py-1">
+          <div
+            className="flex items-center gap-2 border-b border-[var(--border)]/80 bg-[color-mix(in_srgb,var(--panel),var(--background)_28%)] py-1"
+            data-workspace-pane-header
+          >
             <WorkspaceSurfaceTabBar
               activeTabKey={activeTabKey}
               dragPreview={tabBarDragPreview}
@@ -896,7 +741,7 @@ export function WorkspaceSurfacePaneTree({
             </div>
           </div>
 
-          <div className="relative flex min-h-0 flex-1 flex-col">
+          <div className="relative flex min-h-0 flex-1 flex-col" data-workspace-pane-body>
             <WorkspaceSurfacePanels
               activeFileSessionState={activeFileSessionState}
               activeTabKey={activeTabKey}
@@ -911,10 +756,9 @@ export function WorkspaceSurfacePaneTree({
               paneDragInProgress={activeTabDrag !== null}
               paneFocused={isActivePane}
               terminals={terminals}
-              waitingForActiveRuntimeTab={waitingForRuntimePaneIds.has(node.id)}
+              waitingForSelectedRuntimeTab={paneIdsWaitingForSelectedRuntimeTab.has(node.id)}
               workspaceId={workspaceId}
             />
-            <PaneDropPreview intent={paneDropIntent} />
           </div>
         </section>
       );
@@ -936,18 +780,18 @@ export function WorkspaceSurfacePaneTree({
       onRenameRuntimeTab,
       onSelectPane,
       onSelectTab,
-      onSetPaneTabOrder,
+      onReconcilePaneVisibleTabOrder,
       onSetSplitRatio,
       onSplitPane,
       onTabViewStateChange,
       paneCount,
-      resolvedActiveTabKeyByPaneId,
+      renderedActiveTabKeyByPaneId,
       setPaneElement,
       surfaceActions,
       terminals,
       visibleTabsByPaneId,
       viewStateByTabKey,
-      waitingForRuntimePaneIds,
+      paneIdsWaitingForSelectedRuntimeTab,
       workspaceId,
       handleTabDragCommit,
       handleTabDrag,
@@ -957,6 +801,7 @@ export function WorkspaceSurfacePaneTree({
   return (
     <>
       <div className="flex min-h-0 flex-1 overflow-hidden">{renderNode(rootPane)}</div>
+      <WorkspaceSurfacePaneDropOverlay activeDrag={activeTabDrag} />
       {activeTabDrag && draggedTab ? (
         <WorkspaceSurfaceTabDragGhost drag={activeTabDrag.drag} tab={draggedTab} />
       ) : null}

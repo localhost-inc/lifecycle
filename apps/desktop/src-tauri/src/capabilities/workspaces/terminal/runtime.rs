@@ -301,8 +301,3 @@ pub(crate) fn complete_native_terminal_exit(
     emit_terminal_status(app, &terminal);
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-}

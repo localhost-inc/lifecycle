@@ -73,31 +73,27 @@ describe("WorkspaceSurface layout", () => {
         onRenameRuntimeTab: async () => {},
         onSelectPane: () => {},
         onSelectTab: () => {},
-        onSetPaneTabOrder: () => {},
+        onReconcilePaneVisibleTabOrder: () => {},
         onSetSplitRatio: () => {},
         onSplitPane: () => {},
         onTabViewStateChange: () => {},
         paneCount: 2,
-        resolvedActiveTabKeyByPaneId: {
+        renderedActiveTabKeyByPaneId: {
           "pane-2": null,
           "pane-root": null,
         },
         rootPane: {
           direction: "row",
           first: {
-            activeTabKey: null,
             id: "pane-root",
             kind: "leaf",
-            tabOrderKeys: [],
           },
           id: "split-1",
           kind: "split",
           ratio: 0.5,
           second: {
-            activeTabKey: null,
             id: "pane-2",
             kind: "leaf",
-            tabOrderKeys: [],
           },
         },
         surfaceActions: [],
@@ -107,7 +103,7 @@ describe("WorkspaceSurface layout", () => {
           "pane-2": [],
           "pane-root": [],
         },
-        waitingForRuntimePaneIds: new Set<string>(),
+        paneIdsWaitingForSelectedRuntimeTab: new Set<string>(),
         workspaceId: "workspace-1",
       }),
     );
@@ -117,5 +113,83 @@ describe("WorkspaceSurface layout", () => {
     expect(markup).toContain('class="pointer-events-none absolute inset-y-0 z-20"');
     expect(markup).toContain('style="left:50%"');
     expect(markup).toContain("cursor-col-resize");
+  });
+
+  test("stretches nested split groups to fill their allocated split space", async () => {
+    const panelsModule = await import("./workspace-surface-panels");
+    const tabBarModule = await import("./workspace-surface-tab-bar");
+
+    spyOn(tabBarModule, "WorkspaceSurfaceTabBar").mockImplementation((() =>
+      createElement("div", { "data-slot": "workspace-tab-bar" }, "Tabs")) as never);
+    spyOn(panelsModule, "WorkspaceSurfacePanels").mockImplementation((() =>
+      createElement("div", { "data-slot": "workspace-surface-panels" }, "Panels")) as never);
+
+    const { WorkspaceSurfacePaneTree } = await import("./workspace-surface-pane-tree");
+    const markup = renderToStaticMarkup(
+      createElement(WorkspaceSurfacePaneTree, {
+        activePaneId: "pane-1",
+        creatingSelection: null,
+        documents: [],
+        fileSessionsByTabKey: {},
+        onCloseDocumentTab: () => {},
+        onClosePane: () => {},
+        onCloseRuntimeTab: async () => {},
+        onCreateTerminal: async () => {},
+        onFileSessionStateChange: () => {},
+        onLaunchSurface: () => {},
+        onMoveTabToPane: () => {},
+        onOpenFile: () => {},
+        onRenameRuntimeTab: async () => {},
+        onSelectPane: () => {},
+        onSelectTab: () => {},
+        onReconcilePaneVisibleTabOrder: () => {},
+        onSetSplitRatio: () => {},
+        onSplitPane: () => {},
+        onTabViewStateChange: () => {},
+        paneCount: 3,
+        renderedActiveTabKeyByPaneId: {
+          "pane-1": null,
+          "pane-2": null,
+          "pane-3": null,
+        },
+        rootPane: {
+          direction: "column",
+          first: {
+            direction: "row",
+            first: {
+              id: "pane-1",
+              kind: "leaf",
+            },
+            id: "split-top",
+            kind: "split",
+            ratio: 0.5,
+            second: {
+              id: "pane-2",
+              kind: "leaf",
+            },
+          },
+          id: "split-root",
+          kind: "split",
+          ratio: 0.5,
+          second: {
+            id: "pane-3",
+            kind: "leaf",
+          },
+        },
+        surfaceActions: [],
+        terminals: [],
+        viewStateByTabKey: {},
+        visibleTabsByPaneId: {
+          "pane-1": [],
+          "pane-2": [],
+          "pane-3": [],
+        },
+        paneIdsWaitingForSelectedRuntimeTab: new Set<string>(),
+        workspaceId: "workspace-1",
+      }),
+    );
+
+    expect(markup).toContain('class="flex min-h-0 min-w-0 shrink-0 overflow-hidden"');
+    expect(markup).toContain('class="flex min-h-0 min-w-0 flex-1 overflow-hidden"');
   });
 });

@@ -39,6 +39,13 @@ function createMockSource() {
         workspace: null,
       };
     },
+    async getWorkspaceRuntimeProjection() {
+      return {
+        activity: [],
+        environmentTasks: [],
+        setup: [],
+      };
+    },
     async getWorkspaceFile() {
       return {
         absolute_path: "/tmp/workspace/README.md",

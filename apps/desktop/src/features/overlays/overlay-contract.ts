@@ -1,6 +1,6 @@
 import type { GitBranchPullRequestResult, GitStatusResult } from "@lifecycle/contracts";
 import type { ResolvedTheme } from "@lifecycle/ui";
-import type { OpenInAppId } from "../workspaces/api";
+import type { OpenInAppId } from "../workspaces/open-in-api";
 import type { OpenInTarget } from "../workspaces/lib/open-in-targets";
 
 export interface HostedOverlayAnchor {

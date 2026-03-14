@@ -6,6 +6,7 @@ import {
   killTerminal,
   listWorkspaceTerminals,
   renameTerminal,
+  saveTerminalAttachment,
   terminalHasLiveSession,
 } from "./api";
 
@@ -43,6 +44,13 @@ describe("terminal api", () => {
     );
     await expectTerminalRuntimeError(detachTerminal("terminal_1"));
     await expectTerminalRuntimeError(killTerminal("terminal_1"));
+    await expect(
+      saveTerminalAttachment({
+        base64Data: "ZmFrZQ==",
+        fileName: "screenshot.png",
+        workspaceId: "workspace_1",
+      }),
+    ).rejects.toThrow("Image paste and drop are only available in the desktop app.");
   });
 
   test("normalizes labels before checking runtime support", async () => {

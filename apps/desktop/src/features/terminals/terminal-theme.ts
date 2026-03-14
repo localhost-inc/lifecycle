@@ -1,5 +1,5 @@
 import { themeAppearance, type ResolvedTheme } from "@lifecycle/ui";
-import type { NativeTerminalTheme } from "./api";
+import type { NativeTerminalTheme } from "./native-surface-api";
 
 interface TerminalThemeTokens {
   background: string;

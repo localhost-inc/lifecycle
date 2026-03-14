@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
-import type { OpenDocumentRequest } from "../components/workspace-surface-logic";
+import type { OpenDocumentRequest } from "../components/workspace-surface-requests";
 
 interface WorkspaceOpenRequestsContextValue {
   clearDocumentRequest: (workspaceId: string, requestId: string) => void;

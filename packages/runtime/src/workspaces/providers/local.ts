@@ -1,24 +1,36 @@
 import type {
   GitBranchPullRequestResult,
+  GitCommitDiffResult,
   GitCommitResult,
   GitDiffResult,
+  GitDiffScope,
   GitLogEntry,
+  GitPullRequestDetailResult,
   GitPullRequestListResult,
   GitPullRequestSummary,
   GitPushResult,
   GitStatusResult,
   ServiceRecord,
   TerminalRecord,
+  WorkspaceRecord,
 } from "@lifecycle/contracts";
 import type {
   LocalWorkspaceProviderCreateContext,
+  WorkspaceProviderFileReadResult,
+  WorkspaceProviderFileTreeEntry,
   WorkspaceProvider,
   WorkspaceProviderCreateTerminalInput,
   WorkspaceProviderCreateInput,
   WorkspaceProviderCreateResult,
   WorkspaceProviderGitDiffInput,
   WorkspaceProviderHealthResult,
+  WorkspaceProviderRuntimeProjectionResult,
+  WorkspaceProviderSaveTerminalAttachmentInput,
+  WorkspaceProviderSavedTerminalAttachment,
+  WorkspaceProviderSnapshotResult,
   WorkspaceProviderStartInput,
+  WorkspaceProviderSyncManifestInput,
+  WorkspaceProviderUpdateServiceInput,
   WorkspaceProviderWakeInput,
 } from "../../provider";
 
@@ -59,6 +71,7 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
         worktree_path: null,
         mode: "local",
         status: "idle",
+        manifest_fingerprint: input.manifestFingerprint ?? null,
         failure_reason: null,
         failed_at: null,
         created_by: null,
@@ -75,6 +88,13 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
   async startServices(input: WorkspaceProviderStartInput): Promise<ServiceRecord[]> {
     await this.invokeStartServices(input);
     return input.services;
+  }
+
+  async renameWorkspace(workspaceId: string, name: string): Promise<WorkspaceRecord> {
+    return this.invoke("rename_workspace", {
+      workspaceId,
+      name,
+    }) as Promise<WorkspaceRecord>;
   }
 
   async healthCheck(workspaceId: string): Promise<WorkspaceProviderHealthResult> {
@@ -105,6 +125,45 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
     await this.invoke("destroy_workspace", { workspaceId });
   }
 
+  async getWorkspace(workspaceId: string): Promise<WorkspaceRecord | null> {
+    return this.invoke("get_workspace_by_id", { workspaceId }) as Promise<WorkspaceRecord | null>;
+  }
+
+  async getWorkspaceServices(workspaceId: string): Promise<ServiceRecord[]> {
+    return this.invoke("get_workspace_services", { workspaceId }) as Promise<ServiceRecord[]>;
+  }
+
+  async getWorkspaceSnapshot(workspaceId: string): Promise<WorkspaceProviderSnapshotResult> {
+    return this.invoke("get_workspace_snapshot", {
+      workspaceId,
+    }) as Promise<WorkspaceProviderSnapshotResult>;
+  }
+
+  async getWorkspaceRuntimeProjection(
+    workspaceId: string,
+  ): Promise<WorkspaceProviderRuntimeProjectionResult> {
+    return this.invoke("get_workspace_runtime_projection", {
+      workspaceId,
+    }) as Promise<WorkspaceProviderRuntimeProjectionResult>;
+  }
+
+  async updateWorkspaceService(input: WorkspaceProviderUpdateServiceInput): Promise<void> {
+    await this.invoke("update_workspace_service", {
+      workspaceId: input.workspaceId,
+      serviceName: input.serviceName,
+      exposure: input.exposure,
+      portOverride: input.portOverride,
+    });
+  }
+
+  async syncWorkspaceManifest(input: WorkspaceProviderSyncManifestInput): Promise<void> {
+    await this.invoke("sync_workspace_manifest", {
+      workspaceId: input.workspaceId,
+      manifestJson: input.manifestJson,
+      manifestFingerprint: input.manifestFingerprint,
+    });
+  }
+
   async createTerminal(input: WorkspaceProviderCreateTerminalInput): Promise<TerminalRecord> {
     return this.invoke("create_terminal", {
       workspaceId: input.workspaceId,
@@ -112,6 +171,32 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
       harnessProvider: input.harnessProvider,
       harnessSessionId: input.harnessSessionId,
     }) as Promise<TerminalRecord>;
+  }
+
+  async listWorkspaceTerminals(workspaceId: string): Promise<TerminalRecord[]> {
+    return this.invoke("list_workspace_terminals", { workspaceId }) as Promise<TerminalRecord[]>;
+  }
+
+  async getTerminal(terminalId: string): Promise<TerminalRecord | null> {
+    return this.invoke("get_terminal", { terminalId }) as Promise<TerminalRecord | null>;
+  }
+
+  async renameTerminal(terminalId: string, label: string): Promise<TerminalRecord> {
+    return this.invoke("rename_terminal", {
+      terminalId,
+      label,
+    }) as Promise<TerminalRecord>;
+  }
+
+  async saveTerminalAttachment(
+    input: WorkspaceProviderSaveTerminalAttachmentInput,
+  ): Promise<WorkspaceProviderSavedTerminalAttachment> {
+    return this.invoke("save_terminal_attachment", {
+      base64Data: input.base64Data,
+      fileName: input.fileName,
+      mediaType: input.mediaType ?? null,
+      workspaceId: input.workspaceId,
+    }) as Promise<WorkspaceProviderSavedTerminalAttachment>;
   }
 
   async detachTerminal(terminalId: string): Promise<void> {
@@ -122,21 +207,61 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
     await this.invoke("kill_terminal", { terminalId });
   }
 
+  async readWorkspaceFile(
+    workspaceId: string,
+    filePath: string,
+  ): Promise<WorkspaceProviderFileReadResult> {
+    return this.invoke("read_workspace_file", {
+      workspaceId,
+      filePath,
+    }) as Promise<WorkspaceProviderFileReadResult>;
+  }
+
+  async writeWorkspaceFile(
+    workspaceId: string,
+    filePath: string,
+    content: string,
+  ): Promise<WorkspaceProviderFileReadResult> {
+    return this.invoke("write_workspace_file", {
+      workspaceId,
+      filePath,
+      content,
+    }) as Promise<WorkspaceProviderFileReadResult>;
+  }
+
+  async listWorkspaceFiles(workspaceId: string): Promise<WorkspaceProviderFileTreeEntry[]> {
+    return this.invoke("list_workspace_files", {
+      workspaceId,
+    }) as Promise<WorkspaceProviderFileTreeEntry[]>;
+  }
+
+  async openWorkspaceFile(workspaceId: string, filePath: string): Promise<void> {
+    await this.invoke("open_workspace_file", {
+      workspaceId,
+      filePath,
+    });
+  }
+
   async exposePort(workspaceId: string, serviceName: string, port: number): Promise<string | null> {
-    await this.invoke("update_workspace_service", {
+    await this.updateWorkspaceService({
       workspaceId,
       serviceName,
       exposure: "local",
       portOverride: port,
     });
-    const services = (await this.invoke("get_workspace_services", {
-      workspaceId,
-    })) as ServiceRecord[];
+    const services = await this.getWorkspaceServices(workspaceId);
     return services.find((service) => service.service_name === serviceName)?.preview_url ?? null;
   }
 
   async getGitStatus(workspaceId: string): Promise<GitStatusResult> {
     return this.invoke("get_workspace_git_status", { workspaceId }) as Promise<GitStatusResult>;
+  }
+
+  async getGitScopePatch(workspaceId: string, scope: GitDiffScope): Promise<string> {
+    return this.invoke("get_workspace_git_scope_patch", {
+      workspaceId,
+      scope,
+    }) as Promise<string>;
   }
 
   async getGitChangesPatch(workspaceId: string): Promise<string> {
@@ -164,10 +289,50 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
     }) as Promise<GitPullRequestListResult>;
   }
 
+  async getGitPullRequest(
+    workspaceId: string,
+    pullRequestNumber: number,
+  ): Promise<GitPullRequestDetailResult> {
+    return this.invoke("get_workspace_git_pull_request", {
+      workspaceId,
+      pullRequestNumber,
+    }) as Promise<GitPullRequestDetailResult>;
+  }
+
   async getCurrentGitPullRequest(workspaceId: string): Promise<GitBranchPullRequestResult> {
     return this.invoke("get_workspace_current_git_pull_request", {
       workspaceId,
     }) as Promise<GitBranchPullRequestResult>;
+  }
+
+  async getGitBaseRef(workspaceId: string): Promise<string | null> {
+    return this.invoke("get_workspace_git_base_ref", { workspaceId }) as Promise<string | null>;
+  }
+
+  async getGitRefDiffPatch(
+    workspaceId: string,
+    baseRef: string,
+    headRef: string,
+  ): Promise<string> {
+    return this.invoke("get_workspace_git_ref_diff_patch", {
+      workspaceId,
+      baseRef,
+      headRef,
+    }) as Promise<string>;
+  }
+
+  async getGitPullRequestPatch(workspaceId: string, pullRequestNumber: number): Promise<string> {
+    return this.invoke("get_workspace_git_pull_request_patch", {
+      workspaceId,
+      pullRequestNumber,
+    }) as Promise<string>;
+  }
+
+  async getGitCommitPatch(workspaceId: string, sha: string): Promise<GitCommitDiffResult> {
+    return this.invoke("get_workspace_git_commit_patch", {
+      workspaceId,
+      sha,
+    }) as Promise<GitCommitDiffResult>;
   }
 
   async stageGitFiles(workspaceId: string, filePaths: string[]): Promise<void> {

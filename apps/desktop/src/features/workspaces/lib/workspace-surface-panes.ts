@@ -7,12 +7,33 @@ import type {
 export const DEFAULT_WORKSPACE_PANE_ID = "pane-root";
 export const DEFAULT_WORKSPACE_SPLIT_RATIO = 0.5;
 
+export interface WorkspacePaneLayoutSnapshot {
+  firstPane: WorkspacePaneLeaf;
+  paneCount: number;
+  paneIds: string[];
+  panes: WorkspacePaneLeaf[];
+}
+
+export interface CloseWorkspacePaneLayoutResult {
+  didClose: boolean;
+  nextRoot: WorkspacePaneNode;
+  survivingPaneId: string | null;
+}
+
+export interface SplitWorkspacePaneLayoutResult {
+  didSplit: boolean;
+  nextRoot: WorkspacePaneNode;
+}
+
+export interface UpdateWorkspacePaneLayoutSplitResult {
+  didUpdate: boolean;
+  nextRoot: WorkspacePaneNode;
+}
+
 export function createWorkspacePane(id: string = DEFAULT_WORKSPACE_PANE_ID): WorkspacePaneLeaf {
   return {
-    activeTabKey: null,
     id,
     kind: "leaf",
-    tabOrderKeys: [],
   };
 }
 
@@ -24,58 +45,93 @@ export function isWorkspacePaneSplit(node: WorkspacePaneNode): node is Workspace
   return node.kind === "split";
 }
 
-export function collectWorkspacePaneLeaves(root: WorkspacePaneNode): WorkspacePaneLeaf[] {
+function collectWorkspacePaneLeaves(root: WorkspacePaneNode): WorkspacePaneLeaf[] {
   if (isWorkspacePaneLeaf(root)) {
     return [root];
   }
 
-  return [
-    ...collectWorkspacePaneLeaves(root.first),
-    ...collectWorkspacePaneLeaves(root.second),
-  ];
+  return [...collectWorkspacePaneLeaves(root.first), ...collectWorkspacePaneLeaves(root.second)];
 }
 
-export function countWorkspacePanes(root: WorkspacePaneNode): number {
-  return collectWorkspacePaneLeaves(root).length;
-}
-
-export function getFirstWorkspacePane(root: WorkspacePaneNode): WorkspacePaneLeaf {
-  return collectWorkspacePaneLeaves(root)[0] ?? createWorkspacePane();
-}
-
-export function findWorkspacePaneById(
-  root: WorkspacePaneNode,
-  paneId: string,
-): WorkspacePaneLeaf | null {
+function findWorkspacePaneLeaf(root: WorkspacePaneNode, paneId: string): WorkspacePaneLeaf | null {
   if (isWorkspacePaneLeaf(root)) {
     return root.id === paneId ? root : null;
   }
 
-  return findWorkspacePaneById(root.first, paneId) ?? findWorkspacePaneById(root.second, paneId);
+  return findWorkspacePaneLeaf(root.first, paneId) ?? findWorkspacePaneLeaf(root.second, paneId);
 }
 
-export function findWorkspacePaneContainingTab(
-  root: WorkspacePaneNode,
-  tabKey: string,
-): WorkspacePaneLeaf | null {
-  return collectWorkspacePaneLeaves(root).find((pane) => pane.tabOrderKeys.includes(tabKey)) ?? null;
-}
-
-export function updateWorkspacePane(
+function splitWorkspacePaneNode(
   root: WorkspacePaneNode,
   paneId: string,
-  updater: (pane: WorkspacePaneLeaf) => WorkspacePaneLeaf,
+  split: WorkspacePaneSplit,
 ): WorkspacePaneNode {
   if (isWorkspacePaneLeaf(root)) {
-    return root.id === paneId ? updater(root) : root;
+    return root.id === paneId ? split : root;
   }
 
-  const first = updateWorkspacePane(root.first, paneId, updater);
-  const second = updateWorkspacePane(root.second, paneId, updater);
+  const first = splitWorkspacePaneNode(root.first, paneId, split);
+  const second = splitWorkspacePaneNode(root.second, paneId, split);
   return first === root.first && second === root.second ? root : { ...root, first, second };
 }
 
-export function updateWorkspaceSplit(
+function closeWorkspacePaneNode(
+  root: WorkspacePaneNode,
+  paneId: string,
+): {
+  nextRoot: WorkspacePaneNode;
+  survivingPaneId: string | null;
+} {
+  if (isWorkspacePaneLeaf(root)) {
+    return {
+      nextRoot: root,
+      survivingPaneId: null,
+    };
+  }
+
+  if (isWorkspacePaneLeaf(root.first) && root.first.id === paneId) {
+    return {
+      nextRoot: root.second,
+      survivingPaneId: inspectWorkspacePaneLayout(root.second).firstPane.id,
+    };
+  }
+
+  if (isWorkspacePaneLeaf(root.second) && root.second.id === paneId) {
+    return {
+      nextRoot: root.first,
+      survivingPaneId: inspectWorkspacePaneLayout(root.first).firstPane.id,
+    };
+  }
+
+  const firstResult = closeWorkspacePaneNode(root.first, paneId);
+  if (firstResult.survivingPaneId !== null) {
+    return {
+      nextRoot: {
+        ...root,
+        first: firstResult.nextRoot,
+      },
+      survivingPaneId: firstResult.survivingPaneId,
+    };
+  }
+
+  const secondResult = closeWorkspacePaneNode(root.second, paneId);
+  if (secondResult.survivingPaneId !== null) {
+    return {
+      nextRoot: {
+        ...root,
+        second: secondResult.nextRoot,
+      },
+      survivingPaneId: secondResult.survivingPaneId,
+    };
+  }
+
+  return {
+    nextRoot: root,
+    survivingPaneId: null,
+  };
+}
+
+function updateWorkspaceSplitNode(
   root: WorkspacePaneNode,
   splitId: string,
   updater: (split: WorkspacePaneSplit) => WorkspacePaneSplit,
@@ -88,77 +144,89 @@ export function updateWorkspaceSplit(
     return updater(root);
   }
 
-  const first = updateWorkspaceSplit(root.first, splitId, updater);
-  const second = updateWorkspaceSplit(root.second, splitId, updater);
+  const first = updateWorkspaceSplitNode(root.first, splitId, updater);
+  const second = updateWorkspaceSplitNode(root.second, splitId, updater);
   return first === root.first && second === root.second ? root : { ...root, first, second };
 }
 
-export function splitWorkspacePane(
+export function inspectWorkspacePaneLayout(root: WorkspacePaneNode): WorkspacePaneLayoutSnapshot {
+  const panes = collectWorkspacePaneLeaves(root);
+  const firstPane = panes[0] ?? createWorkspacePane();
+
+  return {
+    firstPane,
+    paneCount: panes.length,
+    paneIds: panes.map((pane) => pane.id),
+    panes,
+  };
+}
+
+export function getWorkspacePane(
+  root: WorkspacePaneNode,
+  paneId: string,
+): WorkspacePaneLeaf | null {
+  return findWorkspacePaneLeaf(root, paneId);
+}
+
+export function requireWorkspacePane(root: WorkspacePaneNode, paneId: string): WorkspacePaneLeaf {
+  const pane = getWorkspacePane(root, paneId);
+  if (!pane) {
+    throw new Error(`Workspace pane not found in layout: ${paneId}`);
+  }
+
+  return pane;
+}
+
+export function hasWorkspacePane(root: WorkspacePaneNode, paneId: string): boolean {
+  return findWorkspacePaneLeaf(root, paneId) !== null;
+}
+
+export function updateWorkspacePaneLayoutSplit(
+  root: WorkspacePaneNode,
+  splitId: string,
+  updater: (split: WorkspacePaneSplit) => WorkspacePaneSplit,
+): UpdateWorkspacePaneLayoutSplitResult {
+  const nextRoot = updateWorkspaceSplitNode(root, splitId, updater);
+  return {
+    didUpdate: nextRoot !== root,
+    nextRoot,
+  };
+}
+
+export function splitWorkspacePaneLayout(
   root: WorkspacePaneNode,
   paneId: string,
   split: WorkspacePaneSplit,
-): WorkspacePaneNode {
-  if (isWorkspacePaneLeaf(root)) {
-    return root.id === paneId ? split : root;
-  }
-
-  const first = splitWorkspacePane(root.first, paneId, split);
-  const second = splitWorkspacePane(root.second, paneId, split);
-  return first === root.first && second === root.second ? root : { ...root, first, second };
-}
-
-export function closeWorkspacePane(
-  root: WorkspacePaneNode,
-  paneId: string,
-): {
-  nextRoot: WorkspacePaneNode;
-  siblingPaneId: string | null;
-} {
-  if (isWorkspacePaneLeaf(root)) {
+): SplitWorkspacePaneLayoutResult {
+  if (!hasWorkspacePane(root, paneId)) {
     return {
+      didSplit: false,
       nextRoot: root,
-      siblingPaneId: null,
-    };
-  }
-
-  if (isWorkspacePaneLeaf(root.first) && root.first.id === paneId) {
-    return {
-      nextRoot: root.second,
-      siblingPaneId: getFirstWorkspacePane(root.second).id,
-    };
-  }
-
-  if (isWorkspacePaneLeaf(root.second) && root.second.id === paneId) {
-    return {
-      nextRoot: root.first,
-      siblingPaneId: getFirstWorkspacePane(root.first).id,
-    };
-  }
-
-  const firstResult = closeWorkspacePane(root.first, paneId);
-  if (firstResult.siblingPaneId !== null) {
-    return {
-      nextRoot: {
-        ...root,
-        first: firstResult.nextRoot,
-      },
-      siblingPaneId: firstResult.siblingPaneId,
-    };
-  }
-
-  const secondResult = closeWorkspacePane(root.second, paneId);
-  if (secondResult.siblingPaneId !== null) {
-    return {
-      nextRoot: {
-        ...root,
-        second: secondResult.nextRoot,
-      },
-      siblingPaneId: secondResult.siblingPaneId,
     };
   }
 
   return {
-    nextRoot: root,
-    siblingPaneId: null,
+    didSplit: true,
+    nextRoot: splitWorkspacePaneNode(root, paneId, split),
+  };
+}
+
+export function closeWorkspacePaneLayout(
+  root: WorkspacePaneNode,
+  paneId: string,
+): CloseWorkspacePaneLayoutResult {
+  if (inspectWorkspacePaneLayout(root).paneCount <= 1 || !hasWorkspacePane(root, paneId)) {
+    return {
+      didClose: false,
+      nextRoot: root,
+      survivingPaneId: null,
+    };
+  }
+
+  const result = closeWorkspacePaneNode(root, paneId);
+  return {
+    didClose: result.survivingPaneId !== null,
+    nextRoot: result.nextRoot,
+    survivingPaneId: result.survivingPaneId,
   };
 }

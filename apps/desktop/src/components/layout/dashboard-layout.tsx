@@ -12,16 +12,13 @@ import { Loading, SidebarInset } from "@lifecycle/ui";
 import { Outlet, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppHotkeyListener } from "../../app/app-hotkey-listener";
 import { CommandPaletteProvider } from "../../features/command-palette";
-import {
-  addProjectFromDirectory,
-  readManifest,
-  removeProject,
-} from "../../features/projects/api/projects";
+import { getCurrentBranch } from "../../features/projects/api/current-branch";
+import { addProjectFromDirectory, readManifest, removeProject } from "../../features/projects/api/projects";
 import { getGitStatus } from "../../features/git/api";
 import { WelcomeScreen } from "../../features/welcome/components/welcome-screen";
 import { projectKeys, useProjectCatalog } from "../../features/projects/hooks";
 import { useSettings } from "../../features/settings/state/app-settings-provider";
-import { createWorkspace, destroyWorkspace, getCurrentBranch } from "../../features/workspaces/api";
+import { createWorkspace, destroyWorkspace } from "../../features/workspaces/api";
 import {
   createWorkspacesByProjectQuery,
   useWorkspacesByProject,
