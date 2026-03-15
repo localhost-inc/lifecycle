@@ -1040,6 +1040,7 @@ mod tests {
     fn reconcile_workspace_services_db_assigns_internal_image_services_from_high_port_range() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
+        let web_default_port = available_test_port();
 
         let conn = open_db(&db_path).expect("open db");
         conn.execute(
@@ -1049,16 +1050,18 @@ mod tests {
         .expect("insert workspace");
         drop(conn);
 
-        let config_json = r#"{
-            "workspace": {
-                "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 30 }]
-            },
-            "environment": {
-                "postgres": { "kind": "service", "runtime": "image", "image": "postgres:16", "port": 5432 },
-                "web": { "kind": "service", "runtime": "process", "command": "bun run dev", "port": 3000, "share_default": true }
-            }
-        }"#;
-        let config: LifecycleConfig = serde_json::from_str(config_json).expect("valid config");
+        let config_json = format!(
+            r#"{{
+            "workspace": {{
+                "setup": [{{ "name": "install", "command": "bun install", "timeout_seconds": 30 }}]
+            }},
+            "environment": {{
+                "postgres": {{ "kind": "service", "runtime": "image", "image": "postgres:16", "port": 5432 }},
+                "web": {{ "kind": "service", "runtime": "process", "command": "bun run dev", "port": {web_default_port}, "share_default": true }}
+            }}
+        }}"#
+        );
+        let config: LifecycleConfig = serde_json::from_str(&config_json).expect("valid config");
 
         reconcile_workspace_services_db(&db_path, "ws_image", Some(&config), Some("fingerprint_4"))
             .expect("reconcile succeeds");
@@ -1080,7 +1083,7 @@ mod tests {
             .expect("query web");
 
         assert!(matches!(postgres_port, Some(port) if (41_000..=48_999).contains(&port)));
-        assert_eq!(web_port, Some(3000));
+        assert_eq!(web_port, Some(web_default_port));
 
         let _ = std::fs::remove_file(db_path);
     }

@@ -45,6 +45,17 @@ fn should_run_task(step: &TaskConfig, setup_completed: bool) -> bool {
     should_run_run_on(step.run_on.as_deref(), setup_completed)
 }
 
+fn filter_satisfied_dependencies(
+    depends_on: &[String],
+    satisfied_nodes: &std::collections::HashSet<String>,
+) -> Vec<String> {
+    depends_on
+        .iter()
+        .filter(|dependency| !satisfied_nodes.contains(*dependency))
+        .cloned()
+        .collect()
+}
+
 pub(super) fn lower_environment_graph(
     config: &LifecycleConfig,
     setup_completed: bool,
@@ -56,6 +67,17 @@ pub(super) fn lower_environment_graph(
         .filter(|step| should_run_step(step, setup_completed))
         .cloned()
         .collect::<Vec<_>>();
+
+    let satisfied_nodes = config
+        .environment
+        .iter()
+        .filter_map(|(node_name, node_config)| match node_config {
+            EnvironmentNodeConfig::Task(step) if !should_run_task(step, setup_completed) => {
+                Some(node_name.clone())
+            }
+            _ => None,
+        })
+        .collect::<HashSet<_>>();
 
     let mut environment_nodes = HashMap::new();
     for (node_name, node_config) in &config.environment {
@@ -69,19 +91,24 @@ pub(super) fn lower_environment_graph(
                     node_name.clone(),
                     EnvironmentNode {
                         kind: EnvironmentNodeKind::Task(lowered_step),
-                        depends_on: step.depends_on().to_vec(),
+                        depends_on: filter_satisfied_dependencies(
+                            step.depends_on(),
+                            &satisfied_nodes,
+                        ),
                     },
                 );
             }
             EnvironmentNodeConfig::Service { config } => {
+                let depends_on =
+                    filter_satisfied_dependencies(config.depends_on(), &satisfied_nodes);
                 environment_nodes.insert(
                     node_name.clone(),
                     EnvironmentNode {
                         kind: EnvironmentNodeKind::Service(clone_service_with_depends_on(
                             config,
-                            config.depends_on().to_vec(),
+                            depends_on.clone(),
                         )),
-                        depends_on: config.depends_on().to_vec(),
+                        depends_on,
                     },
                 );
             }
@@ -285,6 +312,42 @@ mod tests {
         assert!(graph.workspace_setup.is_empty());
         assert!(!graph.environment_nodes.contains_key("seed"));
         assert!(graph.environment_nodes.contains_key("migrate"));
+    }
+
+    #[test]
+    fn lower_environment_graph_treats_skipped_create_tasks_as_satisfied_dependencies() {
+        let config = parse_config(
+            r#"{
+                "workspace": { "setup": [] },
+                "environment": {
+                    "postgres": { "kind": "service", "runtime": "image", "image": "postgres:16" },
+                    "seed": {
+                        "kind": "task",
+                        "command": "bun run seed",
+                        "depends_on": ["postgres"],
+                        "timeout_seconds": 60
+                    },
+                    "api": {
+                        "kind": "service",
+                        "runtime": "process",
+                        "command": "bun run api",
+                        "depends_on": ["seed", "postgres"]
+                    }
+                }
+            }"#,
+        );
+
+        let graph = lower_environment_graph(&config, true).expect("graph lowers");
+
+        assert!(!graph.environment_nodes.contains_key("seed"));
+        assert_eq!(
+            graph
+                .environment_nodes
+                .get("api")
+                .expect("api present")
+                .depends_on(),
+            ["postgres"]
+        );
     }
 
     #[test]

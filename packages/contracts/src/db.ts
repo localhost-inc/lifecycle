@@ -30,6 +30,7 @@ export interface WorkspaceRecord {
   updated_at: string;
   last_active_at: string;
   expires_at: string | null;
+  setup_completed_at?: string | null;
 }
 
 export interface ServiceRecord {

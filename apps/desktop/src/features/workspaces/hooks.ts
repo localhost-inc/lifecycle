@@ -800,17 +800,17 @@ export function reduceWorkspaceServices(
 
     found = true;
     if (event.kind === "service.status_changed") {
-      return {
-        ...service,
-        status: event.status,
-        status_reason: event.status_reason,
-      };
+      return service;
     }
 
     return event.service;
   });
 
   if (!found) {
+    return { kind: "invalidate" };
+  }
+
+  if (event.kind === "service.status_changed") {
     return { kind: "invalidate" };
   }
 
@@ -928,11 +928,37 @@ function reduceWorkspaceStepProgressProjection(
     return current.length > 0 ? [] : current;
   }
 
+  if (
+    event.kind === "workspace.status_changed" &&
+    event.workspace_id === workspaceId &&
+    event.status === "idle" &&
+    event.failure_reason !== null
+  ) {
+    return normalizeRunningStepProgressState(current, "failed");
+  }
+
   if (event.kind !== progressKind || event.workspace_id !== workspaceId) {
     return current;
   }
 
   return reduceStepProgressState(current, event);
+}
+
+function normalizeRunningStepProgressState(
+  current: WorkspaceStepProgressSnapshot[],
+  status: WorkspaceStepProgressSnapshot["status"],
+): WorkspaceStepProgressSnapshot[] {
+  let changed = false;
+  const next = current.map((step) => {
+    if (step.status !== "running") {
+      return step;
+    }
+
+    changed = true;
+    return { ...step, status };
+  });
+
+  return changed ? next : current;
 }
 
 function reduceStepProgressState(

@@ -1,7 +1,16 @@
 import { Navigate, useOutletContext } from "react-router-dom";
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
+import { readLastProjectId } from "../state/project-content-tabs";
 import { readLastWorkspaceId } from "../../workspaces/state/workspace-canvas-state";
 import type { AppShellOutletContext } from "../../../components/layout/app-shell-context";
+
+function safeReadLastProjectId(): string | null {
+  try {
+    return readLastProjectId();
+  } catch {
+    return null;
+  }
+}
 
 function safeReadLastWorkspaceId(): string | null {
   try {
@@ -15,7 +24,16 @@ export function resolveHomeRouteTarget(
   projects: ProjectRecord[],
   workspacesByProjectId: Record<string, WorkspaceRecord[]>,
   lastWorkspaceId: string | null,
+  lastProjectId: string | null,
 ): string | null {
+  const lastProject =
+    lastProjectId !== null
+      ? (projects.find((project) => project.id === lastProjectId) ?? null)
+      : null;
+  if (lastProject) {
+    return `/projects/${lastProject.id}`;
+  }
+
   const allWorkspaces = Object.values(workspacesByProjectId).flat();
   const lastWorkspace =
     lastWorkspaceId !== null
@@ -40,6 +58,7 @@ export function HomeRoute() {
     projects,
     workspacesByProjectId,
     safeReadLastWorkspaceId(),
+    safeReadLastProjectId(),
   );
 
   if (nextTarget) {

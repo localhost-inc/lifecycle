@@ -117,16 +117,12 @@ function parsePortDraft(value: string): ParsedPortDraft {
   return { error: null, value: nextPort };
 }
 
-function resolvePreviewUrl(service: ServiceRecord): string | null {
-  if (service.preview_url) {
-    return service.preview_url;
+export function resolvePreviewUrl(service: ServiceRecord): string | null {
+  if (service.exposure === "local" && service.effective_port !== null) {
+    return `http://localhost:${service.effective_port}`;
   }
 
-  if (service.exposure !== "local" || service.effective_port === null) {
-    return null;
-  }
-
-  return `http://localhost:${service.effective_port}`;
+  return service.preview_url;
 }
 
 function formatStatusReason(reason: ServiceRecord["status_reason"]): string | null {

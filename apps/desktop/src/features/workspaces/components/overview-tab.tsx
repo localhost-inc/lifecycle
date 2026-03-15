@@ -45,6 +45,11 @@ export type BootSequenceItem =
   | BootSequenceTaskItem
   | BootSequenceServiceItem;
 
+interface BootStatusIndicatorProps {
+  isActive?: boolean;
+  status: BootSequenceItemStatus;
+}
+
 const DOT_STYLES: Record<BootSequenceItemStatus, string> = {
   pending: "bg-[var(--muted-foreground)]/40",
   running: "bg-blue-500 lifecycle-motion-soft-pulse",
@@ -72,12 +77,25 @@ const STATUS_BANNER = {
     iconClassName: "text-red-500",
     label: "Boot failed",
   },
-  running: {
-    icon: LoaderCircle,
-    iconClassName: "text-blue-500 animate-spin",
-    label: "Booting environment",
-  },
 } as const;
+
+function shouldRunOn(
+  runOn: "create" | "start" | null | undefined,
+  setupCompleted: boolean,
+): boolean {
+  return runOn === "start" || !setupCompleted;
+}
+
+function shouldIncludeEnvironmentNode(
+  node: LifecycleConfig["environment"][string],
+  setupCompleted: boolean,
+): boolean {
+  if (node.kind !== "task") {
+    return true;
+  }
+
+  return shouldRunOn(node.run_on ?? null, setupCompleted);
+}
 
 function insertSorted(values: string[], nextValue: string): void {
   let index = 0;
@@ -122,8 +140,13 @@ function mapServiceStatus(service: ServiceRecord | null): BootSequenceItemStatus
   }
 }
 
-function orderEnvironmentNodes(environment: LifecycleConfig["environment"]): string[] {
-  const entries = Object.entries(environment);
+function orderEnvironmentNodes(
+  environment: LifecycleConfig["environment"],
+  setupCompleted: boolean,
+): string[] {
+  const entries = Object.entries(environment).filter(([, node]) =>
+    shouldIncludeEnvironmentNode(node, setupCompleted),
+  );
   const nodeNames = new Set(entries.map(([name]) => name));
   const inDegree = new Map<string, number>();
   const dependents = new Map<string, string[]>();
@@ -180,6 +203,7 @@ export function deriveBootSequenceItems(
   environmentTasks: EnvironmentTaskState[],
   services: ServiceRecord[],
   serviceRuntimeByName: Partial<Record<string, "image" | "process">>,
+  setupCompleted = false,
 ): BootSequenceItem[] {
   const items: BootSequenceItem[] = [];
   const setupStepByName = new Map(setupSteps.map((step) => [step.name, step]));
@@ -187,7 +211,9 @@ export function deriveBootSequenceItems(
   const serviceByName = new Map(services.map((service) => [service.service_name, service]));
 
   const setupNames = mergeDeclaredAndObserved(
-    config?.workspace.setup.map((step) => step.name) ?? declaredStepNames,
+    config?.workspace.setup
+      .filter((step) => shouldRunOn(step.run_on ?? null, setupCompleted))
+      .map((step) => step.name) ?? declaredStepNames,
     setupSteps,
   );
 
@@ -203,7 +229,7 @@ export function deriveBootSequenceItems(
   }
 
   if (config) {
-    const orderedNodeNames = orderEnvironmentNodes(config.environment);
+    const orderedNodeNames = orderEnvironmentNodes(config.environment, setupCompleted);
     const knownNodeNames = new Set(orderedNodeNames);
 
     for (const nodeName of orderedNodeNames) {
@@ -362,9 +388,28 @@ export function deriveBootPresentation(
   return null;
 }
 
-function BootStepRow({ item }: { item: BootSequenceSetupItem | BootSequenceTaskItem }) {
+function BootStatusIndicator({ isActive = false, status }: BootStatusIndicatorProps) {
+  return (
+    <span className="flex size-3.5 shrink-0 items-center justify-center">
+      {isActive ? (
+        <LoaderCircle className="size-3 text-blue-500 animate-spin" strokeWidth={2.2} />
+      ) : (
+        <span className={`inline-block size-[6px] rounded-full ${DOT_STYLES[status]}`} />
+      )}
+    </span>
+  );
+}
+
+function BootStepRow({
+  isActive = false,
+  item,
+}: {
+  isActive?: boolean;
+  item: BootSequenceSetupItem | BootSequenceTaskItem;
+}) {
   const [open, setOpen] = useState(item.status === "running");
   const hasOutput = item.output.length > 0;
+  const nameClassName = isActive ? NAME_STYLES.running : NAME_STYLES[item.status];
 
   return (
     <Collapsible onOpenChange={setOpen} open={hasOutput ? open : false}>
@@ -374,10 +419,8 @@ function BootStepRow({ item }: { item: BootSequenceSetupItem | BootSequenceTaskI
           disabled={!hasOutput}
           type="button"
         >
-          <span className={`inline-block size-[6px] shrink-0 rounded-full ${DOT_STYLES[item.status]}`} />
-          <span className={`min-w-0 truncate text-[13px] ${NAME_STYLES[item.status]}`}>
-            {item.name}
-          </span>
+          <BootStatusIndicator isActive={isActive} status={item.status} />
+          <span className={`min-w-0 truncate text-[13px] ${nameClassName}`}>{item.name}</span>
         </button>
       </CollapsibleTrigger>
       {hasOutput ? (
@@ -393,15 +436,20 @@ function BootStepRow({ item }: { item: BootSequenceSetupItem | BootSequenceTaskI
   );
 }
 
-function BootServiceRow({ item }: { item: BootSequenceServiceItem }) {
+function BootServiceRow({
+  isActive = false,
+  item,
+}: {
+  isActive?: boolean;
+  item: BootSequenceServiceItem;
+}) {
   const portLabel = item.port !== null ? `:${item.port}` : null;
+  const nameClassName = isActive ? NAME_STYLES.running : NAME_STYLES[item.status];
 
   return (
     <div className="flex w-full items-center gap-2.5 px-2 py-1.5">
-      <span className={`inline-block size-[6px] shrink-0 rounded-full ${DOT_STYLES[item.status]}`} />
-      <span className={`min-w-0 truncate text-[13px] ${NAME_STYLES[item.status]}`}>
-        {item.name}
-      </span>
+      <BootStatusIndicator isActive={isActive} status={item.status} />
+      <span className={`min-w-0 truncate text-[13px] ${nameClassName}`}>{item.name}</span>
       {portLabel ? (
         <span className="ml-auto shrink-0 font-mono text-[11px] text-[var(--muted-foreground)]">
           {portLabel}
@@ -423,7 +471,7 @@ interface OverviewTabProps {
   serviceRuntimeByName: Partial<Record<string, "image" | "process">>;
   services: ServiceRecord[];
   setupSteps: SetupStepState[];
-  workspace: Pick<WorkspaceRecord, "failure_reason" | "status">;
+  workspace: Pick<WorkspaceRecord, "failure_reason" | "status" | "setup_completed_at">;
 }
 
 export function OverviewTab({
@@ -443,20 +491,27 @@ export function OverviewTab({
     environmentTasks,
     services,
     serviceRuntimeByName,
+    workspace.setup_completed_at !== null && workspace.setup_completed_at !== undefined,
   );
   const presentation = deriveBootPresentation(items, workspace);
-  const banner = presentation ? STATUS_BANNER[presentation.phase] : null;
+  const banner =
+    presentation && presentation.phase !== "running" ? STATUS_BANNER[presentation.phase] : null;
   const progressLabel = presentation
     ? `${presentation.completedSteps} / ${presentation.totalSteps}`
     : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--muted-foreground)]">
+      <div className="flex items-center justify-between gap-3 text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--muted-foreground)]">
         <span>Boot sequence</span>
+        {progressLabel ? (
+          <span className="shrink-0 font-mono tracking-normal text-[var(--muted-foreground)]">
+            {progressLabel}
+          </span>
+        ) : null}
       </div>
       {banner ? (
-        <div className="flex items-center justify-between gap-3 text-xs text-[var(--muted-foreground)]">
+        <div className="flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
           <div className="flex min-w-0 items-center gap-2">
             <banner.icon
               className={`size-3.5 shrink-0 ${banner.iconClassName}`}
@@ -464,15 +519,14 @@ export function OverviewTab({
             />
             <span>{banner.label}</span>
           </div>
-          <span className="shrink-0 font-mono text-[11px] text-[var(--muted-foreground)]">
-            {progressLabel}
-          </span>
         </div>
       ) : null}
       {items.length > 0 ? (
         <div className="flex flex-col">
-          {items.map((item) =>
-            item.kind === "service" ? (
+          {items.map((item, index) => {
+            const isActive =
+              presentation?.phase === "running" && presentation.currentStepIndex === index;
+            return item.kind === "service" ? (
               item.service ? (
                 <ServiceRow
                   key={item.id}
@@ -481,17 +535,15 @@ export function OverviewTab({
                   service={item.service}
                 />
               ) : (
-                <BootServiceRow key={item.id} item={item} />
+                <BootServiceRow isActive={isActive} key={item.id} item={item} />
               )
             ) : (
-              <BootStepRow key={item.id} item={item} />
-            ),
-          )}
+              <BootStepRow isActive={isActive} key={item.id} item={item} />
+            );
+          })}
         </div>
       ) : (
-        <p className="text-[11px] text-[var(--muted-foreground)]">
-          No environment nodes defined.
-        </p>
+        <p className="text-[11px] text-[var(--muted-foreground)]">No environment nodes defined.</p>
       )}
     </div>
   );

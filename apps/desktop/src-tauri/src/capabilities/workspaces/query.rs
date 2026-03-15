@@ -28,6 +28,7 @@ pub struct WorkspaceRecord {
     pub updated_at: String,
     pub last_active_at: String,
     pub expires_at: Option<String>,
+    pub setup_completed_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,6 +115,7 @@ fn map_workspace_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRe
         updated_at: row.get(15)?,
         last_active_at: row.get(16)?,
         expires_at: row.get(17)?,
+        setup_completed_at: row.get(18)?,
     })
 }
 
@@ -135,7 +137,7 @@ fn get_workspace_sync(
     project_id: String,
 ) -> Result<Option<WorkspaceRecord>, LifecycleError> {
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, name, kind, source_ref, git_sha, worktree_path, mode, status, manifest_fingerprint, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at
+        "SELECT id, project_id, name, kind, source_ref, git_sha, worktree_path, mode, status, manifest_fingerprint, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at, setup_completed_at
          FROM workspace
          WHERE project_id = ?1
          ORDER BY CASE WHEN kind = 'root' THEN 0 ELSE 1 END, created_at DESC
@@ -166,7 +168,7 @@ fn get_workspace_by_id_sync(
     workspace_id: String,
 ) -> Result<Option<WorkspaceRecord>, LifecycleError> {
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, name, kind, source_ref, git_sha, worktree_path, mode, status, manifest_fingerprint, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at
+        "SELECT id, project_id, name, kind, source_ref, git_sha, worktree_path, mode, status, manifest_fingerprint, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at, setup_completed_at
          FROM workspace
          WHERE id = ?1
          LIMIT 1"
@@ -195,7 +197,7 @@ fn list_workspaces_sync(
     conn: &rusqlite::Connection,
 ) -> Result<Vec<WorkspaceRecord>, LifecycleError> {
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, name, kind, source_ref, git_sha, worktree_path, mode, status, manifest_fingerprint, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at
+        "SELECT id, project_id, name, kind, source_ref, git_sha, worktree_path, mode, status, manifest_fingerprint, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at, setup_completed_at
          FROM workspace
          ORDER BY created_at DESC"
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;

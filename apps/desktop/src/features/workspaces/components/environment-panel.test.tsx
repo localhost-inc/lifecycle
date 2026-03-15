@@ -321,7 +321,7 @@ describe("EnvironmentPanel", () => {
 
     expect(markup).toContain("Starting...");
     expect(markup).toContain("Boot sequence");
-    expect(markup).toContain("Booting environment");
+    expect(markup).not.toContain("Booting environment");
     expect(markup).toContain("postgres");
     expect(markup).toContain("api");
     expect(markup).toContain("lucide-loader-circle");

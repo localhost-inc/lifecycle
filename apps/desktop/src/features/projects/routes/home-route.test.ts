@@ -44,8 +44,39 @@ describe("resolveHomeRouteTarget", () => {
           project_1: [createWorkspaceRecord("workspace_1", "project_1")],
         },
         "workspace_1",
+        null,
       ),
     ).toBe("/projects/project_1?workspace=workspace_1");
+  });
+
+  test("falls back to the last opened project when there is no remembered workspace", () => {
+    expect(
+      resolveHomeRouteTarget(
+        [
+          createProjectRecord("project_1", "Lifecycle", "/tmp/lifecycle"),
+          createProjectRecord("project_2", "Docs", "/tmp/docs"),
+        ],
+        {},
+        null,
+        "project_2",
+      ),
+    ).toBe("/projects/project_2");
+  });
+
+  test("prefers the last opened project over an older remembered workspace", () => {
+    expect(
+      resolveHomeRouteTarget(
+        [
+          createProjectRecord("project_1", "Lifecycle", "/tmp/lifecycle"),
+          createProjectRecord("project_2", "Docs", "/tmp/docs"),
+        ],
+        {
+          project_1: [createWorkspaceRecord("workspace_1", "project_1")],
+        },
+        "workspace_1",
+        "project_2",
+      ),
+    ).toBe("/projects/project_2");
   });
 
   test("falls back to the first project when there is no remembered workspace", () => {
@@ -57,6 +88,21 @@ describe("resolveHomeRouteTarget", () => {
         ],
         {},
         null,
+        null,
+      ),
+    ).toBe("/projects/project_1");
+  });
+
+  test("ignores a stale remembered project id", () => {
+    expect(
+      resolveHomeRouteTarget(
+        [
+          createProjectRecord("project_1", "Lifecycle", "/tmp/lifecycle"),
+          createProjectRecord("project_2", "Docs", "/tmp/docs"),
+        ],
+        {},
+        null,
+        "project_99",
       ),
     ).toBe("/projects/project_1");
   });

@@ -286,10 +286,21 @@ impl WorkspaceControllerRegistry {
 impl WorkspaceRuntimeProjectionState {
     fn apply_event(&mut self, envelope: &LifecycleEnvelope) {
         match &envelope.event {
-            LifecycleEvent::WorkspaceStatusChanged { status, .. } if status == "starting" => {
-                self.setup.clear();
-                self.environment_tasks.clear();
-            }
+            LifecycleEvent::WorkspaceStatusChanged {
+                status,
+                failure_reason,
+                ..
+            } => match status.as_str() {
+                "starting" => {
+                    self.setup.clear();
+                    self.environment_tasks.clear();
+                }
+                "idle" if failure_reason.is_some() => {
+                    normalize_running_steps(&mut self.setup, "failed");
+                    normalize_running_steps(&mut self.environment_tasks, "failed");
+                }
+                _ => {}
+            },
             LifecycleEvent::WorkspaceSetupProgress {
                 step_name,
                 event_kind,
@@ -314,6 +325,14 @@ impl WorkspaceRuntimeProjectionState {
             self.activity.retain(|event| event.id != envelope.id);
             self.activity.insert(0, envelope.clone());
             self.activity.truncate(WORKSPACE_ACTIVITY_LIMIT);
+        }
+    }
+}
+
+fn normalize_running_steps(steps: &mut [WorkspaceStepProgressSnapshot], next_status: &str) {
+    for step in steps {
+        if step.status == "running" {
+            step.status = next_status.to_string();
         }
     }
 }
@@ -528,6 +547,50 @@ mod tests {
                 .map(|event| event.id.as_str())
                 .collect::<Vec<_>>(),
             vec!["event-5", "event-4", "event-2", "event-1"]
+        );
+    }
+
+    #[tokio::test]
+    async fn runtime_projection_marks_running_steps_failed_when_workspace_returns_to_idle_with_failure()
+    {
+        let registry = WorkspaceControllerRegistry::new();
+        let controller = registry.get_or_create("workspace-1").await;
+
+        controller.record_lifecycle_envelope(envelope(
+            "event-1",
+            LifecycleEvent::WorkspaceStatusChanged {
+                workspace_id: "workspace-1".to_string(),
+                status: "starting".to_string(),
+                failure_reason: None,
+            },
+        ));
+        controller.record_lifecycle_envelope(envelope(
+            "event-2",
+            LifecycleEvent::WorkspaceSetupProgress {
+                workspace_id: "workspace-1".to_string(),
+                step_name: "Install".to_string(),
+                event_kind: "started".to_string(),
+                data: None,
+            },
+        ));
+        controller.record_lifecycle_envelope(envelope(
+            "event-3",
+            LifecycleEvent::WorkspaceStatusChanged {
+                workspace_id: "workspace-1".to_string(),
+                status: "idle".to_string(),
+                failure_reason: Some("service_start_failed".to_string()),
+            },
+        ));
+
+        let snapshot = controller.runtime_projection_snapshot();
+
+        assert_eq!(
+            snapshot.setup,
+            vec![super::WorkspaceStepProgressSnapshot {
+                name: "Install".to_string(),
+                output: Vec::new(),
+                status: "failed".to_string(),
+            }]
         );
     }
 }

@@ -2,7 +2,7 @@ import type { ServiceRecord } from "@lifecycle/contracts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
-import { ServiceRow } from "./services-tab";
+import { resolvePreviewUrl, ServiceRow } from "./services-tab";
 
 const failedService: ServiceRecord = {
   created_at: "2026-03-12T10:00:00.000Z",
@@ -22,6 +22,17 @@ const failedService: ServiceRecord = {
 };
 
 describe("ServiceRow", () => {
+  test("prefers the current local effective port over a stale preview URL", () => {
+    expect(
+      resolvePreviewUrl({
+        ...failedService,
+        effective_port: 3002,
+        exposure: "local",
+        preview_url: "http://localhost:3001",
+      }),
+    ).toBe("http://localhost:3002");
+  });
+
   test("renders a friendly failed-service status reason", () => {
     const markup = renderToStaticMarkup(
       createElement(ServiceRow, {

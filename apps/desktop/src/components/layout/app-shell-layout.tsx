@@ -41,6 +41,11 @@ import { getWorkspaceDisplayName } from "../../features/workspaces/lib/workspace
 import { formatWorkspaceError } from "../../features/workspaces/lib/workspace-errors";
 import { readProjectRouteFocus } from "../../features/projects/lib/project-route-state";
 import {
+  clearLastProjectId,
+  readLastProjectId,
+  writeLastProjectId,
+} from "../../features/projects/state/project-content-tabs";
+import {
   clearLastWorkspaceId,
   clearWorkspaceCanvasState,
   readLastWorkspaceId,
@@ -235,6 +240,14 @@ export function AppShellLayout() {
   useEffect(() => {
     writePersistedShellContextId(activeShellContext.id);
   }, [activeShellContext.id]);
+
+  useEffect(() => {
+    if (!projectId || !projects.some((project) => project.id === projectId)) {
+      return;
+    }
+
+    writeLastProjectId(projectId);
+  }, [projectId, projects]);
 
   useEffect(() => {
     if (!activeProjectNavigationResize) {
@@ -483,6 +496,10 @@ export function AppShellLayout() {
       try {
         await removeProject(nextProjectId);
         client.invalidate(projectKeys.catalog());
+
+        if (readLastProjectId() === nextProjectId) {
+          clearLastProjectId();
+        }
 
         if (projectId === nextProjectId) {
           const nextProject = projects.find((project) => project.id !== nextProjectId);

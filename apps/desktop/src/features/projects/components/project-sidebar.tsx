@@ -64,25 +64,20 @@ export function ProjectSidebar({
       data-slot="project-sidebar"
     >
       {/* Project header — monogram + name */}
-      <div className="px-4 pb-3 pt-5">
-        <div className="flex items-center justify-between">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-[var(--muted)] text-[13px] font-semibold text-[var(--foreground)]">
+      <div
+        className="flex h-10 items-center border-b border-[var(--border)] px-3"
+        data-slot="project-sidebar-header"
+      >
+        <div className="-translate-y-px flex w-full items-center justify-between">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-[var(--muted)] text-[12px] font-semibold text-[var(--foreground)]">
               {projectMonogram(project.name)}
             </span>
             <h1 className="truncate text-[16px] font-medium leading-tight tracking-tight text-[var(--foreground)]">
               {project.name}
             </h1>
           </div>
-          <div className="flex shrink-0 items-center gap-0.5">
-            <Button
-              aria-label={`Create workspace for ${project.name}`}
-              onClick={onCreateWorkspace}
-              size="icon"
-              variant="ghost"
-            >
-              <Plus size={16} />
-            </Button>
+          <div className="flex shrink-0 items-center">
             <Popover onOpenChange={setMenuOpen} open={menuOpen}>
               <PopoverTrigger asChild>
                 <Button aria-label="Project actions" size="icon" variant="ghost">
@@ -123,7 +118,7 @@ export function ProjectSidebar({
       </div>
 
       {/* Project nav — icon + label, pill selected */}
-      <div className="px-2">
+      <div className="px-2 pt-2">
         <div className="flex flex-col gap-0.5">
           <button
             className={navItemClassName(activeViewId === "overview")}

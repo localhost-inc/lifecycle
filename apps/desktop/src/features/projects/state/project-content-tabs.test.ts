@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  clearLastProjectId,
   canCloseProjectContentTab,
   closeProjectContentTab,
   createDefaultProjectContentTabsState,
@@ -10,9 +11,11 @@ import {
   focusPullRequestTab,
   focusWorkspaceTab,
   normalizeProjectContentTabsState,
+  readLastProjectId,
   readProjectContentTabsState,
   reorderProjectContentTabs,
   resolveProjectContentTabIdToClose,
+  writeLastProjectId,
   workspaceTabId,
   writeProjectContentTabsState,
 } from "./project-content-tabs";
@@ -123,6 +126,18 @@ describe("project content tabs", () => {
     expect(readProjectContentTabsState("project_2", storage)).toEqual(
       createDefaultProjectContentTabsState(),
     );
+  });
+
+  test("persists and clears the last selected project id", () => {
+    const storage = createStorage();
+
+    expect(readLastProjectId(storage)).toBeNull();
+
+    writeLastProjectId("project_7", storage);
+    expect(readLastProjectId(storage)).toBe("project_7");
+
+    clearLastProjectId(storage);
+    expect(readLastProjectId(storage)).toBeNull();
   });
 
   test("focuses project view tabs without duplicating overview", () => {

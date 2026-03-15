@@ -8,6 +8,7 @@ import {
   type ProjectContentTabPlacement,
 } from "../lib/project-content-tab-order";
 
+const LAST_PROJECT_ID_STORAGE_KEY = "lifecycle.desktop.last-project-id";
 const PROJECT_CONTENT_TABS_STORAGE_KEY = "lifecycle.desktop.project-content-tabs";
 
 export interface StorageLike {
@@ -420,4 +421,16 @@ export function writeProjectContentTabsState(
   } catch {
     // best-effort persistence
   }
+}
+
+export function readLastProjectId(storage?: StorageLike): string | null {
+  return getStorage(storage)?.getItem(LAST_PROJECT_ID_STORAGE_KEY) ?? null;
+}
+
+export function writeLastProjectId(projectId: string, storage?: StorageLike): void {
+  getStorage(storage)?.setItem(LAST_PROJECT_ID_STORAGE_KEY, projectId);
+}
+
+export function clearLastProjectId(storage?: StorageLike): void {
+  getStorage(storage)?.removeItem(LAST_PROJECT_ID_STORAGE_KEY);
 }

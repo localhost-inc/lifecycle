@@ -243,6 +243,57 @@ describe("reduceWorkspaceRuntimeProjection", () => {
       },
     });
   });
+
+  test("marks running setup steps as failed when the workspace returns to idle with a failure", () => {
+    const current = {
+      activity: [],
+      environmentTasks: [],
+      setup: [
+        {
+          name: "install",
+          output: [],
+          status: "running" as const,
+        },
+      ],
+    };
+
+    const result = reduceWorkspaceRuntimeProjection(
+      current,
+      {
+        failure_reason: "service_start_failed",
+        id: "event-4",
+        kind: "workspace.status_changed",
+        occurred_at: "2026-03-10T10:03:00.000Z",
+        status: "idle",
+        workspace_id: "ws_1",
+      },
+      "ws_1",
+    );
+
+    expect(result).toEqual({
+      kind: "replace",
+      data: {
+        activity: [
+          {
+            failure_reason: "service_start_failed",
+            id: "event-4",
+            kind: "workspace.status_changed",
+            occurred_at: "2026-03-10T10:03:00.000Z",
+            status: "idle",
+            workspace_id: "ws_1",
+          },
+        ],
+        environmentTasks: [],
+        setup: [
+          {
+            name: "install",
+            output: [],
+            status: "failed",
+          },
+        ],
+      },
+    });
+  });
 });
 
 describe("reduceWorkspacesByProject", () => {
@@ -411,7 +462,7 @@ describe("createWorkspaceManifestQuery", () => {
 });
 
 describe("reduceWorkspaceSnapshot", () => {
-  test("patches workspace, service, and terminal facts without refetching", () => {
+  test("patches workspace and terminal facts, and refetches full service rows on status changes", () => {
     const workspace: WorkspaceRecord = {
       created_at: "2026-03-10T10:00:00.000Z",
       created_by: null,
@@ -473,7 +524,6 @@ describe("reduceWorkspaceSnapshot", () => {
       terminals,
       workspace,
     };
-    const service = services[0]!;
     const terminal = terminals[0]!;
 
     const serviceResult = reduceWorkspaceSnapshot(
@@ -490,18 +540,7 @@ describe("reduceWorkspaceSnapshot", () => {
       "ws_1",
     );
     expect(serviceResult).toEqual({
-      kind: "replace",
-      data: {
-        services: [
-          {
-            ...service,
-            status: "ready",
-            status_reason: null,
-          },
-        ],
-        terminals,
-        workspace,
-      },
+      kind: "invalidate",
     });
 
     const terminalResult = reduceWorkspaceSnapshot(
@@ -561,6 +600,43 @@ describe("reduceWorkspaceSnapshot", () => {
 });
 
 describe("reduceWorkspaceServices", () => {
+  test("invalidates on service status changes so preview fields stay in sync", () => {
+    const current: ServiceRecord[] = [
+      {
+        created_at: "2026-03-10T10:00:00.000Z",
+        default_port: 3000,
+        effective_port: 3000,
+        exposure: "local",
+        id: "svc_1",
+        port_override: null,
+        preview_failure_reason: null,
+        preview_status: "sleeping",
+        preview_url: "http://localhost:3000",
+        service_name: "web",
+        status: "stopped",
+        status_reason: null,
+        updated_at: "2026-03-10T10:00:00.000Z",
+        workspace_id: "ws_1",
+      },
+    ];
+
+    expect(
+      reduceWorkspaceServices(
+        current,
+        {
+          id: "event-status-1",
+          kind: "service.status_changed",
+          occurred_at: "2026-03-10T10:05:00.000Z",
+          service_name: "web",
+          status: "ready",
+          status_reason: null,
+          workspace_id: "ws_1",
+        },
+        "ws_1",
+      ),
+    ).toEqual({ kind: "invalidate" });
+  });
+
   test("patches service configuration facts without refetching", () => {
     const current: ServiceRecord[] = [
       {

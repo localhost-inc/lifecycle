@@ -141,7 +141,7 @@ describe("OverviewTab", () => {
       }),
     );
 
-    expect(markup).toContain("Booting environment");
+    expect(markup).not.toContain("Booting environment");
     expect(markup).toContain("install");
     expect(markup).toContain("write-local-env");
     expect(markup).toContain("postgres");
@@ -153,6 +153,23 @@ describe("OverviewTab", () => {
     expect(markup.indexOf("postgres")).toBeLessThan(markup.indexOf("migrate"));
     expect(markup.indexOf("migrate")).toBeLessThan(markup.indexOf("redis"));
     expect(markup.indexOf("migrate")).toBeLessThan(markup.indexOf("api"));
+  });
+
+  test("shows the loader on the active step while the boot sequence is running", () => {
+    const markup = renderToStaticMarkup(
+      createElement(OverviewTab, {
+        ...defaultProps,
+        config: null,
+        declaredStepNames: ["install", "write-local-env"],
+        services: [],
+        setupSteps: [],
+        workspace: { failure_reason: null, status: "starting" },
+      }),
+    );
+
+    expect(markup).not.toContain("Booting environment");
+    expect(markup).toContain("install");
+    expect(markup).toContain("lucide-loader-circle");
   });
 
   test("falls back to declared setup steps before any activity is captured", () => {
@@ -223,6 +240,58 @@ describe("deriveBootSequenceItems", () => {
     expect(items.map((item) => item.id)).toContain("service:postgres");
     expect(items.map((item) => item.id)).toContain("service:redis");
     expect(items.map((item) => item.id)).toContain("service:api");
+  });
+
+  test("omits create-scoped setup steps and tasks after setup has completed", () => {
+    const restartConfig: LifecycleConfig = {
+      workspace: {
+        setup: [
+          { command: "bun install", name: "install", timeout_seconds: 60 },
+          {
+            command: "bun run write-local-env",
+            name: "write-local-env",
+            run_on: "start",
+            timeout_seconds: 60,
+          },
+        ],
+        teardown: [],
+      },
+      environment: {
+        postgres: {
+          kind: "service",
+          runtime: "image",
+          image: "postgres:16",
+        },
+        migrate: {
+          kind: "task",
+          command: "bun run db:migrate",
+          depends_on: ["postgres"],
+          timeout_seconds: 60,
+        },
+        api: {
+          kind: "service",
+          runtime: "process",
+          command: "bun run api",
+          depends_on: ["migrate", "postgres"],
+        },
+      },
+    };
+
+    const items = deriveBootSequenceItems(
+      restartConfig,
+      [],
+      [],
+      [],
+      [],
+      { api: "process", postgres: "image" },
+      true,
+    );
+
+    expect(items.map((item) => item.id)).toEqual([
+      "setup:write-local-env",
+      "service:postgres",
+      "service:api",
+    ]);
   });
 });
 
