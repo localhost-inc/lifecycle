@@ -32,6 +32,7 @@ describe("applyFontSettings", () => {
 describe("parseStoredSettings", () => {
   test("returns defaults when storage is empty", () => {
     expect(parseStoredSettings(null)).toEqual({
+      defaultNewTabLaunch: "shell",
       interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
       monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
       turnNotificationSound: "orbit",
@@ -50,6 +51,7 @@ describe("parseStoredSettings", () => {
         }),
       ),
     ).toEqual({
+      defaultNewTabLaunch: "shell",
       interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
       monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
       turnNotificationSound: "signal",
@@ -65,6 +67,7 @@ describe("parseStoredSettings", () => {
         }),
       ),
     ).toEqual({
+      defaultNewTabLaunch: "shell",
       interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
       monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
       turnNotificationSound: "orbit",

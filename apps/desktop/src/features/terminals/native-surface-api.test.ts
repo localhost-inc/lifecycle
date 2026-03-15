@@ -61,6 +61,7 @@ describe("native terminal surface api", () => {
       theme: {
         background: "#000000",
         cursorColor: "#ffffff",
+        faintOpacity: 0.84,
         foreground: "#ffffff",
         palette: ["#000000"],
         selectionBackground: "#222222",
@@ -93,6 +94,7 @@ describe("native terminal surface api", () => {
         theme: {
           background: "#000000",
           cursorColor: "#ffffff",
+          faintOpacity: 0.84,
           foreground: "#ffffff",
           palette: ["#000000"],
           selectionBackground: "#222222",

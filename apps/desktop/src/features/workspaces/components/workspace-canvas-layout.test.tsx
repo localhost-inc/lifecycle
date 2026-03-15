@@ -2,6 +2,7 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryProvider } from "../../../query";
+import { SettingsProvider } from "../../settings/state/app-settings-provider";
 
 describe("WorkspaceCanvas layout", () => {
   afterEach(() => {
@@ -32,11 +33,13 @@ describe("WorkspaceCanvas layout", () => {
 
     const { WorkspaceCanvas } = await import("./workspace-canvas");
     const markup = renderToStaticMarkup(
-      createElement(QueryProvider, {
-        children: createElement(WorkspaceCanvas, {
-          openDocumentRequest: null,
-          snapshotTerminals: [],
-          workspaceId: "workspace-1",
+      createElement(SettingsProvider, {
+        children: createElement(QueryProvider, {
+          children: createElement(WorkspaceCanvas, {
+            openDocumentRequest: null,
+            snapshotTerminals: [],
+            workspaceId: "workspace-1",
+          }),
         }),
       }),
     );
@@ -117,7 +120,7 @@ describe("WorkspaceCanvas layout", () => {
     expect(markup).toContain(
       'class="group absolute inset-y-0 -left-2 z-20 flex w-4 touch-none cursor-col-resize justify-center outline-none',
     );
-    expect(markup).toContain("group-hover:bg-[var(--ring)]");
+    expect(markup).toContain("group-focus-visible:bg-[var(--ring)]");
     expect(markup).toContain("cursor-col-resize");
   });
 

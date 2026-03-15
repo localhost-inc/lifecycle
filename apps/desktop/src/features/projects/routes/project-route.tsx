@@ -1,8 +1,8 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
-import { EmptyState } from "@lifecycle/ui";
-import { Activity, GitPullRequest, LayoutGrid, TerminalSquare } from "lucide-react";
+import { Button, EmptyState } from "@lifecycle/ui";
+import { Activity, GitPullRequest, LayoutGrid, PanelRight, TerminalSquare } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext, useParams, useSearchParams } from "react-router-dom";
 import { AppStatusBar } from "../../../components/layout/app-status-bar";
@@ -11,7 +11,7 @@ import {
   SHORTCUT_HANDLER_PRIORITY,
   useShortcutRegistration,
 } from "../../../app/shortcuts/shortcut-router";
-import { WorkspaceHeader } from "../../workspaces/components/workspace-header";
+import { TitleBarActions } from "../../../components/layout/title-bar-actions";
 import { getWorkspaceDisplayName } from "../../workspaces/lib/workspace-display";
 import { workspaceSupportsFilesystemInteraction } from "../../workspaces/lib/workspace-capabilities";
 import {
@@ -449,6 +449,19 @@ export function ProjectRoute() {
     );
   }
 
+  const actionsOutlet = activeWorkspace ? (
+    <div className="flex items-center gap-1">
+      <TitleBarActions onFork={() => void onForkWorkspace(activeWorkspace)} workspace={activeWorkspace} />
+      <Button
+        onClick={() => window.dispatchEvent(new Event("lifecycle:toggle-extension-panel"))}
+        size="icon"
+        title="Toggle extension panel"
+      >
+        <PanelRight size={14} strokeWidth={2.2} />
+      </Button>
+    </div>
+  ) : null;
+
   const activeViewId = activeTab?.kind === "project-view" ? activeTab.viewId : null;
   const selectedWorkspaceId =
     activeWorkspace?.id ?? (routeFocus?.kind === "workspace" ? routeFocus.workspaceId : null);
@@ -497,6 +510,7 @@ export function ProjectRoute() {
               data-slot="project-main"
             >
               <ProjectPageTabs
+                actionsOutlet={actionsOutlet}
                 activeTabId={activeTab?.id ?? tabState.activeTabId}
                 onCloseTab={handleCloseTab}
                 onReorderTabs={handleReorderTabs}
@@ -505,22 +519,14 @@ export function ProjectRoute() {
               />
               {activeWorkspace ? (
                 <div
-                  className="workspace-canvas-grid flex min-h-0 min-w-0 flex-1 flex-col"
+                  className="workspace-canvas-grid flex min-h-0 min-w-0 flex-1"
                   data-slot="workspace"
                 >
-                  <WorkspaceHeader
-                    onFork={() => void onForkWorkspace(activeWorkspace)}
-                    workspace={activeWorkspace}
+                  <WorkspaceTabContent
+                    onCloseWorkspaceTab={handleCloseActiveProjectTab}
+                    onOpenPullRequest={handleOpenPullRequestSummary}
+                    workspaceId={activeWorkspace.id}
                   />
-                  <div className="flex min-h-0 min-w-0 flex-1">
-                    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                      <WorkspaceTabContent
-                        onCloseWorkspaceTab={handleCloseActiveProjectTab}
-                        onOpenPullRequest={handleOpenPullRequestSummary}
-                        workspaceId={activeWorkspace.id}
-                      />
-                    </div>
-                  </div>
                 </div>
               ) : (
                 <div className="flex min-h-0 min-w-0 flex-1">

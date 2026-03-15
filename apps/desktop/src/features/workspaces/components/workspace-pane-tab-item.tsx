@@ -72,7 +72,7 @@ export function WorkspacePaneTabItem({
   return (
     <TabChip
       active={active}
-      activeSurface="card"
+      activeSurface="surface"
       className={`max-w-[300px] touch-none select-none ${dragDropClasses}`}
       closable={!isRenaming}
       id={canvasTabDomId(tab.key)}

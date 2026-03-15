@@ -17,6 +17,8 @@ describe("buildTerminalTheme", () => {
               return "var(--surface)";
             case "--terminal-foreground":
               return "#111111";
+            case "--terminal-faint-opacity":
+              return "0.78";
             case "--surface":
               return "#f5f5f3";
             case "--foreground":
@@ -32,6 +34,7 @@ describe("buildTerminalTheme", () => {
     const tokens = readTerminalThemeTokens({} as HTMLElement, "light");
 
     expect(tokens.background).toBe("#f5f5f3");
+    expect(tokens.faintOpacity).toBe(0.78);
     expect(tokens.foreground).toBe("#111111");
   });
 
@@ -44,6 +47,8 @@ describe("buildTerminalTheme", () => {
               return "#09090b";
             case "--terminal-foreground":
               return "#f4f4f5";
+            case "--terminal-faint-opacity":
+              return "0.86";
             case "--surface":
               return "#141416";
             case "--foreground":
@@ -59,6 +64,7 @@ describe("buildTerminalTheme", () => {
     const tokens = readTerminalThemeTokens({} as HTMLElement, "dark");
 
     expect(tokens.background).toBe("#09090b");
+    expect(tokens.faintOpacity).toBe(0.86);
     expect(tokens.foreground).toBe("#f4f4f5");
     expect(tokens.selectionBackground).toBe("#27272a");
   });
@@ -72,6 +78,8 @@ describe("buildTerminalTheme", () => {
               return "#272822";
             case "--terminal-foreground":
               return "#f8f8f2";
+            case "--terminal-faint-opacity":
+              return "0.84";
             case "--foreground":
               return "#f8f8f2";
             case "--surface-selected":
@@ -96,6 +104,7 @@ describe("buildTerminalTheme", () => {
     const theme = buildTerminalTheme("monokai", tokens);
 
     expect(tokens.foreground).toBe("#f8f8f2");
+    expect(tokens.faintOpacity).toBe(0.84);
     expect(tokens.paletteOverrides?.black).toBe("#403e41");
     expect(tokens.paletteOverrides?.white).toBe("#ccccc6");
     expect(tokens.paletteOverrides?.brightBlack).toBe("#75715e");
@@ -111,6 +120,7 @@ describe("buildTerminalTheme", () => {
   test("keeps the terminal surface aligned with the app background tokens", () => {
     const theme = buildTerminalTheme("dark", {
       background: "#111113",
+      faintOpacity: 0.86,
       foreground: "#fafaf9",
       selectionBackground: "#27272a",
       selectionForeground: "#fafaf9",
@@ -119,6 +129,7 @@ describe("buildTerminalTheme", () => {
     expect(theme).toEqual({
       background: "#111113",
       cursorColor: "#87b2cf",
+      faintOpacity: 0.86,
       foreground: "#fafaf9",
       palette: [
         "#322d28",
@@ -127,7 +138,7 @@ describe("buildTerminalTheme", () => {
         "#c9aa5f",
         "#6f9dbc",
         "#b393d8",
-        "#72b9b6",
+        "#7caec8",
         "#ddd6cf",
         "#8f867c",
         "#eb8a84",
@@ -135,7 +146,7 @@ describe("buildTerminalTheme", () => {
         "#d9bd76",
         "#87b2cf",
         "#c6a8e4",
-        "#8acbc7",
+        "#95c2dd",
         "#fafaf9",
       ],
       selectionBackground: "#27272a",
@@ -146,6 +157,7 @@ describe("buildTerminalTheme", () => {
   test("CSS-defined themes override the appearance base palette", () => {
     const theme = buildTerminalTheme("dracula", {
       background: "#282a36",
+      faintOpacity: 0.84,
       foreground: "#f8f8f2",
       selectionBackground: "#44475a",
       selectionForeground: "#f8f8f2",
@@ -180,6 +192,7 @@ describe("buildTerminalTheme", () => {
   test("uses theme-specific ansi colors for alternate themes", () => {
     const theme = buildTerminalTheme("nord", {
       background: "#2e3440",
+      faintOpacity: 0.8,
       foreground: "#eceff4",
       selectionBackground: "#4c566a",
       selectionForeground: "#eceff4",

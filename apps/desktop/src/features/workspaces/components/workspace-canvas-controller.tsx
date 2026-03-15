@@ -48,6 +48,7 @@ import {
   toWorkspaceTabHotkeyAction,
   type WorkspaceTabHotkeyAction,
 } from "./workspace-canvas-shortcuts";
+import { useSettings } from "../../settings/state/app-settings-provider";
 import { type SurfaceLaunchAction, type SurfaceLaunchRequest } from "./surface-launch-actions";
 import { ClaudeIcon, CodexIcon, ShellIcon } from "./surface-icons";
 import {
@@ -83,6 +84,7 @@ export function useWorkspaceCanvasController({
   workspaceId,
 }: WorkspaceCanvasControllerInput) {
   const client = useQueryClient();
+  const { defaultNewTabLaunch } = useSettings();
   const { clearTerminalResponseReady, isTerminalResponseReady, isTerminalTurnRunning } =
     useTerminalResponseReady();
   const [creatingSelection, setCreatingSelection] = useState<"shell" | HarnessProvider | null>(
@@ -483,9 +485,14 @@ export function useWorkspaceCanvasController({
   const handleWorkspaceTabHotkeyAction = useCallback(
     (action: WorkspaceTabHotkeyAction): boolean => {
       switch (action.kind) {
-        case "new-tab":
-          void handleCreateTerminal({ launchType: "shell" }, activePaneId);
+        case "new-tab": {
+          const request: CreateTerminalRequest =
+            defaultNewTabLaunch === "shell"
+              ? { launchType: "shell" }
+              : { launchType: "harness", harnessProvider: defaultNewTabLaunch };
+          void handleCreateTerminal(request, activePaneId);
           return true;
+        }
         case "close-active-tab": {
           const closeTarget = resolveWorkspaceCloseShortcutTarget(paneLayout.paneCount);
           if (closeTarget === "close-pane") {
@@ -554,6 +561,7 @@ export function useWorkspaceCanvasController({
       activePaneVisibleTabKeys,
       activePaneVisibleTabs,
       activeTabKey,
+      defaultNewTabLaunch,
       handleCloseDocumentTab,
       handleCloseRuntimeTab,
       handleCreateTerminal,

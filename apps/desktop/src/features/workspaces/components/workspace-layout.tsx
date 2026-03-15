@@ -28,7 +28,6 @@ import {
   writePersistedPanelValue,
 } from "../../../lib/panel-layout";
 import { ExtensionBar } from "../../extensions/extension-bar";
-import { WORKSPACE_EXTENSION_STRIP_WIDTH_PX } from "../../extensions/extension-bar";
 import {
   readPersistedActiveExtensionId,
   readPersistedExtensionPreference,
@@ -300,7 +299,7 @@ export function WorkspaceLayout({
         containerWidth: workspaceLayoutWidth,
         maxWidth: MAX_WORKSPACE_EXTENSION_PANEL_WIDTH,
         minWidth: MIN_WORKSPACE_EXTENSION_PANEL_WIDTH,
-        oppositeSidebarWidth: WORKSPACE_EXTENSION_STRIP_WIDTH_PX,
+        oppositeSidebarWidth: 0,
       }),
     [workspaceLayoutWidth],
   );
@@ -463,6 +462,17 @@ export function WorkspaceLayout({
     );
   }, []);
 
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+
+  useEffect(() => {
+    const handleTogglePanel = () => {
+      setPanelCollapsed((current) => !current);
+    };
+
+    window.addEventListener("lifecycle:toggle-extension-panel", handleTogglePanel);
+    return () => window.removeEventListener("lifecycle:toggle-extension-panel", handleTogglePanel);
+  }, []);
+
   const canvasContent = supportsTerminalInteraction ? (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1 flex-col">
@@ -492,27 +502,37 @@ export function WorkspaceLayout({
   return (
     <div
       ref={workspaceLayoutRef}
-      className="flex min-h-0 flex-1 gap-1 overflow-hidden px-2 pb-2"
+      className="flex min-h-0 flex-1 overflow-hidden"
       data-slot="workspace-layout"
     >
-      <div className="flex min-w-0 flex-1 flex-col" data-slot="workspace-canvas">
+      <div className="flex min-w-0 flex-1 flex-col p-1.5" data-slot="workspace-canvas">
         {canvasContent}
       </div>
-      <div className="relative z-[1] flex shrink-0 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
-        <ExtensionPanel
-          activeSlot={activeExtensionSlot}
-          maxWidth={panelBounds.maxSize}
-          minWidth={panelBounds.minSize}
-          onResizeKeyDown={handlePanelResizeKeyDown}
-          onResizePointerDown={handlePanelResizePointerDown}
-          width={panelWidth}
-        />
-        <ExtensionBar
-          activeExtensionId={activeExtensionId}
-          onToggleExtension={handleToggleExtension}
-          slots={extensionSlots}
-        />
-      </div>
+      {!panelCollapsed && (
+        <div
+          className="relative z-[1] flex shrink-0 flex-col border-l border-[var(--border)] bg-[var(--surface)]"
+          style={activeExtensionSlot ? { width: `${panelWidth}px` } : undefined}
+        >
+          <div
+            aria-label="Resize extension panel"
+            aria-orientation="vertical"
+            aria-valuemax={panelBounds.maxSize}
+            aria-valuemin={panelBounds.minSize}
+            aria-valuenow={panelWidth}
+            className="absolute inset-y-0 -left-2 z-20 w-4 cursor-col-resize"
+            onKeyDown={handlePanelResizeKeyDown}
+            onPointerDown={handlePanelResizePointerDown}
+            role="separator"
+            tabIndex={0}
+          />
+          <ExtensionBar
+            activeExtensionId={activeExtensionId}
+            onToggleExtension={handleToggleExtension}
+            slots={extensionSlots}
+          />
+          <ExtensionPanel activeSlot={activeExtensionSlot} />
+        </div>
+      )}
     </div>
   );
 }

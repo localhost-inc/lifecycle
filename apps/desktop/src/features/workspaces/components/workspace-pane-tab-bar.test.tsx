@@ -59,8 +59,11 @@ describe("WorkspacePaneTabBar", () => {
       }),
     );
 
-    expect(markup).toContain("relative my-1 flex shrink-0 items-center gap-2 rounded-md px-3");
-    expect(markup).toContain("bg-[var(--surface-hover)]");
+    expect(markup).toContain(
+      "relative flex h-full shrink-0 items-center gap-2 border-l border-[var(--border)] px-3",
+    );
+    expect(markup).toContain("bg-[var(--surface)]");
+    expect(markup).toContain("h-0.5 bg-[var(--accent)]");
     expect(markup).toContain("text-sm");
     expect(markup).toContain("font-semibold");
     expect(markup).toContain("cursor-grab");
@@ -101,7 +104,8 @@ describe("WorkspacePaneTabBar", () => {
     expect(markup).toContain("padding-right:24px");
     expect(markup).toContain("scrollbar-width:none");
     expect(markup).toContain("-ms-overflow-style:none");
-    expect(markup).toContain("pl-1.5");
+    expect(markup).toContain("gap-0 overflow-x-auto");
+    expect(markup).toContain("first:border-l-0");
     expect(markup).toContain("z-[1]");
     expect(markup).not.toContain("right-0 z-10");
   });

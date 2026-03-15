@@ -53,6 +53,7 @@ export interface ProjectPageTab {
 }
 
 interface ProjectPageTabsProps {
+  actionsOutlet?: ReactNode;
   activeTabId: string;
   tabs: ProjectPageTab[];
   onCloseTab: (tabId: string) => void;
@@ -83,6 +84,7 @@ function hasStartedProjectTabDrag(
 }
 
 export function ProjectPageTabs({
+  actionsOutlet,
   activeTabId,
   tabs,
   onCloseTab,
@@ -458,6 +460,11 @@ export function ProjectPageTabs({
           })}
         </div>
       </div>
+      {actionsOutlet ? (
+        <div className="flex shrink-0 items-center px-2" data-no-drag>
+          {actionsOutlet}
+        </div>
+      ) : null}
     </header>
   );
 }

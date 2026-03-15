@@ -25,7 +25,23 @@ export const DEFAULT_LIFECYCLE_ROOT = "~/.lifecycle";
 export const DEFAULT_WORKTREE_ROOT = `${DEFAULT_LIFECYCLE_ROOT}/worktrees`;
 const SETTINGS_STORAGE_KEY = "lifecycle.desktop.settings";
 
+export type DefaultNewTabLaunch = "shell" | "claude" | "codex";
+
+export const DEFAULT_NEW_TAB_LAUNCH: DefaultNewTabLaunch = "shell";
+
+const VALID_NEW_TAB_LAUNCH_VALUES = new Set<string>(["shell", "claude", "codex"]);
+
+function normalizeDefaultNewTabLaunch(
+  value: string | undefined | null,
+): DefaultNewTabLaunch {
+  if (typeof value === "string" && VALID_NEW_TAB_LAUNCH_VALUES.has(value)) {
+    return value as DefaultNewTabLaunch;
+  }
+  return DEFAULT_NEW_TAB_LAUNCH;
+}
+
 export interface AppSettings {
+  defaultNewTabLaunch: DefaultNewTabLaunch;
   interfaceFontFamily: string;
   monospaceFontFamily: string;
   turnNotificationsMode: TurnNotificationMode;
@@ -35,6 +51,7 @@ export interface AppSettings {
 
 interface SettingsContextValue extends AppSettings {
   resetTypography: () => void;
+  setDefaultNewTabLaunch: (value: DefaultNewTabLaunch) => void;
   setInterfaceFontFamily: (value: string) => void;
   setMonospaceFontFamily: (value: string) => void;
   setTurnNotificationSound: (value: TurnNotificationSound) => void;
@@ -77,6 +94,7 @@ function normalizeWorktreeRoot(value: string | undefined | null): string {
 
 function buildDefaultSettings(): AppSettings {
   return {
+    defaultNewTabLaunch: DEFAULT_NEW_TAB_LAUNCH,
     interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
     monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
     turnNotificationsMode: DEFAULT_TURN_NOTIFICATION_MODE,
@@ -92,6 +110,7 @@ export function parseStoredSettings(raw: string | null | undefined): AppSettings
   try {
     const parsed = JSON.parse(raw) as Partial<AppSettings>;
     return {
+      defaultNewTabLaunch: normalizeDefaultNewTabLaunch(parsed.defaultNewTabLaunch),
       interfaceFontFamily: normalizeFontFamily(
         parsed.interfaceFontFamily,
         defaults.interfaceFontFamily,
@@ -132,6 +151,19 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     applyFontSettings(settings);
   }, [settings.interfaceFontFamily, settings.monospaceFontFamily]);
+
+  const setDefaultNewTabLaunch = useCallback(
+    (value: DefaultNewTabLaunch) => {
+      setSettings((prev) => {
+        const next = {
+          ...prev,
+          defaultNewTabLaunch: normalizeDefaultNewTabLaunch(value),
+        };
+        return persistSettings(next);
+      });
+    },
+    [persistSettings],
+  );
 
   const setWorktreeRoot = useCallback(
     (value: string) => {
@@ -217,9 +249,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
 
   const contextValue = useMemo<SettingsContextValue>(
     () => ({
+      defaultNewTabLaunch: settings.defaultNewTabLaunch,
       interfaceFontFamily: settings.interfaceFontFamily,
       monospaceFontFamily: settings.monospaceFontFamily,
       resetTypography,
+      setDefaultNewTabLaunch,
       setInterfaceFontFamily,
       setMonospaceFontFamily,
       setTurnNotificationSound,
@@ -230,12 +264,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setWorktreeRoot,
     }),
     [
+      settings.defaultNewTabLaunch,
       settings.interfaceFontFamily,
       settings.monospaceFontFamily,
       settings.turnNotificationSound,
       settings.turnNotificationsMode,
       settings.worktreeRoot,
       resetTypography,
+      setDefaultNewTabLaunch,
       setInterfaceFontFamily,
       setMonospaceFontFamily,
       setTurnNotificationSound,

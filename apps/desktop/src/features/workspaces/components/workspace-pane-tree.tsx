@@ -186,7 +186,7 @@ function ResizeHandle({
         onPointerDown={onPointerDown}
         className="group absolute inset-y-0 -left-2 z-20 flex w-4 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
       >
-        <div className="h-full w-px bg-transparent transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
+        <div className="h-full w-px bg-transparent transition-colors group-focus-visible:bg-[var(--ring)]" />
       </div>
     </div>
   ) : (
@@ -203,7 +203,7 @@ function ResizeHandle({
         onPointerDown={onPointerDown}
         className="group absolute inset-x-0 top-1/2 z-10 flex h-3 -translate-y-1/2 cursor-row-resize items-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
       >
-        <div className="h-px w-full bg-transparent transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
+        <div className="h-px w-full bg-transparent transition-colors group-focus-visible:bg-[var(--ring)]" />
       </div>
     </div>
   );
@@ -689,7 +689,7 @@ export function WorkspacePaneTree({
           }}
         >
           <div
-            className="flex h-10 items-stretch gap-0 border-b border-[var(--border)] bg-[var(--sidebar-selected)]"
+            className="flex h-10 items-stretch gap-0 border-b border-[var(--border)] bg-[var(--card)]"
             data-workspace-pane-header
           >
             <WorkspacePaneTabBar

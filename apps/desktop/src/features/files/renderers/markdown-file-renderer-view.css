@@ -12,9 +12,9 @@
 }
 
 .markdown-file-renderer a {
-  color: var(--accent-foreground);
+  color: var(--accent);
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--accent-foreground), transparent 55%);
+  text-decoration-color: color-mix(in srgb, var(--accent), transparent 55%);
   text-underline-offset: 3px;
   transition: color 150ms ease;
 }

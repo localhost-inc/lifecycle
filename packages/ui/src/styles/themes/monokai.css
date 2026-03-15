@@ -1,16 +1,17 @@
 :root[data-theme="monokai"] {
-  --background: #272822;
+  --background: #2f3028;
   --foreground: #f8f8f2;
-  --card: #2f3129;
-  --surface: #2a2c24;
+  --card: #34352d;
+  --surface: #272822;
   --sidebar-background: var(--surface);
   --sidebar-foreground: #fbfbf6;
   --sidebar-muted-foreground: #d5d3ca;
-  --sidebar-hover: #3f4035;
-  --sidebar-selected: #555446;
+  --sidebar-hover: #3a3b31;
+  --sidebar-selected: #4a4c41;
   --terminal-surface-background: var(--surface);
   --terminal-foreground: #f8f8f2;
-  --muted: #3e3d32;
+  --terminal-faint-opacity: 0.84;
+  --muted: #34352d;
   --muted-foreground: #b7b7ae;
   --border: #49483e;
   --primary: #f8f8f2;
@@ -20,8 +21,8 @@
   --destructive: #f92672;
   --destructive-foreground: #3f0d20;
   --ring: #a6e22e;
-  --surface-hover: #3e3d32;
-  --surface-selected: #49483e;
+  --surface-hover: #3a3b31;
+  --surface-selected: #4a4c41;
   --tab-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 12px 30px rgba(0, 0, 0, 0.22);
   --tab-shadow-drag: 0 16px 36px rgba(0, 0, 0, 0.28);
   --terminal-cursor-color: #66d9ef;

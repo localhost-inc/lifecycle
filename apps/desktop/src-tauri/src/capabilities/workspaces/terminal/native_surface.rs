@@ -38,6 +38,19 @@ fn validate_native_terminal_font_family(value: &str) -> Result<String, Lifecycle
     Ok(trimmed.to_string())
 }
 
+fn validate_native_terminal_theme_opacity(
+    field: &str,
+    value: f64,
+) -> Result<String, LifecycleError> {
+    if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+        return Err(LifecycleError::AttachFailed(format!(
+            "native terminal theme field `{field}` must be a finite number between 0 and 1"
+        )));
+    }
+
+    Ok(value.to_string())
+}
+
 fn quote_native_terminal_font_family(value: &str) -> String {
     let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
     format!("\"{escaped}\"")
@@ -58,6 +71,8 @@ pub(crate) fn build_native_terminal_theme_config(
     let background = validate_native_terminal_theme_value("background", &theme.background)?;
     let foreground = validate_native_terminal_theme_value("foreground", &theme.foreground)?;
     let cursor_color = validate_native_terminal_theme_value("cursorColor", &theme.cursor_color)?;
+    let faint_opacity =
+        validate_native_terminal_theme_opacity("faintOpacity", theme.faint_opacity)?;
     let selection_background =
         validate_native_terminal_theme_value("selectionBackground", &theme.selection_background)?;
     let selection_foreground =
@@ -76,6 +91,7 @@ pub(crate) fn build_native_terminal_theme_config(
     config_lines.push(format!("background = {background}"));
     config_lines.push(format!("foreground = {foreground}"));
     config_lines.push(format!("cursor-color = {cursor_color}"));
+    config_lines.push(format!("faint-opacity = {faint_opacity}"));
     config_lines.push(format!("selection-background = {selection_background}"));
     config_lines.push(format!("selection-foreground = {selection_foreground}"));
     config_lines.push("background-opacity = 1".to_string());
@@ -138,6 +154,7 @@ mod tests {
             &NativeTerminalTheme {
                 background: "#1a1a1a".to_string(),
                 cursor_color: "#539bf5".to_string(),
+                faint_opacity: 0.84,
                 foreground: "#adbac7".to_string(),
                 palette: vec![
                     "#545d68".to_string(),
@@ -171,6 +188,7 @@ mod tests {
         assert!(config.contains("background = #1a1a1a"));
         assert!(config.contains("foreground = #adbac7"));
         assert!(config.contains("cursor-color = #539bf5"));
+        assert!(config.contains("faint-opacity = 0.84"));
         assert!(config.contains("selection-background = #444c56"));
         assert!(config.contains("selection-foreground = #adbac7"));
         assert!(config.contains("window-padding-x = 0"));
@@ -183,6 +201,7 @@ mod tests {
             &NativeTerminalTheme {
                 background: "#09090b".to_string(),
                 cursor_color: "#93c5fd".to_string(),
+                faint_opacity: 0.84,
                 foreground: "#fafaf9".to_string(),
                 palette: vec!["#27272a".to_string(); 15],
                 selection_background: "#27272a".to_string(),
@@ -206,6 +225,7 @@ mod tests {
             &NativeTerminalTheme {
                 background: "#09090b".to_string(),
                 cursor_color: "#93c5fd".to_string(),
+                faint_opacity: 0.84,
                 foreground: "#fafaf9".to_string(),
                 palette: vec!["#27272a".to_string(); 16],
                 selection_background: "#27272a".to_string(),
@@ -218,6 +238,30 @@ mod tests {
         match error {
             LifecycleError::AttachFailed(message) => {
                 assert!(message.contains("font family"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn build_native_terminal_theme_config_rejects_out_of_range_faint_opacity() {
+        let error = build_native_terminal_theme_config(
+            &NativeTerminalTheme {
+                background: "#09090b".to_string(),
+                cursor_color: "#93c5fd".to_string(),
+                faint_opacity: 1.2,
+                foreground: "#fafaf9".to_string(),
+                palette: vec!["#27272a".to_string(); 16],
+                selection_background: "#27272a".to_string(),
+                selection_foreground: "#fafaf9".to_string(),
+            },
+            "Geist Mono",
+        )
+        .expect_err("out of range faint opacity must fail");
+
+        match error {
+            LifecycleError::AttachFailed(message) => {
+                assert!(message.contains("faintOpacity"));
             }
             other => panic!("unexpected error: {other}"),
         }

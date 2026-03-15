@@ -10,6 +10,7 @@
   --sidebar-selected: #585b70;
   --terminal-surface-background: var(--surface);
   --terminal-foreground: #cdd6f4;
+  --terminal-faint-opacity: 0.82;
   --muted: #313244;
   --muted-foreground: #a6adc8;
   --border: #45475a;
@@ -21,7 +22,7 @@
   --destructive-foreground: #1e1e2e;
   --ring: #89b4fa;
   --surface-hover: #45475a;
-  --surface-selected: #45475a;
+  --surface-selected: #585b70;
   --tab-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 12px 30px rgba(0, 0, 0, 0.22);
   --tab-shadow-drag: 0 16px 36px rgba(0, 0, 0, 0.28);
   --terminal-cursor-color: #f5e0dc;

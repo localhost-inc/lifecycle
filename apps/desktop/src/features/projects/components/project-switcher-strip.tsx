@@ -2,7 +2,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ProjectRecord } from "@lifecycle/contracts";
 import { Button, Spinner } from "@lifecycle/ui";
-import { ChevronDown, CircleUserRound, FolderPlus } from "lucide-react";
+import { ChevronDown, CircleUserRound, Plus } from "lucide-react";
 import { type MouseEvent, useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -153,7 +153,7 @@ export function ProjectSwitcherStrip({
     >
       <Button
         aria-label={`Open ${activeContextName} context`}
-        className="h-7 shrink-0 gap-1.5 rounded-[var(--radius-xl)] border border-[color-mix(in_srgb,var(--border),var(--foreground)_8%)] bg-[color-mix(in_srgb,var(--surface),var(--foreground)_4%)] px-2 text-[11px] font-medium text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--surface),var(--foreground)_8%)]"
+        className="h-7 shrink-0 gap-1.5 rounded-[8px] bg-[color-mix(in_srgb,var(--surface),var(--foreground)_4%)] px-2 text-[11px] font-medium text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--surface),var(--foreground)_8%)]"
         data-slot="project-switcher-context"
         onClick={onOpenSettings}
         title={contextControlTitle(activeContextName, authSession, authSessionLoading)}
@@ -176,10 +176,10 @@ export function ProjectSwitcherStrip({
                 key={project.id}
                 aria-label={`Open project ${project.name}`}
                 className={[
-                  "inline-flex h-6.5 shrink-0 items-center gap-1.5 rounded-[var(--radius-xl)] border px-2 text-[12px] font-medium leading-none transition-colors",
+                  "inline-flex h-6.5 shrink-0 items-center gap-1.5 rounded-[8px] px-2 text-[12px] font-medium leading-none transition-colors",
                   selected
-                    ? "border-[color-mix(in_srgb,var(--border),var(--foreground)_10%)] bg-[color-mix(in_srgb,var(--surface),var(--foreground)_6%)] text-[var(--foreground)]"
-                    : "border-transparent bg-transparent text-[var(--muted-foreground)] hover:bg-[color-mix(in_srgb,var(--surface),var(--foreground)_3%)] hover:text-[var(--foreground)]",
+                    ? "bg-[color-mix(in_srgb,var(--surface),var(--foreground)_6%)] text-[var(--foreground)]"
+                    : "bg-transparent text-[var(--muted-foreground)] hover:bg-[color-mix(in_srgb,var(--surface),var(--foreground)_3%)] hover:text-[var(--foreground)]",
                 ].join(" ")}
                 to={`/projects/${project.id}`}
                 title={project.name}
@@ -198,12 +198,10 @@ export function ProjectSwitcherStrip({
               </Link>
             );
           })}
+          <Button aria-label="Add project" className="shrink-0" onClick={onAddProject} size="icon" variant="ghost">
+            <Plus size={14} strokeWidth={2} />
+          </Button>
         </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-0.5">
-        <Button aria-label="Add project" onClick={onAddProject} size="icon" variant="ghost">
-          <FolderPlus size={16} />
-        </Button>
       </div>
     </header>
   );

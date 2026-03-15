@@ -38,7 +38,7 @@ describe("SurfaceLaunchActions", () => {
     expect(resolveSurfaceLaunchTooltipAlign(2, actions.length)).toBe("end");
   });
 
-  test("renders all action buttons with titles", () => {
+  test("renders a single trigger button with 'New tab' title", () => {
     const markup = renderToStaticMarkup(
       createElement(SurfaceLaunchActions, {
         actions,
@@ -46,16 +46,12 @@ describe("SurfaceLaunchActions", () => {
       }),
     );
 
-    expect(markup).toContain('title="New shell"');
-    expect(markup).toContain('title="New Claude session"');
-    expect(markup).toContain('title="New Codex session"');
+    expect(markup).toContain('title="New tab"');
     expect(markup).toContain("rounded-md");
     expect(markup).toContain("h-7 w-7");
-    expect(markup).toContain("gap-0.5");
-    expect(markup).not.toContain("bg-[var(--muted)]");
   });
 
-  test("renders loading dot when action is loading", () => {
+  test("renders loading dot when any action is loading", () => {
     const loadingActions = actions.map((a) => (a.key === "shell" ? { ...a, loading: true } : a));
 
     const markup = renderToStaticMarkup(

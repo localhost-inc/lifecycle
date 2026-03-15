@@ -143,7 +143,7 @@ describe("ProjectRoute", () => {
     expect(markup).not.toContain('data-slot="project-sidebar"');
   });
 
-  test("renders a workspace header below the page tabs for workspace tabs", async () => {
+  test("renders Fork action inside the tab rail for workspace tabs", async () => {
     const workspaceTabContentModule =
       await import("../../workspaces/components/workspace-tab-content");
     spyOn(workspaceTabContentModule, "WorkspaceTabContent").mockImplementation((() =>
@@ -158,19 +158,16 @@ describe("ProjectRoute", () => {
     );
 
     expect(markup).toContain('data-slot="project-page-tabs"');
-    expect(markup).toContain('data-slot="workspace-header"');
+    expect(markup).not.toContain('data-slot="workspace-header"');
     expect(markup).toContain('data-slot="workspace"');
     expect(markup).toContain('data-slot="workspace-layout"');
     expect(markup).toContain(">Fork<");
-    expect(markup.indexOf('data-slot="project-page-tabs"')).toBeLessThan(
-      markup.indexOf('data-slot="workspace"'),
-    );
-    expect(markup.indexOf('data-slot="workspace"')).toBeLessThan(
-      markup.indexOf('data-slot="workspace-header"'),
-    );
-    expect(markup.indexOf('data-slot="workspace-header"')).toBeLessThan(
-      markup.indexOf('data-slot="workspace-layout"'),
-    );
+
+    const tabsStart = markup.indexOf('data-slot="project-page-tabs"');
+    const forkIndex = markup.indexOf(">Fork<");
+    const workspaceStart = markup.indexOf('data-slot="workspace"');
+    expect(tabsStart).toBeLessThan(forkIndex);
+    expect(forkIndex).toBeLessThan(workspaceStart);
   });
 
   test("does not render the legacy workspace right-rail host in the project route", async () => {

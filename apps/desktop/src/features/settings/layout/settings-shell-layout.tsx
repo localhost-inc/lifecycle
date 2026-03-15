@@ -37,7 +37,11 @@ import {
   warmAudioContext,
 } from "../../notifications/lib/turn-notification-runtime";
 import { SettingsFieldRow, SettingsRow, SettingsSection } from "../components/settings-primitives";
-import { DEFAULT_WORKTREE_ROOT, useSettings } from "../state/app-settings-provider";
+import {
+  DEFAULT_WORKTREE_ROOT,
+  useSettings,
+  type DefaultNewTabLaunch,
+} from "../state/app-settings-provider";
 import {
   readSettingsSectionHash,
   settingsSections,
@@ -58,9 +62,11 @@ export function SettingsShellLayout() {
     session: authSession,
   } = useAuthSession();
   const {
+    defaultNewTabLaunch,
     interfaceFontFamily,
     monospaceFontFamily,
     resetTypography,
+    setDefaultNewTabLaunch,
     setInterfaceFontFamily,
     setMonospaceFontFamily,
     setTurnNotificationSound,
@@ -98,6 +104,14 @@ export function SettingsShellLayout() {
         label: option.label,
         value: option.value,
       })),
+    [],
+  );
+  const defaultNewTabLaunchItems = useMemo(
+    () => [
+      { label: "Shell", value: "shell" as const },
+      { label: "Claude", value: "claude" as const },
+      { label: "Codex", value: "codex" as const },
+    ],
     [],
   );
   const interfaceFontPresets = useMemo(() => getInterfaceFontPresets(), []);
@@ -314,7 +328,7 @@ export function SettingsShellLayout() {
                     Settings
                   </h1>
                   <p className="mt-2 max-w-2xl text-sm text-[var(--muted-foreground)]">
-                    Account state, appearance, notifications, and workspace defaults.
+                    Account state, appearance, notifications, workspace, and worktree defaults.
                   </p>
                 </header>
 
@@ -559,6 +573,38 @@ export function SettingsShellLayout() {
                       </p>
                     </div>
                   </div>
+                </SettingsSection>
+
+                <SettingsSection
+                  id="workspace"
+                  label="Workspace"
+                  ref={(node) => {
+                    sectionRefs.current.workspace = node;
+                  }}
+                >
+                  <SettingsRow
+                    label="Default new tab"
+                    description="The session type launched by Cmd+T and the new tab shortcut."
+                  >
+                    <Select
+                      items={defaultNewTabLaunchItems}
+                      onValueChange={(value: string) =>
+                        setDefaultNewTabLaunch(value as DefaultNewTabLaunch)
+                      }
+                      value={defaultNewTabLaunch}
+                    >
+                      <SelectTrigger className="w-full min-w-0 md:w-48" id="default-new-tab-launch">
+                        <SelectValue placeholder="Select a default" />
+                      </SelectTrigger>
+                      <SelectContent alignItemWithTrigger={false}>
+                        {defaultNewTabLaunchItems.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </SettingsRow>
                 </SettingsSection>
 
                 <SettingsSection

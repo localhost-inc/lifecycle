@@ -12,6 +12,13 @@ function readThemeToken(css: string, token: string): string[] {
     .filter((value) => value.length > 0);
 }
 
+function readSingleThemeToken(css: string, token: string): string {
+  const values = [...new Set(readThemeToken(css, token))];
+
+  expect(values.length).toBeGreaterThan(0);
+  return values[0] ?? "";
+}
+
 describe("theme.css", () => {
   test("defines a semantic accent token in every theme file", () => {
     const themesDir = new URL("./themes/", import.meta.url);
@@ -27,15 +34,14 @@ describe("theme.css", () => {
     }
   });
 
-  test("uses the lifecycle accent blue in the light and dark presets", () => {
-    for (const preset of ["light", "dark"] as const) {
-      const css = readThemeFile(preset);
-      const accentValues = readThemeToken(css, "--accent");
-      const accentForegroundValues = readThemeToken(css, "--accent-foreground");
+  test("uses monochrome accent tokens in the light and dark presets", () => {
+    const lightCss = readThemeFile("light");
+    expect(readThemeToken(lightCss, "--accent")[0]).toBe("#111111");
+    expect(readThemeToken(lightCss, "--accent-foreground")[0]).toBe("#ffffff");
 
-      expect(accentValues[0]).toBe("#1877f2");
-      expect(accentForegroundValues[0]).toBe("#ffffff");
-    }
+    const darkCss = readThemeFile("dark");
+    expect(readThemeToken(darkCss, "--accent")[0]).toBe("#ffffff");
+    expect(readThemeToken(darkCss, "--accent-foreground")[0]).toBe("#0f0d0b");
   });
 
   test("keeps terminal surfaces aligned with the theme surface token in every preset", () => {
@@ -51,6 +57,26 @@ describe("theme.css", () => {
       expect(terminalSurfaceValues.length).toBeGreaterThan(0);
       for (const value of terminalSurfaceValues) {
         expect(value).toBe("var(--surface)");
+      }
+    }
+  });
+
+  test("defines a readable terminal faint opacity token in every preset", () => {
+    const themesDir = new URL("./themes/", import.meta.url);
+    const themeFiles = readdirSync(themesDir).filter(
+      (file) => file.endsWith(".css") && file !== "index.css",
+    );
+
+    for (const file of themeFiles) {
+      const css = readFileSync(join(themesDir.pathname, file), "utf8");
+      const faintOpacityValues = readThemeToken(css, "--terminal-faint-opacity");
+
+      expect(faintOpacityValues.length).toBeGreaterThan(0);
+      for (const value of faintOpacityValues) {
+        const numericValue = Number.parseFloat(value);
+        expect(Number.isFinite(numericValue)).toBe(true);
+        expect(numericValue).toBeGreaterThanOrEqual(0.75);
+        expect(numericValue).toBeLessThanOrEqual(0.9);
       }
     }
   });
@@ -107,32 +133,47 @@ describe("theme.css", () => {
     expect(css).toContain('[data-lifecycle-logo-path="right"]');
   });
 
-  test("keeps shell layers visually distinct in the light and dark presets", () => {
-    for (const preset of ["light", "dark"] as const) {
-      const css = readThemeFile(preset);
-      const backgrounds = readThemeToken(css, "--background");
-      const surfaces = readThemeToken(css, "--surface");
-      const cards = readThemeToken(css, "--card");
-      const surfaceHovers = readThemeToken(css, "--surface-hover");
-      const surfaceSelected = readThemeToken(css, "--surface-selected");
-      const sidebarHovers = readThemeToken(css, "--sidebar-hover");
-      const sidebarSelected = readThemeToken(css, "--sidebar-selected");
+  test("keeps shell layers visually distinct in every preset", () => {
+    const themesDir = new URL("./themes/", import.meta.url);
+    const themeFiles = readdirSync(themesDir).filter(
+      (file) => file.endsWith(".css") && file !== "index.css",
+    );
 
-      expect(backgrounds.length).toBeGreaterThan(0);
-      expect(surfaces.length).toBeGreaterThan(0);
-      expect(cards.length).toBeGreaterThan(0);
+    for (const file of themeFiles) {
+      const css = readFileSync(join(themesDir.pathname, file), "utf8");
+      const background = readSingleThemeToken(css, "--background");
+      const surface = readSingleThemeToken(css, "--surface");
+      const card = readSingleThemeToken(css, "--card");
+      const surfaceHover = readSingleThemeToken(css, "--surface-hover");
+      const surfaceSelected = readSingleThemeToken(css, "--surface-selected");
+      const sidebarHover = readSingleThemeToken(css, "--sidebar-hover");
+      const sidebarSelected = readSingleThemeToken(css, "--sidebar-selected");
 
-      for (const value of backgrounds) {
-        expect(value).not.toBe(surfaces[0]);
-        expect(value).not.toBe(cards[0]);
-      }
+      expect(background).not.toBe(surface);
+      expect(background).not.toBe(card);
+      expect(surface).not.toBe(card);
+      expect(surfaceHover).not.toBe(surfaceSelected);
+      expect(sidebarHover).not.toBe(sidebarSelected);
+    }
+  });
 
-      for (const value of surfaces) {
-        expect(value).not.toBe(cards[0]);
-      }
+  test("keeps terminal ansi lanes distinguishable in every preset", () => {
+    const themesDir = new URL("./themes/", import.meta.url);
+    const themeFiles = readdirSync(themesDir).filter(
+      (file) => file.endsWith(".css") && file !== "index.css",
+    );
 
-      expect(surfaceHovers[0]).not.toBe(surfaceSelected[0]);
-      expect(sidebarHovers[0]).not.toBe(sidebarSelected[0]);
+    for (const file of themeFiles) {
+      const css = readFileSync(join(themesDir.pathname, file), "utf8");
+      const green = readSingleThemeToken(css, "--terminal-ansi-green");
+      const blue = readSingleThemeToken(css, "--terminal-ansi-blue");
+      const cyan = readSingleThemeToken(css, "--terminal-ansi-cyan");
+      const brightBlue = readSingleThemeToken(css, "--terminal-ansi-bright-blue");
+      const brightCyan = readSingleThemeToken(css, "--terminal-ansi-bright-cyan");
+
+      expect(green).not.toBe(cyan);
+      expect(blue).not.toBe(cyan);
+      expect(brightBlue).not.toBe(brightCyan);
     }
   });
 });

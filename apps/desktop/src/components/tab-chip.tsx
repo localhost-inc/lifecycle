@@ -57,7 +57,7 @@ export function TabChip({
       ? "bg-[var(--card)]"
       : activeSurface === "surface"
         ? "bg-[var(--surface)]"
-      : "bg-[var(--background)]";
+        : "bg-[var(--background)]";
   const activeClasses = active
     ? `${activeSurfaceClass} text-[var(--foreground)]`
     : "bg-transparent text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]";
@@ -90,7 +90,7 @@ export function TabChip({
       {active ? (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-[var(--accent)]"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-[var(--accent)]"
         />
       ) : null}
       {indicator}

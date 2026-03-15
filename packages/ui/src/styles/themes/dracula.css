@@ -10,6 +10,7 @@
   --sidebar-selected: #6272a4;
   --terminal-surface-background: var(--surface);
   --terminal-foreground: #f8f8f2;
+  --terminal-faint-opacity: 0.84;
   --muted: #44475a;
   --muted-foreground: #6272a4;
   --border: #44475a;
