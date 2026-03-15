@@ -11,6 +11,10 @@ import {
   useState,
 } from "react";
 import { useNavigate } from "react-router-dom";
+import {
+  SHORTCUT_HANDLER_PRIORITY,
+  useShortcutRegistration,
+} from "../../../app/shortcuts/shortcut-router";
 import { useHistoryAvailability } from "../../../app/history-stack";
 import { TabChip } from "../../../components/tab-chip";
 import {
@@ -67,21 +71,6 @@ function shouldSkipDrag(target: EventTarget | null): boolean {
 
   return (
     target.closest("button, a, input, textarea, select, [role='button'], [data-no-drag]") !== null
-  );
-}
-
-function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
-
-  const tagName = target.tagName.toLowerCase();
-  return (
-    target.isContentEditable ||
-    tagName === "input" ||
-    tagName === "textarea" ||
-    tagName === "select" ||
-    target.closest("[contenteditable='true']") !== null
   );
 }
 
@@ -262,32 +251,21 @@ export function ProjectPageTabs({
     navigate(1);
   }, [canGoForward, navigate]);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.altKey || event.shiftKey || isEditableTarget(event.target)) {
-        return;
-      }
+  useShortcutRegistration({
+    handler: () => {
+      goBack();
+    },
+    id: "project.go-back",
+    priority: SHORTCUT_HANDLER_PRIORITY.project,
+  });
 
-      const isMacShortcut = event.metaKey && !event.ctrlKey;
-      const isNonMacShortcut = event.ctrlKey && !event.metaKey;
-      if (!isMacShortcut && !isNonMacShortcut) {
-        return;
-      }
-
-      if (event.key === "[") {
-        event.preventDefault();
-        goBack();
-      }
-
-      if (event.key === "]") {
-        event.preventDefault();
-        goForward();
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [goBack, goForward]);
+  useShortcutRegistration({
+    handler: () => {
+      goForward();
+    },
+    id: "project.go-forward",
+    priority: SHORTCUT_HANDLER_PRIORITY.project,
+  });
 
   useEffect(() => {
     const clearDragSession = () => {
@@ -395,7 +373,7 @@ export function ProjectPageTabs({
 
   return (
     <header
-      className="flex h-10 shrink-0 items-stretch gap-0 border-b border-[var(--border)] bg-[var(--panel)] px-0"
+      className="flex h-10 shrink-0 items-stretch gap-0 border-b border-[var(--border)] bg-transparent px-0"
       data-slot="project-page-tabs"
       data-tauri-drag-region
       onMouseDown={handleMouseDown}

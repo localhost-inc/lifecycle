@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   claimNativeTerminalSurfaceLease,
+  createNativeTerminalSurfaceSyncCoordinator,
   createNativeTerminalSurfaceLeaseRegistry,
   resolveNativeTerminalSurfaceSyncResultAction,
   resolveNativeTerminalSurfaceInteraction,
@@ -105,6 +106,109 @@ describe("shouldHideNativeTerminalSurfaceForTabDrag", () => {
         width: 960,
       }),
     ).toBeFalse();
+  });
+});
+
+describe("native terminal sync coordination", () => {
+  test("coalesces repeated schedule requests into one animation frame sync", async () => {
+    const frameCallbacks: FrameRequestCallback[] = [];
+    let syncCallCount = 0;
+
+    const coordinator = createNativeTerminalSurfaceSyncCoordinator({
+      cancelFrame: () => {},
+      requestFrame: (callback) => {
+        frameCallbacks.push(callback);
+        return frameCallbacks.length;
+      },
+      sync: async () => {
+        syncCallCount += 1;
+      },
+    });
+
+    coordinator.scheduleSync();
+    coordinator.scheduleSync();
+
+    expect(frameCallbacks).toHaveLength(1);
+
+    const firstFrameCallback = frameCallbacks[0];
+    if (!firstFrameCallback) {
+      throw new Error("expected a scheduled animation frame callback");
+    }
+
+    firstFrameCallback(0);
+    await Promise.resolve();
+
+    expect(syncCallCount).toBe(1);
+  });
+
+  test("runs only one follow-up sync after repeated requests during an active sync", async () => {
+    const frameCallbacks: FrameRequestCallback[] = [];
+    let syncCallCount = 0;
+    let releaseFirstSync: () => void = () => {
+      throw new Error("expected the first sync promise resolver");
+    };
+
+    const coordinator = createNativeTerminalSurfaceSyncCoordinator({
+      cancelFrame: () => {},
+      requestFrame: (callback) => {
+        frameCallbacks.push(callback);
+        return frameCallbacks.length;
+      },
+      sync: () => {
+        syncCallCount += 1;
+        if (syncCallCount === 1) {
+          return new Promise<void>((resolve) => {
+            releaseFirstSync = () => {
+              resolve();
+            };
+          });
+        }
+
+        return Promise.resolve();
+      },
+    });
+
+    coordinator.scheduleSync();
+    const firstFrameCallback = frameCallbacks[0];
+    if (!firstFrameCallback) {
+      throw new Error("expected a scheduled animation frame callback");
+    }
+
+    firstFrameCallback(0);
+
+    expect(syncCallCount).toBe(1);
+
+    coordinator.scheduleSync();
+    coordinator.scheduleSync();
+
+    expect(frameCallbacks).toHaveLength(1);
+
+    releaseFirstSync();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(syncCallCount).toBe(2);
+  });
+
+  test("flushSync cancels a queued frame and runs immediately", async () => {
+    const cancelledFrameIds: number[] = [];
+    let syncCallCount = 0;
+
+    const coordinator = createNativeTerminalSurfaceSyncCoordinator({
+      cancelFrame: (frameId) => {
+        cancelledFrameIds.push(frameId);
+      },
+      requestFrame: () => 17,
+      sync: async () => {
+        syncCallCount += 1;
+      },
+    });
+
+    coordinator.scheduleSync();
+    await coordinator.flushSync();
+
+    expect(cancelledFrameIds).toEqual([17]);
+    expect(syncCallCount).toBe(1);
   });
 });
 

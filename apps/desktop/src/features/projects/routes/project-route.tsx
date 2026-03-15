@@ -1,12 +1,22 @@
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
 import { Activity, GitPullRequest, LayoutGrid, TerminalSquare } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext, useParams, useSearchParams } from "react-router-dom";
 import { AppStatusBar } from "../../../components/layout/app-status-bar";
 import type { AppShellOutletContext } from "../../../components/layout/app-shell-context";
+import {
+  SHORTCUT_HANDLER_PRIORITY,
+  useShortcutRegistration,
+} from "../../../app/shortcuts/shortcut-router";
 import { WorkspaceHeader } from "../../workspaces/components/workspace-header";
 import { getWorkspaceDisplayName } from "../../workspaces/lib/workspace-display";
+import { workspaceSupportsFilesystemInteraction } from "../../workspaces/lib/workspace-capabilities";
+import {
+  shouldTreatWindowCloseAsTabClose,
+} from "../../workspaces/components/workspace-canvas-shortcuts";
 import { WorkspaceTabContent } from "../../workspaces/components/workspace-tab-content";
 import { ProjectActivitySurface } from "../components/project-activity-surface";
 import { ProjectOverviewSurface } from "../components/project-overview-surface";
@@ -23,6 +33,7 @@ import {
   updateProjectRouteFocus,
 } from "../lib/project-route-state";
 import {
+  canCloseProjectContentTab,
   closeProjectContentTab,
   focusProjectViewTab,
   focusPullRequestTab,
@@ -32,6 +43,7 @@ import {
   projectContentTabsStateEquals,
   readProjectContentTabsState,
   reorderProjectContentTabs,
+  resolveProjectContentTabIdToClose,
   writeProjectContentTabsState,
 } from "../state/project-content-tabs";
 import type { ProjectContentTabPlacement } from "../lib/project-content-tab-order";
@@ -68,10 +80,6 @@ function focusRouteTab(
   }
 
   return focusProjectViewTab(state, routeFocus.viewId);
-}
-
-function isOverviewTab(tab: ProjectContentTab): boolean {
-  return tab.kind === "project-view" && tab.viewId === "overview";
 }
 
 function getProjectViewTabLabel(viewId: ProjectViewId): string {
@@ -160,6 +168,8 @@ export function ProjectRoute() {
       workspacesById,
     }),
   );
+  const closeShortcutTriggeredAtRef = useRef(0);
+  const closeShortcutHandledAtRef = useRef(0);
 
   useEffect(() => {
     if (!projectId) {
@@ -210,6 +220,8 @@ export function ProjectRoute() {
   const activeProjectViewTab = activeTab?.kind === "project-view" ? activeTab : null;
   const activeWorkspace =
     activeTab?.kind === "workspace" ? (workspacesById.get(activeTab.workspaceId) ?? null) : null;
+  const activeWorkspaceSupportsCanvas =
+    activeWorkspace !== null && workspaceSupportsFilesystemInteraction(activeWorkspace);
 
   useEffect(() => {
     if (routeFocusAvailable) {
@@ -276,6 +288,20 @@ export function ProjectRoute() {
     [handleFocusTab, routeFocus, tabState],
   );
 
+  const handleCloseActiveProjectTab = useCallback(() => {
+    const tabId = resolveProjectContentTabIdToClose({
+      activeTab,
+      activeWorkspaceSupportsCanvas,
+    });
+    if (!tabId) {
+      return false;
+    }
+
+    closeShortcutHandledAtRef.current = Date.now();
+    handleCloseTab(tabId);
+    return true;
+  }, [activeTab, activeWorkspaceSupportsCanvas, handleCloseTab]);
+
   const handleReorderTabs = useCallback(
     (draggedTabId: string, targetTabId: string, placement: ProjectContentTabPlacement) => {
       setTabState((currentState) =>
@@ -284,6 +310,64 @@ export function ProjectRoute() {
     },
     [],
   );
+
+  useShortcutRegistration({
+    enabled:
+      resolveProjectContentTabIdToClose({
+        activeTab,
+        activeWorkspaceSupportsCanvas,
+      }) !== null,
+    handler: () => {
+      closeShortcutTriggeredAtRef.current = Date.now();
+      return handleCloseActiveProjectTab();
+    },
+    id: "workspace.close-active-tab",
+    priority: SHORTCUT_HANDLER_PRIORITY.project,
+  });
+
+  useEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+
+    void getCurrentWindow()
+      .onCloseRequested((event) => {
+        const now = Date.now();
+        if (
+          !resolveProjectContentTabIdToClose({
+            activeTab,
+            activeWorkspaceSupportsCanvas,
+          }) ||
+          !shouldTreatWindowCloseAsTabClose(closeShortcutTriggeredAtRef.current, now)
+        ) {
+          return;
+        }
+
+        closeShortcutTriggeredAtRef.current = 0;
+        event.preventDefault();
+        if (shouldTreatWindowCloseAsTabClose(closeShortcutHandledAtRef.current, now)) {
+          return;
+        }
+
+        handleCloseActiveProjectTab();
+      })
+      .then((cleanup) => {
+        if (disposed) {
+          cleanup();
+          return;
+        }
+
+        unlisten = cleanup;
+      });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [activeTab, activeWorkspaceSupportsCanvas, handleCloseActiveProjectTab]);
 
   const handleOpenProjectView = useCallback(
     (viewId: ProjectViewId) => {
@@ -324,7 +408,7 @@ export function ProjectRoute() {
   const pageTabs = useMemo<ProjectPageTab[]>(
     () =>
       tabState.tabs.map((tab) => ({
-        closable: !isOverviewTab(tab),
+        closable: canCloseProjectContentTab(tab),
         id: tab.id,
         icon:
           tab.kind === "workspace" ? (
@@ -417,7 +501,10 @@ export function ProjectRoute() {
                 tabs={pageTabs}
               />
               {activeWorkspace ? (
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-slot="workspace">
+                <div
+                  className="workspace-canvas-grid flex min-h-0 min-w-0 flex-1 flex-col"
+                  data-slot="workspace"
+                >
                   <WorkspaceHeader
                     onFork={() => void onForkWorkspace(activeWorkspace)}
                     workspace={activeWorkspace}
@@ -425,6 +512,7 @@ export function ProjectRoute() {
                   <div className="flex min-h-0 min-w-0 flex-1">
                     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                       <WorkspaceTabContent
+                        onCloseWorkspaceTab={handleCloseActiveProjectTab}
                         onOpenPullRequest={handleOpenPullRequestSummary}
                         workspaceId={activeWorkspace.id}
                       />

@@ -38,6 +38,12 @@ interface NativeTerminalSurfaceLease {
 
 type NativeTerminalSurfaceSyncResultAction = "apply" | "hide" | "ignore";
 
+interface NativeTerminalSurfaceSyncCoordinator {
+  cancelScheduledSync: () => void;
+  flushSync: () => Promise<void>;
+  scheduleSync: () => void;
+}
+
 // DOM splitters cannot stack above the sibling native NSView, so keep the
 // embedded surface slightly inset from the shell seams.
 const NATIVE_TERMINAL_EDGE_GUTTER_PX = 6;
@@ -165,6 +171,73 @@ export function resolveNativeTerminalSurfaceSyncResultAction({
   return registry.has(terminalId) ? "ignore" : "hide";
 }
 
+export function createNativeTerminalSurfaceSyncCoordinator({
+  cancelFrame,
+  requestFrame,
+  sync,
+}: {
+  cancelFrame: (frameId: number) => void;
+  requestFrame: (callback: FrameRequestCallback) => number;
+  sync: () => Promise<void>;
+}): NativeTerminalSurfaceSyncCoordinator {
+  let activeSync: Promise<void> | null = null;
+  let frameId: number | null = null;
+  let resyncRequested = false;
+
+  const runSyncLoop = (): Promise<void> => {
+    if (activeSync) {
+      resyncRequested = true;
+      return activeSync;
+    }
+
+    activeSync = (async () => {
+      try {
+        do {
+          resyncRequested = false;
+          await sync();
+        } while (resyncRequested);
+      } finally {
+        activeSync = null;
+      }
+    })();
+
+    return activeSync;
+  };
+
+  return {
+    cancelScheduledSync: () => {
+      if (frameId !== null) {
+        cancelFrame(frameId);
+        frameId = null;
+      }
+      resyncRequested = false;
+    },
+    flushSync: () => {
+      if (frameId !== null) {
+        cancelFrame(frameId);
+        frameId = null;
+      }
+
+      return runSyncLoop();
+    },
+    scheduleSync: () => {
+      if (frameId !== null) {
+        return;
+      }
+
+      if (activeSync !== null) {
+        resyncRequested = true;
+        return;
+      }
+
+      frameId = requestFrame(() => {
+        frameId = null;
+        void runSyncLoop();
+      });
+    },
+  };
+}
+
 function readNativeTerminalResolvedTheme(): ResolvedTheme {
   if (typeof document === "undefined") {
     return resolveTheme(DEFAULT_THEME_PREFERENCE.theme, getSystemThemeAppearance(null));
@@ -197,10 +270,11 @@ export function NativeTerminalSurface({
 }: NativeTerminalSurfaceProps) {
   const ownerRef = useRef(Symbol("native-terminal-surface-owner"));
   const hostRef = useRef<HTMLDivElement | null>(null);
-  const frameIdRef = useRef<number | null>(null);
   const lifecycleTokenRef = useRef(0);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const shellResizeInProgressRef = useRef(false);
+  const syncCoordinatorRef = useRef<NativeTerminalSurfaceSyncCoordinator | null>(null);
+  const syncSurfaceRef = useRef<() => Promise<void>>(async () => {});
   const [attachState, setAttachState] = useState<NativeTerminalSurfaceAttachState>(() =>
     terminalHasLiveSession(terminal.status) ? "attaching" : "attached",
   );
@@ -209,13 +283,17 @@ export function NativeTerminalSurface({
   const resolvedTheme = readNativeTerminalResolvedTheme();
   const terminalFontFamily = readNativeTerminalMonospaceFontFamily();
 
-  const cancelScheduledSync = () => {
-    if (frameIdRef.current === null) {
-      return;
+  const getSyncCoordinator = (): NativeTerminalSurfaceSyncCoordinator => {
+    if (syncCoordinatorRef.current) {
+      return syncCoordinatorRef.current;
     }
 
-    window.cancelAnimationFrame(frameIdRef.current);
-    frameIdRef.current = null;
+    syncCoordinatorRef.current = createNativeTerminalSurfaceSyncCoordinator({
+      cancelFrame: window.cancelAnimationFrame,
+      requestFrame: window.requestAnimationFrame,
+      sync: () => syncSurfaceRef.current(),
+    });
+    return syncCoordinatorRef.current;
   };
 
   const hideSurface = async () => {
@@ -325,16 +403,7 @@ export function NativeTerminalSurface({
     }
   };
 
-  const scheduleSync = () => {
-    if (frameIdRef.current !== null) {
-      return;
-    }
-
-    frameIdRef.current = window.requestAnimationFrame(() => {
-      frameIdRef.current = null;
-      void syncSurface();
-    });
-  };
+  syncSurfaceRef.current = syncSurface;
 
   useEffect(() => {
     setAttachState(hasLiveSession ? "attaching" : "attached");
@@ -361,8 +430,7 @@ export function NativeTerminalSurface({
   useEffect(() => {
     const unsubscribe = subscribeToShellResize((resizing) => {
       shellResizeInProgressRef.current = resizing;
-      cancelScheduledSync();
-      void syncSurface();
+      void getSyncCoordinator().flushSync();
     });
 
     return () => {
@@ -381,23 +449,26 @@ export function NativeTerminalSurface({
       ownerRef.current,
       window.cancelAnimationFrame,
     );
-    scheduleSync();
+    getSyncCoordinator().scheduleSync();
     resizeObserverRef.current?.disconnect();
     resizeObserverRef.current = new ResizeObserver(() => {
-      scheduleSync();
+      getSyncCoordinator().scheduleSync();
     });
     resizeObserverRef.current.observe(hostRef.current);
-    window.addEventListener("resize", scheduleSync);
-    window.addEventListener("scroll", scheduleSync, true);
-    document.addEventListener("visibilitychange", scheduleSync);
+    const handleSyncRequest = () => {
+      getSyncCoordinator().scheduleSync();
+    };
+    window.addEventListener("resize", handleSyncRequest);
+    window.addEventListener("scroll", handleSyncRequest, true);
+    document.addEventListener("visibilitychange", handleSyncRequest);
 
     return () => {
-      cancelScheduledSync();
+      getSyncCoordinator().cancelScheduledSync();
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
-      window.removeEventListener("resize", scheduleSync);
-      window.removeEventListener("scroll", scheduleSync, true);
-      document.removeEventListener("visibilitychange", scheduleSync);
+      window.removeEventListener("resize", handleSyncRequest);
+      window.removeEventListener("scroll", handleSyncRequest, true);
+      document.removeEventListener("visibilitychange", handleSyncRequest);
       scheduleNativeTerminalSurfaceLeaseHide(
         nativeTerminalSurfaceLeaseRegistry,
         terminal.id,

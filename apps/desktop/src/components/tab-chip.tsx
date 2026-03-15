@@ -49,10 +49,10 @@ export function TabChip({
   indicator,
 }: TabChipProps) {
   const baseClasses =
-    "relative -mb-px flex h-full shrink-0 items-center gap-2 px-3 text-sm transition-colors";
+    "relative my-1 flex shrink-0 items-center gap-2 rounded-md px-3 text-sm transition-colors";
   const activeClasses = active
-    ? "z-10 border-x first:border-l-0 border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] after:absolute after:-bottom-px after:inset-x-0 after:h-px after:bg-[var(--background)]"
-    : "bg-[var(--panel)] text-[var(--muted-foreground)] after:absolute after:inset-y-2 after:right-0 after:w-px after:bg-[var(--border)] last:after:hidden hover:bg-[color-mix(in_oklab,var(--panel),var(--foreground)_2%)] hover:text-[var(--foreground)]";
+    ? "z-10 bg-[var(--surface-hover)] text-[var(--foreground)]"
+    : "text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--surface-hover)]/50";
   const fontClass = active ? "font-semibold" : "font-medium";
 
   const dataProps: Record<string, string> = {};

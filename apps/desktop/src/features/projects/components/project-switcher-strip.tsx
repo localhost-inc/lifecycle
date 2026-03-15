@@ -1,8 +1,9 @@
 import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ProjectRecord } from "@lifecycle/contracts";
 import { Button, Spinner } from "@lifecycle/ui";
 import { CircleUserRound, FolderPlus } from "lucide-react";
-import { useState } from "react";
+import { type MouseEvent, useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   detectPlatformHint,
@@ -122,16 +123,37 @@ export function ProjectSwitcherStrip({
 }: ProjectSwitcherStripProps) {
   const shouldInset = shouldInsetForWindowControls(detectPlatformHint(), isTauri());
 
+  const handleMouseDown = useCallback(
+    (event: MouseEvent<HTMLElement>) => {
+      if (event.button !== 0 || !isTauri()) {
+        return;
+      }
+
+      if ((event.target as Element).closest("a, button, input, textarea, select, [role='button']")) {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (event.detail >= 2) {
+        void getCurrentWindow().toggleMaximize();
+      } else {
+        void getCurrentWindow().startDragging();
+      }
+    },
+    [],
+  );
+
   return (
     <header
       className={[
-        "flex h-9 shrink-0 items-center gap-1 rounded-[18px] px-1 text-[var(--foreground)]",
+        "flex h-9 shrink-0 select-none items-center gap-1 rounded-[18px] px-1 text-[var(--foreground)]",
         shouldInset ? "pl-20 pr-1" : "px-1",
       ].join(" ")}
       data-slot="project-switcher-strip"
-      data-tauri-drag-region
+      onMouseDown={handleMouseDown}
     >
-      <div className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden" data-no-drag>
+      <div className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden">
         <div className="flex min-w-max items-center gap-0.5 pr-0.5">
           {projects.map((project) => {
             const selected = project.id === activeProjectId;
@@ -164,7 +186,7 @@ export function ProjectSwitcherStrip({
           })}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-0.5" data-no-drag>
+      <div className="flex shrink-0 items-center gap-0.5">
         <Button aria-label="Add project" onClick={onAddProject} size="icon" variant="ghost">
           <FolderPlus size={16} />
         </Button>

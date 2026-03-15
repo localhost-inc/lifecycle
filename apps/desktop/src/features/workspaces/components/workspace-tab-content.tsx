@@ -14,11 +14,16 @@ const WorkspaceLayout = lazy(async () => {
 });
 
 interface WorkspaceTabContentProps {
+  onCloseWorkspaceTab?: () => void;
   onOpenPullRequest?: (pullRequest: GitPullRequestSummary) => void;
   workspaceId: string;
 }
 
-export function WorkspaceTabContent({ onOpenPullRequest, workspaceId }: WorkspaceTabContentProps) {
+export function WorkspaceTabContent({
+  onCloseWorkspaceTab,
+  onOpenPullRequest,
+  workspaceId,
+}: WorkspaceTabContentProps) {
   const workspaceSnapshotQuery = useWorkspaceSnapshot(workspaceId);
   const readyMeasuredRef = useRef(false);
   const workspace = workspaceSnapshotQuery.data?.workspace ?? null;
@@ -86,6 +91,7 @@ export function WorkspaceTabContent({ onOpenPullRequest, workspaceId }: Workspac
     <Suspense fallback={<Loading message="Loading workspace..." />}>
       <WorkspaceLayout
         manifestStatus={manifestQuery.data ?? null}
+        onCloseWorkspaceTab={onCloseWorkspaceTab}
         onOpenPullRequest={onOpenPullRequest}
         workspace={workspace}
         workspaceSnapshot={workspaceSnapshotQuery.data ?? null}

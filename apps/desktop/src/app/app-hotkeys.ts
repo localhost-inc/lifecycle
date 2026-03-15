@@ -1,5 +1,9 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import {
+  formatRegisteredShortcutLabel,
+  type RegisteredShortcutId,
+} from "./shortcuts/shortcut-registry";
 
 export const APP_HOTKEY_EVENT_NAME = "app:shortcut";
 
@@ -18,6 +22,12 @@ export interface AppHotkeyKeyEvent {
   metaKey: boolean;
   shiftKey: boolean;
 }
+
+const APP_HOTKEY_SHORTCUT_ID_BY_ACTION: Record<AppHotkeyAction, RegisteredShortcutId> = {
+  "open-command-palette": "app.open-command-palette",
+  "open-file-picker": "app.open-file-picker",
+  "open-settings": "app.open-settings",
+};
 
 export function isMacPlatform(): boolean {
   if (typeof navigator === "undefined") {
@@ -82,15 +92,7 @@ export function readAppHotkeyAction(
 }
 
 export function formatAppHotkeyLabel(action: AppHotkeyAction, macPlatform: boolean): string {
-  const modifier = macPlatform ? "Cmd" : "Ctrl";
-  switch (action) {
-    case "open-settings":
-      return `${modifier}+,`;
-    case "open-command-palette":
-      return `${modifier}+K`;
-    case "open-file-picker":
-      return `${modifier}+P`;
-  }
+  return formatRegisteredShortcutLabel(APP_HOTKEY_SHORTCUT_ID_BY_ACTION[action], macPlatform);
 }
 
 export function shouldHandleDomAppHotkey(

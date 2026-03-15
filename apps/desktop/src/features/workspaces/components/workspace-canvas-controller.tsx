@@ -3,6 +3,10 @@ import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useQueryClient } from "../../../query";
+import {
+  SHORTCUT_HANDLER_PRIORITY,
+  useShortcutRegistration,
+} from "../../../app/shortcuts/shortcut-router";
 import { recordWorkspaceFileUsage } from "../../files/lib/workspace-file-usage";
 import { useWorkspaceFileSessions } from "../../files/state/workspace-file-sessions";
 import {
@@ -38,10 +42,8 @@ import {
 import type { OpenDocumentRequest } from "./workspace-canvas-requests";
 import { workspaceCanvasReducer } from "./workspace-canvas-reducer";
 import {
-  isEditableTarget,
-  isMacPlatform,
-  readWorkspaceTabHotkeyAction,
   releaseWebviewFocus,
+  resolveWorkspaceCloseShortcutTarget,
   shouldTreatWindowCloseAsTabClose,
   toWorkspaceTabHotkeyAction,
   type WorkspaceTabHotkeyAction,
@@ -67,6 +69,7 @@ import {
 
 export interface WorkspaceCanvasControllerInput {
   openDocumentRequest: OpenDocumentRequest | null;
+  onCloseWorkspaceTab?: () => void;
   onOpenDocumentRequestHandled?: (requestId: string) => void;
   snapshotTerminals: TerminalRecord[];
   workspaceId: string;
@@ -74,6 +77,7 @@ export interface WorkspaceCanvasControllerInput {
 
 export function useWorkspaceCanvasController({
   openDocumentRequest,
+  onCloseWorkspaceTab,
   onOpenDocumentRequestHandled,
   snapshotTerminals,
   workspaceId,
@@ -166,8 +170,7 @@ export function useWorkspaceCanvasController({
     [paneSnapshots, visibleTabsByPaneId],
   );
   const inactiveRuntimeTerminalIds = useMemo(
-    () =>
-      getWorkspaceInactiveRuntimeTerminalIds(liveRuntimeTabKeys, renderedActiveTabKeyByPaneId),
+    () => getWorkspaceInactiveRuntimeTerminalIds(liveRuntimeTabKeys, renderedActiveTabKeyByPaneId),
     [liveRuntimeTabKeys, renderedActiveTabKeyByPaneId],
   );
   const activePaneVisibleTabs = activePane ? (visibleTabsByPaneId[activePane.id] ?? []) : [];
@@ -478,29 +481,42 @@ export function useWorkspaceCanvasController({
   );
 
   const handleWorkspaceTabHotkeyAction = useCallback(
-    (action: WorkspaceTabHotkeyAction) => {
+    (action: WorkspaceTabHotkeyAction): boolean => {
       switch (action.kind) {
         case "new-tab":
           void handleCreateTerminal({ launchType: "shell" }, activePaneId);
-          return;
+          return true;
         case "close-active-tab": {
+          const closeTarget = resolveWorkspaceCloseShortcutTarget(paneLayout.paneCount);
+          if (closeTarget === "close-pane") {
+            closeShortcutHandledAtRef.current = Date.now();
+            dispatch({ kind: "close-pane", paneId: activePaneId });
+            return true;
+          }
+
+          if (closeTarget === "close-project-tab" && onCloseWorkspaceTab) {
+            closeShortcutHandledAtRef.current = Date.now();
+            onCloseWorkspaceTab();
+            return true;
+          }
+
           if (!activeTabKey) {
-            return;
+            return true;
           }
 
           const activeTab = activePaneVisibleTabs.find((tab) => tab.key === activeTabKey);
           if (!activeTab) {
-            return;
+            return true;
           }
 
           closeShortcutHandledAtRef.current = Date.now();
           if (activeTab.kind === "terminal") {
             void handleCloseRuntimeTab(activeTab.key, activeTab.terminalId);
-            return;
+            return true;
           }
 
           handleCloseDocumentTab(activeTab.key);
-          return;
+          return true;
         }
         case "next-tab": {
           const nextKey = getWorkspaceAdjacentTabKey(
@@ -511,7 +527,7 @@ export function useWorkspaceCanvasController({
           if (nextKey) {
             handleSelectTab(activePaneId, nextKey);
           }
-          return;
+          return true;
         }
         case "previous-tab": {
           const previousKey = getWorkspaceAdjacentTabKey(
@@ -522,13 +538,14 @@ export function useWorkspaceCanvasController({
           if (previousKey) {
             handleSelectTab(activePaneId, previousKey);
           }
-          return;
+          return true;
         }
         case "select-tab-index": {
           const selectedKey = getWorkspaceTabKeyByIndex(activePaneVisibleTabKeys, action.index);
           if (selectedKey) {
             handleSelectTab(activePaneId, selectedKey);
           }
+          return true;
         }
       }
     },
@@ -540,31 +557,48 @@ export function useWorkspaceCanvasController({
       handleCloseDocumentTab,
       handleCloseRuntimeTab,
       handleCreateTerminal,
+      onCloseWorkspaceTab,
+      paneLayout.paneCount,
       handleSelectTab,
     ],
   );
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || isEditableTarget(event.target)) {
-        return;
-      }
+  useShortcutRegistration({
+    handler: () => handleWorkspaceTabHotkeyAction({ kind: "new-tab" }),
+    id: "workspace.new-tab",
+    priority: SHORTCUT_HANDLER_PRIORITY.workspace,
+  });
 
-      const action = readWorkspaceTabHotkeyAction(event, isMacPlatform());
-      if (!action) {
-        return;
-      }
+  useShortcutRegistration({
+    handler: () => {
+      closeShortcutTriggeredAtRef.current = Date.now();
+      return handleWorkspaceTabHotkeyAction({ kind: "close-active-tab" });
+    },
+    id: "workspace.close-active-tab",
+    priority: SHORTCUT_HANDLER_PRIORITY.workspace,
+  });
 
-      if (action.kind === "close-active-tab") {
-        closeShortcutTriggeredAtRef.current = Date.now();
-      }
-      event.preventDefault();
-      handleWorkspaceTabHotkeyAction(action);
-    };
+  useShortcutRegistration({
+    handler: () => handleWorkspaceTabHotkeyAction({ kind: "previous-tab" }),
+    id: "workspace.previous-tab",
+    priority: SHORTCUT_HANDLER_PRIORITY.workspace,
+  });
 
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleWorkspaceTabHotkeyAction]);
+  useShortcutRegistration({
+    handler: () => handleWorkspaceTabHotkeyAction({ kind: "next-tab" }),
+    id: "workspace.next-tab",
+    priority: SHORTCUT_HANDLER_PRIORITY.workspace,
+  });
+
+  useShortcutRegistration({
+    handler: (match) =>
+      handleWorkspaceTabHotkeyAction({
+        index: match.index ?? 1,
+        kind: "select-tab-index",
+      }),
+    id: "workspace.select-tab-index",
+    priority: SHORTCUT_HANDLER_PRIORITY.workspace,
+  });
 
   useEffect(() => {
     let disposed = false;

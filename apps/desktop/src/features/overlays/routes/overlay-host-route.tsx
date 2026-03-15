@@ -4,6 +4,10 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { applyThemeToRoot } from "@lifecycle/ui";
+import {
+  SHORTCUT_HANDLER_PRIORITY,
+  useShortcutRegistration,
+} from "../../../app/shortcuts/shortcut-router";
 import { GitActionMenuContent } from "../../git/components/git-action-button";
 import { WorkspaceOpenInMenu } from "../../workspaces/components/workspace-open-in-menu";
 import type {
@@ -242,25 +246,19 @@ export function OverlayHostRoute() {
     })();
   }, [overlay]);
 
-  useEffect(() => {
-    if (!overlay) {
-      return;
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") {
-        return;
+  useShortcutRegistration({
+    allowInEditable: true,
+    enabled: overlay !== null,
+    handler: () => {
+      if (!overlay) {
+        return false;
       }
 
-      event.preventDefault();
       void requestClose(overlay);
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [overlay]);
+    },
+    id: "overlay.close",
+    priority: SHORTCUT_HANDLER_PRIORITY.overlay,
+  });
 
   const frame = useMemo(() => {
     if (!overlay) {

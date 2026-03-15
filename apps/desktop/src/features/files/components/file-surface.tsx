@@ -10,6 +10,10 @@ import {
 import { ExternalLink, FileText, RefreshCcw, Save } from "lucide-react";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
+  SHORTCUT_HANDLER_PRIORITY,
+  useShortcutRegistration,
+} from "../../../app/shortcuts/shortcut-router";
+import {
   workspaceFileBasename,
   workspaceFileDirname,
   workspaceFileExtension,
@@ -21,7 +25,6 @@ import type { FileViewerMode } from "../lib/file-view-mode";
 import { isFileViewerDirty, type FileViewerSessionState } from "../lib/file-session";
 import {
   getFileViewerScrollRestoreKey,
-  readFileSaveHotkey,
   resolveFileViewerRenderer,
   resolveInitialFileViewerMode,
   supportsFileViewerViewMode,
@@ -238,27 +241,15 @@ export function FileSurface({
     workspaceId,
   ]);
 
-  useEffect(() => {
-    if (textContent === null) {
-      return;
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      const platform =
-        typeof navigator !== "undefined"
-          ? /mac/i.test(navigator.platform ?? navigator.userAgent)
-          : false;
-      if (!readFileSaveHotkey(event, platform)) {
-        return;
-      }
-
-      event.preventDefault();
+  useShortcutRegistration({
+    allowInEditable: true,
+    enabled: textContent !== null,
+    handler: () => {
       void handleSave();
-    };
-
-    window.addEventListener("keydown", onKeyDown, { capture: true });
-    return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
-  }, [handleSave, textContent]);
+    },
+    id: "file.save",
+    priority: SHORTCUT_HANDLER_PRIORITY.file,
+  });
 
   const handleReload = async () => {
     setSaveError(null);

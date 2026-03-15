@@ -31,6 +31,7 @@ import {
 } from "../state/workspace-canvas-state";
 import {
   readWorkspaceTabHotkeyAction,
+  resolveWorkspaceCloseShortcutTarget,
   shouldTreatWindowCloseAsTabClose,
 } from "./workspace-canvas-shortcuts";
 import { workspaceCanvasReducer } from "./workspace-canvas-reducer";
@@ -1260,6 +1261,12 @@ describe("canvas tab helpers", () => {
     expect(shouldTreatWindowCloseAsTabClose(1_000, 1_200)).toBeTrue();
     expect(shouldTreatWindowCloseAsTabClose(1_000, 1_251)).toBeFalse();
     expect(shouldTreatWindowCloseAsTabClose(0, 1_200)).toBeFalse();
+  });
+
+  test("closes the active pane before the outer project tab when multiple panes are open", () => {
+    expect(resolveWorkspaceCloseShortcutTarget(2)).toBe("close-pane");
+    expect(resolveWorkspaceCloseShortcutTarget(1)).toBe("close-project-tab");
+    expect(resolveWorkspaceCloseShortcutTarget(0)).toBeNull();
   });
 
   test("preserves hidden runtime tabs until terminal queries finish loading", () => {

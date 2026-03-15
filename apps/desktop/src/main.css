@@ -31,6 +31,25 @@ html[data-overlay-host-window="true"] body #root {
   border-color: var(--border);
 }
 
+.workspace-canvas-grid {
+  position: relative;
+}
+.workspace-canvas-grid::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: color-mix(in srgb, var(--foreground), transparent 96%);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cpath d='M7 6h2v4h-2zM6 7h4v2h-4z' fill='black'/%3E%3C/svg%3E");
+  mask-size: 16px 16px;
+  mask-repeat: repeat;
+}
+
+[data-workspace-pane-id] .terminal-host {
+  --terminal-surface-background: var(--card);
+}
+
 .terminal-host {
   background-color: var(--terminal-surface-background, var(--background));
   contain: paint;

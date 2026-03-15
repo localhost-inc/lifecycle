@@ -278,6 +278,24 @@ export function closeProjectContentTab(
   };
 }
 
+export function canCloseProjectContentTab(tab: ProjectContentTab | null | undefined): boolean {
+  return !(!tab || (tab.kind === "project-view" && tab.viewId === "overview"));
+}
+
+export function resolveProjectContentTabIdToClose({
+  activeTab,
+  activeWorkspaceSupportsCanvas,
+}: {
+  activeTab: ProjectContentTab | null;
+  activeWorkspaceSupportsCanvas: boolean;
+}): string | null {
+  if (!activeTab || activeWorkspaceSupportsCanvas || !canCloseProjectContentTab(activeTab)) {
+    return null;
+  }
+
+  return activeTab.id;
+}
+
 export function reorderProjectContentTabs(
   state: ProjectContentTabsState,
   draggedTabId: string,

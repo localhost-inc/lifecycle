@@ -17,8 +17,8 @@ export function WorkspaceCanvas(props: WorkspaceCanvasProps) {
         </div>
       )}
 
-      <WorkspacePaneTree
-        activePaneId={controller.activePaneId}
+        <WorkspacePaneTree
+          activePaneId={controller.activePaneId}
         creatingSelection={controller.creatingSelection}
         documents={controller.documents}
         fileSessionsByTabKey={controller.fileSessionsByTabKey}
@@ -45,8 +45,8 @@ export function WorkspaceCanvas(props: WorkspaceCanvasProps) {
         viewStateByTabKey={controller.viewStateByTabKey}
         visibleTabsByPaneId={controller.visibleTabsByPaneId}
         paneIdsWaitingForSelectedRuntimeTab={controller.paneIdsWaitingForSelectedRuntimeTab}
-        workspaceId={controller.workspaceId}
-      />
-    </div>
+          workspaceId={controller.workspaceId}
+        />
+      </div>
   );
 }

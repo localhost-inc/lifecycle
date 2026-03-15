@@ -15,15 +15,12 @@ export function WorkspaceHeader({ onFork, workspace }: WorkspaceHeaderProps) {
 
   return (
     <header
-      className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-[var(--border)] bg-[var(--background)] px-4"
+      className="relative z-10 flex shrink-0 items-center justify-between gap-4 px-2 py-1.5"
       data-slot="workspace-header"
     >
-      <div className="min-w-0">
-        <div className="app-panel-title truncate text-[var(--muted-foreground)]">Workspace</div>
-        <div className="flex min-w-0 items-baseline gap-3">
-          <h1 className="truncate text-lg font-semibold text-[var(--foreground)]">{displayName}</h1>
-          <p className="truncate text-sm text-[var(--muted-foreground)]">{secondaryLabel}</p>
-        </div>
+      <div className="flex min-w-0 items-baseline gap-3">
+        <h1 className="truncate text-lg font-semibold text-[var(--foreground)]">{displayName}</h1>
+        <p className="truncate text-sm text-[var(--muted-foreground)]">{secondaryLabel}</p>
       </div>
       <TitleBarActions onFork={onFork} workspace={workspace} />
     </header>

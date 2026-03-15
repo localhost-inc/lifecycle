@@ -69,6 +69,7 @@ interface WorkspaceLayoutProps {
   workspace: WorkspaceRecord;
   workspaceSnapshot: WorkspaceSnapshotResult | null;
   manifestStatus: ManifestStatus | null;
+  onCloseWorkspaceTab?: () => void;
   onOpenPullRequest?: (pullRequest: GitPullRequestSummary) => void;
 }
 
@@ -76,6 +77,7 @@ export function WorkspaceLayout({
   workspace,
   workspaceSnapshot,
   manifestStatus,
+  onCloseWorkspaceTab,
   onOpenPullRequest,
 }: WorkspaceLayoutProps) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -466,6 +468,7 @@ export function WorkspaceLayout({
         <WorkspaceCanvas
           key={workspace.id}
           openDocumentRequest={openDocumentRequest}
+          onCloseWorkspaceTab={onCloseWorkspaceTab}
           onOpenDocumentRequestHandled={(requestId) =>
             clearDocumentRequest(workspace.id, requestId)
           }
@@ -488,25 +491,27 @@ export function WorkspaceLayout({
   return (
     <div
       ref={workspaceLayoutRef}
-      className="flex min-h-0 flex-1 overflow-hidden"
+      className="flex min-h-0 flex-1 gap-1 overflow-hidden px-2 pb-2"
       data-slot="workspace-layout"
     >
       <div className="flex min-w-0 flex-1 flex-col" data-slot="workspace-canvas">
         {canvasContent}
       </div>
-      <ExtensionPanel
-        activeSlot={activeExtensionSlot}
-        maxWidth={panelBounds.maxSize}
-        minWidth={panelBounds.minSize}
-        onResizeKeyDown={handlePanelResizeKeyDown}
-        onResizePointerDown={handlePanelResizePointerDown}
-        width={panelWidth}
-      />
-      <ExtensionBar
-        activeExtensionId={activeExtensionId}
-        onToggleExtension={handleToggleExtension}
-        slots={extensionSlots}
-      />
+      <div className="relative z-[1] flex shrink-0 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--card)]">
+        <ExtensionPanel
+          activeSlot={activeExtensionSlot}
+          maxWidth={panelBounds.maxSize}
+          minWidth={panelBounds.minSize}
+          onResizeKeyDown={handlePanelResizeKeyDown}
+          onResizePointerDown={handlePanelResizePointerDown}
+          width={panelWidth}
+        />
+        <ExtensionBar
+          activeExtensionId={activeExtensionId}
+          onToggleExtension={handleToggleExtension}
+          slots={extensionSlots}
+        />
+      </div>
     </div>
   );
 }

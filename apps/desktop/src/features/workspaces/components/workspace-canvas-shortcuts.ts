@@ -18,6 +18,8 @@ export type WorkspaceTabHotkeyAction =
   | { kind: "previous-tab" }
   | { kind: "select-tab-index"; index: number };
 
+export type WorkspaceCloseShortcutTarget = "close-pane" | "close-project-tab" | null;
+
 export function releaseWebviewFocus(): void {
   if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
     document.activeElement.blur();
@@ -150,4 +152,14 @@ export function shouldTreatWindowCloseAsTabClose(
     now >= lastShortcutTriggeredAt &&
     now - lastShortcutTriggeredAt <= graceMs
   );
+}
+
+export function resolveWorkspaceCloseShortcutTarget(
+  paneCount: number,
+): WorkspaceCloseShortcutTarget {
+  if (!Number.isFinite(paneCount) || paneCount <= 0) {
+    return null;
+  }
+
+  return paneCount > 1 ? "close-pane" : "close-project-tab";
 }

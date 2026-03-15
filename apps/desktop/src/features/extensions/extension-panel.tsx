@@ -24,14 +24,14 @@ export function ExtensionPanel({
 
   return (
     <>
-      <div className="relative w-px shrink-0">
+      <div className="relative w-0 shrink-0">
         <div
           aria-label="Resize workspace extension panel"
           aria-orientation="vertical"
           aria-valuemax={maxWidth}
           aria-valuemin={minWidth}
           aria-valuenow={width}
-          className="absolute inset-y-0 -left-2 w-4 cursor-col-resize"
+          className="absolute inset-y-0 -left-2 z-20 w-4 cursor-col-resize"
           onKeyDown={onResizeKeyDown}
           onPointerDown={onResizePointerDown}
           role="separator"
@@ -39,7 +39,7 @@ export function ExtensionPanel({
         />
       </div>
       <aside
-        className="min-h-0 shrink-0 overflow-hidden border-l border-[var(--border)] bg-[var(--panel)]"
+        className="min-h-0 shrink-0 border-r border-[var(--border)] overflow-hidden"
         data-slot="workspace-extension-panel"
         style={{ width: `${width}px` }}
       >

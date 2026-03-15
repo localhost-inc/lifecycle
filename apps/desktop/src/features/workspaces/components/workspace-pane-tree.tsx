@@ -11,7 +11,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
@@ -166,16 +165,14 @@ function ResizeHandle({
   onKeyDown,
   onPointerDown,
   ratio,
-  style,
 }: {
   direction: "column" | "row";
   onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
   ratio: number;
-  style?: CSSProperties;
 }) {
   return direction === "row" ? (
-    <div className="pointer-events-none absolute inset-y-0 z-20" style={style}>
+    <div className="relative w-0 shrink-0">
       <div
         role="separator"
         aria-label="Resize workspace panes"
@@ -187,13 +184,13 @@ function ResizeHandle({
         tabIndex={0}
         onKeyDown={onKeyDown}
         onPointerDown={onPointerDown}
-        className="group pointer-events-auto absolute inset-y-0 -left-2 flex w-4 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
+        className="group absolute inset-y-0 -left-2 z-20 flex w-4 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
       >
-        <div className="h-full w-px bg-[var(--border)] transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
+        <div className="h-full w-px bg-transparent transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
       </div>
     </div>
   ) : (
-    <div className="relative h-px w-full shrink-0">
+    <div className="relative h-0 w-full shrink-0">
       <div
         role="separator"
         aria-label="Resize workspace panes"
@@ -206,7 +203,7 @@ function ResizeHandle({
         onPointerDown={onPointerDown}
         className="group absolute inset-x-0 top-1/2 z-10 flex h-3 -translate-y-1/2 cursor-row-resize items-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
       >
-        <div className="h-px w-full bg-[var(--border)] transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
+        <div className="h-px w-full bg-transparent transition-colors group-hover:bg-[var(--ring)] group-focus-visible:bg-[var(--ring)]" />
       </div>
     </div>
   );
@@ -375,36 +372,21 @@ function WorkspacePaneSplitNode({
   return (
     <div
       ref={containerRef}
-      className={`relative flex min-h-0 flex-1 overflow-hidden ${direction === "row" ? "flex-row" : "flex-col"}`}
+      className={`relative flex min-h-0 flex-1 gap-1 overflow-hidden ${direction === "row" ? "flex-row" : "flex-col"}`}
     >
       <div
         className="flex min-h-0 min-w-0 shrink-0 overflow-hidden"
-        style={
-          direction === "row"
-            ? { flexBasis: `${clampedRatio * 100}%` }
-            : { flexBasis: `${clampedRatio * 100}%` }
-        }
+        style={{ flexBasis: `${clampedRatio * 100}%` }}
       >
         {children[0]}
       </div>
-      {direction === "column" ? (
-        <ResizeHandle
-          direction={direction}
-          onKeyDown={handleSeparatorKeyDown}
-          onPointerDown={handleSeparatorPointerDown}
-          ratio={clampedRatio}
-        />
-      ) : null}
+      <ResizeHandle
+        direction={direction}
+        onKeyDown={handleSeparatorKeyDown}
+        onPointerDown={handleSeparatorPointerDown}
+        ratio={clampedRatio}
+      />
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">{children[1]}</div>
-      {direction === "row" ? (
-        <ResizeHandle
-          direction={direction}
-          onKeyDown={handleSeparatorKeyDown}
-          onPointerDown={handleSeparatorPointerDown}
-          ratio={clampedRatio}
-          style={{ left: `${clampedRatio * 100}%` }}
-        />
-      ) : null}
     </div>
   );
 }
@@ -698,7 +680,7 @@ export function WorkspacePaneTree({
         <section
           key={node.id}
           ref={(element) => setPaneElement(node.id, element)}
-          className={`relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${isDropTargetPane ? "border border-[var(--ring)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--ring),transparent_50%)]" : isActivePane ? "shadow-[0_0_0_1px_color-mix(in_srgb,var(--ring),transparent_65%)]" : ""}`}
+          className={`relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-[var(--card)] ${isDropTargetPane ? "border-[var(--ring)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--ring),transparent_50%)]" : isActivePane ? "shadow-[0_0_0_1px_color-mix(in_srgb,var(--ring),transparent_65%)]" : ""}`}
           data-workspace-pane-id={node.id}
           onPointerDownCapture={(event) => {
             if (!isActivePane && shouldAutoSelectWorkspacePaneFromPointerTarget(event.target)) {
@@ -707,7 +689,7 @@ export function WorkspacePaneTree({
           }}
         >
           <div
-            className="flex h-10 items-stretch gap-0 border-b border-[var(--border)] bg-[var(--panel)]"
+            className="flex h-10 items-stretch gap-0 border-b border-[var(--border)] bg-transparent"
             data-workspace-pane-header
           >
             <WorkspacePaneTabBar

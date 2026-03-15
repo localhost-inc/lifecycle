@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  canCloseProjectContentTab,
   closeProjectContentTab,
   createDefaultProjectContentTabsState,
   createPullRequestTab,
@@ -11,6 +12,7 @@ import {
   normalizeProjectContentTabsState,
   readProjectContentTabsState,
   reorderProjectContentTabs,
+  resolveProjectContentTabIdToClose,
   workspaceTabId,
   writeProjectContentTabsState,
 } from "./project-content-tabs";
@@ -127,5 +129,39 @@ describe("project content tabs", () => {
     const state = focusProjectViewTab(createDefaultProjectContentTabsState(), "overview");
     expect(state.tabs).toEqual([createProjectViewTab("overview")]);
     expect(state.activeTabId).toBe("view:overview");
+  });
+
+  test("keeps overview as the non-closeable root tab", () => {
+    expect(canCloseProjectContentTab(createProjectViewTab("overview"))).toBeFalse();
+    expect(
+      resolveProjectContentTabIdToClose({
+        activeTab: createProjectViewTab("overview"),
+        activeWorkspaceSupportsCanvas: false,
+      }),
+    ).toBeNull();
+  });
+
+  test("resolves workspace and pull-request project tabs as closeable when the workspace canvas is not owning the shortcut", () => {
+    expect(
+      resolveProjectContentTabIdToClose({
+        activeTab: createPullRequestTab(42),
+        activeWorkspaceSupportsCanvas: false,
+      }),
+    ).toBe("pull-request:42");
+    expect(
+      resolveProjectContentTabIdToClose({
+        activeTab: createWorkspaceTab("workspace_1"),
+        activeWorkspaceSupportsCanvas: false,
+      }),
+    ).toBe("workspace:workspace_1");
+  });
+
+  test("defers workspace-tab close to the workspace canvas when an interactive pane surface is active", () => {
+    expect(
+      resolveProjectContentTabIdToClose({
+        activeTab: createWorkspaceTab("workspace_1"),
+        activeWorkspaceSupportsCanvas: true,
+      }),
+    ).toBeNull();
   });
 });

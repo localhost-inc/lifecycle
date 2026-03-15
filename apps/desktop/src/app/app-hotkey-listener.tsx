@@ -3,13 +3,15 @@ import { useCallback, useContext, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { CommandPaletteContext } from "../features/command-palette/command-palette-context";
 import {
-  shouldHandleDomAppHotkey,
-  isEditableTarget,
   isMacPlatform,
-  readAppHotkeyAction,
+  shouldHandleDomAppHotkey,
   subscribeToAppHotkeyEvents,
   type AppHotkeyAction,
 } from "./app-hotkeys";
+import {
+  SHORTCUT_HANDLER_PRIORITY,
+  useShortcutRegistration,
+} from "./shortcuts/shortcut-router";
 
 export function AppHotkeyListener() {
   const location = useLocation();
@@ -39,30 +41,41 @@ export function AppHotkeyListener() {
     [commandPalette, location.pathname, navigate],
   );
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || isEditableTarget(event.target)) {
-        return;
-      }
+  useShortcutRegistration({
+    enabled: shouldHandleDomAppHotkey("open-settings", {
+      isTauriApp: tauriApp,
+      macPlatform,
+    }),
+    handler: () => {
+      handleAction("open-settings");
+    },
+    id: "app.open-settings",
+    priority: SHORTCUT_HANDLER_PRIORITY.app,
+  });
 
-      const action = readAppHotkeyAction(event, macPlatform);
-      if (
-        !action ||
-        !shouldHandleDomAppHotkey(action, {
-          isTauriApp: tauriApp,
-          macPlatform,
-        })
-      ) {
-        return;
-      }
+  useShortcutRegistration({
+    enabled: shouldHandleDomAppHotkey("open-command-palette", {
+      isTauriApp: tauriApp,
+      macPlatform,
+    }),
+    handler: () => {
+      handleAction("open-command-palette");
+    },
+    id: "app.open-command-palette",
+    priority: SHORTCUT_HANDLER_PRIORITY.app,
+  });
 
-      event.preventDefault();
-      handleAction(action);
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleAction, macPlatform, tauriApp]);
+  useShortcutRegistration({
+    enabled: shouldHandleDomAppHotkey("open-file-picker", {
+      isTauriApp: tauriApp,
+      macPlatform,
+    }),
+    handler: () => {
+      handleAction("open-file-picker");
+    },
+    id: "app.open-file-picker",
+    priority: SHORTCUT_HANDLER_PRIORITY.app,
+  });
 
   useEffect(() => {
     let disposed = false;

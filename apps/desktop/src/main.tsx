@@ -2,6 +2,7 @@ import { ThemeProvider } from "@lifecycle/ui";
 import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
+import { ShortcutRouterProvider } from "./app/shortcuts/shortcut-router";
 import { router } from "./app/router";
 import { AuthSessionProvider } from "./features/auth/state/auth-session-provider";
 import { TurnNotificationListener } from "./features/notifications/turn-notification-listener";
@@ -37,7 +38,9 @@ createRoot(document.getElementById("root")!).render(
           <SettingsProvider>
             <TurnNotificationListener />
             <TerminalResponseReadyProvider>
-              <RouterProvider router={router} />
+              <ShortcutRouterProvider>
+                <RouterProvider router={router} />
+              </ShortcutRouterProvider>
             </TerminalResponseReadyProvider>
           </SettingsProvider>
         </AuthSessionProvider>
