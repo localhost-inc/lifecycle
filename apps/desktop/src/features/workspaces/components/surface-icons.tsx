@@ -10,6 +10,7 @@ import {
 } from "../state/workspace-canvas-state";
 import type { HarnessProvider } from "../../terminals/api";
 import type { WorkspaceCanvasTab } from "./workspace-canvas-tabs";
+import { getWorkspaceSessionStatusState } from "./workspace-session-status";
 
 export function ShellIcon({ size = 14 }: { size?: number }) {
   return (
@@ -104,29 +105,39 @@ function SurfaceBubble({ children, tab }: { children: ReactNode; tab: WorkspaceC
 
 export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceCanvasTab }) {
   if (tab.kind === "terminal") {
-    return (
-      <span className="flex items-center gap-1.5">
-        {tab.running ? (
+    const state = getWorkspaceSessionStatusState({
+      responseReady: tab.responseReady,
+      running: Boolean(tab.running),
+    });
+
+    if (state === "loading") {
+      return (
+        <span
+          aria-label="Generating response"
+          className="flex h-5 w-5 shrink-0 items-center justify-center"
+          role="img"
+          title="Generating response"
+        >
           <Spinner
             aria-hidden="true"
             aria-label={undefined}
             className="size-3.5 shrink-0 text-[var(--muted-foreground)]"
             role={undefined}
           />
-        ) : null}
-        <span
-          className="relative flex h-5 w-5 shrink-0 items-center justify-center text-current"
-          data-surface-tab-icon={tabIconName(tab)}
-        >
-          {tab.responseReady ? (
-            <ResponseReadyDot />
-          ) : (
-            <TerminalProviderIcon
-              harnessProvider={tab.harnessProvider}
-              launchType={tab.launchType}
-            />
-          )}
         </span>
+      );
+    }
+
+    return (
+      <span
+        className="relative flex h-5 w-5 shrink-0 items-center justify-center text-current"
+        data-surface-tab-icon={tabIconName(tab)}
+      >
+        {state === "ready" ? (
+          <ResponseReadyDot />
+        ) : (
+          <TerminalProviderIcon harnessProvider={tab.harnessProvider} launchType={tab.launchType} />
+        )}
       </span>
     );
   }

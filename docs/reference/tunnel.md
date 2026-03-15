@@ -20,7 +20,7 @@ If the first tunnel implementation is forced through `organization` semantics, l
 Tunnels should be designed as a transport layer first, with access policy layered on top.
 
 1. **Transport**
-   - `local`: direct `http://localhost:<effective_port>`
+   - `local`: direct `http://127.0.0.1:<effective_port>`
    - `shared`: optional tunnel-backed URL for a local or cloud workspace
 2. **Access policy**
    - local-only

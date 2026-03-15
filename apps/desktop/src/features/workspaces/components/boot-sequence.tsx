@@ -1,6 +1,6 @@
 import type { LifecycleConfig, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger, IconButton } from "@lifecycle/ui";
-import { CheckCircle2, LoaderCircle, Play } from "lucide-react";
+import { LoaderCircle, Play } from "lucide-react";
 import { useState } from "react";
 import { ServiceRow } from "./services-tab";
 import type { EnvironmentTaskState, SetupStepState } from "../hooks";
@@ -65,14 +65,6 @@ const NAME_STYLES: Record<BootSequenceItemStatus, string> = {
   failed: "text-[var(--foreground)]",
   timeout: "text-[var(--foreground)]",
 };
-
-const STATUS_BANNER = {
-  completed: {
-    icon: CheckCircle2,
-    iconClassName: "text-[var(--status-success)]",
-    label: "Boot complete",
-  },
-} as const;
 
 function shouldRunOn(
   runOn: "create" | "start" | null | undefined,
@@ -535,33 +527,9 @@ export function BootSequence({
     workspace.setup_completed_at !== null && workspace.setup_completed_at !== undefined,
   );
   const presentation = deriveBootPresentation(items, workspace);
-  const banner =
-    presentation?.phase === "completed" ? STATUS_BANNER.completed : null;
-  const progressLabel = presentation
-    ? `${presentation.completedSteps} / ${presentation.totalSteps}`
-    : null;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
-      <div className="flex items-center justify-between gap-3 text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--muted-foreground)]">
-        <span>Boot sequence</span>
-        {progressLabel ? (
-          <span className="shrink-0 font-mono tracking-normal text-[var(--muted-foreground)]">
-            {progressLabel}
-          </span>
-        ) : null}
-      </div>
-      {banner ? (
-        <div className="flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
-          <div className="flex min-w-0 items-center gap-2">
-            <banner.icon
-              className={`size-3.5 shrink-0 ${banner.iconClassName}`}
-              strokeWidth={2.2}
-            />
-            <span>{banner.label}</span>
-          </div>
-        </div>
-      ) : null}
+    <div className="flex min-h-0 flex-1 flex-col">
       {items.length > 0 ? (
         <div className="flex flex-col">
           {items.map((item, index) => {
@@ -578,6 +546,7 @@ export function BootSequence({
                   runPending={runningServiceName === item.name}
                   runtime={item.runtime}
                   service={item.service}
+                  statusAffordance="indicator"
                 />
               ) : (
                 <BootServiceRow

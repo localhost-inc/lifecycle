@@ -246,6 +246,34 @@ describe("WorkspacePaneTabBar", () => {
     expect(markup).not.toContain('aria-label="Response ready"');
     expect(markup).toContain('data-surface-tab-icon="shell"');
   });
+
+  test("replaces the terminal icon with a spinner while a turn is running", () => {
+    const markup = renderToStaticMarkup(
+      createElement(WorkspacePaneTabBar, {
+        activeTabKey: "terminal:term-1",
+        onCloseDocumentTab: () => {},
+        onCloseRuntimeTab: async () => {},
+        onSelectTab: () => {},
+        visibleTabs: [
+          {
+            key: "terminal:term-1",
+            harnessProvider: "codex",
+            kind: "terminal",
+            label: "Codex",
+            launchType: "harness",
+            responseReady: false,
+            running: true,
+            status: "active",
+            terminalId: "term-1",
+          },
+        ],
+      }),
+    );
+
+    expect(markup).toContain('data-slot="spinner"');
+    expect(markup).toContain('title="Generating response"');
+    expect(markup).not.toContain('data-surface-tab-icon="codex"');
+  });
 });
 
 describe("getWorkspaceActiveTabScrollLeft", () => {

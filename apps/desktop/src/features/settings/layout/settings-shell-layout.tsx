@@ -39,6 +39,7 @@ import {
 } from "../../notifications/lib/turn-notification-runtime";
 import { SettingsFieldRow, SettingsRow, SettingsSection } from "../components/settings-primitives";
 import {
+  INACTIVE_PANE_OPACITY_OPTIONS,
   DEFAULT_WORKTREE_ROOT,
   useSettings,
   type DefaultNewTabLaunch,
@@ -64,10 +65,14 @@ export function SettingsShellLayout() {
   } = useAuthSession();
   const {
     defaultNewTabLaunch,
+    dimInactivePanes,
     interfaceFontFamily,
+    inactivePaneOpacity,
     monospaceFontFamily,
     resetTypography,
     setDefaultNewTabLaunch,
+    setDimInactivePanes,
+    setInactivePaneOpacity,
     setInterfaceFontFamily,
     setMonospaceFontFamily,
     setTurnNotificationSound,
@@ -113,6 +118,21 @@ export function SettingsShellLayout() {
       { label: "Claude", value: "claude" as const },
       { label: "Codex", value: "codex" as const },
     ],
+    [],
+  );
+  const dimInactivePaneItems = useMemo(
+    () => [
+      { label: "Off", value: "off" as const },
+      { label: "On", value: "on" as const },
+    ],
+    [],
+  );
+  const inactivePaneOpacityItems = useMemo(
+    () =>
+      INACTIVE_PANE_OPACITY_OPTIONS.map((option) => ({
+        label: option.label,
+        value: option.value.toFixed(2),
+      })),
     [],
   );
   const interfaceFontPresets = useMemo(() => getInterfaceFontPresets(), []);
@@ -604,6 +624,62 @@ export function SettingsShellLayout() {
                       </SelectContent>
                     </Select>
                   </SettingsRow>
+
+                  <SettingsRow
+                    label="Dim inactive panes"
+                    description="Lower the opacity of non-active pane groups until you hover them."
+                  >
+                    <Select
+                      items={dimInactivePaneItems}
+                      onValueChange={(value: string) => setDimInactivePanes(value === "on")}
+                      value={dimInactivePanes ? "on" : "off"}
+                    >
+                      <SelectTrigger className="w-full min-w-0 md:w-48" id="dim-inactive-panes">
+                        <SelectValue placeholder="Select a mode" />
+                      </SelectTrigger>
+                      <SelectContent alignItemWithTrigger={false}>
+                        {dimInactivePaneItems.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </SettingsRow>
+
+                  {dimInactivePanes ? (
+                    <div className="ml-4 border-l-4 border-[var(--border)] pl-4">
+                      <SettingsRow
+                        label="Inactive opacity"
+                        description="Applies to every non-active pane group until it becomes active or hovered."
+                      >
+                        <Select
+                          items={inactivePaneOpacityItems}
+                          onValueChange={(value: string) =>
+                            setInactivePaneOpacity(Number(value))
+                          }
+                          value={inactivePaneOpacity.toFixed(2)}
+                        >
+                          <SelectTrigger
+                            className="w-full min-w-0 md:w-48"
+                            id="inactive-pane-opacity"
+                          >
+                            <SelectValue placeholder="Select an opacity" />
+                          </SelectTrigger>
+                          <SelectContent alignItemWithTrigger={false}>
+                            {INACTIVE_PANE_OPACITY_OPTIONS.map((option) => (
+                              <SelectItem
+                                key={option.value}
+                                value={option.value.toFixed(2)}
+                              >
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </SettingsRow>
+                    </div>
+                  ) : null}
                 </SettingsSection>
 
                 <SettingsSection

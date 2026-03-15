@@ -28,9 +28,9 @@ describe("ServiceRow", () => {
         ...failedService,
         effective_port: 3002,
         exposure: "local",
-        preview_url: "http://localhost:3001",
+        preview_url: "http://127.0.0.1:3001",
       }),
-    ).toBe("http://localhost:3002");
+    ).toBe("http://127.0.0.1:3002");
   });
 
   test("renders a friendly failed-service status reason", () => {

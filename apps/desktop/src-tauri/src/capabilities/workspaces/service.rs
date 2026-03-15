@@ -260,7 +260,7 @@ mod tests {
                 "stopped",
                 Some(default_port),
                 Some(default_port),
-                Some(format!("http://localhost:{default_port}")),
+                Some(format!("http://127.0.0.1:{default_port}")),
             ],
         )
         .expect("insert service");
@@ -336,7 +336,7 @@ mod tests {
                 "failed",
                 Some(default_port),
                 Some(override_port),
-                Some(format!("http://localhost:{override_port}")),
+                Some(format!("http://127.0.0.1:{override_port}")),
             ],
         )
         .expect("insert service");
@@ -379,7 +379,7 @@ mod tests {
                 Some(default_port),
                 "failed".to_string(),
                 Some("service_unreachable".to_string()),
-                Some(format!("http://localhost:{default_port}")),
+                Some(format!("http://127.0.0.1:{default_port}")),
             ),
         );
 
@@ -410,7 +410,7 @@ mod tests {
                 "starting",
                 Some(3000_i64),
                 Some(3000_i64),
-                Some("http://localhost:3000"),
+                Some("http://127.0.0.1:3000"),
             ],
         )
         .expect("insert service");

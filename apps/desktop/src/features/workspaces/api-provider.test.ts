@@ -37,7 +37,7 @@ const services: ServiceRecord[] = [
     effective_port: 3000,
     preview_status: "sleeping",
     preview_failure_reason: null,
-    preview_url: "http://localhost:3000",
+    preview_url: "http://127.0.0.1:3000",
     created_at: "2026-03-13T00:00:00.000Z",
     updated_at: "2026-03-13T00:00:00.000Z",
   },

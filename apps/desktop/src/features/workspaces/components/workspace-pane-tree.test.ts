@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { shouldAutoSelectWorkspacePaneFromPointerTarget } from "./workspace-pane-tree";
+import {
+  resolveWorkspacePaneOpacity,
+  shouldAutoSelectWorkspacePaneFromPointerTarget,
+} from "./workspace-pane-tree";
 
 const originalElement = globalThis.Element;
 
@@ -40,5 +43,49 @@ describe("shouldAutoSelectWorkspacePaneFromPointerTarget", () => {
       shouldAutoSelectWorkspacePaneFromPointerTarget(new FakeElement() as unknown as EventTarget),
     ).toBe(true);
     expect(shouldAutoSelectWorkspacePaneFromPointerTarget(null)).toBe(true);
+  });
+});
+
+describe("resolveWorkspacePaneOpacity", () => {
+  test("dims only inactive panes that are not hovered", () => {
+    expect(
+      resolveWorkspacePaneOpacity({
+        dimInactivePanes: true,
+        inactivePaneOpacity: 0.45,
+        isActivePane: false,
+        isHoveredPane: false,
+      }),
+    ).toBe(0.45);
+  });
+
+  test("keeps active or hovered panes at full opacity", () => {
+    expect(
+      resolveWorkspacePaneOpacity({
+        dimInactivePanes: true,
+        inactivePaneOpacity: 0.45,
+        isActivePane: true,
+        isHoveredPane: false,
+      }),
+    ).toBe(1);
+
+    expect(
+      resolveWorkspacePaneOpacity({
+        dimInactivePanes: true,
+        inactivePaneOpacity: 0.45,
+        isActivePane: false,
+        isHoveredPane: true,
+      }),
+    ).toBe(1);
+  });
+
+  test("does not dim when the feature is disabled", () => {
+    expect(
+      resolveWorkspacePaneOpacity({
+        dimInactivePanes: false,
+        inactivePaneOpacity: 0.45,
+        isActivePane: false,
+        isHoveredPane: false,
+      }),
+    ).toBe(1);
   });
 });

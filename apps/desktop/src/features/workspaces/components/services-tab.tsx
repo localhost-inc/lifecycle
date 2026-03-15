@@ -29,12 +29,16 @@ import { formatWorkspaceError } from "../lib/workspace-errors";
 
 type ServiceRuntime = "image" | "process";
 
+const LOCAL_PREVIEW_HOST = "127.0.0.1";
+
 interface StatusStyles {
   dotStyle: CSSProperties;
   nameClassName: string;
   portStyle: CSSProperties;
   rowStyle: CSSProperties;
 }
+
+type ServiceRowStatusAffordance = "full" | "indicator";
 
 const STATUS_STYLES: Record<string, StatusStyles> = {
   stopped: {
@@ -143,7 +147,7 @@ function parsePortDraft(value: string): ParsedPortDraft {
 
 export function resolvePreviewUrl(service: ServiceRecord): string | null {
   if (service.exposure === "local" && service.effective_port !== null) {
-    return `http://localhost:${service.effective_port}`;
+    return `http://${LOCAL_PREVIEW_HOST}:${service.effective_port}`;
   }
 
   return service.preview_url;
@@ -165,6 +169,7 @@ export function ServiceRow({
   runPending = false,
   runtime,
   service,
+  statusAffordance = "full",
 }: {
   onOpenLogs?: (serviceName: string) => void;
   onStartService?: (serviceName: string) => void;
@@ -177,6 +182,7 @@ export function ServiceRow({
   runPending?: boolean;
   runtime: "image" | "process" | null;
   service: ServiceRecord;
+  statusAffordance?: ServiceRowStatusAffordance;
 }) {
   const [draftExposure, setDraftExposure] = useState<ServiceRecord["exposure"]>(service.exposure);
   const [draftPort, setDraftPort] = useState(service.port_override?.toString() ?? "");
@@ -246,6 +252,11 @@ export function ServiceRow({
     onStartService !== undefined && (service.status === "stopped" || service.status === "failed");
   // biome-ignore lint: indexing a known-populated record
   const styles = (STATUS_STYLES[service.status] ?? STATUS_STYLES.stopped)!;
+  const rowStyle = statusAffordance === "full" ? styles.rowStyle : {};
+  const portStyle =
+    statusAffordance === "full"
+      ? styles.portStyle
+      : ({ color: "var(--muted-foreground)" } satisfies CSSProperties);
   const runtimeIcon =
     runtime === "image" ? (
       <Layers className="size-3 text-[var(--muted-foreground)]/70" strokeWidth={2.2} />
@@ -257,7 +268,7 @@ export function ServiceRow({
     <div className="group/row">
       <div
         className={`flex items-center gap-2 py-1${!launchesBootLogs ? " cursor-pointer" : ""}`}
-        style={styles.rowStyle}
+        style={rowStyle}
         onClick={!launchesBootLogs ? () => setExpanded(!expanded) : undefined}
       >
         <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -280,7 +291,7 @@ export function ServiceRow({
                 </span>
               </span>
               {service.effective_port !== null && (
-                <span className="shrink-0 font-mono text-[11px]" style={styles.portStyle}>
+                <span className="shrink-0 font-mono text-[11px]" style={portStyle}>
                   :{service.effective_port}
                 </span>
               )}

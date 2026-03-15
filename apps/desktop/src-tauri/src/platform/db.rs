@@ -207,7 +207,7 @@ fn reconcile_workspace_environments(conn: &rusqlite::Connection) -> Result<(), L
                      ELSE NULL
                  END,
                  preview_url = CASE
-                     WHEN exposure = 'local' AND effective_port IS NOT NULL THEN 'http://localhost:' || effective_port
+                     WHEN exposure = 'local' AND effective_port IS NOT NULL THEN 'http://127.0.0.1:' || effective_port
                      ELSE NULL
                  END,
                  updated_at = datetime('now')
@@ -426,7 +426,7 @@ mod tests {
                 Some(3000_i64),
                 "ready",
                 Option::<String>::None,
-                Some("http://localhost:3000"),
+                Some("http://127.0.0.1:3000"),
                 "service_failed",
                 "workspace_active",
                 "api",
@@ -437,7 +437,7 @@ mod tests {
                 Some(3001_i64),
                 "failed",
                 Some("service_unreachable"),
-                Some("http://localhost:3001"),
+                Some("http://127.0.0.1:3001"),
                 "service_stopping",
                 "workspace_stopping",
                 "worker",

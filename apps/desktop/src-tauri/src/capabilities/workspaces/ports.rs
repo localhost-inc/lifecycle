@@ -1,16 +1,29 @@
 use crate::shared::errors::LifecycleError;
 use rusqlite::params;
 use std::hash::{DefaultHasher, Hash, Hasher};
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, TcpListener};
 
 const RANDOMIZED_PORT_RANGE_START: i64 = 41_000;
 const RANDOMIZED_PORT_RANGE_END: i64 = 48_999;
+
+fn can_bind_loopback(addr: SocketAddr) -> bool {
+    match TcpListener::bind(addr) {
+        Ok(listener) => {
+            drop(listener);
+            true
+        }
+        Err(error) => matches!(error.kind(), std::io::ErrorKind::AddrNotAvailable),
+    }
+}
 
 fn is_host_port_available(port: i64) -> bool {
     if !(1..=65535).contains(&port) {
         return false;
     }
 
-    std::net::TcpListener::bind(("127.0.0.1", port as u16)).is_ok()
+    let port = port as u16;
+    can_bind_loopback(SocketAddr::from((Ipv4Addr::LOCALHOST, port)))
+        && can_bind_loopback(SocketAddr::from((Ipv6Addr::LOCALHOST, port)))
 }
 
 fn load_reserved_effective_ports(
@@ -128,4 +141,79 @@ fn resolve_randomized_port(
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn init_workspace_service_table(conn: &rusqlite::Connection) {
+        conn.execute_batch(
+            "CREATE TABLE workspace_service (
+                workspace_id TEXT NOT NULL,
+                service_name TEXT NOT NULL,
+                effective_port INTEGER
+            );",
+        )
+        .expect("create workspace_service table");
+    }
+
+    #[test]
+    fn resolve_effective_port_rejects_occupied_ipv4_loopback_ports() {
+        let conn = rusqlite::Connection::open_in_memory().expect("open in-memory db");
+        init_workspace_service_table(&conn);
+        let listener =
+            TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0))).expect("bind ipv4");
+        let occupied_port = i64::from(
+            listener
+                .local_addr()
+                .expect("listener addr should exist")
+                .port(),
+        );
+
+        let assigned_port = resolve_effective_port(
+            &conn,
+            "ws-1",
+            "web",
+            Some(occupied_port),
+            None,
+            None,
+            false,
+            false,
+        )
+        .expect("port resolution should succeed");
+
+        assert_ne!(assigned_port, Some(occupied_port));
+    }
+
+    #[test]
+    fn resolve_effective_port_rejects_occupied_ipv6_loopback_ports() {
+        let listener = match TcpListener::bind(SocketAddr::from((Ipv6Addr::LOCALHOST, 0))) {
+            Ok(listener) => listener,
+            Err(error) if matches!(error.kind(), std::io::ErrorKind::AddrNotAvailable) => return,
+            Err(error) => panic!("bind ipv6: {error}"),
+        };
+        let conn = rusqlite::Connection::open_in_memory().expect("open in-memory db");
+        init_workspace_service_table(&conn);
+        let occupied_port = i64::from(
+            listener
+                .local_addr()
+                .expect("listener addr should exist")
+                .port(),
+        );
+
+        let assigned_port = resolve_effective_port(
+            &conn,
+            "ws-1",
+            "web",
+            Some(occupied_port),
+            None,
+            None,
+            false,
+            false,
+        )
+        .expect("port resolution should succeed");
+
+        assert_ne!(assigned_port, Some(occupied_port));
+    }
 }

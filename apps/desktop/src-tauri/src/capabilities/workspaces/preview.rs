@@ -1,9 +1,11 @@
 use crate::shared::errors::{LifecycleError, WorkspaceStatus};
 use rusqlite::params;
 
+pub(crate) const LOCAL_PREVIEW_HOST: &str = "127.0.0.1";
+
 fn local_preview_url(exposure: &str, effective_port: Option<i64>) -> Option<String> {
     if exposure == "local" {
-        effective_port.map(|port| format!("http://localhost:{port}"))
+        effective_port.map(|port| format!("http://{LOCAL_PREVIEW_HOST}:{port}"))
     } else {
         None
     }

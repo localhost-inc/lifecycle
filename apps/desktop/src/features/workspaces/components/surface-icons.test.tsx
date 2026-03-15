@@ -10,7 +10,7 @@ import {
 import { WorkspaceSurfaceTabLeading } from "./surface-icons";
 
 describe("WorkspaceSurfaceTabLeading", () => {
-  test("renders provider iconography and ready state for harness tabs", () => {
+  test("prefers the ready indicator over the spinner for harness tabs", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceSurfaceTabLeading, {
         tab: {
@@ -28,9 +28,30 @@ describe("WorkspaceSurfaceTabLeading", () => {
     );
 
     expect(markup).toContain('data-surface-tab-icon="claude"');
-    expect(markup).toContain('data-slot="spinner"');
     expect(markup).toContain('title="Response ready"');
     expect(markup).not.toContain('title="active"');
+  });
+
+  test("replaces the provider icon with a spinner while a harness tab is running", () => {
+    const markup = renderToStaticMarkup(
+      createElement(WorkspaceSurfaceTabLeading, {
+        tab: {
+          harnessProvider: "codex",
+          key: "terminal:term-1",
+          kind: "terminal",
+          label: "Codex · auth-fix",
+          launchType: "harness",
+          running: true,
+          responseReady: false,
+          status: "active",
+          terminalId: "term-1",
+        },
+      }),
+    );
+
+    expect(markup).toContain('data-slot="spinner"');
+    expect(markup).toContain('title="Generating response"');
+    expect(markup).not.toContain('data-surface-tab-icon="codex"');
   });
 
   test("omits the spinner and status dot for inactive terminal tabs", () => {

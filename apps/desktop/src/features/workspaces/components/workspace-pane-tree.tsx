@@ -54,8 +54,10 @@ const PANE_RESIZE_STEP_PX = 32;
 interface WorkspacePaneTreeProps {
   activePaneId: string;
   creatingSelection: "shell" | HarnessProvider | null;
+  dimInactivePanes?: boolean;
   documents: WorkspaceCanvasDocument[];
   fileSessionsByTabKey: Record<string, FileViewerSessionState>;
+  inactivePaneOpacity?: number;
   onCloseDocumentTab: (tabKey: string) => void;
   onClosePane: (paneId: string) => void;
   onCloseRuntimeTab: (tabKey: string, terminalId: string) => Promise<void>;
@@ -452,6 +454,24 @@ function WorkspacePaneTabDragGhost({
   );
 }
 
+export function resolveWorkspacePaneOpacity({
+  dimInactivePanes,
+  inactivePaneOpacity,
+  isActivePane,
+  isHoveredPane,
+}: {
+  dimInactivePanes: boolean;
+  inactivePaneOpacity: number;
+  isActivePane: boolean;
+  isHoveredPane: boolean;
+}): number {
+  if (!dimInactivePanes || isActivePane || isHoveredPane) {
+    return 1;
+  }
+
+  return inactivePaneOpacity;
+}
+
 export function shouldAutoSelectWorkspacePaneFromPointerTarget(
   target: EventTarget | null,
 ): boolean {
@@ -464,8 +484,10 @@ export function shouldAutoSelectWorkspacePaneFromPointerTarget(
 export function WorkspacePaneTree({
   activePaneId,
   creatingSelection,
+  dimInactivePanes = false,
   documents,
   fileSessionsByTabKey,
+  inactivePaneOpacity = 1,
   onCloseDocumentTab,
   onClosePane,
   onCloseRuntimeTab,
@@ -494,6 +516,7 @@ export function WorkspacePaneTree({
   const [activeTabDrag, setActiveTabDrag] = useState<WorkspacePaneActiveTabDropState | null>(
     null,
   );
+  const [hoveredPaneId, setHoveredPaneId] = useState<string | null>(null);
   const activeTabDragRef = useRef<WorkspacePaneActiveTabDropState | null>(null);
   const paneElementsRef = useRef(new Map<string, HTMLElement>());
   const draggedTab =
@@ -675,6 +698,13 @@ export function WorkspacePaneTree({
           ? (fileSessionsByTabKey[activeTabKey] ?? null)
           : null;
       const isActivePane = node.id === activePaneId;
+      const isHoveredPane = hoveredPaneId === node.id;
+      const paneOpacity = resolveWorkspacePaneOpacity({
+        dimInactivePanes,
+        inactivePaneOpacity,
+        isActivePane,
+        isHoveredPane,
+      });
       const paneDropIntent =
         activeTabDrag?.intent?.paneId === node.id ? activeTabDrag.intent : null;
       const tabBarDragPreview = getWorkspacePaneTabBarDragPreview(activeTabDrag, node.id);
@@ -685,13 +715,20 @@ export function WorkspacePaneTree({
         <section
           key={node.id}
           ref={(element) => setPaneElement(node.id, element)}
-          className={`relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-[var(--card)] ${isDropTargetPane ? "border-[var(--ring)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--ring),transparent_50%)]" : isActivePane ? "shadow-[0_0_0_1px_color-mix(in_srgb,var(--ring),transparent_65%)]" : ""}`}
+          className={`relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-[var(--card)] transition-opacity duration-150 ${isDropTargetPane ? "border-[var(--ring)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--ring),transparent_50%)]" : isActivePane ? "shadow-[0_0_0_1px_color-mix(in_srgb,var(--ring),transparent_65%)]" : ""}`}
           data-workspace-pane-id={node.id}
+          onPointerEnter={() => {
+            setHoveredPaneId(node.id);
+          }}
+          onPointerLeave={() => {
+            setHoveredPaneId((current) => (current === node.id ? null : current));
+          }}
           onPointerDownCapture={(event) => {
             if (!isActivePane && shouldAutoSelectWorkspacePaneFromPointerTarget(event.target)) {
               onSelectPane(node.id);
             }
           }}
+          style={{ opacity: paneOpacity }}
         >
           <div
             className="flex h-9 items-stretch gap-1 border-b border-[var(--border)] bg-[var(--card)]"
@@ -754,8 +791,11 @@ export function WorkspacePaneTree({
       activePaneId,
       activeTabDrag,
       creatingSelection,
+      dimInactivePanes,
       documents,
       fileSessionsByTabKey,
+      hoveredPaneId,
+      inactivePaneOpacity,
       onCloseDocumentTab,
       onClosePane,
       onCloseRuntimeTab,

@@ -513,7 +513,7 @@ describe("workspace provider interface", () => {
         effective_port: 1420,
         preview_status: "sleeping",
         preview_failure_reason: null,
-        preview_url: "http://localhost:1420",
+        preview_url: "http://127.0.0.1:1420",
         created_at: "2026-03-12T00:00:00.000Z",
         updated_at: "2026-03-12T00:00:00.000Z",
       },
@@ -708,7 +708,7 @@ describe("workspace provider interface", () => {
         effective_port: 1420,
         preview_status: "ready",
         preview_failure_reason: null,
-        preview_url: "http://localhost:1420",
+        preview_url: "http://127.0.0.1:1420",
         created_at: "2026-03-12T00:00:00.000Z",
         updated_at: "2026-03-12T00:00:00.000Z",
       },
@@ -926,7 +926,7 @@ describe("workspace provider interface", () => {
             effective_port: 1420,
             preview_status: "sleeping",
             preview_failure_reason: null,
-            preview_url: "http://localhost:1420",
+            preview_url: "http://127.0.0.1:1420",
             created_at: "2026-03-12T00:00:00.000Z",
             updated_at: "2026-03-12T00:00:00.000Z",
           },
@@ -938,7 +938,7 @@ describe("workspace provider interface", () => {
 
     const previewUrl = await provider.exposePort("ws_1", "web", 1420);
 
-    expect(previewUrl).toBe("http://localhost:1420");
+    expect(previewUrl).toBe("http://127.0.0.1:1420");
     expect(calls).toEqual([
       {
         cmd: "update_workspace_service",

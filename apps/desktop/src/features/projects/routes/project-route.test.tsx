@@ -219,4 +219,33 @@ describe("ProjectRoute", () => {
     expect(markup.match(/aria-label="Response ready"/g)?.length ?? 0).toBe(2);
     expect(markup).not.toContain("pointer-events-none absolute right-3 top-1.5");
   });
+
+  test("renders running indicators in the workspace tab and sidebar from shared turn state", async () => {
+    const workspaceTabContentModule =
+      await import("../../workspaces/components/workspace-tab-content");
+    spyOn(workspaceTabContentModule, "WorkspaceTabContent").mockImplementation((() =>
+      createElement("main", { "data-slot": "workspace-layout" }, "Workspace Layout")) as never);
+
+    const responseReadyModule =
+      await import("../../terminals/state/terminal-response-ready-provider");
+    spyOn(responseReadyModule, "useTerminalResponseReady").mockReturnValue({
+      clearTerminalResponseReady: () => {},
+      clearWorkspaceResponseReady: () => {},
+      hasWorkspaceResponseReady: () => false,
+      hasWorkspaceRunningTurn: (workspaceId: string) => workspaceId === "workspace_1",
+      isTerminalResponseReady: () => false,
+      isTerminalTurnRunning: () => false,
+    });
+
+    const { ProjectRoute } = await import("./project-route");
+
+    const markup = renderProjectRoute(
+      ProjectRoute,
+      {},
+      "/projects/project_1?workspace=workspace_1",
+    );
+
+    expect(markup.match(/data-slot="spinner"/g)?.length ?? 0).toBe(2);
+    expect(markup).toContain('title="Generating response"');
+  });
 });

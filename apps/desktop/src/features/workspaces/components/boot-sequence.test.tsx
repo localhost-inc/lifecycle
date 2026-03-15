@@ -110,6 +110,8 @@ describe("BootSequence", () => {
 
     expect(markup).not.toContain(">Tasks<");
     expect(markup).not.toContain(">Services<");
+    expect(markup).not.toContain("Boot sequence");
+    expect(markup).not.toContain("Boot complete");
   });
 
   test("renders the boot sequence in graph execution order while starting", () => {
@@ -132,7 +134,7 @@ describe("BootSequence", () => {
             effective_port: 3001,
             exposure: "local",
             preview_status: "provisioning",
-            preview_url: "http://localhost:3001",
+            preview_url: "http://127.0.0.1:3001",
             status: "starting",
           }),
         ],
@@ -153,6 +155,7 @@ describe("BootSequence", () => {
     expect(markup.indexOf("postgres")).toBeLessThan(markup.indexOf("migrate"));
     expect(markup.indexOf("migrate")).toBeLessThan(markup.indexOf("redis"));
     expect(markup.indexOf("migrate")).toBeLessThan(markup.indexOf("api"));
+    expect(markup).not.toContain("linear-gradient(90deg");
   });
 
   test("shows the loader on the active step while the boot sequence is running", () => {

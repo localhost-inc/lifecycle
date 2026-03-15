@@ -85,7 +85,7 @@ export function useWorkspaceCanvasController({
   workspaceId,
 }: WorkspaceCanvasControllerInput) {
   const client = useQueryClient();
-  const { defaultNewTabLaunch } = useSettings();
+  const { defaultNewTabLaunch, dimInactivePanes, inactivePaneOpacity } = useSettings();
   const { clearTerminalResponseReady, isTerminalResponseReady, isTerminalTurnRunning } =
     useTerminalResponseReady();
   const [creatingSelection, setCreatingSelection] = useState<"shell" | HarnessProvider | null>(
@@ -799,6 +799,7 @@ export function useWorkspaceCanvasController({
   return {
     activePaneId,
     creatingSelection,
+    dimInactivePanes,
     documents,
     error,
     fileSessionsByTabKey,
@@ -817,6 +818,7 @@ export function useWorkspaceCanvasController({
     handleReconcilePaneVisibleTabOrder,
     handleSetSplitRatio,
     handleSplitPane,
+    inactivePaneOpacity,
     paneCount: paneLayout.paneCount,
     renderedActiveTabKeyByPaneId,
     rootPane: state.rootPane,

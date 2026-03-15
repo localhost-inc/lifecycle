@@ -4,7 +4,11 @@ import {
   DEFAULT_MONOSPACE_FONT_FAMILY,
 } from "../../../lib/typography";
 
-import { applyFontSettings, parseStoredSettings } from "./app-settings-provider";
+import {
+  DEFAULT_INACTIVE_PANE_OPACITY,
+  applyFontSettings,
+  parseStoredSettings,
+} from "./app-settings-provider";
 
 describe("applyFontSettings", () => {
   test("writes interface and monospace font tokens to the root style", () => {
@@ -33,7 +37,9 @@ describe("parseStoredSettings", () => {
   test("returns defaults when storage is empty", () => {
     expect(parseStoredSettings(null)).toEqual({
       defaultNewTabLaunch: "shell",
+      dimInactivePanes: false,
       interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
+      inactivePaneOpacity: DEFAULT_INACTIVE_PANE_OPACITY,
       monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
       turnNotificationSound: "orbit",
       turnNotificationsMode: "when-unfocused",
@@ -45,6 +51,8 @@ describe("parseStoredSettings", () => {
     expect(
       parseStoredSettings(
         JSON.stringify({
+          dimInactivePanes: true,
+          inactivePaneOpacity: 0.45,
           turnNotificationSound: "signal",
           turnNotificationsMode: "always",
           worktreeRoot: "  ~/workspace-root  ",
@@ -52,7 +60,9 @@ describe("parseStoredSettings", () => {
       ),
     ).toEqual({
       defaultNewTabLaunch: "shell",
+      dimInactivePanes: true,
       interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
+      inactivePaneOpacity: 0.45,
       monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
       turnNotificationSound: "signal",
       turnNotificationsMode: "always",
@@ -62,13 +72,17 @@ describe("parseStoredSettings", () => {
     expect(
       parseStoredSettings(
         JSON.stringify({
+          dimInactivePanes: "broken",
+          inactivePaneOpacity: 0.62,
           turnNotificationSound: "broken",
           turnNotificationsMode: "broken",
         }),
       ),
     ).toEqual({
       defaultNewTabLaunch: "shell",
+      dimInactivePanes: false,
       interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
+      inactivePaneOpacity: DEFAULT_INACTIVE_PANE_OPACITY,
       monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
       turnNotificationSound: "orbit",
       turnNotificationsMode: "when-unfocused",

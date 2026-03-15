@@ -94,14 +94,14 @@ const services: ServiceRecord[] = [
     effective_port: 43001,
     exposure: "local",
     preview_status: "ready",
-    preview_url: "http://localhost:8787",
+    preview_url: "http://127.0.0.1:8787",
   }),
   createService("www", {
     default_port: 3000,
     effective_port: 43002,
     exposure: "local",
     preview_status: "ready",
-    preview_url: "http://localhost:3000",
+    preview_url: "http://127.0.0.1:3000",
   }),
 ];
 

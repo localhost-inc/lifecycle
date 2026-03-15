@@ -602,7 +602,7 @@ mod tests {
                 Some(3000_i64),
                 Some(3000_i64),
                 "sleeping",
-                Some("http://localhost:3000"),
+                Some("http://127.0.0.1:3000"),
             ],
         )
         .expect("insert service");
@@ -659,7 +659,7 @@ mod tests {
                 Some(8787_i64),
                 Some(8787_i64),
                 "ready",
-                Some("http://localhost:8787"),
+                Some("http://127.0.0.1:8787"),
             ],
         )
         .expect("insert service");
@@ -734,7 +734,7 @@ mod tests {
                 Option::<String>::None,
                 Some(3000_i64),
                 "ready",
-                Some("http://localhost:3000"),
+                Some("http://127.0.0.1:3000"),
             ],
         )
         .expect("insert api");
@@ -752,7 +752,7 @@ mod tests {
                 Some(5432_i64),
                 "failed",
                 Some("service_unreachable"),
-                Some("http://localhost:5432"),
+                Some("http://127.0.0.1:5432"),
             ],
         )
         .expect("insert db");
@@ -769,7 +769,7 @@ mod tests {
                 Option::<String>::None,
                 Some(4173_i64),
                 "provisioning",
-                Some("http://localhost:4173"),
+                Some("http://127.0.0.1:4173"),
             ],
         )
         .expect("insert worker");
@@ -954,7 +954,7 @@ mod tests {
                     Some(admin_default_port),
                     "sleeping".to_string(),
                     None,
-                    Some(format!("http://localhost:{admin_default_port}")),
+                    Some(format!("http://127.0.0.1:{admin_default_port}")),
                 ),
                 (
                     "api".to_string(),

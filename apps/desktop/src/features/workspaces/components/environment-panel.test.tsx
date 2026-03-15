@@ -38,7 +38,7 @@ const services: ServiceRecord[] = [
     effective_port: 3000,
     preview_status: "ready",
     preview_failure_reason: null,
-    preview_url: "http://localhost:3000",
+    preview_url: "http://127.0.0.1:3000",
     created_at: "2026-03-09T10:00:00.000Z",
     updated_at: "2026-03-09T10:00:00.000Z",
   },
@@ -54,7 +54,7 @@ const services: ServiceRecord[] = [
     effective_port: 8787,
     preview_status: "provisioning",
     preview_failure_reason: null,
-    preview_url: "http://localhost:8787",
+    preview_url: "http://127.0.0.1:8787",
     created_at: "2026-03-09T10:00:00.000Z",
     updated_at: "2026-03-09T10:00:00.000Z",
   },
@@ -100,7 +100,7 @@ describe("EnvironmentPanel", () => {
     expect(markup).toContain(">Stop<");
     expect(markup).not.toContain(">Start<");
     expect(markup).toContain('aria-label="Show environment actions"');
-    expect(markup).toContain("Boot sequence");
+    expect(markup).not.toContain("Boot sequence");
   });
 
   test("renders start affordance and failure details for an idle workspace with a failure", () => {
@@ -130,7 +130,7 @@ describe("EnvironmentPanel", () => {
     expect(markup).not.toContain('aria-label="Show environment actions"');
     expect(markup).toContain('data-slot="button"');
     expect(markup).toContain("A service failed to start.");
-    expect(markup).toContain("Boot sequence");
+    expect(markup).not.toContain("Boot sequence");
     expect(markup).not.toContain("View details");
   });
 
@@ -157,7 +157,7 @@ describe("EnvironmentPanel", () => {
 
     expect(markup).toContain(">Start<");
     expect(markup).toContain('disabled=""');
-    expect(markup).toContain("Boot sequence");
+    expect(markup).not.toContain("Boot sequence");
   });
 
   test("shows restart guidance when a running workspace manifest is stale", () => {
@@ -241,7 +241,7 @@ describe("EnvironmentPanel", () => {
 
     expect(markup).toContain("web");
     expect(markup).toContain(":3000");
-    expect(markup).toContain("background-color:var(--status-neutral)");
+    expect(markup).not.toContain("linear-gradient(90deg");
     expect(markup).not.toContain("lucide-external-link");
   });
 
@@ -315,7 +315,7 @@ describe("EnvironmentPanel", () => {
     );
 
     expect(markup).toContain("Starting...");
-    expect(markup).toContain("Boot sequence");
+    expect(markup).not.toContain("Boot sequence");
     expect(markup).not.toContain("Booting environment");
     expect(markup).toContain("postgres");
     expect(markup).toContain("api");
@@ -360,7 +360,7 @@ describe("EnvironmentPanel", () => {
             status: "stopped",
             status_reason: null,
             preview_status: "sleeping",
-            preview_url: "http://localhost:3000",
+            preview_url: "http://127.0.0.1:3000",
           },
           {
             ...services[1]!,
@@ -406,7 +406,7 @@ describe("EnvironmentPanel", () => {
     );
 
     expect(markup).toContain("An environment task failed.");
-    expect(markup).toContain("Boot sequence");
+    expect(markup).not.toContain("Boot sequence");
     expect(markup).not.toContain("Boot failed");
     expect(markup).toContain("migrate");
   });

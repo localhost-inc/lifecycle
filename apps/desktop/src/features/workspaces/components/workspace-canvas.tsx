@@ -20,8 +20,10 @@ export function WorkspaceCanvas(props: WorkspaceCanvasProps) {
       <WorkspacePaneTree
         activePaneId={controller.activePaneId}
         creatingSelection={controller.creatingSelection}
+        dimInactivePanes={controller.dimInactivePanes}
         documents={controller.documents}
         fileSessionsByTabKey={controller.fileSessionsByTabKey}
+        inactivePaneOpacity={controller.inactivePaneOpacity}
         onCloseDocumentTab={controller.handleCloseDocumentTab}
         onClosePane={controller.handleClosePane}
         onCloseRuntimeTab={controller.handleCloseRuntimeTab}

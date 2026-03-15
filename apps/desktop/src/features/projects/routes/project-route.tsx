@@ -1,7 +1,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
-import { Button, EmptyState } from "@lifecycle/ui";
+import { Button, EmptyState, Spinner } from "@lifecycle/ui";
 import { Activity, GitPullRequest, LayoutGrid, PanelRight, TerminalSquare } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext, useParams, useSearchParams } from "react-router-dom";
@@ -13,6 +13,7 @@ import {
   useShortcutRegistration,
 } from "../../../app/shortcuts/shortcut-router";
 import { WorkspaceActions } from "../../workspaces/components/workspace-actions";
+import { getWorkspaceSessionStatusState } from "../../workspaces/components/workspace-session-status";
 import { getWorkspaceDisplayName } from "../../workspaces/lib/workspace-display";
 import { workspaceSupportsFilesystemInteraction } from "../../workspaces/lib/workspace-capabilities";
 import { useTerminalResponseReady } from "../../terminals/state/terminal-response-ready-provider";
@@ -92,6 +93,40 @@ function getProjectViewTabLabel(viewId: ProjectViewId): string {
   }
 
   return "Overview";
+}
+
+function ProjectWorkspaceTabIcon({
+  responseReady,
+  running,
+}: {
+  responseReady: boolean;
+  running: boolean;
+}) {
+  const state = getWorkspaceSessionStatusState({ responseReady, running });
+
+  if (state === "ready") {
+    return <ResponseReadyDot />;
+  }
+
+  if (state === "loading") {
+    return (
+      <span
+        aria-label="Generating response"
+        className="flex items-center justify-center"
+        role="img"
+        title="Generating response"
+      >
+        <Spinner
+          aria-hidden="true"
+          aria-label={undefined}
+          className="size-3.5 text-[var(--muted-foreground)]"
+          role={undefined}
+        />
+      </span>
+    );
+  }
+
+  return <TerminalSquare className="size-3.5" strokeWidth={2} />;
 }
 
 function getRouteAlignedTabState({
@@ -411,16 +446,18 @@ export function ProjectRoute() {
       tabState.tabs.map((tab) => {
         const workspaceResponseReady =
           tab.kind === "workspace" && hasWorkspaceResponseReady(tab.workspaceId);
+        const workspaceRunningTurn =
+          tab.kind === "workspace" && hasWorkspaceRunningTurn(tab.workspaceId);
 
         return {
           closable: canCloseProjectContentTab(tab),
           id: tab.id,
-          icon:
-            tab.kind === "workspace" && workspaceResponseReady ? (
-              <ResponseReadyDot />
-            ) : tab.kind === "workspace" ? (
-              <TerminalSquare className="size-3.5" strokeWidth={2} />
-            ) : tab.kind === "pull-request" ? (
+          icon: tab.kind === "workspace" ? (
+            <ProjectWorkspaceTabIcon
+              responseReady={workspaceResponseReady}
+              running={workspaceRunningTurn}
+            />
+          ) : tab.kind === "pull-request" ? (
               <GitPullRequest className="size-3.5" strokeWidth={2} />
             ) : tab.viewId === "activity" ? (
               <Activity className="size-3.5" strokeWidth={2} />
@@ -443,7 +480,7 @@ export function ProjectRoute() {
                 : getProjectViewTabLabel(tab.viewId),
         };
       }),
-    [hasWorkspaceResponseReady, tabState.tabs, workspacesById],
+    [hasWorkspaceResponseReady, hasWorkspaceRunningTurn, tabState.tabs, workspacesById],
   );
 
   if (!project) {

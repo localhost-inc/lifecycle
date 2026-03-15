@@ -28,8 +28,22 @@ const SETTINGS_STORAGE_KEY = "lifecycle.desktop.settings";
 export type DefaultNewTabLaunch = "shell" | "claude" | "codex";
 
 export const DEFAULT_NEW_TAB_LAUNCH: DefaultNewTabLaunch = "shell";
+export const DEFAULT_DIM_INACTIVE_PANES = false;
+export const DEFAULT_INACTIVE_PANE_OPACITY = 0.65;
+
+export const INACTIVE_PANE_OPACITY_OPTIONS = [
+  { label: "85%", value: 0.85 },
+  { label: "75%", value: 0.75 },
+  { label: "65%", value: 0.65 },
+  { label: "55%", value: 0.55 },
+  { label: "45%", value: 0.45 },
+  { label: "35%", value: 0.35 },
+] as const;
 
 const VALID_NEW_TAB_LAUNCH_VALUES = new Set<string>(["shell", "claude", "codex"]);
+const VALID_INACTIVE_PANE_OPACITY_VALUES = new Set<string>(
+  INACTIVE_PANE_OPACITY_OPTIONS.map((option) => option.value.toFixed(2)),
+);
 
 function normalizeDefaultNewTabLaunch(
   value: string | undefined | null,
@@ -40,8 +54,29 @@ function normalizeDefaultNewTabLaunch(
   return DEFAULT_NEW_TAB_LAUNCH;
 }
 
+function normalizeDimInactivePanes(value: boolean | undefined | null): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  return DEFAULT_DIM_INACTIVE_PANES;
+}
+
+function normalizeInactivePaneOpacity(value: number | undefined | null): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const normalizedValue = value.toFixed(2);
+    if (VALID_INACTIVE_PANE_OPACITY_VALUES.has(normalizedValue)) {
+      return Number(normalizedValue);
+    }
+  }
+
+  return DEFAULT_INACTIVE_PANE_OPACITY;
+}
+
 export interface AppSettings {
   defaultNewTabLaunch: DefaultNewTabLaunch;
+  dimInactivePanes: boolean;
+  inactivePaneOpacity: number;
   interfaceFontFamily: string;
   monospaceFontFamily: string;
   turnNotificationsMode: TurnNotificationMode;
@@ -52,6 +87,8 @@ export interface AppSettings {
 interface SettingsContextValue extends AppSettings {
   resetTypography: () => void;
   setDefaultNewTabLaunch: (value: DefaultNewTabLaunch) => void;
+  setDimInactivePanes: (value: boolean) => void;
+  setInactivePaneOpacity: (value: number) => void;
   setInterfaceFontFamily: (value: string) => void;
   setMonospaceFontFamily: (value: string) => void;
   setTurnNotificationSound: (value: TurnNotificationSound) => void;
@@ -95,6 +132,8 @@ function normalizeWorktreeRoot(value: string | undefined | null): string {
 function buildDefaultSettings(): AppSettings {
   return {
     defaultNewTabLaunch: DEFAULT_NEW_TAB_LAUNCH,
+    dimInactivePanes: DEFAULT_DIM_INACTIVE_PANES,
+    inactivePaneOpacity: DEFAULT_INACTIVE_PANE_OPACITY,
     interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
     monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
     turnNotificationsMode: DEFAULT_TURN_NOTIFICATION_MODE,
@@ -111,6 +150,8 @@ export function parseStoredSettings(raw: string | null | undefined): AppSettings
     const parsed = JSON.parse(raw) as Partial<AppSettings>;
     return {
       defaultNewTabLaunch: normalizeDefaultNewTabLaunch(parsed.defaultNewTabLaunch),
+      dimInactivePanes: normalizeDimInactivePanes(parsed.dimInactivePanes),
+      inactivePaneOpacity: normalizeInactivePaneOpacity(parsed.inactivePaneOpacity),
       interfaceFontFamily: normalizeFontFamily(
         parsed.interfaceFontFamily,
         defaults.interfaceFontFamily,
@@ -158,6 +199,32 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         const next = {
           ...prev,
           defaultNewTabLaunch: normalizeDefaultNewTabLaunch(value),
+        };
+        return persistSettings(next);
+      });
+    },
+    [persistSettings],
+  );
+
+  const setDimInactivePanes = useCallback(
+    (value: boolean) => {
+      setSettings((prev) => {
+        const next = {
+          ...prev,
+          dimInactivePanes: normalizeDimInactivePanes(value),
+        };
+        return persistSettings(next);
+      });
+    },
+    [persistSettings],
+  );
+
+  const setInactivePaneOpacity = useCallback(
+    (value: number) => {
+      setSettings((prev) => {
+        const next = {
+          ...prev,
+          inactivePaneOpacity: normalizeInactivePaneOpacity(value),
         };
         return persistSettings(next);
       });
@@ -250,10 +317,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const contextValue = useMemo<SettingsContextValue>(
     () => ({
       defaultNewTabLaunch: settings.defaultNewTabLaunch,
+      dimInactivePanes: settings.dimInactivePanes,
+      inactivePaneOpacity: settings.inactivePaneOpacity,
       interfaceFontFamily: settings.interfaceFontFamily,
       monospaceFontFamily: settings.monospaceFontFamily,
       resetTypography,
       setDefaultNewTabLaunch,
+      setDimInactivePanes,
+      setInactivePaneOpacity,
       setInterfaceFontFamily,
       setMonospaceFontFamily,
       setTurnNotificationSound,
@@ -265,6 +336,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }),
     [
       settings.defaultNewTabLaunch,
+      settings.dimInactivePanes,
+      settings.inactivePaneOpacity,
       settings.interfaceFontFamily,
       settings.monospaceFontFamily,
       settings.turnNotificationSound,
@@ -272,6 +345,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       settings.worktreeRoot,
       resetTypography,
       setDefaultNewTabLaunch,
+      setDimInactivePanes,
+      setInactivePaneOpacity,
       setInterfaceFontFamily,
       setMonospaceFontFamily,
       setTurnNotificationSound,

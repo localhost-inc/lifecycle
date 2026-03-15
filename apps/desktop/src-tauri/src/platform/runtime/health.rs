@@ -259,13 +259,9 @@ mod tests {
 
     #[tokio::test]
     async fn tcp_health_check_fails_for_unreachable_port() {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind ephemeral port");
-        let port = listener.local_addr().expect("read local addr").port();
-        drop(listener);
-
         let health_check = HealthCheck::Tcp {
-            host: "127.0.0.1".to_string(),
-            port: HealthCheckPort::Number(port),
+            host: "203.0.113.1".to_string(),
+            port: HealthCheckPort::Number(81),
             timeout_seconds: 1,
         };
 

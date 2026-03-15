@@ -78,8 +78,10 @@ describe("WorkspaceCanvas layout", () => {
         createElement(WorkspacePaneTree, {
           activePaneId: "pane-root",
           creatingSelection: null,
+          dimInactivePanes: false,
           documents: [],
           fileSessionsByTabKey: {},
+          inactivePaneOpacity: 0.65,
           onCloseDocumentTab: () => {},
           onClosePane: () => {},
           onCloseRuntimeTab: async () => {},
@@ -152,8 +154,10 @@ describe("WorkspaceCanvas layout", () => {
         createElement(WorkspacePaneTree, {
           activePaneId: "pane-1",
           creatingSelection: null,
+          dimInactivePanes: false,
           documents: [],
           fileSessionsByTabKey: {},
+          inactivePaneOpacity: 0.65,
           onCloseDocumentTab: () => {},
           onClosePane: () => {},
           onCloseRuntimeTab: async () => {},
@@ -215,5 +219,76 @@ describe("WorkspaceCanvas layout", () => {
 
     expect(markup).toContain('class="flex min-h-0 min-w-0 shrink-0 overflow-hidden"');
     expect(markup).toContain('class="flex min-h-0 min-w-0 flex-1 overflow-hidden"');
+  });
+
+  test("dims inactive panes to the configured opacity", async () => {
+    const panelsModule = await import("./workspace-pane-content");
+    const tabBarModule = await import("./workspace-pane-tab-bar");
+
+    spyOn(tabBarModule, "WorkspacePaneTabBar").mockImplementation((() =>
+      createElement("div", { "data-slot": "workspace-tab-bar" }, "Tabs")) as never);
+    spyOn(panelsModule, "WorkspacePaneContent").mockImplementation((() =>
+      createElement("div", { "data-slot": "workspace-pane-content" }, "Panels")) as never);
+
+    const { WorkspacePaneTree } = await import("./workspace-pane-tree");
+    const markup = renderToStaticMarkup(
+      withTheme(
+        createElement(WorkspacePaneTree, {
+          activePaneId: "pane-root",
+          creatingSelection: null,
+          dimInactivePanes: true,
+          documents: [],
+          fileSessionsByTabKey: {},
+          inactivePaneOpacity: 0.45,
+          onCloseDocumentTab: () => {},
+          onClosePane: () => {},
+          onCloseRuntimeTab: async () => {},
+          onCreateTerminal: async () => {},
+          onFileSessionStateChange: () => {},
+          onLaunchSurface: () => {},
+          onMoveTabToPane: () => {},
+          onOpenFile: () => {},
+          onRenameRuntimeTab: async () => {},
+          onSelectPane: () => {},
+          onSelectTab: () => {},
+          onReconcilePaneVisibleTabOrder: () => {},
+          onSetSplitRatio: () => {},
+          onSplitPane: () => {},
+          onTabViewStateChange: () => {},
+          paneCount: 2,
+          renderedActiveTabKeyByPaneId: {
+            "pane-2": null,
+            "pane-root": null,
+          },
+          rootPane: {
+            direction: "row",
+            first: {
+              id: "pane-root",
+              kind: "leaf",
+            },
+            id: "split-1",
+            kind: "split",
+            ratio: 0.5,
+            second: {
+              id: "pane-2",
+              kind: "leaf",
+            },
+          },
+          surfaceActions: [],
+          terminals: [],
+          viewStateByTabKey: {},
+          visibleTabsByPaneId: {
+            "pane-2": [],
+            "pane-root": [],
+          },
+          paneIdsWaitingForSelectedRuntimeTab: new Set<string>(),
+          workspaceId: "workspace-1",
+        }),
+      ),
+    );
+
+    expect(markup).toContain('data-workspace-pane-id="pane-2"');
+    expect(markup).toContain('style="opacity:0.45"');
+    expect(markup).toContain("transition-opacity duration-150");
   });
 });
