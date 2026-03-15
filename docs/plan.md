@@ -90,7 +90,7 @@ Detail spec: [docs/milestones/m4.md](./milestones/m4.md)
 - [ ] Local preview and service exposure controls are wired
 - [ ] Workspace, environment, and service lifecycle boundaries are enforced
 - [x] Desktop workspace extension strip supports local environment lifecycle controls
-- [x] Local terminal sessions survive desktop app restart through an external session host
+- [ ] Local terminal sessions survive desktop app restart
 - [ ] Local lifecycle round-trip behavior is tested
 
 ### M5 - First-Class CLI (Local)

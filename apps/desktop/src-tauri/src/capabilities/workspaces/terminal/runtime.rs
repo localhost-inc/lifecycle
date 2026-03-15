@@ -12,17 +12,15 @@ use super::super::query::TerminalRecord;
 use super::super::rename::TitleOrigin;
 use super::events::{emit_terminal_created, emit_terminal_status};
 use super::harness_observer::maybe_schedule_harness_observers;
-use super::launch::{resolve_terminal_launch, resolve_terminal_working_directory};
+use super::launch::{
+    native_terminal_command, resolve_terminal_launch, resolve_terminal_working_directory,
+};
 use super::native_surface::{
     parse_native_terminal_color_scheme, write_native_terminal_theme_override,
 };
 use super::persistence::{
     insert_terminal_record, load_terminal_record, load_workspace_runtime, next_terminal_label,
     update_terminal_state, workspace_has_interactive_terminal_context,
-};
-use super::session_host::{
-    destroy_terminal_session, provision_terminal_session, terminal_attach_command,
-    terminal_session_exists,
 };
 use super::types::{NativeTerminalSurfaceFrameSyncInput, NativeTerminalSurfaceSyncInput};
 use crate::capabilities::workspaces::controller::ManagedWorkspaceController;
@@ -67,7 +65,7 @@ pub(crate) async fn create_terminal(
     let workspace_controllers = app.state::<WorkspaceControllerRegistryHandle>();
     let controller = workspace_controllers.get_or_create(&workspace_id).await;
     let _mutation_guard = controller.acquire_mutation_guard().await?;
-    let workspace = require_interactive_workspace_runtime(&db, &workspace_id, "terminal_access")?;
+    require_interactive_workspace_runtime(&db, &workspace_id, "terminal_access")?;
 
     let launch_type = TerminalType::from_str(&launch_type)?;
     let label = next_terminal_label(
@@ -77,7 +75,7 @@ pub(crate) async fn create_terminal(
         harness_provider.as_deref(),
     )?;
     let terminal_id = uuid::Uuid::new_v4().to_string();
-    let launch = resolve_terminal_launch(
+    resolve_terminal_launch(
         &launch_type,
         harness_provider.as_deref(),
         harness_session_id.as_deref(),
@@ -88,9 +86,6 @@ pub(crate) async fn create_terminal(
             "native terminal runtime is unavailable".to_string(),
         ));
     }
-
-    let working_directory = resolve_terminal_working_directory(&workspace)?;
-    provision_terminal_session(&terminal_id, &working_directory, &launch_type, &launch)?;
 
     let terminal = insert_terminal_record(
         &db,
@@ -104,7 +99,6 @@ pub(crate) async fn create_terminal(
         TerminalStatus::Detached,
     )?;
 
-    maybe_schedule_harness_observers(&app, &db, &terminal, &working_directory, SystemTime::now());
     emit_terminal_created(&app, &terminal);
     Ok(terminal)
 }
@@ -135,27 +129,19 @@ pub(crate) async fn sync_native_terminal_surface(
         require_interactive_workspace_runtime(&db, &terminal.workspace_id, "terminal_access")?;
     let controller = lookup_workspace_controller(window.app_handle(), &terminal.workspace_id).await;
     let _mutation_guard = controller.acquire_mutation_guard().await?;
-    let working_directory = resolve_terminal_working_directory(&workspace)?;
-    if !terminal_session_exists(&input.terminal_id)? {
-        let terminal = update_terminal_state(
-            &db,
-            &input.terminal_id,
-            TerminalStatus::Finished,
-            None,
-            None,
-            true,
-        )?;
-        emit_terminal_status(window.app_handle(), &terminal);
-        native_terminal::hide_surface(window.app_handle(), &input.terminal_id)?;
-        return Ok(());
-    }
-
+    let launch_type = TerminalType::from_str(&terminal.launch_type)?;
+    let launch = resolve_terminal_launch(
+        &launch_type,
+        terminal.harness_provider.as_deref(),
+        terminal.harness_session_id.as_deref(),
+    )?;
     let theme_override_path =
         write_native_terminal_theme_override(&input.theme, &input.font_family)?;
     let color_scheme = parse_native_terminal_color_scheme(&input.appearance)?;
-    let command_line = terminal_attach_command(&input.terminal_id);
+    let command_line = native_terminal_command(&launch_type, &launch);
     let terminal_id_for_surface = input.terminal_id.clone();
     let theme_override_path = theme_override_path.to_string_lossy().to_string();
+    let working_directory = resolve_terminal_working_directory(&workspace)?;
     native_terminal::sync_surface(
         &window,
         NativeTerminalSurfaceSyncRequest {
@@ -271,7 +257,8 @@ pub(crate) async fn kill_terminal(
     if let Some(terminal) = load_terminal_record(&db, &terminal_id)? {
         let controller = lookup_workspace_controller(&app, &terminal.workspace_id).await;
         let _mutation_guard = controller.acquire_mutation_guard().await?;
-        destroy_terminal_session(&terminal_id)?;
+        let terminal_id_for_surface = terminal_id.clone();
+        native_terminal::destroy_surface(&app, &terminal_id_for_surface)?;
         if !matches!(
             terminal_status(&terminal)?,
             TerminalStatus::Finished | TerminalStatus::Failed
@@ -286,11 +273,8 @@ pub(crate) async fn kill_terminal(
             )?;
             emit_terminal_status(&app, &terminal);
         }
-        let terminal_id_for_surface = terminal_id.clone();
-        native_terminal::destroy_surface(&app, &terminal_id_for_surface)?;
     } else {
         let terminal_id_for_surface = terminal_id.clone();
-        let _ = destroy_terminal_session(&terminal_id);
         native_terminal::destroy_surface(&app, &terminal_id_for_surface)?;
     }
 
@@ -312,21 +296,6 @@ pub(crate) fn complete_native_terminal_exit(
         terminal_status(&terminal)?,
         TerminalStatus::Finished | TerminalStatus::Failed
     ) {
-        return Ok(());
-    }
-
-    if terminal_session_exists(terminal_id)? {
-        if terminal.status != TerminalStatus::Detached.as_str() {
-            let terminal = update_terminal_state(
-                db_path,
-                terminal_id,
-                TerminalStatus::Detached,
-                None,
-                None,
-                false,
-            )?;
-            emit_terminal_status(app, &terminal);
-        }
         return Ok(());
     }
 

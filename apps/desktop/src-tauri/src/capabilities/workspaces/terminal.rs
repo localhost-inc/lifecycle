@@ -12,8 +12,6 @@ mod native_surface;
 mod persistence;
 #[path = "terminal/runtime.rs"]
 mod runtime;
-#[path = "terminal/session_host.rs"]
-mod session_host;
 #[path = "terminal/types.rs"]
 mod types;
 

@@ -134,10 +134,10 @@ Terminal control stays split between typed lifecycle mutations and desktop surfa
 1. Control-plane operations stay typed and imperative (`create`, `detach`, `kill`).
 2. `createTerminal(...)` provisions a provider-owned terminal session and returns typed terminal metadata.
 3. Session runtime stays provider-owned:
-   - local mode runs an external host-managed session on the machine (currently `tmux`, keyed by `terminal.id`)
+   - local mode runs a desktop-owned native session inside the app process
    - cloud mode runs a sandbox-owned PTY session and may add a shared-session multiplexer
 4. Terminal metadata mutations such as rename and workspace-scoped attachment persistence are also provider-owned terminal operations.
-5. When the desktop app has a native terminal host available, both local and cloud terminals should render through that host; local native Ghostty is attach-only presentation over the external host-managed session, and cloud attach transport may use a provider-specific bridge or proxy path rather than reviving a browser renderer contract inside the main app.
+5. When the desktop app has a native terminal host available, both local and cloud terminals should render through that host; local native Ghostty currently owns both presentation and process lifetime for the running desktop session, and cloud attach transport may use a provider-specific bridge or proxy path rather than reviving a browser renderer contract inside the main app.
 6. Desktop-only geometry, visibility, focus, theme, and font synchronization for native surfaces stay outside the provider interface.
 7. `detachTerminal(terminal_id)` hides the active surface without terminating the running session.
 8. `killTerminal(terminal_id)` is the only normal terminal-level action that intentionally ends a live session.
