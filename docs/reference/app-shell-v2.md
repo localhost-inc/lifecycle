@@ -116,11 +116,20 @@ The visual hierarchy should be explicit:
 
 ### Project Switcher Strip
 
-The strip switches the active project, and later the active organization/project context.
+The strip anchors the active shell context and switches projects inside that context.
+
+In the current local-first shell, the leading control may read as `Personal` even before shared organizations ship.
+
+Projects without an `organization_id` should still resolve into that implicit `Personal` shell context so local-first mode and signed-in personal mode converge on the same hierarchy.
 
 It is not a tab strip and it is not a workspace launcher. It changes the active shell context.
 
 The canonical placement is a horizontal strip in the shell plane, to the right of macOS window controls when present.
+
+The expected left-to-right read is:
+
+1. active personal/shared context
+2. projects inside that context
 
 ### Project Sidebar
 

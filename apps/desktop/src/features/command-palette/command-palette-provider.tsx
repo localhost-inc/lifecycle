@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
+import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { CommandPaletteContext, type CommandPaletteContextValue } from "./command-palette-context";
 import { CommandPalette } from "./command-palette";
 import { useCommandPaletteCommands } from "./use-command-palette-commands";
@@ -8,9 +9,16 @@ import type { CommandPaletteMode } from "./types";
 interface CommandPaletteProviderProps {
   children: ReactNode;
   onForkWorkspace?: () => void;
+  projects: ProjectRecord[];
+  workspacesByProjectId: Record<string, WorkspaceRecord[]>;
 }
 
-export function CommandPaletteProvider({ children, onForkWorkspace }: CommandPaletteProviderProps) {
+export function CommandPaletteProvider({
+  children,
+  onForkWorkspace,
+  projects,
+  workspacesByProjectId,
+}: CommandPaletteProviderProps) {
   const [state, setState] = useState<{ isOpen: boolean; mode: CommandPaletteMode }>({
     isOpen: false,
     mode: "commands",
@@ -46,6 +54,8 @@ export function CommandPaletteProvider({ children, onForkWorkspace }: CommandPal
   const commands = useCommandPaletteCommands({
     onForkWorkspace,
     onOpenFiles: files.isAvailable ? () => open("files") : undefined,
+    projects,
+    workspacesByProjectId,
   });
 
   const value = useMemo<CommandPaletteContextValue>(

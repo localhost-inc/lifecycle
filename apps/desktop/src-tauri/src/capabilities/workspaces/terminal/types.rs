@@ -21,6 +21,16 @@ pub(crate) struct NativeTerminalTheme {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub(crate) struct NativeTerminalSurfaceFrameSyncInput {
+    pub height: f64,
+    pub terminal_id: String,
+    pub width: f64,
+    pub x: f64,
+    pub y: f64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct NativeTerminalSurfaceSyncInput {
     pub appearance: String,
     pub focused: bool,

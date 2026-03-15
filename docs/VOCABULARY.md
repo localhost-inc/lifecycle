@@ -45,13 +45,32 @@ Avoid:
 
 Use `shell plane` unless the distinction truly does not matter.
 
+### Shell context
+
+The active personal or shared organization scope that owns the visible project set in the shell.
+
+Examples:
+
+1. `Personal`
+2. `Kin Health`
+
+Local-first note:
+
+1. projects without an `organization_id` still resolve into the implicit `Personal` shell context
+2. sign-in can later persist that `Personal` context without changing the shell hierarchy
+
 ### Project switcher strip
 
-The shell-plane strip for switching projects and, later, organizations.
+The shell-plane strip for the active personal/shared context plus project switching within that context.
 
 The current shell renders it horizontally to the right of macOS window controls when present.
 
 It changes the active shell context.
+
+The expected read is:
+
+1. leading personal/shared context control, for example `Personal`
+2. project switching within that context
 
 It is not:
 

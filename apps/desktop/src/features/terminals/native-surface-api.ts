@@ -26,6 +26,14 @@ export interface SyncNativeTerminalSurfaceInput {
   y: number;
 }
 
+export interface SyncNativeTerminalSurfaceFrameInput {
+  height: number;
+  terminalId: string;
+  width: number;
+  x: number;
+  y: number;
+}
+
 export async function syncNativeTerminalSurface(
   input: SyncNativeTerminalSurfaceInput,
 ): Promise<void> {
@@ -45,6 +53,24 @@ export async function syncNativeTerminalSurface(
       terminalId: input.terminalId,
       theme: input.theme,
       visible: input.visible,
+      width: input.width,
+      x: input.x,
+      y: input.y,
+    },
+  });
+}
+
+export async function syncNativeTerminalSurfaceFrame(
+  input: SyncNativeTerminalSurfaceFrameInput,
+): Promise<void> {
+  if (!isTauri()) {
+    return;
+  }
+
+  await invokeTauri<void>("sync_native_terminal_surface_frame", {
+    input: {
+      height: input.height,
+      terminalId: input.terminalId,
       width: input.width,
       x: input.x,
       y: input.y,

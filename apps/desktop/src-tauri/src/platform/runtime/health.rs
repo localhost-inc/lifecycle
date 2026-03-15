@@ -176,12 +176,18 @@ mod tests {
             timeout_seconds: 5,
         };
 
-        let resolved =
-            resolve_health_check_templates(&health_check, &runtime_env, "environment.web.health_check")
-                .expect("http health check templates should resolve");
+        let resolved = resolve_health_check_templates(
+            &health_check,
+            &runtime_env,
+            "environment.web.health_check",
+        )
+        .expect("http health check templates should resolve");
 
         match resolved {
-            HealthCheck::Http { url, timeout_seconds } => {
+            HealthCheck::Http {
+                url,
+                timeout_seconds,
+            } => {
                 assert_eq!(url, "http://127.0.0.1:43085/@vite/client");
                 assert_eq!(timeout_seconds, 5);
             }

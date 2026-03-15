@@ -37,7 +37,7 @@ describe("WorkspacePaneTabBar", () => {
     expect(markup).toContain("lead:terminal:term-1");
   });
 
-  test("renders workspace tab items without depending on the shared compact tab primitive", () => {
+  test("renders workspace tab items with the current workspace chip styling", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspacePaneTabBar, {
         activeTabKey: "terminal:term-1",
@@ -59,12 +59,11 @@ describe("WorkspacePaneTabBar", () => {
       }),
     );
 
-    expect(markup).toContain("h-full");
-    expect(markup).toContain("border-x");
-    expect(markup).toContain("bg-[var(--background)]");
+    expect(markup).toContain("relative my-1 flex shrink-0 items-center gap-2 rounded-md px-3");
+    expect(markup).toContain("bg-[var(--surface-hover)]");
     expect(markup).toContain("text-sm");
     expect(markup).toContain("font-semibold");
-    expect(markup).not.toContain("shadow-[");
+    expect(markup).toContain("cursor-grab");
   });
 
   test("hides the horizontal scrollbar and reserves a right gutter for the fade", () => {

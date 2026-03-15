@@ -1,10 +1,8 @@
 import { useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Circle, File, GitFork, Home, Layers, Settings } from "lucide-react";
-import type { WorkspaceRecord } from "@lifecycle/contracts";
-import { useProjects } from "../projects/hooks";
+import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { readProjectRouteFocus } from "../projects/lib/project-route-state";
-import { useWorkspacesByProject } from "../workspaces/hooks";
 import { getWorkspaceDisplayName } from "../workspaces/lib/workspace-display";
 import { formatAppHotkeyLabel, isMacPlatform } from "../../app/app-hotkeys";
 import type { CommandPaletteCommand } from "./types";
@@ -20,18 +18,16 @@ function workspaceIcon(workspace: WorkspaceRecord): typeof Circle {
 interface UseCommandPaletteCommandsOptions {
   onForkWorkspace?: () => void;
   onOpenFiles?: () => void;
+  projects: ProjectRecord[];
+  workspacesByProjectId: Record<string, WorkspaceRecord[]>;
 }
 
 export function useCommandPaletteCommands(
-  options: UseCommandPaletteCommandsOptions = {},
+  options: UseCommandPaletteCommandsOptions,
 ): CommandPaletteCommand[] {
-  const { onForkWorkspace, onOpenFiles } = options;
+  const { onForkWorkspace, onOpenFiles, projects, workspacesByProjectId } = options;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const projectsQuery = useProjects();
-  const workspacesByProjectQuery = useWorkspacesByProject();
-  const projects = projectsQuery.data ?? [];
-  const workspacesByProjectId = workspacesByProjectQuery.data ?? {};
   const mac = isMacPlatform();
   const routeFocus = readProjectRouteFocus(searchParams);
   const workspaceId = routeFocus?.kind === "workspace" ? routeFocus.workspaceId : null;

@@ -16,6 +16,12 @@ pub enum NativeTerminalColorScheme {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct NativeTerminalSurfaceFrameSyncRequest<'a> {
+    pub frame: NativeTerminalFrame,
+    pub terminal_id: &'a str,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct NativeTerminalSurfaceSyncRequest<'a> {
     pub background_color: &'a str,
     pub color_scheme: NativeTerminalColorScheme,
@@ -75,6 +81,13 @@ pub fn sync_surface(
     request: NativeTerminalSurfaceSyncRequest<'_>,
 ) -> Result<(), LifecycleError> {
     platform::sync_surface(window, request)
+}
+
+pub fn sync_surface_frame(
+    window: &WebviewWindow,
+    request: NativeTerminalSurfaceFrameSyncRequest<'_>,
+) -> Result<(), LifecycleError> {
+    platform::sync_surface_frame(window, request)
 }
 
 pub fn hide_surface(app: &AppHandle, terminal_id: &str) -> Result<(), LifecycleError> {

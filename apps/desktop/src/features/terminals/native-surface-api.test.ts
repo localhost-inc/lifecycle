@@ -31,7 +31,7 @@ mock.module("../../lib/tauri-error", () => ({
   },
 }));
 
-const { hideNativeTerminalSurface, syncNativeTerminalSurface } =
+const { hideNativeTerminalSurface, syncNativeTerminalSurface, syncNativeTerminalSurfaceFrame } =
   await import("./native-surface-api");
 
 describe("native terminal surface api", () => {
@@ -71,6 +71,13 @@ describe("native terminal surface api", () => {
       x: 10,
       y: 20,
     });
+    await syncNativeTerminalSurfaceFrame({
+      height: 720,
+      terminalId: "term_1",
+      width: 1280,
+      x: 20,
+      y: 30,
+    });
     await hideNativeTerminalSurface("term_1");
 
     expect(invokeTauri).toHaveBeenNthCalledWith(1, "sync_native_terminal_surface", {
@@ -97,7 +104,16 @@ describe("native terminal surface api", () => {
         y: 20,
       },
     });
-    expect(invokeTauri).toHaveBeenNthCalledWith(2, "hide_native_terminal_surface", {
+    expect(invokeTauri).toHaveBeenNthCalledWith(2, "sync_native_terminal_surface_frame", {
+      input: {
+        height: 720,
+        terminalId: "term_1",
+        width: 1280,
+        x: 20,
+        y: 30,
+      },
+    });
+    expect(invokeTauri).toHaveBeenNthCalledWith(3, "hide_native_terminal_surface", {
       terminalId: "term_1",
     });
   });

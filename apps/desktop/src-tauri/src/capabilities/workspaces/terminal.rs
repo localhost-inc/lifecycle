@@ -19,6 +19,8 @@ pub(crate) use attachments::{prepare_native_terminal_attachment_paste, save_term
 pub(crate) use persistence::load_terminal_record;
 pub(crate) use runtime::{
     complete_native_terminal_exit, create_terminal, detach_terminal, hide_native_terminal_surface,
-    kill_terminal, sync_native_terminal_surface,
+    kill_terminal, sync_native_terminal_surface, sync_native_terminal_surface_frame,
 };
-pub(crate) use types::{NativeTerminalSurfaceSyncInput, SavedTerminalAttachment};
+pub(crate) use types::{
+    NativeTerminalSurfaceFrameSyncInput, NativeTerminalSurfaceSyncInput, SavedTerminalAttachment,
+};

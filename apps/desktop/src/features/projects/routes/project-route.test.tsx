@@ -43,6 +43,12 @@ function renderProjectRoute(
   entry = "/projects/project_1",
 ) {
   const context: AppShellOutletContext = {
+    activeShellContext: {
+      id: "personal",
+      kind: "personal",
+      name: "Personal",
+      persisted: false,
+    },
     onCreateWorkspace: async () => {},
     onDestroyWorkspace: async () => {},
     onForkWorkspace: async () => {},

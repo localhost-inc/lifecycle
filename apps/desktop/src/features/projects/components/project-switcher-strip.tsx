@@ -2,7 +2,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ProjectRecord } from "@lifecycle/contracts";
 import { Button, Spinner } from "@lifecycle/ui";
-import { CircleUserRound, FolderPlus } from "lucide-react";
+import { ChevronDown, CircleUserRound, FolderPlus } from "lucide-react";
 import { type MouseEvent, useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -13,6 +13,7 @@ import type { AuthSession } from "../../auth/auth-session";
 
 interface ProjectSwitcherStripProps {
   activeProjectId: string | null;
+  activeContextName?: string;
   authSession: AuthSession;
   authSessionLoading?: boolean;
   onAddProject: () => void;
@@ -40,18 +41,6 @@ function authAvatarHue(seed: string): number {
   return ((hash % 360) + 360) % 360;
 }
 
-function authSessionLabel(session: AuthSession, loading: boolean): string {
-  if (loading) {
-    return "Checking auth";
-  }
-
-  if (session.state === "logged_in") {
-    return session.identity?.handle ?? session.identity?.displayName ?? "Signed in";
-  }
-
-  return "Signed out";
-}
-
 function authSessionTitle(session: AuthSession, loading: boolean): string {
   if (loading) {
     return "Checking current auth session.";
@@ -67,6 +56,14 @@ function authSessionTitle(session: AuthSession, loading: boolean): string {
   }
 
   return session.message ?? "No account is currently signed in.";
+}
+
+function contextControlTitle(
+  activeContextName: string,
+  session: AuthSession,
+  loading: boolean,
+): string {
+  return `${activeContextName} context. ${authSessionTitle(session, loading)}`;
 }
 
 function AuthSessionAvatar({ loading, session }: { loading: boolean; session: AuthSession }) {
@@ -115,6 +112,7 @@ function AuthSessionAvatar({ loading, session }: { loading: boolean; session: Au
 
 export function ProjectSwitcherStrip({
   activeProjectId,
+  activeContextName = "Personal",
   authSession,
   authSessionLoading = false,
   onAddProject,
@@ -147,12 +145,28 @@ export function ProjectSwitcherStrip({
   return (
     <header
       className={[
-        "flex h-9 shrink-0 select-none items-center gap-1 rounded-[18px] px-1 text-[var(--foreground)]",
+        "flex h-9 shrink-0 select-none items-center gap-1.5 rounded-[18px] px-1 text-[var(--foreground)]",
         shouldInset ? "pl-20 pr-1" : "px-1",
       ].join(" ")}
       data-slot="project-switcher-strip"
       onMouseDown={handleMouseDown}
     >
+      <Button
+        aria-label={`Open ${activeContextName} context`}
+        className="h-7 shrink-0 gap-1.5 rounded-[var(--radius-xl)] border border-[color-mix(in_srgb,var(--border),var(--foreground)_8%)] bg-[color-mix(in_srgb,var(--panel),var(--foreground)_4%)] px-2 text-[11px] font-medium text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--panel),var(--foreground)_8%)]"
+        data-slot="project-switcher-context"
+        onClick={onOpenSettings}
+        title={contextControlTitle(activeContextName, authSession, authSessionLoading)}
+        variant="ghost"
+      >
+        <AuthSessionAvatar loading={authSessionLoading} session={authSession} />
+        <span className="max-w-[8rem] truncate">{activeContextName}</span>
+        <ChevronDown className="size-3.5 text-[var(--muted-foreground)]" strokeWidth={1.8} />
+      </Button>
+      <div
+        aria-hidden="true"
+        className="h-5 w-px shrink-0 bg-[color-mix(in_srgb,var(--border),transparent_12%)]"
+      />
       <div className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden">
         <div className="flex min-w-max items-center gap-0.5 pr-0.5">
           {projects.map((project) => {
@@ -189,19 +203,6 @@ export function ProjectSwitcherStrip({
       <div className="flex shrink-0 items-center gap-0.5">
         <Button aria-label="Add project" onClick={onAddProject} size="icon" variant="ghost">
           <FolderPlus size={16} />
-        </Button>
-        <Button
-          aria-label="Open settings"
-          className="h-7 gap-1.5 rounded-[var(--radius-xl)] border border-[color-mix(in_srgb,var(--border),var(--foreground)_8%)] bg-[color-mix(in_srgb,var(--panel),var(--foreground)_4%)] px-1.5 text-[11px] font-medium text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--panel),var(--foreground)_8%)]"
-          data-slot="project-switcher-auth"
-          onClick={onOpenSettings}
-          title={authSessionTitle(authSession, authSessionLoading)}
-          variant="ghost"
-        >
-          <AuthSessionAvatar loading={authSessionLoading} session={authSession} />
-          <span className="max-w-[8rem] truncate">
-            {authSessionLabel(authSession, authSessionLoading)}
-          </span>
         </Button>
       </div>
     </header>

@@ -1,4 +1,4 @@
-use super::NativeTerminalSurfaceSyncRequest;
+use super::{NativeTerminalSurfaceFrameSyncRequest, NativeTerminalSurfaceSyncRequest};
 use crate::shared::errors::LifecycleError;
 use tauri::{AppHandle, WebviewWindow};
 
@@ -13,6 +13,15 @@ pub(super) fn initialize(
 pub(super) fn sync_surface(
     _window: &WebviewWindow,
     _request: NativeTerminalSurfaceSyncRequest<'_>,
+) -> Result<(), LifecycleError> {
+    Err(LifecycleError::AttachFailed(
+        "native terminal runtime is unavailable".to_string(),
+    ))
+}
+
+pub(super) fn sync_surface_frame(
+    _window: &WebviewWindow,
+    _request: NativeTerminalSurfaceFrameSyncRequest<'_>,
 ) -> Result<(), LifecycleError> {
     Err(LifecycleError::AttachFailed(
         "native terminal runtime is unavailable".to_string(),

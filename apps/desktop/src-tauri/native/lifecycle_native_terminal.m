@@ -38,6 +38,14 @@ typedef struct {
   bool dark;
 } LifecycleNativeTerminalConfig;
 
+typedef struct {
+  const char *terminal_id;
+  double x;
+  double y;
+  double width;
+  double height;
+} LifecycleNativeTerminalFrameConfig;
+
 @class LifecycleNativeTerminalView;
 static LifecycleNativeTerminalView *lifecycleTerminalViewForSurface(ghostty_surface_t surface);
 static BOOL lifecycleNativeTerminalHandleWorkspaceShortcut(LifecycleNativeTerminalView *view,
@@ -2167,6 +2175,70 @@ bool lifecycle_native_terminal_sync(void *webview_view,
       return true;
     } @catch (NSException *exception) {
       lifecycleSetLastErrorFromException(@"Native terminal sync threw an exception", exception);
+      return false;
+    }
+  }
+}
+
+bool lifecycle_native_terminal_sync_frame(void *webview_view,
+                                          const LifecycleNativeTerminalFrameConfig *config) {
+  @autoreleasepool {
+    @try {
+      if (gGhosttyApp == NULL) {
+        lifecycleSetLastError(@"Ghostty runtime is not initialized.");
+        return false;
+      }
+
+      if (webview_view == NULL || config == NULL || config->terminal_id == NULL) {
+        lifecycleSetLastError(@"Native terminal frame sync received incomplete arguments.");
+        return false;
+      }
+
+      NSView *webview = (__bridge NSView *)webview_view;
+      NSView *container = webview.superview;
+      if (container == nil) {
+        lifecycleSetLastError(@"Tauri webview has no superview for native terminal mounting.");
+        return false;
+      }
+
+      NSString *terminalId = [NSString stringWithUTF8String:config->terminal_id];
+      LifecycleNativeTerminalView *view = (LifecycleNativeTerminalView *)gTerminalViews[terminalId];
+      if (view == nil) {
+        gLastError = nil;
+        return true;
+      }
+
+      if (view.superview != container) {
+        [view removeFromSuperview];
+        [container addSubview:view positioned:NSWindowAbove relativeTo:webview];
+      }
+
+      LifecycleNativeTerminalConfig frameOnlyConfig = {
+          .terminal_id = config->terminal_id,
+          .working_directory = NULL,
+          .command = NULL,
+          .background_color = NULL,
+          .theme_config_path = NULL,
+          .x = config->x,
+          .y = config->y,
+          .width = config->width,
+          .height = config->height,
+          .font_size = 0,
+          .scale_factor = 0,
+          .focused = false,
+          .pointer_passthrough = false,
+          .hidden = false,
+          .dark = false,
+      };
+      NSRect targetFrame = lifecycleFrameForConfig(webview, &frameOnlyConfig);
+      [view setFrame:targetFrame];
+      [view syncContentScale];
+
+      gLastError = nil;
+      return true;
+    } @catch (NSException *exception) {
+      lifecycleSetLastErrorFromException(@"Native terminal frame sync threw an exception",
+                                         exception);
       return false;
     }
   }

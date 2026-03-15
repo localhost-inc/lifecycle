@@ -1,4 +1,7 @@
-use super::{NativeTerminalColorScheme, NativeTerminalSurfaceSyncRequest};
+use super::{
+    NativeTerminalColorScheme, NativeTerminalSurfaceFrameSyncRequest,
+    NativeTerminalSurfaceSyncRequest,
+};
 use crate::capabilities::workspaces::terminal::{
     complete_native_terminal_exit, prepare_native_terminal_attachment_paste,
 };
@@ -37,6 +40,15 @@ struct LifecycleNativeTerminalConfig {
     dark: bool,
 }
 
+#[repr(C)]
+struct LifecycleNativeTerminalFrameConfig {
+    terminal_id: *const c_char,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct NativeWorkspaceShortcutEvent {
     action: String,
@@ -60,6 +72,10 @@ unsafe extern "C" {
     fn lifecycle_native_terminal_sync(
         webview_view: *mut c_void,
         config: *const LifecycleNativeTerminalConfig,
+    ) -> bool;
+    fn lifecycle_native_terminal_sync_frame(
+        webview_view: *mut c_void,
+        config: *const LifecycleNativeTerminalFrameConfig,
     ) -> bool;
     fn lifecycle_native_terminal_install_diagnostics(log_path: *const c_char);
     fn lifecycle_native_terminal_hide(terminal_id: *const c_char) -> bool;
@@ -334,6 +350,35 @@ pub(super) fn sync_surface(
             let result = with_error(
                 || unsafe { lifecycle_native_terminal_sync(webview.inner(), &config) },
                 "failed to sync native terminal surface",
+            );
+            let _ = sender.send(result);
+        })
+        .map_err(|error| LifecycleError::AttachFailed(error.to_string()))?;
+
+    receiver.recv().map_err(|_| {
+        LifecycleError::AttachFailed("native terminal webview task did not complete".to_string())
+    })?
+}
+
+pub(super) fn sync_surface_frame(
+    window: &WebviewWindow,
+    request: NativeTerminalSurfaceFrameSyncRequest<'_>,
+) -> Result<(), LifecycleError> {
+    let terminal_id = cstring(request.terminal_id, "terminal id")?;
+    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+
+    window
+        .with_webview(move |webview| {
+            let config = LifecycleNativeTerminalFrameConfig {
+                terminal_id: terminal_id.as_ptr(),
+                x: request.frame.x,
+                y: request.frame.y,
+                width: request.frame.width,
+                height: request.frame.height,
+            };
+            let result = with_error(
+                || unsafe { lifecycle_native_terminal_sync_frame(webview.inner(), &config) },
+                "failed to sync native terminal frame",
             );
             let _ = sender.send(result);
         })

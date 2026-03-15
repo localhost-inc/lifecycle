@@ -113,8 +113,11 @@ describe("WorkspaceCanvas layout", () => {
 
     expect(markup).toContain('aria-orientation="vertical"');
     expect(markup).toContain('data-workspace-split-resizer="row"');
-    expect(markup).toContain('class="pointer-events-none absolute inset-y-0 z-20"');
-    expect(markup).toContain('style="left:50%"');
+    expect(markup).toContain('class="relative w-0 shrink-0"');
+    expect(markup).toContain(
+      'class="group absolute inset-y-0 -left-2 z-20 flex w-4 touch-none cursor-col-resize justify-center outline-none',
+    );
+    expect(markup).toContain("group-hover:bg-[var(--ring)]");
     expect(markup).toContain("cursor-col-resize");
   });
 

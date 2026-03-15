@@ -88,6 +88,14 @@ pub async fn sync_native_terminal_surface(
 }
 
 #[tauri::command]
+pub async fn sync_native_terminal_surface_frame(
+    window: WebviewWindow,
+    input: super::super::terminal::NativeTerminalSurfaceFrameSyncInput,
+) -> Result<(), LifecycleError> {
+    super::super::terminal::sync_native_terminal_surface_frame(window, input).await
+}
+
+#[tauri::command]
 pub async fn hide_native_terminal_surface(
     app: AppHandle,
     db_path: State<'_, DbPath>,

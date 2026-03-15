@@ -41,13 +41,14 @@ const loggedInAuthSession: AuthSession = {
 };
 
 describe("ProjectSwitcherStrip", () => {
-  test("renders the project switcher strip with the project list and auth settings pill", () => {
+  test("renders the project switcher strip with a leading Personal context control and project list", () => {
     const markup = renderToStaticMarkup(
       createElement(ThemeProvider, {
         storageKey: "test.theme",
         children: createElement(MemoryRouter, {
           children: createElement(ProjectSwitcherStrip, {
             activeProjectId: "project_2",
+            activeContextName: "Personal",
             authSession: loggedInAuthSession,
             onAddProject: () => {},
             onOpenSettings: () => {},
@@ -58,15 +59,19 @@ describe("ProjectSwitcherStrip", () => {
     );
 
     expect(markup).toContain('data-slot="project-switcher-strip"');
+    expect(markup).toContain('data-slot="project-switcher-context"');
+    expect(markup).toContain('aria-label="Open Personal context"');
+    expect(markup).toContain(">Personal<");
     expect(markup).toContain('aria-label="Open project Lifecycle"');
     expect(markup).toContain('href="/projects/project_1"');
     expect(markup).toContain('aria-label="Open project Kin"');
     expect(markup).toContain('href="/projects/project_2"');
     expect(markup).toContain('aria-label="Add project"');
-    expect(markup).toContain('aria-label="Open settings"');
-    expect(markup).toContain('data-slot="project-switcher-auth"');
     expect(markup).toContain("kylealwyn");
     expect(markup).toContain('src="https://avatars.githubusercontent.com/u/14184138?v=4"');
+    expect(markup.indexOf('data-slot="project-switcher-context"')).toBeLessThan(
+      markup.indexOf('href="/projects/project_1"'),
+    );
     expect(markup.indexOf('href="/projects/project_1"')).toBeLessThan(
       markup.indexOf('href="/projects/project_2"'),
     );

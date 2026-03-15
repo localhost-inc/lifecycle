@@ -452,6 +452,9 @@ export function OverviewTab({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--muted-foreground)]">
+        <span>Boot sequence</span>
+      </div>
       {banner ? (
         <div className="flex items-center justify-between gap-3 text-xs text-[var(--muted-foreground)]">
           <div className="flex min-w-0 items-center gap-2">

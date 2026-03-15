@@ -19,7 +19,11 @@ import {
   getNativeMonospaceFontFamily,
 } from "../../../lib/typography";
 import { terminalHasLiveSession } from "../api";
-import { hideNativeTerminalSurface, syncNativeTerminalSurface } from "../native-surface-api";
+import {
+  hideNativeTerminalSurface,
+  syncNativeTerminalSurface,
+  syncNativeTerminalSurfaceFrame,
+} from "../native-surface-api";
 import { DEFAULT_TERMINAL_FONT_SIZE } from "../terminal-display";
 import { resolveTerminalTheme } from "../terminal-theme";
 
@@ -272,7 +276,9 @@ export function NativeTerminalSurface({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const lifecycleTokenRef = useRef(0);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const resizeFrameCoordinatorRef = useRef<NativeTerminalSurfaceSyncCoordinator | null>(null);
   const shellResizeInProgressRef = useRef(false);
+  const syncResizeFrameRef = useRef<() => Promise<void>>(async () => {});
   const syncCoordinatorRef = useRef<NativeTerminalSurfaceSyncCoordinator | null>(null);
   const syncSurfaceRef = useRef<() => Promise<void>>(async () => {});
   const [attachState, setAttachState] = useState<NativeTerminalSurfaceAttachState>(() =>
@@ -294,6 +300,19 @@ export function NativeTerminalSurface({
       sync: () => syncSurfaceRef.current(),
     });
     return syncCoordinatorRef.current;
+  };
+
+  const getResizeFrameCoordinator = (): NativeTerminalSurfaceSyncCoordinator => {
+    if (resizeFrameCoordinatorRef.current) {
+      return resizeFrameCoordinatorRef.current;
+    }
+
+    resizeFrameCoordinatorRef.current = createNativeTerminalSurfaceSyncCoordinator({
+      cancelFrame: window.cancelAnimationFrame,
+      requestFrame: window.requestAnimationFrame,
+      sync: () => syncResizeFrameRef.current(),
+    });
+    return resizeFrameCoordinatorRef.current;
   };
 
   const hideSurface = async () => {
@@ -405,6 +424,46 @@ export function NativeTerminalSurface({
 
   syncSurfaceRef.current = syncSurface;
 
+  const syncResizeFrame = async () => {
+    const host = hostRef.current;
+    if (!host || !shellResizeInProgressRef.current) {
+      return;
+    }
+
+    const rect = host.getBoundingClientRect();
+    if (
+      !shouldShowNativeTerminalSurface({
+        hasLiveSession,
+        height: rect.height,
+        width: rect.width,
+      }) ||
+      shouldHideNativeTerminalSurfaceForTabDrag({
+        hasLiveSession,
+        height: rect.height,
+        tabDragInProgress,
+        width: rect.width,
+      })
+    ) {
+      return;
+    }
+
+    try {
+      await measureAsyncPerformance(`native-terminal-frame-sync:${terminal.id}`, () =>
+        syncNativeTerminalSurfaceFrame({
+          height: rect.height,
+          terminalId: terminal.id,
+          width: rect.width,
+          x: rect.left,
+          y: rect.top,
+        }),
+      );
+    } catch (nextError) {
+      console.error("Failed to sync native terminal frame during pane resize:", nextError);
+    }
+  };
+
+  syncResizeFrameRef.current = syncResizeFrame;
+
   useEffect(() => {
     setAttachState(hasLiveSession ? "attaching" : "attached");
     setError(null);
@@ -430,6 +489,9 @@ export function NativeTerminalSurface({
   useEffect(() => {
     const unsubscribe = subscribeToShellResize((resizing) => {
       shellResizeInProgressRef.current = resizing;
+      if (!resizing) {
+        getResizeFrameCoordinator().cancelScheduledSync();
+      }
       void getSyncCoordinator().flushSync();
     });
 
@@ -452,10 +514,20 @@ export function NativeTerminalSurface({
     getSyncCoordinator().scheduleSync();
     resizeObserverRef.current?.disconnect();
     resizeObserverRef.current = new ResizeObserver(() => {
+      if (shellResizeInProgressRef.current) {
+        getResizeFrameCoordinator().scheduleSync();
+        return;
+      }
+
       getSyncCoordinator().scheduleSync();
     });
     resizeObserverRef.current.observe(hostRef.current);
     const handleSyncRequest = () => {
+      if (shellResizeInProgressRef.current) {
+        getResizeFrameCoordinator().scheduleSync();
+        return;
+      }
+
       getSyncCoordinator().scheduleSync();
     };
     window.addEventListener("resize", handleSyncRequest);
@@ -463,6 +535,7 @@ export function NativeTerminalSurface({
     document.addEventListener("visibilitychange", handleSyncRequest);
 
     return () => {
+      getResizeFrameCoordinator().cancelScheduledSync();
       getSyncCoordinator().cancelScheduledSync();
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;

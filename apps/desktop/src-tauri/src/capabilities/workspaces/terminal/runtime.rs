@@ -1,6 +1,7 @@
 use crate::platform::db::DbPath;
 use crate::platform::native_terminal::{
-    self, NativeTerminalFrame, NativeTerminalSurfaceSyncRequest,
+    self, NativeTerminalFrame, NativeTerminalSurfaceFrameSyncRequest,
+    NativeTerminalSurfaceSyncRequest,
 };
 use crate::shared::errors::{LifecycleError, TerminalFailureReason, TerminalStatus, TerminalType};
 use crate::WorkspaceControllerRegistryHandle;
@@ -21,7 +22,7 @@ use super::persistence::{
     insert_terminal_record, load_terminal_record, load_workspace_runtime, next_terminal_label,
     update_terminal_state, workspace_has_interactive_terminal_context,
 };
-use super::types::NativeTerminalSurfaceSyncInput;
+use super::types::{NativeTerminalSurfaceFrameSyncInput, NativeTerminalSurfaceSyncInput};
 use crate::capabilities::workspaces::controller::ManagedWorkspaceController;
 
 fn terminal_status(record: &TerminalRecord) -> Result<TerminalStatus, LifecycleError> {
@@ -181,6 +182,30 @@ pub(crate) async fn sync_native_terminal_surface(
             update_terminal_state(&db, &input.terminal_id, target_status, None, None, false)?;
         emit_terminal_status(window.app_handle(), &terminal);
     }
+
+    Ok(())
+}
+
+pub(crate) async fn sync_native_terminal_surface_frame(
+    window: WebviewWindow,
+    input: NativeTerminalSurfaceFrameSyncInput,
+) -> Result<(), LifecycleError> {
+    if !native_terminal::is_available() {
+        return Ok(());
+    }
+
+    native_terminal::sync_surface_frame(
+        &window,
+        NativeTerminalSurfaceFrameSyncRequest {
+            frame: NativeTerminalFrame {
+                x: input.x,
+                y: input.y,
+                width: input.width,
+                height: input.height,
+            },
+            terminal_id: &input.terminal_id,
+        },
+    )?;
 
     Ok(())
 }

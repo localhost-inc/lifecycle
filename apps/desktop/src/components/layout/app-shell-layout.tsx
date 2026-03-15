@@ -22,6 +22,13 @@ import {
 } from "../../features/projects/api/projects";
 import { projectKeys, useProjectCatalog } from "../../features/projects/hooks";
 import { ProjectSwitcherStrip } from "../../features/projects/components/project-switcher-strip";
+import {
+  buildShellContexts,
+  filterProjectsForShellContext,
+  readPersistedShellContextId,
+  resolveActiveShellContext,
+  writePersistedShellContextId,
+} from "../../features/projects/lib/shell-context";
 import { useSettings } from "../../features/settings/state/app-settings-provider";
 import { WelcomeScreen } from "../../features/welcome/components/welcome-screen";
 import { createWorkspace, destroyWorkspace } from "../../features/workspaces/api";
@@ -96,6 +103,9 @@ export function AppShellLayout() {
   const workspacesByProjectQuery = useWorkspacesByProject();
   const { isLoading: authSessionLoading, session: authSession } = useAuthSession();
   const { worktreeRoot } = useSettings();
+  const [requestedShellContextId, setRequestedShellContextId] = useState<string | null>(
+    readPersistedShellContextId,
+  );
   const [shellViewportWidth, setShellViewportWidth] = useState(0);
   const [projectNavigationWidth, setProjectNavigationWidth] = useState(() =>
     readPersistedPanelValue(PROJECT_SHELL_SIDEBAR_WIDTH_STORAGE_KEY, DEFAULT_LEFT_SIDEBAR_WIDTH),
@@ -104,7 +114,28 @@ export function AppShellLayout() {
     readPersistedSidebarCollapsed,
   );
   const [activeProjectNavigationResize, setActiveProjectNavigationResize] = useState(false);
-  const projects = projectCatalogQuery.data?.projects ?? [];
+  const allProjects = projectCatalogQuery.data?.projects ?? [];
+  const shellContexts = useMemo(
+    () =>
+      buildShellContexts(allProjects, {
+        personalContextPersisted: authSession.state === "logged_in",
+      }),
+    [allProjects, authSession.state],
+  );
+  const activeShellContext = useMemo(
+    () =>
+      resolveActiveShellContext({
+        contexts: shellContexts,
+        projects: allProjects,
+        requestedContextId: requestedShellContextId,
+        routeProjectId: projectId,
+      }),
+    [allProjects, projectId, requestedShellContextId, shellContexts],
+  );
+  const projects = useMemo(
+    () => filterProjectsForShellContext(allProjects, activeShellContext),
+    [activeShellContext, allProjects],
+  );
   const rawWorkspacesByProjectId = workspacesByProjectQuery.data ?? {};
   const workspacesByProjectId = useMemo(() => {
     const visibleProjectIds = new Set(projects.map((project) => project.id));
@@ -114,6 +145,21 @@ export function AppShellLayout() {
       ),
     );
   }, [projects, rawWorkspacesByProjectId]);
+  const visibleProjectCatalog = useMemo(() => {
+    if (!projectCatalogQuery.data) {
+      return undefined;
+    }
+
+    const visibleProjectIds = new Set(projects.map((project) => project.id));
+    return {
+      manifestsByProjectId: Object.fromEntries(
+        Object.entries(projectCatalogQuery.data.manifestsByProjectId).filter(([candidateProjectId]) =>
+          visibleProjectIds.has(candidateProjectId),
+        ),
+      ),
+      projects,
+    };
+  }, [projectCatalogQuery.data, projects]);
   const activeProject = useMemo(
     () => projects.find((project) => project.id === projectId) ?? projects[0] ?? null,
     [projectId, projects],
@@ -177,6 +223,18 @@ export function AppShellLayout() {
   useEffect(() => {
     writePersistedSidebarCollapsed(projectNavigationCollapsed);
   }, [projectNavigationCollapsed]);
+
+  useEffect(() => {
+    if (requestedShellContextId === activeShellContext.id) {
+      return;
+    }
+
+    setRequestedShellContextId(activeShellContext.id);
+  }, [activeShellContext.id, requestedShellContextId]);
+
+  useEffect(() => {
+    writePersistedShellContextId(activeShellContext.id);
+  }, [activeShellContext.id]);
 
   useEffect(() => {
     if (!activeProjectNavigationResize) {
@@ -294,7 +352,7 @@ export function AppShellLayout() {
 
   const handleCreateWorkspace = useCallback(
     async (nextProjectId: string) => {
-      const project = projects.find((item) => item.id === nextProjectId);
+      const project = allProjects.find((item) => item.id === nextProjectId);
       if (!project) {
         return;
       }
@@ -336,7 +394,7 @@ export function AppShellLayout() {
     [
       navigate,
       projectCatalogQuery.data,
-      projects,
+      allProjects,
       refreshWorkspaceList,
       workspacesByProjectId,
       worktreeRoot,
@@ -345,7 +403,7 @@ export function AppShellLayout() {
 
   const handleForkWorkspace = useCallback(
     async (workspace: WorkspaceRecord) => {
-      const project = projects.find((item) => item.id === workspace.project_id);
+      const project = allProjects.find((item) => item.id === workspace.project_id);
       if (!project) {
         return;
       }
@@ -381,7 +439,7 @@ export function AppShellLayout() {
         alert(`Failed to fork workspace: ${error}`);
       }
     },
-    [navigate, projectCatalogQuery.data, projects, refreshWorkspaceList, worktreeRoot],
+    [navigate, projectCatalogQuery.data, allProjects, refreshWorkspaceList, worktreeRoot],
   );
 
   const handleDestroyWorkspace = useCallback(
@@ -497,6 +555,7 @@ export function AppShellLayout() {
 
   const outletContext = useMemo<AppShellOutletContext>(
     () => ({
+      activeShellContext,
       onCreateWorkspace: handleCreateWorkspace,
       onDestroyWorkspace: handleDestroyWorkspace,
       onForkWorkspace: handleForkWorkspace,
@@ -507,11 +566,12 @@ export function AppShellLayout() {
       onRemoveProject: handleRemoveProject,
       projectNavigationCollapsed,
       projectNavigationWidth,
-      projectCatalog: projectCatalogQuery.data,
+      projectCatalog: visibleProjectCatalog,
       projects,
       workspacesByProjectId,
     }),
     [
+      activeShellContext,
       handleCreateWorkspace,
       handleDestroyWorkspace,
       handleForkWorkspace,
@@ -520,7 +580,7 @@ export function AppShellLayout() {
       handleProjectNavigationResizePointerDown,
       handleRemoveProject,
       projectNavigationCollapsed,
-      projectCatalogQuery.data,
+      visibleProjectCatalog,
       projectNavigationWidth,
       projects,
       workspacesByProjectId,
@@ -536,7 +596,7 @@ export function AppShellLayout() {
     );
   }
 
-  if (projects.length === 0) {
+  if (allProjects.length === 0) {
     return (
       <div className="flex h-full w-full bg-[var(--background)] text-[var(--foreground)]">
         <AppHotkeyListener />
@@ -547,11 +607,16 @@ export function AppShellLayout() {
 
   return (
     <WorkspaceOpenRequestsProvider>
-      <CommandPaletteProvider onForkWorkspace={commandPaletteForkHandler}>
+      <CommandPaletteProvider
+        onForkWorkspace={commandPaletteForkHandler}
+        projects={projects}
+        workspacesByProjectId={workspacesByProjectId}
+      >
         <div className="flex h-full w-full flex-col gap-0.5 bg-[var(--panel)] px-2 pb-2 pt-0.5 text-[var(--foreground)]">
           <AppHotkeyListener />
           <ProjectSwitcherStrip
             activeProjectId={activeProject?.id ?? null}
+            activeContextName={activeShellContext.name}
             authSession={authSession}
             authSessionLoading={authSessionLoading}
             onAddProject={handleAddProject}
