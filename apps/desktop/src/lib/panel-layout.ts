@@ -25,20 +25,14 @@ export const PROJECT_SHELL_SIDEBAR_COLLAPSED_STORAGE_KEY =
   "lifecycle.desktop.project-shell-sidebar-collapsed";
 export const PROJECT_SHELL_SIDEBAR_WIDTH_STORAGE_KEY =
   "lifecycle.desktop.project-shell-sidebar-width";
-export const PROJECT_WORKSPACE_PANEL_COLLAPSED_STORAGE_KEY =
-  "lifecycle.desktop.project-workspace-panel-collapsed";
-export const PROJECT_WORKSPACE_PANEL_WIDTH_STORAGE_KEY =
-  "lifecycle.desktop.project-workspace-panel-width";
-export const WORKSPACE_SIDEBAR_TOP_PANEL_RATIO_STORAGE_KEY =
-  "lifecycle.desktop.workspace-sidebar-top-panel-ratio";
 
 export const DEFAULT_LEFT_SIDEBAR_WIDTH = 256;
 export const MIN_LEFT_SIDEBAR_WIDTH = 224;
 export const MAX_LEFT_SIDEBAR_WIDTH = 420;
 
-export const DEFAULT_RIGHT_SIDEBAR_WIDTH = 300;
-export const MIN_RIGHT_SIDEBAR_WIDTH = 260;
-export const MAX_RIGHT_SIDEBAR_WIDTH = 420;
+export const DEFAULT_WORKSPACE_EXTENSION_PANEL_WIDTH = 300;
+export const MIN_WORKSPACE_EXTENSION_PANEL_WIDTH = 260;
+export const MAX_WORKSPACE_EXTENSION_PANEL_WIDTH = 420;
 
 export const MIN_DASHBOARD_MAIN_PANEL_WIDTH = 480;
 
@@ -46,9 +40,6 @@ export const DIFF_FILE_TREE_WIDTH_STORAGE_KEY = "lifecycle.desktop.diff-file-tre
 export const DEFAULT_DIFF_FILE_TREE_WIDTH = 240;
 export const MIN_DIFF_FILE_TREE_WIDTH = 180;
 export const MAX_DIFF_FILE_TREE_WIDTH = 360;
-
-export const DEFAULT_WORKSPACE_SIDEBAR_TOP_PANEL_RATIO = 0.54;
-export const MIN_WORKSPACE_SIDEBAR_PANEL_HEIGHT = 180;
 
 function getBrowserStorage(): StorageLike | null {
   if (typeof window === "undefined") {

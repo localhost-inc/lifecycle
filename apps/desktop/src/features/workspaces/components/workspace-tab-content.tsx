@@ -6,10 +6,10 @@ import { toErrorEnvelope } from "../../../lib/tauri-error";
 import { useWorkspaceManifest, useWorkspaceSnapshot } from "../hooks";
 import { hasBlockingQueryError, hasBlockingQueryLoad } from "../routes/workspace-route-query-state";
 
-const WorkspacePanel = lazy(async () => {
-  const module = await import("./workspace-panel");
+const WorkspaceLayout = lazy(async () => {
+  const module = await import("./workspace-layout");
   return {
-    default: module.WorkspacePanel,
+    default: module.WorkspaceLayout,
   };
 });
 
@@ -84,7 +84,7 @@ export function WorkspaceTabContent({ onOpenPullRequest, workspaceId }: Workspac
 
   return (
     <Suspense fallback={<Loading message="Loading workspace..." />}>
-      <WorkspacePanel
+      <WorkspaceLayout
         manifestStatus={manifestQuery.data ?? null}
         onOpenPullRequest={onOpenPullRequest}
         workspace={workspace}

@@ -103,9 +103,7 @@ describe("EnvironmentPanel", () => {
     expect(markup).toContain("Overview");
     expect(markup).toContain("Topology");
     expect(markup).toContain("Logs");
-    expect(markup).toContain("Setup");
-    expect(markup).toContain("Tasks");
-    expect(markup).toContain("Services");
+    expect(markup).toContain("Boot sequence");
   });
 
   test("renders start affordance and failure details for an idle workspace with a failure", () => {
@@ -135,7 +133,7 @@ describe("EnvironmentPanel", () => {
     expect(markup).not.toContain('aria-label="Show environment actions"');
     expect(markup).toContain('data-slot="button"');
     expect(markup).toContain("A service failed to start.");
-    expect(markup).toContain("Setup");
+    expect(markup).toContain("Boot sequence");
     expect(markup).not.toContain("View details");
   });
 
@@ -164,9 +162,7 @@ describe("EnvironmentPanel", () => {
     expect(markup).toContain('disabled=""');
     expect(markup).toContain("Overview");
     expect(markup).toContain("Logs");
-    expect(markup).toContain("Setup");
-    expect(markup).toContain("Tasks");
-    expect(markup).toContain("Services");
+    expect(markup).toContain("Boot sequence");
   });
 
   test("shows restart guidance when a running workspace manifest is stale", () => {
@@ -324,9 +320,8 @@ describe("EnvironmentPanel", () => {
     );
 
     expect(markup).toContain("Starting...");
-    expect(markup).toContain("Setup");
-    expect(markup).toContain("Tasks");
-    expect(markup).toContain("Services");
+    expect(markup).toContain("Boot sequence");
+    expect(markup).toContain("Booting environment");
     expect(markup).toContain("postgres");
     expect(markup).toContain("api");
     expect(markup).toContain("lucide-loader-circle");
@@ -362,8 +357,8 @@ describe("EnvironmentPanel", () => {
     );
 
     expect(markup).toContain("An environment task failed.");
-    expect(markup).toContain("Tasks");
+    expect(markup).toContain("Boot sequence");
+    expect(markup).toContain("Boot failed");
     expect(markup).toContain("migrate");
-    expect(markup).toContain("Setup");
   });
 });

@@ -4,7 +4,7 @@ Date: 2026-03-14
 
 ## Context
 
-Workspace pane launchers create terminals asynchronously, while the workbench controller also has a background path that assigns newly discovered runtime tabs into the current active pane. That creates a race when a launcher is clicked in one pane but runtime events arrive while another pane is still active.
+Workspace pane launchers create terminals asynchronously, while the canvas controller also has a background path that assigns newly discovered runtime tabs into the current active pane. That creates a race when a launcher is clicked in one pane but runtime events arrive while another pane is still active.
 
 ## Learning
 
@@ -20,10 +20,10 @@ Workspace pane launchers create terminals asynchronously, while the workbench co
 
 ## Milestone Impact
 
-1. M3 workbench pane behavior stays trustworthy because pane-local launchers now preserve the clicked pane as the destination.
+1. M3 canvas pane behavior stays trustworthy because pane-local launchers now preserve the clicked pane as the destination.
 2. Follow-on terminal and pane work can keep using background runtime reconciliation without letting it override explicit user placement.
 
 ## Follow-Up
 
-1. Treat explicit pane-targeted actions as higher priority than active-pane fallbacks in other async workbench flows.
+1. Treat explicit pane-targeted actions as higher priority than active-pane fallbacks in other async canvas flows.
 2. Add regression coverage whenever background reconciliation can race with pane-local user intent.

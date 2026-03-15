@@ -5,8 +5,8 @@
 The shell direction clarified into a three-layer model:
 
 1. project / organization shell
-2. project-scoped top-level content tabs
-3. split-only workspace workbench inside a workspace tab
+2. project-scoped top-level page tabs
+3. split-only workspace canvas inside a workspace tab
 
 The important question was not just "project-first or workspace-first." It was whether the workspace should keep acting like a second tab system after the shell itself gains durable top-level tabs.
 
@@ -20,7 +20,7 @@ The important question was not just "project-first or workspace-first." It was w
    - whole-pane rearrangement remains valid; what goes away is pane-local tab transfer semantics
 3. Scope should follow the access point and authority boundary, not the visual size of a surface.
 4. Shared renderers can still be reused across both levels. A full-canvas patch viewer does not force one navigation layer.
-5. A workspace is best treated as one kind of top-level content tab rather than the app's primary shell mode.
+5. A workspace is best treated as one kind of top-level page tab rather than the app's primary shell mode.
 
 ## Why It Matters
 
@@ -35,7 +35,7 @@ The important question was not just "project-first or workspace-first." It was w
 
 ## Follow-Up Actions
 
-1. Keep `app-shell-v2.md` explicit that a workspace tab hosts a split-only workbench.
+1. Keep `app-shell-v2.md` explicit that a workspace tab hosts a split-only canvas.
 2. Use "same renderer, different access point" as the rule for diff, PR, and other shared surfaces.
 3. When the migration begins, split implementation work into:
    - top-level shell / project tab architecture

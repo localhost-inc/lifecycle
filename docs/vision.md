@@ -40,7 +40,7 @@ Lifecycle aims to deliver calm velocity:
 1. Open desktop app.
 2. Add project.
 3. Start workspace.
-4. Open the workspace surface and, when needed, drop into a raw terminal.
+4. Open a workspace and work in the workspace canvas, dropping into a raw terminal when needed.
 5. Optionally sign in and fork to cloud.
 6. Share preview.
 7. Create PR.
@@ -99,6 +99,8 @@ The implementation plan and contracts live in:
 1. [Plan](./plan.md)
 2. [Milestones](./milestones)
 3. [Reference contracts](./reference)
-4. [Brand guide](./BRAND.md)
+4. [Vocabulary](./VOCABULARY.md)
+5. [Execution docs](./execution)
+6. [Brand guide](./BRAND.md)
 
-This document defines the product direction. Milestone and reference docs define implementation detail and acceptance gates.
+This document defines the product direction. Plan, milestone, reference, vocabulary, and execution docs define implementation detail, sequencing, and acceptance gates.

@@ -23,7 +23,7 @@ The main shifts were:
 
 The largest moved costs now sit behind lazy boundaries instead of the base route:
 
-- `workspace-panel`: `140.61 kB`
+- `workspace-layout`: `140.61 kB`
 - `git-patch-viewer-body`: `332.67 kB`
 - `markdown-file-renderer`: `138.56 kB`
 

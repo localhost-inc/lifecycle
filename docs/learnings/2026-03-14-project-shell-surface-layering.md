@@ -12,10 +12,10 @@ The shell is now layered explicitly:
 
 1. The shell plane uses `--panel` and owns:
    - the project switcher strip
-2. The active project canvas owns:
+2. The active project layout owns:
    - the project sidebar
-   - the right-hand page area
-3. The page tabs rail lives inside that right-hand page area, not on the shell plane.
+   - the right-hand project main
+3. The page tabs rail lives inside that right-hand project main, not on the shell plane.
 
 This means the project sidebar must render inside `ProjectRoute`, not in the outer `AppShellLayout`.
 
@@ -29,10 +29,10 @@ This means the project sidebar must render inside `ProjectRoute`, not in the out
 ## Milestone Impact
 
 1. Phase 1 of `execution/project-shell-cutover.md` is materially sharper now because the visual hierarchy matches the intended shell model.
-2. This does not change the Phase 4 workbench cutover scope; it only makes the outer shell authority cleaner before that work continues.
+2. This does not change the Phase 4 canvas cutover scope; it only makes the outer shell authority cleaner before that work continues.
 
 ## Follow-Up
 
 1. Keep the project route authoritative for raised-surface layout decisions.
 2. Do not reintroduce project-scoped sidebar rendering in the outer shell.
-3. Preserve the separation between project-level tabs and workspace-internal pane mechanics during the workbench cutover.
+3. Preserve the separation between project-level tabs and workspace-internal pane mechanics during the canvas cutover.

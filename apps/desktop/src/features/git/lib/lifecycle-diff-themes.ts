@@ -3,10 +3,7 @@ import {
   registerCustomTheme,
   type ThemeRegistrationResolved,
 } from "@pierre/diffs";
-import {
-  LIFECYCLE_DARK_DIFF_THEME,
-  LIFECYCLE_LIGHT_DIFF_THEME,
-} from "@lifecycle/ui";
+import { LIFECYCLE_DARK_DIFF_THEME, LIFECYCLE_LIGHT_DIFF_THEME } from "@lifecycle/ui";
 import githubDarkDefault from "@shikijs/themes/github-dark-default";
 import githubLightDefault from "@shikijs/themes/github-light-default";
 
@@ -67,10 +64,7 @@ export function buildLifecycleDiffTheme(
       "editor.lineHighlightBackground":
         appearance === "light" ? rgba(surface.border, 0.45) : rgba(surface.border, 0.7),
       "editorGutter.addedBackground": rgba(surface.added, appearance === "light" ? 0.32 : 0.4),
-      "editorGutter.deletedBackground": rgba(
-        surface.deleted,
-        appearance === "light" ? 0.22 : 0.38,
-      ),
+      "editorGutter.deletedBackground": rgba(surface.deleted, appearance === "light" ? 0.22 : 0.38),
       "editorGutter.modifiedBackground": rgba(
         surface.modified,
         appearance === "light" ? 0.22 : 0.34,

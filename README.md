@@ -10,6 +10,8 @@ The current implementation includes:
 
 For product direction, read [docs/vision.md](./docs/vision.md).
 
+The desktop app currently renders a project shell with project-scoped page tabs and workspace-scoped interiors. The remaining shell migration is the split-only workspace workbench cutover described in [docs/reference/app-shell-v2.md](./docs/reference/app-shell-v2.md) and [docs/execution/project-shell-cutover.md](./docs/execution/project-shell-cutover.md).
+
 ## Prerequisites
 
 1. Bun `>=1.3.10`
@@ -51,9 +53,12 @@ vendor/
   ghostty.lock  Pinned upstream Ghostty revision used for native desktop embedding
 docs/
   vision.md             Product vision and direction
-  plan.md     Milestone status and task checklists
+  plan.md               Milestone status and task checklists
   milestones/           Milestone implementation contracts
   reference/            Cross-milestone reference specs
+  execution/            Tactical cutover and migration docs
+  learnings/            Dated implementation decisions
+  backlog/              Deferred product/workspace ideas
   BRAND.md              Brand and voice guidelines
 ```
 
@@ -103,12 +108,13 @@ bun --filter @lifecycle/contracts run test
 
 ## Documentation Map
 
-Use this split:
-1. Execution plan = high-level milestone tracking.
-2. Milestones = detailed implementation contracts and test scenarios.
+Start here:
 
-1. [Vision](./docs/vision.md)
-2. [Plan](./docs/plan.md)
-3. [Milestones](./docs/milestones)
-4. [Reference Specs](./docs/reference)
-5. [Learnings](./docs/learnings)
+1. [Vision](./docs/vision.md) for product direction and V1 boundaries
+2. [Vocabulary](./docs/VOCABULARY.md) for canonical shell, project, and workspace terms
+3. [Plan](./docs/plan.md) for high-level milestone tracking
+4. [Milestones](./docs/milestones) for detailed implementation contracts and acceptance scenarios
+5. [Reference Specs](./docs/reference) for cross-milestone contracts
+6. [Execution Docs](./docs/execution) for active tactical cutover work
+7. [Learnings](./docs/learnings) for dated architecture and implementation decisions
+8. [Backlog](./docs/backlog) and [Expansion](./docs/expansion) for intentionally deferred work

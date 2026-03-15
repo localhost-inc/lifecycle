@@ -1,6 +1,6 @@
-# App Shell v2 — Project Shell, Workspace Workbench
+# App Shell v2 — Project Shell, Workspace Canvas
 
-This document defines the **target desktop shell model** as Lifecycle moves from a workspace-first app toward a project-first shell that can later grow into an organization-first shell.
+This document defines the **target desktop shell model** as Lifecycle completes the move from a workspace-first app toward a project-first shell that can later grow into an organization-first shell.
 
 The goal is to make the outer app structure stable before the implementation details change underneath it.
 
@@ -17,36 +17,36 @@ It is intentionally **not** a file-by-file migration plan.
 ## Status
 
 1. This is the **destination shell model**, not a statement of the current implementation.
-2. The current desktop still follows the existing workspace-first route and workspace-surface contracts until migration lands.
-3. Implementation sequencing belongs in execution docs such as [execution/project-shell-cutover.md](../execution/project-shell-cutover.md), not here.
+2. The outer shell spine is already live in the desktop app: project switcher strip, project sidebar, page tabs, workspace tabs, and a workspace header now render under the project shell route.
+3. The remaining gap is the inner workspace canvas cutover; the center workspace area still follows the mixed-tab [workspace-surface.md](./workspace-surface.md) contract until that migration lands.
+4. Implementation sequencing belongs in execution docs such as [execution/project-shell-cutover.md](../execution/project-shell-cutover.md), not here.
 
 ## Relationship to Other Contracts
 
 1. [workspace-provider.md](./workspace-provider.md) remains authoritative for provider boundaries, runtime authority, Git authority, file authority, and terminal authority.
-2. [workspace-surface.md](./workspace-surface.md) remains the current workspace-surface contract until [workspace-workbench.md](./workspace-workbench.md) replaces it.
-3. [workspace-workbench.md](./workspace-workbench.md) owns the target split-only workspace interior.
+2. [workspace-surface.md](./workspace-surface.md) remains the current center-pane contract inside the workspace layout until [workspace-canvas.md](./workspace-canvas.md) replaces it.
+3. [workspace-canvas.md](./workspace-canvas.md) owns the target split-only center workspace interior.
 4. This document owns only the **outer shell model** and the high-level contract for what belongs at the project level versus inside a workspace tab.
-5. Detailed pane-state, drag-target, or restore-shape mechanics should live in the workspace workbench contract, not expand ad hoc inside this document.
+5. Detailed pane-state, drag-target, or restore-shape mechanics should live in the workspace canvas contract, not expand ad hoc inside this document.
 
 ## Core Model
 
-Lifecycle should be understood as three layers:
+Lifecycle should be understood as these layered regions:
 
 1. **Project shell**
    - durable container for shared repo/project artifacts
    - later becomes compatible with organization-level grouping
-2. **Project canvas**
-   - owns the page area for the active project
+2. **Project layout**
+   - owns the project main region for the active project
    - includes the top tab rail plus the active body
 3. **Top-level page tabs**
    - the project's open destinations
    - examples: Overview, Inbox, Pull Request, Workspace
-4. **Workspace page**
+4. **Workspace**
    - only exists inside a workspace tab
-   - owns workspace identity and workspace-level actions
-5. **Workspace workbench**
-   - exists below the workspace page header
-   - live execution and local-state surface
+   - owns workspace identity, workspace actions, and attached workspace extensions
+5. **Workspace canvas**
+   - the center live execution and local-state surface
    - split-only, pane-based
 
 The key idea is simple:
@@ -70,9 +70,9 @@ Use these rules when deciding where something belongs.
 Project shell
 ├─ Shell plane (`--panel`)
 │  └─ Project switcher strip
-└─ Project canvas
+└─ Project layout
    ├─ Project sidebar
-   └─ Page area
+   └─ Project main
       ├─ Page tabs rail (`--panel`)
       │  ├─ Project view tab
       │  ├─ Pull request tab
@@ -86,12 +86,14 @@ Project shell
          │  ├─ Pull Requests
          │  └─ Activity
          └─ Workspace tab
-            └─ Workspace page
-               ├─ Workspace page header
-               └─ Workspace workbench
-                  ├─ Pane
-                  ├─ Pane
-                  └─ Pane
+            └─ Workspace
+               ├─ Workspace header
+               ├─ Workspace canvas
+               │  ├─ Pane
+               │  ├─ Pane
+               │  └─ Pane
+               ├─ Workspace extension panel
+               └─ Workspace extension strip
 ```
 
 ## Visual Layering
@@ -100,14 +102,15 @@ The visual hierarchy should be explicit:
 
 1. The **shell plane** uses `--panel` and carries durable chrome:
    - project switcher strip
-2. The **project canvas** owns the full page area below the shell strip.
-3. The **project sidebar** sits on the left edge of the project canvas.
-4. The **page area** sits to the right of the project sidebar.
-5. The **page tabs rail** uses `--panel` inside the page area.
+2. The **project layout** owns the full project main region below the shell strip.
+3. The **project sidebar** sits on the left edge of the project layout.
+4. The **project main** sits to the right of the project sidebar.
+5. The **page tabs rail** uses `--panel` inside project main.
 6. The **active body** uses `--background` and carries project-context content:
    - active page or workspace content
-7. A workspace tab does not create another shell layer. It replaces the active content inside the page area.
-8. A workspace page may add a workspace-scoped header rail below the page tabs, but that header belongs to the workspace page, not the project shell.
+7. A workspace tab does not create another shell layer. It replaces the active content inside project main.
+8. A workspace may add a workspace-scoped header rail below the page tabs, but that header belongs to the workspace, not the project shell.
+9. The rest of the workspace area contains the center canvas plus any workspace extension surfaces.
 
 ## Navigation Layers
 
@@ -126,13 +129,13 @@ The sidebar is project-scoped and should contain:
 1. project-level views and actions
 2. the workspace list for the active project
 
-Clicking a project-level item opens or focuses a **top-level content tab**.
+Clicking a project-level item opens or focuses a **top-level page tab**.
 
 Clicking a workspace opens or focuses a **workspace tab**.
 
 ### Page Tabs
 
-Page tabs are the only top-level tab strip in the project canvas.
+Page tabs are the only top-level tab strip in the project layout.
 
 They represent durable open destinations for the active project, for example:
 
@@ -142,20 +145,26 @@ They represent durable open destinations for the active project, for example:
 
 These are not editor buffers and not pane-local working sets.
 
-### Workspace Workbench
+### Workspace And Canvas
 
 A workspace is one kind of page tab.
 
-Inside that tab, the workspace becomes a **split-only workbench**:
+Inside that tab, the workspace contains:
 
-1. a workspace page header for workspace identity and actions
-2. recursive row/column split tree below that header
-3. one surface per pane
-4. compact pane header strip for local identity and actions
-5. no pane-local tab groups
-6. explicit split, resize, close, and whole-pane rearrangement
+1. a workspace header for workspace identity and actions
+2. a center canvas for pane-based work
 
-The workspace workbench is optimized for a few simultaneous surfaces, not for deep inner tab management.
+The canvas is a **split-only** center area with:
+
+1. recursive row/column split tree
+2. one surface per pane
+3. compact pane header strip for local identity and actions
+4. no pane-local tab groups
+5. explicit split, resize, close, and whole-pane rearrangement
+
+Workspace extension panels and the workspace extension strip live alongside the canvas inside the workspace.
+
+The workspace canvas is optimized for a few simultaneous surfaces, not for deep inner tab management.
 
 ## Scope Ownership
 
@@ -207,13 +216,13 @@ Example: shared patch viewer
    - local changes diff
    - staged vs working diff
    - workspace-local commit detail
-   - opens inside the **workspace workbench**
+   - opens inside the **workspace canvas**
 
 This keeps the UX consistent without forcing all diffs into the same navigation layer.
 
-## Workspace Workbench Rules
+## Workspace Canvas Rules
 
-The workbench exists only inside a workspace tab.
+The canvas exists only inside a workspace tab.
 
 It should follow these rules:
 
@@ -223,9 +232,9 @@ It should follow these rules:
 4. Empty panes are first-class workspace states, not fake tabs.
 5. Pane headers stay visible as compact local control strips.
 6. Whole-pane drag may rearrange layout and change grouping.
-7. The workbench has no pane-local tab stacks.
+7. The canvas has no pane-local tab stacks.
 
-This document does **not** define the detailed pane-state data model. That belongs in a dedicated workbench contract.
+This document does **not** define the detailed pane-state data model. That belongs in a dedicated canvas contract.
 
 ## Route and Restore Contract
 
@@ -247,7 +256,7 @@ Examples:
 Local restore rules:
 
 1. project tab sets may restore per project
-2. workspace workbench layout may restore per workspace
+2. workspace canvas layout may restore per workspace
 3. restore should never override provider/runtime authority
 
 ## Guardrails
@@ -265,7 +274,7 @@ Do **not** use this document for:
 If those need to change, put them in:
 
 1. milestone docs for sequencing and delivery
-2. dedicated workspace workbench docs for inner-surface mechanics
+2. dedicated workspace canvas docs for inner-surface mechanics
 3. code and tests for exact implementation behavior
 
 ## Naming
@@ -274,13 +283,16 @@ Use these terms consistently:
 
 1. **Project switcher strip**: shell-plane strip for project or future organization switching
 2. **Shell plane**: the outer `--panel` layer that holds only the switcher strip
-3. **Project canvas**: the full page area for the active project
-4. **Page tabs**: top-level project tabs rendered in the canvas top rail
-5. **Project sidebar**: left project-scoped navigation panel inside the active body
+3. **Project layout**: the full raised project container for the active project
+4. **Page tabs**: top-level project tabs rendered in the page tabs rail inside project main
+5. **Project sidebar**: left project-scoped navigation panel inside the project layout
 6. **Project view tab**: a page tab for durable project/org surfaces such as Overview, Inbox, Memory, Plans, or Activity
 7. **Pull request tab**: a page tab for pull request detail and review surfaces
-8. **Workspace tab**: a page tab whose active content is a workspace workbench
-9. **Workspace workbench**: the split-only pane surface inside a workspace tab
-10. **Pane header**: compact strip at the top of a workspace pane
-11. **Workspace panel**: optional workspace-scoped right-side panel
-12. **App shell**: the full outer frame
+8. **Workspace tab**: a page tab whose active content is a workspace
+9. **Workspace**: the workspace-scoped area inside a workspace tab
+10. **Workspace header**: the workspace-scoped header rail below the page tabs
+11. **Workspace canvas**: the split-only center pane surface inside a workspace
+12. **Pane header**: compact strip at the top of a workspace pane
+13. **Workspace extension strip**: optional workspace-scoped right-edge strip for Git, Environment, and future workspace extensions
+14. **Workspace extension panel**: optional workspace-scoped panel opened from the extension strip
+15. **App shell**: the full outer frame

@@ -62,7 +62,7 @@ Ordered workspace teardown steps.
 Current local-provider status:
 
 - `workspace.teardown` is accepted by the manifest contract
-- local stop/destroy execution is not wired yet
+- local stop/destroy flows exist, but manifest-owned `workspace.teardown` execution is not wired into those flows yet
 
 That field exists to preserve the intended authoring boundary without reintroducing ad hoc hooks later.
 
@@ -96,12 +96,19 @@ Lifecycle injects reserved discovery env vars into workspace steps and service p
 - `LIFECYCLE_SERVICE_<NODE_NAME>_PORT`
 - `LIFECYCLE_SERVICE_<NODE_NAME>_ADDRESS`
 
+`<NODE_NAME>` is the environment node key uppercased with non-alphanumeric
+separators normalized to `_`. For example, `desktop-web` becomes
+`LIFECYCLE_SERVICE_DESKTOP_WEB_ADDRESS`.
+
 Reserved `LIFECYCLE_*` values may be referenced inside:
 
 - workspace step `write_files.content`
 - workspace step `write_files.lines[]`
 - workspace step `env`
 - environment node `env`
+- environment service `health_check.host`
+- environment service `health_check.port`
+- environment service `health_check.url`
 
 Unknown `LIFECYCLE_*` references fail workspace start with a field-level error.
 
@@ -178,7 +185,20 @@ Additional service fields:
 Optional service readiness gate.
 
 - `kind: "tcp"`
+  - fields: `host`, `port`, `timeout_seconds`
+  - `host` and `port` may use reserved runtime templates
 - `kind: "http"`
+  - fields: `url`, `timeout_seconds`
+  - `url` may use reserved runtime templates
+- `kind: "container"`
+  - fields: `timeout_seconds`
+  - behavior: for `runtime: "image"` services, waits for the container's Docker `HEALTHCHECK` status to become `healthy`
+  - use this when TCP or HTTP probes are too weak and the image already knows how to prove readiness
+
+For dynamic local ports, use reserved runtime templates like
+`http://${LIFECYCLE_SERVICE_API_ADDRESS}/health` or
+`"${LIFECYCLE_SERVICE_REDIS_PORT}"`. Literal localhost ports are treated
+literally; Lifecycle does not rewrite them at runtime.
 
 Workspace start transitions to `active` only after all declared service health checks pass.
 
@@ -214,7 +234,7 @@ Materialize local env files in workspace setup instead.
         { "type": "volume", "source": "postgres", "target": "/var/lib/postgresql/data" },
         { "type": "bind", "source": "docker/init.sql", "target": "/docker-entrypoint-initdb.d/init.sql", "read_only": true }
       ],
-      "health_check": { "kind": "tcp", "host": "127.0.0.1", "port": 5432, "timeout_seconds": 45 },
+      "health_check": { "kind": "container", "timeout_seconds": 45 },
       "env": {
         "POSTGRES_USER": "app",
         "POSTGRES_PASSWORD": "app",
@@ -228,7 +248,12 @@ Materialize local env files in workspace setup instead.
       "command": "redis-server",
       "args": ["--save", "", "--appendonly", "no"],
       "startup_timeout_seconds": 30,
-      "health_check": { "kind": "tcp", "host": "127.0.0.1", "port": 6379, "timeout_seconds": 30 }
+      "health_check": {
+        "kind": "tcp",
+        "host": "${LIFECYCLE_SERVICE_REDIS_HOST}",
+        "port": "${LIFECYCLE_SERVICE_REDIS_PORT}",
+        "timeout_seconds": 30
+      }
     },
     "migrate": {
       "kind": "task",
@@ -247,7 +272,7 @@ Materialize local env files in workspace setup instead.
       "share_default": true,
       "health_check": {
         "kind": "http",
-        "url": "http://127.0.0.1:3001/health",
+        "url": "http://${LIFECYCLE_SERVICE_API_ADDRESS}/health",
         "timeout_seconds": 45
       },
       "env": {

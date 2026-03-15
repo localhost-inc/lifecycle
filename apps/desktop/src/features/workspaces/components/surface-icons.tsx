@@ -7,9 +7,9 @@ import {
   isCommitDiffDocument,
   isFileViewerDocument,
   isPullRequestDocument,
-} from "../state/workspace-surface-state";
+} from "../state/workspace-canvas-state";
 import type { HarnessProvider } from "../../terminals/api";
-import type { WorkspaceSurfaceTab } from "./workspace-surface-tabs";
+import type { WorkspaceCanvasTab } from "./workspace-canvas-tabs";
 
 export function ShellIcon({ size = 14 }: { size?: number }) {
   return (
@@ -63,7 +63,7 @@ function TerminalProviderIcon({
   return <ShellIcon />;
 }
 
-function tabIconName(tab: WorkspaceSurfaceTab): string {
+function tabIconName(tab: WorkspaceCanvasTab): string {
   if (tab.kind === "terminal") {
     if (tab.launchType === "harness" && tab.harnessProvider) {
       return tab.harnessProvider;
@@ -91,7 +91,7 @@ function tabIconName(tab: WorkspaceSurfaceTab): string {
   return "workspace-tab";
 }
 
-function SurfaceBubble({ children, tab }: { children: ReactNode; tab: WorkspaceSurfaceTab }) {
+function SurfaceBubble({ children, tab }: { children: ReactNode; tab: WorkspaceCanvasTab }) {
   return (
     <span
       className="flex h-5 w-5 shrink-0 items-center justify-center text-current"
@@ -102,7 +102,7 @@ function SurfaceBubble({ children, tab }: { children: ReactNode; tab: WorkspaceS
   );
 }
 
-export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceSurfaceTab }) {
+export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceCanvasTab }) {
   if (tab.kind === "terminal") {
     return (
       <span className="flex items-center gap-1.5">

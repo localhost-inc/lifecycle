@@ -6,7 +6,7 @@ import {
   createCommitDiffTab,
   createFileViewerTab,
   createPullRequestTab,
-} from "../state/workspace-surface-state";
+} from "../state/workspace-canvas-state";
 import { WorkspaceSurfaceTabLeading } from "./surface-icons";
 
 describe("WorkspaceSurfaceTabLeading", () => {

@@ -13,7 +13,7 @@ The result was the wrong ownership boundary and visually confusing layout.
 
 ## Decision
 
-Workspace identity and workspace-level actions now live in a dedicated **workspace page header** directly below the project page tabs.
+Workspace identity and workspace-level actions now live in a dedicated **workspace header** directly below the project page tabs.
 
 The project page-tab rail is now responsible only for:
 
@@ -21,31 +21,31 @@ The project page-tab rail is now responsible only for:
 2. showing open project tabs
 3. app/page history affordances
 
-The workspace page header is responsible for:
+The workspace header is responsible for:
 
 1. workspace identity
 2. workspace-scoped actions such as fork and open-in
-3. workspace-panel visibility controls
+3. workspace-layout visibility controls
 
-The workspace workbench remains below that header and continues to own pane layout and pane-local actions.
+The workspace canvas remains below that header and continues to own pane layout and pane-local actions.
 
 ## Why It Matters
 
 This keeps the shell layered correctly:
 
 1. shell plane
-2. project canvas
+2. project layout
 3. page tabs rail
-4. workspace page header
-5. workspace workbench
+4. workspace header
+5. workspace canvas
 
 That makes it easier to reason about ownership and prevents project navigation chrome from silently becoming workspace chrome again.
 
 ## Milestone Impact
 
-This advances the project-shell cutover by making the workspace tab host structurally correct before the split-only workbench cutover is complete.
+This advances the project-shell cutover by making the workspace tab host structurally correct before the split-only canvas cutover is complete.
 
 ## Follow-Up
 
-1. Rename `TitleBarActions` to a workspace-page-scoped name so code matches the new boundary.
-2. Continue Phase 4 by replacing the mixed inner workspace surface with the target split-only workbench.
+1. Rename `TitleBarActions` to a workspace-scoped name so code matches the new boundary.
+2. Continue Phase 4 by replacing the mixed inner workspace surface with the target split-only canvas.

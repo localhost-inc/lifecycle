@@ -1,0 +1,512 @@
+import { openUrl } from "@tauri-apps/plugin-opener";
+import {
+  getManifestFingerprint,
+  type GitPullRequestSummary,
+  type ServiceRecord,
+  type WorkspaceRecord,
+} from "@lifecycle/contracts";
+import { EmptyState } from "@lifecycle/ui";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
+import { useSearchParams } from "react-router-dom";
+import { notifyShellResizeListeners } from "../../../components/layout/shell-resize-provider";
+import {
+  DEFAULT_WORKSPACE_EXTENSION_PANEL_WIDTH,
+  MAX_WORKSPACE_EXTENSION_PANEL_WIDTH,
+  MIN_WORKSPACE_EXTENSION_PANEL_WIDTH,
+  clampPanelSize,
+  getRightSidebarWidthFromPointer,
+  getSidebarWidthBounds,
+  readPersistedPanelValue,
+  writePersistedPanelValue,
+} from "../../../lib/panel-layout";
+import { ExtensionBar } from "../../extensions/extension-bar";
+import { WORKSPACE_EXTENSION_STRIP_WIDTH_PX } from "../../extensions/extension-bar";
+import {
+  readPersistedActiveExtensionId,
+  readPersistedExtensionPreference,
+  toggleActiveExtension,
+  WORKSPACE_EXTENSION_PANEL_WIDTH_STORAGE_KEY,
+  writePersistedActiveExtensionId,
+  writePersistedExtensionPreference,
+} from "../../extensions/extension-bar-state";
+import type { WorkspaceExtensionLaunchActions } from "../../extensions/extension-bar-types";
+import { getBuiltinExtensionSlots } from "../../extensions/builtin-extensions";
+import { ExtensionPanel } from "../../extensions/extension-panel";
+import { useGitStatus } from "../../git/hooks";
+import type { ManifestStatus } from "../../projects/api/projects";
+import { isEnvironmentPanelTabValue, type EnvironmentPanelTabValue } from "./environment-panel";
+import { WorkspaceCanvas } from "./workspace-canvas";
+import {
+  createChangesDiffOpenInput,
+  createCommitDiffOpenInput,
+  createFileViewerOpenInput,
+} from "./workspace-canvas-requests";
+import {
+  syncWorkspaceManifest,
+  startServices,
+  stopWorkspace,
+  updateWorkspaceService,
+  type WorkspaceSnapshotResult,
+} from "../api";
+import { useWorkspaceEnvironmentTasks, useWorkspaceSetup } from "../hooks";
+import { workspaceSupportsFilesystemInteraction } from "../lib/workspace-capabilities";
+import { readWorkspaceRouteState, updateWorkspaceRouteState } from "../lib/workspace-route-state";
+import { shouldSyncWorkspaceManifest } from "../lib/workspace-manifest-sync";
+import { useWorkspaceOpenRequests } from "../state/workspace-open-requests";
+
+const SIDEBAR_RESIZE_STEP = 16;
+const ENVIRONMENT_TAB_PREFERENCE_KEY = "environment-tab";
+
+interface WorkspaceLayoutProps {
+  workspace: WorkspaceRecord;
+  workspaceSnapshot: WorkspaceSnapshotResult | null;
+  manifestStatus: ManifestStatus | null;
+  onOpenPullRequest?: (pullRequest: GitPullRequestSummary) => void;
+}
+
+export function WorkspaceLayout({
+  workspace,
+  workspaceSnapshot,
+  manifestStatus,
+  onOpenPullRequest,
+}: WorkspaceLayoutProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const workspaceLayoutRef = useRef<HTMLDivElement | null>(null);
+  const [workspaceLayoutWidth, setWorkspaceLayoutWidth] = useState(0);
+  const [panelWidth, setPanelWidth] = useState(() =>
+    readPersistedPanelValue(
+      WORKSPACE_EXTENSION_PANEL_WIDTH_STORAGE_KEY,
+      DEFAULT_WORKSPACE_EXTENSION_PANEL_WIDTH,
+    ),
+  );
+  const [activeExtensionId, setActiveExtensionId] = useState<string | null>(() =>
+    readPersistedActiveExtensionId(workspace.id),
+  );
+  const [activePanelResize, setActivePanelResize] = useState(false);
+  const [activeEnvironmentTab, setActiveEnvironmentTab] = useState<EnvironmentPanelTabValue>(() => {
+    const storedValue = readPersistedExtensionPreference(
+      workspace.id,
+      ENVIRONMENT_TAB_PREFERENCE_KEY,
+      "overview",
+    );
+    return isEnvironmentPanelTabValue(storedValue) ? storedValue : "overview";
+  });
+  const { clearDocumentRequest, openDocument, requestsByWorkspaceId } = useWorkspaceOpenRequests();
+  const openDocumentRequest = requestsByWorkspaceId[workspace.id] ?? null;
+  const hasManifest = manifestStatus?.state === "valid";
+  const config = hasManifest ? manifestStatus.result.config : null;
+  const manifestState = manifestStatus?.state ?? "missing";
+  const manifestFingerprint = config ? getManifestFingerprint(config) : null;
+  const environmentTasksQuery = useWorkspaceEnvironmentTasks(workspace.id);
+  const setupQuery = useWorkspaceSetup(workspace.id);
+  const services = workspaceSnapshot?.services ?? [];
+  const terminals = workspaceSnapshot?.terminals ?? [];
+  const environmentTasks = environmentTasksQuery.data ?? [];
+  const setupSteps = setupQuery.data ?? [];
+  const routeState = useMemo(() => readWorkspaceRouteState(searchParams), [searchParams]);
+  const supportsTerminalInteraction = workspaceSupportsFilesystemInteraction(workspace);
+  const gitStatusQuery = useGitStatus(
+    workspace.mode === "local" && workspace.worktree_path !== null ? workspace.id : null,
+  );
+
+  const handleRun = useCallback(async () => {
+    if (!config) return;
+    try {
+      const manifestJson = JSON.stringify(config);
+      await startServices({
+        workspace,
+        services,
+        manifestJson,
+        manifestFingerprint: getManifestFingerprint(config),
+      });
+    } catch (err) {
+      console.error("Failed to start services:", err);
+      throw err;
+    }
+  }, [config, services, workspace]);
+
+  const handleRestart = useCallback(async () => {
+    if (!config) {
+      return;
+    }
+
+    try {
+      const manifestJson = JSON.stringify(config);
+      await stopWorkspace(workspace.id);
+      await startServices({
+        workspace,
+        services,
+        manifestJson,
+        manifestFingerprint: getManifestFingerprint(config),
+      });
+    } catch (err) {
+      console.error("Failed to restart workspace:", err);
+      throw err;
+    }
+  }, [config, services, workspace]);
+
+  const handleStop = useCallback(async () => {
+    try {
+      await stopWorkspace(workspace.id);
+    } catch (err) {
+      console.error("Failed to stop workspace:", err);
+      throw err;
+    }
+  }, [workspace.id]);
+
+  const handleUpdateService = useCallback(
+    async ({
+      exposure,
+      portOverride,
+      serviceName,
+    }: {
+      exposure: ServiceRecord["exposure"];
+      portOverride: number | null;
+      serviceName: string;
+    }) => {
+      try {
+        await updateWorkspaceService(workspace.id, serviceName, { exposure, portOverride });
+      } catch (err) {
+        console.error("Failed to update workspace service:", err);
+        throw err;
+      }
+    },
+    [workspace.id],
+  );
+
+  const isManifestStale =
+    manifestState === "valid" &&
+    manifestFingerprint !== null &&
+    workspace.manifest_fingerprint !== null &&
+    workspace.manifest_fingerprint !== undefined &&
+    workspace.manifest_fingerprint !== manifestFingerprint;
+
+  useEffect(() => {
+    if (!shouldSyncWorkspaceManifest(workspace, manifestStatus, services.length)) {
+      return;
+    }
+
+    const configToSync = manifestStatus?.state === "valid" ? manifestStatus.result.config : null;
+    void (async () => {
+      try {
+        await syncWorkspaceManifest(workspace.id, configToSync);
+      } catch (error) {
+        console.error("Failed to sync workspace manifest:", error);
+      }
+    })();
+  }, [manifestStatus, services.length, workspace]);
+
+  const updateRoute = useCallback(
+    (patch: Parameters<typeof updateWorkspaceRouteState>[1]) => {
+      const nextSearchParams = updateWorkspaceRouteState(searchParams, patch);
+      if (nextSearchParams.toString() === searchParams.toString()) {
+        return;
+      }
+
+      setSearchParams(nextSearchParams, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
+  const launchActions = useMemo<WorkspaceExtensionLaunchActions>(
+    () => ({
+      openChangesDiff: (focusPath) => {
+        openDocument(workspace.id, createChangesDiffOpenInput(focusPath));
+      },
+      openCommitDiff: (entry) => {
+        openDocument(workspace.id, createCommitDiffOpenInput(entry));
+      },
+      openFileViewer: (filePath) => {
+        openDocument(workspace.id, createFileViewerOpenInput(filePath));
+      },
+      openPullRequest: (pullRequest: GitPullRequestSummary) => {
+        if (onOpenPullRequest) {
+          onOpenPullRequest(pullRequest);
+          return;
+        }
+
+        if (!supportsTerminalInteraction) {
+          openUrl(pullRequest.url);
+        }
+      },
+    }),
+    [onOpenPullRequest, openDocument, supportsTerminalInteraction, workspace.id],
+  );
+
+  const handleGitTabChange = useCallback(
+    (gitTab: ReturnType<typeof readWorkspaceRouteState>["gitTab"]) => {
+      updateRoute({ gitTab });
+    },
+    [updateRoute],
+  );
+
+  useEffect(() => {
+    const workspaceLayout = workspaceLayoutRef.current;
+    if (!workspaceLayout) {
+      return;
+    }
+
+    const syncWidth = () => setWorkspaceLayoutWidth(workspaceLayout.getBoundingClientRect().width);
+
+    syncWidth();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", syncWidth);
+      return () => window.removeEventListener("resize", syncWidth);
+    }
+
+    const observer = new ResizeObserver(() => syncWidth());
+    observer.observe(workspaceLayout);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    setActiveExtensionId(readPersistedActiveExtensionId(workspace.id));
+    const storedEnvironmentTab = readPersistedExtensionPreference(
+      workspace.id,
+      ENVIRONMENT_TAB_PREFERENCE_KEY,
+      "overview",
+    );
+    setActiveEnvironmentTab(
+      isEnvironmentPanelTabValue(storedEnvironmentTab) ? storedEnvironmentTab : "overview",
+    );
+  }, [workspace.id]);
+
+  useEffect(() => {
+    writePersistedActiveExtensionId(workspace.id, activeExtensionId);
+  }, [activeExtensionId, workspace.id]);
+
+  useEffect(() => {
+    writePersistedExtensionPreference(
+      workspace.id,
+      ENVIRONMENT_TAB_PREFERENCE_KEY,
+      activeEnvironmentTab,
+    );
+  }, [activeEnvironmentTab, workspace.id]);
+
+  const panelBounds = useMemo(
+    () =>
+      getSidebarWidthBounds({
+        containerWidth: workspaceLayoutWidth,
+        maxWidth: MAX_WORKSPACE_EXTENSION_PANEL_WIDTH,
+        minWidth: MIN_WORKSPACE_EXTENSION_PANEL_WIDTH,
+        oppositeSidebarWidth: WORKSPACE_EXTENSION_STRIP_WIDTH_PX,
+      }),
+    [workspaceLayoutWidth],
+  );
+
+  useEffect(() => {
+    setPanelWidth((currentWidth) => {
+      const nextWidth = clampPanelSize(currentWidth, panelBounds);
+      return nextWidth === currentWidth ? currentWidth : nextWidth;
+    });
+  }, [panelBounds]);
+
+  useEffect(() => {
+    writePersistedPanelValue(
+      WORKSPACE_EXTENSION_PANEL_WIDTH_STORAGE_KEY,
+      clampPanelSize(panelWidth, panelBounds),
+    );
+  }, [panelBounds, panelWidth]);
+
+  useEffect(() => {
+    if (!activePanelResize) {
+      return;
+    }
+
+    const handlePointerMove = (event: PointerEvent) => {
+      const workspaceLayout = workspaceLayoutRef.current;
+      if (!workspaceLayout) {
+        return;
+      }
+
+      const bounds = workspaceLayout.getBoundingClientRect();
+      setPanelWidth(getRightSidebarWidthFromPointer(event.clientX, bounds.right, panelBounds));
+    };
+
+    const handlePointerUp = () => {
+      notifyShellResizeListeners(false);
+      setActivePanelResize(false);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+    window.addEventListener("blur", handlePointerUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+      window.removeEventListener("blur", handlePointerUp);
+    };
+  }, [activePanelResize, panelBounds]);
+
+  useEffect(() => {
+    if (!activePanelResize) {
+      return;
+    }
+
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    return () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+    };
+  }, [activePanelResize]);
+
+  const handlePanelResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    notifyShellResizeListeners(true);
+    setActivePanelResize(true);
+  }, []);
+
+  const handlePanelResizeKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        setPanelWidth((currentWidth) =>
+          clampPanelSize(currentWidth + SIDEBAR_RESIZE_STEP, panelBounds),
+        );
+      }
+
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        setPanelWidth((currentWidth) =>
+          clampPanelSize(currentWidth - SIDEBAR_RESIZE_STEP, panelBounds),
+        );
+      }
+
+      if (event.key === "Home") {
+        event.preventDefault();
+        setPanelWidth(panelBounds.minSize);
+      }
+
+      if (event.key === "End") {
+        event.preventDefault();
+        setPanelWidth(panelBounds.maxSize);
+      }
+    },
+    [panelBounds],
+  );
+
+  const extensionSlots = useMemo(
+    () =>
+      getBuiltinExtensionSlots({
+        activeEnvironmentTab,
+        activeGitTab: routeState.gitTab,
+        config,
+        environmentTasks,
+        gitStatus: gitStatusQuery.data,
+        hasManifest,
+        isManifestStale,
+        launchActions,
+        manifestState,
+        onActiveEnvironmentTabChange: setActiveEnvironmentTab,
+        onActiveGitTabChange: handleGitTabChange,
+        onRestart: handleRestart,
+        onRun: handleRun,
+        onStop: handleStop,
+        onUpdateService: handleUpdateService,
+        services,
+        setupSteps,
+        workspace,
+      }),
+    [
+      activeEnvironmentTab,
+      config,
+      environmentTasks,
+      gitStatusQuery.data,
+      handleGitTabChange,
+      handleRestart,
+      handleRun,
+      handleStop,
+      handleUpdateService,
+      hasManifest,
+      isManifestStale,
+      launchActions,
+      manifestState,
+      routeState.gitTab,
+      services,
+      setupSteps,
+      workspace,
+    ],
+  );
+
+  const activeExtensionSlot = useMemo(
+    () => extensionSlots.find((slot) => slot.id === activeExtensionId) ?? null,
+    [activeExtensionId, extensionSlots],
+  );
+
+  const handleToggleExtension = useCallback((extensionId: string) => {
+    setActiveExtensionId((currentExtensionId) =>
+      toggleActiveExtension(currentExtensionId, extensionId),
+    );
+  }, []);
+
+  const canvasContent = supportsTerminalInteraction ? (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <WorkspaceCanvas
+          key={workspace.id}
+          openDocumentRequest={openDocumentRequest}
+          onOpenDocumentRequestHandled={(requestId) =>
+            clearDocumentRequest(workspace.id, requestId)
+          }
+          snapshotTerminals={terminals}
+          workspaceId={workspace.id}
+        />
+      </div>
+    </div>
+  ) : (
+    <div className="flex-1 overflow-y-auto p-8">
+      <div className="mx-auto max-w-2xl">
+        <EmptyState
+          description="Use the Environment panel for lifecycle state and setup details until this workspace exposes an interactive surface."
+          title="Workspace surface unavailable"
+        />
+      </div>
+    </div>
+  );
+
+  return (
+    <div
+      ref={workspaceLayoutRef}
+      className="flex min-h-0 flex-1 overflow-hidden"
+      data-slot="workspace-layout"
+    >
+      <div className="flex min-w-0 flex-1 flex-col" data-slot="workspace-canvas">
+        {canvasContent}
+      </div>
+      <ExtensionPanel
+        activeSlot={activeExtensionSlot}
+        maxWidth={panelBounds.maxSize}
+        minWidth={panelBounds.minSize}
+        onResizeKeyDown={handlePanelResizeKeyDown}
+        onResizePointerDown={handlePanelResizePointerDown}
+        width={panelWidth}
+      />
+      <ExtensionBar
+        activeExtensionId={activeExtensionId}
+        onToggleExtension={handleToggleExtension}
+        slots={extensionSlots}
+      />
+    </div>
+  );
+}

@@ -217,16 +217,25 @@ impl ImageVolume {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+#[serde(untagged)]
+pub enum HealthCheckPort {
+    Number(u16),
+    Template(String),
+}
+
+#[derive(Clone, Debug, Deserialize)]
 #[serde(tag = "kind")]
 pub enum HealthCheck {
     #[serde(rename = "tcp")]
     Tcp {
         host: String,
-        port: u16,
+        port: HealthCheckPort,
         timeout_seconds: u64,
     },
     #[serde(rename = "http")]
     Http { url: String, timeout_seconds: u64 },
+    #[serde(rename = "container")]
+    Container { timeout_seconds: u64 },
 }
 
 const UNSUPPORTED_SECRETS_MESSAGE: &str =
@@ -284,8 +293,16 @@ impl LifecycleConfig {
                 EnvironmentNodeConfig::Task(step) => {
                     validate_task(step, &format!("environment.{node_name}"))?;
                 }
-                EnvironmentNodeConfig::Service { config } => {
-                    if let ServiceConfig::Image(image) = config {
+                EnvironmentNodeConfig::Service { config } => match config {
+                    ServiceConfig::Process(process) => {
+                        if matches!(process.health_check, Some(HealthCheck::Container { .. })) {
+                            return manifest_invalid(
+                                &format!("environment.{node_name}.health_check.kind"),
+                                "container health checks are only valid for runtime image services",
+                            );
+                        }
+                    }
+                    ServiceConfig::Image(image) => {
                         if image.image.is_none() && image.build.is_none() {
                             return manifest_invalid(
                                 &format!("environment.{node_name}.image"),
@@ -301,7 +318,7 @@ impl LifecycleConfig {
                             }
                         }
                     }
-                }
+                },
             }
         }
 
@@ -570,6 +587,119 @@ mod tests {
             config.environment.get("db").unwrap(),
             EnvironmentNodeConfig::Service { .. }
         ));
+    }
+
+    #[test]
+    fn parse_tcp_health_check_templates() {
+        let json = r#"{
+            "workspace": {
+                "setup": [
+                    { "name": "init", "command": "echo hello", "timeout_seconds": 10 }
+                ]
+            },
+            "environment": {
+                "redis": {
+                    "kind": "service",
+                    "runtime": "image",
+                    "image": "redis:7-alpine",
+                    "health_check": {
+                        "kind": "tcp",
+                        "host": "${LIFECYCLE_SERVICE_REDIS_HOST}",
+                        "port": "${LIFECYCLE_SERVICE_REDIS_PORT}",
+                        "timeout_seconds": 30
+                    }
+                }
+            }
+        }"#;
+
+        let config = parse_config(json);
+        let EnvironmentNodeConfig::Service { config: service } =
+            config.environment.get("redis").expect("redis exists")
+        else {
+            panic!("expected service node");
+        };
+        let ServiceConfig::Image(service) = service else {
+            panic!("expected image service");
+        };
+
+        assert!(matches!(
+            service.health_check,
+            Some(HealthCheck::Tcp {
+                host: _,
+                port: HealthCheckPort::Template(_),
+                timeout_seconds: 30,
+            })
+        ));
+    }
+
+    #[test]
+    fn parse_container_health_check() {
+        let json = r#"{
+            "workspace": {
+                "setup": [
+                    { "name": "init", "command": "echo hello", "timeout_seconds": 10 }
+                ]
+            },
+            "environment": {
+                "db": {
+                    "kind": "service",
+                    "runtime": "image",
+                    "image": "postgres:16",
+                    "port": 5432,
+                    "health_check": {
+                        "kind": "container",
+                        "timeout_seconds": 30
+                    }
+                }
+            }
+        }"#;
+
+        let config = parse_config(json);
+        let EnvironmentNodeConfig::Service { config: service } =
+            config.environment.get("db").expect("db exists")
+        else {
+            panic!("expected service node");
+        };
+        let ServiceConfig::Image(service) = service else {
+            panic!("expected image service");
+        };
+
+        assert!(matches!(
+            service.health_check,
+            Some(HealthCheck::Container { .. })
+        ));
+    }
+
+    #[test]
+    fn rejects_container_health_check_on_process_service() {
+        let error = parse_lifecycle_config(
+            r#"{
+                "workspace": {
+                    "setup": [
+                        { "name": "init", "command": "echo hello", "timeout_seconds": 10 }
+                    ]
+                },
+                "environment": {
+                    "api": {
+                        "kind": "service",
+                        "runtime": "process",
+                        "command": "bun run dev",
+                        "health_check": {
+                            "kind": "container",
+                            "timeout_seconds": 30
+                        }
+                    }
+                }
+            }"#,
+        )
+        .expect_err("container health should be rejected for process services");
+
+        match error {
+            LifecycleError::ManifestInvalid(message) => {
+                assert!(message.contains("environment.api.health_check.kind"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
     }
 
     #[test]

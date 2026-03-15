@@ -1,6 +1,6 @@
 # Project Shell Cutover
 
-This is the **working execution document** for moving Lifecycle from the current workspace-first desktop app to the target project-shell / workspace-workbench model.
+This is the **working execution document** for completing Lifecycle's cutover from the legacy workspace-first desktop app to the target project-shell / workspace-canvas model.
 
 Use this document step by step.
 
@@ -9,17 +9,17 @@ It should stay tactical enough to drive implementation, but stable enough that w
 ## Source Documents
 
 1. [reference/app-shell-v2.md](../reference/app-shell-v2.md)
-2. [reference/workspace-workbench.md](../reference/workspace-workbench.md)
+2. [reference/workspace-canvas.md](../reference/workspace-canvas.md)
 3. [reference/workspace-provider.md](../reference/workspace-provider.md)
 4. [reference/workspace-files.md](../reference/workspace-files.md)
 5. [reference/workspace-surface.md](../reference/workspace-surface.md) for current-state comparison only
 
 ## Non-Negotiable Rules
 
-1. Do not try to land the outer shell rewrite and the inner workspace-workbench rewrite in one batch.
+1. Do not try to land the outer shell rewrite and the inner workspace-canvas rewrite in one batch.
 2. Do not let project-scoped artifacts continue leaking through workspace-local UI once a project-level surface exists for them.
 3. Do not let the new shell break workspace/provider/runtime authority boundaries.
-4. Do not let the workbench become a second tab manager.
+4. Do not let the canvas become a second tab manager.
 5. Delete old paths once the replacement is proven; do not accumulate compatibility layers.
 
 ## High-Level Sequence
@@ -29,9 +29,14 @@ Contracts
 → Project shell spine
 → Workspace tab host
 → Project-scoped tabs
-→ Workspace workbench cutover
+→ Workspace canvas cutover
 → Legacy deletion
 ```
+
+## Current Snapshot
+
+1. Phases 1 through 3 are complete: the project shell spine, workspace-tab host, and project-scoped Overview, Activity, and pull request tabs are live.
+2. The remaining work is Phase 4 and Phase 5: replace the mixed-tab workspace canvas interior with the split-only canvas model, then delete obsolete compatibility paths and close the remaining docs/code drift.
 
 ## Phase 0 — Freeze the Contracts
 
@@ -42,9 +47,9 @@ Create a stable doc system before cutting code.
 Deliverables:
 
 - [x] `app-shell-v2.md` is shell-only
-- [x] `workspace-workbench.md` defines the target inner workspace model
+- [x] `workspace-canvas.md` defines the target inner workspace model
 - [x] current-vs-target boundary is explicit
-- [x] naming for project view tabs, pull request tabs, workspace tabs, workspace workbench, and pane header is explicit
+- [x] naming for project view tabs, pull request tabs, workspace tabs, workspace canvas, and pane header is explicit
 
 Exit gate:
 
@@ -61,9 +66,9 @@ Deliverables:
 - [x] real `ProjectRoute`
 - [x] project switcher strip
 - [x] project sidebar
-- [x] project canvas with a top page-tab rail
-- [x] page tabs live inside the project canvas, not on the shell plane
-- [x] project-scoped content-tab state
+- [x] project layout with a top page-tab rail
+- [x] page tabs live inside the project layout, not on the shell plane
+- [x] project-scoped page-tab state
 - [x] canonical shell route based on `/projects/:projectId`
 
 Likely code touchpoints:
@@ -72,11 +77,11 @@ Likely code touchpoints:
 - dashboard/root shell layout
 - title-bar replacement
 - sidebar split into project shell components
-- new project content-tab state module
+- new project page-tab state module
 
 Out of scope:
 
-- split-only workspace workbench
+- split-only workspace canvas
 - removing pane-local tabs
 - moving PR/detail UI out of the current workspace surface
 
@@ -88,19 +93,19 @@ Exit gate:
 
 Objective:
 
-Treat workspace as one project content-tab kind instead of the app's primary route mode.
+Treat workspace as one page-tab kind instead of the app's primary route mode.
 
 Deliverables:
 
-- [x] `WorkspaceTab` becomes a first-class content-tab payload
+- [x] `WorkspaceTab` becomes a first-class page-tab payload
 - [x] opening a workspace from the sidebar focuses or creates a workspace tab
 - [x] current workspace content mounts inside that tab host
 - [x] workspace deep links resolve to project context plus focused workspace tab
-- [x] workspace tabs own a workspace page header below the page tabs for workspace identity and workspace-level actions
+- [x] workspace tabs own a workspace header below the page tabs for workspace identity and workspace-level actions
 
 Likely code touchpoints:
 
-- project content-tab reducer/store
+- project page-tab reducer/store
 - project route tab-host rendering
 - workspace open request handling
 - route/search-param focus helpers
@@ -131,9 +136,9 @@ Deliverables:
 Likely code touchpoints:
 
 - Git / PR routes and panels
-- workspace panel ownership boundaries
+- workspace extension ownership boundaries
 - project-level data loaders and views
-- content-tab kinds for project views and PR tabs
+- page-tab kinds for project views and PR tabs
 
 Out of scope:
 
@@ -144,11 +149,11 @@ Exit gate:
 
 - [x] PR and project activity no longer depend on opening a workspace first
 
-## Phase 4 — Cut Over the Workspace Interior to the Workbench Model
+## Phase 4 — Cut Over the Workspace Interior to the Canvas Model
 
 Objective:
 
-Replace the current mixed-tab workspace surface with the target split-only workbench.
+Replace the current mixed-tab workspace surface with the target split-only canvas.
 
 Deliverables:
 
@@ -157,7 +162,7 @@ Deliverables:
 - [ ] no pane-local tab groups
 - [ ] explicit split / resize / close / whole-pane rearrangement
 - [ ] empty-pane launch surfaces
-- [ ] restore model aligned with the workbench contract
+- [ ] restore model aligned with the canvas contract
 
 Likely code touchpoints:
 
@@ -170,11 +175,11 @@ Likely code touchpoints:
 Out of scope:
 
 - shell-level project tab changes
-- provider authority changes unrelated to workbench placement
+- provider authority changes unrelated to canvas placement
 
 Exit gate:
 
-- [ ] the workspace interior behaves as a split-only workbench and no longer carries a second tab stack
+- [ ] the workspace interior behaves as a split-only canvas and no longer carries a second tab stack
 
 ## Phase 5 — Delete Legacy Shell and Surface Paths
 
@@ -218,25 +223,24 @@ Each phase should prove one thing before the next begins.
 
 - [ ] split, resize, rearrange, empty-pane launch, and close flows behave correctly
 - [ ] scenario tests cover repeated pane operations
-- [ ] workbench restore survives reload
+- [ ] canvas restore survives reload
 
 ### Phase 5
 
 - [ ] no dead shell paths remain
 - [ ] docs and implementation match
 
-## Open Decisions We Must Resolve Before or During Cutover
+## Remaining Questions
 
-- [ ] which project-level surfaces ship in the first shell pass: Overview only, or Overview + PR + Activity?
 - [ ] whether repo-level commit detail defaults to a project tab everywhere, or remains dual-entry depending on access point
-- [ ] whether the workspace right-side panel survives as-is or is split into smaller workspace-scoped surfaces during workbench cutover
+- [ ] how aggressively to prune legacy workspace-surface restore compatibility once pane-local tab groups are removed
 
-## Recommended First Batch
+## Recommended Remaining Batch
 
-If we start implementation now, do this first:
+If we continue implementation now, do this next:
 
-1. land the project shell spine
-2. make workspace a top-level tab kind
-3. host the current workspace surface inside that tab
+1. finish the one-surface-per-pane canvas rules inside the current workspace interior
+2. replace pane-local tab groups with empty-pane launch and replace-in-pane flows
+3. delete obsolete workspace-surface compatibility helpers and update docs once the canvas contract becomes current
 
-That gives us the new app shape with the least churn and keeps the split-only workbench rewrite as an isolated second move.
+That keeps the remaining work focused on the inner workspace cutover instead of reopening already-finished shell-spine work.

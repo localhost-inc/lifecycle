@@ -89,7 +89,7 @@ Detail spec: [docs/milestones/m4.md](./milestones/m4.md)
 - [ ] `run`, `reset`, `sleep`, `wake`, and `destroy` flows are complete for local mode
 - [ ] Local preview and service exposure controls are wired
 - [ ] Workspace, environment, and service lifecycle boundaries are enforced
-- [ ] Desktop operations panel supports local environment lifecycle controls
+- [x] Desktop workspace extension strip supports local environment lifecycle controls
 - [ ] Local lifecycle round-trip behavior is tested
 
 ### M5 - First-Class CLI (Local)

@@ -26,7 +26,7 @@ The full desktop frame.
 Includes:
 
 1. shell plane
-2. project canvas
+2. project layout
 3. app-level routes such as settings
 
 ### Shell plane
@@ -61,7 +61,7 @@ It is not:
 
 ### Page tabs
 
-The top-level tabs in the page-area tab rail.
+The top-level tabs in the page tabs rail inside project main.
 
 These are the durable open destinations for the active project.
 
@@ -73,20 +73,26 @@ Avoid:
 
 Use `page tabs`.
 
+### Page tabs rail
+
+The rail inside project main that renders page tabs.
+
+It belongs to the project layout, not the shell plane, even when it uses panel styling.
+
 ### Active tab
 
-The currently selected top-level content tab.
+The currently selected top-level page tab.
 
 ## Project
 
-### Project canvas
+### Project layout
 
 The single raised `--background` surface for the active project.
 
 Contains:
 
 1. project sidebar
-2. page area
+2. project main
 3. project footer
 
 Avoid:
@@ -95,11 +101,11 @@ Avoid:
 2. page frame
 3. content panel
 
-Use `project canvas` for the raised container so `surface` can keep meaning an individual content unit.
+Use `project layout` for the raised container so `surface` can keep meaning an individual content unit.
 
-### Page area
+### Project main
 
-The right-hand content column inside the project canvas.
+The right-hand main column inside the project layout.
 
 Contains:
 
@@ -108,7 +114,7 @@ Contains:
 
 ### Project sidebar
 
-The left project-scoped navigation panel inside the project canvas.
+The left project-scoped navigation panel inside the project layout.
 
 Contains:
 
@@ -150,20 +156,22 @@ This is project-scoped, even when the renderer is shared with workspace-level di
 
 ### Workspace tab
 
-A page tab whose body is a workspace page.
+A page tab that opens or focuses a workspace.
 
 This is the project-level entry point into a specific workspace.
 
-### Workspace page
+### Workspace
 
-The full workspace-scoped body inside a workspace tab.
+The full workspace-scoped area inside a workspace tab.
 
 Contains:
 
-1. workspace page header
-2. workspace workbench
+1. workspace header
+2. workspace canvas
+3. optional workspace extension panel
+4. optional workspace extension strip
 
-### Workspace page header
+### Workspace header
 
 The compact workspace-scoped rail directly below the page tabs.
 
@@ -171,20 +179,20 @@ It provides:
 
 1. workspace identity
 2. workspace-level actions such as fork and open-in
-3. workspace-panel visibility controls
 
-### Workspace workbench
+The workspace extension strip, not the workspace header, is the durable affordance for workspace extensions.
 
-The pane-based work area below the workspace page header.
+### Workspace canvas
 
-This is the target model for the workspace interior.
+The pane-based center work area inside the workspace.
+
+This is the target model for the center workspace interior.
 
 Contains:
 
 1. panes
 2. pane headers
 3. pane content
-4. optional workspace panel
 
 Avoid:
 
@@ -192,17 +200,59 @@ Avoid:
 
 Use `workspace surface` only when referring to the legacy/current mixed-tab implementation or the specific `workspace-surface.md` contract.
 
+Use `workspace` for the full workspace-scoped area.
+
+Use `workspace canvas` for the center pane area.
+
+Implementation note:
+
+1. use `canvas`-prefixed module names for center-host state, restore, and orchestration
+2. use `pane`-prefixed module names for split layout and pane-local chrome
+3. use `surface` for rendered content units and feature-owned renderers only
+
+### Workspace extensions
+
+Optional workspace-scoped side tools attached to a workspace.
+
+Includes:
+
+1. workspace extension panel
+2. workspace extension strip
+
+### Workspace extension strip
+
+The optional workspace-scoped right-edge strip attached to the workspace, beside the workspace canvas.
+
+It hosts entry points for workspace extensions such as Git and Environment.
+
+It is not:
+
+1. the project sidebar
+2. app shell chrome
+
+### Workspace extension panel
+
+The optional workspace-scoped panel attached to the workspace, opened from the workspace extension strip.
+
+Only one workspace extension panel is active at a time.
+
+### Workspace page
+
+Implementation term for the route/container that hosts a workspace inside a workspace tab.
+
+Avoid when simple `workspace` is enough.
+
 ### Workspace panel
 
-The optional workspace-scoped right-side panel inside the workspace workbench.
+Legacy/current term for the old combined right-side rail.
 
-Use this for the workspace-local side panel, not for the project sidebar.
+Avoid this term in new target-state docs; use `workspace extension strip` or `workspace extension panel` instead.
 
 ## Panes
 
 ### Pane
 
-One split region inside the workspace workbench.
+One split region inside the workspace canvas.
 
 A pane owns:
 
@@ -273,6 +323,10 @@ Example:
 
 1. the patch viewer renderer can open from project scope or workspace scope
 
+Implementation note:
+
+1. `surface` should describe what a pane shows, not the outer workspace host
+
 ## Scope
 
 ### Project-scoped
@@ -294,7 +348,7 @@ Examples:
 1. terminals
 2. services and previews
 3. local changes
-4. workspace workbench layout
+4. workspace canvas layout
 
 ## Current vs Target Terms
 
@@ -309,7 +363,9 @@ Target meaning:
 
 1. do not use this term for the split-only future model
 
-Use `workspace workbench` for the target model.
+Use `workspace` for the full workspace-scoped area.
+
+Use `workspace canvas` for the center pane area.
 
 ### Project surface
 
@@ -320,7 +376,7 @@ Avoid this term for now because it is ambiguous between:
 
 Use:
 
-1. `project canvas` for the raised container
+1. `project layout` for the raised container
 2. `project page` or `surface` for the content unit
 
 ## Quick Reference
@@ -329,17 +385,20 @@ Use:
 app shell
 ├─ shell plane
 │  └─ project switcher strip
-└─ project canvas
+└─ project layout
    ├─ project sidebar
-   └─ page area
+   └─ project main
       ├─ page tabs
       └─ active tab body
          ├─ project page
          ├─ pull request tab
          └─ workspace tab
-            └─ workspace workbench
-               ├─ pane
-               │  ├─ pane header
-               │  └─ pane content
-               └─ workspace panel
+            └─ workspace
+               ├─ workspace header
+               ├─ workspace canvas
+               │  ├─ pane
+               │  │  ├─ pane header
+               │  │  └─ pane content
+               ├─ workspace extension panel
+               └─ workspace extension strip
 ```

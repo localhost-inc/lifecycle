@@ -1,9 +1,13 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
-import type { OpenDocumentRequest } from "../components/workspace-surface-requests";
+import {
+  createOpenDocumentRequest,
+  type OpenDocumentInput,
+  type OpenDocumentRequest,
+} from "../components/workspace-canvas-requests";
 
 interface WorkspaceOpenRequestsContextValue {
   clearDocumentRequest: (workspaceId: string, requestId: string) => void;
-  openDocument: (workspaceId: string, request: OpenDocumentRequest) => void;
+  openDocument: (workspaceId: string, request: OpenDocumentInput) => void;
   requestsByWorkspaceId: Record<string, OpenDocumentRequest | null>;
 }
 
@@ -14,15 +18,13 @@ export function WorkspaceOpenRequestsProvider({ children }: { children: ReactNod
     Record<string, OpenDocumentRequest | null>
   >({});
 
-  const openDocument = useCallback((workspaceId: string, request: OpenDocumentRequest) => {
-    setRequestsByWorkspaceId((current) => {
-      if (current[workspaceId] === request) {
-        return current;
-      }
+  const openDocument = useCallback((workspaceId: string, request: OpenDocumentInput) => {
+    const nextRequest = createOpenDocumentRequest(request);
 
+    setRequestsByWorkspaceId((current) => {
       return {
         ...current,
-        [workspaceId]: request,
+        [workspaceId]: nextRequest,
       };
     });
   }, []);

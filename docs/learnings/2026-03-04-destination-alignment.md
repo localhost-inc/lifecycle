@@ -36,7 +36,7 @@ The target design adds major surfaces not yet implemented:
    - Introduce feature folders under `apps/desktop/src/features` as surfaces grow.
    - Keep shared primitives in `apps/desktop/src/components` only when reused by multiple features.
 2. Naming:
-   - Use hyphenated filenames for React component modules (for example `workspace-panel.tsx`).
+   - Use hyphenated filenames for React component modules (for example `workspace-layout.tsx`).
 3. Triage discipline:
    - Compare active work with target design and milestone contracts before major UI additions.
    - Capture resulting learnings in `docs/learnings`.

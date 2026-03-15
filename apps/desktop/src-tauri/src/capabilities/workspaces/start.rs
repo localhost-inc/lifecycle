@@ -1,5 +1,5 @@
 use crate::capabilities::workspaces::manifest::{
-    parse_lifecycle_config, LifecycleConfig, ServiceConfig,
+    parse_lifecycle_config, HealthCheck, LifecycleConfig, ServiceConfig,
 };
 use crate::platform::db::{map_database_result, open_db, DbPath};
 use crate::platform::diagnostics;
@@ -65,63 +65,14 @@ fn slugify_workspace_value(value: &str) -> String {
     slug.trim_matches('-').to_string()
 }
 
-fn is_local_health_host(host: &str) -> bool {
-    matches!(host, "localhost" | "127.0.0.1" | "0.0.0.0")
-}
-
-fn rewrite_health_check_port(
-    health_check: &mut Option<crate::capabilities::workspaces::manifest::HealthCheck>,
-    previous_port: Option<u16>,
-    override_port: u16,
-) {
-    let Some(health_check) = health_check.as_mut() else {
-        return;
-    };
-
-    match health_check {
-        crate::capabilities::workspaces::manifest::HealthCheck::Tcp { host, port, .. } => {
-            if is_local_health_host(host)
-                && (previous_port.is_none() || previous_port == Some(*port))
-            {
-                *port = override_port;
-            }
-        }
-        crate::capabilities::workspaces::manifest::HealthCheck::Http { url, .. } => {
-            let Ok(mut parsed) = reqwest::Url::parse(url) else {
-                return;
-            };
-            let Some(host) = parsed.host_str() else {
-                return;
-            };
-
-            if !is_local_health_host(host) {
-                return;
-            }
-
-            let current_port = parsed.port_or_known_default();
-            if previous_port.is_some() && current_port != previous_port {
-                return;
-            }
-
-            if parsed.set_port(Some(override_port)).is_ok() {
-                *url = parsed.to_string();
-            }
-        }
-    }
-}
-
 fn apply_port_override(service: &mut ServiceConfig, override_port: u16) {
     match service {
         ServiceConfig::Process(process) => {
-            let previous_port = process.port;
             process.resolved_port = Some(override_port);
             set_port_env(&mut process.env, override_port);
-            rewrite_health_check_port(&mut process.health_check, previous_port, override_port);
         }
         ServiceConfig::Image(image) => {
-            let previous_port = image.port;
             image.resolved_port = Some(override_port);
-            rewrite_health_check_port(&mut image.health_check, previous_port, override_port);
         }
     }
 }
@@ -476,15 +427,27 @@ impl WorkspaceStartContext<'_> {
             return Ok(());
         }
 
-        let health_check = service
-            .health_check()
-            .expect("health check already verified to exist");
+        let health_check = health::resolve_health_check_templates(
+            service
+                .health_check()
+                .expect("health check already verified to exist"),
+            self.runtime_env,
+            &format!("environment.{service_name}.health_check"),
+        )?;
         let timeout_secs = service.startup_timeout_seconds();
         let health_check_started_at = Instant::now();
+        let container_ref = match (service, &health_check) {
+            (ServiceConfig::Image(_), HealthCheck::Container { .. }) => {
+                let supervisor = self.controller.supervisor();
+                let managed = supervisor.lock().await;
+                managed.container_ref(service_name)
+            }
+            _ => None,
+        };
         let health_result = {
             let mut start_token = self.start_token.clone();
             tokio::select! {
-                result = health::wait_for_health(health_check, timeout_secs) => Some(result),
+                result = health::wait_for_health(&health_check, timeout_secs, container_ref.as_deref()) => Some(result),
                 _ = start_token.cancelled() => None,
             }
         };

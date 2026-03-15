@@ -112,12 +112,16 @@ const HealthCheckSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("tcp"),
     host: z.string(),
-    port: z.number().int().positive(),
+    port: z.union([z.number().int().positive(), z.string().min(1)]),
     timeout_seconds: z.number().int().positive(),
   }),
   z.object({
     kind: z.literal("http"),
     url: z.string(),
+    timeout_seconds: z.number().int().positive(),
+  }),
+  z.object({
+    kind: z.literal("container"),
     timeout_seconds: z.number().int().positive(),
   }),
 ]);
@@ -167,13 +171,23 @@ const TaskNodeSchema = z
   })
   .superRefine(validateStepAction);
 
-const ProcessServiceNodeSchema = z.object({
-  kind: z.literal("service"),
-  runtime: z.literal("process"),
-  command: z.string(),
-  cwd: z.string().optional(),
-  ...BaseServiceFields,
-});
+const ProcessServiceNodeSchema = z
+  .object({
+    kind: z.literal("service"),
+    runtime: z.literal("process"),
+    command: z.string(),
+    cwd: z.string().optional(),
+    ...BaseServiceFields,
+  })
+  .superRefine((service, ctx) => {
+    if (service.health_check?.kind === "container") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Container health checks are only valid for runtime: "image" services',
+        path: ["health_check", "kind"],
+      });
+    }
+  });
 
 const ImageServiceNodeSchema = z
   .object({

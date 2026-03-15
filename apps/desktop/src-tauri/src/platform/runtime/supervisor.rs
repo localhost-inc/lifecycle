@@ -403,6 +403,10 @@ impl Supervisor {
             false
         }
     }
+
+    pub fn container_ref(&self, service_name: &str) -> Option<String> {
+        self.containers.get(service_name).cloned()
+    }
 }
 
 fn resolve_service_env(

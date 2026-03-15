@@ -1,32 +1,11 @@
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
 import { Activity, GitPullRequest, LayoutGrid, TerminalSquare } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type PointerEvent as ReactPointerEvent,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useOutletContext, useParams, useSearchParams } from "react-router-dom";
 import { AppStatusBar } from "../../../components/layout/app-status-bar";
 import type { AppShellOutletContext } from "../../../components/layout/app-shell-context";
-import { notifyShellResizeListeners } from "../../../components/layout/shell-resize-provider";
-import {
-  DEFAULT_RIGHT_SIDEBAR_WIDTH,
-  MAX_RIGHT_SIDEBAR_WIDTH,
-  MIN_RIGHT_SIDEBAR_WIDTH,
-  PROJECT_WORKSPACE_PANEL_COLLAPSED_STORAGE_KEY,
-  PROJECT_WORKSPACE_PANEL_WIDTH_STORAGE_KEY,
-  clampPanelSize,
-  getRightSidebarWidthFromPointer,
-  getSidebarWidthBounds,
-  readPersistedPanelValue,
-  writePersistedPanelValue,
-} from "../../../lib/panel-layout";
-import { WorkspacePageHeader } from "../../workspaces/components/workspace-page-header";
+import { WorkspaceHeader } from "../../workspaces/components/workspace-header";
 import { getWorkspaceDisplayName } from "../../workspaces/lib/workspace-display";
 import { WorkspaceTabContent } from "../../workspaces/components/workspace-tab-content";
 import { ProjectActivitySurface } from "../components/project-activity-surface";
@@ -61,24 +40,6 @@ import type {
   ProjectContentTabsState,
   ProjectViewId,
 } from "../types/project-content-tabs";
-
-const SIDEBAR_RESIZE_STEP = 16;
-
-function readPersistedWorkspacePanelCollapsed(): boolean {
-  try {
-    return localStorage.getItem(PROJECT_WORKSPACE_PANEL_COLLAPSED_STORAGE_KEY) === "true";
-  } catch {
-    return false;
-  }
-}
-
-function writePersistedWorkspacePanelCollapsed(collapsed: boolean): void {
-  try {
-    localStorage.setItem(PROJECT_WORKSPACE_PANEL_COLLAPSED_STORAGE_KEY, String(collapsed));
-  } catch {
-    // best-effort persistence
-  }
-}
 
 function isWorkspaceAvailable(
   workspacesById: ReadonlyMap<string, WorkspaceRecord>,
@@ -166,15 +127,6 @@ export function ProjectRoute() {
   } = useOutletContext<AppShellOutletContext>();
   const { projectId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const workspaceContentRowRef = useRef<HTMLDivElement | null>(null);
-  const [workspaceContentRowWidth, setWorkspaceContentRowWidth] = useState(0);
-  const [workspacePanelWidth, setWorkspacePanelWidth] = useState(() =>
-    readPersistedPanelValue(PROJECT_WORKSPACE_PANEL_WIDTH_STORAGE_KEY, DEFAULT_RIGHT_SIDEBAR_WIDTH),
-  );
-  const [workspacePanelCollapsed, setWorkspacePanelCollapsed] = useState(
-    readPersistedWorkspacePanelCollapsed,
-  );
-  const [activeWorkspacePanelResize, setActiveWorkspacePanelResize] = useState(false);
   const project = projects.find((item) => item.id === projectId) ?? null;
   const workspaces = useMemo(() => {
     if (!projectId) {
@@ -288,149 +240,6 @@ export function ProjectRoute() {
       setSearchParams(nextSearchParams, options);
     },
     [searchParams, setSearchParams],
-  );
-
-  useEffect(() => {
-    const row = workspaceContentRowRef.current;
-    if (!row) {
-      return;
-    }
-
-    const syncWidth = () => setWorkspaceContentRowWidth(row.getBoundingClientRect().width);
-
-    syncWidth();
-    if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", syncWidth);
-      return () => window.removeEventListener("resize", syncWidth);
-    }
-
-    const observer = new ResizeObserver(() => syncWidth());
-    observer.observe(row);
-    return () => observer.disconnect();
-  }, []);
-
-  const workspacePanelBounds = useMemo(
-    () =>
-      getSidebarWidthBounds({
-        containerWidth: workspaceContentRowWidth,
-        maxWidth: MAX_RIGHT_SIDEBAR_WIDTH,
-        minWidth: MIN_RIGHT_SIDEBAR_WIDTH,
-        oppositeSidebarWidth: 0,
-      }),
-    [workspaceContentRowWidth],
-  );
-
-  useEffect(() => {
-    setWorkspacePanelWidth((currentWidth) => {
-      const nextWidth = clampPanelSize(currentWidth, workspacePanelBounds);
-      return nextWidth === currentWidth ? currentWidth : nextWidth;
-    });
-  }, [workspacePanelBounds]);
-
-  useEffect(() => {
-    writePersistedPanelValue(
-      PROJECT_WORKSPACE_PANEL_WIDTH_STORAGE_KEY,
-      clampPanelSize(workspacePanelWidth, workspacePanelBounds),
-    );
-  }, [workspacePanelBounds, workspacePanelWidth]);
-
-  useEffect(() => {
-    writePersistedWorkspacePanelCollapsed(workspacePanelCollapsed);
-  }, [workspacePanelCollapsed]);
-
-  useEffect(() => {
-    if (!activeWorkspacePanelResize) {
-      return;
-    }
-
-    const handlePointerMove = (event: PointerEvent) => {
-      const row = workspaceContentRowRef.current;
-      if (!row) {
-        return;
-      }
-
-      const bounds = row.getBoundingClientRect();
-      setWorkspacePanelWidth(
-        getRightSidebarWidthFromPointer(event.clientX, bounds.right, workspacePanelBounds),
-      );
-    };
-
-    const handlePointerUp = () => {
-      notifyShellResizeListeners(false);
-      setActiveWorkspacePanelResize(false);
-    };
-
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", handlePointerUp);
-    window.addEventListener("blur", handlePointerUp);
-
-    return () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("pointercancel", handlePointerUp);
-      window.removeEventListener("blur", handlePointerUp);
-    };
-  }, [activeWorkspacePanelResize, workspacePanelBounds]);
-
-  useEffect(() => {
-    if (!activeWorkspacePanelResize) {
-      return;
-    }
-
-    const previousCursor = document.body.style.cursor;
-    const previousUserSelect = document.body.style.userSelect;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-
-    return () => {
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousUserSelect;
-    };
-  }, [activeWorkspacePanelResize]);
-
-  const handleWorkspacePanelResizePointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (event.button !== 0) {
-        return;
-      }
-
-      event.preventDefault();
-      event.stopPropagation();
-      event.currentTarget.setPointerCapture(event.pointerId);
-      notifyShellResizeListeners(true);
-      setActiveWorkspacePanelResize(true);
-    },
-    [],
-  );
-
-  const handleWorkspacePanelResizeKeyDown = useCallback(
-    (event: ReactKeyboardEvent<HTMLDivElement>) => {
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        setWorkspacePanelWidth((currentWidth) =>
-          clampPanelSize(currentWidth + SIDEBAR_RESIZE_STEP, workspacePanelBounds),
-        );
-      }
-
-      if (event.key === "ArrowRight") {
-        event.preventDefault();
-        setWorkspacePanelWidth((currentWidth) =>
-          clampPanelSize(currentWidth - SIDEBAR_RESIZE_STEP, workspacePanelBounds),
-        );
-      }
-
-      if (event.key === "Home") {
-        event.preventDefault();
-        setWorkspacePanelWidth(workspacePanelBounds.minSize);
-      }
-
-      if (event.key === "End") {
-        event.preventDefault();
-        setWorkspacePanelWidth(workspacePanelBounds.maxSize);
-      }
-    },
-    [workspacePanelBounds],
   );
 
   const handleSelectTab = useCallback(
@@ -565,7 +374,7 @@ export function ProjectRoute() {
       <div className="min-h-0 flex-1">
         <div
           className="flex h-full min-h-0 flex-col overflow-hidden rounded-[var(--project-shell-radius)] border border-[color-mix(in_srgb,var(--border),var(--foreground)_12%)] bg-[var(--background)] shadow-[0_16px_36px_rgba(0,0,0,0.12)]"
-          data-slot="project-surface"
+          data-slot="project-layout"
         >
           <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
             {!projectNavigationCollapsed ? (
@@ -599,7 +408,7 @@ export function ProjectRoute() {
                 </div>
               </>
             ) : null}
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-slot="project-main">
               <ProjectPageTabs
                 activeTabId={activeTab?.id ?? tabState.activeTabId}
                 onCloseTab={handleCloseTab}
@@ -608,44 +417,22 @@ export function ProjectRoute() {
                 tabs={pageTabs}
               />
               {activeWorkspace ? (
-                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                  <WorkspacePageHeader
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-slot="workspace">
+                  <WorkspaceHeader
                     onFork={() => void onForkWorkspace(activeWorkspace)}
-                    onToggleRightSidebar={() => setWorkspacePanelCollapsed((current) => !current)}
-                    rightSidebarCollapsed={workspacePanelCollapsed}
                     workspace={activeWorkspace}
                   />
-                  <div ref={workspaceContentRowRef} className="flex min-h-0 min-w-0 flex-1">
+                  <div className="flex min-h-0 min-w-0 flex-1">
                     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                       <WorkspaceTabContent
                         onOpenPullRequest={handleOpenPullRequestSummary}
                         workspaceId={activeWorkspace.id}
                       />
                     </div>
-                    {!workspacePanelCollapsed ? (
-                      <>
-                        <div className="relative w-px shrink-0">
-                          <div
-                            aria-label="Resize workspace panel"
-                            aria-orientation="vertical"
-                            className="absolute inset-y-0 -left-2 w-4 cursor-col-resize"
-                            onKeyDown={handleWorkspacePanelResizeKeyDown}
-                            onPointerDown={handleWorkspacePanelResizePointerDown}
-                            role="separator"
-                            tabIndex={0}
-                          />
-                        </div>
-                        <aside
-                          className="min-h-0 shrink-0 border-l border-[var(--border)] bg-[var(--panel)]"
-                          id="workspace-right-rail"
-                          style={{ width: `${workspacePanelWidth}px` }}
-                        />
-                      </>
-                    ) : null}
                   </div>
                 </div>
               ) : (
-                <div ref={workspaceContentRowRef} className="flex min-h-0 min-w-0 flex-1">
+                <div className="flex min-h-0 min-w-0 flex-1">
                   <div className="flex min-h-0 min-w-0 flex-1 flex-col">
                     {activeTab?.kind === "pull-request" ? (
                       <ProjectPullRequestTabContent

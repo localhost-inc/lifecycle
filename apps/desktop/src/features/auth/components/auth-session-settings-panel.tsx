@@ -132,13 +132,7 @@ export function AuthSessionSettingsPanel({
                 : "Not connected"}
           </p>
         </div>
-        <Button
-          className="shrink-0"
-          onClick={onRefresh}
-          size="sm"
-          type="button"
-          variant="outline"
-        >
+        <Button className="shrink-0" onClick={onRefresh} size="sm" type="button" variant="outline">
           {isLoading ? (
             <Spinner className="size-3.5" />
           ) : (

@@ -36,6 +36,6 @@ Project-scoped pull request list/detail and activity surfaces now live in top-le
 
 ## Follow-up Actions
 
-1. Complete the split-only workspace-workbench cutover so pane-local tab groups disappear inside workspace tabs.
-2. Delete remaining workspace-local pull-request document support from the inner workspace model once the split-only workbench lands.
+1. Complete the split-only workspace-canvas cutover so pane-local tab groups disappear inside workspace tabs.
+2. Delete remaining workspace-local pull-request document support from the inner workspace model once the split-only canvas lands.
 3. Introduce a true project-scoped provider/query model so project PR and activity tabs do not need a canonical repo workspace as backing context.

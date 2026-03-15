@@ -10,7 +10,7 @@ import {
   SplitButtonSecondary,
   useTheme,
 } from "@lifecycle/ui";
-import { ChevronDown, GitFork, PanelRight, PanelRightClose } from "lucide-react";
+import { ChevronDown, GitFork } from "lucide-react";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { isMacPlatform } from "../../app/app-hotkeys";
 import type { HostedOverlayAction } from "../../features/overlays/overlay-contract";
@@ -32,8 +32,6 @@ import {
 interface TitleBarActionsProps {
   workspace: WorkspaceRecord;
   onFork?: () => void;
-  rightSidebarCollapsed?: boolean;
-  onToggleRightSidebar?: () => void;
 }
 
 function describeOpenInError(error: unknown): string {
@@ -58,12 +56,7 @@ function describeOpenInError(error: unknown): string {
   return "Unable to open this workspace in the selected app.";
 }
 
-export function TitleBarActions({
-  workspace,
-  onFork,
-  rightSidebarCollapsed,
-  onToggleRightSidebar,
-}: TitleBarActionsProps) {
+export function TitleBarActions({ workspace, onFork }: TitleBarActionsProps) {
   const { resolvedTheme } = useTheme();
   const [baseAvailableTargets] = useState(() => listAvailableOpenInTargets(isMacPlatform()));
   const [availableTargets, setAvailableTargets] =
@@ -298,18 +291,6 @@ export function TitleBarActions({
           </Popover>
         )}
       </SplitButton>
-      {onToggleRightSidebar && (
-        <Button
-          onClick={onToggleRightSidebar}
-          title={rightSidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
-        >
-          {rightSidebarCollapsed ? (
-            <PanelRight size={14} strokeWidth={2.2} />
-          ) : (
-            <PanelRightClose size={14} strokeWidth={2.2} />
-          )}
-        </Button>
-      )}
     </div>
   );
 }

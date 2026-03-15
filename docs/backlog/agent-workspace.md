@@ -114,7 +114,7 @@ user input
    - `message-mapper.ts`: persisted record -> UI message mapping
    - `components/*`: center panel, composer, attachment tray, screenshot action, task pane, approval cards, artifact pane, session switcher
    - `transport.ts`: `LifecycleChatTransport`
-3. `WorkspacePanel` should compose `AgentWorkspaceSurface` as the main center surface and keep terminal entry points visible but secondary through the shared workspace-surface tab model.
+3. `WorkspaceLayout` should compose `AgentWorkspaceSurface` as the main center surface and keep terminal entry points visible but secondary through the shared workspace-surface tab model.
 4. The query layer should extend the existing `QueryClient` pattern rather than introducing a second query/cache system.
 
 ### Surface shape

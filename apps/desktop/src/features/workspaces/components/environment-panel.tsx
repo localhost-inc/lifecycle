@@ -41,13 +41,21 @@ const ENVIRONMENT_PANEL_TABS = [
   { label: "Logs", value: "logs" },
 ] as const;
 
-type EnvironmentPanelTabValue = (typeof ENVIRONMENT_PANEL_TABS)[number]["value"];
+export type EnvironmentPanelTabValue = (typeof ENVIRONMENT_PANEL_TABS)[number]["value"];
+
+export function isEnvironmentPanelTabValue(
+  value: string | null | undefined,
+): value is EnvironmentPanelTabValue {
+  return ENVIRONMENT_PANEL_TABS.some((tab) => tab.value === value);
+}
 
 interface EnvironmentPanelProps {
+  activeTab?: EnvironmentPanelTabValue;
   config: LifecycleConfig | null;
   hasManifest: boolean;
   isManifestStale: boolean;
   manifestState: "invalid" | "missing" | "valid";
+  onActiveTabChange?: (tab: EnvironmentPanelTabValue) => void;
   onRestart: () => Promise<void>;
   onRun: () => Promise<void>;
   onStop: () => Promise<void>;
@@ -63,10 +71,12 @@ interface EnvironmentPanelProps {
 }
 
 export function EnvironmentPanel({
+  activeTab: controlledActiveTab,
   config,
   hasManifest,
   isManifestStale,
   manifestState,
+  onActiveTabChange,
   onRestart,
   onRun,
   onStop,
@@ -76,10 +86,18 @@ export function EnvironmentPanel({
   services,
   workspace,
 }: EnvironmentPanelProps) {
-  const [activeTab, setActiveTab] = useState<EnvironmentPanelTabValue>("overview");
+  const [uncontrolledActiveTab, setUncontrolledActiveTab] =
+    useState<EnvironmentPanelTabValue>("overview");
   const [activeAction, setActiveAction] = useState<"restart" | "start" | "stop" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [restartMenuOpen, setRestartMenuOpen] = useState(false);
+  const activeTab = controlledActiveTab ?? uncontrolledActiveTab;
+  const handleActiveTabChange = (tab: EnvironmentPanelTabValue) => {
+    onActiveTabChange?.(tab);
+    if (controlledActiveTab === undefined) {
+      setUncontrolledActiveTab(tab);
+    }
+  };
   const declaredSetupStepNames = (config?.workspace.setup ?? []).map((step) => step.name);
   const serviceRuntimeByName = Object.fromEntries(
     Object.entries(config?.environment ?? {})
@@ -255,7 +273,7 @@ export function EnvironmentPanel({
           )}
           {actionError && <p className="text-xs text-[var(--destructive)]">{actionError}</p>}
           <Tabs
-            onValueChange={(value) => setActiveTab(value as EnvironmentPanelTabValue)}
+            onValueChange={(value) => handleActiveTabChange(value as EnvironmentPanelTabValue)}
             value={activeTab}
           >
             <TabsList className="-mx-2.5 w-[calc(100%+1.25rem)]" variant="underline">

@@ -168,7 +168,7 @@ export function ProjectSidebar({
         {workspaces.length === 0 ? (
           <div className="px-3 pb-3">
             <EmptyState
-              description="Create a workspace to start a live workbench for this project."
+              description="Create a workspace to start a live canvas for this project."
               title="No workspaces yet"
             />
           </div>

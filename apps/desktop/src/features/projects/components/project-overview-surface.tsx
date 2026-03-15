@@ -91,7 +91,7 @@ export function ProjectOverviewSurface({
                 <div>
                   <p className="text-sm font-medium text-[var(--foreground)]">No workspaces yet</p>
                   <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
-                    Create a workspace to open a live workbench for this project.
+                    Create a workspace to open a live canvas for this project.
                   </p>
                 </div>
                 <Button onClick={onCreateWorkspace}>Create workspace</Button>

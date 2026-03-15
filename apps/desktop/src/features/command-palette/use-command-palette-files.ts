@@ -17,6 +17,7 @@ import {
   workspaceFileDirname,
 } from "../workspaces/lib/workspace-file-paths";
 import { useWorkspaceOpenRequests } from "../workspaces/state/workspace-open-requests";
+import { createFileViewerOpenInput } from "../workspaces/components/workspace-canvas-requests";
 import type { CommandPaletteCommand } from "./types";
 
 interface UseCommandPaletteFilesResult {
@@ -72,12 +73,7 @@ export function useCommandPaletteFiles(): UseCommandPaletteFilesResult {
         icon: File,
         keywords: [filePath, label, dirname, entry.extension ?? ""].filter(Boolean),
         label,
-        onExecute: () =>
-          openDocument(currentWorkspace.id, {
-            filePath,
-            id: crypto.randomUUID(),
-            kind: "file-viewer",
-          }),
+        onExecute: () => openDocument(currentWorkspace.id, createFileViewerOpenInput(filePath)),
         priority: scoreWorkspaceFileUsage(usageByPath[filePath]),
       } satisfies CommandPaletteCommand;
     });

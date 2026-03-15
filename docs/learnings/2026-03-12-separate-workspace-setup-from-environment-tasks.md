@@ -11,7 +11,7 @@ Lifecycle now treats these as separate domains:
 1. `workspace.setup` emits `workspace.setup_progress`.
 2. Environment task nodes emit `environment.task_progress`.
 3. Workspace failures caused by environment tasks record `workspace.failure_reason = environment_task_failed`.
-4. The desktop `Environment` panel no longer has a separate `Setup` tab. `Overview` contains distinct sections for workspace setup, environment tasks, and services/topology.
+4. The desktop `Environment` panel no longer has a separate `Setup` tab. `Overview` models one boot sequence: workspace setup first, then graph nodes in execution order, while topology stays in its own view.
 
 ## Why
 
@@ -28,3 +28,4 @@ Lifecycle now treats these as separate domains:
 
 1. Add first-class docs for `workspace.setup_progress` and `environment.task_progress` in the event reference instead of relying on reducer code as the clearest contract.
 2. Consider whether the `Overview` list should show task history after boot or only active/failed tasks.
+3. Decide whether `run_on=create` nodes need first-class UI treatment so repeated starts can hide steps that are no longer part of the current boot.

@@ -2,9 +2,11 @@
 
 ## Status
 
-1. This is the **current implementation contract** for the desktop workspace center panel.
-2. The target successor direction is [workspace-workbench.md](./workspace-workbench.md), which defines the future split-only workspace interior for the project-shell model.
-3. Until that migration lands, this document remains authoritative for the existing mixed runtime/document tab behavior.
+1. This is the **current implementation contract** for the desktop workspace center panel hosted inside the workspace layout.
+2. The outer project shell, workspace header, and workspace extension surfaces are defined elsewhere and are not owned by this contract.
+3. The target successor direction is [workspace-canvas.md](./workspace-canvas.md), which defines the future split-only workspace interior for the project-shell model.
+4. Until that migration lands, this document remains authoritative for the existing mixed runtime/document tab behavior inside the center panel.
+5. The code now uses `canvas` and `pane` module prefixes for the host and split tree; this document keeps the legacy `workspace surface` name only as the behavior contract for the mixed-tab model.
 
 The workspace center panel is a shared surface that can host both provider-backed runtime tabs and client-owned document tabs.
 
@@ -16,8 +18,8 @@ The workspace center panel is a shared surface that can host both provider-backe
    - identity is provider-owned (`terminal_id`, future `agent_session_id`)
 2. Document tabs:
    - backed by workspace content or derived workspace artifacts
-   - examples: git diff, pull request, file editor, preview-specific documents
-   - identity is client-owned and derived from document intent (`diff:changes`, `diff:commit:<sha>`, `pull-request:<number>`, future `file:path`)
+   - examples: git diff, commit detail, file editor, preview-specific documents
+   - identity is client-owned and derived from document intent (`diff:changes`, `diff:commit:<sha>`, `file:<path>`, future workspace-local document kinds)
 
 ## Ownership Rules
 
@@ -26,8 +28,19 @@ The workspace center panel is a shared surface that can host both provider-backe
 3. Desktop-owned tab state may be restored locally across app restarts, but that restore must stay separate from provider/runtime authority.
 4. Desktop-owned surface layout includes `activePaneId`, the persisted split tree, per-pane mixed-tab ordering (`pane.tabOrderKeys`), and hidden-runtime presentation (`hiddenRuntimeTabKeys`).
 5. Side-panel actions may request opening a document tab, but they do not own tab state.
-6. Mixed tab bars must render from normalized tab records rather than terminal-specific component state.
-7. Route/search state may mirror the currently focused workspace view (for example the active Git rail tab or pull request number) so hot reload can restore the same surface, but that URL state must stay identifier-only rather than replacing local document snapshots.
+6. Workspace extensions may declare workspace document kinds they contribute, but the workspace surface still owns pane placement, reuse, and persistence for those documents.
+7. Mixed tab bars must render from normalized tab records rather than terminal-specific component state.
+8. Route/search state may mirror the currently focused workspace view (for example the active Git extension tab) so hot reload can restore the same surface, but that URL state must stay identifier-only rather than replacing local document snapshots.
+
+## Implementation Boundary
+
+The current mixed-tab implementation should still follow the target ownership vocabulary in code:
+
+1. `workspace-layout.tsx` owns workspace-vs-extension shell composition.
+2. `workspace-canvas.tsx`, `workspace-canvas-controller.tsx`, `workspace-canvas-reducer.ts`, and `workspace-canvas-state.ts` own center-host orchestration and restore.
+3. `workspace-pane-layout.ts` owns split topology operations.
+4. `workspace-pane-tree.tsx`, `workspace-pane-content.tsx`, `workspace-pane-tab-bar.tsx`, and `workspace-pane-drop-zones.tsx` own pane-local presentation and interaction.
+5. Feature-owned surfaces such as terminal, file, and diff renderers own renderer-specific behavior.
 
 ## Pane Tree Model
 
@@ -70,13 +83,11 @@ The workspace center panel is a shared surface that can host both provider-backe
 4. Full patch rendering belongs in the center panel; list summaries belong in the side panel.
 5. The side panel should stay lightweight: summaries and diff navigation belong there; commit composition and staging workflows do not.
 
-## Pull Request Documents
+## Pull Request Access
 
-1. Pull requests are document tabs, not runtime tabs.
-2. Git-panel PR actions may request opening a PR tab, but the workspace surface owns the resulting tab lifecycle.
-3. PR tabs are keyed by pull request number within a workspace and should reuse the existing tab when the same PR is reopened.
-4. Persisted PR tabs may store a last-known snapshot so the surface can render even when live provider detail is temporarily unavailable.
-5. Router-backed PR focus should carry only the PR number needed to reopen the surface; the rendered snapshot and tab ordering remain desktop-owned state.
+1. Pull request detail is project-scoped and should open as a project tab by default.
+2. Workspace-local entry points should delegate PR opens to the project shell rather than creating new workspace-surface document tabs.
+3. Legacy workspace-surface PR document state may still exist during cutover compatibility, but it should not guide new product or architecture work.
 
 ## File Viewer Documents
 
@@ -99,10 +110,10 @@ The workspace center panel is a shared surface that can host both provider-backe
 9. Save shortcuts belong to the active file surface and should work while the editor holds focus (`Cmd/Ctrl + S`).
 10. Closing a dirty file tab must prompt for discard instead of silently dropping the draft.
 11. If the on-disk file changes while a dirty draft exists, the surface should enter an explicit conflict state rather than silently overwriting either version.
-12. File surfaces may own a scoped file-tree rail for navigating other workspace files, but that rail is local presentation state within the active file tab and does not replace the workspace sidebar.
+12. File surfaces may own a scoped file-tree rail for navigating other workspace files, but that rail is local presentation state within the active file tab and does not replace the workspace extension strip.
 13. Unsupported binary files or oversized files may still open as tabs, but the surface should show an explicit fallback state rather than silently failing.
-14. Git-side file open affordances from the Changes tab, diff surfaces, and PR surfaces should request file-viewer documents instead of handing files off to the OS.
-15. `features/workspaces` owns tab orchestration only. File-specific renderer selection, draft/conflict state, file-tree UI, and editor behavior should live in a dedicated file feature so the workspace surface stays a host rather than an ever-growing file implementation.
+14. Git-side file open affordances from the Changes tab and diff surfaces should request file-viewer documents instead of handing files off to the OS.
+15. `features/workspaces` owns tab orchestration only. File-specific renderer selection, draft/conflict state, file-tree UI, and editor behavior live in `features/files`, and the workspace surface composes that feature rather than owning file-session behavior directly.
 
 ## Forward Compatibility
 

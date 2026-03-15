@@ -89,7 +89,7 @@ describe("ProjectRoute", () => {
     mock.restore();
   });
 
-  test("renders page tabs in the right-hand page area beside the sidebar", async () => {
+  test("renders page tabs in the right-hand project main beside the sidebar", async () => {
     const overviewSurfaceModule = await import("../components/project-overview-surface");
     spyOn(overviewSurfaceModule, "ProjectOverviewSurface").mockImplementation((() =>
       createElement("main", { "data-slot": "project-page" }, "Overview Surface")) as never);
@@ -99,14 +99,18 @@ describe("ProjectRoute", () => {
     const markup = renderProjectRoute(ProjectRoute);
 
     expect(markup).toContain('data-slot="project-page-tabs"');
-    expect(markup).toContain('data-slot="project-surface"');
+    expect(markup).toContain('data-slot="project-layout"');
+    expect(markup).toContain('data-slot="project-main"');
     expect(markup).toContain('data-slot="project-sidebar"');
     expect(markup).toContain('data-slot="project-page"');
     expect(markup).toContain('data-slot="app-status-bar"');
-    expect(markup.indexOf('data-slot="project-surface"')).toBeLessThan(
+    expect(markup.indexOf('data-slot="project-layout"')).toBeLessThan(
       markup.indexOf('data-slot="project-sidebar"'),
     );
     expect(markup.indexOf('data-slot="project-sidebar"')).toBeLessThan(
+      markup.indexOf('data-slot="project-main"'),
+    );
+    expect(markup.indexOf('data-slot="project-main"')).toBeLessThan(
       markup.indexOf('data-slot="project-page-tabs"'),
     );
     expect(markup.indexOf('data-slot="project-page-tabs"')).toBeLessThan(
@@ -128,15 +132,16 @@ describe("ProjectRoute", () => {
       projectNavigationCollapsed: true,
     });
 
-    expect(markup).toContain('data-slot="project-surface"');
+    expect(markup).toContain('data-slot="project-layout"');
+    expect(markup).toContain('data-slot="project-main"');
     expect(markup).not.toContain('data-slot="project-sidebar"');
   });
 
-  test("renders a workspace page header below the page tabs for workspace tabs", async () => {
+  test("renders a workspace header below the page tabs for workspace tabs", async () => {
     const workspaceTabContentModule =
       await import("../../workspaces/components/workspace-tab-content");
     spyOn(workspaceTabContentModule, "WorkspaceTabContent").mockImplementation((() =>
-      createElement("main", { "data-slot": "workspace-page" }, "Workspace Page")) as never);
+      createElement("main", { "data-slot": "workspace-layout" }, "Workspace Layout")) as never);
 
     const { ProjectRoute } = await import("./project-route");
 
@@ -147,14 +152,36 @@ describe("ProjectRoute", () => {
     );
 
     expect(markup).toContain('data-slot="project-page-tabs"');
-    expect(markup).toContain('data-slot="workspace-page-header"');
-    expect(markup).toContain('data-slot="workspace-page"');
+    expect(markup).toContain('data-slot="workspace-header"');
+    expect(markup).toContain('data-slot="workspace"');
+    expect(markup).toContain('data-slot="workspace-layout"');
     expect(markup).toContain(">Fork<");
     expect(markup.indexOf('data-slot="project-page-tabs"')).toBeLessThan(
-      markup.indexOf('data-slot="workspace-page-header"'),
+      markup.indexOf('data-slot="workspace"'),
     );
-    expect(markup.indexOf('data-slot="workspace-page-header"')).toBeLessThan(
-      markup.indexOf('data-slot="workspace-page"'),
+    expect(markup.indexOf('data-slot="workspace"')).toBeLessThan(
+      markup.indexOf('data-slot="workspace-header"'),
     );
+    expect(markup.indexOf('data-slot="workspace-header"')).toBeLessThan(
+      markup.indexOf('data-slot="workspace-layout"'),
+    );
+  });
+
+  test("does not render the legacy workspace right-rail host in the project route", async () => {
+    const workspaceTabContentModule =
+      await import("../../workspaces/components/workspace-tab-content");
+    spyOn(workspaceTabContentModule, "WorkspaceTabContent").mockImplementation((() =>
+      createElement("main", { "data-slot": "workspace-layout" }, "Workspace Layout")) as never);
+
+    const { ProjectRoute } = await import("./project-route");
+
+    const markup = renderProjectRoute(
+      ProjectRoute,
+      {},
+      "/projects/project_1?workspace=workspace_1",
+    );
+
+    expect(markup).not.toContain("workspace-right-rail");
+    expect(markup).not.toContain("Resize workspace panel");
   });
 });

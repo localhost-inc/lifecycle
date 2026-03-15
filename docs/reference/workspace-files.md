@@ -6,13 +6,14 @@ The files feature owns workspace-backed file tabs inside the shared workspace su
 
 1. File tabs are document tabs, not runtime tabs.
 2. File tab identity is keyed by normalized repo-relative path as `file:<path>`.
-3. `features/workspaces` owns tab orchestration, persistence, active-tab routing, and dirty-close interception.
+3. `features/workspaces` owns tab orchestration, persistence, and active-tab routing while composing file-session close requests from the file feature.
 4. `features/files` owns file-specific UI and behavior:
    - renderer selection
    - editor configuration
    - preview/edit mode behavior
    - scoped file tree
    - draft/conflict handling inside the active file surface
+   - dirty-close and discard-confirmation state
 5. File reads, writes, and file-tree listing must go through the workspace/provider boundary rather than direct React-side filesystem access.
 
 ## Surface Model
@@ -62,8 +63,8 @@ The files feature owns workspace-backed file tabs inside the shared workspace su
 ## File Tree
 
 1. The file surface may own a scoped file-tree rail for navigating other workspace files.
-2. That file tree is local to the file feature and does not replace the workspace sidebar.
-3. The workspace sidebar continues to own broader workspace concerns such as Git, environment, and workspace lifecycle.
+2. That file tree is local to the file feature and does not replace the workspace extension strip.
+3. Workspace extensions continue to own broader workspace concerns such as Git, environment, and workspace lifecycle.
 
 ## Unsupported Files
 

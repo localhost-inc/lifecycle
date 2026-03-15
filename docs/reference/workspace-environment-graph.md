@@ -37,7 +37,7 @@ If something needs a running dependency, it does not belong in `workspace.setup`
 Current local-provider note:
 
 - `workspace.teardown` is part of the manifest contract
-- local stop/destroy execution has not been wired yet
+- local stop/destroy flows exist, but manifest-owned `workspace.teardown` execution has not been wired into them yet
 
 ### `environment`
 
@@ -114,8 +114,8 @@ There is no `setup.services` bootstrap phase anymore. Service-dependent setup wo
 
 The current graph model maps cleanly onto the Environment rail and future graph surfaces.
 
-1. `workspace.setup` can render as a separate ordered lane.
-2. `environment` can render as the main DAG.
+1. The overview can render one ordered boot sequence: `workspace.setup` first, then the topologically sorted `environment` nodes, with alphabetical tie-breaks whenever multiple nodes are ready.
+2. The topology view can render the main DAG directly from `environment`.
 3. `task` and `service` nodes can carry different status semantics without inventing new manifest concepts.
 
 ## Kin Shape

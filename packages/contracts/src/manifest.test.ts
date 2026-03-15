@@ -284,6 +284,79 @@ describe("parseManifest", () => {
     expect(result.valid).toBe(true);
   });
 
+  test("accepts runtime templates in http health check urls", () => {
+    const result = parseManifest(`{
+      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "environment": {
+        "web": {
+          "kind": "service",
+          "runtime": "process",
+          "command": "run",
+          "health_check": {
+            "kind": "http",
+            "url": "http://\${LIFECYCLE_SERVICE_WEB_ADDRESS}/@vite/client",
+            "timeout_seconds": 30
+          }
+        }
+      }
+    }`);
+    expect(result.valid).toBe(true);
+  });
+
+  test("accepts runtime templates in tcp health check ports", () => {
+    const result = parseManifest(`{
+      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "environment": {
+        "redis": {
+          "kind": "service",
+          "runtime": "image",
+          "image": "redis:7-alpine",
+          "health_check": {
+            "kind": "tcp",
+            "host": "\${LIFECYCLE_SERVICE_REDIS_HOST}",
+            "port": "\${LIFECYCLE_SERVICE_REDIS_PORT}",
+            "timeout_seconds": 30
+          }
+        }
+      }
+    }`);
+    expect(result.valid).toBe(true);
+  });
+
+  test("accepts container health checks", () => {
+    const result = parseManifest(`{
+      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "environment": {
+        "postgres": {
+          "kind": "service",
+          "runtime": "image",
+          "image": "postgres:16",
+          "port": 5432,
+          "health_check": {
+            "kind": "container",
+            "timeout_seconds": 30
+          }
+        }
+      }
+    }`);
+    expect(result.valid).toBe(true);
+  });
+
+  test("rejects container health checks on process services", () => {
+    const result = parseManifest(`{
+      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "environment": {
+        "api": {
+          "kind": "service",
+          "runtime": "process",
+          "command": "run",
+          "health_check": { "kind": "container", "timeout_seconds": 30 }
+        }
+      }
+    }`);
+    expect(result.valid).toBe(false);
+  });
+
   test("accepts image services with build and volumes", () => {
     const result = parseManifest(`{
       "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },

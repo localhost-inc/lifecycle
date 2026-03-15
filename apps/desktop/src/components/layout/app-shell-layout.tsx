@@ -35,10 +35,10 @@ import { formatWorkspaceError } from "../../features/workspaces/lib/workspace-er
 import { readProjectRouteFocus } from "../../features/projects/lib/project-route-state";
 import {
   clearLastWorkspaceId,
-  clearWorkspaceSurfaceState,
+  clearWorkspaceCanvasState,
   readLastWorkspaceId,
   writeLastWorkspaceId,
-} from "../../features/workspaces/state/workspace-surface-state";
+} from "../../features/workspaces/state/workspace-canvas-state";
 import { WorkspaceOpenRequestsProvider } from "../../features/workspaces/state/workspace-open-requests";
 import {
   DEFAULT_LEFT_SIDEBAR_WIDTH,
@@ -80,7 +80,7 @@ function workspaceFocusSearch(workspaceId: string): string {
 
 function safeClearWorkspaceUiState(workspaceId: string): void {
   try {
-    clearWorkspaceSurfaceState(workspaceId);
+    clearWorkspaceCanvasState(workspaceId);
   } catch {
     // best-effort cleanup
   }
@@ -548,7 +548,7 @@ export function AppShellLayout() {
   return (
     <WorkspaceOpenRequestsProvider>
       <CommandPaletteProvider onForkWorkspace={commandPaletteForkHandler}>
-        <div className="flex h-full w-full flex-col gap-0.5 bg-[var(--panel)] p-0.5 text-[var(--foreground)]">
+        <div className="flex h-full w-full flex-col gap-1.5 bg-[var(--panel)] px-2 pb-2 pt-1.5 text-[var(--foreground)]">
           <AppHotkeyListener />
           <ProjectSwitcherStrip
             activeProjectId={activeProject?.id ?? null}

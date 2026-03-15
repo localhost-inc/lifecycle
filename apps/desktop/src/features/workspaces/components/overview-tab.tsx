@@ -1,78 +1,414 @@
 import type { LifecycleConfig, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
-import { SetupProgress } from "@lifecycle/ui";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
-import { EnvironmentSection } from "./environment-section";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@lifecycle/ui";
+import { AlertTriangle, CheckCircle2, LoaderCircle } from "lucide-react";
+import { useState } from "react";
 import { ServiceRow } from "./services-tab";
 import type { EnvironmentTaskState, SetupStepState } from "../hooks";
 
-export type SetupPresentationPhase = "completed" | "failed" | "running";
+type BootSequenceItemStatus = SetupStepState["status"];
 
-export interface SetupPresentation {
+export type BootPresentationPhase = "completed" | "failed" | "running";
+
+export interface BootPresentation {
   completedSteps: number;
   currentStepIndex: number;
   currentStepName: string;
-  phase: SetupPresentationPhase;
+  phase: BootPresentationPhase;
   totalSteps: number;
 }
 
-export function deriveSetupPresentation(
+interface BootSequenceBaseItem {
+  id: string;
+  name: string;
+  status: BootSequenceItemStatus;
+}
+
+interface BootSequenceSetupItem extends BootSequenceBaseItem {
+  kind: "setup";
+  output: string[];
+}
+
+interface BootSequenceTaskItem extends BootSequenceBaseItem {
+  kind: "task";
+  output: string[];
+}
+
+interface BootSequenceServiceItem extends BootSequenceBaseItem {
+  kind: "service";
+  port: number | null;
+  runtime: "image" | "process" | null;
+  service: ServiceRecord | null;
+}
+
+export type BootSequenceItem =
+  | BootSequenceSetupItem
+  | BootSequenceTaskItem
+  | BootSequenceServiceItem;
+
+const DOT_STYLES: Record<BootSequenceItemStatus, string> = {
+  pending: "bg-[var(--muted-foreground)]/40",
+  running: "bg-blue-500 lifecycle-motion-soft-pulse",
+  completed: "bg-emerald-500",
+  failed: "bg-red-500",
+  timeout: "bg-red-500",
+};
+
+const NAME_STYLES: Record<BootSequenceItemStatus, string> = {
+  pending: "text-[var(--muted-foreground)]",
+  running: "text-[var(--foreground)]",
+  completed: "text-[var(--foreground)]",
+  failed: "text-[var(--foreground)]",
+  timeout: "text-[var(--foreground)]",
+};
+
+const STATUS_BANNER = {
+  completed: {
+    icon: CheckCircle2,
+    iconClassName: "text-emerald-500",
+    label: "Boot complete",
+  },
+  failed: {
+    icon: AlertTriangle,
+    iconClassName: "text-red-500",
+    label: "Boot failed",
+  },
+  running: {
+    icon: LoaderCircle,
+    iconClassName: "text-blue-500 animate-spin",
+    label: "Booting environment",
+  },
+} as const;
+
+function insertSorted(values: string[], nextValue: string): void {
+  let index = 0;
+  while (index < values.length && values[index]!.localeCompare(nextValue) < 0) {
+    index += 1;
+  }
+  values.splice(index, 0, nextValue);
+}
+
+function mergeDeclaredAndObserved(
+  declaredNames: string[],
+  observedItems: Array<{ name: string }>,
+): string[] {
+  const mergedNames = [...declaredNames];
+  const knownNames = new Set(declaredNames);
+
+  for (const item of observedItems) {
+    if (knownNames.has(item.name)) {
+      continue;
+    }
+    knownNames.add(item.name);
+    mergedNames.push(item.name);
+  }
+
+  return mergedNames;
+}
+
+function mapServiceStatus(service: ServiceRecord | null): BootSequenceItemStatus {
+  if (!service) {
+    return "pending";
+  }
+
+  switch (service.status) {
+    case "ready":
+      return "completed";
+    case "starting":
+      return "running";
+    case "failed":
+      return "failed";
+    case "stopped":
+      return "pending";
+  }
+}
+
+function orderEnvironmentNodes(environment: LifecycleConfig["environment"]): string[] {
+  const entries = Object.entries(environment);
+  const nodeNames = new Set(entries.map(([name]) => name));
+  const inDegree = new Map<string, number>();
+  const dependents = new Map<string, string[]>();
+
+  for (const [name] of entries) {
+    inDegree.set(name, 0);
+    dependents.set(name, []);
+  }
+
+  for (const [name, node] of entries) {
+    for (const dependency of node.depends_on ?? []) {
+      if (!nodeNames.has(dependency)) {
+        continue;
+      }
+      dependents.get(dependency)?.push(name);
+      inDegree.set(name, (inDegree.get(name) ?? 0) + 1);
+    }
+  }
+
+  const ready = Array.from(inDegree.entries())
+    .filter(([, degree]) => degree === 0)
+    .map(([name]) => name)
+    .sort((a, b) => a.localeCompare(b));
+  const ordered: string[] = [];
+
+  while (ready.length > 0) {
+    const nextName = ready.shift()!;
+    ordered.push(nextName);
+
+    for (const dependent of dependents.get(nextName) ?? []) {
+      const remaining = (inDegree.get(dependent) ?? 0) - 1;
+      inDegree.set(dependent, remaining);
+      if (remaining === 0) {
+        insertSorted(ready, dependent);
+      }
+    }
+  }
+
+  if (ordered.length === entries.length) {
+    return ordered;
+  }
+
+  const unresolved = entries
+    .map(([name]) => name)
+    .filter((name) => !ordered.includes(name))
+    .sort((a, b) => a.localeCompare(b));
+  return [...ordered, ...unresolved];
+}
+
+export function deriveBootSequenceItems(
+  config: LifecycleConfig | null,
+  declaredStepNames: string[],
   setupSteps: SetupStepState[],
+  environmentTasks: EnvironmentTaskState[],
+  services: ServiceRecord[],
+  serviceRuntimeByName: Partial<Record<string, "image" | "process">>,
+): BootSequenceItem[] {
+  const items: BootSequenceItem[] = [];
+  const setupStepByName = new Map(setupSteps.map((step) => [step.name, step]));
+  const taskByName = new Map(environmentTasks.map((task) => [task.name, task]));
+  const serviceByName = new Map(services.map((service) => [service.service_name, service]));
+
+  const setupNames = mergeDeclaredAndObserved(
+    config?.workspace.setup.map((step) => step.name) ?? declaredStepNames,
+    setupSteps,
+  );
+
+  for (const name of setupNames) {
+    const step = setupStepByName.get(name);
+    items.push({
+      id: `setup:${name}`,
+      kind: "setup",
+      name,
+      output: step?.output ?? [],
+      status: step?.status ?? "pending",
+    });
+  }
+
+  if (config) {
+    const orderedNodeNames = orderEnvironmentNodes(config.environment);
+    const knownNodeNames = new Set(orderedNodeNames);
+
+    for (const nodeName of orderedNodeNames) {
+      const node = config.environment[nodeName]!;
+      if (node.kind === "task") {
+        const task = taskByName.get(nodeName);
+        items.push({
+          id: `task:${nodeName}`,
+          kind: "task",
+          name: nodeName,
+          output: task?.output ?? [],
+          status: task?.status ?? "pending",
+        });
+        continue;
+      }
+
+      const service = serviceByName.get(nodeName) ?? null;
+      items.push({
+        id: `service:${nodeName}`,
+        kind: "service",
+        name: nodeName,
+        port: service?.effective_port ?? node.port ?? null,
+        runtime: serviceRuntimeByName[nodeName] ?? node.runtime,
+        service,
+        status: mapServiceStatus(service),
+      });
+    }
+
+    for (const task of environmentTasks) {
+      if (knownNodeNames.has(task.name)) {
+        continue;
+      }
+      items.push({
+        id: `task:${task.name}`,
+        kind: "task",
+        name: task.name,
+        output: task.output,
+        status: task.status,
+      });
+    }
+
+    const runtimeOrder: Record<string, number> = { image: 0, process: 1 };
+    const extraServices = services
+      .filter((service) => !knownNodeNames.has(service.service_name))
+      .sort((a, b) => {
+        const aOrder = runtimeOrder[serviceRuntimeByName[a.service_name] ?? ""] ?? 2;
+        const bOrder = runtimeOrder[serviceRuntimeByName[b.service_name] ?? ""] ?? 2;
+        return aOrder - bOrder || a.service_name.localeCompare(b.service_name);
+      });
+
+    for (const service of extraServices) {
+      items.push({
+        id: `service:${service.service_name}`,
+        kind: "service",
+        name: service.service_name,
+        port: service.effective_port,
+        runtime: serviceRuntimeByName[service.service_name] ?? null,
+        service,
+        status: mapServiceStatus(service),
+      });
+    }
+
+    return items;
+  }
+
+  for (const task of environmentTasks) {
+    items.push({
+      id: `task:${task.name}`,
+      kind: "task",
+      name: task.name,
+      output: task.output,
+      status: task.status,
+    });
+  }
+
+  const runtimeOrder: Record<string, number> = { image: 0, process: 1 };
+  const sortedServices = [...services].sort((a, b) => {
+    const aOrder = runtimeOrder[serviceRuntimeByName[a.service_name] ?? ""] ?? 2;
+    const bOrder = runtimeOrder[serviceRuntimeByName[b.service_name] ?? ""] ?? 2;
+    return aOrder - bOrder || a.service_name.localeCompare(b.service_name);
+  });
+
+  for (const service of sortedServices) {
+    items.push({
+      id: `service:${service.service_name}`,
+      kind: "service",
+      name: service.service_name,
+      port: service.effective_port,
+      runtime: serviceRuntimeByName[service.service_name] ?? null,
+      service,
+      status: mapServiceStatus(service),
+    });
+  }
+
+  return items;
+}
+
+export function deriveBootPresentation(
+  items: BootSequenceItem[],
   workspace: Pick<WorkspaceRecord, "failure_reason" | "status">,
-): SetupPresentation | null {
-  if (setupSteps.length === 0) {
+): BootPresentation | null {
+  if (items.length === 0) {
     return null;
   }
 
-  const failedIndex = setupSteps.findIndex(
-    (step) => step.status === "failed" || step.status === "timeout",
+  const failedIndex = items.findIndex(
+    (item) => item.status === "failed" || item.status === "timeout",
   );
-  const runningIndex = setupSteps.findIndex((step) => step.status === "running");
-  const pendingIndex = setupSteps.findIndex((step) => step.status === "pending");
-  const completedSteps = setupSteps.filter((step) => step.status === "completed").length;
-  const totalSteps = setupSteps.length;
+  const runningIndex = items.findIndex((item) => item.status === "running");
+  const pendingIndex = items.findIndex((item) => item.status === "pending");
+  const completedSteps = items.filter((item) => item.status === "completed").length;
+  const totalSteps = items.length;
   const allCompleted = completedSteps === totalSteps;
 
-  if (
-    workspace.status === "idle" &&
-    (workspace.failure_reason === "setup_step_failed" || failedIndex >= 0)
-  ) {
-    const failedStep = setupSteps[failedIndex >= 0 ? failedIndex : 0]!;
-
+  if (workspace.status === "idle" && workspace.failure_reason) {
+    const failedItemIndex = failedIndex >= 0 ? failedIndex : pendingIndex >= 0 ? pendingIndex : 0;
+    const failedItem = items[failedItemIndex]!;
     return {
       completedSteps,
-      currentStepIndex: failedIndex >= 0 ? failedIndex : 0,
-      currentStepName: failedStep.name,
+      currentStepIndex: failedItemIndex,
+      currentStepName: failedItem.name,
       phase: "failed",
       totalSteps,
     };
   }
 
-  if (workspace.status === "starting" || runningIndex >= 0 || pendingIndex >= 0) {
-    const activeIndex = runningIndex >= 0 ? runningIndex : pendingIndex >= 0 ? pendingIndex : 0;
-    const activeStep = setupSteps[activeIndex]!;
-
+  if (workspace.status === "starting" || runningIndex >= 0) {
+    const activeIndex =
+      runningIndex >= 0
+        ? runningIndex
+        : pendingIndex >= 0
+          ? pendingIndex
+          : Math.max(completedSteps, 0);
+    const activeItem = items[Math.min(activeIndex, totalSteps - 1)]!;
     return {
       completedSteps,
-      currentStepIndex: activeIndex,
-      currentStepName: activeStep.name,
+      currentStepIndex: Math.min(activeIndex, totalSteps - 1),
+      currentStepName: activeItem.name,
       phase: "running",
       totalSteps,
     };
   }
 
-  if (allCompleted) {
-    const lastStep = setupSteps[totalSteps - 1]!;
-
+  if (workspace.status === "active" || allCompleted) {
+    const currentStepIndex = totalSteps - 1;
+    const currentItem = items[currentStepIndex]!;
     return {
       completedSteps,
-      currentStepIndex: totalSteps - 1,
-      currentStepName: lastStep.name,
+      currentStepIndex,
+      currentStepName: currentItem.name,
       phase: "completed",
       totalSteps,
     };
   }
 
   return null;
+}
+
+function BootStepRow({ item }: { item: BootSequenceSetupItem | BootSequenceTaskItem }) {
+  const [open, setOpen] = useState(item.status === "running");
+  const hasOutput = item.output.length > 0;
+
+  return (
+    <Collapsible onOpenChange={setOpen} open={hasOutput ? open : false}>
+      <CollapsibleTrigger asChild>
+        <button
+          className={`flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-[var(--surface-hover)] ${hasOutput ? "cursor-pointer" : "cursor-default"}`}
+          disabled={!hasOutput}
+          type="button"
+        >
+          <span className={`inline-block size-[6px] shrink-0 rounded-full ${DOT_STYLES[item.status]}`} />
+          <span className={`min-w-0 truncate text-[13px] ${NAME_STYLES[item.status]}`}>
+            {item.name}
+          </span>
+        </button>
+      </CollapsibleTrigger>
+      {hasOutput ? (
+        <CollapsibleContent>
+          <div className="mb-0.5 ml-[22px] rounded-md bg-[var(--muted)] px-2.5 py-2">
+            <pre className="max-h-48 overflow-auto whitespace-pre-wrap font-mono text-xs text-[var(--muted-foreground)]">
+              {item.output.join("\n")}
+            </pre>
+          </div>
+        </CollapsibleContent>
+      ) : null}
+    </Collapsible>
+  );
+}
+
+function BootServiceRow({ item }: { item: BootSequenceServiceItem }) {
+  const portLabel = item.port !== null ? `:${item.port}` : null;
+
+  return (
+    <div className="flex w-full items-center gap-2.5 px-2 py-1.5">
+      <span className={`inline-block size-[6px] shrink-0 rounded-full ${DOT_STYLES[item.status]}`} />
+      <span className={`min-w-0 truncate text-[13px] ${NAME_STYLES[item.status]}`}>
+        {item.name}
+      </span>
+      {portLabel ? (
+        <span className="ml-auto shrink-0 font-mono text-[11px] text-[var(--muted-foreground)]">
+          {portLabel}
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
 interface OverviewTabProps {
@@ -90,19 +426,6 @@ interface OverviewTabProps {
   workspace: Pick<WorkspaceRecord, "failure_reason" | "status">;
 }
 
-const STATUS_BANNER = {
-  completed: {
-    icon: CheckCircle2,
-    iconClassName: "text-emerald-500",
-    label: "Setup complete",
-  },
-  failed: {
-    icon: AlertTriangle,
-    iconClassName: "text-red-500",
-    label: "Setup failed",
-  },
-} as const;
-
 export function OverviewTab({
   config,
   declaredStepNames,
@@ -113,63 +436,60 @@ export function OverviewTab({
   setupSteps,
   workspace,
 }: OverviewTabProps) {
-  const presentation = deriveSetupPresentation(setupSteps, workspace);
-
-  const runtimeOrder: Record<string, number> = { image: 0, process: 1 };
-  const sortedServices = [...services].sort((a, b) => {
-    const aOrder = runtimeOrder[serviceRuntimeByName[a.service_name] ?? ""] ?? 2;
-    const bOrder = runtimeOrder[serviceRuntimeByName[b.service_name] ?? ""] ?? 2;
-    return aOrder - bOrder || a.service_name.localeCompare(b.service_name);
-  });
-
-  const declaredTaskNames = Object.entries(config?.environment ?? {})
-    .filter(([, node]) => node.kind === "task")
-    .map(([name]) => name);
-
-  const setupStepsToShow =
-    setupSteps.length > 0
-      ? setupSteps
-      : declaredStepNames.map((name) => ({ name, output: [], status: "pending" as const }));
-
-  const tasksToShow =
-    environmentTasks.length > 0
-      ? environmentTasks
-      : declaredTaskNames.map((name) => ({ name, output: [], status: "pending" as const }));
-
-  const banner =
-    presentation?.phase === "completed" || presentation?.phase === "failed"
-      ? STATUS_BANNER[presentation.phase]
-      : null;
+  const items = deriveBootSequenceItems(
+    config,
+    declaredStepNames,
+    setupSteps,
+    environmentTasks,
+    services,
+    serviceRuntimeByName,
+  );
+  const presentation = deriveBootPresentation(items, workspace);
+  const banner = presentation ? STATUS_BANNER[presentation.phase] : null;
+  const progressLabel = presentation
+    ? `${presentation.completedSteps} / ${presentation.totalSteps}`
+    : null;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <EnvironmentSection title="Setup">
-        {banner && (
-          <div className="flex items-center gap-2 px-1 text-xs text-[var(--muted-foreground)]">
-            <banner.icon className={`size-3.5 ${banner.iconClassName}`} strokeWidth={2.2} />
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {banner ? (
+        <div className="flex items-center justify-between gap-3 text-xs text-[var(--muted-foreground)]">
+          <div className="flex min-w-0 items-center gap-2">
+            <banner.icon
+              className={`size-3.5 shrink-0 ${banner.iconClassName}`}
+              strokeWidth={2.2}
+            />
             <span>{banner.label}</span>
           </div>
-        )}
-        <SetupProgress
-          expandOutputByDefault={presentation?.phase === "running"}
-          steps={setupStepsToShow}
-        />
-      </EnvironmentSection>
-      <EnvironmentSection title="Tasks">
-        <SetupProgress expandOutputByDefault steps={tasksToShow} />
-      </EnvironmentSection>
-      <EnvironmentSection title="Services">
-        <div className="flex flex-col gap-1">
-          {sortedServices.map((service) => (
-            <ServiceRow
-              key={`${service.id}:${service.updated_at}`}
-              onUpdateService={onUpdateService}
-              runtime={serviceRuntimeByName[service.service_name] ?? null}
-              service={service}
-            />
-          ))}
+          <span className="shrink-0 font-mono text-[11px] text-[var(--muted-foreground)]">
+            {progressLabel}
+          </span>
         </div>
-      </EnvironmentSection>
+      ) : null}
+      {items.length > 0 ? (
+        <div className="flex flex-col">
+          {items.map((item) =>
+            item.kind === "service" ? (
+              item.service ? (
+                <ServiceRow
+                  key={item.id}
+                  onUpdateService={onUpdateService}
+                  runtime={item.runtime}
+                  service={item.service}
+                />
+              ) : (
+                <BootServiceRow key={item.id} item={item} />
+              )
+            ) : (
+              <BootStepRow key={item.id} item={item} />
+            ),
+          )}
+        </div>
+      ) : (
+        <p className="text-[11px] text-[var(--muted-foreground)]">
+          No environment nodes defined.
+        </p>
+      )}
     </div>
   );
 }

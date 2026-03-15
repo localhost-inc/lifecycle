@@ -34,7 +34,7 @@ function makeFile(name: string, additions: number = 0, deletions: number = 0): F
 }
 
 describe("git diff chrome theming", () => {
-  test("renders the file tree on the project canvas background", () => {
+  test("renders the file tree on the project layout background", () => {
     const markup = renderToStaticMarkup(
       createElement(DiffFileTree, {
         activeFilePath: null,
@@ -51,7 +51,7 @@ describe("git diff chrome theming", () => {
     expect(markup).not.toContain("bg-[var(--panel)]");
   });
 
-  test("renders sticky diff headers on the project canvas background", () => {
+  test("renders sticky diff headers on the project layout background", () => {
     const markup = renderToStaticMarkup(
       createElement(GitFileHeader, {
         collapsed: false,
@@ -62,7 +62,9 @@ describe("git diff chrome theming", () => {
       }),
     );
 
-    expect(markup).toContain("sticky top-0 z-10 bg-[var(--background)] border-b border-[var(--border)]");
+    expect(markup).toContain(
+      "sticky top-0 z-10 bg-[var(--background)] border-b border-[var(--border)]",
+    );
     expect(markup).not.toContain("bg-[var(--panel)]");
   });
 });
