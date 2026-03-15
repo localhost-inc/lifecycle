@@ -2,7 +2,7 @@ import { type LifecycleConfig, type ServiceRecord } from "@lifecycle/contracts";
 import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { deriveBootPresentation, deriveBootSequenceItems, OverviewTab } from "./overview-tab";
+import { deriveBootPresentation, deriveBootSequenceItems, BootSequence } from "./boot-sequence";
 import type { EnvironmentTaskState, SetupStepState } from "../hooks";
 
 const graphConfig: LifecycleConfig = {
@@ -98,10 +98,10 @@ const defaultProps = {
   services: [],
 };
 
-describe("OverviewTab", () => {
+describe("BootSequence", () => {
   test("renders environment nodes without separate setup, task, and service sections", () => {
     const markup = renderToStaticMarkup(
-      createElement(OverviewTab, {
+      createElement(BootSequence, {
         ...defaultProps,
         setupSteps: [],
         workspace: { failure_reason: null, status: "idle" },
@@ -114,7 +114,7 @@ describe("OverviewTab", () => {
 
   test("renders the boot sequence in graph execution order while starting", () => {
     const markup = renderToStaticMarkup(
-      createElement(OverviewTab, {
+      createElement(BootSequence, {
         ...defaultProps,
         environmentTasks,
         services: [
@@ -157,7 +157,7 @@ describe("OverviewTab", () => {
 
   test("shows the loader on the active step while the boot sequence is running", () => {
     const markup = renderToStaticMarkup(
-      createElement(OverviewTab, {
+      createElement(BootSequence, {
         ...defaultProps,
         config: null,
         declaredStepNames: ["install", "write-local-env"],
@@ -174,7 +174,7 @@ describe("OverviewTab", () => {
 
   test("falls back to declared setup steps before any activity is captured", () => {
     const markup = renderToStaticMarkup(
-      createElement(OverviewTab, {
+      createElement(BootSequence, {
         ...defaultProps,
         config: null,
         declaredStepNames: ["install", "write-local-env"],
@@ -189,7 +189,7 @@ describe("OverviewTab", () => {
 
   test("shows a failed boot banner when startup stops on a failed step", () => {
     const markup = renderToStaticMarkup(
-      createElement(OverviewTab, {
+      createElement(BootSequence, {
         ...defaultProps,
         config: null,
         setupSteps: [{ name: "install", output: ["error"], status: "failed" }],
@@ -197,7 +197,7 @@ describe("OverviewTab", () => {
       }),
     );
 
-    expect(markup).toContain("Boot failed");
+    expect(markup).not.toContain("Boot failed");
     expect(markup).toContain("install");
   });
 });

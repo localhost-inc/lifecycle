@@ -64,6 +64,7 @@ export type WorkspaceCanvasAction =
       ratio?: number;
       splitId: string;
     }
+  | { kind: "collapse-pane"; paneId: string }
   | { kind: "close-pane"; paneId: string }
   | { kind: "set-split-ratio"; ratio: number; splitId: string };
 
@@ -323,6 +324,28 @@ function closeWorkspacePaneIfEmpty(
 
   const paneTabState = getWorkspacePaneTabState(state.paneTabStateById, pane.id);
   if (paneTabState.tabOrderKeys.length > 0) {
+    return state;
+  }
+
+  const closeResult = closeWorkspacePaneLayout(state.rootPane, pane.id);
+  if (!closeResult.didClose || !closeResult.survivingPaneId) {
+    return state;
+  }
+
+  return {
+    ...state,
+    activePaneId: state.activePaneId === pane.id ? closeResult.survivingPaneId : state.activePaneId,
+    paneTabStateById: omitWorkspacePaneTabState(state.paneTabStateById, pane.id),
+    rootPane: closeResult.nextRoot,
+  };
+}
+
+function collapseWorkspacePane(
+  state: WorkspaceCanvasState,
+  paneId: string,
+): WorkspaceCanvasState {
+  const pane = getWorkspacePane(state.rootPane, paneId);
+  if (!pane) {
     return state;
   }
 
@@ -796,37 +819,11 @@ export function workspaceCanvasReducer(
         rootPane: splitResult.nextRoot,
       };
     }
+    case "collapse-pane": {
+      return collapseWorkspacePane(state, action.paneId);
+    }
     case "close-pane": {
-      const pane = getWorkspacePane(state.rootPane, action.paneId);
-      if (!pane) {
-        return state;
-      }
-      const paneTabState = getWorkspacePaneTabState(state.paneTabStateById, action.paneId);
-      const closeResult = closeWorkspacePaneLayout(state.rootPane, action.paneId);
-      if (!closeResult.didClose || !closeResult.survivingPaneId) {
-        return state;
-      }
-
-      const nextPaneTabStateById = updateWorkspacePaneTabState(
-        omitWorkspacePaneTabState(state.paneTabStateById, action.paneId),
-        closeResult.survivingPaneId,
-        (sibling) => ({
-          ...sibling,
-          activeTabKey:
-            state.activePaneId === action.paneId && paneTabState.activeTabKey
-              ? paneTabState.activeTabKey
-              : sibling.activeTabKey,
-          tabOrderKeys: appendWorkspaceTabKeys(sibling.tabOrderKeys, paneTabState.tabOrderKeys),
-        }),
-      );
-
-      return {
-        ...state,
-        activePaneId:
-          state.activePaneId === action.paneId ? closeResult.survivingPaneId : state.activePaneId,
-        paneTabStateById: nextPaneTabStateById,
-        rootPane: closeResult.nextRoot,
-      };
+      return closeWorkspacePaneIfEmpty(state, action.paneId);
     }
     case "set-split-ratio":
       return {

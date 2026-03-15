@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { ThemeProvider } from "@lifecycle/ui";
 import {
   ClaudeIcon,
   CodexIcon,
@@ -13,19 +14,19 @@ import {
 const actions: SurfaceLaunchAction[] = [
   {
     key: "shell",
-    title: "New shell",
+    title: "Shell",
     icon: createElement(ShellIcon),
     request: { kind: "terminal", launchType: "shell" },
   },
   {
     key: "claude",
-    title: "New Claude session",
+    title: "Claude",
     icon: createElement(ClaudeIcon),
     request: { kind: "terminal", launchType: "harness", harnessProvider: "claude" },
   },
   {
     key: "codex",
-    title: "New Codex session",
+    title: "Codex",
     icon: createElement(CodexIcon),
     request: { kind: "terminal", launchType: "harness", harnessProvider: "codex" },
   },
@@ -40,9 +41,13 @@ describe("SurfaceLaunchActions", () => {
 
   test("renders a single trigger button with 'New tab' title", () => {
     const markup = renderToStaticMarkup(
-      createElement(SurfaceLaunchActions, {
-        actions,
-        onLaunch: () => {},
+      createElement(ThemeProvider, {
+        children: createElement(SurfaceLaunchActions, {
+          actions,
+          onLaunch: () => {},
+        }),
+        defaultPreference: { theme: "light" },
+        storageKey: "lifecycle.desktop.theme.test",
       }),
     );
 
@@ -55,9 +60,13 @@ describe("SurfaceLaunchActions", () => {
     const loadingActions = actions.map((a) => (a.key === "shell" ? { ...a, loading: true } : a));
 
     const markup = renderToStaticMarkup(
-      createElement(SurfaceLaunchActions, {
-        actions: loadingActions,
-        onLaunch: () => {},
+      createElement(ThemeProvider, {
+        children: createElement(SurfaceLaunchActions, {
+          actions: loadingActions,
+          onLaunch: () => {},
+        }),
+        defaultPreference: { theme: "light" },
+        storageKey: "lifecycle.desktop.theme.test",
       }),
     );
 

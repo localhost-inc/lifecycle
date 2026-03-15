@@ -1,5 +1,7 @@
 import type { LifecycleConfig, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import {
+  Alert,
+  AlertDescription,
   Button,
   Popover,
   PopoverContent,
@@ -7,15 +9,10 @@ import {
   SplitButton,
   SplitButtonPrimary,
   SplitButtonSecondary,
-  Tabs,
-  TabsList,
-  TabsTrigger,
 } from "@lifecycle/ui";
-import { useEffect, useState } from "react";
-import { ChevronDown, LoaderCircle, Play, RotateCcw, Square } from "lucide-react";
-import { GraphTab } from "./graph-tab";
-import { LogsTab } from "./logs-tab";
-import { OverviewTab } from "./overview-tab";
+import { useState } from "react";
+import { AlertTriangle, ChevronDown, LoaderCircle, Play, RotateCcw, Square } from "lucide-react";
+import { BootSequence } from "./boot-sequence";
 import type { EnvironmentTaskState, SetupStepState } from "../hooks";
 import { formatWorkspaceError } from "../lib/workspace-errors";
 
@@ -35,27 +32,12 @@ const FAILURE_REASON_LABELS: Record<string, string> = {
   setup_step_failed: "A setup step failed.",
 };
 
-const ENVIRONMENT_PANEL_TABS = [
-  { label: "Overview", value: "overview" },
-  { label: "Topology", value: "topology" },
-  { label: "Logs", value: "logs" },
-] as const;
-
-export type EnvironmentPanelTabValue = (typeof ENVIRONMENT_PANEL_TABS)[number]["value"];
-
-export function isEnvironmentPanelTabValue(
-  value: string | null | undefined,
-): value is EnvironmentPanelTabValue {
-  return ENVIRONMENT_PANEL_TABS.some((tab) => tab.value === value);
-}
-
 interface EnvironmentPanelProps {
-  activeTab?: EnvironmentPanelTabValue;
   config: LifecycleConfig | null;
   hasManifest: boolean;
   isManifestStale: boolean;
   manifestState: "invalid" | "missing" | "valid";
-  onActiveTabChange?: (tab: EnvironmentPanelTabValue) => void;
+  onOpenServiceLogs?: (serviceName: string) => void;
   onRestart: () => Promise<void>;
   onRun: (serviceNames?: string[]) => Promise<void>;
   onStop: () => Promise<void>;
@@ -71,12 +53,11 @@ interface EnvironmentPanelProps {
 }
 
 export function EnvironmentPanel({
-  activeTab: controlledActiveTab,
   config,
   hasManifest,
   isManifestStale,
   manifestState,
-  onActiveTabChange,
+  onOpenServiceLogs,
   onRestart,
   onRun,
   onStop,
@@ -86,20 +67,10 @@ export function EnvironmentPanel({
   services,
   workspace,
 }: EnvironmentPanelProps) {
-  const [uncontrolledActiveTab, setUncontrolledActiveTab] =
-    useState<EnvironmentPanelTabValue>("overview");
   const [activeAction, setActiveAction] = useState<"restart" | "start" | "stop" | null>(null);
   const [activeServiceStartName, setActiveServiceStartName] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [restartMenuOpen, setRestartMenuOpen] = useState(false);
-  const [selectedServiceLogsName, setSelectedServiceLogsName] = useState<string | null>(null);
-  const activeTab = controlledActiveTab ?? uncontrolledActiveTab;
-  const handleActiveTabChange = (tab: EnvironmentPanelTabValue) => {
-    onActiveTabChange?.(tab);
-    if (controlledActiveTab === undefined) {
-      setUncontrolledActiveTab(tab);
-    }
-  };
   const declaredSetupStepNames = (config?.workspace.setup ?? []).map((step) => step.name);
   const serviceRuntimeByName = Object.fromEntries(
     Object.entries(config?.environment ?? {})
@@ -113,21 +84,6 @@ export function EnvironmentPanel({
       )
       .map(([name, node]) => [name, node.runtime]),
   );
-  useEffect(() => {
-    if (
-      selectedServiceLogsName !== null &&
-      !(
-        services.some((service) => service.service_name === selectedServiceLogsName) ||
-        serviceRuntimeByName[selectedServiceLogsName] !== undefined
-      )
-    ) {
-      setSelectedServiceLogsName(null);
-    }
-  }, [selectedServiceLogsName, serviceRuntimeByName, services]);
-  useEffect(() => {
-    setSelectedServiceLogsName(null);
-    setActiveServiceStartName(null);
-  }, [workspace.id]);
   const canRun = workspace.status === "idle" && hasManifest;
   const canStartService =
     hasManifest && (workspace.status === "idle" || workspace.status === "active");
@@ -136,8 +92,7 @@ export function EnvironmentPanel({
   const stopping = workspace.status === "stopping";
 
   function handleOpenServiceLogs(serviceName: string): void {
-    setSelectedServiceLogsName(serviceName);
-    handleActiveTabChange("logs");
+    onOpenServiceLogs?.(serviceName);
   }
 
   async function handleRunService(serviceName: string): Promise<void> {
@@ -301,69 +256,54 @@ export function EnvironmentPanel({
             </div>
           </div>
           {workspace.status === "idle" && workspace.failure_reason && (
-            <p className="text-xs text-[var(--destructive)]">
-              {FAILURE_REASON_LABELS[workspace.failure_reason] ?? workspace.failure_reason}
-            </p>
+            <Alert variant="destructive">
+              <AlertTriangle className="size-4" />
+              <AlertDescription>
+                {FAILURE_REASON_LABELS[workspace.failure_reason] ?? workspace.failure_reason}
+              </AlertDescription>
+            </Alert>
           )}
           {workspace.status === "active" && isManifestStale && (
-            <p className="text-xs text-[var(--muted-foreground)]">
-              Manifest changed. Stop and start again to apply environment updates.
-            </p>
+            <Alert>
+              <AlertDescription>
+                Manifest changed. Stop and start again to apply environment updates.
+              </AlertDescription>
+            </Alert>
           )}
           {workspace.status === "active" && manifestState === "invalid" && (
-            <p className="text-xs text-[var(--destructive)]">
-              lifecycle.json is invalid. Current services keep running until you stop them.
-            </p>
+            <Alert variant="destructive">
+              <AlertTriangle className="size-4" />
+              <AlertDescription>
+                lifecycle.json is invalid. Current services keep running until you stop them.
+              </AlertDescription>
+            </Alert>
           )}
-          {actionError && <p className="text-xs text-[var(--destructive)]">{actionError}</p>}
-          <Tabs
-            onValueChange={(value) => handleActiveTabChange(value as EnvironmentPanelTabValue)}
-            value={activeTab}
-          >
-            <TabsList className="-mx-2.5 w-[calc(100%+1.25rem)]" variant="underline">
-              {ENVIRONMENT_PANEL_TABS.map((tab) => (
-                <TabsTrigger key={tab.value} value={tab.value} variant="underline">
-                  {tab.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+          {actionError && (
+            <Alert variant="destructive">
+              <AlertTriangle className="size-4" />
+              <AlertDescription>{actionError}</AlertDescription>
+            </Alert>
+          )}
         </div>
       </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className="flex min-h-0 flex-1 flex-col px-2.5 pb-4 pt-1">
-          {activeTab === "overview" && (
-            <OverviewTab
-              config={config}
-              declaredStepNames={declaredSetupStepNames}
-              environmentTasks={environmentTasks}
-              onOpenServiceLogs={handleOpenServiceLogs}
-              onStartService={(serviceName) => void handleRunService(serviceName)}
-              onUpdateService={onUpdateService}
-              runDisabled={
-                !canStartService || activeAction !== null || activeServiceStartName !== null
-              }
-              runningServiceName={activeServiceStartName}
-              serviceRuntimeByName={serviceRuntimeByName}
-              services={services}
-              setupSteps={setupSteps}
-              workspace={workspace}
-            />
-          )}
-          {activeTab === "topology" && <GraphTab config={config} services={services} />}
-          {activeTab === "logs" && (
-            <LogsTab
-              config={config}
-              declaredStepNames={declaredSetupStepNames}
-              environmentTasks={environmentTasks}
-              onClearSelectedService={() => setSelectedServiceLogsName(null)}
-              selectedServiceName={selectedServiceLogsName}
-              serviceRuntimeByName={serviceRuntimeByName}
-              services={services}
-              setupSteps={setupSteps}
-              workspace={workspace}
-            />
-          )}
+          <BootSequence
+            config={config}
+            declaredStepNames={declaredSetupStepNames}
+            environmentTasks={environmentTasks}
+            onOpenServiceLogs={handleOpenServiceLogs}
+            onStartService={(serviceName) => void handleRunService(serviceName)}
+            onUpdateService={onUpdateService}
+            runDisabled={
+              !canStartService || activeAction !== null || activeServiceStartName !== null
+            }
+            runningServiceName={activeServiceStartName}
+            serviceRuntimeByName={serviceRuntimeByName}
+            services={services}
+            setupSteps={setupSteps}
+            workspace={workspace}
+          />
         </div>
       </div>
     </section>

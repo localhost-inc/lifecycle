@@ -5,6 +5,7 @@ import { Button, Spinner } from "@lifecycle/ui";
 import { ChevronDown, CircleUserRound, Plus } from "lucide-react";
 import { type MouseEvent, useCallback, useState } from "react";
 import { Link } from "react-router-dom";
+import { ResponseReadyDot } from "../../../components/response-ready-dot";
 import {
   detectPlatformHint,
   shouldInsetForWindowControls,
@@ -19,6 +20,7 @@ interface ProjectSwitcherStripProps {
   onAddProject: () => void;
   onOpenSettings: () => void;
   projects: ProjectRecord[];
+  readyProjectIds?: ReadonlySet<string>;
 }
 
 function projectMonogram(name: string): string {
@@ -118,29 +120,27 @@ export function ProjectSwitcherStrip({
   onAddProject,
   onOpenSettings,
   projects,
+  readyProjectIds,
 }: ProjectSwitcherStripProps) {
   const shouldInset = shouldInsetForWindowControls(detectPlatformHint(), isTauri());
 
-  const handleMouseDown = useCallback(
-    (event: MouseEvent<HTMLElement>) => {
-      if (event.button !== 0 || !isTauri()) {
-        return;
-      }
+  const handleMouseDown = useCallback((event: MouseEvent<HTMLElement>) => {
+    if (event.button !== 0 || !isTauri()) {
+      return;
+    }
 
-      if ((event.target as Element).closest("a, button, input, textarea, select, [role='button']")) {
-        return;
-      }
+    if ((event.target as Element).closest("a, button, input, textarea, select, [role='button']")) {
+      return;
+    }
 
-      event.preventDefault();
+    event.preventDefault();
 
-      if (event.detail >= 2) {
-        void getCurrentWindow().toggleMaximize();
-      } else {
-        void getCurrentWindow().startDragging();
-      }
-    },
-    [],
-  );
+    if (event.detail >= 2) {
+      void getCurrentWindow().toggleMaximize();
+    } else {
+      void getCurrentWindow().startDragging();
+    }
+  }, []);
 
   return (
     <header
@@ -171,12 +171,14 @@ export function ProjectSwitcherStrip({
         <div className="flex min-w-max items-center gap-0.5 pr-0.5">
           {projects.map((project) => {
             const selected = project.id === activeProjectId;
+            const responseReady = readyProjectIds?.has(project.id) ?? false;
             return (
               <Link
                 key={project.id}
                 aria-label={`Open project ${project.name}`}
                 className={[
-                  "inline-flex h-6.5 shrink-0 items-center gap-1.5 rounded-[8px] px-2 text-[12px] font-medium leading-none transition-colors",
+                  "relative inline-flex h-6.5 shrink-0 items-center gap-1.5 rounded-[8px] px-2 text-[12px] font-medium leading-none transition-colors",
+                  responseReady ? "pr-5" : "",
                   selected
                     ? "bg-[color-mix(in_srgb,var(--surface),var(--foreground)_6%)] text-[var(--foreground)]"
                     : "bg-transparent text-[var(--muted-foreground)] hover:bg-[color-mix(in_srgb,var(--surface),var(--foreground)_3%)] hover:text-[var(--foreground)]",
@@ -184,6 +186,9 @@ export function ProjectSwitcherStrip({
                 to={`/projects/${project.id}`}
                 title={project.name}
               >
+                {responseReady ? (
+                  <ResponseReadyDot className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 scale-[0.85]" />
+                ) : null}
                 <span
                   className={[
                     "inline-flex size-3.5 shrink-0 items-center justify-center rounded-full text-[9px] font-semibold uppercase",
@@ -198,7 +203,13 @@ export function ProjectSwitcherStrip({
               </Link>
             );
           })}
-          <Button aria-label="Add project" className="shrink-0" onClick={onAddProject} size="icon" variant="ghost">
+          <Button
+            aria-label="Add project"
+            className="shrink-0"
+            onClick={onAddProject}
+            size="icon"
+            variant="ghost"
+          >
             <Plus size={14} strokeWidth={2} />
           </Button>
         </div>

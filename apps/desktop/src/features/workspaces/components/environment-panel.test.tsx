@@ -78,7 +78,7 @@ const environmentTasks: EnvironmentTaskState[] = [
 ];
 
 describe("EnvironmentPanel", () => {
-  test("renders environment controls and tabs for an active workspace", () => {
+  test("renders environment controls for an active workspace", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
         config: null,
@@ -100,9 +100,6 @@ describe("EnvironmentPanel", () => {
     expect(markup).toContain(">Stop<");
     expect(markup).not.toContain(">Start<");
     expect(markup).toContain('aria-label="Show environment actions"');
-    expect(markup).toContain("Overview");
-    expect(markup).toContain("Topology");
-    expect(markup).toContain("Logs");
     expect(markup).toContain("Boot sequence");
   });
 
@@ -160,54 +157,7 @@ describe("EnvironmentPanel", () => {
 
     expect(markup).toContain(">Start<");
     expect(markup).toContain('disabled=""');
-    expect(markup).toContain("Overview");
-    expect(markup).toContain("Logs");
     expect(markup).toContain("Boot sequence");
-  });
-
-  test("renders boot output in the logs tab", () => {
-    const markup = renderToStaticMarkup(
-      createElement(EnvironmentPanel, {
-        activeTab: "logs",
-        config: {
-          workspace: {
-            setup: [{ command: "bun install", name: "install", timeout_seconds: 60 }],
-            teardown: [],
-          },
-          environment: {
-            migrate: {
-              kind: "task",
-              command: "bun run db:migrate",
-              timeout_seconds: 60,
-            },
-            api: {
-              kind: "service",
-              runtime: "process",
-              command: "bun run dev",
-              depends_on: ["migrate"],
-              port: 8787,
-            },
-          },
-        },
-        hasManifest: true,
-        isManifestStale: false,
-        manifestState: "valid",
-        onActiveTabChange: () => {},
-        onRestart: async () => {},
-        onRun: async () => {},
-        onStop: async () => {},
-        onUpdateService: async () => {},
-        environmentTasks,
-        setupSteps,
-        services,
-        workspace: baseWorkspace,
-      }),
-    );
-
-    expect(markup).toContain("Boot logs");
-    expect(markup).toContain("bun install");
-    expect(markup).toContain("bun run db:migrate");
-    expect(markup).not.toContain("Logs coming next");
   });
 
   test("shows restart guidance when a running workspace manifest is stale", () => {
@@ -291,46 +241,8 @@ describe("EnvironmentPanel", () => {
 
     expect(markup).toContain("web");
     expect(markup).toContain(":3000");
-    expect(markup).toContain("color-mix(in srgb, var(--status-neutral) 30%, transparent)");
+    expect(markup).toContain("background-color:var(--status-neutral)");
     expect(markup).not.toContain("lucide-external-link");
-  });
-
-  test("renders captured boot output in the logs tab", () => {
-    const markup = renderToStaticMarkup(
-      createElement(EnvironmentPanel, {
-        activeTab: "logs",
-        config: {
-          workspace: {
-            setup: [{ command: "bun install", name: "install", timeout_seconds: 60 }],
-            teardown: [],
-          },
-          environment: {
-            api: {
-              kind: "service",
-              runtime: "process",
-              command: "bun run dev",
-              port: 8787,
-            },
-          },
-        },
-        hasManifest: true,
-        isManifestStale: false,
-        manifestState: "valid",
-        onRestart: async () => {},
-        onRun: async () => {},
-        onStop: async () => {},
-        onUpdateService: async () => {},
-        environmentTasks: [],
-        setupSteps,
-        services,
-        workspace: baseWorkspace,
-      }),
-    );
-
-    expect(markup).toContain("Boot logs");
-    expect(markup).toContain("Workspace boot");
-    expect(markup).toContain("bun install");
-    expect(markup).not.toContain("Logs coming next");
   });
 
   test("shows starting status in the header action and overview sections", () => {
@@ -495,7 +407,7 @@ describe("EnvironmentPanel", () => {
 
     expect(markup).toContain("An environment task failed.");
     expect(markup).toContain("Boot sequence");
-    expect(markup).toContain("Boot failed");
+    expect(markup).not.toContain("Boot failed");
     expect(markup).toContain("migrate");
   });
 });

@@ -53,6 +53,7 @@ describe("ProjectSwitcherStrip", () => {
             onAddProject: () => {},
             onOpenSettings: () => {},
             projects,
+            readyProjectIds: new Set<string>(),
           }),
         }),
       }),
@@ -76,5 +77,27 @@ describe("ProjectSwitcherStrip", () => {
     expect(markup.indexOf('href="/projects/project_1"')).toBeLessThan(
       markup.indexOf('href="/projects/project_2"'),
     );
+  });
+
+  test("renders a response-ready indicator for projects with ready workspaces", () => {
+    const markup = renderToStaticMarkup(
+      createElement(ThemeProvider, {
+        storageKey: "test.theme",
+        children: createElement(MemoryRouter, {
+          children: createElement(ProjectSwitcherStrip, {
+            activeProjectId: "project_1",
+            activeContextName: "Personal",
+            authSession: loggedInAuthSession,
+            onAddProject: () => {},
+            onOpenSettings: () => {},
+            projects,
+            readyProjectIds: new Set(["project_1"]),
+          }),
+        }),
+      }),
+    );
+
+    expect(markup.match(/aria-label="Response ready"/g)?.length ?? 0).toBe(1);
+    expect(markup).toContain("right-1.5 top-1/2");
   });
 });

@@ -3,7 +3,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/cn";
 
 const splitButtonPrimaryVariants = cva(
-  "inline-flex h-8 items-center gap-2 rounded-l-xl bg-[var(--muted)] text-xs font-semibold outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center gap-2 bg-[var(--muted)] font-semibold outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
@@ -12,19 +12,41 @@ const splitButtonPrimaryVariants = cva(
         active: "text-[var(--foreground)]",
       },
       withIcon: {
-        true: "pl-2 pr-2.5",
-        false: "px-3",
+        true: "",
+        false: "",
+      },
+      size: {
+        default: "h-8 rounded-l-xl text-xs",
+        lg: "h-10 rounded-l-2xl text-sm",
       },
     },
+    compoundVariants: [
+      { size: "default", withIcon: true, className: "pl-2 pr-2.5" },
+      { size: "default", withIcon: false, className: "px-3" },
+      { size: "lg", withIcon: true, className: "pl-3 pr-3.5" },
+      { size: "lg", withIcon: false, className: "px-4" },
+    ],
     defaultVariants: {
       variant: "foreground",
       withIcon: false,
+      size: "default",
     },
   },
 );
 
 const splitButtonSecondaryVariants = cva(
-  "inline-flex h-8 w-8 items-center justify-center rounded-r-xl bg-[var(--muted)] text-[var(--muted-foreground)] outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out hover:bg-[color-mix(in_srgb,var(--muted),var(--foreground)_8%)] hover:text-[var(--foreground)] focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center bg-[var(--muted)] text-[var(--muted-foreground)] outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out hover:bg-[color-mix(in_srgb,var(--muted),var(--foreground)_8%)] hover:text-[var(--foreground)] focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50",
+  {
+    variants: {
+      size: {
+        default: "h-8 w-8 rounded-r-xl",
+        lg: "h-10 w-10 rounded-r-2xl",
+      },
+    },
+    defaultVariants: {
+      size: "default",
+    },
+  },
 );
 
 const SplitButton = React.forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef<"div">>(
@@ -44,7 +66,7 @@ interface SplitButtonPrimaryProps
 
 const SplitButtonPrimary = React.forwardRef<HTMLButtonElement, SplitButtonPrimaryProps>(
   function SplitButtonPrimary(
-    { children, className, leadingIcon, type = "button", variant, ...props },
+    { children, className, leadingIcon, size, type = "button", variant, ...props },
     ref,
   ) {
     return (
@@ -52,6 +74,7 @@ const SplitButtonPrimary = React.forwardRef<HTMLButtonElement, SplitButtonPrimar
         className={cn(
           splitButtonPrimaryVariants({
             variant,
+            size,
             withIcon: leadingIcon !== undefined && leadingIcon !== null,
           }),
           className,
@@ -67,21 +90,25 @@ const SplitButtonPrimary = React.forwardRef<HTMLButtonElement, SplitButtonPrimar
   },
 );
 
-const SplitButtonSecondary = React.forwardRef<
-  HTMLButtonElement,
-  React.ComponentPropsWithoutRef<"button">
->(function SplitButtonSecondary({ children, className, type = "button", ...props }, ref) {
-  return (
-    <button
-      className={cn(splitButtonSecondaryVariants(), className)}
-      ref={ref}
-      type={type}
-      {...props}
-    >
-      {children}
-    </button>
-  );
-});
+interface SplitButtonSecondaryProps
+  extends
+    React.ComponentPropsWithoutRef<"button">,
+    VariantProps<typeof splitButtonSecondaryVariants> {}
+
+const SplitButtonSecondary = React.forwardRef<HTMLButtonElement, SplitButtonSecondaryProps>(
+  function SplitButtonSecondary({ children, className, size, type = "button", ...props }, ref) {
+    return (
+      <button
+        className={cn(splitButtonSecondaryVariants({ size }), className)}
+        ref={ref}
+        type={type}
+        {...props}
+      >
+        {children}
+      </button>
+    );
+  },
+);
 
 export {
   SplitButton,

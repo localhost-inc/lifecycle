@@ -51,7 +51,7 @@ export function TabChip({
   indicator,
 }: TabChipProps) {
   const baseClasses =
-    "relative flex h-full shrink-0 items-center gap-2 border-l border-[var(--border)] px-3 text-sm transition-colors first:border-l-0";
+    "relative flex h-full shrink-0 cursor-pointer items-center gap-1.5 border-r border-[var(--border)] px-3 text-[13px] transition-colors";
   const activeSurfaceClass =
     activeSurface === "card"
       ? "bg-[var(--card)]"
@@ -61,7 +61,7 @@ export function TabChip({
   const activeClasses = active
     ? `${activeSurfaceClass} text-[var(--foreground)]`
     : "bg-transparent text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]";
-  const fontClass = active ? "font-semibold" : "font-medium";
+  const fontClass = active ? "font-medium" : "font-normal";
 
   const dataProps: Record<string, string> = {};
   if (dataAttributes) {
@@ -90,14 +90,14 @@ export function TabChip({
       {active ? (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-[var(--accent)]"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-[var(--accent)]"
         />
       ) : null}
       {indicator}
       {leading ? (
         <span
           aria-hidden="true"
-          className={`shrink-0 ${active ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)]"}`}
+          className={`inline-flex shrink-0 items-center ${active ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)]"}`}
         >
           {leading}
         </span>

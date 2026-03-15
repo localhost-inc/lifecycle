@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { WorkspaceKind, WorkspaceRecord } from "@lifecycle/contracts";
-import { cn, SidebarMenuAction, sidebarMenuSubButtonVariants } from "@lifecycle/ui";
+import { cn, SidebarMenuAction, sidebarMenuSubButtonVariants, Spinner } from "@lifecycle/ui";
 import { Archive, FolderGit2, GitBranch, type LucideIcon } from "lucide-react";
+import { ResponseReadyDot } from "../../../components/response-ready-dot";
 import { TypedTitle } from "../../../components/typed-title";
 import { formatCompactRelativeTime } from "../../../lib/format";
 import { renameWorkspace } from "../api";
 import { canInlineRenameWorkspace, getWorkspaceDisplayName } from "../lib/workspace-display";
 import { formatWorkspaceError } from "../lib/workspace-errors";
-import { getWorkspaceSessionStatusState, WorkspaceSessionStatus } from "./workspace-session-status";
+import { getWorkspaceSessionStatusState } from "./workspace-session-status";
 
 const workspaceKindIcons: Record<WorkspaceKind, LucideIcon> = {
   root: FolderGit2,
@@ -17,6 +18,53 @@ const workspaceKindIcons: Record<WorkspaceKind, LucideIcon> = {
 function WorkspaceKindIcon({ kind, className }: { kind: WorkspaceKind; className?: string }) {
   const Icon = workspaceKindIcons[kind];
   return <Icon className={className} size={10} strokeWidth={2} />;
+}
+
+function WorkspaceTreeLeadingVisual({
+  kind,
+  selected,
+  state,
+}: {
+  kind: WorkspaceKind;
+  selected: boolean;
+  state: ReturnType<typeof getWorkspaceSessionStatusState>;
+}) {
+  if (state === "ready") {
+    return <ResponseReadyDot className="mr-0.5 shrink-0" />;
+  }
+
+  if (state === "loading") {
+    return (
+      <span
+        aria-label="Generating response"
+        className="mr-0.5 flex shrink-0 items-center justify-center"
+        role="img"
+        title="Generating response"
+      >
+        <Spinner
+          aria-hidden="true"
+          aria-label={undefined}
+          className={cn(
+            "size-3.5",
+            selected
+              ? "text-[var(--sidebar-foreground)]"
+              : "text-[var(--sidebar-muted-foreground)]",
+          )}
+          role={undefined}
+        />
+      </span>
+    );
+  }
+
+  return (
+    <WorkspaceKindIcon
+      className={cn(
+        "mr-0.5 shrink-0",
+        selected ? "text-[var(--sidebar-foreground)]" : "text-[var(--sidebar-muted-foreground)]",
+      )}
+      kind={kind}
+    />
+  );
 }
 
 interface WorkspaceTreeItemProps {
@@ -179,7 +227,7 @@ export function WorkspaceTreeItem({
           }}
           value={draftName}
         />
-        {sessionStatusState === "hidden" && timestamp ? (
+        {timestamp ? (
           <span
             className={cn(
               "shrink-0 min-w-9 text-right text-[13px] text-[var(--sidebar-foreground)] opacity-70",
@@ -188,9 +236,7 @@ export function WorkspaceTreeItem({
           >
             {timestamp}
           </span>
-        ) : (
-          <WorkspaceSessionStatus className={trailingMetaClassName} state={sessionStatusState} />
-        )}
+        ) : null}
       </div>
     );
   }
@@ -207,17 +253,13 @@ export function WorkspaceTreeItem({
         title={titleText}
         type="button"
       >
-        <WorkspaceKindIcon
-          className={cn(
-            "mr-0.5 shrink-0",
-            selected
-              ? "text-[var(--sidebar-foreground)]"
-              : "text-[var(--sidebar-muted-foreground)]",
-          )}
+        <WorkspaceTreeLeadingVisual
           kind={workspace.kind}
+          selected={selected}
+          state={sessionStatusState}
         />
         <TypedTitle className="flex-1 truncate text-sm" text={displayName} />
-        {sessionStatusState === "hidden" && timestamp ? (
+        {timestamp ? (
           <span
             className={cn(
               "shrink-0 min-w-9 text-right text-[13px] text-[var(--sidebar-foreground)] opacity-70 transition-opacity group-hover/workspace-item:opacity-0",
@@ -225,9 +267,7 @@ export function WorkspaceTreeItem({
           >
             {timestamp}
           </span>
-        ) : (
-          <WorkspaceSessionStatus className={trailingMetaClassName} state={sessionStatusState} />
-        )}
+        ) : null}
       </button>
       <SidebarMenuAction
         aria-label={`Archive workspace ${displayName}`}

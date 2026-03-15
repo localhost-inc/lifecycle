@@ -24,6 +24,8 @@ describe("ProjectSidebar", () => {
         children: createElement(MemoryRouter, {
           children: createElement(ProjectSidebar, {
             activeViewId: "overview",
+            hasWorkspaceResponseReady: () => false,
+            hasWorkspaceRunningTurn: () => false,
             onCreateWorkspace: () => {},
             onDestroyWorkspace: () => {},
             onOpenProjectView: () => {},
@@ -47,5 +49,53 @@ describe("ProjectSidebar", () => {
     expect(markup).toContain('data-slot="project-sidebar-header"');
     expect(markup).toContain("flex h-10 items-center border-b border-[var(--border)] px-3");
     expect(markup.match(/Create workspace for Lifecycle/g)?.length ?? 0).toBe(1);
+  });
+
+  test("renders workspace readiness indicators in the sidebar list", () => {
+    const markup = renderToStaticMarkup(
+      createElement(ThemeProvider, {
+        storageKey: "test.theme",
+        children: createElement(MemoryRouter, {
+          children: createElement(ProjectSidebar, {
+            activeViewId: "overview",
+            hasWorkspaceResponseReady: (workspaceId) => workspaceId === "workspace_1",
+            hasWorkspaceRunningTurn: () => false,
+            onCreateWorkspace: () => {},
+            onDestroyWorkspace: () => {},
+            onOpenProjectView: () => {},
+            onOpenWorkspace: () => {},
+            onRemoveProject: () => {},
+            project,
+            selectedWorkspaceId: "workspace_1",
+            workspaces: [
+              {
+                created_at: "2026-03-14T10:00:00.000Z",
+                created_by: null,
+                expires_at: null,
+                failed_at: null,
+                failure_reason: null,
+                git_sha: null,
+                id: "workspace_1",
+                kind: "managed",
+                last_active_at: "2026-03-14T10:00:00.000Z",
+                manifest_fingerprint: "manifest_1",
+                mode: "local",
+                name: "Setup",
+                project_id: "project_1",
+                source_ref: "lifecycle/setup",
+                source_workspace_id: null,
+                status: "active",
+                updated_at: "2026-03-14T10:00:00.000Z",
+                worktree_path: "/tmp/lifecycle-setup",
+              },
+            ],
+          }),
+        }),
+      }),
+    );
+
+    expect(markup).toContain('aria-label="Response ready"');
+    expect(markup).not.toContain('data-slot="workspace-session-status"');
+    expect(markup).toContain("min-w-9 text-right");
   });
 });

@@ -28,8 +28,12 @@ import { resolveContainedOverlayWidth, useOverlayBoundary } from "../../../lib/o
 interface GitActionButtonProps {
   actionError: string | null;
   branchPullRequest: GitBranchPullRequestResult | null;
+  className?: string;
   defaultOpen?: boolean;
   gitStatus: GitStatusResult | null;
+  /** Render the menu inline above the button with CSS positioning instead of a popover/overlay. */
+  inlineMenu?: boolean;
+  size?: "default" | "lg";
   isCommitting: boolean;
   isCreatingPullRequest: boolean;
   isLoading: boolean;
@@ -334,8 +338,11 @@ export function GitActionMenuContent({
 export function GitActionButton({
   actionError,
   branchPullRequest,
+  className,
   defaultOpen = false,
   gitStatus,
+  inlineMenu = false,
+  size,
   isCommitting,
   isCreatingPullRequest,
   isLoading,
@@ -401,6 +408,7 @@ export function GitActionButton({
   );
   const hostedOverlay = useHostedOverlay({
     anchorRef: triggerRef,
+    enabled: !inlineMenu,
     onAction: (action: HostedOverlayAction) => {
       if (action.kind !== "git-actions") {
         return;
@@ -488,35 +496,77 @@ export function GitActionButton({
     await onCommit(nextMessage, pushAfterCommit);
   }
 
+  const useDirectChevron = usesHostedOverlay || inlineMenu;
+
   const splitButton = (
-    <SplitButton ref={triggerRef}>
+    <SplitButton className={className} ref={triggerRef}>
       <SplitButtonPrimary
         disabled={isBusy}
         onClick={() => void handlePrimaryClick()}
+        size={size}
         title={actionState.title}
         variant="foreground"
       >
         {actionState.primaryAction.label}
       </SplitButtonPrimary>
-      {usesHostedOverlay ? (
+      {useDirectChevron ? (
         <SplitButtonSecondary
           aria-label="Show git actions"
           disabled={isBusy}
           onClick={() => {
             setOpen((current) => !current);
           }}
+          size={size}
         >
           <ChevronDown className="size-3.5" strokeWidth={2.4} />
         </SplitButtonSecondary>
       ) : (
         <PopoverTrigger asChild>
-          <SplitButtonSecondary aria-label="Show git actions" disabled={isBusy}>
+          <SplitButtonSecondary aria-label="Show git actions" disabled={isBusy} size={size}>
             <ChevronDown className="size-3.5" strokeWidth={2.4} />
           </SplitButtonSecondary>
         </PopoverTrigger>
       )}
     </SplitButton>
   );
+
+  const menuContent = (
+    <GitActionMenuContent
+      actionError={actionError}
+      autoFocusCommitMessage={inlineMenu}
+      branchPullRequest={branchPullRequest}
+      commitMessage={commitMessage}
+      gitStatus={gitStatus}
+      isCommitting={isCommitting}
+      isCreatingPullRequest={isCreatingPullRequest}
+      isLoading={isLoading}
+      isMergingPullRequest={isMergingPullRequest}
+      isPushingBranch={isPushingBranch}
+      onCommit={handleCommit}
+      onCommitMessageChange={setCommitMessage}
+      onCreatePullRequest={onCreatePullRequest}
+      onMergePullRequest={onMergePullRequest}
+      onOpenPullRequest={onOpenPullRequest}
+      onPushBranch={onPushBranch}
+      onShowChanges={onShowChanges}
+    />
+  );
+
+  if (inlineMenu) {
+    return (
+      <div className="relative">
+        {open && (
+          <div
+            className="absolute inset-x-0 bottom-full mb-2 rounded-[22px] border border-[var(--border)] bg-[var(--card)] p-3 shadow-[0_20px_64px_rgba(0,0,0,0.18)]"
+            style={{ width: `${contentWidth}px`, left: "50%", transform: "translateX(-50%)" }}
+          >
+            {menuContent}
+          </div>
+        )}
+        {splitButton}
+      </div>
+    );
+  }
 
   if (usesHostedOverlay) {
     return splitButton;
@@ -533,24 +583,7 @@ export function GitActionButton({
         sideOffset={8}
         style={{ maxWidth: "calc(100vw - 2rem)", width: `${contentWidth}px` }}
       >
-        <GitActionMenuContent
-          actionError={actionError}
-          branchPullRequest={branchPullRequest}
-          commitMessage={commitMessage}
-          gitStatus={gitStatus}
-          isCommitting={isCommitting}
-          isCreatingPullRequest={isCreatingPullRequest}
-          isLoading={isLoading}
-          isMergingPullRequest={isMergingPullRequest}
-          isPushingBranch={isPushingBranch}
-          onCommit={handleCommit}
-          onCommitMessageChange={setCommitMessage}
-          onCreatePullRequest={onCreatePullRequest}
-          onMergePullRequest={onMergePullRequest}
-          onOpenPullRequest={onOpenPullRequest}
-          onPushBranch={onPushBranch}
-          onShowChanges={onShowChanges}
-        />
+        {menuContent}
       </PopoverContent>
     </Popover>
   );

@@ -49,7 +49,22 @@ export interface HostedGitActionsOverlay extends HostedOverlayBase {
   kind: "git-actions";
 }
 
-export type HostedOverlayPayload = HostedGitActionsOverlay | HostedWorkspaceOpenInOverlay;
+export interface HostedSurfaceLaunchActionItem {
+  disabled?: boolean;
+  key: string;
+  loading?: boolean;
+  title: string;
+}
+
+export interface HostedSurfaceLaunchOverlay extends HostedOverlayBase {
+  actions: HostedSurfaceLaunchActionItem[];
+  kind: "surface-launch";
+}
+
+export type HostedOverlayPayload =
+  | HostedGitActionsOverlay
+  | HostedSurfaceLaunchOverlay
+  | HostedWorkspaceOpenInOverlay;
 
 export interface HostedOverlayStatusRequest {
   ownerWindowLabel: string;
@@ -76,6 +91,11 @@ interface HostedOverlayActionBase {
 }
 
 export type HostedOverlayAction =
+  | (HostedOverlayActionBase & {
+      action: "launch";
+      key: string;
+      kind: "surface-launch";
+    })
   | (HostedOverlayActionBase & {
       action: "open-in";
       appId: OpenInAppId;

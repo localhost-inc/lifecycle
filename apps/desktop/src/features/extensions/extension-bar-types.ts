@@ -4,17 +4,12 @@ import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import type { WorkspaceDocumentKind } from "../workspaces/components/workspace-canvas-requests";
 
-export type WorkspaceExtensionId = "environment" | "git";
+export type WorkspaceExtensionId = "environment" | "git-changes" | "git-history" | "logs";
 
-export type ExtensionBadge =
-  | {
-      kind: "count";
-      value: number;
-    }
-  | {
-      kind: "dot";
-      tone: StatusDotTone;
-    };
+export interface ExtensionBadge {
+  kind: "dot";
+  tone: StatusDotTone;
+}
 
 export interface WorkspaceExtensionLaunchActions {
   openChangesDiff: (focusPath: string | null) => void;

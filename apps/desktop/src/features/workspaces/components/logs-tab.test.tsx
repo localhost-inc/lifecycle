@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { LogsTab, deriveBootLogEntries } from "./logs-tab";
-import { deriveBootSequenceItems } from "./overview-tab";
+import { deriveBootSequenceItems } from "./boot-sequence";
 import type { EnvironmentTaskState, SetupStepState } from "../hooks";
 
 const config: LifecycleConfig = {

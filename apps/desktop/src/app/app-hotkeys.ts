@@ -29,6 +29,12 @@ const APP_HOTKEY_SHORTCUT_ID_BY_ACTION: Record<AppHotkeyAction, RegisteredShortc
   "open-settings": "app.open-settings",
 };
 
+const TAURI_MAC_MENU_APP_HOTKEYS = new Set<AppHotkeyAction>([
+  "open-command-palette",
+  "open-file-picker",
+  "open-settings",
+]);
+
 export function isMacPlatform(): boolean {
   if (typeof navigator === "undefined") {
     return false;
@@ -102,7 +108,11 @@ export function shouldHandleDomAppHotkey(
     macPlatform: boolean;
   },
 ): boolean {
-  return !(action === "open-settings" && options.isTauriApp && options.macPlatform);
+  return !(
+    options.isTauriApp &&
+    options.macPlatform &&
+    TAURI_MAC_MENU_APP_HOTKEYS.has(action)
+  );
 }
 
 export async function subscribeToAppHotkeyEvents(

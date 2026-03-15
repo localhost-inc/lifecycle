@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { isCommitDiffDocument, isPullRequestDocument } from "../state/workspace-canvas-state";
+import { WorkspaceSurfaceTabLeading } from "./surface-icons";
 import {
   getWorkspaceTabDragShiftDirection,
   type WorkspaceCanvasTab,
@@ -127,7 +128,7 @@ export function hasStartedWorkspaceTabDrag(
 
 export function renderWorkspacePaneDefaultTabLeading(tab: WorkspaceCanvasTab) {
   if (tab.kind === "terminal") {
-    return null;
+    return <WorkspaceSurfaceTabLeading tab={tab} />;
   }
 
   return (
@@ -518,8 +519,6 @@ export function WorkspacePaneTabBar({
           const leading = renderTabLeading
             ? renderTabLeading(tab)
             : renderWorkspacePaneDefaultTabLeading(tab);
-          const showFloatingReadyDot =
-            isTerminal && tab.responseReady && !active && !renderTabLeading;
           const previewShiftDirection =
             dragPreview?.targetKey && dragPreview.placement
               ? getWorkspaceTabDragShiftDirection(
@@ -577,7 +576,6 @@ export function WorkspacePaneTabBar({
               renameInputRef={renameInputRef}
               renameSaving={renameState?.saving ?? false}
               renameValue={renameState?.value ?? tab.label}
-              showFloatingReadyDot={showFloatingReadyDot}
               style={style}
               tab={tab}
               tabIndex={isRenaming ? -1 : active ? 0 : -1}

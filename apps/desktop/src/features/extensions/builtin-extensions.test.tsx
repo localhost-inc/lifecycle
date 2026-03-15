@@ -45,7 +45,7 @@ const readyService: ServiceRecord = {
 };
 
 describe("builtin extension badges", () => {
-  test("shows a git changed-file count only when changes exist", () => {
+  test("shows a git dot only when changes exist", () => {
     const gitStatus: GitStatusResult = {
       ahead: 0,
       behind: 0,
@@ -66,7 +66,7 @@ describe("builtin extension badges", () => {
 
     expect(getGitExtensionBadge(undefined)).toBeNull();
     expect(getGitExtensionBadge({ ...gitStatus, files: [] })).toBeNull();
-    expect(getGitExtensionBadge(gitStatus)).toEqual({ kind: "count", value: 1 });
+    expect(getGitExtensionBadge(gitStatus)).toEqual({ kind: "dot", tone: "warning" });
   });
 
   test("derives environment badge tone from workspace and service state", () => {
@@ -101,10 +101,8 @@ describe("builtin extension badges", () => {
 });
 
 describe("builtin extension slots", () => {
-  test("declares git-owned canvas document kinds separately from panel rendering", () => {
+  test("declares git-owned canvas document kinds split across changes and history", () => {
     const slots = getBuiltinExtensionSlots({
-      activeEnvironmentTab: "overview",
-      activeGitTab: "changes",
       config: null,
       environmentTasks: [],
       gitStatus: undefined,
@@ -117,21 +115,25 @@ describe("builtin extension slots", () => {
         openPullRequest: () => {},
       },
       manifestState: "missing",
-      onActiveEnvironmentTabChange: () => {},
-      onActiveGitTabChange: () => {},
+      onClearServiceLogsName: () => {},
+      onOpenServiceLogs: () => {},
       onRestart: async () => {},
       onRun: async () => {},
       onStop: async () => {},
+      onSwitchToExtension: () => {},
       onUpdateService: async () => {},
+      selectedServiceLogsName: null,
       services: [],
       setupSteps: [],
       workspace: baseWorkspace,
     });
 
-    const gitSlot = slots.find((slot) => slot.id === "git");
+    const changesSlot = slots.find((slot) => slot.id === "git-changes");
+    const historySlot = slots.find((slot) => slot.id === "git-history");
     const environmentSlot = slots.find((slot) => slot.id === "environment");
 
-    expect(gitSlot?.ownedDocumentKinds).toEqual(["changes-diff", "commit-diff"]);
+    expect(changesSlot?.ownedDocumentKinds).toEqual(["changes-diff"]);
+    expect(historySlot?.ownedDocumentKinds).toEqual(["commit-diff"]);
     expect(environmentSlot?.ownedDocumentKinds).toBeUndefined();
   });
 });

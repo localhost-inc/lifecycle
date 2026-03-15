@@ -9,6 +9,7 @@ import {
   useShortcutRegistration,
 } from "../../../app/shortcuts/shortcut-router";
 import { GitActionMenuContent } from "../../git/components/git-action-button";
+import { SurfaceLaunchMenuContent } from "../../workspaces/components/surface-launch-menu-content";
 import { WorkspaceOpenInMenu } from "../../workspaces/components/workspace-open-in-menu";
 import type {
   HostedGitActionsOverlay,
@@ -18,6 +19,7 @@ import type {
   HostedOverlayPayload,
   HostedOverlayReadyEvent,
   HostedOverlayStatusRequest,
+  HostedSurfaceLaunchOverlay,
 } from "../overlay-contract";
 import { logOverlayDebug } from "../overlay-debug";
 import { computeHostedOverlayFrame } from "../overlay-frame";
@@ -323,6 +325,10 @@ export function OverlayHostRoute() {
       );
     }
 
+    if (currentOverlay.kind === "surface-launch") {
+      return renderSurfaceLaunchOverlay(currentOverlay, emitAction);
+    }
+
     return renderGitActionsOverlay(
       currentOverlay,
       draftCommitMessage,
@@ -344,7 +350,7 @@ export function OverlayHostRoute() {
     >
       {overlay && frame && (
         <div
-          className="absolute overflow-y-auto rounded-[22px] border border-[var(--border)] bg-[var(--card)] p-3 shadow-[0_20px_64px_rgba(0,0,0,0.18)]"
+          className={`absolute overflow-y-auto border border-[var(--border)] shadow-[0_20px_64px_rgba(0,0,0,0.18)] ${overlay.kind === "surface-launch" ? "rounded-lg bg-[var(--surface)] p-1" : "rounded-[22px] bg-[var(--card)] p-3"}`}
           style={{
             left: `${frame.left}px`,
             maxHeight: `${frame.maxHeight}px`,
@@ -356,6 +362,26 @@ export function OverlayHostRoute() {
         </div>
       )}
     </div>
+  );
+}
+
+function renderSurfaceLaunchOverlay(
+  overlay: HostedSurfaceLaunchOverlay,
+  emitAction: (action: HostedOverlayAction) => Promise<void>,
+) {
+  return (
+    <SurfaceLaunchMenuContent
+      actions={overlay.actions}
+      onLaunch={(key) =>
+        void emitAction({
+          action: "launch",
+          key,
+          kind: "surface-launch",
+          overlayId: overlay.overlayId,
+          ownerWindowLabel: overlay.ownerWindowLabel,
+        })
+      }
+    />
   );
 }
 

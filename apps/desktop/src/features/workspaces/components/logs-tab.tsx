@@ -2,7 +2,7 @@ import type { LifecycleConfig, ServiceRecord, WorkspaceRecord } from "@lifecycle
 import { Button, EmptyState } from "@lifecycle/ui";
 import { ScrollText } from "lucide-react";
 import type { EnvironmentTaskState, SetupStepState } from "../hooks";
-import { deriveBootSequenceItems, type BootSequenceItem } from "./overview-tab";
+import { deriveBootSequenceItems, type BootSequenceItem } from "./boot-sequence";
 import { formatServiceStatusReason, resolvePreviewUrl } from "./services-tab";
 
 interface BootLogEntry {

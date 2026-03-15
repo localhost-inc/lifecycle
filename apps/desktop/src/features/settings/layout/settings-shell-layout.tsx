@@ -1,6 +1,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import {
   Button,
+  IconButton,
   Input,
   ScrollFade,
   Select,
@@ -526,18 +527,16 @@ export function SettingsShellLayout() {
                       }
                     >
                       <div className="flex items-center gap-2">
-                        <button
+                        <IconButton
                           aria-label="Play preview"
-                          className="shrink-0 rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)] disabled:pointer-events-none disabled:opacity-40"
                           disabled={turnNotificationSound === "silent"}
                           onClick={() => {
                             void playTurnNotificationSound(turnNotificationSound);
                           }}
                           onPointerDown={warmAudioContext}
-                          type="button"
                         >
                           <Volume2 className="size-4" />
-                        </button>
+                        </IconButton>
                         <Select
                           items={turnNotificationSoundItems}
                           onValueChange={(value: string) =>

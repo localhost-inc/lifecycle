@@ -14,7 +14,7 @@ describe("TabChip", () => {
     );
 
     expect(markup).toContain(
-      'class="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-[var(--accent)]"',
+      'class="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-[var(--accent)]"',
     );
     expect(markup).toContain("bg-[var(--surface)]");
     expect(markup).not.toContain("shadow-[var(--tab-shadow)]");

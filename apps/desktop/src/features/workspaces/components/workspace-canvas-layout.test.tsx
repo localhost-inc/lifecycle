@@ -1,8 +1,17 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { ThemeProvider } from "@lifecycle/ui";
 import { QueryProvider } from "../../../query";
 import { SettingsProvider } from "../../settings/state/app-settings-provider";
+
+function withTheme(element: ReturnType<typeof createElement>) {
+  return createElement(ThemeProvider, {
+    children: element,
+    defaultPreference: { theme: "light" },
+    storageKey: "lifecycle.desktop.theme.test",
+  });
+}
 
 describe("WorkspaceCanvas layout", () => {
   afterEach(() => {
@@ -33,19 +42,21 @@ describe("WorkspaceCanvas layout", () => {
 
     const { WorkspaceCanvas } = await import("./workspace-canvas");
     const markup = renderToStaticMarkup(
-      createElement(SettingsProvider, {
-        children: createElement(QueryProvider, {
-          children: createElement(WorkspaceCanvas, {
-            openDocumentRequest: null,
-            snapshotTerminals: [],
-            workspaceId: "workspace-1",
+      withTheme(
+        createElement(SettingsProvider, {
+          children: createElement(QueryProvider, {
+            children: createElement(WorkspaceCanvas, {
+              openDocumentRequest: null,
+              snapshotTerminals: [],
+              workspaceId: "workspace-1",
+            }),
           }),
         }),
-      }),
+      ),
     );
 
     expect(markup).toContain('data-workspace-pane-header="true"');
-    expect(markup).toContain('class="flex h-10 items-stretch gap-1 border-b');
+    expect(markup).toContain('class="flex h-9 items-stretch gap-1 border-b');
     expect(markup).toContain('data-slot="workspace-tab-bar"');
     expect(markup).toContain(
       'class="flex shrink-0 items-center gap-px"',
@@ -63,55 +74,57 @@ describe("WorkspaceCanvas layout", () => {
 
     const { WorkspacePaneTree } = await import("./workspace-pane-tree");
     const markup = renderToStaticMarkup(
-      createElement(WorkspacePaneTree, {
-        activePaneId: "pane-root",
-        creatingSelection: null,
-        documents: [],
-        fileSessionsByTabKey: {},
-        onCloseDocumentTab: () => {},
-        onClosePane: () => {},
-        onCloseRuntimeTab: async () => {},
-        onCreateTerminal: async () => {},
-        onFileSessionStateChange: () => {},
-        onLaunchSurface: () => {},
-        onMoveTabToPane: () => {},
-        onOpenFile: () => {},
-        onRenameRuntimeTab: async () => {},
-        onSelectPane: () => {},
-        onSelectTab: () => {},
-        onReconcilePaneVisibleTabOrder: () => {},
-        onSetSplitRatio: () => {},
-        onSplitPane: () => {},
-        onTabViewStateChange: () => {},
-        paneCount: 2,
-        renderedActiveTabKeyByPaneId: {
-          "pane-2": null,
-          "pane-root": null,
-        },
-        rootPane: {
-          direction: "row",
-          first: {
-            id: "pane-root",
-            kind: "leaf",
+      withTheme(
+        createElement(WorkspacePaneTree, {
+          activePaneId: "pane-root",
+          creatingSelection: null,
+          documents: [],
+          fileSessionsByTabKey: {},
+          onCloseDocumentTab: () => {},
+          onClosePane: () => {},
+          onCloseRuntimeTab: async () => {},
+          onCreateTerminal: async () => {},
+          onFileSessionStateChange: () => {},
+          onLaunchSurface: () => {},
+          onMoveTabToPane: () => {},
+          onOpenFile: () => {},
+          onRenameRuntimeTab: async () => {},
+          onSelectPane: () => {},
+          onSelectTab: () => {},
+          onReconcilePaneVisibleTabOrder: () => {},
+          onSetSplitRatio: () => {},
+          onSplitPane: () => {},
+          onTabViewStateChange: () => {},
+          paneCount: 2,
+          renderedActiveTabKeyByPaneId: {
+            "pane-2": null,
+            "pane-root": null,
           },
-          id: "split-1",
-          kind: "split",
-          ratio: 0.5,
-          second: {
-            id: "pane-2",
-            kind: "leaf",
+          rootPane: {
+            direction: "row",
+            first: {
+              id: "pane-root",
+              kind: "leaf",
+            },
+            id: "split-1",
+            kind: "split",
+            ratio: 0.5,
+            second: {
+              id: "pane-2",
+              kind: "leaf",
+            },
           },
-        },
-        surfaceActions: [],
-        terminals: [],
-        viewStateByTabKey: {},
-        visibleTabsByPaneId: {
-          "pane-2": [],
-          "pane-root": [],
-        },
-        paneIdsWaitingForSelectedRuntimeTab: new Set<string>(),
-        workspaceId: "workspace-1",
-      }),
+          surfaceActions: [],
+          terminals: [],
+          viewStateByTabKey: {},
+          visibleTabsByPaneId: {
+            "pane-2": [],
+            "pane-root": [],
+          },
+          paneIdsWaitingForSelectedRuntimeTab: new Set<string>(),
+          workspaceId: "workspace-1",
+        }),
+      ),
     );
 
     expect(markup).toContain('aria-orientation="vertical"');
@@ -135,67 +148,69 @@ describe("WorkspaceCanvas layout", () => {
 
     const { WorkspacePaneTree } = await import("./workspace-pane-tree");
     const markup = renderToStaticMarkup(
-      createElement(WorkspacePaneTree, {
-        activePaneId: "pane-1",
-        creatingSelection: null,
-        documents: [],
-        fileSessionsByTabKey: {},
-        onCloseDocumentTab: () => {},
-        onClosePane: () => {},
-        onCloseRuntimeTab: async () => {},
-        onCreateTerminal: async () => {},
-        onFileSessionStateChange: () => {},
-        onLaunchSurface: () => {},
-        onMoveTabToPane: () => {},
-        onOpenFile: () => {},
-        onRenameRuntimeTab: async () => {},
-        onSelectPane: () => {},
-        onSelectTab: () => {},
-        onReconcilePaneVisibleTabOrder: () => {},
-        onSetSplitRatio: () => {},
-        onSplitPane: () => {},
-        onTabViewStateChange: () => {},
-        paneCount: 3,
-        renderedActiveTabKeyByPaneId: {
-          "pane-1": null,
-          "pane-2": null,
-          "pane-3": null,
-        },
-        rootPane: {
-          direction: "column",
-          first: {
-            direction: "row",
+      withTheme(
+        createElement(WorkspacePaneTree, {
+          activePaneId: "pane-1",
+          creatingSelection: null,
+          documents: [],
+          fileSessionsByTabKey: {},
+          onCloseDocumentTab: () => {},
+          onClosePane: () => {},
+          onCloseRuntimeTab: async () => {},
+          onCreateTerminal: async () => {},
+          onFileSessionStateChange: () => {},
+          onLaunchSurface: () => {},
+          onMoveTabToPane: () => {},
+          onOpenFile: () => {},
+          onRenameRuntimeTab: async () => {},
+          onSelectPane: () => {},
+          onSelectTab: () => {},
+          onReconcilePaneVisibleTabOrder: () => {},
+          onSetSplitRatio: () => {},
+          onSplitPane: () => {},
+          onTabViewStateChange: () => {},
+          paneCount: 3,
+          renderedActiveTabKeyByPaneId: {
+            "pane-1": null,
+            "pane-2": null,
+            "pane-3": null,
+          },
+          rootPane: {
+            direction: "column",
             first: {
-              id: "pane-1",
-              kind: "leaf",
+              direction: "row",
+              first: {
+                id: "pane-1",
+                kind: "leaf",
+              },
+              id: "split-top",
+              kind: "split",
+              ratio: 0.5,
+              second: {
+                id: "pane-2",
+                kind: "leaf",
+              },
             },
-            id: "split-top",
+            id: "split-root",
             kind: "split",
             ratio: 0.5,
             second: {
-              id: "pane-2",
+              id: "pane-3",
               kind: "leaf",
             },
           },
-          id: "split-root",
-          kind: "split",
-          ratio: 0.5,
-          second: {
-            id: "pane-3",
-            kind: "leaf",
+          surfaceActions: [],
+          terminals: [],
+          viewStateByTabKey: {},
+          visibleTabsByPaneId: {
+            "pane-1": [],
+            "pane-2": [],
+            "pane-3": [],
           },
-        },
-        surfaceActions: [],
-        terminals: [],
-        viewStateByTabKey: {},
-        visibleTabsByPaneId: {
-          "pane-1": [],
-          "pane-2": [],
-          "pane-3": [],
-        },
-        paneIdsWaitingForSelectedRuntimeTab: new Set<string>(),
-        workspaceId: "workspace-1",
-      }),
+          paneIdsWaitingForSelectedRuntimeTab: new Set<string>(),
+          workspaceId: "workspace-1",
+        }),
+      ),
     );
 
     expect(markup).toContain('class="flex min-h-0 min-w-0 shrink-0 overflow-hidden"');

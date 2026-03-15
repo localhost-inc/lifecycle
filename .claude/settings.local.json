@@ -8,7 +8,9 @@
       "mcp__paper__create_artboard",
       "mcp__paper__write_html",
       "mcp__paper__delete_nodes",
-      "Bash(bun run:*)"
+      "Bash(bun run:*)",
+      "Bash(cd:*)",
+      "Bash(bun test:*)"
     ]
   }
 }

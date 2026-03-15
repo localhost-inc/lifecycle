@@ -5,6 +5,7 @@ import { createElement, type ComponentType } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, Outlet, Route, Routes } from "react-router-dom";
 import type { AppShellOutletContext } from "../../../components/layout/app-shell-context";
+import { TerminalResponseReadyProvider } from "../../terminals/state/terminal-response-ready-provider";
 
 const project: ProjectRecord = {
   id: "project_1",
@@ -74,14 +75,16 @@ function renderProjectRoute(
   return renderToStaticMarkup(
     createElement(ThemeProvider, {
       storageKey: "test.theme",
-      children: createElement(MemoryRouter, {
-        initialEntries: [entry],
-        children: createElement(Routes, {
-          children: createElement(Route, {
-            element: createElement(OutletContextBoundary),
+      children: createElement(TerminalResponseReadyProvider, {
+        children: createElement(MemoryRouter, {
+          initialEntries: [entry],
+          children: createElement(Routes, {
             children: createElement(Route, {
-              element: createElement(ProjectRoute),
-              path: "/projects/:projectId",
+              element: createElement(OutletContextBoundary),
+              children: createElement(Route, {
+                element: createElement(ProjectRoute),
+                path: "/projects/:projectId",
+              }),
             }),
           }),
         }),
@@ -186,5 +189,34 @@ describe("ProjectRoute", () => {
 
     expect(markup).not.toContain("workspace-right-rail");
     expect(markup).not.toContain("Resize workspace panel");
+  });
+
+  test("renders response-ready indicators in the workspace tab and sidebar from shared readiness state", async () => {
+    const workspaceTabContentModule =
+      await import("../../workspaces/components/workspace-tab-content");
+    spyOn(workspaceTabContentModule, "WorkspaceTabContent").mockImplementation((() =>
+      createElement("main", { "data-slot": "workspace-layout" }, "Workspace Layout")) as never);
+
+    const responseReadyModule =
+      await import("../../terminals/state/terminal-response-ready-provider");
+    spyOn(responseReadyModule, "useTerminalResponseReady").mockReturnValue({
+      clearTerminalResponseReady: () => {},
+      clearWorkspaceResponseReady: () => {},
+      hasWorkspaceResponseReady: (workspaceId: string) => workspaceId === "workspace_1",
+      hasWorkspaceRunningTurn: () => false,
+      isTerminalResponseReady: () => false,
+      isTerminalTurnRunning: () => false,
+    });
+
+    const { ProjectRoute } = await import("./project-route");
+
+    const markup = renderProjectRoute(
+      ProjectRoute,
+      {},
+      "/projects/project_1?workspace=workspace_1",
+    );
+
+    expect(markup.match(/aria-label="Response ready"/g)?.length ?? 0).toBe(2);
+    expect(markup).not.toContain("pointer-events-none absolute right-3 top-1.5");
   });
 });

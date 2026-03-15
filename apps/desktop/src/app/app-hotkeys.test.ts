@@ -115,12 +115,21 @@ describe("shouldHandleDomAppHotkey", () => {
     ).toBe(false);
   });
 
-  test("still handles command palette shortcuts in the DOM on tauri macOS", () => {
+  test("keeps command palette on the native menu path for tauri macOS", () => {
     expect(
       shouldHandleDomAppHotkey("open-command-palette", {
         isTauriApp: true,
         macPlatform: true,
       }),
-    ).toBe(true);
+    ).toBe(false);
+  });
+
+  test("keeps file picker on the native menu path for tauri macOS", () => {
+    expect(
+      shouldHandleDomAppHotkey("open-file-picker", {
+        isTauriApp: true,
+        macPlatform: true,
+      }),
+    ).toBe(false);
   });
 });

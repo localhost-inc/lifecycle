@@ -3,6 +3,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   Button,
   EmptyState,
+  IconButton,
   Input,
   Select,
   SelectContent,
@@ -16,8 +17,8 @@ import {
   FileJson,
   Layers,
   Loader2,
+  Logs,
   Play,
-  ScrollText,
   TerminalSquare,
 } from "lucide-react";
 import type { CSSProperties } from "react";
@@ -38,11 +39,11 @@ interface StatusStyles {
 const STATUS_STYLES: Record<string, StatusStyles> = {
   stopped: {
     dotStyle: {
-      backgroundColor: "color-mix(in srgb, var(--status-neutral) 30%, transparent)",
+      backgroundColor: "var(--status-neutral)",
     },
-    nameClassName: "text-[var(--foreground)]/30",
+    nameClassName: "text-[var(--foreground)]",
     portStyle: {
-      color: "color-mix(in srgb, var(--status-neutral) 20%, transparent)",
+      color: "var(--muted-foreground)",
     },
     rowStyle: {},
   },
@@ -251,28 +252,15 @@ export function ServiceRow({
     ) : runtime === "process" ? (
       <TerminalSquare className="size-3 text-[var(--muted-foreground)]/70" strokeWidth={2.2} />
     ) : null;
-  const logsIcon = launchesBootLogs ? (
-    <ScrollText className="size-3.5 shrink-0 text-[var(--muted-foreground)]/45" strokeWidth={2.2} />
-  ) : null;
 
   return (
     <div className="group/row">
-      <div className="flex items-center gap-2">
-        <button
-          className="flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-[var(--surface-hover)] cursor-pointer"
-          aria-label={launchesBootLogs ? `Show boot logs for ${service.service_name}` : undefined}
-          onClick={() => {
-            if (onOpenLogs) {
-              onOpenLogs(service.service_name);
-              return;
-            }
-
-            setExpanded(!expanded);
-          }}
-          style={styles.rowStyle}
-          title={launchesBootLogs ? `Show boot logs for ${service.service_name}` : undefined}
-          type="button"
-        >
+      <div
+        className={`flex items-center gap-2 py-1${!launchesBootLogs ? " cursor-pointer" : ""}`}
+        style={styles.rowStyle}
+        onClick={!launchesBootLogs ? () => setExpanded(!expanded) : undefined}
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           <div className="flex size-3.5 shrink-0 items-center justify-center">
             {service.status === "starting" ? (
               <Loader2
@@ -309,31 +297,38 @@ export function ServiceRow({
             )}
           </div>
           {canOpenPreview && (
-            <ExternalLink
-              className="size-3.5 shrink-0 text-[var(--muted-foreground)]/40 transition-colors hover:text-[var(--foreground)]"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleOpenPreview();
-              }}
-            />
+            <button
+              aria-label={`Open preview for ${service.service_name}`}
+              className="rounded-md p-1 text-[var(--muted-foreground)]/40 transition-colors hover:text-[var(--foreground)] cursor-pointer"
+              onClick={() => handleOpenPreview()}
+              type="button"
+            >
+              <ExternalLink className="size-3.5" />
+            </button>
           )}
-          {!canOpenPreview ? logsIcon : null}
-        </button>
+          {launchesBootLogs && (
+            <IconButton
+              aria-label={`Show boot logs for ${service.service_name}`}
+              onClick={() => onOpenLogs!(service.service_name)}
+              title={`Show boot logs for ${service.service_name}`}
+            >
+              <Logs className="size-3.5" strokeWidth={2.2} />
+            </IconButton>
+          )}
+        </div>
         {canStartService ? (
-          <button
+          <IconButton
             aria-label={`Run ${service.service_name} and its dependencies`}
-            className="rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50"
             disabled={runDisabled}
             onClick={() => onStartService?.(service.service_name)}
             title={`Run ${service.service_name} and its dependencies`}
-            type="button"
           >
             {runPending ? (
               <Loader2 className="size-3.5 animate-spin" strokeWidth={2.4} />
             ) : (
               <Play className="size-3.5 fill-current" strokeWidth={2.4} />
             )}
-          </button>
+          </IconButton>
         ) : null}
       </div>
 

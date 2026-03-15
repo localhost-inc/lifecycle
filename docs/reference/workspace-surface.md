@@ -49,7 +49,7 @@ The current mixed-tab implementation should still follow the target ownership vo
 3. `activePaneId` is the keyboard and launch target when an action does not name a destination pane explicitly.
 4. Tabs belong to exactly one pane at a time. Reopening an existing document or runtime should select the owning pane instead of cloning the tab into a second pane.
 5. Splitting a pane creates a sibling leaf pane that starts empty and renders a pane-local empty state with quick launch actions.
-6. Closing a pane removes that leaf from the tree and merges its tab order into the surviving sibling pane instead of silently discarding tabs.
+6. Closing a populated pane is destructive for that pane's tabs: document tabs close, runtime tabs hide/detach, and the leaf collapses once it becomes empty.
 7. Panes are separate tab groups. Moving a tab into another pane should transfer ownership to that pane rather than mirroring the tab across both panes.
 8. Dragging a tab into an empty pane should move the tab there and leave the source pane empty when it no longer owns any tabs.
 9. Dragging a tab onto an existing tab strip may position it before or after the hovered target tab inside that destination pane.

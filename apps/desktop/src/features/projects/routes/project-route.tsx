@@ -6,6 +6,7 @@ import { Activity, GitPullRequest, LayoutGrid, PanelRight, TerminalSquare } from
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext, useParams, useSearchParams } from "react-router-dom";
 import { AppStatusBar } from "../../../components/layout/app-status-bar";
+import { ResponseReadyDot } from "../../../components/response-ready-dot";
 import type { AppShellOutletContext } from "../../../components/layout/app-shell-context";
 import {
   SHORTCUT_HANDLER_PRIORITY,
@@ -14,9 +15,8 @@ import {
 import { WorkspaceActions } from "../../workspaces/components/workspace-actions";
 import { getWorkspaceDisplayName } from "../../workspaces/lib/workspace-display";
 import { workspaceSupportsFilesystemInteraction } from "../../workspaces/lib/workspace-capabilities";
-import {
-  shouldTreatWindowCloseAsTabClose,
-} from "../../workspaces/components/workspace-canvas-shortcuts";
+import { useTerminalResponseReady } from "../../terminals/state/terminal-response-ready-provider";
+import { shouldTreatWindowCloseAsTabClose } from "../../workspaces/components/workspace-canvas-shortcuts";
 import { WorkspaceTabContent } from "../../workspaces/components/workspace-tab-content";
 import { ProjectActivitySurface } from "../components/project-activity-surface";
 import { ProjectOverviewSurface } from "../components/project-overview-surface";
@@ -136,6 +136,7 @@ export function ProjectRoute() {
   const { projectId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const project = projects.find((item) => item.id === projectId) ?? null;
+  const { hasWorkspaceResponseReady, hasWorkspaceRunningTurn } = useTerminalResponseReady();
   const workspaces = useMemo(() => {
     if (!projectId) {
       return [];
@@ -407,35 +408,42 @@ export function ProjectRoute() {
 
   const pageTabs = useMemo<ProjectPageTab[]>(
     () =>
-      tabState.tabs.map((tab) => ({
-        closable: canCloseProjectContentTab(tab),
-        id: tab.id,
-        icon:
-          tab.kind === "workspace" ? (
-            <TerminalSquare className="size-3.5" strokeWidth={2} />
-          ) : tab.kind === "pull-request" ? (
-            <GitPullRequest className="size-3.5" strokeWidth={2} />
-          ) : tab.viewId === "activity" ? (
-            <Activity className="size-3.5" strokeWidth={2} />
-          ) : tab.viewId === "pull-requests" ? (
-            <GitPullRequest className="size-3.5" strokeWidth={2} />
-          ) : (
-            <LayoutGrid className="size-3.5" strokeWidth={2} />
-          ),
-        label:
-          tab.kind === "workspace"
-            ? getWorkspaceDisplayName(
-                workspacesById.get(tab.workspaceId) ?? {
-                  kind: "managed",
-                  name: "Workspace",
-                  source_ref: "workspace",
-                },
-              )
-            : tab.kind === "pull-request"
-              ? `PR #${tab.pullRequestNumber}`
-              : getProjectViewTabLabel(tab.viewId),
-      })),
-    [tabState.tabs, workspacesById],
+      tabState.tabs.map((tab) => {
+        const workspaceResponseReady =
+          tab.kind === "workspace" && hasWorkspaceResponseReady(tab.workspaceId);
+
+        return {
+          closable: canCloseProjectContentTab(tab),
+          id: tab.id,
+          icon:
+            tab.kind === "workspace" && workspaceResponseReady ? (
+              <ResponseReadyDot />
+            ) : tab.kind === "workspace" ? (
+              <TerminalSquare className="size-3.5" strokeWidth={2} />
+            ) : tab.kind === "pull-request" ? (
+              <GitPullRequest className="size-3.5" strokeWidth={2} />
+            ) : tab.viewId === "activity" ? (
+              <Activity className="size-3.5" strokeWidth={2} />
+            ) : tab.viewId === "pull-requests" ? (
+              <GitPullRequest className="size-3.5" strokeWidth={2} />
+            ) : (
+              <LayoutGrid className="size-3.5" strokeWidth={2} />
+            ),
+          label:
+            tab.kind === "workspace"
+              ? getWorkspaceDisplayName(
+                  workspacesById.get(tab.workspaceId) ?? {
+                    kind: "managed",
+                    name: "Workspace",
+                    source_ref: "workspace",
+                  },
+                )
+              : tab.kind === "pull-request"
+                ? `PR #${tab.pullRequestNumber}`
+                : getProjectViewTabLabel(tab.viewId),
+        };
+      }),
+    [hasWorkspaceResponseReady, tabState.tabs, workspacesById],
   );
 
   if (!project) {
@@ -451,7 +459,10 @@ export function ProjectRoute() {
 
   const actionsOutlet = activeWorkspace ? (
     <div className="flex items-center gap-1">
-      <WorkspaceActions onFork={() => void onForkWorkspace(activeWorkspace)} workspace={activeWorkspace} />
+      <WorkspaceActions
+        onFork={() => void onForkWorkspace(activeWorkspace)}
+        workspace={activeWorkspace}
+      />
       <Button
         onClick={() => window.dispatchEvent(new Event("lifecycle:toggle-extension-panel"))}
         size="icon"
@@ -482,6 +493,8 @@ export function ProjectRoute() {
                 >
                   <ProjectSidebar
                     activeViewId={activeViewId}
+                    hasWorkspaceResponseReady={hasWorkspaceResponseReady}
+                    hasWorkspaceRunningTurn={hasWorkspaceRunningTurn}
                     onCreateWorkspace={() => void onCreateWorkspace(project.id)}
                     onDestroyWorkspace={(workspace) => void onDestroyWorkspace(workspace)}
                     onOpenProjectView={handleOpenProjectView}

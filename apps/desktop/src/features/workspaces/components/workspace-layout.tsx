@@ -15,7 +15,6 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { useSearchParams } from "react-router-dom";
 import { notifyShellResizeListeners } from "../../../components/layout/shell-resize-provider";
 import {
   DEFAULT_WORKSPACE_EXTENSION_PANEL_WIDTH,
@@ -30,18 +29,15 @@ import {
 import { ExtensionBar } from "../../extensions/extension-bar";
 import {
   readPersistedActiveExtensionId,
-  readPersistedExtensionPreference,
   toggleActiveExtension,
   WORKSPACE_EXTENSION_PANEL_WIDTH_STORAGE_KEY,
   writePersistedActiveExtensionId,
-  writePersistedExtensionPreference,
 } from "../../extensions/extension-bar-state";
 import type { WorkspaceExtensionLaunchActions } from "../../extensions/extension-bar-types";
 import { getBuiltinExtensionSlots } from "../../extensions/builtin-extensions";
 import { ExtensionPanel } from "../../extensions/extension-panel";
 import { useGitStatus } from "../../git/hooks";
 import type { ManifestStatus } from "../../projects/api/projects";
-import { isEnvironmentPanelTabValue, type EnvironmentPanelTabValue } from "./environment-panel";
 import { WorkspaceCanvas } from "./workspace-canvas";
 import {
   createChangesDiffOpenInput,
@@ -57,12 +53,10 @@ import {
 } from "../api";
 import { useWorkspaceEnvironmentTasks, useWorkspaceSetup } from "../hooks";
 import { workspaceSupportsFilesystemInteraction } from "../lib/workspace-capabilities";
-import { readWorkspaceRouteState, updateWorkspaceRouteState } from "../lib/workspace-route-state";
 import { shouldSyncWorkspaceManifest } from "../lib/workspace-manifest-sync";
 import { useWorkspaceOpenRequests } from "../state/workspace-open-requests";
 
 const SIDEBAR_RESIZE_STEP = 16;
-const ENVIRONMENT_TAB_PREFERENCE_KEY = "environment-tab";
 
 interface WorkspaceLayoutProps {
   workspace: WorkspaceRecord;
@@ -79,7 +73,6 @@ export function WorkspaceLayout({
   onCloseWorkspaceTab,
   onOpenPullRequest,
 }: WorkspaceLayoutProps) {
-  const [searchParams, setSearchParams] = useSearchParams();
   const workspaceLayoutRef = useRef<HTMLDivElement | null>(null);
   const [workspaceLayoutWidth, setWorkspaceLayoutWidth] = useState(0);
   const [panelWidth, setPanelWidth] = useState(() =>
@@ -92,14 +85,7 @@ export function WorkspaceLayout({
     readPersistedActiveExtensionId(workspace.id),
   );
   const [activePanelResize, setActivePanelResize] = useState(false);
-  const [activeEnvironmentTab, setActiveEnvironmentTab] = useState<EnvironmentPanelTabValue>(() => {
-    const storedValue = readPersistedExtensionPreference(
-      workspace.id,
-      ENVIRONMENT_TAB_PREFERENCE_KEY,
-      "overview",
-    );
-    return isEnvironmentPanelTabValue(storedValue) ? storedValue : "overview";
-  });
+  const [selectedServiceLogsName, setSelectedServiceLogsName] = useState<string | null>(null);
   const { clearDocumentRequest, openDocument, requestsByWorkspaceId } = useWorkspaceOpenRequests();
   const openDocumentRequest = requestsByWorkspaceId[workspace.id] ?? null;
   const hasManifest = manifestStatus?.state === "valid";
@@ -112,7 +98,6 @@ export function WorkspaceLayout({
   const terminals = workspaceSnapshot?.terminals ?? [];
   const environmentTasks = environmentTasksQuery.data ?? [];
   const setupSteps = setupQuery.data ?? [];
-  const routeState = useMemo(() => readWorkspaceRouteState(searchParams), [searchParams]);
   const supportsTerminalInteraction = workspaceSupportsFilesystemInteraction(workspace);
   const gitStatusQuery = useGitStatus(
     workspace.mode === "local" && workspace.worktree_path !== null ? workspace.id : null,
@@ -206,18 +191,6 @@ export function WorkspaceLayout({
     })();
   }, [manifestStatus, services.length, workspace]);
 
-  const updateRoute = useCallback(
-    (patch: Parameters<typeof updateWorkspaceRouteState>[1]) => {
-      const nextSearchParams = updateWorkspaceRouteState(searchParams, patch);
-      if (nextSearchParams.toString() === searchParams.toString()) {
-        return;
-      }
-
-      setSearchParams(nextSearchParams, { replace: true });
-    },
-    [searchParams, setSearchParams],
-  );
-
   const launchActions = useMemo<WorkspaceExtensionLaunchActions>(
     () => ({
       openChangesDiff: (focusPath) => {
@@ -243,13 +216,6 @@ export function WorkspaceLayout({
     [onOpenPullRequest, openDocument, supportsTerminalInteraction, workspace.id],
   );
 
-  const handleGitTabChange = useCallback(
-    (gitTab: ReturnType<typeof readWorkspaceRouteState>["gitTab"]) => {
-      updateRoute({ gitTab });
-    },
-    [updateRoute],
-  );
-
   useEffect(() => {
     const workspaceLayout = workspaceLayoutRef.current;
     if (!workspaceLayout) {
@@ -271,27 +237,12 @@ export function WorkspaceLayout({
 
   useEffect(() => {
     setActiveExtensionId(readPersistedActiveExtensionId(workspace.id));
-    const storedEnvironmentTab = readPersistedExtensionPreference(
-      workspace.id,
-      ENVIRONMENT_TAB_PREFERENCE_KEY,
-      "overview",
-    );
-    setActiveEnvironmentTab(
-      isEnvironmentPanelTabValue(storedEnvironmentTab) ? storedEnvironmentTab : "overview",
-    );
+    setSelectedServiceLogsName(null);
   }, [workspace.id]);
 
   useEffect(() => {
     writePersistedActiveExtensionId(workspace.id, activeExtensionId);
   }, [activeExtensionId, workspace.id]);
-
-  useEffect(() => {
-    writePersistedExtensionPreference(
-      workspace.id,
-      ENVIRONMENT_TAB_PREFERENCE_KEY,
-      activeEnvironmentTab,
-    );
-  }, [activeEnvironmentTab, workspace.id]);
 
   const panelBounds = useMemo(
     () =>
@@ -411,8 +362,6 @@ export function WorkspaceLayout({
   const extensionSlots = useMemo(
     () =>
       getBuiltinExtensionSlots({
-        activeEnvironmentTab,
-        activeGitTab: routeState.gitTab,
         config,
         environmentTasks,
         gitStatus: gitStatusQuery.data,
@@ -420,22 +369,25 @@ export function WorkspaceLayout({
         isManifestStale,
         launchActions,
         manifestState,
-        onActiveEnvironmentTabChange: setActiveEnvironmentTab,
-        onActiveGitTabChange: handleGitTabChange,
+        onClearServiceLogsName: () => setSelectedServiceLogsName(null),
+        onOpenServiceLogs: (serviceName) => {
+          setSelectedServiceLogsName(serviceName);
+          setActiveExtensionId("logs");
+        },
         onRestart: handleRestart,
         onRun: handleRun,
         onStop: handleStop,
+        onSwitchToExtension: (id) => setActiveExtensionId(id),
         onUpdateService: handleUpdateService,
+        selectedServiceLogsName,
         services,
         setupSteps,
         workspace,
       }),
     [
-      activeEnvironmentTab,
       config,
       environmentTasks,
       gitStatusQuery.data,
-      handleGitTabChange,
       handleRestart,
       handleRun,
       handleStop,
@@ -444,7 +396,7 @@ export function WorkspaceLayout({
       isManifestStale,
       launchActions,
       manifestState,
-      routeState.gitTab,
+      selectedServiceLogsName,
       services,
       setupSteps,
       workspace,

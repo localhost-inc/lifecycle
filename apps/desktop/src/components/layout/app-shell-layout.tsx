@@ -30,6 +30,7 @@ import {
   writePersistedShellContextId,
 } from "../../features/projects/lib/shell-context";
 import { useSettings } from "../../features/settings/state/app-settings-provider";
+import { useTerminalResponseReady } from "../../features/terminals/state/terminal-response-ready-provider";
 import { WelcomeScreen } from "../../features/welcome/components/welcome-screen";
 import { createWorkspace, destroyWorkspace } from "../../features/workspaces/api";
 import {
@@ -107,6 +108,7 @@ export function AppShellLayout() {
   const projectCatalogQuery = useProjectCatalog();
   const workspacesByProjectQuery = useWorkspacesByProject();
   const { isLoading: authSessionLoading, session: authSession } = useAuthSession();
+  const { hasWorkspaceResponseReady } = useTerminalResponseReady();
   const { worktreeRoot } = useSettings();
   const [requestedShellContextId, setRequestedShellContextId] = useState<string | null>(
     readPersistedShellContextId,
@@ -158,8 +160,8 @@ export function AppShellLayout() {
     const visibleProjectIds = new Set(projects.map((project) => project.id));
     return {
       manifestsByProjectId: Object.fromEntries(
-        Object.entries(projectCatalogQuery.data.manifestsByProjectId).filter(([candidateProjectId]) =>
-          visibleProjectIds.has(candidateProjectId),
+        Object.entries(projectCatalogQuery.data.manifestsByProjectId).filter(
+          ([candidateProjectId]) => visibleProjectIds.has(candidateProjectId),
         ),
       ),
       projects,
@@ -168,6 +170,19 @@ export function AppShellLayout() {
   const activeProject = useMemo(
     () => projects.find((project) => project.id === projectId) ?? projects[0] ?? null,
     [projectId, projects],
+  );
+  const readyProjectIds = useMemo(
+    () =>
+      new Set(
+        projects.flatMap((project) =>
+          (workspacesByProjectId[project.id] ?? []).some((workspace) =>
+            hasWorkspaceResponseReady(workspace.id),
+          )
+            ? [project.id]
+            : [],
+        ),
+      ),
+    [hasWorkspaceResponseReady, projects, workspacesByProjectId],
   );
   const routeFocus = useMemo(() => readProjectRouteFocus(searchParams), [searchParams]);
   const selectedWorkspaceId = routeFocus?.kind === "workspace" ? routeFocus.workspaceId : null;
@@ -639,6 +654,7 @@ export function AppShellLayout() {
             onAddProject={handleAddProject}
             onOpenSettings={handleOpenSettings}
             projects={projects}
+            readyProjectIds={readyProjectIds}
           />
           <div ref={shellViewportRef} className="min-h-0 flex flex-1">
             <ShellResizeProvider resizing={activeProjectNavigationResize}>

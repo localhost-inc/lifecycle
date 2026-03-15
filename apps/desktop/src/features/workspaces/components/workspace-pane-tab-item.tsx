@@ -5,7 +5,6 @@ import type {
   ReactNode,
   RefObject,
 } from "react";
-import { ResponseReadyDot } from "../../../components/response-ready-dot";
 import { TabChip } from "../../../components/tab-chip";
 import { TypedTitle } from "../../../components/typed-title";
 import { tabTitle, type WorkspaceCanvasTab } from "./workspace-canvas-tabs";
@@ -27,7 +26,6 @@ interface WorkspacePaneTabItemProps {
   renameInputRef: RefObject<HTMLInputElement | null>;
   renameSaving: boolean;
   renameValue: string;
-  showFloatingReadyDot: boolean;
   style?: CSSProperties;
   tab: WorkspaceCanvasTab;
   tabIndex: number;
@@ -52,7 +50,6 @@ export function WorkspacePaneTabItem({
   renameInputRef,
   renameSaving,
   renameValue,
-  showFloatingReadyDot,
   style,
   tab,
   tabIndex,
@@ -76,11 +73,7 @@ export function WorkspacePaneTabItem({
       className={`max-w-[300px] touch-none select-none ${dragDropClasses}`}
       closable={!isRenaming}
       id={canvasTabDomId(tab.key)}
-      indicator={
-        showFloatingReadyDot ? (
-          <ResponseReadyDot className="pointer-events-none absolute right-3 top-1.5" />
-        ) : undefined
-      }
+      indicator={undefined}
       label={tab.label}
       leading={leading}
       onClick={onClick}
@@ -121,7 +114,7 @@ export function WorkspacePaneTabItem({
         />
       ) : (
         <TypedTitle
-          className={`min-w-0 flex-1 truncate leading-none ${active ? "font-semibold" : "font-medium"}`}
+          className={`min-w-0 flex-1 truncate leading-none ${active ? "font-medium" : "font-normal"}`}
           text={tab.label}
         />
       )}

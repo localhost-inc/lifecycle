@@ -478,7 +478,7 @@ describe("workspace canvas reducer", () => {
     );
   });
 
-  test("closes a pane by merging its tabs into the sibling pane", () => {
+  test("ignores explicit close-pane actions when the pane still owns tabs", () => {
     const splitState = withWorkspaceState({
       activePaneId: "pane-2",
       documents: [createChangesDiffTab("src/app.tsx")],
@@ -507,6 +507,80 @@ describe("workspace canvas reducer", () => {
     expect(
       workspaceCanvasReducer(splitState, {
         kind: "close-pane",
+        paneId: "pane-root",
+      }),
+    ).toEqual(splitState);
+  });
+
+  test("close-pane collapses empty panes", () => {
+    const splitState = withWorkspaceState({
+      activePaneId: "pane-2",
+      documents: [createChangesDiffTab("src/app.tsx")],
+      hiddenRuntimeTabKeys: [],
+      rootPane: {
+        direction: "row" as const,
+        first: {
+          activeTabKey: CHANGES_DIFF_TAB_KEY,
+          id: "pane-root",
+          kind: "leaf" as const,
+          tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+        },
+        id: "split-1",
+        kind: "split" as const,
+        ratio: 0.5,
+        second: {
+          activeTabKey: null,
+          id: "pane-2",
+          kind: "leaf" as const,
+          tabOrderKeys: [],
+        },
+      },
+      viewStateByTabKey: {},
+    });
+
+    expect(
+      workspaceCanvasReducer(splitState, {
+        kind: "close-pane",
+        paneId: "pane-2",
+      }),
+    ).toEqual(
+      withSinglePaneState({
+        activeTabKey: CHANGES_DIFF_TAB_KEY,
+        documents: [createChangesDiffTab("src/app.tsx")],
+        tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+      }),
+    );
+  });
+
+  test("collapse-pane removes a visibly empty pane even when stale tab order remains", () => {
+    const splitState = withWorkspaceState({
+      activePaneId: "pane-2",
+      documents: [createChangesDiffTab("src/app.tsx")],
+      hiddenRuntimeTabKeys: [],
+      rootPane: {
+        direction: "row" as const,
+        first: {
+          activeTabKey: CHANGES_DIFF_TAB_KEY,
+          id: "pane-root",
+          kind: "leaf" as const,
+          tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
+        },
+        id: "split-1",
+        kind: "split" as const,
+        ratio: 0.5,
+        second: {
+          activeTabKey: null,
+          id: "pane-2",
+          kind: "leaf" as const,
+          tabOrderKeys: ["terminal:stale"],
+        },
+      },
+      viewStateByTabKey: {},
+    });
+
+    expect(
+      workspaceCanvasReducer(splitState, {
+        kind: "collapse-pane",
         paneId: "pane-2",
       }),
     ).toEqual(

@@ -29,6 +29,12 @@ const APP_HOTKEY_EVENT_NAME: &str = "app:shortcut";
 const APP_MENU_ITEM_OPEN_SETTINGS: &str = "app.open-settings";
 
 #[cfg(target_os = "macos")]
+const APP_MENU_ITEM_OPEN_COMMAND_PALETTE: &str = "app.open-command-palette";
+
+#[cfg(target_os = "macos")]
+const APP_MENU_ITEM_OPEN_FILE_PICKER: &str = "app.open-file-picker";
+
+#[cfg(target_os = "macos")]
 #[derive(Clone, Serialize)]
 struct AppShortcutEvent {
     action: &'static str,
@@ -113,6 +119,28 @@ pub fn run() {
                         APP_HOTKEY_EVENT_NAME,
                         AppShortcutEvent {
                             action: "open-settings",
+                            source: "menu",
+                        },
+                    );
+                    return;
+                }
+
+                if event.id() == APP_MENU_ITEM_OPEN_COMMAND_PALETTE {
+                    let _ = app.emit(
+                        APP_HOTKEY_EVENT_NAME,
+                        AppShortcutEvent {
+                            action: "open-command-palette",
+                            source: "menu",
+                        },
+                    );
+                    return;
+                }
+
+                if event.id() == APP_MENU_ITEM_OPEN_FILE_PICKER {
+                    let _ = app.emit(
+                        APP_HOTKEY_EVENT_NAME,
+                        AppShortcutEvent {
+                            action: "open-file-picker",
                             source: "menu",
                         },
                     );
@@ -283,6 +311,21 @@ fn build_app_menu<R: tauri::Runtime>(
 ) -> Result<tauri::menu::Menu<R>, LifecycleError> {
     use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 
+    let command_palette_item =
+        MenuItemBuilder::with_id(APP_MENU_ITEM_OPEN_COMMAND_PALETTE, "Command Palette...")
+            .accelerator("CmdOrCtrl+K")
+            .build(app)
+            .map_err(|error| {
+                LifecycleError::AttachFailed(format!("failed to build app menu: {error}"))
+            })?;
+
+    let open_file_item = MenuItemBuilder::with_id(APP_MENU_ITEM_OPEN_FILE_PICKER, "Open File...")
+        .accelerator("CmdOrCtrl+P")
+        .build(app)
+        .map_err(|error| {
+            LifecycleError::AttachFailed(format!("failed to build app menu: {error}"))
+        })?;
+
     let settings_item = MenuItemBuilder::with_id(APP_MENU_ITEM_OPEN_SETTINGS, "Settings...")
         .accelerator("CmdOrCtrl+,")
         .build(app)
@@ -293,6 +336,8 @@ fn build_app_menu<R: tauri::Runtime>(
     let lifecycle_menu = SubmenuBuilder::new(app, "Lifecycle")
         .about(None)
         .separator()
+        .item(&command_palette_item)
+        .item(&open_file_item)
         .item(&settings_item)
         .separator()
         .services()

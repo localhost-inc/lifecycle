@@ -1,6 +1,6 @@
 import type { LifecycleConfig, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@lifecycle/ui";
-import { AlertTriangle, CheckCircle2, LoaderCircle, Play } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger, IconButton } from "@lifecycle/ui";
+import { CheckCircle2, LoaderCircle, Play } from "lucide-react";
 import { useState } from "react";
 import { ServiceRow } from "./services-tab";
 import type { EnvironmentTaskState, SetupStepState } from "../hooks";
@@ -71,11 +71,6 @@ const STATUS_BANNER = {
     icon: CheckCircle2,
     iconClassName: "text-[var(--status-success)]",
     label: "Boot complete",
-  },
-  failed: {
-    icon: AlertTriangle,
-    iconClassName: "text-[var(--status-danger)]",
-    label: "Boot failed",
   },
 } as const;
 
@@ -477,20 +472,18 @@ function BootServiceRow({
           {rowContent}
         </button>
         {onStartService && item.status === "pending" ? (
-          <button
+          <IconButton
             aria-label={`Run ${item.name} and its dependencies`}
-            className="rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50"
             disabled={runDisabled}
             onClick={() => onStartService(item.name)}
             title={`Run ${item.name} and its dependencies`}
-            type="button"
           >
             {runPending ? (
               <LoaderCircle className="size-3.5 animate-spin" strokeWidth={2.2} />
             ) : (
               <Play className="size-3.5 fill-current" strokeWidth={2.2} />
             )}
-          </button>
+          </IconButton>
         ) : null}
       </div>
     );
@@ -499,7 +492,7 @@ function BootServiceRow({
   return <div className="flex w-full items-center gap-2.5 px-2 py-1.5">{rowContent}</div>;
 }
 
-interface OverviewTabProps {
+interface BootSequenceProps {
   config: LifecycleConfig | null;
   declaredStepNames: string[];
   environmentTasks: EnvironmentTaskState[];
@@ -518,7 +511,7 @@ interface OverviewTabProps {
   workspace: Pick<WorkspaceRecord, "failure_reason" | "status" | "setup_completed_at">;
 }
 
-export function OverviewTab({
+export function BootSequence({
   config,
   declaredStepNames,
   environmentTasks,
@@ -531,7 +524,7 @@ export function OverviewTab({
   services,
   setupSteps,
   workspace,
-}: OverviewTabProps) {
+}: BootSequenceProps) {
   const items = deriveBootSequenceItems(
     config,
     declaredStepNames,
@@ -543,7 +536,7 @@ export function OverviewTab({
   );
   const presentation = deriveBootPresentation(items, workspace);
   const banner =
-    presentation && presentation.phase !== "running" ? STATUS_BANNER[presentation.phase] : null;
+    presentation?.phase === "completed" ? STATUS_BANNER.completed : null;
   const progressLabel = presentation
     ? `${presentation.completedSteps} / ${presentation.totalSteps}`
     : null;

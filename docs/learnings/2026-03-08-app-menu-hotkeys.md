@@ -19,5 +19,5 @@ The embedded native terminal can own first responder status above the webview, s
 
 ## Follow-Up Actions
 
-1. Add `Cmd+K` to the same app shortcut contract when the command switcher UI exists.
+1. Completed on 2026-03-15: `Cmd+K` now uses the same app shortcut contract; see `docs/learnings/2026-03-15-command-palette-app-menu-shortcut.md`.
 2. Keep workspace-tab shortcuts on the workspace surface contract and reserve the app shortcut contract for actions that should work across routes and focused surfaces.

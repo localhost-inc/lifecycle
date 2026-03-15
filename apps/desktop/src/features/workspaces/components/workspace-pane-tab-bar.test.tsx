@@ -60,12 +60,12 @@ describe("WorkspacePaneTabBar", () => {
     );
 
     expect(markup).toContain(
-      "relative flex h-full shrink-0 items-center gap-2 border-l border-[var(--border)] px-3",
+      "relative flex h-full shrink-0 cursor-pointer items-center gap-1.5 border-r border-[var(--border)] px-3",
     );
     expect(markup).toContain("bg-[var(--surface)]");
-    expect(markup).toContain("h-0.5 bg-[var(--accent)]");
-    expect(markup).toContain("text-sm");
-    expect(markup).toContain("font-semibold");
+    expect(markup).toContain("h-px bg-[var(--accent)]");
+    expect(markup).toContain("text-[13px]");
+    expect(markup).toContain("font-medium");
     expect(markup).toContain("cursor-grab");
   });
 
@@ -105,7 +105,7 @@ describe("WorkspacePaneTabBar", () => {
     expect(markup).toContain("scrollbar-width:none");
     expect(markup).toContain("-ms-overflow-style:none");
     expect(markup).toContain("gap-0 overflow-x-auto");
-    expect(markup).toContain("first:border-l-0");
+    expect(markup).toContain("border-r");
     expect(markup).toContain("z-[1]");
     expect(markup).not.toContain("right-0 z-10");
   });
@@ -183,35 +183,7 @@ describe("WorkspacePaneTabBar", () => {
     expect(markup).not.toContain('aria-label="Response ready"');
   });
 
-  test("does not render the floating ready badge for the active terminal tab", () => {
-    const markup = renderToStaticMarkup(
-      createElement(WorkspacePaneTabBar, {
-        activeTabKey: "terminal:term-1",
-        onCloseDocumentTab: () => {},
-        onCloseRuntimeTab: async () => {},
-
-        onSelectTab: () => {},
-        visibleTabs: [
-          {
-            key: "terminal:term-1",
-            harnessProvider: null,
-            kind: "terminal",
-            label: "Terminal 1",
-            launchType: "shell",
-            responseReady: true,
-            status: "detached",
-            terminalId: "term-1",
-          },
-        ],
-      }),
-    );
-
-    expect(markup).not.toContain('aria-label="Response ready"');
-    expect(markup).not.toContain("pointer-events-none absolute right-3 top-1.5");
-    expect(markup).not.toContain('title="detached"');
-  });
-
-  test("renders the floating ready badge for an inactive ready terminal tab", () => {
+  test("renders inline ready indicator for a ready terminal tab", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspacePaneTabBar, {
         activeTabKey: "terminal:term-2",
@@ -245,8 +217,34 @@ describe("WorkspacePaneTabBar", () => {
     );
 
     expect(markup).toContain('aria-label="Response ready"');
-    expect(markup).toContain("pointer-events-none absolute right-3 top-1.5");
-    expect(markup).not.toContain('title="detached"');
+    expect(markup).toContain('data-surface-tab-icon="shell"');
+  });
+
+  test("renders shell icon for non-ready terminal tab", () => {
+    const markup = renderToStaticMarkup(
+      createElement(WorkspacePaneTabBar, {
+        activeTabKey: "terminal:term-1",
+        onCloseDocumentTab: () => {},
+        onCloseRuntimeTab: async () => {},
+
+        onSelectTab: () => {},
+        visibleTabs: [
+          {
+            key: "terminal:term-1",
+            harnessProvider: null,
+            kind: "terminal",
+            label: "Terminal 1",
+            launchType: "shell",
+            responseReady: false,
+            status: "detached",
+            terminalId: "term-1",
+          },
+        ],
+      }),
+    );
+
+    expect(markup).not.toContain('aria-label="Response ready"');
+    expect(markup).toContain('data-surface-tab-icon="shell"');
   });
 });
 

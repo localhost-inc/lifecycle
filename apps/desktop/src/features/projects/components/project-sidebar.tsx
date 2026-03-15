@@ -1,5 +1,5 @@
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
-import { Button, EmptyState } from "@lifecycle/ui";
+import { Button, EmptyState, IconButton } from "@lifecycle/ui";
 import {
   Activity,
   GitPullRequest,
@@ -26,6 +26,8 @@ function projectMonogram(name: string): string {
 
 interface ProjectSidebarProps {
   activeViewId: ProjectViewId | null;
+  hasWorkspaceResponseReady: (workspaceId: string) => boolean;
+  hasWorkspaceRunningTurn: (workspaceId: string) => boolean;
   project: ProjectRecord;
   selectedWorkspaceId: string | null;
   onCreateWorkspace: () => void;
@@ -38,6 +40,8 @@ interface ProjectSidebarProps {
 
 export function ProjectSidebar({
   activeViewId,
+  hasWorkspaceResponseReady,
+  hasWorkspaceRunningTurn,
   project,
   selectedWorkspaceId,
   onCreateWorkspace,
@@ -151,14 +155,12 @@ export function ProjectSidebar({
       <div className="flex min-h-0 flex-1 flex-col pt-7">
         <div className="flex items-center justify-between px-4 pb-2">
           <p className="app-panel-title text-[var(--muted-foreground)]">Workspaces</p>
-          <Button
+          <IconButton
             aria-label={`Create workspace for ${project.name}`}
             onClick={onCreateWorkspace}
-            size="icon"
-            variant="ghost"
           >
-            <Plus size={14} />
-          </Button>
+            <Plus className="size-3.5" />
+          </IconButton>
         </div>
         {workspaces.length === 0 ? (
           <div className="px-3 pb-3">
@@ -172,6 +174,8 @@ export function ProjectSidebar({
             {workspaces.map((workspace) => (
               <WorkspaceTreeItem
                 key={workspace.id}
+                responseReady={hasWorkspaceResponseReady(workspace.id)}
+                running={hasWorkspaceRunningTurn(workspace.id)}
                 selected={workspace.id === selectedWorkspaceId}
                 workspace={workspace}
                 onDestroy={() => onDestroyWorkspace(workspace)}

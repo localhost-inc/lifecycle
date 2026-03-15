@@ -39,7 +39,7 @@ describe("WorkspaceTreeItem", () => {
     expect(markup).not.toContain('title="Active"');
   });
 
-  test("renders the ready indicator in the right-side session status slot", () => {
+  test("renders the ready indicator in the left icon slot while preserving the timestamp", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceTreeItem, {
         responseReady: true,
@@ -50,14 +50,13 @@ describe("WorkspaceTreeItem", () => {
       }),
     );
 
-    expect(markup).toContain('data-slot="workspace-session-status"');
     expect(markup).toContain('aria-label="Response ready"');
-    expect(markup).toContain("justify-end");
+    expect(markup).not.toContain('data-slot="workspace-session-status"');
+    expect(markup).toContain("min-w-9 text-right");
     expect(markup).not.toContain(">Ready</span>");
-    expect(markup).not.toContain("absolute left-1 top-1/2 -translate-y-1/2");
   });
 
-  test("renders a loading spinner in the same right-side session status slot", () => {
+  test("renders a loading spinner in the left icon slot while preserving the timestamp", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceTreeItem, {
         running: true,
@@ -68,9 +67,10 @@ describe("WorkspaceTreeItem", () => {
       }),
     );
 
-    expect(markup).toContain('data-slot="workspace-session-status"');
     expect(markup).toContain('data-slot="spinner"');
     expect(markup).toContain('title="Generating response"');
+    expect(markup).not.toContain('data-slot="workspace-session-status"');
+    expect(markup).toContain("min-w-9 text-right");
   });
 
   test("uses a subtle pill background for the selected workspace", () => {

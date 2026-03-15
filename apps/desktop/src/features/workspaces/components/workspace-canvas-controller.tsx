@@ -67,6 +67,7 @@ import {
   getWorkspaceRenderedPaneActiveTabKeys,
   getWorkspaceUnassignedLiveRuntimeTabKeys,
 } from "./workspace-canvas-runtime-state";
+import { closeWorkspacePaneTabs } from "./workspace-pane-close";
 
 export interface WorkspaceCanvasControllerInput {
   openDocumentRequest: OpenDocumentRequest | null;
@@ -420,7 +421,7 @@ export function useWorkspaceCanvasController({
     () => [
       {
         key: "shell",
-        title: "New shell",
+        title: "Shell",
         icon: <ShellIcon />,
         request: { kind: "terminal", launchType: "shell" },
         loading: creatingSelection === "shell",
@@ -428,7 +429,7 @@ export function useWorkspaceCanvasController({
       },
       {
         key: "claude",
-        title: "New Claude session",
+        title: "Claude",
         icon: <ClaudeIcon />,
         request: { kind: "terminal", launchType: "harness", harnessProvider: "claude" as const },
         loading: creatingSelection === "claude",
@@ -436,7 +437,7 @@ export function useWorkspaceCanvasController({
       },
       {
         key: "codex",
-        title: "New Codex session",
+        title: "Codex",
         icon: <CodexIcon />,
         request: { kind: "terminal", launchType: "harness", harnessProvider: "codex" as const },
         loading: creatingSelection === "codex",
@@ -446,7 +447,7 @@ export function useWorkspaceCanvasController({
     [creatingSelection],
   );
 
-  const handleCloseRuntimeTab = useCallback(
+  const closeRuntimeTab = useCallback(
     async (tabKey: string, terminalId: string) => {
       try {
         await detachTerminal(terminalId);
@@ -456,21 +457,23 @@ export function useWorkspaceCanvasController({
           key: tabKey,
           kind: "hide-runtime-tab",
         });
+        return true;
       } catch (closeError) {
-        setError(String(closeError));
+        setError(formatWorkspaceError(closeError, "Failed to close session."));
+        return false;
       }
     },
     [client, workspaceId],
   );
 
-  const handleCloseDocumentTab = useCallback(
-    (tabKey: string) => {
+  const closeDocumentTab = useCallback(
+    (tabKey: string): boolean => {
       const closingDocument = getWorkspaceDocument(state.documentsByKey, tabKey);
       if (
         closingDocument?.kind === "file-viewer" &&
         !confirmCloseFileSession(closingDocument.key, closingDocument.label)
       ) {
-        return;
+        return false;
       }
 
       dispatch({
@@ -478,8 +481,41 @@ export function useWorkspaceCanvasController({
         kind: "close-document",
       });
       clearFileSession(tabKey);
+      return true;
     },
     [clearFileSession, confirmCloseFileSession, state.documentsByKey],
+  );
+
+  const collapseWorkspacePane = useCallback((paneId: string) => {
+    dispatch({ kind: "collapse-pane", paneId });
+  }, []);
+
+  const closeWorkspacePane = useCallback(
+    async (paneId: string) => {
+      const didClosePaneTabs = await closeWorkspacePaneTabs(visibleTabsByPaneId[paneId] ?? [], {
+        collapseEmptyPane: () => {},
+        closeDocumentTab,
+        closeRuntimeTab,
+      });
+      if (didClosePaneTabs) {
+        collapseWorkspacePane(paneId);
+      }
+    },
+    [closeDocumentTab, closeRuntimeTab, collapseWorkspacePane, visibleTabsByPaneId],
+  );
+
+  const handleCloseRuntimeTab = useCallback(
+    async (tabKey: string, terminalId: string) => {
+      await closeRuntimeTab(tabKey, terminalId);
+    },
+    [closeRuntimeTab],
+  );
+
+  const handleCloseDocumentTab = useCallback(
+    (tabKey: string) => {
+      closeDocumentTab(tabKey);
+    },
+    [closeDocumentTab],
   );
 
   const handleWorkspaceTabHotkeyAction = useCallback(
@@ -497,7 +533,7 @@ export function useWorkspaceCanvasController({
           const closeTarget = resolveWorkspaceCloseShortcutTarget(paneLayout.paneCount);
           if (closeTarget === "close-pane") {
             closeShortcutHandledAtRef.current = Date.now();
-            dispatch({ kind: "close-pane", paneId: activePaneId });
+            void closeWorkspacePane(activePaneId);
             return true;
           }
 
@@ -561,6 +597,7 @@ export function useWorkspaceCanvasController({
       activePaneVisibleTabKeys,
       activePaneVisibleTabs,
       activeTabKey,
+      closeWorkspacePane,
       defaultNewTabLaunch,
       handleCloseDocumentTab,
       handleCloseRuntimeTab,
@@ -684,9 +721,12 @@ export function useWorkspaceCanvasController({
     };
   }, [activePaneVisibleTabs.length, activeTabKey, handleWorkspaceTabHotkeyAction]);
 
-  const handleClosePane = useCallback((paneId: string) => {
-    dispatch({ kind: "close-pane", paneId });
-  }, []);
+  const handleClosePane = useCallback(
+    (paneId: string) => {
+      void closeWorkspacePane(paneId);
+    },
+    [closeWorkspacePane],
+  );
 
   const handleMoveTabToPane = useCallback(
     (

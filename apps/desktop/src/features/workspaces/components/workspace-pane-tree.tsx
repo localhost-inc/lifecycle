@@ -6,6 +6,7 @@ import {
 } from "../../../lib/panel-layout";
 import { notifyShellResizeListeners } from "../../../components/layout/shell-resize-provider";
 import {
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
@@ -652,12 +653,16 @@ export function WorkspacePaneTree({
       if (node.kind === "split") {
         return (
           <WorkspacePaneSplitNode
+            key={node.id}
             direction={node.direction}
             onSetSplitRatio={onSetSplitRatio}
             ratio={node.ratio}
             splitId={node.id}
           >
-            {[renderNode(node.first), renderNode(node.second)]}
+            {[
+              <Fragment key={`${node.id}:first`}>{renderNode(node.first)}</Fragment>,
+              <Fragment key={`${node.id}:second`}>{renderNode(node.second)}</Fragment>,
+            ]}
           </WorkspacePaneSplitNode>
         );
       }
@@ -689,7 +694,7 @@ export function WorkspacePaneTree({
           }}
         >
           <div
-            className="flex h-10 items-stretch gap-1 border-b border-[var(--border)] bg-[var(--card)]"
+            className="flex h-9 items-stretch gap-1 border-b border-[var(--border)] bg-[var(--card)]"
             data-workspace-pane-header
           >
             <WorkspacePaneTabBar

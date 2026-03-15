@@ -4,6 +4,10 @@
 
 The workspace surface started as one mixed tab strip with one `activeTabKey`. That model held for launcher, terminal, diff, and file tabs until split panes became a real product need. Adding horizontal and vertical splits means the center surface is no longer "which tab is active?" but "which pane is focused, which tab is active inside each leaf, and how is the pane tree laid out?"
 
+## Superseded Note
+
+1. Item 9 below was revised on 2026-03-15 after pane-close testing showed that merging the clicked pane's tabs into the survivor read as closing the wrong pane.
+
 ## Learning
 
 1. Split panes require a tree-shaped surface model. A flat `tabOrderKeys` list cannot express horizontal and vertical nesting, pane-local active tabs, or future pane-targeted actions.
@@ -19,7 +23,7 @@ The workspace surface started as one mixed tab strip with one `activeTabKey`. Th
    - drop on its tab strip to place before or after a specific tab
    - drop on a pane edge to create a new split on that side
 8. Native terminal visibility and terminal focus are no longer the same thing. Multiple terminal panes may be visible at once, but only the focused pane's active terminal should receive Ghostty focus and pointer input.
-9. Closing a pane should merge its tabs into the sibling leaf instead of destroying user state. Pane-close is a layout action first, not a tab-close shortcut.
+9. The first pane-close implementation tried to merge the clicked pane's tabs into the sibling leaf to preserve user state, but that behavior was later rolled back because it read as closing the wrong pane in stacked layouts.
 10. Restore compatibility matters because the pane-tree change replaces a persisted shape. Reading legacy flat snapshots into a single root leaf keeps existing local state usable without adding a long-lived compatibility layer.
 
 ## Milestone Impact

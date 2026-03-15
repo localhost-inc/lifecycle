@@ -1,5 +1,4 @@
 import type { ProjectContentTab, ProjectViewId } from "../types/project-content-tabs";
-import { WORKSPACE_ROUTE_GIT_TAB_PARAM } from "../../workspaces/lib/workspace-route-state";
 
 export const PROJECT_ROUTE_PULL_REQUEST_PARAM = "pull-request";
 export const PROJECT_ROUTE_VIEW_PARAM = "view";
@@ -133,7 +132,7 @@ export function updateProjectRouteFocus(
 
   if (focus.kind === "project-view") {
     nextSearchParams.set(PROJECT_ROUTE_VIEW_PARAM, focus.viewId);
-    nextSearchParams.delete(WORKSPACE_ROUTE_GIT_TAB_PARAM);
+    nextSearchParams.delete("git");
     return nextSearchParams;
   }
 
@@ -143,6 +142,6 @@ export function updateProjectRouteFocus(
   }
 
   nextSearchParams.set(PROJECT_ROUTE_PULL_REQUEST_PARAM, String(focus.pullRequestNumber));
-  nextSearchParams.delete(WORKSPACE_ROUTE_GIT_TAB_PARAM);
+  nextSearchParams.delete("git");
   return nextSearchParams;
 }
