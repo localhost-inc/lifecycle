@@ -11,7 +11,15 @@ import {
   SelectValue,
   SetupProgress,
 } from "@lifecycle/ui";
-import { ExternalLink, FileJson, Layers, Loader2, TerminalSquare } from "lucide-react";
+import {
+  ExternalLink,
+  FileJson,
+  Layers,
+  Loader2,
+  Play,
+  ScrollText,
+  TerminalSquare,
+} from "lucide-react";
 import type { CSSProperties } from "react";
 import { useState } from "react";
 import { EnvironmentSection } from "./environment-section";
@@ -21,47 +29,62 @@ import { formatWorkspaceError } from "../lib/workspace-errors";
 type ServiceRuntime = "image" | "process";
 
 interface StatusStyles {
-  dotClassName: string;
-  dotStyle?: CSSProperties;
+  dotStyle: CSSProperties;
   nameClassName: string;
-  portClassName: string;
+  portStyle: CSSProperties;
   rowStyle: CSSProperties;
 }
 
 const STATUS_STYLES: Record<string, StatusStyles> = {
   stopped: {
-    dotClassName: "bg-slate-500/30",
+    dotStyle: {
+      backgroundColor: "color-mix(in srgb, var(--status-neutral) 30%, transparent)",
+    },
     nameClassName: "text-[var(--foreground)]/30",
-    portClassName: "text-slate-500/20",
+    portStyle: {
+      color: "color-mix(in srgb, var(--status-neutral) 20%, transparent)",
+    },
     rowStyle: {},
   },
   starting: {
-    dotClassName: "",
+    dotStyle: {
+      backgroundColor: "var(--status-info)",
+    },
     nameClassName: "text-[var(--foreground)]",
-    portClassName: "text-blue-500/45",
+    portStyle: {
+      color: "color-mix(in srgb, var(--status-info) 45%, transparent)",
+    },
     rowStyle: {
       backgroundImage:
-        "linear-gradient(90deg, rgba(59, 130, 246, 0.07) 0%, rgba(59, 130, 246, 0.01) 100%)",
+        "linear-gradient(90deg, color-mix(in srgb, var(--status-info) 7%, transparent) 0%, color-mix(in srgb, var(--status-info) 1%, transparent) 100%)",
     },
   },
   ready: {
-    dotClassName: "bg-emerald-500",
-    dotStyle: { boxShadow: "0 0 6px rgba(16, 185, 129, 0.5)" },
+    dotStyle: {
+      backgroundColor: "var(--status-success)",
+      boxShadow: "0 0 6px color-mix(in srgb, var(--status-success) 50%, transparent)",
+    },
     nameClassName: "text-[var(--foreground)]",
-    portClassName: "text-emerald-500/50",
+    portStyle: {
+      color: "color-mix(in srgb, var(--status-success) 50%, transparent)",
+    },
     rowStyle: {
       backgroundImage:
-        "linear-gradient(90deg, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0.02) 100%)",
+        "linear-gradient(90deg, color-mix(in srgb, var(--status-success) 8%, transparent) 0%, color-mix(in srgb, var(--status-success) 2%, transparent) 100%)",
     },
   },
   failed: {
-    dotClassName: "bg-red-500",
-    dotStyle: { boxShadow: "0 0 6px rgba(239, 68, 68, 0.4)" },
+    dotStyle: {
+      backgroundColor: "var(--status-danger)",
+      boxShadow: "0 0 6px color-mix(in srgb, var(--status-danger) 40%, transparent)",
+    },
     nameClassName: "text-[var(--foreground)]",
-    portClassName: "text-red-500/40",
+    portStyle: {
+      color: "color-mix(in srgb, var(--status-danger) 40%, transparent)",
+    },
     rowStyle: {
       backgroundImage:
-        "linear-gradient(90deg, rgba(239, 68, 68, 0.08) 0%, rgba(239, 68, 68, 0.02) 100%)",
+        "linear-gradient(90deg, color-mix(in srgb, var(--status-danger) 8%, transparent) 0%, color-mix(in srgb, var(--status-danger) 2%, transparent) 100%)",
     },
   },
 };
@@ -125,7 +148,7 @@ export function resolvePreviewUrl(service: ServiceRecord): string | null {
   return service.preview_url;
 }
 
-function formatStatusReason(reason: ServiceRecord["status_reason"]): string | null {
+export function formatServiceStatusReason(reason: ServiceRecord["status_reason"]): string | null {
   if (!reason) {
     return null;
   }
@@ -134,15 +157,23 @@ function formatStatusReason(reason: ServiceRecord["status_reason"]): string | nu
 }
 
 export function ServiceRow({
+  onOpenLogs,
+  onStartService,
   onUpdateService,
+  runDisabled = false,
+  runPending = false,
   runtime,
   service,
 }: {
+  onOpenLogs?: (serviceName: string) => void;
+  onStartService?: (serviceName: string) => void;
   onUpdateService: (input: {
     exposure: ServiceRecord["exposure"];
     portOverride: number | null;
     serviceName: string;
   }) => Promise<void>;
+  runDisabled?: boolean;
+  runPending?: boolean;
   runtime: "image" | "process" | null;
   service: ServiceRecord;
 }) {
@@ -155,7 +186,7 @@ export function ServiceRow({
   const parsedPort = parsePortDraft(draftPort);
   const previewUrl = resolvePreviewUrl(service);
   const isDirty = draftExposure !== service.exposure || parsedPort.value !== service.port_override;
-  const statusReasonLabel = formatStatusReason(service.status_reason);
+  const statusReasonLabel = formatServiceStatusReason(service.status_reason);
 
   async function handleSave(): Promise<void> {
     if (isSaving || !isDirty || parsedPort.error) {
@@ -209,6 +240,9 @@ export function ServiceRow({
 
   const canOpenPreview = previewUrl !== null && service.preview_status === "ready";
   const [expanded, setExpanded] = useState(false);
+  const launchesBootLogs = onOpenLogs !== undefined;
+  const canStartService =
+    onStartService !== undefined && (service.status === "stopped" || service.status === "failed");
   // biome-ignore lint: indexing a known-populated record
   const styles = (STATUS_STYLES[service.status] ?? STATUS_STYLES.stopped)!;
   const runtimeIcon =
@@ -217,55 +251,93 @@ export function ServiceRow({
     ) : runtime === "process" ? (
       <TerminalSquare className="size-3 text-[var(--muted-foreground)]/70" strokeWidth={2.2} />
     ) : null;
+  const logsIcon = launchesBootLogs ? (
+    <ScrollText className="size-3.5 shrink-0 text-[var(--muted-foreground)]/45" strokeWidth={2.2} />
+  ) : null;
 
   return (
     <div className="group/row">
-      <button
-        className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-[var(--surface-hover)] cursor-pointer"
-        onClick={() => setExpanded(!expanded)}
-        style={styles.rowStyle}
-        type="button"
-      >
-        <div className="flex size-3.5 shrink-0 items-center justify-center">
-          {service.status === "starting" ? (
-            <Loader2 className="size-3.5 animate-spin text-blue-500" strokeWidth={2.5} />
-          ) : (
-            <span
-              className={`inline-block size-[7px] rounded-full ${styles.dotClassName}`}
-              style={styles.dotStyle}
-            />
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline gap-2">
-            <span className="inline-flex min-w-0 items-center gap-1.5">
-              {runtimeIcon}
-              <span className={`truncate text-[13px] font-medium ${styles.nameClassName}`}>
-                {service.service_name}
-              </span>
-            </span>
-            {service.effective_port !== null && (
-              <span className={`shrink-0 font-mono text-[11px] ${styles.portClassName}`}>
-                :{service.effective_port}
-              </span>
+      <div className="flex items-center gap-2">
+        <button
+          className="flex w-full min-w-0 items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-[var(--surface-hover)] cursor-pointer"
+          aria-label={launchesBootLogs ? `Show boot logs for ${service.service_name}` : undefined}
+          onClick={() => {
+            if (onOpenLogs) {
+              onOpenLogs(service.service_name);
+              return;
+            }
+
+            setExpanded(!expanded);
+          }}
+          style={styles.rowStyle}
+          title={launchesBootLogs ? `Show boot logs for ${service.service_name}` : undefined}
+          type="button"
+        >
+          <div className="flex size-3.5 shrink-0 items-center justify-center">
+            {service.status === "starting" ? (
+              <Loader2
+                className="size-3.5 animate-spin text-[var(--status-info)]"
+                strokeWidth={2.5}
+              />
+            ) : (
+              <span className="inline-block size-[7px] rounded-full" style={styles.dotStyle} />
             )}
           </div>
-          {statusReasonLabel && (
-            <p className="mt-1 text-[10px] text-red-500/55">{statusReasonLabel}</p>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-2">
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                {runtimeIcon}
+                <span className={`truncate text-[13px] font-medium ${styles.nameClassName}`}>
+                  {service.service_name}
+                </span>
+              </span>
+              {service.effective_port !== null && (
+                <span className="shrink-0 font-mono text-[11px]" style={styles.portStyle}>
+                  :{service.effective_port}
+                </span>
+              )}
+            </div>
+            {statusReasonLabel && (
+              <p
+                className="mt-1 text-[10px]"
+                style={{
+                  color: "color-mix(in srgb, var(--status-danger) 70%, var(--muted-foreground))",
+                }}
+              >
+                {statusReasonLabel}
+              </p>
+            )}
+          </div>
+          {canOpenPreview && (
+            <ExternalLink
+              className="size-3.5 shrink-0 text-[var(--muted-foreground)]/40 transition-colors hover:text-[var(--foreground)]"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleOpenPreview();
+              }}
+            />
           )}
-        </div>
-        {canOpenPreview && (
-          <ExternalLink
-            className="size-3.5 shrink-0 text-[var(--muted-foreground)]/40 transition-colors hover:text-[var(--foreground)]"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleOpenPreview();
-            }}
-          />
-        )}
-      </button>
+          {!canOpenPreview ? logsIcon : null}
+        </button>
+        {canStartService ? (
+          <button
+            aria-label={`Run ${service.service_name} and its dependencies`}
+            className="rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={runDisabled}
+            onClick={() => onStartService?.(service.service_name)}
+            title={`Run ${service.service_name} and its dependencies`}
+            type="button"
+          >
+            {runPending ? (
+              <Loader2 className="size-3.5 animate-spin" strokeWidth={2.4} />
+            ) : (
+              <Play className="size-3.5 fill-current" strokeWidth={2.4} />
+            )}
+          </button>
+        ) : null}
+      </div>
 
-      {expanded && (
+      {!launchesBootLogs && expanded && (
         <div className="flex flex-col gap-2 px-3 pb-3 pl-[38px] pt-1">
           <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_6rem_auto] sm:items-end">
             <label className="flex min-w-0 flex-col gap-1">

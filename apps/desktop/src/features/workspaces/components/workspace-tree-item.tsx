@@ -137,8 +137,10 @@ export function WorkspaceTreeItem({
 
   const rowClassName = cn(
     sidebarMenuSubButtonVariants({ active: false }),
-    "gap-1.5 rounded-md pl-2 pr-1 text-[var(--sidebar-foreground)] hover:bg-[var(--surface-hover)]",
-    selected ? "bg-[var(--muted)] opacity-100" : "bg-transparent opacity-80 hover:opacity-100",
+    "gap-1.5 rounded-md pl-2 pr-1 text-[var(--sidebar-foreground)] hover:bg-[var(--sidebar-hover)]",
+    selected
+      ? "bg-[var(--sidebar-selected)] opacity-100"
+      : "bg-transparent opacity-80 hover:opacity-100",
     editing ? "cursor-text ring-1 ring-[var(--sidebar-foreground)]/20" : undefined,
   );
 
@@ -155,7 +157,7 @@ export function WorkspaceTreeItem({
           aria-label="Rename workspace"
           className={cn(
             "min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-[var(--sidebar-muted-foreground)]",
-            renameError ? "text-rose-300" : undefined,
+            renameError ? "text-[var(--destructive)]" : undefined,
           )}
           disabled={saving}
           onBlur={() => {
@@ -208,7 +210,9 @@ export function WorkspaceTreeItem({
         <WorkspaceKindIcon
           className={cn(
             "mr-0.5 shrink-0",
-            selected ? "text-[var(--sidebar-foreground)]" : "text-[var(--muted-foreground)]",
+            selected
+              ? "text-[var(--sidebar-foreground)]"
+              : "text-[var(--sidebar-muted-foreground)]",
           )}
           kind={workspace.kind}
         />

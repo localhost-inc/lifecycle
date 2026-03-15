@@ -12,7 +12,8 @@ pub fn validate_workspace_transition(
             | (WorkspaceStatus::Starting, WorkspaceStatus::Active)
             | (WorkspaceStatus::Starting, WorkspaceStatus::Stopping)
             | (WorkspaceStatus::Starting, WorkspaceStatus::Idle)
-            // active -> stopping
+            // active -> starting | stopping
+            | (WorkspaceStatus::Active, WorkspaceStatus::Starting)
             | (WorkspaceStatus::Active, WorkspaceStatus::Stopping)
             // stopping -> idle
             | (WorkspaceStatus::Stopping, WorkspaceStatus::Idle)
@@ -39,6 +40,7 @@ mod tests {
             (WorkspaceStatus::Starting, WorkspaceStatus::Active),
             (WorkspaceStatus::Starting, WorkspaceStatus::Stopping),
             (WorkspaceStatus::Starting, WorkspaceStatus::Idle),
+            (WorkspaceStatus::Active, WorkspaceStatus::Starting),
             (WorkspaceStatus::Active, WorkspaceStatus::Stopping),
             (WorkspaceStatus::Stopping, WorkspaceStatus::Idle),
         ];
@@ -58,7 +60,6 @@ mod tests {
             (WorkspaceStatus::Idle, WorkspaceStatus::Stopping),
             (WorkspaceStatus::Starting, WorkspaceStatus::Starting),
             (WorkspaceStatus::Active, WorkspaceStatus::Active),
-            (WorkspaceStatus::Active, WorkspaceStatus::Starting),
             (WorkspaceStatus::Stopping, WorkspaceStatus::Starting),
             (WorkspaceStatus::Stopping, WorkspaceStatus::Active),
         ];

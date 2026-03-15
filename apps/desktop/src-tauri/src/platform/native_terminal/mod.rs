@@ -16,12 +16,14 @@ pub enum NativeTerminalColorScheme {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub struct NativeTerminalSurfaceFrameSyncRequest<'a> {
     pub frame: NativeTerminalFrame,
     pub terminal_id: &'a str,
 }
 
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub struct NativeTerminalSurfaceSyncRequest<'a> {
     pub background_color: &'a str,
     pub color_scheme: NativeTerminalColorScheme,

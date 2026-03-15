@@ -47,23 +47,23 @@ const TOKEN_FALLBACKS: Record<"light" | "dark", TerminalThemeTokens> = {
 const ANSI_PALETTES: Partial<Record<ResolvedTheme, TerminalAnsiPalette>> &
   Record<"light" | "dark", TerminalAnsiPalette> = {
   dark: {
-    black: "#27272a",
-    red: "#ef4444",
-    green: "#22c55e",
-    yellow: "#f59e0b",
-    blue: "#60a5fa",
-    magenta: "#a78bfa",
-    cyan: "#22d3ee",
-    white: "#d4d4d8",
-    brightBlack: "#71717a",
-    brightRed: "#f87171",
-    brightGreen: "#4ade80",
-    brightYellow: "#fbbf24",
-    brightBlue: "#93c5fd",
-    brightMagenta: "#c4b5fd",
-    brightCyan: "#67e8f9",
+    black: "#322d28",
+    red: "#de7474",
+    green: "#83b86f",
+    yellow: "#c9aa5f",
+    blue: "#6f9dbc",
+    magenta: "#b393d8",
+    cyan: "#72b9b6",
+    white: "#ddd6cf",
+    brightBlack: "#8f867c",
+    brightRed: "#eb8a84",
+    brightGreen: "#9ccc85",
+    brightYellow: "#d9bd76",
+    brightBlue: "#87b2cf",
+    brightMagenta: "#c6a8e4",
+    brightCyan: "#8acbc7",
     brightWhite: "#fafaf9",
-    cursor: "#93c5fd",
+    cursor: "#87b2cf",
   },
   light: {
     black: "#e4e4e7",
@@ -88,12 +88,52 @@ const ANSI_PALETTES: Partial<Record<ResolvedTheme, TerminalAnsiPalette>> &
 
 function readToken(styles: CSSStyleDeclaration, token: string, fallback: string): string {
   const value = styles.getPropertyValue(token).trim();
-  return value || fallback;
+  return resolveTokenValue(styles, value, fallback);
 }
 
 function readOptionalToken(styles: CSSStyleDeclaration, token: string): string | undefined {
   const value = styles.getPropertyValue(token).trim();
-  return value || undefined;
+  if (!value) {
+    return undefined;
+  }
+
+  return resolveTokenValue(styles, value, value);
+}
+
+function resolveTokenValue(
+  styles: CSSStyleDeclaration,
+  value: string,
+  fallback: string,
+  seen: Set<string> = new Set(),
+): string {
+  const trimmedValue = value.trim();
+  if (!trimmedValue) {
+    return fallback;
+  }
+
+  const variableReference = /^var\((--[^),\s]+)(?:,\s*(.+))?\)$/.exec(trimmedValue);
+  if (!variableReference) {
+    return trimmedValue;
+  }
+
+  const [, referencedToken, inlineFallback] = variableReference;
+  const resolvedInlineFallback = inlineFallback
+    ? resolveTokenValue(styles, inlineFallback.trim(), fallback, new Set(seen))
+    : fallback;
+
+  if (!referencedToken || seen.has(referencedToken)) {
+    return resolvedInlineFallback;
+  }
+
+  const nextSeen = new Set(seen);
+  nextSeen.add(referencedToken);
+
+  const referencedValue = styles.getPropertyValue(referencedToken).trim();
+  if (!referencedValue) {
+    return resolvedInlineFallback;
+  }
+
+  return resolveTokenValue(styles, referencedValue, resolvedInlineFallback, nextSeen);
 }
 
 function readTerminalPaletteOverrides(styles: CSSStyleDeclaration): Partial<TerminalAnsiPalette> {
@@ -159,7 +199,7 @@ export function readTerminalThemeTokens(
     background: readToken(
       styles,
       "--terminal-surface-background",
-      readToken(styles, "--background", fallback.background),
+      readToken(styles, "--surface", readToken(styles, "--background", fallback.background)),
     ),
     foreground: readToken(
       styles,

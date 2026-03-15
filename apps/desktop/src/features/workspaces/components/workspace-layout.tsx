@@ -119,11 +119,12 @@ export function WorkspaceLayout({
     workspace.mode === "local" && workspace.worktree_path !== null ? workspace.id : null,
   );
 
-  const handleRun = useCallback(async () => {
+  const handleRun = useCallback(async (serviceNames?: string[]) => {
     if (!config) return;
     try {
       const manifestJson = JSON.stringify(config);
       await startServices({
+        serviceNames,
         workspace,
         services,
         manifestJson,
@@ -497,7 +498,7 @@ export function WorkspaceLayout({
       <div className="flex min-w-0 flex-1 flex-col" data-slot="workspace-canvas">
         {canvasContent}
       </div>
-      <div className="relative z-[1] flex shrink-0 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--card)]">
+      <div className="relative z-[1] flex shrink-0 overflow-hidden rounded-lg border border-[var(--border)] bg-[var(--surface)]">
         <ExtensionPanel
           activeSlot={activeExtensionSlot}
           maxWidth={panelBounds.maxSize}

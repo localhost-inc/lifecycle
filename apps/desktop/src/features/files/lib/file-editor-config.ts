@@ -12,7 +12,7 @@ import type { FileRendererEditorConfig, FileEditorConfig } from "./file-editor-t
 function createBaseFileCodeEditorTheme() {
   return EditorView.theme({
     "&": {
-      backgroundColor: "var(--background)",
+      backgroundColor: "var(--surface)",
       color: "var(--foreground)",
       fontSize: "12px",
       height: "100%",
@@ -28,7 +28,7 @@ function createBaseFileCodeEditorTheme() {
       borderLeftColor: "var(--foreground)",
     },
     ".cm-gutters": {
-      backgroundColor: "color-mix(in srgb, var(--panel), transparent 20%)",
+      backgroundColor: "color-mix(in srgb, var(--surface), transparent 20%)",
       borderRight: "1px solid var(--border)",
       color: "var(--muted-foreground)",
     },
@@ -42,7 +42,7 @@ function createBaseFileCodeEditorTheme() {
       backgroundColor: "color-mix(in srgb, var(--ring), transparent 72%)",
     },
     ".cm-panels": {
-      backgroundColor: "var(--panel)",
+      backgroundColor: "var(--surface)",
       color: "var(--foreground)",
     },
     ".cm-scroller": {

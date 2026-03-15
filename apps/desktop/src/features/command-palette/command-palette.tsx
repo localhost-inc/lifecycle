@@ -121,7 +121,7 @@ export function CommandPalette({
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogPopup>
         <div
-          className="w-full max-w-[560px] origin-top overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--panel)] shadow-[0_16px_70px_-12px_rgba(0,0,0,0.3)] transition-[transform,opacity] data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0"
+          className="w-full max-w-[560px] origin-top overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)] shadow-[0_16px_70px_-12px_rgba(0,0,0,0.3)] transition-[transform,opacity] data-[ending-style]:scale-[0.98] data-[ending-style]:opacity-0 data-[starting-style]:scale-[0.98] data-[starting-style]:opacity-0"
           onClick={(event) => event.stopPropagation()}
         >
           <CommandPaletteInput

@@ -9,7 +9,7 @@ use crate::shared::errors::{
 };
 use crate::WorkspaceControllerRegistryHandle;
 use rusqlite::params;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use tauri::{AppHandle, State};
@@ -147,6 +147,37 @@ fn load_setup_completed(db_path: &str, workspace_id: &str) -> Result<bool, Lifec
     Ok(setup_completed_at.is_some())
 }
 
+fn load_ready_service_names(
+    db_path: &str,
+    workspace_id: &str,
+) -> Result<HashSet<String>, LifecycleError> {
+    let conn = open_db(db_path)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT service_name
+             FROM workspace_service
+             WHERE workspace_id = ?1 AND status = 'ready'",
+        )
+        .map_err(|error| LifecycleError::Database(error.to_string()))?;
+    let rows = stmt
+        .query_map(params![workspace_id], |row| row.get::<_, String>(0))
+        .map_err(|error| LifecycleError::Database(error.to_string()))?;
+
+    let mut ready_service_names = HashSet::new();
+    for row in rows {
+        ready_service_names
+            .insert(row.map_err(|error| LifecycleError::Database(error.to_string()))?);
+    }
+
+    Ok(ready_service_names)
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum WorkspaceStartMode {
+    Cold,
+    Incremental,
+}
+
 fn mark_setup_completed(db_path: &str, workspace_id: &str) -> Result<(), LifecycleError> {
     let conn = open_db(db_path)?;
     conn.execute(
@@ -249,6 +280,7 @@ struct WorkspaceStartContext<'a> {
     app: &'a AppHandle,
     controller: &'a ManagedWorkspaceController,
     db_path: &'a str,
+    start_mode: WorkspaceStartMode,
     start_token: WorkspaceControllerToken,
     workspace_id: &'a str,
     worktree_path: &'a str,
@@ -276,6 +308,7 @@ impl WorkspaceStartContext<'_> {
             self.controller,
             self.db_path,
             &self.start_token,
+            self.start_mode,
             self.workspace_id,
             failure_reason,
         )
@@ -548,15 +581,22 @@ impl WorkspaceStartContext<'_> {
 
     async fn execute_environment_graph(
         &self,
+        nodes: &HashMap<String, EnvironmentNode>,
         sorted_nodes: &[(&str, &EnvironmentNode)],
     ) -> Result<(), LifecycleError> {
         for (node_name, node) in sorted_nodes {
             match &node.kind {
                 EnvironmentNodeKind::Task(step) => {
-                    self.execute_task_node(node_name, step).await?;
+                    if let Err(error) = self.execute_task_node(node_name, step).await {
+                        mark_dependent_services_failed(self, nodes, node_name)?;
+                        return Err(error);
+                    }
                 }
                 EnvironmentNodeKind::Service(service) => {
-                    self.execute_service_node(node_name, service).await?;
+                    if let Err(error) = self.execute_service_node(node_name, service).await {
+                        mark_dependent_services_failed(self, nodes, node_name)?;
+                        return Err(error);
+                    }
                 }
             }
         }
@@ -586,6 +626,7 @@ async fn record_start_failure(
     controller: &ManagedWorkspaceController,
     db_path: &str,
     start_token: &WorkspaceControllerToken,
+    start_mode: WorkspaceStartMode,
     workspace_id: &str,
     failure_reason: WorkspaceFailureReason,
 ) -> Result<bool, LifecycleError> {
@@ -593,22 +634,97 @@ async fn record_start_failure(
         return Ok(false);
     }
 
+    let next_workspace_status = match start_mode {
+        WorkspaceStartMode::Cold => WorkspaceStatus::Idle,
+        WorkspaceStartMode::Incremental => WorkspaceStatus::Active,
+    };
+    let next_failure_reason = match start_mode {
+        WorkspaceStartMode::Cold => Some(&failure_reason),
+        WorkspaceStartMode::Incremental => None,
+    };
     update_workspace_status_db(
         db_path,
         workspace_id,
-        &WorkspaceStatus::Idle,
-        Some(&failure_reason),
+        &next_workspace_status,
+        next_failure_reason,
     )?;
-    emit_workspace_status(app, workspace_id, "idle", Some(failure_reason.as_str()));
+    emit_workspace_status(
+        app,
+        workspace_id,
+        next_workspace_status.as_str(),
+        next_failure_reason.map(WorkspaceFailureReason::as_str),
+    );
     controller.finish_start(start_token).await;
-    controller.stop_runtime().await;
 
-    let stopped_services = mark_nonfailed_services_stopped(db_path, workspace_id)?;
-    for service_name in stopped_services {
-        emit_service_status(app, workspace_id, &service_name, "stopped", None);
+    if matches!(start_mode, WorkspaceStartMode::Cold) {
+        controller.stop_runtime().await;
+
+        let stopped_services = mark_nonfailed_services_stopped(db_path, workspace_id)?;
+        for service_name in stopped_services {
+            emit_service_status(app, workspace_id, &service_name, "stopped", None);
+        }
     }
 
     Ok(true)
+}
+
+fn collect_dependent_service_names(
+    nodes: &HashMap<String, EnvironmentNode>,
+    failed_node_name: &str,
+) -> Vec<String> {
+    let mut visited = HashSet::from([failed_node_name.to_string()]);
+    let mut frontier = vec![failed_node_name.to_string()];
+    let mut dependent_service_names = Vec::new();
+
+    while let Some(node_name) = frontier.pop() {
+        for (candidate_name, candidate_node) in nodes {
+            if visited.contains(candidate_name) || !candidate_node.depends_on().contains(&node_name)
+            {
+                continue;
+            }
+
+            visited.insert(candidate_name.clone());
+            frontier.push(candidate_name.clone());
+
+            if matches!(candidate_node.kind, EnvironmentNodeKind::Service(_)) {
+                dependent_service_names.push(candidate_name.clone());
+            }
+        }
+    }
+
+    dependent_service_names.sort();
+    dependent_service_names
+}
+
+fn mark_dependent_services_failed(
+    ctx: &WorkspaceStartContext<'_>,
+    nodes: &HashMap<String, EnvironmentNode>,
+    failed_node_name: &str,
+) -> Result<(), LifecycleError> {
+    let dependent_service_names = collect_dependent_service_names(nodes, failed_node_name);
+
+    if dependent_service_names.is_empty() {
+        return Ok(());
+    }
+
+    mark_services_failed(
+        ctx.db_path,
+        ctx.workspace_id,
+        &dependent_service_names,
+        "service_dependency_failed",
+    )?;
+
+    for service_name in dependent_service_names {
+        emit_service_status(
+            ctx.app,
+            ctx.workspace_id,
+            &service_name,
+            "failed",
+            Some("service_dependency_failed"),
+        );
+    }
+
+    Ok(())
 }
 
 async fn record_service_graph_failure(
@@ -648,6 +764,8 @@ async fn start_services_lifecycle(
     controller: &ManagedWorkspaceController,
     db_path: &str,
     start_token: WorkspaceControllerToken,
+    start_mode: WorkspaceStartMode,
+    service_names: Option<&[String]>,
     workspace_id: &str,
     worktree_path: &str,
     config: &LifecycleConfig,
@@ -659,16 +777,29 @@ async fn start_services_lifecycle(
         workspace_id,
         Some(config),
         Some(manifest_fingerprint),
+        matches!(start_mode, WorkspaceStartMode::Incremental),
     )?;
     if abort_start_if_needed(db_path, workspace_id, controller, &start_token).await? {
         return Ok(());
     }
     let runtime_config = config_with_workspace_overrides(db_path, workspace_id, config)?;
     let setup_completed = load_setup_completed(db_path, workspace_id)?;
-    let lowered_graph = match lower_environment_graph(&runtime_config, setup_completed) {
+    let satisfied_service_names = if matches!(start_mode, WorkspaceStartMode::Incremental) {
+        load_ready_service_names(db_path, workspace_id)?
+    } else {
+        HashSet::new()
+    };
+    let lowered_graph = match lower_environment_graph(
+        &runtime_config,
+        setup_completed,
+        service_names,
+        Some(&satisfied_service_names),
+    ) {
         Ok(graph) => graph,
         Err(error) => {
-            let service_names = runtime_config.declared_service_names();
+            let service_names = service_names
+                .map(|names| names.to_vec())
+                .unwrap_or_else(|| runtime_config.declared_service_names());
             mark_services_failed(
                 db_path,
                 workspace_id,
@@ -691,6 +822,7 @@ async fn start_services_lifecycle(
                 controller,
                 db_path,
                 &start_token,
+                start_mode,
                 workspace_id,
                 WorkspaceFailureReason::ServiceStartFailed,
             )
@@ -702,12 +834,32 @@ async fn start_services_lifecycle(
             return Err(error);
         }
     };
+    let selected_service_names = lowered_graph
+        .environment_nodes
+        .iter()
+        .filter_map(|(node_name, node)| match node.kind {
+            EnvironmentNodeKind::Service(_) => Some(node_name.clone()),
+            EnvironmentNodeKind::Task(_) => None,
+        })
+        .collect::<Vec<_>>();
+    if lowered_graph.workspace_setup.is_empty() && lowered_graph.environment_nodes.is_empty() {
+        update_workspace_status_db(db_path, workspace_id, &WorkspaceStatus::Active, None)?;
+        emit_workspace_status(app, workspace_id, "active", None);
+        controller.finish_start(&start_token).await;
+        diagnostics::append_timing(
+            "workspace-start",
+            &format!("workspace {workspace_id} total"),
+            total_started_at,
+        );
+        return Ok(());
+    }
     let runtime_env = build_runtime_env(db_path, workspace_id, worktree_path)?;
     let storage_root = workspace_volume_root(db_path, workspace_id)?;
     let ctx = WorkspaceStartContext {
         app,
         controller,
         db_path,
+        start_mode,
         start_token: start_token.clone(),
         workspace_id,
         worktree_path,
@@ -717,8 +869,7 @@ async fn start_services_lifecycle(
     let sorted_nodes = match topo_sort_environment_nodes(&lowered_graph.environment_nodes) {
         Ok(sorted) => sorted,
         Err(error) => {
-            let service_names = runtime_config.declared_service_names();
-            record_service_graph_failure(&ctx, &service_names, error).await?;
+            record_service_graph_failure(&ctx, &selected_service_names, error).await?;
             return Ok(());
         }
     };
@@ -767,7 +918,8 @@ async fn start_services_lifecycle(
         }
     }
 
-    ctx.execute_environment_graph(&sorted_nodes).await?;
+    ctx.execute_environment_graph(&lowered_graph.environment_nodes, &sorted_nodes)
+        .await?;
 
     if !setup_completed && setup_work_ran {
         mark_setup_completed(db_path, workspace_id)?;
@@ -797,11 +949,29 @@ pub async fn start_services(
     workspace_id: String,
     manifest_json: String,
     manifest_fingerprint: String,
+    service_names: Option<Vec<String>>,
 ) -> Result<(), LifecycleError> {
     let config = parse_lifecycle_config(&manifest_json)?;
+    let service_names = service_names.filter(|names| !names.is_empty());
     let _mutation_guard = workspace_controllers
         .acquire_mutation_guard(&workspace_id)
         .await?;
+    let current_workspace_status = load_workspace_status(&db_path.0, &workspace_id)?;
+    let start_mode = match (&current_workspace_status, service_names.as_ref()) {
+        (WorkspaceStatus::Idle, _) => WorkspaceStartMode::Cold,
+        (WorkspaceStatus::Active, Some(_)) => WorkspaceStartMode::Incremental,
+        (WorkspaceStatus::Starting | WorkspaceStatus::Stopping, _) => {
+            return Err(LifecycleError::WorkspaceMutationLocked {
+                status: current_workspace_status.as_str().to_string(),
+            });
+        }
+        (WorkspaceStatus::Active, None) => {
+            return Err(LifecycleError::InvalidStateTransition {
+                from: WorkspaceStatus::Active.as_str().to_string(),
+                to: WorkspaceStatus::Starting.as_str().to_string(),
+            });
+        }
+    };
 
     // Read workspace row — validate worktree_path is set.
     let worktree_path = {
@@ -818,6 +988,24 @@ pub async fn start_services(
             ))
         })?
     };
+    let setup_completed = load_setup_completed(&db_path.0, &workspace_id)?;
+    let satisfied_service_names = if matches!(start_mode, WorkspaceStartMode::Incremental) {
+        load_ready_service_names(&db_path.0, &workspace_id)?
+    } else {
+        HashSet::new()
+    };
+    let lowered_graph = lower_environment_graph(
+        &config,
+        setup_completed,
+        service_names.as_deref(),
+        Some(&satisfied_service_names),
+    )?;
+    if matches!(start_mode, WorkspaceStartMode::Incremental)
+        && lowered_graph.workspace_setup.is_empty()
+        && lowered_graph.environment_nodes.is_empty()
+    {
+        return Ok(());
+    }
 
     // Acquire workspace lifecycle lock synchronously to prevent concurrent starts.
     transition_workspace_to_starting(&db_path.0, &workspace_id)?;
@@ -827,6 +1015,7 @@ pub async fn start_services(
     let controller = workspace_controllers.get_or_create(&workspace_id).await;
     let start_token = controller.begin_start().await?;
     let ws_id = workspace_id.clone();
+    let requested_service_names = service_names.clone();
 
     tokio::spawn(async move {
         if let Err(e) = start_services_lifecycle(
@@ -834,6 +1023,8 @@ pub async fn start_services(
             &controller,
             &db,
             start_token,
+            start_mode,
+            requested_service_names.as_deref(),
             &ws_id,
             &worktree_path,
             &config,
@@ -882,6 +1073,7 @@ pub async fn sync_workspace_manifest(
             &workspace_id,
             config.as_ref(),
             manifest_fingerprint.as_deref(),
+            false,
         )?;
         if let Some(app) = app {
             let services =
@@ -896,4 +1088,92 @@ pub async fn sync_workspace_manifest(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::capabilities::workspaces::manifest::{ProcessService, SetupStep};
+
+    #[test]
+    fn collect_dependent_service_names_only_marks_impacted_service_descendants() {
+        let nodes = HashMap::from([
+            (
+                "api".to_string(),
+                EnvironmentNode {
+                    kind: EnvironmentNodeKind::Service(ServiceConfig::Process(ProcessService {
+                        command: "bun run api".to_string(),
+                        cwd: None,
+                        env: None,
+                        depends_on: None,
+                        startup_timeout_seconds: None,
+                        health_check: None,
+                        port: Some(8787),
+                        share_default: None,
+                        resolved_port: None,
+                    })),
+                    depends_on: vec!["migrate".to_string()],
+                },
+            ),
+            (
+                "migrate".to_string(),
+                EnvironmentNode {
+                    kind: EnvironmentNodeKind::Task(SetupStep {
+                        name: "migrate".to_string(),
+                        command: Some("bun run db:migrate".to_string()),
+                        write_files: None,
+                        timeout_seconds: 60,
+                        cwd: None,
+                        env: None,
+                        depends_on: Some(vec![]),
+                        run_on: None,
+                    }),
+                    depends_on: vec![],
+                },
+            ),
+            (
+                "www".to_string(),
+                EnvironmentNode {
+                    kind: EnvironmentNodeKind::Service(ServiceConfig::Process(ProcessService {
+                        command: "bun run www".to_string(),
+                        cwd: None,
+                        env: None,
+                        depends_on: Some(vec!["api".to_string()]),
+                        startup_timeout_seconds: None,
+                        health_check: None,
+                        port: Some(3000),
+                        share_default: Some(true),
+                        resolved_port: None,
+                    })),
+                    depends_on: vec!["api".to_string()],
+                },
+            ),
+            (
+                "docs".to_string(),
+                EnvironmentNode {
+                    kind: EnvironmentNodeKind::Service(ServiceConfig::Process(ProcessService {
+                        command: "bun run docs".to_string(),
+                        cwd: None,
+                        env: None,
+                        depends_on: None,
+                        startup_timeout_seconds: None,
+                        health_check: None,
+                        port: Some(4000),
+                        share_default: Some(true),
+                        resolved_port: None,
+                    })),
+                    depends_on: vec![],
+                },
+            ),
+        ]);
+
+        assert_eq!(
+            collect_dependent_service_names(&nodes, "migrate"),
+            vec!["api".to_string(), "www".to_string()]
+        );
+        assert_eq!(
+            collect_dependent_service_names(&nodes, "api"),
+            vec!["www".to_string()]
+        );
+    }
 }

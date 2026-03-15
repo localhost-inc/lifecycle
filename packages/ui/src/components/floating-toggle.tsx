@@ -55,7 +55,7 @@ export function FloatingToggle<T extends string>({
               className={cn(
                 "inline-flex shrink-0 items-center justify-center rounded-full text-xs font-medium leading-none transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:pointer-events-none",
                 active
-                  ? "bg-[color-mix(in_srgb,var(--panel)_92%,transparent)] text-[var(--foreground)] shadow-[0_8px_24px_color-mix(in_srgb,var(--foreground)_10%,transparent)]"
+                  ? "bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] text-[var(--foreground)] shadow-[0_8px_24px_color-mix(in_srgb,var(--foreground)_10%,transparent)]"
                   : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]",
                 option.itemClassName,
               )}

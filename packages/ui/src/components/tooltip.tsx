@@ -46,7 +46,7 @@ function TooltipContent({
       >
         <TooltipPrimitive.Popup
           className={cn(
-            "z-50 border border-[var(--border)] bg-[var(--panel)] px-2 py-1 text-xs text-[var(--foreground)] shadow-none rounded-lg",
+            "z-50 border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-xs text-[var(--foreground)] shadow-none rounded-lg",
             className,
           )}
           data-slot="tooltip-content"

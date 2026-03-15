@@ -10,33 +10,34 @@
     ]
   },
 
-  // Explicit long-lived services. We model the previewable web surfaces directly
-  // instead of delegating orchestration to the repo-level `bun run dev` fanout.
+  // Explicit long-lived app services. Lifecycle assigns the effective port at
+  // runtime, and the app entrypoints read it from PORT/LIFECYCLE_SERVICE_* env.
   "environment": {
-    "desktop-web": {
-      "kind": "service",
-      "runtime": "process",
-      "command": "bun run vite:dev",
-      "cwd": "apps/desktop",
-      "port": 1420,
-      "share_default": true,
-      "startup_timeout_seconds": 45,
-      "health_check": {
-        "kind": "http",
-        "url": "http://${LIFECYCLE_SERVICE_DESKTOP_WEB_ADDRESS}",
-        "timeout_seconds": 5
-      }
-    },
-    "worker": {
+    "api": {
       "kind": "service",
       "runtime": "process",
       "command": "bun run dev",
-      "cwd": "apps/worker",
+      "cwd": "apps/api",
       "port": 8787,
       "startup_timeout_seconds": 30,
       "health_check": {
         "kind": "http",
-        "url": "http://${LIFECYCLE_SERVICE_WORKER_ADDRESS}/health",
+        "url": "http://${LIFECYCLE_SERVICE_API_ADDRESS}/health",
+        "timeout_seconds": 5
+      }
+    },
+    "www": {
+      "kind": "service",
+      "runtime": "process",
+      "command": "bun run dev",
+      "cwd": "apps/www",
+      "depends_on": ["api"],
+      "port": 3000,
+      "share_default": true,
+      "startup_timeout_seconds": 30,
+      "health_check": {
+        "kind": "http",
+        "url": "http://${LIFECYCLE_SERVICE_WWW_ADDRESS}",
         "timeout_seconds": 5
       }
     }

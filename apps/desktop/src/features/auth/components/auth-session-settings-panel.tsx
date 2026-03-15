@@ -53,7 +53,7 @@ function AuthSessionAvatar({
 
   if (isLoading) {
     return (
-      <div className="flex size-12 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[color-mix(in_srgb,var(--panel),var(--foreground)_4%)]">
+      <div className="flex size-12 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface),var(--foreground)_4%)]">
         <Spinner className="size-4 text-[var(--muted-foreground)]" />
       </div>
     );
@@ -83,7 +83,7 @@ function AuthSessionAvatar({
   }
 
   return (
-    <div className="flex size-12 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[color-mix(in_srgb,var(--panel),var(--foreground)_4%)] text-[var(--muted-foreground)]">
+    <div className="flex size-12 shrink-0 items-center justify-center rounded-full border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface),var(--foreground)_4%)] text-[var(--muted-foreground)]">
       <CircleUserRound size={22} strokeWidth={1.8} />
     </div>
   );
@@ -115,7 +115,7 @@ export function AuthSessionSettingsPanel({
                 "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium leading-none",
                 isSignedIn
                   ? "border-[color-mix(in_srgb,var(--border),var(--foreground)_12%)] bg-[color-mix(in_srgb,var(--foreground),transparent_94%)] text-[var(--foreground)]"
-                  : "border-[var(--border)] bg-[color-mix(in_srgb,var(--panel),var(--foreground)_3%)] text-[var(--muted-foreground)]",
+                  : "border-[var(--border)] bg-[color-mix(in_srgb,var(--surface),var(--foreground)_3%)] text-[var(--muted-foreground)]",
               ].join(" ")}
             >
               {stateLabel}
@@ -143,13 +143,13 @@ export function AuthSessionSettingsPanel({
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
-        <div className="rounded-2xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--panel),var(--foreground)_2%)] px-3 py-2.5">
+        <div className="rounded-2xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface),var(--foreground)_2%)] px-3 py-2.5">
           <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)]">
             Runtime path
           </p>
           <p className="mt-1 text-sm text-[var(--foreground)]">{environmentLabel}</p>
         </div>
-        <div className="rounded-2xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--panel),var(--foreground)_2%)] px-3 py-2.5">
+        <div className="rounded-2xl border border-[var(--border)] bg-[color-mix(in_srgb,var(--surface),var(--foreground)_2%)] px-3 py-2.5">
           <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)]">
             Auth source
           </p>

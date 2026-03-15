@@ -102,7 +102,7 @@ export function summarizeRouteError(error: unknown): RouteErrorSummary {
 
 function ErrorHero() {
   return (
-    <div className="relative flex h-32 w-32 items-center justify-center rounded-[32px] border border-[color-mix(in_srgb,var(--border),var(--foreground)_12%)] bg-[color-mix(in_srgb,var(--panel),var(--background)_26%)]">
+    <div className="relative flex h-32 w-32 items-center justify-center rounded-[32px] border border-[color-mix(in_srgb,var(--border),var(--foreground)_12%)] bg-[color-mix(in_srgb,var(--surface),var(--background)_26%)]">
       <div
         aria-hidden="true"
         className="lifecycle-motion-ready-ring absolute h-[5.5rem] w-[5.5rem] rounded-full border border-[color-mix(in_srgb,var(--foreground),transparent_78%)]"
@@ -191,7 +191,7 @@ export function RouteErrorSurface({
 
             <aside className="flex flex-col justify-end gap-4">
               <EmptyState
-                className="min-h-[220px] rounded-[28px] border border-[color-mix(in_srgb,var(--border),var(--foreground)_10%)] bg-[color-mix(in_srgb,var(--panel),var(--background)_18%)]"
+                className="min-h-[220px] rounded-[28px] border border-[color-mix(in_srgb,var(--border),var(--foreground)_10%)] bg-[color-mix(in_srgb,var(--surface),var(--background)_18%)]"
                 description="The failure is isolated to this surface. Workspace state and local settings stay intact until you choose the next move."
                 icon={
                   <div className="rounded-[22px] border border-[color-mix(in_srgb,var(--border),var(--foreground)_10%)] bg-[var(--background)] p-3">
@@ -202,7 +202,7 @@ export function RouteErrorSurface({
                 title="Shell still stable"
               />
 
-              <div className="rounded-[28px] border border-[color-mix(in_srgb,var(--border),var(--foreground)_10%)] bg-[color-mix(in_srgb,var(--panel),var(--background)_18%)] p-5">
+              <div className="rounded-[28px] border border-[color-mix(in_srgb,var(--border),var(--foreground)_10%)] bg-[color-mix(in_srgb,var(--surface),var(--background)_18%)] p-5">
                 <div className="space-y-4" data-slot="route-error-detail">
                   <DetailRow label="Surface" value={pathLabel} />
                   <DetailRow

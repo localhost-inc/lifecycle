@@ -31,7 +31,7 @@ Includes:
 
 ### Shell plane
 
-The outer `--panel` chrome layer.
+The outer `--background` chrome layer.
 
 Contains:
 
@@ -96,7 +96,7 @@ Use `page tabs`.
 
 The rail inside project main that renders page tabs.
 
-It belongs to the project layout, not the shell plane, even when it uses panel styling.
+It belongs to the project layout, not the shell plane, even when it uses surface styling.
 
 ### Active tab
 
@@ -106,7 +106,7 @@ The currently selected top-level page tab.
 
 ### Project layout
 
-The single raised `--background` surface for the active project.
+The single raised `--surface` surface for the active project.
 
 Contains:
 

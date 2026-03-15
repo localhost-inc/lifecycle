@@ -2,6 +2,16 @@
   "name": "@lifecycle/desktop",
   "version": "0.0.0",
   "private": true,
+  "description": "Lifecycle desktop shell for local-first workspace operations.",
+  "homepage": "https://github.com/localhost-inc/lifecycle",
+  "bugs": {
+    "url": "https://github.com/localhost-inc/lifecycle/issues"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/localhost-inc/lifecycle.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "tauri dev --no-watch --config src-tauri/tauri.dev.conf.json",

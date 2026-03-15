@@ -629,7 +629,7 @@ export function AppShellLayout() {
         projects={projects}
         workspacesByProjectId={workspacesByProjectId}
       >
-        <div className="flex h-full w-full flex-col gap-0.5 bg-[var(--panel)] px-2 pb-2 pt-0.5 text-[var(--foreground)]">
+        <div className="flex h-full w-full flex-col gap-0.5 bg-[var(--background)] px-2 pb-2 pt-0.5 text-[var(--foreground)]">
           <AppHotkeyListener />
           <ProjectSwitcherStrip
             activeProjectId={activeProject?.id ?? null}

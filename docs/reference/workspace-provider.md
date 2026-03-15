@@ -38,7 +38,7 @@ In V1, the environment is represented on the workspace record rather than as a s
 interface WorkspaceProvider {
   createWorkspace(input + manifest_json? + manifest_fingerprint?) → { workspace, worktree_path }
   renameWorkspace(workspace_id, name) → workspace
-  startServices(workspace + manifest_json + manifest_fingerprint) → service_statuses
+  startServices(workspace + manifest_json + manifest_fingerprint + service_names?) → service_statuses
   healthCheck(manifest.environment[kind=service].health_check) → pass/fail per service
   stopServices(service_names[]) → void
   runSetup(workspace_id) → void
@@ -88,11 +88,13 @@ Provider-specific runtime detail should not be stuffed into a generic `mode_stat
 
 1. `createWorkspace` and `destroy` are workspace-lifecycle operations.
 2. `startServices`, `stopServices`, `sleep`, `wake`, and reset flows operate on the environment attached to that workspace.
-3. Local create/start/wake flows must carry the exact manifest content plus `manifest_fingerprint`; the provider must not infer lifecycle state from stale cached service rows.
-4. Future archive/unarchive flows are workspace-lifecycle operations that must drive the environment down or back up as needed.
-5. The provider boundary should expose one coherent workspace-scoped API even when the underlying behavior targets the environment or a service within it.
-6. Workspace-scoped read models such as runtime projection, snapshot, terminal lists, and workspace file access should also route through the provider when they materially depend on the authoritative execution context.
-7. Aggregate control-plane queries such as "list all workspaces by project" may stay outside the provider as long as they operate on normalized domain records rather than provider-specific transport rows.
+3. `startServices(service_names?)` may target a single service chain; providers must honor manifest `depends_on` edges for the requested services rather than forcing callers to hand-expand dependencies.
+4. When `startServices(service_names?)` is called against an already-active workspace, providers should treat `ready` dependency services as satisfied boundaries and avoid restarting them just to boot a downstream target.
+5. Local create/start/wake flows must carry the exact manifest content plus `manifest_fingerprint`; the provider must not infer lifecycle state from stale cached service rows.
+6. Future archive/unarchive flows are workspace-lifecycle operations that must drive the environment down or back up as needed.
+7. The provider boundary should expose one coherent workspace-scoped API even when the underlying behavior targets the environment or a service within it.
+8. Workspace-scoped read models such as runtime projection, snapshot, terminal lists, and workspace file access should also route through the provider when they materially depend on the authoritative execution context.
+9. Aggregate control-plane queries such as "list all workspaces by project" may stay outside the provider as long as they operate on normalized domain records rather than provider-specific transport rows.
 
 ## Execution Model
 
@@ -132,10 +134,10 @@ Terminal control stays split between typed lifecycle mutations and desktop surfa
 1. Control-plane operations stay typed and imperative (`create`, `detach`, `kill`).
 2. `createTerminal(...)` provisions a provider-owned terminal session and returns typed terminal metadata.
 3. Session runtime stays provider-owned:
-   - local mode runs a native libghostty-owned session on the host machine
+   - local mode runs an external host-managed session on the machine (currently `tmux`, keyed by `terminal.id`)
    - cloud mode runs a sandbox-owned PTY session and may add a shared-session multiplexer
 4. Terminal metadata mutations such as rename and workspace-scoped attachment persistence are also provider-owned terminal operations.
-5. When the desktop app has a native terminal host available, both local and cloud terminals should render through that host; cloud attach transport may use a provider-specific bridge or proxy path rather than reviving a browser renderer contract inside the main app.
+5. When the desktop app has a native terminal host available, both local and cloud terminals should render through that host; local native Ghostty is attach-only presentation over the external host-managed session, and cloud attach transport may use a provider-specific bridge or proxy path rather than reviving a browser renderer contract inside the main app.
 6. Desktop-only geometry, visibility, focus, theme, and font synchronization for native surfaces stay outside the provider interface.
 7. `detachTerminal(terminal_id)` hides the active surface without terminating the running session.
 8. `killTerminal(terminal_id)` is the only normal terminal-level action that intentionally ends a live session.

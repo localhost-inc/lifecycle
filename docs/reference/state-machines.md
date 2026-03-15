@@ -36,7 +36,7 @@ Workspace lifecycle is about the durable shell, not whether services are current
 
 - `idle -> starting`
 - `starting -> active|stopping|idle`
-- `active -> stopping`
+- `active -> starting|stopping`
 - `stopping -> idle`
 
 ### Workspace Environment Invariants
@@ -44,20 +44,21 @@ Workspace lifecycle is about the durable shell, not whether services are current
 1. Allowed states: `idle`, `starting`, `active`, `stopping`
 2. Transitional environment status acts as implicit mutation lock for environment/service mutations (`starting|stopping`). Terminal create/attach is governed by interactive workspace context instead of service readiness.
 3. V1 `setup` follows each step's declared cadence; ordinary environment stop/start does not replay create-scoped setup work.
-4. All defined services must pass health checks before transition to `active`
-5. Failed start attempts land back in `idle`; the failure is carried by `failure_reason` and `failed_at` instead of a terminal `failed` status.
-6. Workspace creation and deletion are workspace-lifecycle concerns, not environment-status values.
+4. Cold starts and additive service boots both use `starting`; the environment returns to `active` once the current boot target is healthy.
+5. Full cold starts require all targeted services to pass health checks before transition to `active`.
+6. Failed cold starts land back in `idle`; failed additive service boots return to `active` when the workspace was already running. Service-level failures still surface on the affected `workspace_service` rows.
+7. Workspace creation and deletion are workspace-lifecycle concerns, not environment-status values.
 
 ### Environment State Semantics by Mode
 
 | State | `CloudWorkspaceProvider` | `LocalWorkspaceProvider` |
 |-------|-------------------|-------------------|
 | `idle` | No active sandbox services; workspace record persists | No running services; worktree persists |
-| `starting` | Provisioning or starting sandbox services | Running any required workspace setup and starting local processes + containers |
+| `starting` | Provisioning or starting sandbox services | Running any required workspace setup and starting the current local service target, including additive boots from an already-active environment |
 | `active` | Health checks pass in sandbox | Health checks pass on localhost |
 | `stopping` | Sandbox services are shutting down | Processes and containers are shutting down |
 
-- Failed start attempts record typed `failure_reason` and `failed_at` while returning the workspace to `idle`
+- Failed cold starts record typed `failure_reason` and `failed_at` while returning the workspace to `idle`
 - All forbidden transitions must throw `invalid_state_transition` error with current/target state in `details`
 
 ## Workspace Service `status` Allowed Transitions

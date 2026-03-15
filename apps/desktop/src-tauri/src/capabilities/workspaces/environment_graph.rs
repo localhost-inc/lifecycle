@@ -56,10 +56,87 @@ fn filter_satisfied_dependencies(
         .collect()
 }
 
+fn collect_selected_node_names(
+    config: &LifecycleConfig,
+    node_name: &str,
+    selected: &mut HashSet<String>,
+    satisfied_service_names: &HashSet<String>,
+) -> Result<(), LifecycleError> {
+    let node =
+        config
+            .environment
+            .get(node_name)
+            .ok_or_else(|| LifecycleError::ServiceStartFailed {
+                service: node_name.to_string(),
+                reason: format!("node '{node_name}' is not declared in environment"),
+            })?;
+
+    if matches!(node, EnvironmentNodeConfig::Service { .. })
+        && satisfied_service_names.contains(node_name)
+    {
+        return Ok(());
+    }
+
+    if !selected.insert(node_name.to_string()) {
+        return Ok(());
+    }
+
+    let dependencies = match node {
+        EnvironmentNodeConfig::Task(task) => task.depends_on(),
+        EnvironmentNodeConfig::Service { config } => config.depends_on(),
+    };
+
+    for dependency in dependencies {
+        collect_selected_node_names(config, dependency, selected, satisfied_service_names)?;
+    }
+
+    Ok(())
+}
+
+fn resolve_selected_node_names(
+    config: &LifecycleConfig,
+    target_service_names: Option<&[String]>,
+    satisfied_service_names: &HashSet<String>,
+) -> Result<Option<HashSet<String>>, LifecycleError> {
+    let Some(target_service_names) = target_service_names else {
+        return Ok(None);
+    };
+
+    if target_service_names.is_empty() {
+        return Ok(None);
+    }
+
+    let mut selected = HashSet::new();
+    for service_name in target_service_names {
+        let node =
+            config
+                .environment
+                .get(service_name)
+                .ok_or_else(|| LifecycleError::InvalidInput {
+                    field: "serviceNames".to_string(),
+                    reason: format!("unknown service '{service_name}'"),
+                })?;
+        if !matches!(node, EnvironmentNodeConfig::Service { .. }) {
+            return Err(LifecycleError::InvalidInput {
+                field: "serviceNames".to_string(),
+                reason: format!("'{service_name}' is not a service node"),
+            });
+        }
+        collect_selected_node_names(config, service_name, &mut selected, satisfied_service_names)?;
+    }
+
+    Ok(Some(selected))
+}
+
 pub(super) fn lower_environment_graph(
     config: &LifecycleConfig,
     setup_completed: bool,
+    target_service_names: Option<&[String]>,
+    satisfied_service_names: Option<&HashSet<String>>,
 ) -> Result<LoweredEnvironmentGraph, LifecycleError> {
+    let satisfied_service_names = satisfied_service_names.cloned().unwrap_or_default();
+    let selected_node_names =
+        resolve_selected_node_names(config, target_service_names, &satisfied_service_names)?;
     let workspace_setup = config
         .workspace
         .setup
@@ -78,9 +155,17 @@ pub(super) fn lower_environment_graph(
             _ => None,
         })
         .collect::<HashSet<_>>();
+    let mut satisfied_nodes = satisfied_nodes;
+    satisfied_nodes.extend(satisfied_service_names);
 
     let mut environment_nodes = HashMap::new();
     for (node_name, node_config) in &config.environment {
+        if selected_node_names
+            .as_ref()
+            .is_some_and(|selected| !selected.contains(node_name))
+        {
+            continue;
+        }
         match node_config {
             EnvironmentNodeConfig::Task(step) => {
                 if !should_run_task(step, setup_completed) {
@@ -266,7 +351,7 @@ mod tests {
             }"#,
         );
 
-        let graph = lower_environment_graph(&config, false).expect("graph lowers");
+        let graph = lower_environment_graph(&config, false, None, None).expect("graph lowers");
 
         assert_eq!(graph.workspace_setup.len(), 2);
         assert!(graph
@@ -307,7 +392,7 @@ mod tests {
             }"#,
         );
 
-        let graph = lower_environment_graph(&config, true).expect("graph lowers");
+        let graph = lower_environment_graph(&config, true, None, None).expect("graph lowers");
 
         assert!(graph.workspace_setup.is_empty());
         assert!(!graph.environment_nodes.contains_key("seed"));
@@ -337,7 +422,7 @@ mod tests {
             }"#,
         );
 
-        let graph = lower_environment_graph(&config, true).expect("graph lowers");
+        let graph = lower_environment_graph(&config, true, None, None).expect("graph lowers");
 
         assert!(!graph.environment_nodes.contains_key("seed"));
         assert_eq!(
@@ -369,7 +454,7 @@ mod tests {
             }"#,
         );
 
-        let graph = lower_environment_graph(&config, false).expect("graph lowers");
+        let graph = lower_environment_graph(&config, false, None, None).expect("graph lowers");
         let sorted = topo_sort_environment_nodes(&graph.environment_nodes).expect("nodes sort");
         let sorted_names = sorted
             .into_iter()
@@ -399,6 +484,55 @@ mod tests {
     }
 
     #[test]
+    fn lower_environment_graph_can_select_a_service_and_its_dependencies() {
+        let config = parse_config(
+            r#"{
+                "workspace": { "setup": [] },
+                "environment": {
+                    "api": { "kind": "service", "runtime": "process", "command": "bun run api" },
+                    "www": { "kind": "service", "runtime": "process", "command": "bun run www", "depends_on": ["api"] },
+                    "docs": { "kind": "service", "runtime": "process", "command": "bun run docs" }
+                }
+            }"#,
+        );
+
+        let graph = lower_environment_graph(&config, false, Some(&["www".to_string()]), None)
+            .expect("graph lowers");
+
+        let node_names = graph
+            .environment_nodes
+            .keys()
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            node_names,
+            BTreeSet::from(["api".to_string(), "www".to_string()])
+        );
+    }
+
+    #[test]
+    fn lower_environment_graph_rejects_unknown_selected_services() {
+        let config = parse_config(
+            r#"{
+                "workspace": { "setup": [] },
+                "environment": {
+                    "api": { "kind": "service", "runtime": "process", "command": "bun run api" }
+                }
+            }"#,
+        );
+
+        let error = lower_environment_graph(&config, false, Some(&["www".to_string()]), None)
+            .expect_err("unknown service should fail lowering");
+        match error {
+            LifecycleError::InvalidInput { field, reason } => {
+                assert_eq!(field, "serviceNames");
+                assert!(reason.contains("unknown service"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
     fn lower_environment_graph_fails_when_dependency_is_missing() {
         let config = parse_config(
             r#"{
@@ -409,7 +543,7 @@ mod tests {
             }"#,
         );
 
-        let error = lower_environment_graph(&config, false)
+        let error = lower_environment_graph(&config, false, None, None)
             .expect_err("missing dependency should fail lowering");
         match error {
             LifecycleError::ServiceStartFailed { service, reason } => {
@@ -432,7 +566,7 @@ mod tests {
             }"#,
         );
 
-        let graph = lower_environment_graph(&config, false).expect("graph lowers");
+        let graph = lower_environment_graph(&config, false, None, None).expect("graph lowers");
         let error =
             topo_sort_environment_nodes(&graph.environment_nodes).expect_err("cycle should fail");
         match error {
@@ -441,5 +575,57 @@ mod tests {
             }
             other => panic!("unexpected error: {other}"),
         }
+    }
+
+    #[test]
+    fn lower_environment_graph_skips_ready_service_dependencies_for_targeted_boots() {
+        let config = parse_config(
+            r#"{
+                "workspace": { "setup": [] },
+                "environment": {
+                    "api": {
+                        "kind": "service",
+                        "runtime": "process",
+                        "command": "bun run api",
+                        "depends_on": ["migrate"]
+                    },
+                    "migrate": {
+                        "kind": "task",
+                        "command": "bun run db:migrate",
+                        "timeout_seconds": 60
+                    },
+                    "www": {
+                        "kind": "service",
+                        "runtime": "process",
+                        "command": "bun run www",
+                        "depends_on": ["api"]
+                    }
+                }
+            }"#,
+        );
+
+        let satisfied_service_names = HashSet::from(["api".to_string()]);
+        let graph = lower_environment_graph(
+            &config,
+            true,
+            Some(&["www".to_string()]),
+            Some(&satisfied_service_names),
+        )
+        .expect("graph lowers");
+
+        let node_names = graph
+            .environment_nodes
+            .keys()
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        assert_eq!(node_names, BTreeSet::from(["www".to_string()]));
+        assert_eq!(
+            graph
+                .environment_nodes
+                .get("www")
+                .expect("www present")
+                .depends_on(),
+            [] as [String; 0]
+        );
     }
 }

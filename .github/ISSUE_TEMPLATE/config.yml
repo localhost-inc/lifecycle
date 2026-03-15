@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Contributing Guide
+    url: https://github.com/localhost-inc/lifecycle/blob/main/CONTRIBUTING.md
+    about: Read this before opening a large issue or sending a pull request.
+  - name: Security Policy
+    url: https://github.com/localhost-inc/lifecycle/blob/main/SECURITY.md
+    about: Use private reporting paths for vulnerabilities.

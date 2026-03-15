@@ -42,6 +42,7 @@ describe("ProjectPageTabs", () => {
     );
 
     expect(markup).toContain('data-slot="project-page-tabs"');
+    expect(markup).toContain("bg-[var(--surface)]");
     expect(markup).toContain(">Overview<");
     expect(markup).toContain(">Setup<");
     expect(markup).toContain(">PR #42<");

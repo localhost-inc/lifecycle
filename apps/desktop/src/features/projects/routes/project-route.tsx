@@ -457,7 +457,7 @@ export function ProjectRoute() {
     <div className="flex h-full min-h-0 flex-1 flex-col" data-slot="project-shell">
       <div className="min-h-0 flex-1">
         <div
-          className="flex h-full min-h-0 flex-col overflow-hidden rounded-[var(--project-shell-radius)] border border-[color-mix(in_srgb,var(--border),var(--foreground)_12%)] bg-[var(--background)] shadow-[0_16px_36px_rgba(0,0,0,0.12)]"
+          className="flex h-full min-h-0 flex-col overflow-hidden rounded-[var(--project-shell-radius)] border border-[var(--border)] bg-[var(--surface)]"
           data-slot="project-layout"
         >
           <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -492,7 +492,10 @@ export function ProjectRoute() {
                 </div>
               </>
             ) : null}
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-slot="project-main">
+            <div
+              className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--surface)]"
+              data-slot="project-main"
+            >
               <ProjectPageTabs
                 activeTabId={activeTab?.id ?? tabState.activeTabId}
                 onCloseTab={handleCloseTab}

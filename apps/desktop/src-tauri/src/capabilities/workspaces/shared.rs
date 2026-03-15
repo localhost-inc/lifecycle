@@ -157,6 +157,7 @@ pub(super) fn reconcile_workspace_services_db(
     workspace_id: &str,
     config: Option<&LifecycleConfig>,
     manifest_fingerprint: Option<&str>,
+    preserve_runtime_state: bool,
 ) -> Result<(), LifecycleError> {
     let mut conn = open_db(db_path)?;
     let tx = conn
@@ -175,7 +176,7 @@ pub(super) fn reconcile_workspace_services_db(
         Some(config) => {
             let mut existing_rows = tx
                 .prepare(
-                    "SELECT service_name, exposure, port_override, status
+                    "SELECT service_name, exposure, port_override, status, status_reason
                      FROM workspace_service
                      WHERE workspace_id = ?1",
                 )
@@ -187,15 +188,19 @@ pub(super) fn reconcile_workspace_services_db(
                         row.get::<_, String>(1)?,
                         row.get::<_, Option<i64>>(2)?,
                         row.get::<_, String>(3)?,
+                        row.get::<_, Option<String>>(4)?,
                     ))
                 })
                 .map_err(|e| LifecycleError::Database(e.to_string()))?;
 
             let mut existing_rows_by_service = std::collections::HashMap::new();
             for row in existing {
-                let (service_name, exposure, port_override, status) =
+                let (service_name, exposure, port_override, status, status_reason) =
                     row.map_err(|e| LifecycleError::Database(e.to_string()))?;
-                existing_rows_by_service.insert(service_name, (exposure, port_override, status));
+                existing_rows_by_service.insert(
+                    service_name,
+                    (exposure, port_override, status, status_reason),
+                );
             }
             drop(existing_rows);
 
@@ -227,20 +232,22 @@ pub(super) fn reconcile_workspace_services_db(
 
             for (service_name, service_config) in config.declared_services() {
                 let default_port = service_config.port().map(|port| port as i64);
-                let (exposure, port_override, current_status) = existing_rows_by_service
-                    .get(service_name)
-                    .cloned()
-                    .unwrap_or_else(|| {
-                        (
-                            if service_config.share_default() {
-                                "local".to_string()
-                            } else {
-                                "internal".to_string()
-                            },
-                            None,
-                            "stopped".to_string(),
-                        )
-                    });
+                let (exposure, port_override, current_status, current_status_reason) =
+                    existing_rows_by_service
+                        .get(service_name)
+                        .cloned()
+                        .unwrap_or_else(|| {
+                            (
+                                if service_config.share_default() {
+                                    "local".to_string()
+                                } else {
+                                    "internal".to_string()
+                                },
+                                None,
+                                "stopped".to_string(),
+                                None,
+                            )
+                        });
                 let allow_bound_current_port = matches!(
                     (workspace_status.clone(), current_status.as_str()),
                     (
@@ -271,27 +278,39 @@ pub(super) fn reconcile_workspace_services_db(
                     allow_bound_current_port,
                     prefer_randomized_port_assignment,
                 )?;
+                let next_status = if preserve_runtime_state {
+                    current_status.as_str()
+                } else {
+                    "stopped"
+                };
+                let next_status_reason = if preserve_runtime_state {
+                    current_status_reason.clone()
+                } else {
+                    None
+                };
                 let (preview_status, preview_failure_reason, preview_url) =
                     preview_fields_for_service(
                         &exposure,
                         effective_port,
-                        "stopped",
+                        next_status,
                         &workspace_status,
                     );
 
                 let updated = tx
                     .execute(
                         "UPDATE workspace_service
-                         SET status = 'stopped',
-                             status_reason = NULL,
-                             default_port = ?1,
-                             effective_port = ?2,
-                             preview_status = ?3,
-                             preview_failure_reason = ?4,
-                             preview_url = ?5,
+                         SET status = ?1,
+                             status_reason = ?2,
+                             default_port = ?3,
+                             effective_port = ?4,
+                             preview_status = ?5,
+                             preview_failure_reason = ?6,
+                             preview_url = ?7,
                              updated_at = datetime('now')
-                         WHERE workspace_id = ?6 AND service_name = ?7",
+                         WHERE workspace_id = ?8 AND service_name = ?9",
                         params![
+                            next_status,
+                            next_status_reason,
                             default_port,
                             effective_port,
                             preview_status,
@@ -616,6 +635,57 @@ mod tests {
     }
 
     #[test]
+    fn transition_workspace_to_starting_allows_incremental_boots_from_active() {
+        let db_path = temp_db_path();
+        init_workspace_tables(&db_path);
+
+        let conn = open_db(&db_path).expect("open db");
+        conn.execute(
+            "INSERT INTO workspace (id, status, updated_at) VALUES (?1, ?2, datetime('now'))",
+            rusqlite::params!["ws_active", "active"],
+        )
+        .expect("insert workspace");
+        conn.execute(
+            "INSERT INTO workspace_service (
+                id, workspace_id, service_name, exposure, status, default_port, effective_port,
+                preview_status, preview_url, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'), datetime('now'))",
+            rusqlite::params![
+                "svc_ws_active",
+                "ws_active",
+                "api",
+                "local",
+                "ready",
+                Some(8787_i64),
+                Some(8787_i64),
+                "ready",
+                Some("http://localhost:8787"),
+            ],
+        )
+        .expect("insert service");
+        drop(conn);
+
+        transition_workspace_to_starting(&db_path, "ws_active").expect("transition succeeds");
+
+        let conn = open_db(&db_path).expect("re-open db");
+        let (status, preview_status): (String, String) = conn
+            .query_row(
+                "SELECT workspace.status, workspace_service.preview_status
+                 FROM workspace
+                 JOIN workspace_service ON workspace_service.workspace_id = workspace.id
+                 WHERE workspace.id = ?1 AND workspace_service.service_name = ?2",
+                rusqlite::params!["ws_active", "api"],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("query state");
+        assert_eq!(status, "starting");
+        assert_eq!(preview_status, "ready");
+
+        drop(conn);
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
     fn transition_workspace_to_starting_rejects_invalid_transition() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
@@ -810,14 +880,20 @@ mod tests {
                     "web": {{ "kind": "service", "runtime": "process", "command": "bun run dev", "port": {web_default_port} }},
                     "admin": {{ "kind": "service", "runtime": "process", "command": "bun run admin", "port": {admin_default_port}, "share_default": true }},
                     "migrate": {{ "kind": "task", "command": "bun run db:migrate", "depends_on": ["web"], "timeout_seconds": 30 }},
-                    "worker": {{ "kind": "service", "runtime": "process", "command": "bun run worker" }}
+                    "api": {{ "kind": "service", "runtime": "process", "command": "bun run api" }}
                 }}
             }}"#,
         );
         let config: LifecycleConfig = serde_json::from_str(&config_json).expect("valid config");
 
-        reconcile_workspace_services_db(&db_path, "ws_seed", Some(&config), Some("fingerprint_1"))
-            .expect("reconcile succeeds");
+        reconcile_workspace_services_db(
+            &db_path,
+            "ws_seed",
+            Some(&config),
+            Some("fingerprint_1"),
+            false,
+        )
+        .expect("reconcile succeeds");
 
         let conn = open_db(&db_path).expect("re-open db");
         let fingerprint: Option<String> = conn
@@ -881,6 +957,18 @@ mod tests {
                     Some(format!("http://localhost:{admin_default_port}")),
                 ),
                 (
+                    "api".to_string(),
+                    "internal".to_string(),
+                    None,
+                    "stopped".to_string(),
+                    None,
+                    None,
+                    None,
+                    "disabled".to_string(),
+                    None,
+                    None,
+                ),
+                (
                     "web".to_string(),
                     "organization".to_string(),
                     Some(web_override_port),
@@ -892,21 +980,115 @@ mod tests {
                     None,
                     None,
                 ),
+            ]
+        );
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn reconcile_workspace_services_db_can_preserve_existing_runtime_state() {
+        let db_path = temp_db_path();
+        init_workspace_tables(&db_path);
+
+        let conn = open_db(&db_path).expect("open db");
+        conn.execute(
+            "INSERT INTO workspace (id, status, updated_at) VALUES (?1, ?2, datetime('now'))",
+            rusqlite::params!["ws_active", "active"],
+        )
+        .expect("insert workspace");
+        conn.execute(
+            "INSERT INTO workspace_service (
+                id, workspace_id, service_name, exposure, port_override, status, status_reason,
+                default_port, effective_port, preview_status, preview_failure_reason, preview_url,
+                created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, datetime('now'), datetime('now'))",
+            rusqlite::params![
+                "svc_api",
+                "ws_active",
+                "api",
+                "internal",
+                Option::<i64>::None,
+                "ready",
+                Option::<String>::None,
+                Option::<i64>::None,
+                Option::<i64>::None,
+                "disabled",
+                Option::<String>::None,
+                Option::<String>::None,
+            ],
+        )
+        .expect("insert existing service");
+        drop(conn);
+
+        let config_json = r#"{
+                "workspace": { "setup": [] },
+                "environment": {
+                    "api": {
+                        "kind": "service",
+                        "runtime": "process",
+                        "command": "bun run api"
+                    },
+                    "www": {
+                        "kind": "service",
+                        "runtime": "process",
+                        "command": "bun run www"
+                    }
+                }
+            }"#;
+        let config: LifecycleConfig = serde_json::from_str(&config_json).expect("valid config");
+
+        reconcile_workspace_services_db(
+            &db_path,
+            "ws_active",
+            Some(&config),
+            Some("fingerprint_active"),
+            true,
+        )
+        .expect("reconcile succeeds");
+
+        let conn = open_db(&db_path).expect("re-open db");
+        let mut stmt = conn
+            .prepare(
+                "SELECT service_name, status, status_reason, preview_status
+                 FROM workspace_service
+                 WHERE workspace_id = ?1
+                 ORDER BY service_name",
+            )
+            .expect("prepare query");
+        let rows = stmt
+            .query_map(rusqlite::params!["ws_active"], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })
+            .expect("query services");
+        let values = rows
+            .map(|row| row.expect("row"))
+            .collect::<Vec<(String, String, Option<String>, String)>>();
+        drop(stmt);
+        assert_eq!(
+            values,
+            vec![
                 (
-                    "worker".to_string(),
-                    "internal".to_string(),
-                    None,
-                    "stopped".to_string(),
-                    None,
-                    None,
+                    "api".to_string(),
+                    "ready".to_string(),
                     None,
                     "disabled".to_string(),
+                ),
+                (
+                    "www".to_string(),
+                    "stopped".to_string(),
                     None,
-                    None,
+                    "disabled".to_string(),
                 ),
             ]
         );
 
+        drop(conn);
         let _ = std::fs::remove_file(db_path);
     }
 
@@ -953,8 +1135,14 @@ mod tests {
         );
         let config: LifecycleConfig = serde_json::from_str(&config_json).expect("valid config");
 
-        reconcile_workspace_services_db(&db_path, "ws_b", Some(&config), Some("fingerprint_2"))
-            .expect("reconcile succeeds");
+        reconcile_workspace_services_db(
+            &db_path,
+            "ws_b",
+            Some(&config),
+            Some("fingerprint_2"),
+            false,
+        )
+        .expect("reconcile succeeds");
 
         let conn = open_db(&db_path).expect("re-open db");
         let row: (Option<i64>, Option<i64>) = conn
@@ -1019,8 +1207,14 @@ mod tests {
         );
         let config: LifecycleConfig = serde_json::from_str(&config_json).expect("valid config");
 
-        reconcile_workspace_services_db(&db_path, "ws_idle", Some(&config), Some("fingerprint_3"))
-            .expect("reconcile succeeds");
+        reconcile_workspace_services_db(
+            &db_path,
+            "ws_idle",
+            Some(&config),
+            Some("fingerprint_3"),
+            false,
+        )
+        .expect("reconcile succeeds");
 
         let conn = open_db(&db_path).expect("re-open db");
         let effective_port: Option<i64> = conn
@@ -1063,8 +1257,14 @@ mod tests {
         );
         let config: LifecycleConfig = serde_json::from_str(&config_json).expect("valid config");
 
-        reconcile_workspace_services_db(&db_path, "ws_image", Some(&config), Some("fingerprint_4"))
-            .expect("reconcile succeeds");
+        reconcile_workspace_services_db(
+            &db_path,
+            "ws_image",
+            Some(&config),
+            Some("fingerprint_4"),
+            false,
+        )
+        .expect("reconcile succeeds");
 
         let conn = open_db(&db_path).expect("re-open db");
         let postgres_port: Option<i64> = conn

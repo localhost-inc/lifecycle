@@ -55,6 +55,7 @@ export interface WorkspaceProviderCreateResult {
 }
 
 export interface WorkspaceProviderStartInput {
+  serviceNames?: string[];
   workspace: WorkspaceRecord;
   services: ServiceRecord[];
   manifestJson: string;

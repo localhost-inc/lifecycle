@@ -10,7 +10,7 @@ The first pass of the project shell still rendered the project sidebar in the ou
 
 The shell is now layered explicitly:
 
-1. The shell plane uses `--panel` and owns:
+1. The shell plane uses `--background` and owns:
    - the project switcher strip
 2. The active project layout owns:
    - the project sidebar

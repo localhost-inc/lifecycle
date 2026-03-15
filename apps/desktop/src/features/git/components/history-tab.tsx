@@ -120,7 +120,11 @@ export function HistoryTab({ error, isLoading, entries, onOpenCommit }: HistoryT
   }
 
   if (error) {
-    return <p className="text-xs text-red-400">Failed to load history: {String(error)}</p>;
+    return (
+      <p className="text-xs text-[var(--destructive)]">
+        Failed to load history: {String(error)}
+      </p>
+    );
   }
 
   if (entries.length === 0) {

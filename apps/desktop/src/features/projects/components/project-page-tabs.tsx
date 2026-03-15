@@ -373,7 +373,7 @@ export function ProjectPageTabs({
 
   return (
     <header
-      className="flex h-10 shrink-0 items-stretch gap-0 border-b border-[var(--border)] bg-transparent px-0"
+      className="flex h-10 shrink-0 items-stretch gap-0 border-b border-[var(--border)] bg-[var(--surface)] px-0"
       data-slot="project-page-tabs"
       data-tauri-drag-region
       onMouseDown={handleMouseDown}

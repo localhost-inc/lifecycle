@@ -68,16 +68,16 @@ Use these rules when deciding where something belongs.
 
 ```text
 Project shell
-├─ Shell plane (`--panel`)
+├─ Shell plane (`--background`)
 │  └─ Project switcher strip
 └─ Project layout
    ├─ Project sidebar
    └─ Project main
-      ├─ Page tabs rail (`--panel`)
+      ├─ Page tabs rail (`--surface`)
       │  ├─ Project view tab
       │  ├─ Pull request tab
       │  └─ Workspace tab
-      └─ Active content (`--background`)
+      └─ Active content (`--surface`)
          ├─ Project view
          │  ├─ Overview
          │  ├─ Inbox
@@ -100,13 +100,13 @@ Project shell
 
 The visual hierarchy should be explicit:
 
-1. The **shell plane** uses `--panel` and carries durable chrome:
+1. The **shell plane** uses `--background` and carries durable chrome:
    - project switcher strip
 2. The **project layout** owns the full project main region below the shell strip.
 3. The **project sidebar** sits on the left edge of the project layout.
 4. The **project main** sits to the right of the project sidebar.
-5. The **page tabs rail** uses `--panel` inside project main.
-6. The **active body** uses `--background` and carries project-context content:
+5. The **page tabs rail** uses `--surface` inside project main.
+6. The **active body** uses `--surface` and carries project-context content:
    - active page or workspace content
 7. A workspace tab does not create another shell layer. It replaces the active content inside project main.
 8. A workspace may add a workspace-scoped header rail below the page tabs, but that header belongs to the workspace, not the project shell.
@@ -291,7 +291,7 @@ If those need to change, put them in:
 Use these terms consistently:
 
 1. **Project switcher strip**: shell-plane strip for project or future organization switching
-2. **Shell plane**: the outer `--panel` layer that holds only the switcher strip
+2. **Shell plane**: the outer `--background` layer that holds only the switcher strip
 3. **Project layout**: the full raised project container for the active project
 4. **Page tabs**: top-level project tabs rendered in the page tabs rail inside project main
 5. **Project sidebar**: left project-scoped navigation panel inside the project layout

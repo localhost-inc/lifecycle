@@ -23,7 +23,7 @@ The layering is:
      - active body
    - project footer
 
-The page tabs rail uses `--panel` inside the right-hand project main. The active body uses `--background`.
+The page tabs rail uses `--surface` inside the right-hand project main. The active body uses `--surface`.
 
 ## Why It Matters
 

@@ -551,8 +551,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn runtime_projection_marks_running_steps_failed_when_workspace_returns_to_idle_with_failure()
-    {
+    async fn runtime_projection_marks_running_steps_failed_when_workspace_returns_to_idle_with_failure(
+    ) {
         let registry = WorkspaceControllerRegistry::new();
         let controller = registry.get_or_create("workspace-1").await;
 

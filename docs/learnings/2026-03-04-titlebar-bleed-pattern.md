@@ -12,8 +12,8 @@ Using default decorated windows keeps native titlebar styling separate from app 
 
 1. Use macOS titlebar overlay mode in Tauri (`titleBarStyle: Overlay`, `hiddenTitle: true`).
 2. Render a custom top strip in the webview with:
-   - left segment width matching sidebar (`w-64`) and `var(--panel)` background
-   - right segment using main surface token (`var(--background)`)
+   - left segment width matching sidebar (`w-64`) and `var(--surface)` background
+   - right segment using shell background token (`var(--background)`)
 3. Mark the strip as draggable via `data-tauri-drag-region`.
 4. Keep native traffic lights (do not disable decorations).
 

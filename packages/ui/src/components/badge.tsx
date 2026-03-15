@@ -8,15 +8,16 @@ const badgeVariants = cva(
     variants: {
       variant: {
         default: "border-transparent bg-[var(--primary)] text-[var(--primary-foreground)]",
-        secondary: "border-transparent bg-[var(--muted)] text-[var(--foreground)]",
+        secondary: "border-transparent bg-[var(--surface-selected)] text-[var(--foreground)]",
         outline: "border-[var(--border)] bg-transparent text-[var(--foreground)]",
-        destructive: "border-[var(--destructive)]/40 bg-transparent text-[var(--destructive)]",
+        destructive:
+          "border-[color-mix(in_srgb,var(--destructive)_35%,transparent)] bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] text-[var(--destructive)]",
         success:
-          "text-[var(--git-status-added)] border-[color-mix(in_srgb,var(--git-status-added)_25%,transparent)] bg-[color-mix(in_srgb,var(--git-status-added)_8%,transparent)]",
+          "text-[var(--status-success)] border-[color-mix(in_srgb,var(--status-success)_25%,transparent)] bg-[color-mix(in_srgb,var(--status-success)_10%,transparent)]",
         warning:
-          "text-[var(--git-status-modified)] border-[color-mix(in_srgb,var(--git-status-modified)_25%,transparent)] bg-[color-mix(in_srgb,var(--git-status-modified)_8%,transparent)]",
-        info: "text-[var(--git-status-renamed)] border-[color-mix(in_srgb,var(--git-status-renamed)_25%,transparent)] bg-[color-mix(in_srgb,var(--git-status-renamed)_8%,transparent)]",
-        muted: "border-transparent bg-[var(--muted)] text-[var(--muted-foreground)]",
+          "text-[var(--status-warning)] border-[color-mix(in_srgb,var(--status-warning)_25%,transparent)] bg-[color-mix(in_srgb,var(--status-warning)_10%,transparent)]",
+        info: "text-[var(--status-info)] border-[color-mix(in_srgb,var(--status-info)_25%,transparent)] bg-[color-mix(in_srgb,var(--status-info)_10%,transparent)]",
+        muted: "border-transparent bg-[var(--surface-selected)] text-[var(--muted-foreground)]",
       },
     },
     defaultVariants: {

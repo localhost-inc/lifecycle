@@ -35,7 +35,7 @@ function EmptyState({ icon, title, description, action, size = "lg", className }
           <div
             className={cn(
               "text-[var(--muted-foreground)]",
-              isSmall ? "opacity-30 [&>svg]:size-8" : "opacity-20 [&>svg]:size-16",
+              isSmall ? "opacity-35 [&>svg]:size-8" : "opacity-22 [&>svg]:size-16",
             )}
           >
             {icon}
@@ -43,15 +43,18 @@ function EmptyState({ icon, title, description, action, size = "lg", className }
         )}
         <div className={cn("flex flex-col items-center", isSmall ? "gap-1" : "gap-1.5")}>
           <p
-            className={cn("font-medium text-[var(--foreground)]", isSmall ? "text-sm" : "text-sm")}
+            className={cn(
+              "font-medium text-[var(--foreground)]",
+              isSmall ? "text-sm" : "text-base",
+            )}
           >
             {title}
           </p>
           {description && (
             <p
               className={cn(
-                "max-w-xs text-[var(--muted-foreground)]",
-                isSmall ? "text-xs" : "text-xs",
+                "text-[var(--muted-foreground)]",
+                isSmall ? "max-w-xs text-xs leading-5" : "max-w-sm text-sm leading-6",
               )}
             >
               {description}

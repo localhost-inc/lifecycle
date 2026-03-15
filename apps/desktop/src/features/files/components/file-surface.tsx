@@ -381,7 +381,7 @@ export function FileSurface({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 overflow-hidden bg-[var(--background)]">
+    <div className="flex min-h-0 flex-1 overflow-hidden bg-[var(--surface)]">
       <FileTree
         activeFilePath={displayPath}
         entries={fileTreeQuery.data}

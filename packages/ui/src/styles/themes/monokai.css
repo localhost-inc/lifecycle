@@ -2,13 +2,13 @@
   --background: #272822;
   --foreground: #f8f8f2;
   --card: #2f3129;
-  --panel: #2a2c24;
-  --sidebar-background: var(--panel);
+  --surface: #2a2c24;
+  --sidebar-background: var(--surface);
   --sidebar-foreground: #fbfbf6;
   --sidebar-muted-foreground: #d5d3ca;
   --sidebar-hover: #3f4035;
   --sidebar-selected: #555446;
-  --terminal-surface-background: #272822;
+  --terminal-surface-background: var(--surface);
   --terminal-foreground: #f8f8f2;
   --muted: #3e3d32;
   --muted-foreground: #b7b7ae;

@@ -7,8 +7,19 @@ fn main() {
     println!("cargo:rustc-check-cfg=cfg(has_ghosttykit)");
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=native/lifecycle_native_terminal.m");
+    println!("cargo:rerun-if-changed=native/lifecycle_native_platform.m");
     println!("cargo:rerun-if-changed=../../../scripts/prepare-ghosttykit.sh");
     println!("cargo:rerun-if-changed=../../../vendor/ghostty.lock");
+
+    #[cfg(target_os = "macos")]
+    {
+        cc::Build::new()
+            .file("native/lifecycle_native_platform.m")
+            .flag("-fobjc-arc")
+            .compile("lifecycle_native_platform");
+
+        println!("cargo:rustc-link-lib=framework=AppKit");
+    }
 
     #[cfg(target_os = "macos")]
     if let Some(slice_dir) = prepare_ghosttykit() {

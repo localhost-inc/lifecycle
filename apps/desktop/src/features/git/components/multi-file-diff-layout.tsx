@@ -407,7 +407,7 @@ function MultiFileDiffLayoutInner({
   return (
     <div ref={containerRef} className="flex min-h-0 flex-1 overflow-hidden">
       <div
-        className="flex min-h-0 shrink-0 bg-[var(--background)]"
+        className="flex min-h-0 shrink-0 bg-[var(--surface)]"
         style={{ width: `${clampPanelSize(treeWidth, TREE_BOUNDS)}px` }}
       >
         <DiffFileTree

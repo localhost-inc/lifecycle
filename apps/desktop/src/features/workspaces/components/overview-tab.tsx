@@ -1,6 +1,6 @@
 import type { LifecycleConfig, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@lifecycle/ui";
-import { AlertTriangle, CheckCircle2, LoaderCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, LoaderCircle, Play } from "lucide-react";
 import { useState } from "react";
 import { ServiceRow } from "./services-tab";
 import type { EnvironmentTaskState, SetupStepState } from "../hooks";
@@ -52,10 +52,10 @@ interface BootStatusIndicatorProps {
 
 const DOT_STYLES: Record<BootSequenceItemStatus, string> = {
   pending: "bg-[var(--muted-foreground)]/40",
-  running: "bg-blue-500 lifecycle-motion-soft-pulse",
-  completed: "bg-emerald-500",
-  failed: "bg-red-500",
-  timeout: "bg-red-500",
+  running: "bg-[var(--status-info)] lifecycle-motion-soft-pulse",
+  completed: "bg-[var(--status-success)]",
+  failed: "bg-[var(--status-danger)]",
+  timeout: "bg-[var(--status-danger)]",
 };
 
 const NAME_STYLES: Record<BootSequenceItemStatus, string> = {
@@ -69,12 +69,12 @@ const NAME_STYLES: Record<BootSequenceItemStatus, string> = {
 const STATUS_BANNER = {
   completed: {
     icon: CheckCircle2,
-    iconClassName: "text-emerald-500",
+    iconClassName: "text-[var(--status-success)]",
     label: "Boot complete",
   },
   failed: {
     icon: AlertTriangle,
-    iconClassName: "text-red-500",
+    iconClassName: "text-[var(--status-danger)]",
     label: "Boot failed",
   },
 } as const;
@@ -392,7 +392,7 @@ function BootStatusIndicator({ isActive = false, status }: BootStatusIndicatorPr
   return (
     <span className="flex size-3.5 shrink-0 items-center justify-center">
       {isActive ? (
-        <LoaderCircle className="size-3 text-blue-500 animate-spin" strokeWidth={2.2} />
+        <LoaderCircle className="size-3 animate-spin text-[var(--status-info)]" strokeWidth={2.2} />
       ) : (
         <span className={`inline-block size-[6px] rounded-full ${DOT_STYLES[status]}`} />
       )}
@@ -439,15 +439,22 @@ function BootStepRow({
 function BootServiceRow({
   isActive = false,
   item,
+  onOpenLogs,
+  onStartService,
+  runDisabled = false,
+  runPending = false,
 }: {
   isActive?: boolean;
   item: BootSequenceServiceItem;
+  onOpenLogs?: ((serviceName: string) => void) | undefined;
+  onStartService?: ((serviceName: string) => void) | undefined;
+  runDisabled?: boolean;
+  runPending?: boolean;
 }) {
   const portLabel = item.port !== null ? `:${item.port}` : null;
   const nameClassName = isActive ? NAME_STYLES.running : NAME_STYLES[item.status];
-
-  return (
-    <div className="flex w-full items-center gap-2.5 px-2 py-1.5">
+  const rowContent = (
+    <>
       <BootStatusIndicator isActive={isActive} status={item.status} />
       <span className={`min-w-0 truncate text-[13px] ${nameClassName}`}>{item.name}</span>
       {portLabel ? (
@@ -455,19 +462,56 @@ function BootServiceRow({
           {portLabel}
         </span>
       ) : null}
-    </div>
+    </>
   );
+
+  if (onOpenLogs || onStartService) {
+    return (
+      <div className="flex items-center gap-2">
+        <button
+          className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-[var(--surface-hover)]"
+          onClick={() => onOpenLogs?.(item.name)}
+          title={onOpenLogs ? `Show boot logs for ${item.name}` : undefined}
+          type="button"
+        >
+          {rowContent}
+        </button>
+        {onStartService && item.status === "pending" ? (
+          <button
+            aria-label={`Run ${item.name} and its dependencies`}
+            className="rounded-md p-1.5 text-[var(--muted-foreground)] transition-colors hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={runDisabled}
+            onClick={() => onStartService(item.name)}
+            title={`Run ${item.name} and its dependencies`}
+            type="button"
+          >
+            {runPending ? (
+              <LoaderCircle className="size-3.5 animate-spin" strokeWidth={2.2} />
+            ) : (
+              <Play className="size-3.5 fill-current" strokeWidth={2.2} />
+            )}
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
+  return <div className="flex w-full items-center gap-2.5 px-2 py-1.5">{rowContent}</div>;
 }
 
 interface OverviewTabProps {
   config: LifecycleConfig | null;
   declaredStepNames: string[];
   environmentTasks: EnvironmentTaskState[];
+  onOpenServiceLogs?: (serviceName: string) => void;
+  onStartService?: (serviceName: string) => void;
   onUpdateService: (input: {
     exposure: ServiceRecord["exposure"];
     portOverride: number | null;
     serviceName: string;
   }) => Promise<void>;
+  runDisabled?: boolean;
+  runningServiceName?: string | null;
   serviceRuntimeByName: Partial<Record<string, "image" | "process">>;
   services: ServiceRecord[];
   setupSteps: SetupStepState[];
@@ -478,7 +522,11 @@ export function OverviewTab({
   config,
   declaredStepNames,
   environmentTasks,
+  onOpenServiceLogs,
+  onStartService,
   onUpdateService,
+  runDisabled = false,
+  runningServiceName = null,
   serviceRuntimeByName,
   services,
   setupSteps,
@@ -530,12 +578,24 @@ export function OverviewTab({
               item.service ? (
                 <ServiceRow
                   key={item.id}
+                  onOpenLogs={onOpenServiceLogs}
+                  onStartService={onStartService}
                   onUpdateService={onUpdateService}
+                  runDisabled={runDisabled}
+                  runPending={runningServiceName === item.name}
                   runtime={item.runtime}
                   service={item.service}
                 />
               ) : (
-                <BootServiceRow isActive={isActive} key={item.id} item={item} />
+                <BootServiceRow
+                  isActive={isActive}
+                  key={item.id}
+                  item={item}
+                  onOpenLogs={onOpenServiceLogs}
+                  onStartService={onStartService}
+                  runDisabled={runDisabled}
+                  runPending={runningServiceName === item.name}
+                />
               )
             ) : (
               <BootStepRow isActive={isActive} key={item.id} item={item} />

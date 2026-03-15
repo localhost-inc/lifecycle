@@ -58,4 +58,33 @@ describe("ServiceRow", () => {
     expect(markup).toContain("postgres");
     expect(markup).toContain(":44446");
   });
+
+  test("can switch the row into boot-log launch mode", () => {
+    const markup = renderToStaticMarkup(
+      createElement(ServiceRow, {
+        onOpenLogs: () => {},
+        onUpdateService: async () => {},
+        runtime: "image",
+        service: failedService,
+      }),
+    );
+
+    expect(markup).toContain('aria-label="Show boot logs for postgres"');
+    expect(markup).not.toContain("Exposure");
+  });
+
+  test("renders a compact play button for independently bootable services", () => {
+    const markup = renderToStaticMarkup(
+      createElement(ServiceRow, {
+        onOpenLogs: () => {},
+        onStartService: () => {},
+        onUpdateService: async () => {},
+        runtime: "image",
+        service: failedService,
+      }),
+    );
+
+    expect(markup).toContain('aria-label="Run postgres and its dependencies"');
+    expect(markup).not.toContain(">Run<");
+  });
 });

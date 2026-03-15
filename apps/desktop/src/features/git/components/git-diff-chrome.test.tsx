@@ -46,9 +46,8 @@ describe("git diff chrome theming", () => {
     );
 
     expect(markup).toContain(
-      'class="flex h-full w-full flex-col overflow-hidden bg-[var(--background)]"',
+      'class="flex h-full w-full flex-col overflow-hidden bg-[var(--surface)]"',
     );
-    expect(markup).not.toContain("bg-[var(--panel)]");
   });
 
   test("renders sticky diff headers on the project layout background", () => {
@@ -63,8 +62,7 @@ describe("git diff chrome theming", () => {
     );
 
     expect(markup).toContain(
-      "sticky top-0 z-10 bg-[var(--background)] border-b border-[var(--border)]",
+      "sticky top-0 z-10 bg-[var(--surface)] border-b border-[var(--border)]",
     );
-    expect(markup).not.toContain("bg-[var(--panel)]");
   });
 });

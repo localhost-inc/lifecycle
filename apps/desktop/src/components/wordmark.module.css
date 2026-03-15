@@ -11,6 +11,6 @@
 }
 
 .wordmark:hover .letter {
-  color: var(--ring);
+  color: var(--accent);
   opacity: 1;
 }

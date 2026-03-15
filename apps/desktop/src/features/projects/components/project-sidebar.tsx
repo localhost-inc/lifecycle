@@ -54,13 +54,13 @@ export function ProjectSidebar({
     [
       "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors",
       selected
-        ? "bg-[var(--muted)] text-[var(--foreground)]"
-        : "text-[var(--sidebar-muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]",
+        ? "bg-[var(--sidebar-selected)] text-[var(--sidebar-foreground)]"
+        : "text-[var(--sidebar-muted-foreground)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]",
     ].join(" ");
 
   return (
     <aside
-      className="flex h-full min-h-0 flex-col bg-[var(--background)] text-[var(--sidebar-foreground)]"
+      className="flex h-full min-h-0 flex-col bg-[var(--sidebar-background)] text-[var(--sidebar-foreground)]"
       data-slot="project-sidebar"
     >
       {/* Project header — monogram + name */}
@@ -70,7 +70,7 @@ export function ProjectSidebar({
       >
         <div className="-translate-y-px flex w-full items-center justify-between">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-[var(--muted)] text-[12px] font-semibold text-[var(--foreground)]">
+            <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-[var(--sidebar-selected)] text-[12px] font-semibold text-[var(--sidebar-foreground)]">
               {projectMonogram(project.name)}
             </span>
             <h1 className="truncate text-[16px] font-medium leading-tight tracking-tight text-[var(--foreground)]">
@@ -86,7 +86,7 @@ export function ProjectSidebar({
               </PopoverTrigger>
               <PopoverContent
                 align="end"
-                className="w-44 rounded-lg border-[var(--border)] bg-[var(--panel)] p-1"
+                className="w-44 rounded-lg border-[var(--border)] bg-[var(--surface)] p-1"
                 side="bottom"
                 sideOffset={8}
               >
@@ -101,7 +101,7 @@ export function ProjectSidebar({
                   Project settings
                 </Link>
                 <button
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-rose-300 hover:bg-[var(--surface-hover)]"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[var(--destructive)] transition-colors hover:bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)]"
                   onClick={() => {
                     setMenuOpen(false);
                     onRemoveProject();

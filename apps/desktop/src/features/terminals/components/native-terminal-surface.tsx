@@ -3,12 +3,8 @@ import {
   Alert,
   AlertDescription,
   EmptyState,
-  DEFAULT_THEME_PREFERENCE,
-  getSystemThemeAppearance,
-  isTheme,
-  resolveTheme,
   themeAppearance,
-  type ResolvedTheme,
+  useTheme,
 } from "@lifecycle/ui";
 import { TerminalSquare } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -242,19 +238,6 @@ export function createNativeTerminalSurfaceSyncCoordinator({
   };
 }
 
-function readNativeTerminalResolvedTheme(): ResolvedTheme {
-  if (typeof document === "undefined") {
-    return resolveTheme(DEFAULT_THEME_PREFERENCE.theme, getSystemThemeAppearance(null));
-  }
-
-  const rootTheme = document.documentElement.dataset.theme;
-  if (isTheme(rootTheme) && rootTheme !== "system") {
-    return rootTheme;
-  }
-
-  return resolveTheme(DEFAULT_THEME_PREFERENCE.theme, getSystemThemeAppearance());
-}
-
 function readNativeTerminalMonospaceFontFamily(): string {
   if (typeof document === "undefined" || typeof getComputedStyle !== "function") {
     return getNativeMonospaceFontFamily(DEFAULT_MONOSPACE_FONT_FAMILY);
@@ -272,6 +255,7 @@ export function NativeTerminalSurface({
   tabDragInProgress = false,
   terminal,
 }: NativeTerminalSurfaceProps) {
+  const { resolvedTheme } = useTheme();
   const ownerRef = useRef(Symbol("native-terminal-surface-owner"));
   const hostRef = useRef<HTMLDivElement | null>(null);
   const lifecycleTokenRef = useRef(0);
@@ -286,8 +270,6 @@ export function NativeTerminalSurface({
   );
   const [error, setError] = useState<string | null>(null);
   const hasLiveSession = terminalHasLiveSession(terminal.status);
-  const resolvedTheme = readNativeTerminalResolvedTheme();
-  const terminalFontFamily = readNativeTerminalMonospaceFontFamily();
 
   const getSyncCoordinator = (): NativeTerminalSurfaceSyncCoordinator => {
     if (syncCoordinatorRef.current) {
@@ -362,6 +344,8 @@ export function NativeTerminalSurface({
         shellResizeInProgress: shellResizeInProgressRef.current,
         visible,
       });
+      const terminalTheme = resolveTerminalTheme(host, resolvedTheme);
+      const terminalFontFamily = readNativeTerminalMonospaceFontFamily();
 
       if (
         interaction.focused &&
@@ -381,7 +365,7 @@ export function NativeTerminalSurface({
           pointerPassthrough: interaction.pointerPassthrough,
           scaleFactor: window.devicePixelRatio,
           terminalId: terminal.id,
-          theme: resolveTerminalTheme(host, resolvedTheme),
+          theme: terminalTheme,
           visible: true,
           width: rect.width,
           x: rect.left,
@@ -498,7 +482,7 @@ export function NativeTerminalSurface({
     return () => {
       unsubscribe();
     };
-  }, [focused, hasLiveSession, resolvedTheme, tabDragInProgress, terminal.id, terminalFontFamily]);
+  }, [focused, hasLiveSession, resolvedTheme, tabDragInProgress, terminal.id]);
 
   useEffect(() => {
     if (!hostRef.current) {
@@ -553,7 +537,47 @@ export function NativeTerminalSurface({
         },
       );
     };
-  }, [focused, hasLiveSession, resolvedTheme, tabDragInProgress, terminal.id, terminalFontFamily]);
+  }, [focused, hasLiveSession, resolvedTheme, tabDragInProgress, terminal.id]);
+
+  useEffect(() => {
+    if (typeof MutationObserver === "undefined") {
+      return;
+    }
+
+    const scheduleSync = () => {
+      if (shellResizeInProgressRef.current) {
+        getResizeFrameCoordinator().scheduleSync();
+        return;
+      }
+
+      getSyncCoordinator().scheduleSync();
+    };
+
+    const observer = new MutationObserver(() => {
+      scheduleSync();
+    });
+
+    const root = document.documentElement;
+    const head = document.head;
+
+    observer.observe(root, {
+      attributeFilter: ["class", "data-theme", "style"],
+      attributes: true,
+    });
+
+    if (head) {
+      observer.observe(head, {
+        attributes: true,
+        characterData: true,
+        childList: true,
+        subtree: true,
+      });
+    }
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [focused, hasLiveSession, resolvedTheme, tabDragInProgress, terminal.id]);
 
   const showAttachOverlay = hasLiveSession && attachState !== "attached" && !tabDragInProgress;
 

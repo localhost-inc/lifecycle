@@ -18,10 +18,10 @@ interface SetupProgressProps {
 
 const dotClassName: Record<SetupProgressStepStatus, string> = {
   pending: "bg-[var(--muted-foreground)]/40",
-  running: "bg-blue-500 lifecycle-motion-soft-pulse",
-  completed: "bg-emerald-500",
-  failed: "bg-red-500",
-  timeout: "bg-red-500",
+  running: "bg-[var(--status-info)] lifecycle-motion-soft-pulse",
+  completed: "bg-[var(--status-success)]",
+  failed: "bg-[var(--status-danger)]",
+  timeout: "bg-[var(--status-danger)]",
 };
 
 const nameClassName: Record<SetupProgressStepStatus, string> = {

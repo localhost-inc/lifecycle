@@ -165,6 +165,51 @@ describe("EnvironmentPanel", () => {
     expect(markup).toContain("Boot sequence");
   });
 
+  test("renders boot output in the logs tab", () => {
+    const markup = renderToStaticMarkup(
+      createElement(EnvironmentPanel, {
+        activeTab: "logs",
+        config: {
+          workspace: {
+            setup: [{ command: "bun install", name: "install", timeout_seconds: 60 }],
+            teardown: [],
+          },
+          environment: {
+            migrate: {
+              kind: "task",
+              command: "bun run db:migrate",
+              timeout_seconds: 60,
+            },
+            api: {
+              kind: "service",
+              runtime: "process",
+              command: "bun run dev",
+              depends_on: ["migrate"],
+              port: 8787,
+            },
+          },
+        },
+        hasManifest: true,
+        isManifestStale: false,
+        manifestState: "valid",
+        onActiveTabChange: () => {},
+        onRestart: async () => {},
+        onRun: async () => {},
+        onStop: async () => {},
+        onUpdateService: async () => {},
+        environmentTasks,
+        setupSteps,
+        services,
+        workspace: baseWorkspace,
+      }),
+    );
+
+    expect(markup).toContain("Boot logs");
+    expect(markup).toContain("bun install");
+    expect(markup).toContain("bun run db:migrate");
+    expect(markup).not.toContain("Logs coming next");
+  });
+
   test("shows restart guidance when a running workspace manifest is stale", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
@@ -246,8 +291,46 @@ describe("EnvironmentPanel", () => {
 
     expect(markup).toContain("web");
     expect(markup).toContain(":3000");
-    expect(markup).toContain("bg-slate-500/30");
+    expect(markup).toContain("color-mix(in srgb, var(--status-neutral) 30%, transparent)");
     expect(markup).not.toContain("lucide-external-link");
+  });
+
+  test("renders captured boot output in the logs tab", () => {
+    const markup = renderToStaticMarkup(
+      createElement(EnvironmentPanel, {
+        activeTab: "logs",
+        config: {
+          workspace: {
+            setup: [{ command: "bun install", name: "install", timeout_seconds: 60 }],
+            teardown: [],
+          },
+          environment: {
+            api: {
+              kind: "service",
+              runtime: "process",
+              command: "bun run dev",
+              port: 8787,
+            },
+          },
+        },
+        hasManifest: true,
+        isManifestStale: false,
+        manifestState: "valid",
+        onRestart: async () => {},
+        onRun: async () => {},
+        onStop: async () => {},
+        onUpdateService: async () => {},
+        environmentTasks: [],
+        setupSteps,
+        services,
+        workspace: baseWorkspace,
+      }),
+    );
+
+    expect(markup).toContain("Boot logs");
+    expect(markup).toContain("Workspace boot");
+    expect(markup).toContain("bun install");
+    expect(markup).not.toContain("Logs coming next");
   });
 
   test("shows starting status in the header action and overview sections", () => {
@@ -326,6 +409,60 @@ describe("EnvironmentPanel", () => {
     expect(markup).toContain("api");
     expect(markup).toContain("lucide-loader-circle");
     expect(markup).not.toContain("View details");
+  });
+
+  test("keeps the per-service play affordance available while the workspace is active", () => {
+    const markup = renderToStaticMarkup(
+      createElement(EnvironmentPanel, {
+        config: {
+          workspace: { setup: [], teardown: [] },
+          environment: {
+            api: {
+              kind: "service",
+              runtime: "process",
+              command: "bun run dev",
+              port: 8787,
+            },
+            www: {
+              kind: "service",
+              runtime: "process",
+              command: "bun run dev",
+              depends_on: ["api"],
+              port: 3000,
+            },
+          },
+        },
+        hasManifest: true,
+        isManifestStale: false,
+        manifestState: "valid",
+        onRestart: async () => {},
+        onRun: async () => {},
+        onStop: async () => {},
+        onUpdateService: async () => {},
+        environmentTasks: [],
+        setupSteps: [],
+        services: [
+          {
+            ...readyWebService,
+            service_name: "www",
+            status: "stopped",
+            status_reason: null,
+            preview_status: "sleeping",
+            preview_url: "http://localhost:3000",
+          },
+          {
+            ...services[1]!,
+            service_name: "api",
+            status: "ready",
+            preview_status: "ready",
+          },
+        ],
+        workspace: baseWorkspace,
+      }),
+    );
+
+    expect(markup).toContain('aria-label="Run www and its dependencies"');
+    expect(markup).not.toContain('aria-label="Run api and its dependencies"');
   });
 
   test("renders an environment task failure banner separately from setup", () => {

@@ -1,0 +1,14 @@
+{
+  "name": "@lifecycle/www",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun run src/build.ts",
+    "dev": "bun run src/dev.ts",
+    "format": "oxfmt src",
+    "lint": "oxlint src",
+    "test": "bun test src",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

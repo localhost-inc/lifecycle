@@ -8,6 +8,33 @@ afterEach(() => {
 });
 
 describe("buildTerminalTheme", () => {
+  test("resolves aliased terminal background tokens before syncing native terminals", () => {
+    globalThis.getComputedStyle = ((_: Element) =>
+      ({
+        getPropertyValue(name: string) {
+          switch (name) {
+            case "--terminal-surface-background":
+              return "var(--surface)";
+            case "--terminal-foreground":
+              return "#111111";
+            case "--surface":
+              return "#f5f5f3";
+            case "--foreground":
+              return "#111111";
+            case "--surface-selected":
+              return "#ecece9";
+            default:
+              return "";
+          }
+        },
+      }) as CSSStyleDeclaration) as typeof getComputedStyle;
+
+    const tokens = readTerminalThemeTokens({} as HTMLElement, "light");
+
+    expect(tokens.background).toBe("#f5f5f3");
+    expect(tokens.foreground).toBe("#111111");
+  });
+
   test("reads the dedicated terminal surface token before the page background", () => {
     globalThis.getComputedStyle = ((_: Element) =>
       ({
@@ -17,7 +44,7 @@ describe("buildTerminalTheme", () => {
               return "#09090b";
             case "--terminal-foreground":
               return "#f4f4f5";
-            case "--panel":
+            case "--surface":
               return "#141416";
             case "--foreground":
               return "#fafaf9";
@@ -91,24 +118,24 @@ describe("buildTerminalTheme", () => {
 
     expect(theme).toEqual({
       background: "#111113",
-      cursorColor: "#93c5fd",
+      cursorColor: "#87b2cf",
       foreground: "#fafaf9",
       palette: [
-        "#27272a",
-        "#ef4444",
-        "#22c55e",
-        "#f59e0b",
-        "#60a5fa",
-        "#a78bfa",
-        "#22d3ee",
-        "#d4d4d8",
-        "#71717a",
-        "#f87171",
-        "#4ade80",
-        "#fbbf24",
-        "#93c5fd",
-        "#c4b5fd",
-        "#67e8f9",
+        "#322d28",
+        "#de7474",
+        "#83b86f",
+        "#c9aa5f",
+        "#6f9dbc",
+        "#b393d8",
+        "#72b9b6",
+        "#ddd6cf",
+        "#8f867c",
+        "#eb8a84",
+        "#9ccc85",
+        "#d9bd76",
+        "#87b2cf",
+        "#c6a8e4",
+        "#8acbc7",
         "#fafaf9",
       ],
       selectionBackground: "#27272a",

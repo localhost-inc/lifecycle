@@ -48,13 +48,13 @@ function PullRequestRow({
 
   const statusColor =
     pullRequest.mergeable === "conflicting"
-      ? "var(--muted-foreground)"
+      ? "var(--status-danger)"
       : pullRequest.reviewDecision === "approved"
-        ? "var(--git-status-added)"
+        ? "var(--status-success)"
         : pullRequest.reviewDecision === "changes_requested"
-          ? "var(--git-status-modified)"
+          ? "var(--status-danger)"
           : pullRequest.mergeable === "mergeable"
-            ? "var(--git-status-added)"
+            ? "var(--status-info)"
             : undefined;
 
   return (
@@ -119,7 +119,11 @@ export function PullRequestsTab({
   }
 
   if (error) {
-    return <p className="text-xs text-red-400">Failed to load pull requests: {String(error)}</p>;
+    return (
+      <p className="text-xs text-[var(--destructive)]">
+        Failed to load pull requests: {String(error)}
+      </p>
+    );
   }
 
   if (!result?.support.available) {

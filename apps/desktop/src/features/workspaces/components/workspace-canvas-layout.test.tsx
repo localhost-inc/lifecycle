@@ -8,7 +8,7 @@ describe("WorkspaceCanvas layout", () => {
     mock.restore();
   });
 
-  test("renders pane headers flush on the left edge while preserving right-side controls", async () => {
+  test("renders pane headers with a dedicated tab strip region beside the right-side controls", async () => {
     const terminalHooksModule = await import("../../terminals/hooks");
     const responseReadyModule =
       await import("../../terminals/state/terminal-response-ready-provider");

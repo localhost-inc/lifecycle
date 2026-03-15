@@ -66,7 +66,7 @@ describe("WorkspacePaneTabBar", () => {
     expect(markup).toContain("cursor-grab");
   });
 
-  test("hides the horizontal scrollbar and reserves a right gutter for the fade", () => {
+  test("hides the horizontal scrollbar, reserves the fade gutter, and insets tabs from the pane edge", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspacePaneTabBar, {
         activeTabKey: "terminal:term-1",
@@ -101,6 +101,7 @@ describe("WorkspacePaneTabBar", () => {
     expect(markup).toContain("padding-right:24px");
     expect(markup).toContain("scrollbar-width:none");
     expect(markup).toContain("-ms-overflow-style:none");
+    expect(markup).toContain("pl-1.5");
     expect(markup).toContain("z-[1]");
     expect(markup).not.toContain("right-0 z-10");
   });

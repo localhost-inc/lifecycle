@@ -2,6 +2,7 @@ import { X } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 
 interface TabChipProps {
+  activeSurface?: "background" | "card" | "surface";
   active: boolean;
   children?: ReactNode;
   className?: string;
@@ -26,6 +27,7 @@ interface TabChipProps {
 }
 
 export function TabChip({
+  activeSurface = "surface",
   active,
   children,
   className,
@@ -49,10 +51,16 @@ export function TabChip({
   indicator,
 }: TabChipProps) {
   const baseClasses =
-    "relative my-1 flex shrink-0 items-center gap-2 rounded-md px-3 text-sm transition-colors";
+    "relative flex h-full shrink-0 items-center gap-2 border-l border-[var(--border)] px-3 text-sm transition-colors first:border-l-0";
+  const activeSurfaceClass =
+    activeSurface === "card"
+      ? "bg-[var(--card)]"
+      : activeSurface === "surface"
+        ? "bg-[var(--surface)]"
+      : "bg-[var(--background)]";
   const activeClasses = active
-    ? "z-10 bg-[var(--surface-hover)] text-[var(--foreground)]"
-    : "text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--surface-hover)]/50";
+    ? `${activeSurfaceClass} text-[var(--foreground)]`
+    : "bg-transparent text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]";
   const fontClass = active ? "font-semibold" : "font-medium";
 
   const dataProps: Record<string, string> = {};
@@ -79,9 +87,18 @@ export function TabChip({
       title={title}
       {...dataProps}
     >
+      {active ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-[var(--accent)]"
+        />
+      ) : null}
       {indicator}
       {leading ? (
-        <span aria-hidden="true" className="shrink-0 text-[var(--muted-foreground)]">
+        <span
+          aria-hidden="true"
+          className={`shrink-0 ${active ? "text-[var(--foreground)]" : "text-[var(--muted-foreground)]"}`}
+        >
           {leading}
         </span>
       ) : null}

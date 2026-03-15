@@ -10,7 +10,9 @@ All tokens referenced below are CSS custom properties defined in `packages/ui/sr
 - Thin 1px borders using `var(--border)` for structure
 - Shadows reserved for floating affordances only — tabs use `var(--tab-shadow)`; general surfaces use borders and background shifts
 - Cards use `var(--card)` bg with 1px border — bordered containers, not floating surfaces
-- Panels use `var(--panel)` bg for recessed/secondary regions
+- Primary project/workspace/terminal planes use `var(--surface)`
+- Shell chrome uses `var(--background)` for the backmost app frame; project sidebars use `--sidebar-background`; page-tab rails and similar durable project chrome use `--surface`
+- Active content bodies stay on `var(--surface)`; do not add extra filled chrome bands inside the active body unless the surface actually changes scope
 
 ## Buttons
 
@@ -45,9 +47,16 @@ All tokens referenced below are CSS custom properties defined in `packages/ui/sr
 
 - Hover: `var(--surface-hover)` background shift — no shadows
 - Selected/active: `var(--surface-selected)` bg or solid `var(--primary)` fill
+- Sidebar rows use `--sidebar-hover` and `--sidebar-selected`, not the generic surface states
 - Focus: `var(--ring)` outline, offset from element, no glow
 - No color/background transitions longer than 150ms
 
 ## Panel Titles
 
 - `.app-panel-title`: mono (`var(--font-mono)`), 12px, weight 500, uppercase, 0.1em tracking, `var(--sidebar-muted-foreground)`
+
+## Status and Errors
+
+- Functional status colors resolve through semantic tokens: `--status-info`, `--status-success`, `--status-warning`, `--status-danger`, `--status-neutral`
+- Git-specific colors (`--git-status-*`) are reserved for diff/file-state rendering, not generic shell status UI
+- Destructive/error states use `--destructive` with subtle mixed fills; avoid hardcoded red/rose utility classes in shell chrome

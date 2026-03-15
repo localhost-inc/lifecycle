@@ -49,9 +49,9 @@ export function buildPullRequestDiffReloadKey(
 }
 
 const checkStatusColors: Record<string, string> = {
-  success: "var(--git-status-added)",
+  success: "var(--status-success)",
   failed: "var(--destructive)",
-  pending: "var(--git-status-modified)",
+  pending: "var(--status-warning)",
   neutral: "var(--muted-foreground)",
 };
 
@@ -257,9 +257,9 @@ export function PullRequestSurface({
 
   const reviewColor =
     pullRequest.reviewDecision === "approved"
-      ? "var(--git-status-added)"
+      ? "var(--status-success)"
       : pullRequest.reviewDecision === "changes_requested"
-        ? "var(--git-status-modified)"
+        ? "var(--status-danger)"
         : undefined;
 
   const mergeText =
@@ -271,9 +271,9 @@ export function PullRequestSurface({
 
   const mergeColor =
     pullRequest.mergeable === "mergeable"
-      ? "var(--git-status-added)"
+      ? "var(--status-info)"
       : pullRequest.mergeable === "conflicting"
-        ? "var(--muted-foreground)"
+        ? "var(--status-danger)"
         : undefined;
 
   // -- Diff state --
@@ -309,7 +309,7 @@ export function PullRequestSurface({
   const [checksExpanded, setChecksExpanded] = useState(false);
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--background)]">
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface)]">
       <header className="flex flex-col gap-0 border-b border-[var(--border)] px-5 pt-4 pb-0">
         {/* Section title row */}
         <div className="flex items-center gap-2.5">

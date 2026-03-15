@@ -1,6 +1,6 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { PanelLeft, PanelLeftClose } from "lucide-react";
-import { version } from "../../../package.json";
+import { bugs, version } from "../../../package.json";
 import { Wordmark } from "../wordmark";
 
 interface AppStatusBarProps {
@@ -14,7 +14,7 @@ export function AppStatusBar({
 }: AppStatusBarProps) {
   return (
     <footer
-      className="flex h-7 shrink-0 items-center justify-between border-t border-[var(--border)] bg-[var(--background)] px-2.5 text-[11px] text-[var(--muted-foreground)]"
+      className="flex h-7 shrink-0 items-center justify-between border-t border-[var(--border)] bg-[var(--surface)] px-2.5 text-[11px] text-[var(--muted-foreground)]"
       data-slot="app-status-bar"
     >
       <div className="flex items-center gap-1.5">
@@ -38,7 +38,7 @@ export function AppStatusBar({
         <button
           type="button"
           className="hover:text-[var(--foreground)]"
-          onClick={() => openUrl("https://github.com/kylealwyn/lifecycle/issues")}
+          onClick={() => openUrl(bugs.url)}
         >
           Feedback
         </button>

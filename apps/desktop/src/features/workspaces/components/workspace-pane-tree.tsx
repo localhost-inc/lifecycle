@@ -438,7 +438,7 @@ function WorkspacePaneTabDragGhost({
       }}
     >
       <div
-        className="flex items-center gap-2 whitespace-nowrap border-x border-[var(--border)] bg-[var(--background)] px-3 text-sm font-semibold text-[var(--foreground)] shadow-[0_18px_40px_-20px_rgba(15,23,42,0.75)] opacity-95"
+        className="flex items-center gap-2 whitespace-nowrap border-x border-[var(--border)] border-t-2 border-t-[var(--primary)] bg-[var(--card)] px-3 text-sm font-semibold text-[var(--foreground)] shadow-[var(--tab-shadow-drag)] opacity-95"
         style={{
           height: drag.draggedHeight,
           width: drag.draggedWidth,
@@ -689,7 +689,7 @@ export function WorkspacePaneTree({
           }}
         >
           <div
-            className="flex h-10 items-stretch gap-0 border-b border-[var(--border)] bg-transparent"
+            className="flex h-10 items-stretch gap-0 border-b border-[var(--border)] bg-[var(--sidebar-selected)]"
             data-workspace-pane-header
           >
             <WorkspacePaneTabBar

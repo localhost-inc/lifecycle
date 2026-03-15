@@ -200,7 +200,7 @@ For dynamic local ports, use reserved runtime templates like
 `"${LIFECYCLE_SERVICE_REDIS_PORT}"`. Literal localhost ports are treated
 literally; Lifecycle does not rewrite them at runtime.
 
-Workspace start transitions to `active` only after all declared service health checks pass.
+Workspace start transitions or returns to `active` only after all targeted service health checks pass. A full workspace run targets every declared service; a service-targeted run only boots the selected service chain. During an additive service boot on an already-active workspace, ready dependencies are treated as satisfied and are not restarted.
 
 ## Secret Handling
 

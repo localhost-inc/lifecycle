@@ -11,7 +11,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@lifecycle/ui";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, LoaderCircle, Play, RotateCcw, Square } from "lucide-react";
 import { GraphTab } from "./graph-tab";
 import { LogsTab } from "./logs-tab";
@@ -57,7 +57,7 @@ interface EnvironmentPanelProps {
   manifestState: "invalid" | "missing" | "valid";
   onActiveTabChange?: (tab: EnvironmentPanelTabValue) => void;
   onRestart: () => Promise<void>;
-  onRun: () => Promise<void>;
+  onRun: (serviceNames?: string[]) => Promise<void>;
   onStop: () => Promise<void>;
   onUpdateService: (input: {
     exposure: ServiceRecord["exposure"];
@@ -89,8 +89,10 @@ export function EnvironmentPanel({
   const [uncontrolledActiveTab, setUncontrolledActiveTab] =
     useState<EnvironmentPanelTabValue>("overview");
   const [activeAction, setActiveAction] = useState<"restart" | "start" | "stop" | null>(null);
+  const [activeServiceStartName, setActiveServiceStartName] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [restartMenuOpen, setRestartMenuOpen] = useState(false);
+  const [selectedServiceLogsName, setSelectedServiceLogsName] = useState<string | null>(null);
   const activeTab = controlledActiveTab ?? uncontrolledActiveTab;
   const handleActiveTabChange = (tab: EnvironmentPanelTabValue) => {
     onActiveTabChange?.(tab);
@@ -111,12 +113,53 @@ export function EnvironmentPanel({
       )
       .map(([name, node]) => [name, node.runtime]),
   );
+  useEffect(() => {
+    if (
+      selectedServiceLogsName !== null &&
+      !(
+        services.some((service) => service.service_name === selectedServiceLogsName) ||
+        serviceRuntimeByName[selectedServiceLogsName] !== undefined
+      )
+    ) {
+      setSelectedServiceLogsName(null);
+    }
+  }, [selectedServiceLogsName, serviceRuntimeByName, services]);
+  useEffect(() => {
+    setSelectedServiceLogsName(null);
+    setActiveServiceStartName(null);
+  }, [workspace.id]);
   const canRun = workspace.status === "idle" && hasManifest;
+  const canStartService =
+    hasManifest && (workspace.status === "idle" || workspace.status === "active");
   const canStop = workspace.status === "active" || workspace.status === "starting";
   const canRestart = workspace.status === "active" && hasManifest;
   const stopping = workspace.status === "stopping";
+
+  function handleOpenServiceLogs(serviceName: string): void {
+    setSelectedServiceLogsName(serviceName);
+    handleActiveTabChange("logs");
+  }
+
+  async function handleRunService(serviceName: string): Promise<void> {
+    if (!canStartService || activeAction !== null || activeServiceStartName !== null) {
+      return;
+    }
+
+    setActionError(null);
+    setActiveServiceStartName(serviceName);
+    handleOpenServiceLogs(serviceName);
+
+    try {
+      await onRun([serviceName]);
+    } catch (error) {
+      setActionError(formatWorkspaceError(error, `Failed to start ${serviceName}.`));
+    } finally {
+      setActiveServiceStartName(null);
+    }
+  }
+
   async function handleStart(): Promise<void> {
-    if (!canRun || activeAction !== null) {
+    if (!canRun || activeAction !== null || activeServiceStartName !== null) {
       return;
     }
 
@@ -192,7 +235,8 @@ export function EnvironmentPanel({
             variant: "default" as const,
           };
 
-  const actionDisabled = activeAction !== null || stopping || (!canRun && !canStop);
+  const actionDisabled =
+    activeAction !== null || activeServiceStartName !== null || stopping || (!canRun && !canStop);
 
   return (
     <section className="flex h-full min-h-0 flex-col">
@@ -226,7 +270,7 @@ export function EnvironmentPanel({
                     </PopoverTrigger>
                     <PopoverContent
                       align="end"
-                      className="w-44 rounded-lg border-[var(--border)] bg-[var(--panel)] p-1 shadow-[0_12px_32px_rgba(0,0,0,0.18)]"
+                      className="w-44 rounded-lg border-[var(--border)] bg-[var(--surface)] p-1 shadow-[0_12px_32px_rgba(0,0,0,0.18)]"
                       side="bottom"
                       sideOffset={8}
                     >
@@ -293,7 +337,13 @@ export function EnvironmentPanel({
               config={config}
               declaredStepNames={declaredSetupStepNames}
               environmentTasks={environmentTasks}
+              onOpenServiceLogs={handleOpenServiceLogs}
+              onStartService={(serviceName) => void handleRunService(serviceName)}
               onUpdateService={onUpdateService}
+              runDisabled={
+                !canStartService || activeAction !== null || activeServiceStartName !== null
+              }
+              runningServiceName={activeServiceStartName}
               serviceRuntimeByName={serviceRuntimeByName}
               services={services}
               setupSteps={setupSteps}
@@ -301,7 +351,19 @@ export function EnvironmentPanel({
             />
           )}
           {activeTab === "topology" && <GraphTab config={config} services={services} />}
-          {activeTab === "logs" && <LogsTab />}
+          {activeTab === "logs" && (
+            <LogsTab
+              config={config}
+              declaredStepNames={declaredSetupStepNames}
+              environmentTasks={environmentTasks}
+              onClearSelectedService={() => setSelectedServiceLogsName(null)}
+              selectedServiceName={selectedServiceLogsName}
+              serviceRuntimeByName={serviceRuntimeByName}
+              services={services}
+              setupSteps={setupSteps}
+              workspace={workspace}
+            />
+          )}
         </div>
       </div>
     </section>

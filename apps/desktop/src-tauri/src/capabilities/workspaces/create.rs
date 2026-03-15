@@ -148,6 +148,7 @@ pub async fn create_workspace(
         &workspace_id,
         manifest.as_ref(),
         request.manifest_fingerprint.as_deref(),
+        false,
     )?;
     diagnostics::append_timing(
         "workspace-create",

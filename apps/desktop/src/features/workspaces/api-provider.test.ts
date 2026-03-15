@@ -182,6 +182,7 @@ describe("workspace api provider routing", () => {
     expect(provider.createWorkspace).toHaveBeenCalledTimes(1);
     expect(provider.renameWorkspace).toHaveBeenCalledWith("ws_1", "Renamed Workspace");
     expect(provider.startServices).toHaveBeenCalledWith({
+      serviceNames: undefined,
       workspace,
       services,
       manifestJson: '{"services":{"web":{}}}',

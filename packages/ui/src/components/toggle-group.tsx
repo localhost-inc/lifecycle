@@ -70,7 +70,7 @@ function ToggleGroup({
   return (
     <ToggleGroupPrimitive
       className={cn(
-        "inline-flex items-center gap-1 border border-[var(--border)] bg-[var(--panel)] p-1",
+        "inline-flex items-center gap-1 border border-[var(--border)] bg-[var(--surface)] p-1",
         className,
       )}
       data-slot="toggle-group"

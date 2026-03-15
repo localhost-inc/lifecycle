@@ -18,8 +18,13 @@ fn shell_command_line(launch: &TerminalLaunchSpec) -> String {
     parts.join(" ")
 }
 
-fn resolved_login_shell() -> String {
+pub(crate) fn resolved_login_shell() -> String {
     std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".to_string())
+}
+
+pub(crate) fn login_shell_command(command: &str) -> String {
+    let shell = resolved_login_shell();
+    format!("{} -l -c {}", shell_quote(&shell), shell_quote(command))
 }
 
 pub(crate) fn resolve_terminal_working_directory(
@@ -48,15 +53,14 @@ pub(crate) fn native_terminal_command(
         // runtime's default-shell startup path instead of that command mode.
         TerminalType::Shell => String::new(),
         TerminalType::Harness => {
-            let shell = resolved_login_shell();
             let command = format!("exec {}", shell_command_line(launch));
-            format!("{} -l -c {}", shell_quote(&shell), shell_quote(&command))
+            login_shell_command(&command)
         }
         _ => shell_command_line(launch),
     }
 }
 
-fn shell_quote(value: &str) -> String {
+pub(crate) fn shell_quote(value: &str) -> String {
     if value.is_empty() {
         return "''".to_string();
     }

@@ -373,6 +373,7 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
       workspaceId: input.workspace.id,
       manifestJson: input.manifestJson,
       manifestFingerprint: input.manifestFingerprint,
+      serviceNames: input.serviceNames,
     });
   }
 }

@@ -17,9 +17,10 @@ Lifecycle should stay prescriptive about service execution.
 
 Applied to this repo:
 
-1. `desktop-web` is modeled as the previewable Vite dev server on port `1420`.
-2. `worker` is modeled as the scaffold HTTP service on port `8787`.
-3. We intentionally do not launch `tauri dev` from inside the repo manifest because that would recursively spawn the desktop shell rather than define a previewable app service boundary.
+1. `api` is modeled as the scaffold HTTP service on port `8787`.
+2. `www` is modeled as the static landing page on port `3000`.
+3. Both services read their assigned runtime ports from `PORT` or reserved `LIFECYCLE_SERVICE_*` env vars so the checked-in manifest stays compatible with dynamic local port assignment.
+4. We intentionally do not launch `tauri dev` from inside the repo manifest because that would recursively spawn the desktop shell rather than define a previewable app service boundary.
 
 ## Milestone Impact
 
@@ -29,6 +30,6 @@ Applied to this repo:
 
 ## Follow-Up Actions
 
-1. Add environment-wide aggregated logs in the right rail on top of explicit service supervision.
+1. Extend the right-rail boot log view into full service stdout/stderr streaming on top of explicit service supervision.
 2. Revisit stable local preview URLs if we adopt a port-abstraction layer like `portless`.
 3. Consider a clearly-labeled limited-capability fallback mode for unsupported repos that only expose a broad runner command.

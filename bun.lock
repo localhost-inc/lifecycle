@@ -16,6 +16,10 @@
         "typescript": "^5.9.0",
       },
     },
+    "apps/api": {
+      "name": "@lifecycle/api",
+      "version": "0.0.0",
+    },
     "apps/desktop": {
       "name": "@lifecycle/desktop",
       "version": "0.0.0",
@@ -57,8 +61,8 @@
         "vite": "^7.0.4",
       },
     },
-    "apps/worker": {
-      "name": "@lifecycle/worker",
+    "apps/www": {
+      "name": "@lifecycle/www",
       "version": "0.0.0",
     },
     "packages/cli": {
@@ -326,6 +330,8 @@
 
     "@lezer/xml": ["@lezer/xml@1.0.6", "", { "dependencies": { "@lezer/common": "^1.2.0", "@lezer/highlight": "^1.0.0", "@lezer/lr": "^1.0.0" } }, "sha512-CdDwirL0OEaStFue/66ZmFSeppuL6Dwjlk8qk153mSQwiSH/Dlri4GNymrNWnUmPl2Um7QfV1FO9KFUyX3Twww=="],
 
+    "@lifecycle/api": ["@lifecycle/api@workspace:apps/api"],
+
     "@lifecycle/cli": ["@lifecycle/cli@workspace:packages/cli"],
 
     "@lifecycle/config": ["@lifecycle/config@workspace:packages/config"],
@@ -338,7 +344,7 @@
 
     "@lifecycle/ui": ["@lifecycle/ui@workspace:packages/ui"],
 
-    "@lifecycle/worker": ["@lifecycle/worker@workspace:apps/worker"],
+    "@lifecycle/www": ["@lifecycle/www@workspace:apps/www"],
 
     "@marijn/find-cluster-break": ["@marijn/find-cluster-break@1.0.2", "", {}, "sha512-l0h88YhZFyKdXIFNfSWpyjStDjGHwZ/U7iobcK1cQQD8sejsONdQtTVU+1wVN1PBw40PiiHB1vA5S7VTfQiP9g=="],
 

@@ -77,6 +77,7 @@ pub async fn start_services(
     workspace_id: String,
     manifest_json: String,
     manifest_fingerprint: String,
+    service_names: Option<Vec<String>>,
 ) -> Result<(), LifecycleError> {
     let _mutation_guard = workspace_controllers
         .acquire_mutation_guard(&workspace_id)
@@ -88,6 +89,7 @@ pub async fn start_services(
         workspace_id,
         manifest_json,
         manifest_fingerprint,
+        service_names,
     )
     .await
 }

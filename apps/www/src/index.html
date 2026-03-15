@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lifecycle</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --page: #f6f2ea;
+        --surface: rgba(255, 255, 255, 0.72);
+        --ink: #16120f;
+        --muted: #5f564f;
+        --accent: #111111;
+        --line: rgba(22, 18, 15, 0.1);
+        --line-strong: rgba(22, 18, 15, 0.18);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Avenir Next", "Segoe UI", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top center, rgba(22, 18, 15, 0.08), transparent 28rem),
+          linear-gradient(180deg, #fbf9f4 0%, var(--page) 58%, #efe7da 100%);
+      }
+
+      main {
+        display: flex;
+        min-height: 100vh;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 32px 20px 48px;
+      }
+
+      .welcome-stage {
+        width: min(720px, 100%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 12px;
+        padding: 48px 32px 28px;
+      }
+
+      .logo-shell {
+        margin-bottom: -28px;
+        animation: welcome-logo-settle 1000ms cubic-bezier(0.22, 0.61, 0.36, 1) 140ms both;
+        transform-origin: center center;
+      }
+
+      .logo-float {
+        animation: welcome-logo-float 6s ease-in-out 1200ms infinite;
+      }
+
+      .logo-mark {
+        width: min(220px, 58vw);
+        display: block;
+        color: var(--accent);
+      }
+
+      .wordmark-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 52px;
+      }
+
+      .wordmark {
+        margin: 0;
+        font-family: "SF Mono", "Menlo", "Monaco", monospace;
+        font-size: clamp(2.75rem, 7vw, 4.1rem);
+        font-weight: 500;
+        letter-spacing: -0.12em;
+        text-transform: lowercase;
+      }
+
+      .cursor {
+        display: inline-block;
+        width: 0.12em;
+        height: 0.88em;
+        margin-left: 0.16em;
+        transform: translateY(0.1em);
+        background: currentColor;
+        animation: welcome-cursor-blink 1200ms ease-in-out infinite;
+      }
+
+      .lede {
+        margin: 0;
+        max-width: 34rem;
+        font-size: 1rem;
+        line-height: 1.7;
+        color: var(--muted);
+      }
+
+      .cta-row {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 12px;
+        margin-top: 14px;
+        opacity: 0;
+        animation: welcome-button-enter 1000ms cubic-bezier(0.4, 0, 0.2, 1) 520ms forwards;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 42px;
+        padding: 0 18px;
+        border-radius: 999px;
+        border: 1px solid var(--accent);
+        background: var(--accent);
+        color: #fbf9f4;
+        font-size: 0.95rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        text-decoration: none;
+      }
+
+      .button.secondary {
+        background: transparent;
+        color: var(--accent);
+        border-color: var(--line-strong);
+      }
+
+      .surfaces {
+        width: min(960px, 100%);
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 16px;
+        margin-top: 36px;
+      }
+
+      .surface-card {
+        flex: 1 1 220px;
+        max-width: 280px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-height: 196px;
+        padding: 22px;
+        border-radius: 24px;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        box-shadow: 0 18px 60px rgba(33, 26, 20, 0.08);
+        backdrop-filter: blur(18px);
+      }
+
+      .surface-kicker {
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .surface-card strong {
+        font-size: 1.18rem;
+        letter-spacing: -0.03em;
+      }
+
+      .surface-card span {
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .surface-card code {
+        display: inline-flex;
+        width: fit-content;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(22, 18, 15, 0.06);
+        font-family: "SF Mono", "Menlo", "Monaco", monospace;
+        font-size: 0.78rem;
+      }
+
+      @keyframes welcome-logo-settle {
+        from {
+          transform: scale(1);
+          margin-bottom: 0;
+        }
+
+        to {
+          transform: scale(0.58);
+          margin-bottom: -42px;
+        }
+      }
+
+      @keyframes welcome-logo-float {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+
+        50% {
+          transform: translateY(-6px);
+        }
+      }
+
+      @keyframes welcome-button-enter {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes welcome-cursor-blink {
+        0%,
+        100% {
+          opacity: 0.8;
+        }
+
+        50% {
+          opacity: 0;
+        }
+      }
+
+      @media (max-width: 720px) {
+        main {
+          padding: 16px;
+        }
+
+        .welcome-stage {
+          padding: 28px 18px 16px;
+        }
+
+        .surface-card {
+          max-width: none;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .logo-shell,
+        .logo-float,
+        .cta-row,
+        .cursor {
+          animation: none;
+          opacity: 1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="welcome-stage">
+        <div class="logo-shell" aria-hidden="true">
+          <div class="logo-float">
+            <svg class="logo-mark" viewBox="0 0 535 535" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M118.611 342.4V305.2H100V230.8H118.611V193.6H155.833V175H193.056V193.6H230.278V212.2H248.889V230.8H267.5V249.4H286.111V268H304.722V286.6H323.333V305.2H341.944V323.8H379.167V305.2H397.778V230.8H379.167V212.2H341.944V230.8H323.333V249.4H286.111V212.2H304.722V193.6H341.944V175H379.167V193.6H416.389V230.8H435V305.2H416.389V342.4H379.167V361H341.944V342.4H304.722V323.8H286.111V305.2H267.5V286.6H248.889V268H230.278V249.4H211.667V230.8H193.056V212.2H155.833V230.8H137.222V305.2H155.833V323.8H193.056V305.2H211.667V286.6H248.889V323.8H230.278V342.4H193.056V361H155.833V342.4H118.611Z"
+                fill="currentColor"
+              />
+            </svg>
+          </div>
+        </div>
+        <div class="wordmark-row">
+          <h1 class="wordmark">lifecycle</h1>
+          <span class="cursor" aria-hidden="true"></span>
+        </div>
+        <p class="lede">
+          Desktop-first workspace runtime for local-first software work. Bring up the desktop app,
+          the API scaffold, and the landing page as separate surfaces instead of hiding everything
+          behind one fanout script.
+        </p>
+        <div class="cta-row">
+          <a class="button" href="#surfaces">See the surfaces</a>
+          <a class="button secondary" href="https://github.com/localhost-inc/lifecycle">View the repo</a>
+        </div>
+      </section>
+
+      <section class="surfaces" id="surfaces">
+        <article class="surface-card">
+          <span class="surface-kicker">Desktop</span>
+          <strong>Tauri shell</strong>
+          <span>
+            The main local-first workspace surface for lifecycle controls, tabs, terminals, and
+            previews.
+          </span>
+          <code>apps/desktop</code>
+        </article>
+        <article class="surface-card">
+          <span class="surface-kicker">API</span>
+          <strong>HTTP scaffold</strong>
+          <span>
+            A minimal Bun service on port 8787 for proving out explicit service execution and health
+            checks.
+          </span>
+          <code>apps/api</code>
+        </article>
+        <article class="surface-card">
+          <span class="surface-kicker">WWW</span>
+          <strong>Landing page</strong>
+          <span>
+            This static page mirrors the desktop welcome screen language while staying simple enough
+            to ship as plain HTML.
+          </span>
+          <code>apps/www</code>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

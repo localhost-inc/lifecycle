@@ -153,7 +153,7 @@ export function ProjectSwitcherStrip({
     >
       <Button
         aria-label={`Open ${activeContextName} context`}
-        className="h-7 shrink-0 gap-1.5 rounded-[var(--radius-xl)] border border-[color-mix(in_srgb,var(--border),var(--foreground)_8%)] bg-[color-mix(in_srgb,var(--panel),var(--foreground)_4%)] px-2 text-[11px] font-medium text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--panel),var(--foreground)_8%)]"
+        className="h-7 shrink-0 gap-1.5 rounded-[var(--radius-xl)] border border-[color-mix(in_srgb,var(--border),var(--foreground)_8%)] bg-[color-mix(in_srgb,var(--surface),var(--foreground)_4%)] px-2 text-[11px] font-medium text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--surface),var(--foreground)_8%)]"
         data-slot="project-switcher-context"
         onClick={onOpenSettings}
         title={contextControlTitle(activeContextName, authSession, authSessionLoading)}
@@ -178,8 +178,8 @@ export function ProjectSwitcherStrip({
                 className={[
                   "inline-flex h-6.5 shrink-0 items-center gap-1.5 rounded-[var(--radius-xl)] border px-2 text-[12px] font-medium leading-none transition-colors",
                   selected
-                    ? "border-[color-mix(in_srgb,var(--border),var(--foreground)_10%)] bg-[color-mix(in_srgb,var(--panel),var(--foreground)_6%)] text-[var(--foreground)]"
-                    : "border-transparent bg-transparent text-[var(--muted-foreground)] hover:bg-[color-mix(in_srgb,var(--panel),var(--foreground)_3%)] hover:text-[var(--foreground)]",
+                    ? "border-[color-mix(in_srgb,var(--border),var(--foreground)_10%)] bg-[color-mix(in_srgb,var(--surface),var(--foreground)_6%)] text-[var(--foreground)]"
+                    : "border-transparent bg-transparent text-[var(--muted-foreground)] hover:bg-[color-mix(in_srgb,var(--surface),var(--foreground)_3%)] hover:text-[var(--foreground)]",
                 ].join(" ")}
                 to={`/projects/${project.id}`}
                 title={project.name}

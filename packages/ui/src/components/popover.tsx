@@ -45,7 +45,7 @@ function PopoverContent({
       >
         <PopoverPrimitive.Popup
           className={cn(
-            "z-50 w-72 border border-[var(--border)] bg-[var(--panel)] p-3 text-sm text-[var(--foreground)] shadow-lg outline-none",
+            "z-50 w-72 border border-[var(--border)] bg-[var(--surface)] p-3 text-sm text-[var(--foreground)] shadow-lg outline-none",
             "origin-[var(--transform-origin)] transition-[transform,opacity] data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0",
             className,
           )}

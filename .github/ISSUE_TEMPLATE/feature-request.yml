@@ -1,0 +1,33 @@
+name: Feature request
+description: Propose a scoped improvement aligned with the active roadmap
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user or developer problem are you trying to solve?
+      placeholder: The current behavior makes it hard to...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Describe the smallest coherent change that would help.
+      placeholder: A good first version would...
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Milestone or contract impact
+      description: Note any related docs, milestones, or reference specs if you know them.
+      placeholder: docs/milestones/m4.md, docs/reference/state-machines.md
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      placeholder: I also considered...

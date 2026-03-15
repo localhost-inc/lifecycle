@@ -72,6 +72,7 @@ export function WorkspacePaneTabItem({
   return (
     <TabChip
       active={active}
+      activeSurface="card"
       className={`max-w-[300px] touch-none select-none ${dragDropClasses}`}
       closable={!isRenaming}
       id={canvasTabDomId(tab.key)}
@@ -101,7 +102,7 @@ export function WorkspacePaneTabItem({
           ref={renameInputRef}
           aria-label="Rename session"
           className={`min-w-0 flex-1 bg-transparent outline-none ${
-            renameError ? "text-rose-300" : "text-inherit"
+            renameError ? "text-[var(--destructive)]" : "text-inherit"
           }`}
           disabled={renameSaving}
           onBlur={onRenameBlur}

@@ -106,7 +106,7 @@ export function summarizePencilDocument(content: string): PencilDocumentSummary 
 
 function SummaryCard({ label, value }: { label: string; value: number | string | null }) {
   return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--panel)] px-4 py-3">
+    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
       <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)]">
         {label}
       </p>
@@ -138,7 +138,7 @@ export function PencilFileRendererView({
             <SummaryCard label="Node Types" value={summary.uniqueTypeCount} />
           </div>
           <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-            <section className="rounded-3xl border border-[var(--border)] bg-[var(--panel)] p-5">
+            <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5">
               <div className="flex items-center gap-2">
                 <PencilRuler className="h-4 w-4 text-[var(--muted-foreground)]" />
                 <h3 className="text-sm font-semibold text-[var(--foreground)]">Pencil document</h3>
@@ -161,7 +161,7 @@ export function PencilFileRendererView({
               </div>
             </section>
 
-            <aside className="rounded-3xl border border-[var(--border)] bg-[var(--panel)] p-5">
+            <aside className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5">
               <h3 className="text-sm font-semibold text-[var(--foreground)]">Common node types</h3>
               {summary.topTypes.length > 0 ? (
                 <div className="mt-3 space-y-2">
@@ -191,7 +191,7 @@ export function PencilFileRendererView({
         </Alert>
       )}
 
-      <section className="mt-5 rounded-3xl border border-[var(--border)] bg-[var(--panel)]">
+      <section className="mt-5 rounded-3xl border border-[var(--border)] bg-[var(--surface)]">
         <div className="border-b border-[var(--border)] px-5 py-3">
           <h3 className="text-sm font-semibold text-[var(--foreground)]">Raw JSON</h3>
         </div>

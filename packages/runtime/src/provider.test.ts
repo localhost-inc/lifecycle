@@ -536,6 +536,7 @@ describe("workspace provider interface", () => {
           manifestJson:
             '{"setup":{"steps":[]},"services":{"web":{"runtime":"process","command":"bun run dev"}}}',
           manifestFingerprint: "manifest_1",
+          serviceNames: undefined,
         },
       },
     ]);
@@ -582,6 +583,56 @@ describe("workspace provider interface", () => {
           workspaceId: "ws_1",
           manifestJson: '{"setup":{"steps":[]},"services":{}}',
           manifestFingerprint: "manifest_1",
+          serviceNames: undefined,
+        },
+      },
+    ]);
+  });
+
+  test("local provider forwards targeted service starts", async () => {
+    const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
+    const invoke = async (cmd: string, args?: Record<string, unknown>) => {
+      calls.push(args ? { cmd, args } : { cmd });
+      return undefined;
+    };
+    const provider = new LocalWorkspaceProvider(invoke);
+
+    await provider.startServices({
+      serviceNames: ["www"],
+      workspace: {
+        id: "ws_1",
+        project_id: "project_1",
+        name: "Workspace 1",
+        kind: "managed",
+        source_ref: "lifecycle/workspace-1",
+        git_sha: null,
+        worktree_path: "/tmp/project_1/.worktrees/ws_1",
+        mode: "local",
+        status: "idle",
+        manifest_fingerprint: "manifest_1",
+        failure_reason: null,
+        failed_at: null,
+        created_by: null,
+        source_workspace_id: null,
+        created_at: "2026-03-12T00:00:00.000Z",
+        updated_at: "2026-03-12T00:00:00.000Z",
+        last_active_at: "2026-03-12T00:00:00.000Z",
+        expires_at: null,
+      },
+      services: [],
+      manifestJson: '{"environment":{"www":{"kind":"service","runtime":"process","command":"bun run dev"}}}',
+      manifestFingerprint: "manifest_1",
+    });
+
+    expect(calls).toEqual([
+      {
+        cmd: "start_services",
+        args: {
+          workspaceId: "ws_1",
+          manifestJson:
+            '{"environment":{"www":{"kind":"service","runtime":"process","command":"bun run dev"}}}',
+          manifestFingerprint: "manifest_1",
+          serviceNames: ["www"],
         },
       },
     ]);

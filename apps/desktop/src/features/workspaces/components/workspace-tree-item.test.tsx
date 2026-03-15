@@ -83,8 +83,7 @@ describe("WorkspaceTreeItem", () => {
       }),
     );
 
-    expect(markup).not.toContain("bg-[var(--sidebar-selected)]");
-    expect(markup).toContain("bg-[var(--muted)]");
+    expect(markup).toContain("bg-[var(--sidebar-selected)]");
     expect(markup).toContain("opacity-100");
     expect(markup).toContain("text-[var(--sidebar-foreground)]");
   });
@@ -101,7 +100,7 @@ describe("WorkspaceTreeItem", () => {
 
     expect(markup).toContain("opacity-80");
     expect(markup).toContain("hover:opacity-100");
-    expect(markup).toContain("hover:bg-[var(--surface-hover)]");
+    expect(markup).toContain("hover:bg-[var(--sidebar-hover)]");
     expect(markup).toContain("bg-transparent");
     expect(markup).toContain("text-[var(--sidebar-foreground)]");
   });

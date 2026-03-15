@@ -86,23 +86,23 @@ describe("WorkspaceLayout", () => {
       {
         id: "svc_1",
         workspace_id: "workspace_1",
-        service_name: "desktop-web",
+        service_name: "www",
         exposure: "local",
         port_override: null,
         status: "stopped",
         status_reason: null,
-        default_port: 1420,
-        effective_port: 1420,
+        default_port: 3000,
+        effective_port: 3000,
         preview_status: "sleeping",
         preview_failure_reason: null,
-        preview_url: "http://localhost:1420",
+        preview_url: "http://localhost:3000",
         created_at: "2026-03-10T10:00:00.000Z",
         updated_at: "2026-03-10T10:00:00.000Z",
       },
       {
         id: "svc_2",
         workspace_id: "workspace_1",
-        service_name: "worker",
+        service_name: "api",
         exposure: "local",
         port_override: null,
         status: "stopped",
@@ -157,16 +157,16 @@ describe("WorkspaceLayout", () => {
             config: {
               workspace: { setup: [], teardown: [] },
               environment: {
-                "desktop-web": {
+                www: {
                   kind: "service",
                   runtime: "process",
                   command: "bun run dev",
-                  port: 1420,
+                  port: 3000,
                 },
-                worker: {
+                api: {
                   kind: "service",
                   runtime: "process",
-                  command: "bun run worker",
+                  command: "bun run api",
                   port: 8787,
                 },
               },
@@ -187,8 +187,8 @@ describe("WorkspaceLayout", () => {
     expect(markup).toContain('data-slot="workspace-canvas"');
     expect(markup).toContain('data-slot="workspace-extension-strip"');
     expect(markup).not.toContain('data-slot="workspace-extension-panel"');
-    expect(markup).not.toContain("desktop-web");
-    expect(markup).not.toContain("worker");
+    expect(markup).not.toContain(">www<");
+    expect(markup).not.toContain(">api<");
   });
 
   test("keeps environment setup progress out of the workspace layout", async () => {
@@ -237,11 +237,11 @@ describe("WorkspaceLayout", () => {
                 teardown: [],
               },
               environment: {
-                "desktop-web": {
+                www: {
                   kind: "service",
                   runtime: "process",
                   command: "bun run dev",
-                  port: 1420,
+                  port: 3000,
                 },
               },
             },

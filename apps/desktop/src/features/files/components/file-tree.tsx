@@ -148,7 +148,7 @@ export function FileTree({
   };
 
   return (
-    <aside className="flex h-full min-h-0 w-72 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--panel)]">
+    <aside className="flex h-full min-h-0 w-72 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)]">
       <div className="flex min-h-14 items-center gap-2 border-b border-[var(--border)] px-3 py-3">
         <div className="min-w-0">
           <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted-foreground)]">

@@ -131,7 +131,7 @@ export function renderWorkspacePaneDefaultTabLeading(tab: WorkspaceCanvasTab) {
   }
 
   return (
-    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--background)]/70 font-mono text-[10px] text-[var(--muted-foreground)]">
+    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--surface)]/70 font-mono text-[10px] text-[var(--muted-foreground)]">
       {isCommitDiffDocument(tab) ? "#" : isPullRequestDocument(tab) ? "PR" : "D"}
     </span>
   );
@@ -498,7 +498,7 @@ export function WorkspacePaneTabBar({
     <div className="relative min-w-0 flex-1">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 right-0 z-[1] bg-gradient-to-l from-[var(--card)] to-transparent"
+        className="pointer-events-none absolute inset-y-0 right-0 z-[1] bg-gradient-to-l from-[var(--sidebar-selected)] to-transparent"
         style={{ width: TAB_BAR_RIGHT_FADE_WIDTH_PX }}
       />
       <div

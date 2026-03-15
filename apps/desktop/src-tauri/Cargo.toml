@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "Lifecycle Desktop"
 authors = ["Lifecycle"]
 edition = "2021"
+license-file = "../../../LICENSE"
+repository = "https://github.com/localhost-inc/lifecycle"
+homepage = "https://github.com/localhost-inc/lifecycle"
 
 [lib]
 name = "lifecycle_desktop_lib"

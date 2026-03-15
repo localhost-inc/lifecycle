@@ -12,11 +12,15 @@ mod native_surface;
 mod persistence;
 #[path = "terminal/runtime.rs"]
 mod runtime;
+#[path = "terminal/session_host.rs"]
+mod session_host;
 #[path = "terminal/types.rs"]
 mod types;
 
+#[allow(unused_imports)]
 pub(crate) use attachments::{prepare_native_terminal_attachment_paste, save_terminal_attachment};
 pub(crate) use persistence::load_terminal_record;
+#[allow(unused_imports)]
 pub(crate) use runtime::{
     complete_native_terminal_exit, create_terminal, detach_terminal, hide_native_terminal_surface,
     kill_terminal, sync_native_terminal_surface, sync_native_terminal_surface_frame,

@@ -153,7 +153,7 @@ export function GitDiffSurface({
   const parsedFiles = useParsedGitPatchFiles(diffCacheKeyPrefix, patch);
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--background)]">
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--surface)]">
       {header(source)}
       <GitPatchViewer
         error={error}

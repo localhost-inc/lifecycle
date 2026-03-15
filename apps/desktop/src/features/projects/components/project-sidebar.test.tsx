@@ -43,6 +43,7 @@ describe("ProjectSidebar", () => {
     expect(markup).toContain("lucide-layout-grid");
     expect(markup).toContain("lucide-git-pull-request");
     expect(markup).toContain("lucide-activity");
+    expect(markup).toContain("bg-[var(--sidebar-background)]");
     expect(markup).toContain('data-slot="project-sidebar-header"');
     expect(markup).toContain("flex h-10 items-center border-b border-[var(--border)] px-3");
     expect(markup.match(/Create workspace for Lifecycle/g)?.length ?? 0).toBe(1);

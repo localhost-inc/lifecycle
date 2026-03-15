@@ -14,7 +14,7 @@ function AppIconTile({
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[8px] border border-[var(--border)] bg-[var(--background)]/60",
+        "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[8px] border border-[var(--border)] bg-[var(--surface)]/60",
         sizeClass,
         className,
       )}

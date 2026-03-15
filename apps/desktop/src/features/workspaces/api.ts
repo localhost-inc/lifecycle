@@ -94,6 +94,7 @@ export async function renameWorkspace(workspaceId: string, name: string): Promis
 }
 
 export async function startServices(input: {
+  serviceNames?: string[];
   workspace: WorkspaceRecord;
   services: ServiceRecord[];
   manifestJson: string;
@@ -105,6 +106,7 @@ export async function startServices(input: {
   }
 
   await getWorkspaceProvider().startServices({
+    serviceNames: input.serviceNames,
     workspace: input.workspace,
     services: input.services,
     manifestJson: input.manifestJson,

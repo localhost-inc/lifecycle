@@ -59,6 +59,7 @@ describe("ProjectSwitcherStrip", () => {
     );
 
     expect(markup).toContain('data-slot="project-switcher-strip"');
+    expect(markup).not.toContain("bg-[var(--surface)]");
     expect(markup).toContain('data-slot="project-switcher-context"');
     expect(markup).toContain('aria-label="Open Personal context"');
     expect(markup).toContain(">Personal<");

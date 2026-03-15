@@ -46,10 +46,6 @@ html[data-overlay-host-window="true"] body #root {
   mask-repeat: repeat;
 }
 
-[data-workspace-pane-id] .terminal-host {
-  --terminal-surface-background: var(--card);
-}
-
 .terminal-host {
   background-color: var(--terminal-surface-background, var(--background));
   contain: paint;

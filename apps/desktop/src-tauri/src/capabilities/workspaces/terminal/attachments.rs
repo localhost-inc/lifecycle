@@ -88,6 +88,7 @@ fn infer_attachment_extension_from_media_type(media_type: Option<&str>) -> &'sta
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn format_terminal_attachment_insertion(paths: &[String]) -> String {
     paths
         .iter()
@@ -120,6 +121,7 @@ pub(crate) fn build_terminal_attachment_write_payloads(
     vec![format!("{} ", format_terminal_attachment_insertion(paths))]
 }
 
+#[allow(dead_code)]
 pub(crate) fn build_native_terminal_attachment_paste_payload(
     harness_provider: Option<&str>,
     paths: &[String],
@@ -208,6 +210,7 @@ pub(crate) async fn save_terminal_attachment(
     )
 }
 
+#[allow(dead_code)]
 pub(crate) fn prepare_native_terminal_attachment_paste(
     db_path: &str,
     terminal_id: &str,
