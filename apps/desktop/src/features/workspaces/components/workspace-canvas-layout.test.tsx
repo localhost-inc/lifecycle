@@ -45,10 +45,10 @@ describe("WorkspaceCanvas layout", () => {
     );
 
     expect(markup).toContain('data-workspace-pane-header="true"');
-    expect(markup).toContain('class="flex h-10 items-stretch gap-0 border-b');
+    expect(markup).toContain('class="flex h-10 items-stretch gap-1 border-b');
     expect(markup).toContain('data-slot="workspace-tab-bar"');
     expect(markup).toContain(
-      'class="flex shrink-0 items-center gap-px border-l border-[var(--border)] px-2"',
+      'class="flex shrink-0 items-center gap-px"',
     );
   });
 

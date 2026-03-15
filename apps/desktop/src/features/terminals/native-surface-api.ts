@@ -4,7 +4,6 @@ import { invokeTauri } from "../../lib/tauri-error";
 export interface NativeTerminalTheme {
   background: string;
   cursorColor: string;
-  faintOpacity: number;
   foreground: string;
   palette: string[];
   selectionBackground: string;

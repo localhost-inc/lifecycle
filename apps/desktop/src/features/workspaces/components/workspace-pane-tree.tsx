@@ -689,7 +689,7 @@ export function WorkspacePaneTree({
           }}
         >
           <div
-            className="flex h-10 items-stretch gap-0 border-b border-[var(--border)] bg-[var(--card)]"
+            className="flex h-10 items-stretch gap-1 border-b border-[var(--border)] bg-[var(--card)]"
             data-workspace-pane-header
           >
             <WorkspacePaneTabBar
@@ -704,13 +704,11 @@ export function WorkspacePaneTree({
               paneId={node.id}
               visibleTabs={visibleTabs}
             />
-            <div className="flex shrink-0 items-center border-l border-[var(--border)] px-1">
+            <div className="flex shrink-0 items-center gap-px">
               <SurfaceLaunchActions
                 actions={surfaceActions}
                 onLaunch={(request) => onLaunchSurface(node.id, request)}
               />
-            </div>
-            <div className="flex shrink-0 items-center gap-px border-l border-[var(--border)] px-2">
               <PaneControlButton label="Split Right" onClick={() => onSplitPane(node.id, "row")}>
                 <SplitRightIcon />
               </PaneControlButton>

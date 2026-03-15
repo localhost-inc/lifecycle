@@ -38,10 +38,6 @@ function basename(filePath: string): string {
   return segments[segments.length - 1] ?? filePath;
 }
 
-function dirname(filePath: string): string {
-  const idx = filePath.lastIndexOf("/");
-  return idx > 0 ? filePath.slice(0, idx + 1) : "";
-}
 
 function statusCssVar(kind: GitFileChangeKind | null): string {
   switch (kind) {
@@ -197,7 +193,6 @@ function FileRow({
   onOpenFile: () => void;
   section: ChangesSectionKind;
 }) {
-  const dir = dirname(file.path);
   const name = basename(file.path);
   const ins = file.stats.insertions;
   const del = file.stats.deletions;
@@ -235,15 +230,10 @@ function FileRow({
         <Icon className="h-4 w-4" />
       </span>
 
-      <div className="flex min-w-0 flex-1 items-baseline gap-1">
-        <span className="shrink-0 text-sm text-[var(--foreground)]">{name}</span>
-        {dir && (
-          <span className="truncate text-sm text-[var(--muted-foreground)] opacity-60">{dir}</span>
-        )}
-      </div>
+      <span className="min-w-0 truncate text-sm text-[var(--foreground)]" title={file.path}>{name}</span>
 
       <div className="ml-auto flex shrink-0 items-center">
-        <div className="relative flex min-h-8 min-w-16 items-center justify-end">
+        <div className="relative flex min-h-8 min-w-12 items-center justify-end">
           {hasDiffStats ? (
             <span
               className={`shrink-0 font-mono text-xs transition-opacity ${statsVisibilityClass}`}

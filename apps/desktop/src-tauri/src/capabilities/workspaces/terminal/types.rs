@@ -13,7 +13,6 @@ pub(crate) struct SavedTerminalAttachment {
 pub(crate) struct NativeTerminalTheme {
     pub background: String,
     pub cursor_color: String,
-    pub faint_opacity: f64,
     pub foreground: String,
     pub palette: Vec<String>,
     pub selection_background: String,

@@ -61,26 +61,6 @@ describe("theme.css", () => {
     }
   });
 
-  test("defines a readable terminal faint opacity token in every preset", () => {
-    const themesDir = new URL("./themes/", import.meta.url);
-    const themeFiles = readdirSync(themesDir).filter(
-      (file) => file.endsWith(".css") && file !== "index.css",
-    );
-
-    for (const file of themeFiles) {
-      const css = readFileSync(join(themesDir.pathname, file), "utf8");
-      const faintOpacityValues = readThemeToken(css, "--terminal-faint-opacity");
-
-      expect(faintOpacityValues.length).toBeGreaterThan(0);
-      for (const value of faintOpacityValues) {
-        const numericValue = Number.parseFloat(value);
-        expect(Number.isFinite(numericValue)).toBe(true);
-        expect(numericValue).toBeGreaterThanOrEqual(0.75);
-        expect(numericValue).toBeLessThanOrEqual(0.9);
-      }
-    }
-  });
-
   test("keeps sidebar background aligned with the surface token in every theme file", () => {
     const themesDir = new URL("./themes/", import.meta.url);
     const themeFiles = readdirSync(themesDir).filter(

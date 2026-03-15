@@ -3,7 +3,6 @@ import type { NativeTerminalTheme } from "./native-surface-api";
 
 interface TerminalThemeTokens {
   background: string;
-  faintOpacity: number;
   foreground: string;
   selectionBackground: string;
   selectionForeground: string;
@@ -33,14 +32,12 @@ interface TerminalAnsiPalette {
 const TOKEN_FALLBACKS: Record<"light" | "dark", TerminalThemeTokens> = {
   dark: {
     background: "#111113",
-    faintOpacity: 0.86,
     foreground: "#fafaf9",
     selectionBackground: "#27272a",
     selectionForeground: "#fafaf9",
   },
   light: {
     background: "#f4f4f5",
-    faintOpacity: 0.78,
     foreground: "#09090b",
     selectionBackground: "#e4e4e7",
     selectionForeground: "#09090b",
@@ -101,20 +98,6 @@ function readOptionalToken(styles: CSSStyleDeclaration, token: string): string |
   }
 
   return resolveTokenValue(styles, value, value);
-}
-
-function readNumberToken(styles: CSSStyleDeclaration, token: string, fallback: number): number {
-  const value = styles.getPropertyValue(token).trim();
-  if (!value) {
-    return fallback;
-  }
-
-  const parsed = Number.parseFloat(value);
-  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
-    return fallback;
-  }
-
-  return parsed;
 }
 
 function resolveTokenValue(
@@ -218,7 +201,6 @@ export function readTerminalThemeTokens(
       "--terminal-surface-background",
       readToken(styles, "--surface", readToken(styles, "--background", fallback.background)),
     ),
-    faintOpacity: readNumberToken(styles, "--terminal-faint-opacity", fallback.faintOpacity),
     foreground: readToken(
       styles,
       "--terminal-foreground",
@@ -243,7 +225,6 @@ export function buildTerminalTheme(
   return {
     background: tokens.background,
     cursorColor: palette.cursor,
-    faintOpacity: tokens.faintOpacity,
     foreground: tokens.foreground,
     palette: paletteToList(palette),
     selectionBackground: tokens.selectionBackground,

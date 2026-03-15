@@ -12,24 +12,24 @@ import {
 } from "@lifecycle/ui";
 import { ChevronDown, GitFork } from "lucide-react";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
-import { isMacPlatform } from "../../app/app-hotkeys";
-import type { HostedOverlayAction } from "../../features/overlays/overlay-contract";
-import { useHostedOverlay } from "../../features/overlays/use-hosted-overlay";
+import { isMacPlatform } from "../../../app/app-hotkeys";
+import type { HostedOverlayAction } from "../../overlays/overlay-contract";
+import { useHostedOverlay } from "../../overlays/use-hosted-overlay";
 import {
   listWorkspaceOpenInApps,
   openWorkspaceInApp,
   type WorkspaceOpenInAppInfo,
   type OpenInAppId,
-} from "../../features/workspaces/open-in-api";
-import { OpenInAppIcon } from "../../features/workspaces/components/open-in-app-icon";
-import { WorkspaceOpenInMenu } from "../../features/workspaces/components/workspace-open-in-menu";
+} from "../open-in-api";
+import { OpenInAppIcon } from "./open-in-app-icon";
+import { WorkspaceOpenInMenu } from "./workspace-open-in-menu";
 import {
   listAvailableOpenInTargets,
   resolveDefaultOpenTarget,
   type OpenInTarget,
-} from "../../features/workspaces/lib/open-in-targets";
+} from "../lib/open-in-targets";
 
-interface TitleBarActionsProps {
+interface WorkspaceActionsProps {
   workspace: WorkspaceRecord;
   onFork?: () => void;
 }
@@ -56,7 +56,7 @@ function describeOpenInError(error: unknown): string {
   return "Unable to open this workspace in the selected app.";
 }
 
-export function TitleBarActions({ workspace, onFork }: TitleBarActionsProps) {
+export function WorkspaceActions({ workspace, onFork }: WorkspaceActionsProps) {
   const { resolvedTheme } = useTheme();
   const [baseAvailableTargets] = useState(() => listAvailableOpenInTargets(isMacPlatform()));
   const [availableTargets, setAvailableTargets] =
@@ -203,7 +203,7 @@ export function TitleBarActions({ workspace, onFork }: TitleBarActionsProps) {
   }
 
   return (
-    <div className="flex items-center gap-1.5">
+    <>
       {onFork && (
         <Button onClick={onFork} title="Fork workspace">
           <GitFork size={14} strokeWidth={2.2} />
@@ -291,6 +291,6 @@ export function TitleBarActions({ workspace, onFork }: TitleBarActionsProps) {
           </Popover>
         )}
       </SplitButton>
-    </div>
+    </>
   );
 }

@@ -11,7 +11,7 @@ import {
   SHORTCUT_HANDLER_PRIORITY,
   useShortcutRegistration,
 } from "../../../app/shortcuts/shortcut-router";
-import { TitleBarActions } from "../../../components/layout/title-bar-actions";
+import { WorkspaceActions } from "../../workspaces/components/workspace-actions";
 import { getWorkspaceDisplayName } from "../../workspaces/lib/workspace-display";
 import { workspaceSupportsFilesystemInteraction } from "../../workspaces/lib/workspace-capabilities";
 import {
@@ -451,7 +451,7 @@ export function ProjectRoute() {
 
   const actionsOutlet = activeWorkspace ? (
     <div className="flex items-center gap-1">
-      <TitleBarActions onFork={() => void onForkWorkspace(activeWorkspace)} workspace={activeWorkspace} />
+      <WorkspaceActions onFork={() => void onForkWorkspace(activeWorkspace)} workspace={activeWorkspace} />
       <Button
         onClick={() => window.dispatchEvent(new Event("lifecycle:toggle-extension-panel"))}
         size="icon"

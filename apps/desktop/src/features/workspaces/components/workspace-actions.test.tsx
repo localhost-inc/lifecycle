@@ -3,7 +3,7 @@ import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { ThemeProvider } from "@lifecycle/ui";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { TitleBarActions } from "./title-bar-actions";
+import { WorkspaceActions } from "./workspace-actions";
 
 const interactiveWorkspace: WorkspaceRecord = {
   id: "workspace_1",
@@ -25,7 +25,7 @@ const interactiveWorkspace: WorkspaceRecord = {
   expires_at: null,
 };
 
-describe("TitleBarActions", () => {
+describe("WorkspaceActions", () => {
   test("keeps the open button pinned to the default target instead of a stale stored app", () => {
     const originalWindow = globalThis.window;
 
@@ -51,7 +51,7 @@ describe("TitleBarActions", () => {
     try {
       const markup = renderToStaticMarkup(
         createElement(ThemeProvider, {
-          children: createElement(TitleBarActions, {
+          children: createElement(WorkspaceActions, {
             workspace: interactiveWorkspace,
           }),
           storageKey: "lifecycle.desktop.theme.test",

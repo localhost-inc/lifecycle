@@ -10,7 +10,6 @@
   --sidebar-selected: #2c2620;
   --terminal-surface-background: var(--surface);
   --terminal-foreground: #fafaf9;
-  --terminal-faint-opacity: 0.86;
   --muted: #29241f;
   --muted-foreground: #847d73;
   --border: #2d2823;
@@ -65,7 +64,6 @@
   --sidebar-selected: #2c2620;
   --terminal-surface-background: var(--surface);
   --terminal-foreground: #fafaf9;
-  --terminal-faint-opacity: 0.86;
   --muted: #29241f;
   --muted-foreground: #847d73;
   --border: #2d2823;

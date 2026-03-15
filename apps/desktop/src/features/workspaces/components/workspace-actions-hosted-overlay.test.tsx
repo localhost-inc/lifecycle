@@ -11,11 +11,11 @@ const useHostedOverlay = mock((options: { payload: { resolvedTheme: string } }) 
 
 let capturedResolvedTheme: string | null = null;
 
-mock.module("../../features/overlays/use-hosted-overlay", () => ({
+mock.module("../../overlays/use-hosted-overlay", () => ({
   useHostedOverlay,
 }));
 
-const { TitleBarActions } = await import("./title-bar-actions");
+const { WorkspaceActions } = await import("./workspace-actions");
 
 const interactiveWorkspace: WorkspaceRecord = {
   id: "workspace_1",
@@ -37,7 +37,7 @@ const interactiveWorkspace: WorkspaceRecord = {
   expires_at: null,
 };
 
-describe("TitleBarActions hosted overlay", () => {
+describe("WorkspaceActions hosted overlay", () => {
   beforeEach(() => {
     capturedResolvedTheme = null;
     useHostedOverlay.mockClear();
@@ -46,7 +46,7 @@ describe("TitleBarActions hosted overlay", () => {
   test("passes the resolved theme to the open-in overlay host", () => {
     renderToStaticMarkup(
       createElement(ThemeProvider, {
-        children: createElement(TitleBarActions, {
+        children: createElement(WorkspaceActions, {
           workspace: interactiveWorkspace,
         }),
         defaultPreference: { theme: "light" },

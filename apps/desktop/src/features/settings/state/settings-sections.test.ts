@@ -7,6 +7,7 @@ describe("settingsSections", () => {
       "account",
       "appearance",
       "notifications",
+      "workspace",
       "worktrees",
     ]);
   });
@@ -17,6 +18,7 @@ describe("readSettingsSectionHash", () => {
     expect(readSettingsSectionHash("#account")).toBe("account");
     expect(readSettingsSectionHash("#appearance")).toBe("appearance");
     expect(readSettingsSectionHash("#notifications")).toBe("notifications");
+    expect(readSettingsSectionHash("#workspace")).toBe("workspace");
     expect(readSettingsSectionHash("worktrees")).toBe("worktrees");
   });
 
