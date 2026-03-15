@@ -21,7 +21,7 @@ export function AppStatusBar({
         {onToggleProjectNavigation && (
           <button
             type="button"
-            className="flex items-center justify-center text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+            className="flex items-center justify-center text-[var(--muted-foreground)] hover:text-[var(--foreground)] -mt-0.5"
             onClick={onToggleProjectNavigation}
             title={projectNavigationCollapsed ? "Show sidebar" : "Hide sidebar"}
           >

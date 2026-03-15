@@ -4,7 +4,6 @@
 }
 
 .letter {
-  opacity: 0.5;
   transition:
     opacity 0.2s ease calc(var(--i) * 30ms),
     color 0.2s ease calc(var(--i) * 30ms);
