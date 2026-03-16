@@ -41,7 +41,7 @@ interface NativeTerminalSurfaceSyncCoordinator {
 
 // DOM splitters cannot stack above the sibling native NSView, so keep the
 // embedded surface slightly inset from the shell seams.
-const NATIVE_TERMINAL_EDGE_GUTTER_PX = 6;
+const NATIVE_TERMINAL_EDGE_GUTTER_PX = 3;
 const nativeTerminalSurfaceLeaseRegistry = createNativeTerminalSurfaceLeaseRegistry();
 
 export function shouldShowNativeTerminalSurface({
@@ -591,7 +591,7 @@ export function NativeTerminalSurface({
             className="relative h-full w-full"
             style={{ paddingInline: `${NATIVE_TERMINAL_EDGE_GUTTER_PX}px` }}
           >
-            <div ref={hostRef} className="h-full w-full bg-[var(--terminal-surface-background)]" />
+            <div ref={hostRef} className="h-full w-full" />
             {showAttachOverlay ? (
               <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
                 <div className="flex max-w-sm flex-col items-center gap-3">

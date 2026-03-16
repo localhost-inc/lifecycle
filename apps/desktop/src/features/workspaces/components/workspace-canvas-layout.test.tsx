@@ -56,7 +56,7 @@ describe("WorkspaceCanvas layout", () => {
     );
 
     expect(markup).toContain('data-workspace-pane-header="true"');
-    expect(markup).toContain('class="flex h-9 items-stretch gap-1 border-b');
+    expect(markup).toContain('class="flex h-9 items-stretch gap-1 shadow-[inset_0_-1px_0_var(--border)]');
     expect(markup).toContain('data-slot="workspace-tab-bar"');
     expect(markup).toContain('class="flex shrink-0 items-center gap-px"');
   });

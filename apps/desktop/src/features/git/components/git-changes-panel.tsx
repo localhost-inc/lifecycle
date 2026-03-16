@@ -25,7 +25,7 @@ export function GitChangesPanel({
   onOpenDiff,
   onOpenFile,
   onOpenPullRequest,
-  onShowChanges,
+  onShowChanges: _onShowChanges,
   workspaceId,
   workspaceMode,
   worktreePath,
@@ -151,7 +151,6 @@ export function GitChangesPanel({
             actionError={actionError}
             branchPullRequest={currentPullRequestQuery.data ?? null}
             gitStatus={gitStatusQuery.data ?? null}
-            inlineMenu
             size="default"
             isCommitting={isCommitting}
             isCreatingPullRequest={isCreatingPullRequest}

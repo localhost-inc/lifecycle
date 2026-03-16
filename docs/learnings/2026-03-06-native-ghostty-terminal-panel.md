@@ -26,7 +26,7 @@ For M3 local terminals on macOS, Lifecycle should use a native Ghostty terminal 
 
 Current stance:
 
-1. macOS Tauri builds use the native Ghostty panel by default when GhosttyKit is available.
+1. macOS Tauri builds require the native Ghostty panel; missing GhosttyKit is a build failure, not a product fallback.
 2. Browser terminal hosting is not part of the current desktop product path.
 3. The rest of the desktop shell remains React/Tauri for now; only the terminal panel becomes native.
 

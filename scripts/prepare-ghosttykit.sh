@@ -50,6 +50,14 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
   exit 1
 fi
 
+mkdir -p "$GENERATED_DIR"
+
+if [[ -z "${LIFECYCLE_GHOSTTY_SOURCE_DIR:-}" ]] && [[ -f "$OUTPUT_DIR/Info.plist" ]] && \
+  [[ -f "$STAMP_FILE" ]] && [[ "$(cat "$STAMP_FILE")" == "$GHOSTTY_COMMIT" ]]; then
+  printf '%s\n' "$OUTPUT_DIR"
+  exit 0
+fi
+
 if ! command -v zig >/dev/null 2>&1; then
   echo "zig is required to build GhosttyKit." >&2
   exit 1
@@ -57,14 +65,6 @@ fi
 
 if ! /usr/bin/xcrun -sdk macosx metal -v >/dev/null 2>&1; then
   /usr/bin/xcodebuild -downloadComponent MetalToolchain >/dev/null
-fi
-
-mkdir -p "$GENERATED_DIR"
-
-if [[ -z "${LIFECYCLE_GHOSTTY_SOURCE_DIR:-}" ]] && [[ -f "$OUTPUT_DIR/Info.plist" ]] && \
-  [[ -f "$STAMP_FILE" ]] && [[ "$(cat "$STAMP_FILE")" == "$GHOSTTY_COMMIT" ]]; then
-  printf '%s\n' "$OUTPUT_DIR"
-  exit 0
 fi
 
 if [[ -z "${LIFECYCLE_GHOSTTY_SOURCE_DIR:-}" ]]; then

@@ -128,24 +128,28 @@ export function PullRequestsTab({
 
   if (!result?.support.available) {
     return (
-      <EmptyState
-        description={
-          result?.support.message ??
-          "Pull request listing will appear here once a provider is available."
-        }
-        size="sm"
-        title="Pull requests unavailable"
-      />
+      <div className="flex flex-1 items-center justify-center">
+        <EmptyState
+          description={
+            result?.support.message ??
+            "Pull request listing will appear here once a provider is available."
+          }
+          size="sm"
+          title="Pull requests unavailable"
+        />
+      </div>
     );
   }
 
   if (result.pullRequests.length === 0) {
     return (
-      <EmptyState
-        description="Open pull requests for this repository will appear here."
-        size="sm"
-        title="No open pull requests"
-      />
+      <div className="flex flex-1 items-center justify-center">
+        <EmptyState
+          description="Open pull requests for this repository will appear here."
+          size="sm"
+          title="No open pull requests"
+        />
+      </div>
     );
   }
 

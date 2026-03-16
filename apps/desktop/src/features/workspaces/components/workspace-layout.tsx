@@ -460,7 +460,7 @@ export function WorkspaceLayout({
       className="flex min-h-0 flex-1 overflow-hidden"
       data-slot="workspace-layout"
     >
-      <div className="workspace-canvas-grid flex min-w-0 flex-1 flex-col p-1.5" data-slot="workspace-canvas">
+      <div className="workspace-canvas-grid flex min-w-0 flex-1 flex-col" data-slot="workspace-canvas">
         {canvasContent}
       </div>
       {!panelCollapsed && activeExtensionSlot && (

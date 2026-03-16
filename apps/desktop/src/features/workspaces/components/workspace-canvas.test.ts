@@ -1337,8 +1337,16 @@ describe("canvas tab helpers", () => {
     expect(shouldTreatWindowCloseAsTabClose(0, 1_200)).toBeFalse();
   });
 
-  test("closes the active pane before the outer project tab when multiple panes are open", () => {
+  test("closes the active tab first, then the pane, then the project tab", () => {
+    // With tabs still open, return null to let the handler close the active tab
+    expect(resolveWorkspaceCloseShortcutTarget(2, 3)).toBeNull();
+    expect(resolveWorkspaceCloseShortcutTarget(2, 1)).toBeNull();
+    expect(resolveWorkspaceCloseShortcutTarget(1, 2)).toBeNull();
+    // With no tabs in the active pane, close the pane when multiple panes exist
+    expect(resolveWorkspaceCloseShortcutTarget(2, 0)).toBe("close-pane");
     expect(resolveWorkspaceCloseShortcutTarget(2)).toBe("close-pane");
+    // With no tabs and only one pane, close the project tab
+    expect(resolveWorkspaceCloseShortcutTarget(1, 0)).toBe("close-project-tab");
     expect(resolveWorkspaceCloseShortcutTarget(1)).toBe("close-project-tab");
     expect(resolveWorkspaceCloseShortcutTarget(0)).toBeNull();
   });

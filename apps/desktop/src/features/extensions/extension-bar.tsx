@@ -24,7 +24,7 @@ function ExtensionIcon({ slot }: { slot: ExtensionSlot }) {
 export function ExtensionBar({ activeExtensionId, onToggleExtension, slots }: ExtensionBarProps) {
   return (
     <nav
-      className="flex w-10 shrink-0 flex-col items-center gap-1 border-l border-[var(--border)] bg-[var(--surface)] py-2"
+      className="flex w-10 shrink-0 flex-col items-stretch border-l border-[var(--border)] bg-[var(--background)]"
       data-slot="workspace-extension-strip"
     >
       {slots.map((slot) => {
@@ -34,10 +34,10 @@ export function ExtensionBar({ activeExtensionId, onToggleExtension, slots }: Ex
             key={slot.id}
             aria-label={slot.label}
             className={[
-              "flex size-7 items-center justify-center rounded-md transition-colors",
+              "relative flex h-10 items-center justify-center border-b border-[var(--border)] transition-colors",
               isActive
-                ? "bg-[var(--sidebar-selected)] text-[var(--foreground)]"
-                : "text-[var(--muted-foreground)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--foreground)]",
+                ? "bg-[var(--surface)] text-[var(--foreground)] -ml-px z-[1] pl-px"
+                : "text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]",
             ].join(" ")}
             onClick={() => onToggleExtension(slot.id)}
             title={slot.label}

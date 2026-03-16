@@ -4,6 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Lifecycle</title>
+    <script>
+      // Synchronously apply theme before CSS paints to prevent flash
+      (function () {
+        var DARK_THEMES = { dark: 1, nord: 1, monokai: 1, catppuccin: 1, dracula: 1, "rose-pine": 1 };
+        var theme = "dark";
+        try {
+          var stored = JSON.parse(localStorage.getItem("lifecycle.desktop.theme") || "{}");
+          if (stored.theme && (stored.theme === "light" || stored.theme === "system" || stored.theme in DARK_THEMES)) {
+            theme = stored.theme;
+          }
+        } catch (e) {}
+        if (theme === "system") {
+          theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        var d = document.documentElement;
+        d.dataset.theme = theme;
+        d.style.colorScheme = theme in DARK_THEMES ? "dark" : "light";
+        if (theme in DARK_THEMES) d.classList.add("dark");
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,10 +1,12 @@
 import { isTauri } from "@tauri-apps/api/core";
+import { Menu, MenuItem, PredefinedMenuItem, Submenu } from "@tauri-apps/api/menu";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { Button, Spinner } from "@lifecycle/ui";
 import { Activity, FolderGit2, GitBranch, GitPullRequest, LayoutGrid, Plus } from "lucide-react";
-import { type MouseEvent, type ReactNode } from "react";
+import { type MouseEvent } from "react";
 import { NavLink } from "react-router-dom";
+import { isMacPlatform } from "../../../app/app-hotkeys";
 import {
   SHORTCUT_HANDLER_PRIORITY,
   useShortcutRegistration,
@@ -13,13 +15,20 @@ import { ResponseReadyDot } from "../../../components/response-ready-dot";
 import { NavigationControls } from "../../../components/layout/navigation-controls";
 import { getWorkspaceSessionStatusState } from "../../workspaces/components/workspace-session-status";
 import { getWorkspaceDisplayName } from "../../workspaces/lib/workspace-display";
+import {
+  listAvailableOpenInTargets,
+  resolveDefaultOpenTarget,
+  type OpenInTarget,
+} from "../../workspaces/lib/open-in-targets";
+import { listWorkspaceOpenInApps, openWorkspaceInApp } from "../../workspaces/open-in-api";
 
 interface ProjectNavBarProps {
-  actionsOutlet?: ReactNode;
   activeWorkspaceId: string | null;
   hasWorkspaceResponseReady: (workspaceId: string) => boolean;
   hasWorkspaceRunningTurn: (workspaceId: string) => boolean;
   onCreateWorkspace: () => void;
+  onDestroyWorkspace: (workspace: WorkspaceRecord) => void;
+  onForkWorkspace: (workspace: WorkspaceRecord) => void;
   onToggleSidebar?: () => void;
   projectId: string;
   sidebarCollapsed?: boolean;
@@ -72,12 +81,85 @@ const workspaceNavClass = ({ isActive }: { isActive: boolean }) =>
       : "text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--surface-hover)]",
   ].join(" ");
 
+async function showWorkspaceContextMenu(
+  workspace: WorkspaceRecord,
+  callbacks: {
+    onDestroy: (workspace: WorkspaceRecord) => void;
+    onFork: (workspace: WorkspaceRecord) => void;
+  },
+): Promise<void> {
+  const baseTargets = listAvailableOpenInTargets(isMacPlatform());
+  let targets: readonly OpenInTarget[] = baseTargets;
+
+  try {
+    const installedApps = await listWorkspaceOpenInApps();
+    if (installedApps.length > 0) {
+      targets = baseTargets
+        .filter((t) => installedApps.some((a) => a.id === t.id))
+        .map((t) => {
+          const installed = installedApps.find((a) => a.id === t.id);
+          return installed ? { ...t, label: installed.label } : t;
+        });
+    }
+  } catch {
+    /* use base targets */
+  }
+
+  const defaultTarget = resolveDefaultOpenTarget(targets);
+  const otherTargets = targets.filter((t) => t.id !== defaultTarget.id);
+
+  const items: Array<MenuItem | PredefinedMenuItem | Submenu> = [];
+
+  items.push(
+    await MenuItem.new({
+      text: `Open in ${defaultTarget.label}`,
+      action: () => void openWorkspaceInApp(workspace.id, defaultTarget.id),
+    }),
+  );
+
+  if (otherTargets.length > 0) {
+    items.push(
+      await Submenu.new({
+        text: "Open in...",
+        items: await Promise.all(
+          otherTargets.map((target) =>
+            MenuItem.new({
+              text: target.label,
+              action: () => void openWorkspaceInApp(workspace.id, target.id),
+            }),
+          ),
+        ),
+      }),
+    );
+  }
+
+  items.push(await PredefinedMenuItem.new({ item: "Separator" }));
+  items.push(
+    await MenuItem.new({
+      text: "Fork Workspace",
+      action: () => callbacks.onFork(workspace),
+    }),
+  );
+
+  items.push(await PredefinedMenuItem.new({ item: "Separator" }));
+  items.push(
+    await MenuItem.new({
+      text: "Destroy Workspace",
+      action: () => callbacks.onDestroy(workspace),
+    }),
+  );
+
+  const menu = await Menu.new({ items });
+  await menu.popup();
+}
+
 export function ProjectNavBar({
-  actionsOutlet,
-  activeWorkspaceId,
+  activeWorkspaceId: _activeWorkspaceId,
   hasWorkspaceResponseReady,
   hasWorkspaceRunningTurn,
   onCreateWorkspace,
+  onDestroyWorkspace,
+  onForkWorkspace,
   onToggleSidebar,
   projectId,
   sidebarCollapsed,
@@ -128,7 +210,7 @@ export function ProjectNavBar({
 
   return (
     <header
-      className="flex h-10 shrink-0 items-stretch gap-0 border-b border-[var(--border)] bg-[var(--surface)] px-0"
+      className="flex h-10 shrink-0 items-stretch gap-0 bg-[var(--background)] px-0"
       data-slot="project-nav-bar"
       data-tauri-drag-region
       onMouseDown={handleMouseDown}
@@ -171,6 +253,14 @@ export function ProjectNavBar({
               <NavLink
                 key={workspace.id}
                 className={workspaceNavClass}
+                onContextMenu={(event) => {
+                  if (!isTauri()) return;
+                  event.preventDefault();
+                  void showWorkspaceContextMenu(workspace, {
+                    onDestroy: onDestroyWorkspace,
+                    onFork: onForkWorkspace,
+                  });
+                }}
                 title={displayName}
                 to={`${basePath}/workspaces/${workspace.id}`}
               >
@@ -192,15 +282,6 @@ export function ProjectNavBar({
         </div>
       </div>
 
-      {/* Actions */}
-      {actionsOutlet ? (
-        <>
-          <div aria-hidden="true" className="my-2 w-px shrink-0 bg-[var(--border)]" />
-          <div className="flex shrink-0 items-center px-2" data-no-drag>
-            {actionsOutlet}
-          </div>
-        </>
-      ) : null}
     </header>
   );
 }

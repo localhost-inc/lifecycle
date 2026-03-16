@@ -156,8 +156,13 @@ export function shouldTreatWindowCloseAsTabClose(
 
 export function resolveWorkspaceCloseShortcutTarget(
   paneCount: number,
+  activePaneTabCount: number = 0,
 ): WorkspaceCloseShortcutTarget {
   if (!Number.isFinite(paneCount) || paneCount <= 0) {
+    return null;
+  }
+
+  if (activePaneTabCount > 0) {
     return null;
   }
 

@@ -530,7 +530,7 @@ export function useWorkspaceCanvasController({
           return true;
         }
         case "close-active-tab": {
-          const closeTarget = resolveWorkspaceCloseShortcutTarget(paneLayout.paneCount);
+          const closeTarget = resolveWorkspaceCloseShortcutTarget(paneLayout.paneCount, activePaneVisibleTabs.length);
           if (closeTarget === "close-pane") {
             closeShortcutHandledAtRef.current = Date.now();
             void closeWorkspacePane(activePaneId);

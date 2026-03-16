@@ -3,7 +3,7 @@
   --foreground: #f8f8f2;
   --card: #34352d;
   --surface: #272822;
-  --sidebar-background: var(--surface);
+  --sidebar-background: var(--background);
   --sidebar-foreground: #fbfbf6;
   --sidebar-muted-foreground: #d5d3ca;
   --sidebar-hover: #3a3b31;

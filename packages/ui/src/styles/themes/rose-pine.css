@@ -3,7 +3,7 @@
   --foreground: #e0def4;
   --card: #26233a;
   --surface: #191724;
-  --sidebar-background: var(--surface);
+  --sidebar-background: var(--background);
   --sidebar-foreground: #e0def4;
   --sidebar-muted-foreground: #908caa;
   --sidebar-hover: #2a273f;
@@ -20,7 +20,7 @@
   --destructive: #eb6f92;
   --destructive-foreground: #191724;
   --ring: #c4a7e7;
-  --surface-hover: #232033;
+  --surface-hover: #2a273f;
   --surface-selected: #312e49;
   --tab-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 12px 30px rgba(0, 0, 0, 0.22);
   --tab-shadow-drag: 0 16px 36px rgba(0, 0, 0, 0.28);

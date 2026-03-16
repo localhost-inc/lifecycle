@@ -13,7 +13,7 @@ export function AppStatusBar({
 }: AppStatusBarProps) {
   return (
     <footer
-      className="flex h-7 shrink-0 items-center justify-between border-t border-[var(--border)] bg-[var(--surface)] px-2.5 text-[11px] text-[var(--muted-foreground)]"
+      className="flex h-7 shrink-0 items-center justify-between border-t border-[var(--border)] bg-[var(--background)] px-2.5 text-[11px] text-[var(--muted-foreground)]"
       data-slot="app-status-bar"
     >
       <div className="flex items-center gap-1.5">

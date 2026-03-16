@@ -4,7 +4,6 @@ import { useMemo } from "react";
 import { Outlet, useOutletContext, useParams } from "react-router-dom";
 import type { AppShellOutletContext } from "../../../components/layout/app-shell-context";
 import { useTerminalResponseReady } from "../../terminals/state/terminal-response-ready-provider";
-import { WorkspaceActions } from "../../workspaces/components/workspace-actions";
 import { ProjectNavBar } from "../components/project-nav-bar";
 import { resolveProjectRepoWorkspace } from "../lib/project-repo-workspace";
 
@@ -84,30 +83,21 @@ export function ProjectRoute() {
     );
   }
 
-  const actionsOutlet = activeWorkspace ? (
-    <div className="flex items-center gap-1">
-      <WorkspaceActions
-        onDestroy={() => void onDestroyWorkspace(activeWorkspace)}
-        onFork={() => void onForkWorkspace(activeWorkspace)}
-        workspace={activeWorkspace}
-      />
-    </div>
-  ) : null;
-
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col" data-slot="project-shell">
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-[var(--background)]" data-slot="project-shell">
       <ProjectNavBar
-        actionsOutlet={actionsOutlet}
         activeWorkspaceId={activeWorkspace?.id ?? null}
         hasWorkspaceResponseReady={hasWorkspaceResponseReady}
         hasWorkspaceRunningTurn={hasWorkspaceRunningTurn}
         onCreateWorkspace={() => void onCreateWorkspace(project.id)}
+        onDestroyWorkspace={onDestroyWorkspace}
+        onForkWorkspace={onForkWorkspace}
         onToggleSidebar={onToggleSidebar}
         projectId={project.id}
         sidebarCollapsed={sidebarCollapsed}
         workspaces={workspaces}
       />
-      <div className="surface-grid flex min-h-0 min-w-0 flex-1 bg-[var(--background)]">
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-tl-lg border-l border-t border-[var(--border)] bg-[var(--surface)]">
         <Outlet context={projectRouteContext} />
       </div>
     </div>

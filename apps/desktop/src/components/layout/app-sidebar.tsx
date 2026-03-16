@@ -152,7 +152,7 @@ export function AppSidebar({
   if (collapsed) {
     return (
       <aside
-        className="flex h-full min-h-0 shrink-0 flex-col items-center bg-[var(--surface)] text-[var(--sidebar-foreground)]"
+        className="flex h-full min-h-0 shrink-0 flex-col items-center bg-[var(--background)] text-[var(--sidebar-foreground)]"
         data-slot="app-sidebar"
         onMouseDown={handleMouseDown}
         style={{ width: `${COLLAPSED_WIDTH}px` }}
@@ -160,7 +160,7 @@ export function AppSidebar({
         {/* Spacer to align below nav bar — no border in traffic light zone */}
         <div className="h-10 w-full shrink-0" />
 
-        <div className="flex min-h-0 w-full flex-1 flex-col items-center border-r border-[var(--border)]">
+        <div className="flex min-h-0 w-full flex-1 flex-col items-center">
           {/* Avatar */}
           <div className="flex shrink-0 items-center justify-center pt-1 pb-3">
             <button
@@ -239,7 +239,7 @@ export function AppSidebar({
 
   return (
     <aside
-      className="flex h-full min-h-0 shrink-0 flex-col bg-[var(--surface)] text-[var(--sidebar-foreground)]"
+      className="flex h-full min-h-0 shrink-0 flex-col bg-[var(--background)] text-[var(--sidebar-foreground)]"
       data-slot="app-sidebar"
       onMouseDown={handleMouseDown}
       style={{ width: `${width}px` }}
@@ -257,7 +257,7 @@ export function AppSidebar({
         </button>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col border-r border-[var(--border)]">
+      <div className="flex min-h-0 flex-1 flex-col">
 
       {/* Context switcher */}
       <div className="px-4 pb-3">

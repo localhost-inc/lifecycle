@@ -189,7 +189,7 @@ function ResizeHandle({
         onPointerDown={onPointerDown}
         className="group absolute inset-y-0 -left-2 z-20 flex w-4 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
       >
-        <div className="h-full w-px bg-transparent transition-colors group-focus-visible:bg-[var(--ring)]" />
+        <div className="h-full w-px bg-[var(--border)] transition-colors group-focus-visible:bg-[var(--ring)]" />
       </div>
     </div>
   ) : (
@@ -206,7 +206,7 @@ function ResizeHandle({
         onPointerDown={onPointerDown}
         className="group absolute inset-x-0 top-1/2 z-10 flex h-3 -translate-y-1/2 cursor-row-resize items-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
       >
-        <div className="h-px w-full bg-transparent transition-colors group-focus-visible:bg-[var(--ring)]" />
+        <div className="h-px w-full bg-[var(--border)] transition-colors group-focus-visible:bg-[var(--ring)]" />
       </div>
     </div>
   );
@@ -375,7 +375,7 @@ function WorkspacePaneSplitNode({
   return (
     <div
       ref={containerRef}
-      className={`relative flex min-h-0 flex-1 gap-1 overflow-hidden ${direction === "row" ? "flex-row" : "flex-col"}`}
+      className={`relative flex min-h-0 flex-1 overflow-hidden ${direction === "row" ? "flex-row" : "flex-col"}`}
     >
       <div
         className="flex min-h-0 min-w-0 shrink-0 overflow-hidden"
@@ -465,8 +465,12 @@ export function resolveWorkspacePaneOpacity({
   isActivePane: boolean;
   isHoveredPane: boolean;
 }): number {
-  if (!dimInactivePanes || isActivePane || isHoveredPane) {
+  if (!dimInactivePanes || isActivePane) {
     return 1;
+  }
+
+  if (isHoveredPane) {
+    return (inactivePaneOpacity + 1) / 2;
   }
 
   return inactivePaneOpacity;
@@ -713,7 +717,7 @@ export function WorkspacePaneTree({
         <section
           key={node.id}
           ref={(element) => setPaneElement(node.id, element)}
-          className={`relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-[var(--background)] transition-opacity duration-150 ${isDropTargetPane ? "border-[var(--ring)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--ring),transparent_50%)]" : isActivePane ? "shadow-[0_0_0_1px_color-mix(in_srgb,var(--ring),transparent_65%)]" : ""}`}
+          className={`relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--surface)] transition-opacity duration-150 ${isDropTargetPane ? "ring-1 ring-[var(--ring)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--ring),transparent_50%)]" : ""}`}
           data-workspace-pane-id={node.id}
           onPointerEnter={() => {
             setHoveredPaneId(node.id);
@@ -729,7 +733,7 @@ export function WorkspacePaneTree({
           style={{ opacity: paneOpacity }}
         >
           <div
-            className="flex h-9 items-stretch gap-1 border-b border-[var(--border)] bg-[var(--surface)]"
+            className="flex h-9 items-stretch gap-1 shadow-[inset_0_-1px_0_var(--border)] bg-[var(--background)]"
             data-workspace-pane-header
           >
             <WorkspacePaneTabBar

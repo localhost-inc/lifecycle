@@ -11,7 +11,8 @@
       "Bash(bun run:*)",
       "Bash(cd:*)",
       "Bash(bun test:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebSearch"
     ]
   }
 }

@@ -98,25 +98,6 @@ export function MultiFileDiffLayout({
     });
   }, []);
 
-  if (files.length <= 1) {
-    return (
-      <div className="min-h-0 flex-1 overflow-auto pb-24">
-        {files.map((fileDiff, index) => (
-          <DiffFileSection
-            key={`${fileDiff.prevName ?? ""}:${fileDiff.name}:${index}`}
-            collapsed={collapsedPaths.has(fileDiff.name)}
-            diffStyle={diffStyle}
-            fileDiff={fileDiff}
-            onOpenFile={onOpenFile}
-            onToggleCollapse={handleToggleCollapse}
-            theme={theme}
-            themeType={themeType}
-          />
-        ))}
-      </div>
-    );
-  }
-
   return (
     <MultiFileDiffLayoutInner
       files={files}

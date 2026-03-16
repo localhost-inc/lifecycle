@@ -157,7 +157,7 @@ function SectionHeader({
   title: string;
 }) {
   return (
-    <div className="sticky top-0 z-10 flex min-h-6 items-center gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-4 py-0.5">
+    <div className="sticky top-0 z-10 flex min-h-6 items-center gap-2 border-y border-[var(--border)] bg-[var(--background)] px-4 py-0.5">
       <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
         <span className="text-xs font-medium text-[var(--foreground)]">{title}</span>
         <span className="text-xs text-[var(--muted-foreground)] opacity-60">{count}</span>

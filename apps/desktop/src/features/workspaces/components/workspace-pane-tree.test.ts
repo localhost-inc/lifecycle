@@ -58,7 +58,7 @@ describe("resolveWorkspacePaneOpacity", () => {
     ).toBe(0.45);
   });
 
-  test("keeps active or hovered panes at full opacity", () => {
+  test("keeps active panes at full opacity", () => {
     expect(
       resolveWorkspacePaneOpacity({
         dimInactivePanes: true,
@@ -67,7 +67,9 @@ describe("resolveWorkspacePaneOpacity", () => {
         isHoveredPane: false,
       }),
     ).toBe(1);
+  });
 
+  test("hovered inactive panes split the difference between dim and full opacity", () => {
     expect(
       resolveWorkspacePaneOpacity({
         dimInactivePanes: true,
@@ -75,7 +77,7 @@ describe("resolveWorkspacePaneOpacity", () => {
         isActivePane: false,
         isHoveredPane: true,
       }),
-    ).toBe(1);
+    ).toBe(0.725);
   });
 
   test("does not dim when the feature is disabled", () => {
