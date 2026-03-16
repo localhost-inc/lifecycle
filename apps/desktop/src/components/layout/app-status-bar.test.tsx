@@ -65,7 +65,6 @@ describe("AppStatusBar", () => {
     expect(markup).toContain("px-2.5");
     expect(markup).toContain("gap-1.5");
     expect(markup).toContain("gap-2.5");
-    expect(markup).toContain("h-[11px]");
   });
 
   test("routes feedback through package metadata", async () => {

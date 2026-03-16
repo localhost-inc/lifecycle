@@ -1,8 +1,7 @@
 import { useMemo } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { Circle, File, GitFork, Home, Layers, Settings } from "lucide-react";
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
-import { readProjectRouteFocus } from "../projects/lib/project-route-state";
 import { getWorkspaceDisplayName } from "../workspaces/lib/workspace-display";
 import { formatAppHotkeyLabel, isMacPlatform } from "../../app/app-hotkeys";
 import type { CommandPaletteCommand } from "./types";
@@ -27,10 +26,8 @@ export function useCommandPaletteCommands(
 ): CommandPaletteCommand[] {
   const { onForkWorkspace, onOpenFiles, projects, workspacesByProjectId } = options;
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const { workspaceId } = useParams();
   const mac = isMacPlatform();
-  const routeFocus = readProjectRouteFocus(searchParams);
-  const workspaceId = routeFocus?.kind === "workspace" ? routeFocus.workspaceId : null;
 
   return useMemo(() => {
     const projectsById = new Map(projects.map((project) => [project.id, project]));
@@ -50,7 +47,7 @@ export function useCommandPaletteCommands(
             keywords: ["workspace", project.name, displayName, workspace.source_ref],
             icon: workspaceIcon(workspace),
             onExecute: () =>
-              void navigate(`/projects/${workspace.project_id}?workspace=${workspace.id}`),
+              void navigate(`/projects/${workspace.project_id}/workspaces/${workspace.id}`),
           } satisfies CommandPaletteCommand;
         });
       },

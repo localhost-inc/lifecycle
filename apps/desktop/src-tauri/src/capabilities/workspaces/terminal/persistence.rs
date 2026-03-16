@@ -3,10 +3,10 @@ use crate::shared::errors::{
     LifecycleError, TerminalFailureReason, TerminalStatus, TerminalType, WorkspaceStatus,
 };
 use rusqlite::params;
-use std::collections::HashSet;
 
 use super::super::harness::default_harness_terminal_label;
 use super::super::query::TerminalRecord;
+use super::launch::HarnessLaunchMode;
 use super::super::rename::TitleOrigin;
 
 pub(crate) struct WorkspaceRuntime {
@@ -44,20 +44,22 @@ pub(crate) fn insert_terminal_record(
     launch_type: &TerminalType,
     harness_provider: Option<&str>,
     harness_session_id: Option<&str>,
+    harness_launch_mode: HarnessLaunchMode,
     label: &str,
     label_origin: TitleOrigin,
     status: TerminalStatus,
 ) -> Result<TerminalRecord, LifecycleError> {
     let conn = open_db(db_path)?;
     conn.execute(
-        "INSERT INTO terminal (id, workspace_id, launch_type, harness_provider, harness_session_id, label, label_origin, status)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        "INSERT INTO terminal (id, workspace_id, launch_type, harness_provider, harness_session_id, harness_launch_mode, label, label_origin, status)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         params![
             terminal_id,
             workspace_id,
             launch_type.as_str(),
             harness_provider,
             harness_session_id,
+            harness_launch_mode.as_str(),
             label,
             label_origin.as_str(),
             status.as_str()
@@ -104,7 +106,7 @@ pub(crate) fn load_terminal_record(
 ) -> Result<Option<TerminalRecord>, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn.prepare(
-        "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, created_by, label, label_origin, status, failure_reason, exit_code, started_at, last_active_at, ended_at
+        "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, harness_launch_mode, created_by, label, label_origin, status, failure_reason, exit_code, started_at, last_active_at, ended_at
          FROM terminal
          WHERE id = ?1
          LIMIT 1",
@@ -117,15 +119,16 @@ pub(crate) fn load_terminal_record(
             launch_type: row.get(2)?,
             harness_provider: row.get(3)?,
             harness_session_id: row.get(4)?,
-            created_by: row.get(5)?,
-            label: row.get(6)?,
-            label_origin: row.get(7)?,
-            status: row.get(8)?,
-            failure_reason: row.get(9)?,
-            exit_code: row.get(10)?,
-            started_at: row.get(11)?,
-            last_active_at: row.get(12)?,
-            ended_at: row.get(13)?,
+            harness_launch_mode: row.get(5)?,
+            created_by: row.get(6)?,
+            label: row.get(7)?,
+            label_origin: row.get(8)?,
+            status: row.get(9)?,
+            failure_reason: row.get(10)?,
+            exit_code: row.get(11)?,
+            started_at: row.get(12)?,
+            last_active_at: row.get(13)?,
+            ended_at: row.get(14)?,
         })
     });
 
@@ -170,36 +173,7 @@ pub(crate) fn load_workspace_runtime(
     })
 }
 
-pub(crate) fn load_claimed_harness_session_ids(
-    db_path: &str,
-    workspace_id: &str,
-    harness_provider: &str,
-    exclude_terminal_id: &str,
-) -> Result<HashSet<String>, LifecycleError> {
-    let conn = open_db(db_path)?;
-    let mut stmt = conn.prepare(
-        "SELECT harness_session_id
-         FROM terminal
-         WHERE workspace_id = ?1
-           AND harness_provider = ?2
-           AND id != ?3
-           AND harness_session_id IS NOT NULL
-           AND harness_session_id != ''",
-    )?;
-    let rows = stmt.query_map(
-        params![workspace_id, harness_provider, exclude_terminal_id],
-        |row| row.get::<_, String>(0),
-    )?;
-
-    let mut claimed = HashSet::new();
-    for row in rows {
-        claimed.insert(row?);
-    }
-
-    Ok(claimed)
-}
-
-pub(crate) fn update_terminal_harness_session_id(
+pub(crate) fn update_terminal_harness_session_capture(
     db_path: &str,
     terminal_id: &str,
     harness_session_id: &str,
@@ -207,10 +181,28 @@ pub(crate) fn update_terminal_harness_session_id(
     let conn = open_db(db_path)?;
     conn.execute(
         "UPDATE terminal
-         SET harness_session_id = ?1
-         WHERE id = ?2
+         SET harness_session_id = ?1,
+             harness_launch_mode = ?2
+         WHERE id = ?3
            AND (harness_session_id IS NULL OR harness_session_id = '')",
-        params![harness_session_id, terminal_id],
+        params![harness_session_id, HarnessLaunchMode::Resume.as_str(), terminal_id],
+    )?;
+
+    load_terminal_record(db_path, terminal_id)?
+        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()))
+}
+
+pub(crate) fn update_terminal_harness_launch_mode(
+    db_path: &str,
+    terminal_id: &str,
+    harness_launch_mode: HarnessLaunchMode,
+) -> Result<TerminalRecord, LifecycleError> {
+    let conn = open_db(db_path)?;
+    conn.execute(
+        "UPDATE terminal
+         SET harness_launch_mode = ?1
+         WHERE id = ?2",
+        params![harness_launch_mode.as_str(), terminal_id],
     )?;
 
     load_terminal_record(db_path, terminal_id)?

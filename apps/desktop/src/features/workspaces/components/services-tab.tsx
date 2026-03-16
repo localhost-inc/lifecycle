@@ -12,15 +12,7 @@ import {
   SelectValue,
   SetupProgress,
 } from "@lifecycle/ui";
-import {
-  ExternalLink,
-  FileJson,
-  Layers,
-  Loader2,
-  Logs,
-  Play,
-  TerminalSquare,
-} from "lucide-react";
+import { ExternalLink, FileJson, Layers, Loader2, Logs, Play, TerminalSquare } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useState } from "react";
 import { EnvironmentSection } from "./environment-section";

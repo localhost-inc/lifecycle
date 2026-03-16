@@ -13,7 +13,7 @@ pub(super) const ADAPTER: HarnessAdapter = HarnessAdapter {
     name: "claude",
     display_name: "Claude",
     program: "claude",
-    new_session_args: &[],
+    new_session_args: claude_new_session_args,
     resume_args: claude_resume_args,
     session_store: Some(SessionStoreConfig {
         root_subdir: ".claude/projects",
@@ -29,6 +29,13 @@ pub(super) const ADAPTER: HarnessAdapter = HarnessAdapter {
     parse_prompt_submission,
     parse_turn_completion,
 };
+
+fn claude_new_session_args(session_id: Option<&str>) -> Vec<String> {
+    match session_id {
+        Some(session_id) => vec!["--session-id".to_string(), session_id.to_string()],
+        None => Vec::new(),
+    }
+}
 
 fn claude_resume_args(session_id: &str) -> Vec<String> {
     vec!["--resume".to_string(), session_id.to_string()]

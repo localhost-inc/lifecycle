@@ -1,5 +1,4 @@
-use std::collections::HashSet;
-use std::fs::{self, File};
+use std::fs::{self, File, Metadata};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -12,27 +11,35 @@ use super::types::{
 };
 use super::HARNESS_SESSION_CAPTURE_GRACE;
 
-pub(crate) fn discover_harness_session_id(
+pub(crate) fn discover_harness_session_candidates(
     provider: HarnessAdapter,
     worktree_path: &str,
     launched_after: SystemTime,
-    claimed_session_ids: &HashSet<String>,
-) -> Option<String> {
+    bound_session_store_root: Option<&Path>,
+) -> Vec<HarnessSessionCandidate> {
     let modified_after = launched_after
         .checked_sub(HARNESS_SESSION_CAPTURE_GRACE)
         .unwrap_or(SystemTime::UNIX_EPOCH);
 
-    let store = provider.session_store?;
-    discover_session_id_from_store(&store, worktree_path, modified_after, claimed_session_ids)
+    let Some(store) = provider.session_store else {
+        return Vec::new();
+    };
+    collect_session_candidates_from_store(
+        &store,
+        worktree_path,
+        modified_after,
+        bound_session_store_root,
+    )
 }
 
 pub(crate) fn resolve_harness_session_log_path(
     provider: HarnessAdapter,
     worktree_path: &str,
     session_id: &str,
+    bound_session_store_root: Option<&Path>,
 ) -> Option<PathBuf> {
     let store = provider.session_store?;
-    let root = harness_home_subdir(store.root_subdir)?;
+    let root = session_store_root(&store, bound_session_store_root)?;
 
     match store.scope {
         SessionStoreScope::ExactWorkspaceDir { workspace_dir_name } => {
@@ -91,6 +98,15 @@ fn harness_home_subdir(subdir: &str) -> Option<PathBuf> {
     std::env::var_os("HOME").map(|home| PathBuf::from(home).join(subdir))
 }
 
+fn session_store_root(
+    store: &SessionStoreConfig,
+    bound_session_store_root: Option<&Path>,
+) -> Option<PathBuf> {
+    bound_session_store_root
+        .map(Path::to_path_buf)
+        .or_else(|| harness_home_subdir(store.root_subdir))
+}
+
 pub(super) fn claude_project_directory_name(worktree_path: &str) -> String {
     worktree_path
         .chars()
@@ -98,41 +114,65 @@ pub(super) fn claude_project_directory_name(worktree_path: &str) -> String {
         .collect()
 }
 
-fn discover_session_id_from_store(
+fn collect_session_candidates_from_store(
     store: &SessionStoreConfig,
     worktree_path: &str,
     modified_after: SystemTime,
-    claimed_session_ids: &HashSet<String>,
-) -> Option<String> {
-    let root = harness_home_subdir(store.root_subdir)?;
+    bound_session_store_root: Option<&Path>,
+) -> Vec<HarnessSessionCandidate> {
+    let Some(root) = session_store_root(store, bound_session_store_root) else {
+        return Vec::new();
+    };
     match store.scope {
         SessionStoreScope::ExactWorkspaceDir { workspace_dir_name } => {
-            discover_session_id_from_directory(
+            collect_session_candidates_from_directory(
                 &root.join(workspace_dir_name(worktree_path)),
                 store,
                 worktree_path,
                 modified_after,
-                claimed_session_ids,
             )
         }
-        SessionStoreScope::Recursive => discover_session_id_from_tree(
+        SessionStoreScope::Recursive => collect_session_candidates_from_tree(
             &root,
             store,
             worktree_path,
             modified_after,
-            claimed_session_ids,
         ),
     }
 }
 
-pub(super) fn discover_session_id_from_directory(
+fn session_candidate_timestamp(metadata: &Metadata) -> Option<SystemTime> {
+    metadata.created().ok().or_else(|| metadata.modified().ok())
+}
+
+fn ordered_session_candidates(
+    mut candidates: Vec<HarnessSessionCandidate>,
+) -> Vec<HarnessSessionCandidate> {
+    candidates.sort_by(|left, right| {
+        left.detected_at
+            .cmp(&right.detected_at)
+            .then_with(|| left.session_id.cmp(&right.session_id))
+    });
+    candidates
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+fn select_session_id(candidates: Vec<HarnessSessionCandidate>) -> Option<String> {
+    ordered_session_candidates(candidates)
+        .into_iter()
+        .next()
+        .map(|candidate| candidate.session_id)
+}
+
+fn collect_session_candidates_from_directory(
     dir: &Path,
     store: &SessionStoreConfig,
     worktree_path: &str,
     modified_after: SystemTime,
-    claimed_session_ids: &HashSet<String>,
-) -> Option<String> {
-    let entries = fs::read_dir(dir).ok()?;
+) -> Vec<HarnessSessionCandidate> {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return Vec::new();
+    };
     let mut candidates = Vec::new();
 
     for entry in entries.flatten() {
@@ -141,44 +181,38 @@ pub(super) fn discover_session_id_from_directory(
             continue;
         }
 
-        let Some(modified_at) = entry
-            .metadata()
-            .ok()
-            .and_then(|metadata| metadata.modified().ok())
-        else {
+        let Ok(metadata) = entry.metadata() else {
             continue;
         };
-        if modified_at < modified_after {
+        let Some(detected_at) = session_candidate_timestamp(&metadata) else {
+            continue;
+        };
+        if detected_at < modified_after {
             continue;
         }
 
         let Some((cwd, session_id)) = read_session_metadata(&path, store) else {
             continue;
         };
-        if cwd != worktree_path || claimed_session_ids.contains(&session_id) {
+        if cwd != worktree_path {
             continue;
         }
 
         candidates.push(HarnessSessionCandidate {
-            modified_at,
+            detected_at,
             session_id,
         });
     }
 
-    candidates.sort_by(|left, right| right.modified_at.cmp(&left.modified_at));
-    candidates
-        .into_iter()
-        .next()
-        .map(|candidate| candidate.session_id)
+    ordered_session_candidates(candidates)
 }
 
-pub(super) fn discover_session_id_from_tree(
+fn collect_session_candidates_from_tree(
     root: &Path,
     store: &SessionStoreConfig,
     worktree_path: &str,
     modified_after: SystemTime,
-    claimed_session_ids: &HashSet<String>,
-) -> Option<String> {
+) -> Vec<HarnessSessionCandidate> {
     let mut pending = vec![root.to_path_buf()];
     let mut candidates = Vec::new();
 
@@ -200,36 +234,61 @@ pub(super) fn discover_session_id_from_tree(
                 continue;
             }
 
-            let Some(modified_at) = entry
-                .metadata()
-                .ok()
-                .and_then(|metadata| metadata.modified().ok())
-            else {
+            let Ok(metadata) = entry.metadata() else {
                 continue;
             };
-            if modified_at < modified_after {
+            let Some(detected_at) = session_candidate_timestamp(&metadata) else {
+                continue;
+            };
+            if detected_at < modified_after {
                 continue;
             }
 
             let Some((cwd, session_id)) = read_session_metadata(&path, store) else {
                 continue;
             };
-            if cwd != worktree_path || claimed_session_ids.contains(&session_id) {
+            if cwd != worktree_path {
                 continue;
             }
 
             candidates.push(HarnessSessionCandidate {
-                modified_at,
+                detected_at,
                 session_id,
             });
         }
     }
 
-    candidates.sort_by(|left, right| right.modified_at.cmp(&left.modified_at));
-    candidates
-        .into_iter()
-        .next()
-        .map(|candidate| candidate.session_id)
+    ordered_session_candidates(candidates)
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+pub(super) fn discover_session_id_from_directory(
+    dir: &Path,
+    store: &SessionStoreConfig,
+    worktree_path: &str,
+    modified_after: SystemTime,
+) -> Option<String> {
+    select_session_id(collect_session_candidates_from_directory(
+        dir,
+        store,
+        worktree_path,
+        modified_after,
+    ))
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+pub(super) fn discover_session_id_from_tree(
+    root: &Path,
+    store: &SessionStoreConfig,
+    worktree_path: &str,
+    modified_after: SystemTime,
+) -> Option<String> {
+    select_session_id(collect_session_candidates_from_tree(
+        root,
+        store,
+        worktree_path,
+        modified_after,
+    ))
 }
 
 fn read_session_metadata(path: &Path, store: &SessionStoreConfig) -> Option<(String, String)> {

@@ -21,6 +21,12 @@ export const DASHBOARD_RIGHT_SIDEBAR_COLLAPSED_STORAGE_KEY =
   "lifecycle.desktop.dashboard-right-sidebar-collapsed";
 export const DASHBOARD_RIGHT_SIDEBAR_WIDTH_STORAGE_KEY =
   "lifecycle.desktop.dashboard-right-sidebar-width";
+export const APP_SIDEBAR_COLLAPSED_STORAGE_KEY = "lifecycle.desktop.app-sidebar-collapsed";
+export const APP_SIDEBAR_WIDTH_STORAGE_KEY = "lifecycle.desktop.app-sidebar-width";
+export const DEFAULT_APP_SIDEBAR_WIDTH = 220;
+export const MIN_APP_SIDEBAR_WIDTH = 180;
+export const MAX_APP_SIDEBAR_WIDTH = 320;
+
 export const PROJECT_SHELL_SIDEBAR_COLLAPSED_STORAGE_KEY =
   "lifecycle.desktop.project-shell-sidebar-collapsed";
 export const PROJECT_SHELL_SIDEBAR_WIDTH_STORAGE_KEY =

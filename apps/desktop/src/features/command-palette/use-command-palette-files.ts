@@ -1,7 +1,6 @@
 import { useMemo, useSyncExternalStore } from "react";
 import { File } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
-import { readProjectRouteFocus } from "../projects/lib/project-route-state";
+import { useParams } from "react-router-dom";
 import {
   readWorkspaceFileUsage,
   readWorkspaceFileUsageVersion,
@@ -28,11 +27,9 @@ interface UseCommandPaletteFilesResult {
 }
 
 export function useCommandPaletteFiles(): UseCommandPaletteFilesResult {
-  const [searchParams] = useSearchParams();
+  const { workspaceId } = useParams();
   const { openDocument } = useWorkspaceOpenRequests();
   const workspacesByProjectQuery = useWorkspacesByProject();
-  const routeFocus = readProjectRouteFocus(searchParams);
-  const workspaceId = routeFocus?.kind === "workspace" ? routeFocus.workspaceId : null;
   const currentWorkspace = useMemo(
     () =>
       workspaceId

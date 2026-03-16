@@ -31,6 +31,7 @@ interface WorkspacePaneContentProps {
   onTabViewStateChange: (tabKey: string, viewState: WorkspaceCanvasTabViewState | null) => void;
   paneDragInProgress: boolean;
   paneFocused: boolean;
+  surfaceOpacity: number;
   terminals: TerminalRecord[];
   waitingForSelectedRuntimeTab: boolean;
   workspaceId: string;
@@ -49,6 +50,7 @@ export function WorkspacePaneContent({
   onTabViewStateChange,
   paneDragInProgress,
   paneFocused,
+  surfaceOpacity,
   terminals,
   waitingForSelectedRuntimeTab,
   workspaceId,
@@ -101,6 +103,7 @@ export function WorkspacePaneContent({
       {activeTerminal ? (
         <TerminalSurface
           focused={paneFocused}
+          opacity={surfaceOpacity}
           tabDragInProgress={paneDragInProgress}
           terminal={activeTerminal}
         />

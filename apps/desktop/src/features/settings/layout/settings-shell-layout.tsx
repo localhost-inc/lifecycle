@@ -9,6 +9,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Switch,
   cn,
   sidebarMenuSubButtonVariants,
   themeOptions,
@@ -117,13 +118,6 @@ export function SettingsShellLayout() {
       { label: "Shell", value: "shell" as const },
       { label: "Claude", value: "claude" as const },
       { label: "Codex", value: "codex" as const },
-    ],
-    [],
-  );
-  const dimInactivePaneItems = useMemo(
-    () => [
-      { label: "Off", value: "off" as const },
-      { label: "On", value: "on" as const },
     ],
     [],
   );
@@ -629,22 +623,12 @@ export function SettingsShellLayout() {
                     label="Dim inactive panes"
                     description="Lower the opacity of non-active pane groups until you hover them."
                   >
-                    <Select
-                      items={dimInactivePaneItems}
-                      onValueChange={(value: string) => setDimInactivePanes(value === "on")}
-                      value={dimInactivePanes ? "on" : "off"}
-                    >
-                      <SelectTrigger className="w-full min-w-0 md:w-48" id="dim-inactive-panes">
-                        <SelectValue placeholder="Select a mode" />
-                      </SelectTrigger>
-                      <SelectContent alignItemWithTrigger={false}>
-                        {dimInactivePaneItems.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Switch
+                      aria-label="Dim inactive panes"
+                      checked={dimInactivePanes}
+                      id="dim-inactive-panes"
+                      onCheckedChange={setDimInactivePanes}
+                    />
                   </SettingsRow>
 
                   {dimInactivePanes ? (
@@ -655,9 +639,7 @@ export function SettingsShellLayout() {
                       >
                         <Select
                           items={inactivePaneOpacityItems}
-                          onValueChange={(value: string) =>
-                            setInactivePaneOpacity(Number(value))
-                          }
+                          onValueChange={(value: string) => setInactivePaneOpacity(Number(value))}
                           value={inactivePaneOpacity.toFixed(2)}
                         >
                           <SelectTrigger
@@ -668,10 +650,7 @@ export function SettingsShellLayout() {
                           </SelectTrigger>
                           <SelectContent alignItemWithTrigger={false}>
                             {INACTIVE_PANE_OPACITY_OPTIONS.map((option) => (
-                              <SelectItem
-                                key={option.value}
-                                value={option.value.toFixed(2)}
-                              >
+                              <SelectItem key={option.value} value={option.value.toFixed(2)}>
                                 {option.label}
                               </SelectItem>
                             ))}

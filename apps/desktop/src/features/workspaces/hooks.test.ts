@@ -93,6 +93,32 @@ describe("reduceWorkspaceActivity", () => {
     expect(afterOtherWorkspace).toEqual(current);
   });
 
+  test("ignores terminal metadata refresh events in workspace activity", () => {
+    const activity = applyActivityEvent(undefined, {
+      id: "event-1",
+      kind: "terminal.updated",
+      occurred_at: "2026-03-10T10:00:00.000Z",
+      terminal: {
+        created_by: null,
+        ended_at: null,
+        exit_code: null,
+        failure_reason: null,
+        harness_provider: "codex",
+        harness_session_id: "session-12345678",
+        id: "term-1",
+        label: "Codex · Session 7",
+        last_active_at: "2026-03-10T10:00:00.000Z",
+        launch_type: "harness",
+        started_at: "2026-03-10T10:00:00.000Z",
+        status: "active",
+        workspace_id: "ws_1",
+      },
+      workspace_id: "ws_1",
+    });
+
+    expect(activity).toBeUndefined();
+  });
+
   test("keeps workspace activity newest-first and bounded", () => {
     let current: WorkspaceActivityItem[] | undefined = undefined;
 
@@ -569,6 +595,36 @@ describe("reduceWorkspaceSnapshot", () => {
       },
     });
 
+    const terminalUpdateResult = reduceWorkspaceSnapshot(
+      current,
+      {
+        id: "event-3",
+        kind: "terminal.updated",
+        occurred_at: "2026-03-10T10:06:30.000Z",
+        terminal: {
+          ...terminal,
+          harness_session_id: "session-12345678",
+          label: "Codex · Session 3",
+        },
+        workspace_id: "ws_1",
+      },
+      "ws_1",
+    );
+    expect(terminalUpdateResult).toEqual({
+      kind: "replace",
+      data: {
+        services,
+        terminals: [
+          {
+            ...terminal,
+            harness_session_id: "session-12345678",
+            label: "Codex · Session 3",
+          },
+        ],
+        workspace,
+      },
+    });
+
     const workspaceResult = reduceWorkspaceSnapshot(
       current,
       {
@@ -576,7 +632,7 @@ describe("reduceWorkspaceSnapshot", () => {
         behind: null,
         branch: "feature/root-live",
         head_sha: "bbbbbbbb",
-        id: "event-3",
+        id: "event-4",
         kind: "git.head_changed",
         occurred_at: "2026-03-10T10:07:00.000Z",
         upstream: null,

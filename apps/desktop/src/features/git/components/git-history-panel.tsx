@@ -46,6 +46,9 @@ export function GitHistoryPanel({
 
   return (
     <section className="flex min-h-0 h-full flex-col">
+      <div className="px-2.5 py-3">
+        <span className="app-panel-title">History</span>
+      </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className={`flex min-h-0 flex-1 flex-col ${GIT_HISTORY_PANEL_BODY_CLASS_NAME}`}>
           {supportsHistory ? (

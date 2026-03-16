@@ -10,7 +10,8 @@
       "mcp__paper__delete_nodes",
       "Bash(bun run:*)",
       "Bash(cd:*)",
-      "Bash(bun test:*)"
+      "Bash(bun test:*)",
+      "Bash(find:*)"
     ]
   }
 }

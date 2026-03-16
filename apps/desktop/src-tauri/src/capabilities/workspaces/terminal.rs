@@ -2,6 +2,8 @@
 mod attachments;
 #[path = "terminal/events.rs"]
 mod events;
+#[path = "terminal/harness_binding.rs"]
+mod harness_binding;
 #[path = "terminal/harness_observer.rs"]
 mod harness_observer;
 #[path = "terminal/launch.rs"]

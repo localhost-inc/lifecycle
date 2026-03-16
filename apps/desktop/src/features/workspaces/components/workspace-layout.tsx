@@ -103,22 +103,25 @@ export function WorkspaceLayout({
     workspace.mode === "local" && workspace.worktree_path !== null ? workspace.id : null,
   );
 
-  const handleRun = useCallback(async (serviceNames?: string[]) => {
-    if (!config) return;
-    try {
-      const manifestJson = JSON.stringify(config);
-      await startServices({
-        serviceNames,
-        workspace,
-        services,
-        manifestJson,
-        manifestFingerprint: getManifestFingerprint(config),
-      });
-    } catch (err) {
-      console.error("Failed to start services:", err);
-      throw err;
-    }
-  }, [config, services, workspace]);
+  const handleRun = useCallback(
+    async (serviceNames?: string[]) => {
+      if (!config) return;
+      try {
+        const manifestJson = JSON.stringify(config);
+        await startServices({
+          serviceNames,
+          workspace,
+          services,
+          manifestJson,
+          manifestFingerprint: getManifestFingerprint(config),
+        });
+      } catch (err) {
+        console.error("Failed to start services:", err);
+        throw err;
+      }
+    },
+    [config, services, workspace],
+  );
 
   const handleRestart = useCallback(async () => {
     if (!config) {
@@ -457,13 +460,13 @@ export function WorkspaceLayout({
       className="flex min-h-0 flex-1 overflow-hidden"
       data-slot="workspace-layout"
     >
-      <div className="flex min-w-0 flex-1 flex-col p-1.5" data-slot="workspace-canvas">
+      <div className="workspace-canvas-grid flex min-w-0 flex-1 flex-col p-1.5" data-slot="workspace-canvas">
         {canvasContent}
       </div>
-      {!panelCollapsed && (
+      {!panelCollapsed && activeExtensionSlot && (
         <div
           className="relative z-[1] flex shrink-0 flex-col border-l border-[var(--border)] bg-[var(--surface)]"
-          style={activeExtensionSlot ? { width: `${panelWidth}px` } : undefined}
+          style={{ width: `${panelWidth}px` }}
         >
           <div
             aria-label="Resize extension panel"
@@ -477,14 +480,14 @@ export function WorkspaceLayout({
             role="separator"
             tabIndex={0}
           />
-          <ExtensionBar
-            activeExtensionId={activeExtensionId}
-            onToggleExtension={handleToggleExtension}
-            slots={extensionSlots}
-          />
           <ExtensionPanel activeSlot={activeExtensionSlot} />
         </div>
       )}
+      <ExtensionBar
+        activeExtensionId={activeExtensionId}
+        onToggleExtension={handleToggleExtension}
+        slots={extensionSlots}
+      />
     </div>
   );
 }

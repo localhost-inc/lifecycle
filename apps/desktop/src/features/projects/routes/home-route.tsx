@@ -41,7 +41,7 @@ export function resolveHomeRouteTarget(
       : null;
 
   if (lastWorkspace) {
-    return `/projects/${lastWorkspace.project_id}?workspace=${lastWorkspace.id}`;
+    return `/projects/${lastWorkspace.project_id}/workspaces/${lastWorkspace.id}`;
   }
 
   const firstProject = projects[0];

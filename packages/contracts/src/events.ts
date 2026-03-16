@@ -91,6 +91,13 @@ export type LifecycleEvent =
   | {
       id: string;
       occurred_at: string;
+      kind: "terminal.updated";
+      workspace_id: string;
+      terminal: TerminalRecord;
+    }
+  | {
+      id: string;
+      occurred_at: string;
       kind: "terminal.status_changed";
       terminal_id: string;
       workspace_id: string;

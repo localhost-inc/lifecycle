@@ -8,10 +8,7 @@ import {
   subscribeToAppHotkeyEvents,
   type AppHotkeyAction,
 } from "./app-hotkeys";
-import {
-  SHORTCUT_HANDLER_PRIORITY,
-  useShortcutRegistration,
-} from "./shortcuts/shortcut-router";
+import { SHORTCUT_HANDLER_PRIORITY, useShortcutRegistration } from "./shortcuts/shortcut-router";
 
 export function AppHotkeyListener() {
   const location = useLocation();

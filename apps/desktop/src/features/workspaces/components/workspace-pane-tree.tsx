@@ -513,9 +513,7 @@ export function WorkspacePaneTree({
   paneIdsWaitingForSelectedRuntimeTab,
   workspaceId,
 }: WorkspacePaneTreeProps) {
-  const [activeTabDrag, setActiveTabDrag] = useState<WorkspacePaneActiveTabDropState | null>(
-    null,
-  );
+  const [activeTabDrag, setActiveTabDrag] = useState<WorkspacePaneActiveTabDropState | null>(null);
   const [hoveredPaneId, setHoveredPaneId] = useState<string | null>(null);
   const activeTabDragRef = useRef<WorkspacePaneActiveTabDropState | null>(null);
   const paneElementsRef = useRef(new Map<string, HTMLElement>());
@@ -715,7 +713,7 @@ export function WorkspacePaneTree({
         <section
           key={node.id}
           ref={(element) => setPaneElement(node.id, element)}
-          className={`relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-[var(--card)] transition-opacity duration-150 ${isDropTargetPane ? "border-[var(--ring)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--ring),transparent_50%)]" : isActivePane ? "shadow-[0_0_0_1px_color-mix(in_srgb,var(--ring),transparent_65%)]" : ""}`}
+          className={`relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-[var(--background)] transition-opacity duration-150 ${isDropTargetPane ? "border-[var(--ring)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--ring),transparent_50%)]" : isActivePane ? "shadow-[0_0_0_1px_color-mix(in_srgb,var(--ring),transparent_65%)]" : ""}`}
           data-workspace-pane-id={node.id}
           onPointerEnter={() => {
             setHoveredPaneId(node.id);
@@ -731,7 +729,7 @@ export function WorkspacePaneTree({
           style={{ opacity: paneOpacity }}
         >
           <div
-            className="flex h-9 items-stretch gap-1 border-b border-[var(--border)] bg-[var(--card)]"
+            className="flex h-9 items-stretch gap-1 border-b border-[var(--border)] bg-[var(--surface)]"
             data-workspace-pane-header
           >
             <WorkspacePaneTabBar
@@ -779,6 +777,7 @@ export function WorkspacePaneTree({
               onTabViewStateChange={onTabViewStateChange}
               paneDragInProgress={activeTabDrag !== null}
               paneFocused={isActivePane}
+              surfaceOpacity={paneOpacity}
               terminals={terminals}
               waitingForSelectedRuntimeTab={paneIdsWaitingForSelectedRuntimeTab.has(node.id)}
               workspaceId={workspaceId}

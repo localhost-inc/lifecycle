@@ -45,9 +45,7 @@ const VALID_INACTIVE_PANE_OPACITY_VALUES = new Set<string>(
   INACTIVE_PANE_OPACITY_OPTIONS.map((option) => option.value.toFixed(2)),
 );
 
-function normalizeDefaultNewTabLaunch(
-  value: string | undefined | null,
-): DefaultNewTabLaunch {
+function normalizeDefaultNewTabLaunch(value: string | undefined | null): DefaultNewTabLaunch {
   if (typeof value === "string" && VALID_NEW_TAB_LAUNCH_VALUES.has(value)) {
     return value as DefaultNewTabLaunch;
   }

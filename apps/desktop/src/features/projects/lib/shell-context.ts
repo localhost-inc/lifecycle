@@ -63,9 +63,7 @@ export function filterProjectsForShellContext(
   projects: ProjectRecord[],
   shellContext: Pick<ShellContext, "id">,
 ): ProjectRecord[] {
-  return projects.filter(
-    (project) => resolveProjectShellContextId(project) === shellContext.id,
-  );
+  return projects.filter((project) => resolveProjectShellContextId(project) === shellContext.id);
 }
 
 export function resolveActiveShellContext(options: {
@@ -75,16 +73,15 @@ export function resolveActiveShellContext(options: {
   routeProjectId: string | undefined;
 }): ShellContext {
   const { contexts, projects, requestedContextId, routeProjectId } = options;
-  const personalContext = contexts.find((context) => context.kind === "personal")
-    ?? createPersonalShellContext(false);
+  const personalContext =
+    contexts.find((context) => context.kind === "personal") ?? createPersonalShellContext(false);
 
   if (routeProjectId) {
     const routeProject = projects.find((project) => project.id === routeProjectId);
     if (routeProject) {
       return (
-        contexts.find(
-          (context) => context.id === resolveProjectShellContextId(routeProject),
-        ) ?? personalContext
+        contexts.find((context) => context.id === resolveProjectShellContextId(routeProject)) ??
+        personalContext
       );
     }
   }
@@ -96,13 +93,16 @@ export function resolveActiveShellContext(options: {
     }
   }
 
-  if (filterProjectsForShellContext(projects, personalContext).length > 0 || contexts.length === 1) {
+  if (
+    filterProjectsForShellContext(projects, personalContext).length > 0 ||
+    contexts.length === 1
+  ) {
     return personalContext;
   }
 
   return (
-    contexts.find((context) => filterProjectsForShellContext(projects, context).length > 0)
-    ?? personalContext
+    contexts.find((context) => filterProjectsForShellContext(projects, context).length > 0) ??
+    personalContext
   );
 }
 
@@ -121,4 +121,3 @@ export function writePersistedShellContextId(contextId: string): void {
     // best-effort persistence
   }
 }
-

@@ -1,19 +1,21 @@
-import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
+import { useCallback } from "react";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import { useCurrentGitPullRequest, useGitPullRequests } from "../../git/hooks";
 import { PullRequestsTab } from "../../git/components/pull-requests-tab";
+import type { ProjectRouteOutletContext } from "../routes/project-route";
 
-interface ProjectPullRequestsSurfaceProps {
-  projectName: string;
-  repositoryWorkspace: WorkspaceRecord | null;
-  onOpenPullRequest: (pullRequestNumber: number) => void;
-}
+export function ProjectPullRequestsSurface() {
+  const { project, repositoryWorkspace } = useOutletContext<ProjectRouteOutletContext>();
+  const projectName = project.name;
+  const navigate = useNavigate();
 
-export function ProjectPullRequestsSurface({
-  projectName,
-  repositoryWorkspace,
-  onOpenPullRequest,
-}: ProjectPullRequestsSurfaceProps) {
+  const onOpenPullRequest = useCallback(
+    (pullRequestNumber: number) => {
+      void navigate(`/projects/${project.id}/pulls/${pullRequestNumber}`);
+    },
+    [navigate, project.id],
+  );
   const workspaceId = repositoryWorkspace?.id ?? null;
   const pullRequestsQuery = useGitPullRequests(workspaceId, {
     enabled: workspaceId !== null,

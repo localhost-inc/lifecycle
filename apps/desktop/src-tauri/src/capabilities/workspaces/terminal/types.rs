@@ -37,6 +37,7 @@ pub(crate) struct NativeTerminalSurfaceSyncInput {
     pub font_family: String,
     pub font_size: f64,
     pub height: f64,
+    pub opacity: f64,
     pub pointer_passthrough: bool,
     pub scale_factor: f64,
     pub terminal_id: String,

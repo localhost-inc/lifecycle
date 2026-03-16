@@ -5,7 +5,7 @@ pub(crate) struct HarnessAdapter {
     pub(crate) name: &'static str,
     pub(crate) display_name: &'static str,
     pub(crate) program: &'static str,
-    pub(crate) new_session_args: &'static [&'static str],
+    pub(crate) new_session_args: fn(Option<&str>) -> Vec<String>,
     pub(crate) resume_args: fn(&str) -> Vec<String>,
     pub(in crate::capabilities::workspaces::harness) session_store: Option<SessionStoreConfig>,
     pub(in crate::capabilities::workspaces::harness) parse_prompt_submission:
@@ -27,10 +27,10 @@ pub(crate) struct HarnessTurnCompletion {
     pub(crate) turn_id: Option<String>,
 }
 
-#[derive(Debug)]
-pub(in crate::capabilities::workspaces::harness) struct HarnessSessionCandidate {
-    pub(in crate::capabilities::workspaces::harness) modified_at: std::time::SystemTime,
-    pub(in crate::capabilities::workspaces::harness) session_id: String,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct HarnessSessionCandidate {
+    pub(crate) detected_at: std::time::SystemTime,
+    pub(crate) session_id: String,
 }
 
 #[derive(Clone, Copy)]

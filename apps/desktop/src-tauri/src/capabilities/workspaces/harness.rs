@@ -9,13 +9,15 @@ mod types;
 
 use std::time::Duration;
 
-pub(super) const HARNESS_SESSION_CAPTURE_GRACE: Duration = Duration::from_secs(5);
+pub(crate) const HARNESS_SESSION_CAPTURE_GRACE: Duration = Duration::from_secs(5);
 
 #[cfg(test)]
 pub(crate) use parsing::read_first_prompt_from_session_reader;
 pub(crate) use parsing::{line_is_within_launched_session, normalize_prompt_text};
 pub(crate) use providers::{default_harness_terminal_label, resolve_harness_adapter};
-pub(crate) use session_store::{discover_harness_session_id, resolve_harness_session_log_path};
+pub(crate) use session_store::{
+    discover_harness_session_candidates, resolve_harness_session_log_path,
+};
 pub(crate) use types::HarnessAdapter;
 
 #[cfg(test)]
@@ -26,11 +28,11 @@ mod tests {
     };
     use super::*;
     use serde_json::Value;
-    use std::collections::HashSet;
     use std::fs;
     use std::io::Cursor;
     use std::path::{Path, PathBuf};
-    use std::time::UNIX_EPOCH;
+    use std::thread;
+    use std::time::{Duration, UNIX_EPOCH};
 
     fn create_test_temp_dir(name: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!(
@@ -43,6 +45,10 @@ mod tests {
 
     fn write_test_file(path: &Path, contents: &str) {
         fs::write(path, contents).expect("write test file");
+    }
+
+    fn sleep_for_distinct_session_timestamp() {
+        thread::sleep(Duration::from_millis(25));
     }
 
     #[test]
@@ -92,10 +98,37 @@ mod tests {
             &store,
             "/tmp/worktree-a",
             UNIX_EPOCH,
-            &HashSet::new(),
         );
 
         assert_eq!(discovered.as_deref(), Some("session-a"));
+    }
+
+    #[test]
+    fn discovers_oldest_matching_claude_session_before_newer_candidates() {
+        let project_dir = create_test_temp_dir("claude-session-order");
+        let store = resolve_harness_adapter(Some("claude"))
+            .and_then(|provider| provider.session_store)
+            .expect("claude session store");
+        let first_path = project_dir.join("session-a.jsonl");
+        let second_path = project_dir.join("session-b.jsonl");
+        write_test_file(
+            &first_path,
+            "{\"cwd\":\"/tmp/worktree-a\",\"sessionId\":\"session-a\"}\n",
+        );
+        sleep_for_distinct_session_timestamp();
+        write_test_file(
+            &second_path,
+            "{\"cwd\":\"/tmp/worktree-a\",\"sessionId\":\"session-b\"}\n",
+        );
+
+        let first_discovered = discover_session_id_from_directory(
+            &project_dir,
+            &store,
+            "/tmp/worktree-a",
+            UNIX_EPOCH,
+        );
+
+        assert_eq!(first_discovered.as_deref(), Some("session-a"));
     }
 
     #[test]
@@ -125,34 +158,45 @@ mod tests {
             &store,
             "/tmp/worktree-a",
             UNIX_EPOCH,
-            &HashSet::new(),
         );
 
         assert_eq!(discovered.as_deref(), Some("session-a"));
     }
 
     #[test]
-    fn skips_harness_session_ids_already_claimed_by_another_terminal() {
-        let project_dir = create_test_temp_dir("claimed-session");
-        let matching_path = project_dir.join("session-a.jsonl");
-        let store = resolve_harness_adapter(Some("claude"))
+    fn discovers_oldest_matching_codex_session_before_newer_candidates() {
+        let root = create_test_temp_dir("codex-session-order");
+        let session_dir = root.join("2026/03/08");
+        let store = resolve_harness_adapter(Some("codex"))
             .and_then(|provider| provider.session_store)
-            .expect("claude session store");
+            .expect("codex session store");
+        fs::create_dir_all(&session_dir).expect("create nested codex dir");
+        let first_path = session_dir.join("rollout-a.jsonl");
+        let second_path = session_dir.join("rollout-b.jsonl");
         write_test_file(
-            &matching_path,
-            "{\"cwd\":\"/tmp/worktree-a\",\"sessionId\":\"session-a\"}\n",
+            &first_path,
+            concat!(
+                "{\"type\":\"session_meta\",\"payload\":{\"id\":\"session-a\",\"cwd\":\"/tmp/worktree-a\"}}\n",
+                "{\"type\":\"event_msg\"}\n"
+            ),
         );
-        let claimed = HashSet::from([String::from("session-a")]);
+        sleep_for_distinct_session_timestamp();
+        write_test_file(
+            &second_path,
+            concat!(
+                "{\"type\":\"session_meta\",\"payload\":{\"id\":\"session-b\",\"cwd\":\"/tmp/worktree-a\"}}\n",
+                "{\"type\":\"event_msg\"}\n"
+            ),
+        );
 
-        let discovered = discover_session_id_from_directory(
-            &project_dir,
+        let first_discovered = discover_session_id_from_tree(
+            &root,
             &store,
             "/tmp/worktree-a",
             UNIX_EPOCH,
-            &claimed,
         );
 
-        assert_eq!(discovered, None);
+        assert_eq!(first_discovered.as_deref(), Some("session-a"));
     }
 
     #[test]

@@ -320,9 +320,7 @@ export function resolveWorkspacePaneDropStateFromGeometry({
   };
 }
 
-function getWorkspacePaneBodyDropZoneClipPath(
-  zone: WorkspacePaneBodyDropZone,
-): string {
+function getWorkspacePaneBodyDropZoneClipPath(zone: WorkspacePaneBodyDropZone): string {
   const edgeZonePercent = Math.round(PANE_DROP_EDGE_ZONE_RATIO * 1000) / 10;
   const trailingEdgePercent = 100 - edgeZonePercent;
 

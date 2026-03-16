@@ -7,7 +7,9 @@ import {
   resolveProjectShellContextId,
 } from "./shell-context";
 
-function createProjectRecord(overrides: Partial<ProjectRecord> & Pick<ProjectRecord, "id" | "name">): ProjectRecord {
+function createProjectRecord(
+  overrides: Partial<ProjectRecord> & Pick<ProjectRecord, "id" | "name">,
+): ProjectRecord {
   const { id, name, ...rest } = overrides;
   return {
     createdAt: "2026-03-14T00:00:00.000Z",
@@ -23,13 +25,16 @@ function createProjectRecord(overrides: Partial<ProjectRecord> & Pick<ProjectRec
 
 describe("shell context helpers", () => {
   test("buildShellContexts always includes Personal and unique organization contexts", () => {
-    const contexts = buildShellContexts([
-      createProjectRecord({ id: "project_1", name: "Lifecycle" }),
-      createProjectRecord({ id: "project_2", name: "Kin API", organizationId: "org_2" }),
-      createProjectRecord({ id: "project_3", name: "Ops", organizationId: "org_1" }),
-    ], {
-      personalContextPersisted: true,
-    });
+    const contexts = buildShellContexts(
+      [
+        createProjectRecord({ id: "project_1", name: "Lifecycle" }),
+        createProjectRecord({ id: "project_2", name: "Kin API", organizationId: "org_2" }),
+        createProjectRecord({ id: "project_3", name: "Ops", organizationId: "org_1" }),
+      ],
+      {
+        personalContextPersisted: true,
+      },
+    );
 
     expect(contexts).toEqual([
       {

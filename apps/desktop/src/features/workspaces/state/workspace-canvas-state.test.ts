@@ -937,9 +937,7 @@ describe("workspace canvas state persistence", () => {
     );
     writeWorkspaceCanvasState("ws-1", createDefaultWorkspaceCanvasState(), storage);
 
-    expect(readWorkspaceCanvasState("ws-1", storage)).toEqual(
-      createDefaultWorkspaceCanvasState(),
-    );
+    expect(readWorkspaceCanvasState("ws-1", storage)).toEqual(createDefaultWorkspaceCanvasState());
     expect(storage.getItem(WORKSPACE_CANVAS_STATE_STORAGE_KEY)).toBeNull();
   });
 

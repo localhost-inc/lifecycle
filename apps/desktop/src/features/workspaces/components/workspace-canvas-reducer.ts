@@ -340,10 +340,7 @@ function closeWorkspacePaneIfEmpty(
   };
 }
 
-function collapseWorkspacePane(
-  state: WorkspaceCanvasState,
-  paneId: string,
-): WorkspaceCanvasState {
+function collapseWorkspacePane(state: WorkspaceCanvasState, paneId: string): WorkspaceCanvasState {
   const pane = getWorkspacePane(state.rootPane, paneId);
   if (!pane) {
     return state;

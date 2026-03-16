@@ -5,6 +5,7 @@ import { useQuery } from "../../query";
 
 const TERMINAL_EVENT_KINDS = [
   "terminal.created",
+  "terminal.updated",
   "terminal.status_changed",
   "terminal.renamed",
 ] as const satisfies readonly LifecycleEventKind[];
@@ -29,6 +30,24 @@ export function reduceWorkspaceTerminals(
       kind: "replace",
       data: [event.terminal, ...previous],
     };
+  }
+
+  if (event.kind === "terminal.updated" && event.workspace_id === workspaceId) {
+    if (!current) {
+      return { kind: "invalidate" };
+    }
+
+    let found = false;
+    const next = current.map((terminal) => {
+      if (terminal.id !== event.terminal.id) {
+        return terminal;
+      }
+
+      found = true;
+      return event.terminal;
+    });
+
+    return found ? { kind: "replace", data: next } : { kind: "invalidate" };
   }
 
   if (event.kind === "terminal.status_changed" && event.workspace_id === workspaceId) {
@@ -100,6 +119,13 @@ export function reduceTerminal(
   terminalId: string,
 ): QueryUpdate<TerminalRecord | null> {
   if (event.kind === "terminal.created" && event.terminal.id === terminalId) {
+    return {
+      kind: "replace",
+      data: event.terminal,
+    };
+  }
+
+  if (event.kind === "terminal.updated" && event.terminal.id === terminalId) {
     return {
       kind: "replace",
       data: event.terminal,

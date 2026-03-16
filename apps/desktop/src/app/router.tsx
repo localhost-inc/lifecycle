@@ -28,6 +28,36 @@ const ProjectRoute = lazy(async () => {
     default: module.ProjectRoute,
   };
 });
+const ProjectOverviewSurface = lazy(async () => {
+  const module = await import("../features/projects/components/project-overview-surface");
+  return {
+    default: module.ProjectOverviewSurface,
+  };
+});
+const ProjectPullRequestsSurface = lazy(async () => {
+  const module = await import("../features/projects/components/project-pull-requests-surface");
+  return {
+    default: module.ProjectPullRequestsSurface,
+  };
+});
+const ProjectPullRequestTabContent = lazy(async () => {
+  const module = await import("../features/projects/components/project-pull-request-tab-content");
+  return {
+    default: module.ProjectPullRequestTabContent,
+  };
+});
+const ProjectActivitySurface = lazy(async () => {
+  const module = await import("../features/projects/components/project-activity-surface");
+  return {
+    default: module.ProjectActivitySurface,
+  };
+});
+const WorkspaceRoute = lazy(async () => {
+  const module = await import("../features/workspaces/routes/workspace-route");
+  return {
+    default: module.WorkspaceRoute,
+  };
+});
 const SettingsShellLayout = lazy(async () => {
   const module = await import("../features/settings/layout/settings-shell-layout");
   return {
@@ -75,14 +105,56 @@ function createRouter() {
                   <ProjectRoute />
                 </LazyRoute>
               ),
-            },
-            {
-              path: "projects/:projectId/settings",
-              element: (
-                <LazyRoute>
-                  <ProjectSettingsRoute />
-                </LazyRoute>
-              ),
+              children: [
+                {
+                  index: true,
+                  element: (
+                    <LazyRoute>
+                      <ProjectOverviewSurface />
+                    </LazyRoute>
+                  ),
+                },
+                {
+                  path: "pulls",
+                  element: (
+                    <LazyRoute>
+                      <ProjectPullRequestsSurface />
+                    </LazyRoute>
+                  ),
+                },
+                {
+                  path: "pulls/:prNumber",
+                  element: (
+                    <LazyRoute>
+                      <ProjectPullRequestTabContent />
+                    </LazyRoute>
+                  ),
+                },
+                {
+                  path: "activity",
+                  element: (
+                    <LazyRoute>
+                      <ProjectActivitySurface />
+                    </LazyRoute>
+                  ),
+                },
+                {
+                  path: "workspaces/:workspaceId",
+                  element: (
+                    <LazyRoute>
+                      <WorkspaceRoute />
+                    </LazyRoute>
+                  ),
+                },
+                {
+                  path: "settings",
+                  element: (
+                    <LazyRoute>
+                      <ProjectSettingsRoute />
+                    </LazyRoute>
+                  ),
+                },
+              ],
             },
             {
               path: "*",

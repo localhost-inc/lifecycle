@@ -1,12 +1,12 @@
 import type { GitPullRequestSummary, WorkspaceMode } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
 import { useEffect, useState } from "react";
-import { commitGit, createGitPullRequest, mergeGitPullRequest, pushGit } from "../api";
+import { commitGit, createGitPullRequest, mergeGitPullRequest, pushGit, stageGitFiles } from "../api";
 import { useCurrentGitPullRequest, useGitLog, useGitStatus } from "../hooks";
 import { ChangesTab } from "./changes-tab";
 import { GitActionButton } from "./git-action-button";
 
-export const GIT_CHANGES_PANEL_BODY_CLASS_NAME = "px-2.5 pb-4 pt-3";
+export const GIT_CHANGES_PANEL_BODY_CLASS_NAME = "px-2.5 pb-4";
 export const GIT_CHANGES_PANEL_EMPTY_STATE_CLASS_NAME = "px-2.5 py-4";
 
 interface GitChangesPanelProps {
@@ -143,7 +143,36 @@ export function GitChangesPanel({
   }
 
   return (
-    <section className="relative flex min-h-0 h-full flex-col">
+    <section className="flex min-h-0 h-full flex-col">
+      <div className="flex items-center justify-between gap-3 px-2.5 py-3">
+        <span className="app-panel-title">Changes</span>
+        <div className="shrink-0">
+          <GitActionButton
+            actionError={actionError}
+            branchPullRequest={currentPullRequestQuery.data ?? null}
+            gitStatus={gitStatusQuery.data ?? null}
+            inlineMenu
+            size="default"
+            isCommitting={isCommitting}
+            isCreatingPullRequest={isCreatingPullRequest}
+            isLoading={gitStatusQuery.isLoading || currentPullRequestQuery.isLoading}
+            isMergingPullRequest={isMergingPullRequest}
+            isPushingBranch={isPushingBranch}
+            onCommit={handleCommit}
+            onCreatePullRequest={handleCreatePullRequest}
+            onMergePullRequest={handleMergePullRequest}
+            onOpenPullRequest={onOpenPullRequest}
+            onPushBranch={handlePushBranch}
+            onShowChanges={async () => {
+              const unstaged = (gitStatusQuery.data?.files ?? []).filter((f) => f.unstaged);
+              if (unstaged.length > 0) {
+                await stageGitFiles(workspaceId, unstaged.map((f) => f.path));
+                await gitStatusQuery.refresh();
+              }
+            }}
+          />
+        </div>
+      </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className={`flex min-h-0 flex-1 flex-col ${GIT_CHANGES_PANEL_BODY_CLASS_NAME}`}>
           {supportsChanges ? (
@@ -165,30 +194,7 @@ export function GitChangesPanel({
               />
             </div>
           )}
-          {/* Spacer so the last file row isn't hidden behind the floating button */}
-          <div className="h-20 shrink-0" />
         </div>
-      </div>
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center pb-3">
-        <GitActionButton
-          actionError={actionError}
-          branchPullRequest={currentPullRequestQuery.data ?? null}
-          className="pointer-events-auto shadow-[0_8px_32px_rgba(0,0,0,0.3)] rounded-2xl [&>button]:backdrop-blur-xl [&>button]:bg-[color-mix(in_srgb,var(--muted),transparent_30%)]"
-          gitStatus={gitStatusQuery.data ?? null}
-          inlineMenu
-          size="lg"
-          isCommitting={isCommitting}
-          isCreatingPullRequest={isCreatingPullRequest}
-          isLoading={gitStatusQuery.isLoading || currentPullRequestQuery.isLoading}
-          isMergingPullRequest={isMergingPullRequest}
-          isPushingBranch={isPushingBranch}
-          onCommit={handleCommit}
-          onCreatePullRequest={handleCreatePullRequest}
-          onMergePullRequest={handleMergePullRequest}
-          onOpenPullRequest={onOpenPullRequest}
-          onPushBranch={handlePushBranch}
-          onShowChanges={onShowChanges}
-        />
       </div>
     </section>
   );

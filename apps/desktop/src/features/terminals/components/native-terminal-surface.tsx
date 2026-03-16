@@ -1,11 +1,5 @@
 import type { TerminalRecord } from "@lifecycle/contracts";
-import {
-  Alert,
-  AlertDescription,
-  EmptyState,
-  themeAppearance,
-  useTheme,
-} from "@lifecycle/ui";
+import { Alert, AlertDescription, EmptyState, themeAppearance, useTheme } from "@lifecycle/ui";
 import { TerminalSquare } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { subscribeToShellResize } from "../../../components/layout/shell-resize-provider";
@@ -25,6 +19,7 @@ import { resolveTerminalTheme } from "../terminal-theme";
 
 interface NativeTerminalSurfaceProps {
   focused: boolean;
+  opacity: number;
   tabDragInProgress?: boolean;
   terminal: TerminalRecord;
 }
@@ -252,6 +247,7 @@ function readNativeTerminalMonospaceFontFamily(): string {
 
 export function NativeTerminalSurface({
   focused,
+  opacity,
   tabDragInProgress = false,
   terminal,
 }: NativeTerminalSurfaceProps) {
@@ -362,6 +358,7 @@ export function NativeTerminalSurface({
           fontFamily: terminalFontFamily,
           fontSize: DEFAULT_TERMINAL_FONT_SIZE,
           height: rect.height,
+          opacity,
           pointerPassthrough: interaction.pointerPassthrough,
           scaleFactor: window.devicePixelRatio,
           terminalId: terminal.id,
@@ -482,7 +479,7 @@ export function NativeTerminalSurface({
     return () => {
       unsubscribe();
     };
-  }, [focused, hasLiveSession, resolvedTheme, tabDragInProgress, terminal.id]);
+  }, [focused, hasLiveSession, opacity, resolvedTheme, tabDragInProgress, terminal.id]);
 
   useEffect(() => {
     if (!hostRef.current) {
@@ -537,7 +534,7 @@ export function NativeTerminalSurface({
         },
       );
     };
-  }, [focused, hasLiveSession, resolvedTheme, tabDragInProgress, terminal.id]);
+  }, [focused, hasLiveSession, opacity, resolvedTheme, tabDragInProgress, terminal.id]);
 
   useEffect(() => {
     if (typeof MutationObserver === "undefined") {
@@ -577,7 +574,7 @@ export function NativeTerminalSurface({
     return () => {
       observer.disconnect();
     };
-  }, [focused, hasLiveSession, resolvedTheme, tabDragInProgress, terminal.id]);
+  }, [focused, hasLiveSession, opacity, resolvedTheme, tabDragInProgress, terminal.id]);
 
   const showAttachOverlay = hasLiveSession && attachState !== "attached" && !tabDragInProgress;
 

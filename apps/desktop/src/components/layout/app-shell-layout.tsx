@@ -9,7 +9,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { Outlet, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Outlet, useNavigate, useParams } from "react-router-dom";
 import { AppHotkeyListener } from "../../app/app-hotkey-listener";
 import { useAuthSession } from "../../features/auth/state/auth-session-provider";
 import { CommandPaletteProvider } from "../../features/command-palette";
@@ -21,7 +21,6 @@ import {
   removeProject,
 } from "../../features/projects/api/projects";
 import { projectKeys, useProjectCatalog } from "../../features/projects/hooks";
-import { ProjectSwitcherStrip } from "../../features/projects/components/project-switcher-strip";
 import {
   buildShellContexts,
   filterProjectsForShellContext,
@@ -40,7 +39,6 @@ import {
 } from "../../features/workspaces/hooks";
 import { getWorkspaceDisplayName } from "../../features/workspaces/lib/workspace-display";
 import { formatWorkspaceError } from "../../features/workspaces/lib/workspace-errors";
-import { readProjectRouteFocus } from "../../features/projects/lib/project-route-state";
 import {
   clearLastProjectId,
   readLastProjectId,
@@ -54,11 +52,11 @@ import {
 } from "../../features/workspaces/state/workspace-canvas-state";
 import { WorkspaceOpenRequestsProvider } from "../../features/workspaces/state/workspace-open-requests";
 import {
-  DEFAULT_LEFT_SIDEBAR_WIDTH,
-  MAX_LEFT_SIDEBAR_WIDTH,
-  MIN_LEFT_SIDEBAR_WIDTH,
-  PROJECT_SHELL_SIDEBAR_COLLAPSED_STORAGE_KEY,
-  PROJECT_SHELL_SIDEBAR_WIDTH_STORAGE_KEY,
+  APP_SIDEBAR_COLLAPSED_STORAGE_KEY,
+  APP_SIDEBAR_WIDTH_STORAGE_KEY,
+  DEFAULT_APP_SIDEBAR_WIDTH,
+  MAX_APP_SIDEBAR_WIDTH,
+  MIN_APP_SIDEBAR_WIDTH,
   clampPanelSize,
   getLeftSidebarWidthFromPointer,
   getSidebarWidthBounds,
@@ -67,13 +65,14 @@ import {
 } from "../../lib/panel-layout";
 import { useQueryClient } from "../../query";
 import { type AppShellOutletContext } from "./app-shell-context";
+import { AppSidebar } from "./app-sidebar";
 import { notifyShellResizeListeners, ShellResizeProvider } from "./shell-resize-provider";
 
 const SIDEBAR_RESIZE_STEP = 16;
 
 function readPersistedSidebarCollapsed(): boolean {
   try {
-    return localStorage.getItem(PROJECT_SHELL_SIDEBAR_COLLAPSED_STORAGE_KEY) === "true";
+    return localStorage.getItem(APP_SIDEBAR_COLLAPSED_STORAGE_KEY) === "true";
   } catch {
     return false;
   }
@@ -81,14 +80,10 @@ function readPersistedSidebarCollapsed(): boolean {
 
 function writePersistedSidebarCollapsed(collapsed: boolean): void {
   try {
-    localStorage.setItem(PROJECT_SHELL_SIDEBAR_COLLAPSED_STORAGE_KEY, String(collapsed));
+    localStorage.setItem(APP_SIDEBAR_COLLAPSED_STORAGE_KEY, String(collapsed));
   } catch {
     // best-effort persistence
   }
-}
-
-function workspaceFocusSearch(workspaceId: string): string {
-  return `?workspace=${workspaceId}`;
 }
 
 function safeClearWorkspaceUiState(workspaceId: string): void {
@@ -103,7 +98,6 @@ export function AppShellLayout() {
   const client = useQueryClient();
   const navigate = useNavigate();
   const { projectId } = useParams();
-  const [searchParams] = useSearchParams();
   const shellViewportRef = useRef<HTMLDivElement | null>(null);
   const projectCatalogQuery = useProjectCatalog();
   const workspacesByProjectQuery = useWorkspacesByProject();
@@ -114,13 +108,11 @@ export function AppShellLayout() {
     readPersistedShellContextId,
   );
   const [shellViewportWidth, setShellViewportWidth] = useState(0);
-  const [projectNavigationWidth, setProjectNavigationWidth] = useState(() =>
-    readPersistedPanelValue(PROJECT_SHELL_SIDEBAR_WIDTH_STORAGE_KEY, DEFAULT_LEFT_SIDEBAR_WIDTH),
+  const [sidebarWidth, setSidebarWidth] = useState(() =>
+    readPersistedPanelValue(APP_SIDEBAR_WIDTH_STORAGE_KEY, DEFAULT_APP_SIDEBAR_WIDTH),
   );
-  const [projectNavigationCollapsed, setProjectNavigationCollapsed] = useState(
-    readPersistedSidebarCollapsed,
-  );
-  const [activeProjectNavigationResize, setActiveProjectNavigationResize] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readPersistedSidebarCollapsed);
+  const [activeSidebarResize, setActiveSidebarResize] = useState(false);
   const allProjects = projectCatalogQuery.data?.projects ?? [];
   const shellContexts = useMemo(
     () =>
@@ -167,10 +159,6 @@ export function AppShellLayout() {
       projects,
     };
   }, [projectCatalogQuery.data, projects]);
-  const activeProject = useMemo(
-    () => projects.find((project) => project.id === projectId) ?? projects[0] ?? null,
-    [projectId, projects],
-  );
   const readyProjectIds = useMemo(
     () =>
       new Set(
@@ -184,27 +172,15 @@ export function AppShellLayout() {
       ),
     [hasWorkspaceResponseReady, projects, workspacesByProjectId],
   );
-  const routeFocus = useMemo(() => readProjectRouteFocus(searchParams), [searchParams]);
-  const selectedWorkspaceId = routeFocus?.kind === "workspace" ? routeFocus.workspaceId : null;
-  const selectedWorkspace = useMemo(
-    () =>
-      selectedWorkspaceId
-        ? (Object.values(workspacesByProjectId)
-            .flat()
-            .find((workspace) => workspace.id === selectedWorkspaceId) ?? null)
-        : null,
-    [selectedWorkspaceId, workspacesByProjectId],
-  );
-  const projectShellWidth = shellViewportWidth;
-  const projectNavigationBounds = useMemo(
+  const sidebarBounds = useMemo(
     () =>
       getSidebarWidthBounds({
-        containerWidth: projectShellWidth,
-        maxWidth: MAX_LEFT_SIDEBAR_WIDTH,
-        minWidth: MIN_LEFT_SIDEBAR_WIDTH,
+        containerWidth: shellViewportWidth,
+        maxWidth: MAX_APP_SIDEBAR_WIDTH,
+        minWidth: MIN_APP_SIDEBAR_WIDTH,
         oppositeSidebarWidth: 0,
       }),
-    [projectShellWidth],
+    [shellViewportWidth],
   );
 
   useEffect(() => {
@@ -227,22 +203,22 @@ export function AppShellLayout() {
   }, []);
 
   useEffect(() => {
-    setProjectNavigationWidth((currentWidth) => {
-      const nextWidth = clampPanelSize(currentWidth, projectNavigationBounds);
+    setSidebarWidth((currentWidth) => {
+      const nextWidth = clampPanelSize(currentWidth, sidebarBounds);
       return nextWidth === currentWidth ? currentWidth : nextWidth;
     });
-  }, [projectNavigationBounds]);
+  }, [sidebarBounds]);
 
   useEffect(() => {
     writePersistedPanelValue(
-      PROJECT_SHELL_SIDEBAR_WIDTH_STORAGE_KEY,
-      clampPanelSize(projectNavigationWidth, projectNavigationBounds),
+      APP_SIDEBAR_WIDTH_STORAGE_KEY,
+      clampPanelSize(sidebarWidth, sidebarBounds),
     );
-  }, [projectNavigationBounds, projectNavigationWidth]);
+  }, [sidebarBounds, sidebarWidth]);
 
   useEffect(() => {
-    writePersistedSidebarCollapsed(projectNavigationCollapsed);
-  }, [projectNavigationCollapsed]);
+    writePersistedSidebarCollapsed(sidebarCollapsed);
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     if (requestedShellContextId === activeShellContext.id) {
@@ -265,7 +241,7 @@ export function AppShellLayout() {
   }, [projectId, projects]);
 
   useEffect(() => {
-    if (!activeProjectNavigationResize) {
+    if (!activeSidebarResize) {
       return;
     }
 
@@ -276,14 +252,12 @@ export function AppShellLayout() {
       }
 
       const bounds = shellViewport.getBoundingClientRect();
-      setProjectNavigationWidth(
-        getLeftSidebarWidthFromPointer(event.clientX, bounds.left, projectNavigationBounds),
-      );
+      setSidebarWidth(getLeftSidebarWidthFromPointer(event.clientX, bounds.left, sidebarBounds));
     };
 
     const handlePointerUp = () => {
       notifyShellResizeListeners(false);
-      setActiveProjectNavigationResize(false);
+      setActiveSidebarResize(false);
     };
 
     window.addEventListener("pointermove", handlePointerMove);
@@ -297,10 +271,10 @@ export function AppShellLayout() {
       window.removeEventListener("pointercancel", handlePointerUp);
       window.removeEventListener("blur", handlePointerUp);
     };
-  }, [activeProjectNavigationResize, projectNavigationBounds]);
+  }, [activeSidebarResize, sidebarBounds]);
 
   useEffect(() => {
-    if (!activeProjectNavigationResize) {
+    if (!activeSidebarResize) {
       return;
     }
 
@@ -313,7 +287,7 @@ export function AppShellLayout() {
       document.body.style.cursor = previousCursor;
       document.body.style.userSelect = previousUserSelect;
     };
-  }, [activeProjectNavigationResize]);
+  }, [activeSidebarResize]);
 
   const refreshWorkspaceList = useCallback(
     async (context: string) => {
@@ -330,7 +304,7 @@ export function AppShellLayout() {
   const handleOpenWorkspace = useCallback(
     (workspace: WorkspaceRecord) => {
       writeLastWorkspaceId(workspace.id);
-      void navigate(`/projects/${workspace.project_id}${workspaceFocusSearch(workspace.id)}`);
+      void navigate(`/projects/${workspace.project_id}/workspaces/${workspace.id}`);
     },
     [navigate],
   );
@@ -365,7 +339,7 @@ export function AppShellLayout() {
 
       await refreshWorkspaceList("creating root workspace");
       writeLastWorkspaceId(workspaceId);
-      void navigate(`/projects/${project.id}${workspaceFocusSearch(workspaceId)}`);
+      void navigate(`/projects/${project.id}/workspaces/${workspaceId}`);
     } catch (error) {
       console.error("Failed to add project:", error);
       if (importedProjectId) {
@@ -413,7 +387,7 @@ export function AppShellLayout() {
 
         await refreshWorkspaceList("creating workspace");
         writeLastWorkspaceId(workspaceId);
-        void navigate(`/projects/${project.id}${workspaceFocusSearch(workspaceId)}`);
+        void navigate(`/projects/${project.id}/workspaces/${workspaceId}`);
       } catch (error) {
         console.error("Failed to create workspace:", error);
         alert(`Failed to create workspace: ${error}`);
@@ -461,7 +435,7 @@ export function AppShellLayout() {
 
         await refreshWorkspaceList("forking workspace");
         writeLastWorkspaceId(newWorkspaceId);
-        void navigate(`/projects/${project.id}${workspaceFocusSearch(newWorkspaceId)}`);
+        void navigate(`/projects/${project.id}/workspaces/${newWorkspaceId}`);
       } catch (error) {
         console.error("Failed to fork workspace:", error);
         alert(`Failed to fork workspace: ${error}`);
@@ -495,15 +469,14 @@ export function AppShellLayout() {
           clearLastWorkspaceId();
         }
 
-        if (selectedWorkspaceId === workspace.id) {
-          void navigate(`/projects/${workspace.project_id}`);
-        }
+        // Navigate away from destroyed workspace
+        void navigate(`/projects/${workspace.project_id}`);
       } catch (error) {
         console.error("Failed to archive workspace:", error);
         alert(formatWorkspaceError(error, "Failed to archive workspace."));
       }
     },
-    [client, navigate, selectedWorkspaceId],
+    [client, navigate],
   );
 
   const handleRemoveProject = useCallback(
@@ -537,53 +510,50 @@ export function AppShellLayout() {
     void navigate("/settings");
   }, [navigate]);
 
-  const handleProjectNavigationResizePointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      if (event.button !== 0) {
-        return;
-      }
+  const handleToggleSidebar = useCallback(() => {
+    setSidebarCollapsed((current) => !current);
+  }, []);
 
-      event.preventDefault();
-      event.stopPropagation();
-      event.currentTarget.setPointerCapture(event.pointerId);
-      notifyShellResizeListeners(true);
-      setActiveProjectNavigationResize(true);
-    },
-    [],
-  );
+  const handleSidebarResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) {
+      return;
+    }
 
-  const handleProjectNavigationResizeKeyDown = useCallback(
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    notifyShellResizeListeners(true);
+    setActiveSidebarResize(true);
+  }, []);
+
+  const handleSidebarResizeKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
       if (event.key === "ArrowLeft") {
         event.preventDefault();
-        setProjectNavigationWidth((currentWidth) =>
-          clampPanelSize(currentWidth - SIDEBAR_RESIZE_STEP, projectNavigationBounds),
+        setSidebarWidth((currentWidth) =>
+          clampPanelSize(currentWidth - SIDEBAR_RESIZE_STEP, sidebarBounds),
         );
       }
 
       if (event.key === "ArrowRight") {
         event.preventDefault();
-        setProjectNavigationWidth((currentWidth) =>
-          clampPanelSize(currentWidth + SIDEBAR_RESIZE_STEP, projectNavigationBounds),
+        setSidebarWidth((currentWidth) =>
+          clampPanelSize(currentWidth + SIDEBAR_RESIZE_STEP, sidebarBounds),
         );
       }
 
       if (event.key === "Home") {
         event.preventDefault();
-        setProjectNavigationWidth(projectNavigationBounds.minSize);
+        setSidebarWidth(sidebarBounds.minSize);
       }
 
       if (event.key === "End") {
         event.preventDefault();
-        setProjectNavigationWidth(projectNavigationBounds.maxSize);
+        setSidebarWidth(sidebarBounds.maxSize);
       }
     },
-    [projectNavigationBounds],
+    [sidebarBounds],
   );
-
-  const commandPaletteForkHandler = selectedWorkspace
-    ? () => void handleForkWorkspace(selectedWorkspace)
-    : undefined;
 
   const outletContext = useMemo<AppShellOutletContext>(
     () => ({
@@ -592,14 +562,11 @@ export function AppShellLayout() {
       onDestroyWorkspace: handleDestroyWorkspace,
       onForkWorkspace: handleForkWorkspace,
       onOpenWorkspace: handleOpenWorkspace,
-      onToggleProjectNavigation: () => setProjectNavigationCollapsed((current) => !current),
-      onProjectNavigationResizeKeyDown: handleProjectNavigationResizeKeyDown,
-      onProjectNavigationResizePointerDown: handleProjectNavigationResizePointerDown,
       onRemoveProject: handleRemoveProject,
-      projectNavigationCollapsed,
-      projectNavigationWidth,
+      onToggleSidebar: handleToggleSidebar,
       projectCatalog: visibleProjectCatalog,
       projects,
+      sidebarCollapsed,
       workspacesByProjectId,
     }),
     [
@@ -608,13 +575,11 @@ export function AppShellLayout() {
       handleDestroyWorkspace,
       handleForkWorkspace,
       handleOpenWorkspace,
-      handleProjectNavigationResizeKeyDown,
-      handleProjectNavigationResizePointerDown,
       handleRemoveProject,
-      projectNavigationCollapsed,
+      handleToggleSidebar,
       visibleProjectCatalog,
-      projectNavigationWidth,
       projects,
+      sidebarCollapsed,
       workspacesByProjectId,
     ],
   );
@@ -639,26 +604,44 @@ export function AppShellLayout() {
 
   return (
     <WorkspaceOpenRequestsProvider>
-      <CommandPaletteProvider
-        onForkWorkspace={commandPaletteForkHandler}
-        projects={projects}
-        workspacesByProjectId={workspacesByProjectId}
-      >
-        <div className="flex h-full w-full flex-col gap-0.5 bg-[var(--background)] px-2 pb-2 pt-0.5 text-[var(--foreground)]">
+      <CommandPaletteProvider projects={projects} workspacesByProjectId={workspacesByProjectId}>
+        <div
+          ref={shellViewportRef}
+          className="flex h-full w-full flex-row bg-[var(--background)] text-[var(--foreground)]"
+        >
           <AppHotkeyListener />
-          <ProjectSwitcherStrip
-            activeProjectId={activeProject?.id ?? null}
+
+          {/* App sidebar */}
+          <AppSidebar
             activeContextName={activeShellContext.name}
             authSession={authSession}
             authSessionLoading={authSessionLoading}
+            collapsed={sidebarCollapsed}
             onAddProject={handleAddProject}
             onOpenSettings={handleOpenSettings}
+            onToggleCollapse={handleToggleSidebar}
             projects={projects}
             readyProjectIds={readyProjectIds}
+            width={sidebarWidth}
           />
-          <div ref={shellViewportRef} className="min-h-0 flex flex-1">
-            <ShellResizeProvider resizing={activeProjectNavigationResize}>
-              <div className="min-w-0 flex-1">
+          <div className="relative w-px shrink-0 bg-[var(--border)]">
+            {!sidebarCollapsed ? (
+              <div
+                aria-label="Resize sidebar"
+                aria-orientation="vertical"
+                className="absolute inset-y-0 -left-2 z-10 w-4 cursor-col-resize"
+                onKeyDown={handleSidebarResizeKeyDown}
+                onPointerDown={handleSidebarResizePointerDown}
+                role="separator"
+                tabIndex={0}
+              />
+            ) : null}
+          </div>
+
+          {/* Main area */}
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <ShellResizeProvider resizing={activeSidebarResize}>
+              <div className="min-h-0 flex-1">
                 <Outlet context={outletContext} />
               </div>
             </ShellResizeProvider>

@@ -82,6 +82,7 @@ const WORKSPACE_SNAPSHOT_EVENT_KINDS = [
   "service.configuration_changed",
   "service.status_changed",
   "terminal.created",
+  "terminal.updated",
   "terminal.status_changed",
   "terminal.renamed",
   "workspace.manifest_synced",
@@ -331,6 +332,8 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
         )} session started`,
         tone: "success",
       };
+    case "terminal.updated":
+      return null;
     case "terminal.status_changed":
       return {
         detail: joinActivityDetail([

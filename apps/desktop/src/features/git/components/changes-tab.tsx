@@ -38,7 +38,6 @@ function basename(filePath: string): string {
   return segments[segments.length - 1] ?? filePath;
 }
 
-
 function statusCssVar(kind: GitFileChangeKind | null): string {
   switch (kind) {
     case "added":
@@ -230,7 +229,9 @@ function FileRow({
         <Icon className="h-4 w-4" />
       </span>
 
-      <span className="min-w-0 truncate text-sm text-[var(--foreground)]" title={file.path}>{name}</span>
+      <span className="min-w-0 truncate text-sm text-[var(--foreground)]" title={file.path}>
+        {name}
+      </span>
 
       <div className="ml-auto flex shrink-0 items-center">
         <div className="relative flex min-h-8 min-w-12 items-center justify-end">
@@ -387,9 +388,7 @@ export function ChangesTab({
 
   if (error) {
     return (
-      <p className="text-xs text-[var(--destructive)]">
-        Failed to load changes: {String(error)}
-      </p>
+      <p className="text-xs text-[var(--destructive)]">Failed to load changes: {String(error)}</p>
     );
   }
 

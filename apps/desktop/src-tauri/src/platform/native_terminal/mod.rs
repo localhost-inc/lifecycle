@@ -31,6 +31,7 @@ pub struct NativeTerminalSurfaceSyncRequest<'a> {
     pub focused: bool,
     pub font_size: f64,
     pub frame: NativeTerminalFrame,
+    pub opacity: f64,
     pub pointer_passthrough: bool,
     pub scale_factor: f64,
     pub terminal_id: &'a str,

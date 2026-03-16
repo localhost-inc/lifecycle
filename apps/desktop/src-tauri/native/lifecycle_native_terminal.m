@@ -32,6 +32,7 @@ typedef struct {
   double height;
   double font_size;
   double scale_factor;
+  double opacity;
   bool focused;
   bool pointer_passthrough;
   bool hidden;
@@ -800,7 +801,7 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
 }
 
 - (BOOL)isOpaque {
-  return YES;
+  return !self.hidden && self.alphaValue >= 1.0;
 }
 
 - (BOOL)mouseDownCanMoveWindow {
@@ -2222,7 +2223,15 @@ bool lifecycle_native_terminal_sync(void *webview_view,
       }
 
       NSRect targetFrame = lifecycleFrameForConfig(webview, config);
+      CGFloat alpha = config->opacity;
+      if (alpha < 0.0) {
+        alpha = 0.0;
+      } else if (alpha > 1.0) {
+        alpha = 1.0;
+      }
       [view setFrame:targetFrame];
+      view.alphaValue = alpha;
+      view.layer.opacity = (float)alpha;
       [view syncContentScale];
 
       if (view.surface != NULL) {
@@ -2295,6 +2304,7 @@ bool lifecycle_native_terminal_sync_frame(void *webview_view,
           .height = config->height,
           .font_size = 0,
           .scale_factor = 0,
+          .opacity = 1.0,
           .focused = false,
           .pointer_passthrough = false,
           .hidden = false,

@@ -70,6 +70,11 @@ pub enum LifecycleEvent {
         workspace_id: String,
         terminal: TerminalRecord,
     },
+    #[serde(rename = "terminal.updated")]
+    TerminalUpdated {
+        workspace_id: String,
+        terminal: TerminalRecord,
+    },
     #[serde(rename = "terminal.status_changed")]
     TerminalStatusChanged {
         terminal_id: String,
@@ -139,6 +144,7 @@ impl LifecycleEvent {
             | Self::WorkspaceManifestSynced { workspace_id, .. }
             | Self::EnvironmentTaskProgress { workspace_id, .. }
             | Self::TerminalCreated { workspace_id, .. }
+            | Self::TerminalUpdated { workspace_id, .. }
             | Self::TerminalStatusChanged { workspace_id, .. }
             | Self::TerminalRenamed { workspace_id, .. }
             | Self::TerminalHarnessPromptSubmitted { workspace_id, .. }
@@ -155,6 +161,7 @@ impl LifecycleEvent {
             | Self::EnvironmentTaskProgress { event_kind, .. } => {
                 !matches!(event_kind.as_str(), "stdout" | "stderr")
             }
+            Self::TerminalUpdated { .. } => false,
             _ => true,
         }
     }
@@ -177,4 +184,47 @@ pub fn publish_lifecycle_event(app: &AppHandle, event: LifecycleEvent) {
     }
 
     let _ = app.emit(LIFECYCLE_EVENT_NAME, envelope);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LifecycleEvent;
+
+    #[test]
+    fn terminal_updated_events_do_not_contribute_to_activity() {
+        let event = LifecycleEvent::TerminalUpdated {
+            workspace_id: "workspace-1".to_string(),
+            terminal: crate::capabilities::workspaces::query::TerminalRecord {
+                id: "terminal-1".to_string(),
+                workspace_id: "workspace-1".to_string(),
+                launch_type: "harness".to_string(),
+                harness_provider: Some("codex".to_string()),
+                harness_session_id: Some("session-1".to_string()),
+                harness_launch_mode: "resume".to_string(),
+                created_by: None,
+                label: "Codex · Session 1".to_string(),
+                label_origin: Some("default".to_string()),
+                status: "active".to_string(),
+                failure_reason: None,
+                exit_code: None,
+                started_at: "2026-03-15 10:00:00".to_string(),
+                last_active_at: "2026-03-15 10:00:00".to_string(),
+                ended_at: None,
+            },
+        };
+
+        assert!(!event.contributes_to_activity());
+    }
+
+    #[test]
+    fn completed_setup_events_continue_to_contribute_to_activity() {
+        let event = LifecycleEvent::WorkspaceSetupProgress {
+            workspace_id: "workspace-1".to_string(),
+            step_name: "install".to_string(),
+            event_kind: "completed".to_string(),
+            data: None,
+        };
+
+        assert!(event.contributes_to_activity());
+    }
 }

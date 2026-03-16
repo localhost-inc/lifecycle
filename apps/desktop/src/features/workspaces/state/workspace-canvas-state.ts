@@ -1075,11 +1075,7 @@ export function writeWorkspaceCanvasState(
   }
 
   const persistedMap =
-    readPersistedWorkspaceCanvasStateMap(
-      resolvedStorage,
-      WORKSPACE_CANVAS_STATE_STORAGE_KEY,
-    ) ??
-    {};
+    readPersistedWorkspaceCanvasStateMap(resolvedStorage, WORKSPACE_CANVAS_STATE_STORAGE_KEY) ?? {};
   const nextMap: PersistedWorkspaceStateMap = { ...persistedMap };
   const normalizedState = normalizeWorkspaceCanvasState(state);
   const layout = inspectWorkspacePaneLayout(normalizedState.rootPane);
@@ -1119,11 +1115,7 @@ export function clearWorkspaceCanvasState(workspaceId: string, storage?: Storage
   }
 
   const persistedMap =
-    readPersistedWorkspaceCanvasStateMap(
-      resolvedStorage,
-      WORKSPACE_CANVAS_STATE_STORAGE_KEY,
-    ) ??
-    {};
+    readPersistedWorkspaceCanvasStateMap(resolvedStorage, WORKSPACE_CANVAS_STATE_STORAGE_KEY) ?? {};
   if (!(workspaceId in persistedMap)) {
     return;
   }

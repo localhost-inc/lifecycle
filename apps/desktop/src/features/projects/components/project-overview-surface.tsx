@@ -1,15 +1,11 @@
-import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
+import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { Button, StatusDot, type StatusDotTone } from "@lifecycle/ui";
 import { ArrowUpRight, FolderGit2, GitBranch, Layers, Plus } from "lucide-react";
+import { useNavigate, useOutletContext } from "react-router-dom";
+import { useCallback } from "react";
 import { formatRelativeTime } from "../../../lib/format";
 import { getWorkspaceDisplayName, isRootWorkspace } from "../../workspaces/lib/workspace-display";
-
-interface ProjectOverviewSurfaceProps {
-  project: ProjectRecord;
-  workspaces: WorkspaceRecord[];
-  onCreateWorkspace: () => void;
-  onOpenWorkspace: (workspace: WorkspaceRecord) => void;
-}
+import type { ProjectRouteOutletContext } from "../routes/project-route";
 
 const statusDotTone: Record<WorkspaceRecord["status"], StatusDotTone> = {
   active: "success",
@@ -25,12 +21,16 @@ const statusLabel: Record<WorkspaceRecord["status"], string> = {
   stopping: "Stopping",
 };
 
-export function ProjectOverviewSurface({
-  project,
-  workspaces,
-  onCreateWorkspace,
-  onOpenWorkspace,
-}: ProjectOverviewSurfaceProps) {
+export function ProjectOverviewSurface() {
+  const { project, workspaces, onCreateWorkspace } = useOutletContext<ProjectRouteOutletContext>();
+  const navigate = useNavigate();
+
+  const onOpenWorkspace = useCallback(
+    (workspace: WorkspaceRecord) => {
+      void navigate(`/projects/${project.id}/workspaces/${workspace.id}`);
+    },
+    [navigate, project.id],
+  );
   const recentWorkspaces = [...workspaces]
     .sort((left, right) => Date.parse(right.last_active_at) - Date.parse(left.last_active_at))
     .slice(0, 6);
@@ -104,10 +104,7 @@ export function ProjectOverviewSurface({
                     type="button"
                   >
                     {/* Status dot */}
-                    <StatusDot
-                      tone={statusDotTone[workspace.status]}
-                      pulse={isActive}
-                    />
+                    <StatusDot tone={statusDotTone[workspace.status]} pulse={isActive} />
 
                     {/* Name + branch */}
                     <div className="flex min-w-0 flex-1 items-center gap-3">

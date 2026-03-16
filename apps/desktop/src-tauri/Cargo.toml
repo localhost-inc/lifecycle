@@ -31,7 +31,7 @@ serde_json = "1"
 tokio = { version = "1", features = ["full"] }
 bollard = "0.18"
 uuid = { version = "1", features = ["v4"] }
-time = { version = "0.3", features = ["formatting"] }
+time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
 thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = "0.3"

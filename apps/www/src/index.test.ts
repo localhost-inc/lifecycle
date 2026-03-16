@@ -9,7 +9,9 @@ describe("landing page", () => {
     expect(response.status).toBe(200);
     expect(response.contentType).toBe("text/html; charset=utf-8");
     expect(response.body).toContain("<title>Lifecycle</title>");
-    expect(response.body).toContain("Desktop-first workspace runtime for local-first software work.");
+    expect(response.body).toContain(
+      "Desktop-first workspace runtime for local-first software work.",
+    );
     expect(response.body).toContain("lifecycle</h1>");
   });
 

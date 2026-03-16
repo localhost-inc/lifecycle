@@ -46,7 +46,7 @@ describe("resolveHomeRouteTarget", () => {
         "workspace_1",
         null,
       ),
-    ).toBe("/projects/project_1?workspace=workspace_1");
+    ).toBe("/projects/project_1/workspaces/workspace_1");
   });
 
   test("falls back to the last opened project when there is no remembered workspace", () => {

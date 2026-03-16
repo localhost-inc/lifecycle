@@ -1,14 +1,12 @@
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { Card, EmptyState } from "@lifecycle/ui";
+import { useCallback } from "react";
+import { useNavigate, useOutletContext } from "react-router-dom";
 import { formatRelativeTime } from "../../../lib/format";
 import { WorkspaceActivityFeed } from "../../workspaces/components/workspace-activity-feed";
 import { useWorkspaceActivity } from "../../workspaces/hooks";
 import { getWorkspaceDisplayName } from "../../workspaces/lib/workspace-display";
-
-interface ProjectActivitySurfaceProps {
-  onOpenWorkspace: (workspace: WorkspaceRecord) => void;
-  workspaces: WorkspaceRecord[];
-}
+import type { ProjectRouteOutletContext } from "../routes/project-route";
 
 function ProjectActivityWorkspaceSection({
   workspace,
@@ -43,10 +41,16 @@ function ProjectActivityWorkspaceSection({
   );
 }
 
-export function ProjectActivitySurface({
-  onOpenWorkspace,
-  workspaces,
-}: ProjectActivitySurfaceProps) {
+export function ProjectActivitySurface() {
+  const { project, workspaces } = useOutletContext<ProjectRouteOutletContext>();
+  const navigate = useNavigate();
+
+  const onOpenWorkspace = useCallback(
+    (workspace: WorkspaceRecord) => {
+      void navigate(`/projects/${project.id}/workspaces/${workspace.id}`);
+    },
+    [navigate, project.id],
+  );
   const recentWorkspaces = [...workspaces].sort(
     (left, right) => Date.parse(right.last_active_at) - Date.parse(left.last_active_at),
   );

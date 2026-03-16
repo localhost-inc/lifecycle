@@ -1,26 +1,21 @@
-import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { EmptyState, Loading } from "@lifecycle/ui";
 import { useMemo } from "react";
+import { useOutletContext, useParams } from "react-router-dom";
 import { useGitPullRequest, useGitPullRequests } from "../../git/hooks";
 import { PullRequestSurface } from "../../git/components/pull-request-surface";
+import type { ProjectRouteOutletContext } from "../routes/project-route";
 
-interface ProjectPullRequestTabContentProps {
-  projectName: string;
-  pullRequestNumber: number;
-  repositoryWorkspace: WorkspaceRecord | null;
-}
-
-export function ProjectPullRequestTabContent({
-  projectName,
-  pullRequestNumber,
-  repositoryWorkspace,
-}: ProjectPullRequestTabContentProps) {
+export function ProjectPullRequestTabContent() {
+  const { project, repositoryWorkspace } = useOutletContext<ProjectRouteOutletContext>();
+  const { prNumber: prNumberParam } = useParams();
+  const pullRequestNumber = Number(prNumberParam);
+  const projectName = project.name;
   const workspaceId = repositoryWorkspace?.id ?? null;
   const listQuery = useGitPullRequests(workspaceId, {
     enabled: workspaceId !== null,
   });
   const detailQuery = useGitPullRequest(workspaceId, pullRequestNumber, {
-    enabled: workspaceId !== null,
+    enabled: workspaceId !== null && Number.isInteger(pullRequestNumber) && pullRequestNumber > 0,
   });
   const pullRequest = useMemo(
     () =>

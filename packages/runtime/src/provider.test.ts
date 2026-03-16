@@ -620,7 +620,8 @@ describe("workspace provider interface", () => {
         expires_at: null,
       },
       services: [],
-      manifestJson: '{"environment":{"www":{"kind":"service","runtime":"process","command":"bun run dev"}}}',
+      manifestJson:
+        '{"environment":{"www":{"kind":"service","runtime":"process","command":"bun run dev"}}}',
       manifestFingerprint: "manifest_1",
     });
 

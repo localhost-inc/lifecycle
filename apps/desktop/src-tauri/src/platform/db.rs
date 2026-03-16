@@ -2,7 +2,7 @@ use crate::platform::diagnostics;
 use crate::shared::errors::LifecycleError;
 use std::time::Instant;
 
-const MIGRATIONS: [(&str, &str); 3] = [
+const MIGRATIONS: [(&str, &str); 4] = [
     (
         "0001_initial_schema",
         include_str!("migrations/0001_initial_schema.sql"),
@@ -14,6 +14,10 @@ const MIGRATIONS: [(&str, &str); 3] = [
     (
         "0003_workspace_kind",
         include_str!("migrations/0003_workspace_kind.sql"),
+    ),
+    (
+        "0004_terminal_harness_launch_mode",
+        include_str!("migrations/0004_terminal_harness_launch_mode.sql"),
     ),
 ];
 
@@ -264,6 +268,7 @@ mod tests {
         assert!(column_exists(&conn, "terminal", "workspace_id"));
         assert!(column_exists(&conn, "terminal", "launch_type"));
         assert!(column_exists(&conn, "terminal", "harness_provider"));
+        assert!(column_exists(&conn, "terminal", "harness_launch_mode"));
         assert!(column_exists(&conn, "terminal", "label_origin"));
         assert!(column_exists(&conn, "terminal", "status"));
         assert!(!column_exists(&conn, "workspace_service", "preview_state"));
@@ -284,6 +289,7 @@ mod tests {
                 "0001_initial_schema".to_string(),
                 "0002_terminal_schema".to_string(),
                 "0003_workspace_kind".to_string(),
+                "0004_terminal_harness_launch_mode".to_string(),
             ]
         );
 
@@ -376,6 +382,79 @@ mod tests {
         assert_eq!(values[2].1, "finished");
         assert!(values[2].2.is_none());
         assert!(values[2].3.is_none());
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn run_migrations_backfills_harness_launch_mode_for_existing_sessions() {
+        let db_path = temp_db_path();
+        let mut conn = open_db(&db_path).expect("open db");
+        initialize_migration_table(&conn).expect("initialize migration table");
+        apply_migration(
+            &mut conn,
+            "0001_initial_schema",
+            include_str!("migrations/0001_initial_schema.sql"),
+        )
+        .expect("apply initial schema");
+        apply_migration(
+            &mut conn,
+            "0002_terminal_schema",
+            include_str!("migrations/0002_terminal_schema.sql"),
+        )
+        .expect("apply terminal schema");
+        apply_migration(
+            &mut conn,
+            "0003_workspace_kind",
+            include_str!("migrations/0003_workspace_kind.sql"),
+        )
+        .expect("apply workspace kind schema");
+
+        conn.execute(
+            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["project_1", "/tmp/project_1", "Project 1"],
+        )
+        .expect("insert project");
+        conn.execute(
+            "INSERT INTO workspace (id, project_id, source_ref, worktree_path, status)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![
+                "workspace_1",
+                "project_1",
+                "main",
+                "/tmp/project_1/worktree",
+                "active"
+            ],
+        )
+        .expect("insert workspace");
+        conn.execute(
+            "INSERT INTO terminal (id, workspace_id, launch_type, harness_provider, harness_session_id, label, status)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            rusqlite::params![
+                "terminal_1",
+                "workspace_1",
+                "harness",
+                "claude",
+                "session-123",
+                "Claude · Session 1",
+                "sleeping"
+            ],
+        )
+        .expect("insert legacy harness terminal");
+        drop(conn);
+
+        run_migrations(&db_path).expect("migration backfill succeeds");
+
+        let conn = open_db(&db_path).expect("reopen db");
+        let launch_mode: String = conn
+            .query_row(
+                "SELECT harness_launch_mode FROM terminal WHERE id = ?1",
+                rusqlite::params!["terminal_1"],
+                |row| row.get(0),
+            )
+            .expect("query launch mode");
+        assert_eq!(launch_mode, "resume");
+
+        drop(conn);
         let _ = std::fs::remove_file(db_path);
     }
 

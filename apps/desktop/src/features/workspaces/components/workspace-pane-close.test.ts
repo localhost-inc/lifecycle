@@ -56,10 +56,7 @@ describe("closeWorkspacePaneTabs", () => {
       ),
     ).resolves.toBe(true);
 
-    expect(calls).toEqual([
-      "runtime:terminal:term-1:term-1",
-      "document:file:README.md",
-    ]);
+    expect(calls).toEqual(["runtime:terminal:term-1:term-1", "document:file:README.md"]);
   });
 
   test("stops once a pane tab refuses to close", async () => {

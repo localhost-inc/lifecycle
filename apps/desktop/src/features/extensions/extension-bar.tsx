@@ -1,5 +1,4 @@
 import { StatusDot } from "@lifecycle/ui";
-import { TabChip } from "../../components/tab-chip";
 import type { ExtensionSlot } from "./extension-bar-types";
 
 interface ExtensionBarProps {
@@ -12,9 +11,9 @@ function ExtensionIcon({ slot }: { slot: ExtensionSlot }) {
   const Icon = slot.icon;
   return (
     <span className="relative inline-flex">
-      <Icon className="size-3.5" strokeWidth={2} />
+      <Icon className="size-4" strokeWidth={2} />
       {slot.badge?.kind === "dot" ? (
-        <span className="absolute -bottom-1 -right-1 flex items-center justify-center rounded-full bg-[var(--background)] p-px">
+        <span className="absolute -bottom-1 -right-1 flex items-center justify-center rounded-full bg-[var(--surface)] p-px">
           <StatusDot aria-hidden size="sm" tone={slot.badge.tone} />
         </span>
       ) : null}
@@ -25,21 +24,27 @@ function ExtensionIcon({ slot }: { slot: ExtensionSlot }) {
 export function ExtensionBar({ activeExtensionId, onToggleExtension, slots }: ExtensionBarProps) {
   return (
     <nav
-      className="flex h-8 shrink-0 items-stretch overflow-x-auto border-b border-[var(--border)]"
+      className="flex w-10 shrink-0 flex-col items-center gap-1 border-l border-[var(--border)] bg-[var(--surface)] py-2"
       data-slot="workspace-extension-strip"
-      style={{ scrollbarWidth: "none", msOverflowStyle: "none", WebkitOverflowScrolling: "touch" }}
     >
       {slots.map((slot) => {
         const isActive = activeExtensionId === slot.id;
         return (
-          <TabChip
+          <button
             key={slot.id}
-            active={isActive}
-            closable={false}
-            label={slot.label}
-            leading={<ExtensionIcon slot={slot} />}
+            aria-label={slot.label}
+            className={[
+              "flex size-7 items-center justify-center rounded-md transition-colors",
+              isActive
+                ? "bg-[var(--sidebar-selected)] text-[var(--foreground)]"
+                : "text-[var(--muted-foreground)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--foreground)]",
+            ].join(" ")}
             onClick={() => onToggleExtension(slot.id)}
-          />
+            title={slot.label}
+            type="button"
+          >
+            <ExtensionIcon slot={slot} />
+          </button>
         );
       })}
     </nav>

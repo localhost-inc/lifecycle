@@ -108,11 +108,7 @@ export function shouldHandleDomAppHotkey(
     macPlatform: boolean;
   },
 ): boolean {
-  return !(
-    options.isTauriApp &&
-    options.macPlatform &&
-    TAURI_MAC_MENU_APP_HOTKEYS.has(action)
-  );
+  return !(options.isTauriApp && options.macPlatform && TAURI_MAC_MENU_APP_HOTKEYS.has(action));
 }
 
 export async function subscribeToAppHotkeyEvents(
