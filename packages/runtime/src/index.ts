@@ -21,5 +21,14 @@ export type {
   WorkspaceProviderUpdateServiceInput,
   WorkspaceProviderWakeInput,
 } from "./provider";
+export type {
+  ClaudePermissionMode,
+  ClaudeHarnessLaunchConfigInput,
+  CodexApprovalPolicy,
+  CodexHarnessLaunchConfigInput,
+  CodexSandboxMode,
+  HarnessLaunchConfigInput,
+  HarnessPreset,
+} from "./harnesses";
 export { LocalWorkspaceProvider } from "./workspaces/providers/local";
 export { CloudWorkspaceProvider, type CloudWorkspaceClient } from "./workspaces/providers/cloud";

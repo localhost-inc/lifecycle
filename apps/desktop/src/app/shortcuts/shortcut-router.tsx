@@ -9,10 +9,12 @@ export const SHORTCUT_HANDLER_PRIORITY = {
   project: 10,
   workspace: 20,
   file: 30,
-  overlay: 40,
 } as const;
 
+export type PaneDirection = "down" | "left" | "right" | "up";
+
 export interface ShortcutMatch {
+  direction?: PaneDirection;
   id: RegisteredShortcutId;
   index?: number;
 }
@@ -51,6 +53,39 @@ function readProjectRouteShortcutMatch(
   event: ShortcutRouterKeyEvent,
   macPlatform: boolean,
 ): ShortcutMatch | null {
+  const hasMod = macPlatform ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+  const isBracketLeft = event.code === "BracketLeft" || event.key === "[" || event.key === "{";
+  const isBracketRight = event.code === "BracketRight" || event.key === "]" || event.key === "}";
+
+  // Cmd+[ / Cmd+] (no shift) — history navigation
+  if (!event.altKey && !event.shiftKey && hasMod) {
+    if (shortcutId === "project.go-back" && isBracketLeft) {
+      return { id: shortcutId };
+    }
+
+    if (shortcutId === "project.go-forward" && isBracketRight) {
+      return { id: shortcutId };
+    }
+  }
+
+  // Cmd+Shift+[ / Cmd+Shift+] — workspace navigation
+  if (!event.altKey && event.shiftKey && hasMod) {
+    if (shortcutId === "workspace.previous-workspace" && isBracketLeft) {
+      return { id: shortcutId };
+    }
+
+    if (shortcutId === "workspace.next-workspace" && isBracketRight) {
+      return { id: shortcutId };
+    }
+  }
+
+  return null;
+}
+
+function readProjectSelectIndexMatch(
+  event: ShortcutRouterKeyEvent,
+  macPlatform: boolean,
+): ShortcutMatch | null {
   if (event.altKey || event.shiftKey) {
     return null;
   }
@@ -60,17 +95,42 @@ function readProjectRouteShortcutMatch(
     return null;
   }
 
-  const isBracketLeft = event.code === "BracketLeft" || event.key === "[";
-  if (shortcutId === "project.go-back" && isBracketLeft) {
-    return { id: shortcutId };
-  }
-
-  const isBracketRight = event.code === "BracketRight" || event.key === "]";
-  if (shortcutId === "project.go-forward" && isBracketRight) {
-    return { id: shortcutId };
+  const lowerKey = event.key.toLowerCase();
+  if (lowerKey >= "1" && lowerKey <= "9") {
+    return { id: "project.select-index", index: Number.parseInt(lowerKey, 10) };
   }
 
   return null;
+}
+
+function readFocusPaneMatch(
+  event: ShortcutRouterKeyEvent,
+  macPlatform: boolean,
+): ShortcutMatch | null {
+  if (event.shiftKey) {
+    return null;
+  }
+
+  const hasMod = macPlatform
+    ? event.metaKey && event.ctrlKey && !event.altKey
+    : event.ctrlKey && event.altKey && !event.metaKey;
+  if (!hasMod) {
+    return null;
+  }
+
+  const directionByKey: Record<string, PaneDirection> = {
+    ArrowUp: "up",
+    ArrowDown: "down",
+    ArrowLeft: "left",
+    ArrowRight: "right",
+  };
+
+  const direction = directionByKey[event.key];
+  if (!direction) {
+    return null;
+  }
+
+  return { direction, id: "workspace.focus-pane" };
 }
 
 export function readRegisteredShortcutMatch(
@@ -93,7 +153,11 @@ export function readRegisteredShortcutMatch(
         : null;
     case "project.go-back":
     case "project.go-forward":
+    case "workspace.previous-workspace":
+    case "workspace.next-workspace":
       return readProjectRouteShortcutMatch(shortcutId, event, macPlatform);
+    case "project.select-index":
+      return readProjectSelectIndexMatch(event, macPlatform);
     case "workspace.new-tab":
       return readWorkspaceTabHotkeyAction(event, macPlatform)?.kind === "new-tab"
         ? { id: shortcutId }
@@ -110,14 +174,10 @@ export function readRegisteredShortcutMatch(
       return readWorkspaceTabHotkeyAction(event, macPlatform)?.kind === "next-tab"
         ? { id: shortcutId }
         : null;
-    case "workspace.select-tab-index": {
-      const action = readWorkspaceTabHotkeyAction(event, macPlatform);
-      return action?.kind === "select-tab-index" ? { id: shortcutId, index: action.index } : null;
-    }
+    case "workspace.focus-pane":
+      return readFocusPaneMatch(event, macPlatform);
     case "file.save":
       return readFileSaveHotkey(event, macPlatform) ? { id: shortcutId } : null;
-    case "overlay.close":
-      return event.key === "Escape" || event.key === "Esc" ? { id: shortcutId } : null;
     default:
       return null;
   }

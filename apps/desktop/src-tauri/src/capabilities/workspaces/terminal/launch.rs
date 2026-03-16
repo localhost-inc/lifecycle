@@ -2,6 +2,7 @@ use crate::shared::errors::{LifecycleError, TerminalType};
 use std::path::Path;
 
 use super::super::harness;
+use super::super::harness::HarnessLaunchConfig;
 use super::persistence::WorkspaceRuntime;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,6 +112,7 @@ pub(crate) fn resolve_terminal_launch(
     harness_provider: Option<&str>,
     harness_session_id: Option<&str>,
     harness_launch_mode: HarnessLaunchMode,
+    harness_launch_config: Option<&HarnessLaunchConfig>,
 ) -> Result<TerminalLaunchSpec, LifecycleError> {
     match (launch_type, harness_provider, harness_session_id) {
         (TerminalType::Shell, Some(_), _) => Err(LifecycleError::AttachFailed(
@@ -131,17 +133,22 @@ pub(crate) fn resolve_terminal_launch(
             let provider = harness::resolve_harness_adapter(Some(provider)).ok_or_else(|| {
                 LifecycleError::AttachFailed(format!("unsupported harness provider: {provider}"))
             })?;
+            if let Some(harness_launch_config) = harness_launch_config {
+                harness_launch_config.validate_provider(provider.name)?;
+            }
             Ok(TerminalLaunchSpec {
                 program: provider.program.to_string(),
                 args: match harness_launch_mode {
-                    HarnessLaunchMode::New => (provider.new_session_args)(harness_session_id),
+                    HarnessLaunchMode::New => {
+                        (provider.new_session_args)(harness_session_id, harness_launch_config)?
+                    }
                     HarnessLaunchMode::Resume => {
                         let session_id = harness_session_id.ok_or_else(|| {
                             LifecycleError::AttachFailed(
                                 "harness resume requires a harness session id".to_string(),
                             )
                         })?;
-                        (provider.resume_args)(session_id)
+                        (provider.resume_args)(session_id, harness_launch_config)?
                     }
                 },
                 treat_nonzero_as_failure: true,
@@ -156,11 +163,57 @@ pub(crate) fn resolve_terminal_launch(
 
 #[cfg(test)]
 mod tests {
+    use crate::capabilities::workspaces::harness::{
+        ClaudeLaunchConfig, ClaudePermissionMode, CodexApprovalPolicy, CodexLaunchConfig,
+        CodexSandboxMode, HarnessLaunchConfig, HarnessPreset,
+    };
     use crate::shared::errors::{LifecycleError, TerminalType};
 
     use super::{
         native_terminal_command, resolve_terminal_launch, HarnessLaunchMode, TerminalLaunchSpec,
     };
+
+    fn guarded_codex_config() -> HarnessLaunchConfig {
+        HarnessLaunchConfig::Codex {
+            config: CodexLaunchConfig {
+                preset: HarnessPreset::Guarded,
+                sandbox_mode: CodexSandboxMode::WorkspaceWrite,
+                approval_policy: CodexApprovalPolicy::Untrusted,
+                dangerous_bypass: false,
+            },
+        }
+    }
+
+    fn trusted_codex_config() -> HarnessLaunchConfig {
+        HarnessLaunchConfig::Codex {
+            config: CodexLaunchConfig {
+                preset: HarnessPreset::TrustedHost,
+                sandbox_mode: CodexSandboxMode::DangerFullAccess,
+                approval_policy: CodexApprovalPolicy::Never,
+                dangerous_bypass: true,
+            },
+        }
+    }
+
+    fn guarded_claude_config() -> HarnessLaunchConfig {
+        HarnessLaunchConfig::Claude {
+            config: ClaudeLaunchConfig {
+                preset: HarnessPreset::Guarded,
+                permission_mode: ClaudePermissionMode::AcceptEdits,
+                dangerous_skip_permissions: false,
+            },
+        }
+    }
+
+    fn trusted_claude_config() -> HarnessLaunchConfig {
+        HarnessLaunchConfig::Claude {
+            config: ClaudeLaunchConfig {
+                preset: HarnessPreset::TrustedHost,
+                permission_mode: ClaudePermissionMode::BypassPermissions,
+                dangerous_skip_permissions: true,
+            },
+        }
+    }
 
     #[test]
     fn resolve_terminal_launch_rejects_unsupported_harness() {
@@ -169,6 +222,7 @@ mod tests {
             Some("unsupported"),
             None,
             HarnessLaunchMode::New,
+            None,
         )
         .expect_err("must fail");
         match error {
@@ -186,6 +240,7 @@ mod tests {
             Some("claude"),
             Some("session-123"),
             HarnessLaunchMode::Resume,
+            None,
         )
         .expect("claude resume launch");
         assert_eq!(claude.program, "claude");
@@ -196,6 +251,7 @@ mod tests {
             Some("codex"),
             Some("session-456"),
             HarnessLaunchMode::Resume,
+            None,
         )
         .expect("codex resume");
         assert_eq!(codex.program, "codex");
@@ -209,6 +265,7 @@ mod tests {
             Some("claude"),
             Some("session-123"),
             HarnessLaunchMode::New,
+            None,
         )
         .expect("claude new launch");
         assert_eq!(claude.program, "claude");
@@ -219,6 +276,7 @@ mod tests {
             Some("codex"),
             None,
             HarnessLaunchMode::New,
+            None,
         )
         .expect("codex new launch");
         assert_eq!(codex.program, "codex");
@@ -232,6 +290,7 @@ mod tests {
             Some("claude"),
             None,
             HarnessLaunchMode::Resume,
+            None,
         )
         .expect_err("resume requires session id");
         match error {
@@ -249,6 +308,7 @@ mod tests {
             None,
             Some("session-123"),
             HarnessLaunchMode::Resume,
+            None,
         )
         .expect_err("shell resume fails");
         match error {
@@ -267,7 +327,10 @@ mod tests {
             treat_nonzero_as_failure: false,
         };
 
-        assert_eq!(native_terminal_command(&TerminalType::Shell, &launch, &[]), "");
+        assert_eq!(
+            native_terminal_command(&TerminalType::Shell, &launch, &[]),
+            ""
+        );
     }
 
     #[test]
@@ -300,5 +363,106 @@ mod tests {
             ),
             "/bin/zsh -l -c 'export CODEX_HOME=/tmp/codex-home; exec codex'"
         );
+    }
+
+    #[test]
+    fn resolve_terminal_launch_applies_guarded_codex_settings() {
+        let codex = resolve_terminal_launch(
+            &TerminalType::Harness,
+            Some("codex"),
+            None,
+            HarnessLaunchMode::New,
+            Some(&guarded_codex_config()),
+        )
+        .expect("codex guarded launch");
+
+        assert_eq!(
+            codex.args,
+            vec![
+                "--sandbox",
+                "workspace-write",
+                "--ask-for-approval",
+                "untrusted",
+            ]
+        );
+    }
+
+    #[test]
+    fn resolve_terminal_launch_applies_trusted_codex_settings() {
+        let codex = resolve_terminal_launch(
+            &TerminalType::Harness,
+            Some("codex"),
+            Some("session-456"),
+            HarnessLaunchMode::Resume,
+            Some(&trusted_codex_config()),
+        )
+        .expect("codex trusted resume");
+
+        assert_eq!(
+            codex.args,
+            vec![
+                "resume",
+                "session-456",
+                "--dangerously-bypass-approvals-and-sandbox",
+            ]
+        );
+    }
+
+    #[test]
+    fn resolve_terminal_launch_applies_guarded_claude_settings() {
+        let claude = resolve_terminal_launch(
+            &TerminalType::Harness,
+            Some("claude"),
+            Some("session-123"),
+            HarnessLaunchMode::New,
+            Some(&guarded_claude_config()),
+        )
+        .expect("claude guarded launch");
+
+        assert_eq!(
+            claude.args,
+            vec![
+                "--session-id",
+                "session-123",
+                "--permission-mode",
+                "acceptEdits"
+            ]
+        );
+    }
+
+    #[test]
+    fn resolve_terminal_launch_applies_trusted_claude_settings() {
+        let claude = resolve_terminal_launch(
+            &TerminalType::Harness,
+            Some("claude"),
+            Some("session-123"),
+            HarnessLaunchMode::Resume,
+            Some(&trusted_claude_config()),
+        )
+        .expect("claude trusted launch");
+
+        assert_eq!(
+            claude.args,
+            vec!["--resume", "session-123", "--dangerously-skip-permissions"]
+        );
+    }
+
+    #[test]
+    fn resolve_terminal_launch_rejects_mismatched_launch_config() {
+        let error = resolve_terminal_launch(
+            &TerminalType::Harness,
+            Some("codex"),
+            None,
+            HarnessLaunchMode::New,
+            Some(&guarded_claude_config()),
+        )
+        .expect_err("mismatched config fails");
+
+        match error {
+            LifecycleError::AttachFailed(message) => {
+                assert!(message.contains("does not match provider"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
     }
 }

@@ -1,4 +1,3 @@
-import type { GitPullRequestSummary } from "@lifecycle/contracts";
 import { Alert, AlertDescription, AlertTitle, Loading } from "@lifecycle/ui";
 import { Suspense, lazy, useEffect, useRef } from "react";
 import { markPerformance, measurePerformance } from "../../../lib/performance";
@@ -16,7 +15,6 @@ const WorkspaceLayout = lazy(async () => {
 
 interface WorkspaceTabContentProps {
   onCloseWorkspaceTab?: () => void;
-  onOpenPullRequest?: (pullRequest: GitPullRequestSummary) => void;
   onRouteDialogChange?: (dialog: WorkspaceRouteDialogState) => void;
   routeDialog?: WorkspaceRouteDialogState;
   workspaceId: string;
@@ -24,7 +22,6 @@ interface WorkspaceTabContentProps {
 
 export function WorkspaceTabContent({
   onCloseWorkspaceTab,
-  onOpenPullRequest,
   onRouteDialogChange,
   routeDialog = null,
   workspaceId,
@@ -97,7 +94,6 @@ export function WorkspaceTabContent({
       <WorkspaceLayout
         manifestStatus={manifestQuery.data ?? null}
         onCloseWorkspaceTab={onCloseWorkspaceTab}
-        onOpenPullRequest={onOpenPullRequest}
         onRouteDialogChange={onRouteDialogChange}
         routeDialog={routeDialog}
         workspace={workspace}

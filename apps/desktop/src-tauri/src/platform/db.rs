@@ -2,7 +2,7 @@ use crate::platform::diagnostics;
 use crate::shared::errors::LifecycleError;
 use std::time::Instant;
 
-const MIGRATIONS: [(&str, &str); 4] = [
+const MIGRATIONS: [(&str, &str); 5] = [
     (
         "0001_initial_schema",
         include_str!("migrations/0001_initial_schema.sql"),
@@ -18,6 +18,10 @@ const MIGRATIONS: [(&str, &str); 4] = [
     (
         "0004_terminal_harness_launch_mode",
         include_str!("migrations/0004_terminal_harness_launch_mode.sql"),
+    ),
+    (
+        "0005_terminal_harness_launch_config",
+        include_str!("migrations/0005_terminal_harness_launch_config.sql"),
     ),
 ];
 
@@ -258,6 +262,7 @@ mod tests {
         let conn = open_db(&db_path).expect("open db");
         assert!(column_exists(&conn, "workspace", "created_by"));
         assert!(column_exists(&conn, "workspace", "name"));
+        assert!(column_exists(&conn, "terminal", "harness_launch_config"));
         assert!(column_exists(&conn, "workspace", "name_origin"));
         assert!(column_exists(&conn, "workspace", "source_ref_origin"));
         assert!(column_exists(&conn, "workspace", "source_workspace_id"));
@@ -290,6 +295,7 @@ mod tests {
                 "0002_terminal_schema".to_string(),
                 "0003_workspace_kind".to_string(),
                 "0004_terminal_harness_launch_mode".to_string(),
+                "0005_terminal_harness_launch_config".to_string(),
             ]
         );
 

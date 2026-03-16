@@ -16,18 +16,21 @@ describe("shortcut registry", () => {
       "project.go-forward",
       "workspace.new-tab",
       "workspace.close-active-tab",
+      "project.select-index",
+      "workspace.previous-workspace",
+      "workspace.next-workspace",
       "workspace.previous-tab",
       "workspace.next-tab",
-      "workspace.select-tab-index",
+      "workspace.focus-pane",
       "file.save",
-      "overlay.close",
     ]);
   });
 
   test("formats labels from the registry for each platform", () => {
     expect(formatRegisteredShortcutLabel("app.open-settings", true)).toBe("Cmd+,");
+    expect(formatRegisteredShortcutLabel("workspace.next-tab", true)).toBe("Ctrl+Tab");
     expect(formatRegisteredShortcutLabel("workspace.next-tab", false)).toBe("Ctrl+Tab");
-    expect(formatRegisteredShortcutLabel("overlay.close", true)).toBe("Escape");
+    expect(formatRegisteredShortcutLabel("file.save", true)).toBe("Cmd+S");
   });
 
   test("filters shortcuts by scope", () => {
@@ -38,7 +41,7 @@ describe("shortcut registry", () => {
       "workspace.close-active-tab",
       "workspace.previous-tab",
       "workspace.next-tab",
-      "workspace.select-tab-index",
+      "workspace.focus-pane",
     ]);
   });
 

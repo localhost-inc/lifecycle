@@ -136,10 +136,8 @@ describe("LogsTab", () => {
         config,
         declaredStepNames: [],
         environmentTasks,
-        onClearSelectedService: () => {},
         selectedServiceName: "api",
         serviceRuntimeByName,
-        services,
         setupSteps,
         workspace: {
           failure_reason: null,
@@ -149,11 +147,29 @@ describe("LogsTab", () => {
       }),
     );
 
-    expect(markup).toContain("Service boot logs");
-    expect(markup).toContain(">api<");
+    expect(markup).toContain("install");
     expect(markup).toContain("bun install --frozen-lockfile");
     expect(markup).toContain("bun run db:migrate");
     expect(markup).not.toContain("bun run content:seed");
-    expect(markup).toContain(">Show all<");
+  });
+
+  test("returns null when no log entries have output", () => {
+    const markup = renderToStaticMarkup(
+      createElement(LogsTab, {
+        config,
+        declaredStepNames: [],
+        environmentTasks: [],
+        selectedServiceName: null,
+        serviceRuntimeByName,
+        setupSteps: [],
+        workspace: {
+          failure_reason: null,
+          setup_completed_at: null,
+          status: "active",
+        },
+      }),
+    );
+
+    expect(markup).toBe("");
   });
 });

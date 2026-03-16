@@ -25,6 +25,7 @@ interface WorkspacePaneContentProps {
   creatingSelection: "shell" | HarnessProvider | null;
   documents: WorkspaceCanvasDocument[];
   hasVisibleTabs: boolean;
+  nativeTerminalsSuppressed?: boolean;
   onFileSessionStateChange: (tabKey: string, state: FileViewerSessionState | null) => void;
   onCreateTerminal: (input: CreateTerminalRequest) => Promise<void>;
   onOpenFile: (filePath: string) => void;
@@ -44,6 +45,7 @@ export function WorkspacePaneContent({
   creatingSelection,
   documents,
   hasVisibleTabs,
+  nativeTerminalsSuppressed = false,
   onFileSessionStateChange,
   onCreateTerminal,
   onOpenFile,
@@ -101,12 +103,21 @@ export function WorkspacePaneContent({
       role="tabpanel"
     >
       {activeTerminal ? (
-        <TerminalSurface
-          focused={paneFocused}
-          opacity={surfaceOpacity}
-          tabDragInProgress={paneDragInProgress}
-          terminal={activeTerminal}
-        />
+        nativeTerminalsSuppressed ? (
+          <div
+            className="flex min-h-0 flex-1 flex-col bg-[var(--terminal-surface-background)]"
+            data-slot="terminal-surface-suppressed"
+          />
+        ) : (
+          <div className="flex min-h-0 flex-1 flex-col bg-[var(--terminal-surface-background)]">
+            <TerminalSurface
+              focused={paneFocused}
+              opacity={surfaceOpacity}
+              tabDragInProgress={paneDragInProgress}
+              terminal={activeTerminal}
+            />
+          </div>
+        )
       ) : activeDocument && isChangesDiffDocument(activeDocument) ? (
         <GitDiffSurface
           initialScrollTop={activeTabViewState?.scrollTop ?? 0}

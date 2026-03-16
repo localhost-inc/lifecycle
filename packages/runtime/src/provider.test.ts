@@ -959,7 +959,7 @@ describe("workspace provider interface", () => {
     ]);
   });
 
-  test("local provider forwards optional terminal resume session ids", async () => {
+  test("local provider forwards optional harness session ids", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
       if (args) {
@@ -998,6 +998,7 @@ describe("workspace provider interface", () => {
         args: {
           workspaceId: "ws_1",
           launchType: "harness",
+          harnessLaunchConfig: null,
           harnessProvider: "claude",
           harnessSessionId: "session-123",
         },

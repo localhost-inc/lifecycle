@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import githubDarkDefault from "@shikijs/themes/github-dark-default";
+import githubLightDefault from "@shikijs/themes/github-light-default";
 import { buildTerminalTheme, readTerminalThemeTokens } from "./terminal-theme";
 
 const originalGetComputedStyle = globalThis.getComputedStyle;
@@ -207,5 +209,63 @@ describe("buildTerminalTheme", () => {
     expect(theme.cursorColor).toBe("#88c0d0");
     expect(theme.palette[4]).toBe("#81a1c1");
     expect(theme.palette[15]).toBe("#eceff4");
+  });
+
+  test("matches the github light ansi palette shipped by shiki", () => {
+    const theme = buildTerminalTheme("github-light", {
+      background: "#ffffff",
+      foreground: "#1f2328",
+      selectionBackground: "#ddf4ff",
+      selectionForeground: "#1f2328",
+    });
+
+    expect(theme.cursorColor).toBe(githubLightDefault.colors?.["editorCursor.foreground"]);
+    expect(theme.palette).toEqual([
+      githubLightDefault.colors?.["terminal.ansiBlack"],
+      githubLightDefault.colors?.["terminal.ansiRed"],
+      githubLightDefault.colors?.["terminal.ansiGreen"],
+      githubLightDefault.colors?.["terminal.ansiYellow"],
+      githubLightDefault.colors?.["terminal.ansiBlue"],
+      githubLightDefault.colors?.["terminal.ansiMagenta"],
+      githubLightDefault.colors?.["terminal.ansiCyan"],
+      githubLightDefault.colors?.["terminal.ansiWhite"],
+      githubLightDefault.colors?.["terminal.ansiBrightBlack"],
+      githubLightDefault.colors?.["terminal.ansiBrightRed"],
+      githubLightDefault.colors?.["terminal.ansiBrightGreen"],
+      githubLightDefault.colors?.["terminal.ansiBrightYellow"],
+      githubLightDefault.colors?.["terminal.ansiBrightBlue"],
+      githubLightDefault.colors?.["terminal.ansiBrightMagenta"],
+      githubLightDefault.colors?.["terminal.ansiBrightCyan"],
+      githubLightDefault.colors?.["terminal.ansiBrightWhite"],
+    ]);
+  });
+
+  test("matches the github dark ansi palette shipped by shiki", () => {
+    const theme = buildTerminalTheme("github-dark", {
+      background: "#0d1117",
+      foreground: "#e6edf3",
+      selectionBackground: "#30363d",
+      selectionForeground: "#e6edf3",
+    });
+
+    expect(theme.cursorColor).toBe(githubDarkDefault.colors?.["editorCursor.foreground"]);
+    expect(theme.palette).toEqual([
+      githubDarkDefault.colors?.["terminal.ansiBlack"],
+      githubDarkDefault.colors?.["terminal.ansiRed"],
+      githubDarkDefault.colors?.["terminal.ansiGreen"],
+      githubDarkDefault.colors?.["terminal.ansiYellow"],
+      githubDarkDefault.colors?.["terminal.ansiBlue"],
+      githubDarkDefault.colors?.["terminal.ansiMagenta"],
+      githubDarkDefault.colors?.["terminal.ansiCyan"],
+      githubDarkDefault.colors?.["terminal.ansiWhite"],
+      githubDarkDefault.colors?.["terminal.ansiBrightBlack"],
+      githubDarkDefault.colors?.["terminal.ansiBrightRed"],
+      githubDarkDefault.colors?.["terminal.ansiBrightGreen"],
+      githubDarkDefault.colors?.["terminal.ansiBrightYellow"],
+      githubDarkDefault.colors?.["terminal.ansiBrightBlue"],
+      githubDarkDefault.colors?.["terminal.ansiBrightMagenta"],
+      githubDarkDefault.colors?.["terminal.ansiBrightCyan"],
+      githubDarkDefault.colors?.["terminal.ansiBrightWhite"],
+    ]);
   });
 });

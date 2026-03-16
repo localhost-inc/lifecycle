@@ -63,8 +63,12 @@ fn main() {
 #[cfg(target_os = "macos")]
 fn prepare_ghosttykit() -> Result<PathBuf, String> {
     if let Some(path) = env::var_os("LIFECYCLE_GHOSTTYKIT_PATH").map(PathBuf::from) {
-        return resolve_ghosttykit_slice(&path)
-            .map_err(|error| format!("invalid LIFECYCLE_GHOSTTYKIT_PATH '{}': {error}", path.display()));
+        return resolve_ghosttykit_slice(&path).map_err(|error| {
+            format!(
+                "invalid LIFECYCLE_GHOSTTYKIT_PATH '{}': {error}",
+                path.display()
+            )
+        });
     }
 
     if let Some(path) = cached_ghosttykit_xcframework_path() {
@@ -111,7 +115,10 @@ fn resolve_ghosttykit_slice(xcframework_path: &Path) -> Result<PathBuf, String> 
     let lib_path = slice_dir.join("libghostty-fat.a");
     let header_path = slice_dir.join("Headers").join("ghostty.h");
     if !lib_path.exists() || !header_path.exists() {
-        return Err(format!("GhosttyKit slice is incomplete at {}", slice_dir.display()));
+        return Err(format!(
+            "GhosttyKit slice is incomplete at {}",
+            slice_dir.display()
+        ));
     }
 
     Ok(slice_dir)

@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::capabilities::workspaces::harness::launch_config::{HarnessLaunchConfig, HarnessPreset};
 use crate::capabilities::workspaces::harness::parsing::{
     build_harness_event_key, extract_text_from_message_content, json_string_at_path,
     normalize_prompt_text,
@@ -8,6 +10,82 @@ use crate::capabilities::workspaces::harness::types::{
     HarnessAdapter, HarnessPromptSubmission, HarnessTurnCompletion, SessionStoreConfig,
     SessionStoreScope,
 };
+use crate::shared::errors::LifecycleError;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) enum CodexSandboxMode {
+    #[serde(rename = "read-only")]
+    ReadOnly,
+    #[serde(rename = "workspace-write")]
+    WorkspaceWrite,
+    #[serde(rename = "danger-full-access")]
+    DangerFullAccess,
+}
+
+impl CodexSandboxMode {
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            Self::ReadOnly => "read-only",
+            Self::WorkspaceWrite => "workspace-write",
+            Self::DangerFullAccess => "danger-full-access",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) enum CodexApprovalPolicy {
+    #[serde(rename = "untrusted")]
+    Untrusted,
+    #[serde(rename = "on-request")]
+    OnRequest,
+    #[serde(rename = "never")]
+    Never,
+}
+
+impl CodexApprovalPolicy {
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            Self::Untrusted => "untrusted",
+            Self::OnRequest => "on-request",
+            Self::Never => "never",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct CodexLaunchConfig {
+    pub(crate) preset: HarnessPreset,
+    pub(crate) sandbox_mode: CodexSandboxMode,
+    pub(crate) approval_policy: CodexApprovalPolicy,
+    pub(crate) dangerous_bypass: bool,
+}
+
+impl CodexLaunchConfig {
+    fn cli_args(&self) -> Vec<String> {
+        if self.dangerous_bypass {
+            return vec!["--dangerously-bypass-approvals-and-sandbox".to_string()];
+        }
+
+        vec![
+            "--sandbox".to_string(),
+            self.sandbox_mode.as_str().to_string(),
+            "--ask-for-approval".to_string(),
+            self.approval_policy.as_str().to_string(),
+        ]
+    }
+}
+
+fn resolve_codex_launch_config(
+    launch_config: &HarnessLaunchConfig,
+) -> Result<&CodexLaunchConfig, LifecycleError> {
+    match launch_config {
+        HarnessLaunchConfig::Codex { config } => Ok(config),
+        HarnessLaunchConfig::Claude { .. } => Err(LifecycleError::AttachFailed(
+            "received a Claude launch config for a Codex harness".to_string(),
+        )),
+    }
+}
 
 pub(super) const ADAPTER: HarnessAdapter = HarnessAdapter {
     name: "codex",
@@ -28,12 +106,28 @@ pub(super) const ADAPTER: HarnessAdapter = HarnessAdapter {
     parse_turn_completion,
 };
 
-fn codex_new_session_args(_session_id: Option<&str>) -> Vec<String> {
-    Vec::new()
+fn codex_new_session_args(
+    _session_id: Option<&str>,
+    launch_config: Option<&HarnessLaunchConfig>,
+) -> Result<Vec<String>, LifecycleError> {
+    let mut args = Vec::new();
+    if let Some(launch_config) = launch_config {
+        args.extend(resolve_codex_launch_config(launch_config)?.cli_args());
+    }
+
+    Ok(args)
 }
 
-fn codex_resume_args(session_id: &str) -> Vec<String> {
-    vec!["resume".to_string(), session_id.to_string()]
+fn codex_resume_args(
+    session_id: &str,
+    launch_config: Option<&HarnessLaunchConfig>,
+) -> Result<Vec<String>, LifecycleError> {
+    let mut args = vec!["resume".to_string(), session_id.to_string()];
+    if let Some(launch_config) = launch_config {
+        args.extend(resolve_codex_launch_config(launch_config)?.cli_args());
+    }
+
+    Ok(args)
 }
 
 fn parse_prompt_submission(value: &Value, line: &str) -> Option<HarnessPromptSubmission> {

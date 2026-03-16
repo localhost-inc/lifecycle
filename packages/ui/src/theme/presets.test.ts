@@ -14,6 +14,8 @@ describe("theme presets", () => {
       "system",
       "light",
       "dark",
+      "github-light",
+      "github-dark",
       "nord",
       "monokai",
       "catppuccin",
@@ -26,6 +28,8 @@ describe("theme presets", () => {
     expect(isTheme("system")).toBeTrue();
     expect(isTheme("light")).toBeTrue();
     expect(isTheme("dark")).toBeTrue();
+    expect(isTheme("github-light")).toBeTrue();
+    expect(isTheme("github-dark")).toBeTrue();
     expect(isTheme("nord")).toBeTrue();
     expect(isTheme("monokai")).toBeTrue();
     expect(isTheme("catppuccin")).toBeTrue();
@@ -43,6 +47,8 @@ describe("theme presets", () => {
   test("derives appearance from resolved theme", () => {
     expect(themeAppearance("light")).toBe("light");
     expect(themeAppearance("dark")).toBe("dark");
+    expect(themeAppearance("github-light")).toBe("light");
+    expect(themeAppearance("github-dark")).toBe("dark");
     expect(themeAppearance("nord")).toBe("dark");
     expect(themeAppearance("monokai")).toBe("dark");
     expect(themeAppearance("catppuccin")).toBe("dark");
@@ -53,6 +59,8 @@ describe("theme presets", () => {
   test("maps themes to shiki theme names", () => {
     expect(diffTheme("light")).toBe(LIFECYCLE_LIGHT_DIFF_THEME);
     expect(diffTheme("dark")).toBe(LIFECYCLE_DARK_DIFF_THEME);
+    expect(diffTheme("github-light")).toBe("github-light-default");
+    expect(diffTheme("github-dark")).toBe("github-dark-default");
     expect(diffTheme("nord")).toBe("nord");
     expect(diffTheme("monokai")).toBe("monokai");
     expect(diffTheme("catppuccin")).toBe("catppuccin-mocha");

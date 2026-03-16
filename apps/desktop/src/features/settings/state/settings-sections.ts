@@ -2,6 +2,7 @@ export const settingsSections = [
   { slug: "account", label: "Account" },
   { slug: "appearance", label: "Appearance" },
   { slug: "notifications", label: "Notifications" },
+  { slug: "harnesses", label: "Harnesses" },
   { slug: "workspace", label: "Workspace" },
   { slug: "worktrees", label: "Worktrees" },
 ] as const;

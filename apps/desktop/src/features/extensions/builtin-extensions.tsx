@@ -4,7 +4,7 @@ import type {
   ServiceRecord,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
-import { GitBranch, History, Logs, Server } from "lucide-react";
+import { GitBranch, GitPullRequest, History, Server } from "lucide-react";
 import type {
   ExtensionBadge,
   ExtensionSlot,
@@ -12,10 +12,10 @@ import type {
   WorkspaceExtensionLaunchActions,
 } from "./extension-bar-types";
 import { EnvironmentPanel } from "../workspaces/components/environment-panel";
-import { LogsTab } from "../workspaces/components/logs-tab";
 import type { EnvironmentTaskState, SetupStepState } from "../workspaces/hooks";
 import { GitChangesPanel } from "../git/components/git-changes-panel";
 import { GitHistoryPanel } from "../git/components/git-history-panel";
+import { GitPullRequestsPanel } from "../git/components/git-pull-requests-panel";
 
 export function getGitExtensionBadge(
   gitStatus: GitStatusResult | undefined,
@@ -58,8 +58,6 @@ interface BuiltinExtensionsOptions {
   isManifestStale: boolean;
   launchActions: WorkspaceExtensionLaunchActions;
   manifestState: "invalid" | "missing" | "valid";
-  onClearServiceLogsName: () => void;
-  onOpenServiceLogs: (serviceName: string) => void;
   onRestart: () => Promise<void>;
   onRun: () => Promise<void>;
   onStop: () => Promise<void>;
@@ -69,7 +67,6 @@ interface BuiltinExtensionsOptions {
     portOverride: number | null;
     serviceName: string;
   }) => Promise<void>;
-  selectedServiceLogsName: string | null;
   services: ServiceRecord[];
   setupSteps: SetupStepState[];
   workspace: WorkspaceRecord;
@@ -83,32 +80,15 @@ export function getBuiltinExtensionSlots({
   isManifestStale,
   launchActions,
   manifestState,
-  onClearServiceLogsName,
-  onOpenServiceLogs,
   onRestart,
   onRun,
   onStop,
   onSwitchToExtension,
   onUpdateService,
-  selectedServiceLogsName,
   services,
   setupSteps,
   workspace,
 }: BuiltinExtensionsOptions): ExtensionSlot[] {
-  const declaredSetupStepNames = (config?.workspace.setup ?? []).map((step) => step.name);
-  const serviceRuntimeByName = Object.fromEntries(
-    Object.entries(config?.environment ?? {})
-      .filter(
-        (
-          entry,
-        ): entry is [
-          string,
-          Extract<LifecycleConfig["environment"][string], { kind: "service" }>,
-        ] => entry[1].kind === "service",
-      )
-      .map(([name, node]) => [name, node.runtime]),
-  );
-
   return [
     {
       badge: getGitExtensionBadge(gitStatus),
@@ -143,6 +123,19 @@ export function getBuiltinExtensionSlots({
       ),
     },
     {
+      icon: GitPullRequest,
+      id: "pull-requests",
+      label: "Pull Requests",
+      panel: (
+        <GitPullRequestsPanel
+          onOpenPullRequest={launchActions.openPullRequest}
+          workspaceId={workspace.id}
+          workspaceMode={workspace.mode}
+          worktreePath={workspace.worktree_path}
+        />
+      ),
+    },
+    {
       badge: getEnvironmentExtensionBadge({ services, workspace }),
       icon: Server,
       id: "environment",
@@ -154,7 +147,6 @@ export function getBuiltinExtensionSlots({
           hasManifest={hasManifest}
           isManifestStale={isManifestStale}
           manifestState={manifestState}
-          onOpenServiceLogs={onOpenServiceLogs}
           onRestart={onRestart}
           onRun={onRun}
           onStop={onStop}
@@ -163,28 +155,6 @@ export function getBuiltinExtensionSlots({
           setupSteps={setupSteps}
           workspace={workspace}
         />
-      ),
-    },
-    {
-      icon: Logs,
-      id: "logs",
-      label: "Logs",
-      panel: (
-        <section className="flex h-full min-h-0 flex-col">
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2.5 py-3">
-            <LogsTab
-              config={config}
-              declaredStepNames={declaredSetupStepNames}
-              environmentTasks={environmentTasks}
-              onClearSelectedService={onClearServiceLogsName}
-              selectedServiceName={selectedServiceLogsName}
-              serviceRuntimeByName={serviceRuntimeByName}
-              services={services}
-              setupSteps={setupSteps}
-              workspace={workspace}
-            />
-          </div>
-        </section>
       ),
     },
   ];

@@ -26,6 +26,7 @@ import {
   readPersistedPanelValue,
   writePersistedPanelValue,
 } from "../../../lib/panel-layout";
+import { OVERLAY_BOUNDARY_ATTRIBUTE } from "../../../lib/overlay-boundary";
 import { ExtensionBar } from "../../extensions/extension-bar";
 import {
   readPersistedActiveExtensionId,
@@ -43,6 +44,7 @@ import { WorkspaceRouteDialogHost } from "./workspace-route-dialog-host";
 import {
   createCommitDiffOpenInput,
   createFileViewerOpenInput,
+  createPullRequestOpenInput,
 } from "./workspace-canvas-requests";
 import {
   syncWorkspaceManifest,
@@ -64,7 +66,6 @@ interface WorkspaceLayoutProps {
   workspaceSnapshot: WorkspaceSnapshotResult | null;
   manifestStatus: ManifestStatus | null;
   onCloseWorkspaceTab?: () => void;
-  onOpenPullRequest?: (pullRequest: GitPullRequestSummary) => void;
   onRouteDialogChange?: (dialog: WorkspaceRouteDialogState) => void;
   routeDialog?: WorkspaceRouteDialogState;
 }
@@ -74,7 +75,6 @@ export function WorkspaceLayout({
   workspaceSnapshot,
   manifestStatus,
   onCloseWorkspaceTab,
-  onOpenPullRequest,
   onRouteDialogChange,
   routeDialog = null,
 }: WorkspaceLayoutProps) {
@@ -90,7 +90,6 @@ export function WorkspaceLayout({
     readPersistedActiveExtensionId(workspace.id),
   );
   const [activePanelResize, setActivePanelResize] = useState(false);
-  const [selectedServiceLogsName, setSelectedServiceLogsName] = useState<string | null>(null);
   const { clearDocumentRequest, openDocument, requestsByWorkspaceId } = useWorkspaceOpenRequests();
   const openDocumentRequest = requestsByWorkspaceId[workspace.id] ?? null;
   const hasManifest = manifestStatus?.state === "valid";
@@ -214,17 +213,14 @@ export function WorkspaceLayout({
         openDocument(workspace.id, createFileViewerOpenInput(filePath));
       },
       openPullRequest: (pullRequest: GitPullRequestSummary) => {
-        if (onOpenPullRequest) {
-          onOpenPullRequest(pullRequest);
-          return;
-        }
-
-        if (!supportsTerminalInteraction) {
+        if (supportsTerminalInteraction) {
+          openDocument(workspace.id, createPullRequestOpenInput(pullRequest));
+        } else {
           openUrl(pullRequest.url);
         }
       },
     }),
-    [onOpenPullRequest, onRouteDialogChange, openDocument, supportsTerminalInteraction, workspace.id],
+    [onRouteDialogChange, openDocument, supportsTerminalInteraction, workspace.id],
   );
 
   useEffect(() => {
@@ -248,7 +244,6 @@ export function WorkspaceLayout({
 
   useEffect(() => {
     setActiveExtensionId(readPersistedActiveExtensionId(workspace.id));
-    setSelectedServiceLogsName(null);
   }, [workspace.id]);
 
   useEffect(() => {
@@ -380,17 +375,11 @@ export function WorkspaceLayout({
         isManifestStale,
         launchActions,
         manifestState,
-        onClearServiceLogsName: () => setSelectedServiceLogsName(null),
-        onOpenServiceLogs: (serviceName) => {
-          setSelectedServiceLogsName(serviceName);
-          setActiveExtensionId("logs");
-        },
         onRestart: handleRestart,
         onRun: handleRun,
         onStop: handleStop,
         onSwitchToExtension: (id) => setActiveExtensionId(id),
         onUpdateService: handleUpdateService,
-        selectedServiceLogsName,
         services,
         setupSteps,
         workspace,
@@ -407,7 +396,6 @@ export function WorkspaceLayout({
       isManifestStale,
       launchActions,
       manifestState,
-      selectedServiceLogsName,
       services,
       setupSteps,
       workspace,
@@ -441,6 +429,7 @@ export function WorkspaceLayout({
       <div className="flex min-h-0 flex-1 flex-col">
         <WorkspaceCanvas
           key={workspace.id}
+          nativeTerminalsSuppressed={routeDialog !== null}
           openDocumentRequest={openDocumentRequest}
           onCloseWorkspaceTab={onCloseWorkspaceTab}
           onOpenDocumentRequestHandled={(requestId) =>
@@ -465,7 +454,8 @@ export function WorkspaceLayout({
   return (
     <div
       ref={workspaceLayoutRef}
-      className="flex min-h-0 flex-1 overflow-hidden"
+      className="relative flex min-h-0 flex-1 overflow-hidden"
+      {...{ [OVERLAY_BOUNDARY_ATTRIBUTE]: "" }}
       data-slot="workspace-layout"
     >
       <div
@@ -473,12 +463,6 @@ export function WorkspaceLayout({
         data-slot="workspace-canvas"
       >
         {canvasContent}
-        <WorkspaceRouteDialogHost
-          dialog={routeDialog}
-          onDialogChange={(dialog) => onRouteDialogChange?.(dialog)}
-          onOpenFile={launchActions.openFileViewer}
-          workspaceId={workspace.id}
-        />
       </div>
       {!panelCollapsed && activeExtensionSlot && (
         <div
@@ -504,6 +488,12 @@ export function WorkspaceLayout({
         activeExtensionId={activeExtensionId}
         onToggleExtension={handleToggleExtension}
         slots={extensionSlots}
+      />
+      <WorkspaceRouteDialogHost
+        dialog={routeDialog}
+        onDialogChange={(dialog) => onRouteDialogChange?.(dialog)}
+        onOpenFile={launchActions.openFileViewer}
+        workspaceId={workspace.id}
       />
     </div>
   );

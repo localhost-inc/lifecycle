@@ -1,5 +1,5 @@
 import { isTauri } from "@tauri-apps/api/core";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Button,
   Popover,
@@ -12,13 +12,10 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-  useTheme,
 } from "@lifecycle/ui";
 import { ChevronDown, GitFork, Trash2 } from "lucide-react";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { isMacPlatform } from "../../../app/app-hotkeys";
-import type { HostedOverlayAction } from "../../overlays/overlay-contract";
-import { useHostedOverlay } from "../../overlays/use-hosted-overlay";
 import {
   listWorkspaceOpenInApps,
   openWorkspaceInApp,
@@ -62,7 +59,6 @@ function describeOpenInError(error: unknown): string {
 }
 
 export function WorkspaceActions({ workspace, onDestroy, onFork }: WorkspaceActionsProps) {
-  const { resolvedTheme } = useTheme();
   const [baseAvailableTargets] = useState(() => listAvailableOpenInTargets(isMacPlatform()));
   const [availableTargets, setAvailableTargets] =
     useState<readonly OpenInTarget[]>(baseAvailableTargets);
@@ -71,7 +67,6 @@ export function WorkspaceActions({ workspace, onDestroy, onFork }: WorkspaceActi
   const [destroying, setDestroying] = useState(false);
   const [launchingTarget, setLaunchingTarget] = useState<OpenInAppId | null>(null);
   const [launchError, setLaunchError] = useState<string | null>(null);
-  const menuTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const defaultTarget = resolveDefaultOpenTarget(availableTargets);
   const interactionLocked = launchingTarget !== null || destroying;
@@ -167,52 +162,6 @@ export function WorkspaceActions({ workspace, onDestroy, onFork }: WorkspaceActi
     }
   }
 
-  const hostedOverlayPayload = useMemo(
-    () => ({
-      availableTargets,
-      autoFocusTargetId: openInKeyboardMode ? defaultTarget.id : null,
-      kind: "workspace-open-in" as const,
-      launchError,
-      launchingTarget,
-      placement: {
-        align: "end" as const,
-        estimatedHeight: 352,
-        gutter: 16,
-        preferredWidth: 248,
-        side: "bottom" as const,
-        sideOffset: 8,
-      },
-      resolvedTheme,
-      requiresWindowFocus: openInKeyboardMode,
-    }),
-    [
-      availableTargets,
-      defaultTarget.id,
-      launchError,
-      launchingTarget,
-      openInKeyboardMode,
-      resolvedTheme,
-    ],
-  );
-
-  const hostedOpenIn = useHostedOverlay({
-    anchorRef: menuTriggerRef,
-    onAction: (action: HostedOverlayAction) => {
-      if (action.kind !== "workspace-open-in" || action.action !== "open-in") {
-        return;
-      }
-
-      void handleOpenIn(action.appId);
-    },
-    onRequestClose: () => {
-      setOpenInOpen(false);
-    },
-    open: openInOpen,
-    payload: hostedOverlayPayload,
-  });
-
-  const usesHostedOpenInMenu = hostedOpenIn.hosted;
-
   function handleOpenInKeyboardIntent(key: string): boolean {
     if (key !== "Enter" && key !== " " && key !== "ArrowDown" && key !== "ArrowUp") {
       return false;
@@ -239,71 +188,42 @@ export function WorkspaceActions({ workspace, onDestroy, onFork }: WorkspaceActi
         >
           Open
         </SplitButtonPrimary>
+        <Popover open={openInOpen} onOpenChange={setOpenInOpen}>
+          <PopoverTrigger asChild>
+            <SplitButtonSecondary
+              aria-label="Choose app"
+              disabled={interactionLocked}
+              onKeyDown={(event) => {
+                const shouldOpen = handleOpenInKeyboardIntent(event.key);
+                if (!shouldOpen) {
+                  return;
+                }
 
-        {usesHostedOpenInMenu ? (
-          <SplitButtonSecondary
-            aria-label="Choose app"
-            disabled={interactionLocked}
-            onKeyDown={(event) => {
-              const shouldOpen = handleOpenInKeyboardIntent(event.key);
-              if (!shouldOpen) {
-                return;
-              }
-
-              event.preventDefault();
-              setLaunchError(null);
-              setOpenInOpen(true);
-            }}
-            onPointerDown={() => {
-              setOpenInKeyboardMode(false);
-            }}
-            onClick={() => {
-              setLaunchError(null);
-              setOpenInOpen((current) => !current);
-            }}
-            ref={menuTriggerRef}
-          >
-            <ChevronDown className="size-3.5" strokeWidth={2.4} />
-          </SplitButtonSecondary>
-        ) : (
-          <Popover open={openInOpen} onOpenChange={setOpenInOpen}>
-            <PopoverTrigger asChild>
-              <SplitButtonSecondary
-                aria-label="Choose app"
-                disabled={interactionLocked}
-                onKeyDown={(event) => {
-                  const shouldOpen = handleOpenInKeyboardIntent(event.key);
-                  if (!shouldOpen) {
-                    return;
-                  }
-
-                  event.preventDefault();
-                  setOpenInOpen(true);
-                }}
-                onPointerDown={() => {
-                  setOpenInKeyboardMode(false);
-                }}
-                ref={menuTriggerRef}
-              >
-                <ChevronDown className="size-3.5" strokeWidth={2.4} />
-              </SplitButtonSecondary>
-            </PopoverTrigger>
-            <PopoverContent
-              align="end"
-              className="w-[18rem] rounded-[22px] border-[var(--border)] bg-[var(--card)] p-3 shadow-[0_20px_64px_rgba(0,0,0,0.18)]"
-              side="bottom"
-              sideOffset={8}
+                event.preventDefault();
+                setOpenInOpen(true);
+              }}
+              onPointerDown={() => {
+                setOpenInKeyboardMode(false);
+              }}
             >
-              <WorkspaceOpenInMenu
-                availableTargets={availableTargets}
-                autoFocusTargetId={openInKeyboardMode ? defaultTarget.id : null}
-                launchError={launchError}
-                launchingTarget={launchingTarget}
-                onOpenIn={(appId) => void handleOpenIn(appId)}
-              />
-            </PopoverContent>
-          </Popover>
-        )}
+              <ChevronDown className="size-3.5" strokeWidth={2.4} />
+            </SplitButtonSecondary>
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            className="w-[18rem] rounded-[22px] border-[var(--border)] bg-[var(--card)] p-3 shadow-[0_20px_64px_rgba(0,0,0,0.18)]"
+            side="bottom"
+            sideOffset={8}
+          >
+            <WorkspaceOpenInMenu
+              availableTargets={availableTargets}
+              autoFocusTargetId={openInKeyboardMode ? defaultTarget.id : null}
+              launchError={launchError}
+              launchingTarget={launchingTarget}
+              onOpenIn={(appId) => void handleOpenIn(appId)}
+            />
+          </PopoverContent>
+        </Popover>
       </SplitButton>
       {onFork && (
         <Tooltip>

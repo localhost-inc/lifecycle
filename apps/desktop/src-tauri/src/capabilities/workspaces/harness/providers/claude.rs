@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::capabilities::workspaces::harness::launch_config::{HarnessLaunchConfig, HarnessPreset};
 use crate::capabilities::workspaces::harness::parsing::{
     build_harness_event_key, extract_text_from_message_content, json_string_at_path,
     normalize_prompt_text,
@@ -8,6 +10,68 @@ use crate::capabilities::workspaces::harness::types::{
     HarnessAdapter, HarnessPromptSubmission, HarnessTurnCompletion, SessionStoreConfig,
     SessionStoreScope,
 };
+use crate::shared::errors::LifecycleError;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) enum ClaudePermissionMode {
+    #[serde(rename = "acceptEdits")]
+    AcceptEdits,
+    #[serde(rename = "auto")]
+    Auto,
+    #[serde(rename = "bypassPermissions")]
+    BypassPermissions,
+    #[serde(rename = "default")]
+    Default,
+    #[serde(rename = "dontAsk")]
+    DontAsk,
+    #[serde(rename = "plan")]
+    Plan,
+}
+
+impl ClaudePermissionMode {
+    pub(crate) fn as_str(&self) -> &'static str {
+        match self {
+            Self::AcceptEdits => "acceptEdits",
+            Self::Auto => "auto",
+            Self::BypassPermissions => "bypassPermissions",
+            Self::Default => "default",
+            Self::DontAsk => "dontAsk",
+            Self::Plan => "plan",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ClaudeLaunchConfig {
+    pub(crate) preset: HarnessPreset,
+    pub(crate) permission_mode: ClaudePermissionMode,
+    pub(crate) dangerous_skip_permissions: bool,
+}
+
+impl ClaudeLaunchConfig {
+    fn cli_args(&self) -> Vec<String> {
+        if self.dangerous_skip_permissions {
+            return vec!["--dangerously-skip-permissions".to_string()];
+        }
+
+        vec![
+            "--permission-mode".to_string(),
+            self.permission_mode.as_str().to_string(),
+        ]
+    }
+}
+
+fn resolve_claude_launch_config(
+    launch_config: &HarnessLaunchConfig,
+) -> Result<&ClaudeLaunchConfig, LifecycleError> {
+    match launch_config {
+        HarnessLaunchConfig::Claude { config } => Ok(config),
+        HarnessLaunchConfig::Codex { .. } => Err(LifecycleError::AttachFailed(
+            "received a Codex launch config for a Claude harness".to_string(),
+        )),
+    }
+}
 
 pub(super) const ADAPTER: HarnessAdapter = HarnessAdapter {
     name: "claude",
@@ -30,15 +94,32 @@ pub(super) const ADAPTER: HarnessAdapter = HarnessAdapter {
     parse_turn_completion,
 };
 
-fn claude_new_session_args(session_id: Option<&str>) -> Vec<String> {
-    match session_id {
+fn claude_new_session_args(
+    session_id: Option<&str>,
+    launch_config: Option<&HarnessLaunchConfig>,
+) -> Result<Vec<String>, LifecycleError> {
+    let mut args = match session_id {
         Some(session_id) => vec!["--session-id".to_string(), session_id.to_string()],
         None => Vec::new(),
+    };
+
+    if let Some(launch_config) = launch_config {
+        args.extend(resolve_claude_launch_config(launch_config)?.cli_args());
     }
+
+    Ok(args)
 }
 
-fn claude_resume_args(session_id: &str) -> Vec<String> {
-    vec!["--resume".to_string(), session_id.to_string()]
+fn claude_resume_args(
+    session_id: &str,
+    launch_config: Option<&HarnessLaunchConfig>,
+) -> Result<Vec<String>, LifecycleError> {
+    let mut args = vec!["--resume".to_string(), session_id.to_string()];
+    if let Some(launch_config) = launch_config {
+        args.extend(resolve_claude_launch_config(launch_config)?.cli_args());
+    }
+
+    Ok(args)
 }
 
 fn parse_prompt_submission(value: &Value, line: &str) -> Option<HarnessPromptSubmission> {

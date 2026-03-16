@@ -4,18 +4,14 @@ import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import {
   IconButton,
   SidebarFooter,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
   Spinner,
 } from "@lifecycle/ui";
 import {
   ChevronDown,
   CircleUserRound,
-  Megaphone,
+  PanelLeft,
   PanelLeftClose,
   Plus,
-  Settings,
 } from "lucide-react";
 import { type MouseEvent, useCallback, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
@@ -25,9 +21,6 @@ import {
   resolveProjectNavigationTarget,
 } from "../../features/projects/state/project-content-tabs";
 import { ResponseReadyDot } from "../response-ready-dot";
-import { Wordmark } from "../wordmark";
-import { openUrl } from "@tauri-apps/plugin-opener";
-import { bugs, version } from "../../../package.json";
 import type { AuthSession } from "../../features/auth/auth-session";
 
 const COLLAPSED_WIDTH = 48;
@@ -188,20 +181,30 @@ export function AppSidebar({
         <div className="h-10 w-full shrink-0" />
 
         <div className="flex min-h-0 w-full flex-1 flex-col items-center">
-          {/* Avatar */}
-          <div className="flex shrink-0 items-center justify-center pt-1 pb-3">
+          {/* Sidebar actions */}
+          <div className="flex shrink-0 flex-col items-center gap-1 py-1">
             <button
-              aria-label={activeContextName}
-              onClick={onOpenSettings}
-              title={activeContextName}
+              aria-label="Expand sidebar"
+              className="flex size-8 items-center justify-center rounded-lg text-[var(--sidebar-muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"
+              onClick={onToggleCollapse}
+              title="Expand sidebar"
               type="button"
             >
-              <AuthSessionAvatar loading={authSessionLoading} session={authSession} size={24} />
+              <PanelLeft size={16} strokeWidth={2} />
+            </button>
+            <button
+              aria-label="Add project"
+              className="flex size-8 items-center justify-center rounded-lg text-[var(--sidebar-muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"
+              onClick={onAddProject}
+              title="Add project"
+              type="button"
+            >
+              <Plus size={16} strokeWidth={2} />
             </button>
           </div>
 
           {/* Project monograms */}
-          <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto">
+          <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto pt-1">
             <div className="flex flex-col gap-1">
               {projects.map((project) => {
                 const selected = project.id === projectId;
@@ -227,36 +230,18 @@ export function AppSidebar({
                   </Link>
                 );
               })}
-              <button
-                aria-label="Add project"
-                className="flex size-8 items-center justify-center rounded-lg text-[var(--sidebar-muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"
-                onClick={onAddProject}
-                type="button"
-              >
-                <Plus size={16} strokeWidth={2} />
-              </button>
             </div>
           </div>
 
-          {/* Footer icons */}
-          <div className="flex flex-col items-center gap-1 pb-2 pt-1">
+          {/* Avatar at bottom */}
+          <div className="flex shrink-0 items-center justify-center pt-1 pb-2">
             <button
-              aria-label="Feedback"
-              className="flex size-8 items-center justify-center rounded-lg text-[var(--sidebar-muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"
-              onClick={() => openUrl(bugs.url)}
-              title="Feedback"
-              type="button"
-            >
-              <Megaphone size={16} strokeWidth={2} />
-            </button>
-            <button
-              aria-label="Settings"
-              className="flex size-8 items-center justify-center rounded-lg text-[var(--sidebar-muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"
+              aria-label={activeContextName}
               onClick={onOpenSettings}
-              title="Settings"
+              title={activeContextName}
               type="button"
             >
-              <Settings size={16} strokeWidth={2} />
+              <AuthSessionAvatar loading={authSessionLoading} session={authSession} size={24} />
             </button>
           </div>
         </div>
@@ -285,26 +270,6 @@ export function AppSidebar({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        {/* Context switcher */}
-        <div className="px-4 pb-3">
-          <button
-            aria-label={`Open ${activeContextName} context`}
-            className="flex w-full items-center gap-2 text-left"
-            data-slot="app-sidebar-context"
-            onClick={onOpenSettings}
-            type="button"
-          >
-            <AuthSessionAvatar loading={authSessionLoading} session={authSession} />
-            <span className="min-w-0 flex-1 truncate text-[15px] font-bold text-[var(--sidebar-foreground)]">
-              {activeContextName}
-            </span>
-            <ChevronDown
-              className="size-3.5 shrink-0 text-[var(--muted-foreground)]"
-              strokeWidth={2}
-            />
-          </button>
-        </div>
-
         {/* Project list */}
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex items-center justify-between px-4 pb-1">
@@ -351,33 +316,24 @@ export function AppSidebar({
           </div>
         </div>
 
+        {/* Context switcher at bottom */}
         <SidebarFooter>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                className="text-[var(--sidebar-muted-foreground)]"
-                onClick={() => openUrl(bugs.url)}
-                size="sm"
-              >
-                <Megaphone />
-                <span>Feedback</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                className="text-[var(--sidebar-muted-foreground)]"
-                onClick={onOpenSettings}
-                size="sm"
-              >
-                <Settings />
-                <span>Settings</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-          <div className="flex items-center gap-2 px-2 pb-0.5 text-[var(--muted-foreground)]">
-            <Wordmark className="h-[11px] w-auto" />
-            <span className="font-mono text-[10px]">v{version}</span>
-          </div>
+          <button
+            aria-label={`Open ${activeContextName} context`}
+            className="flex w-full items-center gap-2 px-2 py-1.5 text-left"
+            data-slot="app-sidebar-context"
+            onClick={onOpenSettings}
+            type="button"
+          >
+            <AuthSessionAvatar loading={authSessionLoading} session={authSession} />
+            <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--sidebar-foreground)]">
+              {activeContextName}
+            </span>
+            <ChevronDown
+              className="size-3.5 shrink-0 text-[var(--muted-foreground)]"
+              strokeWidth={2}
+            />
+          </button>
         </SidebarFooter>
       </div>
     </aside>

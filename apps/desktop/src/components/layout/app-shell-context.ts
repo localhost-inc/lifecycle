@@ -11,7 +11,7 @@ export interface AppShellOutletContext {
   onCreateWorkspace: (projectId: string) => Promise<void>;
   onDestroyWorkspace: (workspace: WorkspaceRecord) => Promise<void>;
   onForkWorkspace: (workspace: WorkspaceRecord) => Promise<void>;
+  onOpenSettings: () => void;
   onOpenWorkspace: (workspace: WorkspaceRecord) => void;
   onRemoveProject: (projectId: string) => Promise<void>;
-  onToggleSidebar: () => void;
 }

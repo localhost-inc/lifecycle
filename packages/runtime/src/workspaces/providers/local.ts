@@ -168,6 +168,7 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
 
   async createTerminal(input: WorkspaceProviderCreateTerminalInput): Promise<TerminalRecord> {
     return this.invoke("create_terminal", {
+      harnessLaunchConfig: input.harnessLaunchConfig ?? null,
       workspaceId: input.workspaceId,
       launchType: input.launchType,
       harnessProvider: input.harnessProvider,

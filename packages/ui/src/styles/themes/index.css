@@ -1,5 +1,7 @@
 @import "./dark.css";
 @import "./light.css";
+@import "./github-light.css";
+@import "./github-dark.css";
 @import "./nord.css";
 @import "./monokai.css";
 @import "./catppuccin.css";

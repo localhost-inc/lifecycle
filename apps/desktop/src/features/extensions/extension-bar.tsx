@@ -34,7 +34,7 @@ export function ExtensionBar({ activeExtensionId, onToggleExtension, slots }: Ex
             key={slot.id}
             aria-label={slot.label}
             className={[
-              "relative flex h-10 items-center justify-center border-b border-[var(--border)] transition-colors",
+              "relative flex h-9 items-center justify-center border-b border-[var(--border)] transition-colors",
               isActive
                 ? "bg-[var(--surface)] text-[var(--foreground)] -ml-px z-[1] pl-px"
                 : "text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]",

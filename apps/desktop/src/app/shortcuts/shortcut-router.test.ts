@@ -40,10 +40,10 @@ function createRegistration(
 }
 
 describe("shortcut router matching", () => {
-  test("reads indexed workspace tab shortcuts from the central router matcher", () => {
+  test("reads project select-index shortcuts from the central router matcher", () => {
     expect(
       readRegisteredShortcutMatch(
-        "workspace.select-tab-index",
+        "project.select-index",
         createShortcutEvent({
           code: "Digit3",
           key: "3",
@@ -52,8 +52,87 @@ describe("shortcut router matching", () => {
         true,
       ),
     ).toEqual({
-      id: "workspace.select-tab-index",
+      id: "project.select-index",
       index: 3,
+    });
+
+    expect(
+      readRegisteredShortcutMatch(
+        "project.select-index",
+        createShortcutEvent({
+          code: "Digit1",
+          ctrlKey: true,
+          key: "1",
+        }),
+        false,
+      ),
+    ).toEqual({
+      id: "project.select-index",
+      index: 1,
+    });
+  });
+
+  test("reads workspace navigation shortcuts from the central router matcher", () => {
+    expect(
+      readRegisteredShortcutMatch(
+        "workspace.previous-workspace",
+        createShortcutEvent({
+          code: "BracketLeft",
+          key: "{",
+          metaKey: true,
+          shiftKey: true,
+        }),
+        true,
+      ),
+    ).toEqual({
+      id: "workspace.previous-workspace",
+    });
+
+    expect(
+      readRegisteredShortcutMatch(
+        "workspace.next-workspace",
+        createShortcutEvent({
+          code: "BracketRight",
+          key: "}",
+          metaKey: true,
+          shiftKey: true,
+        }),
+        true,
+      ),
+    ).toEqual({
+      id: "workspace.next-workspace",
+    });
+  });
+
+  test("reads focus-pane shortcuts from the central router matcher", () => {
+    expect(
+      readRegisteredShortcutMatch(
+        "workspace.focus-pane",
+        createShortcutEvent({
+          ctrlKey: true,
+          key: "ArrowRight",
+          metaKey: true,
+        }),
+        true,
+      ),
+    ).toEqual({
+      direction: "right",
+      id: "workspace.focus-pane",
+    });
+
+    expect(
+      readRegisteredShortcutMatch(
+        "workspace.focus-pane",
+        createShortcutEvent({
+          altKey: true,
+          ctrlKey: true,
+          key: "ArrowLeft",
+        }),
+        false,
+      ),
+    ).toEqual({
+      direction: "left",
+      id: "workspace.focus-pane",
     });
   });
 

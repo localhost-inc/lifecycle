@@ -1,5 +1,7 @@
 # Same-Window Overlay Webviews - 2026-03-15
 
+> Superseded later on 2026-03-15 by [2026-03-15-hosted-overlay-retirement.md](./2026-03-15-hosted-overlay-retirement.md). The child-webview overlay host regressed app navigation and was removed in favor of route-driven workspace dialogs plus native-terminal suppression.
+
 ## Context
 
 The desktop app renders native terminal surfaces as sibling `NSView`s relative to the main Tauri webview. A separate overlay `WebviewWindow` worked around that layering boundary, but it introduced cross-window focus, viewport sync, and input behavior that was more complex than the underlying problem.

@@ -17,6 +17,9 @@ import {
 import { DEFAULT_TERMINAL_FONT_SIZE } from "../terminal-display";
 import { resolveTerminalTheme } from "../terminal-theme";
 
+// Keep the native surface slightly inset so DOM seams stay visible beside the sibling NSView.
+const NATIVE_TERMINAL_EDGE_GUTTER_PX = 3;
+
 interface NativeTerminalSurfaceProps {
   focused: boolean;
   opacity: number;
@@ -39,9 +42,6 @@ interface NativeTerminalSurfaceSyncCoordinator {
   scheduleSync: () => void;
 }
 
-// DOM splitters cannot stack above the sibling native NSView, so keep the
-// embedded surface slightly inset from the shell seams.
-const NATIVE_TERMINAL_EDGE_GUTTER_PX = 3;
 const nativeTerminalSurfaceLeaseRegistry = createNativeTerminalSurfaceLeaseRegistry();
 
 export function shouldShowNativeTerminalSurface({

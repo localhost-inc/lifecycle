@@ -10,9 +10,7 @@ use tauri::{AppHandle, Manager, State, WebviewWindow};
 use super::super::query::TerminalRecord;
 use super::super::rename::TitleOrigin;
 use super::events::{emit_terminal_created, emit_terminal_status};
-use super::harness_binding::{
-    prepare_harness_terminal, resolve_harness_launch_environment,
-};
+use super::harness_binding::{prepare_harness_terminal, resolve_harness_launch_environment};
 use super::harness_observer::maybe_schedule_harness_observers;
 use super::launch::{
     native_terminal_command, resolve_terminal_launch, resolve_terminal_working_directory,
@@ -22,11 +20,13 @@ use super::native_surface::{
     parse_native_terminal_color_scheme, write_native_terminal_theme_override,
 };
 use super::persistence::{
-    insert_terminal_record, load_terminal_record, load_workspace_runtime, next_terminal_label,
-    update_terminal_state, workspace_has_interactive_terminal_context,
+    insert_terminal_record, load_terminal_harness_launch_config, load_terminal_record,
+    load_workspace_runtime, next_terminal_label, update_terminal_state,
+    workspace_has_interactive_terminal_context,
 };
 use super::types::{NativeTerminalSurfaceFrameSyncInput, NativeTerminalSurfaceSyncInput};
 use crate::capabilities::workspaces::controller::ManagedWorkspaceController;
+use crate::capabilities::workspaces::harness::HarnessLaunchConfig;
 
 fn terminal_status(record: &TerminalRecord) -> Result<TerminalStatus, LifecycleError> {
     TerminalStatus::from_str(&record.status)
@@ -63,6 +63,7 @@ pub(crate) async fn create_terminal(
     launch_type: String,
     harness_provider: Option<String>,
     harness_session_id: Option<String>,
+    harness_launch_config: Option<HarnessLaunchConfig>,
 ) -> Result<TerminalRecord, LifecycleError> {
     let db = db_path.0.clone();
     let workspace_controllers = app.state::<WorkspaceControllerRegistryHandle>();
@@ -90,6 +91,7 @@ pub(crate) async fn create_terminal(
         harness_provider.as_deref(),
         prepared_harness_terminal.harness_session_id.as_deref(),
         prepared_harness_terminal.harness_launch_mode,
+        harness_launch_config.as_ref(),
     )?;
 
     if !native_terminal::is_available() {
@@ -106,6 +108,7 @@ pub(crate) async fn create_terminal(
         harness_provider.as_deref(),
         prepared_harness_terminal.harness_session_id.as_deref(),
         prepared_harness_terminal.harness_launch_mode,
+        harness_launch_config.as_ref(),
         &label,
         TitleOrigin::Default,
         TerminalStatus::Detached,
@@ -143,11 +146,13 @@ pub(crate) async fn sync_native_terminal_surface(
     let _mutation_guard = controller.acquire_mutation_guard().await?;
     let launch_type = TerminalType::from_str(&terminal.launch_type)?;
     let harness_launch_mode = HarnessLaunchMode::from_str(&terminal.harness_launch_mode)?;
+    let harness_launch_config = load_terminal_harness_launch_config(&db, &terminal.id)?;
     let launch = resolve_terminal_launch(
         &launch_type,
         terminal.harness_provider.as_deref(),
         terminal.harness_session_id.as_deref(),
         harness_launch_mode,
+        harness_launch_config.as_ref(),
     )?;
     let launch_environment = resolve_harness_launch_environment(&window.app_handle(), &terminal)?;
     let theme_override_path =
@@ -180,12 +185,7 @@ pub(crate) async fn sync_native_terminal_surface(
             working_directory: &working_directory,
         },
     )?;
-    maybe_schedule_harness_observers(
-        window.app_handle(),
-        &db,
-        &terminal,
-        &working_directory,
-    );
+    maybe_schedule_harness_observers(window.app_handle(), &db, &terminal, &working_directory);
 
     let target_status = if input.visible {
         TerminalStatus::Active
@@ -315,11 +315,13 @@ pub(crate) fn complete_native_terminal_exit(
     }
 
     let launch_type = TerminalType::from_str(&terminal.launch_type)?;
+    let harness_launch_config = load_terminal_harness_launch_config(db_path, terminal_id)?;
     let launch = resolve_terminal_launch(
         &launch_type,
         terminal.harness_provider.as_deref(),
         terminal.harness_session_id.as_deref(),
         HarnessLaunchMode::from_str(&terminal.harness_launch_mode)?,
+        harness_launch_config.as_ref(),
     )?;
     let (status, failure_reason) = if exit_code == 0 {
         (TerminalStatus::Finished, None)

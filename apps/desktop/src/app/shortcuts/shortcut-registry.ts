@@ -3,19 +3,20 @@ export type RegisteredShortcutId =
   | "app.open-file-picker"
   | "app.open-settings"
   | "file.save"
-  | "overlay.close"
   | "project.go-back"
   | "project.go-forward"
+  | "project.select-index"
   | "workspace.close-active-tab"
+  | "workspace.focus-pane"
   | "workspace.new-tab"
   | "workspace.next-tab"
+  | "workspace.next-workspace"
   | "workspace.previous-tab"
-  | "workspace.select-tab-index";
+  | "workspace.previous-workspace";
 
 export type RegisteredShortcutScope =
   | "app"
   | "file-surface"
-  | "overlay-host"
   | "project-route"
   | "workspace-canvas";
 
@@ -81,25 +82,46 @@ export const REGISTERED_SHORTCUTS: readonly RegisteredShortcut[] = [
     windowsLinux: "Ctrl+W",
   },
   {
-    description: "Select the previous workspace tab",
-    id: "workspace.previous-tab",
+    description: "Select project by sidebar index",
+    id: "project.select-index",
+    mac: "Cmd+1..9",
+    scope: "app",
+    windowsLinux: "Ctrl+1..9",
+  },
+  {
+    description: "Switch to the previous workspace",
+    id: "workspace.previous-workspace",
     mac: "Cmd+Shift+[",
+    scope: "project-route",
+    windowsLinux: "Ctrl+Shift+[",
+  },
+  {
+    description: "Switch to the next workspace",
+    id: "workspace.next-workspace",
+    mac: "Cmd+Shift+]",
+    scope: "project-route",
+    windowsLinux: "Ctrl+Shift+]",
+  },
+  {
+    description: "Select the previous pane tab",
+    id: "workspace.previous-tab",
+    mac: "Ctrl+Shift+Tab",
     scope: "workspace-canvas",
     windowsLinux: "Ctrl+Shift+Tab",
   },
   {
-    description: "Select the next workspace tab",
+    description: "Select the next pane tab",
     id: "workspace.next-tab",
-    mac: "Cmd+Shift+]",
+    mac: "Ctrl+Tab",
     scope: "workspace-canvas",
     windowsLinux: "Ctrl+Tab",
   },
   {
-    description: "Select workspace tab by visible index",
-    id: "workspace.select-tab-index",
-    mac: "Cmd+1..9",
+    description: "Move focus to an adjacent pane",
+    id: "workspace.focus-pane",
+    mac: "Cmd+Ctrl+Arrows",
     scope: "workspace-canvas",
-    windowsLinux: "Ctrl+1..9",
+    windowsLinux: "Ctrl+Alt+Arrows",
   },
   {
     description: "Save the current file",
@@ -107,13 +129,6 @@ export const REGISTERED_SHORTCUTS: readonly RegisteredShortcut[] = [
     mac: "Cmd+S",
     scope: "file-surface",
     windowsLinux: "Ctrl+S",
-  },
-  {
-    description: "Close the hosted overlay",
-    id: "overlay.close",
-    mac: "Escape",
-    scope: "overlay-host",
-    windowsLinux: "Escape",
   },
 ] as const;
 

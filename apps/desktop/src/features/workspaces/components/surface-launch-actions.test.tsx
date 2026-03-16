@@ -5,7 +5,6 @@ import { ThemeProvider } from "@lifecycle/ui";
 import {
   ClaudeIcon,
   CodexIcon,
-  resolveSurfaceLaunchTooltipAlign,
   ShellIcon,
   SurfaceLaunchActions,
   type SurfaceLaunchAction,
@@ -33,12 +32,6 @@ const actions: SurfaceLaunchAction[] = [
 ];
 
 describe("SurfaceLaunchActions", () => {
-  test("right-aligns action tooltips away from the resize rail", () => {
-    expect(resolveSurfaceLaunchTooltipAlign(0, actions.length)).toBe("end");
-    expect(resolveSurfaceLaunchTooltipAlign(1, actions.length)).toBe("end");
-    expect(resolveSurfaceLaunchTooltipAlign(2, actions.length)).toBe("end");
-  });
-
   test("renders a single trigger button with 'New tab' title", () => {
     const markup = renderToStaticMarkup(
       createElement(ThemeProvider, {
@@ -71,5 +64,24 @@ describe("SurfaceLaunchActions", () => {
     );
 
     expect(markup).toContain("lifecycle-motion-soft-pulse");
+  });
+
+  test("renders an inline action rail when opened", () => {
+    const markup = renderToStaticMarkup(
+      createElement(ThemeProvider, {
+        children: createElement(SurfaceLaunchActions, {
+          actions,
+          defaultOpen: true,
+          onLaunch: () => {},
+        }),
+        defaultPreference: { theme: "light" },
+        storageKey: "lifecycle.desktop.theme.test",
+      }),
+    );
+
+    expect(markup).toContain('aria-label="Shell"');
+    expect(markup).toContain('aria-label="Claude"');
+    expect(markup).toContain('aria-label="Codex"');
+    expect(markup).toContain('aria-label="Close new tab actions"');
   });
 });

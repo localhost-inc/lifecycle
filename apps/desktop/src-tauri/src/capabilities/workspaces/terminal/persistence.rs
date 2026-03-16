@@ -1,3 +1,4 @@
+use crate::capabilities::workspaces::harness::HarnessLaunchConfig;
 use crate::platform::db::open_db;
 use crate::shared::errors::{
     LifecycleError, TerminalFailureReason, TerminalStatus, TerminalType, WorkspaceStatus,
@@ -6,8 +7,8 @@ use rusqlite::params;
 
 use super::super::harness::default_harness_terminal_label;
 use super::super::query::TerminalRecord;
-use super::launch::HarnessLaunchMode;
 use super::super::rename::TitleOrigin;
+use super::launch::HarnessLaunchMode;
 
 pub(crate) struct WorkspaceRuntime {
     pub(crate) status: WorkspaceStatus,
@@ -45,14 +46,16 @@ pub(crate) fn insert_terminal_record(
     harness_provider: Option<&str>,
     harness_session_id: Option<&str>,
     harness_launch_mode: HarnessLaunchMode,
+    harness_launch_config: Option<&HarnessLaunchConfig>,
     label: &str,
     label_origin: TitleOrigin,
     status: TerminalStatus,
 ) -> Result<TerminalRecord, LifecycleError> {
+    let harness_launch_config = serialize_harness_launch_config(harness_launch_config)?;
     let conn = open_db(db_path)?;
     conn.execute(
-        "INSERT INTO terminal (id, workspace_id, launch_type, harness_provider, harness_session_id, harness_launch_mode, label, label_origin, status)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        "INSERT INTO terminal (id, workspace_id, launch_type, harness_provider, harness_session_id, harness_launch_mode, harness_launch_config, label, label_origin, status)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![
             terminal_id,
             workspace_id,
@@ -60,6 +63,7 @@ pub(crate) fn insert_terminal_record(
             harness_provider,
             harness_session_id,
             harness_launch_mode.as_str(),
+            harness_launch_config,
             label,
             label_origin.as_str(),
             status.as_str()
@@ -139,6 +143,30 @@ pub(crate) fn load_terminal_record(
     }
 }
 
+pub(crate) fn load_terminal_harness_launch_config(
+    db_path: &str,
+    terminal_id: &str,
+) -> Result<Option<HarnessLaunchConfig>, LifecycleError> {
+    let conn = open_db(db_path)?;
+    let config_json = conn
+        .query_row(
+            "SELECT harness_launch_config
+             FROM terminal
+             WHERE id = ?1
+             LIMIT 1",
+            params![terminal_id],
+            |row| row.get::<_, Option<String>>(0),
+        )
+        .map_err(|error| match error {
+            rusqlite::Error::QueryReturnedNoRows => {
+                LifecycleError::WorkspaceNotFound(terminal_id.to_string())
+            }
+            _ => LifecycleError::Database(error.to_string()),
+        })?;
+
+    deserialize_harness_launch_config(config_json.as_deref())
+}
+
 pub(crate) fn workspace_has_interactive_terminal_context(workspace: &WorkspaceRuntime) -> bool {
     let _ = workspace.status;
     !workspace.worktree_path.is_empty() || !workspace.project_path.is_empty()
@@ -185,7 +213,11 @@ pub(crate) fn update_terminal_harness_session_capture(
              harness_launch_mode = ?2
          WHERE id = ?3
            AND (harness_session_id IS NULL OR harness_session_id = '')",
-        params![harness_session_id, HarnessLaunchMode::Resume.as_str(), terminal_id],
+        params![
+            harness_session_id,
+            HarnessLaunchMode::Resume.as_str(),
+            terminal_id
+        ],
     )?;
 
     load_terminal_record(db_path, terminal_id)?
@@ -209,11 +241,76 @@ pub(crate) fn update_terminal_harness_launch_mode(
         .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()))
 }
 
+fn serialize_harness_launch_config(
+    config: Option<&HarnessLaunchConfig>,
+) -> Result<Option<String>, LifecycleError> {
+    config
+        .map(|config| {
+            serde_json::to_string(config)
+                .map_err(|error| LifecycleError::Database(error.to_string()))
+        })
+        .transpose()
+}
+
+fn deserialize_harness_launch_config(
+    config_json: Option<&str>,
+) -> Result<Option<HarnessLaunchConfig>, LifecycleError> {
+    config_json
+        .map(|config_json| {
+            serde_json::from_str(config_json)
+                .map_err(|error| LifecycleError::Database(error.to_string()))
+        })
+        .transpose()
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::shared::errors::WorkspaceStatus;
+    use crate::capabilities::workspaces::harness::{
+        CodexApprovalPolicy, CodexLaunchConfig, CodexSandboxMode, HarnessLaunchConfig,
+        HarnessPreset,
+    };
+    use crate::capabilities::workspaces::rename::TitleOrigin;
+    use crate::platform::db::{open_db, run_migrations};
+    use crate::shared::errors::{TerminalStatus, TerminalType, WorkspaceStatus};
 
-    use super::{workspace_has_interactive_terminal_context, WorkspaceRuntime};
+    use super::super::launch::HarnessLaunchMode;
+    use super::{
+        insert_terminal_record, load_terminal_harness_launch_config,
+        workspace_has_interactive_terminal_context, WorkspaceRuntime,
+    };
+
+    fn temp_db_path() -> String {
+        std::env::temp_dir()
+            .join(format!(
+                "lifecycle-terminal-persistence-{}.db",
+                uuid::Uuid::new_v4()
+            ))
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    fn seed_workspace(db_path: &str, workspace_id: &str) {
+        run_migrations(db_path).expect("run migrations");
+        let conn = open_db(db_path).expect("open db");
+        conn.execute(
+            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["project_1", "/tmp/project_1", "Project 1"],
+        )
+        .expect("insert project");
+        conn.execute(
+            "INSERT INTO workspace (id, project_id, source_ref, worktree_path, mode, status)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![
+                workspace_id,
+                "project_1",
+                "lifecycle/test",
+                "/tmp/project_1",
+                "local",
+                "active"
+            ],
+        )
+        .expect("insert workspace");
+    }
 
     #[test]
     fn interactive_terminal_context_requires_worktree_lifecycle_to_exist() {
@@ -248,5 +345,69 @@ mod tests {
                 worktree_path: String::new(),
             }
         ));
+    }
+
+    #[test]
+    fn stores_and_loads_harness_launch_config_per_terminal_record() {
+        let db_path = temp_db_path();
+        seed_workspace(&db_path, "workspace_1");
+        let config = HarnessLaunchConfig::Codex {
+            config: CodexLaunchConfig {
+                preset: HarnessPreset::Guarded,
+                sandbox_mode: CodexSandboxMode::WorkspaceWrite,
+                approval_policy: CodexApprovalPolicy::Untrusted,
+                dangerous_bypass: false,
+            },
+        };
+
+        insert_terminal_record(
+            &db_path,
+            "terminal_1",
+            "workspace_1",
+            &TerminalType::Harness,
+            Some("codex"),
+            Some("session_1"),
+            HarnessLaunchMode::Resume,
+            Some(&config),
+            "Codex · Session 1",
+            TitleOrigin::Default,
+            TerminalStatus::Detached,
+        )
+        .expect("insert terminal");
+
+        let stored_config = load_terminal_harness_launch_config(&db_path, "terminal_1")
+            .expect("load harness launch config");
+
+        assert_eq!(stored_config, Some(config));
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn returns_none_when_terminal_record_has_no_harness_launch_config() {
+        let db_path = temp_db_path();
+        seed_workspace(&db_path, "workspace_1");
+
+        insert_terminal_record(
+            &db_path,
+            "terminal_1",
+            "workspace_1",
+            &TerminalType::Shell,
+            None,
+            None,
+            HarnessLaunchMode::New,
+            None,
+            "Terminal 1",
+            TitleOrigin::Default,
+            TerminalStatus::Detached,
+        )
+        .expect("insert terminal");
+
+        let stored_config = load_terminal_harness_launch_config(&db_path, "terminal_1")
+            .expect("load harness launch config");
+
+        assert!(stored_config.is_none());
+
+        let _ = std::fs::remove_file(db_path);
     }
 }

@@ -1,6 +1,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import type { TerminalRecord, TerminalStatus } from "@lifecycle/contracts";
 import { getWorkspaceProvider } from "../../lib/workspace-provider";
+import type { HarnessLaunchConfig } from "../settings/state/harness-settings";
 
 export type HarnessProvider = "claude" | "codex";
 const TERMINAL_RUNTIME_UNAVAILABLE_MESSAGE = "Terminal runtime requires the Tauri desktop shell.";
@@ -12,6 +13,7 @@ export function terminalHasLiveSession(status: TerminalStatus): boolean {
 export type CreateTerminalRequest =
   | { launchType: "shell" }
   | {
+      harnessLaunchConfig?: HarnessLaunchConfig | null;
       launchType: "harness";
       harnessProvider: HarnessProvider;
       harnessSessionId?: string | null;
@@ -59,12 +61,21 @@ export async function getTerminal(terminalId: string): Promise<TerminalRecord | 
 export async function createTerminal(input: CreateTerminalInput): Promise<TerminalRecord> {
   requireNativeTerminalRuntime();
 
+  if (input.launchType === "harness") {
+    return getWorkspaceProvider().createTerminal({
+      workspaceId: input.workspaceId,
+      launchType: input.launchType,
+      harnessLaunchConfig: input.harnessLaunchConfig ?? null,
+      harnessProvider: input.harnessProvider,
+      harnessSessionId: input.harnessSessionId?.trim() || null,
+    });
+  }
+
   return getWorkspaceProvider().createTerminal({
-    launchType: input.launchType,
-    harnessProvider: input.launchType === "harness" ? input.harnessProvider : null,
-    harnessSessionId:
-      input.launchType === "harness" ? input.harnessSessionId?.trim() || null : null,
     workspaceId: input.workspaceId,
+    launchType: input.launchType,
+    harnessProvider: null,
+    harnessSessionId: null,
   });
 }
 

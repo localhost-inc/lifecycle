@@ -55,9 +55,8 @@ fn terminal_launched_after(terminal: &TerminalRecord) -> SystemTime {
         .ok()
         .and_then(|value| {
             let unix_timestamp = value.unix_timestamp();
-            (unix_timestamp >= 0).then_some(
-                SystemTime::UNIX_EPOCH + Duration::from_secs(unix_timestamp as u64),
-            )
+            (unix_timestamp >= 0)
+                .then_some(SystemTime::UNIX_EPOCH + Duration::from_secs(unix_timestamp as u64))
         })
         .unwrap_or_else(SystemTime::now)
 }
@@ -345,10 +344,9 @@ fn capture_harness_session(
             return;
         }
 
-        let bound_session_store_root =
-            resolve_bound_harness_session_store_root(app, &terminal)
-                .ok()
-                .flatten();
+        let bound_session_store_root = resolve_bound_harness_session_store_root(app, &terminal)
+            .ok()
+            .flatten();
         let Some(session_id) = harness::discover_harness_session_candidates(
             provider,
             worktree_path,
@@ -357,8 +355,7 @@ fn capture_harness_session(
         )
         .into_iter()
         .next()
-        .map(|candidate| candidate.session_id)
-        else {
+        .map(|candidate| candidate.session_id) else {
             thread::sleep(HARNESS_SESSION_CAPTURE_POLL_INTERVAL);
             continue;
         };
@@ -469,7 +466,11 @@ mod tests {
 
     use super::terminal_launched_after;
 
-    fn terminal(id: &str, started_at: &str, harness_launch_mode: HarnessLaunchMode) -> TerminalRecord {
+    fn terminal(
+        id: &str,
+        started_at: &str,
+        harness_launch_mode: HarnessLaunchMode,
+    ) -> TerminalRecord {
         TerminalRecord {
             id: id.to_string(),
             workspace_id: "workspace-1".to_string(),

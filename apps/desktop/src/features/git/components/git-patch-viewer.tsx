@@ -56,36 +56,44 @@ export function GitPatchViewer({
   const diffControlsDisabled = isLoading || displayError !== null || !hasRenderableDiff;
 
   return (
-    <>
-      {isLoading && !patch ? (
-        <Loading message={loadingMessage} />
-      ) : displayError ? (
-        <Alert className="m-5" variant="destructive">
-          <AlertDescription>
-            {displayErrorPrefix}: {displayError}
-          </AlertDescription>
-        </Alert>
-      ) : !hasRenderableDiff ? (
-        <div className="flex flex-1 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
-          {emptyMessage}
-        </div>
-      ) : (
-        <Suspense fallback={<Loading message={loadingMessage} />}>
-          <GitPatchViewerBody
-            diffStyle={diffStyle}
-            initialFilePath={initialFilePath}
-            initialScrollTop={initialScrollTop}
-            onOpenFile={onOpenFile}
-            onScrollTopChange={onScrollTopChange}
-            parsedFiles={parsedFiles}
-          />
-        </Suspense>
-      )}
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col" data-slot="git-patch-viewer-content">
+        {isLoading && !patch ? (
+          <Loading className="min-h-0 h-full py-0" delay={0} message={loadingMessage} />
+        ) : displayError ? (
+          <div className="flex h-full min-h-0 items-center justify-center p-5">
+            <Alert className="w-full max-w-2xl" variant="destructive">
+              <AlertDescription>
+                {displayErrorPrefix}: {displayError}
+              </AlertDescription>
+            </Alert>
+          </div>
+        ) : !hasRenderableDiff ? (
+          <div className="flex h-full min-h-0 items-center justify-center px-8 text-sm text-[var(--muted-foreground)]">
+            {emptyMessage}
+          </div>
+        ) : (
+          <Suspense
+            fallback={
+              <Loading className="min-h-0 h-full py-0" delay={0} message={loadingMessage} />
+            }
+          >
+            <GitPatchViewerBody
+              diffStyle={diffStyle}
+              initialFilePath={initialFilePath}
+              initialScrollTop={initialScrollTop}
+              onOpenFile={onOpenFile}
+              onScrollTopChange={onScrollTopChange}
+              parsedFiles={parsedFiles}
+            />
+          </Suspense>
+        )}
+      </div>
       <DiffStyleToggle
         diffStyle={diffStyle}
         disabled={diffControlsDisabled}
         onChange={setDiffStyle}
       />
-    </>
+    </div>
   );
 }

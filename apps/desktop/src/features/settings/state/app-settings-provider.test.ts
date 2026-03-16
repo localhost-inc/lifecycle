@@ -3,6 +3,7 @@ import {
   DEFAULT_INTERFACE_FONT_FAMILY,
   DEFAULT_MONOSPACE_FONT_FAMILY,
 } from "../../../lib/typography";
+import { buildDefaultHarnessSettings } from "./harness-settings";
 
 import {
   DEFAULT_INACTIVE_PANE_OPACITY,
@@ -38,6 +39,7 @@ describe("parseStoredSettings", () => {
     expect(parseStoredSettings(null)).toEqual({
       defaultNewTabLaunch: "shell",
       dimInactivePanes: false,
+      harnesses: buildDefaultHarnessSettings(),
       interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
       inactivePaneOpacity: DEFAULT_INACTIVE_PANE_OPACITY,
       monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
@@ -52,6 +54,19 @@ describe("parseStoredSettings", () => {
       parseStoredSettings(
         JSON.stringify({
           dimInactivePanes: true,
+          harnesses: {
+            claude: {
+              dangerousSkipPermissions: true,
+              permissionMode: "bypassPermissions",
+              preset: "trusted_host",
+            },
+            codex: {
+              approvalPolicy: "never",
+              dangerousBypass: true,
+              preset: "trusted_host",
+              sandboxMode: "danger-full-access",
+            },
+          },
           inactivePaneOpacity: 0.45,
           turnNotificationSound: "signal",
           turnNotificationsMode: "always",
@@ -61,6 +76,19 @@ describe("parseStoredSettings", () => {
     ).toEqual({
       defaultNewTabLaunch: "shell",
       dimInactivePanes: true,
+      harnesses: {
+        claude: {
+          dangerousSkipPermissions: true,
+          permissionMode: "bypassPermissions",
+          preset: "trusted_host",
+        },
+        codex: {
+          approvalPolicy: "never",
+          dangerousBypass: true,
+          preset: "trusted_host",
+          sandboxMode: "danger-full-access",
+        },
+      },
       interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
       inactivePaneOpacity: 0.45,
       monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
@@ -73,6 +101,17 @@ describe("parseStoredSettings", () => {
       parseStoredSettings(
         JSON.stringify({
           dimInactivePanes: "broken",
+          harnesses: {
+            claude: {
+              dangerousSkipPermissions: "broken",
+              permissionMode: "broken",
+            },
+            codex: {
+              approvalPolicy: "broken",
+              dangerousBypass: "broken",
+              sandboxMode: "broken",
+            },
+          },
           inactivePaneOpacity: 0.62,
           turnNotificationSound: "broken",
           turnNotificationsMode: "broken",
@@ -81,6 +120,7 @@ describe("parseStoredSettings", () => {
     ).toEqual({
       defaultNewTabLaunch: "shell",
       dimInactivePanes: false,
+      harnesses: buildDefaultHarnessSettings(),
       interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
       inactivePaneOpacity: DEFAULT_INACTIVE_PANE_OPACITY,
       monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,

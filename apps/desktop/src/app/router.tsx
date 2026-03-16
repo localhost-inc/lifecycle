@@ -10,12 +10,6 @@ const HomeRoute = lazy(async () => {
     default: module.HomeRoute,
   };
 });
-const OverlayHostRoute = lazy(async () => {
-  const module = await import("../features/overlays/routes/overlay-host-route");
-  return {
-    default: module.OverlayHostRoute,
-  };
-});
 const ProjectSettingsRoute = lazy(async () => {
   const module = await import("../features/projects/routes/project-settings-route");
   return {
@@ -32,24 +26,6 @@ const ProjectOverviewSurface = lazy(async () => {
   const module = await import("../features/projects/components/project-overview-surface");
   return {
     default: module.ProjectOverviewSurface,
-  };
-});
-const ProjectPullRequestsSurface = lazy(async () => {
-  const module = await import("../features/projects/components/project-pull-requests-surface");
-  return {
-    default: module.ProjectPullRequestsSurface,
-  };
-});
-const ProjectPullRequestTabContent = lazy(async () => {
-  const module = await import("../features/projects/components/project-pull-request-tab-content");
-  return {
-    default: module.ProjectPullRequestTabContent,
-  };
-});
-const ProjectActivitySurface = lazy(async () => {
-  const module = await import("../features/projects/components/project-activity-surface");
-  return {
-    default: module.ProjectActivitySurface,
   };
 });
 const WorkspaceRoute = lazy(async () => {
@@ -79,14 +55,6 @@ function createRouter() {
       errorElement: <RouteErrorPage />,
       children: [
         {
-          path: "/overlay-host",
-          element: (
-            <LazyRoute>
-              <OverlayHostRoute />
-            </LazyRoute>
-          ),
-        },
-        {
           path: "/",
           element: <AppShellLayout />,
           children: [
@@ -111,30 +79,6 @@ function createRouter() {
                   element: (
                     <LazyRoute>
                       <ProjectOverviewSurface />
-                    </LazyRoute>
-                  ),
-                },
-                {
-                  path: "pulls",
-                  element: (
-                    <LazyRoute>
-                      <ProjectPullRequestsSurface />
-                    </LazyRoute>
-                  ),
-                },
-                {
-                  path: "pulls/:prNumber",
-                  element: (
-                    <LazyRoute>
-                      <ProjectPullRequestTabContent />
-                    </LazyRoute>
-                  ),
-                },
-                {
-                  path: "activity",
-                  element: (
-                    <LazyRoute>
-                      <ProjectActivitySurface />
                     </LazyRoute>
                   ),
                 },

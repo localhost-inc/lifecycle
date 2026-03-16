@@ -53,9 +53,9 @@ function renderProjectRoute(
     onCreateWorkspace: async () => {},
     onDestroyWorkspace: async () => {},
     onForkWorkspace: async () => {},
+    onOpenSettings: () => {},
     onOpenWorkspace: () => {},
     onRemoveProject: async () => {},
-    onToggleSidebar: () => {},
     projectCatalog: undefined,
     projects: [project],
     sidebarCollapsed: false,
@@ -146,6 +146,14 @@ describe("ProjectRoute", () => {
     const workspaceStart = markup.indexOf('data-slot="workspace-layout"');
     expect(navBarStart).toBeLessThan(forkIndex);
     expect(forkIndex).toBeLessThan(workspaceStart);
+  });
+
+  test("does not render a divider after the navigation controls", async () => {
+    const { ProjectRoute } = await import("./project-route");
+
+    const markup = renderProjectRoute(ProjectRoute);
+
+    expect(markup).not.toContain('class="flex shrink-0 items-center border-r border-[var(--border)]"');
   });
 
   test("renders response-ready indicators in the workspace nav link from shared readiness state", async () => {

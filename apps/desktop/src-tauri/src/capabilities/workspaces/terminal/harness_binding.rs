@@ -85,7 +85,9 @@ pub(crate) fn resolve_bound_harness_session_store_root(
         return Ok(None);
     }
 
-    Ok(Some(resolve_codex_home_override(app, terminal)?.join("sessions")))
+    Ok(Some(
+        resolve_codex_home_override(app, terminal)?.join("sessions"),
+    ))
 }
 
 pub(crate) fn promote_harness_session_scope(
@@ -197,10 +199,7 @@ fn map_filesystem_error(error: std::io::Error) -> LifecycleError {
     LifecycleError::AttachFailed(error.to_string())
 }
 
-fn resolve_codex_home_override_with_root(
-    root: &Path,
-    terminal: &TerminalRecord,
-) -> PathBuf {
+fn resolve_codex_home_override_with_root(root: &Path, terminal: &TerminalRecord) -> PathBuf {
     let temporary_path = root.join(CODEX_STATE_DIR).join(&terminal.id);
     if let Some(harness_session_id) = terminal.harness_session_id.as_deref() {
         let promoted_path = root.join(CODEX_STATE_DIR).join(harness_session_id);
@@ -267,8 +266,7 @@ mod tests {
         let temporary_scope = codex_scope_root(&root, "terminal-1");
         fs::create_dir_all(&temporary_scope).expect("create temporary scope");
 
-        let resolved =
-            resolve_codex_home_override_for_test(&root, &terminal);
+        let resolved = resolve_codex_home_override_for_test(&root, &terminal);
 
         assert_eq!(resolved, temporary_scope);
         let _ = fs::remove_dir_all(root);
@@ -281,8 +279,7 @@ mod tests {
         let promoted_scope = codex_scope_root(&root, "session-1");
         fs::create_dir_all(&promoted_scope).expect("create promoted scope");
 
-        let resolved =
-            resolve_codex_home_override_for_test(&root, &terminal);
+        let resolved = resolve_codex_home_override_for_test(&root, &terminal);
 
         assert_eq!(resolved, promoted_scope);
         let _ = fs::remove_dir_all(root);
@@ -294,17 +291,13 @@ mod tests {
         let terminal = terminal("terminal-1", Some("session-1"), HarnessLaunchMode::Resume);
         let promoted_scope = codex_scope_root(&root, "session-1");
 
-        let resolved =
-            resolve_codex_home_override_for_test(&root, &terminal);
+        let resolved = resolve_codex_home_override_for_test(&root, &terminal);
 
         assert_eq!(resolved, promoted_scope);
         let _ = fs::remove_dir_all(root);
     }
 
-    fn resolve_codex_home_override_for_test(
-        root: &Path,
-        terminal: &TerminalRecord,
-    ) -> PathBuf {
+    fn resolve_codex_home_override_for_test(root: &Path, terminal: &TerminalRecord) -> PathBuf {
         resolve_codex_home_override_with_root(&root.join(HARNESS_STATE_DIR), terminal)
     }
 }

@@ -38,6 +38,7 @@ import {
   playTurnNotificationSound,
   warmAudioContext,
 } from "../../notifications/lib/turn-notification-runtime";
+import { HarnessSettingsPanel } from "../components/harness-settings-panel";
 import { SettingsFieldRow, SettingsRow, SettingsSection } from "../components/settings-primitives";
 import {
   INACTIVE_PANE_OPACITY_OPTIONS,
@@ -67,10 +68,13 @@ export function SettingsShellLayout() {
   const {
     defaultNewTabLaunch,
     dimInactivePanes,
+    harnesses,
     interfaceFontFamily,
     inactivePaneOpacity,
     monospaceFontFamily,
     resetTypography,
+    setClaudeHarnessSettings,
+    setCodexHarnessSettings,
     setDefaultNewTabLaunch,
     setDimInactivePanes,
     setInactivePaneOpacity,
@@ -343,7 +347,8 @@ export function SettingsShellLayout() {
                     Settings
                   </h1>
                   <p className="mt-2 max-w-2xl text-sm text-[var(--muted-foreground)]">
-                    Account state, appearance, notifications, workspace, and worktree defaults.
+                    Account state, appearance, harness launch defaults, notifications, workspace,
+                    and worktree defaults.
                   </p>
                 </header>
 
@@ -586,6 +591,22 @@ export function SettingsShellLayout() {
                       </p>
                     </div>
                   </div>
+                </SettingsSection>
+
+                <SettingsSection
+                  description="Choose default Codex and Claude launch behavior for new harness terminals on this machine."
+                  id="harnesses"
+                  label="Harnesses"
+                  ref={(node) => {
+                    sectionRefs.current.harnesses = node;
+                  }}
+                >
+                  <HarnessSettingsPanel
+                    claude={harnesses.claude}
+                    codex={harnesses.codex}
+                    onClaudeChange={setClaudeHarnessSettings}
+                    onCodexChange={setCodexHarnessSettings}
+                  />
                 </SettingsSection>
 
                 <SettingsSection

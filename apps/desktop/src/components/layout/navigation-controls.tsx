@@ -1,18 +1,15 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { Button } from "@lifecycle/ui";
-import { PanelLeft, PanelLeftClose } from "lucide-react";
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useHistoryAvailability } from "../../app/history-stack";
 import { detectPlatformHint, shouldInsetForWindowControls } from "./window-controls";
 
 interface NavigationControlsProps {
-  onToggleSidebar: () => void;
   sidebarCollapsed: boolean;
 }
 
 export function NavigationControls({
-  onToggleSidebar,
   sidebarCollapsed,
 }: NavigationControlsProps) {
   const navigate = useNavigate();
@@ -53,19 +50,6 @@ export function NavigationControls({
         variant="ghost"
       >
         →
-      </Button>
-      <Button
-        aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        onClick={onToggleSidebar}
-        size="icon"
-        title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-        variant="ghost"
-      >
-        {sidebarCollapsed ? (
-          <PanelLeft size={14} strokeWidth={2} />
-        ) : (
-          <PanelLeftClose size={14} strokeWidth={2} />
-        )}
       </Button>
     </div>
   );

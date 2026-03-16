@@ -1,5 +1,5 @@
 import type { GitLogEntry, GitStatusResult } from "@lifecycle/contracts";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { formatRelativeTime } from "../../../lib/format";
 import { measureAsyncPerformance } from "../../../lib/performance";
 import { GithubAvatar } from "./github-avatar";
@@ -106,6 +106,7 @@ export function GitDiffSurface({
 
   useEffect(() => {
     let cancelled = false;
+    let frameId = 0;
 
     const shouldResetPatch = previousSurfaceIdentityRef.current !== surfaceIdentity;
     previousSurfaceIdentityRef.current = surfaceIdentity;
@@ -117,37 +118,37 @@ export function GitDiffSurface({
     setError(null);
     setIsLoading(true);
 
-    const patchRequest = measureAsyncPerformance(`git-diff-surface.patch:${surfaceIdentity}`, () =>
-      source.mode === "changes"
-        ? getGitChangesPatch(workspaceId)
-        : getGitCommitPatch(workspaceId, commitSha ?? "").then((result) => result.patch),
-    );
+    frameId = window.requestAnimationFrame(() => {
+      const patchRequest = measureAsyncPerformance(`git-diff-surface.patch:${surfaceIdentity}`, () =>
+        source.mode === "changes"
+          ? getGitChangesPatch(workspaceId)
+          : getGitCommitPatch(workspaceId, commitSha ?? "").then((result) => result.patch),
+      );
 
-    void patchRequest
-      .then((result) => {
-        if (cancelled) {
-          return;
-        }
+      void patchRequest
+        .then((result) => {
+          if (cancelled) {
+            return;
+          }
 
-        setPatch(result);
-      })
-      .catch((nextError) => {
-        if (cancelled) {
-          return;
-        }
+          startTransition(() => {
+            setPatch(result);
+            setIsLoading(false);
+          });
+        })
+        .catch((nextError) => {
+          if (cancelled) {
+            return;
+          }
 
-        setError(String(nextError));
-      })
-      .finally(() => {
-        if (cancelled) {
-          return;
-        }
-
-        setIsLoading(false);
-      });
+          setError(String(nextError));
+          setIsLoading(false);
+        });
+    });
 
     return () => {
       cancelled = true;
+      window.cancelAnimationFrame(frameId);
     };
   }, [changesPatchReloadKey, commitSha, source.mode, surfaceIdentity, workspaceId]);
   const parsedFiles = useParsedGitPatchFiles(diffCacheKeyPrefix, patch);

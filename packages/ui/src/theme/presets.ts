@@ -2,6 +2,8 @@ export type Theme =
   | "system"
   | "light"
   | "dark"
+  | "github-light"
+  | "github-dark"
   | "nord"
   | "monokai"
   | "catppuccin"
@@ -31,6 +33,18 @@ export const themeOptions: Array<{
     value: "dark",
     appearance: "dark",
     shikiTheme: LIFECYCLE_DARK_DIFF_THEME,
+  },
+  {
+    label: "GitHub Light",
+    value: "github-light",
+    appearance: "light",
+    shikiTheme: "github-light-default",
+  },
+  {
+    label: "GitHub Dark",
+    value: "github-dark",
+    appearance: "dark",
+    shikiTheme: "github-dark-default",
   },
   { label: "Nord", value: "nord", appearance: "dark", shikiTheme: "nord" },
   { label: "Monokai", value: "monokai", appearance: "dark", shikiTheme: "monokai" },

@@ -402,7 +402,7 @@ function BootStepRow({
     <Collapsible onOpenChange={setOpen} open={hasOutput ? open : false}>
       <CollapsibleTrigger asChild>
         <button
-          className={`flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-[var(--surface-hover)] ${hasOutput ? "cursor-pointer" : "cursor-default"}`}
+          className={`flex w-full items-center gap-2.5 py-1 text-left ${hasOutput ? "cursor-pointer" : "cursor-default"}`}
           disabled={!hasOutput}
           type="button"
         >
@@ -412,7 +412,7 @@ function BootStepRow({
       </CollapsibleTrigger>
       {hasOutput ? (
         <CollapsibleContent>
-          <div className="mb-0.5 ml-[22px] rounded-md bg-[var(--muted)] px-2.5 py-2">
+          <div className="mb-1 ml-[22px] rounded-md bg-[var(--muted)]/50 px-2.5 py-2">
             <pre className="max-h-48 overflow-auto whitespace-pre-wrap font-mono text-xs text-[var(--muted-foreground)]">
               {item.output.join("\n")}
             </pre>
@@ -456,7 +456,7 @@ function BootServiceRow({
     return (
       <div className="flex items-center gap-2">
         <button
-          className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-[var(--surface-hover)]"
+          className="flex w-full items-center gap-2.5 py-1 text-left transition-colors"
           onClick={() => onOpenLogs?.(item.name)}
           title={onOpenLogs ? `Show boot logs for ${item.name}` : undefined}
           type="button"
@@ -481,7 +481,7 @@ function BootServiceRow({
     );
   }
 
-  return <div className="flex w-full items-center gap-2.5 px-2 py-1.5">{rowContent}</div>;
+  return <div className="flex w-full items-center gap-2.5 py-1">{rowContent}</div>;
 }
 
 interface BootSequenceProps {
@@ -531,7 +531,7 @@ export function BootSequence({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {items.length > 0 ? (
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-0.5">
           {items.map((item, index) => {
             const isActive =
               presentation?.phase === "running" && presentation.currentStepIndex === index;

@@ -3,7 +3,11 @@ import type { GitBranchPullRequestResult, GitStatusResult } from "@lifecycle/con
 import { ThemeProvider } from "@lifecycle/ui";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { GitActionButton, GitActionMenuContent } from "./git-action-button";
+import {
+  GitActionButton,
+  GitActionMenuContent,
+  performShowChangesAction,
+} from "./git-action-button";
 
 function renderGitActionButton(props: Partial<Parameters<typeof GitActionButton>[0]> = {}) {
   return renderToStaticMarkup(
@@ -61,6 +65,21 @@ function renderGitActionMenuContent(
 }
 
 describe("GitActionButton", () => {
+  test("closes the menu before opening changes", () => {
+    const calls: string[] = [];
+
+    performShowChangesAction(
+      (open) => {
+        calls.push(`open:${String(open)}`);
+      },
+      () => {
+        calls.push("show-changes");
+      },
+    );
+
+    expect(calls).toEqual(["open:false", "show-changes"]);
+  });
+
   test("keeps the semantic action label while loading", () => {
     const markup = renderGitActionButton({
       isLoading: true,

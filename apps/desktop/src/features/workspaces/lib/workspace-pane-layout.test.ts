@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   closeWorkspacePaneLayout,
   createWorkspacePane,
+  getAdjacentPaneId,
   getWorkspacePane,
   hasWorkspacePane,
   inspectWorkspacePaneLayout,
@@ -154,6 +155,17 @@ describe("workspace pane layout helpers", () => {
       },
       survivingPaneId: "pane-c",
     });
+  });
+
+  test("finds adjacent pane by direction, cycling through leaf order", () => {
+    expect(getAdjacentPaneId(NESTED_LAYOUT, "pane-a", "right")).toBe("pane-b");
+    expect(getAdjacentPaneId(NESTED_LAYOUT, "pane-b", "right")).toBe("pane-c");
+    expect(getAdjacentPaneId(NESTED_LAYOUT, "pane-c", "right")).toBe("pane-a");
+    expect(getAdjacentPaneId(NESTED_LAYOUT, "pane-a", "left")).toBe("pane-c");
+    expect(getAdjacentPaneId(NESTED_LAYOUT, "pane-b", "up")).toBe("pane-a");
+    expect(getAdjacentPaneId(NESTED_LAYOUT, "pane-b", "down")).toBe("pane-c");
+    expect(getAdjacentPaneId(createWorkspacePane(), "pane-root", "right")).toBeNull();
+    expect(getAdjacentPaneId(NESTED_LAYOUT, "pane-missing", "right")).toBeNull();
   });
 
   test("updates only the targeted split node", () => {

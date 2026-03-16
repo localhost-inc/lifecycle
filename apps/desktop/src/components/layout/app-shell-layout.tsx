@@ -66,6 +66,10 @@ import {
   writePersistedPanelValue,
 } from "../../lib/panel-layout";
 import { useQueryClient } from "../../query";
+import {
+  SHORTCUT_HANDLER_PRIORITY,
+  useShortcutRegistration,
+} from "../../app/shortcuts/shortcut-router";
 import { type AppShellOutletContext } from "./app-shell-context";
 import { AppSidebar } from "./app-sidebar";
 import { notifyShellResizeListeners, ShellResizeProvider } from "./shell-resize-provider";
@@ -565,15 +569,32 @@ export function AppShellLayout() {
     [sidebarBounds],
   );
 
+  useShortcutRegistration({
+    handler: useCallback(
+      (match) => {
+        const index = match.index ?? 1;
+        const target = index <= projects.length ? projects[index - 1] : projects[projects.length - 1];
+        if (!target) {
+          return true;
+        }
+        void navigate(`/projects/${target.id}`);
+        return true;
+      },
+      [navigate, projects],
+    ),
+    id: "project.select-index",
+    priority: SHORTCUT_HANDLER_PRIORITY.app,
+  });
+
   const outletContext = useMemo<AppShellOutletContext>(
     () => ({
       activeShellContext,
       onCreateWorkspace: handleCreateWorkspace,
       onDestroyWorkspace: handleDestroyWorkspace,
       onForkWorkspace: handleForkWorkspace,
+      onOpenSettings: handleOpenSettings,
       onOpenWorkspace: handleOpenWorkspace,
       onRemoveProject: handleRemoveProject,
-      onToggleSidebar: handleToggleSidebar,
       projectCatalog: visibleProjectCatalog,
       projects,
       sidebarCollapsed,
@@ -584,9 +605,9 @@ export function AppShellLayout() {
       handleCreateWorkspace,
       handleDestroyWorkspace,
       handleForkWorkspace,
+      handleOpenSettings,
       handleOpenWorkspace,
       handleRemoveProject,
-      handleToggleSidebar,
       visibleProjectCatalog,
       projects,
       sidebarCollapsed,

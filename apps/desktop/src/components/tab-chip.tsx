@@ -51,7 +51,7 @@ export function TabChip({
   indicator,
 }: TabChipProps) {
   const baseClasses =
-    "relative flex h-full shrink-0 cursor-pointer items-center gap-1.5 border-r border-[var(--border)] px-3 text-[13px] transition-colors";
+    "relative flex h-full shrink-0 cursor-pointer items-center gap-1.5 border-r border-[var(--border)] px-3 pb-px text-[13px] transition-colors";
   const activeSurfaceClass =
     activeSurface === "card"
       ? "bg-[var(--card)]"
@@ -59,9 +59,9 @@ export function TabChip({
         ? "bg-[var(--surface)]"
         : "bg-[var(--background)]";
   const activeClasses = active
-    ? `${activeSurfaceClass} text-[var(--foreground)] -mb-px z-[1] pb-px`
+    ? `${activeSurfaceClass} text-[var(--foreground)] -mb-px z-[1]`
     : "bg-transparent text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]";
-  const fontClass = active ? "font-medium" : "font-normal";
+  const fontClass = "font-normal";
 
   const dataProps: Record<string, string> = {};
   if (dataAttributes) {

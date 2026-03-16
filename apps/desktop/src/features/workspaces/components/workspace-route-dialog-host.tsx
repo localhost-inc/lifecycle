@@ -1,4 +1,4 @@
-import { Dialog, DialogBackdrop, DialogClose, DialogDescription, DialogTitle } from "@lifecycle/ui";
+import { Dialog, DialogClose, DialogDescription, DialogTitle } from "@lifecycle/ui";
 import { X } from "lucide-react";
 import { useEffect, useId, useRef } from "react";
 import { GitDiffSurface } from "../../git/components/git-diff-surface";
@@ -26,27 +26,18 @@ function WorkspaceChangesDialog({
 }) {
   return (
     <>
-      <div className="flex items-start justify-between gap-4 border-b border-[var(--border)] px-5 py-4">
-        <div className="min-w-0">
-          <DialogTitle className="text-base" id={titleId}>
-            Changes
-          </DialogTitle>
-          <DialogDescription className="mt-1 text-xs leading-5" id={descriptionId}>
-            Review local workspace edits in a canvas overlay.
-          </DialogDescription>
-          {focusPath ? (
-            <p className="mt-2 truncate font-mono text-[11px] text-[var(--muted-foreground)]">
-              {focusPath}
-            </p>
-          ) : null}
-        </div>
-        <DialogClose
-          aria-label="Close changes dialog"
-          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[var(--muted-foreground)] outline-none transition-colors duration-150 hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] focus-visible:shadow-[0_0_0_1px_var(--ring)]"
-        >
-          <X className="size-4" strokeWidth={2} />
-        </DialogClose>
-      </div>
+      <DialogTitle className="sr-only" id={titleId}>
+        Changes
+      </DialogTitle>
+      <DialogDescription className="sr-only" id={descriptionId}>
+        Review local workspace edits in a dedicated workspace surface.
+      </DialogDescription>
+      <DialogClose
+        aria-label="Close changes dialog"
+        className="absolute right-3 top-3 z-10 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[color-mix(in_srgb,var(--border)_82%,transparent)] bg-[color-mix(in_srgb,var(--background)_78%,transparent)] text-[var(--muted-foreground)] outline-none transition-colors duration-150 hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)] focus-visible:shadow-[0_0_0_1px_var(--ring)]"
+      >
+        <X className="size-4" strokeWidth={2} />
+      </DialogClose>
       <div className="min-h-0 flex-1 overflow-hidden">
         <GitDiffSurface
           onOpenFile={onOpenFile}
@@ -111,14 +102,21 @@ export function WorkspaceRouteDialogHost({
       }}
     >
       {dialog ? (
-        <div className="absolute inset-0 z-20 p-3 sm:p-4" data-slot="workspace-route-dialog">
-          <DialogBackdrop className="!absolute !inset-0 rounded-[20px] bg-[color-mix(in_srgb,var(--background)_58%,transparent)] backdrop-blur-[2px]" />
+        <div
+          className="absolute inset-0 z-30 flex min-h-0 flex-col p-3 sm:p-4 lg:p-5"
+          data-slot="workspace-route-dialog"
+        >
+          <div
+            className="absolute inset-0 bg-[color-mix(in_srgb,var(--background)_48%,transparent)] backdrop-blur-[6px]"
+            data-slot="workspace-route-dialog-backdrop"
+          />
           <div
             ref={popupRef}
             aria-describedby={descriptionId}
             aria-labelledby={titleId}
             aria-modal="true"
-            className="relative flex h-full min-h-0 flex-col overflow-hidden rounded-[24px] border border-[var(--border)] bg-[var(--background)] shadow-[0_28px_90px_rgba(0,0,0,0.24)] outline-none"
+            className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-[14px] border border-[color-mix(in_srgb,var(--border)_82%,transparent)] bg-[color-mix(in_srgb,var(--background)_92%,var(--surface))] shadow-[0_28px_90px_rgba(0,0,0,0.28)] outline-none"
+            data-slot="workspace-route-dialog-panel"
             role="dialog"
             tabIndex={-1}
           >

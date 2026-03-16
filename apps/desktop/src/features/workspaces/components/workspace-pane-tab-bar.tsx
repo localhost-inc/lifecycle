@@ -499,7 +499,7 @@ export function WorkspacePaneTabBar({
     <div className="relative min-w-0 flex-1">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 right-0 z-[1] bg-gradient-to-l from-[var(--background)] to-transparent"
+        className="pointer-events-none absolute inset-y-0 bottom-px right-0 z-[1] bg-gradient-to-l from-[var(--background)] to-transparent"
         style={{ width: TAB_BAR_RIGHT_FADE_WIDTH_PX }}
       />
       <div

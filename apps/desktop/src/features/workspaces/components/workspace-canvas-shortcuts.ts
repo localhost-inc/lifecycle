@@ -15,8 +15,7 @@ export type WorkspaceTabHotkeyAction =
   | { kind: "close-active-tab" }
   | { kind: "new-tab" }
   | { kind: "next-tab" }
-  | { kind: "previous-tab" }
-  | { kind: "select-tab-index"; index: number };
+  | { kind: "previous-tab" };
 
 export type WorkspaceCloseShortcutTarget = "close-pane" | "close-project-tab" | null;
 
@@ -61,60 +60,32 @@ export function readWorkspaceTabHotkeyAction(
   macPlatform: boolean,
 ): WorkspaceTabHotkeyAction | null {
   const lowerKey = event.key.toLowerCase();
-  const isBracketLeft = event.code === "BracketLeft" || event.key === "[" || event.key === "{";
-  const isBracketRight = event.code === "BracketRight" || event.key === "]" || event.key === "}";
 
+  // Cmd+T / Cmd+W (mac) or Ctrl+T / Ctrl+W (non-mac)
   if (macPlatform) {
-    if (!event.metaKey || event.ctrlKey || event.altKey) {
-      return null;
-    }
+    if (event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+      if (lowerKey === "t") {
+        return { kind: "new-tab" };
+      }
 
-    if (!event.shiftKey && lowerKey === "t") {
-      return { kind: "new-tab" };
+      if (lowerKey === "w") {
+        return { kind: "close-active-tab" };
+      }
     }
+  } else {
+    if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+      if (lowerKey === "t") {
+        return { kind: "new-tab" };
+      }
 
-    if (!event.shiftKey && lowerKey === "w") {
-      return { kind: "close-active-tab" };
+      if (lowerKey === "w") {
+        return { kind: "close-active-tab" };
+      }
     }
-
-    if (!event.shiftKey && lowerKey >= "1" && lowerKey <= "9") {
-      return {
-        index: Number.parseInt(lowerKey, 10),
-        kind: "select-tab-index",
-      };
-    }
-
-    if (event.shiftKey && isBracketLeft) {
-      return { kind: "previous-tab" };
-    }
-
-    if (event.shiftKey && isBracketRight) {
-      return { kind: "next-tab" };
-    }
-
-    return null;
   }
 
-  if (!event.ctrlKey || event.metaKey || event.altKey) {
-    return null;
-  }
-
-  if (!event.shiftKey && lowerKey === "t") {
-    return { kind: "new-tab" };
-  }
-
-  if (!event.shiftKey && lowerKey === "w") {
-    return { kind: "close-active-tab" };
-  }
-
-  if (!event.shiftKey && lowerKey >= "1" && lowerKey <= "9") {
-    return {
-      index: Number.parseInt(lowerKey, 10),
-      kind: "select-tab-index",
-    };
-  }
-
-  if (event.key === "Tab") {
+  // Ctrl+Tab / Ctrl+Shift+Tab — tab cycling (same on all platforms)
+  if (event.ctrlKey && !event.metaKey && !event.altKey && event.key === "Tab") {
     return event.shiftKey ? { kind: "previous-tab" } : { kind: "next-tab" };
   }
 
@@ -133,10 +104,6 @@ export function toWorkspaceTabHotkeyAction(
       return { kind: "next-tab" };
     case "previous-tab":
       return { kind: "previous-tab" };
-    case "select-tab-index":
-      return typeof event.index === "number"
-        ? { index: event.index, kind: "select-tab-index" }
-        : null;
     default:
       return null;
   }

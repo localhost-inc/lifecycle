@@ -21,12 +21,6 @@ body {
   --diffs-font-family: var(--font-mono);
 }
 
-html[data-overlay-host-window="true"],
-html[data-overlay-host-window="true"] body,
-html[data-overlay-host-window="true"] body #root {
-  background-color: transparent;
-}
-
 * {
   border-color: var(--border);
 }

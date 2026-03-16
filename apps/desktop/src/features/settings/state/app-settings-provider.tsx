@@ -13,6 +13,15 @@ import {
   normalizeFontFamily,
 } from "../../../lib/typography";
 import {
+  buildDefaultHarnessSettings,
+  normalizeClaudeHarnessSettings,
+  normalizeCodexHarnessSettings,
+  normalizeHarnessSettings,
+  type ClaudeHarnessSettings,
+  type CodexHarnessSettings,
+  type HarnessSettings,
+} from "./harness-settings";
+import {
   DEFAULT_TURN_NOTIFICATION_MODE,
   DEFAULT_TURN_NOTIFICATION_SOUND,
   normalizeTurnNotificationMode,
@@ -74,6 +83,7 @@ function normalizeInactivePaneOpacity(value: number | undefined | null): number 
 export interface AppSettings {
   defaultNewTabLaunch: DefaultNewTabLaunch;
   dimInactivePanes: boolean;
+  harnesses: HarnessSettings;
   inactivePaneOpacity: number;
   interfaceFontFamily: string;
   monospaceFontFamily: string;
@@ -84,6 +94,8 @@ export interface AppSettings {
 
 interface SettingsContextValue extends AppSettings {
   resetTypography: () => void;
+  setClaudeHarnessSettings: (value: ClaudeHarnessSettings) => void;
+  setCodexHarnessSettings: (value: CodexHarnessSettings) => void;
   setDefaultNewTabLaunch: (value: DefaultNewTabLaunch) => void;
   setDimInactivePanes: (value: boolean) => void;
   setInactivePaneOpacity: (value: number) => void;
@@ -131,6 +143,7 @@ function buildDefaultSettings(): AppSettings {
   return {
     defaultNewTabLaunch: DEFAULT_NEW_TAB_LAUNCH,
     dimInactivePanes: DEFAULT_DIM_INACTIVE_PANES,
+    harnesses: buildDefaultHarnessSettings(),
     inactivePaneOpacity: DEFAULT_INACTIVE_PANE_OPACITY,
     interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
     monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
@@ -149,6 +162,7 @@ export function parseStoredSettings(raw: string | null | undefined): AppSettings
     return {
       defaultNewTabLaunch: normalizeDefaultNewTabLaunch(parsed.defaultNewTabLaunch),
       dimInactivePanes: normalizeDimInactivePanes(parsed.dimInactivePanes),
+      harnesses: normalizeHarnessSettings(parsed.harnesses),
       inactivePaneOpacity: normalizeInactivePaneOpacity(parsed.inactivePaneOpacity),
       interfaceFontFamily: normalizeFontFamily(
         parsed.interfaceFontFamily,
@@ -223,6 +237,38 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         const next = {
           ...prev,
           inactivePaneOpacity: normalizeInactivePaneOpacity(value),
+        };
+        return persistSettings(next);
+      });
+    },
+    [persistSettings],
+  );
+
+  const setCodexHarnessSettings = useCallback(
+    (value: CodexHarnessSettings) => {
+      setSettings((prev) => {
+        const next = {
+          ...prev,
+          harnesses: {
+            ...prev.harnesses,
+            codex: normalizeCodexHarnessSettings(value),
+          },
+        };
+        return persistSettings(next);
+      });
+    },
+    [persistSettings],
+  );
+
+  const setClaudeHarnessSettings = useCallback(
+    (value: ClaudeHarnessSettings) => {
+      setSettings((prev) => {
+        const next = {
+          ...prev,
+          harnesses: {
+            ...prev.harnesses,
+            claude: normalizeClaudeHarnessSettings(value),
+          },
         };
         return persistSettings(next);
       });
@@ -316,10 +362,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     () => ({
       defaultNewTabLaunch: settings.defaultNewTabLaunch,
       dimInactivePanes: settings.dimInactivePanes,
+      harnesses: settings.harnesses,
       inactivePaneOpacity: settings.inactivePaneOpacity,
       interfaceFontFamily: settings.interfaceFontFamily,
       monospaceFontFamily: settings.monospaceFontFamily,
       resetTypography,
+      setClaudeHarnessSettings,
+      setCodexHarnessSettings,
       setDefaultNewTabLaunch,
       setDimInactivePanes,
       setInactivePaneOpacity,
@@ -335,6 +384,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [
       settings.defaultNewTabLaunch,
       settings.dimInactivePanes,
+      settings.harnesses,
       settings.inactivePaneOpacity,
       settings.interfaceFontFamily,
       settings.monospaceFontFamily,
@@ -342,6 +392,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       settings.turnNotificationsMode,
       settings.worktreeRoot,
       resetTypography,
+      setClaudeHarnessSettings,
+      setCodexHarnessSettings,
       setDefaultNewTabLaunch,
       setDimInactivePanes,
       setInactivePaneOpacity,

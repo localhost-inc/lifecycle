@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { TerminalRecord } from "@lifecycle/contracts";
+import {
+  buildHarnessLaunchConfig,
+  buildDefaultHarnessSettings,
+} from "../settings/state/harness-settings";
 
 const getWorkspaceProvider = mock(() => provider);
 
@@ -68,6 +72,14 @@ describe("terminal api provider routing", () => {
     expect(await listWorkspaceTerminals("ws_1")).toEqual([terminal]);
     expect(await getTerminal("term_1")).toEqual(terminal);
     expect(await createTerminal({ workspaceId: "ws_1", launchType: "shell" })).toEqual(terminal);
+    expect(
+      await createTerminal({
+        workspaceId: "ws_1",
+        launchType: "harness",
+        harnessProvider: "codex",
+        harnessLaunchConfig: buildHarnessLaunchConfig("codex", buildDefaultHarnessSettings()),
+      }),
+    ).toEqual(terminal);
     expect(await renameTerminal("term_1", "  Codex   Session  ")).toEqual({
       ...terminal,
       label: "Codex Session",
@@ -93,6 +105,19 @@ describe("terminal api provider routing", () => {
       workspaceId: "ws_1",
       launchType: "shell",
       harnessProvider: null,
+      harnessSessionId: null,
+    });
+    expect(provider.createTerminal).toHaveBeenCalledWith({
+      workspaceId: "ws_1",
+      launchType: "harness",
+      harnessLaunchConfig: {
+        approvalPolicy: "untrusted",
+        dangerousBypass: false,
+        preset: "guarded",
+        provider: "codex",
+        sandboxMode: "workspace-write",
+      },
+      harnessProvider: "codex",
       harnessSessionId: null,
     });
     expect(provider.renameTerminal).toHaveBeenCalledWith("term_1", "Codex Session");

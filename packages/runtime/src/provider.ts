@@ -17,6 +17,7 @@ import type {
   WorkspaceRecord,
   WorkspaceServiceExposure,
 } from "@lifecycle/contracts";
+import type { HarnessLaunchConfigInput } from "./harnesses";
 
 export interface LocalWorkspaceProviderCreateContext {
   mode: "local";
@@ -72,6 +73,7 @@ export interface WorkspaceProviderHealthResult {
 export interface WorkspaceProviderCreateTerminalInput {
   workspaceId: string;
   launchType: "shell" | "harness";
+  harnessLaunchConfig?: HarnessLaunchConfigInput | null;
   harnessProvider?: string | null;
   harnessSessionId?: string | null;
 }

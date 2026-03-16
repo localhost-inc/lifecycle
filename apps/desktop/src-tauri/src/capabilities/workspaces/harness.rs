@@ -1,3 +1,5 @@
+#[path = "harness/launch_config.rs"]
+mod launch_config;
 #[path = "harness/parsing.rs"]
 mod parsing;
 #[path = "harness/providers.rs"]
@@ -11,10 +13,18 @@ use std::time::Duration;
 
 pub(crate) const HARNESS_SESSION_CAPTURE_GRACE: Duration = Duration::from_secs(5);
 
+pub(crate) use launch_config::HarnessLaunchConfig;
+#[cfg(test)]
+pub(crate) use launch_config::HarnessPreset;
 #[cfg(test)]
 pub(crate) use parsing::read_first_prompt_from_session_reader;
 pub(crate) use parsing::{line_is_within_launched_session, normalize_prompt_text};
 pub(crate) use providers::{default_harness_terminal_label, resolve_harness_adapter};
+#[cfg(test)]
+pub(crate) use providers::{
+    ClaudeLaunchConfig, ClaudePermissionMode, CodexApprovalPolicy, CodexLaunchConfig,
+    CodexSandboxMode,
+};
 pub(crate) use session_store::{
     discover_harness_session_candidates, resolve_harness_session_log_path,
 };
@@ -93,12 +103,8 @@ mod tests {
             "{\"cwd\":\"/tmp/worktree-b\",\"sessionId\":\"session-b\"}\n",
         );
 
-        let discovered = discover_session_id_from_directory(
-            &project_dir,
-            &store,
-            "/tmp/worktree-a",
-            UNIX_EPOCH,
-        );
+        let discovered =
+            discover_session_id_from_directory(&project_dir, &store, "/tmp/worktree-a", UNIX_EPOCH);
 
         assert_eq!(discovered.as_deref(), Some("session-a"));
     }
@@ -121,12 +127,8 @@ mod tests {
             "{\"cwd\":\"/tmp/worktree-a\",\"sessionId\":\"session-b\"}\n",
         );
 
-        let first_discovered = discover_session_id_from_directory(
-            &project_dir,
-            &store,
-            "/tmp/worktree-a",
-            UNIX_EPOCH,
-        );
+        let first_discovered =
+            discover_session_id_from_directory(&project_dir, &store, "/tmp/worktree-a", UNIX_EPOCH);
 
         assert_eq!(first_discovered.as_deref(), Some("session-a"));
     }
@@ -153,12 +155,8 @@ mod tests {
             "{\"type\":\"session_meta\",\"payload\":{\"id\":\"session-b\",\"cwd\":\"/tmp/worktree-b\"}}\n",
         );
 
-        let discovered = discover_session_id_from_tree(
-            &root,
-            &store,
-            "/tmp/worktree-a",
-            UNIX_EPOCH,
-        );
+        let discovered =
+            discover_session_id_from_tree(&root, &store, "/tmp/worktree-a", UNIX_EPOCH);
 
         assert_eq!(discovered.as_deref(), Some("session-a"));
     }
@@ -189,12 +187,8 @@ mod tests {
             ),
         );
 
-        let first_discovered = discover_session_id_from_tree(
-            &root,
-            &store,
-            "/tmp/worktree-a",
-            UNIX_EPOCH,
-        );
+        let first_discovered =
+            discover_session_id_from_tree(&root, &store, "/tmp/worktree-a", UNIX_EPOCH);
 
         assert_eq!(first_discovered.as_deref(), Some("session-a"));
     }

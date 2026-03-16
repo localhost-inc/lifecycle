@@ -1,3 +1,4 @@
+import { isTauri } from "@tauri-apps/api/core";
 import { ThemeProvider } from "@lifecycle/ui";
 import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
@@ -23,12 +24,32 @@ function BootstrapPerfMarker() {
   return null;
 }
 
+function ContextMenuBlocker() {
+  useEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+
+    const handleContextMenu = (event: MouseEvent) => {
+      event.preventDefault();
+    };
+
+    window.addEventListener("contextmenu", handleContextMenu, true);
+    return () => {
+      window.removeEventListener("contextmenu", handleContextMenu, true);
+    };
+  }, []);
+
+  return null;
+}
+
 markPerformance("bootstrap:start");
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ThemeProvider storageKey="lifecycle.desktop.theme">
       <BootstrapPerfMarker />
+      <ContextMenuBlocker />
       <ThemeWindowSync />
       <QueryProvider>
         <AuthSessionProvider>

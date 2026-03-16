@@ -3,6 +3,9 @@ import {
   Alert,
   AlertDescription,
   Button,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -10,9 +13,18 @@ import {
   SplitButtonPrimary,
   SplitButtonSecondary,
 } from "@lifecycle/ui";
-import { useState } from "react";
-import { AlertTriangle, ChevronDown, LoaderCircle, Play, RotateCcw, Square } from "lucide-react";
-import { BootSequence } from "./boot-sequence";
+import { useEffect, useState } from "react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  LoaderCircle,
+  Play,
+  RotateCcw,
+  Square,
+} from "lucide-react";
+import { BootSequence, deriveBootPresentation, deriveBootSequenceItems } from "./boot-sequence";
+import { LogsTab } from "./logs-tab";
 import type { EnvironmentTaskState, SetupStepState } from "../hooks";
 import { formatWorkspaceError } from "../lib/workspace-errors";
 
@@ -37,7 +49,6 @@ interface EnvironmentPanelProps {
   hasManifest: boolean;
   isManifestStale: boolean;
   manifestState: "invalid" | "missing" | "valid";
-  onOpenServiceLogs?: (serviceName: string) => void;
   onRestart: () => Promise<void>;
   onRun: (serviceNames?: string[]) => Promise<void>;
   onStop: () => Promise<void>;
@@ -57,7 +68,6 @@ export function EnvironmentPanel({
   hasManifest,
   isManifestStale,
   manifestState,
-  onOpenServiceLogs,
   onRestart,
   onRun,
   onStop,
@@ -71,6 +81,8 @@ export function EnvironmentPanel({
   const [activeServiceStartName, setActiveServiceStartName] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [restartMenuOpen, setRestartMenuOpen] = useState(false);
+  const [selectedServiceLogsName, setSelectedServiceLogsName] = useState<string | null>(null);
+
   const declaredSetupStepNames = (config?.workspace.setup ?? []).map((step) => step.name);
   const serviceRuntimeByName = Object.fromEntries(
     Object.entries(config?.environment ?? {})
@@ -84,6 +96,8 @@ export function EnvironmentPanel({
       )
       .map(([name, node]) => [name, node.runtime]),
   );
+  const serviceNames = Object.keys(serviceRuntimeByName);
+
   const canRun = workspace.status === "idle" && hasManifest;
   const canStartService =
     hasManifest && (workspace.status === "idle" || workspace.status === "active");
@@ -91,8 +105,29 @@ export function EnvironmentPanel({
   const canRestart = workspace.status === "active" && hasManifest;
   const stopping = workspace.status === "stopping";
 
+  // Boot sequence items and presentation
+  const bootItems = deriveBootSequenceItems(
+    config,
+    declaredSetupStepNames,
+    setupSteps,
+    environmentTasks,
+    services,
+    serviceRuntimeByName,
+    workspace.setup_completed_at !== null && workspace.setup_completed_at !== undefined,
+  );
+  const bootPresentation = deriveBootPresentation(bootItems, workspace);
+
+  // Auto-collapse boot card on terminal state, expand when booting
+  const isTerminal =
+    workspace.status === "active" ||
+    (workspace.status === "idle" && workspace.failure_reason !== null);
+  const [bootExpanded, setBootExpanded] = useState(!isTerminal);
+  useEffect(() => {
+    setBootExpanded(!isTerminal);
+  }, [isTerminal]);
+
   function handleOpenServiceLogs(serviceName: string): void {
-    onOpenServiceLogs?.(serviceName);
+    setSelectedServiceLogsName(serviceName);
   }
 
   async function handleRunService(serviceName: string): Promise<void> {
@@ -195,112 +230,216 @@ export function EnvironmentPanel({
 
   return (
     <section className="flex h-full min-h-0 flex-col">
-      <div className="px-2.5 py-3">
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <span className="app-panel-title">Environment</span>
-            </div>
-            <div className="flex shrink-0 items-center">
-              {canRestart ? (
-                <SplitButton>
-                  <SplitButtonPrimary
-                    disabled={actionDisabled}
-                    leadingIcon={<Square className="size-3.5 fill-current" strokeWidth={2.2} />}
-                    onClick={() => void handleStop()}
-                    title="Stop workspace services"
-                    variant="foreground"
-                  >
-                    {activeAction === "stop" || stopping ? "Stopping..." : "Stop"}
-                  </SplitButtonPrimary>
-                  <Popover onOpenChange={setRestartMenuOpen} open={restartMenuOpen}>
-                    <PopoverTrigger asChild>
-                      <SplitButtonSecondary
-                        aria-label="Show environment actions"
-                        disabled={actionDisabled}
-                        title="More environment actions"
-                      >
-                        <ChevronDown className="size-3.5" strokeWidth={2.4} />
-                      </SplitButtonSecondary>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      align="end"
-                      className="w-44 rounded-lg border-[var(--border)] bg-[var(--surface)] p-1 shadow-[0_12px_32px_rgba(0,0,0,0.18)]"
-                      side="bottom"
-                      sideOffset={8}
-                    >
-                      <button
-                        type="button"
-                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[var(--foreground)] transition-colors hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={activeAction !== null}
-                        onClick={() => void handleRestart()}
-                      >
-                        <RotateCcw className="size-3.5" strokeWidth={2.2} />
-                        <span>{activeAction === "restart" ? "Restarting..." : "Restart"}</span>
-                      </button>
-                    </PopoverContent>
-                  </Popover>
-                </SplitButton>
-              ) : (
-                <Button
+      {/* Header */}
+      <div className="shrink-0 px-3 pt-3 pb-2">
+        <div className="flex items-center justify-between gap-3">
+          <span className="app-panel-title">Environment</span>
+          <div className="flex shrink-0 items-center">
+            {canRestart ? (
+              <SplitButton>
+                <SplitButtonPrimary
                   disabled={actionDisabled}
-                  onClick={() => void actionConfig.onClick()}
-                  size="sm"
-                  title={actionConfig.title}
-                  variant={actionConfig.variant}
+                  leadingIcon={<Square className="size-3 fill-current" strokeWidth={2.2} />}
+                  onClick={() => void handleStop()}
+                  title="Stop workspace services"
+                  variant="foreground"
                 >
-                  {actionConfig.icon}
-                  <span>{actionConfig.label}</span>
-                </Button>
-              )}
-            </div>
+                  {activeAction === "stop" || stopping ? "Stopping..." : "Stop"}
+                </SplitButtonPrimary>
+                <Popover onOpenChange={setRestartMenuOpen} open={restartMenuOpen}>
+                  <PopoverTrigger asChild>
+                    <SplitButtonSecondary
+                      aria-label="Show environment actions"
+                      disabled={actionDisabled}
+                      title="More environment actions"
+                    >
+                      <ChevronDown className="size-3.5" strokeWidth={2.4} />
+                    </SplitButtonSecondary>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="end"
+                    className="w-44 rounded-lg border-[var(--border)] bg-[var(--surface)] p-1 shadow-[0_12px_32px_rgba(0,0,0,0.18)]"
+                    side="bottom"
+                    sideOffset={8}
+                  >
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[var(--foreground)] transition-colors hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"
+                      disabled={activeAction !== null}
+                      onClick={() => void handleRestart()}
+                    >
+                      <RotateCcw className="size-3.5" strokeWidth={2.2} />
+                      <span>{activeAction === "restart" ? "Restarting..." : "Restart"}</span>
+                    </button>
+                  </PopoverContent>
+                </Popover>
+              </SplitButton>
+            ) : (
+              <Button
+                disabled={actionDisabled}
+                onClick={() => void actionConfig.onClick()}
+                size="sm"
+                title={actionConfig.title}
+                variant={actionConfig.variant}
+              >
+                {actionConfig.icon}
+                <span>{actionConfig.label}</span>
+              </Button>
+            )}
           </div>
-          {workspace.status === "idle" && workspace.failure_reason && (
-            <Alert variant="destructive">
-              <AlertTriangle className="size-4" />
-              <AlertDescription>
-                {FAILURE_REASON_LABELS[workspace.failure_reason] ?? workspace.failure_reason}
-              </AlertDescription>
-            </Alert>
-          )}
-          {workspace.status === "active" && isManifestStale && (
-            <Alert>
-              <AlertDescription>
-                Manifest changed. Stop and start again to apply environment updates.
-              </AlertDescription>
-            </Alert>
-          )}
-          {workspace.status === "active" && manifestState === "invalid" && (
-            <Alert variant="destructive">
-              <AlertTriangle className="size-4" />
-              <AlertDescription>
-                lifecycle.json is invalid. Current services keep running until you stop them.
-              </AlertDescription>
-            </Alert>
-          )}
-          {actionError && (
-            <Alert variant="destructive">
-              <AlertTriangle className="size-4" />
-              <AlertDescription>{actionError}</AlertDescription>
-            </Alert>
-          )}
         </div>
+
+        {/* Alerts */}
+        {(actionError ||
+          (workspace.status === "idle" && workspace.failure_reason) ||
+          (workspace.status === "active" && isManifestStale) ||
+          (workspace.status === "active" && manifestState === "invalid")) && (
+          <div className="mt-2.5 flex flex-col gap-2">
+            {workspace.status === "idle" && workspace.failure_reason && (
+              <Alert variant="destructive">
+                <AlertTriangle className="size-4" />
+                <AlertDescription>
+                  {FAILURE_REASON_LABELS[workspace.failure_reason] ?? workspace.failure_reason}
+                </AlertDescription>
+              </Alert>
+            )}
+            {workspace.status === "active" && isManifestStale && (
+              <Alert>
+                <AlertDescription>
+                  Manifest changed. Stop and start again to apply environment updates.
+                </AlertDescription>
+              </Alert>
+            )}
+            {workspace.status === "active" && manifestState === "invalid" && (
+              <Alert variant="destructive">
+                <AlertTriangle className="size-4" />
+                <AlertDescription>
+                  lifecycle.json is invalid. Current services keep running until you stop them.
+                </AlertDescription>
+              </Alert>
+            )}
+            {actionError && (
+              <Alert variant="destructive">
+                <AlertTriangle className="size-4" />
+                <AlertDescription>{actionError}</AlertDescription>
+              </Alert>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Scrollable body */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <div className="flex min-h-0 flex-1 flex-col px-2.5 pb-4 pt-1">
-          <BootSequence
+        {/* Boot section */}
+        {bootItems.length > 0 && (
+          <Collapsible
+            className="shrink-0 px-3"
+            onOpenChange={setBootExpanded}
+            open={bootExpanded}
+          >
+            <CollapsibleTrigger asChild>
+              <button
+                className="group flex w-full items-center gap-2 py-1.5 text-left"
+                type="button"
+              >
+                <ChevronRight
+                  className={`size-3 shrink-0 text-[var(--muted-foreground)] transition-transform duration-150 ${bootExpanded ? "rotate-90" : ""}`}
+                  strokeWidth={2.4}
+                />
+                {bootPresentation?.phase === "running" ? (
+                  <LoaderCircle
+                    className="size-3 shrink-0 animate-spin text-[var(--status-info)]"
+                    strokeWidth={2.4}
+                  />
+                ) : bootPresentation?.phase === "completed" ? (
+                  <span className="inline-block size-1.5 shrink-0 rounded-full bg-[var(--status-success)]" />
+                ) : bootPresentation?.phase === "failed" ? (
+                  <span className="inline-block size-1.5 shrink-0 rounded-full bg-[var(--status-danger)]" />
+                ) : null}
+                <span className="text-[12px] font-medium text-[var(--muted-foreground)] group-hover:text-[var(--foreground)] transition-colors">
+                  Boot
+                </span>
+                {bootPresentation && (
+                  <span className="ml-auto shrink-0 text-[11px] tabular-nums text-[var(--muted-foreground)]/60">
+                    {bootPresentation.completedSteps}/{bootPresentation.totalSteps}
+                  </span>
+                )}
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="pb-2 pt-0.5">
+                <BootSequence
+                  config={config}
+                  declaredStepNames={declaredSetupStepNames}
+                  environmentTasks={environmentTasks}
+                  onOpenServiceLogs={handleOpenServiceLogs}
+                  onStartService={(serviceName) => void handleRunService(serviceName)}
+                  onUpdateService={onUpdateService}
+                  runDisabled={
+                    !canStartService || activeAction !== null || activeServiceStartName !== null
+                  }
+                  runningServiceName={activeServiceStartName}
+                  serviceRuntimeByName={serviceRuntimeByName}
+                  services={services}
+                  setupSteps={setupSteps}
+                  workspace={workspace}
+                />
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
+        {/* Divider */}
+        {bootItems.length > 0 && <div className="mx-3 border-t border-[var(--border)]" />}
+
+        {/* Logs section */}
+        <div className="shrink-0 px-3 pt-2">
+          <div className="flex items-center gap-3">
+            <span className="text-[12px] font-medium text-[var(--muted-foreground)]">
+              Logs
+            </span>
+            {serviceNames.length > 0 && (
+              <div className="flex items-center rounded-md bg-[var(--muted)]/50 p-0.5">
+                <button
+                  className={`rounded px-2 py-0.5 text-[11px] transition-colors ${
+                    selectedServiceLogsName === null
+                      ? "bg-[var(--surface)] font-medium text-[var(--foreground)] shadow-xs"
+                      : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                  }`}
+                  onClick={() => setSelectedServiceLogsName(null)}
+                  type="button"
+                >
+                  All
+                </button>
+                {serviceNames.map((name) => (
+                  <button
+                    className={`rounded px-2 py-0.5 text-[11px] transition-colors ${
+                      selectedServiceLogsName === name
+                        ? "bg-[var(--surface)] font-medium text-[var(--foreground)] shadow-xs"
+                        : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                    }`}
+                    key={name}
+                    onClick={() =>
+                      setSelectedServiceLogsName(selectedServiceLogsName === name ? null : name)
+                    }
+                    type="button"
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Log entries */}
+        <div className="mt-2 flex flex-col px-3 pb-4">
+          <LogsTab
             config={config}
             declaredStepNames={declaredSetupStepNames}
             environmentTasks={environmentTasks}
-            onOpenServiceLogs={handleOpenServiceLogs}
-            onStartService={(serviceName) => void handleRunService(serviceName)}
-            onUpdateService={onUpdateService}
-            runDisabled={
-              !canStartService || activeAction !== null || activeServiceStartName !== null
-            }
-            runningServiceName={activeServiceStartName}
+            selectedServiceName={selectedServiceLogsName}
             serviceRuntimeByName={serviceRuntimeByName}
-            services={services}
             setupSteps={setupSteps}
             workspace={workspace}
           />

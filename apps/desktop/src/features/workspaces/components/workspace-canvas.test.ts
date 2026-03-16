@@ -1441,7 +1441,7 @@ describe("canvas tab helpers", () => {
 });
 
 describe("readWorkspaceTabHotkeyAction", () => {
-  test("reads standard mac tab shortcuts without stealing history bracket shortcuts", () => {
+  test("reads mac new-tab and close-active-tab with Cmd modifier", () => {
     expect(
       readWorkspaceTabHotkeyAction(
         {
@@ -1460,10 +1460,56 @@ describe("readWorkspaceTabHotkeyAction", () => {
       readWorkspaceTabHotkeyAction(
         {
           altKey: false,
+          code: "KeyW",
+          ctrlKey: false,
+          key: "w",
+          metaKey: true,
+          shiftKey: false,
+        },
+        true,
+      ),
+    ).toEqual({ kind: "close-active-tab" });
+  });
+
+  test("Cmd+Shift+[ no longer matches tab shortcuts on mac (now workspace nav)", () => {
+    expect(
+      readWorkspaceTabHotkeyAction(
+        {
+          altKey: false,
           code: "BracketLeft",
           ctrlKey: false,
           key: "[",
           metaKey: true,
+          shiftKey: true,
+        },
+        true,
+      ),
+    ).toBeNull();
+  });
+
+  test("Ctrl+Tab cycles tabs on mac and non-mac", () => {
+    expect(
+      readWorkspaceTabHotkeyAction(
+        {
+          altKey: false,
+          code: "Tab",
+          ctrlKey: true,
+          key: "Tab",
+          metaKey: false,
+          shiftKey: false,
+        },
+        true,
+      ),
+    ).toEqual({ kind: "next-tab" });
+
+    expect(
+      readWorkspaceTabHotkeyAction(
+        {
+          altKey: false,
+          code: "Tab",
+          ctrlKey: true,
+          key: "Tab",
+          metaKey: false,
           shiftKey: true,
         },
         true,
@@ -1474,15 +1520,15 @@ describe("readWorkspaceTabHotkeyAction", () => {
       readWorkspaceTabHotkeyAction(
         {
           altKey: false,
-          code: "BracketLeft",
-          ctrlKey: false,
-          key: "[",
-          metaKey: true,
-          shiftKey: false,
+          code: "Tab",
+          ctrlKey: true,
+          key: "Tab",
+          metaKey: false,
+          shiftKey: true,
         },
-        true,
+        false,
       ),
-    ).toBeNull();
+    ).toEqual({ kind: "previous-tab" });
   });
 
   test("reads standard non-mac shortcuts", () => {
@@ -1499,6 +1545,22 @@ describe("readWorkspaceTabHotkeyAction", () => {
         false,
       ),
     ).toEqual({ kind: "close-active-tab" });
+  });
+
+  test("Cmd+1..9 no longer matches tab shortcuts (now project selection)", () => {
+    expect(
+      readWorkspaceTabHotkeyAction(
+        {
+          altKey: false,
+          code: "Digit9",
+          ctrlKey: false,
+          key: "9",
+          metaKey: true,
+          shiftKey: false,
+        },
+        true,
+      ),
+    ).toBeNull();
 
     expect(
       readWorkspaceTabHotkeyAction(
@@ -1512,20 +1574,6 @@ describe("readWorkspaceTabHotkeyAction", () => {
         },
         false,
       ),
-    ).toEqual({ index: 9, kind: "select-tab-index" });
-
-    expect(
-      readWorkspaceTabHotkeyAction(
-        {
-          altKey: false,
-          code: "Tab",
-          ctrlKey: true,
-          key: "Tab",
-          metaKey: false,
-          shiftKey: true,
-        },
-        false,
-      ),
-    ).toEqual({ kind: "previous-tab" });
+    ).toBeNull();
   });
 });

@@ -69,6 +69,26 @@ function withWindowStorage<T>(initialEntries: Record<string, string>, run: () =>
 }
 
 describe("GitPatchViewer", () => {
+  test("stretches the loading state to the full viewer height", () => {
+    const markup = withWindowStorage({}, () =>
+      renderViewer(
+        createElement(GitPatchViewer, {
+          error: null,
+          errorMessagePrefix: "Failed to load diff",
+          isLoading: true,
+          loadingMessage: "Loading diff...",
+          parsedFiles: [],
+          patch: "",
+        }),
+      ),
+    );
+
+    expect(markup).toContain('data-slot="git-patch-viewer-content"');
+    expect(markup).toContain('class="flex min-h-0 flex-1 flex-col"');
+    expect(markup).toContain("min-h-0 h-full py-0");
+    expect(markup).toContain("Loading diff...");
+  });
+
   test("restores the remembered diff view mode from storage", () => {
     const markup = withWindowStorage(
       {

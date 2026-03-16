@@ -17,7 +17,8 @@ import {
   type ReactNode,
 } from "react";
 import type { TerminalRecord } from "@lifecycle/contracts";
-import type { CreateTerminalRequest, HarnessProvider } from "../../terminals/api";
+import { AnimatePresence, motion } from "motion/react";
+import { type CreateTerminalRequest, type HarnessProvider } from "../../terminals/api";
 import {
   SurfaceLaunchActions,
   type SurfaceLaunchAction,
@@ -58,8 +59,8 @@ interface WorkspacePaneTreeProps {
   documents: WorkspaceCanvasDocument[];
   fileSessionsByTabKey: Record<string, FileViewerSessionState>;
   inactivePaneOpacity?: number;
+  nativeTerminalsSuppressed?: boolean;
   onCloseDocumentTab: (tabKey: string) => void;
-  onClosePane: (paneId: string) => void;
   onCloseRuntimeTab: (tabKey: string, terminalId: string) => Promise<void>;
   onCreateTerminal: (input: CreateTerminalRequest, paneId?: string) => Promise<void>;
   onFileSessionStateChange: (tabKey: string, state: FileViewerSessionState | null) => void;
@@ -147,21 +148,6 @@ function SplitDownIcon() {
   );
 }
 
-function ClosePaneIcon() {
-  return (
-    <svg
-      fill="none"
-      height="14"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeWidth="1.5"
-      viewBox="0 0 16 16"
-      width="14"
-    >
-      <path d="M4 4l8 8M12 4L4 12" />
-    </svg>
-  );
-}
 
 function ResizeHandle({
   direction,
@@ -492,8 +478,8 @@ export function WorkspacePaneTree({
   documents,
   fileSessionsByTabKey,
   inactivePaneOpacity = 1,
+  nativeTerminalsSuppressed = false,
   onCloseDocumentTab,
-  onClosePane,
   onCloseRuntimeTab,
   onCreateTerminal,
   onFileSessionStateChange,
@@ -519,6 +505,7 @@ export function WorkspacePaneTree({
 }: WorkspacePaneTreeProps) {
   const [activeTabDrag, setActiveTabDrag] = useState<WorkspacePaneActiveTabDropState | null>(null);
   const [hoveredPaneId, setHoveredPaneId] = useState<string | null>(null);
+  const [surfaceLaunchOpenPaneId, setSurfaceLaunchOpenPaneId] = useState<string | null>(null);
   const activeTabDragRef = useRef<WorkspacePaneActiveTabDropState | null>(null);
   const paneElementsRef = useRef(new Map<string, HTMLElement>());
   const draggedTab =
@@ -712,6 +699,7 @@ export function WorkspacePaneTree({
       const tabBarDragPreview = getWorkspacePaneTabBarDragPreview(activeTabDrag, node.id);
       const isDropTargetPane =
         paneDropIntent?.kind === "insert" && paneDropIntent.surface === "body";
+      const paneLaunchActionsOpen = surfaceLaunchOpenPaneId === node.id;
 
       return (
         <section
@@ -730,11 +718,11 @@ export function WorkspacePaneTree({
               onSelectPane(node.id);
             }
           }}
-          style={{ opacity: paneOpacity }}
         >
           <div
             className="flex h-9 items-stretch gap-1 shadow-[inset_0_-1px_0_var(--border)] bg-[var(--background)]"
             data-workspace-pane-header
+            style={{ opacity: paneOpacity }}
           >
             <WorkspacePaneTabBar
               activeTabKey={activeTabKey}
@@ -751,19 +739,31 @@ export function WorkspacePaneTree({
             <div className="flex shrink-0 items-center gap-px">
               <SurfaceLaunchActions
                 actions={surfaceActions}
+                onOpenChange={(nextOpen) => {
+                  setSurfaceLaunchOpenPaneId(nextOpen ? node.id : null);
+                }}
+                open={paneLaunchActionsOpen}
                 onLaunch={(request) => onLaunchSurface(node.id, request)}
               />
-              <PaneControlButton label="Split Right" onClick={() => onSplitPane(node.id, "row")}>
-                <SplitRightIcon />
-              </PaneControlButton>
-              <PaneControlButton label="Split Down" onClick={() => onSplitPane(node.id, "column")}>
-                <SplitDownIcon />
-              </PaneControlButton>
-              {paneCount > 1 ? (
-                <PaneControlButton label="Close Pane" onClick={() => onClosePane(node.id)}>
-                  <ClosePaneIcon />
-                </PaneControlButton>
-              ) : null}
+              <AnimatePresence initial={false}>
+                {paneLaunchActionsOpen ? null : (
+                  <motion.div
+                    key={`${node.id}:pane-controls`}
+                    animate={{ opacity: 1, width: "auto", x: 0 }}
+                    className="flex items-center gap-px overflow-hidden"
+                    exit={{ opacity: 0, width: 0, x: 8 }}
+                    initial={{ opacity: 0, width: 0, x: 8 }}
+                    transition={{ duration: 0.16, ease: "easeInOut" }}
+                  >
+                    <PaneControlButton label="Split Right" onClick={() => onSplitPane(node.id, "row")}>
+                      <SplitRightIcon />
+                    </PaneControlButton>
+                    <PaneControlButton label="Split Down" onClick={() => onSplitPane(node.id, "column")}>
+                      <SplitDownIcon />
+                    </PaneControlButton>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
 
@@ -775,6 +775,7 @@ export function WorkspacePaneTree({
               creatingSelection={creatingSelection}
               documents={documents}
               hasVisibleTabs={visibleTabs.length > 0}
+              nativeTerminalsSuppressed={nativeTerminalsSuppressed}
               onCreateTerminal={(input) => onCreateTerminal(input, node.id)}
               onFileSessionStateChange={onFileSessionStateChange}
               onOpenFile={onOpenFile}
@@ -800,10 +801,10 @@ export function WorkspacePaneTree({
       hoveredPaneId,
       inactivePaneOpacity,
       onCloseDocumentTab,
-      onClosePane,
       onCloseRuntimeTab,
       onCreateTerminal,
       onFileSessionStateChange,
+      nativeTerminalsSuppressed,
       onLaunchSurface,
       onMoveTabToPane,
       onOpenFile,
@@ -817,6 +818,7 @@ export function WorkspacePaneTree({
       paneCount,
       renderedActiveTabKeyByPaneId,
       setPaneElement,
+      surfaceLaunchOpenPaneId,
       surfaceActions,
       terminals,
       visibleTabsByPaneId,

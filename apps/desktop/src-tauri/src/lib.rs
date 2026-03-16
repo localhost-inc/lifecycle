@@ -95,6 +95,10 @@ pub fn run() {
                 crate::platform::diagnostics::append_error("main-webview-scroll-elasticity", error);
             }
 
+            if let Err(error) = disable_main_webview_context_menu(&app.handle()) {
+                crate::platform::diagnostics::append_error("main-webview-context-menu", error);
+            }
+
             if let Err(error) = expand_main_window_for_dev(&app.handle()) {
                 crate::platform::diagnostics::append_error("main-window-dev-size", error);
             }
@@ -155,7 +159,6 @@ pub fn run() {
             capabilities::app::commands::set_window_accepts_mouse_moved_events,
             capabilities::app::commands::set_window_pointing_cursor,
             capabilities::app::commands::get_window_mouse_position,
-            capabilities::app::context_menu::show_context_menu,
             capabilities::projects::commands::list_projects,
             capabilities::projects::commands::add_project,
             capabilities::projects::commands::remove_project,
@@ -243,6 +246,55 @@ fn disable_main_webview_scroll_elasticity(app: &tauri::AppHandle) -> Result<(), 
 
 #[cfg(not(target_os = "macos"))]
 fn disable_main_webview_scroll_elasticity(_app: &tauri::AppHandle) -> Result<(), LifecycleError> {
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn disable_main_webview_context_menu(app: &tauri::AppHandle) -> Result<(), LifecycleError> {
+    use objc2_app_kit::NSView;
+    use std::ffi::c_void;
+
+    let main_window = app
+        .get_webview_window("main")
+        .ok_or_else(|| LifecycleError::AttachFailed("main webview window not found".to_string()))?;
+
+    main_window
+        .with_webview(|webview| unsafe {
+            let view: &NSView = &*webview.inner().cast();
+
+            extern "C" {
+                fn object_getClass(obj: *const c_void) -> *mut c_void;
+                fn class_replaceMethod(
+                    cls: *mut c_void,
+                    name: *const c_void,
+                    imp: *const c_void,
+                    types: *const u8,
+                ) -> *const c_void;
+            }
+
+            extern "C" fn no_menu(
+                _this: *const c_void,
+                _cmd: *const c_void,
+                _event: *const c_void,
+            ) -> *const c_void {
+                std::ptr::null()
+            }
+
+            let cls = object_getClass((view as *const NSView).cast());
+            let sel = objc2::sel!(menuForEvent:);
+            let sel_ptr: *const c_void = std::mem::transmute(sel);
+            class_replaceMethod(
+                cls,
+                sel_ptr,
+                no_menu as *const () as *const c_void,
+                b"@@:@\0".as_ptr(),
+            );
+        })
+        .map_err(|error| LifecycleError::AttachFailed(error.to_string()))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn disable_main_webview_context_menu(_app: &tauri::AppHandle) -> Result<(), LifecycleError> {
     Ok(())
 }
 

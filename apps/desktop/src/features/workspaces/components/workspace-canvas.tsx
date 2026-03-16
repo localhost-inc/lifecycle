@@ -4,10 +4,15 @@ import {
   type WorkspaceCanvasControllerInput,
 } from "./workspace-canvas-controller";
 
-export type WorkspaceCanvasProps = WorkspaceCanvasControllerInput;
+interface WorkspaceCanvasProps extends WorkspaceCanvasControllerInput {
+  nativeTerminalsSuppressed?: boolean;
+}
 
-export function WorkspaceCanvas(props: WorkspaceCanvasProps) {
-  const controller = useWorkspaceCanvasController(props);
+export function WorkspaceCanvas({
+  nativeTerminalsSuppressed = false,
+  ...controllerInput
+}: WorkspaceCanvasProps) {
+  const controller = useWorkspaceCanvasController(controllerInput);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -24,8 +29,8 @@ export function WorkspaceCanvas(props: WorkspaceCanvasProps) {
         documents={controller.documents}
         fileSessionsByTabKey={controller.fileSessionsByTabKey}
         inactivePaneOpacity={controller.inactivePaneOpacity}
+        nativeTerminalsSuppressed={nativeTerminalsSuppressed}
         onCloseDocumentTab={controller.handleCloseDocumentTab}
-        onClosePane={controller.handleClosePane}
         onCloseRuntimeTab={controller.handleCloseRuntimeTab}
         onCreateTerminal={controller.handleCreateTerminal}
         onFileSessionStateChange={controller.handleFileSessionStateChange}

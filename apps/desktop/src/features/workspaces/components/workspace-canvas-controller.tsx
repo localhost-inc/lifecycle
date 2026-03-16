@@ -21,7 +21,11 @@ import { terminalKeys } from "../../terminals/hooks";
 import { hideNativeTerminalSurface } from "../../terminals/native-surface-api";
 import { useTerminalResponseReady } from "../../terminals/state/terminal-response-ready-provider";
 import { subscribeToNativeWorkspaceShortcutEvents } from "../native-shortcuts-api";
-import { inspectWorkspacePaneLayout, requireWorkspacePane } from "../lib/workspace-pane-layout";
+import {
+  getAdjacentPaneId,
+  inspectWorkspacePaneLayout,
+  requireWorkspacePane,
+} from "../lib/workspace-pane-layout";
 import { formatWorkspaceError } from "../lib/workspace-errors";
 import {
   getWorkspaceDocument,
@@ -49,12 +53,12 @@ import {
   type WorkspaceTabHotkeyAction,
 } from "./workspace-canvas-shortcuts";
 import { useSettings } from "../../settings/state/app-settings-provider";
+import { buildHarnessLaunchConfig } from "../../settings/state/harness-settings";
 import { type SurfaceLaunchAction, type SurfaceLaunchRequest } from "./surface-launch-actions";
 import { ClaudeIcon, CodexIcon, ShellIcon } from "./surface-icons";
 import {
   areStringArraysEqual,
   getWorkspaceAdjacentTabKey,
-  getWorkspaceTabKeyByIndex,
   orderWorkspaceTerminals,
   reconcileHiddenRuntimeTabKeys,
   resolveWorkspaceVisibleTabs,
@@ -85,7 +89,7 @@ export function useWorkspaceCanvasController({
   workspaceId,
 }: WorkspaceCanvasControllerInput) {
   const client = useQueryClient();
-  const { defaultNewTabLaunch, dimInactivePanes, inactivePaneOpacity } = useSettings();
+  const { defaultNewTabLaunch, dimInactivePanes, harnesses, inactivePaneOpacity } = useSettings();
   const { clearTerminalResponseReady, isTerminalResponseReady, isTerminalTurnRunning } =
     useTerminalResponseReady();
   const [creatingSelection, setCreatingSelection] = useState<"shell" | HarnessProvider | null>(
@@ -390,10 +394,17 @@ export function useWorkspaceCanvasController({
       releaseWebviewFocus();
 
       try {
-        const terminal = await createTerminal({
-          ...input,
-          workspaceId,
-        });
+        const terminal =
+          input.launchType === "harness"
+            ? await createTerminal({
+                ...input,
+                harnessLaunchConfig: buildHarnessLaunchConfig(input.harnessProvider, harnesses),
+                workspaceId,
+              })
+            : await createTerminal({
+                ...input,
+                workspaceId,
+              });
         client.invalidate(terminalKeys.byWorkspace(workspaceId));
         client.invalidate(terminalKeys.detail(terminal.id));
         handleShowRuntimeTab(terminal.id, paneId);
@@ -403,7 +414,7 @@ export function useWorkspaceCanvasController({
         setCreatingSelection(null);
       }
     },
-    [client, handleShowRuntimeTab, workspaceId],
+    [client, handleShowRuntimeTab, harnesses, workspaceId],
   );
 
   const handleLaunchSurface = useCallback(
@@ -530,7 +541,10 @@ export function useWorkspaceCanvasController({
           return true;
         }
         case "close-active-tab": {
-          const closeTarget = resolveWorkspaceCloseShortcutTarget(paneLayout.paneCount, activePaneVisibleTabs.length);
+          const closeTarget = resolveWorkspaceCloseShortcutTarget(
+            paneLayout.paneCount,
+            activePaneVisibleTabs.length,
+          );
           if (closeTarget === "close-pane") {
             closeShortcutHandledAtRef.current = Date.now();
             void closeWorkspacePane(activePaneId);
@@ -583,13 +597,6 @@ export function useWorkspaceCanvasController({
           }
           return true;
         }
-        case "select-tab-index": {
-          const selectedKey = getWorkspaceTabKeyByIndex(activePaneVisibleTabKeys, action.index);
-          if (selectedKey) {
-            handleSelectTab(activePaneId, selectedKey);
-          }
-          return true;
-        }
       }
     },
     [
@@ -636,12 +643,17 @@ export function useWorkspaceCanvasController({
   });
 
   useShortcutRegistration({
-    handler: (match) =>
-      handleWorkspaceTabHotkeyAction({
-        index: match.index ?? 1,
-        kind: "select-tab-index",
-      }),
-    id: "workspace.select-tab-index",
+    handler: (match) => {
+      if (!match.direction) {
+        return false;
+      }
+      const adjacentId = getAdjacentPaneId(state.rootPane, activePaneId, match.direction);
+      if (adjacentId) {
+        handleSelectPane(adjacentId);
+      }
+      return true;
+    },
+    id: "workspace.focus-pane",
     priority: SHORTCUT_HANDLER_PRIORITY.workspace,
   });
 
@@ -721,13 +733,6 @@ export function useWorkspaceCanvasController({
     };
   }, [activePaneVisibleTabs.length, activeTabKey, handleWorkspaceTabHotkeyAction]);
 
-  const handleClosePane = useCallback(
-    (paneId: string) => {
-      void closeWorkspacePane(paneId);
-    },
-    [closeWorkspacePane],
-  );
-
   const handleMoveTabToPane = useCallback(
     (
       key: string,
@@ -805,7 +810,6 @@ export function useWorkspaceCanvasController({
     fileSessionsByTabKey,
     handleActiveTabViewStateChange,
     handleCloseDocumentTab,
-    handleClosePane,
     handleCloseRuntimeTab,
     handleCreateTerminal,
     handleFileSessionStateChange,

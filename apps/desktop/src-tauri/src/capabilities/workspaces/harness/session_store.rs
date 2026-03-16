@@ -132,12 +132,9 @@ fn collect_session_candidates_from_store(
                 modified_after,
             )
         }
-        SessionStoreScope::Recursive => collect_session_candidates_from_tree(
-            &root,
-            store,
-            worktree_path,
-            modified_after,
-        ),
+        SessionStoreScope::Recursive => {
+            collect_session_candidates_from_tree(&root, store, worktree_path, modified_after)
+        }
     }
 }
 

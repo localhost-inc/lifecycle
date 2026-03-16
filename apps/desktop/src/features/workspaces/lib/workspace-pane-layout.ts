@@ -211,6 +211,26 @@ export function splitWorkspacePaneLayout(
   };
 }
 
+export function getAdjacentPaneId(
+  root: WorkspacePaneNode,
+  currentPaneId: string,
+  direction: "down" | "left" | "right" | "up",
+): string | null {
+  const panes = collectWorkspacePaneLeaves(root);
+  if (panes.length <= 1) {
+    return null;
+  }
+
+  const currentIndex = panes.findIndex((pane) => pane.id === currentPaneId);
+  if (currentIndex === -1) {
+    return null;
+  }
+
+  const delta = direction === "left" || direction === "up" ? -1 : 1;
+  const nextIndex = (currentIndex + delta + panes.length) % panes.length;
+  return panes[nextIndex]?.id ?? null;
+}
+
 export function closeWorkspacePaneLayout(
   root: WorkspacePaneNode,
   paneId: string,

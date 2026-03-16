@@ -8,22 +8,15 @@ import {
   Badge,
   Button,
   Input,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
   SplitButton,
   SplitButtonPrimary,
   SplitButtonSecondary,
   StatusDot,
   type StatusDotTone,
-  useTheme,
 } from "@lifecycle/ui";
 import { ChevronDown } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
-import type { HostedOverlayAction } from "../../overlays/overlay-contract";
-import { useHostedOverlay } from "../../overlays/use-hosted-overlay";
+import { useCallback, useMemo, useState } from "react";
 import { buildWorkspaceGitActionState } from "../lib/workspace-git-action-state";
-import { resolveContainedOverlayWidth, useOverlayBoundary } from "../../../lib/overlay-boundary";
 
 interface GitActionButtonProps {
   actionError: string | null;
@@ -31,8 +24,6 @@ interface GitActionButtonProps {
   className?: string;
   defaultOpen?: boolean;
   gitStatus: GitStatusResult | null;
-  /** Render the menu inline above the button with CSS positioning instead of a popover/overlay. */
-  inlineMenu?: boolean;
   size?: "default" | "lg";
   isCommitting: boolean;
   isCreatingPullRequest: boolean;
@@ -103,6 +94,14 @@ function checkLabel(status: GitPullRequestCheckStatus): string {
     default:
       return "Neutral";
   }
+}
+
+export function performShowChangesAction(
+  setOpen: (open: boolean) => void,
+  onShowChanges: () => void,
+): void {
+  setOpen(false);
+  onShowChanges();
 }
 
 export function GitActionMenuContent({
@@ -341,7 +340,6 @@ export function GitActionButton({
   className,
   defaultOpen = false,
   gitStatus,
-  inlineMenu = false,
   size,
   isCommitting,
   isCreatingPullRequest,
@@ -355,101 +353,20 @@ export function GitActionButton({
   onPushBranch,
   onShowChanges,
 }: GitActionButtonProps) {
-  const { resolvedTheme } = useTheme();
   const [open, setOpen] = useState(defaultOpen);
   const [commitMessage, setCommitMessage] = useState("");
-  const triggerRef = useRef<HTMLDivElement | null>(null);
   const actionState = useMemo(
     () => buildWorkspaceGitActionState(gitStatus, branchPullRequest, { isLoading }),
     [branchPullRequest, gitStatus, isLoading],
   );
   const isBusy = isCommitting || isCreatingPullRequest || isMergingPullRequest || isPushingBranch;
-  const overlayBoundary = useOverlayBoundary(triggerRef);
-  const contentWidth = resolveContainedOverlayWidth({
-    boundaryWidth: overlayBoundary.width,
-    idealWidth: 352,
-  });
-  const hostedOverlayPayload = useMemo(
-    () => ({
-      actionError,
-      branchPullRequest,
-      commitMessage,
-      gitStatus,
-      isCommitting,
-      isCreatingPullRequest,
-      isLoading,
-      isMergingPullRequest,
-      isPushingBranch,
-      kind: "git-actions" as const,
-      placement: {
-        align: "end" as const,
-        estimatedHeight: 560,
-        gutter: 16,
-        preferredWidth: 352,
-        side: "bottom" as const,
-        sideOffset: 8,
-      },
-      resolvedTheme,
-      requiresWindowFocus: actionState.kind === "needs_commit",
-    }),
-    [
-      actionError,
-      branchPullRequest,
-      commitMessage,
-      gitStatus,
-      isCommitting,
-      isCreatingPullRequest,
-      isLoading,
-      isMergingPullRequest,
-      isPushingBranch,
-      actionState.kind,
-      resolvedTheme,
-    ],
-  );
-  const hostedOverlay = useHostedOverlay({
-    anchorRef: triggerRef,
-    enabled: !inlineMenu,
-    onAction: (action: HostedOverlayAction) => {
-      if (action.kind !== "git-actions") {
-        return;
-      }
-
-      switch (action.action) {
-        case "commit":
-          void handleCommit(action.pushAfterCommit, action.message);
-          return;
-        case "create-pull-request":
-          void onCreatePullRequest();
-          return;
-        case "merge-pull-request":
-          void onMergePullRequest(action.pullRequestNumber);
-          return;
-        case "open-pull-request":
-          if (actionState.pullRequest?.url === action.url) {
-            onOpenPullRequest(actionState.pullRequest);
-          }
-          return;
-        case "push-branch":
-          void onPushBranch();
-          return;
-        case "show-changes":
-          onShowChanges();
-          return;
-        default:
-          return;
-      }
-    },
-    onRequestClose: () => {
-      setOpen(false);
-    },
-    open,
-    payload: hostedOverlayPayload,
-  });
-  const usesHostedOverlay = hostedOverlay.hosted;
+  const handleShowChanges = useCallback(() => {
+    performShowChangesAction(setOpen, onShowChanges);
+  }, [onShowChanges]);
 
   async function handlePrimaryClick(): Promise<void> {
     if (actionState.primaryAction.kind === "show_changes") {
-      onShowChanges();
+      handleShowChanges();
       return;
     }
 
@@ -496,10 +413,8 @@ export function GitActionButton({
     await onCommit(nextMessage, pushAfterCommit);
   }
 
-  const useDirectChevron = usesHostedOverlay || inlineMenu;
-
   const splitButton = (
-    <SplitButton className={className} ref={triggerRef}>
+    <SplitButton className={className}>
       <SplitButtonPrimary
         disabled={isBusy}
         onClick={() => void handlePrimaryClick()}
@@ -509,31 +424,23 @@ export function GitActionButton({
       >
         {actionState.primaryAction.label}
       </SplitButtonPrimary>
-      {useDirectChevron ? (
-        <SplitButtonSecondary
-          aria-label="Show git actions"
-          disabled={isBusy}
-          onClick={() => {
-            setOpen((current) => !current);
-          }}
-          size={size}
-        >
-          <ChevronDown className="size-3.5" strokeWidth={2.4} />
-        </SplitButtonSecondary>
-      ) : (
-        <PopoverTrigger asChild>
-          <SplitButtonSecondary aria-label="Show git actions" disabled={isBusy} size={size}>
-            <ChevronDown className="size-3.5" strokeWidth={2.4} />
-          </SplitButtonSecondary>
-        </PopoverTrigger>
-      )}
+      <SplitButtonSecondary
+        aria-label="Show git actions"
+        disabled={isBusy}
+        onClick={() => {
+          setOpen((current) => !current);
+        }}
+        size={size}
+      >
+        <ChevronDown className="size-3.5" strokeWidth={2.4} />
+      </SplitButtonSecondary>
     </SplitButton>
   );
 
   const menuContent = (
     <GitActionMenuContent
       actionError={actionError}
-      autoFocusCommitMessage={inlineMenu}
+      autoFocusCommitMessage
       branchPullRequest={branchPullRequest}
       commitMessage={commitMessage}
       gitStatus={gitStatus}
@@ -548,43 +455,18 @@ export function GitActionButton({
       onMergePullRequest={onMergePullRequest}
       onOpenPullRequest={onOpenPullRequest}
       onPushBranch={onPushBranch}
-      onShowChanges={onShowChanges}
+      onShowChanges={handleShowChanges}
     />
   );
 
-  if (inlineMenu) {
-    return (
-      <div className="relative">
-        {open && (
-          <div
-            className="absolute inset-x-0 bottom-full mb-2 rounded-[22px] border border-[var(--border)] bg-[var(--card)] p-3 shadow-[0_20px_64px_rgba(0,0,0,0.18)]"
-            style={{ width: `${contentWidth}px`, left: "50%", transform: "translateX(-50%)" }}
-          >
-            {menuContent}
-          </div>
-        )}
-        {splitButton}
-      </div>
-    );
-  }
-
-  if (usesHostedOverlay) {
-    return splitButton;
-  }
-
   return (
-    <Popover onOpenChange={setOpen} open={open}>
+    <div className="relative">
+      {open ? (
+        <div className="absolute right-0 top-full z-20 mt-2 w-[22rem] max-w-[calc(100vw-2rem)] rounded-[22px] border border-[var(--border)] bg-[var(--card)] p-3 shadow-[0_20px_64px_rgba(0,0,0,0.18)]">
+          {menuContent}
+        </div>
+      ) : null}
       {splitButton}
-      <PopoverContent
-        align="end"
-        className="rounded-[22px] border-[var(--border)] bg-[var(--card)] p-3 shadow-[0_20px_64px_rgba(0,0,0,0.18)]"
-        container={overlayBoundary.element ?? undefined}
-        side="bottom"
-        sideOffset={8}
-        style={{ maxWidth: "calc(100vw - 2rem)", width: `${contentWidth}px` }}
-      >
-        {menuContent}
-      </PopoverContent>
-    </Popover>
+    </div>
   );
 }

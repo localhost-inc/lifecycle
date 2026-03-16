@@ -1,12 +1,17 @@
+use crate::shared::errors::LifecycleError;
 use serde_json::Value;
+
+use super::launch_config::HarnessLaunchConfig;
 
 #[derive(Clone, Copy)]
 pub(crate) struct HarnessAdapter {
     pub(crate) name: &'static str,
     pub(crate) display_name: &'static str,
     pub(crate) program: &'static str,
-    pub(crate) new_session_args: fn(Option<&str>) -> Vec<String>,
-    pub(crate) resume_args: fn(&str) -> Vec<String>,
+    pub(crate) new_session_args:
+        fn(Option<&str>, Option<&HarnessLaunchConfig>) -> Result<Vec<String>, LifecycleError>,
+    pub(crate) resume_args:
+        fn(&str, Option<&HarnessLaunchConfig>) -> Result<Vec<String>, LifecycleError>,
     pub(in crate::capabilities::workspaces::harness) session_store: Option<SessionStoreConfig>,
     pub(in crate::capabilities::workspaces::harness) parse_prompt_submission:
         fn(&Value, &str) -> Option<HarnessPromptSubmission>,

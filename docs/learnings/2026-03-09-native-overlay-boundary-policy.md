@@ -1,6 +1,6 @@
 # Native Overlay Surface Policy - 2026-03-09
 
-> Superseded on 2026-03-15 by [2026-03-15-same-window-overlay-webviews.md](./2026-03-15-same-window-overlay-webviews.md). The repo now prefers a transparent child webview in the main window over a separate hosted `WebviewWindow`.
+> Superseded on 2026-03-15 by [2026-03-15-hosted-overlay-retirement.md](./2026-03-15-hosted-overlay-retirement.md). Lifecycle no longer uses a shared hosted-overlay runtime; current guidance is route-driven workspace dialogs plus native-terminal suppression for modal above-terminal flows.
 
 ## Context
 
