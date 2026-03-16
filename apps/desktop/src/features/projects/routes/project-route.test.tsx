@@ -126,7 +126,7 @@ describe("ProjectRoute", () => {
     );
   });
 
-  test("renders Fork action inside the nav bar for workspace routes", async () => {
+  test("renders workspace action icons inside the nav bar for workspace routes", async () => {
     const { ProjectRoute } = await import("./project-route");
 
     const markup = renderProjectRoute(
@@ -137,10 +137,12 @@ describe("ProjectRoute", () => {
 
     expect(markup).toContain('data-slot="project-nav-bar"');
     expect(markup).toContain('data-slot="workspace-layout"');
-    expect(markup).toContain(">Fork<");
+    expect(markup).toContain('aria-label="Fork workspace"');
+    expect(markup).toContain('aria-label="Destroy workspace"');
+    expect(markup).not.toContain('title="Toggle extension panel"');
 
     const navBarStart = markup.indexOf('data-slot="project-nav-bar"');
-    const forkIndex = markup.indexOf(">Fork<");
+    const forkIndex = markup.indexOf('aria-label="Fork workspace"');
     const workspaceStart = markup.indexOf('data-slot="workspace-layout"');
     expect(navBarStart).toBeLessThan(forkIndex);
     expect(forkIndex).toBeLessThan(workspaceStart);
@@ -190,6 +192,5 @@ describe("ProjectRoute", () => {
     );
 
     expect(markup.match(/data-slot="spinner"/g)?.length ?? 0).toBeGreaterThanOrEqual(1);
-    expect(markup).toContain('title="Generating response"');
   });
 });

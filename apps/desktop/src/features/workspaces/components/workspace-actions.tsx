@@ -8,9 +8,13 @@ import {
   SplitButton,
   SplitButtonPrimary,
   SplitButtonSecondary,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
   useTheme,
 } from "@lifecycle/ui";
-import { ChevronDown, GitFork } from "lucide-react";
+import { ChevronDown, GitFork, Trash2 } from "lucide-react";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { isMacPlatform } from "../../../app/app-hotkeys";
 import type { HostedOverlayAction } from "../../overlays/overlay-contract";
@@ -32,6 +36,7 @@ import {
 interface WorkspaceActionsProps {
   workspace: WorkspaceRecord;
   onFork?: () => void;
+  onDestroy?: () => Promise<void> | void;
 }
 
 function describeOpenInError(error: unknown): string {
@@ -56,18 +61,20 @@ function describeOpenInError(error: unknown): string {
   return "Unable to open this workspace in the selected app.";
 }
 
-export function WorkspaceActions({ workspace, onFork }: WorkspaceActionsProps) {
+export function WorkspaceActions({ workspace, onDestroy, onFork }: WorkspaceActionsProps) {
   const { resolvedTheme } = useTheme();
   const [baseAvailableTargets] = useState(() => listAvailableOpenInTargets(isMacPlatform()));
   const [availableTargets, setAvailableTargets] =
     useState<readonly OpenInTarget[]>(baseAvailableTargets);
   const [openInOpen, setOpenInOpen] = useState(false);
   const [openInKeyboardMode, setOpenInKeyboardMode] = useState(false);
+  const [destroying, setDestroying] = useState(false);
   const [launchingTarget, setLaunchingTarget] = useState<OpenInAppId | null>(null);
   const [launchError, setLaunchError] = useState<string | null>(null);
   const menuTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   const defaultTarget = resolveDefaultOpenTarget(availableTargets);
+  const interactionLocked = launchingTarget !== null || destroying;
 
   function mergeInstalledTargets(
     installedApps: readonly WorkspaceOpenInAppInfo[],
@@ -147,6 +154,19 @@ export function WorkspaceActions({ workspace, onFork }: WorkspaceActionsProps) {
     }
   }
 
+  async function handleDestroy(): Promise<void> {
+    if (!onDestroy || destroying) {
+      return;
+    }
+
+    setDestroying(true);
+    try {
+      await onDestroy();
+    } finally {
+      setDestroying(false);
+    }
+  }
+
   const hostedOverlayPayload = useMemo(
     () => ({
       availableTargets,
@@ -203,16 +223,10 @@ export function WorkspaceActions({ workspace, onFork }: WorkspaceActionsProps) {
   }
 
   return (
-    <>
-      {onFork && (
-        <Button onClick={onFork} title="Fork workspace">
-          <GitFork size={14} strokeWidth={2.2} />
-          Fork
-        </Button>
-      )}
+    <TooltipProvider>
       <SplitButton>
         <SplitButtonPrimary
-          disabled={launchingTarget !== null}
+          disabled={interactionLocked}
           leadingIcon={
             <OpenInAppIcon
               appId={defaultTarget.id}
@@ -229,7 +243,7 @@ export function WorkspaceActions({ workspace, onFork }: WorkspaceActionsProps) {
         {usesHostedOpenInMenu ? (
           <SplitButtonSecondary
             aria-label="Choose app"
-            disabled={launchingTarget !== null}
+            disabled={interactionLocked}
             onKeyDown={(event) => {
               const shouldOpen = handleOpenInKeyboardIntent(event.key);
               if (!shouldOpen) {
@@ -256,7 +270,7 @@ export function WorkspaceActions({ workspace, onFork }: WorkspaceActionsProps) {
             <PopoverTrigger asChild>
               <SplitButtonSecondary
                 aria-label="Choose app"
-                disabled={launchingTarget !== null}
+                disabled={interactionLocked}
                 onKeyDown={(event) => {
                   const shouldOpen = handleOpenInKeyboardIntent(event.key);
                   if (!shouldOpen) {
@@ -291,6 +305,31 @@ export function WorkspaceActions({ workspace, onFork }: WorkspaceActionsProps) {
           </Popover>
         )}
       </SplitButton>
-    </>
+      {onFork && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button aria-label="Fork workspace" disabled={interactionLocked} onClick={onFork} size="icon">
+              <GitFork size={14} strokeWidth={2.2} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Fork workspace</TooltipContent>
+        </Tooltip>
+      )}
+      {onDestroy && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              aria-label={destroying ? "Destroying workspace" : "Destroy workspace"}
+              disabled={interactionLocked}
+              onClick={() => void handleDestroy()}
+              size="icon"
+            >
+              <Trash2 size={14} strokeWidth={2.2} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{destroying ? "Destroying workspace" : "Destroy workspace"}</TooltipContent>
+        </Tooltip>
+      )}
+    </TooltipProvider>
   );
 }

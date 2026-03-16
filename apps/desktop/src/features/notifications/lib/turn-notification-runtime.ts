@@ -19,33 +19,43 @@ function providerLabel(provider: string | null): string {
     return "Codex";
   }
 
-  return "Harness";
+  return "Agent";
 }
 
-function shortSessionId(value: string | null): string | null {
-  if (!value) {
-    return null;
+export interface TurnCompletionNotificationContext {
+  projectName?: string | null;
+  sessionTitle?: string | null;
+  workspaceName?: string | null;
+}
+
+function formatLocation(projectName?: string | null, workspaceName?: string | null): string | null {
+  const project = projectName?.trim();
+  const workspace = workspaceName?.trim();
+
+  if (project && workspace) {
+    return `${project}:${workspace}`;
   }
 
-  const segments = value.split("-").filter((segment) => segment.length > 0);
-  const preferredSegment = segments.at(-1) ?? value;
-  return preferredSegment.slice(0, 8);
+  return project || workspace || null;
 }
 
 export function createTurnCompletionNotificationCopy(
   event: LifecycleEventOf<"terminal.harness_turn_completed">,
+  context?: TurnCompletionNotificationContext,
 ): {
   body: string;
   title: string;
 } {
-  const sessionId = shortSessionId(event.harness_session_id);
+  const provider = providerLabel(event.harness_provider);
+  const sessionTitle = context?.sessionTitle?.trim();
+  const location = formatLocation(context?.projectName, context?.workspaceName);
 
-  return {
-    body: sessionId
-      ? `Session ${sessionId} has a response ready in Lifecycle.`
-      : "Lifecycle has a response ready.",
-    title: `${providerLabel(event.harness_provider)} turn completed`,
-  };
+  const title = sessionTitle || "Response ready";
+  const body = location
+    ? `${provider} finished in ${location}.`
+    : `${provider} has a response ready.`;
+
+  return { body, title };
 }
 
 async function ensureBrowserNotificationPermission(): Promise<boolean> {
@@ -74,8 +84,9 @@ async function ensureTauriNotificationPermission(): Promise<boolean> {
 
 export async function sendTurnCompletionNotification(
   event: LifecycleEventOf<"terminal.harness_turn_completed">,
+  context?: TurnCompletionNotificationContext,
 ): Promise<void> {
-  const notification = createTurnCompletionNotificationCopy(event);
+  const notification = createTurnCompletionNotificationCopy(event, context);
 
   if (isTauri()) {
     if (!(await ensureTauriNotificationPermission())) {

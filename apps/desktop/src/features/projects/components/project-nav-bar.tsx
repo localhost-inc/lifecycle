@@ -2,7 +2,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { Button, Spinner } from "@lifecycle/ui";
-import { Activity, GitPullRequest, LayoutGrid, Plus, TerminalSquare } from "lucide-react";
+import { Activity, FolderGit2, GitBranch, GitPullRequest, LayoutGrid, Plus } from "lucide-react";
 import { type MouseEvent, type ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import {
@@ -27,9 +27,11 @@ interface ProjectNavBarProps {
 }
 
 function WorkspaceNavIcon({
+  kind,
   responseReady,
   running,
 }: {
+  kind: WorkspaceRecord["kind"];
   responseReady: boolean;
   running: boolean;
 }) {
@@ -41,39 +43,33 @@ function WorkspaceNavIcon({
 
   if (state === "loading") {
     return (
-      <span
-        aria-label="Generating response"
-        className="flex items-center justify-center"
-        role="img"
-        title="Generating response"
-      >
-        <Spinner
-          aria-hidden="true"
-          aria-label={undefined}
-          className="size-3.5 text-[var(--muted-foreground)]"
-          role={undefined}
-        />
-      </span>
+      <Spinner
+        aria-hidden="true"
+        aria-label={undefined}
+        className="size-3.5 text-[var(--muted-foreground)]"
+        role={undefined}
+      />
     );
   }
 
-  return <TerminalSquare className="size-3.5" strokeWidth={2} />;
+  const Icon = kind === "root" ? FolderGit2 : GitBranch;
+  return <Icon className="size-3.5" strokeWidth={2} />;
 }
 
 const viewNavClass = ({ isActive }: { isActive: boolean }) =>
   [
-    "flex h-full items-center justify-center px-2.5 text-[var(--muted-foreground)] transition-colors",
+    "flex items-center justify-center px-2 text-[var(--muted-foreground)] transition-colors rounded-md mx-0.5 my-1.5 h-7",
     isActive
-      ? "text-[var(--foreground)] border-b border-[var(--foreground)]"
-      : "hover:text-[var(--foreground)]",
+      ? "bg-[var(--surface-selected)] text-[var(--foreground)]"
+      : "hover:text-[var(--foreground)] hover:bg-[var(--surface-hover)]",
   ].join(" ");
 
 const workspaceNavClass = ({ isActive }: { isActive: boolean }) =>
   [
-    "flex h-full items-center gap-1.5 px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors",
+    "flex items-center gap-1.5 px-2.5 text-[13px] font-medium whitespace-nowrap transition-colors rounded-md mx-0.5 my-1.5 h-7",
     isActive
-      ? "text-[var(--foreground)] border-b border-[var(--foreground)]"
-      : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]",
+      ? "bg-[var(--surface-selected)] text-[var(--foreground)]"
+      : "text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--surface-hover)]",
   ].join(" ");
 
 export function ProjectNavBar({
@@ -137,15 +133,15 @@ export function ProjectNavBar({
       data-tauri-drag-region
       onMouseDown={handleMouseDown}
     >
-      {/* Navigation controls — only rendered here when sidebar is collapsed */}
-      {sidebarCollapsed && onToggleSidebar ? (
+      {/* Navigation controls */}
+      {onToggleSidebar ? (
         <div className="flex shrink-0 items-center border-r border-[var(--border)]">
-          <NavigationControls onToggleSidebar={onToggleSidebar} sidebarCollapsed={true} />
+          <NavigationControls onToggleSidebar={onToggleSidebar} sidebarCollapsed={sidebarCollapsed ?? false} />
         </div>
       ) : null}
 
       {/* View icons */}
-      <div className="flex shrink-0 items-stretch" data-no-drag>
+      <div className="flex shrink-0 items-stretch pl-1" data-no-drag>
         <NavLink className={viewNavClass} end title="Overview" to={basePath}>
           <LayoutGrid className="size-3.5" strokeWidth={2} />
         </NavLink>
@@ -158,7 +154,7 @@ export function ProjectNavBar({
       </div>
 
       {/* Divider */}
-      <div aria-hidden="true" className="my-2 w-px shrink-0 bg-[var(--border)]" />
+      <div aria-hidden="true" className="mx-1 w-px shrink-0 bg-[var(--border)]" />
 
       {/* Workspace links */}
       <div
@@ -178,7 +174,7 @@ export function ProjectNavBar({
                 title={displayName}
                 to={`${basePath}/workspaces/${workspace.id}`}
               >
-                <WorkspaceNavIcon responseReady={responseReady} running={running} />
+                <WorkspaceNavIcon kind={workspace.kind} responseReady={responseReady} running={running} />
                 <span className="max-w-[180px] truncate">{displayName}</span>
               </NavLink>
             );

@@ -13,12 +13,12 @@ import {
   ChevronDown,
   CircleUserRound,
   Megaphone,
+  PanelLeftClose,
   Plus,
   Settings,
 } from "lucide-react";
 import { type MouseEvent, useCallback, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { NavigationControls } from "./navigation-controls";
 import { ResponseReadyDot } from "../response-ready-dot";
 import { Wordmark } from "../wordmark";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -157,9 +157,12 @@ export function AppSidebar({
         onMouseDown={handleMouseDown}
         style={{ width: `${COLLAPSED_WIDTH}px` }}
       >
-        {/* Avatar — align with nav bar h-10 */}
-        <div className="flex h-10 shrink-0 items-center justify-center">
-          <div>
+        {/* Spacer to align below nav bar — no border in traffic light zone */}
+        <div className="h-10 w-full shrink-0" />
+
+        <div className="flex min-h-0 w-full flex-1 flex-col items-center border-r border-[var(--border)]">
+          {/* Avatar */}
+          <div className="flex shrink-0 items-center justify-center pt-1 pb-3">
             <button
               aria-label={activeContextName}
               onClick={onOpenSettings}
@@ -169,66 +172,66 @@ export function AppSidebar({
               <AuthSessionAvatar loading={authSessionLoading} session={authSession} size={24} />
             </button>
           </div>
-        </div>
 
-        {/* Project monograms */}
-        <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto">
-          <div className="flex flex-col gap-1">
-            {projects.map((project) => {
-              const selected = project.id === projectId;
-              const responseReady = readyProjectIds.has(project.id);
+          {/* Project monograms */}
+          <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto">
+            <div className="flex flex-col gap-1">
+              {projects.map((project) => {
+                const selected = project.id === projectId;
+                const responseReady = readyProjectIds.has(project.id);
 
-              return (
-                <Link
-                  key={project.id}
-                  aria-label={project.name}
-                  className={[
-                    "relative flex size-8 items-center justify-center rounded-lg text-[11px] font-semibold uppercase transition-colors",
-                    selected
-                      ? "bg-[var(--sidebar-selected)] text-[var(--sidebar-foreground)]"
-                      : "text-[var(--sidebar-muted-foreground)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]",
-                  ].join(" ")}
-                  to={`/projects/${project.id}`}
-                  title={project.name}
-                >
-                  {projectMonogram(project.name)}
-                  {responseReady ? (
-                    <ResponseReadyDot className="absolute -right-0.5 -top-0.5 scale-75" />
-                  ) : null}
-                </Link>
-              );
-            })}
+                return (
+                  <Link
+                    key={project.id}
+                    aria-label={project.name}
+                    className={[
+                      "relative flex size-8 items-center justify-center rounded-lg text-[11px] font-semibold uppercase transition-colors",
+                      selected
+                        ? "bg-[var(--sidebar-selected)] text-[var(--sidebar-foreground)]"
+                        : "text-[var(--sidebar-muted-foreground)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]",
+                    ].join(" ")}
+                    to={`/projects/${project.id}`}
+                    title={project.name}
+                  >
+                    {projectMonogram(project.name)}
+                    {responseReady ? (
+                      <ResponseReadyDot className="absolute -right-0.5 -top-0.5 scale-75" />
+                    ) : null}
+                  </Link>
+                );
+              })}
+              <button
+                aria-label="Add project"
+                className="flex size-8 items-center justify-center rounded-lg text-[var(--sidebar-muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"
+                onClick={onAddProject}
+                type="button"
+              >
+                <Plus size={16} strokeWidth={2} />
+              </button>
+            </div>
+          </div>
+
+          {/* Footer icons */}
+          <div className="flex flex-col items-center gap-1 pb-2 pt-1">
             <button
-              aria-label="Add project"
+              aria-label="Feedback"
               className="flex size-8 items-center justify-center rounded-lg text-[var(--sidebar-muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"
-              onClick={onAddProject}
+              onClick={() => openUrl(bugs.url)}
+              title="Feedback"
               type="button"
             >
-              <Plus size={16} strokeWidth={2} />
+              <Megaphone size={16} strokeWidth={2} />
+            </button>
+            <button
+              aria-label="Settings"
+              className="flex size-8 items-center justify-center rounded-lg text-[var(--sidebar-muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"
+              onClick={onOpenSettings}
+              title="Settings"
+              type="button"
+            >
+              <Settings size={16} strokeWidth={2} />
             </button>
           </div>
-        </div>
-
-        {/* Footer icons */}
-        <div className="flex flex-col items-center gap-1 pb-2 pt-1">
-          <button
-            aria-label="Feedback"
-            className="flex size-8 items-center justify-center rounded-lg text-[var(--sidebar-muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"
-            onClick={() => openUrl(bugs.url)}
-            title="Feedback"
-            type="button"
-          >
-            <Megaphone size={16} strokeWidth={2} />
-          </button>
-          <button
-            aria-label="Settings"
-            className="flex size-8 items-center justify-center rounded-lg text-[var(--sidebar-muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"
-            onClick={onOpenSettings}
-            title="Settings"
-            type="button"
-          >
-            <Settings size={16} strokeWidth={2} />
-          </button>
         </div>
       </aside>
     );
@@ -241,10 +244,20 @@ export function AppSidebar({
       onMouseDown={handleMouseDown}
       style={{ width: `${width}px` }}
     >
-      {/* Navigation + collapse */}
-      <div className="flex h-10 shrink-0 items-center">
-        <NavigationControls onToggleSidebar={onToggleCollapse} sidebarCollapsed={false} />
+      {/* Collapse button — inline with traffic lights */}
+      <div className="flex h-10 shrink-0 items-center justify-end px-2">
+        <button
+          aria-label="Collapse sidebar"
+          className="flex size-6 items-center justify-center rounded-md text-[var(--muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"
+          onClick={onToggleCollapse}
+          title="Collapse sidebar"
+          type="button"
+        >
+          <PanelLeftClose size={14} strokeWidth={2} />
+        </button>
       </div>
+
+      <div className="flex min-h-0 flex-1 flex-col border-r border-[var(--border)]">
 
       {/* Context switcher */}
       <div className="px-4 pb-3">
@@ -340,6 +353,7 @@ export function AppSidebar({
           <span className="font-mono text-[10px]">v{version}</span>
         </div>
       </SidebarFooter>
+      </div>
     </aside>
   );
 }

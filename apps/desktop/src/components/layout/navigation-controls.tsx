@@ -1,8 +1,10 @@
+import { isTauri } from "@tauri-apps/api/core";
 import { Button } from "@lifecycle/ui";
 import { PanelLeft, PanelLeftClose } from "lucide-react";
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useHistoryAvailability } from "../../app/history-stack";
+import { detectPlatformHint, shouldInsetForWindowControls } from "./window-controls";
 
 interface NavigationControlsProps {
   onToggleSidebar: () => void;
@@ -15,6 +17,7 @@ export function NavigationControls({
 }: NavigationControlsProps) {
   const navigate = useNavigate();
   const { canGoBack, canGoForward } = useHistoryAvailability();
+  const shouldInset = sidebarCollapsed && shouldInsetForWindowControls(detectPlatformHint(), isTauri());
 
   const goBack = useCallback(() => {
     if (canGoBack) {
@@ -30,7 +33,7 @@ export function NavigationControls({
 
   return (
     <div
-      className="ml-auto flex shrink-0 items-center gap-0 px-1"
+      className={["flex shrink-0 items-center gap-0 px-1", shouldInset ? "pl-8" : ""].join(" ")}
       data-no-drag
     >
       <Button

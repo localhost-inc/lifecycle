@@ -1,8 +1,8 @@
 :root {
-  --background: #171411;
+  --background: #0f0d0b;
   --foreground: #fafaf9;
   --card: #1b1815;
-  --surface: #0f0d0b;
+  --surface: #171411;
   --sidebar-background: var(--surface);
   --sidebar-foreground: #faf8f5;
   --sidebar-muted-foreground: #a39d93;
@@ -53,10 +53,10 @@
 }
 
 :root[data-theme="dark"] {
-  --background: #171411;
+  --background: #0f0d0b;
   --foreground: #fafaf9;
   --card: #1b1815;
-  --surface: #0f0d0b;
+  --surface: #171411;
   --sidebar-background: var(--surface);
   --sidebar-foreground: #faf8f5;
   --sidebar-muted-foreground: #a39d93;

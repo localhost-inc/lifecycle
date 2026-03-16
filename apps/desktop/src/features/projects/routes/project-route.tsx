@@ -1,12 +1,10 @@
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
-import { Button, EmptyState } from "@lifecycle/ui";
-import { PanelRight } from "lucide-react";
+import { EmptyState } from "@lifecycle/ui";
 import { useMemo } from "react";
 import { Outlet, useOutletContext, useParams } from "react-router-dom";
 import type { AppShellOutletContext } from "../../../components/layout/app-shell-context";
 import { useTerminalResponseReady } from "../../terminals/state/terminal-response-ready-provider";
 import { WorkspaceActions } from "../../workspaces/components/workspace-actions";
-import { workspaceSupportsFilesystemInteraction } from "../../workspaces/lib/workspace-capabilities";
 import { ProjectNavBar } from "../components/project-nav-bar";
 import { resolveProjectRepoWorkspace } from "../lib/project-repo-workspace";
 
@@ -89,16 +87,10 @@ export function ProjectRoute() {
   const actionsOutlet = activeWorkspace ? (
     <div className="flex items-center gap-1">
       <WorkspaceActions
+        onDestroy={() => void onDestroyWorkspace(activeWorkspace)}
         onFork={() => void onForkWorkspace(activeWorkspace)}
         workspace={activeWorkspace}
       />
-      <Button
-        onClick={() => window.dispatchEvent(new Event("lifecycle:toggle-extension-panel"))}
-        size="icon"
-        title="Toggle extension panel"
-      >
-        <PanelRight size={14} strokeWidth={2.2} />
-      </Button>
     </div>
   ) : null;
 
@@ -115,7 +107,7 @@ export function ProjectRoute() {
         sidebarCollapsed={sidebarCollapsed}
         workspaces={workspaces}
       />
-      <div className="flex min-h-0 min-w-0 flex-1">
+      <div className="surface-grid flex min-h-0 min-w-0 flex-1 bg-[var(--background)]">
         <Outlet context={projectRouteContext} />
       </div>
     </div>

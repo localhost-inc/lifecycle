@@ -624,8 +624,8 @@ export function AppShellLayout() {
             readyProjectIds={readyProjectIds}
             width={sidebarWidth}
           />
-          <div className="relative w-px shrink-0 bg-[var(--border)]">
-            {!sidebarCollapsed ? (
+          {!sidebarCollapsed ? (
+            <div className="relative shrink-0">
               <div
                 aria-label="Resize sidebar"
                 aria-orientation="vertical"
@@ -635,8 +635,8 @@ export function AppShellLayout() {
                 role="separator"
                 tabIndex={0}
               />
-            ) : null}
-          </div>
+            </div>
+          ) : null}
 
           {/* Main area */}
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">

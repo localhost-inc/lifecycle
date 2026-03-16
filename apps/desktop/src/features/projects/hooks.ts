@@ -13,7 +13,7 @@ export const projectKeys = {
   manifest: (projectId: string) => ["project-manifest", projectId] as const,
 };
 
-const projectCatalogQuery: QueryDescriptor<ProjectCatalog> = {
+export const projectCatalogQuery: QueryDescriptor<ProjectCatalog> = {
   key: projectKeys.catalog(),
   async fetch(source) {
     const projects = await source.listProjects();

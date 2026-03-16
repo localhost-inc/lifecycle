@@ -67,4 +67,24 @@ describe("WorkspaceActions", () => {
       });
     }
   });
+
+  test("renders a destroy icon button with the standard workspace header treatment", () => {
+    const markup = renderToStaticMarkup(
+      createElement(ThemeProvider, {
+        children: createElement(WorkspaceActions, {
+          onFork: () => {},
+          onDestroy: () => {},
+          workspace: interactiveWorkspace,
+        }),
+        storageKey: "lifecycle.desktop.theme.test",
+      }),
+    );
+
+    expect(markup).toContain('aria-label="Fork workspace"');
+    expect(markup).toContain('aria-label="Destroy workspace"');
+    expect(markup).toContain("h-8 w-8 p-0");
+    expect(markup).toContain("bg-[var(--muted)] text-[var(--foreground)]");
+    expect(markup).not.toContain("text-[var(--destructive)]");
+    expect(markup).not.toContain(">Fork<");
+  });
 });
