@@ -101,7 +101,7 @@ describe("builtin extension badges", () => {
 });
 
 describe("builtin extension slots", () => {
-  test("declares git-owned canvas document kinds split across changes and history", () => {
+  test("declares git-owned canvas document kinds only for tab-backed history surfaces", () => {
     const slots = getBuiltinExtensionSlots({
       config: null,
       environmentTasks: [],
@@ -132,7 +132,7 @@ describe("builtin extension slots", () => {
     const historySlot = slots.find((slot) => slot.id === "git-history");
     const environmentSlot = slots.find((slot) => slot.id === "environment");
 
-    expect(changesSlot?.ownedDocumentKinds).toEqual(["changes-diff"]);
+    expect(changesSlot?.ownedDocumentKinds).toBeUndefined();
     expect(historySlot?.ownedDocumentKinds).toEqual(["commit-diff"]);
     expect(environmentSlot?.ownedDocumentKinds).toBeUndefined();
   });

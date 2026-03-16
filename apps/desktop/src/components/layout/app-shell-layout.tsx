@@ -41,7 +41,9 @@ import { getWorkspaceDisplayName } from "../../features/workspaces/lib/workspace
 import { formatWorkspaceError } from "../../features/workspaces/lib/workspace-errors";
 import {
   clearLastProjectId,
+  clearLastProjectSubPath,
   readLastProjectId,
+  readLastProjectSubPath,
   writeLastProjectId,
 } from "../../features/projects/state/project-content-tabs";
 import {
@@ -469,6 +471,12 @@ export function AppShellLayout() {
           clearLastWorkspaceId();
         }
 
+        // Clear stored sub-path if it pointed to the destroyed workspace
+        const storedSubPath = readLastProjectSubPath(workspace.project_id);
+        if (storedSubPath?.includes(workspace.id)) {
+          clearLastProjectSubPath(workspace.project_id);
+        }
+
         // Navigate away from destroyed workspace
         void navigate(`/projects/${workspace.project_id}`);
       } catch (error) {
@@ -488,6 +496,8 @@ export function AppShellLayout() {
         if (readLastProjectId() === nextProjectId) {
           clearLastProjectId();
         }
+
+        clearLastProjectSubPath(nextProjectId);
 
         if (projectId === nextProjectId) {
           const nextProject = projects.find((project) => project.id !== nextProjectId);
@@ -622,6 +632,7 @@ export function AppShellLayout() {
             onToggleCollapse={handleToggleSidebar}
             projects={projects}
             readyProjectIds={readyProjectIds}
+            workspacesByProjectId={workspacesByProjectId}
             width={sidebarWidth}
           />
           {!sidebarCollapsed ? (

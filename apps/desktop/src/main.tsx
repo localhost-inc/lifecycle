@@ -6,7 +6,6 @@ import { ShortcutRouterProvider } from "./app/shortcuts/shortcut-router";
 import { router } from "./app/router";
 import { AuthSessionProvider } from "./features/auth/state/auth-session-provider";
 import { TurnNotificationListener } from "./features/notifications/turn-notification-listener";
-import { OverlayHostBootstrap } from "./features/overlays/overlay-host-bootstrap";
 import { ProjectManifestWatcher } from "./features/projects/components/project-manifest-watcher";
 import { SettingsProvider } from "./features/settings/state/app-settings-provider";
 import { TerminalResponseReadyProvider } from "./features/terminals/state/terminal-response-ready-provider";
@@ -31,7 +30,6 @@ createRoot(document.getElementById("root")!).render(
     <ThemeProvider storageKey="lifecycle.desktop.theme">
       <BootstrapPerfMarker />
       <ThemeWindowSync />
-      <OverlayHostBootstrap />
       <QueryProvider>
         <AuthSessionProvider>
           <ProjectManifestWatcher />

@@ -98,7 +98,7 @@ The canvas may host workspace-scoped surfaces such as:
 
 1. terminal session
 2. file surface
-3. local changes diff
+3. local changes review
 4. workspace-local commit detail
 5. service preview
 6. empty pane
@@ -185,6 +185,18 @@ Example:
 2. PR diff -> page tab
 3. repo-level history commit detail -> page tab
 4. workspace-local commit detail -> workspace canvas
+
+## Route Dialogs
+
+Some workspace-local routes may present as dialogs over the canvas instead of becoming pane surfaces.
+
+Rules:
+
+1. The route/search state is authoritative for whether the dialog is open.
+2. The canvas owns the dialog host chrome and placement inside the workspace tab.
+3. Dialog routes should carry only minimal identifier-level inputs in the URL, not renderer snapshots.
+4. Dialog routes should reuse existing surface renderers instead of creating placeholder pane tabs just to show modal content.
+5. Local changes review is the first canvas dialog route and should guide future workspace-local dialog routes.
 
 ## Non-Goals
 

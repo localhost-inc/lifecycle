@@ -32,7 +32,8 @@ fn terminal_is_finished(status: &str) -> bool {
 }
 
 const HARNESS_SESSION_CAPTURE_POLL_INTERVAL: Duration = Duration::from_millis(500);
-const HARNESS_SESSION_CAPTURE_TIMEOUT: Duration = Duration::from_secs(15);
+const HARNESS_SESSION_CAPTURE_SAFETY_TIMEOUT: Duration = Duration::from_secs(300);
+const HARNESS_SESSION_CAPTURE_SLOW_THRESHOLD: Duration = Duration::from_secs(15);
 const HARNESS_COMPLETION_WATCH_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 static HARNESS_SESSION_CAPTURE_INFLIGHT: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
@@ -299,12 +300,30 @@ fn capture_harness_session(
     worktree_path: &str,
 ) {
     let deadline = SystemTime::now()
-        .checked_add(HARNESS_SESSION_CAPTURE_TIMEOUT)
+        .checked_add(HARNESS_SESSION_CAPTURE_SAFETY_TIMEOUT)
         .unwrap_or_else(SystemTime::now);
+    let slow_threshold = SystemTime::now()
+        .checked_add(HARNESS_SESSION_CAPTURE_SLOW_THRESHOLD)
+        .unwrap_or_else(SystemTime::now);
+    let mut warned_slow = false;
 
     loop {
-        if SystemTime::now() > deadline {
+        let now = SystemTime::now();
+        if now > deadline {
+            tracing::warn!(
+                terminal_id,
+                harness_provider = provider.name,
+                "harness session capture timed out after safety timeout"
+            );
             return;
+        }
+        if !warned_slow && now > slow_threshold {
+            warned_slow = true;
+            tracing::warn!(
+                terminal_id,
+                harness_provider = provider.name,
+                "harness session capture is taking longer than expected"
+            );
         }
 
         let terminal = match load_terminal_record(db_path, terminal_id) {

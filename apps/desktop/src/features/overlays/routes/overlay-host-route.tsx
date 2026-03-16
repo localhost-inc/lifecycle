@@ -1,7 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { EventTarget } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { applyThemeToRoot } from "@lifecycle/ui";
 import {
@@ -36,8 +35,29 @@ import {
   OVERLAY_HOST_STATUS_REQUEST_EVENT,
 } from "../overlay-window";
 
-function webviewWindowTarget(label: string): EventTarget {
-  return { kind: "WebviewWindow", label };
+function webviewTarget(label: string): EventTarget {
+  return { kind: "Webview", label };
+}
+
+interface OverlayHostWebviewController {
+  hide: () => Promise<void>;
+  setFocus: () => Promise<void>;
+  show: () => Promise<void>;
+}
+
+export async function syncOverlayHostWebviewVisibility(
+  hostWebview: OverlayHostWebviewController,
+  overlay: Pick<HostedOverlayPayload, "requiresWindowFocus"> | null,
+): Promise<void> {
+  if (!overlay) {
+    await hostWebview.hide();
+    return;
+  }
+
+  await hostWebview.show();
+  if (overlay.requiresWindowFocus) {
+    await hostWebview.setFocus();
+  }
 }
 
 export function OverlayHostRoute() {
@@ -70,13 +90,12 @@ export function OverlayHostRoute() {
       return;
     }
 
-    const currentWindow = getCurrentWindow();
-    const currentWebview = getCurrentWebviewWindow();
+    const currentWebview = getCurrentWebview();
 
     const emitReady = async (ownerWindowLabel: string) => {
       logOverlayDebug("host:ready-emitted", { ownerWindowLabel });
       await currentWebview.emitTo<HostedOverlayReadyEvent>(
-        webviewWindowTarget(ownerWindowLabel),
+        webviewTarget(ownerWindowLabel),
         OVERLAY_HOST_READY_EVENT,
         {
           hostWindowLabel: OVERLAY_HOST_LABEL,
@@ -95,7 +114,7 @@ export function OverlayHostRoute() {
         await invoke("set_window_accepts_mouse_moved_events", {
           enabled: true,
         }).catch((error) => {
-          console.warn("Failed to enable mouse-moved events on overlay host window:", error);
+          console.warn("Failed to enable mouse-moved events on overlay host webview:", error);
         });
         const [nextPresent, nextAnchor, nextClose, nextStatus] = await Promise.all([
           currentWebview.listen<HostedOverlayPayload>(OVERLAY_HOST_PRESENT_EVENT, ({ payload }) => {
@@ -165,10 +184,11 @@ export function OverlayHostRoute() {
         if (ownerWindowLabel) {
           await emitReady(ownerWindowLabel);
         }
-
-        void Promise.allSettled([currentWindow.setIgnoreCursorEvents(true), currentWindow.hide()]);
+        void currentWebview.hide().catch((error) => {
+          console.error("Failed to hide overlay host webview:", error);
+        });
       } catch (error) {
-        console.error("Failed to initialize overlay host window:", error);
+        console.error("Failed to initialize overlay host webview:", error);
       }
     })();
 
@@ -209,7 +229,7 @@ export function OverlayHostRoute() {
       return;
     }
 
-    const currentWindow = getCurrentWindow();
+    const currentWebview = getCurrentWebview();
 
     if (overlay) {
       logOverlayDebug("host:overlay-visible", {
@@ -217,35 +237,16 @@ export function OverlayHostRoute() {
         overlayId: overlay.overlayId,
         requiresWindowFocus: overlay.requiresWindowFocus,
       });
-      void (async () => {
-        await Promise.allSettled([
-          currentWindow.setIgnoreCursorEvents(false),
-          currentWindow.setFocusable(overlay.requiresWindowFocus),
-        ]);
-        await currentWindow.show().catch((error) => {
-          console.error("Failed to show overlay host window:", error);
-        });
-        if (overlay.requiresWindowFocus) {
-          await currentWindow.setFocus().catch((error) => {
-            console.error("Failed to focus overlay host window:", error);
-          });
-          return;
-        }
-
-        await currentWindow.setFocusable(true).catch((error) => {
-          console.error("Failed to re-enable overlay host focusability:", error);
-        });
-      })();
+      void syncOverlayHostWebviewVisibility(currentWebview, overlay).catch((error) => {
+        console.error("Failed to show overlay host webview:", error);
+      });
       return;
     }
 
     logOverlayDebug("host:overlay-hidden");
-    void (async () => {
-      await Promise.allSettled([currentWindow.setIgnoreCursorEvents(true), currentWindow.hide()]);
-      await currentWindow.setFocusable(false).catch((error) => {
-        console.error("Failed to reset overlay host focusable state:", error);
-      });
-    })();
+    void syncOverlayHostWebviewVisibility(currentWebview, null).catch((error) => {
+      console.error("Failed to hide overlay host webview:", error);
+    });
   }, [overlay]);
 
   useShortcutRegistration({
@@ -279,8 +280,8 @@ export function OverlayHostRoute() {
       return;
     }
 
-    await getCurrentWebviewWindow().emitTo(
-      webviewWindowTarget(action.ownerWindowLabel),
+    await getCurrentWebview().emitTo(
+      webviewTarget(action.ownerWindowLabel),
       OVERLAY_HOST_ACTION_EVENT,
       action,
     );
@@ -293,8 +294,8 @@ export function OverlayHostRoute() {
     }
 
     setOverlay(null);
-    await getCurrentWebviewWindow().emitTo<HostedOverlayCloseRequest>(
-      webviewWindowTarget(currentOverlay.ownerWindowLabel),
+    await getCurrentWebview().emitTo<HostedOverlayCloseRequest>(
+      webviewTarget(currentOverlay.ownerWindowLabel),
       OVERLAY_HOST_REQUEST_CLOSE_EVENT,
       {
         overlayId: currentOverlay.overlayId,

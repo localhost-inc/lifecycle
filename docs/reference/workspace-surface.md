@@ -18,8 +18,8 @@ The workspace center panel is a shared surface that can host both provider-backe
    - identity is provider-owned (`terminal_id`, future `agent_session_id`)
 2. Document tabs:
    - backed by workspace content or derived workspace artifacts
-   - examples: git diff, commit detail, file editor, preview-specific documents
-   - identity is client-owned and derived from document intent (`diff:changes`, `diff:commit:<sha>`, `file:<path>`, future workspace-local document kinds)
+   - examples: commit detail, file editor, preview-specific documents
+   - identity is client-owned and derived from document intent (`diff:commit:<sha>`, `file:<path>`, future workspace-local document kinds)
 
 ## Ownership Rules
 
@@ -75,12 +75,12 @@ The current mixed-tab implementation should still follow the target ownership vo
 5. Empty panes do not own runtime lifecycle; they are only a launch surface for the next runtime or document tab.
 6. Local restore should preserve non-default split layouts even when every pane is empty.
 
-## Git Diff Documents
+## Git Diff Surfaces
 
-1. Git diffs are document tabs, not runtime tabs.
-2. Current local edits use a single workspace-scoped `Changes` tab with a fixed key; repeated clicks update that tab's `focusPath` instead of opening file-scoped diff tabs.
-3. History commit diffs use commit-scoped document tabs keyed by commit SHA.
-4. Full patch rendering belongs in the center panel; list summaries belong in the side panel.
+1. Full patch rendering belongs in the center panel; list summaries belong in the side panel.
+2. Current local edits open as a single route-driven `Changes` dialog hosted over the workspace canvas, not as a pane tab.
+3. Repeated `Changes` opens should update dialog route inputs such as `focusPath` instead of opening file-scoped diff tabs.
+4. History commit diffs remain commit-scoped document tabs keyed by commit SHA.
 5. The side panel should stay lightweight: summaries and diff navigation belong there; commit composition and staging workflows do not.
 
 ## Pull Request Access

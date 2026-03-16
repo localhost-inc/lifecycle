@@ -115,7 +115,6 @@ export function getBuiltinExtensionSlots({
       icon: GitBranch,
       id: "git-changes",
       label: "Changes",
-      ownedDocumentKinds: ["changes-diff"],
       panel: (
         <GitChangesPanel
           onCommitComplete={() => onSwitchToExtension("git-history")}

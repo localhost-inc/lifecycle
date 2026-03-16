@@ -14,8 +14,8 @@
   },
   "type": "module",
   "scripts": {
-    "dev": "tauri dev --no-watch --config src-tauri/tauri.dev.conf.json",
-    "dev:watch": "tauri dev --config src-tauri/tauri.dev.conf.json",
+    "dev": "sh ./scripts/run-tauri-dev.sh --no-watch",
+    "dev:watch": "sh ./scripts/run-tauri-dev.sh",
     "build": "tauri build",
     "icon:generate": "bun run scripts/generate-icons.ts",
     "vite:dev": "vite",

@@ -1,12 +1,33 @@
 import { useCallback } from "react";
-import { useNavigate, useOutletContext, useParams } from "react-router-dom";
+import { useMemo } from "react";
+import { useNavigate, useOutletContext, useParams, useSearchParams } from "react-router-dom";
 import type { ProjectRouteOutletContext } from "../../projects/routes/project-route";
 import { WorkspaceTabContent } from "../components/workspace-tab-content";
+import {
+  readWorkspaceRoutePresentationState,
+  writeWorkspaceRouteDialogState,
+  type WorkspaceRouteDialogState,
+} from "./workspace-route-query-state";
 
 export function WorkspaceRoute() {
   const { workspaceId } = useParams();
   const { project } = useOutletContext<ProjectRouteOutletContext>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const presentationState = useMemo(
+    () => readWorkspaceRoutePresentationState(searchParams),
+    [searchParams],
+  );
+
+  const setRouteDialog = useCallback(
+    (dialog: WorkspaceRouteDialogState) => {
+      setSearchParams(
+        (current) => writeWorkspaceRouteDialogState(current, dialog),
+        { replace: presentationState.dialog !== null },
+      );
+    },
+    [presentationState.dialog, setSearchParams],
+  );
 
   const handleOpenPullRequest = useCallback(
     (pullRequest: { number: number }) => {
@@ -21,7 +42,12 @@ export function WorkspaceRoute() {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1" data-slot="workspace">
-      <WorkspaceTabContent onOpenPullRequest={handleOpenPullRequest} workspaceId={workspaceId} />
+      <WorkspaceTabContent
+        routeDialog={presentationState.dialog}
+        onRouteDialogChange={setRouteDialog}
+        onOpenPullRequest={handleOpenPullRequest}
+        workspaceId={workspaceId}
+      />
     </div>
   );
 }

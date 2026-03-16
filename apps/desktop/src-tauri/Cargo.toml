@@ -21,7 +21,7 @@ cc = "1"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["image-png", "macos-private-api"] }
+tauri = { version = "2", features = ["image-png", "macos-private-api", "unstable"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
@@ -43,9 +43,21 @@ base64 = "0.22"
 notify = "8"
 
 [target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3.2", default-features = false, features = [
+  "NSAttributedString",
+  "NSDictionary",
+  "NSString",
+] }
 objc2-app-kit = { version = "0.3.2", default-features = false, features = [
+  "NSApplication",
+  "NSColor",
   "NSCursor",
+  "NSEvent",
+  "NSMenu",
+  "NSMenuItem",
   "NSResponder",
+  "NSRunningApplication",
   "NSScrollView",
   "NSView",
   "NSWindow",

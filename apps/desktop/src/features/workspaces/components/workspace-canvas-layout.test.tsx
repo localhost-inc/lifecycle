@@ -287,6 +287,6 @@ describe("WorkspaceCanvas layout", () => {
 
     expect(markup).toContain('data-workspace-pane-id="pane-2"');
     expect(markup).toContain('style="opacity:0.45"');
-    expect(markup).toContain("transition-opacity duration-150");
+    expect(markup).toContain("transition-opacity duration-200 ease-in-out");
   });
 });

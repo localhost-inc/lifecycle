@@ -1,5 +1,7 @@
 # Native Overlay Surface Policy - 2026-03-09
 
+> Superseded on 2026-03-15 by [2026-03-15-same-window-overlay-webviews.md](./2026-03-15-same-window-overlay-webviews.md). The repo now prefers a transparent child webview in the main window over a separate hosted `WebviewWindow`.
+
 ## Context
 
 The desktop app now embeds the active terminal as a native `NSView` above the Tauri `WKWebView`. That made DOM popovers fail anywhere they crossed into native territory, including the Git action popover in the right rail and title-bar actions above the terminal lane.

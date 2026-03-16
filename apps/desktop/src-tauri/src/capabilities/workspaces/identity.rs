@@ -77,6 +77,13 @@ pub fn maybe_schedule_workspace_identity_from_prompt(
     let fallback_title = naming::fallback_terminal_title(&prompt);
 
     let Some(guard) = WorkspaceIdentityGuard::acquire(workspace_id) else {
+        title::maybe_schedule_terminal_auto_title_from_prompt(
+            app,
+            db_path,
+            terminal_id,
+            workspace_id,
+            &prompt,
+        );
         return;
     };
 

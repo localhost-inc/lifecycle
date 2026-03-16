@@ -1,5 +1,4 @@
 import { isTauri } from "@tauri-apps/api/core";
-import { Menu, MenuItem, PredefinedMenuItem, Submenu } from "@tauri-apps/api/menu";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { Button, Spinner } from "@lifecycle/ui";
@@ -13,6 +12,7 @@ import {
 } from "../../../app/shortcuts/shortcut-router";
 import { ResponseReadyDot } from "../../../components/response-ready-dot";
 import { NavigationControls } from "../../../components/layout/navigation-controls";
+import { invokeTauri } from "../../../lib/tauri-error";
 import { getWorkspaceSessionStatusState } from "../../workspaces/components/workspace-session-status";
 import { getWorkspaceDisplayName } from "../../workspaces/lib/workspace-display";
 import {
@@ -21,6 +21,15 @@ import {
   type OpenInTarget,
 } from "../../workspaces/lib/open-in-targets";
 import { listWorkspaceOpenInApps, openWorkspaceInApp } from "../../workspaces/open-in-api";
+
+interface ContextMenuEntry {
+  destructive?: boolean;
+  disabled?: boolean;
+  id?: string;
+  items?: ContextMenuEntry[];
+  kind: "item" | "separator" | "submenu";
+  label?: string;
+}
 
 interface ProjectNavBarProps {
   activeWorkspaceId: string | null;
@@ -108,49 +117,39 @@ async function showWorkspaceContextMenu(
   const defaultTarget = resolveDefaultOpenTarget(targets);
   const otherTargets = targets.filter((t) => t.id !== defaultTarget.id);
 
-  const items: Array<MenuItem | PredefinedMenuItem | Submenu> = [];
-
-  items.push(
-    await MenuItem.new({
-      text: `Open in ${defaultTarget.label}`,
-      action: () => void openWorkspaceInApp(workspace.id, defaultTarget.id),
-    }),
-  );
+  const items: ContextMenuEntry[] = [
+    { kind: "item", id: `open:${defaultTarget.id}`, label: `Open in ${defaultTarget.label}` },
+  ];
 
   if (otherTargets.length > 0) {
-    items.push(
-      await Submenu.new({
-        text: "Open in...",
-        items: await Promise.all(
-          otherTargets.map((target) =>
-            MenuItem.new({
-              text: target.label,
-              action: () => void openWorkspaceInApp(workspace.id, target.id),
-            }),
-          ),
-        ),
-      }),
-    );
+    items.push({
+      kind: "submenu",
+      label: "Open in...",
+      items: otherTargets.map((target) => ({
+        kind: "item" as const,
+        id: `open:${target.id}`,
+        label: target.label,
+      })),
+    });
   }
 
-  items.push(await PredefinedMenuItem.new({ item: "Separator" }));
-  items.push(
-    await MenuItem.new({
-      text: "Fork Workspace",
-      action: () => callbacks.onFork(workspace),
-    }),
-  );
+  items.push({ kind: "separator" });
+  items.push({ kind: "item", id: "fork", label: "Fork Workspace" });
+  items.push({ kind: "separator" });
+  items.push({ kind: "item", id: "destroy", label: "Destroy Workspace", destructive: true });
 
-  items.push(await PredefinedMenuItem.new({ item: "Separator" }));
-  items.push(
-    await MenuItem.new({
-      text: "Destroy Workspace",
-      action: () => callbacks.onDestroy(workspace),
-    }),
-  );
+  const selectedId = await invokeTauri<string | null>("show_context_menu", { items });
 
-  const menu = await Menu.new({ items });
-  await menu.popup();
+  if (!selectedId) return;
+
+  if (selectedId.startsWith("open:")) {
+    const appId = selectedId.slice(5);
+    void openWorkspaceInApp(workspace.id, appId as Parameters<typeof openWorkspaceInApp>[1]);
+  } else if (selectedId === "fork") {
+    callbacks.onFork(workspace);
+  } else if (selectedId === "destroy") {
+    callbacks.onDestroy(workspace);
+  }
 }
 
 export function ProjectNavBar({

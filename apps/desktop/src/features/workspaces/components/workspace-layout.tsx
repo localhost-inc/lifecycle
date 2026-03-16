@@ -39,8 +39,8 @@ import { ExtensionPanel } from "../../extensions/extension-panel";
 import { useGitStatus } from "../../git/hooks";
 import type { ManifestStatus } from "../../projects/api/projects";
 import { WorkspaceCanvas } from "./workspace-canvas";
+import { WorkspaceRouteDialogHost } from "./workspace-route-dialog-host";
 import {
-  createChangesDiffOpenInput,
   createCommitDiffOpenInput,
   createFileViewerOpenInput,
 } from "./workspace-canvas-requests";
@@ -55,6 +55,7 @@ import { useWorkspaceEnvironmentTasks, useWorkspaceSetup } from "../hooks";
 import { workspaceSupportsFilesystemInteraction } from "../lib/workspace-capabilities";
 import { shouldSyncWorkspaceManifest } from "../lib/workspace-manifest-sync";
 import { useWorkspaceOpenRequests } from "../state/workspace-open-requests";
+import type { WorkspaceRouteDialogState } from "../routes/workspace-route-query-state";
 
 const SIDEBAR_RESIZE_STEP = 16;
 
@@ -64,6 +65,8 @@ interface WorkspaceLayoutProps {
   manifestStatus: ManifestStatus | null;
   onCloseWorkspaceTab?: () => void;
   onOpenPullRequest?: (pullRequest: GitPullRequestSummary) => void;
+  onRouteDialogChange?: (dialog: WorkspaceRouteDialogState) => void;
+  routeDialog?: WorkspaceRouteDialogState;
 }
 
 export function WorkspaceLayout({
@@ -72,6 +75,8 @@ export function WorkspaceLayout({
   manifestStatus,
   onCloseWorkspaceTab,
   onOpenPullRequest,
+  onRouteDialogChange,
+  routeDialog = null,
 }: WorkspaceLayoutProps) {
   const workspaceLayoutRef = useRef<HTMLDivElement | null>(null);
   const [workspaceLayoutWidth, setWorkspaceLayoutWidth] = useState(0);
@@ -197,7 +202,10 @@ export function WorkspaceLayout({
   const launchActions = useMemo<WorkspaceExtensionLaunchActions>(
     () => ({
       openChangesDiff: (focusPath) => {
-        openDocument(workspace.id, createChangesDiffOpenInput(focusPath));
+        onRouteDialogChange?.({
+          focusPath,
+          kind: "changes",
+        });
       },
       openCommitDiff: (entry) => {
         openDocument(workspace.id, createCommitDiffOpenInput(entry));
@@ -216,7 +224,7 @@ export function WorkspaceLayout({
         }
       },
     }),
-    [onOpenPullRequest, openDocument, supportsTerminalInteraction, workspace.id],
+    [onOpenPullRequest, onRouteDialogChange, openDocument, supportsTerminalInteraction, workspace.id],
   );
 
   useEffect(() => {
@@ -460,8 +468,17 @@ export function WorkspaceLayout({
       className="flex min-h-0 flex-1 overflow-hidden"
       data-slot="workspace-layout"
     >
-      <div className="workspace-canvas-grid flex min-w-0 flex-1 flex-col" data-slot="workspace-canvas">
+      <div
+        className="workspace-canvas-grid relative flex min-w-0 flex-1 flex-col"
+        data-slot="workspace-canvas"
+      >
         {canvasContent}
+        <WorkspaceRouteDialogHost
+          dialog={routeDialog}
+          onDialogChange={(dialog) => onRouteDialogChange?.(dialog)}
+          onOpenFile={launchActions.openFileViewer}
+          workspaceId={workspace.id}
+        />
       </div>
       {!panelCollapsed && activeExtensionSlot && (
         <div

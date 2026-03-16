@@ -717,7 +717,7 @@ export function WorkspacePaneTree({
         <section
           key={node.id}
           ref={(element) => setPaneElement(node.id, element)}
-          className={`relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--surface)] transition-opacity duration-150 ${isDropTargetPane ? "ring-1 ring-[var(--ring)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--ring),transparent_50%)]" : ""}`}
+          className={`relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--surface)] transition-opacity duration-200 ease-in-out will-change-[opacity] ${isDropTargetPane ? "ring-1 ring-[var(--ring)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--ring),transparent_50%)]" : ""}`}
           data-workspace-pane-id={node.id}
           onPointerEnter={() => {
             setHoveredPaneId(node.id);

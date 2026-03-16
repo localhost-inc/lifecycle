@@ -1,11 +1,15 @@
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
-import { useMemo } from "react";
-import { Outlet, useOutletContext, useParams } from "react-router-dom";
+import { useEffect, useMemo } from "react";
+import { Outlet, useLocation, useOutletContext, useParams } from "react-router-dom";
 import type { AppShellOutletContext } from "../../../components/layout/app-shell-context";
 import { useTerminalResponseReady } from "../../terminals/state/terminal-response-ready-provider";
 import { ProjectNavBar } from "../components/project-nav-bar";
 import { resolveProjectRepoWorkspace } from "../lib/project-repo-workspace";
+import {
+  resolvePersistedProjectSubPath,
+  writeLastProjectSubPath,
+} from "../state/project-content-tabs";
 
 export interface ProjectRouteOutletContext {
   onCreateWorkspace: () => Promise<void>;
@@ -31,6 +35,7 @@ export function ProjectRoute() {
     onRemoveProject,
   } = useOutletContext<AppShellOutletContext>();
   const { projectId, workspaceId } = useParams();
+  const location = useLocation();
   const project = projects.find((item) => item.id === projectId) ?? null;
   const { hasWorkspaceResponseReady, hasWorkspaceRunningTurn } = useTerminalResponseReady();
   const workspaces = useMemo(() => {
@@ -45,6 +50,23 @@ export function ProjectRoute() {
     () => (workspaceId ? (workspaces.find((ws) => ws.id === workspaceId) ?? null) : null),
     [workspaceId, workspaces],
   );
+
+  // Persist the current sub-path so sidebar links restore the last view
+  useEffect(() => {
+    if (!projectId) {
+      return;
+    }
+
+    const subPath = resolvePersistedProjectSubPath({
+      pathname: location.pathname,
+      projectId,
+      repositoryWorkspaceId: repositoryWorkspace?.id ?? null,
+    });
+
+    if (subPath) {
+      writeLastProjectSubPath(projectId, subPath);
+    }
+  }, [location.pathname, projectId, repositoryWorkspace?.id]);
 
   const projectRouteContext = useMemo<ProjectRouteOutletContext | null>(() => {
     if (!project) {
@@ -84,7 +106,10 @@ export function ProjectRoute() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col bg-[var(--background)]" data-slot="project-shell">
+    <div
+      className="flex h-full min-h-0 flex-1 flex-col bg-[var(--background)]"
+      data-slot="project-shell"
+    >
       <ProjectNavBar
         activeWorkspaceId={activeWorkspace?.id ?? null}
         hasWorkspaceResponseReady={hasWorkspaceResponseReady}

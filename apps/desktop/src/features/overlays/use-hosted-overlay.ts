@@ -1,5 +1,5 @@
 import { isTauri } from "@tauri-apps/api/core";
-import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useEffect, useId, useRef, useSyncExternalStore } from "react";
 import type { RefObject } from "react";
 import type {
@@ -20,6 +20,10 @@ import {
   subscribeOverlayHostReady,
   updateHostedOverlayAnchor,
 } from "./overlay-window";
+
+// Same-window hosted overlays currently regress shell interaction, so keep the
+// inline/popover fallbacks active until the overlay host is reliably inert.
+const HOSTED_OVERLAYS_ENABLED = false;
 
 interface UseHostedOverlayOptions {
   anchorRef: RefObject<HTMLElement | null>;
@@ -55,10 +59,11 @@ export function useHostedOverlay({
     getOverlayHostReady,
     getOverlayHostReady,
   );
-  const shouldUseHostedOverlay = enabled && isTauri() && !isOverlayHostWindow();
+  const shouldUseHostedOverlay =
+    HOSTED_OVERLAYS_ENABLED && enabled && isTauri() && !isOverlayHostWindow();
 
   if (shouldUseHostedOverlay && ownerWindowLabelRef.current === null) {
-    ownerWindowLabelRef.current = getCurrentWebviewWindow().label;
+    ownerWindowLabelRef.current = getCurrentWebview().label;
   }
 
   useEffect(() => {

@@ -1,7 +1,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { emitTo, type EventTarget } from "@tauri-apps/api/event";
-import { LogicalPosition, LogicalSize, getCurrentWindow } from "@tauri-apps/api/window";
-import { WebviewWindow, getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { LogicalPosition, getCurrentWindow } from "@tauri-apps/api/window";
+import { Webview, getCurrentWebview } from "@tauri-apps/api/webview";
 import type {
   HostedOverlayAction,
   HostedOverlayAnchorUpdate,
@@ -26,7 +26,7 @@ export const OVERLAY_HOST_REQUEST_CLOSE_EVENT = "desktop-overlay:request-close";
 
 type OverlayActionHandler = (action: HostedOverlayAction) => void;
 
-let hostPromise: Promise<WebviewWindow> | null = null;
+let hostPromise: Promise<Webview> | null = null;
 let initPromise: Promise<void> | null = null;
 let listenersInstalled = false;
 let hostReady = false;
@@ -36,7 +36,7 @@ const overlayActionHandlers = new Map<string, OverlayActionHandler>();
 const overlayCloseHandlers = new Map<string, () => void>();
 
 function overlayHostTarget(): EventTarget {
-  return { kind: "WebviewWindow", label: OVERLAY_HOST_LABEL };
+  return { kind: "Webview", label: OVERLAY_HOST_LABEL };
 }
 
 function setHostReady(nextReady: boolean): void {
@@ -71,7 +71,7 @@ function currentOwnerWindowLabel(): string | null {
     return null;
   }
 
-  return getCurrentWebviewWindow().label;
+  return getCurrentWebview().label;
 }
 
 async function installMainWindowListeners(): Promise<void> {
@@ -81,7 +81,7 @@ async function installMainWindowListeners(): Promise<void> {
 
   listenersInstalled = true;
   const currentWindow = getCurrentWindow();
-  const currentWebview = getCurrentWebviewWindow();
+  const currentWebview = getCurrentWebview();
   logOverlayDebug("owner:listeners-install", {
     windowLabel: currentWindow.label,
     webviewLabel: currentWebview.label,
@@ -115,12 +115,6 @@ async function installMainWindowListeners(): Promise<void> {
     },
   );
 
-  await currentWindow.onMoved(() => {
-    void syncOverlayHostViewport().catch((error) => {
-      console.error("Failed to sync overlay host after move:", error);
-    });
-  });
-
   await currentWindow.onResized(() => {
     void syncOverlayHostViewport().catch((error) => {
       console.error("Failed to sync overlay host after resize:", error);
@@ -134,85 +128,73 @@ async function installMainWindowListeners(): Promise<void> {
   });
 }
 
-async function configureOverlayHostWindow(hostWindow: WebviewWindow): Promise<void> {
+async function configureOverlayHostWebview(hostWebview: Webview): Promise<void> {
   await Promise.allSettled([
-    hostWindow.setAlwaysOnTop(true),
-    hostWindow.setBackgroundColor({ alpha: 0, blue: 0, green: 0, red: 0 }),
-    hostWindow.setDecorations(false),
-    hostWindow.setFocusable(false),
-    hostWindow.setShadow(false),
+    hostWebview.setAutoResize(true),
+    hostWebview.setBackgroundColor({ alpha: 0, blue: 0, green: 0, red: 0 }),
+    hostWebview.hide(),
   ]);
 }
 
-async function waitForWindowCreation(hostWindow: WebviewWindow): Promise<void> {
+async function waitForWebviewCreation(hostWebview: Webview): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const timeout = window.setTimeout(() => {
-      logOverlayDebug("owner:host-create-timeout", { hostWindowLabel: hostWindow.label });
-      reject(new Error("Timed out creating overlay host window."));
+      logOverlayDebug("owner:host-create-timeout", { hostWebviewLabel: hostWebview.label });
+      reject(new Error("Timed out creating overlay host webview."));
     }, 10000);
 
-    void hostWindow.once("tauri://created", () => {
+    void hostWebview.once("tauri://created", () => {
       window.clearTimeout(timeout);
-      logOverlayDebug("owner:host-created", { hostWindowLabel: hostWindow.label });
+      logOverlayDebug("owner:host-created", { hostWebviewLabel: hostWebview.label });
       resolve();
     });
 
-    void hostWindow.once("tauri://error", (event) => {
+    void hostWebview.once("tauri://error", (event) => {
       window.clearTimeout(timeout);
       logOverlayDebug("owner:host-create-error", {
-        hostWindowLabel: hostWindow.label,
+        hostWebviewLabel: hostWebview.label,
         payload: event.payload,
       });
-      reject(new Error(String(event.payload ?? "Failed to create overlay host window.")));
+      reject(new Error(String(event.payload ?? "Failed to create overlay host webview.")));
     });
   });
 }
 
-async function ensureOverlayHostWindow(): Promise<WebviewWindow> {
+async function ensureOverlayHostWebview(): Promise<Webview> {
   if (hostPromise) {
     return hostPromise;
   }
 
   hostPromise = (async () => {
-    const existing = await WebviewWindow.getByLabel(OVERLAY_HOST_LABEL);
+    const existing = await Webview.getByLabel(OVERLAY_HOST_LABEL);
     if (existing) {
-      logOverlayDebug("owner:host-reused", { hostWindowLabel: existing.label });
-      await configureOverlayHostWindow(existing);
+      logOverlayDebug("owner:host-reused", { hostWebviewLabel: existing.label });
+      await configureOverlayHostWebview(existing);
       return existing;
     }
 
     const ownerWindow = getCurrentWindow();
-    const ownerWebview = getCurrentWebviewWindow();
+    const ownerWebview = getCurrentWebview();
     logOverlayDebug("owner:host-create", {
-      hostWindowLabel: OVERLAY_HOST_LABEL,
+      hostWebviewLabel: OVERLAY_HOST_LABEL,
       ownerWebviewLabel: ownerWebview.label,
       ownerWindowLabel: ownerWindow.label,
       url: buildOverlayHostUrl(ownerWebview.label, window.location.origin),
     });
-    const hostWindow = new WebviewWindow(OVERLAY_HOST_LABEL, {
+    const hostWebview = new Webview(ownerWindow, OVERLAY_HOST_LABEL, {
       acceptFirstMouse: true,
-      alwaysOnTop: true,
-      backgroundColor: { alpha: 0, blue: 0, green: 0, red: 0 },
-      decorations: false,
       focus: false,
-      focusable: false,
       height: 1,
-      parent: ownerWindow,
-      resizable: false,
-      shadow: false,
-      skipTaskbar: true,
-      title: "Lifecycle Overlay Host",
       transparent: true,
       url: buildOverlayHostUrl(ownerWebview.label, window.location.origin),
-      visible: false,
       width: 1,
       x: 0,
       y: 0,
     });
 
-    await waitForWindowCreation(hostWindow);
-    await configureOverlayHostWindow(hostWindow);
-    return hostWindow;
+    await waitForWebviewCreation(hostWebview);
+    await configureOverlayHostWebview(hostWebview);
+    return hostWebview;
   })().catch((error) => {
     hostPromise = null;
     throw error;
@@ -226,24 +208,21 @@ export async function syncOverlayHostViewport(): Promise<void> {
     return;
   }
 
-  const hostWindow = await ensureOverlayHostWindow();
+  const hostWebview = await ensureOverlayHostWebview();
   const ownerWindow = getCurrentWindow();
-  const [position, size, scaleFactor] = await Promise.all([
-    ownerWindow.innerPosition(),
-    ownerWindow.innerSize(),
-    ownerWindow.scaleFactor(),
-  ]);
+  const [size, scaleFactor] = await Promise.all([ownerWindow.innerSize(), ownerWindow.scaleFactor()]);
 
   await Promise.all([
-    hostWindow.setPosition(new LogicalPosition(position.x / scaleFactor, position.y / scaleFactor)),
-    hostWindow.setSize(new LogicalSize(size.width / scaleFactor, size.height / scaleFactor)),
+    hostWebview.setPosition(new LogicalPosition(0, 0)),
+    hostWebview.setSize(size),
+    hostWebview.setAutoResize(true),
   ]);
   logOverlayDebug("owner:viewport-synced", {
     height: size.height / scaleFactor,
-    hostWindowLabel: hostWindow.label,
+    hostWebviewLabel: hostWebview.label,
     width: size.width / scaleFactor,
-    x: position.x / scaleFactor,
-    y: position.y / scaleFactor,
+    x: 0,
+    y: 0,
   });
 }
 
@@ -253,7 +232,7 @@ async function requestOverlayHostReady(): Promise<void> {
     return;
   }
 
-  await ensureOverlayHostWindow();
+  await ensureOverlayHostWebview();
   logOverlayDebug("owner:ready-requested", { ownerWindowLabel });
   await emitTo<HostedOverlayStatusRequest>(overlayHostTarget(), OVERLAY_HOST_STATUS_REQUEST_EVENT, {
     ownerWindowLabel,
@@ -322,7 +301,7 @@ export async function initializeDesktopOverlayHost(): Promise<void> {
   initPromise = (async () => {
     logOverlayDebug("owner:init-start");
     await installMainWindowListeners();
-    await ensureOverlayHostWindow();
+    await ensureOverlayHostWebview();
     await syncOverlayHostViewport();
     await waitForOverlayHostReady();
     logOverlayDebug("owner:init-complete");
@@ -345,7 +324,7 @@ export async function presentHostedOverlay(payload: HostedOverlayPayload): Promi
 
   await initializeDesktopOverlayHost();
   await syncOverlayHostViewport();
-  await ensureOverlayHostWindow();
+  await ensureOverlayHostWebview();
   logOverlayDebug("owner:present", {
     kind: payload.kind,
     overlayId: payload.overlayId,
@@ -359,7 +338,7 @@ export async function updateHostedOverlayAnchor(payload: HostedOverlayAnchorUpda
     return;
   }
 
-  await ensureOverlayHostWindow();
+  await ensureOverlayHostWebview();
   logOverlayDebug("owner:anchor-update", {
     overlayId: payload.overlayId,
     ownerWindowLabel: payload.ownerWindowLabel,
@@ -372,7 +351,7 @@ export async function closeHostedOverlay(payload: HostedOverlayCloseRequest): Pr
     return;
   }
 
-  await ensureOverlayHostWindow();
+  await ensureOverlayHostWebview();
   logOverlayDebug("owner:close", payload);
   await emitTo(overlayHostTarget(), OVERLAY_HOST_CLOSE_EVENT, payload);
 }

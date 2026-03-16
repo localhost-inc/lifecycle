@@ -2230,8 +2230,15 @@ bool lifecycle_native_terminal_sync(void *webview_view,
         alpha = 1.0;
       }
       [view setFrame:targetFrame];
-      view.alphaValue = alpha;
-      view.layer.opacity = (float)alpha;
+      if (view.alphaValue != alpha) {
+        [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
+          context.duration = 0.2;
+          context.timingFunction =
+              [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];
+          view.animator.alphaValue = alpha;
+          view.layer.opacity = (float)alpha;
+        }];
+      }
       [view syncContentScale];
 
       if (view.surface != NULL) {

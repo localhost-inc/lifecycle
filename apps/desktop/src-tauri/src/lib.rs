@@ -155,6 +155,7 @@ pub fn run() {
             capabilities::app::commands::set_window_accepts_mouse_moved_events,
             capabilities::app::commands::set_window_pointing_cursor,
             capabilities::app::commands::get_window_mouse_position,
+            capabilities::app::context_menu::show_context_menu,
             capabilities::projects::commands::list_projects,
             capabilities::projects::commands::add_project,
             capabilities::projects::commands::remove_project,

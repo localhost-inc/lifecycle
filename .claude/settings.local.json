@@ -12,7 +12,13 @@
       "Bash(cd:*)",
       "Bash(bun test:*)",
       "Bash(find:*)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:docs.rs)",
+      "Bash(bunx tsc:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:lib.rs)",
+      "Bash(cargo check:*)",
+      "Bash(cargo test:*)"
     ]
   }
 }
