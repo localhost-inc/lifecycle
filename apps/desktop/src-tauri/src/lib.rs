@@ -35,7 +35,7 @@ const APP_MENU_ITEM_OPEN_COMMAND_PALETTE: &str = "app.open-command-palette";
 const APP_MENU_ITEM_OPEN_FILE_PICKER: &str = "app.open-file-picker";
 
 #[cfg(target_os = "macos")]
-const APP_MENU_ITEM_SELECT_PROJECT_PREFIX: &str = "app.select-project-";
+pub(crate) const APP_MENU_ITEM_SELECT_PROJECT_PREFIX: &str = "app.select-project-";
 
 #[cfg(target_os = "macos")]
 #[derive(Clone, Serialize)]
@@ -210,6 +210,7 @@ pub fn run() {
             capabilities::workspaces::commands::hide_native_terminal_surface,
             capabilities::workspaces::commands::detach_terminal,
             capabilities::workspaces::commands::kill_terminal,
+            capabilities::workspaces::commands::interrupt_terminal,
             capabilities::workspaces::commands::get_workspace_git_status,
             capabilities::workspaces::commands::get_workspace_git_diff,
             capabilities::workspaces::commands::get_workspace_git_scope_patch,
@@ -234,6 +235,7 @@ pub fn run() {
             capabilities::workspaces::commands::push_workspace_git,
             capabilities::workspaces::commands::create_workspace_git_pull_request,
             capabilities::workspaces::commands::merge_workspace_git_pull_request,
+            capabilities::app::commands::sync_project_menu,
         ])
         .run(tauri::generate_context!());
 
@@ -407,23 +409,6 @@ fn build_app_menu<R: tauri::Runtime>(
             LifecycleError::AttachFailed(format!("failed to build app menu: {error}"))
         })?;
 
-    // Hidden menu items for Cmd+1-9 (select project by sidebar index).
-    // Menu accelerators ensure these work even when a native terminal surface
-    // has focus, since the macOS menu system intercepts key equivalents that
-    // the terminal does not consume.
-    let mut project_select_items = Vec::new();
-    for digit in 1u32..=9 {
-        let item_id = format!("{APP_MENU_ITEM_SELECT_PROJECT_PREFIX}{digit}");
-        let accelerator = format!("CmdOrCtrl+{digit}");
-        let item = MenuItemBuilder::with_id(item_id, format!("Select Project {digit}"))
-            .accelerator(accelerator)
-            .build(app)
-            .map_err(|error| {
-                LifecycleError::AttachFailed(format!("failed to build app menu: {error}"))
-            })?;
-        project_select_items.push(item);
-    }
-
     let lifecycle_menu = SubmenuBuilder::new(app, "Lifecycle")
         .about(None)
         .separator()
@@ -444,15 +429,12 @@ fn build_app_menu<R: tauri::Runtime>(
 
     let edit_menu = build_edit_menu(app)?;
 
-    // Project submenu with Cmd+1-9 accelerators — kept separate from the
-    // main Lifecycle menu so the items don't clutter it.
-    let mut project_menu_builder = SubmenuBuilder::new(app, "Project");
-    for item in &project_select_items {
-        project_menu_builder = project_menu_builder.item(item);
-    }
-    let project_menu = project_menu_builder.build().map_err(|error| {
-        LifecycleError::AttachFailed(format!("failed to build project menu: {error}"))
-    })?;
+    // Project submenu — populated dynamically via sync_project_menu command.
+    let project_menu = SubmenuBuilder::new(app, "Project")
+        .build()
+        .map_err(|error| {
+            LifecycleError::AttachFailed(format!("failed to build project menu: {error}"))
+        })?;
 
     let menu = MenuBuilder::new(app)
         .item(&lifecycle_menu)

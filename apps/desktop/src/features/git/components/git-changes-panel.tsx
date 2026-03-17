@@ -43,7 +43,7 @@ export function GitChangesPanel({
         <div className="shrink-0">
           <GitActionButton
             actionError={gitActions.actionError}
-            branchPullRequest={gitActions.branchPullRequest}
+            branchPullRequest={gitActions.branchPullRequest ?? null}
             gitStatus={gitActions.gitStatusQuery.data ?? null}
             size="default"
             isCommitting={gitActions.isCommitting}

@@ -1,6 +1,12 @@
 import type { GitPullRequestSummary, WorkspaceMode } from "@lifecycle/contracts";
-import { useEffect, useState } from "react";
-import { commitGit, createGitPullRequest, mergeGitPullRequest, pushGit, stageGitFiles } from "../api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  commitGit,
+  createGitPullRequest,
+  mergeGitPullRequest,
+  pushGit,
+  stageGitFiles,
+} from "../api";
 import { useCurrentGitPullRequest, useGitLog, useGitStatus } from "../hooks";
 
 export interface UseGitActionsOptions {
@@ -67,16 +73,21 @@ export function useGitActions({
   const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId, {
     polling: documentVisible,
   });
+  const gitStatus = gitStatusQuery.data;
+  const refreshGitStatus = gitStatusQuery.refresh;
+  const refreshGitLog = gitLogQuery.refresh;
+  const branchPullRequest = currentPullRequestQuery.data ?? null;
+  const refreshCurrentPullRequest = currentPullRequestQuery.refresh;
 
-  async function refreshPullRequestState(): Promise<void> {
+  const refreshPullRequestState = useCallback(async (): Promise<void> => {
     await Promise.all([
-      gitStatusQuery.refresh(),
-      gitLogQuery.refresh(),
-      currentPullRequestQuery.refresh(),
+      refreshGitStatus(),
+      refreshGitLog(),
+      refreshCurrentPullRequest(),
     ]);
-  }
+  }, [refreshCurrentPullRequest, refreshGitLog, refreshGitStatus]);
 
-  async function handlePushBranch(): Promise<void> {
+  const handlePushBranch = useCallback(async (): Promise<void> => {
     setActionError(null);
     setIsPushingBranch(true);
     try {
@@ -87,39 +98,42 @@ export function useGitActions({
     } finally {
       setIsPushingBranch(false);
     }
-  }
+  }, [refreshPullRequestState, workspaceId]);
 
-  async function handleCommit(message: string, pushAfterCommit: boolean): Promise<void> {
-    let committed = false;
-    setActionError(null);
-    setIsCommitting(true);
+  const handleCommit = useCallback(
+    async (message: string, pushAfterCommit: boolean): Promise<void> => {
+      let committed = false;
+      setActionError(null);
+      setIsCommitting(true);
 
-    try {
-      await commitGit(workspaceId, message);
-      committed = true;
+      try {
+        await commitGit(workspaceId, message);
+        committed = true;
 
-      if (pushAfterCommit) {
-        setIsPushingBranch(true);
-        try {
-          await pushGit(workspaceId);
-        } finally {
-          setIsPushingBranch(false);
+        if (pushAfterCommit) {
+          setIsPushingBranch(true);
+          try {
+            await pushGit(workspaceId);
+          } finally {
+            setIsPushingBranch(false);
+          }
         }
-      }
 
-      await refreshPullRequestState();
-      onCommitComplete();
-    } catch (error) {
-      if (committed) {
-        await refreshPullRequestState().catch(() => undefined);
+        await refreshPullRequestState();
+        onCommitComplete();
+      } catch (error) {
+        if (committed) {
+          await refreshPullRequestState().catch(() => undefined);
+        }
+        setActionError(error instanceof Error ? error.message : String(error));
+      } finally {
+        setIsCommitting(false);
       }
-      setActionError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setIsCommitting(false);
-    }
-  }
+    },
+    [onCommitComplete, refreshPullRequestState, workspaceId],
+  );
 
-  async function handleCreatePullRequest(): Promise<void> {
+  const handleCreatePullRequest = useCallback(async (): Promise<void> => {
     setActionError(null);
     setIsCreatingPullRequest(true);
     try {
@@ -131,44 +145,69 @@ export function useGitActions({
     } finally {
       setIsCreatingPullRequest(false);
     }
-  }
+  }, [onOpenPullRequest, refreshPullRequestState, workspaceId]);
 
-  async function handleMergePullRequest(pullRequestNumber: number): Promise<void> {
-    setActionError(null);
-    setIsMergingPullRequest(true);
-    try {
-      const pullRequest = await mergeGitPullRequest(workspaceId, pullRequestNumber);
-      await refreshPullRequestState();
-      onOpenPullRequest(pullRequest);
-    } catch (error) {
-      setActionError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setIsMergingPullRequest(false);
-    }
-  }
+  const handleMergePullRequest = useCallback(
+    async (pullRequestNumber: number): Promise<void> => {
+      setActionError(null);
+      setIsMergingPullRequest(true);
+      try {
+        const pullRequest = await mergeGitPullRequest(workspaceId, pullRequestNumber);
+        await refreshPullRequestState();
+        onOpenPullRequest(pullRequest);
+      } catch (error) {
+        setActionError(error instanceof Error ? error.message : String(error));
+      } finally {
+        setIsMergingPullRequest(false);
+      }
+    },
+    [onOpenPullRequest, refreshPullRequestState, workspaceId],
+  );
 
-  async function handleShowChanges(): Promise<void> {
-    const unstaged = (gitStatusQuery.data?.files ?? []).filter((f) => f.unstaged);
+  const handleShowChanges = useCallback(async (): Promise<void> => {
+    const unstaged = (gitStatus?.files ?? []).filter((f) => f.unstaged);
     if (unstaged.length > 0) {
-      await stageGitFiles(workspaceId, unstaged.map((f) => f.path));
-      await gitStatusQuery.refresh();
+      await stageGitFiles(
+        workspaceId,
+        unstaged.map((f) => f.path),
+      );
+      await refreshGitStatus();
     }
-  }
+  }, [gitStatus?.files, refreshGitStatus, workspaceId]);
 
-  return {
-    actionError,
-    branchPullRequest: currentPullRequestQuery.data ?? null,
-    gitStatus: gitStatusQuery.data,
-    gitStatusQuery,
-    handleCommit,
-    handleCreatePullRequest,
-    handleMergePullRequest,
-    handlePushBranch,
-    handleShowChanges,
-    isCommitting,
-    isCreatingPullRequest,
-    isLoading: gitStatusQuery.isLoading || currentPullRequestQuery.isLoading,
-    isMergingPullRequest,
-    isPushingBranch,
-  };
+  return useMemo(
+    () => ({
+      actionError,
+      branchPullRequest,
+      gitStatus,
+      gitStatusQuery,
+      handleCommit,
+      handleCreatePullRequest,
+      handleMergePullRequest,
+      handlePushBranch,
+      handleShowChanges,
+      isCommitting,
+      isCreatingPullRequest,
+      isLoading: gitStatusQuery.isLoading || currentPullRequestQuery.isLoading,
+      isMergingPullRequest,
+      isPushingBranch,
+    }),
+    [
+      actionError,
+      branchPullRequest,
+      currentPullRequestQuery.isLoading,
+      gitStatus,
+      gitStatusQuery,
+      gitStatusQuery.isLoading,
+      handleCommit,
+      handleCreatePullRequest,
+      handleMergePullRequest,
+      handlePushBranch,
+      handleShowChanges,
+      isCommitting,
+      isCreatingPullRequest,
+      isMergingPullRequest,
+      isPushingBranch,
+    ],
+  );
 }

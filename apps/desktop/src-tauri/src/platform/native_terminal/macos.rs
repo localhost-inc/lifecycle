@@ -407,3 +407,18 @@ pub(super) fn destroy_surface(terminal_id: &str) -> Result<(), LifecycleError> {
         "failed to destroy native terminal surface",
     )
 }
+
+pub(super) fn send_text(terminal_id: &str, text: &str) -> Result<(), LifecycleError> {
+    let terminal_id = cstring(terminal_id, "terminal id")?;
+    let text_bytes = text.as_bytes();
+    with_error(
+        || unsafe {
+            lifecycle_native_terminal_send_text(
+                terminal_id.as_ptr(),
+                text_bytes.as_ptr() as *const c_char,
+                text_bytes.len(),
+            )
+        },
+        "failed to send text to native terminal",
+    )
+}

@@ -60,9 +60,7 @@ interface BuiltinExtensionsOptions {
   launchActions: WorkspaceExtensionLaunchActions;
   manifestState: "invalid" | "missing" | "valid";
   onFocusTerminal: (terminalId: string) => void;
-  onRestart: () => Promise<void>;
   onRun: () => Promise<void>;
-  onStop: () => Promise<void>;
   onSwitchToExtension: (id: WorkspaceExtensionId) => void;
   onUpdateService: (input: {
     exposure: ServiceRecord["exposure"];
@@ -83,9 +81,7 @@ export function getBuiltinExtensionSlots({
   launchActions,
   manifestState,
   onFocusTerminal,
-  onRestart,
   onRun,
-  onStop,
   onSwitchToExtension,
   onUpdateService,
   services,
@@ -161,9 +157,7 @@ export function getBuiltinExtensionSlots({
           hasManifest={hasManifest}
           isManifestStale={isManifestStale}
           manifestState={manifestState}
-          onRestart={onRestart}
           onRun={onRun}
-          onStop={onStop}
           onUpdateService={onUpdateService}
           services={services}
           setupSteps={setupSteps}

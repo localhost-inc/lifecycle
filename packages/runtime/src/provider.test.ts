@@ -35,6 +35,7 @@ describe("workspace provider interface", () => {
       "saveTerminalAttachment",
       "detachTerminal",
       "killTerminal",
+      "interruptTerminal",
       "readWorkspaceFile",
       "writeWorkspaceFile",
       "listWorkspaceFiles",
@@ -60,7 +61,7 @@ describe("workspace provider interface", () => {
       "mergeGitPullRequest",
     ];
 
-    expect(requiredMethods).toHaveLength(45);
+    expect(requiredMethods).toHaveLength(46);
   });
 
   test("local provider exposes the full contract surface", () => {
@@ -88,6 +89,7 @@ describe("workspace provider interface", () => {
     expect(typeof provider.saveTerminalAttachment).toBe("function");
     expect(typeof provider.detachTerminal).toBe("function");
     expect(typeof provider.killTerminal).toBe("function");
+    expect(typeof provider.interruptTerminal).toBe("function");
     expect(typeof provider.readWorkspaceFile).toBe("function");
     expect(typeof provider.writeWorkspaceFile).toBe("function");
     expect(typeof provider.listWorkspaceFiles).toBe("function");
@@ -168,6 +170,7 @@ describe("workspace provider interface", () => {
       }),
       detachTerminal: async () => {},
       killTerminal: async () => {},
+      interruptTerminal: async () => {},
       readWorkspaceFile: async () => ({
         absolute_path: "/tmp/workspace/README.md",
         byte_len: 0,
@@ -313,6 +316,7 @@ describe("workspace provider interface", () => {
     expect(typeof provider.saveTerminalAttachment).toBe("function");
     expect(typeof provider.detachTerminal).toBe("function");
     expect(typeof provider.killTerminal).toBe("function");
+    expect(typeof provider.interruptTerminal).toBe("function");
     expect(typeof provider.readWorkspaceFile).toBe("function");
     expect(typeof provider.writeWorkspaceFile).toBe("function");
     expect(typeof provider.listWorkspaceFiles).toBe("function");

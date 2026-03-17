@@ -7,6 +7,7 @@ import type {
 import {
   Badge,
   Button,
+  cn,
   Input,
   SplitButton,
   SplitButtonPrimary,
@@ -25,6 +26,7 @@ interface GitActionButtonProps {
   defaultOpen?: boolean;
   gitStatus: GitStatusResult | null;
   size?: "default" | "lg";
+  variant?: "foreground" | "outline";
   isCommitting: boolean;
   isCreatingPullRequest: boolean;
   isLoading: boolean;
@@ -341,6 +343,7 @@ export function GitActionButton({
   defaultOpen = false,
   gitStatus,
   size,
+  variant = "foreground",
   isCommitting,
   isCreatingPullRequest,
   isLoading,
@@ -414,13 +417,13 @@ export function GitActionButton({
   }
 
   const splitButton = (
-    <SplitButton className={className}>
+    <SplitButton className={cn(variant === "outline" && "gap-0", className)}>
       <SplitButtonPrimary
         disabled={isBusy}
         onClick={() => void handlePrimaryClick()}
         size={size}
         title={actionState.title}
-        variant="foreground"
+        variant={variant}
       >
         {actionState.primaryAction.label}
       </SplitButtonPrimary>
@@ -431,6 +434,7 @@ export function GitActionButton({
           setOpen((current) => !current);
         }}
         size={size}
+        variant={variant === "outline" ? "outline" : undefined}
       >
         <ChevronDown className="size-3.5" strokeWidth={2.4} />
       </SplitButtonSecondary>

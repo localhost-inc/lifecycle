@@ -27,15 +27,16 @@ import {
   writePersistedPanelValue,
 } from "../../../lib/panel-layout";
 import { OVERLAY_BOUNDARY_ATTRIBUTE } from "../../../lib/overlay-boundary";
-import { ExtensionBar } from "../../extensions/extension-bar";
 import {
   readPersistedActiveExtensionId,
   WORKSPACE_EXTENSION_PANEL_WIDTH_STORAGE_KEY,
   writePersistedActiveExtensionId,
 } from "../../extensions/extension-bar-state";
 import type { WorkspaceExtensionLaunchActions } from "../../extensions/extension-bar-types";
+import { ExtensionBar } from "../../extensions/extension-bar";
 import { getBuiltinExtensionSlots } from "../../extensions/builtin-extensions";
 import { ExtensionPanel } from "../../extensions/extension-panel";
+import { useGitActions } from "../../git/hooks/use-git-actions";
 import { useGitStatus } from "../../git/hooks";
 import type { ManifestStatus } from "../../projects/api/projects";
 import { WorkspaceCanvas } from "./workspace-canvas";
@@ -56,6 +57,7 @@ import { useWorkspaceEnvironmentTasks, useWorkspaceSetup } from "../hooks";
 import { workspaceSupportsFilesystemInteraction } from "../lib/workspace-capabilities";
 import { shouldSyncWorkspaceManifest } from "../lib/workspace-manifest-sync";
 import { useWorkspaceOpenRequests } from "../state/workspace-open-requests";
+import { useWorkspaceToolbar, type WorkspaceToolbarSlot } from "../state/workspace-toolbar-context";
 
 const SIDEBAR_RESIZE_STEP = 16;
 
@@ -100,6 +102,7 @@ export function WorkspaceLayout({
   const gitStatusQuery = useGitStatus(
     workspace.mode === "local" && workspace.worktree_path !== null ? workspace.id : null,
   );
+  const { registerToolbarSlot, unregisterToolbarSlot } = useWorkspaceToolbar();
 
   const handleRun = useCallback(
     async (serviceNames?: string[]) => {
@@ -378,9 +381,7 @@ export function WorkspaceLayout({
         launchActions,
         manifestState,
         onFocusTerminal: handleFocusTerminal,
-        onRestart: handleRestart,
         onRun: handleRun,
-        onStop: handleStop,
         onSwitchToExtension: (id) => setActiveExtensionId(id),
         onUpdateService: handleUpdateService,
         services,
@@ -392,9 +393,7 @@ export function WorkspaceLayout({
       environmentTasks,
       gitStatusQuery.data,
       handleFocusTerminal,
-      handleRestart,
       handleRun,
-      handleStop,
       handleUpdateService,
       hasManifest,
       isManifestStale,
@@ -426,6 +425,133 @@ export function WorkspaceLayout({
     window.addEventListener("lifecycle:toggle-extension-panel", handleTogglePanel);
     return () => window.removeEventListener("lifecycle:toggle-extension-panel", handleTogglePanel);
   }, []);
+
+  const handleToolbarCommitComplete = useCallback(() => {
+    setActiveExtensionId("git-history");
+  }, []);
+
+  // Git actions for toolbar
+  const gitActions = useGitActions({
+    onCommitComplete: handleToolbarCommitComplete,
+    onOpenPullRequest: launchActions.openPullRequest,
+    workspaceId: workspace.id,
+    workspaceMode: workspace.mode,
+    worktreePath: workspace.worktree_path,
+  });
+
+  // Derive run/stop action state for toolbar
+  const canRun = workspace.status === "idle" && hasManifest;
+  const canStop = workspace.status === "active" || workspace.status === "starting";
+  const canRestart = workspace.status === "active" && hasManifest;
+  const stopping = workspace.status === "stopping";
+  const [runActionActive, setRunActionActive] = useState<"restart" | "start" | "stop" | null>(null);
+
+  const toolbarRunAction = useMemo(() => {
+    const actionDisabled = runActionActive !== null || stopping || (!canRun && !canStop);
+
+    if (canStop || stopping || workspace.status === "starting") {
+      const label =
+        workspace.status === "starting"
+          ? "Starting..."
+          : runActionActive === "stop" || stopping
+            ? "Stopping..."
+            : "Stop";
+      return {
+        label,
+        disabled: actionDisabled,
+        loading: workspace.status === "starting",
+        onClick: () => {
+          if (actionDisabled) return;
+          setRunActionActive("stop");
+          void handleStop()
+            .catch((err) => console.error("Failed to stop:", err))
+            .finally(() => setRunActionActive(null));
+        },
+      };
+    }
+
+    return {
+      label: runActionActive === "start" ? "Starting..." : "Start",
+      disabled: actionDisabled,
+      loading: runActionActive === "start",
+      onClick: () => {
+        if (actionDisabled) return;
+        setRunActionActive("start");
+        void handleRun()
+          .catch((err) => console.error("Failed to start:", err))
+          .finally(() => setRunActionActive(null));
+      },
+    };
+  }, [canRun, canStop, handleRun, handleStop, runActionActive, stopping, workspace.status]);
+
+  const toolbarRestartAction = useMemo(() => {
+    if (!canRestart) return null;
+    return {
+      disabled: runActionActive !== null,
+      onClick: () => {
+        setRunActionActive("restart");
+        void handleRestart()
+          .catch((err) => console.error("Failed to restart:", err))
+          .finally(() => setRunActionActive(null));
+      },
+    };
+  }, [canRestart, handleRestart, runActionActive]);
+
+  const toolbarGitActionProps = useMemo(
+    () => ({
+      actionError: gitActions.actionError,
+      branchPullRequest: gitActions.branchPullRequest ?? null,
+      gitStatus: gitActions.gitStatus ?? null,
+      variant: "outline" as const,
+      isCommitting: gitActions.isCommitting,
+      isCreatingPullRequest: gitActions.isCreatingPullRequest,
+      isLoading: gitActions.isLoading,
+      isMergingPullRequest: gitActions.isMergingPullRequest,
+      isPushingBranch: gitActions.isPushingBranch,
+      onCommit: gitActions.handleCommit,
+      onCreatePullRequest: gitActions.handleCreatePullRequest,
+      onMergePullRequest: gitActions.handleMergePullRequest,
+      onOpenPullRequest: launchActions.openPullRequest,
+      onPushBranch: gitActions.handlePushBranch,
+      onShowChanges: gitActions.handleShowChanges,
+    }),
+    [
+      gitActions.actionError,
+      gitActions.branchPullRequest,
+      gitActions.gitStatus,
+      gitActions.handleCommit,
+      gitActions.handleCreatePullRequest,
+      gitActions.handleMergePullRequest,
+      gitActions.handlePushBranch,
+      gitActions.handleShowChanges,
+      gitActions.isCommitting,
+      gitActions.isCreatingPullRequest,
+      gitActions.isLoading,
+      gitActions.isMergingPullRequest,
+      gitActions.isPushingBranch,
+      launchActions.openPullRequest,
+    ],
+  );
+
+  const toolbarSlot = useMemo<WorkspaceToolbarSlot>(
+    () => ({
+      runAction: toolbarRunAction,
+      restartAction: toolbarRestartAction,
+      gitActionProps: toolbarGitActionProps,
+    }),
+    [toolbarGitActionProps, toolbarRestartAction, toolbarRunAction],
+  );
+
+  // Register toolbar slot
+  useEffect(() => {
+    registerToolbarSlot(workspace.id, toolbarSlot);
+  }, [registerToolbarSlot, toolbarSlot, workspace.id]);
+
+  useEffect(() => {
+    return () => {
+      unregisterToolbarSlot(workspace.id);
+    };
+  }, [unregisterToolbarSlot, workspace.id]);
 
   const canvasContent = supportsTerminalInteraction ? (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -490,9 +616,7 @@ export function WorkspaceLayout({
             onSelectExtension={handleSelectExtension}
             slots={extensionSlots}
           />
-          {activeExtensionSlot && (
-            <ExtensionPanel activeSlot={activeExtensionSlot} />
-          )}
+          {activeExtensionSlot && <ExtensionPanel activeSlot={activeExtensionSlot} />}
         </div>
       )}
     </div>

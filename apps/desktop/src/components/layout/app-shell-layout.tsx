@@ -10,7 +10,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
-import { isTauri } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { AppHotkeyListener } from "../../app/app-hotkey-listener";
 import { isMacPlatform, shouldHandleDomAppHotkey } from "../../app/app-hotkeys";
 import { useAuthSession } from "../../features/auth/state/auth-session-provider";
@@ -55,6 +55,7 @@ import {
   writeLastWorkspaceId,
 } from "../../features/workspaces/state/workspace-canvas-state";
 import { WorkspaceOpenRequestsProvider } from "../../features/workspaces/state/workspace-open-requests";
+import { WorkspaceToolbarProvider } from "../../features/workspaces/state/workspace-toolbar-context";
 import {
   APP_SIDEBAR_COLLAPSED_STORAGE_KEY,
   APP_SIDEBAR_WIDTH_STORAGE_KEY,
@@ -594,6 +595,13 @@ export function AppShellLayout() {
     [navigate, projects],
   );
 
+  // Sync the native Project menu with the current project list (macOS).
+  useEffect(() => {
+    if (isTauri()) {
+      void invoke("sync_project_menu", { names: projects.map((p) => p.name) });
+    }
+  }, [projects]);
+
   useShortcutRegistration({
     enabled: shouldHandleDomAppHotkey("select-project-index", {
       isTauriApp: isTauri(),
@@ -659,6 +667,7 @@ export function AppShellLayout() {
 
   return (
     <WorkspaceOpenRequestsProvider>
+      <WorkspaceToolbarProvider>
       <CommandPaletteProvider projects={projects} workspacesByProjectId={workspacesByProjectId}>
         <div
           ref={shellViewportRef}
@@ -704,6 +713,7 @@ export function AppShellLayout() {
           </div>
         </div>
       </CommandPaletteProvider>
+      </WorkspaceToolbarProvider>
     </WorkspaceOpenRequestsProvider>
   );
 }

@@ -68,9 +68,9 @@ describe("TerminalSessionHistory", () => {
     expect(markup).toContain("bg-[var(--surface-hover)]");
     // Finished harness with session ID is resumable (button not disabled)
     // Failed harness without session ID is disabled
-    const codexButton = markup.split("Codex")[0].split("<button").pop()!;
+    const codexButton = markup.split("Codex")[0]!.split("<button").pop()!;
     expect(codexButton).not.toContain('disabled=""');
-    const claudeButton = markup.split("Claude")[0].split("<button").pop()!;
+    const claudeButton = markup.split("Claude")[0]!.split("<button").pop()!;
     expect(claudeButton).toContain('disabled=""');
   });
 });

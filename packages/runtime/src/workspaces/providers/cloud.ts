@@ -60,6 +60,7 @@ export interface CloudWorkspaceClient {
   ): Promise<WorkspaceProviderSavedTerminalAttachment>;
   detachTerminal(terminalId: string): Promise<void>;
   killTerminal(terminalId: string): Promise<void>;
+  interruptTerminal(terminalId: string): Promise<void>;
   readWorkspaceFile(
     workspaceId: string,
     filePath: string,
@@ -195,6 +196,10 @@ export class CloudWorkspaceProvider implements WorkspaceProvider {
 
   killTerminal(terminalId: string): Promise<void> {
     return this.client.killTerminal(terminalId);
+  }
+
+  interruptTerminal(terminalId: string): Promise<void> {
+    return this.client.interruptTerminal(terminalId);
   }
 
   readWorkspaceFile(

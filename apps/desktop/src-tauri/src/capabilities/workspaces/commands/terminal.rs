@@ -124,3 +124,11 @@ pub async fn kill_terminal(
 ) -> Result<(), LifecycleError> {
     super::super::terminal::kill_terminal(app, db_path, terminal_id).await
 }
+
+#[tauri::command]
+pub async fn interrupt_terminal(
+    app: AppHandle,
+    terminal_id: String,
+) -> Result<(), LifecycleError> {
+    super::super::terminal::interrupt_terminal(app, terminal_id).await
+}

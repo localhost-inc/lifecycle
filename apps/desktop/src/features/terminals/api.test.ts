@@ -3,6 +3,7 @@ import {
   createTerminal,
   detachTerminal,
   getTerminal,
+  interruptTerminal,
   killTerminal,
   listWorkspaceTerminals,
   renameTerminal,
@@ -44,6 +45,7 @@ describe("terminal api", () => {
     );
     await expectTerminalRuntimeError(detachTerminal("terminal_1"));
     await expectTerminalRuntimeError(killTerminal("terminal_1"));
+    await expectTerminalRuntimeError(interruptTerminal("terminal_1"));
     await expect(
       saveTerminalAttachment({
         base64Data: "ZmFrZQ==",

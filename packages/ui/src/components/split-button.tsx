@@ -3,15 +3,15 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/cn";
 
 const splitButtonPrimaryVariants = cva(
-  "inline-flex items-center gap-2 bg-[var(--muted)] font-semibold outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center gap-2 font-semibold outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
       variant: {
         foreground:
-          "text-[var(--foreground)] hover:bg-[var(--surface-selected)]",
-        active: "text-[var(--foreground)]",
+          "bg-[var(--muted)] text-[var(--foreground)] hover:bg-[var(--surface-selected)]",
+        active: "bg-[var(--muted)] text-[var(--foreground)]",
         outline:
-          "border border-[var(--border)] bg-transparent text-[var(--foreground)] hover:bg-[var(--surface-hover)]",
+          "border border-r-0 border-[var(--border)] bg-transparent text-[var(--foreground)] hover:bg-[var(--surface-hover)]",
       },
       withIcon: {
         true: "",
@@ -44,7 +44,7 @@ const splitButtonSecondaryVariants = cva(
         default:
           "bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--surface-selected)]",
         outline:
-          "border border-[var(--border)] border-l-0 bg-transparent text-[var(--foreground)] hover:bg-[var(--surface-hover)]",
+          "border border-[var(--border)] bg-transparent text-[var(--foreground)] hover:bg-[var(--surface-hover)]",
       },
       size: {
         default: "h-8 w-8 rounded-r-xl",

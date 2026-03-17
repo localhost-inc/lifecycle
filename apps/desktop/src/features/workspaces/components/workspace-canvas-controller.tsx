@@ -12,6 +12,7 @@ import { useWorkspaceFileSessions } from "../../files/state/workspace-file-sessi
 import {
   createTerminal,
   detachTerminal,
+  interruptTerminal,
   renameTerminal,
   terminalHasLiveSession,
   type CreateTerminalRequest,
@@ -888,6 +889,26 @@ export function useWorkspaceCanvasController({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleUnzoom, zoomedTabKey]);
+
+  // Escape to interrupt running harness turn
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) {
+        return;
+      }
+      if (zoomedTabKey !== null) {
+        return; // Let unzoom handler take priority
+      }
+      if (!activeTerminalId || !isTerminalTurnRunning(activeTerminalId)) {
+        return;
+      }
+      event.preventDefault();
+      void interruptTerminal(activeTerminalId);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeTerminalId, isTerminalTurnRunning, zoomedTabKey]);
 
   return {
     activePaneId,

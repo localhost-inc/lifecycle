@@ -78,16 +78,14 @@ const environmentTasks: EnvironmentTaskState[] = [
 ];
 
 describe("EnvironmentPanel", () => {
-  test("renders environment controls for an active workspace", () => {
+  test("renders status badge for an active workspace", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
         config: null,
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
-        onRestart: async () => {},
         onRun: async () => {},
-        onStop: async () => {},
         onUpdateService: async () => {},
         environmentTasks: [],
         setupSteps: [],
@@ -96,21 +94,17 @@ describe("EnvironmentPanel", () => {
       }),
     );
 
-    expect(markup).toContain(">Stop<");
-    expect(markup).not.toContain(">Start<");
-    expect(markup).toContain('aria-label="Show environment actions"');
+    expect(markup).toContain("Running");
   });
 
-  test("renders start affordance and failure details for an idle workspace with a failure", () => {
+  test("renders failure details for an idle workspace with a failure", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
         config: null,
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
-        onRestart: async () => {},
         onRun: async () => {},
-        onStop: async () => {},
         onUpdateService: async () => {},
         environmentTasks: [],
         setupSteps: setupSteps,
@@ -123,24 +117,18 @@ describe("EnvironmentPanel", () => {
       }),
     );
 
-    expect(markup).toContain(">Start<");
-    expect(markup).not.toContain(">Stop<");
-    expect(markup).not.toContain('aria-label="Show environment actions"');
-    expect(markup).toContain('data-slot="button"');
+    expect(markup).toContain("Failed");
     expect(markup).toContain("A service failed to start.");
-    expect(markup).not.toContain("View details");
   });
 
-  test("keeps the start action disabled when no lifecycle.json is present", () => {
+  test("shows idle status when no lifecycle.json is present", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
         config: null,
         hasManifest: false,
         isManifestStale: false,
         manifestState: "missing",
-        onRestart: async () => {},
         onRun: async () => {},
-        onStop: async () => {},
         onUpdateService: async () => {},
         environmentTasks: [],
         setupSteps: [],
@@ -152,8 +140,7 @@ describe("EnvironmentPanel", () => {
       }),
     );
 
-    expect(markup).toContain(">Start<");
-    expect(markup).toContain('disabled=""');
+    expect(markup).toContain("Idle");
     expect(markup).not.toContain("Boot sequence");
   });
 
@@ -164,9 +151,7 @@ describe("EnvironmentPanel", () => {
         hasManifest: true,
         isManifestStale: true,
         manifestState: "valid",
-        onRestart: async () => {},
         onRun: async () => {},
-        onStop: async () => {},
         onUpdateService: async () => {},
         environmentTasks: [],
         setupSteps: [],
@@ -193,9 +178,7 @@ describe("EnvironmentPanel", () => {
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
-        onRestart: async () => {},
         onRun: async () => {},
-        onStop: async () => {},
         onUpdateService: async () => {},
         environmentTasks: [],
         setupSteps: [],
@@ -216,9 +199,7 @@ describe("EnvironmentPanel", () => {
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
-        onRestart: async () => {},
         onRun: async () => {},
-        onStop: async () => {},
         onUpdateService: async () => {},
         environmentTasks: [],
         setupSteps: [],
@@ -269,9 +250,7 @@ describe("EnvironmentPanel", () => {
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
-        onRestart: async () => {},
         onRun: async () => {},
-        onStop: async () => {},
         onUpdateService: async () => {},
         environmentTasks,
         setupSteps: [
@@ -312,7 +291,7 @@ describe("EnvironmentPanel", () => {
       }),
     );
 
-    expect(markup).toContain("Starting...");
+    expect(markup).toContain("Starting");
     expect(markup).not.toContain("Booting environment");
     expect(markup).toContain("postgres");
     expect(markup).toContain("api");
@@ -344,9 +323,7 @@ describe("EnvironmentPanel", () => {
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
-        onRestart: async () => {},
         onRun: async () => {},
-        onStop: async () => {},
         onUpdateService: async () => {},
         environmentTasks: [],
         setupSteps: [],
@@ -383,9 +360,7 @@ describe("EnvironmentPanel", () => {
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
-        onRestart: async () => {},
         onRun: async () => {},
-        onStop: async () => {},
         onUpdateService: async () => {},
         environmentTasks: [
           {

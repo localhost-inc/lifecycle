@@ -210,6 +210,10 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
     await this.invoke("kill_terminal", { terminalId });
   }
 
+  async interruptTerminal(terminalId: string): Promise<void> {
+    await this.invoke("interrupt_terminal", { terminalId });
+  }
+
   async readWorkspaceFile(
     workspaceId: string,
     filePath: string,

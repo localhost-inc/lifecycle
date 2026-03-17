@@ -111,3 +111,9 @@ export async function killTerminal(terminalId: string): Promise<void> {
 
   await getWorkspaceProvider().killTerminal(terminalId);
 }
+
+export async function interruptTerminal(terminalId: string): Promise<void> {
+  requireNativeTerminalRuntime();
+
+  await getWorkspaceProvider().interruptTerminal(terminalId);
+}

@@ -35,6 +35,7 @@ const provider = {
   })),
   detachTerminal: mock(async () => {}),
   killTerminal: mock(async () => {}),
+  interruptTerminal: mock(async () => {}),
 };
 
 mock.module("../../lib/workspace-provider", () => ({
@@ -45,6 +46,7 @@ const {
   createTerminal,
   detachTerminal,
   getTerminal,
+  interruptTerminal,
   killTerminal,
   listWorkspaceTerminals,
   renameTerminal,
@@ -97,6 +99,7 @@ describe("terminal api provider routing", () => {
     });
     await detachTerminal("term_1");
     await killTerminal("term_1");
+    await interruptTerminal("term_1");
 
     expect(getWorkspaceProvider).toHaveBeenCalled();
     expect(provider.listWorkspaceTerminals).toHaveBeenCalledWith("ws_1");
@@ -128,5 +131,6 @@ describe("terminal api provider routing", () => {
     });
     expect(provider.detachTerminal).toHaveBeenCalledWith("term_1");
     expect(provider.killTerminal).toHaveBeenCalledWith("term_1");
+    expect(provider.interruptTerminal).toHaveBeenCalledWith("term_1");
   });
 });

@@ -177,6 +177,7 @@ export interface WorkspaceProvider {
   ): Promise<WorkspaceProviderSavedTerminalAttachment>;
   detachTerminal(terminalId: string): Promise<void>;
   killTerminal(terminalId: string): Promise<void>;
+  interruptTerminal(terminalId: string): Promise<void>;
   readWorkspaceFile(
     workspaceId: string,
     filePath: string,

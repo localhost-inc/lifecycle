@@ -111,3 +111,46 @@ pub async fn get_window_mouse_position(
         Ok(None)
     }
 }
+
+#[cfg(target_os = "macos")]
+#[tauri::command]
+pub fn sync_project_menu(app: tauri::AppHandle, names: Vec<String>) -> Result<(), String> {
+    use crate::APP_MENU_ITEM_SELECT_PROJECT_PREFIX;
+    use tauri::menu::{MenuItemBuilder, SubmenuBuilder};
+
+    let menu = app.menu().ok_or("no app menu")?;
+
+    // Find and remove the existing Project submenu.
+    let items = menu.items().map_err(|e| e.to_string())?;
+    for item in &items {
+        if let tauri::menu::MenuItemKind::Submenu(sub) = item {
+            if sub.text().map_or(false, |t| t == "Project") {
+                let _ = menu.remove(sub);
+                break;
+            }
+        }
+    }
+
+    // Build a new Project submenu with the provided names.
+    let max_items = names.len().min(9);
+    let mut builder = SubmenuBuilder::new(&app, "Project");
+    for (i, name) in names.iter().take(max_items).enumerate() {
+        let digit = i + 1;
+        let item_id = format!("{APP_MENU_ITEM_SELECT_PROJECT_PREFIX}{digit}");
+        let item = MenuItemBuilder::with_id(item_id, name.as_str())
+            .accelerator(format!("CmdOrCtrl+{digit}"))
+            .build(&app)
+            .map_err(|e| e.to_string())?;
+        builder = builder.item(&item);
+    }
+    let project_menu = builder.build().map_err(|e| e.to_string())?;
+    menu.append(&project_menu).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+pub fn sync_project_menu(_names: Vec<String>) -> Result<(), String> {
+    Ok(())
+}

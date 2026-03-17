@@ -23,7 +23,8 @@ pub(crate) use persistence::load_terminal_record;
 #[allow(unused_imports)]
 pub(crate) use runtime::{
     complete_native_terminal_exit, create_terminal, detach_terminal, hide_native_terminal_surface,
-    kill_terminal, sync_native_terminal_surface, sync_native_terminal_surface_frame,
+    interrupt_terminal, kill_terminal, sync_native_terminal_surface,
+    sync_native_terminal_surface_frame,
 };
 pub(crate) use types::{
     NativeTerminalSurfaceFrameSyncInput, NativeTerminalSurfaceSyncInput, SavedTerminalAttachment,

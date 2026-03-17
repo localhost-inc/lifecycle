@@ -9,6 +9,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { QueryProvider } from "../../../query";
 import { WorkspaceOpenRequestsProvider } from "../state/workspace-open-requests";
+import { WorkspaceToolbarProvider } from "../state/workspace-toolbar-context";
 import { workspaceSupportsFilesystemInteraction } from "../lib/workspace-capabilities";
 import { shouldSyncWorkspaceManifest } from "../lib/workspace-manifest-sync";
 
@@ -18,7 +19,9 @@ function renderWorkspaceLayout(element: ReturnType<typeof createElement>) {
       initialEntries: ["/projects/project_1/workspaces/workspace_1"],
       children: createElement(QueryProvider, {
         children: createElement(WorkspaceOpenRequestsProvider, {
-          children: element,
+          children: createElement(WorkspaceToolbarProvider, {
+            children: element,
+          }),
         }),
       }),
     }),
@@ -28,6 +31,7 @@ function renderWorkspaceLayout(element: ReturnType<typeof createElement>) {
 async function mockWorkspaceLayoutGitQueries() {
   const gitHooksModule = await import("../../git/hooks");
   spyOn(gitHooksModule, "useCurrentGitPullRequest").mockReturnValue({ data: undefined } as never);
+  spyOn(gitHooksModule, "useGitLog").mockReturnValue({ data: undefined } as never);
   spyOn(gitHooksModule, "useGitPullRequest").mockReturnValue({ data: undefined } as never);
   spyOn(gitHooksModule, "useGitPullRequests").mockReturnValue({ data: undefined } as never);
   spyOn(gitHooksModule, "useGitStatus").mockReturnValue({ data: undefined } as never);

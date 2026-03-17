@@ -102,3 +102,9 @@ pub fn destroy_surface(app: &AppHandle, terminal_id: &str) -> Result<(), Lifecyc
     let terminal_id = terminal_id.to_string();
     run_on_main_thread(app, move || platform::destroy_surface(&terminal_id))
 }
+
+pub fn send_text(app: &AppHandle, terminal_id: &str, text: &str) -> Result<(), LifecycleError> {
+    let terminal_id = terminal_id.to_string();
+    let text = text.to_string();
+    run_on_main_thread(app, move || platform::send_text(&terminal_id, &text))
+}

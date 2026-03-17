@@ -296,6 +296,13 @@ pub(crate) async fn kill_terminal(
     Ok(())
 }
 
+pub(crate) async fn interrupt_terminal(
+    app: AppHandle,
+    terminal_id: String,
+) -> Result<(), LifecycleError> {
+    native_terminal::send_text(&app, &terminal_id, "\x03")
+}
+
 #[allow(dead_code)]
 pub(crate) fn complete_native_terminal_exit(
     app: &AppHandle,

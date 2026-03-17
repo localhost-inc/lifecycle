@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, Outlet, Route, Routes } from "react-router-dom";
 import type { AppShellOutletContext } from "../../../components/layout/app-shell-context";
 import { TerminalResponseReadyProvider } from "../../terminals/state/terminal-response-ready-provider";
+import { WorkspaceToolbarProvider } from "../../workspaces/state/workspace-toolbar-context";
 
 const project: ProjectRecord = {
   id: "project_1",
@@ -82,25 +83,27 @@ function renderProjectRoute(
     createElement(ThemeProvider, {
       storageKey: "test.theme",
       children: createElement(TerminalResponseReadyProvider, {
-        children: createElement(MemoryRouter, {
-          initialEntries: [entry],
-          children: createElement(Routes, {
-            children: createElement(
-              Route,
-              { element: createElement(OutletContextBoundary) },
-              createElement(
+        children: createElement(WorkspaceToolbarProvider, {
+          children: createElement(MemoryRouter, {
+            initialEntries: [entry],
+            children: createElement(Routes, {
+              children: createElement(
                 Route,
-                {
-                  element: createElement(ProjectRoute),
-                  path: "/projects/:projectId",
-                },
-                createElement(Route, { index: true, element: createElement(IndexStub) }),
-                createElement(Route, {
-                  path: "workspaces/:workspaceId",
-                  element: createElement(WorkspaceStub),
-                }),
+                { element: createElement(OutletContextBoundary) },
+                createElement(
+                  Route,
+                  {
+                    element: createElement(ProjectRoute),
+                    path: "/projects/:projectId",
+                  },
+                  createElement(Route, { index: true, element: createElement(IndexStub) }),
+                  createElement(Route, {
+                    path: "workspaces/:workspaceId",
+                    element: createElement(WorkspaceStub),
+                  }),
+                ),
               ),
-            ),
+            }),
           }),
         }),
       }),
@@ -126,7 +129,7 @@ describe("ProjectRoute", () => {
     );
   });
 
-  test("renders workspace action icons inside the nav bar for workspace routes", async () => {
+  test("renders workspace overflow menu inside the nav bar for workspace routes", async () => {
     const { ProjectRoute } = await import("./project-route");
 
     const markup = renderProjectRoute(
@@ -137,14 +140,13 @@ describe("ProjectRoute", () => {
 
     expect(markup).toContain('data-slot="project-nav-bar"');
     expect(markup).toContain('data-slot="workspace-layout"');
-    expect(markup).toContain('aria-label="Fork workspace"');
-    expect(markup).toContain('aria-label="Destroy workspace"');
+    expect(markup).toContain('aria-label="More workspace actions"');
 
     const navBarStart = markup.indexOf('data-slot="project-nav-bar"');
-    const forkIndex = markup.indexOf('aria-label="Fork workspace"');
+    const overflowIndex = markup.indexOf('aria-label="More workspace actions"');
     const workspaceStart = markup.indexOf('data-slot="workspace-layout"');
-    expect(navBarStart).toBeLessThan(forkIndex);
-    expect(forkIndex).toBeLessThan(workspaceStart);
+    expect(navBarStart).toBeLessThan(overflowIndex);
+    expect(overflowIndex).toBeLessThan(workspaceStart);
   });
 
   test("does not render a divider after the navigation controls", async () => {
