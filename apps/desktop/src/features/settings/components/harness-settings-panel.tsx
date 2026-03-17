@@ -1,6 +1,7 @@
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@lifecycle/ui";
 import { type ClaudeHarnessSettings, type CodexHarnessSettings } from "../state/harness-settings";
-import { ClaudeHarnessSettingsCard } from "./harnesses/claude-harness-settings-card";
-import { CodexHarnessSettingsCard } from "./harnesses/codex-harness-settings-card";
+import { ClaudeHarnessSettingsContent } from "./harnesses/claude-harness-settings-card";
+import { CodexHarnessSettingsContent } from "./harnesses/codex-harness-settings-card";
 
 interface HarnessSettingsPanelProps {
   claude: ClaudeHarnessSettings;
@@ -20,17 +21,29 @@ export function HarnessSettingsPanel({
   onCodexChange,
 }: HarnessSettingsPanelProps) {
   return (
-    <div className="space-y-4">
-      <CodexHarnessSettingsCard
-        defaultAdvancedOpen={defaultCodexAdvancedOpen}
-        onChange={onCodexChange}
-        settings={codex}
-      />
-      <ClaudeHarnessSettingsCard
-        defaultAdvancedOpen={defaultClaudeAdvancedOpen}
-        onChange={onClaudeChange}
-        settings={claude}
-      />
-    </div>
+    <Tabs defaultValue="codex">
+      <TabsList variant="pill">
+        <TabsTrigger value="codex" variant="pill">
+          Codex
+        </TabsTrigger>
+        <TabsTrigger value="claude" variant="pill">
+          Claude
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent className="pt-4" value="codex">
+        <CodexHarnessSettingsContent
+          defaultAdvancedOpen={defaultCodexAdvancedOpen}
+          onChange={onCodexChange}
+          settings={codex}
+        />
+      </TabsContent>
+      <TabsContent className="pt-4" value="claude">
+        <ClaudeHarnessSettingsContent
+          defaultAdvancedOpen={defaultClaudeAdvancedOpen}
+          onChange={onClaudeChange}
+          settings={claude}
+        />
+      </TabsContent>
+    </Tabs>
   );
 }

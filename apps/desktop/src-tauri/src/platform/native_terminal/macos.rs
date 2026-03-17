@@ -61,7 +61,6 @@ struct NativeWorkspaceShortcutEvent {
 const NATIVE_TERMINAL_SHORTCUT_PREVIOUS_TAB: c_int = 1;
 const NATIVE_TERMINAL_SHORTCUT_NEXT_TAB: c_int = 2;
 const NATIVE_TERMINAL_SHORTCUT_CLOSE_ACTIVE_TAB: c_int = 3;
-const NATIVE_TERMINAL_SHORTCUT_SELECT_TAB_INDEX: c_int = 4;
 const NATIVE_TERMINAL_SHORTCUT_NEW_TAB: c_int = 5;
 
 unsafe extern "C" {
@@ -81,6 +80,11 @@ unsafe extern "C" {
     fn lifecycle_native_terminal_install_diagnostics(log_path: *const c_char);
     fn lifecycle_native_terminal_hide(terminal_id: *const c_char) -> bool;
     fn lifecycle_native_terminal_close(terminal_id: *const c_char) -> bool;
+    fn lifecycle_native_terminal_send_text(
+        terminal_id: *const c_char,
+        text: *const c_char,
+        text_len: usize,
+    ) -> bool;
 }
 
 fn with_error(invoke: impl FnOnce() -> bool, fallback: &'static str) -> Result<(), LifecycleError> {
@@ -166,7 +170,7 @@ extern "C" fn native_terminal_exit_callback(terminal_id: *const c_char, exit_cod
 extern "C" fn native_workspace_shortcut_callback(
     terminal_id: *const c_char,
     shortcut_kind: c_int,
-    shortcut_index: c_int,
+    _shortcut_index: c_int,
 ) {
     if terminal_id.is_null() {
         return;
@@ -180,9 +184,6 @@ extern "C" fn native_workspace_shortcut_callback(
         NATIVE_TERMINAL_SHORTCUT_PREVIOUS_TAB => Some(("previous-tab", None)),
         NATIVE_TERMINAL_SHORTCUT_NEXT_TAB => Some(("next-tab", None)),
         NATIVE_TERMINAL_SHORTCUT_CLOSE_ACTIVE_TAB => Some(("close-active-tab", None)),
-        NATIVE_TERMINAL_SHORTCUT_SELECT_TAB_INDEX => {
-            Some(("select-tab-index", Some(shortcut_index)))
-        }
         NATIVE_TERMINAL_SHORTCUT_NEW_TAB => Some(("new-tab", None)),
         _ => None,
     }) else {

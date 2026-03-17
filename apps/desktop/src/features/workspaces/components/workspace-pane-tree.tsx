@@ -59,9 +59,8 @@ interface WorkspacePaneTreeProps {
   documents: WorkspaceCanvasDocument[];
   fileSessionsByTabKey: Record<string, FileViewerSessionState>;
   inactivePaneOpacity?: number;
-  nativeTerminalsSuppressed?: boolean;
   onCloseDocumentTab: (tabKey: string) => void;
-  onCloseRuntimeTab: (tabKey: string, terminalId: string) => Promise<void>;
+  onCloseTerminalTab: (tabKey: string, terminalId: string) => Promise<void>;
   onCreateTerminal: (input: CreateTerminalRequest, paneId?: string) => Promise<void>;
   onFileSessionStateChange: (tabKey: string, state: FileViewerSessionState | null) => void;
   onLaunchSurface: (paneId: string, request: SurfaceLaunchRequest) => void;
@@ -76,13 +75,14 @@ interface WorkspacePaneTreeProps {
     splitRatio?: number,
   ) => void;
   onOpenFile: (filePath: string) => void;
-  onRenameRuntimeTab: (terminalId: string, label: string) => Promise<unknown> | unknown;
+  onRenameTerminalTab: (terminalId: string, label: string) => Promise<unknown> | unknown;
   onSelectPane: (paneId: string) => void;
   onSelectTab: (paneId: string, key: string) => void;
   onReconcilePaneVisibleTabOrder: (paneId: string, keys: string[]) => void;
   onSetSplitRatio: (splitId: string, ratio: number) => void;
   onSplitPane: (paneId: string, direction: "column" | "row") => void;
   onTabViewStateChange: (tabKey: string, viewState: WorkspaceCanvasTabViewState | null) => void;
+  onToggleZoom: () => void;
   paneCount: number;
   renderedActiveTabKeyByPaneId: Record<string, string | null>;
   rootPane: WorkspacePaneNode;
@@ -90,8 +90,9 @@ interface WorkspacePaneTreeProps {
   terminals: TerminalRecord[];
   visibleTabsByPaneId: Record<string, WorkspaceCanvasTab[]>;
   viewStateByTabKey: Record<string, WorkspaceCanvasTabViewState>;
-  paneIdsWaitingForSelectedRuntimeTab: ReadonlySet<string>;
+  paneIdsWaitingForSelectedTerminalTab: ReadonlySet<string>;
   workspaceId: string;
+  zoomedTabKey: string | null;
 }
 
 function PaneControlButton({
@@ -144,6 +145,44 @@ function SplitDownIcon() {
     >
       <rect x="2.5" y="3" width="11" height="10" rx="1.5" />
       <path d="M2.5 8h11" />
+    </svg>
+  );
+}
+
+function ZoomInIcon() {
+  return (
+    <svg
+      fill="none"
+      height="14"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeWidth="1.4"
+      viewBox="0 0 16 16"
+      width="14"
+    >
+      <path d="M10 2.5h3.5V6" />
+      <path d="M6 13.5H2.5V10" />
+      <path d="M13.5 2.5L9.5 6.5" />
+      <path d="M2.5 13.5l4-4" />
+    </svg>
+  );
+}
+
+function ZoomOutIcon() {
+  return (
+    <svg
+      fill="none"
+      height="14"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeWidth="1.4"
+      viewBox="0 0 16 16"
+      width="14"
+    >
+      <path d="M5 2.5H2.5V5" />
+      <path d="M11 13.5h2.5V11" />
+      <path d="M2.5 2.5l4 4" />
+      <path d="M13.5 13.5l-4-4" />
     </svg>
   );
 }
@@ -478,21 +517,21 @@ export function WorkspacePaneTree({
   documents,
   fileSessionsByTabKey,
   inactivePaneOpacity = 1,
-  nativeTerminalsSuppressed = false,
   onCloseDocumentTab,
-  onCloseRuntimeTab,
+  onCloseTerminalTab,
   onCreateTerminal,
   onFileSessionStateChange,
   onLaunchSurface,
   onMoveTabToPane,
   onOpenFile,
-  onRenameRuntimeTab,
+  onRenameTerminalTab,
   onSelectPane,
   onSelectTab,
   onReconcilePaneVisibleTabOrder,
   onSetSplitRatio,
   onSplitPane,
   onTabViewStateChange,
+  onToggleZoom,
   paneCount,
   renderedActiveTabKeyByPaneId,
   rootPane,
@@ -500,9 +539,22 @@ export function WorkspacePaneTree({
   terminals,
   visibleTabsByPaneId,
   viewStateByTabKey,
-  paneIdsWaitingForSelectedRuntimeTab,
+  paneIdsWaitingForSelectedTerminalTab,
   workspaceId,
+  zoomedTabKey,
 }: WorkspacePaneTreeProps) {
+  const zoomedPaneId = useMemo(() => {
+    if (!zoomedTabKey) {
+      return null;
+    }
+    for (const [paneId, tabs] of Object.entries(visibleTabsByPaneId)) {
+      if (tabs.some((tab) => tab.key === zoomedTabKey)) {
+        return paneId;
+      }
+    }
+    return null;
+  }, [visibleTabsByPaneId, zoomedTabKey]);
+
   const [activeTabDrag, setActiveTabDrag] = useState<WorkspacePaneActiveTabDropState | null>(null);
   const [hoveredPaneId, setHoveredPaneId] = useState<string | null>(null);
   const [surfaceLaunchOpenPaneId, setSurfaceLaunchOpenPaneId] = useState<string | null>(null);
@@ -705,7 +757,7 @@ export function WorkspacePaneTree({
         <section
           key={node.id}
           ref={(element) => setPaneElement(node.id, element)}
-          className={`relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--surface)] transition-opacity duration-200 ease-in-out will-change-[opacity] ${isDropTargetPane ? "ring-1 ring-[var(--ring)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--ring),transparent_50%)]" : ""}`}
+          className={`relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--surface)] transition-opacity duration-200 ease-in-out will-change-[opacity] ${isDropTargetPane ? "ring-1 ring-[var(--ring)] shadow-[0_0_0_2px_var(--ring)]/50" : ""}`}
           data-workspace-pane-id={node.id}
           onPointerEnter={() => {
             setHoveredPaneId(node.id);
@@ -728,8 +780,8 @@ export function WorkspacePaneTree({
               activeTabKey={activeTabKey}
               dragPreview={tabBarDragPreview}
               onCloseDocumentTab={onCloseDocumentTab}
-              onCloseRuntimeTab={onCloseRuntimeTab}
-              onRenameRuntimeTab={onRenameRuntimeTab}
+              onCloseTerminalTab={onCloseTerminalTab}
+              onRenameTerminalTab={onRenameTerminalTab}
               onSelectTab={(key) => onSelectTab(node.id, key)}
               onTabDrag={handleTabDrag}
               onTabDragCommit={handleTabDragCommit}
@@ -755,6 +807,14 @@ export function WorkspacePaneTree({
                     initial={{ opacity: 0, width: 0, x: 8 }}
                     transition={{ duration: 0.16, ease: "easeInOut" }}
                   >
+                    {paneCount > 1 && (
+                      <PaneControlButton
+                        label={zoomedPaneId ? "Unzoom" : "Zoom"}
+                        onClick={onToggleZoom}
+                      >
+                        {zoomedPaneId ? <ZoomOutIcon /> : <ZoomInIcon />}
+                      </PaneControlButton>
+                    )}
                     <PaneControlButton label="Split Right" onClick={() => onSplitPane(node.id, "row")}>
                       <SplitRightIcon />
                     </PaneControlButton>
@@ -775,7 +835,6 @@ export function WorkspacePaneTree({
               creatingSelection={creatingSelection}
               documents={documents}
               hasVisibleTabs={visibleTabs.length > 0}
-              nativeTerminalsSuppressed={nativeTerminalsSuppressed}
               onCreateTerminal={(input) => onCreateTerminal(input, node.id)}
               onFileSessionStateChange={onFileSessionStateChange}
               onOpenFile={onOpenFile}
@@ -784,7 +843,7 @@ export function WorkspacePaneTree({
               paneFocused={isActivePane}
               surfaceOpacity={paneOpacity}
               terminals={terminals}
-              waitingForSelectedRuntimeTab={paneIdsWaitingForSelectedRuntimeTab.has(node.id)}
+              waitingForSelectedTerminalTab={paneIdsWaitingForSelectedTerminalTab.has(node.id)}
               workspaceId={workspaceId}
             />
           </div>
@@ -801,38 +860,43 @@ export function WorkspacePaneTree({
       hoveredPaneId,
       inactivePaneOpacity,
       onCloseDocumentTab,
-      onCloseRuntimeTab,
+      onCloseTerminalTab,
       onCreateTerminal,
       onFileSessionStateChange,
-      nativeTerminalsSuppressed,
       onLaunchSurface,
       onMoveTabToPane,
       onOpenFile,
-      onRenameRuntimeTab,
+      onRenameTerminalTab,
       onSelectPane,
       onSelectTab,
       onReconcilePaneVisibleTabOrder,
       onSetSplitRatio,
       onSplitPane,
       onTabViewStateChange,
+      onToggleZoom,
       paneCount,
       renderedActiveTabKeyByPaneId,
+      zoomedPaneId,
       setPaneElement,
       surfaceLaunchOpenPaneId,
       surfaceActions,
       terminals,
       visibleTabsByPaneId,
       viewStateByTabKey,
-      paneIdsWaitingForSelectedRuntimeTab,
+      paneIdsWaitingForSelectedTerminalTab,
       workspaceId,
       handleTabDragCommit,
       handleTabDrag,
     ],
   );
 
+  const renderedTree = zoomedPaneId
+    ? renderNode({ kind: "leaf", id: zoomedPaneId })
+    : renderNode(rootPane);
+
   return (
     <>
-      <div className="flex min-h-0 flex-1 overflow-hidden">{renderNode(rootPane)}</div>
+      <div className="flex min-h-0 flex-1 overflow-hidden">{renderedTree}</div>
       <WorkspacePaneDropOverlay activeDrag={activeTabDrag} />
       {activeTabDrag && draggedTab ? (
         <WorkspacePaneTabDragGhost drag={activeTabDrag.drag} tab={draggedTab} />

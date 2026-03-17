@@ -8,7 +8,6 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { isCommitDiffDocument, isPullRequestDocument } from "../state/workspace-canvas-state";
 import { WorkspaceSurfaceTabLeading } from "./surface-icons";
 import {
   getWorkspaceTabDragShiftDirection,
@@ -64,8 +63,8 @@ interface WorkspacePaneTabBarProps {
   activeTabKey: string | null;
   dragPreview?: WorkspacePaneTabBarDragPreview | null;
   onCloseDocumentTab: (tabKey: string) => void;
-  onCloseRuntimeTab: (tabKey: string, terminalId: string) => void;
-  onRenameRuntimeTab?: (terminalId: string, label: string) => Promise<unknown> | unknown;
+  onCloseTerminalTab: (tabKey: string, terminalId: string) => void;
+  onRenameTerminalTab?: (terminalId: string, label: string) => Promise<unknown> | unknown;
   onSelectTab: (key: string) => void;
   onTabDrag?: (drag: WorkspacePaneTabDrag | null) => void;
   onTabDragCommit?: (drag: WorkspacePaneTabDrag) => void;
@@ -127,23 +126,15 @@ export function hasStartedWorkspaceTabDrag(
 }
 
 export function renderWorkspacePaneDefaultTabLeading(tab: WorkspaceCanvasTab) {
-  if (tab.kind === "terminal") {
-    return <WorkspaceSurfaceTabLeading tab={tab} />;
-  }
-
-  return (
-    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--surface)]/70 font-mono text-[10px] text-[var(--muted-foreground)]">
-      {isCommitDiffDocument(tab) ? "#" : isPullRequestDocument(tab) ? "PR" : "D"}
-    </span>
-  );
+  return <WorkspaceSurfaceTabLeading tab={tab} />;
 }
 
 export function WorkspacePaneTabBar({
   activeTabKey,
   dragPreview = null,
   onCloseDocumentTab,
-  onCloseRuntimeTab,
-  onRenameRuntimeTab,
+  onCloseTerminalTab,
+  onRenameTerminalTab,
   onSelectTab,
   onTabDrag,
   onTabDragCommit,
@@ -409,7 +400,7 @@ export function WorkspacePaneTabBar({
 
   const startRenamingTab = useCallback(
     (tab: WorkspaceCanvasTab) => {
-      if (tab.kind !== "terminal" || !onRenameRuntimeTab) {
+      if (tab.kind !== "terminal" || !onRenameTerminalTab) {
         return;
       }
 
@@ -426,7 +417,7 @@ export function WorkspacePaneTabBar({
       });
       onSelectTab(tab.key);
     },
-    [onRenameRuntimeTab, onSelectTab, restoreBodySelection],
+    [onRenameTerminalTab, onSelectTab, restoreBodySelection],
   );
 
   const cancelTabRename = useCallback(() => {
@@ -434,7 +425,7 @@ export function WorkspacePaneTabBar({
   }, []);
 
   const commitTabRename = useCallback(async () => {
-    if (!renameState || !onRenameRuntimeTab || renameState.saving) {
+    if (!renameState || !onRenameTerminalTab || renameState.saving) {
       return;
     }
 
@@ -478,7 +469,7 @@ export function WorkspacePaneTabBar({
     );
 
     try {
-      await onRenameRuntimeTab(renameState.terminalId, normalizedLabel);
+      await onRenameTerminalTab(renameState.terminalId, normalizedLabel);
       setRenameState(null);
     } catch (error) {
       setRenameState((current) =>
@@ -493,7 +484,7 @@ export function WorkspacePaneTabBar({
       renameInputRef.current?.focus();
       renameInputRef.current?.select();
     }
-  }, [onRenameRuntimeTab, renameState, visibleTabs]);
+  }, [onRenameTerminalTab, renameState, visibleTabs]);
 
   return (
     <div className="relative min-w-0 flex-1">
@@ -547,14 +538,14 @@ export function WorkspacePaneTabBar({
               onClick={() => handleTabClick(tab.key)}
               onClose={() => {
                 if (isTerminal) {
-                  void onCloseRuntimeTab(tab.key, tab.terminalId);
+                  void onCloseTerminalTab(tab.key, tab.terminalId);
                   return;
                 }
 
                 onCloseDocumentTab(tab.key);
               }}
               onDoubleClick={(event) => {
-                if (!isTerminal || !onRenameRuntimeTab) {
+                if (!isTerminal || !onRenameTerminalTab) {
                   return;
                 }
 

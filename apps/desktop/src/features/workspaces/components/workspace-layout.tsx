@@ -30,7 +30,6 @@ import { OVERLAY_BOUNDARY_ATTRIBUTE } from "../../../lib/overlay-boundary";
 import { ExtensionBar } from "../../extensions/extension-bar";
 import {
   readPersistedActiveExtensionId,
-  toggleActiveExtension,
   WORKSPACE_EXTENSION_PANEL_WIDTH_STORAGE_KEY,
   writePersistedActiveExtensionId,
 } from "../../extensions/extension-bar-state";
@@ -40,8 +39,8 @@ import { ExtensionPanel } from "../../extensions/extension-panel";
 import { useGitStatus } from "../../git/hooks";
 import type { ManifestStatus } from "../../projects/api/projects";
 import { WorkspaceCanvas } from "./workspace-canvas";
-import { WorkspaceRouteDialogHost } from "./workspace-route-dialog-host";
 import {
+  createChangesDiffOpenInput,
   createCommitDiffOpenInput,
   createFileViewerOpenInput,
   createPullRequestOpenInput,
@@ -57,7 +56,6 @@ import { useWorkspaceEnvironmentTasks, useWorkspaceSetup } from "../hooks";
 import { workspaceSupportsFilesystemInteraction } from "../lib/workspace-capabilities";
 import { shouldSyncWorkspaceManifest } from "../lib/workspace-manifest-sync";
 import { useWorkspaceOpenRequests } from "../state/workspace-open-requests";
-import type { WorkspaceRouteDialogState } from "../routes/workspace-route-query-state";
 
 const SIDEBAR_RESIZE_STEP = 16;
 
@@ -66,8 +64,6 @@ interface WorkspaceLayoutProps {
   workspaceSnapshot: WorkspaceSnapshotResult | null;
   manifestStatus: ManifestStatus | null;
   onCloseWorkspaceTab?: () => void;
-  onRouteDialogChange?: (dialog: WorkspaceRouteDialogState) => void;
-  routeDialog?: WorkspaceRouteDialogState;
 }
 
 export function WorkspaceLayout({
@@ -75,8 +71,6 @@ export function WorkspaceLayout({
   workspaceSnapshot,
   manifestStatus,
   onCloseWorkspaceTab,
-  onRouteDialogChange,
-  routeDialog = null,
 }: WorkspaceLayoutProps) {
   const workspaceLayoutRef = useRef<HTMLDivElement | null>(null);
   const [workspaceLayoutWidth, setWorkspaceLayoutWidth] = useState(0);
@@ -201,10 +195,7 @@ export function WorkspaceLayout({
   const launchActions = useMemo<WorkspaceExtensionLaunchActions>(
     () => ({
       openChangesDiff: (focusPath) => {
-        onRouteDialogChange?.({
-          focusPath,
-          kind: "changes",
-        });
+        openDocument(workspace.id, createChangesDiffOpenInput(focusPath));
       },
       openCommitDiff: (entry) => {
         openDocument(workspace.id, createCommitDiffOpenInput(entry));
@@ -220,7 +211,7 @@ export function WorkspaceLayout({
         }
       },
     }),
-    [onRouteDialogChange, openDocument, supportsTerminalInteraction, workspace.id],
+    [openDocument, supportsTerminalInteraction, workspace.id],
   );
 
   useEffect(() => {
@@ -365,6 +356,17 @@ export function WorkspaceLayout({
     [panelBounds],
   );
 
+  const handleFocusTerminal = useCallback(
+    (terminalId: string) => {
+      window.dispatchEvent(
+        new CustomEvent("lifecycle:focus-terminal", {
+          detail: { workspaceId: workspace.id, terminalId },
+        }),
+      );
+    },
+    [workspace.id],
+  );
+
   const extensionSlots = useMemo(
     () =>
       getBuiltinExtensionSlots({
@@ -375,6 +377,7 @@ export function WorkspaceLayout({
         isManifestStale,
         launchActions,
         manifestState,
+        onFocusTerminal: handleFocusTerminal,
         onRestart: handleRestart,
         onRun: handleRun,
         onStop: handleStop,
@@ -388,6 +391,7 @@ export function WorkspaceLayout({
       config,
       environmentTasks,
       gitStatusQuery.data,
+      handleFocusTerminal,
       handleRestart,
       handleRun,
       handleStop,
@@ -407,10 +411,9 @@ export function WorkspaceLayout({
     [activeExtensionId, extensionSlots],
   );
 
-  const handleToggleExtension = useCallback((extensionId: string) => {
-    setActiveExtensionId((currentExtensionId) =>
-      toggleActiveExtension(currentExtensionId, extensionId),
-    );
+  const handleSelectExtension = useCallback((extensionId: string) => {
+    setActiveExtensionId(extensionId);
+    setPanelCollapsed(false);
   }, []);
 
   const [panelCollapsed, setPanelCollapsed] = useState(false);
@@ -429,7 +432,6 @@ export function WorkspaceLayout({
       <div className="flex min-h-0 flex-1 flex-col">
         <WorkspaceCanvas
           key={workspace.id}
-          nativeTerminalsSuppressed={routeDialog !== null}
           openDocumentRequest={openDocumentRequest}
           onCloseWorkspaceTab={onCloseWorkspaceTab}
           onOpenDocumentRequestHandled={(requestId) =>
@@ -464,37 +466,35 @@ export function WorkspaceLayout({
       >
         {canvasContent}
       </div>
-      {!panelCollapsed && activeExtensionSlot && (
+      {!panelCollapsed && (
         <div
           className="relative z-[1] flex shrink-0 flex-col border-l border-[var(--border)] bg-[var(--surface)]"
-          style={{ width: `${panelWidth}px` }}
+          style={activeExtensionSlot ? { width: `${panelWidth}px` } : undefined}
         >
-          <div
-            aria-label="Resize extension panel"
-            aria-orientation="vertical"
-            aria-valuemax={panelBounds.maxSize}
-            aria-valuemin={panelBounds.minSize}
-            aria-valuenow={panelWidth}
-            className="absolute inset-y-0 -left-2 z-20 w-4 cursor-col-resize"
-            onKeyDown={handlePanelResizeKeyDown}
-            onPointerDown={handlePanelResizePointerDown}
-            role="separator"
-            tabIndex={0}
+          {activeExtensionSlot && (
+            <div
+              aria-label="Resize extension panel"
+              aria-orientation="vertical"
+              aria-valuemax={panelBounds.maxSize}
+              aria-valuemin={panelBounds.minSize}
+              aria-valuenow={panelWidth}
+              className="absolute inset-y-0 -left-2 z-20 w-4 cursor-col-resize"
+              onKeyDown={handlePanelResizeKeyDown}
+              onPointerDown={handlePanelResizePointerDown}
+              role="separator"
+              tabIndex={0}
+            />
+          )}
+          <ExtensionBar
+            activeExtensionId={activeExtensionId}
+            onSelectExtension={handleSelectExtension}
+            slots={extensionSlots}
           />
-          <ExtensionPanel activeSlot={activeExtensionSlot} />
+          {activeExtensionSlot && (
+            <ExtensionPanel activeSlot={activeExtensionSlot} />
+          )}
         </div>
       )}
-      <ExtensionBar
-        activeExtensionId={activeExtensionId}
-        onToggleExtension={handleToggleExtension}
-        slots={extensionSlots}
-      />
-      <WorkspaceRouteDialogHost
-        dialog={routeDialog}
-        onDialogChange={(dialog) => onRouteDialogChange?.(dialog)}
-        onOpenFile={launchActions.openFileViewer}
-        workspaceId={workspace.id}
-      />
     </div>
   );
 }

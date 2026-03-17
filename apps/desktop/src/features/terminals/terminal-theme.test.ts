@@ -219,24 +219,25 @@ describe("buildTerminalTheme", () => {
       selectionForeground: "#1f2328",
     });
 
-    expect(theme.cursorColor).toBe(githubLightDefault.colors?.["editorCursor.foreground"]);
+    const c = (key: string) => githubLightDefault.colors![key]!;
+    expect(theme.cursorColor).toBe(c("editorCursor.foreground"));
     expect(theme.palette).toEqual([
-      githubLightDefault.colors?.["terminal.ansiBlack"],
-      githubLightDefault.colors?.["terminal.ansiRed"],
-      githubLightDefault.colors?.["terminal.ansiGreen"],
-      githubLightDefault.colors?.["terminal.ansiYellow"],
-      githubLightDefault.colors?.["terminal.ansiBlue"],
-      githubLightDefault.colors?.["terminal.ansiMagenta"],
-      githubLightDefault.colors?.["terminal.ansiCyan"],
-      githubLightDefault.colors?.["terminal.ansiWhite"],
-      githubLightDefault.colors?.["terminal.ansiBrightBlack"],
-      githubLightDefault.colors?.["terminal.ansiBrightRed"],
-      githubLightDefault.colors?.["terminal.ansiBrightGreen"],
-      githubLightDefault.colors?.["terminal.ansiBrightYellow"],
-      githubLightDefault.colors?.["terminal.ansiBrightBlue"],
-      githubLightDefault.colors?.["terminal.ansiBrightMagenta"],
-      githubLightDefault.colors?.["terminal.ansiBrightCyan"],
-      githubLightDefault.colors?.["terminal.ansiBrightWhite"],
+      c("terminal.ansiBlack"),
+      c("terminal.ansiRed"),
+      c("terminal.ansiGreen"),
+      c("terminal.ansiYellow"),
+      c("terminal.ansiBlue"),
+      c("terminal.ansiMagenta"),
+      c("terminal.ansiCyan"),
+      c("terminal.ansiWhite"),
+      c("terminal.ansiBrightBlack"),
+      c("terminal.ansiBrightRed"),
+      c("terminal.ansiBrightGreen"),
+      c("terminal.ansiBrightYellow"),
+      c("terminal.ansiBrightBlue"),
+      c("terminal.ansiBrightMagenta"),
+      c("terminal.ansiBrightCyan"),
+      c("terminal.ansiBrightWhite"),
     ]);
   });
 
@@ -248,24 +249,25 @@ describe("buildTerminalTheme", () => {
       selectionForeground: "#e6edf3",
     });
 
-    expect(theme.cursorColor).toBe(githubDarkDefault.colors?.["editorCursor.foreground"]);
+    const d = (key: string) => githubDarkDefault.colors![key]!;
+    expect(theme.cursorColor).toBe(d("editorCursor.foreground"));
     expect(theme.palette).toEqual([
-      githubDarkDefault.colors?.["terminal.ansiBlack"],
-      githubDarkDefault.colors?.["terminal.ansiRed"],
-      githubDarkDefault.colors?.["terminal.ansiGreen"],
-      githubDarkDefault.colors?.["terminal.ansiYellow"],
-      githubDarkDefault.colors?.["terminal.ansiBlue"],
-      githubDarkDefault.colors?.["terminal.ansiMagenta"],
-      githubDarkDefault.colors?.["terminal.ansiCyan"],
-      githubDarkDefault.colors?.["terminal.ansiWhite"],
-      githubDarkDefault.colors?.["terminal.ansiBrightBlack"],
-      githubDarkDefault.colors?.["terminal.ansiBrightRed"],
-      githubDarkDefault.colors?.["terminal.ansiBrightGreen"],
-      githubDarkDefault.colors?.["terminal.ansiBrightYellow"],
-      githubDarkDefault.colors?.["terminal.ansiBrightBlue"],
-      githubDarkDefault.colors?.["terminal.ansiBrightMagenta"],
-      githubDarkDefault.colors?.["terminal.ansiBrightCyan"],
-      githubDarkDefault.colors?.["terminal.ansiBrightWhite"],
+      d("terminal.ansiBlack"),
+      d("terminal.ansiRed"),
+      d("terminal.ansiGreen"),
+      d("terminal.ansiYellow"),
+      d("terminal.ansiBlue"),
+      d("terminal.ansiMagenta"),
+      d("terminal.ansiCyan"),
+      d("terminal.ansiWhite"),
+      d("terminal.ansiBrightBlack"),
+      d("terminal.ansiBrightRed"),
+      d("terminal.ansiBrightGreen"),
+      d("terminal.ansiBrightYellow"),
+      d("terminal.ansiBrightBlue"),
+      d("terminal.ansiBrightMagenta"),
+      d("terminal.ansiBrightCyan"),
+      d("terminal.ansiBrightWhite"),
     ]);
   });
 });

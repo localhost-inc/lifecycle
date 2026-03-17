@@ -65,7 +65,6 @@ static int gDiagnosticsLogFd = -1;
 static const int32_t kLifecycleShortcutPreviousTab = 1;
 static const int32_t kLifecycleShortcutNextTab = 2;
 static const int32_t kLifecycleShortcutCloseActiveTab = 3;
-static const int32_t kLifecycleShortcutSelectTabIndex = 4;
 static const int32_t kLifecycleShortcutNewTab = 5;
 
 static void lifecycleWriteDiagnosticUTF8(const char *value, size_t length) {
@@ -1831,14 +1830,9 @@ static BOOL lifecycleNativeTerminalHandleWorkspaceShortcut(LifecycleNativeTermin
     return YES;
   }
 
-  if (!hasShift && charactersIgnoringModifiers.length == 1) {
-    const unichar character = [charactersIgnoringModifiers characterAtIndex:0];
-    if (character >= '1' && character <= '9') {
-      gWorkspaceShortcutCallback(view.terminalId.UTF8String, kLifecycleShortcutSelectTabIndex,
-                                 (int32_t)(character - '0'));
-      return YES;
-    }
-  }
+  // Cmd+1-9: handled by the native app menu (select project by index).
+  // Do NOT intercept here — let performKeyEquivalent: fall through so the
+  // macOS menu accelerator fires regardless of terminal focus.
 
   if (hasShift && [charactersIgnoringModifiers isEqualToString:@"["]) {
     gWorkspaceShortcutCallback(view.terminalId.UTF8String, kLifecycleShortcutPreviousTab, 0);
@@ -2384,6 +2378,28 @@ bool lifecycle_native_terminal_close(const char *terminal_id) {
       return true;
     } @catch (NSException *exception) {
       lifecycleSetLastErrorFromException(@"Native terminal close threw an exception", exception);
+      return false;
+    }
+  }
+}
+
+bool lifecycle_native_terminal_send_text(const char *terminal_id, const char *text, size_t text_len) {
+  @autoreleasepool {
+    @try {
+      if (terminal_id == NULL || text == NULL || text_len == 0) {
+        lifecycleSetLastError(@"Native terminal send_text is missing required arguments.");
+        return false;
+      }
+      NSString *terminalId = [NSString stringWithUTF8String:terminal_id];
+      LifecycleNativeTerminalView *view = (LifecycleNativeTerminalView *)gTerminalViews[terminalId];
+      if (view == nil || view.surface == NULL) {
+        lifecycleSetLastError(@"Native terminal view not found for send_text.");
+        return false;
+      }
+      ghostty_surface_text(view.surface, text, text_len);
+      return true;
+    } @catch (NSException *exception) {
+      lifecycleSetLastErrorFromException(@"Native terminal send_text threw an exception", exception);
       return false;
     }
   }

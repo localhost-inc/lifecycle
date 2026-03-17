@@ -104,14 +104,14 @@ function withWorkspaceState(
     "documentsByKey" | "paneTabStateById" | "rootPane" | "tabStateByKey"
   > & {
     documents?: WorkspaceCanvasDocument[];
-    hiddenRuntimeTabKeys?: string[];
+    hiddenTerminalTabKeys?: string[];
     rootPane?: TestWorkspacePaneNode;
     viewStateByTabKey?: Record<string, WorkspaceCanvasTabViewState>;
   },
 ): WorkspaceCanvasState {
   const {
     documents = [],
-    hiddenRuntimeTabKeys = [],
+    hiddenTerminalTabKeys = [],
     rootPane,
     viewStateByTabKey = {},
     ...rest
@@ -130,11 +130,11 @@ function withWorkspaceState(
     paneTabStateById: paneTreeState.paneTabStateById,
     rootPane: paneTreeState.rootPane,
     tabStateByKey: Object.fromEntries([
-      ...hiddenRuntimeTabKeys.map((key) => [key, { hidden: true }] as const),
+      ...hiddenTerminalTabKeys.map((key) => [key, { hidden: true }] as const),
       ...Object.entries(viewStateByTabKey).map(([key, viewState]) => [
         key,
         {
-          ...(hiddenRuntimeTabKeys.includes(key) ? { hidden: true } : {}),
+          ...(hiddenTerminalTabKeys.includes(key) ? { hidden: true } : {}),
           viewState,
         },
       ]),
@@ -146,7 +146,7 @@ function withDefaultState(
   state: Partial<WorkspaceCanvasState> & {
     activeTabKey?: string | null;
     documents?: WorkspaceCanvasDocument[];
-    hiddenRuntimeTabKeys?: string[];
+    hiddenTerminalTabKeys?: string[];
     tabOrderKeys?: string[];
     viewStateByTabKey?: Record<string, WorkspaceCanvasTabViewState>;
   },
@@ -156,7 +156,7 @@ function withDefaultState(
   const {
     activeTabKey = null,
     documents = [],
-    hiddenRuntimeTabKeys = [],
+    hiddenTerminalTabKeys = [],
     tabOrderKeys = [],
     viewStateByTabKey = {},
     ...rest
@@ -173,11 +173,11 @@ function withDefaultState(
       },
     },
     tabStateByKey: Object.fromEntries([
-      ...hiddenRuntimeTabKeys.map((key) => [key, { hidden: true }] as const),
+      ...hiddenTerminalTabKeys.map((key) => [key, { hidden: true }] as const),
       ...Object.entries(viewStateByTabKey).map(([key, viewState]) => [
         key,
         {
-          ...(hiddenRuntimeTabKeys.includes(key) ? { hidden: true } : {}),
+          ...(hiddenTerminalTabKeys.includes(key) ? { hidden: true } : {}),
           viewState,
         },
       ]),
@@ -546,7 +546,7 @@ describe("workspace canvas state persistence", () => {
     });
   });
 
-  test("persists runtime active tabs even when no document tabs are open", () => {
+  test("persists terminal active tabs even when no document tabs are open", () => {
     const storage = new MemoryStorage();
 
     writeWorkspaceCanvasState(
@@ -592,7 +592,7 @@ describe("workspace canvas state persistence", () => {
         ...createDefaultWorkspaceCanvasState(),
         activePaneId: "pane-2",
         documents: [createChangesDiffTab("src/app.ts")],
-        hiddenRuntimeTabKeys: [],
+        hiddenTerminalTabKeys: [],
         rootPane: {
           direction: "row",
           first: {
@@ -621,7 +621,7 @@ describe("workspace canvas state persistence", () => {
         ...createDefaultWorkspaceCanvasState(),
         activePaneId: "pane-2",
         documents: [createChangesDiffTab("src/app.ts")],
-        hiddenRuntimeTabKeys: [],
+        hiddenTerminalTabKeys: [],
         rootPane: {
           direction: "row",
           first: {
@@ -727,7 +727,7 @@ describe("workspace canvas state persistence", () => {
         ...createDefaultWorkspaceCanvasState(),
         activePaneId: "pane-2",
         documents: [createChangesDiffTab("src/app.ts")],
-        hiddenRuntimeTabKeys: [],
+        hiddenTerminalTabKeys: [],
         rootPane: {
           direction: "row",
           first: {
@@ -751,7 +751,7 @@ describe("workspace canvas state persistence", () => {
     );
   });
 
-  test("drops persisted launcher tabs and legacy hidden runtime metadata", () => {
+  test("drops persisted launcher tabs and legacy hidden terminal metadata", () => {
     const storage = new MemoryStorage();
 
     storage.setItem(
@@ -765,7 +765,7 @@ describe("workspace canvas state persistence", () => {
               kind: "launcher",
             },
           ],
-          hiddenRuntimeTabKeys: ["terminal:term-hidden", "launcher:ignored"],
+          hiddenTerminalTabKeys: ["terminal:term-hidden", "launcher:ignored"],
           tabOrderKeys: ["launcher:launcher-1", "terminal:term-hidden", CHANGES_DIFF_TAB_KEY],
         },
       }),
@@ -789,7 +789,7 @@ describe("workspace canvas state persistence", () => {
         ...createDefaultWorkspaceCanvasState(),
         activePaneId: "pane-2",
         documents: [],
-        hiddenRuntimeTabKeys: [],
+        hiddenTerminalTabKeys: [],
         rootPane: {
           direction: "row",
           first: {
@@ -818,7 +818,7 @@ describe("workspace canvas state persistence", () => {
         ...createDefaultWorkspaceCanvasState(),
         activePaneId: "pane-2",
         documents: [],
-        hiddenRuntimeTabKeys: [],
+        hiddenTerminalTabKeys: [],
         rootPane: {
           direction: "row",
           first: {

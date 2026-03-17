@@ -115,6 +115,7 @@ describe("builtin extension slots", () => {
         openPullRequest: () => {},
       },
       manifestState: "missing",
+      onFocusTerminal: () => {},
       onRestart: async () => {},
       onRun: async () => {},
       onStop: async () => {},

@@ -3,7 +3,7 @@ import type { ExtensionSlot } from "./extension-bar-types";
 
 interface ExtensionBarProps {
   activeExtensionId: string | null;
-  onToggleExtension: (extensionId: string) => void;
+  onSelectExtension: (extensionId: string) => void;
   slots: readonly ExtensionSlot[];
 }
 
@@ -13,7 +13,7 @@ function ExtensionIcon({ slot }: { slot: ExtensionSlot }) {
     <span className="relative inline-flex">
       <Icon className="size-4" strokeWidth={2} />
       {slot.badge?.kind === "dot" ? (
-        <span className="absolute -bottom-1 -right-1 flex items-center justify-center rounded-full bg-[var(--surface)] p-px">
+        <span className="absolute -bottom-[3px] -right-[3px] flex items-center justify-center rounded-full bg-[var(--surface)] p-px">
           <StatusDot aria-hidden size="sm" tone={slot.badge.tone} />
         </span>
       ) : null}
@@ -21,10 +21,10 @@ function ExtensionIcon({ slot }: { slot: ExtensionSlot }) {
   );
 }
 
-export function ExtensionBar({ activeExtensionId, onToggleExtension, slots }: ExtensionBarProps) {
+export function ExtensionBar({ activeExtensionId, onSelectExtension, slots }: ExtensionBarProps) {
   return (
     <nav
-      className="flex w-10 shrink-0 flex-col items-stretch border-l border-[var(--border)] bg-[var(--background)]"
+      className="flex h-9 shrink-0 flex-row items-stretch overflow-x-auto overflow-y-hidden shadow-[inset_0_-1px_0_var(--border)] bg-[var(--background)]"
       data-slot="workspace-extension-strip"
     >
       {slots.map((slot) => {
@@ -34,16 +34,17 @@ export function ExtensionBar({ activeExtensionId, onToggleExtension, slots }: Ex
             key={slot.id}
             aria-label={slot.label}
             className={[
-              "relative flex h-9 items-center justify-center border-b border-[var(--border)] transition-colors",
+              "relative flex items-center justify-center border-r border-[var(--border)] transition-colors",
               isActive
-                ? "bg-[var(--surface)] text-[var(--foreground)] -ml-px z-[1] pl-px"
-                : "text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]",
+                ? "gap-1.5 px-2.5 bg-[var(--surface)] text-[var(--foreground)] -mb-px z-[1] pb-px"
+                : "aspect-square text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]",
             ].join(" ")}
-            onClick={() => onToggleExtension(slot.id)}
+            onClick={() => onSelectExtension(slot.id)}
             title={slot.label}
             type="button"
           >
             <ExtensionIcon slot={slot} />
+            {isActive && <span className="min-w-0 truncate text-[13px] font-medium leading-none">{slot.label}</span>}
           </button>
         );
       })}

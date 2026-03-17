@@ -18,7 +18,11 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:lib.rs)",
       "Bash(cargo check:*)",
-      "Bash(cargo test:*)"
+      "Bash(cargo test:*)",
+      "Bash(node:*)",
+      "Bash(grep:*)",
+      "WebFetch(domain:ui.shadcn.com)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

@@ -6,19 +6,19 @@ describe("closeWorkspacePaneTabs", () => {
   test("collapses empty panes without trying to close tabs", async () => {
     const collapseEmptyPane = mock(() => {});
     const closeDocumentTab = mock((_tabKey: string) => true);
-    const closeRuntimeTab = mock(async (_tabKey: string, _terminalId: string) => true);
+    const closeTerminalTab = mock(async (_tabKey: string, _terminalId: string) => true);
 
     await expect(
       closeWorkspacePaneTabs([], {
         collapseEmptyPane,
         closeDocumentTab,
-        closeRuntimeTab,
+        closeTerminalTab,
       }),
     ).resolves.toBe(true);
 
     expect(collapseEmptyPane).not.toHaveBeenCalled();
     expect(closeDocumentTab).not.toHaveBeenCalled();
-    expect(closeRuntimeTab).not.toHaveBeenCalled();
+    expect(closeTerminalTab).not.toHaveBeenCalled();
   });
 
   test("closes every tab in a populated pane", async () => {
@@ -48,7 +48,7 @@ describe("closeWorkspacePaneTabs", () => {
             calls.push(`document:${tabKey}`);
             return true;
           },
-          closeRuntimeTab: async (tabKey, terminalId) => {
+          closeTerminalTab: async (tabKey, terminalId) => {
             calls.push(`runtime:${tabKey}:${terminalId}`);
             return true;
           },
@@ -73,7 +73,7 @@ describe("closeWorkspacePaneTabs", () => {
             calls.push(`document:${tabKey}`);
             return false;
           },
-          closeRuntimeTab: async (tabKey, terminalId) => {
+          closeTerminalTab: async (tabKey, terminalId) => {
             calls.push(`runtime:${tabKey}:${terminalId}`);
             return true;
           },

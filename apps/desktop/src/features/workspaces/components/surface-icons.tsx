@@ -118,12 +118,7 @@ export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceCanvasTab })
           role="img"
           title="Generating response"
         >
-          <Spinner
-            aria-hidden="true"
-            aria-label={undefined}
-            className="size-3.5 shrink-0 text-[var(--muted-foreground)]"
-            role={undefined}
-          />
+          <Spinner className="size-4 shrink-0 text-[var(--muted-foreground)]" />
         </span>
       );
     }
@@ -146,9 +141,9 @@ export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceCanvasTab })
     return (
       <SurfaceBubble tab={tab}>
         {tab.extension === "pen" ? (
-          <PenTool className="h-3 w-3" strokeWidth={1.8} />
+          <PenTool className="h-3.5 w-3.5" strokeWidth={1.8} />
         ) : (
-          <FileText className="h-3 w-3" strokeWidth={1.8} />
+          <FileText className="h-3.5 w-3.5" strokeWidth={1.8} />
         )}
       </SurfaceBubble>
     );
@@ -157,7 +152,7 @@ export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceCanvasTab })
   if (isCommitDiffDocument(tab)) {
     return (
       <SurfaceBubble tab={tab}>
-        <GitCommitHorizontal className="h-3 w-3" strokeWidth={1.8} />
+        <GitCommitHorizontal className="h-3.5 w-3.5" strokeWidth={1.8} />
       </SurfaceBubble>
     );
   }
@@ -165,7 +160,7 @@ export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceCanvasTab })
   if (isPullRequestDocument(tab)) {
     return (
       <SurfaceBubble tab={tab}>
-        <GitBranch className="h-3 w-3" strokeWidth={1.8} />
+        <GitBranch className="h-3.5 w-3.5" strokeWidth={1.8} />
       </SurfaceBubble>
     );
   }
@@ -173,14 +168,14 @@ export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceCanvasTab })
   if (isChangesDiffDocument(tab)) {
     return (
       <SurfaceBubble tab={tab}>
-        <FileDiff className="h-3 w-3" strokeWidth={1.8} />
+        <FileDiff className="h-3.5 w-3.5" strokeWidth={1.8} />
       </SurfaceBubble>
     );
   }
 
   return (
     <SurfaceBubble tab={tab}>
-      <FileText className="h-3 w-3" strokeWidth={1.8} />
+      <FileText className="h-3.5 w-3.5" strokeWidth={1.8} />
     </SurfaceBubble>
   );
 }

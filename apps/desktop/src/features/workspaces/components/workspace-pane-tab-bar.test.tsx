@@ -13,7 +13,7 @@ describe("WorkspacePaneTabBar", () => {
       createElement(WorkspacePaneTabBar, {
         activeTabKey: "terminal:term-1",
         onCloseDocumentTab: () => {},
-        onCloseRuntimeTab: async () => {},
+        onCloseTerminalTab: async () => {},
 
         onSelectTab: () => {},
         renderTabLeading: (tab) =>
@@ -42,7 +42,7 @@ describe("WorkspacePaneTabBar", () => {
       createElement(WorkspacePaneTabBar, {
         activeTabKey: "terminal:term-1",
         onCloseDocumentTab: () => {},
-        onCloseRuntimeTab: async () => {},
+        onCloseTerminalTab: async () => {},
         onSelectTab: () => {},
         visibleTabs: [
           {
@@ -63,7 +63,6 @@ describe("WorkspacePaneTabBar", () => {
       "relative flex h-full shrink-0 cursor-pointer items-center gap-1.5 border-r border-[var(--border)] px-3",
     );
     expect(markup).toContain("bg-[var(--surface)]");
-    expect(markup).toContain("h-px bg-[var(--accent)]");
     expect(markup).toContain("text-[13px]");
     expect(markup).toContain("font-medium");
     expect(markup).toContain("cursor-grab");
@@ -74,7 +73,7 @@ describe("WorkspacePaneTabBar", () => {
       createElement(WorkspacePaneTabBar, {
         activeTabKey: "terminal:term-1",
         onCloseDocumentTab: () => {},
-        onCloseRuntimeTab: async () => {},
+        onCloseTerminalTab: async () => {},
         onSelectTab: () => {},
         visibleTabs: [
           {
@@ -115,7 +114,7 @@ describe("WorkspacePaneTabBar", () => {
       createElement(WorkspacePaneTabBar, {
         activeTabKey: "terminal:term-3",
         onCloseDocumentTab: () => {},
-        onCloseRuntimeTab: async () => {},
+        onCloseTerminalTab: async () => {},
         onSelectTab: () => {},
         visibleTabs: [
           {
@@ -161,7 +160,7 @@ describe("WorkspacePaneTabBar", () => {
       createElement(WorkspacePaneTabBar, {
         activeTabKey: "terminal:term-1",
         onCloseDocumentTab: () => {},
-        onCloseRuntimeTab: async () => {},
+        onCloseTerminalTab: async () => {},
 
         onSelectTab: () => {},
         visibleTabs: [
@@ -188,7 +187,7 @@ describe("WorkspacePaneTabBar", () => {
       createElement(WorkspacePaneTabBar, {
         activeTabKey: "terminal:term-2",
         onCloseDocumentTab: () => {},
-        onCloseRuntimeTab: async () => {},
+        onCloseTerminalTab: async () => {},
 
         onSelectTab: () => {},
         visibleTabs: [
@@ -225,7 +224,7 @@ describe("WorkspacePaneTabBar", () => {
       createElement(WorkspacePaneTabBar, {
         activeTabKey: "terminal:term-1",
         onCloseDocumentTab: () => {},
-        onCloseRuntimeTab: async () => {},
+        onCloseTerminalTab: async () => {},
 
         onSelectTab: () => {},
         visibleTabs: [
@@ -252,7 +251,7 @@ describe("WorkspacePaneTabBar", () => {
       createElement(WorkspacePaneTabBar, {
         activeTabKey: "terminal:term-1",
         onCloseDocumentTab: () => {},
-        onCloseRuntimeTab: async () => {},
+        onCloseTerminalTab: async () => {},
         onSelectTab: () => {},
         visibleTabs: [
           {

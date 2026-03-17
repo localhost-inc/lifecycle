@@ -8,7 +8,7 @@ import {
   getWorkspaceTabKeyAfterClose,
   getWorkspaceTabKeyByIndex,
   orderWorkspaceTerminals,
-  reconcileHiddenRuntimeTabKeys,
+  reconcileHiddenTerminalTabKeys,
   reorderWorkspaceTabKeys,
   resolveWorkspaceVisibleTabs,
 } from "./workspace-canvas-tabs";
@@ -21,7 +21,7 @@ import {
   createPullRequestTab,
   fileViewerTabKey,
   getWorkspacePaneTabState,
-  listWorkspaceHiddenRuntimeTabKeys,
+  listWorkspaceHiddenTerminalTabKeys,
   listWorkspaceDocuments,
   listWorkspaceTabViewStateByKey,
   pullRequestTabKey,
@@ -99,17 +99,19 @@ function buildPaneTreeState(
 function withWorkspaceState(
   state: Omit<
     WorkspaceCanvasState,
-    "documentsByKey" | "paneTabStateById" | "rootPane" | "tabStateByKey"
+    "closedTabStack" | "documentsByKey" | "paneTabStateById" | "rootPane" | "tabStateByKey"
   > & {
+    closedTabStack?: WorkspaceCanvasState["closedTabStack"];
     documents?: WorkspaceCanvasDocument[];
-    hiddenRuntimeTabKeys?: string[];
+    hiddenTerminalTabKeys?: string[];
     rootPane?: TestWorkspacePaneNode;
     viewStateByTabKey?: Record<string, WorkspaceCanvasTabViewState>;
   },
 ): WorkspaceCanvasState {
   const {
+    closedTabStack = [],
     documents = [],
-    hiddenRuntimeTabKeys = [],
+    hiddenTerminalTabKeys = [],
     rootPane,
     viewStateByTabKey = {},
     ...rest
@@ -124,15 +126,16 @@ function withWorkspaceState(
 
   return {
     ...rest,
+    closedTabStack,
     documentsByKey: indexDocuments(documents),
     paneTabStateById: paneTreeState.paneTabStateById,
     rootPane: paneTreeState.rootPane,
     tabStateByKey: Object.fromEntries([
-      ...hiddenRuntimeTabKeys.map((key) => [key, { hidden: true }] as const),
+      ...hiddenTerminalTabKeys.map((key) => [key, { hidden: true }] as const),
       ...Object.entries(viewStateByTabKey).map(([key, viewState]) => [
         key,
         {
-          ...(hiddenRuntimeTabKeys.includes(key) ? { hidden: true } : {}),
+          ...(hiddenTerminalTabKeys.includes(key) ? { hidden: true } : {}),
           viewState,
         },
       ]),
@@ -144,7 +147,7 @@ function withSinglePaneState(
   overrides: Partial<WorkspaceCanvasState> & {
     activeTabKey?: string | null;
     documents?: WorkspaceCanvasDocument[];
-    hiddenRuntimeTabKeys?: string[];
+    hiddenTerminalTabKeys?: string[];
     tabOrderKeys?: string[];
     viewStateByTabKey?: Record<string, WorkspaceCanvasTabViewState>;
   } = {},
@@ -154,7 +157,7 @@ function withSinglePaneState(
   const {
     activeTabKey = null,
     documents = [],
-    hiddenRuntimeTabKeys = [],
+    hiddenTerminalTabKeys = [],
     tabOrderKeys = [],
     viewStateByTabKey = {},
     ...rest
@@ -171,11 +174,11 @@ function withSinglePaneState(
       },
     },
     tabStateByKey: Object.fromEntries([
-      ...hiddenRuntimeTabKeys.map((key) => [key, { hidden: true }] as const),
+      ...hiddenTerminalTabKeys.map((key) => [key, { hidden: true }] as const),
       ...Object.entries(viewStateByTabKey).map(([key, viewState]) => [
         key,
         {
-          ...(hiddenRuntimeTabKeys.includes(key) ? { hidden: true } : {}),
+          ...(hiddenTerminalTabKeys.includes(key) ? { hidden: true } : {}),
           viewState,
         },
       ]),
@@ -326,7 +329,7 @@ describe("workspace canvas reducer", () => {
       withWorkspaceState({
         activePaneId: "pane-2",
         documents: [createChangesDiffTab("src/app.tsx")],
-        hiddenRuntimeTabKeys: [],
+        hiddenTerminalTabKeys: [],
         rootPane: {
           direction: "row",
           first: {
@@ -370,7 +373,7 @@ describe("workspace canvas reducer", () => {
       withWorkspaceState({
         activePaneId: "pane-left",
         documents: [createChangesDiffTab("src/app.tsx")],
-        hiddenRuntimeTabKeys: [],
+        hiddenTerminalTabKeys: [],
         rootPane: {
           direction: "row",
           first: {
@@ -398,7 +401,7 @@ describe("workspace canvas reducer", () => {
     const splitState = withWorkspaceState({
       activePaneId: "pane-3",
       documents: [createChangesDiffTab("src/app.tsx"), createFileViewerTab("README.md")],
-      hiddenRuntimeTabKeys: [],
+      hiddenTerminalTabKeys: [],
       rootPane: {
         direction: "row" as const,
         first: {
@@ -442,7 +445,7 @@ describe("workspace canvas reducer", () => {
       withWorkspaceState({
         activePaneId: "pane-3",
         documents: [createChangesDiffTab("src/app.tsx"), createFileViewerTab("README.md")],
-        hiddenRuntimeTabKeys: [],
+        hiddenTerminalTabKeys: [],
         rootPane: {
           direction: "row",
           first: {
@@ -482,7 +485,7 @@ describe("workspace canvas reducer", () => {
     const splitState = withWorkspaceState({
       activePaneId: "pane-2",
       documents: [createChangesDiffTab("src/app.tsx")],
-      hiddenRuntimeTabKeys: [],
+      hiddenTerminalTabKeys: [],
       rootPane: {
         direction: "row" as const,
         first: {
@@ -516,7 +519,7 @@ describe("workspace canvas reducer", () => {
     const splitState = withWorkspaceState({
       activePaneId: "pane-2",
       documents: [createChangesDiffTab("src/app.tsx")],
-      hiddenRuntimeTabKeys: [],
+      hiddenTerminalTabKeys: [],
       rootPane: {
         direction: "row" as const,
         first: {
@@ -556,7 +559,7 @@ describe("workspace canvas reducer", () => {
     const splitState = withWorkspaceState({
       activePaneId: "pane-2",
       documents: [createChangesDiffTab("src/app.tsx")],
-      hiddenRuntimeTabKeys: [],
+      hiddenTerminalTabKeys: [],
       rootPane: {
         direction: "row" as const,
         first: {
@@ -597,7 +600,7 @@ describe("workspace canvas reducer", () => {
     const splitState = withWorkspaceState({
       activePaneId: "pane-2",
       documents: [fileTab],
-      hiddenRuntimeTabKeys: [],
+      hiddenTerminalTabKeys: [],
       rootPane: {
         direction: "row" as const,
         first: {
@@ -624,7 +627,10 @@ describe("workspace canvas reducer", () => {
         key: fileTab.key,
         kind: "close-document",
       }),
-    ).toEqual(createDefaultWorkspaceCanvasState());
+    ).toEqual({
+      ...createDefaultWorkspaceCanvasState(),
+      closedTabStack: [{ document: fileTab, viewState: null }],
+    });
   });
 
   test("moves a tab into another pane and activates the target pane", () => {
@@ -636,7 +642,7 @@ describe("workspace canvas reducer", () => {
         pullRequest,
         createFileViewerTab("README.md"),
       ],
-      hiddenRuntimeTabKeys: [],
+      hiddenTerminalTabKeys: [],
       rootPane: {
         direction: "row" as const,
         first: {
@@ -674,7 +680,7 @@ describe("workspace canvas reducer", () => {
           pullRequest,
           createFileViewerTab("README.md"),
         ],
-        hiddenRuntimeTabKeys: [],
+        hiddenTerminalTabKeys: [],
         rootPane: {
           direction: "row",
           first: {
@@ -703,7 +709,7 @@ describe("workspace canvas reducer", () => {
     const splitState = withWorkspaceState({
       activePaneId: "pane-root",
       documents: [fileTab],
-      hiddenRuntimeTabKeys: [],
+      hiddenTerminalTabKeys: [],
       rootPane: {
         direction: "row" as const,
         first: {
@@ -734,7 +740,7 @@ describe("workspace canvas reducer", () => {
     });
 
     expect(result.activePaneId).toBe("pane-2");
-    expect(listWorkspaceHiddenRuntimeTabKeys(result.tabStateByKey)).toEqual([]);
+    expect(listWorkspaceHiddenTerminalTabKeys(result.tabStateByKey)).toEqual([]);
     expect(listWorkspaceTabViewStateByKey(result.tabStateByKey)).toEqual({});
     expect(result.rootPane).toEqual({
       id: "pane-2",
@@ -754,7 +760,7 @@ describe("workspace canvas reducer", () => {
     const splitState = withWorkspaceState({
       activePaneId: "pane-root",
       documents: [pullRequest, fileTab, changesTab],
-      hiddenRuntimeTabKeys: [],
+      hiddenTerminalTabKeys: [],
       rootPane: {
         direction: "row" as const,
         first: {
@@ -787,7 +793,7 @@ describe("workspace canvas reducer", () => {
     });
 
     expect(result.activePaneId).toBe("pane-2");
-    expect(listWorkspaceHiddenRuntimeTabKeys(result.tabStateByKey)).toEqual([]);
+    expect(listWorkspaceHiddenTerminalTabKeys(result.tabStateByKey)).toEqual([]);
     expect(listWorkspaceTabViewStateByKey(result.tabStateByKey)).toEqual({});
     expect(result.rootPane).toEqual({
       id: "pane-2",
@@ -825,7 +831,7 @@ describe("workspace canvas reducer", () => {
 
     expect(
       workspaceCanvasReducer(splitState, {
-        emptySourcePanePolicy: "preserve",
+        emptySourcePanePolicy: "close",
         key: fileTab.key,
         kind: "move-tab-to-pane",
         sourcePaneId: "pane-root",
@@ -835,7 +841,7 @@ describe("workspace canvas reducer", () => {
       withWorkspaceState({
         activePaneId: "pane-split",
         documents: [changesTab, fileTab],
-        hiddenRuntimeTabKeys: [],
+        hiddenTerminalTabKeys: [],
         rootPane: {
           direction: "column",
           first: {
@@ -874,7 +880,7 @@ describe("workspace canvas reducer", () => {
       withWorkspaceState({
         activePaneId: "pane-2",
         documents: [],
-        hiddenRuntimeTabKeys: [],
+        hiddenTerminalTabKeys: [],
         rootPane: {
           direction: "row",
           first: {
@@ -908,14 +914,14 @@ describe("workspace canvas reducer", () => {
         }),
         {
           key: "terminal:term-2",
-          kind: "hide-runtime-tab",
+          kind: "hide-terminal-tab",
         },
       ),
     ).toEqual(
       withSinglePaneState({
         activeTabKey: "diff:commit:abc12345",
         documents: [createCommitDiffTab("abc12345")],
-        hiddenRuntimeTabKeys: ["terminal:term-2"],
+        hiddenTerminalTabKeys: ["terminal:term-2"],
         tabOrderKeys: ["terminal:term-1", "diff:commit:abc12345"],
       }),
     );
@@ -924,7 +930,7 @@ describe("workspace canvas reducer", () => {
   test("closing the last runtime tab removes the empty pane when sibling panes exist", () => {
     const splitState = withWorkspaceState({
       activePaneId: "pane-2",
-      hiddenRuntimeTabKeys: [],
+      hiddenTerminalTabKeys: [],
       rootPane: {
         direction: "row" as const,
         first: {
@@ -949,11 +955,11 @@ describe("workspace canvas reducer", () => {
     expect(
       workspaceCanvasReducer(splitState, {
         key: "terminal:term-1",
-        kind: "hide-runtime-tab",
+        kind: "hide-terminal-tab",
       }),
     ).toEqual(
       withSinglePaneState({
-        hiddenRuntimeTabKeys: ["terminal:term-1"],
+        hiddenTerminalTabKeys: ["terminal:term-1"],
       }),
     );
   });
@@ -964,21 +970,21 @@ describe("workspace canvas reducer", () => {
         withSinglePaneState({
           activeTabKey: CHANGES_DIFF_TAB_KEY,
           documents: [createChangesDiffTab("src/app.tsx")],
-          hiddenRuntimeTabKeys: ["terminal:term-2"],
+          hiddenTerminalTabKeys: ["terminal:term-2"],
           tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
         }),
         {
           key: "terminal:term-2",
           paneId: "pane-root",
           select: true,
-          kind: "show-runtime-tab",
+          kind: "show-terminal-tab",
         },
       ),
     ).toEqual(
       withSinglePaneState({
         activeTabKey: "terminal:term-2",
         documents: [createChangesDiffTab("src/app.tsx")],
-        hiddenRuntimeTabKeys: [],
+        hiddenTerminalTabKeys: [],
         tabOrderKeys: [CHANGES_DIFF_TAB_KEY, "terminal:term-2"],
       }),
     );
@@ -988,7 +994,7 @@ describe("workspace canvas reducer", () => {
     const splitState = withWorkspaceState({
       activePaneId: "pane-root",
       documents: [createChangesDiffTab("src/app.tsx")],
-      hiddenRuntimeTabKeys: [],
+      hiddenTerminalTabKeys: [],
       rootPane: {
         direction: "row" as const,
         first: {
@@ -1013,7 +1019,7 @@ describe("workspace canvas reducer", () => {
     expect(
       workspaceCanvasReducer(splitState, {
         key: "terminal:term-1",
-        kind: "show-runtime-tab",
+        kind: "show-terminal-tab",
         paneId: "pane-2",
         select: true,
       }),
@@ -1021,7 +1027,7 @@ describe("workspace canvas reducer", () => {
       withWorkspaceState({
         activePaneId: "pane-2",
         documents: [createChangesDiffTab("src/app.tsx")],
-        hiddenRuntimeTabKeys: [],
+        hiddenTerminalTabKeys: [],
         rootPane: {
           direction: "row",
           first: {
@@ -1249,7 +1255,7 @@ describe("canvas tab helpers", () => {
   });
 
   test("resolves only the tabs assigned to each pane instead of mirroring global tabs", () => {
-    const runtimeTabs = [
+    const terminalTabs = [
       {
         harnessProvider: null,
         key: "terminal:term-1",
@@ -1278,7 +1284,7 @@ describe("canvas tab helpers", () => {
 
     expect(
       resolveWorkspaceVisibleTabs(
-        runtimeTabs,
+        terminalTabs,
         documents,
         ["terminal:term-1", fileViewerTabKey("README.md")],
         [],
@@ -1286,7 +1292,7 @@ describe("canvas tab helpers", () => {
     ).toEqual(["terminal:term-1", fileViewerTabKey("README.md")]);
     expect(
       resolveWorkspaceVisibleTabs(
-        runtimeTabs,
+        terminalTabs,
         documents,
         [CHANGES_DIFF_TAB_KEY, "terminal:term-2"],
         [],
@@ -1352,13 +1358,13 @@ describe("canvas tab helpers", () => {
   });
 
   test("preserves hidden runtime tabs until terminal queries finish loading", () => {
-    expect(reconcileHiddenRuntimeTabKeys(["terminal:1", "terminal:2"], [], false)).toEqual([
+    expect(reconcileHiddenTerminalTabKeys(["terminal:1", "terminal:2"], [], false)).toEqual([
       "terminal:1",
       "terminal:2",
     ]);
 
     expect(
-      reconcileHiddenRuntimeTabKeys(
+      reconcileHiddenTerminalTabKeys(
         ["terminal:1", "terminal:2"],
         ["terminal:2", "terminal:3"],
         true,

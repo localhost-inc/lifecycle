@@ -202,23 +202,23 @@ impl HarnessCompletionWatchContext {
                             }
                         }
 
-                        let Some(completion) = self.provider.parse_turn_completion(&value, &line)
-                        else {
-                            continue;
-                        };
-                        if !emitted_completion_keys.insert(completion.completion_key.clone()) {
-                            continue;
-                        }
+                        if let Some(completion) =
+                            self.provider.parse_turn_completion(&value, &line)
+                        {
+                            if !emitted_completion_keys.insert(completion.completion_key.clone()) {
+                                continue;
+                            }
 
-                        emit_harness_turn_completed(
-                            &self.app,
-                            &self.terminal_id,
-                            &self.workspace_id,
-                            self.harness_provider.as_deref(),
-                            &harness_session_id,
-                            &completion.completion_key,
-                            completion.turn_id.as_deref(),
-                        );
+                            emit_harness_turn_completed(
+                                &self.app,
+                                &self.terminal_id,
+                                &self.workspace_id,
+                                self.harness_provider.as_deref(),
+                                &harness_session_id,
+                                &completion.completion_key,
+                                completion.turn_id.as_deref(),
+                            );
+                        }
                     }
                 }
                 Err(error) => {

@@ -4,24 +4,27 @@ import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import {
   IconButton,
   SidebarFooter,
-  Spinner,
 } from "@lifecycle/ui";
 import {
   ChevronDown,
-  CircleUserRound,
+  Megaphone,
   PanelLeft,
   PanelLeftClose,
   Plus,
+  Settings,
 } from "lucide-react";
-import { type MouseEvent, useCallback, useMemo, useState } from "react";
+import { type MouseEvent, useCallback, useMemo } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { resolveProjectRepoWorkspace } from "../../features/projects/lib/project-repo-workspace";
 import {
   readProjectPaths,
   resolveProjectNavigationTarget,
 } from "../../features/projects/state/project-content-tabs";
+import { UserAvatar } from "../../features/user/components/user-avatar";
 import { ResponseReadyDot } from "../response-ready-dot";
 import type { AuthSession } from "../../features/auth/auth-session";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { bugs } from "../../../package.json";
 
 const COLLAPSED_WIDTH = 48;
 
@@ -49,72 +52,6 @@ function projectMonogram(name: string): string {
     .slice(0, 2)
     .map((word) => word[0]?.toUpperCase() ?? "")
     .join("");
-}
-
-function authAvatarHue(seed: string): number {
-  let hash = 5381;
-  for (let index = 0; index < seed.length; index += 1) {
-    hash = ((hash << 5) + hash + seed.charCodeAt(index)) | 0;
-  }
-  return ((hash % 360) + 360) % 360;
-}
-
-function AuthSessionAvatar({
-  loading,
-  session,
-  size = 20,
-}: {
-  loading: boolean;
-  session: AuthSession;
-  size?: number;
-}) {
-  const [imageFailed, setImageFailed] = useState(false);
-  const identity = session.identity;
-  const avatarUrl = session.state === "logged_in" ? (identity?.avatarUrl ?? null) : null;
-  const avatarSeed = identity?.handle ?? identity?.displayName ?? session.provider ?? "lifecycle";
-  const sizeClass = size === 24 ? "size-6" : "size-5";
-  const textSize = size === 24 ? "text-[11px]" : "text-[10px]";
-
-  if (loading) {
-    return (
-      <span
-        className={`flex ${sizeClass} items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--foreground),transparent_90%)] text-[var(--muted-foreground)]`}
-      >
-        <Spinner className="size-3" />
-      </span>
-    );
-  }
-
-  if (avatarUrl && !imageFailed) {
-    return (
-      <img
-        alt={identity?.displayName ?? identity?.handle ?? "Account"}
-        className={`${sizeClass} shrink-0 rounded-full`}
-        onError={() => setImageFailed(true)}
-        src={avatarUrl}
-      />
-    );
-  }
-
-  if (session.state === "logged_in") {
-    const letter = (identity?.displayName ?? identity?.handle ?? "L").charAt(0).toUpperCase();
-    return (
-      <span
-        className={`flex ${sizeClass} shrink-0 items-center justify-center rounded-full ${textSize} font-semibold leading-none text-white`}
-        style={{ backgroundColor: `hsl(${authAvatarHue(avatarSeed)}, 48%, 44%)` }}
-      >
-        {letter}
-      </span>
-    );
-  }
-
-  return (
-    <span
-      className={`flex ${sizeClass} shrink-0 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--foreground),transparent_92%)] text-[var(--muted-foreground)]`}
-    >
-      <CircleUserRound size={size === 24 ? 14 : 12} strokeWidth={1.8} />
-    </span>
-  );
 }
 
 export function AppSidebar({
@@ -204,7 +141,7 @@ export function AppSidebar({
           </div>
 
           {/* Project monograms */}
-          <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto pt-1">
+          <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-1 pt-1">
             <div className="flex flex-col gap-1">
               {projects.map((project) => {
                 const selected = project.id === projectId;
@@ -217,8 +154,8 @@ export function AppSidebar({
                     className={[
                       "relative flex size-8 items-center justify-center rounded-lg text-[11px] font-semibold uppercase transition-colors",
                       selected
-                        ? "bg-[var(--sidebar-selected)] text-[var(--sidebar-foreground)]"
-                        : "text-[var(--sidebar-muted-foreground)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]",
+                        ? "bg-[var(--card)] text-[var(--sidebar-foreground)] shadow-[0_0_0_0.5px_var(--border)]"
+                        : "text-[var(--sidebar-muted-foreground)] hover:text-[var(--sidebar-foreground)]",
                     ].join(" ")}
                     to={projectPaths[project.id] ?? `/projects/${project.id}`}
                     title={project.name}
@@ -233,15 +170,37 @@ export function AppSidebar({
             </div>
           </div>
 
+          {/* Feedback & settings */}
+          <div className="flex shrink-0 flex-col items-center gap-1 pt-2 pb-1.5">
+            <button
+              aria-label="Feedback"
+              className="flex size-8 items-center justify-center rounded-lg text-[var(--sidebar-muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"
+              onClick={() => openUrl(bugs.url)}
+              title="Feedback"
+              type="button"
+            >
+              <Megaphone size={16} strokeWidth={2} />
+            </button>
+            <button
+              aria-label="Settings"
+              className="flex size-8 items-center justify-center rounded-lg text-[var(--sidebar-muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"
+              onClick={onOpenSettings}
+              title="Settings"
+              type="button"
+            >
+              <Settings size={16} strokeWidth={2} />
+            </button>
+          </div>
+
           {/* Avatar at bottom */}
-          <div className="flex shrink-0 items-center justify-center pt-1 pb-2">
+          <div className="flex shrink-0 items-center justify-center pb-3">
             <button
               aria-label={activeContextName}
               onClick={onOpenSettings}
               title={activeContextName}
               type="button"
             >
-              <AuthSessionAvatar loading={authSessionLoading} session={authSession} size={24} />
+              <UserAvatar loading={authSessionLoading} session={authSession} size={28} />
             </button>
           </div>
         </div>
@@ -289,10 +248,10 @@ export function AppSidebar({
                     key={project.id}
                     aria-label={`Open project ${project.name}`}
                     className={[
-                      "relative flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors",
+                      "relative flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors",
                       selected
-                        ? "bg-[var(--sidebar-selected)] text-[var(--sidebar-foreground)]"
-                        : "text-[var(--sidebar-muted-foreground)] hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]",
+                        ? "bg-[var(--card)] text-[var(--sidebar-foreground)] shadow-[0_0_0_0.5px_var(--border)]"
+                        : "text-[var(--sidebar-muted-foreground)] hover:text-[var(--sidebar-foreground)]",
                     ].join(" ")}
                     to={projectPaths[project.id] ?? `/projects/${project.id}`}
                     title={project.name}
@@ -301,8 +260,8 @@ export function AppSidebar({
                       className={[
                         "inline-flex size-5 shrink-0 items-center justify-center rounded-md text-[10px] font-semibold uppercase",
                         selected
-                          ? "bg-[color-mix(in_srgb,var(--foreground),transparent_86%)] text-[var(--foreground)]"
-                          : "bg-[color-mix(in_srgb,var(--foreground),transparent_92%)] text-[var(--foreground)]",
+                          ? "bg-[var(--muted)] text-[var(--foreground)]"
+                          : "bg-[var(--surface-hover)] text-[var(--foreground)]",
                       ].join(" ")}
                     >
                       {projectMonogram(project.name)}
@@ -316,6 +275,26 @@ export function AppSidebar({
           </div>
         </div>
 
+        {/* Feedback & settings */}
+        <div className="flex shrink-0 flex-col gap-0.5 px-2 pt-2 pb-1.5">
+          <button
+            className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium text-[var(--sidebar-muted-foreground)] transition-colors hover:text-[var(--sidebar-foreground)]"
+            onClick={() => openUrl(bugs.url)}
+            type="button"
+          >
+            <Megaphone className="size-4 shrink-0" strokeWidth={2} />
+            <span>Feedback</span>
+          </button>
+          <button
+            className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium text-[var(--sidebar-muted-foreground)] transition-colors hover:text-[var(--sidebar-foreground)]"
+            onClick={onOpenSettings}
+            type="button"
+          >
+            <Settings className="size-4 shrink-0" strokeWidth={2} />
+            <span>Settings</span>
+          </button>
+        </div>
+
         {/* Context switcher at bottom */}
         <SidebarFooter>
           <button
@@ -325,7 +304,7 @@ export function AppSidebar({
             onClick={onOpenSettings}
             type="button"
           >
-            <AuthSessionAvatar loading={authSessionLoading} session={authSession} />
+            <UserAvatar loading={authSessionLoading} session={authSession} />
             <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--sidebar-foreground)]">
               {activeContextName}
             </span>

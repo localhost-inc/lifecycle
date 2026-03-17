@@ -8,8 +8,10 @@ const splitButtonPrimaryVariants = cva(
     variants: {
       variant: {
         foreground:
-          "text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--muted),var(--foreground)_8%)]",
+          "text-[var(--foreground)] hover:bg-[var(--surface-selected)]",
         active: "text-[var(--foreground)]",
+        outline:
+          "border border-[var(--border)] bg-transparent text-[var(--foreground)] hover:bg-[var(--surface-hover)]",
       },
       withIcon: {
         true: "",
@@ -35,15 +37,22 @@ const splitButtonPrimaryVariants = cva(
 );
 
 const splitButtonSecondaryVariants = cva(
-  "inline-flex items-center justify-center bg-[var(--muted)] text-[var(--muted-foreground)] outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out hover:bg-[color-mix(in_srgb,var(--muted),var(--foreground)_8%)] hover:text-[var(--foreground)] focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center outline-none transition-[background-color,border-color,color,opacity] duration-150 ease-in-out hover:text-[var(--foreground)] focus-visible:shadow-[0_0_0_1px_var(--ring)] disabled:pointer-events-none disabled:opacity-50",
   {
     variants: {
+      variant: {
+        default:
+          "bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--surface-selected)]",
+        outline:
+          "border border-[var(--border)] border-l-0 bg-transparent text-[var(--foreground)] hover:bg-[var(--surface-hover)]",
+      },
       size: {
         default: "h-8 w-8 rounded-r-xl",
         lg: "h-10 w-10 rounded-r-2xl",
       },
     },
     defaultVariants: {
+      variant: "default",
       size: "default",
     },
   },
@@ -96,10 +105,10 @@ interface SplitButtonSecondaryProps
     VariantProps<typeof splitButtonSecondaryVariants> {}
 
 const SplitButtonSecondary = React.forwardRef<HTMLButtonElement, SplitButtonSecondaryProps>(
-  function SplitButtonSecondary({ children, className, size, type = "button", ...props }, ref) {
+  function SplitButtonSecondary({ children, className, size, type = "button", variant, ...props }, ref) {
     return (
       <button
-        className={cn(splitButtonSecondaryVariants({ size }), className)}
+        className={cn(splitButtonSecondaryVariants({ size, variant }), className)}
         ref={ref}
         type={type}
         {...props}

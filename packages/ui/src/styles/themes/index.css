@@ -1,5 +1,5 @@
-@import "./dark.css";
-@import "./light.css";
+@import "./lifecycle-dark.css";
+@import "./lifecycle-light.css";
 @import "./github-light.css";
 @import "./github-dark.css";
 @import "./nord.css";

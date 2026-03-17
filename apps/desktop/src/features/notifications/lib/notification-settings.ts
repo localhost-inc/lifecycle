@@ -20,7 +20,7 @@ export const turnNotificationModeOptions: Array<{
   value: TurnNotificationMode;
 }> = [
   {
-    description: "Send a turn-complete notification every time a harness reply finishes.",
+    description: "Notify every time an agent finishes responding.",
     label: "Always",
     value: "always",
   },
@@ -30,7 +30,7 @@ export const turnNotificationModeOptions: Array<{
     value: "when-unfocused",
   },
   {
-    description: "Keep tab-level response indicators only and skip desktop notifications.",
+    description: "Show response indicators in tabs only. No desktop notifications.",
     label: "Off",
     value: "off",
   },

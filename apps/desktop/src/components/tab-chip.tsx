@@ -61,8 +61,6 @@ export function TabChip({
   const activeClasses = active
     ? `${activeSurfaceClass} text-[var(--foreground)] -mb-px z-[1]`
     : "bg-transparent text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]";
-  const fontClass = "font-normal";
-
   const dataProps: Record<string, string> = {};
   if (dataAttributes) {
     for (const [key, value] of Object.entries(dataAttributes)) {
@@ -96,7 +94,7 @@ export function TabChip({
           {leading}
         </span>
       ) : null}
-      {children ?? <span className={`min-w-0 truncate leading-none ${fontClass}`}>{label}</span>}
+      {children ?? <span className="min-w-0 truncate font-medium leading-none">{label}</span>}
       {closable && onClose ? (
         <button
           aria-label={`Close ${label}`}

@@ -4,27 +4,27 @@ import { readSettingsSectionHash, settingsSections } from "./settings-sections";
 describe("settingsSections", () => {
   test("lists only live settings sections", () => {
     expect(settingsSections.map((section) => section.slug)).toEqual([
-      "account",
       "appearance",
-      "notifications",
-      "harnesses",
+      "agents",
       "workspace",
-      "worktrees",
+      "notifications",
+      "account",
     ]);
   });
 });
 
 describe("readSettingsSectionHash", () => {
   test("parses valid section hashes", () => {
-    expect(readSettingsSectionHash("#account")).toBe("account");
-    expect(readSettingsSectionHash("#appearance")).toBe("appearance");
-    expect(readSettingsSectionHash("#notifications")).toBe("notifications");
-    expect(readSettingsSectionHash("#harnesses")).toBe("harnesses");
+    expect(readSettingsSectionHash("#agents")).toBe("agents");
     expect(readSettingsSectionHash("#workspace")).toBe("workspace");
-    expect(readSettingsSectionHash("worktrees")).toBe("worktrees");
+    expect(readSettingsSectionHash("#notifications")).toBe("notifications");
+    expect(readSettingsSectionHash("#appearance")).toBe("appearance");
+    expect(readSettingsSectionHash("#account")).toBe("account");
   });
 
   test("rejects stale placeholder hashes", () => {
+    expect(readSettingsSectionHash("#harnesses")).toBeNull();
+    expect(readSettingsSectionHash("#worktrees")).toBeNull();
     expect(readSettingsSectionHash("#terminal")).toBeNull();
     expect(readSettingsSectionHash("#diagnostics")).toBeNull();
     expect(readSettingsSectionHash("#configuration")).toBeNull();

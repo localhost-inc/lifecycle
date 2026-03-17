@@ -1,6 +1,6 @@
 import type { LifecycleConfig, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger, IconButton } from "@lifecycle/ui";
-import { LoaderCircle, Play } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger, IconButton, Spinner } from "@lifecycle/ui";
+import { Play } from "lucide-react";
 import { useState } from "react";
 import { ServiceRow } from "./services-tab";
 import type { EnvironmentTaskState, SetupStepState } from "../hooks";
@@ -379,7 +379,7 @@ function BootStatusIndicator({ isActive = false, status }: BootStatusIndicatorPr
   return (
     <span className="flex size-3.5 shrink-0 items-center justify-center">
       {isActive ? (
-        <LoaderCircle className="size-3 animate-spin text-[var(--status-info)]" strokeWidth={2.2} />
+        <Spinner className="size-3 text-[var(--status-info)]" />
       ) : (
         <span className={`inline-block size-[6px] rounded-full ${DOT_STYLES[status]}`} />
       )}
@@ -471,7 +471,7 @@ function BootServiceRow({
             title={`Run ${item.name} and its dependencies`}
           >
             {runPending ? (
-              <LoaderCircle className="size-3.5 animate-spin" strokeWidth={2.2} />
+              <Spinner className="size-3.5" />
             ) : (
               <Play className="size-3.5 fill-current" strokeWidth={2.2} />
             )}

@@ -1,15 +1,15 @@
 import type { WorkspacePaneTabSnapshot } from "../state/workspace-canvas-state";
-import type { RuntimeTab } from "./workspace-canvas-tabs";
+import type { TerminalTab } from "./workspace-canvas-tabs";
 
-export function getWorkspaceLiveRuntimeTabKeys(
-  runtimeTabs: readonly Pick<RuntimeTab, "key">[],
+export function getWorkspaceLiveTerminalTabKeys(
+  terminalTabs: readonly Pick<TerminalTab, "key">[],
 ): string[] {
-  return runtimeTabs.map((tab) => tab.key);
+  return terminalTabs.map((tab) => tab.key);
 }
 
 export function getWorkspaceRenderedPaneActiveTabKeys(
   paneSnapshots: readonly Pick<WorkspacePaneTabSnapshot, "activeTabKey" | "id">[],
-  visibleTabsByPaneId: Record<string, readonly Pick<RuntimeTab, "key">[]>,
+  visibleTabsByPaneId: Record<string, readonly Pick<TerminalTab, "key">[]>,
 ): Record<string, string | null> {
   return Object.fromEntries(
     paneSnapshots.map((pane) => {
@@ -23,41 +23,41 @@ export function getWorkspaceRenderedPaneActiveTabKeys(
   );
 }
 
-export function getWorkspaceInactiveRuntimeTerminalIds(
-  liveRuntimeTabKeys: readonly string[],
+export function getWorkspaceInactiveTerminalIds(
+  liveTerminalTabKeys: readonly string[],
   renderedActiveTabKeyByPaneId: Record<string, string | null>,
 ): string[] {
-  const renderedRuntimeTabKeys = new Set(
+  const renderedTerminalTabKeys = new Set(
     Object.values(renderedActiveTabKeyByPaneId).filter((key): key is string => key !== null),
   );
 
-  return liveRuntimeTabKeys.flatMap((key) =>
-    renderedRuntimeTabKeys.has(key) || !key.startsWith("terminal:")
+  return liveTerminalTabKeys.flatMap((key) =>
+    renderedTerminalTabKeys.has(key) || !key.startsWith("terminal:")
       ? []
       : [key.slice("terminal:".length)],
   );
 }
 
-export function getWorkspaceUnassignedLiveRuntimeTabKeys(
-  liveRuntimeTabKeys: readonly string[],
+export function getWorkspaceUnassignedLiveTerminalTabKeys(
+  liveTerminalTabKeys: readonly string[],
   assignedPaneTabKeys: ReadonlySet<string>,
-  hiddenRuntimeTabKeys: readonly string[],
+  hiddenTerminalTabKeys: readonly string[],
 ): string[] {
-  const hiddenRuntimeTabKeySet = new Set(hiddenRuntimeTabKeys);
-  return liveRuntimeTabKeys.filter(
-    (key) => !assignedPaneTabKeys.has(key) && !hiddenRuntimeTabKeySet.has(key),
+  const hiddenTerminalTabKeySet = new Set(hiddenTerminalTabKeys);
+  return liveTerminalTabKeys.filter(
+    (key) => !assignedPaneTabKeys.has(key) && !hiddenTerminalTabKeySet.has(key),
   );
 }
 
-export function getWorkspacePaneIdsWaitingForSelectedRuntimeTab(
+export function getWorkspacePaneIdsWaitingForSelectedTerminalTab(
   paneSnapshots: readonly Pick<WorkspacePaneTabSnapshot, "activeTabKey" | "id">[],
-  visibleTabsByPaneId: Record<string, readonly Pick<RuntimeTab, "key">[]>,
-  liveRuntimeTabKeySet: ReadonlySet<string>,
+  visibleTabsByPaneId: Record<string, readonly Pick<TerminalTab, "key">[]>,
+  liveTerminalTabKeySet: ReadonlySet<string>,
 ): Set<string> {
   return new Set(
     paneSnapshots.flatMap((pane) =>
       pane.activeTabKey &&
-      liveRuntimeTabKeySet.has(pane.activeTabKey) &&
+      liveTerminalTabKeySet.has(pane.activeTabKey) &&
       (visibleTabsByPaneId[pane.id] ?? []).length === 0
         ? [pane.id]
         : [],

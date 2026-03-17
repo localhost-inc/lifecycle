@@ -4,7 +4,7 @@ import type {
   ServiceRecord,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
-import { GitBranch, GitPullRequest, History, Server } from "lucide-react";
+import { FileDiff, GitCommitHorizontal, GitPullRequest, Layers, TerminalSquare } from "lucide-react";
 import type {
   ExtensionBadge,
   ExtensionSlot,
@@ -16,6 +16,7 @@ import type { EnvironmentTaskState, SetupStepState } from "../workspaces/hooks";
 import { GitChangesPanel } from "../git/components/git-changes-panel";
 import { GitHistoryPanel } from "../git/components/git-history-panel";
 import { GitPullRequestsPanel } from "../git/components/git-pull-requests-panel";
+import { SessionHistoryPanel } from "../terminals/components/session-history-panel";
 
 export function getGitExtensionBadge(
   gitStatus: GitStatusResult | undefined,
@@ -58,6 +59,7 @@ interface BuiltinExtensionsOptions {
   isManifestStale: boolean;
   launchActions: WorkspaceExtensionLaunchActions;
   manifestState: "invalid" | "missing" | "valid";
+  onFocusTerminal: (terminalId: string) => void;
   onRestart: () => Promise<void>;
   onRun: () => Promise<void>;
   onStop: () => Promise<void>;
@@ -80,6 +82,7 @@ export function getBuiltinExtensionSlots({
   isManifestStale,
   launchActions,
   manifestState,
+  onFocusTerminal,
   onRestart,
   onRun,
   onStop,
@@ -92,7 +95,7 @@ export function getBuiltinExtensionSlots({
   return [
     {
       badge: getGitExtensionBadge(gitStatus),
-      icon: GitBranch,
+      icon: FileDiff,
       id: "git-changes",
       label: "Changes",
       panel: (
@@ -109,7 +112,7 @@ export function getBuiltinExtensionSlots({
       ),
     },
     {
-      icon: History,
+      icon: GitCommitHorizontal,
       id: "git-history",
       label: "History",
       ownedDocumentKinds: ["commit-diff"],
@@ -136,8 +139,19 @@ export function getBuiltinExtensionSlots({
       ),
     },
     {
+      icon: TerminalSquare,
+      id: "session-history",
+      label: "Sessions",
+      panel: (
+        <SessionHistoryPanel
+          onFocusTerminal={onFocusTerminal}
+          workspaceId={workspace.id}
+        />
+      ),
+    },
+    {
       badge: getEnvironmentExtensionBadge({ services, workspace }),
-      icon: Server,
+      icon: Layers,
       id: "environment",
       label: "Environment",
       panel: (

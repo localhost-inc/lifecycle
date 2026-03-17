@@ -1,17 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import {
-  getWorkspaceInactiveRuntimeTerminalIds,
-  getWorkspaceLiveRuntimeTabKeys,
-  getWorkspacePaneIdsWaitingForSelectedRuntimeTab,
+  getWorkspaceInactiveTerminalIds,
+  getWorkspaceLiveTerminalTabKeys,
+  getWorkspacePaneIdsWaitingForSelectedTerminalTab,
   getWorkspaceRenderedPaneActiveTabKeys,
-  getWorkspaceUnassignedLiveRuntimeTabKeys,
-} from "./workspace-canvas-runtime-state";
+  getWorkspaceUnassignedLiveTerminalTabKeys,
+} from "./workspace-canvas-terminal-state";
 
-describe("canvas runtime helpers", () => {
-  test("only auto-attaches live runtime tabs that are not already assigned or hidden", () => {
+describe("canvas terminal tab helpers", () => {
+  test("only auto-attaches live terminal tabs that are not already assigned or hidden", () => {
     expect(
-      getWorkspaceUnassignedLiveRuntimeTabKeys(
-        getWorkspaceLiveRuntimeTabKeys([
+      getWorkspaceUnassignedLiveTerminalTabKeys(
+        getWorkspaceLiveTerminalTabKeys([
           { key: "terminal:term-1" },
           { key: "terminal:term-2" },
           { key: "terminal:term-3" },
@@ -22,9 +22,9 @@ describe("canvas runtime helpers", () => {
     ).toEqual(["terminal:term-2"]);
   });
 
-  test("marks panes as waiting only for live runtime tabs that have not rendered yet", () => {
+  test("marks panes as waiting only for live terminal tabs that have not rendered yet", () => {
     expect(
-      getWorkspacePaneIdsWaitingForSelectedRuntimeTab(
+      getWorkspacePaneIdsWaitingForSelectedTerminalTab(
         [
           { activeTabKey: "terminal:term-1", id: "pane-a" },
           { activeTabKey: "file:README.md", id: "pane-b" },
@@ -38,9 +38,9 @@ describe("canvas runtime helpers", () => {
     ).toEqual(new Set(["pane-a"]));
   });
 
-  test("does not wait on non-live runtime tabs that no longer have a live session", () => {
+  test("does not wait on non-live terminal tabs that no longer have a live session", () => {
     expect(
-      getWorkspacePaneIdsWaitingForSelectedRuntimeTab(
+      getWorkspacePaneIdsWaitingForSelectedTerminalTab(
         [{ activeTabKey: "terminal:term-9", id: "pane-a" }],
         { "pane-a": [] },
         new Set(["terminal:term-1"]),
@@ -50,7 +50,7 @@ describe("canvas runtime helpers", () => {
 
   test("does not mark a pane as waiting when a visible fallback tab is already rendering", () => {
     expect(
-      getWorkspacePaneIdsWaitingForSelectedRuntimeTab(
+      getWorkspacePaneIdsWaitingForSelectedTerminalTab(
         [{ activeTabKey: "terminal:term-1", id: "pane-a" }],
         { "pane-a": [{ key: "file:README.md" }] },
         new Set(["terminal:term-1"]),
@@ -78,8 +78,8 @@ describe("canvas runtime helpers", () => {
 
   test("identifies live terminal surfaces that are no longer rendered in any pane", () => {
     expect(
-      getWorkspaceInactiveRuntimeTerminalIds(
-        getWorkspaceLiveRuntimeTabKeys([
+      getWorkspaceInactiveTerminalIds(
+        getWorkspaceLiveTerminalTabKeys([
           { key: "terminal:term-1" },
           { key: "terminal:term-2" },
           { key: "terminal:term-3" },

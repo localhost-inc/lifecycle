@@ -5,8 +5,7 @@ export type WorkspaceShortcutAction =
   | "close-active-tab"
   | "new-tab"
   | "next-tab"
-  | "previous-tab"
-  | "select-tab-index";
+  | "previous-tab";
 
 export interface WorkspaceShortcutEvent {
   action: WorkspaceShortcutAction;

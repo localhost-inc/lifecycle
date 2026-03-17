@@ -15,12 +15,12 @@ const badgeVariants = cva(
         secondary: "border-transparent bg-[var(--surface-selected)] text-[var(--foreground)]",
         outline: "border-[var(--border)] bg-transparent text-[var(--foreground)]",
         destructive:
-          "border-[color-mix(in_srgb,var(--destructive)_35%,transparent)] bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] text-[var(--destructive)]",
+          "border-[var(--destructive)]/35 bg-[var(--destructive)]/10 text-[var(--destructive)]",
         success:
-          "text-[var(--status-success)] border-[color-mix(in_srgb,var(--status-success)_25%,transparent)] bg-[color-mix(in_srgb,var(--status-success)_10%,transparent)]",
+          "text-[var(--status-success)] border-[var(--status-success)]/25 bg-[var(--status-success)]/10",
         warning:
-          "text-[var(--status-warning)] border-[color-mix(in_srgb,var(--status-warning)_25%,transparent)] bg-[color-mix(in_srgb,var(--status-warning)_10%,transparent)]",
-        info: "text-[var(--status-info)] border-[color-mix(in_srgb,var(--status-info)_25%,transparent)] bg-[color-mix(in_srgb,var(--status-info)_10%,transparent)]",
+          "text-[var(--status-warning)] border-[var(--status-warning)]/25 bg-[var(--status-warning)]/10",
+        info: "text-[var(--status-info)] border-[var(--status-info)]/25 bg-[var(--status-info)]/10",
         muted: "border-transparent bg-[var(--surface-selected)] text-[var(--muted-foreground)]",
       },
     },

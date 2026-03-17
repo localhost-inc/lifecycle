@@ -1,5 +1,5 @@
 import { isTauri } from "@tauri-apps/api/core";
-import { Button } from "@lifecycle/ui";
+import { IconButton } from "@lifecycle/ui";
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useHistoryAvailability } from "../../app/history-stack";
@@ -33,24 +33,20 @@ export function NavigationControls({
       className={["flex shrink-0 items-center gap-0 px-1", shouldInset ? "pl-8" : ""].join(" ")}
       data-no-drag
     >
-      <Button
+      <IconButton
         aria-label="Go back"
         disabled={!canGoBack}
         onClick={goBack}
-        size="icon"
-        variant="ghost"
       >
         ←
-      </Button>
-      <Button
+      </IconButton>
+      <IconButton
         aria-label="Go forward"
         disabled={!canGoForward}
         onClick={goForward}
-        size="icon"
-        variant="ghost"
       >
         →
-      </Button>
+      </IconButton>
     </div>
   );
 }

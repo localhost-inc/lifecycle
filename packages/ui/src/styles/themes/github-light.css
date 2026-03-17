@@ -1,9 +1,9 @@
 :root[data-theme="github-light"] {
-  --background: #ffffff;
+  --background: #f6f8fa;
   --foreground: #1f2328;
   --card: #ebecf0;
-  --surface: #f6f8fa;
-  --sidebar-background: var(--surface);
+  --surface: #ffffff;
+  --sidebar-background: var(--background);
   --sidebar-foreground: #1f2328;
   --sidebar-muted-foreground: #656d76;
   --sidebar-hover: #eaeef2;

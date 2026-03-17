@@ -63,12 +63,14 @@ describe("TerminalSessionHistory", () => {
 
     expect(markup).toContain("Terminal 1");
     expect(markup).toContain("Codex · Session 2");
-    expect(markup).toContain("zsh");
-    expect(markup).toContain("session abcdef");
-    expect(markup).toContain(">Current<");
-    expect((markup.match(/>Resume</g) ?? []).length).toBe(1);
-    expect(markup).toContain("border-b border-[var(--border)]/40");
-    expect(markup).toContain("text-sm font-medium");
+    expect(markup).toContain("Claude · Session 3");
+    // Active terminal row uses active background
     expect(markup).toContain("bg-[var(--surface-hover)]");
+    // Finished harness with session ID is resumable (button not disabled)
+    // Failed harness without session ID is disabled
+    const codexButton = markup.split("Codex")[0].split("<button").pop()!;
+    expect(codexButton).not.toContain('disabled=""');
+    const claudeButton = markup.split("Claude")[0].split("<button").pop()!;
+    expect(claudeButton).toContain('disabled=""');
   });
 });

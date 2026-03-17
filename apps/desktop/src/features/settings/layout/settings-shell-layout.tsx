@@ -18,7 +18,7 @@ import {
 } from "@lifecycle/ui";
 import { Volume2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { version } from "../../../../package.json";
 import { AppHotkeyListener } from "../../../app/app-hotkey-listener";
 import {
@@ -283,11 +283,13 @@ export function SettingsShellLayout() {
 
       <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--background)]">
         <div className={shouldInset ? "px-3 pb-2 pt-11" : "px-3 py-2"} data-tauri-drag-region>
-          <Button asChild className="w-full justify-start px-2" variant="ghost">
-            <NavLink to="/">
-              <span aria-hidden>←</span>
-              <span>Back to app</span>
-            </NavLink>
+          <Button
+            className="w-full justify-start px-2"
+            onClick={() => navigate(-1)}
+            variant="ghost"
+          >
+            <span aria-hidden>←</span>
+            <span>Back to app</span>
           </Button>
         </div>
 
@@ -347,30 +349,12 @@ export function SettingsShellLayout() {
                     Settings
                   </h1>
                   <p className="mt-2 max-w-2xl text-sm text-[var(--muted-foreground)]">
-                    Account state, appearance, harness launch defaults, notifications, workspace,
-                    and worktree defaults.
+                    Manage appearance, agent defaults, workspace layout, and notifications.
                   </p>
                 </header>
 
                 <SettingsSection
-                  description="Visualize the active account, where lifecycle resolved it from, and the runtime path currently driving auth."
-                  id="account"
-                  label="Account"
-                  ref={(node) => {
-                    sectionRefs.current.account = node;
-                  }}
-                >
-                  <AuthSessionSettingsPanel
-                    environmentLabel={authSessionEnvironmentLabel}
-                    isLoading={authSessionLoading}
-                    onRefresh={() => {
-                      void refreshAuthSession();
-                    }}
-                    session={authSession}
-                  />
-                </SettingsSection>
-
-                <SettingsSection
+                  description="Theme, fonts, and visual style for the app."
                   id="appearance"
                   label="Appearance"
                   ref={(node) => {
@@ -476,8 +460,7 @@ export function SettingsShellLayout() {
                       </Select>
                     </SettingsRow>
 
-                    <div className="space-y-3 border-l-4 border-[var(--border)] pl-4">
-                      <p className="app-panel-title text-[var(--muted-foreground)]">Preview</p>
+                    <div className="space-y-3 rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
                       <p
                         className="text-sm text-[var(--foreground)]"
                         style={{ fontFamily: interfaceFontFamily }}
@@ -501,6 +484,134 @@ export function SettingsShellLayout() {
                 </SettingsSection>
 
                 <SettingsSection
+                  description="Default launch behavior for Claude and Codex sessions."
+                  id="agents"
+                  label="Agents"
+                  ref={(node) => {
+                    sectionRefs.current.agents = node;
+                  }}
+                >
+                  <HarnessSettingsPanel
+                    claude={harnesses.claude}
+                    codex={harnesses.codex}
+                    onClaudeChange={setClaudeHarnessSettings}
+                    onCodexChange={setCodexHarnessSettings}
+                  />
+                </SettingsSection>
+
+                <SettingsSection
+                  description="Layout, display, and file storage for workspaces."
+                  id="workspace"
+                  label="Workspace"
+                  ref={(node) => {
+                    sectionRefs.current.workspace = node;
+                  }}
+                >
+                  <SettingsRow
+                    label="Default new tab"
+                    description="The session type launched by Cmd+T and the new tab shortcut."
+                  >
+                    <Select
+                      items={defaultNewTabLaunchItems}
+                      onValueChange={(value: string) =>
+                        setDefaultNewTabLaunch(value as DefaultNewTabLaunch)
+                      }
+                      value={defaultNewTabLaunch}
+                    >
+                      <SelectTrigger className="w-full min-w-0 md:w-48" id="default-new-tab-launch">
+                        <SelectValue placeholder="Select a default" />
+                      </SelectTrigger>
+                      <SelectContent alignItemWithTrigger={false}>
+                        {defaultNewTabLaunchItems.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </SettingsRow>
+
+                  <SettingsRow
+                    label="Dim inactive panes"
+                    description="Lower the opacity of non-active pane groups until you hover them."
+                  >
+                    <Switch
+                      aria-label="Dim inactive panes"
+                      checked={dimInactivePanes}
+                      id="dim-inactive-panes"
+                      onCheckedChange={setDimInactivePanes}
+                    />
+                  </SettingsRow>
+
+                  {dimInactivePanes ? (
+                    <div className="pl-4">
+                      <SettingsRow
+                        label="Inactive opacity"
+                        description="Applies to every non-active pane group until it becomes active or hovered."
+                      >
+                        <Select
+                          items={inactivePaneOpacityItems}
+                          onValueChange={(value: string) => setInactivePaneOpacity(Number(value))}
+                          value={inactivePaneOpacity.toFixed(2)}
+                        >
+                          <SelectTrigger
+                            className="w-full min-w-0 md:w-48"
+                            id="inactive-pane-opacity"
+                          >
+                            <SelectValue placeholder="Select an opacity" />
+                          </SelectTrigger>
+                          <SelectContent alignItemWithTrigger={false}>
+                            {INACTIVE_PANE_OPACITY_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value.toFixed(2)}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </SettingsRow>
+                    </div>
+                  ) : null}
+
+                  <SettingsFieldRow
+                    label="Working copies root"
+                    htmlFor="worktree-root"
+                    description="Where new workspaces are created on disk. Supports ~. Existing workspaces stay where they are."
+                  >
+                    <Input
+                      id="worktree-root"
+                      onChange={(event) => setDraftWorktreeRoot(event.target.value)}
+                      placeholder={DEFAULT_WORKTREE_ROOT}
+                      value={draftWorktreeRoot}
+                    />
+                  </SettingsFieldRow>
+
+                  <div className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--card)] p-4">
+                    <p className="break-all font-mono text-xs text-[var(--foreground)]">
+                      {previewPath}
+                    </p>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <Button
+                      disabled={!hasWorktreeRootChanges}
+                      onClick={() => setWorktreeRoot(normalizedDraftWorktreeRoot)}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setDraftWorktreeRoot(DEFAULT_WORKTREE_ROOT);
+                        setWorktreeRoot(DEFAULT_WORKTREE_ROOT);
+                      }}
+                      variant="outline"
+                    >
+                      Reset to default
+                    </Button>
+                  </div>
+                </SettingsSection>
+
+                <SettingsSection
+                  description="Alerts and sounds when an agent finishes a response."
                   id="notifications"
                   label="Notifications"
                   ref={(node) => {
@@ -512,7 +623,7 @@ export function SettingsShellLayout() {
                       label="Turn completion"
                       description={
                         selectedTurnNotificationMode?.description ??
-                        "Desktop notifications for completed harness turns."
+                        "Desktop notifications for completed harness turns. Tab response indicators still work even when desktop notifications are off."
                       }
                     >
                       <Select
@@ -580,152 +691,25 @@ export function SettingsShellLayout() {
                       </div>
                     </SettingsRow>
 
-                    <div className="space-y-3 border-l-4 border-[var(--border)] pl-4">
-                      <p className="app-panel-title text-[var(--muted-foreground)]">Notes</p>
-                      <p className="text-sm text-[var(--foreground)]">
-                        Notifications trigger when Claude or Codex finish a turn. Lifecycle may ask
-                        for system notification permission the first time one fires.
-                      </p>
-                      <p className="text-xs text-[var(--muted-foreground)]">
-                        Tab response indicators still work even when desktop notifications are off.
-                      </p>
-                    </div>
                   </div>
                 </SettingsSection>
 
                 <SettingsSection
-                  description="Choose default Codex and Claude launch behavior for new harness terminals on this machine."
-                  id="harnesses"
-                  label="Harnesses"
+                  description="Your signed-in identity and authentication status."
+                  id="account"
+                  label="Account"
                   ref={(node) => {
-                    sectionRefs.current.harnesses = node;
+                    sectionRefs.current.account = node;
                   }}
                 >
-                  <HarnessSettingsPanel
-                    claude={harnesses.claude}
-                    codex={harnesses.codex}
-                    onClaudeChange={setClaudeHarnessSettings}
-                    onCodexChange={setCodexHarnessSettings}
+                  <AuthSessionSettingsPanel
+                    environmentLabel={authSessionEnvironmentLabel}
+                    isLoading={authSessionLoading}
+                    onRefresh={() => {
+                      void refreshAuthSession();
+                    }}
+                    session={authSession}
                   />
-                </SettingsSection>
-
-                <SettingsSection
-                  id="workspace"
-                  label="Workspace"
-                  ref={(node) => {
-                    sectionRefs.current.workspace = node;
-                  }}
-                >
-                  <SettingsRow
-                    label="Default new tab"
-                    description="The session type launched by Cmd+T and the new tab shortcut."
-                  >
-                    <Select
-                      items={defaultNewTabLaunchItems}
-                      onValueChange={(value: string) =>
-                        setDefaultNewTabLaunch(value as DefaultNewTabLaunch)
-                      }
-                      value={defaultNewTabLaunch}
-                    >
-                      <SelectTrigger className="w-full min-w-0 md:w-48" id="default-new-tab-launch">
-                        <SelectValue placeholder="Select a default" />
-                      </SelectTrigger>
-                      <SelectContent alignItemWithTrigger={false}>
-                        {defaultNewTabLaunchItems.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </SettingsRow>
-
-                  <SettingsRow
-                    label="Dim inactive panes"
-                    description="Lower the opacity of non-active pane groups until you hover them."
-                  >
-                    <Switch
-                      aria-label="Dim inactive panes"
-                      checked={dimInactivePanes}
-                      id="dim-inactive-panes"
-                      onCheckedChange={setDimInactivePanes}
-                    />
-                  </SettingsRow>
-
-                  {dimInactivePanes ? (
-                    <div className="ml-4 border-l-4 border-[var(--border)] pl-4">
-                      <SettingsRow
-                        label="Inactive opacity"
-                        description="Applies to every non-active pane group until it becomes active or hovered."
-                      >
-                        <Select
-                          items={inactivePaneOpacityItems}
-                          onValueChange={(value: string) => setInactivePaneOpacity(Number(value))}
-                          value={inactivePaneOpacity.toFixed(2)}
-                        >
-                          <SelectTrigger
-                            className="w-full min-w-0 md:w-48"
-                            id="inactive-pane-opacity"
-                          >
-                            <SelectValue placeholder="Select an opacity" />
-                          </SelectTrigger>
-                          <SelectContent alignItemWithTrigger={false}>
-                            {INACTIVE_PANE_OPACITY_OPTIONS.map((option) => (
-                              <SelectItem key={option.value} value={option.value.toFixed(2)}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </SettingsRow>
-                    </div>
-                  ) : null}
-                </SettingsSection>
-
-                <SettingsSection
-                  id="worktrees"
-                  label="Worktrees"
-                  ref={(node) => {
-                    sectionRefs.current.worktrees = node;
-                  }}
-                >
-                  <SettingsFieldRow
-                    label="Worktree root path"
-                    htmlFor="worktree-root"
-                    description="Supports ~. Existing workspaces stay where they are; this applies to new workspaces only."
-                  >
-                    <Input
-                      id="worktree-root"
-                      onChange={(event) => setDraftWorktreeRoot(event.target.value)}
-                      placeholder={DEFAULT_WORKTREE_ROOT}
-                      value={draftWorktreeRoot}
-                    />
-                  </SettingsFieldRow>
-
-                  <div className="mt-4 space-y-3 border-l-4 border-[var(--border)] pl-4">
-                    <p className="app-panel-title text-[var(--muted-foreground)]">Preview</p>
-                    <p className="break-all font-mono text-xs text-[var(--foreground)]">
-                      {previewPath}
-                    </p>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap items-center gap-2">
-                    <Button
-                      disabled={!hasWorktreeRootChanges}
-                      onClick={() => setWorktreeRoot(normalizedDraftWorktreeRoot)}
-                    >
-                      Save
-                    </Button>
-                    <Button
-                      onClick={() => {
-                        setDraftWorktreeRoot(DEFAULT_WORKTREE_ROOT);
-                        setWorktreeRoot(DEFAULT_WORKTREE_ROOT);
-                      }}
-                      variant="outline"
-                    >
-                      Reset to default
-                    </Button>
-                  </div>
                 </SettingsSection>
               </div>
             </div>

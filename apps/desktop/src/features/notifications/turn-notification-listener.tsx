@@ -1,13 +1,18 @@
+import { isTauri } from "@tauri-apps/api/core";
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "../../query";
+import { router } from "../../app/router";
 import { useLifecycleEvent } from "../events";
 import { projectCatalogQuery } from "../projects/hooks";
 import { useSettings } from "../settings/state/app-settings-provider";
 import { createWorkspaceSnapshotQuery } from "../workspaces/hooks";
+import { setPendingTerminalFocus } from "./lib/notification-navigation";
 import { shouldNotifyForTurnCompletion } from "./lib/notification-settings";
 import {
+  listenForNotificationClicks,
   playTurnNotificationSound,
   sendTurnCompletionNotification,
+  type NotificationNavigationData,
 } from "./lib/turn-notification-runtime";
 
 function readTurnNotificationAttentionState() {
@@ -22,6 +27,36 @@ function readTurnNotificationAttentionState() {
     documentVisible: document.visibilityState === "visible",
     windowFocused: document.hasFocus(),
   };
+}
+
+async function focusAppWindow(): Promise<void> {
+  if (!isTauri()) {
+    return;
+  }
+
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  const appWindow = getCurrentWindow();
+  await appWindow.setFocus();
+}
+
+function handleNotificationNavigation(navigation: NotificationNavigationData): void {
+  const { projectId, terminalId, workspaceId } = navigation;
+  const targetPath = `/projects/${projectId}/workspaces/${workspaceId}`;
+
+  setPendingTerminalFocus(workspaceId, terminalId);
+  void router.navigate(targetPath);
+  void focusAppWindow().catch((error) => {
+    console.error("Failed to focus app window:", error);
+  });
+
+  // Also dispatch focus-terminal for the case where the workspace is already mounted
+  window.requestAnimationFrame(() => {
+    window.dispatchEvent(
+      new CustomEvent("lifecycle:focus-terminal", {
+        detail: { terminalId, workspaceId },
+      }),
+    );
+  });
 }
 
 const recentCompletionKeys = new Set<string>();
@@ -53,6 +88,25 @@ export function TurnNotificationListener() {
     };
   }, []);
 
+  // Listen for notification clicks and navigate to the appropriate workspace/terminal
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+
+    void listenForNotificationClicks(handleNotificationNavigation).then((cleanup) => {
+      if (disposed) {
+        cleanup();
+        return;
+      }
+      unlisten = cleanup;
+    });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
   useLifecycleEvent("terminal.harness_turn_completed", (event) => {
     if (!shouldNotifyForTurnCompletion(turnNotificationsMode, attentionStateRef.current)) {
       return;
@@ -72,15 +126,21 @@ export function TurnNotificationListener() {
       ? catalog.data?.projects.find((p) => p.id === projectId)
       : undefined;
 
-    void sendTurnCompletionNotification(event, {
+    const context = {
+      projectId: projectId ?? null,
       projectName: project?.name,
       sessionTitle: terminal?.label,
+      terminalId: event.terminal_id,
+      workspaceId: event.workspace_id,
       workspaceName: snapshot.data?.workspace?.name,
-    }).catch((error) => {
+    };
+
+    void sendTurnCompletionNotification(event, context).catch((error) => {
       console.error("Failed to send turn-complete notification:", error);
     });
+
     void playTurnNotificationSound(turnNotificationSound).catch((error) => {
-      console.error("Failed to play turn-complete notification sound:", error);
+      console.error("Failed to play notification sound:", error);
     });
   });
 

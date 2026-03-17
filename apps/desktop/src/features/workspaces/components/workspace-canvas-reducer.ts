@@ -20,7 +20,9 @@ import {
   getWorkspaceDocument,
   getWorkspacePaneTabState,
   isChangesDiffDocument,
+  MAX_CLOSED_TAB_STACK_SIZE,
   pullRequestTabKey,
+  type ClosedTabEntry,
   type WorkspacePaneTabState,
   type WorkspacePaneTabStateById,
   type WorkspaceCanvasDocument,
@@ -38,12 +40,13 @@ import {
 
 export type WorkspaceCanvasAction =
   | { kind: "open-document"; request: OpenDocumentRequest }
+  | { kind: "reopen-closed-tab" }
   | { kind: "select-pane"; paneId: string }
   | { key: string | null; kind: "select-tab"; paneId: string }
   | { key: string; kind: "close-document" }
-  | { key: string; kind: "hide-runtime-tab" }
-  | { key: string; kind: "show-runtime-tab"; paneId?: string; select: boolean }
-  | { keys: string[]; kind: "set-hidden-runtime-tab-keys" }
+  | { key: string; kind: "hide-terminal-tab" }
+  | { key: string; kind: "show-terminal-tab"; paneId?: string; select: boolean }
+  | { keys: string[]; kind: "set-hidden-terminal-tab-keys" }
   | { keys: string[]; kind: "reconcile-pane-visible-tab-order"; paneId: string }
   | { key: string; kind: "set-tab-view-state"; viewState: WorkspaceCanvasTabViewState | null }
   | {
@@ -174,11 +177,11 @@ function omitWorkspacePaneTabState(
   return nextPaneTabStateById;
 }
 
-function reconcileWorkspaceHiddenRuntimeTabState(
+function reconcileWorkspaceHiddenTerminalTabState(
   tabStateByKey: WorkspaceCanvasTabStateByKey,
-  hiddenRuntimeTabKeys: readonly string[],
+  hiddenTerminalTabKeys: readonly string[],
 ): WorkspaceCanvasTabStateByKey {
-  const hiddenRuntimeTabKeySet = new Set(hiddenRuntimeTabKeys);
+  const hiddenTerminalTabKeySet = new Set(hiddenTerminalTabKeys);
   let nextTabStateByKey = tabStateByKey;
 
   for (const [key, tabState] of Object.entries(tabStateByKey)) {
@@ -187,13 +190,13 @@ function reconcileWorkspaceHiddenRuntimeTabState(
     }
 
     const nextTabState = {
-      ...(hiddenRuntimeTabKeySet.has(key) ? { hidden: true } : {}),
+      ...(hiddenTerminalTabKeySet.has(key) ? { hidden: true } : {}),
       ...(tabState.viewState ? { viewState: tabState.viewState } : {}),
     };
     nextTabStateByKey = updateWorkspaceTabState(nextTabStateByKey, key, nextTabState);
   }
 
-  for (const key of hiddenRuntimeTabKeySet) {
+  for (const key of hiddenTerminalTabKeySet) {
     if (key in nextTabStateByKey && nextTabStateByKey[key]?.hidden) {
       continue;
     }
@@ -282,19 +285,19 @@ function selectWorkspacePaneTab(
   };
 }
 
-function removeHiddenRuntimeTabsFromPaneState(
+function removeHiddenTerminalTabsFromPaneState(
   paneTabStateById: WorkspaceCanvasState["paneTabStateById"],
-  hiddenRuntimeTabKeySet: ReadonlySet<string>,
+  hiddenTerminalTabKeySet: ReadonlySet<string>,
 ): WorkspaceCanvasState["paneTabStateById"] {
   let nextPaneTabStateById = paneTabStateById;
 
   for (const [paneId, paneTabState] of Object.entries(paneTabStateById)) {
     const activeTabKey =
-      paneTabState.activeTabKey && hiddenRuntimeTabKeySet.has(paneTabState.activeTabKey)
+      paneTabState.activeTabKey && hiddenTerminalTabKeySet.has(paneTabState.activeTabKey)
         ? null
         : paneTabState.activeTabKey;
     const tabOrderKeys = paneTabState.tabOrderKeys.filter(
-      (key) => !hiddenRuntimeTabKeySet.has(key),
+      (key) => !hiddenTerminalTabKeySet.has(key),
     );
 
     if (
@@ -512,6 +515,15 @@ export function workspaceCanvasReducer(
     case "select-tab":
       return selectWorkspacePaneTab(state, action.paneId, action.key);
     case "close-document": {
+      const closingDocument = getWorkspaceDocument(state.documentsByKey, action.key);
+      const closingViewState = state.tabStateByKey[action.key]?.viewState ?? null;
+      const nextClosedTabStack = closingDocument
+        ? [
+            { document: closingDocument, viewState: closingViewState } satisfies ClosedTabEntry,
+            ...state.closedTabStack,
+          ].slice(0, MAX_CLOSED_TAB_STACK_SIZE)
+        : state.closedTabStack;
+
       const paneId = findWorkspacePaneIdContainingTab(
         state.rootPane,
         state.paneTabStateById,
@@ -520,6 +532,7 @@ export function workspaceCanvasReducer(
       if (!paneId) {
         return {
           ...state,
+          closedTabStack: nextClosedTabStack,
           documentsByKey: removeWorkspaceDocument(state.documentsByKey, action.key),
           tabStateByKey: omitWorkspaceTabState(state.tabStateByKey, action.key),
         };
@@ -532,6 +545,7 @@ export function workspaceCanvasReducer(
           : paneTabState.activeTabKey;
       const nextState: WorkspaceCanvasState = {
         ...state,
+        closedTabStack: nextClosedTabStack,
         documentsByKey: removeWorkspaceDocument(state.documentsByKey, action.key),
         paneTabStateById: updateWorkspacePaneTabState(
           state.paneTabStateById,
@@ -555,7 +569,44 @@ export function workspaceCanvasReducer(
 
       return closeWorkspacePaneIfEmpty(nextState, paneId);
     }
-    case "hide-runtime-tab": {
+    case "reopen-closed-tab": {
+      const stack = [...state.closedTabStack];
+      let entry: ClosedTabEntry | undefined;
+
+      while (stack.length > 0) {
+        const candidate = stack.shift()!;
+        if (!(candidate.document.key in state.documentsByKey)) {
+          entry = candidate;
+          break;
+        }
+      }
+
+      if (!entry) {
+        return state;
+      }
+
+      const targetPaneId = resolveWorkspaceTargetPaneId(state);
+      return {
+        ...state,
+        closedTabStack: stack,
+        documentsByKey: upsertWorkspaceDocument(state.documentsByKey, entry.document),
+        paneTabStateById: updateWorkspacePaneTabState(
+          state.paneTabStateById,
+          targetPaneId,
+          (pane) => ({
+            ...pane,
+            activeTabKey: entry.document.key,
+            tabOrderKeys: appendWorkspaceTabKey(pane.tabOrderKeys, entry.document.key),
+          }),
+        ),
+        tabStateByKey: entry.viewState
+          ? updateWorkspaceTabState(state.tabStateByKey, entry.document.key, {
+              viewState: entry.viewState,
+            })
+          : state.tabStateByKey,
+      };
+    }
+    case "hide-terminal-tab": {
       const paneId = findWorkspacePaneIdContainingTab(
         state.rootPane,
         state.paneTabStateById,
@@ -601,7 +652,7 @@ export function workspaceCanvasReducer(
 
       return closeWorkspacePaneIfEmpty(nextState, paneId);
     }
-    case "show-runtime-tab": {
+    case "show-terminal-tab": {
       const existingPaneId = findWorkspacePaneIdContainingTab(
         state.rootPane,
         state.paneTabStateById,
@@ -683,14 +734,14 @@ export function workspaceCanvasReducer(
         ),
       };
     }
-    case "set-hidden-runtime-tab-keys":
+    case "set-hidden-terminal-tab-keys":
       return {
         ...state,
-        paneTabStateById: removeHiddenRuntimeTabsFromPaneState(
+        paneTabStateById: removeHiddenTerminalTabsFromPaneState(
           state.paneTabStateById,
           new Set(action.keys),
         ),
-        tabStateByKey: reconcileWorkspaceHiddenRuntimeTabState(state.tabStateByKey, action.keys),
+        tabStateByKey: reconcileWorkspaceHiddenTerminalTabState(state.tabStateByKey, action.keys),
       };
     case "reconcile-pane-visible-tab-order": {
       const pane = getWorkspacePane(state.rootPane, action.paneId);

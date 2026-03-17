@@ -12,7 +12,9 @@ export type RegisteredShortcutId =
   | "workspace.next-tab"
   | "workspace.next-workspace"
   | "workspace.previous-tab"
-  | "workspace.previous-workspace";
+  | "workspace.previous-workspace"
+  | "workspace.reopen-closed-tab"
+  | "workspace.toggle-zoom";
 
 export type RegisteredShortcutScope =
   | "app"
@@ -122,6 +124,20 @@ export const REGISTERED_SHORTCUTS: readonly RegisteredShortcut[] = [
     mac: "Cmd+Ctrl+Arrows",
     scope: "workspace-canvas",
     windowsLinux: "Ctrl+Alt+Arrows",
+  },
+  {
+    description: "Reopen the last closed document tab",
+    id: "workspace.reopen-closed-tab",
+    mac: "Cmd+Shift+T",
+    scope: "workspace-canvas",
+    windowsLinux: "Ctrl+Shift+T",
+  },
+  {
+    description: "Toggle zoom on the active pane tab",
+    id: "workspace.toggle-zoom",
+    mac: "Cmd+Shift+Enter",
+    scope: "workspace-canvas",
+    windowsLinux: "Ctrl+Shift+Enter",
   },
   {
     description: "Save the current file",

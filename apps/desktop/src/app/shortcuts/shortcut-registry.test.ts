@@ -22,6 +22,8 @@ describe("shortcut registry", () => {
       "workspace.previous-tab",
       "workspace.next-tab",
       "workspace.focus-pane",
+      "workspace.reopen-closed-tab",
+      "workspace.toggle-zoom",
       "file.save",
     ]);
   });
@@ -42,6 +44,8 @@ describe("shortcut registry", () => {
       "workspace.previous-tab",
       "workspace.next-tab",
       "workspace.focus-pane",
+      "workspace.reopen-closed-tab",
+      "workspace.toggle-zoom",
     ]);
   });
 

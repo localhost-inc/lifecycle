@@ -10,7 +10,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-[var(--muted)] text-[var(--foreground)] hover:bg-[color-mix(in_srgb,var(--muted),var(--foreground)_8%)]",
+          "bg-[var(--muted)] text-[var(--foreground)] hover:bg-[var(--surface-selected)]",
         secondary:
           "border border-[var(--border)] bg-[var(--card)] text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]",
         outline:
@@ -18,7 +18,7 @@ const buttonVariants = cva(
         ghost:
           "bg-transparent text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]",
         destructive:
-          "border border-[color-mix(in_srgb,var(--destructive)_35%,transparent)] bg-transparent text-[var(--destructive)] hover:border-[color-mix(in_srgb,var(--destructive)_45%,transparent)] hover:bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)]",
+          "border border-[var(--destructive)]/35 bg-transparent text-[var(--destructive)] hover:border-[var(--destructive)]/45 hover:bg-[var(--destructive)]/10",
         white: "bg-white text-black hover:bg-white/90",
       },
       size: {

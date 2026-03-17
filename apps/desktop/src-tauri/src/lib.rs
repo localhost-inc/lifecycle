@@ -35,9 +35,13 @@ const APP_MENU_ITEM_OPEN_COMMAND_PALETTE: &str = "app.open-command-palette";
 const APP_MENU_ITEM_OPEN_FILE_PICKER: &str = "app.open-file-picker";
 
 #[cfg(target_os = "macos")]
+const APP_MENU_ITEM_SELECT_PROJECT_PREFIX: &str = "app.select-project-";
+
+#[cfg(target_os = "macos")]
 #[derive(Clone, Serialize)]
 struct AppShortcutEvent {
     action: &'static str,
+    index: Option<u32>,
     source: &'static str,
 }
 
@@ -123,6 +127,7 @@ pub fn run() {
                         APP_HOTKEY_EVENT_NAME,
                         AppShortcutEvent {
                             action: "open-settings",
+                            index: None,
                             source: "menu",
                         },
                     );
@@ -134,6 +139,7 @@ pub fn run() {
                         APP_HOTKEY_EVENT_NAME,
                         AppShortcutEvent {
                             action: "open-command-palette",
+                            index: None,
                             source: "menu",
                         },
                     );
@@ -145,10 +151,25 @@ pub fn run() {
                         APP_HOTKEY_EVENT_NAME,
                         AppShortcutEvent {
                             action: "open-file-picker",
+                            index: None,
                             source: "menu",
                         },
                     );
                     return;
+                }
+
+                if let Some(index_str) = event.id().0.strip_prefix(APP_MENU_ITEM_SELECT_PROJECT_PREFIX) {
+                    if let Ok(index) = index_str.parse::<u32>() {
+                        let _ = app.emit(
+                            APP_HOTKEY_EVENT_NAME,
+                            AppShortcutEvent {
+                                action: "select-project-index",
+                                index: Some(index),
+                                source: "menu",
+                            },
+                        );
+                        return;
+                    }
                 }
             }
         })
@@ -386,6 +407,23 @@ fn build_app_menu<R: tauri::Runtime>(
             LifecycleError::AttachFailed(format!("failed to build app menu: {error}"))
         })?;
 
+    // Hidden menu items for Cmd+1-9 (select project by sidebar index).
+    // Menu accelerators ensure these work even when a native terminal surface
+    // has focus, since the macOS menu system intercepts key equivalents that
+    // the terminal does not consume.
+    let mut project_select_items = Vec::new();
+    for digit in 1u32..=9 {
+        let item_id = format!("{APP_MENU_ITEM_SELECT_PROJECT_PREFIX}{digit}");
+        let accelerator = format!("CmdOrCtrl+{digit}");
+        let item = MenuItemBuilder::with_id(item_id, format!("Select Project {digit}"))
+            .accelerator(accelerator)
+            .build(app)
+            .map_err(|error| {
+                LifecycleError::AttachFailed(format!("failed to build app menu: {error}"))
+            })?;
+        project_select_items.push(item);
+    }
+
     let lifecycle_menu = SubmenuBuilder::new(app, "Lifecycle")
         .about(None)
         .separator()
@@ -406,9 +444,20 @@ fn build_app_menu<R: tauri::Runtime>(
 
     let edit_menu = build_edit_menu(app)?;
 
+    // Project submenu with Cmd+1-9 accelerators — kept separate from the
+    // main Lifecycle menu so the items don't clutter it.
+    let mut project_menu_builder = SubmenuBuilder::new(app, "Project");
+    for item in &project_select_items {
+        project_menu_builder = project_menu_builder.item(item);
+    }
+    let project_menu = project_menu_builder.build().map_err(|error| {
+        LifecycleError::AttachFailed(format!("failed to build project menu: {error}"))
+    })?;
+
     let menu = MenuBuilder::new(app)
         .item(&lifecycle_menu)
         .item(&edit_menu)
+        .item(&project_menu)
         .build()
         .map_err(|error| {
             LifecycleError::AttachFailed(format!("failed to build root menu: {error}"))

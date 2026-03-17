@@ -4,7 +4,6 @@ import { markPerformance, measurePerformance } from "../../../lib/performance";
 import { toErrorEnvelope } from "../../../lib/tauri-error";
 import { useWorkspaceManifest, useWorkspaceSnapshot } from "../hooks";
 import { hasBlockingQueryError, hasBlockingQueryLoad } from "../routes/workspace-route-query-state";
-import type { WorkspaceRouteDialogState } from "../routes/workspace-route-query-state";
 
 const WorkspaceLayout = lazy(async () => {
   const module = await import("./workspace-layout");
@@ -15,15 +14,11 @@ const WorkspaceLayout = lazy(async () => {
 
 interface WorkspaceTabContentProps {
   onCloseWorkspaceTab?: () => void;
-  onRouteDialogChange?: (dialog: WorkspaceRouteDialogState) => void;
-  routeDialog?: WorkspaceRouteDialogState;
   workspaceId: string;
 }
 
 export function WorkspaceTabContent({
   onCloseWorkspaceTab,
-  onRouteDialogChange,
-  routeDialog = null,
   workspaceId,
 }: WorkspaceTabContentProps) {
   const workspaceSnapshotQuery = useWorkspaceSnapshot(workspaceId);
@@ -94,8 +89,6 @@ export function WorkspaceTabContent({
       <WorkspaceLayout
         manifestStatus={manifestQuery.data ?? null}
         onCloseWorkspaceTab={onCloseWorkspaceTab}
-        onRouteDialogChange={onRouteDialogChange}
-        routeDialog={routeDialog}
         workspace={workspace}
         workspaceSnapshot={workspaceSnapshotQuery.data ?? null}
       />

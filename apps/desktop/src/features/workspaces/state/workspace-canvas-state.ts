@@ -73,6 +73,13 @@ export interface WorkspaceCanvasTabState {
 
 export type WorkspaceCanvasTabStateByKey = Record<string, WorkspaceCanvasTabState>;
 
+export interface ClosedTabEntry {
+  document: WorkspaceCanvasDocument;
+  viewState: WorkspaceCanvasTabViewState | null;
+}
+
+export const MAX_CLOSED_TAB_STACK_SIZE = 20;
+
 export interface WorkspacePaneLeaf {
   id: string;
   kind: "leaf";
@@ -101,6 +108,7 @@ export interface WorkspacePaneTabSnapshot extends WorkspacePaneTabState {
 
 export interface WorkspaceCanvasState {
   activePaneId: string;
+  closedTabStack: ClosedTabEntry[];
   documentsByKey: WorkspaceCanvasDocumentsByKey;
   paneTabStateById: WorkspacePaneTabStateById;
   rootPane: WorkspacePaneNode;
@@ -191,7 +199,7 @@ function defaultCommitMessage(shortSha: string): string {
   return `Commit ${shortSha}`;
 }
 
-export function isRuntimeTabKey(value: string): boolean {
+export function isTerminalTabKey(value: string): boolean {
   return value.startsWith("terminal:");
 }
 
@@ -294,6 +302,7 @@ export function isFileViewerDocument(
 export function createDefaultWorkspaceCanvasState(): WorkspaceCanvasState {
   return {
     activePaneId: DEFAULT_WORKSPACE_PANE_ID,
+    closedTabStack: [],
     documentsByKey: {},
     paneTabStateById: {
       [DEFAULT_WORKSPACE_PANE_ID]: createDefaultWorkspacePaneTabState(),
@@ -395,11 +404,11 @@ export function getWorkspaceTabViewState(
   return tabStateByKey[key]?.viewState ?? null;
 }
 
-export function listWorkspaceHiddenRuntimeTabKeys(
+export function listWorkspaceHiddenTerminalTabKeys(
   tabStateByKey: WorkspaceCanvasTabStateByKey,
 ): string[] {
   return Object.entries(tabStateByKey).flatMap(([key, tabState]) =>
-    tabState.hidden && isRuntimeTabKey(key) ? [key] : [],
+    tabState.hidden && isTerminalTabKey(key) ? [key] : [],
   );
 }
 
@@ -473,7 +482,7 @@ function normalizeWorkspacePaneTabStateById(
   paneTabStateById: WorkspacePaneTabStateById,
   paneIds: readonly string[],
   knownDocumentKeys: ReadonlySet<string>,
-  hiddenRuntimeTabKeySet: ReadonlySet<string>,
+  hiddenTerminalTabKeySet: ReadonlySet<string>,
 ): WorkspacePaneTabStateById {
   const normalized: WorkspacePaneTabStateById = {};
   const seenTabKeys = new Set<string>();
@@ -484,9 +493,9 @@ function normalizeWorkspacePaneTabStateById(
 
     for (const key of normalizeTabKeyList(paneTabState.tabOrderKeys)) {
       if (
-        hiddenRuntimeTabKeySet.has(key) ||
+        hiddenTerminalTabKeySet.has(key) ||
         seenTabKeys.has(key) ||
-        (!isRuntimeTabKey(key) && !knownDocumentKeys.has(key))
+        (!isTerminalTabKey(key) && !knownDocumentKeys.has(key))
       ) {
         continue;
       }
@@ -498,8 +507,8 @@ function normalizeWorkspacePaneTabStateById(
     const requestedActiveTabKey =
       typeof paneTabState.activeTabKey === "string" &&
       paneTabState.activeTabKey.length > 0 &&
-      !hiddenRuntimeTabKeySet.has(paneTabState.activeTabKey) &&
-      (isRuntimeTabKey(paneTabState.activeTabKey) ||
+      !hiddenTerminalTabKeySet.has(paneTabState.activeTabKey) &&
+      (isTerminalTabKey(paneTabState.activeTabKey) ||
         knownDocumentKeys.has(paneTabState.activeTabKey))
         ? paneTabState.activeTabKey
         : null;
@@ -549,7 +558,7 @@ function normalizeWorkspaceCanvasTabStateByKey(
 
     const nextTabState: WorkspaceCanvasTabState = {};
 
-    if (tabState.hidden && isRuntimeTabKey(key)) {
+    if (tabState.hidden && isTerminalTabKey(key)) {
       nextTabState.hidden = true;
     }
 
@@ -568,14 +577,14 @@ function normalizeWorkspaceCanvasTabStateByKey(
 function normalizeWorkspaceCanvasState(state: WorkspaceCanvasState): WorkspaceCanvasState {
   const documentsByKey = normalizeDocumentsByKey(state.documentsByKey);
   const knownDocumentKeys = new Set(Object.keys(documentsByKey));
-  const hiddenRuntimeTabKeySet = new Set(listWorkspaceHiddenRuntimeTabKeys(state.tabStateByKey));
+  const hiddenTerminalTabKeySet = new Set(listWorkspaceHiddenTerminalTabKeys(state.tabStateByKey));
   const rootPane = normalizeWorkspacePaneNode(state.rootPane, new Set<string>(), "root");
   const layout = inspectWorkspacePaneLayout(rootPane);
   const paneTabStateById = normalizeWorkspacePaneTabStateById(
     state.paneTabStateById,
     layout.paneIds,
     knownDocumentKeys,
-    hiddenRuntimeTabKeySet,
+    hiddenTerminalTabKeySet,
   );
   const activePaneId =
     state.activePaneId && layout.paneIds.includes(state.activePaneId)
@@ -583,7 +592,7 @@ function normalizeWorkspaceCanvasState(state: WorkspaceCanvasState): WorkspaceCa
       : layout.firstPane.id;
   const knownTabKeys = new Set([
     ...Object.keys(documentsByKey),
-    ...hiddenRuntimeTabKeySet,
+    ...hiddenTerminalTabKeySet,
     ...Object.values(paneTabStateById).flatMap((paneTabState) => paneTabState.tabOrderKeys),
     ...Object.values(paneTabStateById).flatMap((paneTabState) =>
       paneTabState.activeTabKey ? [paneTabState.activeTabKey] : [],
@@ -593,6 +602,7 @@ function normalizeWorkspaceCanvasState(state: WorkspaceCanvasState): WorkspaceCa
 
   return {
     activePaneId,
+    closedTabStack: state.closedTabStack ?? [],
     documentsByKey,
     paneTabStateById,
     rootPane,
@@ -904,6 +914,7 @@ function parseWorkspaceCanvasState(value: unknown): WorkspaceCanvasState {
   return normalizeWorkspaceCanvasState({
     activePaneId:
       typeof value.activePaneId === "string" ? value.activePaneId : DEFAULT_WORKSPACE_PANE_ID,
+    closedTabStack: [],
     documentsByKey,
     paneTabStateById,
     rootPane,

@@ -168,3 +168,4 @@ fn parse_turn_completion(value: &Value, line: &str) -> Option<HarnessTurnComplet
         turn_id: turn_id.map(ToString::to_string),
     })
 }
+

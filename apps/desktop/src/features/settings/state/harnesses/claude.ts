@@ -23,12 +23,36 @@ export interface ClaudeHarnessLaunchConfig {
 }
 
 export const claudePermissionModeOptions = [
-  { label: "Accept edits", value: "acceptEdits" as const },
-  { label: "Auto", value: "auto" as const },
-  { label: "Bypass permissions", value: "bypassPermissions" as const },
-  { label: "Default", value: "default" as const },
-  { label: "Don't ask", value: "dontAsk" as const },
-  { label: "Plan", value: "plan" as const },
+  {
+    description: "Approves file edits automatically, still asks before running commands.",
+    label: "Accept edits",
+    value: "acceptEdits" as const,
+  },
+  {
+    description: "Decides when to ask based on the risk of each action.",
+    label: "Auto",
+    value: "auto" as const,
+  },
+  {
+    description: "Skips every permission check. Equivalent to the skip toggle above.",
+    label: "Bypass all",
+    value: "bypassPermissions" as const,
+  },
+  {
+    description: "Prompts before every tool call. Most conservative option.",
+    label: "Ask every time",
+    value: "default" as const,
+  },
+  {
+    description: "Runs without prompting but still respects project-level policy files.",
+    label: "Don't ask",
+    value: "dontAsk" as const,
+  },
+  {
+    description: "Can suggest changes but cannot apply them. Read-only mode.",
+    label: "Plan only",
+    value: "plan" as const,
+  },
 ] as const;
 
 const validClaudePermissionModes = new Set<string>(

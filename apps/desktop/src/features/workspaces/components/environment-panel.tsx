@@ -9,6 +9,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  Spinner,
   SplitButton,
   SplitButtonPrimary,
   SplitButtonSecondary,
@@ -18,7 +19,6 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronRight,
-  LoaderCircle,
   Play,
   RotateCcw,
   Square,
@@ -203,7 +203,7 @@ export function EnvironmentPanel({
   const actionConfig =
     workspace.status === "starting"
       ? {
-          icon: <LoaderCircle className="size-3.5 animate-spin" strokeWidth={2.2} />,
+          icon: <Spinner className="size-3.5" />,
           label: "Starting...",
           onClick: handleStop,
           title: "Stop workspace services",
@@ -228,12 +228,37 @@ export function EnvironmentPanel({
   const actionDisabled =
     activeAction !== null || activeServiceStartName !== null || stopping || (!canRun && !canStop);
 
+  const statusLabel =
+    workspace.status === "starting"
+      ? "Starting"
+      : workspace.status === "stopping"
+        ? "Stopping"
+        : workspace.status === "active"
+          ? "Running"
+          : workspace.failure_reason
+            ? "Failed"
+            : "Idle";
+
+  const statusDotClass =
+    workspace.status === "active"
+      ? "bg-[var(--status-success)]"
+      : workspace.status === "starting"
+        ? "bg-[var(--status-info)] lifecycle-motion-soft-pulse"
+        : workspace.failure_reason
+          ? "bg-[var(--status-danger)]"
+          : "bg-[var(--muted-foreground)]/40";
+
   return (
     <section className="flex h-full min-h-0 flex-col">
       {/* Header */}
       <div className="shrink-0 px-3 pt-3 pb-2">
-        <div className="flex items-center justify-between gap-3">
-          <span className="app-panel-title">Environment</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className={`inline-block size-[7px] shrink-0 rounded-full ${statusDotClass}`} />
+            <span className="text-[13px] font-medium text-[var(--foreground)]">
+              {statusLabel}
+            </span>
+          </div>
           <div className="flex shrink-0 items-center">
             {canRestart ? (
               <SplitButton>
@@ -339,33 +364,45 @@ export function EnvironmentPanel({
           >
             <CollapsibleTrigger asChild>
               <button
-                className="group flex w-full items-center gap-2 py-1.5 text-left"
+                className="group flex w-full items-center gap-2 py-2 text-left"
                 type="button"
               >
                 <ChevronRight
                   className={`size-3 shrink-0 text-[var(--muted-foreground)] transition-transform duration-150 ${bootExpanded ? "rotate-90" : ""}`}
                   strokeWidth={2.4}
                 />
-                {bootPresentation?.phase === "running" ? (
-                  <LoaderCircle
-                    className="size-3 shrink-0 animate-spin text-[var(--status-info)]"
-                    strokeWidth={2.4}
-                  />
-                ) : bootPresentation?.phase === "completed" ? (
-                  <span className="inline-block size-1.5 shrink-0 rounded-full bg-[var(--status-success)]" />
-                ) : bootPresentation?.phase === "failed" ? (
-                  <span className="inline-block size-1.5 shrink-0 rounded-full bg-[var(--status-danger)]" />
-                ) : null}
                 <span className="text-[12px] font-medium text-[var(--muted-foreground)] group-hover:text-[var(--foreground)] transition-colors">
-                  Boot
+                  Boot sequence
                 </span>
                 {bootPresentation && (
-                  <span className="ml-auto shrink-0 text-[11px] tabular-nums text-[var(--muted-foreground)]/60">
-                    {bootPresentation.completedSteps}/{bootPresentation.totalSteps}
-                  </span>
+                  <div className="ml-auto flex items-center gap-2.5">
+                    {bootPresentation.phase === "running" && (
+                      <Spinner className="size-3 shrink-0 text-[var(--status-info)]" />
+                    )}
+                    <span className="shrink-0 text-[11px] tabular-nums text-[var(--muted-foreground)]/60">
+                      {bootPresentation.completedSteps}/{bootPresentation.totalSteps}
+                    </span>
+                  </div>
                 )}
               </button>
             </CollapsibleTrigger>
+            {/* Progress bar */}
+            {bootPresentation && (
+              <div className="mb-1.5 h-[3px] overflow-hidden rounded-full bg-[var(--muted)]">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ease-out ${
+                    bootPresentation.phase === "failed"
+                      ? "bg-[var(--status-danger)]"
+                      : bootPresentation.phase === "completed"
+                        ? "bg-[var(--status-success)]"
+                        : "bg-[var(--status-info)]"
+                  }`}
+                  style={{
+                    width: `${bootPresentation.totalSteps > 0 ? (bootPresentation.completedSteps / bootPresentation.totalSteps) * 100 : 0}%`,
+                  }}
+                />
+              </div>
+            )}
             <CollapsibleContent>
               <div className="pb-2 pt-0.5">
                 <BootSequence
@@ -393,15 +430,15 @@ export function EnvironmentPanel({
         {bootItems.length > 0 && <div className="mx-3 border-t border-[var(--border)]" />}
 
         {/* Logs section */}
-        <div className="shrink-0 px-3 pt-2">
+        <div className="shrink-0 px-3 pt-3">
           <div className="flex items-center gap-3">
             <span className="text-[12px] font-medium text-[var(--muted-foreground)]">
               Logs
             </span>
             {serviceNames.length > 0 && (
-              <div className="flex items-center rounded-md bg-[var(--muted)]/50 p-0.5">
+              <div className="flex items-center gap-0.5 rounded-md border border-[var(--border)] bg-[var(--muted)]/30 p-0.5">
                 <button
-                  className={`rounded px-2 py-0.5 text-[11px] transition-colors ${
+                  className={`rounded-[5px] px-2.5 py-1 text-[11px] transition-colors ${
                     selectedServiceLogsName === null
                       ? "bg-[var(--surface)] font-medium text-[var(--foreground)] shadow-xs"
                       : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
@@ -413,7 +450,7 @@ export function EnvironmentPanel({
                 </button>
                 {serviceNames.map((name) => (
                   <button
-                    className={`rounded px-2 py-0.5 text-[11px] transition-colors ${
+                    className={`rounded-[5px] px-2.5 py-1 text-[11px] transition-colors ${
                       selectedServiceLogsName === name
                         ? "bg-[var(--surface)] font-medium text-[var(--foreground)] shadow-xs"
                         : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
@@ -433,7 +470,7 @@ export function EnvironmentPanel({
         </div>
 
         {/* Log entries */}
-        <div className="mt-2 flex flex-col px-3 pb-4">
+        <div className="mt-2 flex min-h-0 flex-1 flex-col px-3 pb-4">
           <LogsTab
             config={config}
             declaredStepNames={declaredSetupStepNames}

@@ -36,7 +36,33 @@ function createWorkspaceRecord(id: string, projectId: string) {
 }
 
 describe("resolveHomeRouteTarget", () => {
-  test("prefers the last opened workspace when it still exists", () => {
+  test("restores the stored full path when the project still exists", () => {
+    expect(
+      resolveHomeRouteTarget(
+        [createProjectRecord("project_1", "Lifecycle", "/tmp/lifecycle")],
+        {
+          project_1: [createWorkspaceRecord("workspace_1", "project_1")],
+        },
+        null,
+        null,
+        "/projects/project_1/workspaces/workspace_1",
+      ),
+    ).toBe("/projects/project_1/workspaces/workspace_1");
+  });
+
+  test("ignores a stored path whose project no longer exists", () => {
+    expect(
+      resolveHomeRouteTarget(
+        [createProjectRecord("project_1", "Lifecycle", "/tmp/lifecycle")],
+        {},
+        null,
+        null,
+        "/projects/project_99/workspaces/workspace_99",
+      ),
+    ).toBe("/projects/project_1");
+  });
+
+  test("prefers the last opened workspace when there is no stored path", () => {
     expect(
       resolveHomeRouteTarget(
         [createProjectRecord("project_1", "Lifecycle", "/tmp/lifecycle")],
@@ -44,6 +70,7 @@ describe("resolveHomeRouteTarget", () => {
           project_1: [createWorkspaceRecord("workspace_1", "project_1")],
         },
         "workspace_1",
+        null,
         null,
       ),
     ).toBe("/projects/project_1/workspaces/workspace_1");
@@ -59,6 +86,7 @@ describe("resolveHomeRouteTarget", () => {
         {},
         null,
         "project_2",
+        null,
       ),
     ).toBe("/projects/project_2");
   });
@@ -75,6 +103,7 @@ describe("resolveHomeRouteTarget", () => {
         },
         "workspace_1",
         "project_2",
+        null,
       ),
     ).toBe("/projects/project_2");
   });
@@ -87,6 +116,7 @@ describe("resolveHomeRouteTarget", () => {
           createProjectRecord("project_2", "Docs", "/tmp/docs"),
         ],
         {},
+        null,
         null,
         null,
       ),
@@ -103,7 +133,25 @@ describe("resolveHomeRouteTarget", () => {
         {},
         null,
         "project_99",
+        null,
       ),
     ).toBe("/projects/project_1");
+  });
+
+  test("stored path takes priority over last project and workspace ids", () => {
+    expect(
+      resolveHomeRouteTarget(
+        [
+          createProjectRecord("project_1", "Lifecycle", "/tmp/lifecycle"),
+          createProjectRecord("project_2", "Docs", "/tmp/docs"),
+        ],
+        {
+          project_1: [createWorkspaceRecord("workspace_1", "project_1")],
+        },
+        "workspace_1",
+        "project_2",
+        "/projects/project_1/workspaces/workspace_1",
+      ),
+    ).toBe("/projects/project_1/workspaces/workspace_1");
   });
 });

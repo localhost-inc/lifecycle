@@ -15,11 +15,11 @@
   --border: #2d2823;
   --primary: #fafaf9;
   --primary-foreground: #171411;
-  --accent: #ffffff;
+  --accent: #d4a41c;
   --accent-foreground: #171411;
   --destructive: #ef4444;
   --destructive-foreground: #450a0a;
-  --ring: #71717a;
+  --ring: #fafaf9;
   --surface-hover: #1c1916;
   --surface-selected: #23201c;
   --tab-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 12px 30px rgba(0, 0, 0, 0.22);

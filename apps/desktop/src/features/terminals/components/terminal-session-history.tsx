@@ -1,7 +1,7 @@
 import type { TerminalRecord } from "@lifecycle/contracts";
 import { formatCompactRelativeTime } from "../../../lib/format";
 import { terminalHasLiveSession, type CreateTerminalRequest, type HarnessProvider } from "../api";
-import { TerminalStatusDot } from "./terminal-status-dot";
+import { ClaudeIcon, CodexIcon, ShellIcon } from "../../workspaces/components/surface-icons";
 
 interface TerminalSessionHistoryProps {
   activeTerminalId: string | null;
@@ -15,20 +15,10 @@ function isHarnessProvider(value: string | null): value is HarnessProvider {
   return value === "claude" || value === "codex";
 }
 
-function sessionLabel(terminal: TerminalRecord): string {
-  return terminal.label;
-}
-
-function sessionMeta(terminal: TerminalRecord): string {
-  if (terminal.harness_session_id) {
-    return `session ${terminal.harness_session_id.slice(0, 6)}`;
-  }
-
-  if (terminal.launch_type === "shell") {
-    return "zsh";
-  }
-
-  return "";
+function providerIcon(terminal: TerminalRecord) {
+  if (terminal.harness_provider === "claude") return <ClaudeIcon size={13} />;
+  if (terminal.harness_provider === "codex") return <CodexIcon size={13} />;
+  return <ShellIcon size={13} />;
 }
 
 function activityTime(terminal: TerminalRecord): string {
@@ -47,11 +37,10 @@ export function TerminalSessionHistory({
   terminals,
 }: TerminalSessionHistoryProps) {
   return (
-    <ul>
-      {terminals.map((terminal, index) => {
+    <ul className="space-y-0.5">
+      {terminals.map((terminal) => {
         const hasLiveSession = terminalHasLiveSession(terminal.status);
         const isCurrent = terminal.id === activeTerminalId;
-        const isLast = index === terminals.length - 1;
         const canResume =
           !hasLiveSession &&
           terminal.launch_type === "harness" &&
@@ -78,39 +67,21 @@ export function TerminalSessionHistory({
               type="button"
               disabled={!isClickable}
               onClick={handleClick}
-              className={`flex w-full items-start gap-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:opacity-50 ${
-                !isLast ? "border-b border-[var(--border)]/40" : ""
-              } ${isCurrent ? "bg-[var(--surface-hover)]" : "hover:bg-[var(--surface-hover)]"}`}
+              className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:opacity-40 ${
+                isCurrent
+                  ? "bg-[var(--surface-hover)]"
+                  : "hover:bg-[var(--surface-hover)]"
+              }`}
             >
-              <TerminalStatusDot
-                className="mt-1.5 shrink-0"
-                size="default"
-                status={terminal.status}
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-start gap-3">
-                  <p className="min-w-0 flex-1 text-sm font-medium text-[var(--foreground)]">
-                    {sessionLabel(terminal)}
-                  </p>
-                  {isCurrent ? (
-                    <span className="shrink-0 rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--foreground)]/70">
-                      Current
-                    </span>
-                  ) : canResume ? (
-                    <span className="shrink-0 rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--foreground)]/70">
-                      Resume
-                    </span>
-                  ) : null}
-                  <span className="shrink-0 text-[11px] text-[var(--muted-foreground)]">
-                    {activityTime(terminal)}
-                  </span>
-                </div>
-                {sessionMeta(terminal) ? (
-                  <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.08em] text-[var(--muted-foreground)]/45">
-                    {sessionMeta(terminal)}
-                  </p>
-                ) : null}
-              </div>
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--muted-foreground)]">
+                {providerIcon(terminal)}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--foreground)]">
+                {terminal.label}
+              </span>
+              <span className="shrink-0 text-[11px] tabular-nums text-[var(--muted-foreground)]/60">
+                {activityTime(terminal)}
+              </span>
             </button>
           </li>
         );

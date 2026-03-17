@@ -391,7 +391,7 @@ export function WorkspacePaneDropOverlay({
     <div className="pointer-events-none fixed inset-0 z-[80]">
       <div
         data-workspace-pane-drop-overlay={hoveredPane?.paneId}
-        className="absolute rounded-[18px] border border-[color-mix(in_srgb,var(--ring),transparent_45%)] shadow-[0_0_0_1px_color-mix(in_srgb,var(--ring),transparent_70%)]"
+        className="absolute rounded-[18px] border border-[var(--ring)]/55 shadow-[0_0_0_1px_var(--ring)]/30"
         style={{
           height: hoveredBodyRect.height,
           left: hoveredBodyRect.left,
@@ -408,8 +408,8 @@ export function WorkspacePaneDropOverlay({
               data-workspace-pane-drop-zone-active={isActiveZone ? "true" : "false"}
               className={`absolute inset-0 rounded-[inherit] transition-[background-color,opacity,transform] duration-100 ease-out ${
                 isActiveZone
-                  ? "bg-[color-mix(in_srgb,var(--ring),transparent_82%)] opacity-100"
-                  : "bg-[color-mix(in_srgb,var(--ring),transparent_94%)] opacity-85"
+                  ? "bg-[var(--ring)]/18 opacity-100"
+                  : "bg-[var(--ring)]/6 opacity-85"
               }`}
               style={{ clipPath: getWorkspacePaneBodyDropZoneClipPath(zone) }}
             />

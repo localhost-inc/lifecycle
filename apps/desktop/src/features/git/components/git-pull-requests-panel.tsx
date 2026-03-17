@@ -45,9 +45,6 @@ export function GitPullRequestsPanel({
 
   return (
     <section className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-3 px-2.5 py-3">
-        <span className="app-panel-title">Pull Requests</span>
-      </div>
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-2.5">
         <PullRequestsTab
           currentBranchPullRequestNumber={currentPullRequestQuery.data?.pullRequest?.number ?? null}

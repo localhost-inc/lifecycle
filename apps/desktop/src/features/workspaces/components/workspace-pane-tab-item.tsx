@@ -114,7 +114,7 @@ export function WorkspacePaneTabItem({
         />
       ) : (
         <TypedTitle
-          className={`min-w-0 flex-1 truncate leading-none ${active ? "font-medium" : "font-normal"}`}
+          className="min-w-0 flex-1 truncate leading-none font-medium"
           text={tab.label}
         />
       )}

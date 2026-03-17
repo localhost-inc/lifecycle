@@ -1,37 +1,20 @@
 import { describe, expect, test } from "bun:test";
-import {
-  readWorkspaceRoutePresentationState,
-  writeWorkspaceRouteDialogState,
-} from "./workspace-route-query-state";
+import { hasBlockingQueryError, hasBlockingQueryLoad } from "./workspace-route-query-state";
 
-describe("workspace route dialog query state", () => {
-  test("reads the changes dialog from generic route params", () => {
-    expect(
-      readWorkspaceRoutePresentationState("dialog=changes&dialog-focus=src%2Fapp.tsx"),
-    ).toEqual({
-      dialog: {
-        focusPath: "src/app.tsx",
-        kind: "changes",
-      },
-    });
+describe("workspace route query helpers", () => {
+  test("hasBlockingQueryLoad is true when loading with no data", () => {
+    expect(hasBlockingQueryLoad({ data: undefined, isLoading: true })).toBe(true);
   });
 
-  test("ignores unsupported dialog kinds", () => {
-    expect(readWorkspaceRoutePresentationState("dialog=history")).toEqual({
-      dialog: null,
-    });
+  test("hasBlockingQueryLoad is false once data is present", () => {
+    expect(hasBlockingQueryLoad({ data: {}, isLoading: true })).toBe(false);
   });
 
-  test("writes and clears generic workspace dialog params", () => {
-    expect(
-      writeWorkspaceRouteDialogState("tab=logs", {
-        focusPath: "README.md",
-        kind: "changes",
-      }).toString(),
-    ).toBe("tab=logs&dialog=changes&dialog-focus=README.md");
+  test("hasBlockingQueryError is true when errored with no data", () => {
+    expect(hasBlockingQueryError({ data: undefined, error: new Error("fail") })).toBe(true);
+  });
 
-    expect(writeWorkspaceRouteDialogState("tab=logs&dialog=changes", null).toString()).toBe(
-      "tab=logs",
-    );
+  test("hasBlockingQueryError is false when data is present despite error", () => {
+    expect(hasBlockingQueryError({ data: {}, error: new Error("fail") })).toBe(false);
   });
 });

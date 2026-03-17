@@ -11,7 +11,7 @@ import {
   type WorkspaceCanvasDocumentsByKey,
 } from "../state/workspace-canvas-state";
 
-export type RuntimeTab = {
+export type TerminalTab = {
   harnessProvider: HarnessProvider | null;
   kind: "terminal";
   key: string;
@@ -23,7 +23,7 @@ export type RuntimeTab = {
   terminalId: string;
 };
 
-export type WorkspaceCanvasTab = RuntimeTab | WorkspaceCanvasDocument;
+export type WorkspaceCanvasTab = TerminalTab | WorkspaceCanvasDocument;
 
 export type WorkspaceTabPlacement = "after" | "before";
 
@@ -45,20 +45,20 @@ export function orderWorkspaceTerminals(terminals: readonly TerminalRecord[]): T
 }
 
 export function resolveWorkspaceVisibleTabs(
-  runtimeTabs: readonly RuntimeTab[],
+  terminalTabs: readonly TerminalTab[],
   documentsByKey: WorkspaceCanvasDocumentsByKey,
   tabOrderKeys: readonly string[],
-  hiddenRuntimeTabKeys: readonly string[],
+  hiddenTerminalTabKeys: readonly string[],
 ): WorkspaceCanvasTab[] {
-  const hiddenRuntimeTabKeySet = new Set(hiddenRuntimeTabKeys);
-  const runtimeTabsByKey = new Map(runtimeTabs.map((tab) => [tab.key, tab]));
+  const hiddenTerminalTabKeySet = new Set(hiddenTerminalTabKeys);
+  const terminalTabsByKey = new Map(terminalTabs.map((tab) => [tab.key, tab]));
 
   return tabOrderKeys.reduce<WorkspaceCanvasTab[]>((visibleTabs, key) => {
-    if (hiddenRuntimeTabKeySet.has(key)) {
+    if (hiddenTerminalTabKeySet.has(key)) {
       return visibleTabs;
     }
 
-    const runtimeTab = runtimeTabsByKey.get(key);
+    const runtimeTab = terminalTabsByKey.get(key);
     if (runtimeTab) {
       visibleTabs.push(runtimeTab);
       return visibleTabs;
@@ -73,16 +73,16 @@ export function resolveWorkspaceVisibleTabs(
   }, []);
 }
 
-export function reconcileHiddenRuntimeTabKeys(
-  hiddenRuntimeTabKeys: readonly string[],
-  knownRuntimeTabKeys: readonly string[],
+export function reconcileHiddenTerminalTabKeys(
+  hiddenTerminalTabKeys: readonly string[],
+  knownTerminalTabKeys: readonly string[],
   terminalsReady: boolean,
 ): string[] {
   if (!terminalsReady) {
-    return [...hiddenRuntimeTabKeys];
+    return [...hiddenTerminalTabKeys];
   }
 
-  return hiddenRuntimeTabKeys.filter((key) => knownRuntimeTabKeys.includes(key));
+  return hiddenTerminalTabKeys.filter((key) => knownTerminalTabKeys.includes(key));
 }
 
 export function getRightmostWorkspaceTabKey(

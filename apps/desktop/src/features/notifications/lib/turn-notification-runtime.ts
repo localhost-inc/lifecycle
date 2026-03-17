@@ -2,6 +2,7 @@ import type { LifecycleEventOf } from "@lifecycle/contracts";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   isPermissionGranted as isTauriNotificationPermissionGranted,
+  onAction as onTauriNotificationAction,
   requestPermission as requestTauriNotificationPermission,
   sendNotification as sendTauriNotification,
 } from "@tauri-apps/plugin-notification";
@@ -23,8 +24,11 @@ function providerLabel(provider: string | null): string {
 }
 
 export interface TurnCompletionNotificationContext {
+  projectId?: string | null;
   projectName?: string | null;
   sessionTitle?: string | null;
+  terminalId?: string | null;
+  workspaceId?: string | null;
   workspaceName?: string | null;
 }
 
@@ -82,18 +86,42 @@ async function ensureTauriNotificationPermission(): Promise<boolean> {
   return (await requestTauriNotificationPermission()) === "granted";
 }
 
+export interface NotificationNavigationData {
+  projectId: string;
+  terminalId: string;
+  workspaceId: string;
+}
+
+function buildNavigationExtra(
+  context?: TurnCompletionNotificationContext,
+): NotificationNavigationData | null {
+  const projectId = context?.projectId;
+  const workspaceId = context?.workspaceId;
+  const terminalId = context?.terminalId;
+
+  if (!projectId || !workspaceId || !terminalId) {
+    return null;
+  }
+
+  return { projectId, terminalId, workspaceId };
+}
+
 export async function sendTurnCompletionNotification(
   event: LifecycleEventOf<"terminal.harness_turn_completed">,
   context?: TurnCompletionNotificationContext,
 ): Promise<void> {
   const notification = createTurnCompletionNotificationCopy(event, context);
+  const navigation = buildNavigationExtra(context);
 
   if (isTauri()) {
     if (!(await ensureTauriNotificationPermission())) {
       return;
     }
 
-    await sendTauriNotification(notification);
+    await sendTauriNotification({
+      ...notification,
+      extra: navigation ? { ...navigation } : undefined,
+    });
     return;
   }
 
@@ -101,7 +129,63 @@ export async function sendTurnCompletionNotification(
     return;
   }
 
-  new Notification(notification.title, { body: notification.body });
+  const browserNotification = new Notification(notification.title, { body: notification.body });
+  if (navigation) {
+    browserNotification.onclick = () => {
+      window.focus();
+      dispatchNotificationNavigation(navigation);
+    };
+  }
+}
+
+function dispatchNotificationNavigation(navigation: NotificationNavigationData): void {
+  window.dispatchEvent(
+    new CustomEvent("lifecycle:notification-navigate", { detail: navigation }),
+  );
+}
+
+/**
+ * Register a listener for notification click navigation events. Returns an
+ * unlisten function. In Tauri, this listens for native notification actions.
+ * In browser, this listens for the custom `lifecycle:notification-navigate` event.
+ */
+export async function listenForNotificationClicks(
+  callback: (navigation: NotificationNavigationData) => void,
+): Promise<() => void> {
+  const cleanups: Array<() => void> = [];
+
+  if (isTauri()) {
+    const listener = await onTauriNotificationAction((notification) => {
+      const extra = notification.extra as Record<string, unknown> | undefined;
+      const projectId = typeof extra?.projectId === "string" ? extra.projectId : null;
+      const workspaceId = typeof extra?.workspaceId === "string" ? extra.workspaceId : null;
+      const terminalId = typeof extra?.terminalId === "string" ? extra.terminalId : null;
+
+      if (projectId && workspaceId && terminalId) {
+        callback({ projectId, terminalId, workspaceId });
+      }
+    });
+    cleanups.push(() => listener.unregister());
+  }
+
+  // Also listen for browser-originated navigation events (used by browser Notification onclick)
+  const handleCustomEvent = (event: Event) => {
+    const detail = (event as CustomEvent<NotificationNavigationData>).detail;
+    if (detail.projectId && detail.workspaceId && detail.terminalId) {
+      callback(detail);
+    }
+  };
+
+  window.addEventListener("lifecycle:notification-navigate", handleCustomEvent);
+  cleanups.push(() =>
+    window.removeEventListener("lifecycle:notification-navigate", handleCustomEvent),
+  );
+
+  return () => {
+    for (const cleanup of cleanups) {
+      cleanup();
+    }
+  };
 }
 
 type AudioContextConstructor = typeof AudioContext;

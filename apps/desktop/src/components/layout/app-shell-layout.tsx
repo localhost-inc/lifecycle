@@ -9,8 +9,10 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { Outlet, useNavigate, useParams } from "react-router-dom";
+import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
+import { isTauri } from "@tauri-apps/api/core";
 import { AppHotkeyListener } from "../../app/app-hotkey-listener";
+import { isMacPlatform, shouldHandleDomAppHotkey } from "../../app/app-hotkeys";
 import { useAuthSession } from "../../features/auth/state/auth-session-provider";
 import { CommandPaletteProvider } from "../../features/command-palette";
 import { getGitStatus } from "../../features/git/api";
@@ -100,9 +102,12 @@ function safeClearWorkspaceUiState(workspaceId: string): void {
   }
 }
 
+export const LAST_PATH_STORAGE_KEY = "lifecycle.desktop.last-path";
+
 export function AppShellLayout() {
   const client = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
   const { projectId } = useParams();
   const shellViewportRef = useRef<HTMLDivElement | null>(null);
   const projectCatalogQuery = useProjectCatalog();
@@ -245,6 +250,16 @@ export function AppShellLayout() {
 
     writeLastProjectId(projectId);
   }, [projectId, projects]);
+
+  useEffect(() => {
+    if (location.pathname !== "/") {
+      try {
+        localStorage.setItem(LAST_PATH_STORAGE_KEY, location.pathname);
+      } catch {
+        // best-effort persistence
+      }
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!activeSidebarResize) {
@@ -569,18 +584,27 @@ export function AppShellLayout() {
     [sidebarBounds],
   );
 
+  const handleSelectProjectIndex = useCallback(
+    (index: number) => {
+      const target = index <= projects.length ? projects[index - 1] : projects[projects.length - 1];
+      if (target) {
+        void navigate(`/projects/${target.id}`);
+      }
+    },
+    [navigate, projects],
+  );
+
   useShortcutRegistration({
+    enabled: shouldHandleDomAppHotkey("select-project-index", {
+      isTauriApp: isTauri(),
+      macPlatform: isMacPlatform(),
+    }),
     handler: useCallback(
       (match) => {
-        const index = match.index ?? 1;
-        const target = index <= projects.length ? projects[index - 1] : projects[projects.length - 1];
-        if (!target) {
-          return true;
-        }
-        void navigate(`/projects/${target.id}`);
+        handleSelectProjectIndex(match.index ?? 1);
         return true;
       },
-      [navigate, projects],
+      [handleSelectProjectIndex],
     ),
     id: "project.select-index",
     priority: SHORTCUT_HANDLER_PRIORITY.app,
@@ -618,7 +642,7 @@ export function AppShellLayout() {
   if (projectCatalogQuery.isLoading && !projectCatalogQuery.data) {
     return (
       <div className="flex h-full w-full bg-[var(--background)]">
-        <AppHotkeyListener />
+        <AppHotkeyListener onSelectProjectIndex={handleSelectProjectIndex} />
         <Loading />
       </div>
     );
@@ -627,7 +651,7 @@ export function AppShellLayout() {
   if (allProjects.length === 0) {
     return (
       <div className="flex h-full w-full bg-[var(--background)] text-[var(--foreground)]">
-        <AppHotkeyListener />
+        <AppHotkeyListener onSelectProjectIndex={handleSelectProjectIndex} />
         <WelcomeScreen onAddProject={handleAddProject} />
       </div>
     );
@@ -640,7 +664,7 @@ export function AppShellLayout() {
           ref={shellViewportRef}
           className="flex h-full w-full flex-row bg-[var(--background)] text-[var(--foreground)]"
         >
-          <AppHotkeyListener />
+          <AppHotkeyListener onSelectProjectIndex={handleSelectProjectIndex} />
 
           {/* App sidebar */}
           <AppSidebar

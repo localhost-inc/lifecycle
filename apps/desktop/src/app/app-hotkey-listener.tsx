@@ -7,19 +7,24 @@ import {
   shouldHandleDomAppHotkey,
   subscribeToAppHotkeyEvents,
   type AppHotkeyAction,
+  type AppHotkeyEvent,
 } from "./app-hotkeys";
 import { SHORTCUT_HANDLER_PRIORITY, useShortcutRegistration } from "./shortcuts/shortcut-router";
 
-export function AppHotkeyListener() {
+interface AppHotkeyListenerProps {
+  onSelectProjectIndex?: (index: number) => void;
+}
+
+export function AppHotkeyListener({ onSelectProjectIndex }: AppHotkeyListenerProps = {}) {
   const location = useLocation();
   const navigate = useNavigate();
   const tauriApp = isTauri();
   const macPlatform = isMacPlatform();
   const commandPalette = useContext(CommandPaletteContext);
 
-  const handleAction = useCallback(
-    (action: AppHotkeyAction) => {
-      switch (action) {
+  const handleEvent = useCallback(
+    (event: AppHotkeyEvent) => {
+      switch (event.action) {
         case "open-settings":
           if (location.pathname !== "/settings") {
             void navigate("/settings");
@@ -33,9 +38,14 @@ export function AppHotkeyListener() {
             commandPalette.toggle("files");
           }
           return;
+        case "select-project-index":
+          if (event.index != null) {
+            onSelectProjectIndex?.(event.index);
+          }
+          return;
       }
     },
-    [commandPalette, location.pathname, navigate],
+    [commandPalette, location.pathname, navigate, onSelectProjectIndex],
   );
 
   useShortcutRegistration({
@@ -44,7 +54,7 @@ export function AppHotkeyListener() {
       macPlatform,
     }),
     handler: () => {
-      handleAction("open-settings");
+      handleEvent({ action: "open-settings", index: null, source: "menu" });
     },
     id: "app.open-settings",
     priority: SHORTCUT_HANDLER_PRIORITY.app,
@@ -56,7 +66,7 @@ export function AppHotkeyListener() {
       macPlatform,
     }),
     handler: () => {
-      handleAction("open-command-palette");
+      handleEvent({ action: "open-command-palette", index: null, source: "menu" });
     },
     id: "app.open-command-palette",
     priority: SHORTCUT_HANDLER_PRIORITY.app,
@@ -68,7 +78,7 @@ export function AppHotkeyListener() {
       macPlatform,
     }),
     handler: () => {
-      handleAction("open-file-picker");
+      handleEvent({ action: "open-file-picker", index: null, source: "menu" });
     },
     id: "app.open-file-picker",
     priority: SHORTCUT_HANDLER_PRIORITY.app,
@@ -80,7 +90,7 @@ export function AppHotkeyListener() {
 
     void subscribeToAppHotkeyEvents((event) => {
       if (!disposed) {
-        handleAction(event.action);
+        handleEvent(event);
       }
     }).then((cleanup) => {
       if (disposed) {
@@ -95,7 +105,7 @@ export function AppHotkeyListener() {
       disposed = true;
       unlisten?.();
     };
-  }, [handleAction]);
+  }, [handleEvent]);
 
   return null;
 }

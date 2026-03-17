@@ -27,11 +27,12 @@ import {
   requireWorkspacePane,
 } from "../lib/workspace-pane-layout";
 import { formatWorkspaceError } from "../lib/workspace-errors";
+import { consumePendingTerminalFocus } from "../../notifications/lib/notification-navigation";
 import {
   getWorkspaceDocument,
-  isRuntimeTabKey,
+  isTerminalTabKey,
   listWorkspaceDocuments,
-  listWorkspaceHiddenRuntimeTabKeys,
+  listWorkspaceHiddenTerminalTabKeys,
   listWorkspacePaneTabSnapshots,
   listWorkspaceTabViewStateByKey,
   readWorkspaceCanvasState,
@@ -60,17 +61,17 @@ import {
   areStringArraysEqual,
   getWorkspaceAdjacentTabKey,
   orderWorkspaceTerminals,
-  reconcileHiddenRuntimeTabKeys,
+  reconcileHiddenTerminalTabKeys,
   resolveWorkspaceVisibleTabs,
-  type RuntimeTab,
+  type TerminalTab,
 } from "./workspace-canvas-tabs";
 import {
-  getWorkspaceInactiveRuntimeTerminalIds,
-  getWorkspaceLiveRuntimeTabKeys,
-  getWorkspacePaneIdsWaitingForSelectedRuntimeTab,
+  getWorkspaceInactiveTerminalIds,
+  getWorkspaceLiveTerminalTabKeys,
+  getWorkspacePaneIdsWaitingForSelectedTerminalTab,
   getWorkspaceRenderedPaneActiveTabKeys,
-  getWorkspaceUnassignedLiveRuntimeTabKeys,
-} from "./workspace-canvas-runtime-state";
+  getWorkspaceUnassignedLiveTerminalTabKeys,
+} from "./workspace-canvas-terminal-state";
 import { closeWorkspacePaneTabs } from "./workspace-pane-close";
 
 export interface WorkspaceCanvasControllerInput {
@@ -96,6 +97,7 @@ export function useWorkspaceCanvasController({
     null,
   );
   const [error, setError] = useState<string | null>(null);
+  const [zoomedTabKey, setZoomedTabKey] = useState<string | null>(null);
   const [documentVisible, setDocumentVisible] = useState(() =>
     typeof document === "undefined" ? true : document.visibilityState === "visible",
   );
@@ -115,7 +117,7 @@ export function useWorkspaceCanvasController({
       ),
     [terminalSnapshot],
   );
-  const runtimeTabs = useMemo<RuntimeTab[]>(
+  const terminalTabs = useMemo<TerminalTab[]>(
     () =>
       terminals.map((terminal) => ({
         harnessProvider: terminal.harness_provider as HarnessProvider | null,
@@ -130,11 +132,11 @@ export function useWorkspaceCanvasController({
       })),
     [isTerminalResponseReady, isTerminalTurnRunning, terminals],
   );
-  const liveRuntimeTabKeys = useMemo(
-    () => getWorkspaceLiveRuntimeTabKeys(runtimeTabs),
-    [runtimeTabs],
+  const liveTerminalTabKeys = useMemo(
+    () => getWorkspaceLiveTerminalTabKeys(terminalTabs),
+    [terminalTabs],
   );
-  const liveRuntimeTabKeySet = useMemo(() => new Set(liveRuntimeTabKeys), [liveRuntimeTabKeys]);
+  const liveTerminalTabKeySet = useMemo(() => new Set(liveTerminalTabKeys), [liveTerminalTabKeys]);
   const paneLayout = useMemo(() => inspectWorkspacePaneLayout(state.rootPane), [state.rootPane]);
   const paneSnapshots = useMemo(
     () => listWorkspacePaneTabSnapshots(state.rootPane, state.paneTabStateById),
@@ -144,8 +146,8 @@ export function useWorkspaceCanvasController({
     () => listWorkspaceDocuments(state.documentsByKey),
     [state.documentsByKey],
   );
-  const hiddenRuntimeTabKeys = useMemo(
-    () => listWorkspaceHiddenRuntimeTabKeys(state.tabStateByKey),
+  const hiddenTerminalTabKeys = useMemo(
+    () => listWorkspaceHiddenTerminalTabKeys(state.tabStateByKey),
     [state.tabStateByKey],
   );
   const viewStateByTabKey = useMemo(
@@ -163,29 +165,29 @@ export function useWorkspaceCanvasController({
         paneSnapshots.map((pane) => [
           pane.id,
           resolveWorkspaceVisibleTabs(
-            runtimeTabs,
+            terminalTabs,
             state.documentsByKey,
             pane.tabOrderKeys,
-            hiddenRuntimeTabKeys,
+            hiddenTerminalTabKeys,
           ),
         ]),
       ),
-    [hiddenRuntimeTabKeys, paneSnapshots, runtimeTabs, state.documentsByKey],
+    [hiddenTerminalTabKeys, paneSnapshots, terminalTabs, state.documentsByKey],
   );
   const renderedActiveTabKeyByPaneId = useMemo(
     () => getWorkspaceRenderedPaneActiveTabKeys(paneSnapshots, visibleTabsByPaneId),
     [paneSnapshots, visibleTabsByPaneId],
   );
-  const inactiveRuntimeTerminalIds = useMemo(
-    () => getWorkspaceInactiveRuntimeTerminalIds(liveRuntimeTabKeys, renderedActiveTabKeyByPaneId),
-    [liveRuntimeTabKeys, renderedActiveTabKeyByPaneId],
+  const inactiveTerminalIds = useMemo(
+    () => getWorkspaceInactiveTerminalIds(liveTerminalTabKeys, renderedActiveTabKeyByPaneId),
+    [liveTerminalTabKeys, renderedActiveTabKeyByPaneId],
   );
   const activePaneVisibleTabs = activePane ? (visibleTabsByPaneId[activePane.id] ?? []) : [];
   const activePaneVisibleTabKeys = useMemo(
     () => activePaneVisibleTabs.map((tab) => tab.key),
     [activePaneVisibleTabs],
   );
-  const knownRuntimeTabKeys = useMemo(
+  const knownTerminalTabKeys = useMemo(
     () => terminalSnapshot.map((terminal) => `terminal:${terminal.id}`),
     [terminalSnapshot],
   );
@@ -195,16 +197,16 @@ export function useWorkspaceCanvasController({
   );
   const activeTabKey = activePane ? (renderedActiveTabKeyByPaneId[activePane.id] ?? null) : null;
   const activeTerminalId =
-    activeTabKey && isRuntimeTabKey(activeTabKey) ? activeTabKey.slice("terminal:".length) : null;
-  const renderedRuntimeTerminalIdSetRef = useRef<Set<string>>(new Set());
-  const paneIdsWaitingForSelectedRuntimeTab = useMemo(
+    activeTabKey && isTerminalTabKey(activeTabKey) ? activeTabKey.slice("terminal:".length) : null;
+  const renderedTerminalIdSetRef = useRef<Set<string>>(new Set());
+  const paneIdsWaitingForSelectedTerminalTab = useMemo(
     () =>
-      getWorkspacePaneIdsWaitingForSelectedRuntimeTab(
+      getWorkspacePaneIdsWaitingForSelectedTerminalTab(
         paneSnapshots,
         visibleTabsByPaneId,
-        liveRuntimeTabKeySet,
+        liveTerminalTabKeySet,
       ),
-    [liveRuntimeTabKeySet, paneSnapshots, visibleTabsByPaneId],
+    [liveTerminalTabKeySet, paneSnapshots, visibleTabsByPaneId],
   );
   const openFileTabKeys = useMemo(
     () =>
@@ -253,39 +255,39 @@ export function useWorkspaceCanvasController({
   }, []);
 
   useEffect(() => {
-    const nextHiddenRuntimeTabKeys = reconcileHiddenRuntimeTabKeys(
-      hiddenRuntimeTabKeys,
-      knownRuntimeTabKeys,
+    const nextHiddenTerminalTabKeys = reconcileHiddenTerminalTabKeys(
+      hiddenTerminalTabKeys,
+      knownTerminalTabKeys,
       true,
     );
 
-    if (!areStringArraysEqual(hiddenRuntimeTabKeys, nextHiddenRuntimeTabKeys)) {
+    if (!areStringArraysEqual(hiddenTerminalTabKeys, nextHiddenTerminalTabKeys)) {
       dispatch({
-        keys: nextHiddenRuntimeTabKeys,
-        kind: "set-hidden-runtime-tab-keys",
+        keys: nextHiddenTerminalTabKeys,
+        kind: "set-hidden-terminal-tab-keys",
       });
     }
-  }, [hiddenRuntimeTabKeys, knownRuntimeTabKeys]);
+  }, [hiddenTerminalTabKeys, knownTerminalTabKeys]);
 
   useEffect(() => {
-    const unassignedRuntimeKeys = getWorkspaceUnassignedLiveRuntimeTabKeys(
-      liveRuntimeTabKeys,
+    const unassignedTerminalKeys = getWorkspaceUnassignedLiveTerminalTabKeys(
+      liveTerminalTabKeys,
       assignedPaneTabKeys,
-      hiddenRuntimeTabKeys,
+      hiddenTerminalTabKeys,
     );
-    if (unassignedRuntimeKeys.length === 0) {
+    if (unassignedTerminalKeys.length === 0) {
       return;
     }
 
-    for (const key of unassignedRuntimeKeys) {
+    for (const key of unassignedTerminalKeys) {
       dispatch({
         key,
-        kind: "show-runtime-tab",
+        kind: "show-terminal-tab",
         paneId: activePaneId,
         select: false,
       });
     }
-  }, [activePaneId, assignedPaneTabKeys, hiddenRuntimeTabKeys, liveRuntimeTabKeys]);
+  }, [activePaneId, assignedPaneTabKeys, hiddenTerminalTabKeys, liveTerminalTabKeys]);
 
   useEffect(() => {
     if (!activeTerminalId || !documentVisible) {
@@ -300,21 +302,21 @@ export function useWorkspaceCanvasController({
   }, [activeTerminalId, clearTerminalResponseReady, documentVisible, isTerminalResponseReady]);
 
   useEffect(() => {
-    renderedRuntimeTerminalIdSetRef.current = new Set(
+    renderedTerminalIdSetRef.current = new Set(
       Object.values(renderedActiveTabKeyByPaneId).flatMap((key) =>
-        key && isRuntimeTabKey(key) ? [key.slice("terminal:".length)] : [],
+        key && isTerminalTabKey(key) ? [key.slice("terminal:".length)] : [],
       ),
     );
   }, [renderedActiveTabKeyByPaneId]);
 
   useEffect(() => {
-    if (inactiveRuntimeTerminalIds.length === 0) {
+    if (inactiveTerminalIds.length === 0) {
       return;
     }
 
     const frameId = window.requestAnimationFrame(() => {
-      for (const terminalId of inactiveRuntimeTerminalIds) {
-        if (renderedRuntimeTerminalIdSetRef.current.has(terminalId)) {
+      for (const terminalId of inactiveTerminalIds) {
+        if (renderedTerminalIdSetRef.current.has(terminalId)) {
           continue;
         }
 
@@ -327,7 +329,7 @@ export function useWorkspaceCanvasController({
     return () => {
       window.cancelAnimationFrame(frameId);
     };
-  }, [inactiveRuntimeTerminalIds]);
+  }, [inactiveTerminalIds]);
 
   const handleSelectPane = useCallback((paneId: string) => {
     dispatch({ kind: "select-pane", paneId });
@@ -340,7 +342,7 @@ export function useWorkspaceCanvasController({
       }
 
       releaseWebviewFocus();
-      if (isRuntimeTabKey(key)) {
+      if (isTerminalTabKey(key)) {
         clearTerminalResponseReady(key.slice("terminal:".length));
       }
       dispatch({ key, kind: "select-tab", paneId });
@@ -375,11 +377,11 @@ export function useWorkspaceCanvasController({
     [workspaceId],
   );
 
-  const handleShowRuntimeTab = useCallback(
+  const handleShowTerminalTab = useCallback(
     (terminalId: string, paneId?: string) => {
       releaseWebviewFocus();
       clearTerminalResponseReady(terminalId);
-      dispatch({ key: `terminal:${terminalId}`, kind: "show-runtime-tab", paneId, select: true });
+      dispatch({ key: `terminal:${terminalId}`, kind: "show-terminal-tab", paneId, select: true });
     },
     [clearTerminalResponseReady],
   );
@@ -407,14 +409,14 @@ export function useWorkspaceCanvasController({
               });
         client.invalidate(terminalKeys.byWorkspace(workspaceId));
         client.invalidate(terminalKeys.detail(terminal.id));
-        handleShowRuntimeTab(terminal.id, paneId);
+        handleShowTerminalTab(terminal.id, paneId);
       } catch (createError) {
         setError(formatWorkspaceError(createError, "Failed to create session."));
       } finally {
         setCreatingSelection(null);
       }
     },
-    [client, handleShowRuntimeTab, harnesses, workspaceId],
+    [client, handleShowTerminalTab, harnesses, workspaceId],
   );
 
   const handleLaunchSurface = useCallback(
@@ -458,7 +460,7 @@ export function useWorkspaceCanvasController({
     [creatingSelection],
   );
 
-  const closeRuntimeTab = useCallback(
+  const closeTerminalTab = useCallback(
     async (tabKey: string, terminalId: string) => {
       try {
         await detachTerminal(terminalId);
@@ -466,7 +468,7 @@ export function useWorkspaceCanvasController({
         client.invalidate(terminalKeys.detail(terminalId));
         dispatch({
           key: tabKey,
-          kind: "hide-runtime-tab",
+          kind: "hide-terminal-tab",
         });
         return true;
       } catch (closeError) {
@@ -506,20 +508,20 @@ export function useWorkspaceCanvasController({
       const didClosePaneTabs = await closeWorkspacePaneTabs(visibleTabsByPaneId[paneId] ?? [], {
         collapseEmptyPane: () => {},
         closeDocumentTab,
-        closeRuntimeTab,
+        closeTerminalTab,
       });
       if (didClosePaneTabs) {
         collapseWorkspacePane(paneId);
       }
     },
-    [closeDocumentTab, closeRuntimeTab, collapseWorkspacePane, visibleTabsByPaneId],
+    [closeDocumentTab, closeTerminalTab, collapseWorkspacePane, visibleTabsByPaneId],
   );
 
-  const handleCloseRuntimeTab = useCallback(
+  const handleCloseTerminalTab = useCallback(
     async (tabKey: string, terminalId: string) => {
-      await closeRuntimeTab(tabKey, terminalId);
+      await closeTerminalTab(tabKey, terminalId);
     },
-    [closeRuntimeTab],
+    [closeTerminalTab],
   );
 
   const handleCloseDocumentTab = useCallback(
@@ -568,7 +570,7 @@ export function useWorkspaceCanvasController({
 
           closeShortcutHandledAtRef.current = Date.now();
           if (activeTab.kind === "terminal") {
-            void handleCloseRuntimeTab(activeTab.key, activeTab.terminalId);
+            void handleCloseTerminalTab(activeTab.key, activeTab.terminalId);
             return true;
           }
 
@@ -597,6 +599,10 @@ export function useWorkspaceCanvasController({
           }
           return true;
         }
+        case "reopen-closed-tab": {
+          dispatch({ kind: "reopen-closed-tab" });
+          return true;
+        }
       }
     },
     [
@@ -607,7 +613,7 @@ export function useWorkspaceCanvasController({
       closeWorkspacePane,
       defaultNewTabLaunch,
       handleCloseDocumentTab,
-      handleCloseRuntimeTab,
+      handleCloseTerminalTab,
       handleCreateTerminal,
       onCloseWorkspaceTab,
       paneLayout.paneCount,
@@ -627,6 +633,12 @@ export function useWorkspaceCanvasController({
       return handleWorkspaceTabHotkeyAction({ kind: "close-active-tab" });
     },
     id: "workspace.close-active-tab",
+    priority: SHORTCUT_HANDLER_PRIORITY.workspace,
+  });
+
+  useShortcutRegistration({
+    handler: () => handleWorkspaceTabHotkeyAction({ kind: "reopen-closed-tab" }),
+    id: "workspace.reopen-closed-tab",
     priority: SHORTCUT_HANDLER_PRIORITY.workspace,
   });
 
@@ -733,6 +745,28 @@ export function useWorkspaceCanvasController({
     };
   }, [activePaneVisibleTabs.length, activeTabKey, handleWorkspaceTabHotkeyAction]);
 
+  useEffect(() => {
+    const handleFocusTerminal = (event: Event) => {
+      const detail = (event as CustomEvent<{ workspaceId: string; terminalId: string }>).detail;
+      if (detail.workspaceId !== workspaceId) {
+        return;
+      }
+
+      handleShowTerminalTab(detail.terminalId);
+    };
+
+    window.addEventListener("lifecycle:focus-terminal", handleFocusTerminal);
+    return () => window.removeEventListener("lifecycle:focus-terminal", handleFocusTerminal);
+  }, [handleShowTerminalTab, workspaceId]);
+
+  // Consume pending terminal focus from notification clicks
+  useEffect(() => {
+    const terminalId = consumePendingTerminalFocus(workspaceId);
+    if (terminalId) {
+      handleShowTerminalTab(terminalId);
+    }
+  }, [handleShowTerminalTab, workspaceId]);
+
   const handleMoveTabToPane = useCallback(
     (
       key: string,
@@ -756,7 +790,7 @@ export function useWorkspaceCanvasController({
           splitId: createWorkspaceSplitId(),
         });
         dispatch({
-          emptySourcePanePolicy: "preserve",
+          emptySourcePanePolicy: "close",
           key,
           kind: "move-tab-to-pane",
           sourcePaneId,
@@ -778,7 +812,7 @@ export function useWorkspaceCanvasController({
     [],
   );
 
-  const handleRenameRuntimeTab = useCallback((terminalId: string, label: string) => {
+  const handleRenameTerminalTab = useCallback((terminalId: string, label: string) => {
     return renameTerminal(terminalId, label);
   }, []);
 
@@ -801,6 +835,60 @@ export function useWorkspaceCanvasController({
     });
   }, []);
 
+  const handleToggleZoom = useCallback(() => {
+    setZoomedTabKey((current) => {
+      if (current !== null) {
+        return null;
+      }
+      return activeTabKey;
+    });
+  }, [activeTabKey]);
+
+  const handleUnzoom = useCallback(() => {
+    setZoomedTabKey(null);
+  }, []);
+
+  // Auto-clear zoom when zoomed tab no longer exists in any pane
+  useEffect(() => {
+    if (zoomedTabKey === null) {
+      return;
+    }
+
+    const allVisibleTabKeys = new Set(
+      Object.values(visibleTabsByPaneId).flatMap((tabs) => tabs.map((tab) => tab.key)),
+    );
+
+    if (!allVisibleTabKeys.has(zoomedTabKey)) {
+      setZoomedTabKey(null);
+    }
+  }, [visibleTabsByPaneId, zoomedTabKey]);
+
+  useShortcutRegistration({
+    handler: () => {
+      handleToggleZoom();
+      return true;
+    },
+    id: "workspace.toggle-zoom",
+    priority: SHORTCUT_HANDLER_PRIORITY.workspace,
+  });
+
+  // Escape to unzoom
+  useEffect(() => {
+    if (zoomedTabKey === null) {
+      return;
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        event.preventDefault();
+        handleUnzoom();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handleUnzoom, zoomedTabKey]);
+
   return {
     activePaneId,
     creatingSelection,
@@ -810,18 +898,19 @@ export function useWorkspaceCanvasController({
     fileSessionsByTabKey,
     handleActiveTabViewStateChange,
     handleCloseDocumentTab,
-    handleCloseRuntimeTab,
+    handleCloseTerminalTab,
     handleCreateTerminal,
     handleFileSessionStateChange,
     handleLaunchSurface,
     handleMoveTabToPane,
     handleOpenFile,
-    handleRenameRuntimeTab,
+    handleRenameTerminalTab,
     handleSelectPane,
     handleSelectTab,
     handleReconcilePaneVisibleTabOrder,
     handleSetSplitRatio,
     handleSplitPane,
+    handleToggleZoom,
     inactivePaneOpacity,
     paneCount: paneLayout.paneCount,
     renderedActiveTabKeyByPaneId,
@@ -830,7 +919,8 @@ export function useWorkspaceCanvasController({
     terminals,
     viewStateByTabKey,
     visibleTabsByPaneId,
-    paneIdsWaitingForSelectedRuntimeTab,
+    paneIdsWaitingForSelectedTerminalTab,
     workspaceId,
+    zoomedTabKey,
   };
 }

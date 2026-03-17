@@ -11,8 +11,9 @@ import {
   SelectTrigger,
   SelectValue,
   SetupProgress,
+  Spinner,
 } from "@lifecycle/ui";
-import { ExternalLink, FileJson, Layers, Loader2, Logs, Play, TerminalSquare } from "lucide-react";
+import { ExternalLink, FileJson, Layers, Logs, Play, TerminalSquare } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useState } from "react";
 import { EnvironmentSection } from "./environment-section";
@@ -266,10 +267,7 @@ export function ServiceRow({
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <div className="flex size-3.5 shrink-0 items-center justify-center">
             {service.status === "starting" ? (
-              <Loader2
-                className="size-3.5 animate-spin text-[var(--status-info)]"
-                strokeWidth={2.5}
-              />
+              <Spinner className="size-3.5 text-[var(--status-info)]" />
             ) : (
               <span className="inline-block size-[7px] rounded-full" style={styles.dotStyle} />
             )}
@@ -292,7 +290,7 @@ export function ServiceRow({
               <p
                 className="mt-1 text-[10px]"
                 style={{
-                  color: "color-mix(in srgb, var(--status-danger) 70%, var(--muted-foreground))",
+                  color: "var(--status-danger)",
                 }}
               >
                 {statusReasonLabel}
@@ -327,7 +325,7 @@ export function ServiceRow({
             title={`Run ${service.service_name} and its dependencies`}
           >
             {runPending ? (
-              <Loader2 className="size-3.5 animate-spin" strokeWidth={2.4} />
+              <Spinner className="size-3.5" />
             ) : (
               <Play className="size-3.5 fill-current" strokeWidth={2.4} />
             )}
@@ -487,7 +485,7 @@ export function ServicesTab({
       <div className="flex flex-col gap-4">
         {environmentTasks.length > 0 ? (
           <EnvironmentSection
-            icon={<Loader2 className="size-3.5" strokeWidth={2.2} />}
+            icon={<Spinner className="size-3.5" />}
             title="Environment tasks"
           >
             <SetupProgress expandOutputByDefault steps={environmentTasks} />

@@ -20,15 +20,39 @@ export interface CodexHarnessLaunchConfig {
 }
 
 export const codexSandboxModeOptions = [
-  { label: "Read-only", value: "read-only" as const },
-  { label: "Workspace write", value: "workspace-write" as const },
-  { label: "Danger full access", value: "danger-full-access" as const },
+  {
+    description: "Can read everything but cannot write any files.",
+    label: "Read-only",
+    value: "read-only" as const,
+  },
+  {
+    description: "Can read everything, but writes are limited to the workspace directory.",
+    label: "Workspace write",
+    value: "workspace-write" as const,
+  },
+  {
+    description: "Full filesystem access with no restrictions.",
+    label: "Full access",
+    value: "danger-full-access" as const,
+  },
 ] as const;
 
 export const codexApprovalPolicyOptions = [
-  { label: "Untrusted", value: "untrusted" as const },
-  { label: "On request", value: "on-request" as const },
-  { label: "Never", value: "never" as const },
+  {
+    description: "Codex asks before every action that modifies files or runs commands.",
+    label: "Untrusted",
+    value: "untrusted" as const,
+  },
+  {
+    description: "Codex proceeds automatically until it needs human input.",
+    label: "On request",
+    value: "on-request" as const,
+  },
+  {
+    description: "Codex never pauses for approval. Use only in trusted environments.",
+    label: "Never",
+    value: "never" as const,
+  },
 ] as const;
 
 const validCodexSandboxModes = new Set<string>(

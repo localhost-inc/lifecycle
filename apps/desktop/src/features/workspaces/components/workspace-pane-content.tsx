@@ -25,7 +25,6 @@ interface WorkspacePaneContentProps {
   creatingSelection: "shell" | HarnessProvider | null;
   documents: WorkspaceCanvasDocument[];
   hasVisibleTabs: boolean;
-  nativeTerminalsSuppressed?: boolean;
   onFileSessionStateChange: (tabKey: string, state: FileViewerSessionState | null) => void;
   onCreateTerminal: (input: CreateTerminalRequest) => Promise<void>;
   onOpenFile: (filePath: string) => void;
@@ -34,7 +33,7 @@ interface WorkspacePaneContentProps {
   paneFocused: boolean;
   surfaceOpacity: number;
   terminals: TerminalRecord[];
-  waitingForSelectedRuntimeTab: boolean;
+  waitingForSelectedTerminalTab: boolean;
   workspaceId: string;
 }
 
@@ -45,7 +44,6 @@ export function WorkspacePaneContent({
   creatingSelection,
   documents,
   hasVisibleTabs,
-  nativeTerminalsSuppressed = false,
   onFileSessionStateChange,
   onCreateTerminal,
   onOpenFile,
@@ -54,11 +52,11 @@ export function WorkspacePaneContent({
   paneFocused,
   surfaceOpacity,
   terminals,
-  waitingForSelectedRuntimeTab,
+  waitingForSelectedTerminalTab,
   workspaceId,
 }: WorkspacePaneContentProps) {
   if (!hasVisibleTabs) {
-    return waitingForSelectedRuntimeTab ? (
+    return waitingForSelectedTerminalTab ? (
       <EmptyState
         description="Lifecycle is opening your selected terminal tab."
         icon={<TerminalSquare />}
@@ -103,21 +101,14 @@ export function WorkspacePaneContent({
       role="tabpanel"
     >
       {activeTerminal ? (
-        nativeTerminalsSuppressed ? (
-          <div
-            className="flex min-h-0 flex-1 flex-col bg-[var(--terminal-surface-background)]"
-            data-slot="terminal-surface-suppressed"
+        <div className="flex min-h-0 flex-1 flex-col bg-[var(--terminal-surface-background)]">
+          <TerminalSurface
+            focused={paneFocused}
+            opacity={surfaceOpacity}
+            tabDragInProgress={paneDragInProgress}
+            terminal={activeTerminal}
           />
-        ) : (
-          <div className="flex min-h-0 flex-1 flex-col bg-[var(--terminal-surface-background)]">
-            <TerminalSurface
-              focused={paneFocused}
-              opacity={surfaceOpacity}
-              tabDragInProgress={paneDragInProgress}
-              terminal={activeTerminal}
-            />
-          </div>
-        )
+        </div>
       ) : activeDocument && isChangesDiffDocument(activeDocument) ? (
         <GitDiffSurface
           initialScrollTop={activeTabViewState?.scrollTop ?? 0}

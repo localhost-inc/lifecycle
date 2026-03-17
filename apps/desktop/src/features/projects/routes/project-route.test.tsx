@@ -70,8 +70,8 @@ function renderProjectRoute(
   }
 
   // Render an index child route stub so the Outlet inside ProjectRoute can render something
-  function OverviewStub() {
-    return <main data-slot="project-page">Overview Surface</main>;
+  function IndexStub() {
+    return <main data-slot="index-redirect">Index Redirect</main>;
   }
 
   function WorkspaceStub() {
@@ -94,7 +94,7 @@ function renderProjectRoute(
                   element: createElement(ProjectRoute),
                   path: "/projects/:projectId",
                 },
-                createElement(Route, { index: true, element: createElement(OverviewStub) }),
+                createElement(Route, { index: true, element: createElement(IndexStub) }),
                 createElement(Route, {
                   path: "workspaces/:workspaceId",
                   element: createElement(WorkspaceStub),
@@ -120,9 +120,9 @@ describe("ProjectRoute", () => {
 
     expect(markup).toContain('data-slot="project-nav-bar"');
     expect(markup).toContain('data-slot="project-shell"');
-    expect(markup).toContain('data-slot="project-page"');
+    expect(markup).toContain('data-slot="index-redirect"');
     expect(markup.indexOf('data-slot="project-nav-bar"')).toBeLessThan(
-      markup.indexOf('data-slot="project-page"'),
+      markup.indexOf('data-slot="index-redirect"'),
     );
   });
 
@@ -139,7 +139,6 @@ describe("ProjectRoute", () => {
     expect(markup).toContain('data-slot="workspace-layout"');
     expect(markup).toContain('aria-label="Fork workspace"');
     expect(markup).toContain('aria-label="Destroy workspace"');
-    expect(markup).not.toContain('title="Toggle extension panel"');
 
     const navBarStart = markup.indexOf('data-slot="project-nav-bar"');
     const forkIndex = markup.indexOf('aria-label="Fork workspace"');

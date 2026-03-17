@@ -1,5 +1,6 @@
 import { Navigate, useOutletContext } from "react-router-dom";
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
+import { LAST_PATH_STORAGE_KEY } from "../../../components/layout/app-shell-layout";
 import { readLastProjectId } from "../state/project-content-tabs";
 import { readLastWorkspaceId } from "../../workspaces/state/workspace-canvas-state";
 import type { AppShellOutletContext } from "../../../components/layout/app-shell-context";
@@ -20,12 +21,32 @@ function safeReadLastWorkspaceId(): string | null {
   }
 }
 
+function safeReadLastPath(): string | null {
+  try {
+    return localStorage.getItem(LAST_PATH_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 export function resolveHomeRouteTarget(
   projects: ProjectRecord[],
   workspacesByProjectId: Record<string, WorkspaceRecord[]>,
   lastWorkspaceId: string | null,
   lastProjectId: string | null,
+  lastPath: string | null,
 ): string | null {
+  // Prefer the stored full path when it still points to a valid project
+  if (lastPath && lastPath !== "/") {
+    const projectIdMatch = lastPath.match(/^\/projects\/([^/]+)/);
+    if (projectIdMatch) {
+      const pathProjectId = projectIdMatch[1];
+      if (projects.some((project) => project.id === pathProjectId)) {
+        return lastPath;
+      }
+    }
+  }
+
   const lastProject =
     lastProjectId !== null
       ? (projects.find((project) => project.id === lastProjectId) ?? null)
@@ -59,6 +80,7 @@ export function HomeRoute() {
     workspacesByProjectId,
     safeReadLastWorkspaceId(),
     safeReadLastProjectId(),
+    safeReadLastPath(),
   );
 
   if (nextTarget) {

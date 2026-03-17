@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { TabChip } from "./tab-chip";
 
 describe("TabChip", () => {
-  test("renders active tabs edge-to-edge with a bottom accent instead of a pill", () => {
+  test("renders active tabs edge-to-edge with a surface background", () => {
     const markup = renderToStaticMarkup(
       createElement(TabChip, {
         active: true,
@@ -13,9 +13,6 @@ describe("TabChip", () => {
       }),
     );
 
-    expect(markup).toContain(
-      'class="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-[var(--accent)]"',
-    );
     expect(markup).toContain("bg-[var(--surface)]");
     expect(markup).not.toContain("shadow-[var(--tab-shadow)]");
     expect(markup).not.toContain("rounded-md");

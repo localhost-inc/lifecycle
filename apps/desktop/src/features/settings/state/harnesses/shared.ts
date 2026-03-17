@@ -1,8 +1,16 @@
 export type HarnessPreset = "guarded" | "trusted_host";
 
 export const harnessPresetOptions = [
-  { label: "Guarded", value: "guarded" as const },
-  { label: "Trusted Host", value: "trusted_host" as const },
+  {
+    description: "Asks before risky operations. Recommended for most use.",
+    label: "Guarded",
+    value: "guarded" as const,
+  },
+  {
+    description: "No prompts or sandboxing. For fully trusted environments only.",
+    label: "Trusted Host",
+    value: "trusted_host" as const,
+  },
 ] as const;
 
 const validHarnessPresets = new Set<string>(harnessPresetOptions.map((option) => option.value));

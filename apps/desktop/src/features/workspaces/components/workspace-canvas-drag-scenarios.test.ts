@@ -197,7 +197,7 @@ function applyWorkspaceTabDragStep(
 
     return {
       nextState: workspaceCanvasReducer(splitState, {
-        emptySourcePanePolicy: "preserve",
+        emptySourcePanePolicy: "close",
         key: draggedKey,
         kind: "move-tab-to-pane",
         sourcePaneId,

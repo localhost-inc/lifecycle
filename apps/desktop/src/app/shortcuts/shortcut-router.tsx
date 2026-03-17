@@ -133,6 +133,26 @@ function readFocusPaneMatch(
   return { direction, id: "workspace.focus-pane" };
 }
 
+function readToggleZoomMatch(
+  event: ShortcutRouterKeyEvent,
+  macPlatform: boolean,
+): ShortcutMatch | null {
+  if (!event.shiftKey || event.altKey) {
+    return null;
+  }
+
+  const hasMod = macPlatform ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+  if (!hasMod) {
+    return null;
+  }
+
+  if (event.key === "Enter") {
+    return { id: "workspace.toggle-zoom" };
+  }
+
+  return null;
+}
+
 export function readRegisteredShortcutMatch(
   shortcutId: RegisteredShortcutId,
   event: ShortcutRouterKeyEvent,
@@ -174,8 +194,14 @@ export function readRegisteredShortcutMatch(
       return readWorkspaceTabHotkeyAction(event, macPlatform)?.kind === "next-tab"
         ? { id: shortcutId }
         : null;
+    case "workspace.reopen-closed-tab":
+      return readWorkspaceTabHotkeyAction(event, macPlatform)?.kind === "reopen-closed-tab"
+        ? { id: shortcutId }
+        : null;
     case "workspace.focus-pane":
       return readFocusPaneMatch(event, macPlatform);
+    case "workspace.toggle-zoom":
+      return readToggleZoomMatch(event, macPlatform);
     case "file.save":
       return readFileSaveHotkey(event, macPlatform) ? { id: shortcutId } : null;
     default:

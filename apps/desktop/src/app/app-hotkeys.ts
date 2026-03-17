@@ -7,10 +7,11 @@ import {
 
 export const APP_HOTKEY_EVENT_NAME = "app:shortcut";
 
-export type AppHotkeyAction = "open-settings" | "open-command-palette" | "open-file-picker";
+export type AppHotkeyAction = "open-settings" | "open-command-palette" | "open-file-picker" | "select-project-index";
 
 export interface AppHotkeyEvent {
   action: AppHotkeyAction;
+  index: number | null;
   source: "menu";
 }
 
@@ -27,12 +28,14 @@ const APP_HOTKEY_SHORTCUT_ID_BY_ACTION: Record<AppHotkeyAction, RegisteredShortc
   "open-command-palette": "app.open-command-palette",
   "open-file-picker": "app.open-file-picker",
   "open-settings": "app.open-settings",
+  "select-project-index": "project.select-index",
 };
 
 const TAURI_MAC_MENU_APP_HOTKEYS = new Set<AppHotkeyAction>([
   "open-command-palette",
   "open-file-picker",
   "open-settings",
+  "select-project-index",
 ]);
 
 export function isMacPlatform(): boolean {

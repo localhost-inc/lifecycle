@@ -73,7 +73,6 @@ export function SurfaceLaunchActions({
             className="flex items-center gap-px overflow-hidden"
             exit={{ opacity: 0, width: 0, transition: { duration: 0.14, ease: "easeInOut" } }}
             initial={{ opacity: 0, width: 0 }}
-            layout
           >
             {actions.map((action) => (
               <motion.div
@@ -131,7 +130,6 @@ export function SurfaceLaunchActions({
             animate={{ opacity: 1, width: "auto", x: 0 }}
             exit={{ opacity: 0, width: 0, x: -8, transition: { duration: 0.12 } }}
             initial={{ opacity: 0, width: 0, x: -8 }}
-            layout
           >
             <Tooltip>
               <TooltipTrigger asChild>

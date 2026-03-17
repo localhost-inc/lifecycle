@@ -34,14 +34,14 @@ describe("theme.css", () => {
     }
   });
 
-  test("uses monochrome accent tokens in the light and dark presets", () => {
-    const lightCss = readThemeFile("light");
-    expect(readThemeToken(lightCss, "--accent")[0]).toBe("#111111");
+  test("uses goldenrod accent tokens in the lifecycle light and dark presets", () => {
+    const lightCss = readThemeFile("lifecycle-light");
+    expect(readThemeToken(lightCss, "--accent")[0]).toBe("#b38600");
     expect(readThemeToken(lightCss, "--accent-foreground")[0]).toBe("#ffffff");
 
-    const darkCss = readThemeFile("dark");
-    expect(readThemeToken(darkCss, "--accent")[0]).toBe("#ffffff");
-    expect(readThemeToken(darkCss, "--accent-foreground")[0]).toBe("#0f0d0b");
+    const darkCss = readThemeFile("lifecycle-dark");
+    expect(readThemeToken(darkCss, "--accent")[0]).toBe("#d4a41c");
+    expect(readThemeToken(darkCss, "--accent-foreground")[0]).toBe("#171411");
   });
 
   test("keeps terminal surfaces aligned with the theme surface token in every preset", () => {
@@ -75,7 +75,8 @@ describe("theme.css", () => {
 
       expect(sidebarBackgroundMatches.length).toBeGreaterThan(0);
       for (const match of sidebarBackgroundMatches) {
-        expect(match[1]?.trim()).toBe("var(--surface)");
+        const value = match[1]?.trim() ?? "";
+        expect(value === "var(--surface)" || value === "var(--background)").toBe(true);
       }
     }
   });

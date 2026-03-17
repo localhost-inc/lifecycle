@@ -36,6 +36,10 @@ pub(super) fn destroy_surface(_terminal_id: &str) -> Result<(), LifecycleError> 
     Ok(())
 }
 
+pub(super) fn send_text(_terminal_id: &str, _text: &str) -> Result<(), LifecycleError> {
+    Ok(())
+}
+
 #[no_mangle]
 pub extern "C" fn lifecycle_native_terminal_prepare_paste_image(
     _terminal_id: *const std::ffi::c_char,

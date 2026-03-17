@@ -28,18 +28,18 @@ function createBaseFileCodeEditorTheme() {
       borderLeftColor: "var(--foreground)",
     },
     ".cm-gutters": {
-      backgroundColor: "color-mix(in srgb, var(--surface), transparent 20%)",
+      backgroundColor: "var(--card)",
       borderRight: "1px solid var(--border)",
       color: "var(--muted-foreground)",
     },
     ".cm-activeLine": {
-      backgroundColor: "color-mix(in srgb, var(--surface-hover), transparent 20%)",
+      backgroundColor: "var(--surface-hover)",
     },
     ".cm-activeLineGutter": {
       backgroundColor: "transparent",
     },
     ".cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection": {
-      backgroundColor: "color-mix(in srgb, var(--ring), transparent 72%)",
+      backgroundColor: "var(--surface-selected)",
     },
     ".cm-panels": {
       backgroundColor: "var(--surface)",

@@ -39,7 +39,7 @@ describe("WorkspacePaneContent", () => {
         onTabViewStateChange: () => {},
         surfaceOpacity: 1,
         terminals: [],
-        waitingForSelectedRuntimeTab: false,
+        waitingForSelectedTerminalTab: false,
         workspaceId: "workspace-1",
       }),
     );
@@ -88,7 +88,7 @@ describe("WorkspacePaneContent", () => {
             workspace_id: "workspace-1",
           },
         ],
-        waitingForSelectedRuntimeTab: false,
+        waitingForSelectedTerminalTab: false,
         workspaceId: "workspace-1",
       }),
     );
@@ -116,7 +116,7 @@ describe("WorkspacePaneContent", () => {
         paneFocused: true,
         surfaceOpacity: 1,
         terminals: [],
-        waitingForSelectedRuntimeTab: false,
+        waitingForSelectedTerminalTab: false,
         workspaceId: "workspace-1",
       }),
     );
@@ -172,63 +172,12 @@ describe("WorkspacePaneContent", () => {
             workspace_id: "workspace-1",
           },
         ],
-        waitingForSelectedRuntimeTab: false,
+        waitingForSelectedTerminalTab: false,
         workspaceId: "workspace-1",
       }),
     );
 
     expect(capturedOpacity).toBe(0.45);
-  });
-
-  test("suppresses native terminal surfaces while a route dialog is active", async () => {
-    const terminalSurfaceModule = await import("../../terminals/components/terminal-surface");
-    const terminalSurfaceSpy = spyOn(
-      terminalSurfaceModule,
-      "TerminalSurface",
-    ).mockImplementation((() =>
-      createElement("div", { "data-slot": "terminal-surface" }, "Terminal")) as never);
-
-    const { WorkspacePaneContent } = await import("./workspace-pane-content");
-    const markup = renderToStaticMarkup(
-      createElement(WorkspacePaneContent, {
-        activeTabKey: "terminal:term-1",
-        activeFileSessionState: null,
-        activeTabViewState: null,
-        creatingSelection: null,
-        documents: [],
-        hasVisibleTabs: true,
-        nativeTerminalsSuppressed: true,
-        onCreateTerminal: async () => {},
-        onFileSessionStateChange: () => {},
-        onOpenFile: () => {},
-        onTabViewStateChange: () => {},
-        paneDragInProgress: false,
-        paneFocused: true,
-        surfaceOpacity: 1,
-        terminals: [
-          {
-            created_by: null,
-            ended_at: null,
-            exit_code: null,
-            failure_reason: null,
-            harness_provider: null,
-            harness_session_id: null,
-            id: "term-1",
-            label: "Shell 1",
-            last_active_at: "2026-03-12T00:00:00.000Z",
-            launch_type: "shell",
-            started_at: "2026-03-12T00:00:00.000Z",
-            status: "detached",
-            workspace_id: "workspace-1",
-          },
-        ],
-        waitingForSelectedRuntimeTab: false,
-        workspaceId: "workspace-1",
-      }),
-    );
-
-    expect(terminalSurfaceSpy).not.toHaveBeenCalled();
-    expect(markup).toContain('data-slot="terminal-surface-suppressed"');
   });
 
 });

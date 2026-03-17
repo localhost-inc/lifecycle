@@ -36,8 +36,8 @@ export function FloatingToggle<T extends string>({
       <div
         aria-label={ariaLabel}
         className={cn(
-          "pointer-events-auto inline-flex items-center gap-1 rounded-full border px-1 py-1 shadow-[0_18px_48px_color-mix(in_srgb,var(--foreground)_12%,transparent)] backdrop-blur-xl",
-          "border-[color-mix(in_srgb,var(--border)_82%,transparent)] bg-[color-mix(in_srgb,var(--background)_74%,transparent)]",
+          "pointer-events-auto inline-flex items-center gap-1 rounded-full border px-1 py-1 shadow-[0_18px_48px_var(--foreground)]/12 backdrop-blur-xl",
+          "border-[var(--border)]/82 bg-[var(--background)]/74",
           disabled && "opacity-70",
           className,
         )}
@@ -55,7 +55,7 @@ export function FloatingToggle<T extends string>({
               className={cn(
                 "inline-flex shrink-0 items-center justify-center rounded-full text-xs font-medium leading-none transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:pointer-events-none",
                 active
-                  ? "bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] text-[var(--foreground)] shadow-[0_8px_24px_color-mix(in_srgb,var(--foreground)_10%,transparent)]"
+                  ? "bg-[var(--surface)]/92 text-[var(--foreground)] shadow-[0_8px_24px_var(--foreground)]/10"
                   : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]",
                 option.itemClassName,
               )}

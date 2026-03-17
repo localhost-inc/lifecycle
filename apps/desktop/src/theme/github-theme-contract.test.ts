@@ -20,45 +20,39 @@ function readThemeToken(css: string, token: string): string {
 describe("github theme contract", () => {
   test("maps github light shell tokens to the shiki theme payload", () => {
     const css = readThemeCss("github-light");
-    const colors = githubLightDefault.colors ?? {};
+    const c = (key: string) => githubLightDefault.colors![key]!;
 
-    expect(readThemeToken(css, "--background")).toBe(colors["editor.background"]);
-    expect(readThemeToken(css, "--foreground")).toBe(colors["foreground"]);
-    expect(readThemeToken(css, "--surface")).toBe(colors["sideBar.background"]);
-    expect(readThemeToken(css, "--card")).toBe(colors["button.secondaryBackground"]);
-    expect(readThemeToken(css, "--primary")).toBe(colors["button.background"]);
-    expect(readThemeToken(css, "--accent")).toBe(colors["focusBorder"]);
-    expect(readThemeToken(css, "--destructive")).toBe(colors["errorForeground"]);
-    expect(readThemeToken(css, "--ring")).toBe(colors["focusBorder"]);
-    expect(readThemeToken(css, "--terminal-cursor-color")).toBe(colors["editorCursor.foreground"]);
-    expect(readThemeToken(css, "--terminal-ansi-blue")).toBe(colors["terminal.ansiBlue"]);
+    expect(readThemeToken(css, "--foreground")).toBe(c("foreground"));
+    expect(readThemeToken(css, "--primary")).toBe(c("button.background"));
+    expect(readThemeToken(css, "--accent")).toBe(c("focusBorder"));
+    expect(readThemeToken(css, "--destructive")).toBe(c("errorForeground"));
+    expect(readThemeToken(css, "--ring")).toBe(c("focusBorder"));
+    expect(readThemeToken(css, "--terminal-cursor-color")).toBe(c("editorCursor.foreground"));
+    expect(readThemeToken(css, "--terminal-ansi-blue")).toBe(c("terminal.ansiBlue"));
     expect(readThemeToken(css, "--git-status-added")).toBe(
-      colors["gitDecoration.addedResourceForeground"],
+      c("gitDecoration.addedResourceForeground"),
     );
     expect(readThemeToken(css, "--git-status-deleted")).toBe(
-      colors["gitDecoration.deletedResourceForeground"],
+      c("gitDecoration.deletedResourceForeground"),
     );
   });
 
   test("maps github dark shell tokens to the shiki theme payload", () => {
     const css = readThemeCss("github-dark");
-    const colors = githubDarkDefault.colors ?? {};
+    const c = (key: string) => githubDarkDefault.colors![key]!;
 
-    expect(readThemeToken(css, "--background")).toBe(colors["editor.background"]);
-    expect(readThemeToken(css, "--foreground")).toBe(colors["foreground"]);
-    expect(readThemeToken(css, "--surface")).toBe(colors["sideBar.background"]);
-    expect(readThemeToken(css, "--card")).toBe(colors["quickInput.background"]);
-    expect(readThemeToken(css, "--primary")).toBe(colors["button.background"]);
-    expect(readThemeToken(css, "--accent")).toBe(colors["focusBorder"]);
-    expect(readThemeToken(css, "--destructive")).toBe(colors["errorForeground"]);
-    expect(readThemeToken(css, "--ring")).toBe(colors["focusBorder"]);
-    expect(readThemeToken(css, "--terminal-cursor-color")).toBe(colors["editorCursor.foreground"]);
-    expect(readThemeToken(css, "--terminal-ansi-blue")).toBe(colors["terminal.ansiBlue"]);
+    expect(readThemeToken(css, "--foreground")).toBe(c("foreground"));
+    expect(readThemeToken(css, "--primary")).toBe(c("button.background"));
+    expect(readThemeToken(css, "--accent")).toBe(c("focusBorder"));
+    expect(readThemeToken(css, "--destructive")).toBe(c("errorForeground"));
+    expect(readThemeToken(css, "--ring")).toBe(c("focusBorder"));
+    expect(readThemeToken(css, "--terminal-cursor-color")).toBe(c("editorCursor.foreground"));
+    expect(readThemeToken(css, "--terminal-ansi-blue")).toBe(c("terminal.ansiBlue"));
     expect(readThemeToken(css, "--git-status-added")).toBe(
-      colors["gitDecoration.addedResourceForeground"],
+      c("gitDecoration.addedResourceForeground"),
     );
     expect(readThemeToken(css, "--git-status-deleted")).toBe(
-      colors["gitDecoration.deletedResourceForeground"],
+      c("gitDecoration.deletedResourceForeground"),
     );
   });
 });

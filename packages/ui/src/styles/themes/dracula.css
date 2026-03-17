@@ -1,18 +1,18 @@
 :root[data-theme="dracula"] {
   --background: #282a36;
   --foreground: #f8f8f2;
-  --card: #44475a;
+  --card: #2d2f3d;
   --surface: #21222c;
   --sidebar-background: var(--background);
   --sidebar-foreground: #f8f8f2;
-  --sidebar-muted-foreground: #bfbfbf;
-  --sidebar-hover: #44475a;
-  --sidebar-selected: #6272a4;
+  --sidebar-muted-foreground: #9da5c4;
+  --sidebar-hover: #353849;
+  --sidebar-selected: #44475a;
   --terminal-surface-background: var(--surface);
   --terminal-foreground: #f8f8f2;
-  --muted: #44475a;
-  --muted-foreground: #6272a4;
-  --border: #44475a;
+  --muted: #353849;
+  --muted-foreground: #9da5c4;
+  --border: #3a3d50;
   --primary: #f8f8f2;
   --primary-foreground: #282a36;
   --accent: #bd93f9;
@@ -20,8 +20,8 @@
   --destructive: #ff5555;
   --destructive-foreground: #282a36;
   --ring: #bd93f9;
-  --surface-hover: #383a4a;
-  --surface-selected: #44475a;
+  --surface-hover: #2d2f3d;
+  --surface-selected: #353849;
   --tab-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 12px 30px rgba(0, 0, 0, 0.22);
   --tab-shadow-drag: 0 16px 36px rgba(0, 0, 0, 0.28);
   --terminal-cursor-color: #f8f8f2;

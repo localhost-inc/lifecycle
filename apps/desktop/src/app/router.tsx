@@ -22,10 +22,10 @@ const ProjectRoute = lazy(async () => {
     default: module.ProjectRoute,
   };
 });
-const ProjectOverviewSurface = lazy(async () => {
-  const module = await import("../features/projects/components/project-overview-surface");
+const ProjectIndexRedirect = lazy(async () => {
+  const module = await import("../features/projects/routes/project-index-redirect");
   return {
-    default: module.ProjectOverviewSurface,
+    default: module.ProjectIndexRedirect,
   };
 });
 const WorkspaceRoute = lazy(async () => {
@@ -78,7 +78,7 @@ function createRouter() {
                   index: true,
                   element: (
                     <LazyRoute>
-                      <ProjectOverviewSurface />
+                      <ProjectIndexRedirect />
                     </LazyRoute>
                   ),
                 },

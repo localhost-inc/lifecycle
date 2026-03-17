@@ -96,11 +96,9 @@ describe("EnvironmentPanel", () => {
       }),
     );
 
-    expect(markup).toContain("Environment");
     expect(markup).toContain(">Stop<");
     expect(markup).not.toContain(">Start<");
     expect(markup).toContain('aria-label="Show environment actions"');
-    expect(markup).not.toContain("Boot sequence");
   });
 
   test("renders start affordance and failure details for an idle workspace with a failure", () => {
@@ -130,7 +128,6 @@ describe("EnvironmentPanel", () => {
     expect(markup).not.toContain('aria-label="Show environment actions"');
     expect(markup).toContain('data-slot="button"');
     expect(markup).toContain("A service failed to start.");
-    expect(markup).not.toContain("Boot sequence");
     expect(markup).not.toContain("View details");
   });
 
@@ -183,10 +180,16 @@ describe("EnvironmentPanel", () => {
     );
   });
 
-  test("renders collapsed service summaries with preview metadata", () => {
+  test("renders service names in the logs filter tabs when config provides services", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
-        config: null,
+        config: {
+          workspace: { setup: [], teardown: [] },
+          environment: {
+            web: { kind: "service", runtime: "process", command: "bun run dev", port: 3000 },
+            api: { kind: "service", runtime: "process", command: "bun run api", port: 8787 },
+          },
+        },
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
@@ -203,12 +206,7 @@ describe("EnvironmentPanel", () => {
 
     expect(markup).toContain("web");
     expect(markup).toContain("api");
-    expect(markup).toContain(":3000");
-    expect(markup).toContain(":8787");
-    expect(markup).toContain("lucide-external-link");
-    expect(markup).toContain("lucide-loader-circle");
-    expect(markup).not.toContain("Exposure");
-    expect(markup).not.toContain("Copy");
+    expect(markup).toContain("Logs");
   });
 
   test("renders sleeping preview state for local services while the workspace sleeps", () => {
@@ -315,7 +313,6 @@ describe("EnvironmentPanel", () => {
     );
 
     expect(markup).toContain("Starting...");
-    expect(markup).not.toContain("Boot sequence");
     expect(markup).not.toContain("Booting environment");
     expect(markup).toContain("postgres");
     expect(markup).toContain("api");
@@ -323,7 +320,7 @@ describe("EnvironmentPanel", () => {
     expect(markup).not.toContain("View details");
   });
 
-  test("keeps the per-service play affordance available while the workspace is active", () => {
+  test("renders the boot section with service status in an active workspace", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
         config: {
@@ -373,8 +370,10 @@ describe("EnvironmentPanel", () => {
       }),
     );
 
-    expect(markup).toContain('aria-label="Run www and its dependencies"');
-    expect(markup).not.toContain('aria-label="Run api and its dependencies"');
+    expect(markup).toContain("Boot");
+    expect(markup).toContain("Logs");
+    expect(markup).toContain("api");
+    expect(markup).toContain("www");
   });
 
   test("renders an environment task failure banner separately from setup", () => {
@@ -406,7 +405,6 @@ describe("EnvironmentPanel", () => {
     );
 
     expect(markup).toContain("An environment task failed.");
-    expect(markup).not.toContain("Boot sequence");
     expect(markup).not.toContain("Boot failed");
     expect(markup).toContain("migrate");
   });
