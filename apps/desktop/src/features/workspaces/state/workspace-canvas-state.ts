@@ -17,8 +17,7 @@ import {
 } from "../lib/workspace-file-paths";
 
 const LAST_WORKSPACE_ID_STORAGE_KEY = "lifecycle.desktop.last-workspace-id";
-// Preserve the legacy key so existing local canvas restore state survives the taxonomy rename.
-const WORKSPACE_CANVAS_STATE_STORAGE_KEY = "lifecycle.desktop.workspace-surface";
+const WORKSPACE_CANVAS_STATE_STORAGE_KEY = "lifecycle.desktop.workspace-canvas";
 
 export interface StorageLike {
   getItem(key: string): string | null;

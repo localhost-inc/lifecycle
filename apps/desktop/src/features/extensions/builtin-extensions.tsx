@@ -12,7 +12,7 @@ import type {
   WorkspaceExtensionLaunchActions,
 } from "./extension-bar-types";
 import { EnvironmentPanel } from "../workspaces/components/environment-panel";
-import type { EnvironmentTaskState, SetupStepState } from "../workspaces/hooks";
+import type { EnvironmentTaskState, ServiceLogState, SetupStepState } from "../workspaces/hooks";
 import { GitChangesPanel } from "../git/components/git-changes-panel";
 import { GitHistoryPanel } from "../git/components/git-history-panel";
 import { GitPullRequestsPanel } from "../git/components/git-pull-requests-panel";
@@ -60,13 +60,16 @@ interface BuiltinExtensionsOptions {
   launchActions: WorkspaceExtensionLaunchActions;
   manifestState: "invalid" | "missing" | "valid";
   onFocusTerminal: (terminalId: string) => void;
+  onRestart: () => Promise<void>;
   onRun: () => Promise<void>;
+  onStop: () => Promise<void>;
   onSwitchToExtension: (id: WorkspaceExtensionId) => void;
   onUpdateService: (input: {
     exposure: ServiceRecord["exposure"];
     portOverride: number | null;
     serviceName: string;
   }) => Promise<void>;
+  serviceLogs: ServiceLogState[];
   services: ServiceRecord[];
   setupSteps: SetupStepState[];
   workspace: WorkspaceRecord;
@@ -81,9 +84,12 @@ export function getBuiltinExtensionSlots({
   launchActions,
   manifestState,
   onFocusTerminal,
+  onRestart,
   onRun,
+  onStop,
   onSwitchToExtension,
   onUpdateService,
+  serviceLogs,
   services,
   setupSteps,
   workspace,
@@ -157,8 +163,11 @@ export function getBuiltinExtensionSlots({
           hasManifest={hasManifest}
           isManifestStale={isManifestStale}
           manifestState={manifestState}
+          onRestart={onRestart}
           onRun={onRun}
+          onStop={onStop}
           onUpdateService={onUpdateService}
+          serviceLogs={serviceLogs}
           services={services}
           setupSteps={setupSteps}
           workspace={workspace}

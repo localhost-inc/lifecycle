@@ -43,6 +43,7 @@ function createMockSource() {
       return {
         activity: [],
         environmentTasks: [],
+        serviceLogs: [],
         setup: [],
       };
     },

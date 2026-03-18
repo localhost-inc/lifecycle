@@ -14,7 +14,7 @@ mod naming;
 pub mod open;
 mod paths;
 mod ports;
-mod preview;
+pub(crate) mod preview;
 pub mod query;
 pub mod rename;
 pub mod service;

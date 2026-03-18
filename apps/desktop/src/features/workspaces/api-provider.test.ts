@@ -33,8 +33,7 @@ const services: ServiceRecord[] = [
     port_override: null,
     status: "stopped",
     status_reason: null,
-    default_port: 3000,
-    effective_port: 3000,
+    assigned_port: 3000,
     preview_status: "sleeping",
     preview_failure_reason: null,
     preview_url: "http://127.0.0.1:3000",
@@ -151,6 +150,7 @@ describe("workspace api provider routing", () => {
     expect(await getWorkspaceRuntimeProjection("ws_1")).toEqual({
       activity: [],
       environmentTasks: [],
+      serviceLogs: [],
       setup: [],
     });
     await updateWorkspaceService("ws_1", "web", {

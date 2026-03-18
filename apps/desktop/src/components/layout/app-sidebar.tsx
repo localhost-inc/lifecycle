@@ -3,10 +3,9 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import {
   IconButton,
-  SidebarFooter,
+  Logo,
 } from "@lifecycle/ui";
 import {
-  ChevronDown,
   Megaphone,
   PanelLeft,
   PanelLeftClose,
@@ -24,7 +23,8 @@ import { UserAvatar } from "../../features/user/components/user-avatar";
 import { ResponseReadyDot } from "../response-ready-dot";
 import type { AuthSession } from "../../features/auth/auth-session";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { bugs } from "../../../package.json";
+import { bugs, version } from "../../../package.json";
+import { Wordmark } from "../../components/wordmark";
 
 const COLLAPSED_WIDTH = 48;
 
@@ -140,6 +140,18 @@ export function AppSidebar({
             </button>
           </div>
 
+          {/* Avatar (org context) */}
+          <div className="flex shrink-0 items-center justify-center py-1">
+            <button
+              aria-label={activeContextName}
+              onClick={onOpenSettings}
+              title={activeContextName}
+              type="button"
+            >
+              <UserAvatar loading={authSessionLoading} session={authSession} size={28} />
+            </button>
+          </div>
+
           {/* Project monograms */}
           <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-1 pt-1">
             <div className="flex flex-col gap-1">
@@ -192,16 +204,9 @@ export function AppSidebar({
             </button>
           </div>
 
-          {/* Avatar at bottom */}
+          {/* Logo at bottom */}
           <div className="flex shrink-0 items-center justify-center pb-3">
-            <button
-              aria-label={activeContextName}
-              onClick={onOpenSettings}
-              title={activeContextName}
-              type="button"
-            >
-              <UserAvatar loading={authSessionLoading} session={authSession} size={28} />
-            </button>
+            <Logo size={20} className="text-[var(--sidebar-muted-foreground)]" />
           </div>
         </div>
       </aside>
@@ -217,22 +222,34 @@ export function AppSidebar({
     >
       {/* Collapse button — inline with traffic lights */}
       <div className="flex h-10 shrink-0 items-center justify-end px-2">
-        <button
+        <IconButton
           aria-label="Collapse sidebar"
-          className="flex size-6 items-center justify-center rounded-md text-[var(--muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"
           onClick={onToggleCollapse}
           title="Collapse sidebar"
-          type="button"
         >
           <PanelLeftClose size={14} strokeWidth={2} />
-        </button>
+        </IconButton>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
+        {/* Organization / context switcher */}
+        <button
+          aria-label={`Open ${activeContextName} context`}
+          className="flex w-full shrink-0 items-center gap-2 px-4 py-2 text-left"
+          data-slot="app-sidebar-context"
+          onClick={onOpenSettings}
+          type="button"
+        >
+          <UserAvatar loading={authSessionLoading} session={authSession} size={26} />
+          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--sidebar-foreground)]">
+            {activeContextName}
+          </span>
+        </button>
+
         {/* Project list */}
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex items-center justify-between px-4 pb-1">
-            <p className="app-panel-title text-[var(--muted-foreground)]">Projects</p>
+        <div className="flex min-h-0 flex-1 flex-col pt-2">
+          <div className="flex items-center justify-between pl-4 pr-2 pb-1">
+            <p className="text-xs font-medium text-[var(--muted-foreground)]">Projects</p>
             <IconButton aria-label="Add project" onClick={onAddProject}>
               <Plus className="size-3.5" />
             </IconButton>
@@ -295,25 +312,11 @@ export function AppSidebar({
           </button>
         </div>
 
-        {/* Context switcher at bottom */}
-        <SidebarFooter>
-          <button
-            aria-label={`Open ${activeContextName} context`}
-            className="flex w-full items-center gap-2 px-2 py-1.5 text-left"
-            data-slot="app-sidebar-context"
-            onClick={onOpenSettings}
-            type="button"
-          >
-            <UserAvatar loading={authSessionLoading} session={authSession} />
-            <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--sidebar-foreground)]">
-              {activeContextName}
-            </span>
-            <ChevronDown
-              className="size-3.5 shrink-0 text-[var(--muted-foreground)]"
-              strokeWidth={2}
-            />
-          </button>
-        </SidebarFooter>
+        {/* Wordmark + version at bottom */}
+        <div className="flex shrink-0 items-center px-4 pb-3 pt-1">
+          <Wordmark className="h-3 text-[var(--sidebar-muted-foreground)]" />
+          <span className="ml-auto font-mono text-[11px] text-[var(--sidebar-muted-foreground)]">v{version}</span>
+        </div>
       </div>
     </aside>
   );

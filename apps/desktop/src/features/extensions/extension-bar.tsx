@@ -1,4 +1,5 @@
 import { StatusDot } from "@lifecycle/ui";
+import { AnimatePresence, motion } from "motion/react";
 import type { ExtensionSlot } from "./extension-bar-types";
 
 interface ExtensionBarProps {
@@ -44,7 +45,20 @@ export function ExtensionBar({ activeExtensionId, onSelectExtension, slots }: Ex
             type="button"
           >
             <ExtensionIcon slot={slot} />
-            {isActive && <span className="min-w-0 truncate text-[13px] font-medium leading-none">{slot.label}</span>}
+            <AnimatePresence initial={false}>
+              {isActive && (
+                <motion.span
+                  key={slot.id}
+                  animate={{ width: "auto", opacity: 1 }}
+                  className="min-w-0 overflow-hidden truncate text-[13px] font-medium leading-none"
+                  exit={{ width: 0, opacity: 0 }}
+                  initial={{ width: 0, opacity: 0 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
+                >
+                  {slot.label}
+                </motion.span>
+              )}
+            </AnimatePresence>
           </button>
         );
       })}

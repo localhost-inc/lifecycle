@@ -1,9 +1,9 @@
 export const settingsSections = [
+  { slug: "account", label: "Account" },
   { slug: "appearance", label: "Appearance" },
-  { slug: "agents", label: "Agents" },
   { slug: "workspace", label: "Workspace" },
   { slug: "notifications", label: "Notifications" },
-  { slug: "account", label: "Account" },
+  { slug: "agents", label: "Agents" },
 ] as const;
 
 export type SettingsSectionSlug = (typeof settingsSections)[number]["slug"];

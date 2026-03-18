@@ -66,9 +66,9 @@ export function WorkspaceEmptyPaneState({
           </LaunchButton>
         </div>
       }
-      description="Launch a shell or harness session in this pane."
+      description="Launch a shell or harness session to get started."
       icon={<TerminalSquare />}
-      title="No tabs in this pane"
+      title="No open tabs"
     />
   );
 }

@@ -5,10 +5,9 @@ use crate::shared::errors::{
     LifecycleError, ServiceStatus, WorkspaceFailureReason, WorkspaceStatus,
 };
 use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
-use rusqlite::{params, OptionalExtension};
+use rusqlite::params;
 use tauri::AppHandle;
 
-use super::ports::resolve_effective_port;
 use super::preview::{preview_fields_for_service, refresh_workspace_preview_rows};
 use super::query::ServiceRecord;
 
@@ -116,31 +115,40 @@ pub(super) fn update_service_status_db(
         )
         .map_err(|e| LifecycleError::Database(e.to_string()))
         .and_then(|status| WorkspaceStatus::from_str(&status))?;
-    let (exposure, effective_port): (String, Option<i64>) = conn
+    let (exposure, current_assigned_port): (String, Option<i64>) = conn
         .query_row(
-            "SELECT exposure, effective_port FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+            "SELECT exposure, assigned_port FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
             params![workspace_id, service_name],
             |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    let next_assigned_port = match status {
+        ServiceStatus::Stopped | ServiceStatus::Failed => None,
+        ServiceStatus::Starting | ServiceStatus::Ready => current_assigned_port,
+    };
     let (preview_status, preview_failure_reason, preview_url) = preview_fields_for_service(
+        &conn,
+        workspace_id,
+        service_name,
         &exposure,
-        effective_port,
+        next_assigned_port,
         status.as_str(),
         &workspace_status,
-    );
+    )?;
     conn.execute(
         "UPDATE workspace_service
          SET status = ?1,
              status_reason = ?2,
-             preview_status = ?3,
-             preview_failure_reason = ?4,
-             preview_url = ?5,
+             assigned_port = ?3,
+             preview_status = ?4,
+             preview_failure_reason = ?5,
+             preview_url = ?6,
              updated_at = datetime('now')
-         WHERE workspace_id = ?6 AND service_name = ?7",
+         WHERE workspace_id = ?7 AND service_name = ?8",
         params![
             status.as_str(),
             reason,
+            next_assigned_port,
             preview_status,
             preview_failure_reason,
             preview_url,
@@ -176,7 +184,7 @@ pub(super) fn reconcile_workspace_services_db(
         Some(config) => {
             let mut existing_rows = tx
                 .prepare(
-                    "SELECT service_name, exposure, port_override, status, status_reason
+                    "SELECT service_name, exposure, port_override, status, status_reason, assigned_port
                      FROM workspace_service
                      WHERE workspace_id = ?1",
                 )
@@ -189,17 +197,24 @@ pub(super) fn reconcile_workspace_services_db(
                         row.get::<_, Option<i64>>(2)?,
                         row.get::<_, String>(3)?,
                         row.get::<_, Option<String>>(4)?,
+                        row.get::<_, Option<i64>>(5)?,
                     ))
                 })
                 .map_err(|e| LifecycleError::Database(e.to_string()))?;
 
             let mut existing_rows_by_service = std::collections::HashMap::new();
             for row in existing {
-                let (service_name, exposure, port_override, status, status_reason) =
+                let (service_name, exposure, port_override, status, status_reason, assigned_port) =
                     row.map_err(|e| LifecycleError::Database(e.to_string()))?;
                 existing_rows_by_service.insert(
                     service_name,
-                    (exposure, port_override, status, status_reason),
+                    (
+                        exposure,
+                        port_override,
+                        status,
+                        status_reason,
+                        assigned_port,
+                    ),
                 );
             }
             drop(existing_rows);
@@ -230,54 +245,32 @@ pub(super) fn reconcile_workspace_services_db(
                     .map_err(|e| LifecycleError::Database(e.to_string()))?;
             }
 
-            for (service_name, service_config) in config.declared_services() {
-                let default_port = service_config.port().map(|port| port as i64);
-                let (exposure, port_override, current_status, current_status_reason) =
-                    existing_rows_by_service
-                        .get(service_name)
-                        .cloned()
-                        .unwrap_or_else(|| {
-                            (
-                                if service_config.share_default() {
-                                    "local".to_string()
-                                } else {
-                                    "internal".to_string()
-                                },
-                                None,
-                                "stopped".to_string(),
-                                None,
-                            )
-                        });
-                let allow_bound_current_port = matches!(
-                    (workspace_status.clone(), current_status.as_str()),
-                    (
-                        WorkspaceStatus::Active | WorkspaceStatus::Starting,
-                        "ready" | "starting"
-                    )
-                );
-                let prefer_randomized_port_assignment = matches!(
-                    service_config,
-                    crate::capabilities::workspaces::manifest::ServiceConfig::Image(_)
-                ) && !service_config.share_default();
-                let current_effective_port = tx
-                    .query_row(
-                        "SELECT effective_port FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
-                        params![workspace_id, service_name],
-                        |row| row.get::<_, Option<i64>>(0),
-                    )
-                    .optional()
-                    .map_err(|error| LifecycleError::Database(error.to_string()))?
-                    .flatten();
-                let effective_port = resolve_effective_port(
-                    &tx,
-                    workspace_id,
-                    service_name,
-                    default_port,
-                    port_override,
-                    current_effective_port,
-                    allow_bound_current_port,
-                    prefer_randomized_port_assignment,
-                )?;
+            for (service_name, _service_config) in config.declared_services() {
+                let (
+                    exposure,
+                    _port_override,
+                    current_status,
+                    current_status_reason,
+                    current_assigned_port,
+                ) = existing_rows_by_service
+                    .get(service_name)
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        (
+                            "local".to_string(),
+                            None,
+                            "stopped".to_string(),
+                            None,
+                            None,
+                        )
+                    });
+                let assigned_port = if preserve_runtime_state
+                    && matches!(current_status.as_str(), "ready" | "starting")
+                {
+                    current_assigned_port
+                } else {
+                    None
+                };
                 let next_status = if preserve_runtime_state {
                     current_status.as_str()
                 } else {
@@ -290,29 +283,30 @@ pub(super) fn reconcile_workspace_services_db(
                 };
                 let (preview_status, preview_failure_reason, preview_url) =
                     preview_fields_for_service(
+                        &tx,
+                        workspace_id,
+                        service_name,
                         &exposure,
-                        effective_port,
+                        assigned_port,
                         next_status,
                         &workspace_status,
-                    );
+                    )?;
 
                 let updated = tx
                     .execute(
                         "UPDATE workspace_service
                          SET status = ?1,
                              status_reason = ?2,
-                             default_port = ?3,
-                             effective_port = ?4,
-                             preview_status = ?5,
-                             preview_failure_reason = ?6,
-                             preview_url = ?7,
+                             assigned_port = ?3,
+                             preview_status = ?4,
+                             preview_failure_reason = ?5,
+                             preview_url = ?6,
                              updated_at = datetime('now')
-                         WHERE workspace_id = ?8 AND service_name = ?9",
+                         WHERE workspace_id = ?7 AND service_name = ?8",
                         params![
                             next_status,
                             next_status_reason,
-                            default_port,
-                            effective_port,
+                            assigned_port,
                             preview_status,
                             preview_failure_reason,
                             preview_url,
@@ -325,23 +319,25 @@ pub(super) fn reconcile_workspace_services_db(
                 if updated == 0 {
                     let (preview_status, preview_failure_reason, preview_url) =
                         preview_fields_for_service(
+                            &tx,
+                            workspace_id,
+                            service_name,
                             &exposure,
-                            effective_port,
+                            assigned_port,
                             "stopped",
                             &workspace_status,
-                        );
+                        )?;
                     tx.execute(
                         "INSERT INTO workspace_service (
-                            id, workspace_id, service_name, exposure, status, default_port,
-                            effective_port, preview_status, preview_failure_reason, preview_url
-                         ) VALUES (?1, ?2, ?3, ?4, 'stopped', ?5, ?6, ?7, ?8, ?9)",
+                            id, workspace_id, service_name, exposure, status,
+                            assigned_port, preview_status, preview_failure_reason, preview_url
+                         ) VALUES (?1, ?2, ?3, ?4, 'stopped', ?5, ?6, ?7, ?8)",
                         params![
                             uuid::Uuid::new_v4().to_string(),
                             workspace_id,
                             service_name,
                             exposure,
-                            default_port,
-                            effective_port,
+                            assigned_port,
                             preview_status,
                             preview_failure_reason,
                             preview_url,
@@ -419,14 +415,14 @@ pub(super) fn workspace_failure_reason_for_start_error(
 ) -> WorkspaceFailureReason {
     match error {
         LifecycleError::DockerUnavailable(_) => WorkspaceFailureReason::LocalDockerUnavailable,
-        LifecycleError::PortConflict { .. } => WorkspaceFailureReason::LocalPortConflict,
+        LifecycleError::PortConflict { .. } | LifecycleError::PortExhausted { .. } => WorkspaceFailureReason::LocalPortConflict,
         _ => WorkspaceFailureReason::ServiceStartFailed,
     }
 }
 
 pub(super) fn service_status_reason_for_start_error(error: &LifecycleError) -> &'static str {
     match error {
-        LifecycleError::PortConflict { .. } => "service_port_unreachable",
+        LifecycleError::PortConflict { .. } | LifecycleError::PortExhausted { .. } => "service_port_unreachable",
         LifecycleError::ServiceStartFailed { .. } => "service_start_failed",
         _ => "service_start_failed",
     }
@@ -435,7 +431,7 @@ pub(super) fn service_status_reason_for_start_error(error: &LifecycleError) -> &
 pub(super) fn service_name_for_start_error(error: &LifecycleError, fallback: &str) -> String {
     match error {
         LifecycleError::ServiceStartFailed { service, .. } => service.clone(),
-        LifecycleError::PortConflict { service, .. } => service.clone(),
+        LifecycleError::PortConflict { service, .. } | LifecycleError::PortExhausted { service } => service.clone(),
         _ => fallback.to_string(),
     }
 }
@@ -498,6 +494,8 @@ mod tests {
     use super::*;
     use crate::capabilities::workspaces::manifest::LifecycleConfig;
     use crate::capabilities::workspaces::test_support::available_test_port;
+    use crate::platform::git::worktree::{short_workspace_id, slugify_workspace_name};
+    use crate::platform::preview_proxy::{local_preview_url, workspace_host_label};
 
     #[test]
     fn maps_service_start_errors_to_service_start_failed_reason() {
@@ -524,6 +522,9 @@ mod tests {
             "CREATE TABLE workspace (
                 id TEXT PRIMARY KEY NOT NULL,
                 status TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                name TEXT NOT NULL,
+                source_ref TEXT NOT NULL,
                 manifest_fingerprint TEXT,
                 failure_reason TEXT,
                 failed_at TEXT,
@@ -538,8 +539,7 @@ mod tests {
                 port_override INTEGER,
                 status TEXT NOT NULL,
                 status_reason TEXT,
-                default_port INTEGER,
-                effective_port INTEGER,
+                assigned_port INTEGER,
                 preview_status TEXT NOT NULL DEFAULT 'disabled',
                 preview_failure_reason TEXT,
                 preview_url TEXT,
@@ -548,6 +548,17 @@ mod tests {
             );",
         )
         .expect("create tables");
+    }
+
+    fn managed_workspace_identity(workspace_id: &str) -> (String, String, String) {
+        let name = workspace_id.replace('_', " ");
+        let source_ref = format!(
+            "lifecycle/{}-{}",
+            slugify_workspace_name(&name),
+            short_workspace_id(workspace_id)
+        );
+        let label = workspace_host_label(workspace_id, "managed", &name, &source_ref);
+        (name, source_ref, label)
     }
 
     #[test]
@@ -583,16 +594,25 @@ mod tests {
         init_workspace_tables(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
+        let (name, source_ref, preview_label) = managed_workspace_identity("ws_1");
         conn.execute(
-            "INSERT INTO workspace (id, status, failure_reason, failed_at, updated_at) VALUES (?1, ?2, ?3, ?4, datetime('now'))",
-            rusqlite::params!["ws_1", "idle", "service_start_failed", "2026-03-04T00:00:00Z"],
+            "INSERT INTO workspace (id, status, kind, name, source_ref, failure_reason, failed_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))",
+            rusqlite::params![
+                "ws_1",
+                "idle",
+                "managed",
+                name,
+                source_ref,
+                "service_start_failed",
+                "2026-03-04T00:00:00Z"
+            ],
         )
         .expect("insert workspace");
         conn.execute(
             "INSERT INTO workspace_service (
-                id, workspace_id, service_name, exposure, status, default_port, effective_port,
+                id, workspace_id, service_name, exposure, status, assigned_port,
                 preview_status, preview_url, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'), datetime('now'))",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'), datetime('now'))",
             rusqlite::params![
                 "svc_ws_1",
                 "ws_1",
@@ -600,9 +620,8 @@ mod tests {
                 "local",
                 "stopped",
                 Some(3000_i64),
-                Some(3000_i64),
                 "sleeping",
-                Some("http://127.0.0.1:3000"),
+                Some(local_preview_url(&preview_label, "web")),
             ],
         )
         .expect("insert service");
@@ -640,16 +659,17 @@ mod tests {
         init_workspace_tables(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
+        let (name, source_ref, preview_label) = managed_workspace_identity("ws_active");
         conn.execute(
-            "INSERT INTO workspace (id, status, updated_at) VALUES (?1, ?2, datetime('now'))",
-            rusqlite::params!["ws_active", "active"],
+            "INSERT INTO workspace (id, status, kind, name, source_ref, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
+            rusqlite::params!["ws_active", "active", "managed", name, source_ref],
         )
         .expect("insert workspace");
         conn.execute(
             "INSERT INTO workspace_service (
-                id, workspace_id, service_name, exposure, status, default_port, effective_port,
+                id, workspace_id, service_name, exposure, status, assigned_port,
                 preview_status, preview_url, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'), datetime('now'))",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'), datetime('now'))",
             rusqlite::params![
                 "svc_ws_active",
                 "ws_active",
@@ -657,9 +677,8 @@ mod tests {
                 "local",
                 "ready",
                 Some(8787_i64),
-                Some(8787_i64),
                 "ready",
-                Some("http://127.0.0.1:8787"),
+                Some(local_preview_url(&preview_label, "api")),
             ],
         )
         .expect("insert service");
@@ -691,9 +710,10 @@ mod tests {
         init_workspace_tables(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
+        let (name, source_ref, _) = managed_workspace_identity("ws_2");
         conn.execute(
-            "INSERT INTO workspace (id, status, updated_at) VALUES (?1, ?2, datetime('now'))",
-            rusqlite::params!["ws_2", "starting"],
+            "INSERT INTO workspace (id, status, kind, name, source_ref, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
+            rusqlite::params!["ws_2", "starting", "managed", name, source_ref],
         )
         .expect("insert workspace");
         drop(conn);
@@ -716,14 +736,15 @@ mod tests {
         init_workspace_tables(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
+        let (name, source_ref, preview_label) = managed_workspace_identity("ws_3");
         conn.execute(
-            "INSERT INTO workspace (id, status, updated_at) VALUES (?1, ?2, datetime('now'))",
-            rusqlite::params!["ws_3", "idle"],
+            "INSERT INTO workspace (id, status, kind, name, source_ref, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
+            rusqlite::params!["ws_3", "idle", "managed", name, source_ref],
         )
         .expect("insert workspace");
         conn.execute(
             "INSERT INTO workspace_service (
-                id, workspace_id, service_name, status, status_reason, effective_port,
+                id, workspace_id, service_name, status, status_reason, assigned_port,
                 preview_status, preview_url, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))",
             rusqlite::params![
@@ -734,13 +755,13 @@ mod tests {
                 Option::<String>::None,
                 Some(3000_i64),
                 "ready",
-                Some("http://127.0.0.1:3000"),
+                Some(local_preview_url(&preview_label, "api")),
             ],
         )
         .expect("insert api");
         conn.execute(
             "INSERT INTO workspace_service (
-                id, workspace_id, service_name, status, status_reason, effective_port,
+                id, workspace_id, service_name, status, status_reason, assigned_port,
                 preview_status, preview_failure_reason, preview_url, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'))",
             rusqlite::params![
@@ -752,13 +773,13 @@ mod tests {
                 Some(5432_i64),
                 "failed",
                 Some("service_unreachable"),
-                Some("http://127.0.0.1:5432"),
+                Some(local_preview_url(&preview_label, "db")),
             ],
         )
         .expect("insert db");
         conn.execute(
             "INSERT INTO workspace_service (
-                id, workspace_id, service_name, status, status_reason, effective_port,
+                id, workspace_id, service_name, status, status_reason, assigned_port,
                 preview_status, preview_url, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))",
             rusqlite::params![
@@ -769,7 +790,7 @@ mod tests {
                 Option::<String>::None,
                 Some(4173_i64),
                 "provisioning",
-                Some("http://127.0.0.1:4173"),
+                Some(local_preview_url(&preview_label, "worker")),
             ],
         )
         .expect("insert worker");
@@ -840,21 +861,20 @@ mod tests {
     fn reconcile_workspace_services_db_seeds_and_updates_declared_services() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
-        let web_default_port = available_test_port();
-        let admin_default_port = available_test_port();
         let web_override_port = available_test_port();
 
         let conn = open_db(&db_path).expect("open db");
+        let (name, source_ref, preview_label) = managed_workspace_identity("ws_seed");
         conn.execute(
-            "INSERT INTO workspace (id, status, updated_at) VALUES (?1, ?2, datetime('now'))",
-            rusqlite::params!["ws_seed", "idle"],
+            "INSERT INTO workspace (id, status, kind, name, source_ref, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
+            rusqlite::params!["ws_seed", "idle", "managed", name, source_ref],
         )
         .expect("insert workspace");
         conn.execute(
             "INSERT INTO workspace_service (
                 id, workspace_id, service_name, exposure, port_override, status, status_reason,
-                default_port, effective_port, preview_status, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, datetime('now'), datetime('now'))",
+                assigned_port, preview_status, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'), datetime('now'))",
             rusqlite::params![
                 "svc_old",
                 "ws_seed",
@@ -863,7 +883,6 @@ mod tests {
                 Some(web_override_port),
                 "failed",
                 Some("unknown"),
-                Some(web_default_port),
                 Some(web_override_port),
                 "disabled",
             ],
@@ -871,19 +890,17 @@ mod tests {
         .expect("insert existing service");
         drop(conn);
 
-        let config_json = format!(
-            r#"{{
-                "workspace": {{
-                    "setup": [{{ "name": "install", "command": "bun install", "timeout_seconds": 30 }}]
-                }},
-                "environment": {{
-                    "web": {{ "kind": "service", "runtime": "process", "command": "bun run dev", "port": {web_default_port} }},
-                    "admin": {{ "kind": "service", "runtime": "process", "command": "bun run admin", "port": {admin_default_port}, "share_default": true }},
-                    "migrate": {{ "kind": "task", "command": "bun run db:migrate", "depends_on": ["web"], "timeout_seconds": 30 }},
-                    "api": {{ "kind": "service", "runtime": "process", "command": "bun run api" }}
-                }}
-            }}"#,
-        );
+        let config_json = r#"{
+                "workspace": {
+                    "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 30 }]
+                },
+                "environment": {
+                    "web": { "kind": "service", "runtime": "process", "command": "bun run dev" },
+                    "admin": { "kind": "service", "runtime": "process", "command": "bun run admin" },
+                    "migrate": { "kind": "task", "command": "bun run db:migrate", "depends_on": ["web"], "timeout_seconds": 30 },
+                    "api": { "kind": "service", "runtime": "process", "command": "bun run api" }
+                }
+            }"#;
         let config: LifecycleConfig = serde_json::from_str(&config_json).expect("valid config");
 
         reconcile_workspace_services_db(
@@ -907,7 +924,7 @@ mod tests {
 
         let mut stmt = conn
             .prepare(
-                "SELECT service_name, exposure, port_override, status, status_reason, default_port, effective_port, preview_status, preview_failure_reason, preview_url
+                "SELECT service_name, exposure, port_override, status, status_reason, assigned_port, preview_status, preview_failure_reason, preview_url
                  FROM workspace_service
                  WHERE workspace_id = ?1
                  ORDER BY service_name",
@@ -922,10 +939,9 @@ mod tests {
                     row.get::<_, String>(3)?,
                     row.get::<_, Option<String>>(4)?,
                     row.get::<_, Option<i64>>(5)?,
-                    row.get::<_, Option<i64>>(6)?,
-                    row.get::<_, String>(7)?,
+                    row.get::<_, String>(6)?,
+                    row.get::<_, Option<String>>(7)?,
                     row.get::<_, Option<String>>(8)?,
-                    row.get::<_, Option<String>>(9)?,
                 ))
             })
             .expect("query services");
@@ -935,7 +951,6 @@ mod tests {
             Option<i64>,
             String,
             Option<String>,
-            Option<i64>,
             Option<i64>,
             String,
             Option<String>,
@@ -950,23 +965,21 @@ mod tests {
                     None,
                     "stopped".to_string(),
                     None,
-                    Some(admin_default_port),
-                    Some(admin_default_port),
+                    None,
                     "sleeping".to_string(),
                     None,
-                    Some(format!("http://127.0.0.1:{admin_default_port}")),
+                    Some(local_preview_url(&preview_label, "admin")),
                 ),
                 (
                     "api".to_string(),
-                    "internal".to_string(),
+                    "local".to_string(),
                     None,
                     "stopped".to_string(),
                     None,
                     None,
+                    "sleeping".to_string(),
                     None,
-                    "disabled".to_string(),
-                    None,
-                    None,
+                    Some(local_preview_url(&preview_label, "api")),
                 ),
                 (
                     "web".to_string(),
@@ -974,8 +987,7 @@ mod tests {
                     Some(web_override_port),
                     "stopped".to_string(),
                     None,
-                    Some(web_default_port),
-                    Some(web_override_port),
+                    None,
                     "disabled".to_string(),
                     None,
                     None,
@@ -992,17 +1004,18 @@ mod tests {
         init_workspace_tables(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
+        let (name, source_ref, _) = managed_workspace_identity("ws_active");
         conn.execute(
-            "INSERT INTO workspace (id, status, updated_at) VALUES (?1, ?2, datetime('now'))",
-            rusqlite::params!["ws_active", "active"],
+            "INSERT INTO workspace (id, status, kind, name, source_ref, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
+            rusqlite::params!["ws_active", "active", "managed", name, source_ref],
         )
         .expect("insert workspace");
         conn.execute(
             "INSERT INTO workspace_service (
                 id, workspace_id, service_name, exposure, port_override, status, status_reason,
-                default_port, effective_port, preview_status, preview_failure_reason, preview_url,
+                assigned_port, preview_status, preview_failure_reason, preview_url,
                 created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, datetime('now'), datetime('now'))",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, datetime('now'), datetime('now'))",
             rusqlite::params![
                 "svc_api",
                 "ws_active",
@@ -1011,7 +1024,6 @@ mod tests {
                 Option::<i64>::None,
                 "ready",
                 Option::<String>::None,
-                Option::<i64>::None,
                 Option::<i64>::None,
                 "disabled",
                 Option::<String>::None,
@@ -1083,7 +1095,7 @@ mod tests {
                     "www".to_string(),
                     "stopped".to_string(),
                     None,
-                    "disabled".to_string(),
+                    "sleeping".to_string(),
                 ),
             ]
         );
@@ -1093,46 +1105,56 @@ mod tests {
     }
 
     #[test]
-    fn reconcile_workspace_services_db_assigns_next_available_port_for_conflicting_defaults() {
+    fn reconcile_workspace_services_db_does_not_assign_runtime_ports_while_idle() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
-        let default_port = available_test_port();
+        let test_port = available_test_port();
 
         let conn = open_db(&db_path).expect("open db");
+        let (name_a, source_ref_a, _) = managed_workspace_identity("ws_a");
+        let (name_b, source_ref_b, _) = managed_workspace_identity("ws_b");
         conn.execute(
-            "INSERT INTO workspace (id, status, updated_at) VALUES (?1, ?2, datetime('now')), (?3, ?4, datetime('now'))",
-            rusqlite::params!["ws_a", "idle", "ws_b", "idle"],
+            "INSERT INTO workspace (id, status, kind, name, source_ref, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now')), (?6, ?7, ?8, ?9, ?10, datetime('now'))",
+            rusqlite::params![
+                "ws_a",
+                "idle",
+                "managed",
+                name_a,
+                source_ref_a,
+                "ws_b",
+                "idle",
+                "managed",
+                name_b,
+                source_ref_b
+            ],
         )
         .expect("insert workspaces");
         conn.execute(
             "INSERT INTO workspace_service (
-                id, workspace_id, service_name, exposure, status, default_port, effective_port,
+                id, workspace_id, service_name, exposure, status, assigned_port,
                 preview_status, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'), datetime('now'))",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'), datetime('now'))",
             rusqlite::params![
                 "svc_a",
                 "ws_a",
                 "web",
                 "local",
                 "stopped",
-                Some(default_port),
-                Some(default_port),
+                Some(test_port),
                 "sleeping",
             ],
         )
         .expect("insert reserved service");
         drop(conn);
 
-        let config_json = format!(
-            r#"{{
-                "workspace": {{
-                    "setup": [{{ "name": "install", "command": "bun install", "timeout_seconds": 30 }}]
-                }},
-                "environment": {{
-                    "web": {{ "kind": "service", "runtime": "process", "command": "bun run dev", "port": {default_port}, "share_default": true }}
-                }}
-            }}"#,
-        );
+        let config_json = r#"{
+                "workspace": {
+                    "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 30 }]
+                },
+                "environment": {
+                    "web": { "kind": "service", "runtime": "process", "command": "bun run dev" }
+                }
+            }"#;
         let config: LifecycleConfig = serde_json::from_str(&config_json).expect("valid config");
 
         reconcile_workspace_services_db(
@@ -1147,23 +1169,23 @@ mod tests {
         let conn = open_db(&db_path).expect("re-open db");
         let row: (Option<i64>, Option<i64>) = conn
             .query_row(
-                "SELECT port_override, effective_port FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+                "SELECT port_override, assigned_port FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
                 rusqlite::params!["ws_b", "web"],
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .expect("query service");
         assert_eq!(row.0, None);
-        assert!(matches!(row.1, Some(port) if port > default_port));
+        assert_eq!(row.1, None);
 
         let _ = std::fs::remove_file(db_path);
     }
 
     #[test]
-    fn reconcile_workspace_services_db_reassigns_stale_effective_port_when_workspace_is_idle() {
+    fn reconcile_workspace_services_db_clears_stale_assigned_port_when_workspace_is_idle() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
         let port_guard = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("bind port");
-        let default_port = i64::from(
+        let stale_port = i64::from(
             port_guard
                 .local_addr()
                 .expect("port should have local addr")
@@ -1171,24 +1193,24 @@ mod tests {
         );
 
         let conn = open_db(&db_path).expect("open db");
+        let (name, source_ref, _) = managed_workspace_identity("ws_idle");
         conn.execute(
-            "INSERT INTO workspace (id, status, updated_at) VALUES (?1, ?2, datetime('now'))",
-            rusqlite::params!["ws_idle", "idle"],
+            "INSERT INTO workspace (id, status, kind, name, source_ref, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
+            rusqlite::params!["ws_idle", "idle", "managed", name, source_ref],
         )
         .expect("insert workspace");
         conn.execute(
             "INSERT INTO workspace_service (
-                id, workspace_id, service_name, exposure, status, default_port, effective_port,
+                id, workspace_id, service_name, exposure, status, assigned_port,
                 preview_status, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'), datetime('now'))",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'), datetime('now'))",
             rusqlite::params![
                 "svc_idle",
                 "ws_idle",
                 "postgres",
                 "internal",
                 "stopped",
-                Some(default_port),
-                Some(default_port),
+                Some(stale_port),
                 "disabled",
             ],
         )
@@ -1201,7 +1223,7 @@ mod tests {
                     "setup": [{{ "name": "install", "command": "bun install", "timeout_seconds": 30 }}]
                 }},
                 "environment": {{
-                    "postgres": {{ "kind": "service", "runtime": "image", "image": "postgres:16", "port": {default_port} }}
+                    "postgres": {{ "kind": "service", "runtime": "image", "image": "postgres:16", "port": {stale_port} }}
                 }}
             }}"#,
         );
@@ -1217,44 +1239,42 @@ mod tests {
         .expect("reconcile succeeds");
 
         let conn = open_db(&db_path).expect("re-open db");
-        let effective_port: Option<i64> = conn
+        let assigned_port: Option<i64> = conn
             .query_row(
-                "SELECT effective_port FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+                "SELECT assigned_port FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
                 rusqlite::params!["ws_idle", "postgres"],
                 |row| row.get(0),
             )
             .expect("query service");
-        assert!(matches!(effective_port, Some(port) if (41_000..=48_999).contains(&port)));
+        assert_eq!(assigned_port, None);
 
         drop(port_guard);
         let _ = std::fs::remove_file(db_path);
     }
 
     #[test]
-    fn reconcile_workspace_services_db_assigns_internal_image_services_from_high_port_range() {
+    fn reconcile_workspace_services_db_keeps_idle_service_ports_unassigned() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
-        let web_default_port = available_test_port();
 
         let conn = open_db(&db_path).expect("open db");
+        let (name, source_ref, _) = managed_workspace_identity("ws_image");
         conn.execute(
-            "INSERT INTO workspace (id, status, updated_at) VALUES (?1, ?2, datetime('now'))",
-            rusqlite::params!["ws_image", "idle"],
+            "INSERT INTO workspace (id, status, kind, name, source_ref, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
+            rusqlite::params!["ws_image", "idle", "managed", name, source_ref],
         )
         .expect("insert workspace");
         drop(conn);
 
-        let config_json = format!(
-            r#"{{
-            "workspace": {{
-                "setup": [{{ "name": "install", "command": "bun install", "timeout_seconds": 30 }}]
-            }},
-            "environment": {{
-                "postgres": {{ "kind": "service", "runtime": "image", "image": "postgres:16", "port": 5432 }},
-                "web": {{ "kind": "service", "runtime": "process", "command": "bun run dev", "port": {web_default_port}, "share_default": true }}
-            }}
-        }}"#
-        );
+        let config_json = r#"{
+            "workspace": {
+                "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 30 }]
+            },
+            "environment": {
+                "postgres": { "kind": "service", "runtime": "image", "image": "postgres:16", "port": 5432 },
+                "web": { "kind": "service", "runtime": "process", "command": "bun run dev" }
+            }
+        }"#;
         let config: LifecycleConfig = serde_json::from_str(&config_json).expect("valid config");
 
         reconcile_workspace_services_db(
@@ -1269,21 +1289,21 @@ mod tests {
         let conn = open_db(&db_path).expect("re-open db");
         let postgres_port: Option<i64> = conn
             .query_row(
-                "SELECT effective_port FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+                "SELECT assigned_port FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
                 rusqlite::params!["ws_image", "postgres"],
                 |row| row.get(0),
             )
             .expect("query postgres");
         let web_port: Option<i64> = conn
             .query_row(
-                "SELECT effective_port FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+                "SELECT assigned_port FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
                 rusqlite::params!["ws_image", "web"],
                 |row| row.get(0),
             )
             .expect("query web");
 
-        assert!(matches!(postgres_port, Some(port) if (41_000..=48_999).contains(&port)));
-        assert_eq!(web_port, Some(web_default_port));
+        assert_eq!(postgres_port, None);
+        assert_eq!(web_port, None);
 
         let _ = std::fs::remove_file(db_path);
     }

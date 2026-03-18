@@ -179,6 +179,10 @@ async fn run_command_step(
         cmd.env(key, value);
     }
 
+    // Force color output even though stdout/stderr are piped, not a TTY.
+    cmd.env("FORCE_COLOR", "1");
+    cmd.env("CLICOLOR_FORCE", "1");
+
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
 
@@ -551,14 +555,14 @@ mod tests {
             cwd: None,
             env: Some(HashMap::from([(
                 "API_ORIGIN".to_string(),
-                "http://${LIFECYCLE_SERVICE_API_ADDRESS}".to_string(),
+                "${LIFECYCLE_SERVICE_API_URL}".to_string(),
             )])),
             depends_on: None,
             run_on: None,
         };
         let runtime_env = HashMap::from([(
-            "LIFECYCLE_SERVICE_API_ADDRESS".to_string(),
-            "127.0.0.1:3001".to_string(),
+            "LIFECYCLE_SERVICE_API_URL".to_string(),
+            "http://api.frost-beacon-57f59253.lifecycle.localhost:52300".to_string(),
         )]);
 
         let env = build_step_env(&step, &runtime_env, "workspace.setup.write-env")
@@ -566,7 +570,7 @@ mod tests {
 
         assert_eq!(
             env.get("API_ORIGIN").map(String::as_str),
-            Some("http://127.0.0.1:3001")
+            Some("http://api.frost-beacon-57f59253.lifecycle.localhost:52300")
         );
     }
 

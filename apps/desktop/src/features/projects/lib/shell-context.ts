@@ -22,11 +22,11 @@ function buildOrganizationContextName(index: number, total: number): string {
   return total === 1 ? "Organization" : `Organization ${index + 1}`;
 }
 
-function createPersonalShellContext(persisted: boolean): ShellContext {
+function createPersonalShellContext(persisted: boolean, displayName?: string | null): ShellContext {
   return {
     id: PERSONAL_SHELL_CONTEXT_ID,
     kind: "personal",
-    name: "Personal",
+    name: displayName || "Personal",
     persisted,
   };
 }
@@ -41,14 +41,14 @@ export function resolveProjectShellContextId(
 
 export function buildShellContexts(
   projects: ProjectRecord[],
-  options: { personalContextPersisted?: boolean } = {},
+  options: { personalContextPersisted?: boolean; personalDisplayName?: string | null } = {},
 ): ShellContext[] {
   const organizationIds = [...new Set(projects.map((project) => project.organizationId))]
     .filter((organizationId): organizationId is string => Boolean(organizationId))
     .sort((left, right) => left.localeCompare(right));
 
   return [
-    createPersonalShellContext(options.personalContextPersisted ?? false),
+    createPersonalShellContext(options.personalContextPersisted ?? false, options.personalDisplayName),
     ...organizationIds.map((organizationId, index) => ({
       id: organizationShellContextId(organizationId),
       kind: "organization" as const,

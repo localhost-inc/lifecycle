@@ -34,8 +34,7 @@ const services: ServiceRecord[] = [
     port_override: null,
     status: "ready",
     status_reason: null,
-    default_port: 3000,
-    effective_port: 3000,
+    assigned_port: 3000,
     preview_status: "ready",
     preview_failure_reason: null,
     preview_url: "http://127.0.0.1:3000",
@@ -50,8 +49,7 @@ const services: ServiceRecord[] = [
     port_override: null,
     status: "starting",
     status_reason: null,
-    default_port: 8787,
-    effective_port: 8787,
+    assigned_port: 8787,
     preview_status: "provisioning",
     preview_failure_reason: null,
     preview_url: "http://127.0.0.1:8787",
@@ -85,7 +83,31 @@ describe("EnvironmentPanel", () => {
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
+        onRestart: async () => {},
         onRun: async () => {},
+        onStop: async () => {},
+        onUpdateService: async () => {},
+        environmentTasks: [],
+        serviceLogs: [],
+        setupSteps: [],
+        services,
+        workspace: baseWorkspace,
+      }),
+    );
+
+    expect(markup).toContain("Running");
+  });
+
+  test("tolerates missing service logs", () => {
+    const markup = renderToStaticMarkup(
+      createElement(EnvironmentPanel, {
+        config: null,
+        hasManifest: true,
+        isManifestStale: false,
+        manifestState: "valid",
+        onRestart: async () => {},
+        onRun: async () => {},
+        onStop: async () => {},
         onUpdateService: async () => {},
         environmentTasks: [],
         setupSteps: [],
@@ -104,9 +126,12 @@ describe("EnvironmentPanel", () => {
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
+        onRestart: async () => {},
         onRun: async () => {},
+        onStop: async () => {},
         onUpdateService: async () => {},
         environmentTasks: [],
+        serviceLogs: [],
         setupSteps: setupSteps,
         services,
         workspace: {
@@ -128,9 +153,12 @@ describe("EnvironmentPanel", () => {
         hasManifest: false,
         isManifestStale: false,
         manifestState: "missing",
+        onRestart: async () => {},
         onRun: async () => {},
+        onStop: async () => {},
         onUpdateService: async () => {},
         environmentTasks: [],
+        serviceLogs: [],
         setupSteps: [],
         services: [],
         workspace: {
@@ -141,7 +169,7 @@ describe("EnvironmentPanel", () => {
     );
 
     expect(markup).toContain("Idle");
-    expect(markup).not.toContain("Boot sequence");
+    expect(markup).not.toContain("Setup");
   });
 
   test("shows restart guidance when a running workspace manifest is stale", () => {
@@ -151,9 +179,12 @@ describe("EnvironmentPanel", () => {
         hasManifest: true,
         isManifestStale: true,
         manifestState: "valid",
+        onRestart: async () => {},
         onRun: async () => {},
+        onStop: async () => {},
         onUpdateService: async () => {},
         environmentTasks: [],
+        serviceLogs: [],
         setupSteps: [],
         services,
         workspace: baseWorkspace,
@@ -165,22 +196,25 @@ describe("EnvironmentPanel", () => {
     );
   });
 
-  test("renders service names in the logs filter tabs when config provides services", () => {
+  test("renders service names in the service list when config provides services", () => {
     const markup = renderToStaticMarkup(
       createElement(EnvironmentPanel, {
         config: {
           workspace: { setup: [], teardown: [] },
           environment: {
-            web: { kind: "service", runtime: "process", command: "bun run dev", port: 3000 },
-            api: { kind: "service", runtime: "process", command: "bun run api", port: 8787 },
+            web: { kind: "service", runtime: "process", command: "bun run dev" },
+            api: { kind: "service", runtime: "process", command: "bun run api" },
           },
         },
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
+        onRestart: async () => {},
         onRun: async () => {},
+        onStop: async () => {},
         onUpdateService: async () => {},
         environmentTasks: [],
+        serviceLogs: [],
         setupSteps: [],
         services,
         workspace: baseWorkspace,
@@ -189,7 +223,6 @@ describe("EnvironmentPanel", () => {
 
     expect(markup).toContain("web");
     expect(markup).toContain("api");
-    expect(markup).toContain("Logs");
   });
 
   test("renders sleeping preview state for local services while the workspace sleeps", () => {
@@ -199,9 +232,12 @@ describe("EnvironmentPanel", () => {
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
+        onRestart: async () => {},
         onRun: async () => {},
+        onStop: async () => {},
         onUpdateService: async () => {},
         environmentTasks: [],
+        serviceLogs: [],
         setupSteps: [],
         services: [
           {
@@ -219,7 +255,7 @@ describe("EnvironmentPanel", () => {
     );
 
     expect(markup).toContain("web");
-    expect(markup).toContain(":3000");
+    expect(markup).not.toContain(":3000");
     expect(markup).not.toContain("linear-gradient(90deg");
     expect(markup).not.toContain("lucide-external-link");
   });
@@ -250,9 +286,12 @@ describe("EnvironmentPanel", () => {
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
+        onRestart: async () => {},
         onRun: async () => {},
+        onStop: async () => {},
         onUpdateService: async () => {},
         environmentTasks,
+        serviceLogs: [],
         setupSteps: [
           {
             name: "install",
@@ -275,8 +314,7 @@ describe("EnvironmentPanel", () => {
             port_override: null,
             status: "ready",
             status_reason: null,
-            default_port: 5432,
-            effective_port: 5432,
+            assigned_port: 5432,
             preview_status: "disabled",
             preview_failure_reason: null,
             preview_url: null,
@@ -309,23 +347,24 @@ describe("EnvironmentPanel", () => {
               kind: "service",
               runtime: "process",
               command: "bun run dev",
-              port: 8787,
             },
             www: {
               kind: "service",
               runtime: "process",
               command: "bun run dev",
               depends_on: ["api"],
-              port: 3000,
             },
           },
         },
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
+        onRestart: async () => {},
         onRun: async () => {},
+        onStop: async () => {},
         onUpdateService: async () => {},
         environmentTasks: [],
+        serviceLogs: [],
         setupSteps: [],
         services: [
           {
@@ -347,8 +386,6 @@ describe("EnvironmentPanel", () => {
       }),
     );
 
-    expect(markup).toContain("Boot");
-    expect(markup).toContain("Logs");
     expect(markup).toContain("api");
     expect(markup).toContain("www");
   });
@@ -360,7 +397,9 @@ describe("EnvironmentPanel", () => {
         hasManifest: true,
         isManifestStale: false,
         manifestState: "valid",
+        onRestart: async () => {},
         onRun: async () => {},
+        onStop: async () => {},
         onUpdateService: async () => {},
         environmentTasks: [
           {
@@ -369,6 +408,7 @@ describe("EnvironmentPanel", () => {
             status: "failed",
           },
         ],
+        serviceLogs: [],
         setupSteps: [],
         services: [],
         workspace: {
@@ -381,6 +421,6 @@ describe("EnvironmentPanel", () => {
 
     expect(markup).toContain("An environment task failed.");
     expect(markup).not.toContain("Boot failed");
-    expect(markup).toContain("migrate");
+    expect(markup).toContain("Setup");
   });
 });

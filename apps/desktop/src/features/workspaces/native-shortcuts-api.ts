@@ -3,6 +3,8 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export type WorkspaceShortcutAction =
   | "close-active-tab"
+  | "go-back"
+  | "go-forward"
   | "new-tab"
   | "next-tab"
   | "previous-tab";

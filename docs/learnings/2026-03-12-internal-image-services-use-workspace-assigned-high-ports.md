@@ -2,7 +2,7 @@
 
 ## What changed
 
-Local internal image services now allocate their host `effective_port` from a stable high port range instead of starting from the image's canonical service port and scanning upward.
+Local internal image services now allocate their host `assigned_port` from a managed high port range at start time instead of starting from the image's canonical service port and scanning upward.
 
 For example, Postgres may still listen on `5432` inside the container, but the host binding for a given workspace now lands on a workspace-specific high port. Process services and shared/local preview services still prefer their declared low ports.
 
@@ -22,5 +22,5 @@ Anchoring internal image services to the canonical low ports made local stacks f
 
 ## Follow-up
 
-1. Keep the high-port allocation stable per workspace/service so restarts do not thrash env files unnecessarily.
+1. Keep the high-port allocation deterministic enough for one start sequence, but do not treat the last boot's host bind as durable configuration.
 2. Preserve explicit `port_override` as the only user-controlled escape hatch; internal image services should not require manual port picking in the common path.

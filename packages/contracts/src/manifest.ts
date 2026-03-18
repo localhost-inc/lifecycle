@@ -131,8 +131,6 @@ const BaseServiceFields = {
   depends_on: z.array(z.string()).optional(),
   startup_timeout_seconds: z.number().int().positive().optional(),
   health_check: HealthCheckSchema.optional(),
-  port: z.number().int().positive().optional(),
-  share_default: z.boolean().optional(),
 };
 
 const ImageBuildSchema = z.object({
@@ -198,6 +196,7 @@ const ImageServiceNodeSchema = z
     command: z.string().optional(),
     args: z.array(z.string()).optional(),
     volumes: z.array(ImageVolumeSchema).optional(),
+    port: z.number().int().positive().optional(),
     ...BaseServiceFields,
   })
   .superRefine((service, ctx) => {

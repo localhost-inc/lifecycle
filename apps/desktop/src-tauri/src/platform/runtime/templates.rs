@@ -46,18 +46,21 @@ mod tests {
     #[test]
     fn expands_reserved_runtime_templates() {
         let env = HashMap::from([(
-            "LIFECYCLE_SERVICE_API_ADDRESS".to_string(),
-            "127.0.0.1:3001".to_string(),
+            "LIFECYCLE_SERVICE_API_URL".to_string(),
+            "http://api.frost-beacon-57f59253.lifecycle.localhost:52300".to_string(),
         )]);
 
         let rendered = expand_reserved_runtime_templates(
-            "http://${LIFECYCLE_SERVICE_API_ADDRESS}",
+            "${LIFECYCLE_SERVICE_API_URL}",
             &env,
             "environment.web.env.VITE_API_ORIGIN",
         )
         .expect("runtime template expansion succeeds");
 
-        assert_eq!(rendered, "http://127.0.0.1:3001");
+        assert_eq!(
+            rendered,
+            "http://api.frost-beacon-57f59253.lifecycle.localhost:52300"
+        );
     }
 
     #[test]
@@ -79,7 +82,7 @@ mod tests {
         let env = HashMap::new();
 
         let error = expand_reserved_runtime_templates(
-            "${LIFECYCLE_SERVICE_API_ADDRESS}",
+            "${LIFECYCLE_SERVICE_API_URL}",
             &env,
             "environment.web.env.VITE_API_ORIGIN",
         )

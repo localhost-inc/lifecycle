@@ -2,19 +2,23 @@ import type { LifecycleConfig, ServiceRecord, WorkspaceRecord } from "@lifecycle
 import {
   Alert,
   AlertDescription,
+  Button,
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
   Spinner,
 } from "@lifecycle/ui";
-import { useEffect, useState } from "react";
-import {
-  AlertTriangle,
-  ChevronRight,
-} from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { AlertTriangle, ChevronRight } from "lucide-react";
 import { BootSequence, deriveBootPresentation, deriveBootSequenceItems } from "./boot-sequence";
-import { LogsTab } from "./logs-tab";
-import type { EnvironmentTaskState, SetupStepState } from "../hooks";
+import { collectEnvironmentAncestors } from "./logs-tab";
+import { ServiceRow } from "./services-tab";
+import type {
+  EnvironmentTaskState,
+  ServiceLogLine,
+  ServiceLogState,
+  SetupStepState,
+} from "../hooks";
 import { formatWorkspaceError } from "../lib/workspace-errors";
 
 const FAILURE_REASON_LABELS: Record<string, string> = {
@@ -38,13 +42,16 @@ interface EnvironmentPanelProps {
   hasManifest: boolean;
   isManifestStale: boolean;
   manifestState: "invalid" | "missing" | "valid";
+  onRestart: () => Promise<void>;
   onRun: (serviceNames?: string[]) => Promise<void>;
+  onStop: () => Promise<void>;
   onUpdateService: (input: {
     exposure: ServiceRecord["exposure"];
     portOverride: number | null;
     serviceName: string;
   }) => Promise<void>;
   environmentTasks: EnvironmentTaskState[];
+  serviceLogs?: ServiceLogState[];
   setupSteps: SetupStepState[];
   services: ServiceRecord[];
   workspace: WorkspaceRecord;
@@ -55,16 +62,19 @@ export function EnvironmentPanel({
   hasManifest,
   isManifestStale,
   manifestState,
+  onRestart,
   onRun,
+  onStop,
   onUpdateService,
   environmentTasks,
+  serviceLogs = [],
   setupSteps,
   services,
   workspace,
 }: EnvironmentPanelProps) {
   const [activeServiceStartName, setActiveServiceStartName] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [selectedServiceLogsName, setSelectedServiceLogsName] = useState<string | null>(null);
+  const [expandedServiceName, setExpandedServiceName] = useState<string | null>(null);
 
   const declaredSetupStepNames = (config?.workspace.setup ?? []).map((step) => step.name);
   const serviceRuntimeByName = Object.fromEntries(
@@ -79,7 +89,6 @@ export function EnvironmentPanel({
       )
       .map(([name, node]) => [name, node.runtime]),
   );
-  const serviceNames = Object.keys(serviceRuntimeByName);
 
   const canStartService =
     hasManifest && (workspace.status === "idle" || workspace.status === "active");
@@ -94,7 +103,56 @@ export function EnvironmentPanel({
     serviceRuntimeByName,
     workspace.setup_completed_at !== null && workspace.setup_completed_at !== undefined,
   );
-  const bootPresentation = deriveBootPresentation(bootItems, workspace);
+  const bootStepItems = bootItems.filter((item) => item.kind !== "service");
+  const bootPresentation = deriveBootPresentation(bootStepItems, workspace);
+
+  // Run action state
+  const [runActionBusy, setRunActionBusy] = useState(false);
+  const canRun = hasManifest && workspace.status === "idle";
+  const canStop = workspace.status === "active" || workspace.status === "starting";
+  const canRestart = workspace.status === "active" && hasManifest;
+  const stopping = workspace.status === "stopping";
+
+  const handleRunAction = useCallback(async () => {
+    if (runActionBusy) return;
+    setRunActionBusy(true);
+    try {
+      if (canStop) {
+        await onStop();
+      } else if (canRun) {
+        await onRun();
+      }
+    } catch (err) {
+      console.error("Run action failed:", err);
+    } finally {
+      setRunActionBusy(false);
+    }
+  }, [canRun, canStop, onRun, onStop, runActionBusy]);
+
+  const handleRestartAction = useCallback(async () => {
+    if (runActionBusy || !canRestart) return;
+    setRunActionBusy(true);
+    try {
+      await onRestart();
+    } catch (err) {
+      console.error("Restart failed:", err);
+    } finally {
+      setRunActionBusy(false);
+    }
+  }, [canRestart, onRestart, runActionBusy]);
+
+  const runButtonLabel =
+    workspace.status === "starting"
+      ? "Starting..."
+      : stopping || (runActionBusy && canStop)
+        ? "Stopping..."
+        : canStop
+          ? "Stop"
+          : runActionBusy
+            ? "Starting..."
+            : "Start";
+
+  const runButtonDisabled = runActionBusy || stopping || (!canRun && !canStop);
 
   // Auto-collapse boot card on terminal state, expand when booting
   const isTerminal =
@@ -105,8 +163,88 @@ export function EnvironmentPanel({
     setBootExpanded(!isTerminal);
   }, [isTerminal]);
 
+  // Build per-service merged log lines: boot output (setup steps + dep tasks) + runtime logs
+  const serviceLogsByName = new Map<string, ServiceLogLine[]>();
+  for (const svc of services) {
+    const lines: ServiceLogLine[] = [];
+
+    // Prepend boot output: setup steps are global, tasks are per-dependency-chain
+    const ancestors = config
+      ? collectEnvironmentAncestors(config, svc.service_name)
+      : new Set<string>();
+
+    for (const step of setupSteps) {
+      for (const line of step.output) {
+        lines.push({ stream: "stdout", text: line });
+      }
+    }
+
+    for (const task of environmentTasks) {
+      if (ancestors.has(task.name)) {
+        for (const line of task.output) {
+          lines.push({ stream: "stdout", text: line });
+        }
+      }
+    }
+
+    // Append runtime service logs
+    const runtimeLog = serviceLogs.find((log) => log.serviceName === svc.service_name);
+    if (runtimeLog) {
+      lines.push(...runtimeLog.lines);
+    }
+
+    if (lines.length > 0) {
+      serviceLogsByName.set(svc.service_name, lines);
+    }
+  }
+
+  // Auto-expand the first booting service, auto-collapse when all active
+  useEffect(() => {
+    if (workspace.status === "starting") {
+      const booting = services.find((svc) => svc.status === "starting");
+      if (booting) {
+        setExpandedServiceName(booting.service_name);
+      }
+    } else if (workspace.status === "active") {
+      setExpandedServiceName(null);
+    }
+  }, [workspace.status, services]);
+
+  function renderServiceList(withLogs: boolean) {
+    if (services.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="shrink-0">
+        {services.map((svc) => (
+          <ServiceRow
+            expanded={withLogs ? expandedServiceName === svc.service_name : undefined}
+            key={svc.id}
+            logLines={withLogs ? serviceLogsByName.get(svc.service_name) : undefined}
+            onStartService={(serviceName) => void handleRunService(serviceName)}
+            onToggleExpanded={
+              withLogs
+                ? () =>
+                    setExpandedServiceName((prev) =>
+                      prev === svc.service_name ? null : svc.service_name,
+                    )
+                : undefined
+            }
+            onUpdateService={onUpdateService}
+            runDisabled={!canStartService || activeServiceStartName !== null}
+            runPending={activeServiceStartName === svc.service_name}
+            runtime={serviceRuntimeByName[svc.service_name] ?? null}
+            service={svc}
+            statusAffordance="indicator"
+          />
+        ))}
+      </div>
+    );
+  }
+
   function handleOpenServiceLogs(serviceName: string): void {
-    setSelectedServiceLogsName(serviceName);
+    setExpandedServiceName(expandedServiceName === serviceName ? null : serviceName);
   }
 
   async function handleRunService(serviceName: string): Promise<void> {
@@ -127,59 +265,258 @@ export function EnvironmentPanel({
     }
   }
 
-  const statusLabel =
-    workspace.status === "starting"
+  // Derive workspace phase for layout decisions
+  const isFailed = workspace.status === "idle" && workspace.failure_reason !== null;
+  const isIdle = workspace.status === "idle" && workspace.failure_reason === null;
+  const isBooting = workspace.status === "starting" || workspace.status === "stopping";
+  const isActive = workspace.status === "active";
+
+  const statusLabel = isBooting
+    ? workspace.status === "starting"
       ? "Starting"
-      : workspace.status === "stopping"
-        ? "Stopping"
-        : workspace.status === "active"
-          ? "Running"
-          : workspace.failure_reason
-            ? "Failed"
-            : "Idle";
+      : "Stopping"
+    : isActive
+      ? "Running"
+      : isFailed
+        ? "Failed"
+        : "Idle";
 
-  const statusDotClass =
-    workspace.status === "active"
-      ? "bg-[var(--status-success)]"
-      : workspace.status === "starting"
-        ? "bg-[var(--status-info)] lifecycle-motion-soft-pulse"
-        : workspace.failure_reason
-          ? "bg-[var(--status-danger)]"
-          : "bg-[var(--muted-foreground)]/40";
+  const statusDotClass = isActive
+    ? "bg-[var(--status-success)]"
+    : isBooting
+      ? "bg-[var(--status-info)] lifecycle-motion-soft-pulse"
+      : isFailed
+        ? "bg-[var(--status-danger)]"
+        : "bg-[var(--muted-foreground)]/40";
 
+  // Idle with no manifest — nothing to show
+  if (isIdle && !hasManifest) {
+    return (
+      <section className="relative flex h-full min-h-0 flex-col">
+        <div className="shrink-0 px-3 pt-3 pb-2">
+          <div className="flex items-center gap-2">
+            <span className={`inline-block size-[7px] shrink-0 rounded-full ${statusDotClass}`} />
+            <span className="text-[13px] font-medium text-[var(--foreground)]">{statusLabel}</span>
+          </div>
+        </div>
+        <div className="flex flex-1 items-center justify-center px-6">
+          <p className="text-center text-[12px] leading-relaxed text-[var(--muted-foreground)]">
+            Add a{" "}
+            <code className="rounded bg-[var(--muted)] px-1 py-0.5 text-[11px]">
+              lifecycle.json
+            </code>{" "}
+            to configure environment services and setup steps.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  // Idle with manifest, ready to start — clean view
+  if (isIdle && hasManifest) {
+    return (
+      <section className="relative flex h-full min-h-0 flex-col">
+        <div className="shrink-0 px-3 pt-3 pb-2">
+          <div className="flex items-center gap-2">
+            <span className={`inline-block size-[7px] shrink-0 rounded-full ${statusDotClass}`} />
+            <span className="text-[13px] font-medium text-[var(--foreground)]">{statusLabel}</span>
+          </div>
+        </div>
+
+        {/* Boot sequence preview — collapsed, showing what will run */}
+        {bootStepItems.length > 0 && (
+          <div className="shrink-0 px-3 pt-1">
+            <Collapsible onOpenChange={setBootExpanded} open={bootExpanded}>
+              <CollapsibleTrigger asChild>
+                <button
+                  className="group flex w-full items-center gap-2 py-2 text-left"
+                  type="button"
+                >
+                  <ChevronRight
+                    className={`size-3 shrink-0 text-[var(--muted-foreground)] transition-transform duration-150 ${bootExpanded ? "rotate-90" : ""}`}
+                    strokeWidth={2.4}
+                  />
+                  <span className="text-[12px] font-medium text-[var(--muted-foreground)] transition-colors group-hover:text-[var(--foreground)]">
+                    Environment
+                  </span>
+                  <span className="ml-auto shrink-0 text-[11px] tabular-nums text-[var(--muted-foreground)]/60">
+                    {bootStepItems.length} {bootStepItems.length === 1 ? "step" : "steps"}
+                  </span>
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="pb-2 pt-0.5">
+                  <BootSequence
+                    config={config}
+                    declaredStepNames={declaredSetupStepNames}
+                    environmentTasks={environmentTasks}
+                    items={bootStepItems}
+                    onOpenServiceLogs={handleOpenServiceLogs}
+                    onStartService={(serviceName) => void handleRunService(serviceName)}
+                    onUpdateService={onUpdateService}
+                    runDisabled={!canStartService || activeServiceStartName !== null}
+                    runningServiceName={activeServiceStartName}
+                    serviceRuntimeByName={serviceRuntimeByName}
+                    services={services}
+                    setupSteps={setupSteps}
+                    workspace={workspace}
+                  />
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
+        )}
+
+        {renderServiceList(false)}
+
+        {actionError && (
+          <div className="px-3 pt-2">
+            <Alert variant="destructive">
+              <AlertTriangle className="size-4" />
+              <AlertDescription>{actionError}</AlertDescription>
+            </Alert>
+          </div>
+        )}
+
+        {/* Start button */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-2.5 pb-2.5">
+          <Button
+            className="pointer-events-auto px-8"
+            disabled={runButtonDisabled}
+            onClick={() => void handleRunAction()}
+            size="lg"
+            variant="glass"
+          >
+            {runButtonLabel}
+          </Button>
+        </div>
+      </section>
+    );
+  }
+
+  // Failed — show failure prominently with option to see boot sequence
+  if (isFailed) {
+    return (
+      <section className="relative flex h-full min-h-0 flex-col">
+        <div className="shrink-0 px-3 pt-3 pb-2">
+          <div className="flex items-center gap-2">
+            <span className={`inline-block size-[7px] shrink-0 rounded-full ${statusDotClass}`} />
+            <span className="text-[13px] font-medium text-[var(--foreground)]">{statusLabel}</span>
+          </div>
+
+          <div className="mt-2.5">
+            <Alert variant="destructive">
+              <AlertTriangle className="size-4" />
+              <AlertDescription>
+                {FAILURE_REASON_LABELS[workspace.failure_reason!] ?? workspace.failure_reason}
+              </AlertDescription>
+            </Alert>
+          </div>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {/* Boot sequence details */}
+          {bootStepItems.length > 0 && (
+            <Collapsible
+              className="shrink-0 px-3"
+              onOpenChange={setBootExpanded}
+              open={bootExpanded}
+            >
+              <CollapsibleTrigger asChild>
+                <button
+                  className="group flex w-full items-center gap-2 py-2 text-left"
+                  type="button"
+                >
+                  <ChevronRight
+                    className={`size-3 shrink-0 text-[var(--muted-foreground)] transition-transform duration-150 ${bootExpanded ? "rotate-90" : ""}`}
+                    strokeWidth={2.4}
+                  />
+                  <span className="text-[12px] font-medium text-[var(--muted-foreground)] transition-colors group-hover:text-[var(--foreground)]">
+                    Setup
+                  </span>
+                  {bootPresentation && (
+                    <span className="ml-auto shrink-0 text-[11px] tabular-nums text-[var(--muted-foreground)]/60">
+                      {bootPresentation.completedSteps}/{bootPresentation.totalSteps}
+                    </span>
+                  )}
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="pb-2 pt-0.5">
+                  <BootSequence
+                    config={config}
+                    declaredStepNames={declaredSetupStepNames}
+                    environmentTasks={environmentTasks}
+                    items={bootStepItems}
+                    onOpenServiceLogs={handleOpenServiceLogs}
+                    onStartService={(serviceName) => void handleRunService(serviceName)}
+                    onUpdateService={onUpdateService}
+                    runDisabled={!canStartService || activeServiceStartName !== null}
+                    runningServiceName={activeServiceStartName}
+                    serviceRuntimeByName={serviceRuntimeByName}
+                    services={services}
+                    setupSteps={setupSteps}
+                    workspace={workspace}
+                  />
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
+          {renderServiceList(true)}
+        </div>
+
+        {actionError && (
+          <div className="px-3 pb-2">
+            <Alert variant="destructive">
+              <AlertTriangle className="size-4" />
+              <AlertDescription>{actionError}</AlertDescription>
+            </Alert>
+          </div>
+        )}
+
+        {/* Restart button */}
+        {hasManifest && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-2.5 pb-2.5">
+            <Button
+              className="pointer-events-auto px-8"
+              disabled={runButtonDisabled}
+              onClick={() => void handleRunAction()}
+              size="lg"
+              variant="glass"
+            >
+              {runButtonLabel}
+            </Button>
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  // Starting / Stopping / Active — full view with boot sequence and logs
   return (
-    <section className="flex h-full min-h-0 flex-col">
+    <section className="relative flex h-full min-h-0 flex-col">
       {/* Status header */}
       <div className="shrink-0 px-3 pt-3 pb-2">
         <div className="flex items-center gap-2">
           <span className={`inline-block size-[7px] shrink-0 rounded-full ${statusDotClass}`} />
-          <span className="text-[13px] font-medium text-[var(--foreground)]">
-            {statusLabel}
-          </span>
+          <span className="text-[13px] font-medium text-[var(--foreground)]">{statusLabel}</span>
         </div>
 
-        {/* Alerts */}
-        {(actionError ||
-          (workspace.status === "idle" && workspace.failure_reason) ||
-          (workspace.status === "active" && isManifestStale) ||
-          (workspace.status === "active" && manifestState === "invalid")) && (
+        {/* Alerts — only contextual ones during active/booting */}
+        {((isActive && isManifestStale) ||
+          (isActive && manifestState === "invalid") ||
+          actionError) && (
           <div className="mt-2.5 flex flex-col gap-2">
-            {workspace.status === "idle" && workspace.failure_reason && (
-              <Alert variant="destructive">
-                <AlertTriangle className="size-4" />
-                <AlertDescription>
-                  {FAILURE_REASON_LABELS[workspace.failure_reason] ?? workspace.failure_reason}
-                </AlertDescription>
-              </Alert>
-            )}
-            {workspace.status === "active" && isManifestStale && (
+            {isActive && isManifestStale && (
               <Alert>
                 <AlertDescription>
                   Manifest changed. Stop and start again to apply environment updates.
                 </AlertDescription>
               </Alert>
             )}
-            {workspace.status === "active" && manifestState === "invalid" && (
+            {isActive && manifestState === "invalid" && (
               <Alert variant="destructive">
                 <AlertTriangle className="size-4" />
                 <AlertDescription>
@@ -200,22 +537,15 @@ export function EnvironmentPanel({
       {/* Scrollable body */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {/* Boot section */}
-        {bootItems.length > 0 && (
-          <Collapsible
-            className="shrink-0 px-3"
-            onOpenChange={setBootExpanded}
-            open={bootExpanded}
-          >
+        {bootStepItems.length > 0 && (
+          <Collapsible className="shrink-0 px-3" onOpenChange={setBootExpanded} open={bootExpanded}>
             <CollapsibleTrigger asChild>
-              <button
-                className="group flex w-full items-center gap-2 py-2 text-left"
-                type="button"
-              >
+              <button className="group flex w-full items-center gap-2 py-2 text-left" type="button">
                 <ChevronRight
                   className={`size-3 shrink-0 text-[var(--muted-foreground)] transition-transform duration-150 ${bootExpanded ? "rotate-90" : ""}`}
                   strokeWidth={2.4}
                 />
-                <span className="text-[12px] font-medium text-[var(--muted-foreground)] group-hover:text-[var(--foreground)] transition-colors">
+                <span className="text-[12px] font-medium text-[var(--muted-foreground)] transition-colors group-hover:text-[var(--foreground)]">
                   Boot sequence
                 </span>
                 {bootPresentation && (
@@ -253,12 +583,11 @@ export function EnvironmentPanel({
                   config={config}
                   declaredStepNames={declaredSetupStepNames}
                   environmentTasks={environmentTasks}
+                  items={bootStepItems}
                   onOpenServiceLogs={handleOpenServiceLogs}
                   onStartService={(serviceName) => void handleRunService(serviceName)}
                   onUpdateService={onUpdateService}
-                  runDisabled={
-                    !canStartService || activeServiceStartName !== null
-                  }
+                  runDisabled={!canStartService || activeServiceStartName !== null}
                   runningServiceName={activeServiceStartName}
                   serviceRuntimeByName={serviceRuntimeByName}
                   services={services}
@@ -270,62 +599,35 @@ export function EnvironmentPanel({
           </Collapsible>
         )}
 
-        {/* Divider */}
-        {bootItems.length > 0 && <div className="mx-3 border-t border-[var(--border)]" />}
+        {renderServiceList(true)}
+      </div>
 
-        {/* Logs section */}
-        <div className="shrink-0 px-3 pt-3">
-          <div className="flex items-center gap-3">
-            <span className="text-[12px] font-medium text-[var(--muted-foreground)]">
-              Logs
-            </span>
-            {serviceNames.length > 0 && (
-              <div className="flex items-center gap-0.5 rounded-md border border-[var(--border)] bg-[var(--muted)]/30 p-0.5">
-                <button
-                  className={`rounded-[5px] px-2.5 py-1 text-[11px] transition-colors ${
-                    selectedServiceLogsName === null
-                      ? "bg-[var(--surface)] font-medium text-[var(--foreground)] shadow-xs"
-                      : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-                  }`}
-                  onClick={() => setSelectedServiceLogsName(null)}
-                  type="button"
-                >
-                  All
-                </button>
-                {serviceNames.map((name) => (
-                  <button
-                    className={`rounded-[5px] px-2.5 py-1 text-[11px] transition-colors ${
-                      selectedServiceLogsName === name
-                        ? "bg-[var(--surface)] font-medium text-[var(--foreground)] shadow-xs"
-                        : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-                    }`}
-                    key={name}
-                    onClick={() =>
-                      setSelectedServiceLogsName(selectedServiceLogsName === name ? null : name)
-                    }
-                    type="button"
-                  >
-                    {name}
-                  </button>
-                ))}
-              </div>
+      {/* Floating run action */}
+      {hasManifest && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-2.5 pb-2.5">
+          <div className="pointer-events-auto flex items-center gap-2">
+            <Button
+              disabled={runButtonDisabled}
+              onClick={() => void handleRunAction()}
+              size="lg"
+              variant="glass"
+              className="px-8"
+            >
+              {runButtonLabel}
+            </Button>
+            {canRestart && (
+              <Button
+                disabled={runActionBusy}
+                onClick={() => void handleRestartAction()}
+                size="lg"
+                variant="glass"
+              >
+                Restart
+              </Button>
             )}
           </div>
         </div>
-
-        {/* Log entries */}
-        <div className="mt-2 flex min-h-0 flex-1 flex-col px-3 pb-4">
-          <LogsTab
-            config={config}
-            declaredStepNames={declaredSetupStepNames}
-            environmentTasks={environmentTasks}
-            selectedServiceName={selectedServiceLogsName}
-            serviceRuntimeByName={serviceRuntimeByName}
-            setupSteps={setupSteps}
-            workspace={workspace}
-          />
-        </div>
-      </div>
+      )}
     </section>
   );
 }

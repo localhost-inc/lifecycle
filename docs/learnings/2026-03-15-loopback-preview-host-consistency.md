@@ -1,12 +1,16 @@
 # Loopback Preview Host Consistency
 
+Superseded in part by `2026-03-17-local-preview-proxy-separation.md`.
+The current local preview URL is a stable Lifecycle-owned `*.lifecycle.localhost` route.
+`127.0.0.1` remains the internal upstream target Lifecycle binds and validates behind that proxy.
+
 ## Context
 
 Lifecycle reserved local service ports against `127.0.0.1`, and runtime service discovery already exposed `LIFECYCLE_SERVICE_*_HOST=127.0.0.1`.
 
 The preview surface did not use the same contract:
 
-1. stored `preview_url` values used `http://localhost:<effective_port>`
+1. stored `preview_url` values used `http://localhost:<assigned_port>`
 2. the desktop UI opened local previews on `localhost`
 3. browsers could resolve `localhost` to a different loopback listener than the one Lifecycle validated
 
@@ -16,10 +20,10 @@ That made a workspace preview appear healthy in Lifecycle while an `Open` action
 
 Local preview URLs must use the same loopback host Lifecycle actually reserves and injects into runtime env.
 
-1. `preview_url` for local services should be `http://127.0.0.1:<effective_port>`.
-2. UI preview helpers should derive local preview URLs from `effective_port` on the same host.
+1. The proxy's upstream target should use the same loopback host Lifecycle actually reserves and injects into runtime env.
+2. Local preview URLs should stay on a single Lifecycle-owned host contract rather than mixing `localhost` aliases.
 3. Local port viability checks should treat an occupied loopback port as unavailable across both IPv4 and IPv6 loopback listeners.
-4. Local port discovery and browser-open behavior need one consistent address contract; `localhost` is too ambiguous for that role.
+4. Local port discovery and browser-open behavior need one consistent address contract; `localhost` is too ambiguous for direct upstream routing.
 
 ## Milestone Impact
 

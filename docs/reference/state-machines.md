@@ -99,7 +99,7 @@ Workspace lifecycle is about the durable shell, not whether services are current
 
 ### Preview Trigger Conditions
 
-- `disabled -> provisioning` on `share on` or `share_default=true`
+- `disabled -> provisioning` on `share on` or service has `local` exposure
 - `provisioning -> ready|failed` after route bind + health confirmation
 - `ready -> provisioning` during service restart/rebind (URL remains stable)
 - `ready -> sleeping` when the workspace environment becomes `idle` or `stopping`

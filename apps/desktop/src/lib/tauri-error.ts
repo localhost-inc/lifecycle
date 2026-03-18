@@ -9,34 +9,15 @@ function fallbackRequestId(): string {
   return globalThis.crypto?.randomUUID?.() ?? "unknown";
 }
 
-function readStringField(
-  value: Record<string, unknown>,
-  camelCaseKey: string,
-  snakeCaseKey: string,
-): string | null {
-  const camelCaseValue = value[camelCaseKey];
-  if (typeof camelCaseValue === "string" && camelCaseValue.trim().length > 0) {
-    return camelCaseValue;
-  }
-
-  const snakeCaseValue = value[snakeCaseKey];
-  if (typeof snakeCaseValue === "string" && snakeCaseValue.trim().length > 0) {
-    return snakeCaseValue;
-  }
-
-  return null;
-}
-
 export function isErrorEnvelope(value: unknown): value is ErrorEnvelope {
   return (
     isRecord(value) &&
     typeof value.code === "string" &&
     typeof value.message === "string" &&
-    readStringField(value, "requestId", "request_id") !== null &&
+    typeof value.requestId === "string" &&
     typeof value.retryable === "boolean" &&
     (value.details === undefined || isRecord(value.details)) &&
-    ((value.suggestedAction === undefined && value.suggested_action === undefined) ||
-      readStringField(value, "suggestedAction", "suggested_action") !== null)
+    (value.suggestedAction === undefined || typeof value.suggestedAction === "string")
   );
 }
 
@@ -75,15 +56,13 @@ export function getLifecycleErrorEnvelope(error: unknown): ErrorEnvelope | null 
   }
 
   if (isErrorEnvelope(error)) {
-    const normalizedError = error as ErrorEnvelope & Record<string, unknown>;
     return {
-      code: normalizedError.code,
-      details: normalizedError.details,
-      message: normalizedError.message,
-      requestId: readStringField(normalizedError, "requestId", "request_id") ?? fallbackRequestId(),
-      retryable: normalizedError.retryable,
-      suggestedAction:
-        readStringField(normalizedError, "suggestedAction", "suggested_action") ?? undefined,
+      code: error.code,
+      details: error.details,
+      message: error.message,
+      requestId: error.requestId,
+      retryable: error.retryable,
+      suggestedAction: error.suggestedAction,
     };
   }
 
@@ -145,5 +124,3 @@ export async function invokeTauri<T>(command: string, args?: InvokeArgs): Promis
   }
 }
 
-export { LifecycleInvokeError as LifecycleClientError };
-export const invokeLifecycle = invokeTauri;

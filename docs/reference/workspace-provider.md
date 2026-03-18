@@ -2,6 +2,8 @@
 
 The `WorkspaceProvider` is the primary extensibility seam for workspace lifecycle operations. It is the adapter layer between the control plane and the environment where workspaces actually run. Workspace mode is selected **per-workspace** at creation time and stored as `workspace.mode`.
 
+Cross-milestone runtime/control-plane domain taxonomy lives in [runtime-domains.md](./runtime-domains.md).
+
 Preview transport and tunnel-routing direction is captured in [tunnel.md](./tunnel.md).
 
 ## Workspace vs Environment Boundary
@@ -213,7 +215,7 @@ Git operations follow the same authority rule as terminals and lifecycle mutatio
 1. Local execution plane:
    - local Git worktree checked out on host filesystem
    - Tauri Rust backend handles process supervision, libghostty integration, Docker integration, and local state persistence
-   - localhost ports for service access
+   - Lifecycle-managed loopback binds for direct socket access plus stable `*.lifecycle.localhost` routing for HTTP service access
    - `workspace.kind=root` uses `project.path` as `workspace.worktree_path`, so adding a project yields an immediately usable repo-backed workspace without creating a derived worktree first
    - `workspace.kind=managed` uses a Lifecycle-owned derived git worktree and managed branch identity
    - `workspace.name` remains a user-facing label; the managed git branch (`source_ref`) and worktree directory name are derived as kebab-cased Lifecycle-owned identifiers from that label plus the workspace id

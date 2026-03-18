@@ -28,6 +28,8 @@
     "dialog:default",
     "fs:default",
     "notification:default",
+    "updater:default",
+    "process:default",
     {
       "identifier": "fs:allow-exists",
       "allow": ["$HOME/**"]

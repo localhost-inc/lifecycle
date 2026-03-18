@@ -2,8 +2,8 @@ use crate::capabilities::workspaces::manifest::{
     parse_lifecycle_config, HealthCheck, LifecycleConfig, ServiceConfig,
 };
 use crate::platform::db::{map_database_result, open_db, DbPath};
-use crate::platform::diagnostics;
 use crate::platform::runtime::{health, setup};
+use crate::platform::{diagnostics, preview_proxy};
 use crate::shared::errors::{
     LifecycleError, ServiceStatus, WorkspaceFailureReason, WorkspaceStatus,
 };
@@ -18,6 +18,8 @@ use super::controller::{ManagedWorkspaceController, WorkspaceControllerToken};
 use super::environment_graph::{
     lower_environment_graph, topo_sort_environment_nodes, EnvironmentNode, EnvironmentNodeKind,
 };
+use super::ports::resolve_assigned_port;
+use super::preview::preview_fields_for_service;
 use super::shared::{
     emit_service_status, emit_workspace_manifest_synced, emit_workspace_status,
     mark_nonfailed_services_stopped, mark_services_failed, reconcile_workspace_services_db,
@@ -68,7 +70,6 @@ fn slugify_workspace_value(value: &str) -> String {
 fn apply_port_override(service: &mut ServiceConfig, override_port: u16) {
     match service {
         ServiceConfig::Process(process) => {
-            process.resolved_port = Some(override_port);
             set_port_env(&mut process.env, override_port);
         }
         ServiceConfig::Image(image) => {
@@ -85,7 +86,7 @@ fn config_with_workspace_overrides(
     let conn = open_db(db_path)?;
     let mut stmt = conn
         .prepare(
-            "SELECT service_name, effective_port FROM workspace_service WHERE workspace_id = ?1",
+            "SELECT service_name, assigned_port FROM workspace_service WHERE workspace_id = ?1",
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
     let rows = stmt
@@ -96,21 +97,107 @@ fn config_with_workspace_overrides(
 
     let mut next = config.clone();
     for row in rows {
-        let (service_name, port_override) =
+        let (service_name, assigned_port) =
             row.map_err(|error| LifecycleError::Database(error.to_string()))?;
-        let Some(port_override) = port_override else {
+        eprintln!(
+            "[lifecycle:config_overrides] service={service_name} assigned_port={assigned_port:?}"
+        );
+        let Some(assigned_port) = assigned_port else {
             continue;
         };
-        let Ok(port_override) = u16::try_from(port_override) else {
+        let Ok(assigned_port) = u16::try_from(assigned_port) else {
             continue;
         };
         let Some(service) = next.service_mut(&service_name) else {
+            eprintln!(
+                "[lifecycle:config_overrides] service_mut returned None for {service_name}"
+            );
             continue;
         };
-        apply_port_override(service, port_override);
+        apply_port_override(service, assigned_port);
     }
 
     Ok(next)
+}
+
+fn assign_ports_for_start(
+    db_path: &str,
+    workspace_id: &str,
+    config: &LifecycleConfig,
+    service_names: &[String],
+) -> Result<(), LifecycleError> {
+    if service_names.is_empty() {
+        return Ok(());
+    }
+
+    let mut conn = open_db(db_path)?;
+    let tx = conn
+        .transaction()
+        .map_err(|error| LifecycleError::Database(error.to_string()))?;
+
+    for service_name in service_names {
+        if !config.declared_services().any(|(name, _)| name == service_name) {
+            continue;
+        }
+
+        let (exposure, port_override, service_status, current_assigned_port) = tx
+            .query_row(
+                "SELECT exposure, port_override, status, assigned_port
+                 FROM workspace_service
+                 WHERE workspace_id = ?1 AND service_name = ?2",
+                params![workspace_id, service_name],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, Option<i64>>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, Option<i64>>(3)?,
+                    ))
+                },
+            )
+            .map_err(|error| LifecycleError::Database(error.to_string()))?;
+        let assigned_port = resolve_assigned_port(
+            &tx,
+            workspace_id,
+            service_name,
+            port_override,
+            current_assigned_port,
+            matches!(service_status.as_str(), "ready" | "starting"),
+        )?;
+        let (preview_status, preview_failure_reason, preview_url) = preview_fields_for_service(
+            &tx,
+            workspace_id,
+            service_name,
+            &exposure,
+            Some(assigned_port),
+            &service_status,
+            &WorkspaceStatus::Starting,
+        )?;
+
+        tx.execute(
+            "UPDATE workspace_service
+             SET assigned_port = ?1,
+                 preview_status = ?2,
+                 preview_failure_reason = ?3,
+                 preview_url = ?4,
+                 updated_at = datetime('now')
+             WHERE workspace_id = ?5 AND service_name = ?6",
+            params![
+                Some(assigned_port),
+                preview_status,
+                preview_failure_reason,
+                preview_url,
+                workspace_id,
+                service_name,
+            ],
+        )
+        .map_err(|error| LifecycleError::Database(error.to_string()))?;
+    }
+
+    tx.commit()
+        .map_err(|error| LifecycleError::Database(error.to_string()))?;
+
+    Ok(())
 }
 
 fn load_workspace_status(
@@ -194,13 +281,15 @@ fn build_runtime_env(
     worktree_path: &str,
 ) -> Result<HashMap<String, String>, LifecycleError> {
     let conn = open_db(db_path)?;
-    let (workspace_name, source_ref): (String, String) = conn
+    let (workspace_name, source_ref, workspace_kind): (String, String, String) = conn
         .query_row(
-            "SELECT name, source_ref FROM workspace WHERE id = ?1",
+            "SELECT name, source_ref, kind FROM workspace WHERE id = ?1",
             params![workspace_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
+    let workspace_label =
+        preview_proxy::workspace_host_label(workspace_id, &workspace_kind, &workspace_name, &source_ref);
 
     let mut env = HashMap::from([
         (
@@ -224,7 +313,7 @@ fn build_runtime_env(
 
     let mut stmt = conn
         .prepare(
-            "SELECT service_name, effective_port
+            "SELECT service_name, assigned_port
              FROM workspace_service
              WHERE workspace_id = ?1",
         )
@@ -236,7 +325,7 @@ fn build_runtime_env(
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
 
     for row in rows {
-        let (service_name, effective_port) =
+        let (service_name, assigned_port) =
             row.map_err(|error| LifecycleError::Database(error.to_string()))?;
         let key = uppercase_env_key(&service_name);
         if key.is_empty() {
@@ -248,11 +337,15 @@ fn build_runtime_env(
             "127.0.0.1".to_string(),
         );
 
-        if let Some(port) = effective_port {
+        if let Some(port) = assigned_port {
             env.insert(format!("LIFECYCLE_SERVICE_{key}_PORT"), port.to_string());
             env.insert(
                 format!("LIFECYCLE_SERVICE_{key}_ADDRESS"),
                 format!("127.0.0.1:{port}"),
+            );
+            env.insert(
+                format!("LIFECYCLE_SERVICE_{key}_URL"),
+                preview_proxy::service_url(&workspace_label, &service_name),
             );
         }
     }
@@ -344,6 +437,8 @@ impl WorkspaceStartContext<'_> {
                         process_svc,
                         self.worktree_path,
                         self.runtime_env,
+                        self.app.clone(),
+                        self.workspace_id,
                     )
                     .await
             }
@@ -358,6 +453,7 @@ impl WorkspaceStartContext<'_> {
                         self.worktree_path,
                         self.storage_root,
                         self.runtime_env,
+                        self.app.clone(),
                     )
                     .await
             }
@@ -782,15 +878,14 @@ async fn start_services_lifecycle(
     if abort_start_if_needed(db_path, workspace_id, controller, &start_token).await? {
         return Ok(());
     }
-    let runtime_config = config_with_workspace_overrides(db_path, workspace_id, config)?;
     let setup_completed = load_setup_completed(db_path, workspace_id)?;
     let satisfied_service_names = if matches!(start_mode, WorkspaceStartMode::Incremental) {
         load_ready_service_names(db_path, workspace_id)?
     } else {
         HashSet::new()
     };
-    let lowered_graph = match lower_environment_graph(
-        &runtime_config,
+    let planned_graph = match lower_environment_graph(
+        config,
         setup_completed,
         service_names,
         Some(&satisfied_service_names),
@@ -799,7 +894,7 @@ async fn start_services_lifecycle(
         Err(error) => {
             let service_names = service_names
                 .map(|names| names.to_vec())
-                .unwrap_or_else(|| runtime_config.declared_service_names());
+                .unwrap_or_else(|| config.declared_service_names());
             mark_services_failed(
                 db_path,
                 workspace_id,
@@ -834,7 +929,7 @@ async fn start_services_lifecycle(
             return Err(error);
         }
     };
-    let selected_service_names = lowered_graph
+    let selected_service_names = planned_graph
         .environment_nodes
         .iter()
         .filter_map(|(node_name, node)| match node.kind {
@@ -842,6 +937,14 @@ async fn start_services_lifecycle(
             EnvironmentNodeKind::Task(_) => None,
         })
         .collect::<Vec<_>>();
+    assign_ports_for_start(db_path, workspace_id, config, &selected_service_names)?;
+    let runtime_config = config_with_workspace_overrides(db_path, workspace_id, config)?;
+    let lowered_graph = lower_environment_graph(
+        &runtime_config,
+        setup_completed,
+        service_names,
+        Some(&satisfied_service_names),
+    )?;
     if lowered_graph.workspace_setup.is_empty() && lowered_graph.environment_nodes.is_empty() {
         update_workspace_status_db(db_path, workspace_id, &WorkspaceStatus::Active, None)?;
         emit_workspace_status(app, workspace_id, "active", None);
@@ -1094,6 +1197,65 @@ pub async fn sync_workspace_manifest(
 mod tests {
     use super::*;
     use crate::capabilities::workspaces::manifest::{ProcessService, SetupStep};
+    use crate::platform::git::worktree::{short_workspace_id, slugify_workspace_name};
+    use crate::platform::{
+        db::open_db,
+        preview_proxy::{local_preview_url, service_url, workspace_host_label},
+    };
+
+    fn temp_db_path() -> String {
+        format!(
+            "{}/lifecycle-start-{}.sqlite",
+            std::env::temp_dir().display(),
+            uuid::Uuid::new_v4()
+        )
+    }
+
+    fn init_workspace_service_tables(db_path: &str) {
+        let conn = open_db(db_path).expect("open db");
+        conn.execute_batch(
+            "CREATE TABLE workspace_service (
+                id TEXT PRIMARY KEY NOT NULL,
+                workspace_id TEXT NOT NULL,
+                service_name TEXT NOT NULL,
+                exposure TEXT NOT NULL,
+                port_override INTEGER,
+                status TEXT NOT NULL,
+                status_reason TEXT,
+                assigned_port INTEGER,
+                preview_status TEXT NOT NULL,
+                preview_failure_reason TEXT,
+                preview_url TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT
+            );",
+        )
+        .expect("create workspace_service");
+    }
+
+    fn init_workspace_table(db_path: &str) {
+        let conn = open_db(db_path).expect("open db");
+        conn.execute_batch(
+            "CREATE TABLE workspace (
+                id TEXT PRIMARY KEY NOT NULL,
+                name TEXT NOT NULL,
+                source_ref TEXT NOT NULL,
+                kind TEXT NOT NULL
+            );",
+        )
+        .expect("create workspace");
+    }
+
+    fn managed_workspace_identity(workspace_id: &str) -> (String, String, String) {
+        let name = workspace_id.replace('_', " ");
+        let source_ref = format!(
+            "lifecycle/{}-{}",
+            slugify_workspace_name(&name),
+            short_workspace_id(workspace_id)
+        );
+        let label = workspace_host_label(workspace_id, "managed", &name, &source_ref);
+        (name, source_ref, label)
+    }
 
     #[test]
     fn collect_dependent_service_names_only_marks_impacted_service_descendants() {
@@ -1108,9 +1270,6 @@ mod tests {
                         depends_on: None,
                         startup_timeout_seconds: None,
                         health_check: None,
-                        port: Some(8787),
-                        share_default: None,
-                        resolved_port: None,
                     })),
                     depends_on: vec!["migrate".to_string()],
                 },
@@ -1141,9 +1300,6 @@ mod tests {
                         depends_on: Some(vec!["api".to_string()]),
                         startup_timeout_seconds: None,
                         health_check: None,
-                        port: Some(3000),
-                        share_default: Some(true),
-                        resolved_port: None,
                     })),
                     depends_on: vec!["api".to_string()],
                 },
@@ -1158,9 +1314,6 @@ mod tests {
                         depends_on: None,
                         startup_timeout_seconds: None,
                         health_check: None,
-                        port: Some(4000),
-                        share_default: Some(true),
-                        resolved_port: None,
                     })),
                     depends_on: vec![],
                 },
@@ -1176,4 +1329,176 @@ mod tests {
             vec!["www".to_string()]
         );
     }
+
+    #[test]
+    fn assign_ports_for_start_assigns_runtime_port_at_start() {
+        let db_path = temp_db_path();
+        init_workspace_table(&db_path);
+        init_workspace_service_tables(&db_path);
+
+        let conn = open_db(&db_path).expect("open db");
+        let (name, source_ref, preview_label) = managed_workspace_identity("ws_start");
+        conn.execute(
+            "INSERT INTO workspace (id, name, source_ref, kind) VALUES (?1, ?2, ?3, ?4)",
+            params!["ws_start", name, source_ref, "managed"],
+        )
+        .expect("insert workspace");
+        conn.execute(
+            "INSERT INTO workspace_service (
+                id, workspace_id, service_name, exposure, status,
+                assigned_port, preview_status, preview_url, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6, ?7, datetime('now'))",
+            params![
+                "svc_web",
+                "ws_start",
+                "web",
+                "local",
+                "stopped",
+                "sleeping",
+                Some(local_preview_url(&preview_label, "web")),
+            ],
+        )
+        .expect("insert service");
+        drop(conn);
+
+        let config_json = r#"{
+                "workspace": { "setup": [] },
+                "environment": {
+                    "web": { "kind": "service", "runtime": "process", "command": "bun run dev" }
+                }
+            }"#;
+        let config = serde_json::from_str::<LifecycleConfig>(&config_json).expect("valid config");
+
+        assign_ports_for_start(&db_path, "ws_start", &config, &["web".to_string()])
+            .expect("assign ports");
+
+        let conn = open_db(&db_path).expect("re-open db");
+        let row: (Option<i64>, String, Option<String>) = conn
+            .query_row(
+                "SELECT assigned_port, preview_status, preview_url
+                 FROM workspace_service
+                 WHERE workspace_id = ?1 AND service_name = ?2",
+                params!["ws_start", "web"],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .expect("query service");
+        assert!(row.0.is_some());
+        assert_eq!(row.1, "provisioning");
+        assert_eq!(row.2, Some(local_preview_url(&preview_label, "web")));
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn assign_ports_for_start_picks_a_new_port_when_default_is_unavailable() {
+        let db_path = temp_db_path();
+        init_workspace_table(&db_path);
+        init_workspace_service_tables(&db_path);
+        let guard = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("bind port");
+        let occupied_port = i64::from(guard.local_addr().expect("local addr").port());
+
+        let conn = open_db(&db_path).expect("open db");
+        let (name, source_ref, preview_label) = managed_workspace_identity("ws_start");
+        conn.execute(
+            "INSERT INTO workspace (id, name, source_ref, kind) VALUES (?1, ?2, ?3, ?4)",
+            params!["ws_start", name, source_ref, "managed"],
+        )
+        .expect("insert workspace");
+        conn.execute(
+            "INSERT INTO workspace_service (
+                id, workspace_id, service_name, exposure, status,
+                assigned_port, preview_status, preview_url, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6, ?7, datetime('now'))",
+            params![
+                "svc_api",
+                "ws_start",
+                "api",
+                "local",
+                "stopped",
+                "sleeping",
+                Some(local_preview_url(&preview_label, "api")),
+            ],
+        )
+        .expect("insert service");
+        drop(conn);
+
+        let config_json = r#"{
+                "workspace": { "setup": [] },
+                "environment": {
+                    "api": { "kind": "service", "runtime": "process", "command": "bun run api" }
+                }
+            }"#;
+        let config = serde_json::from_str::<LifecycleConfig>(&config_json).expect("valid config");
+
+        assign_ports_for_start(&db_path, "ws_start", &config, &["api".to_string()])
+            .expect("assign ports");
+
+        let conn = open_db(&db_path).expect("re-open db");
+        let assigned_port: Option<i64> = conn
+            .query_row(
+                "SELECT assigned_port FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+                params!["ws_start", "api"],
+                |row| row.get(0),
+            )
+            .expect("query service");
+        assert!(matches!(assigned_port, Some(port) if port != occupied_port));
+
+        drop(guard);
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn build_runtime_env_includes_stable_service_urls_and_direct_bind_details() {
+        let db_path = temp_db_path();
+        init_workspace_table(&db_path);
+        init_workspace_service_tables(&db_path);
+
+        let conn = open_db(&db_path).expect("open db");
+        let (name, source_ref, workspace_label) = managed_workspace_identity("ws_env");
+        conn.execute(
+            "INSERT INTO workspace (id, name, source_ref, kind) VALUES (?1, ?2, ?3, ?4)",
+            params!["ws_env", name, source_ref, "managed"],
+        )
+        .expect("insert workspace");
+        conn.execute(
+            "INSERT INTO workspace_service (
+                id, workspace_id, service_name, exposure, status,
+                assigned_port, preview_status, preview_url, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))",
+            params![
+                "svc_api",
+                "ws_env",
+                "api",
+                "internal",
+                "ready",
+                Some(43123_i64),
+                "disabled",
+                Option::<String>::None,
+            ],
+        )
+        .expect("insert service");
+        drop(conn);
+
+        let env = build_runtime_env(&db_path, "ws_env", "/tmp/workspace-env").expect("build env");
+
+        assert_eq!(
+            env.get("LIFECYCLE_SERVICE_API_HOST").map(String::as_str),
+            Some("127.0.0.1")
+        );
+        assert_eq!(
+            env.get("LIFECYCLE_SERVICE_API_PORT").map(String::as_str),
+            Some("43123")
+        );
+        assert_eq!(
+            env.get("LIFECYCLE_SERVICE_API_ADDRESS").map(String::as_str),
+            Some("127.0.0.1:43123")
+        );
+        assert_eq!(
+            env.get("LIFECYCLE_SERVICE_API_URL").map(String::as_str),
+            Some(service_url(&workspace_label, "api").as_str())
+        );
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
 }

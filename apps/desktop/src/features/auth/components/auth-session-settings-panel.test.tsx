@@ -23,7 +23,6 @@ describe("AuthSessionSettingsPanel", () => {
       createElement(ThemeProvider, {
         storageKey: "test.theme",
         children: createElement(AuthSessionSettingsPanel, {
-          environmentLabel: "Vite dev bridge in desktop",
           isLoading: false,
           onRefresh: () => {},
           session: loggedInAuthSession,
@@ -36,7 +35,6 @@ describe("AuthSessionSettingsPanel", () => {
     expect(markup).toContain("@kylealwyn");
     expect(markup).toContain("GitHub");
     expect(markup).toContain("Local CLI");
-    expect(markup).toContain("Vite dev bridge in desktop");
     expect(markup).toContain("Refresh status");
     expect(markup).toContain('src="https://avatars.githubusercontent.com/u/14184138?v=4"');
   });

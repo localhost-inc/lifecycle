@@ -156,7 +156,12 @@ fn parse_turn_completion(value: &Value, line: &str) -> Option<HarnessTurnComplet
     if json_string_at_path(value, &["type"]) != Some("assistant") {
         return None;
     }
-    if json_string_at_path(value, &["message", "stop_reason"]) != Some("end_turn") {
+
+    let stop_reason = json_string_at_path(value, &["message", "stop_reason"])?;
+
+    // end_turn is the normal completion; stop_sequence covers interrupted
+    // or externally-halted turns so the spinner doesn't get stuck.
+    if !matches!(stop_reason, "end_turn" | "stop_sequence") {
         return None;
     }
 
@@ -168,4 +173,3 @@ fn parse_turn_completion(value: &Value, line: &str) -> Option<HarnessTurnComplet
         turn_id: turn_id.map(ToString::to_string),
     })
 }
-

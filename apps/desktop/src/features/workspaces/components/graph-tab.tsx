@@ -11,7 +11,6 @@ interface GraphTabProps {
 interface GraphNode {
   name: string;
   kind: "service" | "task";
-  port: number | null;
   layer: number;
   column: number;
 }
@@ -44,8 +43,7 @@ function computeLayout(environment: LifecycleConfig["environment"]): GraphLayout
   const inDegree = new Map<string, number>();
 
   for (const [name, node] of entries) {
-    const port = "port" in node && typeof node.port === "number" ? node.port : null;
-    nodes.set(name, { name, kind: node.kind, port, layer: 0, column: 0 });
+    nodes.set(name, { name, kind: node.kind, layer: 0, column: 0 });
     adjacency.set(name, []);
     inDegree.set(name, 0);
   }
@@ -245,9 +243,6 @@ export function GraphTab({ config, services }: GraphTabProps) {
           const dotFill = statusDotFill(status);
 
           const label = node.name.length > 14 ? `${node.name.slice(0, 13)}...` : node.name;
-          const portLabel = node.port !== null ? `:${node.port}` : null;
-
-          // Text layout: name left-aligned after dot, port right-aligned
           const textAreaLeft = cx - NODE_WIDTH / 2 + 18;
 
           return (
@@ -279,7 +274,7 @@ export function GraphTab({ config, services }: GraphTabProps) {
               {/* Service name */}
               <text
                 x={textAreaLeft}
-                y={cy + (portLabel ? 0.5 : 0.5)}
+                y={cy + 0.5}
                 dominantBaseline="central"
                 fill="var(--foreground)"
                 fontSize={11}
@@ -289,22 +284,6 @@ export function GraphTab({ config, services }: GraphTabProps) {
               >
                 {label}
               </text>
-
-              {/* Port badge */}
-              {portLabel && (
-                <text
-                  x={cx + NODE_WIDTH / 2 - 10}
-                  y={cy + 0.5}
-                  textAnchor="end"
-                  dominantBaseline="central"
-                  fill="var(--muted-foreground)"
-                  fontSize={9}
-                  fontFamily="ui-monospace, monospace"
-                  opacity={0.55}
-                >
-                  {portLabel}
-                </text>
-              )}
             </g>
           );
         })}

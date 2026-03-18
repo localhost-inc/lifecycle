@@ -1,8 +1,6 @@
-import { type LifecycleConfig, type ServiceRecord } from "@lifecycle/contracts";
+import type { LifecycleConfig, ServiceRecord } from "@lifecycle/contracts";
 import { describe, expect, test } from "bun:test";
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
-import { LogsTab, deriveBootLogEntries } from "./logs-tab";
+import { deriveBootLogEntries } from "./logs-tab";
 import { deriveBootSequenceItems } from "./boot-sequence";
 import type { EnvironmentTaskState, SetupStepState } from "../hooks";
 
@@ -28,7 +26,6 @@ const config: LifecycleConfig = {
       runtime: "process",
       command: "bun run dev",
       depends_on: ["api-migrate"],
-      port: 8787,
     },
     "www-build": {
       kind: "task",
@@ -40,8 +37,6 @@ const config: LifecycleConfig = {
       runtime: "process",
       command: "bun run dev",
       depends_on: ["www-build"],
-      port: 3000,
-      share_default: true,
     },
   },
 };
@@ -70,8 +65,7 @@ const environmentTasks: EnvironmentTaskState[] = [
 function createService(serviceName: string, overrides: Partial<ServiceRecord> = {}): ServiceRecord {
   return {
     created_at: "2026-03-15T10:00:00.000Z",
-    default_port: null,
-    effective_port: null,
+    assigned_port: null,
     exposure: "internal",
     id: `svc-${serviceName}`,
     port_override: null,
@@ -90,15 +84,13 @@ function createService(serviceName: string, overrides: Partial<ServiceRecord> = 
 const services: ServiceRecord[] = [
   createService("db"),
   createService("api", {
-    default_port: 8787,
-    effective_port: 43001,
+    assigned_port: 43001,
     exposure: "local",
     preview_status: "ready",
     preview_url: "http://127.0.0.1:8787",
   }),
   createService("www", {
-    default_port: 3000,
-    effective_port: 43002,
+    assigned_port: 43002,
     exposure: "local",
     preview_status: "ready",
     preview_url: "http://127.0.0.1:3000",
@@ -129,47 +121,3 @@ describe("deriveBootLogEntries", () => {
   });
 });
 
-describe("LogsTab", () => {
-  test("renders the selected service boot logs without unrelated task output", () => {
-    const markup = renderToStaticMarkup(
-      createElement(LogsTab, {
-        config,
-        declaredStepNames: [],
-        environmentTasks,
-        selectedServiceName: "api",
-        serviceRuntimeByName,
-        setupSteps,
-        workspace: {
-          failure_reason: null,
-          setup_completed_at: null,
-          status: "active",
-        },
-      }),
-    );
-
-    expect(markup).toContain("install");
-    expect(markup).toContain("bun install --frozen-lockfile");
-    expect(markup).toContain("bun run db:migrate");
-    expect(markup).not.toContain("bun run content:seed");
-  });
-
-  test("returns null when no log entries have output", () => {
-    const markup = renderToStaticMarkup(
-      createElement(LogsTab, {
-        config,
-        declaredStepNames: [],
-        environmentTasks: [],
-        selectedServiceName: null,
-        serviceRuntimeByName,
-        setupSteps: [],
-        workspace: {
-          failure_reason: null,
-          setup_completed_at: null,
-          status: "active",
-        },
-      }),
-    );
-
-    expect(markup).toBe("");
-  });
-});

@@ -1,8 +1,10 @@
 import type { GitPullRequestSummary, WorkspaceMode } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
+import { useCallback } from "react";
+import { stageGitFiles } from "../api";
 import { useGitActions } from "../hooks/use-git-actions";
 import { ChangesTab } from "./changes-tab";
-import { GitActionButton } from "./git-action-button";
+import { GitActionBar } from "./git-action-bar";
 
 export const GIT_CHANGES_PANEL_BODY_CLASS_NAME = "px-2.5 pb-4";
 export const GIT_CHANGES_PANEL_EMPTY_STATE_CLASS_NAME = "px-2.5 py-4";
@@ -37,29 +39,20 @@ export function GitChangesPanel({
     worktreePath,
   });
 
+  const handleStageAll = useCallback(async () => {
+    const files = gitActions.gitStatusQuery.data?.files ?? [];
+    const unstaged = files.filter((f) => f.unstaged);
+    if (unstaged.length > 0) {
+      await stageGitFiles(
+        workspaceId,
+        unstaged.map((f) => f.path),
+      );
+      await gitActions.gitStatusQuery.refresh();
+    }
+  }, [gitActions.gitStatusQuery, workspaceId]);
+
   return (
-    <section className="flex min-h-0 h-full flex-col">
-      <div className="flex items-center justify-end px-2.5 py-2">
-        <div className="shrink-0">
-          <GitActionButton
-            actionError={gitActions.actionError}
-            branchPullRequest={gitActions.branchPullRequest ?? null}
-            gitStatus={gitActions.gitStatusQuery.data ?? null}
-            size="default"
-            isCommitting={gitActions.isCommitting}
-            isCreatingPullRequest={gitActions.isCreatingPullRequest}
-            isLoading={gitActions.isLoading}
-            isMergingPullRequest={gitActions.isMergingPullRequest}
-            isPushingBranch={gitActions.isPushingBranch}
-            onCommit={gitActions.handleCommit}
-            onCreatePullRequest={gitActions.handleCreatePullRequest}
-            onMergePullRequest={gitActions.handleMergePullRequest}
-            onOpenPullRequest={onOpenPullRequest}
-            onPushBranch={gitActions.handlePushBranch}
-            onShowChanges={gitActions.handleShowChanges}
-          />
-        </div>
-      </div>
+    <section className="relative flex min-h-0 h-full flex-col">
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <div className={`flex min-h-0 flex-1 flex-col ${GIT_CHANGES_PANEL_BODY_CLASS_NAME}`}>
           {supportsChanges ? (
@@ -83,6 +76,24 @@ export function GitChangesPanel({
           )}
         </div>
       </div>
+      {supportsChanges && (
+        <GitActionBar
+          actionError={gitActions.actionError}
+          branchPullRequest={gitActions.branchPullRequest ?? null}
+          gitStatus={gitActions.gitStatusQuery.data ?? null}
+          isCommitting={gitActions.isCommitting}
+          isCreatingPullRequest={gitActions.isCreatingPullRequest}
+          isLoading={gitActions.isLoading}
+          isMergingPullRequest={gitActions.isMergingPullRequest}
+          isPushingBranch={gitActions.isPushingBranch}
+          onCommit={gitActions.handleCommit}
+          onCreatePullRequest={gitActions.handleCreatePullRequest}
+          onMergePullRequest={gitActions.handleMergePullRequest}
+          onOpenPullRequest={onOpenPullRequest}
+          onPushBranch={gitActions.handlePushBranch}
+          onStageAll={handleStageAll}
+        />
+      )}
     </section>
   );
 }

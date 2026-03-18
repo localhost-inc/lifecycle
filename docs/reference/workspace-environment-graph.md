@@ -108,7 +108,7 @@ There is no `setup.services` bootstrap phase anymore. Service-dependent setup wo
 
 1. Services discover one another by manifest identity and reserved `LIFECYCLE_SERVICE_*` env vars.
 2. Browser-facing apps should prefer provider-managed exposure over hardcoding random local ports into app code.
-3. `share_default` still controls default preview exposure for long-lived service nodes.
+3. All services default to `local` exposure. Users can change exposure to `internal` in the UI.
 
 ## UX Fit
 

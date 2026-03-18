@@ -1,29 +1,13 @@
+use crate::capabilities::workspaces::preview::refresh_workspace_preview_rows;
 use crate::platform::diagnostics;
 use crate::shared::errors::LifecycleError;
+use crate::shared::errors::WorkspaceStatus;
 use std::time::Instant;
 
-const MIGRATIONS: [(&str, &str); 5] = [
-    (
-        "0001_initial_schema",
-        include_str!("migrations/0001_initial_schema.sql"),
-    ),
-    (
-        "0002_terminal_schema",
-        include_str!("migrations/0002_terminal_schema.sql"),
-    ),
-    (
-        "0003_workspace_kind",
-        include_str!("migrations/0003_workspace_kind.sql"),
-    ),
-    (
-        "0004_terminal_harness_launch_mode",
-        include_str!("migrations/0004_terminal_harness_launch_mode.sql"),
-    ),
-    (
-        "0005_terminal_harness_launch_config",
-        include_str!("migrations/0005_terminal_harness_launch_config.sql"),
-    ),
-];
+const MIGRATIONS: [(&str, &str); 1] = [(
+    "0001_baseline",
+    include_str!("migrations/0001_baseline.sql"),
+)];
 
 /// Holds the resolved path to the SQLite database file.
 pub struct DbPath(pub String);
@@ -92,6 +76,49 @@ pub fn run_migrations(db_path: &str) -> Result<(), LifecycleError> {
 
     reconcile_workspace_environments(&conn)?;
     reconcile_ephemeral_terminals(&conn)?;
+    Ok(())
+}
+
+/// Resets ephemeral runtime state in the database before the application exits.
+/// This prevents stale `active`/`starting`/`stopping` rows from triggering
+/// reconciliation side-effects (such as spurious notifications) on the next launch.
+pub fn cleanup_for_exit(db_path: &str) -> Result<(), LifecycleError> {
+    let conn = open_db(db_path)?;
+
+    conn.execute(
+        "UPDATE workspace
+         SET status = 'idle',
+             failure_reason = NULL,
+             failed_at = NULL,
+             updated_at = datetime('now')
+         WHERE status IN ('starting', 'active', 'stopping')",
+        [],
+    )
+    .map_err(database_error)?;
+
+    conn.execute(
+        "UPDATE workspace_service
+         SET status = 'stopped',
+             status_reason = NULL,
+             assigned_port = NULL,
+             updated_at = datetime('now')
+         WHERE status NOT IN ('stopped', 'failed')",
+        [],
+    )
+    .map_err(database_error)?;
+
+    conn.execute(
+        "UPDATE terminal
+         SET status = 'sleeping',
+             failure_reason = NULL,
+             exit_code = NULL,
+             ended_at = NULL,
+             last_active_at = datetime('now')
+         WHERE status IN ('active', 'detached')",
+        [],
+    )
+    .map_err(database_error)?;
+
     Ok(())
 }
 
@@ -205,24 +232,14 @@ fn reconcile_workspace_environments(conn: &rusqlite::Connection) -> Result<(), L
             "UPDATE workspace_service
              SET status = CASE WHEN status = 'failed' THEN status ELSE 'stopped' END,
                  status_reason = CASE WHEN status = 'failed' THEN status_reason ELSE NULL END,
-                 preview_status = CASE
-                     WHEN status = 'failed' THEN 'failed'
-                     WHEN exposure = 'local' AND effective_port IS NOT NULL THEN 'sleeping'
-                     ELSE 'disabled'
-                 END,
-                 preview_failure_reason = CASE
-                     WHEN status = 'failed' THEN 'service_unreachable'
-                     ELSE NULL
-                 END,
-                 preview_url = CASE
-                     WHEN exposure = 'local' AND effective_port IS NOT NULL THEN 'http://127.0.0.1:' || effective_port
-                     ELSE NULL
-                 END,
+                 assigned_port = NULL,
                  updated_at = datetime('now')
             WHERE workspace_id = ?1",
             rusqlite::params![workspace_id],
         )
         .map_err(database_error)?;
+
+        refresh_workspace_preview_rows(conn, &workspace_id, &WorkspaceStatus::Idle)?;
     }
 
     Ok(())
@@ -231,6 +248,7 @@ fn reconcile_workspace_environments(conn: &rusqlite::Connection) -> Result<(), L
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::platform::preview_proxy::{local_preview_url, workspace_host_label};
 
     fn temp_db_path() -> String {
         let path = std::env::temp_dir().join(format!(
@@ -288,16 +306,7 @@ mod tests {
             rows.map(|row| row.expect("migration row"))
                 .collect::<Vec<String>>()
         };
-        assert_eq!(
-            versions,
-            vec![
-                "0001_initial_schema".to_string(),
-                "0002_terminal_schema".to_string(),
-                "0003_workspace_kind".to_string(),
-                "0004_terminal_harness_launch_mode".to_string(),
-                "0005_terminal_harness_launch_config".to_string(),
-            ]
-        );
+        assert_eq!(versions, vec!["0001_baseline".to_string()]);
 
         drop(conn);
         let _ = std::fs::remove_file(db_path);
@@ -392,84 +401,12 @@ mod tests {
     }
 
     #[test]
-    fn run_migrations_backfills_harness_launch_mode_for_existing_sessions() {
-        let db_path = temp_db_path();
-        let mut conn = open_db(&db_path).expect("open db");
-        initialize_migration_table(&conn).expect("initialize migration table");
-        apply_migration(
-            &mut conn,
-            "0001_initial_schema",
-            include_str!("migrations/0001_initial_schema.sql"),
-        )
-        .expect("apply initial schema");
-        apply_migration(
-            &mut conn,
-            "0002_terminal_schema",
-            include_str!("migrations/0002_terminal_schema.sql"),
-        )
-        .expect("apply terminal schema");
-        apply_migration(
-            &mut conn,
-            "0003_workspace_kind",
-            include_str!("migrations/0003_workspace_kind.sql"),
-        )
-        .expect("apply workspace kind schema");
-
-        conn.execute(
-            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
-            rusqlite::params!["project_1", "/tmp/project_1", "Project 1"],
-        )
-        .expect("insert project");
-        conn.execute(
-            "INSERT INTO workspace (id, project_id, source_ref, worktree_path, status)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            rusqlite::params![
-                "workspace_1",
-                "project_1",
-                "main",
-                "/tmp/project_1/worktree",
-                "active"
-            ],
-        )
-        .expect("insert workspace");
-        conn.execute(
-            "INSERT INTO terminal (id, workspace_id, launch_type, harness_provider, harness_session_id, label, status)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-            rusqlite::params![
-                "terminal_1",
-                "workspace_1",
-                "harness",
-                "claude",
-                "session-123",
-                "Claude · Session 1",
-                "sleeping"
-            ],
-        )
-        .expect("insert legacy harness terminal");
-        drop(conn);
-
-        run_migrations(&db_path).expect("migration backfill succeeds");
-
-        let conn = open_db(&db_path).expect("reopen db");
-        let launch_mode: String = conn
-            .query_row(
-                "SELECT harness_launch_mode FROM terminal WHERE id = ?1",
-                rusqlite::params!["terminal_1"],
-                |row| row.get(0),
-            )
-            .expect("query launch mode");
-        assert_eq!(launch_mode, "resume");
-
-        drop(conn);
-        let _ = std::fs::remove_file(db_path);
-    }
-
-    #[test]
     fn run_migrations_reconciles_stale_workspace_environments() {
         let db_path = temp_db_path();
         run_migrations(&db_path).expect("migration run succeeds");
 
         let conn = open_db(&db_path).expect("open db");
+        let active_label = workspace_host_label("workspace_active", "managed", "", "main");
         conn.execute(
             "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
             rusqlite::params!["project_2", "/tmp/project_2", "Project 2"],
@@ -494,12 +431,12 @@ mod tests {
         .expect("insert workspaces");
         conn.execute(
             "INSERT INTO workspace_service (
-                id, workspace_id, service_name, exposure, status, status_reason, default_port,
-                effective_port, preview_status, preview_failure_reason, preview_url, created_at, updated_at
+                id, workspace_id, service_name, exposure, status, status_reason,
+                assigned_port, preview_status, preview_failure_reason, preview_url, created_at, updated_at
             ) VALUES
-                (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, datetime('now'), datetime('now')),
-                (?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, datetime('now'), datetime('now')),
-                (?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?33, datetime('now'), datetime('now'))",
+                (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, datetime('now'), datetime('now')),
+                (?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, datetime('now'), datetime('now')),
+                (?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29, ?30, datetime('now'), datetime('now'))",
             rusqlite::params![
                 "service_ready",
                 "workspace_active",
@@ -508,10 +445,9 @@ mod tests {
                 "ready",
                 Option::<String>::None,
                 Some(3000_i64),
-                Some(3000_i64),
                 "ready",
                 Option::<String>::None,
-                Some("http://127.0.0.1:3000"),
+                Some(local_preview_url(&active_label, "web")),
                 "service_failed",
                 "workspace_active",
                 "api",
@@ -519,17 +455,15 @@ mod tests {
                 "failed",
                 Some("service_port_unreachable"),
                 Some(3001_i64),
-                Some(3001_i64),
                 "failed",
                 Some("service_unreachable"),
-                Some("http://127.0.0.1:3001"),
+                Some(local_preview_url(&active_label, "api")),
                 "service_stopping",
                 "workspace_stopping",
                 "worker",
                 "internal",
                 "starting",
                 Option::<String>::None,
-                Some(4173_i64),
                 Some(4173_i64),
                 "provisioning",
                 Option::<String>::None,
@@ -576,7 +510,7 @@ mod tests {
         let service_rows = {
             let mut stmt = conn
                 .prepare(
-                    "SELECT workspace_id, service_name, status, status_reason, preview_status, preview_failure_reason
+                    "SELECT workspace_id, service_name, status, status_reason, assigned_port, preview_status, preview_failure_reason, preview_url
                      FROM workspace_service
                      ORDER BY workspace_id, service_name",
                 )
@@ -588,8 +522,10 @@ mod tests {
                         row.get::<_, String>(1)?,
                         row.get::<_, String>(2)?,
                         row.get::<_, Option<String>>(3)?,
-                        row.get::<_, String>(4)?,
-                        row.get::<_, Option<String>>(5)?,
+                        row.get::<_, Option<i64>>(4)?,
+                        row.get::<_, String>(5)?,
+                        row.get::<_, Option<String>>(6)?,
+                        row.get::<_, Option<String>>(7)?,
                     ))
                 })
                 .expect("query services");
@@ -603,23 +539,29 @@ mod tests {
                     "api".to_string(),
                     "failed".to_string(),
                     Some("service_port_unreachable".to_string()),
+                    None,
                     "failed".to_string(),
                     Some("service_unreachable".to_string()),
+                    Some(local_preview_url(&active_label, "api")),
                 ),
                 (
                     "workspace_active".to_string(),
                     "web".to_string(),
                     "stopped".to_string(),
                     None,
+                    None,
                     "sleeping".to_string(),
                     None,
+                    Some(local_preview_url(&active_label, "web")),
                 ),
                 (
                     "workspace_stopping".to_string(),
                     "worker".to_string(),
                     "stopped".to_string(),
                     None,
+                    None,
                     "disabled".to_string(),
+                    None,
                     None,
                 ),
             ]
@@ -727,6 +669,106 @@ mod tests {
             error,
             LifecycleError::WorkspaceNotFound(workspace_id) if workspace_id == "workspace_missing"
         ));
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn cleanup_for_exit_resets_runtime_state() {
+        let db_path = temp_db_path();
+        run_migrations(&db_path).expect("migration run succeeds");
+
+        let conn = open_db(&db_path).expect("open db");
+        conn.execute(
+            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["project_1", "/tmp/project_1", "Project 1"],
+        )
+        .expect("insert project");
+        conn.execute(
+            "INSERT INTO workspace (id, project_id, source_ref, worktree_path, status)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![
+                "workspace_1",
+                "project_1",
+                "main",
+                "/tmp/project_1/worktree",
+                "active"
+            ],
+        )
+        .expect("insert workspace");
+        conn.execute(
+            "INSERT INTO workspace_service (
+                id, workspace_id, service_name, exposure, status, assigned_port,
+                preview_status, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'), datetime('now'))",
+            rusqlite::params![
+                "service_1",
+                "workspace_1",
+                "web",
+                "local",
+                "ready",
+                Some(3000_i64),
+                "ready"
+            ],
+        )
+        .expect("insert service");
+        conn.execute(
+            "INSERT INTO terminal (id, workspace_id, label, status)
+             VALUES (?1, ?2, ?3, ?4), (?5, ?6, ?7, ?8)",
+            rusqlite::params![
+                "terminal_active",
+                "workspace_1",
+                "Terminal 1",
+                "active",
+                "terminal_finished",
+                "workspace_1",
+                "Terminal 2",
+                "finished"
+            ],
+        )
+        .expect("insert terminals");
+        drop(conn);
+
+        cleanup_for_exit(&db_path).expect("cleanup succeeds");
+
+        let conn = open_db(&db_path).expect("re-open db");
+        let workspace_status: String = conn
+            .query_row(
+                "SELECT status FROM workspace WHERE id = 'workspace_1'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("query workspace");
+        assert_eq!(workspace_status, "idle");
+
+        let (service_status, assigned_port): (String, Option<i64>) = conn
+            .query_row(
+                "SELECT status, assigned_port FROM workspace_service WHERE id = 'service_1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("query service");
+        assert_eq!(service_status, "stopped");
+        assert!(assigned_port.is_none());
+
+        let terminal_statuses: Vec<(String, String)> = {
+            let mut stmt = conn
+                .prepare("SELECT id, status FROM terminal ORDER BY id")
+                .expect("prepare");
+            stmt.query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .expect("query")
+            .map(|r| r.expect("row"))
+            .collect()
+        };
+        assert_eq!(
+            terminal_statuses,
+            vec![
+                ("terminal_active".to_string(), "sleeping".to_string()),
+                ("terminal_finished".to_string(), "finished".to_string()),
+            ]
+        );
 
         let _ = std::fs::remove_file(db_path);
     }

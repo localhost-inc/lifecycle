@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lifecycle-www",
+  "compatibility_date": "2026-03-17",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "@tanstack/react-start/server-entry",
+  "observability": {
+    "enabled": true
+  },
+  "routes": [
+    { "pattern": "lifecycle.dev", "custom_domain": true },
+    { "pattern": "www.lifecycle.dev", "custom_domain": true }
+  ]
+}

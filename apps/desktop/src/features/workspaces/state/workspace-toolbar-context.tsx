@@ -5,11 +5,16 @@ import {
   useMemo,
   useState,
   type ReactNode,
-  type ComponentProps,
 } from "react";
-import type { GitActionButton } from "../../git/components/git-action-button";
 
 export interface WorkspaceToolbarRunAction {
+  label: string;
+  disabled: boolean;
+  loading: boolean;
+  onClick: () => void;
+}
+
+export interface WorkspaceToolbarGitAction {
   label: string;
   disabled: boolean;
   loading: boolean;
@@ -19,7 +24,7 @@ export interface WorkspaceToolbarRunAction {
 export interface WorkspaceToolbarSlot {
   runAction: WorkspaceToolbarRunAction | null;
   restartAction: { disabled: boolean; onClick: () => void } | null;
-  gitActionProps: ComponentProps<typeof GitActionButton> | null;
+  gitAction: WorkspaceToolbarGitAction | null;
 }
 
 interface WorkspaceToolbarContextValue {
@@ -39,7 +44,7 @@ export function areWorkspaceToolbarSlotsEqual(
   return (
     current.runAction === next.runAction &&
     current.restartAction === next.restartAction &&
-    current.gitActionProps === next.gitActionProps
+    current.gitAction === next.gitAction
   );
 }
 

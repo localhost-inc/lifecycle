@@ -19,7 +19,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { useCallback, type MouseEvent, useMemo, useState } from "react";
+import { useCallback, type MouseEvent, type ReactNode, useMemo, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   SHORTCUT_HANDLER_PRIORITY,
@@ -28,8 +28,6 @@ import {
 import { ResponseReadyDot } from "../../../components/response-ready-dot";
 import { NavigationControls } from "../../../components/layout/navigation-controls";
 import { getWorkspaceSessionStatusState } from "../../workspaces/components/workspace-session-status";
-import { WorkspaceNavToolbar } from "../../workspaces/components/workspace-nav-toolbar";
-import { useWorkspaceToolbarSlot } from "../../workspaces/state/workspace-toolbar-context";
 import { getWorkspaceDisplayName } from "../../workspaces/lib/workspace-display";
 import {
   listAvailableOpenInTargets,
@@ -39,6 +37,7 @@ import { openWorkspaceInApp } from "../../workspaces/open-in-api";
 import { isMacPlatform } from "../../../app/app-hotkeys";
 
 interface ProjectNavBarProps {
+  actionsOutlet?: ReactNode;
   activeWorkspaceId: string | null;
   hasWorkspaceResponseReady: (workspaceId: string) => boolean;
   hasWorkspaceRunningTurn: (workspaceId: string) => boolean;
@@ -82,6 +81,7 @@ const workspaceNavClass = ({ isActive }: { isActive: boolean }) =>
   ].join(" ");
 
 export function ProjectNavBar({
+  actionsOutlet,
   activeWorkspaceId,
   hasWorkspaceResponseReady,
   hasWorkspaceRunningTurn,
@@ -97,7 +97,6 @@ export function ProjectNavBar({
       activeWorkspaceId ? (workspaces.find((ws) => ws.id === activeWorkspaceId) ?? null) : null,
     [activeWorkspaceId, workspaces],
   );
-  const toolbarSlot = useWorkspaceToolbarSlot(activeWorkspaceId);
   const [overflowOpen, setOverflowOpen] = useState(false);
   // Keep shortcuts registered so they work regardless of where the buttons live
   useShortcutRegistration({
@@ -193,7 +192,6 @@ export function ProjectNavBar({
       {/* Workspace links */}
       <div
         className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden py-px [&::-webkit-scrollbar]:hidden"
-        data-no-drag
       >
         <div className="flex h-full min-w-max items-center gap-0.5">
           {workspaces.map((workspace) => {
@@ -230,11 +228,10 @@ export function ProjectNavBar({
         </div>
       </div>
 
-      {/* Workspace toolbar + overflow actions */}
+      {/* Actions outlet (run, git) + overflow actions */}
+      {actionsOutlet}
       {activeWorkspace ? (
-        <div className="flex shrink-0 items-center gap-1 pl-1" data-no-drag>
-          {toolbarSlot && <WorkspaceNavToolbar slot={toolbarSlot} />}
-          <div aria-hidden="true" className="mx-0.5 h-5 w-px shrink-0 bg-[var(--border)]" />
+        <div className="flex shrink-0 items-center gap-1 pl-1">
           <Popover onOpenChange={setOverflowOpen} open={overflowOpen}>
             <PopoverTrigger asChild>
               <IconButton aria-label="More workspace actions" title="More workspace actions">

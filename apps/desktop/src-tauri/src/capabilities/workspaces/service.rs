@@ -1,4 +1,3 @@
-use super::ports::resolve_effective_port;
 use super::preview::preview_fields_for_service;
 use super::query::ServiceRecord;
 use super::shared::emit_service_configuration;
@@ -14,7 +13,7 @@ fn load_workspace_service_record(
 ) -> Result<ServiceRecord, LifecycleError> {
     let conn = open_db(db_path)?;
     conn.query_row(
-        "SELECT id, workspace_id, service_name, exposure, port_override, status, status_reason, default_port, effective_port, preview_status, preview_failure_reason, preview_url, created_at, updated_at
+        "SELECT id, workspace_id, service_name, exposure, port_override, status, status_reason, assigned_port, preview_status, preview_failure_reason, preview_url, created_at, updated_at
          FROM workspace_service
          WHERE workspace_id = ?1 AND service_name = ?2",
         params![workspace_id, service_name],
@@ -27,13 +26,12 @@ fn load_workspace_service_record(
                 port_override: row.get(4)?,
                 status: row.get(5)?,
                 status_reason: row.get(6)?,
-                default_port: row.get(7)?,
-                effective_port: row.get(8)?,
-                preview_status: row.get(9)?,
-                preview_failure_reason: row.get(10)?,
-                preview_url: row.get(11)?,
-                created_at: row.get(12)?,
-                updated_at: row.get(13)?,
+                assigned_port: row.get(7)?,
+                preview_status: row.get(8)?,
+                preview_failure_reason: row.get(9)?,
+                preview_url: row.get(10)?,
+                created_at: row.get(11)?,
+                updated_at: row.get(12)?,
             })
         },
     )
@@ -107,16 +105,14 @@ pub async fn update_workspace_service(
         .and_then(|status| WorkspaceStatus::from_str(&status))?;
     validate_mutable_workspace_status(&workspace_status)?;
 
-    let (current_port_override, default_port, current_effective_port, service_status) = tx
+    let (current_assigned_port, service_status) = tx
         .query_row(
-            "SELECT port_override, default_port, effective_port, status FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+            "SELECT assigned_port, status FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
             params![&workspace_id, &service_name],
             |row| {
                 Ok((
                     row.get::<_, Option<i64>>(0)?,
-                    row.get::<_, Option<i64>>(1)?,
-                    row.get::<_, Option<i64>>(2)?,
-                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(1)?,
                 ))
             },
         )
@@ -128,40 +124,28 @@ pub async fn update_workspace_service(
             _ => LifecycleError::Database(error.to_string()),
         })?;
 
-    let effective_port = resolve_effective_port(
+    let assigned_port = if workspace_status == WorkspaceStatus::Active
+        && matches!(service_status.as_str(), "ready" | "starting")
+    {
+        current_assigned_port
+    } else {
+        None
+    };
+    let (preview_status, preview_failure_reason, preview_url) = preview_fields_for_service(
         &tx,
         &workspace_id,
         &service_name,
-        default_port,
-        port_override,
-        if current_port_override.is_none() {
-            current_effective_port
-        } else {
-            None
-        },
-        matches!(
-            (workspace_status.clone(), service_status.as_str()),
-            (
-                WorkspaceStatus::Active | WorkspaceStatus::Starting,
-                "ready" | "starting"
-            )
-        ),
-        current_effective_port
-            .map(|port| (41_000..=48_999).contains(&port))
-            .unwrap_or(false),
-    )?;
-    let (preview_status, preview_failure_reason, preview_url) = preview_fields_for_service(
         &exposure,
-        effective_port,
+        assigned_port,
         &service_status,
         &workspace_status,
-    );
+    )?;
 
     tx.execute(
         "UPDATE workspace_service
          SET exposure = ?1,
              port_override = ?2,
-             effective_port = ?3,
+             assigned_port = ?3,
              preview_status = ?4,
              preview_failure_reason = ?5,
              preview_url = ?6,
@@ -170,7 +154,7 @@ pub async fn update_workspace_service(
         params![
             exposure,
             port_override,
-            effective_port,
+            assigned_port,
             preview_status,
             preview_failure_reason,
             preview_url,
@@ -196,6 +180,8 @@ mod tests {
     use super::*;
     use crate::capabilities::workspaces::test_support::available_test_port;
     use crate::platform::db::open_db;
+    use crate::platform::git::worktree::{short_workspace_id, slugify_workspace_name};
+    use crate::platform::preview_proxy::{local_preview_url, workspace_host_label};
 
     fn temp_db_path() -> String {
         format!(
@@ -211,7 +197,10 @@ mod tests {
             "
             CREATE TABLE workspace (
                 id TEXT PRIMARY KEY NOT NULL,
-                status TEXT NOT NULL
+                status TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                name TEXT NOT NULL,
+                source_ref TEXT NOT NULL
             );
             CREATE TABLE workspace_service (
                 id TEXT PRIMARY KEY NOT NULL,
@@ -221,8 +210,7 @@ mod tests {
                 port_override INTEGER,
                 status TEXT NOT NULL,
                 status_reason TEXT,
-                default_port INTEGER,
-                effective_port INTEGER,
+                assigned_port INTEGER,
                 preview_status TEXT NOT NULL DEFAULT 'disabled',
                 preview_failure_reason TEXT,
                 preview_url TEXT,
@@ -234,23 +222,34 @@ mod tests {
         .expect("create tables");
     }
 
+    fn managed_workspace_identity(workspace_id: &str) -> (String, String, String) {
+        let name = workspace_id.replace('_', " ");
+        let source_ref = format!(
+            "lifecycle/{}-{}",
+            slugify_workspace_name(&name),
+            short_workspace_id(workspace_id)
+        );
+        let label = workspace_host_label(workspace_id, "managed", &name, &source_ref);
+        (name, source_ref, label)
+    }
+
     #[tokio::test]
-    async fn update_workspace_service_updates_effective_port_and_preview_url() {
+    async fn update_workspace_service_updates_idle_configuration_without_assigning_runtime_port() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
-        let default_port = available_test_port();
         let override_port = available_test_port();
 
         let conn = open_db(&db_path).expect("open db");
+        let (name, source_ref, preview_label) = managed_workspace_identity("ws_1");
         conn.execute(
-            "INSERT INTO workspace (id, status) VALUES (?1, ?2)",
-            params!["ws_1", "idle"],
+            "INSERT INTO workspace (id, status, kind, name, source_ref) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params!["ws_1", "idle", "managed", name, source_ref],
         )
         .expect("insert workspace");
         conn.execute(
             "INSERT INTO workspace_service (
-                id, workspace_id, service_name, exposure, port_override, status, default_port, effective_port, preview_url, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'))",
+                id, workspace_id, service_name, exposure, port_override, status, assigned_port, preview_url, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))",
             params![
                 "svc_1",
                 "ws_1",
@@ -258,9 +257,8 @@ mod tests {
                 "local",
                 Option::<i64>::None,
                 "stopped",
-                Some(default_port),
-                Some(default_port),
-                Some(format!("http://127.0.0.1:{default_port}")),
+                Option::<i64>::None,
+                Some(local_preview_url(&preview_label, "web")),
             ],
         )
         .expect("insert service");
@@ -280,7 +278,7 @@ mod tests {
         let conn = open_db(&db_path).expect("re-open db");
         let row = conn
             .query_row(
-                "SELECT exposure, port_override, effective_port, preview_status, preview_failure_reason, preview_url FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+                "SELECT exposure, port_override, assigned_port, preview_status, preview_failure_reason, preview_url FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
                 params!["ws_1", "web"],
                 |row| {
                     Ok((
@@ -300,7 +298,7 @@ mod tests {
             (
                 "internal".to_string(),
                 Some(override_port),
-                Some(override_port),
+                Option::<i64>::None,
                 "disabled".to_string(),
                 Option::<String>::None,
                 Option::<String>::None,
@@ -311,22 +309,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn update_workspace_service_restores_manifest_port_when_override_is_cleared() {
+    async fn update_workspace_service_clears_idle_runtime_port_when_override_is_cleared() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
-        let default_port = available_test_port();
         let override_port = available_test_port();
 
         let conn = open_db(&db_path).expect("open db");
+        let (name, source_ref, preview_label) = managed_workspace_identity("ws_2");
         conn.execute(
-            "INSERT INTO workspace (id, status) VALUES (?1, ?2)",
-            params!["ws_2", "idle"],
+            "INSERT INTO workspace (id, status, kind, name, source_ref) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params!["ws_2", "idle", "managed", name, source_ref],
         )
         .expect("insert workspace");
         conn.execute(
             "INSERT INTO workspace_service (
-                id, workspace_id, service_name, exposure, port_override, status, default_port, effective_port, preview_url, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'))",
+                id, workspace_id, service_name, exposure, port_override, status, assigned_port, preview_url, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))",
             params![
                 "svc_2",
                 "ws_2",
@@ -334,9 +332,8 @@ mod tests {
                 "local",
                 Some(override_port),
                 "failed",
-                Some(default_port),
                 Some(override_port),
-                Some(format!("http://127.0.0.1:{override_port}")),
+                Some(local_preview_url(&preview_label, "api")),
             ],
         )
         .expect("insert service");
@@ -356,7 +353,7 @@ mod tests {
         let conn = open_db(&db_path).expect("re-open db");
         let row = conn
             .query_row(
-                "SELECT exposure, port_override, effective_port, preview_status, preview_failure_reason, preview_url FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+                "SELECT exposure, port_override, assigned_port, preview_status, preview_failure_reason, preview_url FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
                 params!["ws_2", "api"],
                 |row| {
                     Ok((
@@ -376,10 +373,10 @@ mod tests {
             (
                 "local".to_string(),
                 Option::<i64>::None,
-                Some(default_port),
+                Option::<i64>::None,
                 "failed".to_string(),
                 Some("service_unreachable".to_string()),
-                Some(format!("http://127.0.0.1:{default_port}")),
+                Some(local_preview_url(&preview_label, "api")),
             ),
         );
 
@@ -392,15 +389,16 @@ mod tests {
         init_workspace_tables(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
+        let (name, source_ref, preview_label) = managed_workspace_identity("ws_3");
         conn.execute(
-            "INSERT INTO workspace (id, status) VALUES (?1, ?2)",
-            params!["ws_3", "starting"],
+            "INSERT INTO workspace (id, status, kind, name, source_ref) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params!["ws_3", "starting", "managed", name, source_ref],
         )
         .expect("insert workspace");
         conn.execute(
             "INSERT INTO workspace_service (
-                id, workspace_id, service_name, exposure, port_override, status, default_port, effective_port, preview_url, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'))",
+                id, workspace_id, service_name, exposure, port_override, status, assigned_port, preview_url, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))",
             params![
                 "svc_3",
                 "ws_3",
@@ -409,8 +407,7 @@ mod tests {
                 Option::<i64>::None,
                 "starting",
                 Some(3000_i64),
-                Some(3000_i64),
-                Some("http://127.0.0.1:3000"),
+                Some(local_preview_url(&preview_label, "web")),
             ],
         )
         .expect("insert service");

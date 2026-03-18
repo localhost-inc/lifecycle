@@ -126,20 +126,6 @@ impl ServiceConfig {
         }
     }
 
-    pub fn port(&self) -> Option<u16> {
-        match self {
-            Self::Process(s) => s.port,
-            Self::Image(s) => s.port,
-        }
-    }
-
-    pub fn share_default(&self) -> bool {
-        match self {
-            Self::Process(s) => s.share_default.unwrap_or(false),
-            Self::Image(s) => s.share_default.unwrap_or(false),
-        }
-    }
-
     pub fn startup_timeout_seconds(&self) -> u64 {
         match self {
             Self::Process(s) => s.startup_timeout_seconds.unwrap_or(60),
@@ -156,10 +142,6 @@ pub struct ProcessService {
     pub depends_on: Option<Vec<String>>,
     pub startup_timeout_seconds: Option<u64>,
     pub health_check: Option<HealthCheck>,
-    pub port: Option<u16>,
-    pub share_default: Option<bool>,
-    #[serde(skip)]
-    pub resolved_port: Option<u16>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -173,7 +155,6 @@ pub struct ImageService {
     pub startup_timeout_seconds: Option<u64>,
     pub health_check: Option<HealthCheck>,
     pub port: Option<u16>,
-    pub share_default: Option<bool>,
     pub volumes: Option<Vec<ImageVolume>>,
     #[serde(skip)]
     pub resolved_port: Option<u16>,

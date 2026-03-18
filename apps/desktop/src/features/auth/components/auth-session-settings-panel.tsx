@@ -4,7 +4,6 @@ import type { AuthSession } from "../auth-session";
 import { UserAvatar } from "../../user/components/user-avatar";
 
 interface AuthSessionSettingsPanelProps {
-  environmentLabel: string;
   isLoading: boolean;
   onRefresh: () => void;
   session: AuthSession;
@@ -35,7 +34,6 @@ function authStateLabel(session: AuthSession): string {
 }
 
 export function AuthSessionSettingsPanel({
-  environmentLabel,
   isLoading,
   onRefresh,
   session,
@@ -85,23 +83,6 @@ export function AuthSessionSettingsPanel({
           )}
           {isLoading ? "Refreshing" : "Refresh status"}
         </Button>
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-2">
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] px-3 py-2.5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)]">
-            Runtime path
-          </p>
-          <p className="mt-1 text-sm text-[var(--foreground)]">{environmentLabel}</p>
-        </div>
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] px-3 py-2.5">
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)]">
-            Auth source
-          </p>
-          <p className="mt-1 text-sm text-[var(--foreground)]">
-            {providerLabel} · {sourceLabel}
-          </p>
-        </div>
       </div>
 
       {session.message ? (

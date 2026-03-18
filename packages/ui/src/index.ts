@@ -23,6 +23,7 @@ export { EmptyState, type EmptyStateProps } from "./components/empty-state";
 export { FloatingToggle, type FloatingToggleOption } from "./components/floating-toggle";
 export { IconButton, type IconButtonProps } from "./components/icon-button";
 export { Input } from "./components/input";
+export { OptionList, type OptionListItem, type OptionListProps } from "./components/option-list";
 export { Label } from "./components/label";
 export { Loading, type LoadingProps } from "./components/loading";
 export { Logo, type LogoProps } from "./components/logo";

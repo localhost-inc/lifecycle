@@ -1,7 +1,7 @@
 :root[data-theme="dark"] {
   --background: #171411;
   --foreground: #fafaf9;
-  --card: #1b1815;
+  --card: #221e1a;
   --surface: #131110;
   --sidebar-background: var(--background);
   --sidebar-foreground: #faf8f5;

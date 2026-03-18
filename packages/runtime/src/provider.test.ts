@@ -155,6 +155,7 @@ describe("workspace provider interface", () => {
       getWorkspaceRuntimeProjection: async () => ({
         activity: [],
         environmentTasks: [],
+        serviceLogs: [],
         setup: [],
       }),
       updateWorkspaceService: async () => {},
@@ -513,8 +514,7 @@ describe("workspace provider interface", () => {
         port_override: null,
         status: "stopped",
         status_reason: null,
-        default_port: 1420,
-        effective_port: 1420,
+        assigned_port: 1420,
         preview_status: "sleeping",
         preview_failure_reason: null,
         preview_url: "http://127.0.0.1:1420",
@@ -709,8 +709,7 @@ describe("workspace provider interface", () => {
         port_override: null,
         status: "ready",
         status_reason: null,
-        default_port: 1420,
-        effective_port: 1420,
+        assigned_port: 1420,
         preview_status: "ready",
         preview_failure_reason: null,
         preview_url: "http://127.0.0.1:1420",
@@ -752,6 +751,7 @@ describe("workspace provider interface", () => {
           return {
             activity: [],
             environmentTasks: [],
+            serviceLogs: [],
             setup: [],
           };
         case "read_workspace_file":
@@ -927,8 +927,7 @@ describe("workspace provider interface", () => {
             port_override: 1420,
             status: "stopped",
             status_reason: null,
-            default_port: 1420,
-            effective_port: 1420,
+            assigned_port: 1420,
             preview_status: "sleeping",
             preview_failure_reason: null,
             preview_url: "http://127.0.0.1:1420",

@@ -153,7 +153,18 @@ impl HarnessCompletionWatchContext {
                     }
                 }
 
-                log_offset = 0;
+                // For resumed sessions (app restart), skip to the end of the log so we
+                // only emit events for completions that happen *after* the observer starts.
+                // New sessions read from the beginning to catch the first turn.
+                log_offset = if matches!(self.harness_launch_mode, HarnessLaunchMode::Resume) {
+                    session_log_path
+                        .as_ref()
+                        .and_then(|p| fs::metadata(p).ok())
+                        .map(|m| m.len())
+                        .unwrap_or(0)
+                } else {
+                    0
+                };
                 pending_line_fragment.clear();
             }
 
@@ -202,8 +213,7 @@ impl HarnessCompletionWatchContext {
                             }
                         }
 
-                        if let Some(completion) =
-                            self.provider.parse_turn_completion(&value, &line)
+                        if let Some(completion) = self.provider.parse_turn_completion(&value, &line)
                         {
                             if !emitted_completion_keys.insert(completion.completion_key.clone()) {
                                 continue;

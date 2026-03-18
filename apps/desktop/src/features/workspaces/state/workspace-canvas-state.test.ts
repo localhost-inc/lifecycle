@@ -21,7 +21,7 @@ import {
   writeWorkspaceCanvasState,
 } from "./workspace-canvas-state";
 
-const WORKSPACE_CANVAS_STATE_STORAGE_KEY = "lifecycle.desktop.workspace-surface";
+const WORKSPACE_CANVAS_STATE_STORAGE_KEY = "lifecycle.desktop.workspace-canvas";
 const CHANGES_DIFF_TAB_KEY = changesDiffTabKey();
 
 class MemoryStorage implements StorageLike {
@@ -223,47 +223,6 @@ function createPullRequestSummary(
 }
 
 describe("workspace canvas state persistence", () => {
-  test("restores only the current document schema when legacy pane metadata is absent", () => {
-    const storage = new MemoryStorage();
-    const commit = createCommitEntry();
-
-    storage.setItem(
-      WORKSPACE_CANVAS_STATE_STORAGE_KEY,
-      JSON.stringify({
-        "ws-1": {
-          activeTabKey: CHANGES_DIFF_TAB_KEY,
-          documents: [
-            {
-              focusPath: "src/app.ts",
-              kind: "changes-diff",
-            },
-            {
-              author: commit.author,
-              kind: "commit-diff",
-              message: commit.message,
-              sha: commit.sha,
-              shortSha: commit.shortSha,
-              timestamp: commit.timestamp,
-            },
-            {
-              filePath: "README.md",
-            },
-            {
-              kind: "obsolete-document",
-              filePath: "README.md",
-            },
-          ],
-        },
-      }),
-    );
-
-    expect(readWorkspaceCanvasState("ws-1", storage)).toEqual(
-      withDefaultState({
-        documents: [createChangesDiffTab("src/app.ts"), createCommitDiffTab(commit)],
-      }),
-    );
-  });
-
   test("persists a single changes diff tab with fixed labeling and focus path", () => {
     const storage = new MemoryStorage();
 
@@ -751,35 +710,6 @@ describe("workspace canvas state persistence", () => {
     );
   });
 
-  test("drops persisted launcher tabs and legacy hidden terminal metadata", () => {
-    const storage = new MemoryStorage();
-
-    storage.setItem(
-      WORKSPACE_CANVAS_STATE_STORAGE_KEY,
-      JSON.stringify({
-        "ws-1": {
-          activeTabKey: "terminal:term-hidden",
-          documents: [
-            {
-              key: "launcher:launcher-1",
-              kind: "launcher",
-            },
-          ],
-          hiddenTerminalTabKeys: ["terminal:term-hidden", "launcher:ignored"],
-          tabOrderKeys: ["launcher:launcher-1", "terminal:term-hidden", CHANGES_DIFF_TAB_KEY],
-        },
-      }),
-    );
-
-    expect(readWorkspaceCanvasState("ws-1", storage)).toEqual(
-      withDefaultState({
-        activeTabKey: null,
-        documents: [],
-        tabOrderKeys: [],
-      }),
-    );
-  });
-
   test("preserves an empty split layout instead of deleting it as a blank workspace", () => {
     const storage = new MemoryStorage();
 
@@ -894,31 +824,6 @@ describe("workspace canvas state persistence", () => {
     expect(readWorkspaceCanvasState("ws-1", storage)).toEqual(
       withDefaultState({
         documents: [createChangesDiffTab("src/existing.ts"), createCommitDiffTab(commit)],
-      }),
-    );
-  });
-
-  test("drops legacy root-pane-less runtime tab metadata while filtering invalid documents", () => {
-    const storage = new MemoryStorage();
-
-    storage.setItem(
-      WORKSPACE_CANVAS_STATE_STORAGE_KEY,
-      JSON.stringify({
-        "ws-1": {
-          activeTabKey: "terminal:term-42",
-          documents: [
-            {
-              kind: "obsolete-document",
-              filePath: 42,
-            },
-          ],
-        },
-      }),
-    );
-
-    expect(readWorkspaceCanvasState("ws-1", storage)).toEqual(
-      withDefaultState({
-        documents: [],
       }),
     );
   });

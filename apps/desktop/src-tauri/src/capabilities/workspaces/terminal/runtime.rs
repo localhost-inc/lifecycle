@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+use std::sync::OnceLock;
+
 use crate::platform::db::DbPath;
 use crate::platform::native_terminal::{
     self, NativeTerminalFrame, NativeTerminalSurfaceFrameSyncRequest,
@@ -6,6 +9,7 @@ use crate::platform::native_terminal::{
 use crate::shared::errors::{LifecycleError, TerminalFailureReason, TerminalStatus, TerminalType};
 use crate::WorkspaceControllerRegistryHandle;
 use tauri::{AppHandle, Manager, State, WebviewWindow};
+use tokio::sync::Mutex as TokioMutex;
 
 use super::super::query::TerminalRecord;
 use super::super::rename::TitleOrigin;
@@ -27,6 +31,22 @@ use super::persistence::{
 use super::types::{NativeTerminalSurfaceFrameSyncInput, NativeTerminalSurfaceSyncInput};
 use crate::capabilities::workspaces::controller::ManagedWorkspaceController;
 use crate::capabilities::workspaces::harness::HarnessLaunchConfig;
+
+/// Serializes the initial sync_surface call for harness terminals so that CLI
+/// processes start one at a time instead of racing on shared auth tokens.
+static HARNESS_LAUNCH_GATE: OnceLock<TokioMutex<()>> = OnceLock::new();
+
+/// Tracks which harness terminals have already completed their first sync
+/// (process creation). Subsequent syncs (resize, theme, visibility) skip the gate.
+static LAUNCHED_HARNESS_TERMINALS: OnceLock<std::sync::Mutex<HashSet<String>>> = OnceLock::new();
+
+fn harness_launch_gate() -> &'static TokioMutex<()> {
+    HARNESS_LAUNCH_GATE.get_or_init(|| TokioMutex::new(()))
+}
+
+fn launched_harness_terminals() -> &'static std::sync::Mutex<HashSet<String>> {
+    LAUNCHED_HARNESS_TERMINALS.get_or_init(|| std::sync::Mutex::new(HashSet::new()))
+}
 
 fn terminal_status(record: &TerminalRecord) -> Result<TerminalStatus, LifecycleError> {
     TerminalStatus::from_str(&record.status)
@@ -162,6 +182,19 @@ pub(crate) async fn sync_native_terminal_surface(
     let terminal_id_for_surface = input.terminal_id.clone();
     let theme_override_path = theme_override_path.to_string_lossy().to_string();
     let working_directory = resolve_terminal_working_directory(&workspace)?;
+
+    // Gate the first sync for each harness terminal so CLI processes start
+    // sequentially instead of racing on shared auth tokens.
+    let is_initial_harness_sync = matches!(launch_type, TerminalType::Harness) && {
+        let registry = launched_harness_terminals().lock().unwrap();
+        !registry.contains(&input.terminal_id)
+    };
+    let _harness_gate = if is_initial_harness_sync {
+        Some(harness_launch_gate().lock().await)
+    } else {
+        None
+    };
+
     native_terminal::sync_surface(
         &window,
         NativeTerminalSurfaceSyncRequest {
@@ -186,6 +219,11 @@ pub(crate) async fn sync_native_terminal_surface(
         },
     )?;
     maybe_schedule_harness_observers(window.app_handle(), &db, &terminal, &working_directory);
+
+    if is_initial_harness_sync {
+        let mut registry = launched_harness_terminals().lock().unwrap();
+        registry.insert(input.terminal_id.clone());
+    }
 
     let target_status = if input.visible {
         TerminalStatus::Active

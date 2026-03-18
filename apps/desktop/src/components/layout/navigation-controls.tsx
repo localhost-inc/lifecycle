@@ -30,7 +30,7 @@ export function NavigationControls({
 
   return (
     <div
-      className={["flex shrink-0 items-center gap-0 px-1", shouldInset ? "pl-8" : ""].join(" ")}
+      className={["flex shrink-0 items-center gap-1 px-1", shouldInset ? "pl-8" : ""].join(" ")}
       data-no-drag
     >
       <IconButton

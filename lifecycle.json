@@ -18,7 +18,6 @@
       "runtime": "process",
       "command": "bun run dev",
       "cwd": "apps/api",
-      "port": 8787,
       "startup_timeout_seconds": 30,
       "health_check": {
         "kind": "http",
@@ -32,8 +31,6 @@
       "command": "bun run dev",
       "cwd": "apps/www",
       "depends_on": ["api"],
-      "port": 3000,
-      "share_default": true,
       "startup_timeout_seconds": 30,
       "health_check": {
         "kind": "http",

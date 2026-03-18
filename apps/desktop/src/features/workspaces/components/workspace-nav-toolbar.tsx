@@ -8,9 +8,8 @@ import {
   SplitButtonSecondary,
   Spinner,
 } from "@lifecycle/ui";
-import { ChevronDown, Play, RotateCcw, Square } from "lucide-react";
+import { ChevronDown, GitCommitHorizontal, Play, RotateCcw, Square } from "lucide-react";
 import { useState } from "react";
-import { GitActionButton } from "../../git/components/git-action-button";
 import type { WorkspaceToolbarSlot } from "../state/workspace-toolbar-context";
 
 interface WorkspaceNavToolbarProps {
@@ -27,7 +26,7 @@ export function WorkspaceNavToolbar({ slot }: WorkspaceNavToolbarProps) {
   const [restartMenuOpen, setRestartMenuOpen] = useState(false);
 
   return (
-    <div className="flex items-center gap-1.5" data-no-drag>
+    <div className="flex items-center gap-1.5">
       {/* Run / Stop — plain button when no restart, split when restart is available */}
       {slot.runAction && (
         slot.restartAction ? (
@@ -84,9 +83,21 @@ export function WorkspaceNavToolbar({ slot }: WorkspaceNavToolbarProps) {
         )
       )}
 
-      {/* Git action button */}
-      {slot.gitActionProps && (
-        <GitActionButton {...slot.gitActionProps} />
+      {/* Git action */}
+      {slot.gitAction && (
+        <Button
+          disabled={slot.gitAction.disabled}
+          onClick={slot.gitAction.onClick}
+          size="sm"
+          variant="outline"
+        >
+          {slot.gitAction.loading ? (
+            <Spinner className="size-3.5" />
+          ) : (
+            <GitCommitHorizontal className="size-3.5" strokeWidth={2.2} />
+          )}
+          <span>{slot.gitAction.label}</span>
+        </Button>
       )}
     </div>
   );

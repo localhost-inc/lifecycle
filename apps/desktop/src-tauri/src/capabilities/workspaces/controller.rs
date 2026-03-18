@@ -68,10 +68,27 @@ pub(crate) struct WorkspaceStepProgressSnapshot {
     pub(crate) status: String,
 }
 
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ServiceLogLine {
+    pub(crate) stream: String,
+    pub(crate) text: String,
+}
+
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ServiceLogSnapshot {
+    pub(crate) service_name: String,
+    pub(crate) lines: Vec<ServiceLogLine>,
+}
+
+const SERVICE_LOG_LINE_LIMIT: usize = 5000;
+
 #[derive(Clone, Debug, Default)]
 struct WorkspaceRuntimeProjectionState {
     activity: Vec<LifecycleEnvelope>,
     environment_tasks: Vec<WorkspaceStepProgressSnapshot>,
+    service_logs: Vec<ServiceLogSnapshot>,
     setup: Vec<WorkspaceStepProgressSnapshot>,
 }
 
@@ -80,6 +97,7 @@ struct WorkspaceRuntimeProjectionState {
 pub(crate) struct WorkspaceRuntimeProjectionSnapshot {
     pub(crate) activity: Vec<LifecycleEnvelope>,
     pub(crate) environment_tasks: Vec<WorkspaceStepProgressSnapshot>,
+    pub(crate) service_logs: Vec<ServiceLogSnapshot>,
     pub(crate) setup: Vec<WorkspaceStepProgressSnapshot>,
 }
 
@@ -166,6 +184,7 @@ impl WorkspaceController {
         WorkspaceRuntimeProjectionSnapshot {
             activity: projection.activity.clone(),
             environment_tasks: projection.environment_tasks.clone(),
+            service_logs: projection.service_logs.clone(),
             setup: projection.setup.clone(),
         }
     }
@@ -267,6 +286,17 @@ impl WorkspaceControllerRegistry {
         controllers.remove(workspace_id)
     }
 
+    pub(crate) async fn stop_all_runtimes(&self) {
+        let controllers: Vec<ManagedWorkspaceController> = {
+            let controllers = self.controllers.lock().expect("workspace controller lock");
+            controllers.values().cloned().collect()
+        };
+        for controller in controllers {
+            controller.request_stop().await;
+            controller.stop_runtime().await;
+        }
+    }
+
     pub(crate) fn record_lifecycle_envelope(
         &self,
         workspace_id: &str,
@@ -294,6 +324,7 @@ impl WorkspaceRuntimeProjectionState {
                 "starting" => {
                     self.setup.clear();
                     self.environment_tasks.clear();
+                    self.service_logs.clear();
                 }
                 "idle" if failure_reason.is_some() => {
                     normalize_running_steps(&mut self.setup, "failed");
@@ -318,6 +349,33 @@ impl WorkspaceRuntimeProjectionState {
                 event_kind,
                 data.as_deref(),
             ),
+            LifecycleEvent::ServiceLogLine {
+                service_name,
+                stream,
+                line,
+                ..
+            } => {
+                let log_line = ServiceLogLine {
+                    stream: stream.clone(),
+                    text: line.clone(),
+                };
+                let entry = self
+                    .service_logs
+                    .iter_mut()
+                    .find(|e| e.service_name == *service_name);
+                if let Some(entry) = entry {
+                    entry.lines.push(log_line);
+                    if entry.lines.len() > SERVICE_LOG_LINE_LIMIT {
+                        let excess = entry.lines.len() - SERVICE_LOG_LINE_LIMIT;
+                        entry.lines.drain(..excess);
+                    }
+                } else {
+                    self.service_logs.push(ServiceLogSnapshot {
+                        service_name: service_name.clone(),
+                        lines: vec![log_line],
+                    });
+                }
+            }
             _ => {}
         }
 

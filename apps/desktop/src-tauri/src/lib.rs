@@ -2,7 +2,7 @@ mod capabilities;
 mod platform;
 mod shared;
 
-use crate::platform::db::{run_migrations, DbPath};
+use crate::platform::db::{cleanup_for_exit, run_migrations, DbPath};
 use crate::platform::native_terminal;
 use crate::platform::runtime::supervisor::Supervisor;
 #[cfg(target_os = "macos")]
@@ -38,6 +38,9 @@ const APP_MENU_ITEM_OPEN_FILE_PICKER: &str = "app.open-file-picker";
 pub(crate) const APP_MENU_ITEM_SELECT_PROJECT_PREFIX: &str = "app.select-project-";
 
 #[cfg(target_os = "macos")]
+const APP_MENU_ITEM_QUIT: &str = "app.quit";
+
+#[cfg(target_os = "macos")]
 #[derive(Clone, Serialize)]
 struct AppShortcutEvent {
     action: &'static str,
@@ -57,6 +60,8 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(move |app| {
             let app_data_dir = app
                 .path()
@@ -85,6 +90,12 @@ pub fn run() {
             }
 
             run_migrations(&db_path_str).expect("failed to run migrations");
+            crate::platform::preview_proxy::start_preview_proxy(&app_data_dir, db_path_str.clone())
+                .expect("failed to initialize local preview proxy");
+            crate::capabilities::workspaces::preview::refresh_all_workspace_preview_rows(
+                &db_path_str,
+            )
+            .expect("failed to refresh local preview routes");
             app.manage(DbPath(db_path_str.clone()));
 
             if let Err(error) = capabilities::workspaces::git_watcher::start_root_git_watchers(
@@ -101,6 +112,10 @@ pub fn run() {
 
             if let Err(error) = disable_main_webview_context_menu(&app.handle()) {
                 crate::platform::diagnostics::append_error("main-webview-context-menu", error);
+            }
+
+            if let Err(error) = suppress_escape_beep(&app.handle()) {
+                crate::platform::diagnostics::append_error("suppress-escape-beep", error);
             }
 
             if let Err(error) = expand_main_window_for_dev(&app.handle()) {
@@ -122,6 +137,14 @@ pub fn run() {
         .on_menu_event(|app, event| {
             #[cfg(target_os = "macos")]
             {
+                if event.id() == APP_MENU_ITEM_QUIT {
+                    let app_handle = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        confirm_and_exit(app_handle).await;
+                    });
+                    return;
+                }
+
                 if event.id() == APP_MENU_ITEM_OPEN_SETTINGS {
                     let _ = app.emit(
                         APP_HOTKEY_EVENT_NAME,
@@ -171,6 +194,15 @@ pub fn run() {
                         return;
                     }
                 }
+            }
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let app_handle = window.app_handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    confirm_and_exit(app_handle).await;
+                });
             }
         })
         .manage(workspace_controllers)
@@ -237,15 +269,98 @@ pub fn run() {
             capabilities::workspaces::commands::merge_workspace_git_pull_request,
             capabilities::app::commands::sync_project_menu,
         ])
-        .run(tauri::generate_context!());
+        .build(tauri::generate_context!());
 
-    if let Err(error) = run_result {
-        crate::platform::diagnostics::append_error(
-            "tauri-run",
-            format!("error while running tauri application: {error}"),
-        );
-        panic!("error while running tauri application: {error}");
+    match run_result {
+        Ok(app) => {
+            app.run(|app_handle, event| {
+                if let tauri::RunEvent::ExitRequested { .. } = event {
+                    let db_path = app_handle.state::<DbPath>().0.clone();
+                    let _ = cleanup_for_exit(&db_path);
+                }
+            });
+        }
+        Err(error) => {
+            crate::platform::diagnostics::append_error(
+                "tauri-run",
+                format!("error while running tauri application: {error}"),
+            );
+            panic!("error while running tauri application: {error}");
+        }
     }
+}
+
+async fn confirm_and_exit(app: tauri::AppHandle) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static CONFIRMING: AtomicBool = AtomicBool::new(false);
+    if CONFIRMING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+
+    let db_path = app.state::<DbPath>().0.clone();
+    let controllers = app
+        .state::<WorkspaceControllerRegistryHandle>()
+        .inner()
+        .clone();
+
+    let has_active = tokio::task::spawn_blocking({
+        let db = db_path.clone();
+        move || -> bool {
+            let conn = match crate::platform::db::open_db(&db) {
+                Ok(c) => c,
+                Err(_) => return false,
+            };
+            let workspace_count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM workspace WHERE status IN ('starting', 'active', 'stopping')",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            let terminal_count: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM terminal WHERE status IN ('active', 'detached')",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            workspace_count > 0 || terminal_count > 0
+        }
+    })
+    .await
+    .unwrap_or(false);
+
+    if has_active {
+        use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        app.dialog()
+            .message("Running workspaces will be stopped. Are you sure you want to quit?")
+            .title("Quit Lifecycle")
+            .kind(MessageDialogKind::Warning)
+            .buttons(MessageDialogButtons::OkCancelCustom(
+                "Quit".to_string(),
+                "Cancel".to_string(),
+            ))
+            .show(move |confirmed| {
+                let _ = tx.send(confirmed);
+            });
+
+        if !rx.await.unwrap_or(false) {
+            CONFIRMING.store(false, Ordering::SeqCst);
+            return;
+        }
+    }
+
+    controllers.stop_all_runtimes().await;
+
+    let _ = tokio::task::spawn_blocking({
+        let db = db_path;
+        move || cleanup_for_exit(&db)
+    })
+    .await;
+
+    app.exit(0);
 }
 
 #[cfg(target_os = "macos")]
@@ -318,6 +433,65 @@ fn disable_main_webview_context_menu(app: &tauri::AppHandle) -> Result<(), Lifec
 
 #[cfg(not(target_os = "macos"))]
 fn disable_main_webview_context_menu(_app: &tauri::AppHandle) -> Result<(), LifecycleError> {
+    Ok(())
+}
+
+/// Override `cancelOperation:` on the main NSWindow to suppress the macOS
+/// system beep when Escape is pressed. Without this, NSResponder's default
+/// implementation calls NSBeep() when no view in the responder chain handles
+/// the selector. Placing the override on the window means it acts as a single
+/// catch-all: views that handle Escape themselves (e.g. native terminal
+/// surfaces) still do, while everything else falls through here silently. The
+/// DOM keydown event still reaches JavaScript so Escape can be handled in the
+/// web layer.
+#[cfg(target_os = "macos")]
+fn suppress_escape_beep(app: &tauri::AppHandle) -> Result<(), LifecycleError> {
+    use objc2_app_kit::{NSView, NSWindow};
+    use std::ffi::c_void;
+
+    let main_window = app
+        .get_webview_window("main")
+        .ok_or_else(|| LifecycleError::AttachFailed("main webview window not found".to_string()))?;
+
+    main_window
+        .with_webview(|webview| unsafe {
+            let view: &NSView = &*webview.inner().cast();
+            if let Some(host_window) = view.window() {
+                let host_window: &NSWindow = &host_window;
+
+                extern "C" {
+                    fn object_getClass(obj: *const c_void) -> *mut c_void;
+                    fn class_replaceMethod(
+                        cls: *mut c_void,
+                        name: *const c_void,
+                        imp: *const c_void,
+                        types: *const u8,
+                    ) -> *const c_void;
+                }
+
+                extern "C" fn noop_cancel(
+                    _this: *const c_void,
+                    _cmd: *const c_void,
+                    _sender: *const c_void,
+                ) {
+                }
+
+                let cls = object_getClass((host_window as *const NSWindow).cast());
+                let sel = objc2::sel!(cancelOperation:);
+                let sel_ptr: *const c_void = std::mem::transmute(sel);
+                class_replaceMethod(
+                    cls,
+                    sel_ptr,
+                    noop_cancel as *const () as *const c_void,
+                    b"v@:@\0".as_ptr(),
+                );
+            }
+        })
+        .map_err(|error| LifecycleError::AttachFailed(error.to_string()))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn suppress_escape_beep(_app: &tauri::AppHandle) -> Result<(), LifecycleError> {
     Ok(())
 }
 
@@ -409,6 +583,13 @@ fn build_app_menu<R: tauri::Runtime>(
             LifecycleError::AttachFailed(format!("failed to build app menu: {error}"))
         })?;
 
+    let quit_item = MenuItemBuilder::with_id(APP_MENU_ITEM_QUIT, "Quit Lifecycle")
+        .accelerator("CmdOrCtrl+Q")
+        .build(app)
+        .map_err(|error| {
+            LifecycleError::AttachFailed(format!("failed to build app menu: {error}"))
+        })?;
+
     let lifecycle_menu = SubmenuBuilder::new(app, "Lifecycle")
         .about(None)
         .separator()
@@ -421,7 +602,7 @@ fn build_app_menu<R: tauri::Runtime>(
         .hide()
         .hide_others()
         .separator()
-        .quit()
+        .item(&quit_item)
         .build()
         .map_err(|error| {
             LifecycleError::AttachFailed(format!("failed to build app menu: {error}"))

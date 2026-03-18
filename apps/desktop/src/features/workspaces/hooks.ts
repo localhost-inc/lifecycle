@@ -9,12 +9,15 @@ import { reduceWorkspaceTerminals } from "../terminals/hooks";
 import type { QueryDescriptor, QueryResult, QueryUpdate } from "../../query";
 import { useQuery } from "../../query";
 import type { ManifestStatus } from "../projects/api/projects";
-import type {
-  WorkspaceFileReadResult,
-  WorkspaceFileTreeEntry,
-  WorkspaceRuntimeProjectionResult,
-  WorkspaceStepProgressSnapshot,
-  WorkspaceSnapshotResult,
+import {
+  normalizeWorkspaceRuntimeProjection,
+  type ServiceLogLine as ApiServiceLogLine,
+  type ServiceLogSnapshot,
+  type WorkspaceFileReadResult,
+  type WorkspaceFileTreeEntry,
+  type WorkspaceRuntimeProjectionResult,
+  type WorkspaceStepProgressSnapshot,
+  type WorkspaceSnapshotResult,
 } from "./api";
 
 export interface SetupStepState {
@@ -27,6 +30,16 @@ export interface EnvironmentTaskState {
   name: string;
   output: string[];
   status: "pending" | "running" | "completed" | "failed" | "timeout";
+}
+
+export interface ServiceLogLine {
+  stream: "stdout" | "stderr";
+  text: string;
+}
+
+export interface ServiceLogState {
+  serviceName: string;
+  lines: ServiceLogLine[];
 }
 
 export interface WorkspaceActivityItem {
@@ -96,6 +109,7 @@ const WORKSPACE_ACTIVITY_EVENT_KINDS = [
   "workspace.deleted",
   "workspace.manifest_synced",
   "service.configuration_changed",
+  "service.log_line",
   "service.status_changed",
   "workspace.setup_progress",
   "environment.task_progress",
@@ -244,7 +258,6 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
       return {
         detail: joinActivityDetail([
           `exposure ${event.service.exposure}`,
-          event.service.effective_port !== null ? `port ${event.service.effective_port}` : null,
           event.service.preview_status !== "disabled"
             ? `preview ${humanizeToken(event.service.preview_status).toLowerCase()}`
             : null,
@@ -318,6 +331,8 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
             title: `${label} ${event.step_name} timed out`,
             tone: "warning",
           };
+        default:
+          return null;
       }
     }
     case "terminal.created":
@@ -332,6 +347,8 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
         )} session started`,
         tone: "success",
       };
+    case "service.log_line":
+      return null;
     case "terminal.updated":
       return null;
     case "terminal.status_changed":
@@ -414,6 +431,8 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
         title: "Git history updated",
         tone: "neutral",
       };
+    default:
+      return null;
   }
 }
 
@@ -847,6 +866,7 @@ function emptyWorkspaceRuntimeProjection(): WorkspaceRuntimeProjectionResult {
   return {
     activity: [],
     environmentTasks: [],
+    serviceLogs: [],
     setup: [],
   };
 }
@@ -858,7 +878,9 @@ function createWorkspaceRuntimeProjectionQuery(
     eventKinds: WORKSPACE_ACTIVITY_EVENT_KINDS,
     key: workspaceKeys.runtimeProjection(workspaceId),
     fetch(source) {
-      return source.getWorkspaceRuntimeProjection(workspaceId);
+      return source
+        .getWorkspaceRuntimeProjection(workspaceId)
+        .then(normalizeWorkspaceRuntimeProjection);
     },
     reduce(current, event) {
       return reduceWorkspaceRuntimeProjection(current, event, workspaceId);
@@ -871,6 +893,44 @@ type StepProgressEvent = Extract<
   { kind: "workspace.setup_progress" | "environment.task_progress" }
 >;
 
+const SERVICE_LOG_LINE_LIMIT = 5000;
+
+function reduceServiceLogsProjection(
+  current: ServiceLogSnapshot[],
+  event: LifecycleEvent,
+  workspaceId: string,
+): ServiceLogSnapshot[] {
+  if (
+    event.kind === "workspace.status_changed" &&
+    event.workspace_id === workspaceId &&
+    event.status === "starting"
+  ) {
+    return current.length > 0 ? [] : current;
+  }
+
+  if (event.kind !== "service.log_line" || event.workspace_id !== workspaceId) {
+    return current;
+  }
+
+  const logLine: ApiServiceLogLine = { stream: event.stream, text: event.line };
+  const existing = current.find((entry) => entry.service_name === event.service_name);
+  if (existing) {
+    return current.map((entry) => {
+      if (entry.service_name !== event.service_name) {
+        return entry;
+      }
+
+      const nextLines = [...entry.lines, logLine];
+      if (nextLines.length > SERVICE_LOG_LINE_LIMIT) {
+        nextLines.splice(0, nextLines.length - SERVICE_LOG_LINE_LIMIT);
+      }
+      return { ...entry, lines: nextLines };
+    });
+  }
+
+  return [...current, { service_name: event.service_name, lines: [logLine] }];
+}
+
 export function reduceWorkspaceRuntimeProjection(
   current: WorkspaceRuntimeProjectionResult | undefined,
   event: LifecycleEvent,
@@ -880,7 +940,9 @@ export function reduceWorkspaceRuntimeProjection(
     return { kind: "none" };
   }
 
-  const previous = current ?? emptyWorkspaceRuntimeProjection();
+  const previous = current
+    ? normalizeWorkspaceRuntimeProjection(current)
+    : emptyWorkspaceRuntimeProjection();
   const nextSetup = reduceWorkspaceStepProgressProjection(
     previous.setup,
     event,
@@ -893,11 +955,13 @@ export function reduceWorkspaceRuntimeProjection(
     workspaceId,
     "environment.task_progress",
   );
+  const nextServiceLogs = reduceServiceLogsProjection(previous.serviceLogs, event, workspaceId);
   const nextActivity = reduceWorkspaceActivityEvents(previous.activity, event, workspaceId);
 
   if (
     nextSetup === previous.setup &&
     nextEnvironmentTasks === previous.environmentTasks &&
+    nextServiceLogs === previous.serviceLogs &&
     nextActivity === previous.activity
   ) {
     return { kind: "none" };
@@ -908,6 +972,7 @@ export function reduceWorkspaceRuntimeProjection(
     data: {
       activity: nextActivity,
       environmentTasks: nextEnvironmentTasks,
+      serviceLogs: nextServiceLogs,
       setup: nextSetup,
     },
   };
@@ -1000,6 +1065,10 @@ function reduceStepProgressState(
 }
 
 function eventContributesToWorkspaceActivity(event: LifecycleEvent): boolean {
+  if (event.kind === "service.log_line") {
+    return false;
+  }
+
   return !(
     (event.kind === "workspace.setup_progress" || event.kind === "environment.task_progress") &&
     (event.event_kind === "stdout" || event.event_kind === "stderr")
@@ -1172,7 +1241,7 @@ export function useWorkspaceSetup(
   return useMemo(
     () => ({
       ...query,
-      data: query.data?.setup,
+      data: query.data ? normalizeWorkspaceRuntimeProjection(query.data).setup : undefined,
     }),
     [query],
   );
@@ -1186,7 +1255,28 @@ export function useWorkspaceEnvironmentTasks(
   return useMemo(
     () => ({
       ...query,
-      data: query.data?.environmentTasks,
+      data: query.data
+        ? normalizeWorkspaceRuntimeProjection(query.data).environmentTasks
+        : undefined,
+    }),
+    [query],
+  );
+}
+
+export function useWorkspaceServiceLogs(
+  workspaceId: string | null,
+): QueryResult<ServiceLogState[] | undefined> {
+  const query = useWorkspaceRuntimeProjection(workspaceId);
+
+  return useMemo(
+    () => ({
+      ...query,
+      data: query.data
+        ? normalizeWorkspaceRuntimeProjection(query.data).serviceLogs.map((log) => ({
+            serviceName: log.service_name,
+            lines: log.lines,
+          }))
+        : undefined,
     }),
     [query],
   );
@@ -1200,7 +1290,9 @@ export function useWorkspaceActivity(
   return useMemo(
     () => ({
       ...query,
-      data: query.data ? buildWorkspaceActivityItems(query.data.activity) : undefined,
+      data: query.data
+        ? buildWorkspaceActivityItems(normalizeWorkspaceRuntimeProjection(query.data).activity)
+        : undefined,
     }),
     [query],
   );

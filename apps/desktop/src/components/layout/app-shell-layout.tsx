@@ -130,8 +130,9 @@ export function AppShellLayout() {
     () =>
       buildShellContexts(allProjects, {
         personalContextPersisted: authSession.state === "logged_in",
+        personalDisplayName: authSession.identity?.displayName,
       }),
-    [allProjects, authSession.state],
+    [allProjects, authSession.state, authSession.identity?.displayName],
   );
   const activeShellContext = useMemo(
     () =>

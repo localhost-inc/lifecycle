@@ -40,8 +40,7 @@ pub struct ServiceRecord {
     pub port_override: Option<i64>,
     pub status: String,
     pub status_reason: Option<String>,
-    pub default_port: Option<i64>,
-    pub effective_port: Option<i64>,
+    pub assigned_port: Option<i64>,
     pub preview_status: String,
     pub preview_failure_reason: Option<String>,
     pub preview_url: Option<String>,
@@ -257,7 +256,7 @@ fn get_workspace_services_sync(
     workspace_id: String,
 ) -> Result<Vec<ServiceRecord>, LifecycleError> {
     let mut stmt = conn.prepare(
-        "SELECT id, workspace_id, service_name, exposure, port_override, status, status_reason, default_port, effective_port, preview_status, preview_failure_reason, preview_url, created_at, updated_at FROM workspace_service WHERE workspace_id = ?1 ORDER BY service_name"
+        "SELECT id, workspace_id, service_name, exposure, port_override, status, status_reason, assigned_port, preview_status, preview_failure_reason, preview_url, created_at, updated_at FROM workspace_service WHERE workspace_id = ?1 ORDER BY service_name"
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     let rows = stmt
@@ -270,13 +269,12 @@ fn get_workspace_services_sync(
                 port_override: row.get(4)?,
                 status: row.get(5)?,
                 status_reason: row.get(6)?,
-                default_port: row.get(7)?,
-                effective_port: row.get(8)?,
-                preview_status: row.get(9)?,
-                preview_failure_reason: row.get(10)?,
-                preview_url: row.get(11)?,
-                created_at: row.get(12)?,
-                updated_at: row.get(13)?,
+                assigned_port: row.get(7)?,
+                preview_status: row.get(8)?,
+                preview_failure_reason: row.get(9)?,
+                preview_url: row.get(10)?,
+                created_at: row.get(11)?,
+                updated_at: row.get(12)?,
             })
         })
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
@@ -498,15 +496,14 @@ mod tests {
         .expect("insert workspace");
         conn.execute(
             "INSERT INTO workspace_service (
-                id, workspace_id, service_name, exposure, status, default_port, effective_port
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                id, workspace_id, service_name, exposure, status, assigned_port
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             rusqlite::params![
                 "service_1",
                 "workspace_1",
                 "web",
                 "local",
                 "ready",
-                3000_i64,
                 3000_i64
             ],
         )

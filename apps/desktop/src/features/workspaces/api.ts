@@ -164,10 +164,67 @@ export interface WorkspaceStepProgressSnapshot {
   status: WorkspaceProgressStatus;
 }
 
+export interface ServiceLogLine {
+  stream: "stdout" | "stderr";
+  text: string;
+}
+
+export interface ServiceLogSnapshot {
+  service_name: string;
+  lines: ServiceLogLine[];
+}
+
 export interface WorkspaceRuntimeProjectionResult {
   activity: LifecycleEvent[];
   environmentTasks: WorkspaceStepProgressSnapshot[];
+  serviceLogs: ServiceLogSnapshot[];
   setup: WorkspaceStepProgressSnapshot[];
+}
+
+function normalizeServiceLogLines(lines: unknown[]): ServiceLogLine[] {
+  return lines.map((entry) => {
+    if (typeof entry === "string") {
+      return { stream: "stdout" as const, text: entry };
+    }
+    if (
+      entry !== null &&
+      typeof entry === "object" &&
+      "text" in entry &&
+      typeof (entry as Record<string, unknown>).text === "string"
+    ) {
+      const record = entry as Record<string, unknown>;
+      return {
+        stream: record.stream === "stderr" ? ("stderr" as const) : ("stdout" as const),
+        text: record.text as string,
+      };
+    }
+    return { stream: "stdout" as const, text: String(entry) };
+  });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function normalizeWorkspaceRuntimeProjection(
+  projection: any,
+): WorkspaceRuntimeProjectionResult {
+  const raw = projection as Record<string, unknown> | null | undefined;
+  const rawServiceLogs = (raw?.serviceLogs ?? []) as unknown[];
+  return {
+    activity: (projection?.activity as WorkspaceRuntimeProjectionResult["activity"]) ?? [],
+    environmentTasks:
+      (projection?.environmentTasks as WorkspaceRuntimeProjectionResult["environmentTasks"]) ?? [],
+    serviceLogs: Array.isArray(rawServiceLogs)
+      ? rawServiceLogs.map((entry) => {
+          const record = entry as Record<string, unknown>;
+          return {
+            service_name: (record.service_name as string) ?? "",
+            lines: Array.isArray(record.lines)
+              ? normalizeServiceLogLines(record.lines)
+              : [],
+          };
+        })
+      : [],
+    setup: (projection?.setup as WorkspaceRuntimeProjectionResult["setup"]) ?? [],
+  };
 }
 
 export async function getWorkspaceSnapshot(workspaceId: string): Promise<WorkspaceSnapshotResult> {
@@ -188,14 +245,12 @@ export async function getWorkspaceRuntimeProjection(
 ): Promise<WorkspaceRuntimeProjectionResult> {
   if (!isTauri()) {
     void workspaceId;
-    return {
-      activity: [],
-      environmentTasks: [],
-      setup: [],
-    };
+    return normalizeWorkspaceRuntimeProjection(undefined);
   }
 
-  return getWorkspaceProvider().getWorkspaceRuntimeProjection(workspaceId);
+  return normalizeWorkspaceRuntimeProjection(
+    await getWorkspaceProvider().getWorkspaceRuntimeProjection(workspaceId),
+  );
 }
 
 export interface UpdateWorkspaceServiceInput {

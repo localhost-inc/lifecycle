@@ -8,7 +8,7 @@ The current preview model risks coupling two different concerns:
 
 1. **transport**
    - how traffic reaches a workspace service
-   - direct `localhost` vs tunnel-backed URL
+   - stable local Lifecycle proxy URL vs tunnel-backed URL
 2. **access policy**
    - who can use that URL
    - local-only, share link, team, or organization-gated access
@@ -20,7 +20,7 @@ If the first tunnel implementation is forced through `organization` semantics, l
 Tunnels should be designed as a transport layer first, with access policy layered on top.
 
 1. **Transport**
-   - `local`: direct `http://127.0.0.1:<effective_port>`
+   - `local`: stable Lifecycle-owned local proxy URL that routes to the current `assigned_port`
    - `shared`: optional tunnel-backed URL for a local or cloud workspace
 2. **Access policy**
    - local-only
@@ -87,7 +87,7 @@ Candidate directions:
 ## Milestone Placement
 
 1. **M4**
-   - local preview remains `localhost`
+   - local preview remains local-first, but through a stable Lifecycle-owned proxy route rather than a direct bound port URL
    - service controls and preview metadata stay local-first
 2. **Post-M4 / local sharing slice**
    - add optional tunnel-backed `shared` transport for local workspaces

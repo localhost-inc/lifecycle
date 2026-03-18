@@ -4,14 +4,14 @@ Date: 2026-03-10
 
 ## Context
 
-We already had `workspace_service.exposure`, `port_override`, and `effective_port` in the local schema, but the runtime still treated `lifecycle.json` as the only source of truth when starting services.
+We already had `workspace_service.exposure`, `port_override`, and `assigned_port` in the local schema, but the runtime still treated `lifecycle.json` as the only source of truth when starting services.
 
 ## Learning
 
 Persisting service overrides is not enough. Local environment controls only stay honest if the same overrides are re-applied in three places:
 
 1. during manifest reconciliation, so service rows survive `lifecycle.json` edits without losing local overrides
-2. in preview and environment projection, so the desktop surface reflects the same effective ports and exposure state the runtime will use
+2. in preview and environment projection, so the desktop surface reflects the same runtime-assigned port and exposure state the runtime will use
 3. at runtime startup, so `run` uses the workspace-level override state instead of silently booting the manifest defaults
 
 Without that third step, the Environment rail can show one port while the supervisor actually starts another.
@@ -19,9 +19,9 @@ Without that third step, the Environment rail can show one port while the superv
 ## Decision
 
 - Keep `workspace_service` as the durable source for local service exposure and port overrides.
-- Recompute preview metadata from `exposure` plus `effective_port` whenever service rows are reconciled or edited.
+- Recompute preview metadata from exposure, preview transport, and current runtime state whenever service rows are reconciled or edited.
 - Clone manifest service config at start time and apply workspace overrides before launching processes or containers.
-- For process services, inject the overridden port through `PORT` env vars in addition to updating the stored port field.
+- For process services, inject the start-assigned port through `PORT` env vars in addition to updating the stored runtime port field.
 
 ## Milestone Impact
 

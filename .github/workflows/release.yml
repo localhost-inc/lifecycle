@@ -1,0 +1,78 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+
+      - name: Setup Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.14.1
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Cache GhosttyKit
+        id: ghosttykit-cache
+        uses: actions/cache@v4
+        with:
+          path: apps/desktop/src-tauri/.generated/ghostty
+          key: ${{ runner.os }}-ghosttykit-${{ hashFiles('vendor/ghostty.lock') }}
+
+      - name: Build GhosttyKit
+        if: steps.ghosttykit-cache.outputs.cache-hit != 'true'
+        run: scripts/prepare-ghosttykit.sh
+
+      - name: Set GhosttyKit path
+        run: echo "LIFECYCLE_GHOSTTYKIT_PATH=${{ github.workspace }}/apps/desktop/src-tauri/.generated/ghostty/GhosttyKit.xcframework" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build and release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_REPO_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          LIFECYCLE_GHOSTTYKIT_PATH: ${{ env.LIFECYCLE_GHOSTTYKIT_PATH }}
+        with:
+          projectPath: apps/desktop
+          tauriScript: bunx tauri
+          tagName: v__VERSION__
+          releaseName: "Lifecycle v__VERSION__"
+          releaseBody: "See the assets below to download and install this version."
+          releaseDraft: false
+          prerelease: false
+          owner: localhost-inc
+          repo: lifecycle-releases
+          args: --target aarch64-apple-darwin

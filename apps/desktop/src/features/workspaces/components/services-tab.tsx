@@ -13,21 +13,19 @@ import {
   SetupProgress,
   Spinner,
 } from "@lifecycle/ui";
-import { ExternalLink, FileJson, Layers, Logs, Play, TerminalSquare } from "lucide-react";
-import type { CSSProperties } from "react";
+import { ChevronRight, ExternalLink, FileJson, Layers, Play, TerminalSquare } from "lucide-react";
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef } from "react";
 import { useState } from "react";
+import { hasAnsiCodes, renderAnsiLine } from "../../../lib/ansi";
 import { EnvironmentSection } from "./environment-section";
-import type { EnvironmentTaskState } from "../hooks";
+import type { EnvironmentTaskState, ServiceLogLine } from "../hooks";
 import { formatWorkspaceError } from "../lib/workspace-errors";
 
 type ServiceRuntime = "image" | "process";
 
-const LOCAL_PREVIEW_HOST = "127.0.0.1";
-
 interface StatusStyles {
   dotStyle: CSSProperties;
   nameClassName: string;
-  portStyle: CSSProperties;
   rowStyle: CSSProperties;
 }
 
@@ -39,9 +37,6 @@ const STATUS_STYLES: Record<string, StatusStyles> = {
       backgroundColor: "var(--status-neutral)",
     },
     nameClassName: "text-[var(--foreground)]",
-    portStyle: {
-      color: "var(--muted-foreground)",
-    },
     rowStyle: {},
   },
   starting: {
@@ -49,9 +44,6 @@ const STATUS_STYLES: Record<string, StatusStyles> = {
       backgroundColor: "var(--status-info)",
     },
     nameClassName: "text-[var(--foreground)]",
-    portStyle: {
-      color: "color-mix(in srgb, var(--status-info) 45%, transparent)",
-    },
     rowStyle: {
       backgroundImage:
         "linear-gradient(90deg, color-mix(in srgb, var(--status-info) 7%, transparent) 0%, color-mix(in srgb, var(--status-info) 1%, transparent) 100%)",
@@ -63,9 +55,6 @@ const STATUS_STYLES: Record<string, StatusStyles> = {
       boxShadow: "0 0 6px color-mix(in srgb, var(--status-success) 50%, transparent)",
     },
     nameClassName: "text-[var(--foreground)]",
-    portStyle: {
-      color: "color-mix(in srgb, var(--status-success) 50%, transparent)",
-    },
     rowStyle: {
       backgroundImage:
         "linear-gradient(90deg, color-mix(in srgb, var(--status-success) 8%, transparent) 0%, color-mix(in srgb, var(--status-success) 2%, transparent) 100%)",
@@ -77,9 +66,6 @@ const STATUS_STYLES: Record<string, StatusStyles> = {
       boxShadow: "0 0 6px color-mix(in srgb, var(--status-danger) 40%, transparent)",
     },
     nameClassName: "text-[var(--foreground)]",
-    portStyle: {
-      color: "color-mix(in srgb, var(--status-danger) 40%, transparent)",
-    },
     rowStyle: {
       backgroundImage:
         "linear-gradient(90deg, color-mix(in srgb, var(--status-danger) 8%, transparent) 0%, color-mix(in srgb, var(--status-danger) 2%, transparent) 100%)",
@@ -139,10 +125,6 @@ function parsePortDraft(value: string): ParsedPortDraft {
 }
 
 export function resolvePreviewUrl(service: ServiceRecord): string | null {
-  if (service.exposure === "local" && service.effective_port !== null) {
-    return `http://${LOCAL_PREVIEW_HOST}:${service.effective_port}`;
-  }
-
   return service.preview_url;
 }
 
@@ -154,18 +136,120 @@ export function formatServiceStatusReason(reason: ServiceRecord["status_reason"]
   return STATUS_REASON_LABELS[reason] ?? reason;
 }
 
+function renderLogLine(line: ServiceLogLine, index: number): ReactNode {
+  const content = hasAnsiCodes(line.text)
+    ? renderAnsiLine(line.text, `l${index}`)
+    : line.text;
+
+  return <span key={index}>{content}</span>;
+}
+
+function ServiceLogBody({ height, lines }: { height: number | null; lines: ServiceLogLine[] }) {
+  const scrollRef = useRef<HTMLPreElement | null>(null);
+  const wasAtBottomRef = useRef(true);
+
+  const renderedContent = useMemo(() => {
+    const result: ReactNode[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (i > 0) {
+        result.push("\n");
+      }
+      result.push(renderLogLine(lines[i]!, i));
+    }
+    return result;
+  }, [lines]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !wasAtBottomRef.current) {
+      return;
+    }
+
+    el.scrollTop = el.scrollHeight;
+  }, [lines.length]);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) {
+      return;
+    }
+
+    wasAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+  }, []);
+
+  if (lines.length === 0) {
+    return null;
+  }
+
+  return (
+    <pre
+      ref={scrollRef}
+      className="overflow-auto whitespace-pre-wrap bg-[var(--background)] px-3 py-2 font-mono text-xs text-[var(--muted-foreground)]"
+      onScroll={handleScroll}
+      style={height !== null ? { height } : undefined}
+    >
+      {renderedContent}
+    </pre>
+  );
+}
+
+function useResizeHandle(minHeight = 60) {
+  const [height, setHeight] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const dragState = useRef<{ startY: number; startHeight: number } | null>(null);
+
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault();
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      const measured = containerRef.current?.offsetHeight ?? 160;
+      dragState.current = { startY: e.clientY, startHeight: measured };
+    },
+    [],
+  );
+
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!dragState.current) return;
+      const next = Math.max(minHeight, dragState.current.startHeight + (e.clientY - dragState.current.startY));
+      if (containerRef.current) {
+        containerRef.current.style.height = `${next}px`;
+      }
+    },
+    [minHeight],
+  );
+
+  const onPointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (!dragState.current) return;
+      const next = Math.max(minHeight, dragState.current.startHeight + (e.clientY - dragState.current.startY));
+      dragState.current = null;
+      setHeight(next);
+    },
+    [minHeight],
+  );
+
+  return { containerRef, handleProps: { onPointerDown, onPointerMove, onPointerUp }, height };
+}
+
 export function ServiceRow({
-  onOpenLogs,
+  expanded: expandedProp,
+  logLines,
+  onOpenLogs: _onOpenLogs,
   onStartService,
+  onToggleExpanded,
   onUpdateService,
   runDisabled = false,
   runPending = false,
   runtime,
   service,
-  statusAffordance = "full",
+  statusAffordance: _statusAffordance = "full",
 }: {
+  expanded?: boolean;
+  logLines?: ServiceLogLine[];
   onOpenLogs?: (serviceName: string) => void;
   onStartService?: (serviceName: string) => void;
+  onToggleExpanded?: () => void;
   onUpdateService: (input: {
     exposure: ServiceRecord["exposure"];
     portOverride: number | null;
@@ -182,6 +266,7 @@ export function ServiceRow({
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState<"copied" | null>(null);
+  const { containerRef: logContainerRef, handleProps: resizeHandleProps, height: logHeight } = useResizeHandle();
 
   const parsedPort = parsePortDraft(draftPort);
   const previewUrl = resolvePreviewUrl(service);
@@ -239,17 +324,13 @@ export function ServiceRow({
   }
 
   const canOpenPreview = previewUrl !== null && service.preview_status === "ready";
-  const [expanded, setExpanded] = useState(false);
-  const launchesBootLogs = onOpenLogs !== undefined;
+  const hasLogs = logLines !== undefined && logLines.length > 0;
+  const isExpandable = onToggleExpanded !== undefined;
+  const expanded = expandedProp ?? false;
   const canStartService =
     onStartService !== undefined && (service.status === "stopped" || service.status === "failed");
   // biome-ignore lint: indexing a known-populated record
   const styles = (STATUS_STYLES[service.status] ?? STATUS_STYLES.stopped)!;
-  const rowStyle = statusAffordance === "full" ? styles.rowStyle : {};
-  const portStyle =
-    statusAffordance === "full"
-      ? styles.portStyle
-      : ({ color: "var(--muted-foreground)" } satisfies CSSProperties);
   const runtimeIcon =
     runtime === "image" ? (
       <Layers className="size-3 text-[var(--muted-foreground)]/70" strokeWidth={2.2} />
@@ -260,68 +341,48 @@ export function ServiceRow({
   return (
     <div className="group/row">
       <div
-        className={`flex items-center gap-2 py-1${!launchesBootLogs ? " cursor-pointer" : ""}`}
-        style={rowStyle}
-        onClick={!launchesBootLogs ? () => setExpanded(!expanded) : undefined}
+        className={`flex items-center gap-2 bg-[var(--surface)] px-3 py-1.5 border-b border-[var(--border)]${isExpandable ? " cursor-pointer" : ""}`}
+        onClick={isExpandable ? onToggleExpanded : undefined}
       >
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <div className="flex size-3.5 shrink-0 items-center justify-center">
-            {service.status === "starting" ? (
-              <Spinner className="size-3.5 text-[var(--status-info)]" />
-            ) : (
-              <span className="inline-block size-[7px] rounded-full" style={styles.dotStyle} />
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-baseline gap-2">
-              <span className="inline-flex min-w-0 items-center gap-1.5">
-                {runtimeIcon}
-                <span className={`truncate text-[13px] font-medium ${styles.nameClassName}`}>
-                  {service.service_name}
-                </span>
-              </span>
-              {service.effective_port !== null && (
-                <span className="shrink-0 font-mono text-[11px]" style={portStyle}>
-                  :{service.effective_port}
-                </span>
-              )}
-            </div>
-            {statusReasonLabel && (
-              <p
-                className="mt-1 text-[10px]"
-                style={{
-                  color: "var(--status-danger)",
-                }}
-              >
-                {statusReasonLabel}
-              </p>
-            )}
-          </div>
-          {canOpenPreview && (
-            <button
-              aria-label={`Open preview for ${service.service_name}`}
-              className="rounded-md p-1 text-[var(--muted-foreground)]/40 transition-colors hover:text-[var(--foreground)] cursor-pointer"
-              onClick={() => handleOpenPreview()}
-              type="button"
-            >
-              <ExternalLink className="size-3.5" />
-            </button>
-          )}
-          {launchesBootLogs && (
-            <IconButton
-              aria-label={`Show boot logs for ${service.service_name}`}
-              onClick={() => onOpenLogs!(service.service_name)}
-              title={`Show boot logs for ${service.service_name}`}
-            >
-              <Logs className="size-3.5" strokeWidth={2.2} />
-            </IconButton>
+        <div className="flex size-3.5 shrink-0 items-center justify-center">
+          {service.status === "starting" ? (
+            <Spinner className="size-3.5 text-[var(--status-info)]" />
+          ) : (
+            <span className="inline-block size-[7px] rounded-full" style={styles.dotStyle} />
           )}
         </div>
-        {canStartService ? (
+        <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
+          {runtimeIcon}
+          <span className={`truncate text-[13px] font-medium ${styles.nameClassName}`}>
+            {service.service_name}
+          </span>
+          {statusReasonLabel && (
+            <span className="text-[10px]" style={{ color: "var(--status-danger)" }}>
+              {statusReasonLabel}
+            </span>
+          )}
+        </span>
+        {canOpenPreview && (
+          <button
+            aria-label={`Open preview for ${service.service_name}`}
+            className="rounded-md p-1 text-[var(--muted-foreground)]/40 transition-colors hover:text-[var(--foreground)] cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenPreview();
+            }}
+            type="button"
+          >
+            <ExternalLink className="size-3.5" />
+          </button>
+        )}
+        {canStartService && (
           <IconButton
             aria-label={`Run ${service.service_name} and its dependencies`}
             disabled={runDisabled}
-            onClick={() => onStartService?.(service.service_name)}
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              onStartService?.(service.service_name);
+            }}
             title={`Run ${service.service_name} and its dependencies`}
           >
             {runPending ? (
@@ -330,10 +391,42 @@ export function ServiceRow({
               <Play className="size-3.5 fill-current" strokeWidth={2.4} />
             )}
           </IconButton>
-        ) : null}
+        )}
+        {hasLogs && (
+          <span className="shrink-0 text-[11px] tabular-nums text-[var(--muted-foreground)]/60">
+            {logLines!.length}
+          </span>
+        )}
+        {isExpandable && (
+          <ChevronRight
+            className={`size-3 shrink-0 text-[var(--muted-foreground)] transition-transform duration-150 ${expanded ? "rotate-90" : ""}`}
+            strokeWidth={2.4}
+          />
+        )}
       </div>
 
-      {!launchesBootLogs && expanded && (
+      {isExpandable && (
+        <div
+          className="grid transition-[grid-template-rows] duration-150 ease-out"
+          style={{ gridTemplateRows: expanded ? "1fr" : "0fr" }}
+        >
+          <div className="overflow-hidden">
+            <div ref={logContainerRef} style={logHeight !== null ? { height: logHeight } : undefined}>
+              {hasLogs
+                ? <ServiceLogBody height={logHeight} lines={logLines!} />
+                : <div className="bg-[var(--background)] px-3 py-3 text-xs text-[var(--muted-foreground)]/60">No output yet</div>
+              }
+            </div>
+            {/* biome-ignore lint: resize handle */}
+            <div
+              className="h-1.5 cursor-row-resize border-b border-[var(--border)] bg-[var(--surface)] transition-colors hover:bg-[var(--muted-foreground)]/15 active:bg-[var(--muted-foreground)]/25"
+              {...resizeHandleProps}
+            />
+          </div>
+        </div>
+      )}
+
+      {expanded && !isExpandable && (
         <div className="flex flex-col gap-2 px-3 pb-3 pl-[38px] pt-1">
           <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_6rem_auto] sm:items-end">
             <label className="flex min-w-0 flex-col gap-1">
@@ -358,12 +451,12 @@ export function ServiceRow({
 
             <label className="flex min-w-0 flex-col gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--muted-foreground)]">
-                Port
+                Port override
               </span>
               <Input
                 inputMode="numeric"
                 onChange={(event) => setDraftPort(event.target.value)}
-                placeholder={service.default_port?.toString() ?? "default"}
+                placeholder={service.assigned_port?.toString() ?? "auto"}
                 type="number"
                 value={draftPort}
               />

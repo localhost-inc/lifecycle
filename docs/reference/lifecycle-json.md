@@ -95,10 +95,18 @@ Lifecycle injects reserved discovery env vars into workspace steps and service p
 - `LIFECYCLE_SERVICE_<NODE_NAME>_HOST`
 - `LIFECYCLE_SERVICE_<NODE_NAME>_PORT`
 - `LIFECYCLE_SERVICE_<NODE_NAME>_ADDRESS`
+- `LIFECYCLE_SERVICE_<NODE_NAME>_URL`
 
 `<NODE_NAME>` is the environment node key uppercased with non-alphanumeric
 separators normalized to `_`. For example, `desktop-web` becomes
-`LIFECYCLE_SERVICE_DESKTOP_WEB_ADDRESS`.
+`LIFECYCLE_SERVICE_DESKTOP_WEB_URL`.
+
+Use `LIFECYCLE_SERVICE_<NODE_NAME>_URL` for HTTP service-to-service traffic.
+It is a stable Lifecycle-owned route under `*.lifecycle.localhost`, typically in
+the shape `<service>.<workspace>.lifecycle.localhost`, and does not change when
+the provider reassigns the underlying runtime port. Keep
+`HOST`/`PORT`/`ADDRESS` for direct socket clients such as Postgres, Redis, and
+other non-HTTP protocols.
 
 Reserved `LIFECYCLE_*` values may be referenced inside:
 
@@ -163,12 +171,13 @@ Required fields:
 `runtime: "process"`:
 
 - required: `command`
-- optional: `cwd`, `env`, `depends_on`, `startup_timeout_seconds`, `health_check`, `port`, `share_default`
+- optional: `cwd`, `env`, `depends_on`, `startup_timeout_seconds`, `health_check`
 
 `runtime: "image"`:
 
 - required: at least one of `image` or `build`
-- optional: `command`, `args`, `env`, `depends_on`, `startup_timeout_seconds`, `health_check`, `port`, `share_default`, `volumes`
+- optional: `command`, `args`, `env`, `depends_on`, `startup_timeout_seconds`, `health_check`, `port`, `volumes`
+  - `port` (image services only): the container port to expose to the host; Lifecycle auto-assigns the host-side port at runtime
 
 Additional service fields:
 
@@ -176,8 +185,6 @@ Additional service fields:
 - `volumes` entries use explicit mount types:
   - bind mount: `{ "type": "bind", "source": "<workspace path>", "target": "<container path>", "read_only": true|false }`
   - named volume: `{ "type": "volume", "source": "<name>", "target": "<container path>", "read_only": true|false }`
-- `port`: preferred/default local port; provider may assign a different stable `effective_port` when needed
-- `share_default`: default `workspace_service.exposure` on create (`true -> local`, omitted/`false -> internal`)
 - named volumes resolve to provider-managed persistent workspace storage for that workspace
 
 ### `health_check`
@@ -195,8 +202,8 @@ Optional service readiness gate.
   - behavior: for `runtime: "image"` services, waits for the container's Docker `HEALTHCHECK` status to become `healthy`
   - use this when TCP or HTTP probes are too weak and the image already knows how to prove readiness
 
-For dynamic local ports, use reserved runtime templates like
-`http://${LIFECYCLE_SERVICE_API_ADDRESS}/health` or
+For dynamic local service discovery, use reserved runtime templates like
+`${LIFECYCLE_SERVICE_API_URL}/health` or
 `"${LIFECYCLE_SERVICE_REDIS_PORT}"`. Literal localhost ports are treated
 literally; Lifecycle does not rewrite them at runtime.
 
@@ -268,11 +275,9 @@ Materialize local env files in workspace setup instead.
       "command": "bun run dev:api",
       "cwd": "apps/api",
       "depends_on": ["migrate", "redis"],
-      "port": 3001,
-      "share_default": true,
       "health_check": {
         "kind": "http",
-        "url": "http://${LIFECYCLE_SERVICE_API_ADDRESS}/health",
+        "url": "${LIFECYCLE_SERVICE_API_URL}/health",
         "timeout_seconds": 45
       },
       "env": {
@@ -286,10 +291,8 @@ Materialize local env files in workspace setup instead.
       "command": "bun run dev",
       "cwd": "apps/web",
       "depends_on": ["api"],
-      "port": 3000,
-      "share_default": true,
       "env": {
-        "VITE_API_ORIGIN": "http://${LIFECYCLE_SERVICE_API_ADDRESS}"
+        "VITE_API_ORIGIN": "${LIFECYCLE_SERVICE_API_URL}"
       }
     }
   }

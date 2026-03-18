@@ -4,11 +4,11 @@ import { readSettingsSectionHash, settingsSections } from "./settings-sections";
 describe("settingsSections", () => {
   test("lists only live settings sections", () => {
     expect(settingsSections.map((section) => section.slug)).toEqual([
+      "account",
       "appearance",
-      "agents",
       "workspace",
       "notifications",
-      "account",
+      "agents",
     ]);
   });
 });

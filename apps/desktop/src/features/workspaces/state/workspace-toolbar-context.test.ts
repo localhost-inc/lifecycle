@@ -8,7 +8,7 @@ import {
 
 function createToolbarSlot(label: string): WorkspaceToolbarSlot {
   return {
-    gitActionProps: null,
+    gitAction: null,
     restartAction: null,
     runAction: {
       disabled: false,
@@ -34,33 +34,16 @@ describe("workspace toolbar state helpers", () => {
       loading: false,
       onClick: () => {},
     };
-    const gitActionProps = {
-      actionError: null,
-      branchPullRequest: null,
-      gitStatus: null,
-      isCommitting: false,
-      isCreatingPullRequest: false,
-      isLoading: false,
-      isMergingPullRequest: false,
-      isPushingBranch: false,
-      onCommit: async () => {},
-      onCreatePullRequest: async () => {},
-      onMergePullRequest: async () => {},
-      onOpenPullRequest: () => {},
-      onPushBranch: async () => {},
-      onShowChanges: () => {},
-      variant: "outline" as const,
-    };
 
     expect(
       areWorkspaceToolbarSlotsEqual(
         {
-          gitActionProps,
+          gitAction: null,
           restartAction: null,
           runAction,
         },
         {
-          gitActionProps,
+          gitAction: null,
           restartAction: null,
           runAction,
         },

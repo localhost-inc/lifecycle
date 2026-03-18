@@ -117,9 +117,15 @@ export interface WorkspaceProviderStepProgressSnapshot {
   status: WorkspaceProviderProgressStatus;
 }
 
+export interface WorkspaceProviderServiceLogSnapshot {
+  service_name: string;
+  lines: string[];
+}
+
 export interface WorkspaceProviderRuntimeProjectionResult {
   activity: LifecycleEvent[];
   environmentTasks: WorkspaceProviderStepProgressSnapshot[];
+  serviceLogs: WorkspaceProviderServiceLogSnapshot[];
   setup: WorkspaceProviderStepProgressSnapshot[];
 }
 

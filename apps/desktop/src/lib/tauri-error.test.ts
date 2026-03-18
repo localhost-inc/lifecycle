@@ -1,12 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
-  LifecycleClientError,
   LifecycleInvokeError,
   getLifecycleErrorCode,
   getLifecycleErrorEnvelope,
   getLifecycleErrorMessage,
-  invokeLifecycle,
-  invokeTauri,
   toErrorEnvelope,
 } from "./tauri-error";
 
@@ -43,14 +40,14 @@ describe("tauri-error helpers", () => {
     expect(getLifecycleErrorMessage(error, "fallback")).toBe("plain failure");
   });
 
-  test("normalizes object envelopes serialized from tauri", () => {
+  test("normalizes object envelopes from tauri", () => {
     const error = {
       code: "validation_failed",
       details: { field: "port_override" },
       message: "Invalid port_override: must be between 1 and 65535",
-      request_id: "request-456",
+      requestId: "request-456",
       retryable: false,
-      suggested_action: "Correct the invalid input and retry.",
+      suggestedAction: "Correct the invalid input and retry.",
     };
 
     expect(getLifecycleErrorEnvelope(error)).toEqual({
@@ -63,9 +60,7 @@ describe("tauri-error helpers", () => {
     });
   });
 
-  test("exposes compatibility aliases for invoke helpers and error types", () => {
-    expect(LifecycleClientError).toBe(LifecycleInvokeError);
-    expect(invokeLifecycle).toBe(invokeTauri);
+  test("toErrorEnvelope passes through valid envelopes", () => {
     expect(
       toErrorEnvelope({
         code: "not_found",

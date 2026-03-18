@@ -31,6 +31,7 @@ type TerminalResponseReadyAction =
 
 interface TerminalResponseReadyContextValue {
   clearTerminalResponseReady: (terminalId: string) => void;
+  clearTerminalTurnRunning: (terminalId: string) => void;
   clearWorkspaceResponseReady: (workspaceId: string) => void;
   hasWorkspaceRunningTurn: (workspaceId: string) => boolean;
   hasWorkspaceResponseReady: (workspaceId: string) => boolean;
@@ -304,6 +305,13 @@ export function TerminalResponseReadyProvider({ children }: { children: ReactNod
     });
   }, []);
 
+  const clearTerminalTurnRunning = useCallback((terminalId: string) => {
+    dispatch({
+      terminalId,
+      kind: "clear-running-terminal",
+    });
+  }, []);
+
   const clearWorkspaceResponseReady = useCallback((workspaceId: string) => {
     dispatch({
       kind: "acknowledge-workspace",
@@ -334,6 +342,7 @@ export function TerminalResponseReadyProvider({ children }: { children: ReactNod
   const contextValue = useMemo<TerminalResponseReadyContextValue>(
     () => ({
       clearTerminalResponseReady,
+      clearTerminalTurnRunning,
       clearWorkspaceResponseReady,
       hasWorkspaceRunningTurn,
       hasWorkspaceResponseReady,
@@ -342,6 +351,7 @@ export function TerminalResponseReadyProvider({ children }: { children: ReactNod
     }),
     [
       clearTerminalResponseReady,
+      clearTerminalTurnRunning,
       clearWorkspaceResponseReady,
       hasWorkspaceRunningTurn,
       hasWorkspaceResponseReady,

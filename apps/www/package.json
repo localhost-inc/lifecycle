@@ -4,11 +4,32 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun run src/build.ts",
-    "dev": "bun run src/dev.ts",
+    "build": "vite build",
+    "dev": "vite dev",
+    "deploy": "bun run build && wrangler deploy",
     "format": "oxfmt src",
     "lint": "oxlint src",
+    "preview": "vite preview",
     "test": "bun test src",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc --noEmit",
+    "cf-typegen": "wrangler types"
+  },
+  "dependencies": {
+    "@lifecycle/ui": "workspace:*",
+    "@tailwindcss/vite": "^4.1.18",
+    "@tanstack/react-router": "^1.154.7",
+    "@tanstack/react-start": "^1.154.7",
+    "@vitejs/plugin-react": "^4.5.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "tailwindcss": "^4.1.18"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.0.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.3",
+    "vite": "^6.3.5",
+    "wrangler": "^4.0.0"
   }
 }

@@ -239,6 +239,9 @@ pub enum LifecycleError {
     #[error("Port conflict on port {port}: {service}")]
     PortConflict { service: String, port: u16 },
 
+    #[error("No available port for service {service}")]
+    PortExhausted { service: String },
+
     #[error("Manifest deserialization failed: {0}")]
     ManifestInvalid(String),
 
@@ -365,6 +368,15 @@ impl LifecycleError {
                     ("port".to_string(), json!(*port)),
                 ])),
                 Some("Choose a different port or stop the conflicting process, then retry.".to_string()),
+                true,
+            ),
+            Self::PortExhausted { service } => (
+                "local_port_conflict",
+                Some(Map::from_iter([(
+                    "service".to_string(),
+                    Value::String(service.clone()),
+                )])),
+                Some("No available ports in the assignment range. Stop unused workspaces and retry.".to_string()),
                 true,
             ),
             Self::ManifestInvalid(reason) => (

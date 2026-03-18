@@ -41,8 +41,7 @@ export interface ServiceRecord {
   port_override: number | null;
   status: WorkspaceServiceStatus;
   status_reason: WorkspaceServiceStatusReason | null;
-  default_port: number | null;
-  effective_port: number | null;
+  assigned_port: number | null;
   preview_status: WorkspaceServicePreviewStatus;
   preview_failure_reason: WorkspaceServicePreviewFailureReason | null;
   preview_url: string | null;

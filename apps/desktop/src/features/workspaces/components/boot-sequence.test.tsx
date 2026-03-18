@@ -36,7 +36,6 @@ const graphConfig: LifecycleConfig = {
       runtime: "process",
       command: "bun run api",
       depends_on: ["migrate", "redis"],
-      port: 3001,
     },
   },
 };
@@ -68,8 +67,7 @@ function createServiceRecord(
 ): ServiceRecord {
   return {
     created_at: "2026-03-14T10:00:00.000Z",
-    default_port: null,
-    effective_port: null,
+    assigned_port: null,
     exposure: "internal",
     id: `svc-${serviceName}`,
     port_override: null,
@@ -121,17 +119,15 @@ describe("BootSequence", () => {
         environmentTasks,
         services: [
           createServiceRecord("postgres", {
-            default_port: 5432,
-            effective_port: 43085,
+            assigned_port: 43085,
             status: "ready",
           }),
           createServiceRecord("redis", {
-            effective_port: 47070,
+            assigned_port: 47070,
             status: "ready",
           }),
           createServiceRecord("api", {
-            default_port: 3001,
-            effective_port: 3001,
+            assigned_port: 3001,
             exposure: "local",
             preview_status: "provisioning",
             preview_url: "http://127.0.0.1:3001",

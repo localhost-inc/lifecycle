@@ -15,7 +15,7 @@ For local services, preview state cannot be derived from service status alone. I
 
 That combination matters because the same local service can be:
 
-1. `sleeping` when the workspace is asleep even though the port is still the intended stable URL
+1. `sleeping` when the workspace is asleep even though the preview route is still the intended stable URL
 2. `provisioning` during wake/start before the service is ready
 3. `failed` when the service is unhealthy, with a typed preview failure reason
 

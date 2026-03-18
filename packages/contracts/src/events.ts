@@ -139,6 +139,23 @@ export type LifecycleEvent =
   | {
       id: string;
       occurred_at: string;
+      kind: "service.process_exited";
+      workspace_id: string;
+      service_name: string;
+      exit_code: number | null;
+    }
+  | {
+      id: string;
+      occurred_at: string;
+      kind: "service.log_line";
+      workspace_id: string;
+      service_name: string;
+      stream: "stdout" | "stderr";
+      line: string;
+    }
+  | {
+      id: string;
+      occurred_at: string;
       kind: "git.status_changed";
       workspace_id: string;
       branch: string | null;

@@ -162,6 +162,7 @@ describe("ProjectRoute", () => {
       await import("../../terminals/state/terminal-response-ready-provider");
     spyOn(responseReadyModule, "useTerminalResponseReady").mockReturnValue({
       clearTerminalResponseReady: () => {},
+      clearTerminalTurnRunning: () => {},
       clearWorkspaceResponseReady: () => {},
       hasWorkspaceResponseReady: (workspaceId: string) => workspaceId === "workspace_1",
       hasWorkspaceRunningTurn: () => false,
@@ -185,6 +186,7 @@ describe("ProjectRoute", () => {
       await import("../../terminals/state/terminal-response-ready-provider");
     spyOn(responseReadyModule, "useTerminalResponseReady").mockReturnValue({
       clearTerminalResponseReady: () => {},
+      clearTerminalTurnRunning: () => {},
       clearWorkspaceResponseReady: () => {},
       hasWorkspaceResponseReady: () => false,
       hasWorkspaceRunningTurn: (workspaceId: string) => workspaceId === "workspace_1",

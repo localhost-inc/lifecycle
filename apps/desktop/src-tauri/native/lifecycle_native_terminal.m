@@ -66,6 +66,8 @@ static const int32_t kLifecycleShortcutPreviousTab = 1;
 static const int32_t kLifecycleShortcutNextTab = 2;
 static const int32_t kLifecycleShortcutCloseActiveTab = 3;
 static const int32_t kLifecycleShortcutNewTab = 5;
+static const int32_t kLifecycleShortcutGoBack = 6;
+static const int32_t kLifecycleShortcutGoForward = 7;
 
 static void lifecycleWriteDiagnosticUTF8(const char *value, size_t length) {
   if (value == NULL || length == 0) {
@@ -1841,6 +1843,16 @@ static BOOL lifecycleNativeTerminalHandleWorkspaceShortcut(LifecycleNativeTermin
 
   if (hasShift && [charactersIgnoringModifiers isEqualToString:@"]"]) {
     gWorkspaceShortcutCallback(view.terminalId.UTF8String, kLifecycleShortcutNextTab, 0);
+    return YES;
+  }
+
+  if (!hasShift && [charactersIgnoringModifiers isEqualToString:@"["]) {
+    gWorkspaceShortcutCallback(view.terminalId.UTF8String, kLifecycleShortcutGoBack, 0);
+    return YES;
+  }
+
+  if (!hasShift && [charactersIgnoringModifiers isEqualToString:@"]"]) {
+    gWorkspaceShortcutCallback(view.terminalId.UTF8String, kLifecycleShortcutGoForward, 0);
     return YES;
   }
 

@@ -6,8 +6,7 @@ import { resolvePreviewUrl, ServiceRow } from "./services-tab";
 
 const failedService: ServiceRecord = {
   created_at: "2026-03-12T10:00:00.000Z",
-  default_port: 5432,
-  effective_port: 44446,
+  assigned_port: 44446,
   exposure: "internal",
   id: "svc-postgres",
   port_override: null,
@@ -22,15 +21,15 @@ const failedService: ServiceRecord = {
 };
 
 describe("ServiceRow", () => {
-  test("prefers the current local effective port over a stale preview URL", () => {
+  test("uses the persisted preview URL as an opaque local preview route", () => {
     expect(
       resolvePreviewUrl({
         ...failedService,
-        effective_port: 3002,
+        assigned_port: 3002,
         exposure: "local",
-        preview_url: "http://127.0.0.1:3001",
+        preview_url: "http://www.frost-beacon-57f59253.lifecycle.localhost:52300",
       }),
-    ).toBe("http://127.0.0.1:3002");
+    ).toBe("http://www.frost-beacon-57f59253.lifecycle.localhost:52300");
   });
 
   test("renders a friendly failed-service status reason", () => {
@@ -46,7 +45,7 @@ describe("ServiceRow", () => {
     expect(markup).not.toContain("service_start_failed");
   });
 
-  test("renders the service name and port", () => {
+  test("renders the service name without foregrounding runtime ports", () => {
     const markup = renderToStaticMarkup(
       createElement(ServiceRow, {
         onUpdateService: async () => {},
@@ -56,28 +55,29 @@ describe("ServiceRow", () => {
     );
 
     expect(markup).toContain("postgres");
-    expect(markup).toContain(":44446");
+    expect(markup).not.toContain(":44446");
   });
 
-  test("can switch the row into boot-log launch mode", () => {
+  test("renders expandable chevron when toggle handler is provided", () => {
     const markup = renderToStaticMarkup(
       createElement(ServiceRow, {
-        onOpenLogs: () => {},
+        logLines: [{ stream: "stdout", text: "ready" }],
+        onToggleExpanded: () => {},
         onUpdateService: async () => {},
         runtime: "image",
         service: failedService,
       }),
     );
 
-    expect(markup).toContain('aria-label="Show boot logs for postgres"');
+    expect(markup).toContain("chevron");
     expect(markup).not.toContain("Exposure");
   });
 
   test("renders a compact play button for independently bootable services", () => {
     const markup = renderToStaticMarkup(
       createElement(ServiceRow, {
-        onOpenLogs: () => {},
         onStartService: () => {},
+        onToggleExpanded: () => {},
         onUpdateService: async () => {},
         runtime: "image",
         service: failedService,

@@ -50,8 +50,6 @@ const VALID_CONFIG = `{
       "command": "bun run dev:api",
       "cwd": "apps/api",
       "depends_on": ["migrate"],
-      "port": 3001,
-      "share_default": true,
       "health_check": {
         "kind": "http",
         "url": "http://127.0.0.1:3001/health",
@@ -137,7 +135,7 @@ describe("parseManifest", () => {
         }]
       },
       "environment": {
-        "api": { "kind": "service", "runtime": "process", "command": "bun run dev", "port": 3001 }
+        "api": { "kind": "service", "runtime": "process", "command": "bun run dev" }
       }
     }`);
     expect(result.valid).toBe(true);
@@ -505,7 +503,6 @@ describe("parseManifest", () => {
           "kind": "service",
           "runtime": "process",
           "command": "bun run dev",
-          "port": 3000,
           "env": { "B": "2", "A": "1" }
         },
         "migrate": {
@@ -526,7 +523,6 @@ describe("parseManifest", () => {
         },
         "web": {
           "env": { "A": "1", "B": "2" },
-          "port": 3000,
           "command": "bun run dev",
           "runtime": "process",
           "kind": "service"

@@ -92,8 +92,12 @@ export function useWorkspaceCanvasController({
 }: WorkspaceCanvasControllerInput) {
   const client = useQueryClient();
   const { defaultNewTabLaunch, dimInactivePanes, harnesses, inactivePaneOpacity } = useSettings();
-  const { clearTerminalResponseReady, isTerminalResponseReady, isTerminalTurnRunning } =
-    useTerminalResponseReady();
+  const {
+    clearTerminalResponseReady,
+    clearTerminalTurnRunning,
+    isTerminalResponseReady,
+    isTerminalTurnRunning,
+  } = useTerminalResponseReady();
   const [creatingSelection, setCreatingSelection] = useState<"shell" | HarnessProvider | null>(
     null,
   );
@@ -431,6 +435,24 @@ export function useWorkspaceCanvasController({
     [handleCreateTerminal],
   );
 
+  // Auto-create a default terminal when a workspace opens with no tabs
+  const didAutoCreateTerminalRef = useRef(false);
+  useEffect(() => {
+    if (didAutoCreateTerminalRef.current) {
+      return;
+    }
+    if (terminals.length > 0 || documents.length > 0) {
+      didAutoCreateTerminalRef.current = true;
+      return;
+    }
+    didAutoCreateTerminalRef.current = true;
+    const request: CreateTerminalRequest =
+      defaultNewTabLaunch === "shell"
+        ? { launchType: "shell" }
+        : { launchType: "harness", harnessProvider: defaultNewTabLaunch };
+    void handleCreateTerminal(request, activePaneId);
+  }, [activePaneId, defaultNewTabLaunch, documents.length, handleCreateTerminal, terminals.length]);
+
   const surfaceActions: SurfaceLaunchAction[] = useMemo(
     () => [
       {
@@ -569,13 +591,24 @@ export function useWorkspaceCanvasController({
             return true;
           }
 
+          const isLastTabInPane =
+            activePaneVisibleTabs.length === 1 && paneLayout.paneCount > 1;
+
           closeShortcutHandledAtRef.current = Date.now();
           if (activeTab.kind === "terminal") {
-            void handleCloseTerminalTab(activeTab.key, activeTab.terminalId);
+            if (isLastTabInPane) {
+              void closeWorkspacePane(activePaneId);
+            } else {
+              void handleCloseTerminalTab(activeTab.key, activeTab.terminalId);
+            }
             return true;
           }
 
-          handleCloseDocumentTab(activeTab.key);
+          if (isLastTabInPane) {
+            void closeWorkspacePane(activePaneId);
+          } else {
+            handleCloseDocumentTab(activeTab.key);
+          }
           return true;
         }
         case "next-tab": {
@@ -680,6 +713,15 @@ export function useWorkspaceCanvasController({
         event.source_surface_kind !== "native-terminal" ||
         event.source_surface_id !== activeTerminalId
       ) {
+        return;
+      }
+
+      if (event.action === "go-back") {
+        window.history.back();
+        return;
+      }
+      if (event.action === "go-forward") {
+        window.history.forward();
         return;
       }
 
@@ -825,16 +867,25 @@ export function useWorkspaceCanvasController({
     dispatch({ kind: "set-split-ratio", ratio, splitId });
   }, []);
 
-  const handleSplitPane = useCallback((paneId: string, direction: "column" | "row") => {
-    dispatch({
-      direction,
-      kind: "split-pane",
-      newPaneId: createWorkspacePaneId(),
-      paneId,
-      placement: "after",
-      splitId: createWorkspaceSplitId(),
-    });
-  }, []);
+  const handleSplitPane = useCallback(
+    (paneId: string, direction: "column" | "row") => {
+      const newPaneId = createWorkspacePaneId();
+      dispatch({
+        direction,
+        kind: "split-pane",
+        newPaneId,
+        paneId,
+        placement: "after",
+        splitId: createWorkspaceSplitId(),
+      });
+      const request: CreateTerminalRequest =
+        defaultNewTabLaunch === "shell"
+          ? { launchType: "shell" }
+          : { launchType: "harness", harnessProvider: defaultNewTabLaunch };
+      void handleCreateTerminal(request, newPaneId);
+    },
+    [defaultNewTabLaunch, handleCreateTerminal],
+  );
 
   const handleToggleZoom = useCallback(() => {
     setZoomedTabKey((current) => {
@@ -903,12 +954,13 @@ export function useWorkspaceCanvasController({
         return;
       }
       event.preventDefault();
+      clearTerminalTurnRunning(activeTerminalId);
       void interruptTerminal(activeTerminalId);
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeTerminalId, isTerminalTurnRunning, zoomedTabKey]);
+  }, [activeTerminalId, clearTerminalTurnRunning, isTerminalTurnRunning, zoomedTabKey]);
 
   return {
     activePaneId,

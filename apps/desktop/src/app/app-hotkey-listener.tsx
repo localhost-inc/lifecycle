@@ -6,7 +6,6 @@ import {
   isMacPlatform,
   shouldHandleDomAppHotkey,
   subscribeToAppHotkeyEvents,
-  type AppHotkeyAction,
   type AppHotkeyEvent,
 } from "./app-hotkeys";
 import { SHORTCUT_HANDLER_PRIORITY, useShortcutRegistration } from "./shortcuts/shortcut-router";

@@ -168,11 +168,11 @@ mod tests {
     #[test]
     fn expands_http_health_check_url_templates() {
         let runtime_env = HashMap::from([(
-            "LIFECYCLE_SERVICE_WEB_ADDRESS".to_string(),
-            "127.0.0.1:43085".to_string(),
+            "LIFECYCLE_SERVICE_WEB_URL".to_string(),
+            "http://web.frost-beacon-57f59253.lifecycle.localhost:52300".to_string(),
         )]);
         let health_check = HealthCheck::Http {
-            url: "http://${LIFECYCLE_SERVICE_WEB_ADDRESS}/@vite/client".to_string(),
+            url: "${LIFECYCLE_SERVICE_WEB_URL}/@vite/client".to_string(),
             timeout_seconds: 5,
         };
 
@@ -188,7 +188,10 @@ mod tests {
                 url,
                 timeout_seconds,
             } => {
-                assert_eq!(url, "http://127.0.0.1:43085/@vite/client");
+                assert_eq!(
+                    url,
+                    "http://web.frost-beacon-57f59253.lifecycle.localhost:52300/@vite/client"
+                );
                 assert_eq!(timeout_seconds, 5);
             }
             other => panic!("unexpected health check: {other:?}"),
@@ -237,7 +240,7 @@ mod tests {
     #[test]
     fn rejects_unknown_health_check_templates() {
         let health_check = HealthCheck::Http {
-            url: "http://${LIFECYCLE_SERVICE_WEB_ADDRESS}/@vite/client".to_string(),
+            url: "${LIFECYCLE_SERVICE_WEB_URL}/@vite/client".to_string(),
             timeout_seconds: 5,
         };
 

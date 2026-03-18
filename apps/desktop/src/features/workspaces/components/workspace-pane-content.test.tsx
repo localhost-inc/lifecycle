@@ -121,7 +121,7 @@ describe("WorkspacePaneContent", () => {
       }),
     );
 
-    expect(markup).toContain("No tabs in this pane");
+    expect(markup).toContain("No open tabs");
     expect(markup).toContain("Shell");
     expect(markup).toContain("Claude");
     expect(markup).toContain("Codex");

@@ -1,5 +1,7 @@
 use crate::capabilities::workspaces::query::{ServiceRecord, TerminalRecord};
+use crate::platform::db::DbPath;
 use crate::WorkspaceControllerRegistryHandle;
+use rusqlite::params;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
@@ -108,6 +110,19 @@ pub enum LifecycleEvent {
         completion_key: String,
         turn_id: Option<String>,
     },
+    #[serde(rename = "service.process_exited")]
+    ServiceProcessExited {
+        workspace_id: String,
+        service_name: String,
+        exit_code: Option<i32>,
+    },
+    #[serde(rename = "service.log_line")]
+    ServiceLogLine {
+        workspace_id: String,
+        service_name: String,
+        stream: String,
+        line: String,
+    },
     #[serde(rename = "git.status_changed")]
     GitStatusChanged {
         workspace_id: String,
@@ -140,6 +155,7 @@ impl LifecycleEvent {
             | Self::WorkspaceDeleted { workspace_id }
             | Self::ServiceStatusChanged { workspace_id, .. }
             | Self::ServiceConfigurationChanged { workspace_id, .. }
+            | Self::ServiceProcessExited { workspace_id, .. }
             | Self::WorkspaceSetupProgress { workspace_id, .. }
             | Self::WorkspaceManifestSynced { workspace_id, .. }
             | Self::EnvironmentTaskProgress { workspace_id, .. }
@@ -149,6 +165,7 @@ impl LifecycleEvent {
             | Self::TerminalRenamed { workspace_id, .. }
             | Self::TerminalHarnessPromptSubmitted { workspace_id, .. }
             | Self::TerminalHarnessTurnCompleted { workspace_id, .. }
+            | Self::ServiceLogLine { workspace_id, .. }
             | Self::GitStatusChanged { workspace_id, .. }
             | Self::GitHeadChanged { workspace_id, .. }
             | Self::GitLogChanged { workspace_id, .. } => workspace_id,
@@ -161,6 +178,7 @@ impl LifecycleEvent {
             | Self::EnvironmentTaskProgress { event_kind, .. } => {
                 !matches!(event_kind.as_str(), "stdout" | "stderr")
             }
+            Self::ServiceLogLine { .. } => false,
             Self::TerminalUpdated { .. } => false,
             _ => true,
         }
@@ -168,6 +186,16 @@ impl LifecycleEvent {
 }
 
 pub fn publish_lifecycle_event(app: &AppHandle, event: LifecycleEvent) {
+    // Capture fields before moving event into envelope
+    let process_exited = match &event {
+        LifecycleEvent::ServiceProcessExited {
+            workspace_id,
+            service_name,
+            exit_code,
+        } => Some((workspace_id.clone(), service_name.clone(), *exit_code)),
+        _ => None,
+    };
+
     let occurred_at = OffsetDateTime::now_utc()
         .format(&Rfc3339)
         .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_string());
@@ -184,6 +212,54 @@ pub fn publish_lifecycle_event(app: &AppHandle, event: LifecycleEvent) {
     }
 
     let _ = app.emit(LIFECYCLE_EVENT_NAME, envelope);
+
+    // React to ServiceProcessExited: transition "ready" services to "failed"
+    if let Some((workspace_id, service_name, _exit_code)) = process_exited {
+        handle_service_process_exited(app, &workspace_id, &service_name);
+    }
+}
+
+fn handle_service_process_exited(app: &AppHandle, workspace_id: &str, service_name: &str) {
+    let db_path = match app.try_state::<DbPath>() {
+        Some(state) => state.0.clone(),
+        None => return,
+    };
+
+    let Ok(conn) = crate::platform::db::open_db(&db_path) else {
+        return;
+    };
+
+    let current_status: Option<String> = conn
+        .query_row(
+            "SELECT status FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
+            params![workspace_id, service_name],
+            |row| row.get(0),
+        )
+        .ok();
+
+    if current_status.as_deref() != Some("ready") {
+        return;
+    }
+
+    let _ = conn.execute(
+        "UPDATE workspace_service
+         SET status = 'failed',
+             status_reason = 'service_process_exited',
+             assigned_port = NULL,
+             updated_at = datetime('now')
+         WHERE workspace_id = ?1 AND service_name = ?2",
+        params![workspace_id, service_name],
+    );
+
+    publish_lifecycle_event(
+        app,
+        LifecycleEvent::ServiceStatusChanged {
+            workspace_id: workspace_id.to_string(),
+            service_name: service_name.to_string(),
+            status: "failed".to_string(),
+            status_reason: Some("service_process_exited".to_string()),
+        },
+    );
 }
 
 #[cfg(test)]

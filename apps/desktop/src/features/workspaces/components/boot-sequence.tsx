@@ -35,7 +35,6 @@ interface BootSequenceTaskItem extends BootSequenceBaseItem {
 
 interface BootSequenceServiceItem extends BootSequenceBaseItem {
   kind: "service";
-  port: number | null;
   runtime: "image" | "process" | null;
   service: ServiceRecord | null;
 }
@@ -234,14 +233,13 @@ export function deriveBootSequenceItems(
       }
 
       const service = serviceByName.get(nodeName) ?? null;
-      items.push({
-        id: `service:${nodeName}`,
-        kind: "service",
-        name: nodeName,
-        port: service?.effective_port ?? node.port ?? null,
-        runtime: serviceRuntimeByName[nodeName] ?? node.runtime,
-        service,
-        status: mapServiceStatus(service),
+        items.push({
+          id: `service:${nodeName}`,
+          kind: "service",
+          name: nodeName,
+          runtime: serviceRuntimeByName[nodeName] ?? node.runtime,
+          service,
+          status: mapServiceStatus(service),
       });
     }
 
@@ -272,7 +270,6 @@ export function deriveBootSequenceItems(
         id: `service:${service.service_name}`,
         kind: "service",
         name: service.service_name,
-        port: service.effective_port,
         runtime: serviceRuntimeByName[service.service_name] ?? null,
         service,
         status: mapServiceStatus(service),
@@ -304,7 +301,6 @@ export function deriveBootSequenceItems(
       id: `service:${service.service_name}`,
       kind: "service",
       name: service.service_name,
-      port: service.effective_port,
       runtime: serviceRuntimeByName[service.service_name] ?? null,
       service,
       status: mapServiceStatus(service),
@@ -438,17 +434,11 @@ function BootServiceRow({
   runDisabled?: boolean;
   runPending?: boolean;
 }) {
-  const portLabel = item.port !== null ? `:${item.port}` : null;
   const nameClassName = isActive ? NAME_STYLES.running : NAME_STYLES[item.status];
   const rowContent = (
     <>
       <BootStatusIndicator isActive={isActive} status={item.status} />
       <span className={`min-w-0 truncate text-[13px] ${nameClassName}`}>{item.name}</span>
-      {portLabel ? (
-        <span className="ml-auto shrink-0 font-mono text-[11px] text-[var(--muted-foreground)]">
-          {portLabel}
-        </span>
-      ) : null}
     </>
   );
 
@@ -488,6 +478,7 @@ interface BootSequenceProps {
   config: LifecycleConfig | null;
   declaredStepNames: string[];
   environmentTasks: EnvironmentTaskState[];
+  items?: BootSequenceItem[];
   onOpenServiceLogs?: (serviceName: string) => void;
   onStartService?: (serviceName: string) => void;
   onUpdateService: (input: {
@@ -507,6 +498,7 @@ export function BootSequence({
   config,
   declaredStepNames,
   environmentTasks,
+  items: itemsProp,
   onOpenServiceLogs,
   onStartService,
   onUpdateService,
@@ -517,7 +509,7 @@ export function BootSequence({
   setupSteps,
   workspace,
 }: BootSequenceProps) {
-  const items = deriveBootSequenceItems(
+  const items = itemsProp ?? deriveBootSequenceItems(
     config,
     declaredStepNames,
     setupSteps,

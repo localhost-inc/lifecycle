@@ -172,15 +172,6 @@ export function resolveWorkspacePaneDropIntent({
   pointerX,
   pointerY,
 }: ResolveWorkspacePaneDropTargetInput): WorkspacePaneDropIntent | null {
-  if (
-    pointerX < bodyRect.left ||
-    pointerX > bodyRect.right ||
-    pointerY < bodyRect.top ||
-    pointerY > bodyRect.bottom
-  ) {
-    return null;
-  }
-
   if (pointerOverTabBar) {
     const stripTarget = resolveWorkspacePaneTabStripDropTarget({
       draggedKey,
@@ -205,6 +196,15 @@ export function resolveWorkspacePaneDropIntent({
       surface: "tab-bar",
       targetKey: stripTarget?.targetKey ?? null,
     };
+  }
+
+  if (
+    pointerX < bodyRect.left ||
+    pointerX > bodyRect.right ||
+    pointerY < bodyRect.top ||
+    pointerY > bodyRect.bottom
+  ) {
+    return null;
   }
 
   if (bodyRect.width <= 0 || bodyRect.height <= 0) {

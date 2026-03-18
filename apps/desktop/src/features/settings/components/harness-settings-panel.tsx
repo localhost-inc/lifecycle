@@ -1,5 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@lifecycle/ui";
 import { type ClaudeHarnessSettings, type CodexHarnessSettings } from "../state/harness-settings";
+import { ClaudeIcon, CodexIcon } from "../../workspaces/components/surface-icons";
 import { ClaudeHarnessSettingsContent } from "./harnesses/claude-harness-settings-card";
 import { CodexHarnessSettingsContent } from "./harnesses/codex-harness-settings-card";
 
@@ -23,11 +24,11 @@ export function HarnessSettingsPanel({
   return (
     <Tabs defaultValue="codex">
       <TabsList variant="pill">
-        <TabsTrigger value="codex" variant="pill">
-          Codex
+        <TabsTrigger className="gap-1.5" value="codex" variant="pill">
+          <CodexIcon size={12} /> Codex
         </TabsTrigger>
-        <TabsTrigger value="claude" variant="pill">
-          Claude
+        <TabsTrigger className="gap-1.5" value="claude" variant="pill">
+          <ClaudeIcon size={12} /> Claude
         </TabsTrigger>
       </TabsList>
       <TabsContent className="pt-4" value="codex">

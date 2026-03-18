@@ -57,9 +57,15 @@ pub async fn stop_workspace(
     {
         let conn = open_db(&db)?;
         conn.execute(
-            "UPDATE workspace_service SET status = 'stopped', status_reason = NULL, updated_at = datetime('now') WHERE workspace_id = ?1",
+            "UPDATE workspace_service
+             SET status = 'stopped',
+                 status_reason = NULL,
+                 assigned_port = NULL,
+                 updated_at = datetime('now')
+             WHERE workspace_id = ?1",
             params![workspace_id.clone()],
-        ).map_err(|e| LifecycleError::Database(e.to_string()))?;
+        )
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
     }
 
     for service_name in service_names {

@@ -60,6 +60,22 @@ describe("shell context helpers", () => {
     ]);
   });
 
+  test("buildShellContexts uses personalDisplayName when provided", () => {
+    const contexts = buildShellContexts(
+      [createProjectRecord({ id: "project_1", name: "Lifecycle" })],
+      { personalDisplayName: "Kyle" },
+    );
+    expect(contexts[0]?.name).toBe("Kyle");
+  });
+
+  test("buildShellContexts falls back to Personal when personalDisplayName is null", () => {
+    const contexts = buildShellContexts(
+      [createProjectRecord({ id: "project_1", name: "Lifecycle" })],
+      { personalDisplayName: null },
+    );
+    expect(contexts[0]?.name).toBe("Personal");
+  });
+
   test("resolveProjectShellContextId maps null organization ids into Personal", () => {
     expect(
       resolveProjectShellContextId(createProjectRecord({ id: "project_1", name: "Lifecycle" })),

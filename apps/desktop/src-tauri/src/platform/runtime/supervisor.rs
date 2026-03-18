@@ -3,17 +3,28 @@ use crate::capabilities::workspaces::manifest::{
 };
 use crate::platform::runtime::templates::expand_reserved_runtime_templates;
 use crate::shared::errors::LifecycleError;
-use bollard::container::{Config, CreateContainerOptions, RemoveContainerOptions};
+use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
+use bollard::container::{Config, CreateContainerOptions, LogsOptions, RemoveContainerOptions};
 use bollard::image::CreateImageOptions;
 use bollard::Docker;
-use futures_util::TryStreamExt;
+use futures_util::{StreamExt, TryStreamExt};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use tauri::AppHandle;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
+use tokio::task::JoinHandle;
+
+struct ManagedProcess {
+    child: Child,
+    log_handles: Vec<JoinHandle<()>>,
+    exit_watcher: Option<JoinHandle<()>>,
+}
 
 pub struct Supervisor {
-    processes: HashMap<String, Child>,
+    processes: HashMap<String, ManagedProcess>,
     containers: HashMap<String, String>,
+    container_log_handles: HashMap<String, JoinHandle<()>>,
     docker: Option<Docker>,
 }
 
@@ -22,6 +33,7 @@ impl Supervisor {
         Self {
             processes: HashMap::new(),
             containers: HashMap::new(),
+            container_log_handles: HashMap::new(),
             docker: None,
         }
     }
@@ -48,6 +60,8 @@ impl Supervisor {
         service: &ProcessService,
         worktree_path: &str,
         runtime_env: &HashMap<String, String>,
+        app: AppHandle,
+        workspace_id: &str,
     ) -> Result<(), LifecycleError> {
         let cwd = if let Some(ref svc_cwd) = service.cwd {
             format!("{}/{}", worktree_path, svc_cwd)
@@ -66,6 +80,10 @@ impl Supervisor {
             cmd.env(key, value);
         }
 
+        // Force color output even though stdout/stderr are piped, not a TTY.
+        cmd.env("FORCE_COLOR", "1");
+        cmd.env("CLICOLOR_FORCE", "1");
+
         // Create new process group
         #[cfg(unix)]
         {
@@ -77,18 +95,92 @@ impl Supervisor {
             }
         }
 
-        // Service logs are not yet streamed; avoid pipe backpressure deadlocks.
-        cmd.stdout(std::process::Stdio::null());
-        cmd.stderr(std::process::Stdio::null());
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::piped());
 
-        let child = cmd
+        let mut child = cmd
             .spawn()
             .map_err(|e| LifecycleError::ServiceStartFailed {
                 service: service_name.to_string(),
                 reason: e.to_string(),
             })?;
 
-        self.processes.insert(service_name.to_string(), child);
+        let mut log_handles = Vec::new();
+
+        if let Some(stdout) = child.stdout.take() {
+            let app_clone = app.clone();
+            let ws_id = workspace_id.to_string();
+            let svc_name = service_name.to_string();
+            log_handles.push(tokio::spawn(async move {
+                let reader = BufReader::new(stdout);
+                let mut lines = reader.lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    publish_lifecycle_event(
+                        &app_clone,
+                        LifecycleEvent::ServiceLogLine {
+                            workspace_id: ws_id.clone(),
+                            service_name: svc_name.clone(),
+                            stream: "stdout".to_string(),
+                            line,
+                        },
+                    );
+                }
+            }));
+        }
+
+        if let Some(stderr) = child.stderr.take() {
+            let app_clone = app.clone();
+            let ws_id = workspace_id.to_string();
+            let svc_name = service_name.to_string();
+            log_handles.push(tokio::spawn(async move {
+                let reader = BufReader::new(stderr);
+                let mut lines = reader.lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    publish_lifecycle_event(
+                        &app_clone,
+                        LifecycleEvent::ServiceLogLine {
+                            workspace_id: ws_id.clone(),
+                            service_name: svc_name.clone(),
+                            stream: "stderr".to_string(),
+                            line,
+                        },
+                    );
+                }
+            }));
+        }
+
+        // Spawn exit watcher: polls the PID to detect unexpected process exits
+        let exit_watcher = child.id().map(|pid| {
+            let app_clone = app.clone();
+            let ws_id = workspace_id.to_string();
+            let svc_name = service_name.to_string();
+            tokio::spawn(async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    let alive = unsafe { libc::kill(pid as i32, 0) == 0 };
+                    if !alive {
+                        publish_lifecycle_event(
+                            &app_clone,
+                            LifecycleEvent::ServiceProcessExited {
+                                workspace_id: ws_id,
+                                service_name: svc_name,
+                                exit_code: None,
+                            },
+                        );
+                        break;
+                    }
+                }
+            })
+        });
+
+        self.processes.insert(
+            service_name.to_string(),
+            ManagedProcess {
+                child,
+                log_handles,
+                exit_watcher,
+            },
+        );
         Ok(())
     }
 
@@ -100,6 +192,7 @@ impl Supervisor {
         worktree_path: &str,
         storage_root: &Path,
         runtime_env: &HashMap<String, String>,
+        app: AppHandle,
     ) -> Result<(), LifecycleError> {
         let docker = self.ensure_docker().await?.clone();
         let image_ref = self
@@ -211,8 +304,57 @@ impl Supervisor {
                 }
             })?;
 
+        let container_id = container.id.clone();
         self.containers
-            .insert(service_name.to_string(), container.id);
+            .insert(service_name.to_string(), container_id.clone());
+
+        // Stream container logs
+        {
+            let docker_for_logs = docker.clone();
+            let app_clone = app;
+            let ws_id = workspace_id.to_string();
+            let svc_name = service_name.to_string();
+            let cid = container_id;
+            let handle = tokio::spawn(async move {
+                let opts = LogsOptions::<String> {
+                    follow: true,
+                    stdout: true,
+                    stderr: true,
+                    ..Default::default()
+                };
+                let mut stream = docker_for_logs.logs(&cid, Some(opts));
+                while let Some(result) = stream.next().await {
+                    match result {
+                        Ok(output) => {
+                            let (stream_name, text) = match output {
+                                bollard::container::LogOutput::StdOut { message } => {
+                                    ("stdout", String::from_utf8_lossy(&message).to_string())
+                                }
+                                bollard::container::LogOutput::StdErr { message } => {
+                                    ("stderr", String::from_utf8_lossy(&message).to_string())
+                                }
+                                _ => continue,
+                            };
+                            for line in text.lines() {
+                                publish_lifecycle_event(
+                                    &app_clone,
+                                    LifecycleEvent::ServiceLogLine {
+                                        workspace_id: ws_id.clone(),
+                                        service_name: svc_name.clone(),
+                                        stream: stream_name.to_string(),
+                                        line: line.to_string(),
+                                    },
+                                );
+                            }
+                        }
+                        Err(_) => break,
+                    }
+                }
+            });
+            self.container_log_handles
+                .insert(service_name.to_string(), handle);
+        }
+
         Ok(())
     }
 
@@ -360,19 +502,33 @@ impl Supervisor {
 
     pub async fn stop_all(&mut self) {
         // Stop processes with SIGTERM, then SIGKILL after grace period
-        for (_, mut child) in self.processes.drain() {
+        for (_, mut managed) in self.processes.drain() {
             #[cfg(unix)]
             {
-                if let Some(pid) = child.id() {
+                if let Some(pid) = managed.child.id() {
                     unsafe {
                         libc::kill(-(pid as i32), libc::SIGTERM);
                     }
                 }
             }
 
-            let _ = tokio::time::timeout(std::time::Duration::from_secs(5), child.wait()).await;
+            let _ =
+                tokio::time::timeout(std::time::Duration::from_secs(5), managed.child.wait())
+                    .await;
 
-            let _ = child.kill().await;
+            let _ = managed.child.kill().await;
+
+            if let Some(watcher) = managed.exit_watcher {
+                watcher.abort();
+            }
+            for handle in managed.log_handles {
+                handle.abort();
+            }
+        }
+
+        // Abort container log handles
+        for (_, handle) in self.container_log_handles.drain() {
+            handle.abort();
         }
 
         // Stop Docker containers
@@ -394,8 +550,8 @@ impl Supervisor {
     }
 
     pub fn is_process_running(&mut self, service_name: &str) -> bool {
-        if let Some(child) = self.processes.get_mut(service_name) {
-            match child.try_wait() {
+        if let Some(managed) = self.processes.get_mut(service_name) {
+            match managed.child.try_wait() {
                 Ok(None) => true,
                 _ => false,
             }
@@ -499,7 +655,6 @@ mod tests {
             startup_timeout_seconds: None,
             health_check: None,
             port: Some(5432),
-            share_default: None,
             volumes: Some(volumes),
             resolved_port: None,
         }
@@ -509,11 +664,11 @@ mod tests {
     fn resolve_service_env_expands_reserved_runtime_templates() {
         let env = HashMap::from([(
             "VITE_API_ORIGIN".to_string(),
-            "http://${LIFECYCLE_SERVICE_API_ADDRESS}".to_string(),
+            "${LIFECYCLE_SERVICE_API_URL}".to_string(),
         )]);
         let runtime_env = HashMap::from([(
-            "LIFECYCLE_SERVICE_API_ADDRESS".to_string(),
-            "127.0.0.1:3001".to_string(),
+            "LIFECYCLE_SERVICE_API_URL".to_string(),
+            "http://api.frost-beacon-57f59253.lifecycle.localhost:52300".to_string(),
         )]);
 
         let resolved =
@@ -521,7 +676,7 @@ mod tests {
 
         assert_eq!(
             resolved.get("VITE_API_ORIGIN").map(String::as_str),
-            Some("http://127.0.0.1:3001")
+            Some("http://api.frost-beacon-57f59253.lifecycle.localhost:52300")
         );
     }
 

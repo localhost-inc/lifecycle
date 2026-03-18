@@ -177,17 +177,25 @@ export function SettingsShellLayout() {
       normalizedDraftWorktreeRoot.length > 0 ? normalizedDraftWorktreeRoot : worktreeRoot;
     return `${root}/sydney--2c1b1211`;
   }, [normalizedDraftWorktreeRoot, worktreeRoot]);
-  const authSessionEnvironmentLabel = useMemo(() => {
-    if (import.meta.env.DEV) {
-      return tauriApp ? "Vite dev bridge in desktop" : "Vite dev bridge in browser";
-    }
-
-    return tauriApp ? "Desktop control plane" : "Browser fallback";
-  }, [tauriApp]);
-
   useEffect(() => {
     setDraftWorktreeRoot(worktreeRoot);
   }, [worktreeRoot]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) {
+        return;
+      }
+
+      event.preventDefault();
+      navigate(-1);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [navigate]);
 
   const syncActiveSection = useCallback(() => {
     const root = scrollContainerRef.current;
@@ -293,10 +301,6 @@ export function SettingsShellLayout() {
           </Button>
         </div>
 
-        <div className="px-4 pb-3 pt-4">
-          <p className="text-sm font-semibold text-[var(--foreground)]">Settings</p>
-        </div>
-
         <nav className="flex-1 overflow-y-auto px-2 pb-3">
           <ul className="space-y-0.5">
             {settingsSections.map((section) => (
@@ -349,9 +353,26 @@ export function SettingsShellLayout() {
                     Settings
                   </h1>
                   <p className="mt-2 max-w-2xl text-sm text-[var(--muted-foreground)]">
-                    Manage appearance, agent defaults, workspace layout, and notifications.
+                    Manage your account, appearance, workspace layout, agents, and notifications.
                   </p>
                 </header>
+
+                <SettingsSection
+                  description="Your signed-in identity and authentication status."
+                  id="account"
+                  label="Account"
+                  ref={(node) => {
+                    sectionRefs.current.account = node;
+                  }}
+                >
+                  <AuthSessionSettingsPanel
+                    isLoading={authSessionLoading}
+                    onRefresh={() => {
+                      void refreshAuthSession();
+                    }}
+                    session={authSession}
+                  />
+                </SettingsSection>
 
                 <SettingsSection
                   description="Theme, fonts, and visual style for the app."
@@ -481,22 +502,6 @@ export function SettingsShellLayout() {
                       </Button>
                     </div>
                   </div>
-                </SettingsSection>
-
-                <SettingsSection
-                  description="Default launch behavior for Claude and Codex sessions."
-                  id="agents"
-                  label="Agents"
-                  ref={(node) => {
-                    sectionRefs.current.agents = node;
-                  }}
-                >
-                  <HarnessSettingsPanel
-                    claude={harnesses.claude}
-                    codex={harnesses.codex}
-                    onClaudeChange={setClaudeHarnessSettings}
-                    onCodexChange={setCodexHarnessSettings}
-                  />
                 </SettingsSection>
 
                 <SettingsSection
@@ -695,20 +700,18 @@ export function SettingsShellLayout() {
                 </SettingsSection>
 
                 <SettingsSection
-                  description="Your signed-in identity and authentication status."
-                  id="account"
-                  label="Account"
+                  description="Default launch behavior for Claude and Codex sessions."
+                  id="agents"
+                  label="Agents"
                   ref={(node) => {
-                    sectionRefs.current.account = node;
+                    sectionRefs.current.agents = node;
                   }}
                 >
-                  <AuthSessionSettingsPanel
-                    environmentLabel={authSessionEnvironmentLabel}
-                    isLoading={authSessionLoading}
-                    onRefresh={() => {
-                      void refreshAuthSession();
-                    }}
-                    session={authSession}
+                  <HarnessSettingsPanel
+                    claude={harnesses.claude}
+                    codex={harnesses.codex}
+                    onClaudeChange={setClaudeHarnessSettings}
+                    onCodexChange={setCodexHarnessSettings}
                   />
                 </SettingsSection>
               </div>

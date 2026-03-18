@@ -11,6 +11,8 @@ const buttonVariants = cva(
       variant: {
         default:
           "bg-[var(--muted)] text-[var(--foreground)] hover:bg-[var(--surface-selected)]",
+        primary:
+          "bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary)]/90",
         secondary:
           "border border-[var(--border)] bg-[var(--card)] text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]",
         outline:
@@ -20,6 +22,8 @@ const buttonVariants = cva(
         destructive:
           "border border-[var(--destructive)]/35 bg-transparent text-[var(--destructive)] hover:border-[var(--destructive)]/45 hover:bg-[var(--destructive)]/10",
         white: "bg-white text-black hover:bg-white/90",
+        glass:
+          "bg-[var(--muted)]/80 text-[var(--foreground)] backdrop-blur-xl border border-[var(--border)]/50 shadow-sm hover:bg-[var(--muted)] hover:shadow-md",
       },
       size: {
         default: "h-8 px-3",

@@ -5,6 +5,7 @@ import type {
   TerminalRecord,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
+import type { WorkspaceRuntimeProjectionResult } from "./api";
 import {
   buildWorkspaceActivityItems,
   createWorkspaceManifestQuery,
@@ -119,6 +120,41 @@ describe("reduceWorkspaceActivity", () => {
     expect(activity).toBeUndefined();
   });
 
+  test("summarizes service configuration changes without surfacing runtime ports", () => {
+    const activity = applyActivityEvent(undefined, {
+      id: "event-1",
+      kind: "service.configuration_changed",
+      occurred_at: "2026-03-10T10:00:00.000Z",
+      service: {
+        created_at: "2026-03-10T10:00:00.000Z",
+        assigned_port: 4100,
+        exposure: "local",
+        id: "svc_1",
+        port_override: null,
+        preview_failure_reason: null,
+        preview_status: "ready",
+        preview_url: "http://web.root-workspac.lifecycle.localhost:52300",
+        service_name: "web",
+        status: "ready",
+        status_reason: null,
+        updated_at: "2026-03-10T10:00:00.000Z",
+        workspace_id: "ws_1",
+      },
+      workspace_id: "ws_1",
+    });
+
+    expect(activity).toEqual([
+      {
+        detail: "exposure local · preview ready",
+        id: "event-1",
+        kind: "service.configuration_changed",
+        occurredAt: "2026-03-10T10:00:00.000Z",
+        title: "Service web configuration updated",
+        tone: "neutral",
+      },
+    ]);
+  });
+
   test("keeps workspace activity newest-first and bounded", () => {
     let current: WorkspaceActivityItem[] | undefined = undefined;
 
@@ -200,6 +236,7 @@ describe("reduceWorkspaceRuntimeProjection", () => {
           status: "completed" as const,
         },
       ],
+      serviceLogs: [],
       setup: [
         {
           name: "Clone repository",
@@ -233,6 +270,7 @@ describe("reduceWorkspaceRuntimeProjection", () => {
             status: "completed",
           },
         ],
+        serviceLogs: [],
         setup: current.setup,
       },
     });
@@ -265,6 +303,41 @@ describe("reduceWorkspaceRuntimeProjection", () => {
           ...current.activity,
         ],
         environmentTasks: [],
+        serviceLogs: [],
+        setup: [],
+      },
+    });
+  });
+
+  test("normalizes missing service logs when service log events arrive", () => {
+    const current = {
+      activity: [],
+      environmentTasks: [],
+      setup: [],
+    } as unknown as WorkspaceRuntimeProjectionResult;
+
+    const result = reduceWorkspaceRuntimeProjection(
+      current,
+      {
+        id: "event-logs-1",
+        kind: "service.log_line",
+        line: "ready on :3000",
+        occurred_at: "2026-03-10T10:02:00.000Z",
+        service_name: "web",
+        stream: "stdout",
+        workspace_id: "ws_1",
+      },
+      "ws_1",
+    );
+
+    expect(result).toEqual({
+      kind: "replace",
+      data: {
+        activity: [],
+        environmentTasks: [],
+        serviceLogs: [
+          { lines: [{ stream: "stdout", text: "ready on :3000" }], service_name: "web" },
+        ],
         setup: [],
       },
     });
@@ -274,6 +347,7 @@ describe("reduceWorkspaceRuntimeProjection", () => {
     const current = {
       activity: [],
       environmentTasks: [],
+      serviceLogs: [],
       setup: [
         {
           name: "install",
@@ -310,6 +384,7 @@ describe("reduceWorkspaceRuntimeProjection", () => {
           },
         ],
         environmentTasks: [],
+        serviceLogs: [],
         setup: [
           {
             name: "install",
@@ -512,8 +587,7 @@ describe("reduceWorkspaceSnapshot", () => {
     const services: ServiceRecord[] = [
       {
         created_at: "2026-03-10T10:00:00.000Z",
-        default_port: 3000,
-        effective_port: 3000,
+        assigned_port: 3000,
         exposure: "local",
         id: "svc_1",
         port_override: null,
@@ -660,8 +734,7 @@ describe("reduceWorkspaceServices", () => {
     const current: ServiceRecord[] = [
       {
         created_at: "2026-03-10T10:00:00.000Z",
-        default_port: 3000,
-        effective_port: 3000,
+        assigned_port: 3000,
         exposure: "local",
         id: "svc_1",
         port_override: null,
@@ -697,8 +770,7 @@ describe("reduceWorkspaceServices", () => {
     const current: ServiceRecord[] = [
       {
         created_at: "2026-03-10T10:00:00.000Z",
-        default_port: 3000,
-        effective_port: 3000,
+        assigned_port: 3000,
         exposure: "local",
         id: "svc_1",
         port_override: null,
@@ -722,7 +794,7 @@ describe("reduceWorkspaceServices", () => {
         occurred_at: "2026-03-10T10:07:00.000Z",
         service: {
           ...currentService,
-          effective_port: 4100,
+          assigned_port: 4100,
           exposure: "internal",
           port_override: 4100,
           preview_failure_reason: null,
@@ -739,7 +811,7 @@ describe("reduceWorkspaceServices", () => {
       data: [
         {
           ...currentService,
-          effective_port: 4100,
+          assigned_port: 4100,
           exposure: "internal",
           port_override: 4100,
           preview_failure_reason: null,
@@ -754,8 +826,7 @@ describe("reduceWorkspaceServices", () => {
     const nextServices: ServiceRecord[] = [
       {
         created_at: "2026-03-10T10:08:00.000Z",
-        default_port: 4100,
-        effective_port: 4100,
+        assigned_port: 4100,
         exposure: "internal",
         id: "svc_2",
         port_override: null,
