@@ -179,8 +179,9 @@ export function WorkspacePaneTabBar({
     }
   }, [renameState, visibleTabs]);
 
+  const renameKey = renameState?.key ?? null;
   useEffect(() => {
-    if (!renameState) {
+    if (!renameKey) {
       return;
     }
 
@@ -192,7 +193,7 @@ export function WorkspacePaneTabBar({
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [renameState]);
+  }, [renameKey]);
 
   useEffect(() => {
     if (!activeTabKey) {

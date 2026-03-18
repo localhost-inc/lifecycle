@@ -513,8 +513,7 @@ impl Supervisor {
             }
 
             let _ =
-                tokio::time::timeout(std::time::Duration::from_secs(5), managed.child.wait())
-                    .await;
+                tokio::time::timeout(std::time::Duration::from_secs(5), managed.child.wait()).await;
 
             let _ = managed.child.kill().await;
 

@@ -19,6 +19,16 @@ describe("Logo", () => {
     expect(markup).toContain('data-lifecycle-logo-path="right"');
     expect(markup).toContain("animation-duration:1900ms");
     expect(markup).toContain("animation-iteration-count:infinite");
+    expect(markup).toContain("animation-name:lifecycle-logo-draw-left");
+    expect(markup).toContain("animation-name:lifecycle-logo-draw-right");
+  });
+
+  test("keeps one-shot draw animations visible at the end", () => {
+    const markup = renderToStaticMarkup(createElement(Logo, { animate: true }));
+
+    expect(markup).toContain("animation-name:lifecycle-logo-draw-left-once");
+    expect(markup).toContain("animation-name:lifecycle-logo-draw-right-once");
+    expect(markup).toContain("animation-iteration-count:1");
   });
 
   test("accepts a custom draw timing function", () => {

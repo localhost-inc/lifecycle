@@ -29,7 +29,7 @@ export interface ChangesDiffDocument {
   focusPath: string | null;
   key: string;
   kind: "changes-diff";
-  label: "Changes";
+  label: "Workspace Diff";
 }
 
 export interface CommitDiffDocument extends GitLogEntry {
@@ -227,7 +227,7 @@ export function createChangesDiffTab(focusPath: string | null = null): ChangesDi
     focusPath,
     key: changesDiffTabKey(),
     kind: "changes-diff",
-    label: "Changes",
+    label: "Workspace Diff",
   };
 }
 

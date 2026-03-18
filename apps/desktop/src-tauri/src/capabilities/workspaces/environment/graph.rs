@@ -2,18 +2,18 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 use crate::shared::errors::LifecycleError;
 
-use super::manifest::{
+use super::super::manifest::{
     EnvironmentNodeConfig, LifecycleConfig, ServiceConfig, SetupStep, TaskConfig,
 };
 
 #[derive(Clone, Debug)]
-pub(super) struct LoweredEnvironmentGraph {
+pub(in crate::capabilities::workspaces) struct LoweredEnvironmentGraph {
     pub workspace_setup: Vec<SetupStep>,
     pub environment_nodes: HashMap<String, EnvironmentNode>,
 }
 
 #[derive(Clone, Debug)]
-pub(super) struct EnvironmentNode {
+pub(in crate::capabilities::workspaces) struct EnvironmentNode {
     pub kind: EnvironmentNodeKind,
     pub depends_on: Vec<String>,
 }
@@ -25,7 +25,7 @@ impl EnvironmentNode {
 }
 
 #[derive(Clone, Debug)]
-pub(super) enum EnvironmentNodeKind {
+pub(in crate::capabilities::workspaces) enum EnvironmentNodeKind {
     Task(SetupStep),
     Service(ServiceConfig),
 }
@@ -37,7 +37,10 @@ fn should_run_run_on(run_on: Option<&str>, setup_completed: bool) -> bool {
     }
 }
 
-pub(super) fn should_run_step(step: &SetupStep, setup_completed: bool) -> bool {
+pub(in crate::capabilities::workspaces) fn should_run_step(
+    step: &SetupStep,
+    setup_completed: bool,
+) -> bool {
     should_run_run_on(step.run_on.as_deref(), setup_completed)
 }
 
@@ -128,7 +131,7 @@ fn resolve_selected_node_names(
     Ok(Some(selected))
 }
 
-pub(super) fn lower_environment_graph(
+pub(in crate::capabilities::workspaces) fn lower_environment_graph(
     config: &LifecycleConfig,
     setup_completed: bool,
     target_service_names: Option<&[String]>,
@@ -243,7 +246,7 @@ fn clone_service_with_depends_on(
     }
 }
 
-pub(super) fn topo_sort_environment_nodes<'a>(
+pub(in crate::capabilities::workspaces) fn topo_sort_environment_nodes<'a>(
     nodes: &'a HashMap<String, EnvironmentNode>,
 ) -> Result<Vec<(&'a str, &'a EnvironmentNode)>, LifecycleError> {
     let mut in_degree = HashMap::<&str, usize>::new();

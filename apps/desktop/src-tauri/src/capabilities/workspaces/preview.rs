@@ -131,16 +131,15 @@ pub(crate) fn refresh_workspace_preview_rows(
     drop(stmt);
 
     for (service_name, exposure, assigned_port, service_status) in services {
-        let (preview_status, preview_failure_reason, preview_url) =
-            preview_fields_for_service(
-                conn,
-                workspace_id,
-                &service_name,
-                &exposure,
-                assigned_port,
-                &service_status,
-                workspace_status,
-            )?;
+        let (preview_status, preview_failure_reason, preview_url) = preview_fields_for_service(
+            conn,
+            workspace_id,
+            &service_name,
+            &exposure,
+            assigned_port,
+            &service_status,
+            workspace_status,
+        )?;
         conn.execute(
             "UPDATE workspace_service
              SET preview_status = ?1,
@@ -218,11 +217,20 @@ mod tests {
     fn preview_fields_use_stable_proxy_url_for_local_services() {
         let db_path = temp_db_path();
         let conn = init_workspace_table(&db_path);
-        let workspace_label =
-            preview_proxy::workspace_host_label("ws_preview", "managed", "Frost beacon", "lifecycle/frost-beacon-wsprevie");
+        let workspace_label = preview_proxy::workspace_host_label(
+            "ws_preview",
+            "managed",
+            "Frost beacon",
+            "lifecycle/frost-beacon-wsprevie",
+        );
         conn.execute(
             "INSERT INTO workspace (id, kind, name, source_ref) VALUES (?1, ?2, ?3, ?4)",
-            params!["ws_preview", "managed", "Frost beacon", "lifecycle/frost-beacon-wsprevie"],
+            params![
+                "ws_preview",
+                "managed",
+                "Frost beacon",
+                "lifecycle/frost-beacon-wsprevie"
+            ],
         )
         .expect("insert workspace");
 
@@ -249,11 +257,20 @@ mod tests {
     fn preview_fields_keep_stable_local_url_while_service_is_sleeping() {
         let db_path = temp_db_path();
         let conn = init_workspace_table(&db_path);
-        let workspace_label =
-            preview_proxy::workspace_host_label("ws_preview", "managed", "Frost beacon", "lifecycle/frost-beacon-wsprevie");
+        let workspace_label = preview_proxy::workspace_host_label(
+            "ws_preview",
+            "managed",
+            "Frost beacon",
+            "lifecycle/frost-beacon-wsprevie",
+        );
         conn.execute(
             "INSERT INTO workspace (id, kind, name, source_ref) VALUES (?1, ?2, ?3, ?4)",
-            params!["ws_preview", "managed", "Frost beacon", "lifecycle/frost-beacon-wsprevie"],
+            params![
+                "ws_preview",
+                "managed",
+                "Frost beacon",
+                "lifecycle/frost-beacon-wsprevie"
+            ],
         )
         .expect("insert workspace");
 
@@ -282,7 +299,12 @@ mod tests {
         let conn = init_workspace_table(&db_path);
         conn.execute(
             "INSERT INTO workspace (id, kind, name, source_ref) VALUES (?1, ?2, ?3, ?4)",
-            params!["ws_preview", "managed", "Frost beacon", "lifecycle/frost-beacon-wsprevie"],
+            params![
+                "ws_preview",
+                "managed",
+                "Frost beacon",
+                "lifecycle/frost-beacon-wsprevie"
+            ],
         )
         .expect("insert workspace");
 

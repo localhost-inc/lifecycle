@@ -398,7 +398,6 @@ export function useWorkspaceCanvasController({
       }
       setCreatingSelection(input.launchType === "harness" ? input.harnessProvider : "shell");
       setError(null);
-      releaseWebviewFocus();
 
       try {
         const terminal =

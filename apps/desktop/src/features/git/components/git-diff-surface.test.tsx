@@ -95,12 +95,12 @@ describe("GitDiffSurface", () => {
       })),
     });
 
-    expect(buildChangesPatchReloadKey("src/app.tsx", equivalentStatus)).toBe(
-      buildChangesPatchReloadKey("src/app.tsx", status),
+    expect(buildChangesPatchReloadKey(equivalentStatus)).toBe(
+      buildChangesPatchReloadKey(status),
     );
   });
 
-  test("changes the changes reload key when focus or git status changes", () => {
+  test("changes the changes reload key when git status changes", () => {
     const status = createGitStatus();
     const file = status.files[0]!;
     const stagedStatus = createGitStatus({
@@ -113,11 +113,8 @@ describe("GitDiffSurface", () => {
       ],
     });
 
-    expect(buildChangesPatchReloadKey("README.md", status)).not.toBe(
-      buildChangesPatchReloadKey("src/app.tsx", status),
-    );
-    expect(buildChangesPatchReloadKey("src/app.tsx", stagedStatus)).not.toBe(
-      buildChangesPatchReloadKey("src/app.tsx", status),
+    expect(buildChangesPatchReloadKey(stagedStatus)).not.toBe(
+      buildChangesPatchReloadKey(status),
     );
   });
 });

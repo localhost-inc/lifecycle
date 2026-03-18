@@ -16,6 +16,7 @@ import {
   buildDiffSectionLayout,
   findDiffSectionIndexAtOffset,
   getVirtualDiffRange,
+  type DiffSectionLayout,
 } from "../lib/diff-virtualization";
 import {
   clampPanelSize,
@@ -154,7 +155,7 @@ function MultiFileDiffLayoutInner({
   const [resizing, setResizing] = useState(false);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
-  const lastAutoFocusedSignatureRef = useRef<string | null>(null);
+  const layoutRef = useRef<DiffSectionLayout | null>(null);
   const restoredScrollTopRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -239,6 +240,7 @@ function MultiFileDiffLayoutInner({
       }),
     [collapsedPaths, files, measuredHeights],
   );
+  layoutRef.current = layout;
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current;
     const nextScrollTop = restoredScrollTopRef.current;
@@ -287,21 +289,18 @@ function MultiFileDiffLayoutInner({
       return;
     }
 
-    const firstFile = files[0]?.name ?? "";
-    const lastFile = files.at(-1)?.name ?? "";
-    const signature = `${initialFilePath}:${files.length}:${firstFile}:${lastFile}`;
-
-    if (lastAutoFocusedSignatureRef.current === signature) {
+    const scrollContainer = scrollContainerRef.current;
+    const index = fileIndexByPath.get(initialFilePath);
+    if (!scrollContainer || index === undefined) {
       return;
     }
 
-    if (!fileIndexByPath.has(initialFilePath)) {
-      return;
-    }
-
-    lastAutoFocusedSignatureRef.current = signature;
-    handleSelectFile(initialFilePath, "auto");
-  }, [fileIndexByPath, files, handleSelectFile, initialFilePath]);
+    restoredScrollTopRef.current = null;
+    scrollContainer.scrollTo({
+      behavior: "auto",
+      top: layoutRef.current?.items[index]?.start ?? 0,
+    });
+  }, [fileIndexByPath, initialFilePath]);
 
   const handleSectionHeightChange = useCallback((path: string, height: number) => {
     if (height <= 0) {

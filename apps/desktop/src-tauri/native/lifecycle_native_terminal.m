@@ -788,6 +788,12 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   self.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
   self.autoresizesSubviews = NO;
 
+  [self registerForDraggedTypes:@[
+    NSPasteboardTypeFileURL,
+    NSPasteboardTypeTIFF,
+    NSPasteboardTypePNG,
+  ]];
+
   [self updateTrackingAreas];
   return self;
 }
@@ -901,6 +907,12 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
 
 - (void)setHidden:(BOOL)hidden {
   [super setHidden:hidden];
+  if (hidden) {
+    NSWindow *window = self.window;
+    if (window != nil && window.firstResponder == self) {
+      [window makeFirstResponder:window.contentView];
+    }
+  }
   [self syncGhosttyFocusState];
   if (!hidden) {
     [self requestFocusIfNeeded];
@@ -1578,6 +1590,131 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   NSRect localRect = NSMakeRect(x, self.bounds.size.height - y - height, width, height);
   NSRect windowRect = [self convertRect:localRect toView:nil];
   return [self.window convertRectToScreen:windowRect];
+}
+
+// ---------------------------------------------------------------------------
+// NSDraggingDestination — accept image files dropped onto the terminal
+// ---------------------------------------------------------------------------
+
+static BOOL lifecycleDragInfoContainsImageFile(id<NSDraggingInfo> sender) {
+  NSPasteboard *pasteboard = sender.draggingPasteboard;
+
+  // Check for file URLs that are images.
+  if ([pasteboard.types containsObject:NSPasteboardTypeFileURL]) {
+    NSURL *url = [NSURL URLFromPasteboard:pasteboard];
+    if (url == nil) {
+      return NO;
+    }
+    NSString *extension = url.pathExtension.lowercaseString;
+    NSSet<NSString *> *imageExtensions = [NSSet setWithObjects:@"png", @"jpg", @"jpeg", @"gif",
+                                                               @"webp", @"bmp", @"tiff", @"tif",
+                                                               @"heic", @"heif", @"avif", @"svg",
+                                                               @"svgz", nil];
+    return [imageExtensions containsObject:extension];
+  }
+
+  // Check for image data directly on the pasteboard.
+  if ([pasteboard.types containsObject:NSPasteboardTypeTIFF] ||
+      [pasteboard.types containsObject:NSPasteboardTypePNG]) {
+    return YES;
+  }
+
+  return NO;
+}
+
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
+  if (self.surface == NULL) {
+    return NSDragOperationNone;
+  }
+  return lifecycleDragInfoContainsImageFile(sender) ? NSDragOperationCopy : NSDragOperationNone;
+}
+
+- (NSDragOperation)draggingUpdated:(id<NSDraggingInfo>)sender {
+  if (self.surface == NULL) {
+    return NSDragOperationNone;
+  }
+  return lifecycleDragInfoContainsImageFile(sender) ? NSDragOperationCopy : NSDragOperationNone;
+}
+
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {
+  if (self.surface == NULL) {
+    return NO;
+  }
+
+  NSPasteboard *pasteboard = sender.draggingPasteboard;
+  NSData *imageData = nil;
+  NSString *fileName = @"dropped-image.png";
+  NSString *mediaType = @"image/png";
+
+  // Prefer file URL — read bytes and preserve original file name / type.
+  if ([pasteboard.types containsObject:NSPasteboardTypeFileURL]) {
+    NSURL *url = [NSURL URLFromPasteboard:pasteboard];
+    if (url != nil) {
+      fileName = url.lastPathComponent ?: @"dropped-image.png";
+      NSString *extension = url.pathExtension.lowercaseString;
+
+      // Map extension → MIME type so the Rust side can pick the right format.
+      NSDictionary<NSString *, NSString *> *mimeMap = @{
+        @"png" : @"image/png",
+        @"jpg" : @"image/jpeg",
+        @"jpeg" : @"image/jpeg",
+        @"gif" : @"image/gif",
+        @"webp" : @"image/webp",
+        @"bmp" : @"image/bmp",
+        @"tiff" : @"image/tiff",
+        @"tif" : @"image/tiff",
+        @"heic" : @"image/heic",
+        @"heif" : @"image/heif",
+        @"avif" : @"image/avif",
+        @"svg" : @"image/svg+xml",
+        @"svgz" : @"image/svg+xml",
+      };
+      mediaType = mimeMap[extension] ?: @"image/png";
+      imageData = [NSData dataWithContentsOfURL:url];
+    }
+  }
+
+  // Fall back to pasteboard image data (e.g. dragged from another app as raw image).
+  if (imageData == nil) {
+    imageData = lifecycleNativeTerminalPNGDataForPasteboard(pasteboard);
+    fileName = @"dropped-image.png";
+    mediaType = @"image/png";
+  }
+
+  if (imageData.length == 0) {
+    NSBeep();
+    return NO;
+  }
+
+  lifecycleAppendDiagnosticLine([NSString
+      stringWithFormat:@"[drop] terminal=%@ file=%@ imageBytes=%lu", self.terminalId, fileName,
+                       (unsigned long)imageData.length]);
+
+  char *payload = lifecycle_native_terminal_prepare_paste_image(
+      self.terminalId.UTF8String, fileName.UTF8String, mediaType.UTF8String,
+      (const uint8_t *)imageData.bytes, imageData.length);
+
+  if (payload == NULL) {
+    lifecycleAppendDiagnosticLine([NSString
+        stringWithFormat:@"[drop] terminal=%@ failed to persist dropped image", self.terminalId]);
+    NSBeep();
+    return NO;
+  }
+
+  NSString *attachmentText = [NSString stringWithUTF8String:payload];
+  lifecycle_native_terminal_free_string(payload);
+
+  if (attachmentText.length > 0) {
+    lifecycleGhosttySendText(self.surface, attachmentText);
+  } else {
+    lifecycleAppendDiagnosticLine([NSString
+        stringWithFormat:@"[drop] terminal=%@ produced an empty attachment payload",
+                         self.terminalId]);
+    NSBeep();
+    return NO;
+  }
+
+  return YES;
 }
 
 - (void)paste:(id)sender {
@@ -2354,7 +2491,7 @@ bool lifecycle_native_terminal_hide(const char *terminal_id) {
       view.hidden = YES;
       if (view.surface != NULL) {
         ghostty_surface_set_focus(view.surface, false);
-        ghostty_surface_set_occlusion(view.surface, true);
+        ghostty_surface_set_occlusion(view.surface, false);
       }
       return true;
     } @catch (NSException *exception) {

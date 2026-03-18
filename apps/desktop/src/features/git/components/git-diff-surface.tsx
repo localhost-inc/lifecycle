@@ -52,7 +52,6 @@ function header(source: GitDiffSurfaceSource) {
 }
 
 export function buildChangesPatchReloadKey(
-  focusPath: string | null,
   gitStatus: Pick<GitStatusResult, "files" | "headSha"> | null,
 ): string {
   const filesSignature =
@@ -71,7 +70,7 @@ export function buildChangesPatchReloadKey(
       )
       .join("\u0002") ?? "";
 
-  return [focusPath ?? "", gitStatus?.headSha ?? "", filesSignature].join("\u0003");
+  return [gitStatus?.headSha ?? "", filesSignature].join("\u0003");
 }
 
 export function GitDiffSurface({
@@ -92,9 +91,9 @@ export function GitDiffSurface({
   const changesPatchReloadKey = useMemo(
     () =>
       source.mode === "changes"
-        ? buildChangesPatchReloadKey(focusPath, changesStatusQuery.data ?? null)
+        ? buildChangesPatchReloadKey(changesStatusQuery.data ?? null)
         : null,
-    [changesStatusQuery.data, focusPath, source.mode],
+    [changesStatusQuery.data, source.mode],
   );
   const diffCacheKeyPrefix =
     source.mode === "changes"

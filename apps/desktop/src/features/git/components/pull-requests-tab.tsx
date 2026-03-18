@@ -1,6 +1,8 @@
 import type { GitPullRequestListResult, GitPullRequestSummary } from "@lifecycle/contracts";
 import { Badge, EmptyState, Loading } from "@lifecycle/ui";
 
+import { GitPullRequestDraft } from "lucide-react";
+
 import { GithubAvatar } from "./github-avatar";
 
 interface PullRequestsTabProps {
@@ -145,6 +147,7 @@ export function PullRequestsTab({
     return (
       <div className="flex flex-1 items-center justify-center">
         <EmptyState
+          icon={<GitPullRequestDraft />}
           description="Open pull requests for this repository will appear here."
           size="sm"
           title="No open pull requests"

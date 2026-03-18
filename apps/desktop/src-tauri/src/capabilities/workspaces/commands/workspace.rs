@@ -82,7 +82,7 @@ pub async fn start_services(
     let _mutation_guard = workspace_controllers
         .acquire_mutation_guard(&workspace_id)
         .await?;
-    super::super::start::start_services(
+    super::super::environment::start_services(
         app,
         db_path,
         workspace_controllers,
@@ -106,7 +106,7 @@ pub async fn sync_workspace_manifest(
     let _mutation_guard = workspace_controllers
         .acquire_mutation_guard(&workspace_id)
         .await?;
-    super::super::start::sync_workspace_manifest(
+    super::super::environment::sync_workspace_manifest(
         Some(&app),
         &db_path.0,
         workspace_id,

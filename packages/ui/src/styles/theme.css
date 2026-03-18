@@ -85,6 +85,17 @@
   }
 }
 
+@keyframes lifecycle-logo-draw-left-once {
+  0% {
+    stroke-dashoffset: 1;
+  }
+
+  50%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
 @keyframes lifecycle-logo-draw-right {
   0%,
   25% {
@@ -98,6 +109,17 @@
 
   100% {
     stroke-dashoffset: 1;
+  }
+}
+
+@keyframes lifecycle-logo-draw-right-once {
+  0%,
+  50% {
+    stroke-dashoffset: 1;
+  }
+
+  100% {
+    stroke-dashoffset: 0;
   }
 }
 

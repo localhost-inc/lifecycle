@@ -99,9 +99,7 @@ pub(crate) fn resolve_assigned_port(
         }
     }
 
-    if let Some(candidate) =
-        resolve_randomized_port(workspace_id, service_name, &is_port_usable)
-    {
+    if let Some(candidate) = resolve_randomized_port(workspace_id, service_name, &is_port_usable) {
         return Ok(candidate);
     }
 
@@ -163,15 +161,8 @@ mod tests {
                 .port(),
         );
 
-        let assigned_port = resolve_assigned_port(
-            &conn,
-            "ws-1",
-            "web",
-            None,
-            None,
-            false,
-        )
-        .expect("port resolution should succeed");
+        let assigned_port = resolve_assigned_port(&conn, "ws-1", "web", None, None, false)
+            .expect("port resolution should succeed");
 
         assert_ne!(assigned_port, occupied_port);
         assert!((RANDOMIZED_PORT_RANGE_START..=RANDOMIZED_PORT_RANGE_END).contains(&assigned_port));
@@ -193,15 +184,8 @@ mod tests {
                 .port(),
         );
 
-        let assigned_port = resolve_assigned_port(
-            &conn,
-            "ws-1",
-            "web",
-            None,
-            None,
-            false,
-        )
-        .expect("port resolution should succeed");
+        let assigned_port = resolve_assigned_port(&conn, "ws-1", "web", None, None, false)
+            .expect("port resolution should succeed");
 
         assert!((RANDOMIZED_PORT_RANGE_START..=RANDOMIZED_PORT_RANGE_END).contains(&assigned_port));
     }
@@ -211,15 +195,8 @@ mod tests {
         let conn = rusqlite::Connection::open_in_memory().expect("open in-memory db");
         init_workspace_service_table(&conn);
 
-        let assigned_port = resolve_assigned_port(
-            &conn,
-            "ws-1",
-            "web",
-            Some(9999),
-            None,
-            false,
-        )
-        .expect("port resolution should succeed");
+        let assigned_port = resolve_assigned_port(&conn, "ws-1", "web", Some(9999), None, false)
+            .expect("port resolution should succeed");
 
         assert_eq!(assigned_port, 9999);
     }
@@ -229,15 +206,8 @@ mod tests {
         let conn = rusqlite::Connection::open_in_memory().expect("open in-memory db");
         init_workspace_service_table(&conn);
 
-        let assigned_port = resolve_assigned_port(
-            &conn,
-            "ws-1",
-            "web",
-            None,
-            Some(42000),
-            true,
-        )
-        .expect("port resolution should succeed");
+        let assigned_port = resolve_assigned_port(&conn, "ws-1", "web", None, Some(42000), true)
+            .expect("port resolution should succeed");
 
         assert_eq!(assigned_port, 42000);
     }

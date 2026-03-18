@@ -78,8 +78,8 @@ pub(crate) fn build_native_terminal_theme_config(
     config_lines.push(format!("cursor-color = {cursor_color}"));
     config_lines.push(format!("selection-background = {selection_background}"));
     config_lines.push(format!("selection-foreground = {selection_foreground}"));
+    config_lines.push("scroll-to-bottom = output".to_string());
     config_lines.push("background-opacity = 1".to_string());
-    config_lines.push("scroll-on-output = false".to_string());
     config_lines.push("window-padding-x = 0".to_string());
     config_lines.push("window-padding-y = 0".to_string());
 
@@ -174,6 +174,8 @@ mod tests {
         assert!(config.contains("cursor-color = #539bf5"));
         assert!(config.contains("selection-background = #444c56"));
         assert!(config.contains("selection-foreground = #adbac7"));
+        assert!(config.contains("scroll-to-bottom = output"));
+        assert!(!config.contains("scroll-on-output"));
         assert!(config.contains("window-padding-x = 0"));
         assert!(config.contains("window-padding-y = 0"));
     }

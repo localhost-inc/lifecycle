@@ -66,6 +66,14 @@ function Logo({
     animationIterationCount: repeat ? "infinite" : 1,
     animationTimingFunction: drawTimingFunction,
   } satisfies React.CSSProperties;
+  const leftAnimationStyle = {
+    ...animationStyle,
+    animationName: repeat ? "lifecycle-logo-draw-left" : "lifecycle-logo-draw-left-once",
+  } satisfies React.CSSProperties;
+  const rightAnimationStyle = {
+    ...animationStyle,
+    animationName: repeat ? "lifecycle-logo-draw-right" : "lifecycle-logo-draw-right-once",
+  } satisfies React.CSSProperties;
 
   return (
     <svg
@@ -105,7 +113,7 @@ function Logo({
             strokeDashoffset={1}
             strokeLinecap="butt"
             strokeWidth={100}
-            style={animationStyle}
+            style={leftAnimationStyle}
           />
         </g>
         <g clipPath={`url(#${rightClipPathId})`}>
@@ -119,7 +127,7 @@ function Logo({
             strokeDashoffset={1}
             strokeLinecap="butt"
             strokeWidth={100}
-            style={animationStyle}
+            style={rightAnimationStyle}
           />
         </g>
       </g>

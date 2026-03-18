@@ -256,13 +256,7 @@ pub(super) fn reconcile_workspace_services_db(
                     .get(service_name)
                     .cloned()
                     .unwrap_or_else(|| {
-                        (
-                            "local".to_string(),
-                            None,
-                            "stopped".to_string(),
-                            None,
-                            None,
-                        )
+                        ("local".to_string(), None, "stopped".to_string(), None, None)
                     });
                 let assigned_port = if preserve_runtime_state
                     && matches!(current_status.as_str(), "ready" | "starting")
@@ -415,14 +409,18 @@ pub(super) fn workspace_failure_reason_for_start_error(
 ) -> WorkspaceFailureReason {
     match error {
         LifecycleError::DockerUnavailable(_) => WorkspaceFailureReason::LocalDockerUnavailable,
-        LifecycleError::PortConflict { .. } | LifecycleError::PortExhausted { .. } => WorkspaceFailureReason::LocalPortConflict,
+        LifecycleError::PortConflict { .. } | LifecycleError::PortExhausted { .. } => {
+            WorkspaceFailureReason::LocalPortConflict
+        }
         _ => WorkspaceFailureReason::ServiceStartFailed,
     }
 }
 
 pub(super) fn service_status_reason_for_start_error(error: &LifecycleError) -> &'static str {
     match error {
-        LifecycleError::PortConflict { .. } | LifecycleError::PortExhausted { .. } => "service_port_unreachable",
+        LifecycleError::PortConflict { .. } | LifecycleError::PortExhausted { .. } => {
+            "service_port_unreachable"
+        }
         LifecycleError::ServiceStartFailed { .. } => "service_start_failed",
         _ => "service_start_failed",
     }
@@ -431,7 +429,8 @@ pub(super) fn service_status_reason_for_start_error(error: &LifecycleError) -> &
 pub(super) fn service_name_for_start_error(error: &LifecycleError, fallback: &str) -> String {
     match error {
         LifecycleError::ServiceStartFailed { service, .. } => service.clone(),
-        LifecycleError::PortConflict { service, .. } | LifecycleError::PortExhausted { service } => service.clone(),
+        LifecycleError::PortConflict { service, .. }
+        | LifecycleError::PortExhausted { service } => service.clone(),
         _ => fallback.to_string(),
     }
 }

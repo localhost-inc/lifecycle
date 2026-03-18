@@ -536,7 +536,12 @@ mod tests {
         .expect("create workspace tables");
         conn.execute(
             "INSERT INTO workspace (id, kind, name, source_ref) VALUES (?1, ?2, ?3, ?4)",
-            params!["ws_test", "managed", "Frost beacon", "lifecycle/frost-beacon-ws-test"],
+            params![
+                "ws_test",
+                "managed",
+                "Frost beacon",
+                "lifecycle/frost-beacon-ws-test"
+            ],
         )
         .expect("insert workspace");
         drop(conn);
