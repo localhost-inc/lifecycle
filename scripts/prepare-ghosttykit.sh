@@ -87,8 +87,16 @@ fi
 
 (
   cd "$SOURCE_DIR"
-  zig build -Demit-xcframework=true -Dxcframework-target=native -Doptimize=ReleaseFast >/dev/null
+  # The zig build may exit non-zero because xcodebuild for the full Ghostty
+  # macOS app can fail (e.g. Swift version mismatches). We only need the
+  # GhosttyKit.xcframework which is built before that step.
+  zig build -Demit-xcframework=true -Dxcframework-target=native -Doptimize=ReleaseFast >/dev/null || true
 )
+
+if [[ ! -d "$SOURCE_DIR/macos/GhosttyKit.xcframework" ]]; then
+  echo "GhosttyKit.xcframework was not produced" >&2
+  exit 1
+fi
 
 rm -rf "$OUTPUT_DIR"
 cp -R "$SOURCE_DIR/macos/GhosttyKit.xcframework" "$OUTPUT_DIR"
