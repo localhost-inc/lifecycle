@@ -143,7 +143,7 @@ export function HistoryTab({ error, isLoading, entries, onOpenCommit }: HistoryT
       {groups.map((group) => (
         <div key={group.label}>
           <div className="sticky top-0 z-10 flex justify-center px-2 py-1.5">
-            <span className="rounded-full bg-[var(--background)]/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)] backdrop-blur-md">
+            <span className="rounded-full bg-[var(--surface)] px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
               {group.label}
             </span>
           </div>

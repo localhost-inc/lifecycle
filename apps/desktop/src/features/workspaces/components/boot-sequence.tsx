@@ -1,7 +1,8 @@
 import type { LifecycleConfig, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger, IconButton, Spinner } from "@lifecycle/ui";
 import { Play } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { renderAnsiText } from "../../../lib/ansi";
 import { ServiceRow } from "./services-tab";
 import type { EnvironmentTaskState, SetupStepState } from "../hooks";
 
@@ -383,6 +384,15 @@ function BootStatusIndicator({ isActive = false, status }: BootStatusIndicatorPr
   );
 }
 
+function BootStepOutput({ lines }: { lines: string[] }) {
+  const rendered = useMemo(() => renderAnsiText(lines.join("\n")), [lines]);
+  return (
+    <pre className="max-h-48 overflow-auto whitespace-pre-wrap font-mono text-xs text-[var(--muted-foreground)]">
+      {rendered}
+    </pre>
+  );
+}
+
 function BootStepRow({
   isActive = false,
   item,
@@ -409,9 +419,7 @@ function BootStepRow({
       {hasOutput ? (
         <CollapsibleContent>
           <div className="mb-1 ml-[22px] rounded-md bg-[var(--muted)]/50 px-2.5 py-2">
-            <pre className="max-h-48 overflow-auto whitespace-pre-wrap font-mono text-xs text-[var(--muted-foreground)]">
-              {item.output.join("\n")}
-            </pre>
+            <BootStepOutput lines={item.output} />
           </div>
         </CollapsibleContent>
       ) : null}

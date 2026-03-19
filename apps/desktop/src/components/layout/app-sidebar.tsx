@@ -4,10 +4,10 @@ import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import {
   IconButton,
   Logo,
+  Wordmark,
 } from "@lifecycle/ui";
 import {
   Megaphone,
-  PanelLeft,
   PanelLeftClose,
   Plus,
   Settings,
@@ -24,7 +24,6 @@ import { ResponseReadyDot } from "../response-ready-dot";
 import type { AuthSession } from "../../features/auth/auth-session";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { bugs, version } from "../../../package.json";
-import { Wordmark } from "../../components/wordmark";
 
 const COLLAPSED_WIDTH = 48;
 
@@ -118,30 +117,8 @@ export function AppSidebar({
         <div className="h-10 w-full shrink-0" />
 
         <div className="flex min-h-0 w-full flex-1 flex-col items-center">
-          {/* Sidebar actions */}
-          <div className="flex shrink-0 flex-col items-center gap-1 py-1">
-            <button
-              aria-label="Expand sidebar"
-              className="flex size-8 items-center justify-center rounded-lg text-[var(--sidebar-muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"
-              onClick={onToggleCollapse}
-              title="Expand sidebar"
-              type="button"
-            >
-              <PanelLeft size={16} strokeWidth={2} />
-            </button>
-            <button
-              aria-label="Add project"
-              className="flex size-8 items-center justify-center rounded-lg text-[var(--sidebar-muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"
-              onClick={onAddProject}
-              title="Add project"
-              type="button"
-            >
-              <Plus size={16} strokeWidth={2} />
-            </button>
-          </div>
-
           {/* Avatar (org context) */}
-          <div className="flex shrink-0 items-center justify-center py-1">
+          <div className="flex shrink-0 items-center justify-center py-1 pb-2">
             <button
               aria-label={activeContextName}
               onClick={onOpenSettings}
@@ -180,6 +157,16 @@ export function AppSidebar({
                 );
               })}
             </div>
+            {/* Add project — below project list */}
+            <button
+              aria-label="Add project"
+              className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-lg text-[var(--sidebar-muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"
+              onClick={onAddProject}
+              title="Add project"
+              type="button"
+            >
+              <Plus size={16} strokeWidth={2} />
+            </button>
           </div>
 
           {/* Feedback & settings */}
@@ -240,7 +227,7 @@ export function AppSidebar({
           onClick={onOpenSettings}
           type="button"
         >
-          <UserAvatar loading={authSessionLoading} session={authSession} size={26} />
+          <UserAvatar loading={authSessionLoading} session={authSession} size={28} />
           <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--sidebar-foreground)]">
             {activeContextName}
           </span>

@@ -42,6 +42,12 @@ pre {
   font-size: 13px;
   line-height: 1.75;
   color: var(--foreground);
+  --sh-sign: var(--muted-foreground);
+  --sh-string: #e8b87a;
+  --sh-class: #c4b5fd;
+  --sh-keyword: #c4b5fd;
+  --sh-identifier: var(--foreground);
+  --sh-space: transparent;
 }
 
 pre code {

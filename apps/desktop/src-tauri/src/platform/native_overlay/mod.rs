@@ -18,7 +18,3 @@ pub fn is_available() -> bool {
 pub fn initialize(app: &AppHandle) -> Result<(), LifecycleError> {
     platform::initialize(app)
 }
-
-pub fn destroy(app: &AppHandle) -> Result<(), LifecycleError> {
-    platform::destroy(app)
-}

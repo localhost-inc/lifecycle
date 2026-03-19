@@ -44,6 +44,7 @@ interface ProjectNavBarProps {
   onCreateWorkspace: () => void;
   onDestroyWorkspace: (workspace: WorkspaceRecord) => void;
   onForkWorkspace: (workspace: WorkspaceRecord) => void;
+  onToggleSidebar?: () => void;
   projectId: string;
   sidebarCollapsed?: boolean;
   workspaces: WorkspaceRecord[];
@@ -88,6 +89,7 @@ export function ProjectNavBar({
   onCreateWorkspace,
   onDestroyWorkspace,
   onForkWorkspace,
+  onToggleSidebar,
   projectId,
   sidebarCollapsed,
   workspaces,
@@ -186,7 +188,10 @@ export function ProjectNavBar({
     >
       {/* Navigation controls */}
       <div className="flex shrink-0 items-center">
-        <NavigationControls sidebarCollapsed={sidebarCollapsed ?? false} />
+        <NavigationControls
+          onToggleSidebar={onToggleSidebar}
+          sidebarCollapsed={sidebarCollapsed ?? false}
+        />
       </div>
 
       {/* Workspace links */}

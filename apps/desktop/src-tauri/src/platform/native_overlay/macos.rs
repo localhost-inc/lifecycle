@@ -4,7 +4,6 @@ use tauri::{AppHandle, Manager, WebviewWindow};
 
 unsafe extern "C" {
     fn lifecycle_native_overlay_init(webview_view: *mut c_void, url: *const c_char) -> bool;
-    fn lifecycle_native_overlay_destroy() -> bool;
     fn lifecycle_native_overlay_last_error() -> *const c_char;
 }
 
@@ -65,22 +64,5 @@ pub(super) fn initialize(app: &AppHandle) -> Result<(), LifecycleError> {
 
     receiver.recv().map_err(|_| {
         LifecycleError::AttachFailed("native overlay webview task did not complete".to_string())
-    })?
-}
-
-pub(super) fn destroy(app: &AppHandle) -> Result<(), LifecycleError> {
-    let (sender, receiver) = std::sync::mpsc::sync_channel(1);
-
-    app.run_on_main_thread(move || {
-        let result = with_error(
-            || unsafe { lifecycle_native_overlay_destroy() },
-            "failed to destroy native overlay surface",
-        );
-        let _ = sender.send(result);
-    })
-    .map_err(|error| LifecycleError::AttachFailed(error.to_string()))?;
-
-    receiver.recv().map_err(|_| {
-        LifecycleError::AttachFailed("native overlay destroy task did not complete".to_string())
     })?
 }

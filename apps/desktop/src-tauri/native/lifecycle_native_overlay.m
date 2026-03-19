@@ -314,22 +314,3 @@ bool lifecycle_native_overlay_update_hit_regions(const char *regions_json) {
     }
   }
 }
-
-bool lifecycle_native_overlay_destroy(void) {
-  @autoreleasepool {
-    @try {
-      if (gOverlayView == nil) {
-        return true;
-      }
-
-      [gOverlayView removeFromSuperview];
-      gOverlayView = nil;
-      return true;
-    } @catch (NSException *exception) {
-      lifecycleOverlaySetLastError(
-          [NSString stringWithFormat:@"Overlay destroy threw: %@ — %@", exception.name,
-                                     exception.reason]);
-      return false;
-    }
-  }
-}

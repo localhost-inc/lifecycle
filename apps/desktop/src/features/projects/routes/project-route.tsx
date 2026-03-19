@@ -30,6 +30,7 @@ export function ProjectRoute() {
     onDestroyWorkspace,
     onForkWorkspace,
     onOpenWorkspace,
+    onToggleSidebar,
     projects,
     sidebarCollapsed,
     workspacesByProjectId,
@@ -122,6 +123,7 @@ export function ProjectRoute() {
         onCreateWorkspace={() => void onCreateWorkspace(project.id)}
         onDestroyWorkspace={onDestroyWorkspace}
         onForkWorkspace={onForkWorkspace}
+        onToggleSidebar={onToggleSidebar}
         projectId={project.id}
         sidebarCollapsed={sidebarCollapsed}
         workspaces={workspaces}

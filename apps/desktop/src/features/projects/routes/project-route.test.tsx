@@ -57,6 +57,7 @@ function renderProjectRoute(
     onOpenSettings: () => {},
     onOpenWorkspace: () => {},
     onRemoveProject: async () => {},
+    onToggleSidebar: () => {},
     projectCatalog: undefined,
     projects: [project],
     sidebarCollapsed: false,

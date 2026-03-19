@@ -1,5 +1,5 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
-import { Logo } from "@lifecycle/ui";
+import { Logo, Wordmark } from "@lifecycle/ui";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
@@ -40,9 +40,7 @@ function RootLayout() {
       <header className="flex items-center justify-between gap-6 py-6">
         <a href="/" className="flex items-center gap-3 no-underline">
           <Logo size={22} />
-          <span className="font-[var(--font-pixel)] text-sm uppercase tracking-[0.2em] text-[var(--foreground)]">
-            lifecycle
-          </span>
+          <Wordmark className="h-3 text-[var(--foreground)]" />
         </a>
 
         <nav className="flex items-center gap-5">

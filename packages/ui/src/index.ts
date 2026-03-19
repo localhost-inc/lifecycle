@@ -27,6 +27,7 @@ export { OptionList, type OptionListItem, type OptionListProps } from "./compone
 export { Label } from "./components/label";
 export { Loading, type LoadingProps } from "./components/loading";
 export { Logo, type LogoProps } from "./components/logo";
+export { Wordmark, type WordmarkProps } from "./components/wordmark";
 export { ScrollArea, ScrollBar } from "./components/scroll-area";
 export {
   ScrollFade,

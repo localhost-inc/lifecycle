@@ -245,11 +245,15 @@ async fn run_command_step(
     )
     .await;
 
+    // Drain remaining output with a timeout. If a grandchild process
+    // inherited our pipe file descriptors the readers will block
+    // indefinitely even though the direct child has already exited.
+    let drain_timeout = std::time::Duration::from_secs(2);
     if let Some(handle) = stdout_handle {
-        let _ = handle.await;
+        let _ = tokio::time::timeout(drain_timeout, handle).await;
     }
     if let Some(handle) = stderr_handle {
-        let _ = handle.await;
+        let _ = tokio::time::timeout(drain_timeout, handle).await;
     }
 
     match result {

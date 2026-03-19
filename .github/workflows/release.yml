@@ -71,6 +71,7 @@ jobs:
           tagName: v__VERSION__
           releaseName: "Lifecycle v__VERSION__"
           releaseBody: "See the assets below to download and install this version."
+          releaseCommitish: main
           releaseDraft: false
           prerelease: false
           owner: localhost-inc
