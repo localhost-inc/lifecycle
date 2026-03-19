@@ -1,4 +1,5 @@
 import { isTauri } from "@tauri-apps/api/core";
+import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import {
@@ -7,12 +8,10 @@ import {
   Wordmark,
 } from "@lifecycle/ui";
 import {
-  Megaphone,
   PanelLeftClose,
   Plus,
-  Settings,
 } from "lucide-react";
-import { type MouseEvent, useCallback, useMemo } from "react";
+import { type MouseEvent, useCallback, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { resolveProjectRepoWorkspace } from "../../features/projects/lib/project-repo-workspace";
 import {
@@ -23,7 +22,7 @@ import { UserAvatar } from "../../features/user/components/user-avatar";
 import { ResponseReadyDot } from "../response-ready-dot";
 import type { AuthSession } from "../../features/auth/auth-session";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { bugs, version } from "../../../package.json";
+import { version } from "../../../package.json";
 
 const COLLAPSED_WIDTH = 48;
 
@@ -34,6 +33,7 @@ interface AppSidebarProps {
   collapsed: boolean;
   onAddProject: () => void;
   onOpenSettings: () => void;
+  onRemoveProject: (projectId: string) => void;
   onToggleCollapse: () => void;
   projects: ProjectRecord[];
   readyProjectIds: ReadonlySet<string>;
@@ -60,6 +60,7 @@ export function AppSidebar({
   collapsed,
   onAddProject,
   onOpenSettings,
+  onRemoveProject,
   onToggleCollapse,
   projects,
   readyProjectIds,
@@ -68,6 +69,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const { projectId } = useParams();
   const location = useLocation();
+  const [logoHovered, setLogoHovered] = useState(false);
 
   const projectPaths = useMemo(() => {
     const storedPaths = readProjectPaths();
@@ -104,6 +106,22 @@ export function AppSidebar({
       void getCurrentWindow().startDragging();
     }
   }, []);
+
+  const handleProjectContextMenu = useCallback(
+    async (event: MouseEvent<HTMLElement>, project: ProjectRecord) => {
+      event.preventDefault();
+
+      const removeItem = await MenuItem.new({
+        id: "remove-project",
+        text: "Remove Project",
+        action: () => onRemoveProject(project.id),
+      });
+
+      const menu = await Menu.new({ items: [removeItem] });
+      await menu.popup();
+    },
+    [onRemoveProject],
+  );
 
   if (collapsed) {
     return (
@@ -146,6 +164,7 @@ export function AppSidebar({
                         ? "bg-[var(--card)] text-[var(--sidebar-foreground)] shadow-[0_0_0_0.5px_var(--border)]"
                         : "text-[var(--sidebar-muted-foreground)] hover:text-[var(--sidebar-foreground)]",
                     ].join(" ")}
+                    onContextMenu={(e) => handleProjectContextMenu(e, project)}
                     to={projectPaths[project.id] ?? `/projects/${project.id}`}
                     title={project.name}
                   >
@@ -169,32 +188,16 @@ export function AppSidebar({
             </button>
           </div>
 
-          {/* Feedback & settings */}
-          <div className="flex shrink-0 flex-col items-center gap-1 pt-2 pb-1.5">
-            <button
-              aria-label="Feedback"
-              className="flex size-8 items-center justify-center rounded-lg text-[var(--sidebar-muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"
-              onClick={() => openUrl(bugs.url)}
-              title="Feedback"
-              type="button"
-            >
-              <Megaphone size={16} strokeWidth={2} />
-            </button>
-            <button
-              aria-label="Settings"
-              className="flex size-8 items-center justify-center rounded-lg text-[var(--sidebar-muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"
-              onClick={onOpenSettings}
-              title="Settings"
-              type="button"
-            >
-              <Settings size={16} strokeWidth={2} />
-            </button>
-          </div>
-
           {/* Logo at bottom */}
-          <div className="flex shrink-0 items-center justify-center pb-3">
-            <Logo size={20} className="text-[var(--sidebar-muted-foreground)]" />
-          </div>
+          <button
+            className="flex shrink-0 items-center justify-center pb-3 cursor-pointer"
+            onClick={() => openUrl("https://lifecycle.dev")}
+            onMouseEnter={() => setLogoHovered(true)}
+            onMouseLeave={() => setLogoHovered(false)}
+            type="button"
+          >
+            <Logo animate={logoHovered} size={24} className="text-[var(--sidebar-muted-foreground)]" />
+          </button>
         </div>
       </aside>
     );
@@ -257,6 +260,7 @@ export function AppSidebar({
                         ? "bg-[var(--card)] text-[var(--sidebar-foreground)] shadow-[0_0_0_0.5px_var(--border)]"
                         : "text-[var(--sidebar-muted-foreground)] hover:text-[var(--sidebar-foreground)]",
                     ].join(" ")}
+                    onContextMenu={(e) => handleProjectContextMenu(e, project)}
                     to={projectPaths[project.id] ?? `/projects/${project.id}`}
                     title={project.name}
                   >
@@ -277,26 +281,6 @@ export function AppSidebar({
               })}
             </div>
           </div>
-        </div>
-
-        {/* Feedback & settings */}
-        <div className="flex shrink-0 flex-col gap-0.5 px-2 pt-2 pb-1.5">
-          <button
-            className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium text-[var(--sidebar-muted-foreground)] transition-colors hover:text-[var(--sidebar-foreground)]"
-            onClick={() => openUrl(bugs.url)}
-            type="button"
-          >
-            <Megaphone className="size-4 shrink-0" strokeWidth={2} />
-            <span>Feedback</span>
-          </button>
-          <button
-            className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium text-[var(--sidebar-muted-foreground)] transition-colors hover:text-[var(--sidebar-foreground)]"
-            onClick={onOpenSettings}
-            type="button"
-          >
-            <Settings className="size-4 shrink-0" strokeWidth={2} />
-            <span>Settings</span>
-          </button>
         </div>
 
         {/* Wordmark + version at bottom */}

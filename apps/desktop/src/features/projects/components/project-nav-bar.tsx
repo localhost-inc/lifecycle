@@ -1,25 +1,22 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
+import { Menu, MenuItem, PredefinedMenuItem } from "@tauri-apps/api/menu";
 import {
   Button,
   IconButton,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
   Spinner,
 } from "@lifecycle/ui";
 import {
-  ExternalLink,
   FolderGit2,
   GitBranch,
-  GitFork,
-  MoreHorizontal,
-  PanelRight,
+  Megaphone,
+  PanelRightClose,
+  PanelRightOpen,
   Plus,
-  Trash2,
+  Settings,
 } from "lucide-react";
-import { useCallback, type MouseEvent, type ReactNode, useMemo, useState } from "react";
+import { useCallback, useEffect, type MouseEvent, type ReactNode, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   SHORTCUT_HANDLER_PRIORITY,
@@ -28,13 +25,15 @@ import {
 import { ResponseReadyDot } from "../../../components/response-ready-dot";
 import { NavigationControls } from "../../../components/layout/navigation-controls";
 import { getWorkspaceSessionStatusState } from "../../workspaces/components/workspace-session-status";
-import { getWorkspaceDisplayName } from "../../workspaces/lib/workspace-display";
+import { getWorkspaceDisplayName, isRootWorkspace } from "../../workspaces/lib/workspace-display";
 import {
   listAvailableOpenInTargets,
   resolveDefaultOpenTarget,
 } from "../../workspaces/lib/open-in-targets";
 import { openWorkspaceInApp } from "../../workspaces/open-in-api";
 import { isMacPlatform } from "../../../app/app-hotkeys";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { bugs } from "../../../../package.json";
 
 interface ProjectNavBarProps {
   actionsOutlet?: ReactNode;
@@ -44,6 +43,7 @@ interface ProjectNavBarProps {
   onCreateWorkspace: () => void;
   onDestroyWorkspace: (workspace: WorkspaceRecord) => void;
   onForkWorkspace: (workspace: WorkspaceRecord) => void;
+  onOpenSettings: () => void;
   onToggleSidebar?: () => void;
   projectId: string;
   sidebarCollapsed?: boolean;
@@ -89,17 +89,12 @@ export function ProjectNavBar({
   onCreateWorkspace,
   onDestroyWorkspace,
   onForkWorkspace,
+  onOpenSettings,
   onToggleSidebar,
   projectId,
   sidebarCollapsed,
   workspaces,
 }: ProjectNavBarProps) {
-  const activeWorkspace = useMemo(
-    () =>
-      activeWorkspaceId ? (workspaces.find((ws) => ws.id === activeWorkspaceId) ?? null) : null,
-    [activeWorkspaceId, workspaces],
-  );
-  const [overflowOpen, setOverflowOpen] = useState(false);
   // Keep shortcuts registered so they work regardless of where the buttons live
   useShortcutRegistration({
     handler: () => {
@@ -152,6 +147,59 @@ export function ProjectNavBar({
     id: "workspace.next-workspace",
     priority: SHORTCUT_HANDLER_PRIORITY.project,
   });
+
+  const [extensionPanelCollapsed, setExtensionPanelCollapsed] = useState(false);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      setExtensionPanelCollapsed(
+        (event as CustomEvent<{ collapsed: boolean }>).detail.collapsed,
+      );
+    };
+
+    window.addEventListener("lifecycle:extension-panel-state", handler);
+    return () => window.removeEventListener("lifecycle:extension-panel-state", handler);
+  }, []);
+
+  const handleWorkspaceContextMenu = useCallback(
+    async (event: MouseEvent<HTMLElement>, workspace: WorkspaceRecord) => {
+      event.preventDefault();
+
+      const openInEditorItem = await MenuItem.new({
+        id: "open-in-editor",
+        text: "Open in Editor",
+        action: () => {
+          const target = resolveDefaultOpenTarget(
+            listAvailableOpenInTargets(isMacPlatform()),
+          );
+          void openWorkspaceInApp(workspace.id, target.id);
+        },
+      });
+
+      const forkItem = await MenuItem.new({
+        id: "fork-workspace",
+        text: "Fork Workspace",
+        action: () => onForkWorkspace(workspace),
+      });
+
+      const items: (MenuItem | PredefinedMenuItem)[] = [openInEditorItem, forkItem];
+
+      if (!isRootWorkspace(workspace)) {
+        const separator = await PredefinedMenuItem.new({ item: "Separator" });
+        const destroyItem = await MenuItem.new({
+          id: "destroy-workspace",
+          text: "Destroy Workspace",
+          action: () => onDestroyWorkspace(workspace),
+        });
+        items.push(separator, destroyItem);
+      }
+
+      const menu = await Menu.new({ items });
+
+      await menu.popup();
+    },
+    [onDestroyWorkspace, onForkWorkspace],
+  );
 
   const handleMouseDown = (event: MouseEvent<HTMLElement>) => {
     if (event.button !== 0 || !isTauri()) {
@@ -208,6 +256,7 @@ export function ProjectNavBar({
               <NavLink
                 key={workspace.id}
                 className={workspaceNavClass}
+                onContextMenu={(event) => void handleWorkspaceContextMenu(event, workspace)}
                 title={displayName}
                 to={`${basePath}/workspaces/${workspace.id}`}
               >
@@ -233,73 +282,37 @@ export function ProjectNavBar({
         </div>
       </div>
 
-      {/* Actions outlet (run, git) + overflow actions */}
+      {/* Actions outlet (run, git) + trailing icons */}
       {actionsOutlet}
-      {activeWorkspace ? (
-        <div className="flex shrink-0 items-center gap-1 pl-1 pr-2">
-          <Popover onOpenChange={setOverflowOpen} open={overflowOpen}>
-            <PopoverTrigger asChild>
-              <IconButton aria-label="More workspace actions" title="More workspace actions">
-                <MoreHorizontal size={16} strokeWidth={2} />
-              </IconButton>
-            </PopoverTrigger>
-            <PopoverContent
-              align="end"
-              className="w-48 rounded-lg border-[var(--border)] bg-[var(--surface)] p-1 shadow-[0_12px_32px_rgba(0,0,0,0.18)]"
-              side="bottom"
-              sideOffset={8}
-            >
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[var(--foreground)] transition-colors hover:bg-[var(--surface-hover)]"
-                onClick={() => {
-                  setOverflowOpen(false);
-                  const target = resolveDefaultOpenTarget(
-                    listAvailableOpenInTargets(isMacPlatform()),
-                  );
-                  void openWorkspaceInApp(activeWorkspace.id, target.id);
-                }}
-              >
-                <ExternalLink size={14} strokeWidth={2} />
-                <span>Open in editor</span>
-              </button>
-              <button
-                type="button"
-                aria-label="Fork workspace"
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[var(--foreground)] transition-colors hover:bg-[var(--surface-hover)]"
-                onClick={() => {
-                  setOverflowOpen(false);
-                  onForkWorkspace(activeWorkspace);
-                }}
-              >
-                <GitFork size={14} strokeWidth={2} />
-                <span>Fork workspace</span>
-              </button>
-              <button
-                type="button"
-                aria-label="Destroy workspace"
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-[var(--destructive)] transition-colors hover:bg-[var(--surface-hover)]"
-                onClick={() => {
-                  setOverflowOpen(false);
-                  onDestroyWorkspace(activeWorkspace);
-                }}
-              >
-                <Trash2 size={14} strokeWidth={2} />
-                <span>Destroy workspace</span>
-              </button>
-            </PopoverContent>
-          </Popover>
-          <IconButton
-            aria-label="Toggle extension panel"
-            onClick={() => {
-              window.dispatchEvent(new CustomEvent("lifecycle:toggle-extension-panel"));
-            }}
-            title="Toggle extension panel"
-          >
-            <PanelRight size={16} strokeWidth={2} />
-          </IconButton>
-        </div>
-      ) : null}
+      <div className="flex shrink-0 items-center gap-1 pl-1 pr-2">
+        <IconButton
+          aria-label="Feedback"
+          onClick={() => void openUrl(bugs.url)}
+          title="Feedback"
+        >
+          <Megaphone size={14} strokeWidth={2} />
+        </IconButton>
+        <IconButton
+          aria-label="Settings"
+          onClick={onOpenSettings}
+          title="Settings"
+        >
+          <Settings size={14} strokeWidth={2} />
+        </IconButton>
+        <IconButton
+          aria-label="Toggle extension panel"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent("lifecycle:toggle-extension-panel"));
+          }}
+          title="Toggle extension panel"
+        >
+          {extensionPanelCollapsed ? (
+            <PanelRightOpen size={16} strokeWidth={2} />
+          ) : (
+            <PanelRightClose size={16} strokeWidth={2} />
+          )}
+        </IconButton>
+      </div>
     </header>
   );
 }

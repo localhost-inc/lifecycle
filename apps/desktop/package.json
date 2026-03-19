@@ -5,7 +5,7 @@
   "description": "Lifecycle desktop shell for local-first workspace operations.",
   "homepage": "https://github.com/localhost-inc/lifecycle",
   "bugs": {
-    "url": "https://github.com/localhost-inc/lifecycle/issues"
+    "url": "https://github.com/localhost-inc/lifecycle-releases/issues"
   },
   "license": "SEE LICENSE IN LICENSE",
   "repository": {

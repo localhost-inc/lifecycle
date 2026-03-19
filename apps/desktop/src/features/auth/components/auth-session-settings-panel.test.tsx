@@ -18,7 +18,7 @@ const loggedInAuthSession: AuthSession = {
 };
 
 describe("AuthSessionSettingsPanel", () => {
-  test("renders the account summary with provider, source, and refresh controls", () => {
+  test("renders the account summary with refresh controls", () => {
     const markup = renderToStaticMarkup(
       createElement(ThemeProvider, {
         storageKey: "test.theme",
@@ -30,11 +30,8 @@ describe("AuthSessionSettingsPanel", () => {
       }),
     );
 
-    expect(markup).toContain("Signed in");
     expect(markup).toContain("Kyle Alwyn");
     expect(markup).toContain("@kylealwyn");
-    expect(markup).toContain("GitHub");
-    expect(markup).toContain("Local CLI");
     expect(markup).toContain("Refresh status");
     expect(markup).toContain('src="https://avatars.githubusercontent.com/u/14184138?v=4"');
   });

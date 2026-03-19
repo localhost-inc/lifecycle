@@ -293,12 +293,6 @@ export function EnvironmentPanel({
   if (isIdle && !hasManifest) {
     return (
       <section className="relative flex h-full min-h-0 flex-col">
-        <div className="shrink-0 px-3 pt-3 pb-2">
-          <div className="flex items-center gap-2">
-            <span className={`inline-block size-[7px] shrink-0 rounded-full ${statusDotClass}`} />
-            <span className="text-[13px] font-medium text-[var(--foreground)]">{statusLabel}</span>
-          </div>
-        </div>
         <div className="flex flex-1 items-center justify-center px-6">
           <p className="text-center text-[12px] leading-relaxed text-[var(--muted-foreground)]">
             Add a{" "}
@@ -316,13 +310,6 @@ export function EnvironmentPanel({
   if (isIdle && hasManifest) {
     return (
       <section className="relative flex h-full min-h-0 flex-col">
-        <div className="shrink-0 px-3 pt-3 pb-2">
-          <div className="flex items-center gap-2">
-            <span className={`inline-block size-[7px] shrink-0 rounded-full ${statusDotClass}`} />
-            <span className="text-[13px] font-medium text-[var(--foreground)]">{statusLabel}</span>
-          </div>
-        </div>
-
         {/* Boot sequence preview — collapsed, showing what will run */}
         {bootStepItems.length > 0 && (
           <div className="shrink-0 px-3 pt-1">
@@ -497,42 +484,44 @@ export function EnvironmentPanel({
   // Starting / Stopping / Active — full view with boot sequence and logs
   return (
     <section className="relative flex h-full min-h-0 flex-col">
-      {/* Status header */}
-      <div className="shrink-0 px-3 pt-3 pb-2">
-        <div className="flex items-center gap-2">
-          <span className={`inline-block size-[7px] shrink-0 rounded-full ${statusDotClass}`} />
-          <span className="text-[13px] font-medium text-[var(--foreground)]">{statusLabel}</span>
-        </div>
-
-        {/* Alerts — only contextual ones during active/booting */}
-        {((isActive && isManifestStale) ||
-          (isActive && manifestState === "invalid") ||
-          actionError) && (
-          <div className="mt-2.5 flex flex-col gap-2">
-            {isActive && isManifestStale && (
-              <Alert>
-                <AlertDescription>
-                  Manifest changed. Stop and start again to apply environment updates.
-                </AlertDescription>
-              </Alert>
-            )}
-            {isActive && manifestState === "invalid" && (
-              <Alert variant="destructive">
-                <AlertTriangle className="size-4" />
-                <AlertDescription>
-                  lifecycle.json is invalid. Current services keep running until you stop them.
-                </AlertDescription>
-              </Alert>
-            )}
-            {actionError && (
-              <Alert variant="destructive">
-                <AlertTriangle className="size-4" />
-                <AlertDescription>{actionError}</AlertDescription>
-              </Alert>
-            )}
+      {/* Status header — only show during boot/stop, not when active */}
+      {!isActive && (
+        <div className="shrink-0 px-3 pt-3 pb-2">
+          <div className="flex items-center gap-2">
+            <span className={`inline-block size-[7px] shrink-0 rounded-full ${statusDotClass}`} />
+            <span className="text-[13px] font-medium text-[var(--foreground)]">{statusLabel}</span>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Alerts — only contextual ones during active/booting */}
+      {((isActive && isManifestStale) ||
+        (isActive && manifestState === "invalid") ||
+        actionError) && (
+        <div className="shrink-0 px-3 pt-2 pb-1 flex flex-col gap-2">
+          {isActive && isManifestStale && (
+            <Alert>
+              <AlertDescription>
+                Manifest changed. Stop and start again to apply environment updates.
+              </AlertDescription>
+            </Alert>
+          )}
+          {isActive && manifestState === "invalid" && (
+            <Alert variant="destructive">
+              <AlertTriangle className="size-4" />
+              <AlertDescription>
+                lifecycle.json is invalid. Current services keep running until you stop them.
+              </AlertDescription>
+            </Alert>
+          )}
+          {actionError && (
+            <Alert variant="destructive">
+              <AlertTriangle className="size-4" />
+              <AlertDescription>{actionError}</AlertDescription>
+            </Alert>
+          )}
+        </div>
+      )}
 
       {/* Scrollable body */}
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">

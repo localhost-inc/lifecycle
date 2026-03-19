@@ -169,16 +169,17 @@ export function GitActionBar({
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center px-2.5 pb-2.5">
-      <AnimatePresence initial={false}>
-        {expanded && (
+      <AnimatePresence initial={false} mode="popLayout">
+        {expanded ? (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ type: "spring", duration: 0.3, bounce: 0.05 }}
-            className="pointer-events-auto w-full overflow-hidden"
+            key="panel"
+            initial={{ opacity: 0, y: 12, scale: 0.97, filter: "blur(4px)" }}
+            animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+            exit={{ opacity: 0, y: 12, scale: 0.97, filter: "blur(4px)" }}
+            transition={{ type: "spring", duration: 0.35, bounce: 0 }}
+            className="pointer-events-auto w-full"
           >
-            <div className="space-y-3 rounded-2xl border border-[var(--border)]/50 bg-[var(--background)]/80 p-3.5 shadow-lg backdrop-blur-xl">
+            <div className="space-y-3 rounded-2xl border border-[var(--border)]/50 bg-[var(--background)] p-3.5 shadow-lg">
               <p className="text-[13px] font-semibold text-[var(--foreground)]">
                 {actionState.title}
               </p>
@@ -313,16 +314,21 @@ export function GitActionBar({
               </div>
             </div>
           </motion.div>
+        ) : (
+          <motion.div
+            key="bar"
+            initial={{ opacity: 0, y: -8, scale: 0.95, filter: "blur(4px)" }}
+            animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+            exit={{ opacity: 0, y: -8, scale: 0.95, filter: "blur(4px)" }}
+            transition={{ type: "spring", duration: 0.35, bounce: 0 }}
+            className="pointer-events-auto flex justify-center pb-1"
+          >
+            <Button className="px-8" disabled={isBusy} onClick={handleBarClick} size="lg" variant="glass">
+              {actionState.primaryAction.label}
+            </Button>
+          </motion.div>
         )}
       </AnimatePresence>
-
-      {!expanded && (
-        <div className="pointer-events-auto flex justify-center pb-1">
-          <Button className="px-8" disabled={isBusy} onClick={handleBarClick} size="lg" variant="glass">
-            {actionState.primaryAction.label}
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

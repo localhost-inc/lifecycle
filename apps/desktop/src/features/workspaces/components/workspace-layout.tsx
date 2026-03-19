@@ -439,6 +439,14 @@ export function WorkspaceLayout({
     return () => window.removeEventListener("lifecycle:toggle-extension-panel", handleTogglePanel);
   }, []);
 
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("lifecycle:extension-panel-state", {
+        detail: { collapsed: panelCollapsed },
+      }),
+    );
+  }, [panelCollapsed]);
+
   const canvasContent = supportsTerminalInteraction ? (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1 flex-col">

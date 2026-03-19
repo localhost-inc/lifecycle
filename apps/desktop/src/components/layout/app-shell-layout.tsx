@@ -686,6 +686,7 @@ export function AppShellLayout() {
             collapsed={sidebarCollapsed}
             onAddProject={handleAddProject}
             onOpenSettings={handleOpenSettings}
+            onRemoveProject={handleRemoveProject}
             onToggleCollapse={handleToggleSidebar}
             projects={projects}
             readyProjectIds={readyProjectIds}

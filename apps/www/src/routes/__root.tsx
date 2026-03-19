@@ -7,11 +7,11 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lifecycle — One file. Every environment." },
+      { title: "Lifecycle — Where teams and agents collaborate on code." },
       {
         name: "description",
         content:
-          "Lifecycle turns a lifecycle.json in your repo into a running workspace — services, databases, tasks, health checks — all from a native desktop app.",
+          "Native desktop app for running, sharing, and collaborating on development environments. One manifest in your repo. Local-first — no accounts required.",
       },
     ],
     links: [{ rel: "stylesheet", href: appCss }],
@@ -20,10 +20,13 @@ export const Route = createRootRoute({
   shellComponent: RootDocument,
 });
 
+const themeScript = `(function(){try{var m=window.matchMedia("(prefers-color-scheme:dark)");document.documentElement.setAttribute("data-theme",m.matches?"dark":"light");m.addEventListener("change",function(e){document.documentElement.setAttribute("data-theme",e.matches?"dark":"light")})}catch(e){}})()`;
+
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="dark">
+    <html lang="en">
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <HeadContent />
       </head>
       <body>

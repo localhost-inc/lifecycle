@@ -414,14 +414,16 @@ export function ServiceRow({
             <div ref={logContainerRef} style={logHeight !== null ? { height: logHeight } : undefined}>
               {hasLogs
                 ? <ServiceLogBody height={logHeight} lines={logLines!} />
-                : <div className="bg-[var(--background)] px-3 py-3 text-xs text-[var(--muted-foreground)]/60">No output yet</div>
+                : <div className="bg-[var(--background)] px-3 py-2 text-xs text-[var(--muted-foreground)]/60">No output yet</div>
               }
             </div>
-            {/* biome-ignore lint: resize handle */}
-            <div
-              className="h-1.5 cursor-row-resize border-b border-[var(--border)] bg-[var(--surface)] transition-colors hover:bg-[var(--muted-foreground)]/15 active:bg-[var(--muted-foreground)]/25"
-              {...resizeHandleProps}
-            />
+            {hasLogs && (
+              /* biome-ignore lint: resize handle */
+              <div
+                className="h-1.5 cursor-row-resize border-b border-[var(--border)] bg-[var(--surface)] transition-colors hover:bg-[var(--muted-foreground)]/15 active:bg-[var(--muted-foreground)]/25"
+                {...resizeHandleProps}
+              />
+            )}
           </div>
         </div>
       )}

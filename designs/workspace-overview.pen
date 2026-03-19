@@ -1,0 +1,334 @@
+{
+  "name": "Workspace Overview",
+  "version": "1",
+  "meta": {
+    "author": "kyle",
+    "created": "2026-03-18T00:00:00Z"
+  },
+  "canvas": {
+    "width": 1440,
+    "height": 900,
+    "background": "#0a0a0b"
+  },
+  "nodes": [
+    {
+      "id": "header-bar",
+      "type": "frame",
+      "x": 0,
+      "y": 0,
+      "width": 1440,
+      "height": 48,
+      "fill": "#111113",
+      "children": [
+        {
+          "id": "header-title",
+          "type": "text",
+          "x": 16,
+          "y": 14,
+          "content": "my-project",
+          "fontSize": 13,
+          "fontWeight": 600,
+          "fill": "#e4e4e7"
+        },
+        {
+          "id": "header-branch",
+          "type": "text",
+          "x": 120,
+          "y": 14,
+          "content": "main",
+          "fontSize": 12,
+          "fontWeight": 400,
+          "fill": "#71717a"
+        },
+        {
+          "id": "header-actions",
+          "type": "group",
+          "x": 1280,
+          "y": 8,
+          "children": [
+            {
+              "id": "btn-feedback",
+              "type": "icon",
+              "x": 0,
+              "y": 0,
+              "icon": "megaphone",
+              "size": 14
+            },
+            {
+              "id": "btn-settings",
+              "type": "icon",
+              "x": 32,
+              "y": 0,
+              "icon": "settings",
+              "size": 14
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sidebar",
+      "type": "frame",
+      "x": 0,
+      "y": 48,
+      "width": 240,
+      "height": 852,
+      "fill": "#09090b",
+      "children": [
+        {
+          "id": "sidebar-section-env",
+          "type": "group",
+          "x": 12,
+          "y": 12,
+          "children": [
+            {
+              "id": "env-heading",
+              "type": "text",
+              "x": 0,
+              "y": 0,
+              "content": "Environment",
+              "fontSize": 11,
+              "fontWeight": 500,
+              "fill": "#a1a1aa",
+              "letterSpacing": 0.05
+            },
+            {
+              "id": "env-node",
+              "type": "badge",
+              "x": 0,
+              "y": 24,
+              "label": "Node 22.x",
+              "variant": "muted"
+            },
+            {
+              "id": "env-bun",
+              "type": "badge",
+              "x": 80,
+              "y": 24,
+              "label": "Bun 1.2",
+              "variant": "muted"
+            }
+          ]
+        },
+        {
+          "id": "sidebar-section-services",
+          "type": "group",
+          "x": 12,
+          "y": 80,
+          "children": [
+            {
+              "id": "services-heading",
+              "type": "text",
+              "x": 0,
+              "y": 0,
+              "content": "Services",
+              "fontSize": 11,
+              "fontWeight": 500,
+              "fill": "#a1a1aa",
+              "letterSpacing": 0.05
+            },
+            {
+              "id": "svc-api",
+              "type": "service-row",
+              "x": 0,
+              "y": 24,
+              "label": "api",
+              "port": 4000,
+              "status": "running"
+            },
+            {
+              "id": "svc-web",
+              "type": "service-row",
+              "x": 0,
+              "y": 56,
+              "label": "web",
+              "port": 3000,
+              "status": "running"
+            },
+            {
+              "id": "svc-worker",
+              "type": "service-row",
+              "x": 0,
+              "y": 88,
+              "label": "worker",
+              "port": null,
+              "status": "idle"
+            }
+          ]
+        },
+        {
+          "id": "sidebar-section-files",
+          "type": "group",
+          "x": 12,
+          "y": 220,
+          "children": [
+            {
+              "id": "files-heading",
+              "type": "text",
+              "x": 0,
+              "y": 0,
+              "content": "Files",
+              "fontSize": 11,
+              "fontWeight": 500,
+              "fill": "#a1a1aa",
+              "letterSpacing": 0.05
+            },
+            {
+              "id": "file-lifecycle",
+              "type": "file-row",
+              "x": 0,
+              "y": 24,
+              "label": "lifecycle.json",
+              "icon": "file-json"
+            },
+            {
+              "id": "file-readme",
+              "type": "file-row",
+              "x": 0,
+              "y": 48,
+              "label": "README.md",
+              "icon": "file-text"
+            },
+            {
+              "id": "file-design",
+              "type": "file-row",
+              "x": 0,
+              "y": 72,
+              "label": "workspace-overview.pen",
+              "icon": "pencil-ruler"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "main-canvas",
+      "type": "frame",
+      "x": 240,
+      "y": 48,
+      "width": 1200,
+      "height": 852,
+      "fill": "#0a0a0b",
+      "children": [
+        {
+          "id": "terminal-surface",
+          "type": "frame",
+          "x": 0,
+          "y": 0,
+          "width": 1200,
+          "height": 500,
+          "fill": "#000000",
+          "cornerRadius": 0,
+          "children": [
+            {
+              "id": "terminal-tab-bar",
+              "type": "group",
+              "x": 0,
+              "y": 0,
+              "children": [
+                {
+                  "id": "tab-api",
+                  "type": "tab",
+                  "x": 0,
+                  "y": 0,
+                  "label": "api",
+                  "active": true
+                },
+                {
+                  "id": "tab-web",
+                  "type": "tab",
+                  "x": 80,
+                  "y": 0,
+                  "label": "web",
+                  "active": false
+                }
+              ]
+            },
+            {
+              "id": "terminal-output",
+              "type": "text",
+              "x": 12,
+              "y": 36,
+              "content": "$ bun run dev\n[api] listening on :4000\n[api] connected to postgres\n[api] ready in 240ms",
+              "fontSize": 13,
+              "fontFamily": "monospace",
+              "fill": "#d4d4d8",
+              "lineHeight": 1.6
+            }
+          ]
+        },
+        {
+          "id": "preview-surface",
+          "type": "frame",
+          "x": 0,
+          "y": 500,
+          "width": 1200,
+          "height": 352,
+          "fill": "#111113",
+          "children": [
+            {
+              "id": "preview-url-bar",
+              "type": "frame",
+              "x": 0,
+              "y": 0,
+              "width": 1200,
+              "height": 36,
+              "fill": "#18181b",
+              "children": [
+                {
+                  "id": "preview-url",
+                  "type": "text",
+                  "x": 12,
+                  "y": 10,
+                  "content": "localhost:3000",
+                  "fontSize": 12,
+                  "fontFamily": "monospace",
+                  "fill": "#71717a"
+                }
+              ]
+            },
+            {
+              "id": "preview-content",
+              "type": "placeholder",
+              "x": 0,
+              "y": 36,
+              "width": 1200,
+              "height": 316,
+              "label": "Web preview"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "status-bar",
+      "type": "frame",
+      "x": 0,
+      "y": 876,
+      "width": 1440,
+      "height": 24,
+      "fill": "#09090b",
+      "children": [
+        {
+          "id": "status-feedback",
+          "type": "text",
+          "x": 12,
+          "y": 5,
+          "content": "Feedback",
+          "fontSize": 11,
+          "fill": "#52525b"
+        },
+        {
+          "id": "status-version",
+          "type": "text",
+          "x": 1380,
+          "y": 5,
+          "content": "v0.1.0",
+          "fontSize": 11,
+          "fontFamily": "monospace",
+          "fill": "#3f3f46"
+        }
+      ]
+    }
+  ]
+}

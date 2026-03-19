@@ -1,5 +1,9 @@
-import { buttonVariants } from "@lifecycle/ui";
 import { highlight } from "sugar-high";
+
+const btnBase =
+  "inline-flex items-center justify-center rounded-xl text-sm font-semibold h-10 px-4 transition-colors duration-150";
+const btnPrimary = `${btnBase} bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90`;
+const btnSecondary = `${btnBase} border border-[var(--border)] bg-[var(--card)] text-[var(--muted-foreground)] hover:bg-[var(--surface-hover)] hover:text-[var(--foreground)]`;
 
 const manifestSnippet = `{
   "workspace": {
@@ -30,53 +34,116 @@ const manifestSnippet = `{
   }
 }`;
 
+const features = [
+  {
+    name: "Native terminal",
+    description:
+      "Built on libghostty. GPU-accelerated rendering with full keyboard and mouse support.",
+  },
+  {
+    name: "Split panes",
+    description:
+      "Horizontal and vertical splits. Terminals, files, logs, and previews side by side.",
+  },
+  {
+    name: "Service dependency graph",
+    description:
+      "Services and tasks boot in dependency order with health checks. Postgres before migrations before your dev server.",
+  },
+  {
+    name: "Live service logs",
+    description:
+      "Stream stdout and stderr from every service in your environment. Filter, search, and pin.",
+  },
+  {
+    name: "Git surface",
+    description:
+      "Branches, diffs, and pull requests without leaving the app. Stage, commit, and push from the sidebar.",
+  },
+  {
+    name: "Preview URLs",
+    description:
+      "Every service with a port gets a shareable preview URL. Hot-reloading included.",
+  },
+  {
+    name: "Agent sessions",
+    description:
+      "Any coding agent gets the same environment your team uses. Claude, Codex, or your own toolchain.",
+  },
+  {
+    name: "Local-first",
+    description:
+      "No sign-in required. Your machine, your state, your speed. Cloud is an upgrade, not a prerequisite.",
+  },
+  {
+    name: "Cloud fork",
+    description:
+      "Fork any local environment to cloud. Shared terminals, shareable URLs, and team visibility.",
+  },
+  {
+    name: "Open source",
+    description: "MIT licensed. Read the code, fork it, contribute.",
+  },
+];
+
 export function LandingPage() {
   return (
     <main className="pb-20 pt-8 sm:pt-16">
       {/* Hero */}
       <section>
         <h1 className="text-4xl font-semibold leading-[1.1] tracking-[-0.04em] text-[var(--foreground)] sm:text-5xl">
-          One file.
+          Where teams and agents
           <br />
-          Every environment.
-          <br />
-          <span className="text-[var(--muted-foreground)]">Always reproducible.</span>
+          <span className="text-[var(--muted-foreground)]">
+            collaborate on code.
+          </span>
         </h1>
 
         <p className="mt-6 max-w-md text-base leading-relaxed text-[var(--muted-foreground)]">
-          Your environment breaks every time it moves — new laptop, staging,
-          production. Lifecycle reads a{" "}
-          <code className="rounded-md bg-[var(--muted)] px-1.5 py-0.5 font-mono text-[0.9em] text-[var(--foreground)]">
-            lifecycle.json
-          </code>{" "}
-          from your repo and boots the whole stack in dependency order. Same file on
-          every machine. Same file in every stage. Native desktop app. No Docker
-          Compose. No accounts.
+          Lifecycle is a native desktop app for running, sharing, and
+          collaborating on development environments. One manifest in your repo.
+          Deterministic dependency graph. Local-first — no accounts required.
         </p>
 
         <div className="mt-8 flex flex-wrap gap-3">
-          <a
-            href="https://github.com/localhost-inc/lifecycle/releases"
-            className={buttonVariants({ size: "lg", variant: "primary" })}
-          >
+          <a href="https://github.com/localhost-inc/lifecycle/releases" className={btnPrimary}>
             Download for Mac
           </a>
-          <a
-            href="https://github.com/localhost-inc/lifecycle"
-            className={buttonVariants({ size: "lg", variant: "secondary" })}
-          >
+          <a href="https://github.com/localhost-inc/lifecycle" className={btnSecondary}>
             View source
           </a>
         </div>
       </section>
 
-      {/* How it works */}
+      {/* Features */}
       <section className="mt-24">
         <p className="font-mono text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-          How it works
+          Features
+        </p>
+        <ul className="mt-5 space-y-3">
+          {features.map((feature) => (
+            <li key={feature.name} className="text-sm leading-relaxed text-[var(--muted-foreground)]">
+              <span className="font-semibold text-[var(--foreground)]">
+                {feature.name}
+              </span>{" "}
+              — {feature.description}
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {/* Manifest */}
+      <section className="mt-24">
+        <p className="font-mono text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+          lifecycle.json
         </p>
         <p className="mt-1.5 text-sm leading-relaxed text-[var(--muted-foreground)]">
-          Commit this to your repo. Lifecycle does the rest.
+          Commit a{" "}
+          <code className="rounded-md bg-[var(--muted)] px-1.5 py-0.5 font-mono text-[0.9em] text-[var(--foreground)]">
+            lifecycle.json
+          </code>{" "}
+          to your repo. Lifecycle reads the dependency graph and boots your stack
+          in order.
         </p>
 
         <pre className="mt-5">
@@ -84,27 +151,21 @@ export function LandingPage() {
         </pre>
 
         <p className="mt-4 max-w-md text-sm leading-relaxed text-[var(--muted-foreground)]">
-          Postgres starts first. Migrations run after a healthy database. The dev
-          server waits for migrations. One file from your machine to production.
+          Services, tasks, health checks, dependency ordering. Process or
+          container runtime. No Docker Compose. No shell scripts.
         </p>
       </section>
 
       {/* CTA */}
-      <section className="mt-20 border-t border-[var(--border)] pt-8">
+      <section className="mt-24 border-t border-[var(--border)] pt-8">
         <h2 className="text-xl font-semibold tracking-[-0.02em] text-[var(--foreground)]">
-          Define your stack once. Run it everywhere.
+          Start quickly. Recover predictably. Share confidently.
         </h2>
         <div className="mt-5 flex flex-wrap gap-3">
-          <a
-            href="https://github.com/localhost-inc/lifecycle/releases"
-            className={buttonVariants({ size: "lg", variant: "primary" })}
-          >
+          <a href="https://github.com/localhost-inc/lifecycle/releases" className={btnPrimary}>
             Download for Mac
           </a>
-          <a
-            href="https://github.com/localhost-inc/lifecycle"
-            className={buttonVariants({ size: "lg", variant: "secondary" })}
-          >
+          <a href="https://github.com/localhost-inc/lifecycle" className={btnSecondary}>
             View source
           </a>
         </div>
