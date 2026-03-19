@@ -68,6 +68,8 @@ static const int32_t kLifecycleShortcutCloseActiveTab = 3;
 static const int32_t kLifecycleShortcutNewTab = 5;
 static const int32_t kLifecycleShortcutGoBack = 6;
 static const int32_t kLifecycleShortcutGoForward = 7;
+static const int32_t kLifecycleShortcutReopenClosedTab = 8;
+static const int32_t kLifecycleShortcutToggleZoom = 9;
 
 static void lifecycleWriteDiagnosticUTF8(const char *value, size_t length) {
   if (value == NULL || length == 0) {
@@ -817,6 +819,19 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
 
 - (NSView *)hitTest:(NSPoint)point {
   if (self.pointerPassthrough) {
+    // During a drag-and-drop operation we still need to accept drops even when
+    // pointer passthrough is active (terminal unfocused).  Detect an active drag
+    // by checking whether the left mouse button is held and the drag pasteboard
+    // contains file/image content we handle.
+    if (NSEvent.pressedMouseButtons & 1) {
+      NSPasteboard *dragPasteboard = [NSPasteboard pasteboardWithName:NSPasteboardNameDrag];
+      NSArray<NSPasteboardType> *types = dragPasteboard.types;
+      if ([types containsObject:NSPasteboardTypeFileURL] ||
+          [types containsObject:NSPasteboardTypeTIFF] ||
+          [types containsObject:NSPasteboardTypePNG]) {
+        return [super hitTest:point];
+      }
+    }
     return nil;
   }
 
@@ -1964,6 +1979,11 @@ static BOOL lifecycleNativeTerminalHandleWorkspaceShortcut(LifecycleNativeTermin
     return YES;
   }
 
+  if (hasShift && [charactersIgnoringModifiers isEqualToString:@"t"]) {
+    gWorkspaceShortcutCallback(view.terminalId.UTF8String, kLifecycleShortcutReopenClosedTab, 0);
+    return YES;
+  }
+
   if (!hasShift && [charactersIgnoringModifiers isEqualToString:@"w"]) {
     gWorkspaceShortcutCallback(view.terminalId.UTF8String, kLifecycleShortcutCloseActiveTab, 0);
     return YES;
@@ -1990,6 +2010,11 @@ static BOOL lifecycleNativeTerminalHandleWorkspaceShortcut(LifecycleNativeTermin
 
   if (!hasShift && [charactersIgnoringModifiers isEqualToString:@"]"]) {
     gWorkspaceShortcutCallback(view.terminalId.UTF8String, kLifecycleShortcutGoForward, 0);
+    return YES;
+  }
+
+  if (hasShift && [charactersIgnoringModifiers isEqualToString:@"\r"]) {
+    gWorkspaceShortcutCallback(view.terminalId.UTF8String, kLifecycleShortcutToggleZoom, 0);
     return YES;
   }
 

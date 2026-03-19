@@ -11,7 +11,6 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=native/lifecycle_native_terminal.m");
     println!("cargo:rerun-if-changed=native/lifecycle_native_platform.m");
-    println!("cargo:rerun-if-changed=native/lifecycle_native_overlay.m");
     println!("cargo:rerun-if-changed=../../../scripts/prepare-ghosttykit.sh");
     println!("cargo:rerun-if-changed=../../../vendor/ghostty.lock");
 
@@ -21,14 +20,6 @@ fn main() {
             .file("native/lifecycle_native_platform.m")
             .flag("-fobjc-arc")
             .compile("lifecycle_native_platform");
-
-        cc::Build::new()
-            .file("native/lifecycle_native_overlay.m")
-            .flag("-fobjc-arc")
-            .compile("lifecycle_native_overlay");
-
-        println!("cargo:rustc-link-lib=framework=AppKit");
-        println!("cargo:rustc-link-lib=framework=WebKit");
     }
 
     #[cfg(target_os = "macos")]

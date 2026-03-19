@@ -10,17 +10,33 @@ This file defines engineering execution standards for agents working in this rep
 
 ## Core References
 
-Use these as external contracts, without duplicating their full detail here:
-
 1. `README.md`
-2. `docs/vision.md`
-3. `docs/plan.md`
-4. `docs/VOCABULARY.md`
-5. `docs/reference/*.md`
-6. `docs/milestones/*.md`
-7. `docs/BRAND.md`
+2. `docs/plan.md` — milestone roadmap and status board
+3. `docs/milestones/*.md` — milestone specs (scope, contracts, test scenarios)
+4. `.skills/reference--*/SKILL.md` — canonical cross-milestone contracts (see Reference Skills below)
 
-When behavior changes and docs are now wrong, update docs in the same change.
+When behavior changes and docs are now wrong, update the corresponding skill or doc in the same change.
+
+## Reference Skills
+
+Load project reference docs as agent context using these skills. Each skill contains the full contract content inline — the skills ARE the docs.
+
+| Skill | Context |
+|---|---|
+| `/reference--brand` | Brand voice, visual identity, color, typography |
+| `/reference--design` | Component rules, surfaces, buttons, forms, motion |
+| `/reference--vocabulary` | Canonical product terminology |
+| `/reference--vision` | Product vision and strategy |
+| `/reference--testing` | Test job orchestration spec |
+| `/reference--workspace` | Workspace provider, canvas, surface, environment, files contracts |
+| `/reference--runtime` | Runtime domains, state machines, lifecycle.json, events |
+| `/reference--shell` | App shell v2 layout contract |
+| `/reference--native` | Native platform interop, compositor layering, overlay strategy |
+| `/reference--terminal` | Terminal harness, session lifecycle, log streaming, native surface sync |
+| `/reference--preview` | Local preview proxy, service routing, port assignment, URL contract |
+| `/reference--infra` | Convex API, migrations, errors, SLOs, tunnel, cloud terminal |
+
+Invoke the relevant skill before starting work that touches the corresponding domain. Skills live in `.skills/reference--*/SKILL.md` and are symlinked into `.claude/skills/` and `.codex/skills/`.
 
 ## Triage Router
 
@@ -57,9 +73,20 @@ Use this section to route work before implementation.
 
 ### Learning Capture Rules
 
-1. Record non-trivial implementation or architecture learnings in `docs/learnings`.
-2. Use dated files named `YYYY-MM-DD-short-title.md`.
-3. Include explicit milestone impact and follow-up actions in each learning note.
+1. When a learning describes stable current state or a durable contract, fold it into the appropriate reference skill (`.skills/reference--*/SKILL.md`) or create a new one. Do not leave it as a standalone learning.
+2. When a learning describes a reusable workflow or technique, propose it as a new skill in `.skills/`.
+3. Use `docs/learnings/` only for time-bound investigation notes, evaluation results, and decision records that are not yet ready to become reference docs.
+4. Use dated files named `YYYY-MM-DD-short-title.md` for learnings that do stay in the log.
+5. Periodically review `docs/learnings/` and graduate stable entries into references or archive historical ones.
+6. When graduating a learning, add a one-line header noting the skill it was folded into and the date (e.g. `> Graduated into /reference--native on 2026-03-18`).
+7. Skills should describe current shipped behavior, not planned or aspirational contracts.
+
+### Reference Skill Maintenance
+
+1. **When to update a skill** — when behavior ships that contradicts or extends a contract documented in the skill. Update the skill in the same change that ships the behavior.
+2. **When to create a new skill** — when 3+ learnings converge on a stable domain that has no existing skill. The domain should be non-obvious and actively iterated.
+3. **Graduation workflow** — read the learning, extract the durable contract, fold it into the appropriate skill, add a "graduated" note to the learning header. Keep the learning file for historical context.
+4. **Skill hygiene** — keep skills factual (what IS), not aspirational (what MIGHT BE). Remove milestone-specific follow-ups once the described behavior has shipped. Do not include investigation notes or evaluation details.
 
 ## Engineering Invariants
 

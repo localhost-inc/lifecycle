@@ -110,7 +110,7 @@ The desktop app icon source of truth lives at `apps/desktop/src-tauri/app-icon.s
 Regenerate the checked-in Tauri icon bundle with:
 
 ```bash
-bun --filter @lifecycle/desktop run icon:generate
+cd apps/desktop && bun run icon:generate
 ```
 
 This refreshes the generated files under `apps/desktop/src-tauri/icons`, which `apps/desktop/src-tauri/tauri.conf.json` uses for desktop bundling.

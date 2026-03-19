@@ -61,7 +61,7 @@ function RootLayout() {
 
       <Outlet />
 
-      <footer className="border-t border-[var(--border)] py-10 text-sm text-[var(--muted-foreground)]">
+      <footer className="border-t border-[var(--border)] py-8 text-sm text-[var(--muted-foreground)]">
         <div className="flex flex-wrap gap-5 font-mono text-xs uppercase tracking-[0.14em]">
           <a href="https://github.com/localhost-inc/lifecycle/tree/main/docs/reference/lifecycle-json.md" className="transition-colors hover:text-[var(--foreground)]">Manifest spec</a>
           <a href="https://github.com/localhost-inc/lifecycle/tree/main/docs/vision.md" className="transition-colors hover:text-[var(--foreground)]">Vision</a>

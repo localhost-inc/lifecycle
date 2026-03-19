@@ -301,7 +301,7 @@ export function AppSidebar({
 
         {/* Wordmark + version at bottom */}
         <div className="flex shrink-0 items-center px-4 pb-3 pt-1">
-          <Wordmark className="h-3 text-[var(--sidebar-muted-foreground)]" />
+          <Wordmark className="h-3 cursor-pointer text-[var(--sidebar-muted-foreground)]" onClick={() => openUrl("https://lifecycle.dev")} />
           <span className="ml-auto font-mono text-[11px] text-[var(--sidebar-muted-foreground)]">v{version}</span>
         </div>
       </div>

@@ -27,7 +27,7 @@ export interface WordmarkProps extends Omit<React.ComponentProps<"svg">, "childr
 function Wordmark({ className, ...props }: WordmarkProps) {
   return (
     <svg
-      className={cn("group cursor-default", className)}
+      className={cn("group cursor-default hover:text-[var(--accent)]", className)}
       viewBox="0 0 1129 241"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"

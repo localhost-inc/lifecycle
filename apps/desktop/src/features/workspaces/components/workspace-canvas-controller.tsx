@@ -203,6 +203,14 @@ export function useWorkspaceCanvasController({
   const activeTabKey = activePane ? (renderedActiveTabKeyByPaneId[activePane.id] ?? null) : null;
   const activeTerminalId =
     activeTabKey && isTerminalTabKey(activeTabKey) ? activeTabKey.slice("terminal:".length) : null;
+  const handleToggleZoom = useCallback(() => {
+    setZoomedTabKey((current) => {
+      if (current !== null) {
+        return null;
+      }
+      return activeTabKey;
+    });
+  }, [activeTabKey]);
   const renderedTerminalIdSetRef = useRef<Set<string>>(new Set());
   const paneIdsWaitingForSelectedTerminalTab = useMemo(
     () =>
@@ -723,6 +731,10 @@ export function useWorkspaceCanvasController({
         window.history.forward();
         return;
       }
+      if (event.action === "toggle-zoom") {
+        handleToggleZoom();
+        return;
+      }
 
       const action = toWorkspaceTabHotkeyAction(event);
       if (action) {
@@ -744,7 +756,7 @@ export function useWorkspaceCanvasController({
       disposed = true;
       unlisten?.();
     };
-  }, [activeTerminalId, handleWorkspaceTabHotkeyAction]);
+  }, [activeTerminalId, handleToggleZoom, handleWorkspaceTabHotkeyAction]);
 
   useEffect(() => {
     if (!isTauri()) {
@@ -885,15 +897,6 @@ export function useWorkspaceCanvasController({
     },
     [defaultNewTabLaunch, handleCreateTerminal],
   );
-
-  const handleToggleZoom = useCallback(() => {
-    setZoomedTabKey((current) => {
-      if (current !== null) {
-        return null;
-      }
-      return activeTabKey;
-    });
-  }, [activeTabKey]);
 
   const handleUnzoom = useCallback(() => {
     setZoomedTabKey(null);

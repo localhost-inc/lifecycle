@@ -2,9 +2,8 @@
 
 This document is the high-level delivery tracker for Lifecycle.
 
-Implementation detail lives in milestone specs:
-- `docs/milestones/*.md` for scope, contracts, architecture, and test scenarios
-- `docs/reference/*.md` for shared cross-milestone contracts
+Implementation detail lives in milestone specs (`docs/milestones/*.md`).
+Cross-milestone contracts live in reference skills (`.skills/reference--*/SKILL.md`).
 
 ## Doc Boundary (Important)
 
@@ -33,20 +32,20 @@ Those belong in milestone or reference docs.
 
 | Milestone | Status  | Depends On | Tracking Scope                                          | Detailed Spec |
 | --------- | ------- | ---------- | ------------------------------------------------------- | ------------- |
-| M0        | done    | none       | Monorepo/tooling baseline                               | [m0](./milestones/m0.md) |
-| M1        | done    | M0         | Desktop shell + project import + manifest validation    | [m1](./milestones/m1.md) |
-| M2        | done    | M1         | Local workspace create/start/health to `active`         | [m2](./milestones/m2.md) |
-| M3        | done    | M2         | Terminal and harness runtime in workspace               | [m3](./milestones/m3.md) |
-| M4        | in_progress | M3         | Run and control local workspace environments            | [m4](./milestones/m4.md) |
-| M5        | planned | M4         | First-class local CLI                                   | [m5](./milestones/m5.md) |
-| M6        | planned | M5         | Auth, cloud workspaces, previews, PR flow               | [m6](./milestones/m6.md) |
-| M7        | planned | M6         | Cloud lifecycle hardening (sleep/wake, TTL, quotas)     | [m7](./milestones/m7.md) |
+| M0        | done    | none       | Monorepo/tooling baseline                               | [0-monorepo-bootstrap](./milestones/0-monorepo-bootstrap.md) |
+| M1        | done    | M0         | Desktop shell + project import + manifest validation    | [1-desktop-shell](./milestones/1-desktop-shell.md) |
+| M2        | done    | M1         | Local workspace create/start/health to `active`         | [2-local-workspaces](./milestones/2-local-workspaces.md) |
+| M3        | done    | M2         | Terminal and harness runtime in workspace               | [3-terminal-runtime](./milestones/3-terminal-runtime.md) |
+| M4        | in_progress | M3         | Run and control local workspace environments            | [4-workspace-environments](./milestones/4-workspace-environments.md) |
+| M5        | planned | M4         | First-class local CLI                                   | [5-local-cli](./milestones/5-local-cli.md) |
+| M6        | planned | M5         | Auth, cloud workspaces, previews, PR flow               | [6-cloud-workspaces](./milestones/6-cloud-workspaces.md) |
+| M7        | planned | M6         | Cloud lifecycle hardening (sleep/wake, TTL, quotas)     | [7-cloud-hardening](./milestones/7-cloud-hardening.md) |
 
 ## Milestone Checklists (High-Level Only)
 
 ### M0 - Bun Monorepo Bootstrap
 
-Detail spec: [docs/milestones/m0.md](./milestones/m0.md)
+Detail spec: [0-monorepo-bootstrap](./milestones/0-monorepo-bootstrap.md)
 
 - [x] Monorepo structure and package boundaries established
 - [x] Shared tooling and quality gates are in place
@@ -55,7 +54,7 @@ Detail spec: [docs/milestones/m0.md](./milestones/m0.md)
 
 ### M1 - App Opens, Project Added, Config Visible
 
-Detail spec: [docs/milestones/m1.md](./milestones/m1.md)
+Detail spec: [1-desktop-shell](./milestones/1-desktop-shell.md)
 
 - [x] Tauri desktop shell is operational
 - [x] Add-project flow imports local repositories
@@ -64,7 +63,7 @@ Detail spec: [docs/milestones/m1.md](./milestones/m1.md)
 
 ### M2 - Local Workspace Reaches Active
 
-Detail spec: [docs/milestones/m2.md](./milestones/m2.md)
+Detail spec: [2-local-workspaces](./milestones/2-local-workspaces.md)
 
 - [x] Workspace + workspace-service entities are implemented
 - [x] Local provider create/start flow reaches `active`
@@ -73,7 +72,7 @@ Detail spec: [docs/milestones/m2.md](./milestones/m2.md)
 
 ### M3 - Terminal and Agent Runtime
 
-Detail spec: [docs/milestones/m3.md](./milestones/m3.md)
+Detail spec: [3-terminal-runtime](./milestones/3-terminal-runtime.md)
 
 - [x] Terminal entity and lifecycle states are implemented
 - [x] Local terminal architecture (native Ghostty desktop host) is operational
@@ -84,7 +83,7 @@ Detail spec: [docs/milestones/m3.md](./milestones/m3.md)
 
 ### M4 - Local Workspace Environments
 
-Detail spec: [docs/milestones/m4.md](./milestones/m4.md)
+Detail spec: [4-workspace-environments](./milestones/4-workspace-environments.md)
 
 - [ ] `run`, `reset`, `sleep`, `wake`, and `destroy` flows are complete for local mode
 - [ ] Local preview and service exposure controls are wired
@@ -95,7 +94,7 @@ Detail spec: [docs/milestones/m4.md](./milestones/m4.md)
 
 ### M5 - First-Class CLI (Local)
 
-Detail spec: [docs/milestones/m5.md](./milestones/m5.md)
+Detail spec: [5-local-cli](./milestones/5-local-cli.md)
 
 - [ ] CLI workspace context auto-detection is implemented
 - [ ] Status/logs/health/context observability commands are operational
@@ -105,7 +104,7 @@ Detail spec: [docs/milestones/m5.md](./milestones/m5.md)
 
 ### M6 - Auth, Cloud, Preview, and PR
 
-Detail spec: [docs/milestones/m6.md](./milestones/m6.md)
+Detail spec: [6-cloud-workspaces](./milestones/6-cloud-workspaces.md)
 
 - [ ] Auth and organization-aware cloud data flow are implemented
 - [ ] Repository linking and GitHub App integration are operational
@@ -116,7 +115,7 @@ Detail spec: [docs/milestones/m6.md](./milestones/m6.md)
 
 ### M7 - Cloud Lifecycle Production-Ready
 
-Detail spec: [docs/milestones/m7.md](./milestones/m7.md)
+Detail spec: [7-cloud-hardening](./milestones/7-cloud-hardening.md)
 
 - [ ] Cloud sleep/wake lifecycle is implemented with restore semantics
 - [ ] Cloud destroy guarantees cleanup and revocation
@@ -133,8 +132,8 @@ Backlog items are intentionally out of milestone sequencing and should not block
 
 - [ ] Canonical naming uses `workspace` across all layers
 - [ ] Commands, fact events, streams, hooks, and derived projections stay conceptually distinct across docs and code
-- [ ] Typed error model stays aligned with [docs/reference/errors.md](./reference/errors.md)
-- [ ] State transitions stay aligned with [docs/reference/state-machines.md](./reference/state-machines.md)
-- [ ] Event foundation and command hooks stay aligned with [docs/reference/events.md](./reference/events.md)
-- [x] Provider boundaries stay aligned with [docs/reference/workspace-provider.md](./reference/workspace-provider.md)
-- [ ] Reliability targets stay aligned with [docs/reference/slos.md](./reference/slos.md)
+- [ ] Typed error model stays aligned with `/reference--infra`
+- [ ] State transitions stay aligned with `/reference--runtime`
+- [ ] Event foundation and command hooks stay aligned with `/reference--runtime`
+- [x] Provider boundaries stay aligned with `/reference--workspace`
+- [ ] Reliability targets stay aligned with `/reference--infra`

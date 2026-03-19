@@ -35,17 +35,17 @@ pre {
   margin: 0;
   overflow-x: auto;
   border: 1px solid var(--border);
-  border-radius: var(--radius-3xl);
+  border-radius: var(--radius-xl);
   background: color-mix(in srgb, var(--surface) 94%, var(--background));
-  padding: 1.5rem;
+  padding: 1.25rem 1.5rem;
   font-family: var(--font-mono);
   font-size: 13px;
-  line-height: 1.75;
-  color: var(--foreground);
+  line-height: 1.7;
+  color: var(--muted-foreground);
   --sh-sign: var(--muted-foreground);
-  --sh-string: #e8b87a;
-  --sh-class: #c4b5fd;
-  --sh-keyword: #c4b5fd;
+  --sh-string: #d4a87a;
+  --sh-class: var(--foreground);
+  --sh-keyword: var(--foreground);
   --sh-identifier: var(--foreground);
   --sh-space: transparent;
 }

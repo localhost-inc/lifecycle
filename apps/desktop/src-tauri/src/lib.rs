@@ -3,7 +3,6 @@ mod platform;
 mod shared;
 
 use crate::platform::db::{cleanup_for_exit, run_migrations, DbPath};
-use crate::platform::native_overlay;
 use crate::platform::native_terminal;
 use crate::platform::runtime::supervisor::Supervisor;
 #[cfg(target_os = "macos")]
@@ -126,12 +125,6 @@ pub fn run() {
             if native_terminal::is_available() {
                 native_terminal::initialize(app.handle().clone(), db_path_str.clone())
                     .expect("failed to initialize native terminal runtime");
-            }
-
-            if native_overlay::is_available() {
-                if let Err(error) = native_overlay::initialize(app.handle()) {
-                    crate::platform::diagnostics::append_error("native-overlay", error);
-                }
             }
 
             #[cfg(target_os = "macos")]

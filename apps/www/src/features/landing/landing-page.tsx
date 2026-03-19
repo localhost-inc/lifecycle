@@ -32,7 +32,7 @@ const manifestSnippet = `{
 
 export function LandingPage() {
   return (
-    <main className="pb-24 pt-12 sm:pt-20">
+    <main className="pb-20 pt-8 sm:pt-16">
       {/* Hero */}
       <section>
         <h1 className="text-4xl font-semibold leading-[1.1] tracking-[-0.04em] text-[var(--foreground)] sm:text-5xl">
@@ -43,15 +43,15 @@ export function LandingPage() {
           <span className="text-[var(--muted-foreground)]">Always reproducible.</span>
         </h1>
 
-        <p className="mt-5 max-w-lg text-lg leading-relaxed text-[var(--muted-foreground)]">
-          Your environments shouldn&apos;t be a wiki page and forty minutes of tribal
-          knowledge. Lifecycle reads a{" "}
+        <p className="mt-6 max-w-md text-base leading-relaxed text-[var(--muted-foreground)]">
+          Your environment breaks every time it moves — new laptop, staging,
+          production. Lifecycle reads a{" "}
           <code className="rounded-md bg-[var(--muted)] px-1.5 py-0.5 font-mono text-[0.9em] text-[var(--foreground)]">
             lifecycle.json
           </code>{" "}
-          from your repo and boots the whole thing — services, databases, health
-          checks — in dependency order. Same file from dev to production. No Docker
-          Compose. No accounts. A native desktop app.
+          from your repo and boots the whole stack in dependency order. Same file on
+          every machine. Same file in every stage. Native desktop app. No Docker
+          Compose. No accounts.
         </p>
 
         <div className="mt-8 flex flex-wrap gap-3">
@@ -75,7 +75,7 @@ export function LandingPage() {
         <p className="font-mono text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
           How it works
         </p>
-        <p className="mt-1.5 text-base leading-relaxed text-[var(--muted-foreground)]">
+        <p className="mt-1.5 text-sm leading-relaxed text-[var(--muted-foreground)]">
           Commit this to your repo. Lifecycle does the rest.
         </p>
 
@@ -83,18 +83,18 @@ export function LandingPage() {
           <code dangerouslySetInnerHTML={{ __html: highlight(manifestSnippet) }} />
         </pre>
 
-        <p className="mt-5 max-w-lg text-sm leading-relaxed text-[var(--muted-foreground)]">
-          Postgres boots. Migrations wait for a healthy database. The dev server waits
-          for migrations. Dev, staging, production — same file, same result.
+        <p className="mt-4 max-w-md text-sm leading-relaxed text-[var(--muted-foreground)]">
+          Postgres starts first. Migrations run after a healthy database. The dev
+          server waits for migrations. One file from your machine to production.
         </p>
       </section>
 
       {/* CTA */}
-      <section className="mt-24 border-t border-[var(--border)] pt-10">
-        <h2 className="text-2xl font-semibold tracking-[-0.03em] text-[var(--foreground)]">
-          The whole lifecycle. One file.
+      <section className="mt-20 border-t border-[var(--border)] pt-8">
+        <h2 className="text-xl font-semibold tracking-[-0.02em] text-[var(--foreground)]">
+          Define your stack once. Run it everywhere.
         </h2>
-        <div className="mt-6 flex flex-wrap gap-3">
+        <div className="mt-5 flex flex-wrap gap-3">
           <a
             href="https://github.com/localhost-inc/lifecycle/releases"
             className={buttonVariants({ size: "lg", variant: "primary" })}

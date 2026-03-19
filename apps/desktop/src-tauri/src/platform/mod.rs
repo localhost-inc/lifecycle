@@ -3,7 +3,6 @@ pub mod db;
 pub mod diagnostics;
 pub mod git;
 pub mod lifecycle_root;
-pub mod native_overlay;
 pub mod native_terminal;
 pub mod preview_proxy;
 pub mod runtime;

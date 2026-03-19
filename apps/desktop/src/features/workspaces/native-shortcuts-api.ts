@@ -7,7 +7,9 @@ export type WorkspaceShortcutAction =
   | "go-forward"
   | "new-tab"
   | "next-tab"
-  | "previous-tab";
+  | "previous-tab"
+  | "reopen-closed-tab"
+  | "toggle-zoom";
 
 export interface WorkspaceShortcutEvent {
   action: WorkspaceShortcutAction;

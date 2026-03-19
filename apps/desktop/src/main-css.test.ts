@@ -8,11 +8,4 @@ describe("main.css", () => {
     expect(css).toContain('@import "tailwindcss";');
     expect(css).toContain('@source "../../../packages/ui/src";');
   });
-
-  test("keeps the overlay surface transparent", () => {
-    const css = readFileSync(new URL("./main.css", import.meta.url), "utf8");
-
-    expect(css).toContain('html[data-surface="overlay"]');
-    expect(css).toContain("background: transparent !important;");
-  });
 });

@@ -3,7 +3,7 @@ name: release
 on:
   push:
     tags:
-      - "v*"
+      - "lifecycle@*"
   workflow_dispatch:
 
 jobs:
@@ -68,8 +68,8 @@ jobs:
         with:
           projectPath: apps/desktop
           tauriScript: bunx tauri
-          tagName: v__VERSION__
-          releaseName: "Lifecycle v__VERSION__"
+          tagName: lifecycle@__VERSION__
+          releaseName: lifecycle@__VERSION__
           releaseBody: "See the assets below to download and install this version."
           releaseCommitish: main
           releaseDraft: false

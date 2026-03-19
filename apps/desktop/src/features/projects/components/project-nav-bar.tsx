@@ -236,7 +236,7 @@ export function ProjectNavBar({
       {/* Actions outlet (run, git) + overflow actions */}
       {actionsOutlet}
       {activeWorkspace ? (
-        <div className="flex shrink-0 items-center gap-1 pl-1">
+        <div className="flex shrink-0 items-center gap-1 pl-1 pr-2">
           <Popover onOpenChange={setOverflowOpen} open={overflowOpen}>
             <PopoverTrigger asChild>
               <IconButton aria-label="More workspace actions" title="More workspace actions">

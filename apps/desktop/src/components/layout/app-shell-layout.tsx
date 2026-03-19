@@ -589,11 +589,11 @@ export function AppShellLayout() {
   const handleSelectProjectIndex = useCallback(
     (index: number) => {
       const target = index <= projects.length ? projects[index - 1] : projects[projects.length - 1];
-      if (target) {
+      if (target && target.id !== projectId) {
         void navigate(`/projects/${target.id}`);
       }
     },
-    [navigate, projects],
+    [navigate, projectId, projects],
   );
 
   // Sync the native Project menu with the current project list (macOS).

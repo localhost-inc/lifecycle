@@ -64,6 +64,8 @@ const NATIVE_TERMINAL_SHORTCUT_CLOSE_ACTIVE_TAB: c_int = 3;
 const NATIVE_TERMINAL_SHORTCUT_NEW_TAB: c_int = 5;
 const NATIVE_TERMINAL_SHORTCUT_GO_BACK: c_int = 6;
 const NATIVE_TERMINAL_SHORTCUT_GO_FORWARD: c_int = 7;
+const NATIVE_TERMINAL_SHORTCUT_REOPEN_CLOSED_TAB: c_int = 8;
+const NATIVE_TERMINAL_SHORTCUT_TOGGLE_ZOOM: c_int = 9;
 
 unsafe extern "C" {
     fn lifecycle_native_terminal_initialize(
@@ -189,6 +191,8 @@ extern "C" fn native_workspace_shortcut_callback(
         NATIVE_TERMINAL_SHORTCUT_NEW_TAB => Some(("new-tab", None)),
         NATIVE_TERMINAL_SHORTCUT_GO_BACK => Some(("go-back", None)),
         NATIVE_TERMINAL_SHORTCUT_GO_FORWARD => Some(("go-forward", None)),
+        NATIVE_TERMINAL_SHORTCUT_REOPEN_CLOSED_TAB => Some(("reopen-closed-tab", None)),
+        NATIVE_TERMINAL_SHORTCUT_TOGGLE_ZOOM => Some(("toggle-zoom", None)),
         _ => None,
     }) else {
         return;

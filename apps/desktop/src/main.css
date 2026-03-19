@@ -25,14 +25,6 @@ body {
   border-color: var(--border);
 }
 
-html[data-surface="overlay"],
-html[data-surface="overlay"] body,
-html[data-surface="overlay"] #root {
-  background: transparent !important;
-}
-
-
-
 .terminal-host {
   background-color: var(--terminal-surface-background, var(--background));
   contain: paint;

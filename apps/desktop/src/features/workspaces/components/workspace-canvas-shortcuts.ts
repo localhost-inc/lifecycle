@@ -113,6 +113,8 @@ export function toWorkspaceTabHotkeyAction(
       return { kind: "next-tab" };
     case "previous-tab":
       return { kind: "previous-tab" };
+    case "reopen-closed-tab":
+      return { kind: "reopen-closed-tab" };
     default:
       return null;
   }
