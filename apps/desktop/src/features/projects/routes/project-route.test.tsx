@@ -131,6 +131,18 @@ describe("ProjectRoute", () => {
   });
 
   test("renders workspace overflow menu inside the nav bar for workspace routes", async () => {
+    const workspaceToolbarModule = await import("../../workspaces/state/workspace-toolbar-context");
+    spyOn(workspaceToolbarModule, "useWorkspaceToolbarSlot").mockReturnValue({
+      gitAction: null,
+      restartAction: { disabled: false, onClick: () => {} },
+      runAction: {
+        disabled: false,
+        label: "Stop",
+        loading: false,
+        onClick: () => {},
+      },
+    });
+
     const { ProjectRoute } = await import("./project-route");
 
     const markup = renderProjectRoute(
@@ -141,10 +153,10 @@ describe("ProjectRoute", () => {
 
     expect(markup).toContain('data-slot="project-nav-bar"');
     expect(markup).toContain('data-slot="workspace-layout"');
-    expect(markup).toContain('aria-label="More workspace actions"');
+    expect(markup).toContain('aria-label="Show run actions"');
 
     const navBarStart = markup.indexOf('data-slot="project-nav-bar"');
-    const overflowIndex = markup.indexOf('aria-label="More workspace actions"');
+    const overflowIndex = markup.indexOf('aria-label="Show run actions"');
     const workspaceStart = markup.indexOf('data-slot="workspace-layout"');
     expect(navBarStart).toBeLessThan(overflowIndex);
     expect(overflowIndex).toBeLessThan(workspaceStart);
@@ -155,7 +167,9 @@ describe("ProjectRoute", () => {
 
     const markup = renderProjectRoute(ProjectRoute);
 
-    expect(markup).not.toContain('class="flex shrink-0 items-center border-r border-[var(--border)]"');
+    expect(markup).not.toContain(
+      'class="flex shrink-0 items-center border-r border-[var(--border)]"',
+    );
   });
 
   test("renders response-ready indicators in the workspace nav link from shared readiness state", async () => {

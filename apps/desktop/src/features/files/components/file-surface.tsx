@@ -1,25 +1,13 @@
-import {
-  Alert,
-  AlertAction,
-  AlertDescription,
-  Badge,
-  Button,
-  EmptyState,
-  FloatingToggle,
-} from "@lifecycle/ui";
-import { ExternalLink, FileText, RefreshCcw, Save } from "lucide-react";
+import { Alert, AlertAction, AlertDescription, EmptyState, FloatingToggle } from "@lifecycle/ui";
+import { FileText } from "lucide-react";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   SHORTCUT_HANDLER_PRIORITY,
   useShortcutRegistration,
 } from "../../../app/shortcuts/shortcut-router";
-import {
-  workspaceFileBasename,
-  workspaceFileDirname,
-  workspaceFileExtension,
-} from "../../workspaces/lib/workspace-file-paths";
-import { openWorkspaceFile, writeWorkspaceFile } from "../../workspaces/api";
-import { useWorkspaceFile, useWorkspaceFileTree } from "../../workspaces/hooks";
+import { workspaceFileBasename } from "../../workspaces/lib/workspace-file-paths";
+import { writeWorkspaceFile } from "../../workspaces/api";
+import { useWorkspaceFile } from "../../workspaces/hooks";
 import { resolveFileEditorConfig } from "../lib/file-editor-config";
 import type { FileViewerMode } from "../lib/file-view-mode";
 import { isFileViewerDirty, type FileViewerSessionState } from "../lib/file-session";
@@ -31,7 +19,6 @@ import {
 } from "../lib/file-renderers";
 import { resolveFileRendererDefinition } from "../renderers/registry";
 import { FileCodeEditor } from "./file-code-editor";
-import { FileTree } from "./file-tree";
 
 interface FileSurfaceProps {
   filePath: string;
@@ -45,14 +32,6 @@ interface FileSurfaceProps {
   workspaceId: string;
 }
 
-function modeLabel(mode: FileViewerMode): string {
-  return mode === "view" ? "View" : "Edit";
-}
-
-function RendererBadge({ label }: { label: string }) {
-  return <Badge variant="outline">{label}</Badge>;
-}
-
 export function FileSurface({
   filePath,
   initialMode,
@@ -64,9 +43,7 @@ export function FileSurface({
   sessionState,
   workspaceId,
 }: FileSurfaceProps) {
-  const [openError, setOpenError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
   const [mode, setMode] = useState<FileViewerMode>(() =>
     resolveInitialFileViewerMode(filePath, initialMode),
   );
@@ -75,7 +52,6 @@ export function FileSurface({
   const modeSeedRef = useRef(`${filePath}:${initialMode ?? ""}`);
 
   const fileQuery = useWorkspaceFile(workspaceId, filePath);
-  const fileTreeQuery = useWorkspaceFileTree(workspaceId);
 
   const displayPath = fileQuery.data?.file_path ?? filePath;
   const renderer = resolveFileViewerRenderer(displayPath);
@@ -83,9 +59,6 @@ export function FileSurface({
   const supportsViewMode = supportsFileViewerViewMode(renderer);
   const effectiveMode = supportsViewMode ? mode : "edit";
   const editorConfig = resolveFileEditorConfig(displayPath, rendererDefinition.editor);
-  const fileName = workspaceFileBasename(displayPath);
-  const directoryName = workspaceFileDirname(displayPath);
-  const extension = fileQuery.data?.extension ?? workspaceFileExtension(displayPath);
   const textContent =
     fileQuery.data && !fileQuery.data.is_binary && !fileQuery.data.is_too_large
       ? (fileQuery.data.content ?? "")
@@ -189,16 +162,6 @@ export function FileSurface({
     restoredScrollKeyRef.current = restoreKey;
   }, [displayPath, effectiveMode, fileQuery.isLoading, initialScrollTop, renderer]);
 
-  const handleOpenExternally = async () => {
-    setOpenError(null);
-
-    try {
-      await openWorkspaceFile(workspaceId, displayPath);
-    } catch (error) {
-      setOpenError(error instanceof Error ? error.message : String(error));
-    }
-  };
-
   const handleSave = useCallback(async () => {
     if (textContent === null) {
       return;
@@ -214,7 +177,6 @@ export function FileSurface({
     }
 
     setSaveError(null);
-    setIsSaving(true);
 
     try {
       const result = await writeWorkspaceFile(workspaceId, displayPath, draftContent);
@@ -224,18 +186,15 @@ export function FileSurface({
         draftContent: nextContent,
         savedContent: nextContent,
       });
-      await Promise.all([fileQuery.refresh(), fileTreeQuery.refresh()]);
+      await fileQuery.refresh();
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setIsSaving(false);
     }
   }, [
     conflictDiskContent,
     displayPath,
     draftContent,
     fileQuery,
-    fileTreeQuery,
     onSessionStateChange,
     textContent,
     workspaceId,
@@ -263,7 +222,7 @@ export function FileSurface({
       return;
     }
 
-    await Promise.all([fileQuery.refresh(), fileTreeQuery.refresh()]);
+    await fileQuery.refresh();
   };
 
   const handleLoadDiskVersion = () => {
@@ -381,138 +340,56 @@ export function FileSurface({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 overflow-hidden bg-[var(--surface)]">
-      <FileTree
-        activeFilePath={displayPath}
-        entries={fileTreeQuery.data}
-        error={fileTreeQuery.error}
-        isLoading={fileTreeQuery.isLoading}
-        onOpenFile={onOpenFile}
-        onRefresh={() => {
-          void fileTreeQuery.refresh();
-        }}
-      />
-
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="border-b border-[var(--border)] px-4 py-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-                File Viewer
-              </p>
-              <h2 className="mt-2 truncate text-base font-semibold leading-snug text-[var(--foreground)]">
-                {fileName}
-              </h2>
-              <p className="mt-1.5 truncate text-xs text-[var(--muted-foreground)]">
-                {directoryName || "Workspace root"}
-              </p>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <RendererBadge label={rendererDefinition.label} />
-                <Badge variant="muted">{modeLabel(effectiveMode)}</Badge>
-                {extension ? <Badge variant="muted">.{extension}</Badge> : null}
-                {fileQuery.data ? (
-                  <Badge variant="outline">
-                    {Intl.NumberFormat().format(fileQuery.data.byte_len)} bytes
-                  </Badge>
-                ) : null}
-                {isDirty ? <Badge variant="outline">Unsaved</Badge> : null}
-                {conflictDiskContent !== null ? (
-                  <Badge variant="outline">Disk Changed</Badge>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-              <Button
-                disabled={fileQuery.isLoading || fileQuery.data === null}
-                onClick={() => {
-                  void handleReload();
-                }}
-                size="sm"
-                variant="outline"
-              >
-                <RefreshCcw className="mr-2 h-3.5 w-3.5" />
-                {conflictDiskContent !== null ? "Check Disk" : isDirty ? "Revert" : "Reload"}
-              </Button>
-              {textContent !== null ? (
-                <Button
-                  disabled={!isDirty || isSaving}
-                  onClick={() => {
-                    void handleSave();
-                  }}
-                  size="sm"
-                  variant="outline"
-                >
-                  <Save className="mr-2 h-3.5 w-3.5" />
-                  {isSaving ? "Saving..." : "Save"}
-                </Button>
-              ) : null}
-              <Button onClick={() => void handleOpenExternally()} size="sm" variant="outline">
-                <ExternalLink className="mr-2 h-3.5 w-3.5" />
-                Open Externally
-              </Button>
-            </div>
-          </div>
-
-          {openError ? (
-            <Alert className="mt-3" variant="destructive">
-              <AlertDescription>{openError}</AlertDescription>
-            </Alert>
-          ) : null}
-          {saveError ? (
-            <Alert className="mt-3" variant="destructive">
-              <AlertDescription>{saveError}</AlertDescription>
-            </Alert>
-          ) : null}
-          {conflictDiskContent !== null ? (
-            <Alert className="mt-3" variant="destructive">
-              <AlertDescription>
-                This file changed on disk while you had unsaved edits open. Keep editing and save to
-                overwrite, or reload the newer disk version.
-              </AlertDescription>
-              <AlertAction onClick={handleLoadDiskVersion}>Load Disk Version</AlertAction>
-            </Alert>
-          ) : null}
-          {rendererDefinition.editNotice && effectiveMode === "edit" ? (
-            <Alert className="mt-3">
-              <AlertDescription>{rendererDefinition.editNotice}</AlertDescription>
-            </Alert>
-          ) : null}
-        </header>
-
-        <div
-          ref={viewportRef}
-          className={`relative min-h-0 flex-1 ${effectiveMode === "view" ? "overflow-auto" : "overflow-hidden"}`}
-          onScroll={(event) => {
-            handleViewportScroll(event.currentTarget.scrollTop);
-          }}
-        >
-          {content}
-          {supportsViewMode && textContent !== null ? (
-            <FloatingToggle
-              ariaLabel="File mode"
-              onValueChange={handleModeChange}
-              options={[
-                {
-                  ariaLabel: "View file",
-                  content: "View",
-                  itemClassName: "min-w-14 px-3 py-2",
-                  title: "View rendered file",
-                  value: "view",
-                },
-                {
-                  ariaLabel: "Edit file",
-                  content: "Edit",
-                  itemClassName: "min-w-14 px-3 py-2",
-                  title: "Edit file source",
-                  value: "edit",
-                },
-              ]}
-              value={effectiveMode}
-            />
-          ) : null}
-        </div>
-      </div>
+    <div
+      ref={viewportRef}
+      className={`relative flex min-h-0 flex-1 flex-col bg-[var(--surface)] ${effectiveMode === "view" ? "overflow-auto" : "overflow-hidden"}`}
+      onScroll={(event) => {
+        handleViewportScroll(event.currentTarget.scrollTop);
+      }}
+    >
+      {saveError ? (
+        <Alert className="m-2" variant="destructive">
+          <AlertDescription>{saveError}</AlertDescription>
+        </Alert>
+      ) : null}
+      {conflictDiskContent !== null ? (
+        <Alert className="m-2" variant="destructive">
+          <AlertDescription>
+            This file changed on disk while you had unsaved edits open. Keep editing and save to
+            overwrite, or reload the newer disk version.
+          </AlertDescription>
+          <AlertAction onClick={handleLoadDiskVersion}>Load Disk Version</AlertAction>
+        </Alert>
+      ) : null}
+      {rendererDefinition.editNotice && effectiveMode === "edit" ? (
+        <Alert className="m-2">
+          <AlertDescription>{rendererDefinition.editNotice}</AlertDescription>
+        </Alert>
+      ) : null}
+      {content}
+      {supportsViewMode && textContent !== null ? (
+        <FloatingToggle
+          ariaLabel="File mode"
+          onValueChange={handleModeChange}
+          options={[
+            {
+              ariaLabel: "View file",
+              content: "View",
+              itemClassName: "min-w-14 px-3 py-2",
+              title: "View rendered file",
+              value: "view",
+            },
+            {
+              ariaLabel: "Edit file",
+              content: "Edit",
+              itemClassName: "min-w-14 px-3 py-2",
+              title: "Edit file source",
+              value: "edit",
+            },
+          ]}
+          value={effectiveMode}
+        />
+      ) : null}
     </div>
   );
 }

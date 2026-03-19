@@ -4,14 +4,16 @@ import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import { rust } from "@codemirror/lang-rust";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { EditorView } from "@codemirror/view";
 import { xml } from "@codemirror/lang-xml";
+import { tags as t } from "@lezer/highlight";
 import { workspaceFileExtension } from "../../workspaces/lib/workspace-file-paths";
 import type { FileRendererEditorConfig, FileEditorConfig } from "./file-editor-types";
 
 function createBaseFileCodeEditorTheme() {
   return EditorView.theme({
-    "&": {
+    "&.cm-editor": {
       backgroundColor: "var(--surface)",
       color: "var(--foreground)",
       fontSize: "12px",
@@ -28,8 +30,8 @@ function createBaseFileCodeEditorTheme() {
       borderLeftColor: "var(--foreground)",
     },
     ".cm-gutters": {
-      backgroundColor: "var(--card)",
-      borderRight: "1px solid var(--border)",
+      backgroundColor: "var(--surface)",
+      borderRight: "none",
       color: "var(--muted-foreground)",
     },
     ".cm-activeLine": {
@@ -53,6 +55,22 @@ function createBaseFileCodeEditorTheme() {
 }
 
 const baseFileCodeEditorTheme = createBaseFileCodeEditorTheme();
+
+const fileCodeEditorHighlightStyle = HighlightStyle.define([
+  { tag: [t.comment, t.lineComment, t.blockComment], color: "var(--muted-foreground)" },
+  { tag: [t.string, t.special(t.string)], color: "var(--terminal-ansi-green)" },
+  { tag: [t.keyword, t.modifier, t.operatorKeyword], color: "var(--terminal-ansi-magenta)" },
+  { tag: [t.number, t.bool], color: "var(--terminal-ansi-yellow)" },
+  { tag: [t.propertyName, t.attributeName], color: "var(--terminal-ansi-blue)" },
+  { tag: [t.typeName, t.className, t.namespace], color: "var(--terminal-ansi-cyan)" },
+  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: "var(--terminal-ansi-yellow)" },
+  { tag: [t.definition(t.variableName)], color: "var(--terminal-ansi-bright-blue)" },
+  { tag: [t.operator, t.punctuation], color: "var(--muted-foreground)" },
+  { tag: [t.tagName], color: "var(--terminal-ansi-red)" },
+  { tag: [t.meta], color: "var(--terminal-ansi-bright-magenta)" },
+  { tag: [t.regexp], color: "var(--terminal-ansi-bright-red)" },
+  { tag: [t.atom], color: "var(--terminal-ansi-cyan)" },
+]);
 
 function resolveDefaultFileEditorConfig(filePath: string): FileEditorConfig {
   switch (workspaceFileExtension(filePath)) {
@@ -124,7 +142,11 @@ function resolveLanguageExtensions(language: FileEditorConfig["language"]) {
 }
 
 export function buildFileCodeEditorExtensions(config: FileEditorConfig) {
-  const extensions = [baseFileCodeEditorTheme, ...resolveLanguageExtensions(config.language)];
+  const extensions = [
+    baseFileCodeEditorTheme,
+    syntaxHighlighting(fileCodeEditorHighlightStyle),
+    ...resolveLanguageExtensions(config.language),
+  ];
 
   if (config.lineWrapping) {
     extensions.push(EditorView.lineWrapping);

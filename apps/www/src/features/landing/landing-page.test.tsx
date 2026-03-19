@@ -7,10 +7,11 @@ describe("LandingPage", () => {
   test("renders core messaging", () => {
     const markup = renderToStaticMarkup(createElement(LandingPage));
 
-    expect(markup).toContain("One file.");
-    expect(markup).toContain("Every environment.");
+    expect(markup).toContain("Where teams and agents");
+    expect(markup).toContain("collaborate on code.");
+    expect(markup).toContain("One manifest in your repo.");
     expect(markup).toContain("lifecycle.json");
-    expect(markup).toContain("How it works");
+    expect(markup).toContain("Features");
     expect(markup).toContain("Download for Mac");
   });
 });

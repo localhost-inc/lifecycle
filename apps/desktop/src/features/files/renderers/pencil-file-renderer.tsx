@@ -1,8 +1,194 @@
-import { Alert, AlertDescription, Badge } from "@lifecycle/ui";
-import { PencilRuler } from "lucide-react";
-import { useMemo } from "react";
-import { workspaceFileBasename } from "../../workspaces/lib/workspace-file-paths";
+import { Alert, AlertDescription } from "@lifecycle/ui";
+import type { CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FileRendererDefinition } from "./file-renderer-types";
+
+/* ------------------------------------------------------------------ */
+/* Types                                                               */
+/* ------------------------------------------------------------------ */
+
+interface PenNode {
+  id: string;
+  type: string;
+  name?: string;
+  enabled?: boolean;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  fill?: string;
+  cornerRadius?: number;
+  clipContent?: boolean;
+  opacity?: number;
+  rotation?: number;
+  layout?: "none" | "vertical" | "horizontal";
+  gap?: number;
+  padding?: number | [number, number, number, number];
+  alignItems?: string;
+  justifyContent?: string;
+  children?: PenNode[];
+  content?: string;
+  fontSize?: number;
+  fontWeight?: number;
+  fontFamily?: string;
+  letterSpacing?: number;
+  lineHeight?: number;
+}
+
+interface PenDocument {
+  version?: string;
+  children?: PenNode[];
+}
+
+/* ------------------------------------------------------------------ */
+/* Parsing                                                             */
+/* ------------------------------------------------------------------ */
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parsePenDocument(content: string): PenDocument | null {
+  try {
+    const parsed: unknown = JSON.parse(content);
+    if (!isRecord(parsed)) return null;
+    return parsed as PenDocument;
+  } catch {
+    return null;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Canvas bounds                                                       */
+/* ------------------------------------------------------------------ */
+
+function computeCanvasBounds(nodes: PenNode[]): { width: number; height: number } {
+  let maxRight = 0;
+  let maxBottom = 0;
+
+  for (const node of nodes) {
+    const right = (node.x ?? 0) + (node.width ?? 0);
+    const bottom = (node.y ?? 0) + (node.height ?? 0);
+    if (right > maxRight) maxRight = right;
+    if (bottom > maxBottom) maxBottom = bottom;
+  }
+
+  return { width: maxRight || 400, height: maxBottom || 300 };
+}
+
+/* ------------------------------------------------------------------ */
+/* Style resolvers                                                     */
+/* ------------------------------------------------------------------ */
+
+function resolvePadding(
+  padding: number | [number, number, number, number] | undefined,
+): string | undefined {
+  if (padding == null) return undefined;
+  if (typeof padding === "number") return `${padding}px`;
+  const [top, right, bottom, left] = padding;
+  return `${top}px ${right}px ${bottom}px ${left}px`;
+}
+
+function resolveContainerStyle(node: PenNode, parentLayout: string | undefined): CSSProperties {
+  const style: CSSProperties = {};
+  const isFlexChild = parentLayout === "horizontal" || parentLayout === "vertical";
+
+  if (!isFlexChild) {
+    style.position = "absolute";
+    if (node.x != null) style.left = node.x;
+    if (node.y != null) style.top = node.y;
+  }
+
+  if (typeof node.width === "number") style.width = node.width;
+  if (typeof node.height === "number") style.height = node.height;
+  if (typeof node.fill === "string") style.backgroundColor = node.fill;
+  if (node.cornerRadius != null) style.borderRadius = node.cornerRadius;
+  if (node.clipContent) style.overflow = "hidden";
+  if (node.opacity != null) style.opacity = node.opacity;
+  if (node.rotation != null) style.transform = `rotate(${node.rotation}deg)`;
+
+  const pad = resolvePadding(node.padding);
+  if (pad) style.padding = pad;
+
+  const hasFlexLayout = node.layout === "horizontal" || node.layout === "vertical";
+
+  if (hasFlexLayout) {
+    style.display = "flex";
+    style.flexDirection = node.layout === "horizontal" ? "row" : "column";
+    if (node.gap != null) style.gap = node.gap;
+    if (node.alignItems) style.alignItems = node.alignItems as CSSProperties["alignItems"];
+    if (node.justifyContent)
+      style.justifyContent = node.justifyContent as CSSProperties["justifyContent"];
+  } else if (node.children?.length && isFlexChild) {
+    style.position = "relative";
+  }
+
+  return style;
+}
+
+function resolveTextStyle(node: PenNode, parentLayout: string | undefined): CSSProperties {
+  const style: CSSProperties = {};
+  const isFlexChild = parentLayout === "horizontal" || parentLayout === "vertical";
+
+  if (!isFlexChild) {
+    style.position = "absolute";
+    if (node.x != null) style.left = node.x;
+    if (node.y != null) style.top = node.y;
+  }
+
+  if (typeof node.width === "number") style.width = node.width;
+  if (typeof node.height === "number") style.height = node.height;
+  if (typeof node.fill === "string") style.color = node.fill;
+  if (node.fontSize != null) style.fontSize = node.fontSize;
+  if (node.fontWeight != null) style.fontWeight = node.fontWeight;
+  if (node.fontFamily) style.fontFamily = node.fontFamily;
+  if (node.letterSpacing != null) style.letterSpacing = `${node.letterSpacing}em`;
+  if (node.lineHeight != null) style.lineHeight = node.lineHeight;
+  if (node.opacity != null) style.opacity = node.opacity;
+  style.whiteSpace = "pre-wrap";
+  style.margin = 0;
+  style.flexShrink = 0;
+
+  return style;
+}
+
+/* ------------------------------------------------------------------ */
+/* Node renderer                                                       */
+/* ------------------------------------------------------------------ */
+
+function PenNodeView({ node, parentLayout }: { node: PenNode; parentLayout?: string }) {
+  if (node.enabled === false) return null;
+
+  if (node.type === "text") {
+    return (
+      <span data-pen-id={node.id} style={resolveTextStyle(node, parentLayout)}>
+        {node.content ?? ""}
+      </span>
+    );
+  }
+
+  if (node.type === "ellipse") {
+    const style = resolveContainerStyle(node, parentLayout);
+    style.borderRadius = "50%";
+    return <div data-pen-id={node.id} style={style} />;
+  }
+
+  const style = resolveContainerStyle(node, parentLayout);
+  const childLayout =
+    node.layout === "horizontal" || node.layout === "vertical" ? node.layout : undefined;
+
+  return (
+    <div data-pen-id={node.id} style={style}>
+      {node.children?.map((child) => (
+        <PenNodeView key={child.id} node={child} parentLayout={childLayout} />
+      ))}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Document summary (exported for tests)                               */
+/* ------------------------------------------------------------------ */
 
 interface PencilDocumentSummary {
   nodeCount: number;
@@ -13,31 +199,18 @@ interface PencilDocumentSummary {
   version: string | null;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function firstString(values: unknown[]): string | null {
   for (const value of values) {
-    if (typeof value === "string" && value.trim().length > 0) {
-      return value;
-    }
+    if (typeof value === "string" && value.trim().length > 0) return value;
   }
-
   return null;
 }
 
 function firstScalarString(values: unknown[]): string | null {
   for (const value of values) {
-    if (typeof value === "string" && value.length > 0) {
-      return value;
-    }
-
-    if (typeof value === "number" || typeof value === "boolean") {
-      return String(value);
-    }
+    if (typeof value === "string" && value.length > 0) return value;
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
   }
-
   return null;
 }
 
@@ -57,34 +230,24 @@ export function summarizePencilDocument(content: string): PencilDocumentSummary 
     return null;
   }
 
-  if (!isRecord(parsed)) {
-    return null;
-  }
+  if (!isRecord(parsed)) return null;
 
   const typeCounts = new Map<string, number>();
   let nodeCount = 0;
 
   const visit = (value: unknown) => {
     if (Array.isArray(value)) {
-      for (const item of value) {
-        visit(item);
-      }
+      for (const item of value) visit(item);
       return;
     }
-
-    if (!isRecord(value)) {
-      return;
-    }
+    if (!isRecord(value)) return;
 
     const nodeType = typeof value.type === "string" ? value.type : null;
     if (nodeType) {
       nodeCount += 1;
       typeCounts.set(nodeType, (typeCounts.get(nodeType) ?? 0) + 1);
     }
-
-    for (const child of Object.values(value)) {
-      visit(child);
-    }
+    for (const child of Object.values(value)) visit(child);
   };
 
   visit(parsed);
@@ -104,111 +267,135 @@ export function summarizePencilDocument(content: string): PencilDocumentSummary 
   };
 }
 
-function SummaryCard({ label, value }: { label: string; value: number | string | null }) {
-  return (
-    <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)]">
-        {label}
-      </p>
-      <p className="mt-1 text-base font-semibold text-[var(--foreground)]">{value ?? "Unknown"}</p>
-    </div>
+/* ------------------------------------------------------------------ */
+/* Pan / zoom canvas                                                   */
+/* ------------------------------------------------------------------ */
+
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 5;
+const ZOOM_SENSITIVITY = 0.002;
+
+export function PencilFileRendererView({ content }: { content: string; filePath: string }) {
+  const doc = useMemo(() => parsePenDocument(content), [content]);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const dragging = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(
+    null,
   );
-}
 
-export function PencilFileRendererView({
-  content,
-  filePath,
-}: {
-  content: string;
-  filePath: string;
-}) {
-  const summary = useMemo(() => summarizePencilDocument(content), [content]);
+  const bounds = useMemo(
+    () => (doc?.children?.length ? computeCanvasBounds(doc.children) : null),
+    [doc],
+  );
 
-  return (
-    <div className="px-5 py-5">
-      {summary ? (
-        <>
-          <div className="grid gap-3 md:grid-cols-4">
-            <SummaryCard
-              label="Document"
-              value={summary.title ?? workspaceFileBasename(filePath)}
-            />
-            <SummaryCard label="Version" value={summary.version} />
-            <SummaryCard label="Typed Nodes" value={summary.nodeCount} />
-            <SummaryCard label="Node Types" value={summary.uniqueTypeCount} />
-          </div>
-          <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-            <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5">
-              <div className="flex items-center gap-2">
-                <PencilRuler className="h-4 w-4 text-[var(--muted-foreground)]" />
-                <h3 className="text-sm font-semibold text-[var(--foreground)]">Pencil document</h3>
-              </div>
-              <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
-                `.pen` files are JSON-backed Pencil documents. This viewer summarizes the object
-                graph and keeps the raw payload available below.
-              </p>
-              <div className="mt-4 rounded-2xl border border-[var(--border)] bg-[var(--background)] px-4 py-3">
-                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[var(--muted-foreground)]">
-                  Top-level keys
-                </p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {summary.topLevelKeys.map((key) => (
-                    <Badge key={key} variant="muted">
-                      {key}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            </section>
+  // Fit content on mount / content change
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !bounds) return;
 
-            <aside className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5">
-              <h3 className="text-sm font-semibold text-[var(--foreground)]">Common node types</h3>
-              {summary.topTypes.length > 0 ? (
-                <div className="mt-3 space-y-2">
-                  {summary.topTypes.map((entry) => (
-                    <div
-                      key={entry.type}
-                      className="flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm"
-                    >
-                      <span className="font-mono text-[var(--foreground)]">{entry.type}</span>
-                      <span className="text-[var(--muted-foreground)]">{entry.count}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-3 text-sm text-[var(--muted-foreground)]">
-                  No typed nodes were found in this document.
-                </p>
-              )}
-            </aside>
-          </div>
-        </>
-      ) : (
-        <Alert className="mb-5">
+    const rect = el.getBoundingClientRect();
+    const padded = 64;
+    const scaleX = rect.width / (bounds.width + padded);
+    const scaleY = rect.height / (bounds.height + padded);
+    const fit = Math.min(scaleX, scaleY, 1);
+
+    setZoom(fit);
+    setPan({
+      x: (rect.width - bounds.width * fit) / 2,
+      y: (rect.height - bounds.height * fit) / 2,
+    });
+  }, [bounds]);
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      dragging.current = { startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y };
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    },
+    [pan],
+  );
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    const d = dragging.current;
+    if (!d) return;
+    setPan({ x: d.panX + (e.clientX - d.startX), y: d.panY + (e.clientY - d.startY) });
+  }, []);
+
+  const handlePointerUp = useCallback(() => {
+    dragging.current = null;
+  }, []);
+
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault();
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+
+      const delta = -e.deltaY * ZOOM_SENSITIVITY;
+      const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * (1 + delta)));
+      const ratio = next / zoom;
+
+      setPan({ x: mx - ratio * (mx - pan.x), y: my - ratio * (my - pan.y) });
+      setZoom(next);
+    },
+    [pan, zoom],
+  );
+
+  if (!doc?.children?.length) {
+    return (
+      <div className="px-5 py-5">
+        <Alert>
           <AlertDescription>
-            This `.pen` file could not be parsed as JSON. Showing the raw document payload below.
+            This <code>.pen</code> file could not be parsed or contains no renderable objects.
           </AlertDescription>
         </Alert>
-      )}
+      </div>
+    );
+  }
 
-      <section className="mt-5 rounded-3xl border border-[var(--border)] bg-[var(--surface)]">
-        <div className="border-b border-[var(--border)] px-5 py-3">
-          <h3 className="text-sm font-semibold text-[var(--foreground)]">Raw JSON</h3>
-        </div>
-        <pre className="overflow-x-auto p-5 font-mono text-xs leading-6 text-[var(--foreground)]">
-          {content}
-        </pre>
-      </section>
+  return (
+    <div
+      ref={containerRef}
+      className="flex-1"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onWheel={handleWheel}
+      style={{
+        backgroundColor: "var(--surface)",
+        cursor: dragging.current ? "grabbing" : "grab",
+        minHeight: "100%",
+        overflow: "hidden",
+        touchAction: "none",
+      }}
+    >
+      <div
+        style={{
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          transformOrigin: "0 0",
+          position: "relative",
+          width: bounds!.width,
+          height: bounds!.height,
+        }}
+      >
+        {doc.children.map((node) => (
+          <PenNodeView key={node.id} node={node} parentLayout={undefined} />
+        ))}
+      </div>
     </div>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* Renderer definition                                                 */
+/* ------------------------------------------------------------------ */
 
 export const pencilFileRenderer: FileRendererDefinition = {
   editor: {
     language: "json",
   },
-  editNotice:
-    "Pencil editing currently opens the raw JSON source in CodeMirror. The structured document preview is still available in view mode.",
   extensions: ["pen"],
   kind: "pencil",
   label: "Pencil",

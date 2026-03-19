@@ -4,7 +4,7 @@ Lifecycle is public and source-available, but it is still a maintainer-led produ
 
 ## Before You Start
 
-1. Read [README.md](./README.md), [docs/vision.md](./docs/vision.md), [docs/plan.md](./docs/plan.md), and [docs/VOCABULARY.md](./docs/VOCABULARY.md).
+1. Read [README.md](./README.md), [AGENTS.md](./AGENTS.md), [docs/plan.md](./docs/plan.md), [`.skills/reference--vision/SKILL.md`](./.skills/reference--vision/SKILL.md), and [`.skills/reference--vocabulary/SKILL.md`](./.skills/reference--vocabulary/SKILL.md).
 2. Open an issue before writing a large patch, especially for product behavior, architecture, or milestone scope changes.
 3. Keep proposed changes aligned with the active milestone contract.
 

@@ -95,7 +95,9 @@ describe("EnvironmentPanel", () => {
       }),
     );
 
-    expect(markup).toContain("Running");
+    expect(markup).toContain("Stop");
+    expect(markup).toContain("Restart");
+    expect(markup).toContain("web");
   });
 
   test("tolerates missing service logs", () => {
@@ -116,7 +118,8 @@ describe("EnvironmentPanel", () => {
       }),
     );
 
-    expect(markup).toContain("Running");
+    expect(markup).toContain("Stop");
+    expect(markup).toContain("No output yet");
   });
 
   test("renders failure details for an idle workspace with a failure", () => {
@@ -168,8 +171,9 @@ describe("EnvironmentPanel", () => {
       }),
     );
 
-    expect(markup).toContain("Idle");
-    expect(markup).not.toContain("Setup");
+    expect(markup).toContain("Add a");
+    expect(markup).toContain("lifecycle.json");
+    expect(markup).not.toContain("Boot sequence");
   });
 
   test("shows restart guidance when a running workspace manifest is stale", () => {

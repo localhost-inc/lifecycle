@@ -715,11 +715,7 @@ export function useWorkspaceCanvasController({
     let unlisten: (() => void) | undefined;
 
     void subscribeToNativeWorkspaceShortcutEvents((event) => {
-      if (
-        disposed ||
-        event.source_surface_kind !== "native-terminal" ||
-        event.source_surface_id !== activeTerminalId
-      ) {
+      if (disposed || event.source_surface_kind !== "native-terminal") {
         return;
       }
 
@@ -756,7 +752,7 @@ export function useWorkspaceCanvasController({
       disposed = true;
       unlisten?.();
     };
-  }, [activeTerminalId, handleToggleZoom, handleWorkspaceTabHotkeyAction]);
+  }, [handleToggleZoom, handleWorkspaceTabHotkeyAction]);
 
   useEffect(() => {
     if (!isTauri()) {

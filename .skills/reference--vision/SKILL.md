@@ -108,9 +108,7 @@ The implementation plan and contracts live in:
 
 1. `docs/plan.md`
 2. `docs/milestones`
-3. `docs/reference`
-4. `docs/VOCABULARY.md`
-5. `docs/execution`
-6. `docs/BRAND.md`
+3. `.skills/reference--*/SKILL.md`
+4. `AGENTS.md`
 
-This document defines the product direction. Plan, milestone, reference, vocabulary, and execution docs define implementation detail, sequencing, and acceptance gates.
+This document defines the product direction. The plan, milestone docs, reference skills, and engineering playbook define implementation detail, sequencing, and acceptance gates.

@@ -155,7 +155,7 @@ interface AgentRuntimeAdapter {
 ```
 
 3. The runtime interface is Lifecycle-owned even if the backing executor changes later.
-4. Local native runtime and compatibility adapters must both emit the same conceptual `agent.*` fact families, following [docs/reference/events.md](../reference/events.md):
+4. Local native runtime and compatibility adapters must both emit the same conceptual `agent.*` fact families, following the runtime event foundation contract in [`.skills/reference--runtime/SKILL.md`](../../.skills/reference--runtime/SKILL.md):
    - session lifecycle and metadata facts
    - message and message-part facts
    - attachment facts

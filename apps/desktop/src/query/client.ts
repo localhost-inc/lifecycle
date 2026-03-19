@@ -235,12 +235,18 @@ export class QueryClient {
       return entry.promise;
     }
 
-    entry.snapshot = {
-      ...entry.snapshot,
-      error: null,
-      status: "loading",
-    };
-    notify(entry);
+    // Only show loading state if there's no existing data to display.
+    // Background refreshes (force=true with existing data) keep serving
+    // stale data to avoid unmount/remount flicker in renderers.
+    const hasData = entry.snapshot.data !== undefined;
+    if (!hasData) {
+      entry.snapshot = {
+        ...entry.snapshot,
+        error: null,
+        status: "loading",
+      };
+      notify(entry);
+    }
 
     const fetchPromise = entry.descriptor
       .fetch(this.source)

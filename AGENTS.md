@@ -91,7 +91,7 @@ Use this section to route work before implementation.
 ## Engineering Invariants
 
 1. Use `workspace` as the canonical noun across code, APIs, and docs.
-2. Use the terms in `docs/VOCABULARY.md` for shell, project, workspace, pane, and surface concepts; do not invent new synonyms for core concepts without updating that doc.
+2. Use the terms in `.skills/reference--vocabulary/SKILL.md` for shell, project, workspace, pane, and surface concepts; do not invent new synonyms for core concepts without updating that skill.
 3. Do not introduce ad-hoc state values; follow canonical state machines.
 4. Use typed errors/failure reasons; do not introduce untyped string-only failures.
 5. Preserve local-first operation for local workflows (no mandatory auth/network dependency).
@@ -105,7 +105,7 @@ Use this section to route work before implementation.
 3. Implement the smallest coherent change that fully solves the request.
 4. Add or update tests for changed behavior.
 5. Run verification commands (`bun run qa` by default for code changes).
-6. Update execution/milestone docs if status or scope changed.
+6. Update milestone/reference docs if status or scope changed.
 7. Report what changed, what was verified, and any explicit gaps.
 
 ## Implementation Standards

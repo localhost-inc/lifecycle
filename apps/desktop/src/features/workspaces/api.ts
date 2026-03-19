@@ -181,6 +181,10 @@ export interface WorkspaceRuntimeProjectionResult {
   setup: WorkspaceStepProgressSnapshot[];
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : null;
+}
+
 function normalizeServiceLogLines(lines: unknown[]): ServiceLogLine[] {
   return lines.map((entry) => {
     if (typeof entry === "string") {
@@ -202,28 +206,31 @@ function normalizeServiceLogLines(lines: unknown[]): ServiceLogLine[] {
   });
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function normalizeWorkspaceRuntimeProjection(
-  projection: any,
+  projection: unknown,
 ): WorkspaceRuntimeProjectionResult {
-  const raw = projection as Record<string, unknown> | null | undefined;
-  const rawServiceLogs = (raw?.serviceLogs ?? []) as unknown[];
+  const raw = asRecord(projection);
+  const activity = raw?.activity;
+  const environmentTasks = raw?.environmentTasks;
+  const rawServiceLogs = raw?.serviceLogs;
+  const setup = raw?.setup;
   return {
-    activity: (projection?.activity as WorkspaceRuntimeProjectionResult["activity"]) ?? [],
-    environmentTasks:
-      (projection?.environmentTasks as WorkspaceRuntimeProjectionResult["environmentTasks"]) ?? [],
+    activity: Array.isArray(activity)
+      ? (activity as WorkspaceRuntimeProjectionResult["activity"])
+      : [],
+    environmentTasks: Array.isArray(environmentTasks)
+      ? (environmentTasks as WorkspaceRuntimeProjectionResult["environmentTasks"])
+      : [],
     serviceLogs: Array.isArray(rawServiceLogs)
       ? rawServiceLogs.map((entry) => {
-          const record = entry as Record<string, unknown>;
+          const record = asRecord(entry);
           return {
-            service_name: (record.service_name as string) ?? "",
-            lines: Array.isArray(record.lines)
-              ? normalizeServiceLogLines(record.lines)
-              : [],
+            service_name: typeof record?.service_name === "string" ? record.service_name : "",
+            lines: Array.isArray(record?.lines) ? normalizeServiceLogLines(record.lines) : [],
           };
         })
       : [],
-    setup: (projection?.setup as WorkspaceRuntimeProjectionResult["setup"]) ?? [],
+    setup: Array.isArray(setup) ? (setup as WorkspaceRuntimeProjectionResult["setup"]) : [],
   };
 }
 

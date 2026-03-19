@@ -2,7 +2,6 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ThemeProvider } from "@lifecycle/ui";
-import { FileSurface } from "./file-surface";
 import { buildFileCodeEditorExtensions, resolveFileEditorConfig } from "../lib/file-editor-config";
 import type { FileEditorConfig } from "../lib/file-editor-types";
 import {
@@ -15,6 +14,35 @@ import { hasFileViewerConflict, isFileViewerDirty } from "../lib/file-session";
 import { resolveFileRendererDefinition } from "../renderers/registry";
 import { MarkdownFileRendererView } from "../renderers/markdown-file-renderer-view";
 import { summarizePencilDocument } from "../renderers/pencil-file-renderer";
+import type { WorkspaceFileReadResult } from "../../workspaces/api";
+
+function readyQueryResult<T>(data: T) {
+  return {
+    data,
+    error: null,
+    isLoading: false,
+    refresh: async () => {},
+    status: "ready" as const,
+  };
+}
+
+async function renderFileSurface(filePath: string, file: WorkspaceFileReadResult) {
+  const hooksModule = await import("../../workspaces/hooks");
+  spyOn(hooksModule, "useWorkspaceFile").mockReturnValue(readyQueryResult(file) as never);
+
+  const { FileSurface } = await import("./file-surface");
+
+  return renderToStaticMarkup(
+    createElement(ThemeProvider, {
+      children: createElement(FileSurface, {
+        filePath,
+        onOpenFile: () => {},
+        workspaceId: "workspace-1",
+      }),
+      storageKey: "test.theme",
+    }),
+  );
+}
 
 describe("FileSurface helpers", () => {
   test("maps supported extensions to custom renderer kinds", () => {
@@ -175,105 +203,56 @@ describe("FileSurface", () => {
   });
 
   test("renders markdown files with the markdown renderer", async () => {
-    const hooksModule = await import("../../workspaces/hooks");
+    const markup = await renderFileSurface("README.md", {
+      absolute_path: "/tmp/workspace/README.md",
+      byte_len: 31,
+      content: "# Hello\n\n- first\n- second\n",
+      extension: "md",
+      file_path: "README.md",
+      is_binary: false,
+      is_too_large: false,
+    });
 
-    spyOn(hooksModule, "useWorkspaceFile").mockReturnValue({
-      data: {
-        absolute_path: "/tmp/workspace/README.md",
-        byte_len: 31,
-        content: "# Hello\n\n- first\n- second\n",
-        extension: "md",
-        file_path: "README.md",
-        is_binary: false,
-        is_too_large: false,
-      },
-      error: null,
-      isLoading: false,
-      refresh: async () => {},
-      status: "ready",
-    } as never);
-    spyOn(hooksModule, "useWorkspaceFileTree").mockReturnValue({
-      data: [],
-      error: null,
-      isLoading: false,
-      refresh: async () => {},
-      status: "ready",
-    } as never);
-
-    const markup = renderToStaticMarkup(
-      createElement(ThemeProvider, {
-        children: createElement(FileSurface, {
-          filePath: "README.md",
-          onOpenFile: () => {},
-          workspaceId: "workspace-1",
-        }),
-        storageKey: "test.theme",
-      }),
-    );
-
-    expect(markup).toContain("File Viewer");
-    expect(markup).toContain("Markdown");
     expect(markup).toContain("Loading markdown preview...");
   });
 
-  test("renders .pen files with the pencil summary view", async () => {
-    const hooksModule = await import("../../workspaces/hooks");
-
-    spyOn(hooksModule, "useWorkspaceFile").mockReturnValue({
-      data: {
-        absolute_path: "/tmp/workspace/design/mock.pen",
-        byte_len: 180,
-        content: JSON.stringify(
-          {
-            name: "Mockup",
-            root: {
-              id: "root",
-              type: "page",
+  test("renders .pen files with the pencil canvas view", async () => {
+    const markup = await renderFileSurface("design/mock.pen", {
+      absolute_path: "/tmp/workspace/design/mock.pen",
+      byte_len: 320,
+      content: JSON.stringify(
+        {
+          version: "1.0",
+          children: [
+            {
+              id: "root-frame",
+              type: "frame",
+              x: 0,
+              y: 0,
+              width: 200,
+              height: 100,
+              fill: "#111113",
+              layout: "vertical",
               children: [
-                { id: "shape-1", type: "rectangle" },
-                { id: "shape-2", type: "rectangle" },
-                { id: "text-1", type: "text" },
+                { id: "heading", type: "text", content: "Mockup", fontSize: 14, fill: "#E4E4E7" },
+                { id: "shape-1", type: "rectangle", width: 80, height: 20, fill: "#FF0000" },
               ],
             },
-            version: 1,
-          },
-          null,
-          2,
-        ),
-        extension: "pen",
-        file_path: "design/mock.pen",
-        is_binary: false,
-        is_too_large: false,
-      },
-      error: null,
-      isLoading: false,
-      refresh: async () => {},
-      status: "ready",
-    } as never);
-    spyOn(hooksModule, "useWorkspaceFileTree").mockReturnValue({
-      data: [],
-      error: null,
-      isLoading: false,
-      refresh: async () => {},
-      status: "ready",
-    } as never);
+          ],
+        },
+        null,
+        2,
+      ),
+      extension: "pen",
+      file_path: "design/mock.pen",
+      is_binary: false,
+      is_too_large: false,
+    });
 
-    const markup = renderToStaticMarkup(
-      createElement(ThemeProvider, {
-        children: createElement(FileSurface, {
-          filePath: "design/mock.pen",
-          onOpenFile: () => {},
-          workspaceId: "workspace-1",
-        }),
-        storageKey: "test.theme",
-      }),
-    );
-
-    expect(markup).toContain("Pencil");
-    expect(markup).toContain("Pencil document");
+    expect(markup).toContain("root-frame");
     expect(markup).toContain("Mockup");
-    expect(markup).toContain("rectangle");
-    expect(markup).toContain("Raw JSON");
+    expect(markup).toContain("#111113");
+    expect(markup).toContain("#FF0000");
   });
 });
 
