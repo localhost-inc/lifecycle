@@ -82,9 +82,9 @@ pub(super) fn build_runtime_env(
 
     let mut stmt = conn
         .prepare(
-            "SELECT service_name, assigned_port
-             FROM workspace_service
-             WHERE workspace_id = ?1",
+            "SELECT name, assigned_port
+             FROM service
+             WHERE environment_id = ?1",
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
     let rows = stmt
@@ -94,9 +94,9 @@ pub(super) fn build_runtime_env(
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
 
     for row in rows {
-        let (service_name, assigned_port) =
+        let (name, assigned_port) =
             row.map_err(|error| LifecycleError::Database(error.to_string()))?;
-        let key = uppercase_env_key(&service_name);
+        let key = uppercase_env_key(&name);
         if key.is_empty() {
             continue;
         }
@@ -114,7 +114,7 @@ pub(super) fn build_runtime_env(
             );
             env.insert(
                 format!("LIFECYCLE_SERVICE_{key}_URL"),
-                preview_proxy::service_url(&workspace_label, &service_name),
+                preview_proxy::service_url(&workspace_label, &name),
             );
         }
     }
@@ -159,23 +159,18 @@ mod tests {
     fn init_workspace_service_tables(db_path: &str) {
         let conn = open_db(db_path).expect("open db");
         conn.execute_batch(
-            "CREATE TABLE workspace_service (
+            "CREATE TABLE service (
                 id TEXT PRIMARY KEY NOT NULL,
-                workspace_id TEXT NOT NULL,
-                service_name TEXT NOT NULL,
-                exposure TEXT NOT NULL,
-                port_override INTEGER,
+                environment_id TEXT NOT NULL,
+                name TEXT NOT NULL,
                 status TEXT NOT NULL,
                 status_reason TEXT,
                 assigned_port INTEGER,
-                preview_status TEXT NOT NULL,
-                preview_failure_reason TEXT,
-                preview_url TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT
             );",
         )
-        .expect("create workspace_service");
+        .expect("create service");
     }
 
     fn init_workspace_table(db_path: &str) {
@@ -216,19 +211,15 @@ mod tests {
         )
         .expect("insert workspace");
         conn.execute(
-            "INSERT INTO workspace_service (
-                id, workspace_id, service_name, exposure, status,
-                assigned_port, preview_status, preview_url, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'))",
+            "INSERT INTO service (
+                id, environment_id, name, status, assigned_port, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
             params![
                 "svc_api",
                 "ws_env",
                 "api",
-                "internal",
                 "ready",
                 Some(43123_i64),
-                "disabled",
-                Option::<String>::None,
             ],
         )
         .expect("insert service");

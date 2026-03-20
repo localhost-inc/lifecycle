@@ -1,8 +1,8 @@
 import { Button, EmptyState } from "@lifecycle/ui";
 import { TerminalSquare } from "lucide-react";
 import type { ReactNode } from "react";
-import type { CreateTerminalRequest, HarnessProvider } from "../../terminals/api";
-import { ClaudeIcon, CodexIcon, ShellIcon } from "./surface-icons";
+import type { CreateTerminalRequest, HarnessProvider } from "@/features/terminals/api";
+import { ClaudeIcon, CodexIcon, ShellIcon } from "@/features/workspaces/components/surface-icons";
 
 interface WorkspaceEmptyPaneStateProps {
   creatingSelection: "shell" | HarnessProvider | null;

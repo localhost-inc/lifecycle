@@ -1,31 +1,32 @@
 import { Alert, AlertAction, AlertDescription, EmptyState, FloatingToggle } from "@lifecycle/ui";
+import { isTauri } from "@tauri-apps/api/core";
+import { watch } from "@tauri-apps/plugin-fs";
 import { FileText } from "lucide-react";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   SHORTCUT_HANDLER_PRIORITY,
   useShortcutRegistration,
-} from "../../../app/shortcuts/shortcut-router";
-import { workspaceFileBasename } from "../../workspaces/lib/workspace-file-paths";
-import { writeWorkspaceFile } from "../../workspaces/api";
-import { useWorkspaceFile } from "../../workspaces/hooks";
-import { resolveFileEditorConfig } from "../lib/file-editor-config";
-import type { FileViewerMode } from "../lib/file-view-mode";
-import { isFileViewerDirty, type FileViewerSessionState } from "../lib/file-session";
+} from "@/app/shortcuts/shortcut-router";
+import { workspaceFileBasename } from "@/features/workspaces/lib/workspace-file-paths";
+import { writeWorkspaceFile } from "@/features/workspaces/api";
+import { useWorkspaceFile } from "@/features/workspaces/hooks";
+import { resolveFileEditorConfig } from "@/features/files/lib/file-editor-config";
+import type { FileViewerMode } from "@/features/files/lib/file-view-mode";
+import { isFileViewerDirty, type FileViewerSessionState } from "@/features/files/lib/file-session";
 import {
   getFileViewerScrollRestoreKey,
   resolveFileViewerRenderer,
   resolveInitialFileViewerMode,
   supportsFileViewerViewMode,
-} from "../lib/file-renderers";
-import { resolveFileRendererDefinition } from "../renderers/registry";
-import { FileCodeEditor } from "./file-code-editor";
+} from "@/features/files/lib/file-renderers";
+import { resolveFileRendererDefinition } from "@/features/files/renderers/registry";
+import { FileCodeEditor } from "@/features/files/components/file-code-editor";
 
 interface FileSurfaceProps {
   filePath: string;
   initialMode?: FileViewerMode;
   initialScrollTop?: number;
   onModeChange?: (mode: FileViewerMode) => void;
-  onOpenFile: (filePath: string) => void;
   onScrollTopChange?: (scrollTop: number) => void;
   onSessionStateChange?: (state: FileViewerSessionState | null) => void;
   sessionState?: FileViewerSessionState | null;
@@ -37,7 +38,6 @@ export function FileSurface({
   initialMode,
   initialScrollTop = 0,
   onModeChange,
-  onOpenFile,
   onScrollTopChange,
   onSessionStateChange,
   sessionState,
@@ -64,7 +64,6 @@ export function FileSurface({
       ? (fileQuery.data.content ?? "")
       : null;
   const draftContent = sessionState?.draftContent ?? "";
-  const savedContent = sessionState?.savedContent ?? "";
   const conflictDiskContent = sessionState?.conflictDiskContent ?? null;
   const isDirty = isFileViewerDirty(sessionState);
 
@@ -119,32 +118,58 @@ export function FileSurface({
     });
   }, [isDirty, onSessionStateChange, sessionState, textContent]);
 
+  // Watch the file on disk for external changes instead of polling.
+  const absolutePath = fileQuery.data?.absolute_path ?? null;
+  const isWatchable = textContent !== null;
+  const fileRefreshRef = useRef(fileQuery.refresh);
+  fileRefreshRef.current = fileQuery.refresh;
+
   useEffect(() => {
-    if (textContent === null) {
+    if (!absolutePath || !isWatchable) {
       return;
     }
 
-    const refreshIfVisible = () => {
-      if (typeof document !== "undefined" && document.visibilityState !== "visible") {
-        return;
-      }
+    let cancelled = false;
+    let unwatchFile: (() => void) | undefined;
 
-      void fileQuery.refresh();
-    };
+    if (isTauri()) {
+      void watch(
+        absolutePath,
+        () => {
+          if (!cancelled) {
+            void fileRefreshRef.current();
+          }
+        },
+        { delayMs: 200 },
+      )
+        .then((cleanup) => {
+          if (cancelled) {
+            cleanup();
+          } else {
+            unwatchFile = cleanup;
+          }
+        })
+        .catch((error) => {
+          console.error("Failed to watch file:", absolutePath, error);
+        });
+    }
 
-    const timer = window.setInterval(refreshIfVisible, 5000);
+    // Refresh when the window becomes visible again (e.g., returning from
+    // another app that may have edited the file outside the watcher window).
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        refreshIfVisible();
+        void fileRefreshRef.current();
       }
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
+
     return () => {
-      window.clearInterval(timer);
+      cancelled = true;
+      unwatchFile?.();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [fileQuery, textContent]);
+  }, [absolutePath, isWatchable]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -210,21 +235,6 @@ export function FileSurface({
     priority: SHORTCUT_HANDLER_PRIORITY.file,
   });
 
-  const handleReload = async () => {
-    setSaveError(null);
-
-    if (isDirty && conflictDiskContent === null) {
-      onSessionStateChange?.({
-        conflictDiskContent: null,
-        draftContent: savedContent,
-        savedContent,
-      });
-      return;
-    }
-
-    await fileQuery.refresh();
-  };
-
   const handleLoadDiskVersion = () => {
     const nextDiskContent = conflictDiskContent ?? textContent;
     if (nextDiskContent === null) {
@@ -237,6 +247,20 @@ export function FileSurface({
       savedContent: nextDiskContent,
     });
   };
+
+  // Stable ref-based callback so CodeMirror doesn't reconfigure (and steal
+  // focus from native terminal surfaces) every time FileSurface re-renders.
+  const editorChangeRef = useRef((_value: string) => {});
+  editorChangeRef.current = (value: string) => {
+    onSessionStateChange?.({
+      conflictDiskContent,
+      draftContent: value,
+      savedContent: sessionState?.savedContent ?? textContent ?? value,
+    });
+  };
+  const handleEditorChange = useCallback((value: string) => {
+    editorChangeRef.current(value);
+  }, []);
 
   const handleModeChange = (nextMode: FileViewerMode) => {
     const resolvedNextMode = supportsViewMode ? nextMode : "edit";
@@ -298,17 +322,7 @@ export function FileSurface({
   } else if (effectiveMode === "edit") {
     content = (
       <div className="min-h-0 flex-1 overflow-hidden">
-        <FileCodeEditor
-          config={editorConfig}
-          onChange={(value) => {
-            onSessionStateChange?.({
-              conflictDiskContent,
-              draftContent: value,
-              savedContent: sessionState?.savedContent ?? textContent ?? value,
-            });
-          }}
-          value={draftContent}
-        />
+        <FileCodeEditor config={editorConfig} onChange={handleEditorChange} value={draftContent} />
       </div>
     );
   } else if (RendererView) {
@@ -325,17 +339,7 @@ export function FileSurface({
     );
   } else {
     content = (
-      <FileCodeEditor
-        config={editorConfig}
-        onChange={(value) => {
-          onSessionStateChange?.({
-            conflictDiskContent,
-            draftContent: value,
-            savedContent: sessionState?.savedContent ?? textContent ?? value,
-          });
-        }}
-        value={draftContent}
-      />
+      <FileCodeEditor config={editorConfig} onChange={handleEditorChange} value={draftContent} />
     );
   }
 

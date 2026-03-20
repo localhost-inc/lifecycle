@@ -2,20 +2,20 @@ import type { TerminalRecord } from "@lifecycle/contracts";
 import { Alert, AlertDescription, EmptyState, themeAppearance, useTheme } from "@lifecycle/ui";
 import { TerminalSquare } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { subscribeToShellResize } from "../../../components/layout/shell-resize-provider";
-import { measureAsyncPerformance } from "../../../lib/performance";
+import { subscribeToShellResize } from "@/components/layout/shell-resize-provider";
+import { measureAsyncPerformance } from "@/lib/performance";
 import {
   DEFAULT_MONOSPACE_FONT_FAMILY,
   getNativeMonospaceFontFamily,
-} from "../../../lib/typography";
-import { terminalHasLiveSession } from "../api";
+} from "@/lib/typography";
+import { terminalHasLiveSession } from "@/features/terminals/api";
 import {
   hideNativeTerminalSurface,
   syncNativeTerminalSurface,
   syncNativeTerminalSurfaceFrame,
-} from "../native-surface-api";
-import { DEFAULT_TERMINAL_FONT_SIZE } from "../terminal-display";
-import { resolveTerminalTheme } from "../terminal-theme";
+} from "@/features/terminals/native-surface-api";
+import { DEFAULT_TERMINAL_FONT_SIZE } from "@/features/terminals/terminal-display";
+import { resolveTerminalTheme } from "@/features/terminals/terminal-theme";
 
 // Keep the native surface slightly inset so DOM seams stay visible beside the sibling NSView.
 const NATIVE_TERMINAL_EDGE_GUTTER_PX = 3;

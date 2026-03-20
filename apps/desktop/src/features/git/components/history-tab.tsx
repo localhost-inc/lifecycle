@@ -1,7 +1,7 @@
 import type { GitLogEntry } from "@lifecycle/contracts";
 import { EmptyState, Loading } from "@lifecycle/ui";
 import { History } from "lucide-react";
-import { GithubAvatar } from "./github-avatar";
+import { GithubAvatar } from "@/features/git/components/github-avatar";
 
 interface HistoryTabProps {
   error: unknown;

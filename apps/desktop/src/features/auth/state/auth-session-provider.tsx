@@ -8,9 +8,9 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
-import { getLifecycleErrorMessage } from "../../../lib/tauri-error";
-import { readCurrentAuthSession } from "../api/auth-session";
-import { buildLoggedOutAuthSession, type AuthSession } from "../auth-session";
+import { getLifecycleErrorMessage } from "@/lib/tauri-error";
+import { readCurrentAuthSession } from "@/features/auth/api/auth-session";
+import { buildLoggedOutAuthSession, type AuthSession } from "@/features/auth/auth-session";
 
 interface AuthSessionContextValue {
   isLoading: boolean;

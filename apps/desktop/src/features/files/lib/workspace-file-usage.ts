@@ -1,4 +1,4 @@
-import { normalizeWorkspaceFilePath } from "../../workspaces/lib/workspace-file-paths";
+import { normalizeWorkspaceFilePath } from "@/features/workspaces/lib/workspace-file-paths";
 
 const WORKSPACE_FILE_USAGE_STORAGE_KEY = "lifecycle.desktop.workspace-file-usage";
 const MAX_WORKSPACE_FILE_USAGE_ENTRIES = 200;

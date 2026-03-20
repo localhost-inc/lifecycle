@@ -75,7 +75,7 @@ packages/
   cli/          `lifecycle` CLI package scaffold
   config/       Shared TypeScript config presets
   contracts/    Shared domain contracts and manifest parsing/validation
-  runtime/      WorkspaceProvider interfaces and local provider stubs
+  runtime/      ControlPlane and WorkspaceRuntime contracts plus local/cloud adapters
   ui/           Shared UI primitives and theme tokens
 .skills/
   reference--*/ Canonical product, runtime, UI, and infra contracts

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { FileDiff, type FileDiffMetadata } from "@pierre/diffs/react";
-import { GitFileHeader } from "./git-file-header";
-import { getOpenableDiffFilePath, withCopyableGitDiffOptions } from "./git-diff-rendering";
+import { GitFileHeader } from "@/features/git/components/git-file-header";
+import { getOpenableDiffFilePath, withCopyableGitDiffOptions } from "@/features/git/components/git-diff-rendering";
 
 interface GitDiffFileBlockProps {
   fileDiff: FileDiffMetadata;

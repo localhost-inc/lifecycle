@@ -2,11 +2,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { Menu, MenuItem, PredefinedMenuItem } from "@tauri-apps/api/menu";
-import {
-  Button,
-  IconButton,
-  Spinner,
-} from "@lifecycle/ui";
+import { Button, IconButton, Spinner } from "@lifecycle/ui";
 import {
   FolderGit2,
   GitBranch,
@@ -21,17 +17,17 @@ import { NavLink, useNavigate } from "react-router-dom";
 import {
   SHORTCUT_HANDLER_PRIORITY,
   useShortcutRegistration,
-} from "../../../app/shortcuts/shortcut-router";
-import { ResponseReadyDot } from "../../../components/response-ready-dot";
-import { NavigationControls } from "../../../components/layout/navigation-controls";
-import { getWorkspaceSessionStatusState } from "../../workspaces/components/workspace-session-status";
-import { getWorkspaceDisplayName, isRootWorkspace } from "../../workspaces/lib/workspace-display";
+} from "@/app/shortcuts/shortcut-router";
+import { ResponseReadyDot } from "@/components/response-ready-dot";
+import { NavigationControls } from "@/components/layout/navigation-controls";
+import { getWorkspaceSessionStatusState } from "@/features/workspaces/components/workspace-session-status";
+import { getWorkspaceDisplayName, isRootWorkspace } from "@/features/workspaces/lib/workspace-display";
 import {
   listAvailableOpenInTargets,
   resolveDefaultOpenTarget,
-} from "../../workspaces/lib/open-in-targets";
-import { openWorkspaceInApp } from "../../workspaces/open-in-api";
-import { isMacPlatform } from "../../../app/app-hotkeys";
+} from "@/features/workspaces/lib/open-in-targets";
+import { openWorkspaceInApp } from "@/features/workspaces/open-in-api";
+import { isMacPlatform } from "@/app/app-hotkeys";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { bugs } from "../../../../package.json";
 
@@ -152,9 +148,7 @@ export function ProjectNavBar({
 
   useEffect(() => {
     const handler = (event: Event) => {
-      setExtensionPanelCollapsed(
-        (event as CustomEvent<{ collapsed: boolean }>).detail.collapsed,
-      );
+      setExtensionPanelCollapsed((event as CustomEvent<{ collapsed: boolean }>).detail.collapsed);
     };
 
     window.addEventListener("lifecycle:extension-panel-state", handler);
@@ -169,9 +163,7 @@ export function ProjectNavBar({
         id: "open-in-editor",
         text: "Open in Editor",
         action: () => {
-          const target = resolveDefaultOpenTarget(
-            listAvailableOpenInTargets(isMacPlatform()),
-          );
+          const target = resolveDefaultOpenTarget(listAvailableOpenInTargets(isMacPlatform()));
           void openWorkspaceInApp(workspace.id, target.id);
         },
       });
@@ -243,9 +235,7 @@ export function ProjectNavBar({
       </div>
 
       {/* Workspace links */}
-      <div
-        className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden py-px [&::-webkit-scrollbar]:hidden"
-      >
+      <div className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden py-px [&::-webkit-scrollbar]:hidden">
         <div className="flex h-full min-w-max items-center gap-0.5">
           {workspaces.map((workspace) => {
             const displayName = getWorkspaceDisplayName(workspace);
@@ -285,18 +275,10 @@ export function ProjectNavBar({
       {/* Actions outlet (run, git) + trailing icons */}
       {actionsOutlet}
       <div className="flex shrink-0 items-center gap-1 pl-1 pr-2">
-        <IconButton
-          aria-label="Feedback"
-          onClick={() => void openUrl(bugs.url)}
-          title="Feedback"
-        >
+        <IconButton aria-label="Feedback" onClick={() => void openUrl(bugs.url)} title="Feedback">
           <Megaphone size={14} strokeWidth={2} />
         </IconButton>
-        <IconButton
-          aria-label="Settings"
-          onClick={onOpenSettings}
-          title="Settings"
-        >
+        <IconButton aria-label="Settings" onClick={onOpenSettings} title="Settings">
           <Settings size={14} strokeWidth={2} />
         </IconButton>
         <IconButton

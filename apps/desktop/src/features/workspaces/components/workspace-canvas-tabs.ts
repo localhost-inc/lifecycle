@@ -1,6 +1,6 @@
 import type { DragEvent as ReactDragEvent } from "react";
 import type { TerminalRecord, TerminalStatus } from "@lifecycle/contracts";
-import type { HarnessProvider } from "../../terminals/api";
+import type { HarnessProvider } from "@/features/terminals/api";
 import {
   getWorkspaceDocument,
   isChangesDiffDocument,
@@ -9,7 +9,7 @@ import {
   isPullRequestDocument,
   type WorkspaceCanvasDocument,
   type WorkspaceCanvasDocumentsByKey,
-} from "../state/workspace-canvas-state";
+} from "@/features/workspaces/state/workspace-canvas-state";
 
 export type TerminalTab = {
   harnessProvider: HarnessProvider | null;

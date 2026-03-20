@@ -1,8 +1,8 @@
 import type { GitLogEntry, WorkspaceMode } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
 import { useEffect, useState } from "react";
-import { useGitLog } from "../hooks";
-import { HistoryTab } from "./history-tab";
+import { useGitLog } from "@/features/git/hooks";
+import { HistoryTab } from "@/features/git/components/history-tab";
 
 export const GIT_HISTORY_PANEL_BODY_CLASS_NAME = "px-2.5 pb-4 pt-3";
 export const GIT_HISTORY_PANEL_EMPTY_STATE_CLASS_NAME = "px-2.5 py-4";

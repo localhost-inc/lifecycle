@@ -1,46 +1,38 @@
 import { describe, expect, test } from "bun:test";
-
-import type { ServiceRecord, TerminalRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import type {
-  WorkspaceProvider,
-  WorkspaceProviderCreateInput,
-  WorkspaceProviderGitDiffInput,
-  WorkspaceProviderWakeInput,
-} from "./provider";
-import { CloudWorkspaceProvider, type CloudWorkspaceClient } from "./workspaces/providers/cloud";
-import { LocalWorkspaceProvider } from "./workspaces/providers/local";
+  EnvironmentRecord,
+  ServiceRecord,
+  TerminalRecord,
+  WorkspaceRecord,
+} from "@lifecycle/contracts";
+import type { GitDiffInput, WorkspaceRuntime, WorkspaceWakeInput } from "./workspace-runtime";
+import { CloudWorkspaceRuntime, type CloudWorkspaceRuntimeClient } from "./cloud-workspace-runtime";
+import { LocalWorkspaceRuntime } from "./local-workspace-runtime";
 
-describe("workspace provider interface", () => {
-  test("defines the expected lifecycle method names", () => {
-    const requiredMethods: Array<keyof WorkspaceProvider> = [
-      "createWorkspace",
-      "renameWorkspace",
+describe("workspace runtime contract", () => {
+  test("defines the expected runtime method names", () => {
+    const requiredMethods: Array<keyof WorkspaceRuntime> = [
       "startServices",
       "healthCheck",
       "stopServices",
-      "runSetup",
       "sleep",
       "wake",
-      "destroy",
-      "getWorkspace",
-      "getWorkspaceServices",
-      "getWorkspaceSnapshot",
-      "getWorkspaceRuntimeProjection",
-      "updateWorkspaceService",
-      "syncWorkspaceManifest",
+      "getEnvironment",
+      "getActivity",
+      "getServiceLogs",
+      "getServices",
       "createTerminal",
-      "listWorkspaceTerminals",
+      "listTerminals",
       "getTerminal",
       "renameTerminal",
       "saveTerminalAttachment",
       "detachTerminal",
       "killTerminal",
       "interruptTerminal",
-      "readWorkspaceFile",
-      "writeWorkspaceFile",
-      "listWorkspaceFiles",
-      "openWorkspaceFile",
-      "exposePort",
+      "readFile",
+      "writeFile",
+      "listFiles",
+      "openFile",
       "getGitStatus",
       "getGitScopePatch",
       "getGitChangesPatch",
@@ -61,61 +53,55 @@ describe("workspace provider interface", () => {
       "mergeGitPullRequest",
     ];
 
-    expect(requiredMethods).toHaveLength(46);
+    expect(requiredMethods).toHaveLength(39);
   });
 
-  test("local provider exposes the full contract surface", () => {
+  test("local workspace runtime exposes the full contract surface", () => {
     const invoke = async () => "";
-    const provider = new LocalWorkspaceProvider(invoke);
-    expect(typeof provider.createWorkspace).toBe("function");
-    expect(typeof provider.renameWorkspace).toBe("function");
-    expect(typeof provider.startServices).toBe("function");
-    expect(typeof provider.healthCheck).toBe("function");
-    expect(typeof provider.stopServices).toBe("function");
-    expect(typeof provider.runSetup).toBe("function");
-    expect(typeof provider.sleep).toBe("function");
-    expect(typeof provider.wake).toBe("function");
-    expect(typeof provider.destroy).toBe("function");
-    expect(typeof provider.getWorkspace).toBe("function");
-    expect(typeof provider.getWorkspaceServices).toBe("function");
-    expect(typeof provider.getWorkspaceSnapshot).toBe("function");
-    expect(typeof provider.getWorkspaceRuntimeProjection).toBe("function");
-    expect(typeof provider.updateWorkspaceService).toBe("function");
-    expect(typeof provider.syncWorkspaceManifest).toBe("function");
-    expect(typeof provider.createTerminal).toBe("function");
-    expect(typeof provider.listWorkspaceTerminals).toBe("function");
-    expect(typeof provider.getTerminal).toBe("function");
-    expect(typeof provider.renameTerminal).toBe("function");
-    expect(typeof provider.saveTerminalAttachment).toBe("function");
-    expect(typeof provider.detachTerminal).toBe("function");
-    expect(typeof provider.killTerminal).toBe("function");
-    expect(typeof provider.interruptTerminal).toBe("function");
-    expect(typeof provider.readWorkspaceFile).toBe("function");
-    expect(typeof provider.writeWorkspaceFile).toBe("function");
-    expect(typeof provider.listWorkspaceFiles).toBe("function");
-    expect(typeof provider.openWorkspaceFile).toBe("function");
-    expect(typeof provider.exposePort).toBe("function");
-    expect(typeof provider.getGitStatus).toBe("function");
-    expect(typeof provider.getGitScopePatch).toBe("function");
-    expect(typeof provider.getGitChangesPatch).toBe("function");
-    expect(typeof provider.getGitDiff).toBe("function");
-    expect(typeof provider.listGitLog).toBe("function");
-    expect(typeof provider.listGitPullRequests).toBe("function");
-    expect(typeof provider.getGitPullRequest).toBe("function");
-    expect(typeof provider.getCurrentGitPullRequest).toBe("function");
-    expect(typeof provider.getGitBaseRef).toBe("function");
-    expect(typeof provider.getGitRefDiffPatch).toBe("function");
-    expect(typeof provider.getGitPullRequestPatch).toBe("function");
-    expect(typeof provider.getGitCommitPatch).toBe("function");
-    expect(typeof provider.stageGitFiles).toBe("function");
-    expect(typeof provider.unstageGitFiles).toBe("function");
-    expect(typeof provider.commitGit).toBe("function");
-    expect(typeof provider.pushGit).toBe("function");
-    expect(typeof provider.createGitPullRequest).toBe("function");
-    expect(typeof provider.mergeGitPullRequest).toBe("function");
+    const runtime = new LocalWorkspaceRuntime(invoke);
+
+    expect(typeof runtime.startServices).toBe("function");
+    expect(typeof runtime.healthCheck).toBe("function");
+    expect(typeof runtime.stopServices).toBe("function");
+    expect(typeof runtime.sleep).toBe("function");
+    expect(typeof runtime.wake).toBe("function");
+    expect(typeof runtime.getEnvironment).toBe("function");
+    expect(typeof runtime.getActivity).toBe("function");
+    expect(typeof runtime.getServiceLogs).toBe("function");
+    expect(typeof runtime.getServices).toBe("function");
+    expect(typeof runtime.createTerminal).toBe("function");
+    expect(typeof runtime.listTerminals).toBe("function");
+    expect(typeof runtime.getTerminal).toBe("function");
+    expect(typeof runtime.renameTerminal).toBe("function");
+    expect(typeof runtime.saveTerminalAttachment).toBe("function");
+    expect(typeof runtime.detachTerminal).toBe("function");
+    expect(typeof runtime.killTerminal).toBe("function");
+    expect(typeof runtime.interruptTerminal).toBe("function");
+    expect(typeof runtime.readFile).toBe("function");
+    expect(typeof runtime.writeFile).toBe("function");
+    expect(typeof runtime.listFiles).toBe("function");
+    expect(typeof runtime.openFile).toBe("function");
+    expect(typeof runtime.getGitStatus).toBe("function");
+    expect(typeof runtime.getGitScopePatch).toBe("function");
+    expect(typeof runtime.getGitChangesPatch).toBe("function");
+    expect(typeof runtime.getGitDiff).toBe("function");
+    expect(typeof runtime.listGitLog).toBe("function");
+    expect(typeof runtime.listGitPullRequests).toBe("function");
+    expect(typeof runtime.getGitPullRequest).toBe("function");
+    expect(typeof runtime.getCurrentGitPullRequest).toBe("function");
+    expect(typeof runtime.getGitBaseRef).toBe("function");
+    expect(typeof runtime.getGitRefDiffPatch).toBe("function");
+    expect(typeof runtime.getGitPullRequestPatch).toBe("function");
+    expect(typeof runtime.getGitCommitPatch).toBe("function");
+    expect(typeof runtime.stageGitFiles).toBe("function");
+    expect(typeof runtime.unstageGitFiles).toBe("function");
+    expect(typeof runtime.commitGit).toBe("function");
+    expect(typeof runtime.pushGit).toBe("function");
+    expect(typeof runtime.createGitPullRequest).toBe("function");
+    expect(typeof runtime.mergeGitPullRequest).toBe("function");
   });
 
-  test("cloud provider delegates the full contract surface", () => {
+  test("cloud workspace runtime delegates the full contract surface", async () => {
     const terminalResult: TerminalRecord = {
       id: "term_1",
       workspace_id: "ws_1",
@@ -131,37 +117,26 @@ describe("workspace provider interface", () => {
       last_active_at: "2026-03-05T08:00:00.000Z",
       ended_at: null,
     };
-    const client: CloudWorkspaceClient = {
-      createWorkspace: async () => {
-        throw new Error("not used");
-      },
-      renameWorkspace: async () => {
-        throw new Error("not used");
-      },
+    const environmentResult: EnvironmentRecord = {
+      workspace_id: "ws_1",
+      status: "idle",
+      failure_reason: null,
+      failed_at: null,
+      created_at: "2026-03-05T08:00:00.000Z",
+      updated_at: "2026-03-05T08:00:00.000Z",
+    };
+    const client: CloudWorkspaceRuntimeClient = {
       startServices: async () => [],
       healthCheck: async () => ({ healthy: false, services: [] }),
       stopServices: async () => {},
-      runSetup: async () => {},
       sleep: async () => {},
-      wake: async (_input: WorkspaceProviderWakeInput) => {},
-      destroy: async () => {},
-      getWorkspace: async () => null,
-      getWorkspaceServices: async () => [],
-      getWorkspaceSnapshot: async () => ({
-        services: [],
-        terminals: [],
-        workspace: null,
-      }),
-      getWorkspaceRuntimeProjection: async () => ({
-        activity: [],
-        environmentTasks: [],
-        serviceLogs: [],
-        setup: [],
-      }),
-      updateWorkspaceService: async () => {},
-      syncWorkspaceManifest: async () => {},
+      wake: async (_input: WorkspaceWakeInput) => {},
+      getEnvironment: async () => environmentResult,
+      getActivity: async () => [],
+      getServiceLogs: async () => [],
+      getServices: async () => [],
       createTerminal: async () => terminalResult,
-      listWorkspaceTerminals: async () => [],
+      listTerminals: async () => [],
       getTerminal: async () => null,
       renameTerminal: async () => terminalResult,
       saveTerminalAttachment: async () => ({
@@ -172,7 +147,7 @@ describe("workspace provider interface", () => {
       detachTerminal: async () => {},
       killTerminal: async () => {},
       interruptTerminal: async () => {},
-      readWorkspaceFile: async () => ({
+      readFile: async () => ({
         absolute_path: "/tmp/workspace/README.md",
         byte_len: 0,
         content: "",
@@ -181,7 +156,7 @@ describe("workspace provider interface", () => {
         is_binary: false,
         is_too_large: false,
       }),
-      writeWorkspaceFile: async () => ({
+      writeFile: async () => ({
         absolute_path: "/tmp/workspace/README.md",
         byte_len: 0,
         content: "",
@@ -190,9 +165,8 @@ describe("workspace provider interface", () => {
         is_binary: false,
         is_too_large: false,
       }),
-      listWorkspaceFiles: async () => [],
-      openWorkspaceFile: async () => {},
-      exposePort: async () => null,
+      listFiles: async () => [],
+      openFile: async () => {},
       getGitStatus: async () => ({
         branch: "feature/version-control",
         headSha: "abcdef1234567890",
@@ -203,7 +177,7 @@ describe("workspace provider interface", () => {
       }),
       getGitScopePatch: async () => "",
       getGitChangesPatch: async () => "",
-      getGitDiff: async (input: WorkspaceProviderGitDiffInput) => ({
+      getGitDiff: async (input: GitDiffInput) => ({
         scope: input.scope,
         filePath: input.filePath,
         patch: "",
@@ -294,197 +268,56 @@ describe("workspace provider interface", () => {
         url: "https://github.com/example/repo/pull/42",
       }),
     };
-    const provider = new CloudWorkspaceProvider(client);
-    expect(typeof provider.createWorkspace).toBe("function");
-    expect(typeof provider.renameWorkspace).toBe("function");
-    expect(typeof provider.startServices).toBe("function");
-    expect(typeof provider.healthCheck).toBe("function");
-    expect(typeof provider.stopServices).toBe("function");
-    expect(typeof provider.runSetup).toBe("function");
-    expect(typeof provider.sleep).toBe("function");
-    expect(typeof provider.wake).toBe("function");
-    expect(typeof provider.destroy).toBe("function");
-    expect(typeof provider.getWorkspace).toBe("function");
-    expect(typeof provider.getWorkspaceServices).toBe("function");
-    expect(typeof provider.getWorkspaceSnapshot).toBe("function");
-    expect(typeof provider.getWorkspaceRuntimeProjection).toBe("function");
-    expect(typeof provider.updateWorkspaceService).toBe("function");
-    expect(typeof provider.syncWorkspaceManifest).toBe("function");
-    expect(typeof provider.createTerminal).toBe("function");
-    expect(typeof provider.listWorkspaceTerminals).toBe("function");
-    expect(typeof provider.getTerminal).toBe("function");
-    expect(typeof provider.renameTerminal).toBe("function");
-    expect(typeof provider.saveTerminalAttachment).toBe("function");
-    expect(typeof provider.detachTerminal).toBe("function");
-    expect(typeof provider.killTerminal).toBe("function");
-    expect(typeof provider.interruptTerminal).toBe("function");
-    expect(typeof provider.readWorkspaceFile).toBe("function");
-    expect(typeof provider.writeWorkspaceFile).toBe("function");
-    expect(typeof provider.listWorkspaceFiles).toBe("function");
-    expect(typeof provider.openWorkspaceFile).toBe("function");
-    expect(typeof provider.exposePort).toBe("function");
-    expect(typeof provider.getGitStatus).toBe("function");
-    expect(typeof provider.getGitScopePatch).toBe("function");
-    expect(typeof provider.getGitChangesPatch).toBe("function");
-    expect(typeof provider.getGitDiff).toBe("function");
-    expect(typeof provider.listGitLog).toBe("function");
-    expect(typeof provider.listGitPullRequests).toBe("function");
-    expect(typeof provider.getGitPullRequest).toBe("function");
-    expect(typeof provider.getCurrentGitPullRequest).toBe("function");
-    expect(typeof provider.getGitBaseRef).toBe("function");
-    expect(typeof provider.getGitRefDiffPatch).toBe("function");
-    expect(typeof provider.getGitPullRequestPatch).toBe("function");
-    expect(typeof provider.getGitCommitPatch).toBe("function");
-    expect(typeof provider.stageGitFiles).toBe("function");
-    expect(typeof provider.unstageGitFiles).toBe("function");
-    expect(typeof provider.commitGit).toBe("function");
-    expect(typeof provider.pushGit).toBe("function");
-    expect(typeof provider.createGitPullRequest).toBe("function");
-    expect(typeof provider.mergeGitPullRequest).toBe("function");
+    const runtime = new CloudWorkspaceRuntime(client);
+
+    expect(typeof runtime.startServices).toBe("function");
+    expect(typeof runtime.healthCheck).toBe("function");
+    expect(typeof runtime.stopServices).toBe("function");
+    expect(typeof runtime.sleep).toBe("function");
+    expect(typeof runtime.wake).toBe("function");
+    expect(typeof runtime.getEnvironment).toBe("function");
+    expect(typeof runtime.getActivity).toBe("function");
+    expect(typeof runtime.getServiceLogs).toBe("function");
+    expect(typeof runtime.getServices).toBe("function");
+    expect(typeof runtime.createTerminal).toBe("function");
+    expect(typeof runtime.listTerminals).toBe("function");
+    expect(typeof runtime.getTerminal).toBe("function");
+    expect(typeof runtime.renameTerminal).toBe("function");
+    expect(typeof runtime.saveTerminalAttachment).toBe("function");
+    expect(typeof runtime.detachTerminal).toBe("function");
+    expect(typeof runtime.killTerminal).toBe("function");
+    expect(typeof runtime.interruptTerminal).toBe("function");
+    expect(typeof runtime.readFile).toBe("function");
+    expect(typeof runtime.writeFile).toBe("function");
+    expect(typeof runtime.listFiles).toBe("function");
+    expect(typeof runtime.openFile).toBe("function");
+    expect(typeof runtime.getGitStatus).toBe("function");
+    expect(typeof runtime.getGitScopePatch).toBe("function");
+    expect(typeof runtime.getGitChangesPatch).toBe("function");
+    expect(typeof runtime.getGitDiff).toBe("function");
+    expect(typeof runtime.listGitLog).toBe("function");
+    expect(typeof runtime.listGitPullRequests).toBe("function");
+    expect(typeof runtime.getGitPullRequest).toBe("function");
+    expect(typeof runtime.getCurrentGitPullRequest).toBe("function");
+    expect(typeof runtime.getGitBaseRef).toBe("function");
+    expect(typeof runtime.getGitRefDiffPatch).toBe("function");
+    expect(typeof runtime.getGitPullRequestPatch).toBe("function");
+    expect(typeof runtime.getGitCommitPatch).toBe("function");
+    expect(typeof runtime.stageGitFiles).toBe("function");
+    expect(typeof runtime.unstageGitFiles).toBe("function");
+    expect(typeof runtime.commitGit).toBe("function");
+    expect(typeof runtime.pushGit).toBe("function");
+    expect(typeof runtime.createGitPullRequest).toBe("function");
+    expect(typeof runtime.mergeGitPullRequest).toBe("function");
   });
 
-  test("create input supports provider-specific context via mode discriminator", () => {
-    const localInput: WorkspaceProviderCreateInput = {
-      workspaceId: "ws_local_1",
-      sourceRef: "lifecycle/local-1",
-      manifestPath: "/tmp/lifecycle.json",
-      resolvedSecrets: {},
-      context: {
-        mode: "local",
-        projectId: "project_1",
-        projectPath: "/tmp/project_1",
-      },
-    };
-
-    const cloudInput: WorkspaceProviderCreateInput = {
-      workspaceId: "ws_cloud_1",
-      sourceRef: "feature/cloud-1",
-      manifestPath: "/tmp/lifecycle.json",
-      resolvedSecrets: {},
-      context: {
-        mode: "cloud",
-        organizationId: "org_1",
-        repositoryId: "repo_1",
-        projectId: "project_1",
-      },
-    };
-
-    expect(localInput.context.mode).toBe("local");
-    expect(cloudInput.context.mode).toBe("cloud");
-  });
-
-  test("local provider rejects cloud create context", async () => {
-    const invoke = async () => "";
-    const provider = new LocalWorkspaceProvider(invoke);
-
-    await expect(
-      provider.createWorkspace({
-        workspaceId: "ws_cloud_1",
-        sourceRef: "feature/cloud-1",
-        manifestPath: "/tmp/lifecycle.json",
-        resolvedSecrets: {},
-        context: {
-          mode: "cloud",
-          organizationId: "org_1",
-          repositoryId: "repo_1",
-          projectId: "project_1",
-        },
-      }),
-    ).rejects.toThrow("LocalWorkspaceProvider requires context.mode='local'");
-  });
-
-  test("local provider forwards root workspace kind and returns root defaults", async () => {
-    const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
-    const invoke = async (cmd: string, args?: Record<string, unknown>) => {
-      calls.push(args ? { cmd, args } : { cmd });
-      return "ws_root_1";
-    };
-    const provider = new LocalWorkspaceProvider(invoke);
-
-    const result = await provider.createWorkspace({
-      workspaceId: "ws_root_1",
-      sourceRef: "main",
-      manifestPath: "/tmp/lifecycle.json",
-      resolvedSecrets: {},
-      context: {
-        mode: "local",
-        kind: "root",
-        projectId: "project_1",
-        projectPath: "/tmp/project_1",
-      },
-    });
-
-    expect(calls).toEqual([
-      {
-        cmd: "create_workspace",
-        args: {
-          input: {
-            kind: "root",
-            projectId: "project_1",
-            projectPath: "/tmp/project_1",
-            workspaceName: undefined,
-            baseRef: "main",
-            worktreeRoot: undefined,
-            manifestJson: undefined,
-            manifestFingerprint: undefined,
-          },
-        },
-      },
-    ]);
-    expect(result.workspace.id).toBe("ws_root_1");
-    expect(result.workspace.kind).toBe("root");
-    expect(result.workspace.name).toBe("Root");
-    expect(result.workspace.source_ref).toBe("main");
-  });
-
-  test("local provider forwards manifest metadata during workspace creation", async () => {
-    const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
-    const invoke = async (cmd: string, args?: Record<string, unknown>) => {
-      calls.push(args ? { cmd, args } : { cmd });
-      return "ws_1";
-    };
-    const provider = new LocalWorkspaceProvider(invoke);
-
-    await provider.createWorkspace({
-      workspaceId: "ws_1",
-      sourceRef: "main",
-      manifestPath: "/tmp/lifecycle.json",
-      manifestJson: '{"setup":{"steps":[]},"services":{}}',
-      manifestFingerprint: "manifest_1",
-      resolvedSecrets: {},
-      context: {
-        mode: "local",
-        projectId: "project_1",
-        projectPath: "/tmp/project_1",
-      },
-    });
-
-    expect(calls).toEqual([
-      {
-        cmd: "create_workspace",
-        args: {
-          input: {
-            kind: "managed",
-            projectId: "project_1",
-            projectPath: "/tmp/project_1",
-            workspaceName: undefined,
-            baseRef: "main",
-            worktreeRoot: undefined,
-            manifestJson: '{"setup":{"steps":[]},"services":{}}',
-            manifestFingerprint: "manifest_1",
-          },
-        },
-      },
-    ]);
-  });
-
-  test("local provider forwards manifest fingerprint when starting services", async () => {
+  test("local runtime forwards manifest fingerprint when starting services", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
       calls.push(args ? { cmd, args } : { cmd });
       return undefined;
     };
-    const provider = new LocalWorkspaceProvider(invoke);
+    const runtime = new LocalWorkspaceRuntime(invoke);
     const workspace: WorkspaceRecord = {
       id: "ws_1",
       project_id: "project_1",
@@ -494,10 +327,7 @@ describe("workspace provider interface", () => {
       git_sha: null,
       worktree_path: "/tmp/project_1/.worktrees/ws_1",
       mode: "local",
-      status: "idle",
       manifest_fingerprint: "manifest_1",
-      failure_reason: null,
-      failed_at: null,
       created_by: null,
       source_workspace_id: null,
       created_at: "2026-03-12T00:00:00.000Z",
@@ -508,26 +338,22 @@ describe("workspace provider interface", () => {
     const services: ServiceRecord[] = [
       {
         id: "svc_1",
-        workspace_id: "ws_1",
-        service_name: "web",
-        exposure: "local",
-        port_override: null,
+        environment_id: "ws_1",
+        name: "web",
         status: "stopped",
         status_reason: null,
         assigned_port: 1420,
-        preview_status: "sleeping",
-        preview_failure_reason: null,
         preview_url: "http://127.0.0.1:1420",
         created_at: "2026-03-12T00:00:00.000Z",
         updated_at: "2026-03-12T00:00:00.000Z",
       },
     ];
 
-    const result = await provider.startServices({
+    const result = await runtime.startServices({
       workspace,
       services,
       manifestJson:
-        '{"setup":{"steps":[]},"services":{"web":{"runtime":"process","command":"bun run dev"}}}',
+        '{"workspace":{"prepare":[],"teardown":[]},"environment":{"web":{"kind":"service","runtime":"process","command":"bun run dev"}}}',
       manifestFingerprint: "manifest_1",
     });
 
@@ -538,7 +364,7 @@ describe("workspace provider interface", () => {
         args: {
           workspaceId: "ws_1",
           manifestJson:
-            '{"setup":{"steps":[]},"services":{"web":{"runtime":"process","command":"bun run dev"}}}',
+            '{"workspace":{"prepare":[],"teardown":[]},"environment":{"web":{"kind":"service","runtime":"process","command":"bun run dev"}}}',
           manifestFingerprint: "manifest_1",
           serviceNames: undefined,
         },
@@ -546,15 +372,15 @@ describe("workspace provider interface", () => {
     ]);
   });
 
-  test("local provider wake reuses the start-services contract", async () => {
+  test("local runtime wake reuses the start-services contract", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
       calls.push(args ? { cmd, args } : { cmd });
       return undefined;
     };
-    const provider = new LocalWorkspaceProvider(invoke);
+    const runtime = new LocalWorkspaceRuntime(invoke);
 
-    await provider.wake({
+    await runtime.wake({
       workspace: {
         id: "ws_1",
         project_id: "project_1",
@@ -564,10 +390,7 @@ describe("workspace provider interface", () => {
         git_sha: null,
         worktree_path: "/tmp/project_1/.worktrees/ws_1",
         mode: "local",
-        status: "idle",
         manifest_fingerprint: "manifest_1",
-        failure_reason: null,
-        failed_at: null,
         created_by: null,
         source_workspace_id: null,
         created_at: "2026-03-12T00:00:00.000Z",
@@ -576,7 +399,7 @@ describe("workspace provider interface", () => {
         expires_at: null,
       },
       services: [],
-      manifestJson: '{"setup":{"steps":[]},"services":{}}',
+      manifestJson: '{"workspace":{"prepare":[],"teardown":[]},"environment":{}}',
       manifestFingerprint: "manifest_1",
     });
 
@@ -585,7 +408,7 @@ describe("workspace provider interface", () => {
         cmd: "start_services",
         args: {
           workspaceId: "ws_1",
-          manifestJson: '{"setup":{"steps":[]},"services":{}}',
+          manifestJson: '{"workspace":{"prepare":[],"teardown":[]},"environment":{}}',
           manifestFingerprint: "manifest_1",
           serviceNames: undefined,
         },
@@ -593,15 +416,15 @@ describe("workspace provider interface", () => {
     ]);
   });
 
-  test("local provider forwards targeted service starts", async () => {
+  test("local runtime forwards targeted service starts", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
       calls.push(args ? { cmd, args } : { cmd });
       return undefined;
     };
-    const provider = new LocalWorkspaceProvider(invoke);
+    const runtime = new LocalWorkspaceRuntime(invoke);
 
-    await provider.startServices({
+    await runtime.startServices({
       serviceNames: ["www"],
       workspace: {
         id: "ws_1",
@@ -612,10 +435,7 @@ describe("workspace provider interface", () => {
         git_sha: null,
         worktree_path: "/tmp/project_1/.worktrees/ws_1",
         mode: "local",
-        status: "idle",
         manifest_fingerprint: "manifest_1",
-        failure_reason: null,
-        failed_at: null,
         created_by: null,
         source_workspace_id: null,
         created_at: "2026-03-12T00:00:00.000Z",
@@ -643,48 +463,8 @@ describe("workspace provider interface", () => {
     ]);
   });
 
-  test("local provider destroys workspaces through the desktop command surface", async () => {
+  test("local runtime forwards runtime reads, files, terminals, and health checks", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
-    const invoke = async (cmd: string, args?: Record<string, unknown>) => {
-      calls.push(args ? { cmd, args } : { cmd });
-      return undefined;
-    };
-    const provider = new LocalWorkspaceProvider(invoke);
-
-    await provider.destroy("ws_1");
-
-    expect(calls).toEqual([
-      {
-        cmd: "destroy_workspace",
-        args: {
-          workspaceId: "ws_1",
-        },
-      },
-    ]);
-  });
-
-  test("local provider forwards workspace queries, manifest sync, and file operations", async () => {
-    const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
-    const workspace: WorkspaceRecord = {
-      id: "ws_1",
-      project_id: "project_1",
-      name: "Workspace 1",
-      kind: "managed",
-      source_ref: "lifecycle/workspace-1",
-      git_sha: null,
-      worktree_path: "/tmp/project_1/.worktrees/ws_1",
-      mode: "local",
-      status: "active",
-      manifest_fingerprint: "manifest_1",
-      failure_reason: null,
-      failed_at: null,
-      created_by: null,
-      source_workspace_id: null,
-      created_at: "2026-03-12T00:00:00.000Z",
-      updated_at: "2026-03-12T00:00:00.000Z",
-      last_active_at: "2026-03-12T00:00:00.000Z",
-      expires_at: null,
-    };
     const terminal: TerminalRecord = {
       id: "term_1",
       workspace_id: "ws_1",
@@ -703,15 +483,11 @@ describe("workspace provider interface", () => {
     const services: ServiceRecord[] = [
       {
         id: "svc_1",
-        workspace_id: "ws_1",
-        service_name: "web",
-        exposure: "local",
-        port_override: null,
+        environment_id: "ws_1",
+        name: "web",
         status: "ready",
         status_reason: null,
         assigned_port: 1420,
-        preview_status: "ready",
-        preview_failure_reason: null,
         preview_url: "http://127.0.0.1:1420",
         created_at: "2026-03-12T00:00:00.000Z",
         updated_at: "2026-03-12T00:00:00.000Z",
@@ -735,25 +511,20 @@ describe("workspace provider interface", () => {
       calls.push(args ? { cmd, args } : { cmd });
 
       switch (cmd) {
-        case "rename_workspace":
-          return { ...workspace, name: String(args?.name ?? workspace.name) };
-        case "get_workspace_by_id":
-          return workspace;
+        case "get_workspace_environment":
+          return {
+            workspace_id: "ws_1",
+            status: "idle",
+            failure_reason: null,
+            failed_at: null,
+            created_at: "2026-03-12T00:00:00.000Z",
+            updated_at: "2026-03-12T00:00:00.000Z",
+          } satisfies EnvironmentRecord;
+        case "get_workspace_activity":
+        case "get_workspace_service_logs":
+          return [];
         case "get_workspace_services":
           return services;
-        case "get_workspace_snapshot":
-          return {
-            services,
-            terminals: [terminal],
-            workspace,
-          };
-        case "get_workspace_runtime_projection":
-          return {
-            activity: [],
-            environmentTasks: [],
-            serviceLogs: [],
-            setup: [],
-          };
         case "read_workspace_file":
         case "write_workspace_file":
           return fileResult;
@@ -774,47 +545,52 @@ describe("workspace provider interface", () => {
           return undefined;
       }
     };
-    const provider = new LocalWorkspaceProvider(invoke);
+    const runtime = new LocalWorkspaceRuntime(invoke);
 
-    await provider.renameWorkspace("ws_1", "Renamed Workspace");
-    await provider.getWorkspace("ws_1");
-    await provider.getWorkspaceServices("ws_1");
-    await provider.getWorkspaceSnapshot("ws_1");
-    await provider.getWorkspaceRuntimeProjection("ws_1");
-    await provider.updateWorkspaceService({
-      workspaceId: "ws_1",
-      serviceName: "web",
-      exposure: "local",
-      portOverride: 3000,
-    });
-    await provider.syncWorkspaceManifest({
-      workspaceId: "ws_1",
-      manifestJson: '{"services":{"web":{}}}',
-      manifestFingerprint: "manifest_2",
-    });
-    await provider.listWorkspaceTerminals("ws_1");
-    await provider.getTerminal("term_1");
-    await provider.renameTerminal("term_1", "Codex Session");
-    await provider.saveTerminalAttachment({
+    await runtime.healthCheck("ws_1");
+    await runtime.getEnvironment("ws_1");
+    await runtime.getActivity("ws_1");
+    await runtime.getServiceLogs("ws_1");
+    await runtime.getServices("ws_1");
+    await runtime.listTerminals("ws_1");
+    await runtime.getTerminal("term_1");
+    await runtime.renameTerminal("term_1", "Codex Session");
+    await runtime.saveTerminalAttachment({
       base64Data: "ZmFrZQ==",
       fileName: "screenshot.png",
       workspaceId: "ws_1",
     });
-    await provider.readWorkspaceFile("ws_1", "README.md");
-    await provider.writeWorkspaceFile("ws_1", "README.md", "welcome");
-    await provider.listWorkspaceFiles("ws_1");
-    await provider.openWorkspaceFile("ws_1", "README.md");
+    await runtime.readFile("ws_1", "README.md");
+    await runtime.writeFile("ws_1", "README.md", "welcome");
+    await runtime.listFiles("ws_1");
+    await runtime.openFile("ws_1", "README.md");
+    await runtime.stopServices("ws_1");
+    await runtime.sleep("ws_1");
+    await runtime.detachTerminal("term_1");
+    await runtime.killTerminal("term_1");
+    await runtime.interruptTerminal("term_1");
 
     expect(calls).toEqual([
       {
-        cmd: "rename_workspace",
+        cmd: "get_workspace_services",
         args: {
           workspaceId: "ws_1",
-          name: "Renamed Workspace",
         },
       },
       {
-        cmd: "get_workspace_by_id",
+        cmd: "get_workspace_environment",
+        args: {
+          workspaceId: "ws_1",
+        },
+      },
+      {
+        cmd: "get_workspace_activity",
+        args: {
+          workspaceId: "ws_1",
+        },
+      },
+      {
+        cmd: "get_workspace_service_logs",
         args: {
           workspaceId: "ws_1",
         },
@@ -823,35 +599,6 @@ describe("workspace provider interface", () => {
         cmd: "get_workspace_services",
         args: {
           workspaceId: "ws_1",
-        },
-      },
-      {
-        cmd: "get_workspace_snapshot",
-        args: {
-          workspaceId: "ws_1",
-        },
-      },
-      {
-        cmd: "get_workspace_runtime_projection",
-        args: {
-          workspaceId: "ws_1",
-        },
-      },
-      {
-        cmd: "update_workspace_service",
-        args: {
-          workspaceId: "ws_1",
-          serviceName: "web",
-          exposure: "local",
-          portOverride: 3000,
-        },
-      },
-      {
-        cmd: "sync_workspace_manifest",
-        args: {
-          workspaceId: "ws_1",
-          manifestJson: '{"services":{"web":{}}}',
-          manifestFingerprint: "manifest_2",
         },
       },
       {
@@ -910,59 +657,40 @@ describe("workspace provider interface", () => {
           filePath: "README.md",
         },
       },
-    ]);
-  });
-
-  test("local provider exposes a service and returns the preview url", async () => {
-    const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
-    const invoke = async (cmd: string, args?: Record<string, unknown>) => {
-      calls.push(args ? { cmd, args } : { cmd });
-      if (cmd === "get_workspace_services") {
-        return [
-          {
-            id: "svc_1",
-            workspace_id: "ws_1",
-            service_name: "web",
-            exposure: "local",
-            port_override: 1420,
-            status: "stopped",
-            status_reason: null,
-            assigned_port: 1420,
-            preview_status: "sleeping",
-            preview_failure_reason: null,
-            preview_url: "http://127.0.0.1:1420",
-            created_at: "2026-03-12T00:00:00.000Z",
-            updated_at: "2026-03-12T00:00:00.000Z",
-          },
-        ] satisfies ServiceRecord[];
-      }
-      return undefined;
-    };
-    const provider = new LocalWorkspaceProvider(invoke);
-
-    const previewUrl = await provider.exposePort("ws_1", "web", 1420);
-
-    expect(previewUrl).toBe("http://127.0.0.1:1420");
-    expect(calls).toEqual([
       {
-        cmd: "update_workspace_service",
+        cmd: "stop_workspace",
         args: {
           workspaceId: "ws_1",
-          serviceName: "web",
-          exposure: "local",
-          portOverride: 1420,
         },
       },
       {
-        cmd: "get_workspace_services",
+        cmd: "stop_workspace",
         args: {
           workspaceId: "ws_1",
+        },
+      },
+      {
+        cmd: "detach_terminal",
+        args: {
+          terminalId: "term_1",
+        },
+      },
+      {
+        cmd: "kill_terminal",
+        args: {
+          terminalId: "term_1",
+        },
+      },
+      {
+        cmd: "interrupt_terminal",
+        args: {
+          terminalId: "term_1",
         },
       },
     ]);
   });
 
-  test("local provider forwards optional harness session ids", async () => {
+  test("local runtime forwards optional harness session ids", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
       if (args) {
@@ -986,9 +714,9 @@ describe("workspace provider interface", () => {
         ended_at: null,
       };
     };
-    const provider = new LocalWorkspaceProvider(invoke);
+    const runtime = new LocalWorkspaceRuntime(invoke);
 
-    await provider.createTerminal({
+    await runtime.createTerminal({
       workspaceId: "ws_1",
       launchType: "harness",
       harnessProvider: "claude",
@@ -1009,7 +737,7 @@ describe("workspace provider interface", () => {
     ]);
   });
 
-  test("local provider forwards git operations by workspace id", async () => {
+  test("local runtime forwards git operations by workspace id", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
       if (args) {
@@ -1037,6 +765,8 @@ describe("workspace provider interface", () => {
             patch: "",
             isBinary: false,
           };
+        case "get_workspace_git_changes_patch":
+          return "";
         case "list_workspace_git_log":
           return [];
         case "list_workspace_git_pull_requests":
@@ -1135,29 +865,30 @@ describe("workspace provider interface", () => {
           return undefined;
       }
     };
-    const provider = new LocalWorkspaceProvider(invoke);
+    const runtime = new LocalWorkspaceRuntime(invoke);
 
-    await provider.getGitStatus("ws_1");
-    await provider.getGitScopePatch("ws_1", "working");
-    await provider.getGitDiff({
+    await runtime.getGitStatus("ws_1");
+    await runtime.getGitScopePatch("ws_1", "working");
+    await runtime.getGitChangesPatch("ws_1");
+    await runtime.getGitDiff({
       workspaceId: "ws_1",
       filePath: "src/app.ts",
       scope: "working",
     });
-    await provider.listGitLog("ws_1", 25);
-    await provider.listGitPullRequests("ws_1");
-    await provider.getGitPullRequest("ws_1", 42);
-    await provider.getCurrentGitPullRequest("ws_1");
-    await provider.getGitBaseRef("ws_1");
-    await provider.getGitRefDiffPatch("ws_1", "main", "HEAD");
-    await provider.getGitPullRequestPatch("ws_1", 42);
-    await provider.getGitCommitPatch("ws_1", "abcdef1234567890");
-    await provider.stageGitFiles("ws_1", ["src/app.ts"]);
-    await provider.unstageGitFiles("ws_1", ["src/app.ts"]);
-    await provider.commitGit("ws_1", "feat: add version control");
-    await provider.pushGit("ws_1");
-    await provider.createGitPullRequest("ws_1");
-    await provider.mergeGitPullRequest("ws_1", 42);
+    await runtime.listGitLog("ws_1", 25);
+    await runtime.listGitPullRequests("ws_1");
+    await runtime.getGitPullRequest("ws_1", 42);
+    await runtime.getCurrentGitPullRequest("ws_1");
+    await runtime.getGitBaseRef("ws_1");
+    await runtime.getGitRefDiffPatch("ws_1", "main", "HEAD");
+    await runtime.getGitPullRequestPatch("ws_1", 42);
+    await runtime.getGitCommitPatch("ws_1", "abcdef1234567890");
+    await runtime.stageGitFiles("ws_1", ["src/app.ts"]);
+    await runtime.unstageGitFiles("ws_1", ["src/app.ts"]);
+    await runtime.commitGit("ws_1", "feat: add version control");
+    await runtime.pushGit("ws_1");
+    await runtime.createGitPullRequest("ws_1");
+    await runtime.mergeGitPullRequest("ws_1", 42);
 
     expect(calls).toEqual([
       {
@@ -1171,6 +902,12 @@ describe("workspace provider interface", () => {
         args: {
           workspaceId: "ws_1",
           scope: "working",
+        },
+      },
+      {
+        cmd: "get_workspace_git_changes_patch",
+        args: {
+          workspaceId: "ws_1",
         },
       },
       {

@@ -1,7 +1,7 @@
 import { ScrollArea } from "@lifecycle/ui";
-import type { CommandPaletteCommand } from "./types";
-import { CommandPaletteItem } from "./command-palette-item";
-import { buildCommandPaletteSections } from "./command-palette-sections";
+import type { CommandPaletteCommand } from "@/features/command-palette/types";
+import { CommandPaletteItem } from "@/features/command-palette/command-palette-item";
+import { buildCommandPaletteSections } from "@/features/command-palette/command-palette-sections";
 
 interface CommandPaletteListProps {
   commands: CommandPaletteCommand[];

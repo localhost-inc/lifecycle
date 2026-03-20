@@ -6,7 +6,7 @@ import {
   normalizeClaudeHarnessSettings,
   type ClaudeHarnessLaunchConfig,
   type ClaudeHarnessSettings,
-} from "./harnesses/claude";
+} from "@/features/settings/state/harnesses/claude";
 import {
   buildCodexHarnessLaunchConfig,
   buildCodexHarnessSettingsFromPreset,
@@ -16,12 +16,12 @@ import {
   normalizeCodexHarnessSettings,
   type CodexHarnessLaunchConfig,
   type CodexHarnessSettings,
-} from "./harnesses/codex";
-import { harnessPresetOptions, isRecord } from "./harnesses/shared";
+} from "@/features/settings/state/harnesses/codex";
+import { harnessPresetOptions, isRecord } from "@/features/settings/state/harnesses/shared";
 
-export type { ClaudePermissionMode } from "./harnesses/claude";
-export type { CodexApprovalPolicy, CodexSandboxMode } from "./harnesses/codex";
-export type { HarnessPreset } from "./harnesses/shared";
+export type { ClaudePermissionMode } from "@/features/settings/state/harnesses/claude";
+export type { CodexApprovalPolicy, CodexSandboxMode } from "@/features/settings/state/harnesses/codex";
+export type { HarnessPreset } from "@/features/settings/state/harnesses/shared";
 export {
   buildClaudeHarnessSettingsFromPreset,
   claudeHarnessSettingsUseCustomValues,

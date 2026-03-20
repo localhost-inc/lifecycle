@@ -1,5 +1,5 @@
 import { cn, Spinner } from "@lifecycle/ui";
-import { ResponseReadyDot } from "../../../components/response-ready-dot";
+import { ResponseReadyDot } from "@/components/response-ready-dot";
 
 export type WorkspaceSessionStatusState = "hidden" | "loading" | "ready";
 

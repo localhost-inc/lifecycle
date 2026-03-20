@@ -1,7 +1,7 @@
 import { EmptyState } from "@lifecycle/ui";
-import { useWorkspaceTerminals } from "../hooks";
-import { createTerminal, type CreateTerminalRequest } from "../api";
-import { TerminalSessionHistory } from "./terminal-session-history";
+import { useWorkspaceTerminals } from "@/features/terminals/hooks";
+import { createTerminal, type CreateTerminalRequest } from "@/features/terminals/api";
+import { TerminalSessionHistory } from "@/features/terminals/components/terminal-session-history";
 
 interface SessionHistoryPanelProps {
   onFocusTerminal: (terminalId: string) => void;
@@ -16,9 +16,7 @@ export function SessionHistoryPanel({ onFocusTerminal, workspaceId }: SessionHis
     onFocusTerminal(terminalId);
   }
 
-  function handleResumeTerminal(
-    input: Extract<CreateTerminalRequest, { launchType: "harness" }>,
-  ) {
+  function handleResumeTerminal(input: Extract<CreateTerminalRequest, { launchType: "harness" }>) {
     void createTerminal({ ...input, workspaceId });
   }
 

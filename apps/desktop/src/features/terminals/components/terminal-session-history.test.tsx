@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { TerminalSessionHistory } from "./terminal-session-history";
+import { TerminalSessionHistory } from "@/features/terminals/components/terminal-session-history";
 
 describe("TerminalSessionHistory", () => {
   test("renders open and resume actions from persisted workspace sessions", () => {

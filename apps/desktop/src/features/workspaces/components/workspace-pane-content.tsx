@@ -1,12 +1,12 @@
 import type { TerminalRecord } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
 import { TerminalSquare } from "lucide-react";
-import type { CreateTerminalRequest, HarnessProvider } from "../../terminals/api";
-import { TerminalSurface } from "../../terminals/components/terminal-surface";
-import { GitDiffSurface } from "../../git/components/git-diff-surface";
-import { PullRequestSurface } from "../../git/components/pull-request-surface";
-import { FileSurface } from "../../files/components/file-surface";
-import type { FileViewerSessionState } from "../../files/lib/file-session";
+import type { CreateTerminalRequest, HarnessProvider } from "@/features/terminals/api";
+import { TerminalSurface } from "@/features/terminals/components/terminal-surface";
+import { GitDiffSurface } from "@/features/git/components/git-diff-surface";
+import { PullRequestSurface } from "@/features/git/components/pull-request-surface";
+import { FileSurface } from "@/features/files/components/file-surface";
+import type { FileViewerSessionState } from "@/features/files/lib/file-session";
 import {
   isChangesDiffDocument,
   isCommitDiffDocument,
@@ -14,9 +14,9 @@ import {
   isPullRequestDocument,
   type WorkspaceCanvasDocument,
   type WorkspaceCanvasTabViewState,
-} from "../state/workspace-canvas-state";
-import { WorkspaceEmptyPaneState } from "./workspace-empty-pane-state";
-import { canvasTabDomId, canvasTabPanelId } from "./workspace-canvas-ids";
+} from "@/features/workspaces/state/workspace-canvas-state";
+import { WorkspaceEmptyPaneState } from "@/features/workspaces/components/workspace-empty-pane-state";
+import { canvasTabDomId, canvasTabPanelId } from "@/features/workspaces/components/workspace-canvas-ids";
 
 interface WorkspacePaneContentProps {
   activeTabKey: string | null;
@@ -144,7 +144,6 @@ export function WorkspacePaneContent({
           filePath={activeDocument.filePath}
           initialMode={activeTabViewState?.fileMode}
           initialScrollTop={activeTabViewState?.scrollTop ?? 0}
-          onOpenFile={onOpenFile}
           onSessionStateChange={(nextState) =>
             onFileSessionStateChange(activeDocument.key, nextState)
           }

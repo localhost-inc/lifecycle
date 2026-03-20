@@ -1,5 +1,5 @@
-import type { HarnessPreset } from "./shared";
-import { isRecord, normalizeBoolean, normalizeHarnessPreset } from "./shared";
+import type { HarnessPreset } from "@/features/settings/state/harnesses/shared";
+import { isRecord, normalizeBoolean, normalizeHarnessPreset } from "@/features/settings/state/harnesses/shared";
 
 export type ClaudePermissionMode =
   | "acceptEdits"

@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   buildWorkspaceGitActionState,
   type WorkspaceGitActionStateKind,
-} from "../lib/workspace-git-action-state";
+} from "@/features/git/lib/workspace-git-action-state";
 
 interface GitActionBarProps {
   actionError: string | null;
@@ -146,7 +146,15 @@ export function GitActionBar({
         }
         break;
     }
-  }, [actionState, commitFlow, commitMessage, onCommit, onCreatePullRequest, onMergePullRequest, onPushBranch]);
+  }, [
+    actionState,
+    commitFlow,
+    commitMessage,
+    onCommit,
+    onCreatePullRequest,
+    onMergePullRequest,
+    onPushBranch,
+  ]);
 
   if (HIDDEN.has(actionState.kind)) {
     return null;
@@ -164,8 +172,7 @@ export function GitActionBar({
     return "Continue";
   }
 
-  const continueDisabled =
-    isBusy || (actionState.kind === "needs_commit" && !hasCommitMessage);
+  const continueDisabled = isBusy || (actionState.kind === "needs_commit" && !hasCommitMessage);
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex flex-col items-center px-2.5 pb-2.5">
@@ -217,11 +224,15 @@ export function GitActionBar({
                             {(summary.insertions > 0 || summary.deletions > 0) && (
                               <span className="font-mono">
                                 {summary.insertions > 0 && (
-                                  <span className="text-[var(--git-status-added)]">+{summary.insertions}</span>
+                                  <span className="text-[var(--git-status-added)]">
+                                    +{summary.insertions}
+                                  </span>
                                 )}
                                 {summary.insertions > 0 && summary.deletions > 0 && " "}
                                 {summary.deletions > 0 && (
-                                  <span className="text-[var(--git-status-deleted)]">-{summary.deletions}</span>
+                                  <span className="text-[var(--git-status-deleted)]">
+                                    -{summary.deletions}
+                                  </span>
                                 )}
                               </span>
                             )}
@@ -241,7 +252,12 @@ export function GitActionBar({
                       className="flex min-h-[72px] w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--foreground)] outline-none transition-colors placeholder:text-[var(--muted-foreground)] focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
                       onChange={(event) => setCommitMessage(event.target.value)}
                       onKeyDown={(event) => {
-                        if (event.key === "Enter" && !event.shiftKey && hasCommitMessage && !isBusy) {
+                        if (
+                          event.key === "Enter" &&
+                          !event.shiftKey &&
+                          hasCommitMessage &&
+                          !isBusy
+                        ) {
                           event.preventDefault();
                           void handleContinue();
                         }
@@ -259,9 +275,7 @@ export function GitActionBar({
                   {/* Next steps */}
                   {canPushAfterCommit && (
                     <div className="space-y-1.5">
-                      <p className="text-[12px] font-medium text-[var(--foreground)]">
-                        Next steps
-                      </p>
+                      <p className="text-[12px] font-medium text-[var(--foreground)]">Next steps</p>
                       <OptionList
                         items={COMMIT_FLOW_OPTIONS}
                         onChange={setCommitFlow}
@@ -290,9 +304,8 @@ export function GitActionBar({
                     {actionState.pullRequest.title}
                   </p>
                   <p className="mt-0.5 text-[12px] text-[var(--muted-foreground)]">
-                    #{actionState.pullRequest.number} &middot;{" "}
-                    {actionState.pullRequest.headRefName} &rarr;{" "}
-                    {actionState.pullRequest.baseRefName}
+                    #{actionState.pullRequest.number} &middot; {actionState.pullRequest.headRefName}{" "}
+                    &rarr; {actionState.pullRequest.baseRefName}
                   </p>
                 </div>
               )}
@@ -323,7 +336,13 @@ export function GitActionBar({
             transition={{ type: "spring", duration: 0.35, bounce: 0 }}
             className="pointer-events-auto flex justify-center pb-1"
           >
-            <Button className="px-8" disabled={isBusy} onClick={handleBarClick} size="lg" variant="glass">
+            <Button
+              className="px-8"
+              disabled={isBusy}
+              onClick={handleBarClick}
+              size="lg"
+              variant="glass"
+            >
               {actionState.primaryAction.label}
             </Button>
           </motion.div>

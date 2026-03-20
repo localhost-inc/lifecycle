@@ -2,10 +2,10 @@ import { parse as parseJsonc, ParseError } from "jsonc-parser";
 import { z } from "zod";
 
 const UNSUPPORTED_SECRETS_MESSAGE =
-  "Managed secrets are not supported in local lifecycle.json yet. Materialize local env files in workspace setup instead.";
+  "Managed secrets are not supported in local lifecycle.json yet. Materialize local env files in workspace prepare instead.";
 
 const UNSUPPORTED_SECRET_TEMPLATE_MESSAGE =
-  "`${secrets.*}` is not supported in local lifecycle.json. Materialize local env files in workspace setup instead.";
+  "`${secrets.*}` is not supported in local lifecycle.json. Materialize local env files in workspace prepare instead.";
 
 const UNSUPPORTED_RESET_MESSAGE =
   "`reset` is not part of the current lifecycle.json contract yet. Remove it from the manifest for now.";
@@ -76,16 +76,16 @@ const WorkspaceStepSchema = z
 
 const WorkspaceSchema = z
   .object({
-    setup: z.array(WorkspaceStepSchema).default([]),
+    prepare: z.array(WorkspaceStepSchema).default([]),
     teardown: z.array(WorkspaceStepSchema).optional(),
   })
   .superRefine((workspace, ctx) => {
-    workspace.setup.forEach((step, index) => {
+    workspace.prepare.forEach((step, index) => {
       if (step.depends_on) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "workspace.setup steps cannot declare depends_on",
-          path: ["setup", index, "depends_on"],
+          message: "workspace.prepare steps cannot declare depends_on",
+          path: ["prepare", index, "depends_on"],
         });
       }
     });

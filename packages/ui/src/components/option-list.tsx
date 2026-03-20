@@ -31,12 +31,7 @@ function CheckIcon({ className }: { className?: string }) {
   );
 }
 
-function OptionList<T extends string>({
-  className,
-  items,
-  onChange,
-  value,
-}: OptionListProps<T>) {
+function OptionList<T extends string>({ className, items, onChange, value }: OptionListProps<T>) {
   return (
     <div
       className={cn(

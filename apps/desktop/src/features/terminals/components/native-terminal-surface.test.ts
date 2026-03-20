@@ -8,7 +8,7 @@ import {
   scheduleNativeTerminalSurfaceLeaseHide,
   shouldHideNativeTerminalSurfaceForTabDrag,
   shouldShowNativeTerminalSurface,
-} from "./native-terminal-surface";
+} from "@/features/terminals/components/native-terminal-surface";
 
 describe("shouldShowNativeTerminalSurface", () => {
   test("requires a live session with measurable bounds", () => {

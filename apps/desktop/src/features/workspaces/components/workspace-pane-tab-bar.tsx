@@ -8,14 +8,14 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import { WorkspaceSurfaceTabLeading } from "./surface-icons";
+import { WorkspaceSurfaceTabLeading } from "@/features/workspaces/components/surface-icons";
 import {
   getWorkspaceTabDragShiftDirection,
   type WorkspaceCanvasTab,
   type WorkspaceTabPlacement,
-} from "./workspace-canvas-tabs";
-import { formatWorkspaceError } from "../lib/workspace-errors";
-import { WorkspacePaneTabItem } from "./workspace-pane-tab-item";
+} from "@/features/workspaces/components/workspace-canvas-tabs";
+import { formatWorkspaceError } from "@/features/workspaces/lib/workspace-errors";
+import { WorkspacePaneTabItem } from "@/features/workspaces/components/workspace-pane-tab-item";
 
 const TAB_DRAG_GAP_PX = 0;
 const TAB_DRAG_START_THRESHOLD_PX = 6;

@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
-import { readFileSaveHotkey } from "../../features/files/lib/file-renderers";
-import { readWorkspaceTabHotkeyAction } from "../../features/workspaces/components/workspace-canvas-shortcuts";
-import { isEditableTarget, isMacPlatform, readAppHotkeyAction } from "../app-hotkeys";
-import type { RegisteredShortcutId } from "./shortcut-registry";
+import { readFileSaveHotkey } from "@/features/files/lib/file-renderers";
+import { readWorkspaceTabHotkeyAction } from "@/features/workspaces/components/workspace-canvas-shortcuts";
+import { isEditableTarget, isMacPlatform, readAppHotkeyAction } from "@/app/app-hotkeys";
+import type { RegisteredShortcutId } from "@/app/shortcuts/shortcut-registry";
 
 export const SHORTCUT_HANDLER_PRIORITY = {
   app: 0,

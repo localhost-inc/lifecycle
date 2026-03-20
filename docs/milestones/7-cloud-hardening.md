@@ -11,7 +11,7 @@ Cloud workspaces get the same lifecycle depth as local: sleep, wake, and destroy
 ## What You Build
 
 1. Cloud sleep: R2 backup of worktree filesystem, terminate sandbox.
-2. Cloud wake: provision new sandbox, restore from R2, re-run service startup (skip setup/clone).
+2. Cloud wake: provision new sandbox, restore from R2, re-run service startup (skip workspace preparation/clone).
 3. Cloud destroy: terminate sandbox, revoke credentials, clean metadata.
 4. TTL enforcement: 24-hour default, daily sweeper, audit events on expiration.
 5. Org quotas: max active workspaces per organization.
@@ -22,9 +22,9 @@ Cloud workspaces get the same lifecycle depth as local: sleep, wake, and destroy
 
 **Mental model:** A Lifecycle workspace is a reproducible environment with optional hibernation, not a persistent VM. Every wake is a partial reconstruction. Reproducibility > persistence.
 
-Part of `WorkspaceProvider.sleep()` / `.wake()`.
+Part of `WorkspaceRuntime.sleep()` / `.wake()`.
 
-#### `CloudWorkspaceProvider` Persistence
+#### `CloudWorkspaceRuntime` Persistence
 
 What survives sleep:
 
@@ -41,13 +41,13 @@ What survives sleep:
 Sleep/wake contract:
 
 1. Sleep: back up worktree filesystem to R2. Terminate sandbox. Record `sleeping` state.
-2. Wake: provision new sandbox, restore worktree from R2, re-run service startup (pull/start/health-check). Skip `setup` and `git clone`.
+2. Wake: provision new sandbox, restore worktree from R2, re-run service startup (pull/start/health-check). Skip workspace preparation and `git clone`.
 3. Docker data is NOT backed up in V1. Wake re-seeds if reset behavior is configured; otherwise services start with empty volumes.
 
 #### Wake vs Reset (Cloud)
 
-- **Wake** = restore "where you left off." Filesystem preserved (R2 restore), all services restarted, no re-seed. Skips `setup` and `git clone`.
-- **Reset** = restore "known-good baseline." Filesystem reset to post-setup state, data re-seeded, services restarted.
+- **Wake** = restore "where you left off." Filesystem preserved (R2 restore), all services restarted, no re-seed. Skips workspace preparation and `git clone`.
+- **Reset** = restore "known-good baseline." Filesystem reset to post-prepare state, data re-seeded, services restarted.
 
 #### Open Questions (Cloud)
 

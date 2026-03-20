@@ -1,14 +1,11 @@
 import type { TerminalFailureReason, TerminalStatus, TerminalType } from "./terminal";
 import type {
-  WorkspaceFailureReason,
+  EnvironmentFailureReason,
+  EnvironmentStatus,
+  ServiceStatus,
+  ServiceStatusReason,
   WorkspaceKind,
   WorkspaceMode,
-  WorkspaceServiceExposure,
-  WorkspaceServicePreviewFailureReason,
-  WorkspaceServicePreviewStatus,
-  WorkspaceServiceStatus,
-  WorkspaceServiceStatusReason,
-  WorkspaceStatus,
 } from "./workspace";
 
 export interface WorkspaceRecord {
@@ -20,30 +17,32 @@ export interface WorkspaceRecord {
   git_sha: string | null;
   worktree_path: string | null;
   mode: WorkspaceMode;
-  status: WorkspaceStatus;
   manifest_fingerprint?: string | null;
-  failure_reason: WorkspaceFailureReason | null;
-  failed_at: string | null;
   created_by: string | null;
   source_workspace_id: string | null;
   created_at: string;
   updated_at: string;
   last_active_at: string;
   expires_at: string | null;
-  setup_completed_at?: string | null;
+  prepared_at?: string | null;
+}
+
+export interface EnvironmentRecord {
+  workspace_id: string;
+  status: EnvironmentStatus;
+  failure_reason: EnvironmentFailureReason | null;
+  failed_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ServiceRecord {
   id: string;
-  workspace_id: string;
-  service_name: string;
-  exposure: WorkspaceServiceExposure;
-  port_override: number | null;
-  status: WorkspaceServiceStatus;
-  status_reason: WorkspaceServiceStatusReason | null;
+  environment_id: string;
+  name: string;
+  status: ServiceStatus;
+  status_reason: ServiceStatusReason | null;
   assigned_port: number | null;
-  preview_status: WorkspaceServicePreviewStatus;
-  preview_failure_reason: WorkspaceServicePreviewFailureReason | null;
   preview_url: string | null;
   created_at: string;
   updated_at: string;

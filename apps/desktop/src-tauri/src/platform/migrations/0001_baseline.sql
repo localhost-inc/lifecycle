@@ -21,9 +21,6 @@ CREATE TABLE IF NOT EXISTS workspace (
     worktree_path TEXT,
     mode TEXT NOT NULL DEFAULT 'local',
     kind TEXT NOT NULL DEFAULT 'managed',
-    status TEXT NOT NULL DEFAULT 'idle',
-    failure_reason TEXT,
-    failed_at TEXT,
     created_by TEXT,
     source_workspace_id TEXT REFERENCES workspace(id),
     manifest_fingerprint TEXT,
@@ -31,7 +28,7 @@ CREATE TABLE IF NOT EXISTS workspace (
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     last_active_at TEXT NOT NULL DEFAULT (datetime('now')),
     expires_at TEXT,
-    setup_completed_at TEXT
+    prepared_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_workspace_project_kind ON workspace(project_id, kind);
@@ -40,21 +37,25 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_project_root_unique
 ON workspace(project_id)
 WHERE kind = 'root';
 
-CREATE TABLE IF NOT EXISTS workspace_service (
+CREATE TABLE IF NOT EXISTS environment (
+    workspace_id TEXT PRIMARY KEY NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'idle',
+    failure_reason TEXT,
+    failed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS service (
     id TEXT PRIMARY KEY NOT NULL,
-    workspace_id TEXT NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
-    service_name TEXT NOT NULL,
-    exposure TEXT NOT NULL DEFAULT 'local',
-    port_override INTEGER,
+    environment_id TEXT NOT NULL REFERENCES environment(workspace_id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'stopped',
     status_reason TEXT,
     assigned_port INTEGER,
-    preview_status TEXT NOT NULL DEFAULT 'disabled',
-    preview_failure_reason TEXT,
-    preview_url TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(workspace_id, service_name)
+    UNIQUE(environment_id, name)
 );
 
 CREATE TABLE IF NOT EXISTS terminal (

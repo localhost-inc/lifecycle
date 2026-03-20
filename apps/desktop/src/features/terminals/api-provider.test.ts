@@ -3,9 +3,7 @@ import type { TerminalRecord } from "@lifecycle/contracts";
 import {
   buildHarnessLaunchConfig,
   buildDefaultHarnessSettings,
-} from "../settings/state/harness-settings";
-
-const getWorkspaceProvider = mock(() => provider);
+} from "@/features/settings/state/harness-settings";
 
 const terminal: TerminalRecord = {
   id: "term_1",
@@ -23,8 +21,8 @@ const terminal: TerminalRecord = {
   ended_at: null,
 };
 
-const provider = {
-  listWorkspaceTerminals: mock(async () => [terminal]),
+const runtime = {
+  listTerminals: mock(async () => [terminal]),
   getTerminal: mock(async () => terminal),
   createTerminal: mock(async () => terminal),
   renameTerminal: mock(async () => ({ ...terminal, label: "Codex Session" })),
@@ -38,8 +36,10 @@ const provider = {
   interruptTerminal: mock(async () => {}),
 };
 
-mock.module("../../lib/workspace-provider", () => ({
-  getWorkspaceProvider,
+const getWorkspaceRuntime = mock(() => runtime);
+
+mock.module("../../lib/workspace-runtime", () => ({
+  getWorkspaceRuntime,
 }));
 
 const {
@@ -53,15 +53,15 @@ const {
   saveTerminalAttachment,
 } = await import("./api");
 
-describe("terminal api provider routing", () => {
+describe("terminal api runtime routing", () => {
   beforeEach(() => {
     Object.defineProperty(globalThis, "isTauri", {
       configurable: true,
       value: true,
       writable: true,
     });
-    getWorkspaceProvider.mockClear();
-    for (const method of Object.values(provider)) {
+    getWorkspaceRuntime.mockClear();
+    for (const method of Object.values(runtime)) {
       method.mockClear();
     }
   });
@@ -70,7 +70,7 @@ describe("terminal api provider routing", () => {
     delete (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri;
   });
 
-  test("routes terminal lifecycle reads and mutations through the provider", async () => {
+  test("routes terminal lifecycle reads and mutations through the workspace runtime", async () => {
     expect(await listWorkspaceTerminals("ws_1")).toEqual([terminal]);
     expect(await getTerminal("term_1")).toEqual(terminal);
     expect(await createTerminal({ workspaceId: "ws_1", launchType: "shell" })).toEqual(terminal);
@@ -101,16 +101,16 @@ describe("terminal api provider routing", () => {
     await killTerminal("term_1");
     await interruptTerminal("term_1");
 
-    expect(getWorkspaceProvider).toHaveBeenCalled();
-    expect(provider.listWorkspaceTerminals).toHaveBeenCalledWith("ws_1");
-    expect(provider.getTerminal).toHaveBeenCalledWith("term_1");
-    expect(provider.createTerminal).toHaveBeenCalledWith({
+    expect(getWorkspaceRuntime).toHaveBeenCalled();
+    expect(runtime.listTerminals).toHaveBeenCalledWith("ws_1");
+    expect(runtime.getTerminal).toHaveBeenCalledWith("term_1");
+    expect(runtime.createTerminal).toHaveBeenCalledWith({
       workspaceId: "ws_1",
       launchType: "shell",
       harnessProvider: null,
       harnessSessionId: null,
     });
-    expect(provider.createTerminal).toHaveBeenCalledWith({
+    expect(runtime.createTerminal).toHaveBeenCalledWith({
       workspaceId: "ws_1",
       launchType: "harness",
       harnessLaunchConfig: {
@@ -123,14 +123,14 @@ describe("terminal api provider routing", () => {
       harnessProvider: "codex",
       harnessSessionId: null,
     });
-    expect(provider.renameTerminal).toHaveBeenCalledWith("term_1", "Codex Session");
-    expect(provider.saveTerminalAttachment).toHaveBeenCalledWith({
+    expect(runtime.renameTerminal).toHaveBeenCalledWith("term_1", "Codex Session");
+    expect(runtime.saveTerminalAttachment).toHaveBeenCalledWith({
       base64Data: "ZmFrZQ==",
       fileName: "screenshot.png",
       workspaceId: "ws_1",
     });
-    expect(provider.detachTerminal).toHaveBeenCalledWith("term_1");
-    expect(provider.killTerminal).toHaveBeenCalledWith("term_1");
-    expect(provider.interruptTerminal).toHaveBeenCalledWith("term_1");
+    expect(runtime.detachTerminal).toHaveBeenCalledWith("term_1");
+    expect(runtime.killTerminal).toHaveBeenCalledWith("term_1");
+    expect(runtime.interruptTerminal).toHaveBeenCalledWith("term_1");
   });
 });

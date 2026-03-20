@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { resolveProjectRepoWorkspace } from "./project-repo-workspace";
+import { resolveProjectRepoWorkspace } from "@/features/projects/lib/project-repo-workspace";
 
 function createWorkspaceRecord(
   id: string,
@@ -23,7 +23,7 @@ function createWorkspaceRecord(
     project_id: "project_1",
     source_ref: id,
     source_workspace_id: null,
-    status: "idle" as const,
+    status: "stopped" as const,
     updated_at: "2026-03-14T12:00:00.000Z",
     worktree_path: "/tmp/lifecycle",
   };

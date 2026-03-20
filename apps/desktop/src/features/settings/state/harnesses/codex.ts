@@ -1,5 +1,5 @@
-import type { HarnessPreset } from "./shared";
-import { isRecord, normalizeBoolean, normalizeHarnessPreset } from "./shared";
+import type { HarnessPreset } from "@/features/settings/state/harnesses/shared";
+import { isRecord, normalizeBoolean, normalizeHarnessPreset } from "@/features/settings/state/harnesses/shared";
 
 export type CodexSandboxMode = "read-only" | "workspace-write" | "danger-full-access";
 export type CodexApprovalPolicy = "untrusted" | "on-request" | "never";

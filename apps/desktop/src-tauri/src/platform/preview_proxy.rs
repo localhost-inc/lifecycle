@@ -47,16 +47,16 @@ fn set_preview_proxy_port(port: u16) {
     PREVIEW_PROXY_PORT.store(port, Ordering::Relaxed);
 }
 
-pub(crate) fn service_url(workspace_label: &str, service_name: &str) -> String {
+pub(crate) fn service_url(workspace_label: &str, name: &str) -> String {
     format!(
         "http://{}:{}",
-        preview_host(workspace_label, service_name),
+        preview_host(workspace_label, name),
         current_preview_proxy_port()
     )
 }
 
-pub(crate) fn local_preview_url(workspace_label: &str, service_name: &str) -> String {
-    service_url(workspace_label, service_name)
+pub(crate) fn local_preview_url(workspace_label: &str, name: &str) -> String {
+    service_url(workspace_label, name)
 }
 
 pub(crate) fn start_preview_proxy(
@@ -292,9 +292,9 @@ async fn load_preview_target(
         let conn = open_db(&db_path)?;
         let mut stmt = conn
             .prepare(
-                "SELECT ws.assigned_port, ws.status, ws.service_name, w.id, w.kind, w.name, w.source_ref
-                 FROM workspace_service ws
-                 INNER JOIN workspace w ON w.id = ws.workspace_id",
+                "SELECT ws.assigned_port, ws.status, ws.name, w.id, w.kind, w.name, w.source_ref
+                 FROM service ws
+                 INNER JOIN workspace w ON w.id = ws.environment_id",
             )
             .map_err(|error| LifecycleError::Database(error.to_string()))?;
         let rows = stmt
@@ -312,13 +312,21 @@ async fn load_preview_target(
             .map_err(|error| LifecycleError::Database(error.to_string()))?;
 
         for row in rows {
-            let (assigned_port, service_status, service_name, workspace_id, kind, name, source_ref) =
-                row.map_err(|error| LifecycleError::Database(error.to_string()))?;
-            if service_host_label(&service_name) != route.service_label {
+            let (
+                assigned_port,
+                service_status,
+                name,
+                workspace_id,
+                kind,
+                workspace_name,
+                source_ref,
+            ) = row.map_err(|error| LifecycleError::Database(error.to_string()))?;
+            if service_host_label(&name) != route.service_label {
                 continue;
             }
 
-            let workspace_label = workspace_host_label(&workspace_id, &kind, &name, &source_ref);
+            let workspace_label =
+                workspace_host_label(&workspace_id, &kind, &workspace_name, &source_ref);
             if workspace_label != route.workspace_label {
                 continue;
             }
@@ -396,13 +404,13 @@ fn slugify_source_ref(source_ref: &str) -> String {
     slugify_workspace_name(normalized)
 }
 
-fn service_host_label(service_name: &str) -> String {
-    slugify_workspace_name(service_name)
+fn service_host_label(name: &str) -> String {
+    slugify_workspace_name(name)
 }
 
-fn preview_host(workspace_label: &str, service_name: &str) -> String {
+fn preview_host(workspace_label: &str, name: &str) -> String {
     [
-        service_host_label(service_name),
+        service_host_label(name),
         workspace_label.to_string(),
         PREVIEW_HOST_SUFFIX[0].to_string(),
         PREVIEW_HOST_SUFFIX[1].to_string(),
@@ -510,7 +518,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn proxy_request_forwards_ready_service_traffic_regardless_of_exposure() {
+    async fn proxy_request_forwards_ready_service_traffic_for_ready_services() {
         let db_path = std::env::temp_dir().join(format!(
             "lifecycle-preview-proxy-{}.db",
             uuid::Uuid::new_v4()
@@ -524,13 +532,11 @@ mod tests {
                 name TEXT NOT NULL,
                 source_ref TEXT NOT NULL
             );
-            CREATE TABLE workspace_service (
-                workspace_id TEXT NOT NULL,
-                service_name TEXT NOT NULL,
-                exposure TEXT NOT NULL,
+            CREATE TABLE service (
+                environment_id TEXT NOT NULL,
+                name TEXT NOT NULL,
                 assigned_port INTEGER,
-                status TEXT NOT NULL,
-                preview_status TEXT NOT NULL
+                status TEXT NOT NULL
             );",
         )
         .expect("create workspace tables");
@@ -560,8 +566,8 @@ mod tests {
 
         let conn = open_db(&db_path_str).expect("re-open db");
         conn.execute(
-            "INSERT INTO workspace_service (workspace_id, service_name, exposure, assigned_port, status, preview_status)
-             VALUES (?1, ?2, 'internal', ?3, 'ready', 'disabled')",
+            "INSERT INTO service (environment_id, name, assigned_port, status)
+             VALUES (?1, ?2, ?3, 'ready')",
             params!["ws_test", "www", i64::from(upstream_port)],
         )
         .expect("insert service");

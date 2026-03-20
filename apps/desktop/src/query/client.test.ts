@@ -1,51 +1,25 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import type { LifecycleEvent, LifecycleEventKind, TerminalRecord } from "@lifecycle/contracts";
-import { QueryClient, type LifecycleEventSubscriber, type QueryDescriptor } from "./client";
-import type { QuerySource } from "./source";
-
-function createMockSubscriber() {
-  let listener: ((event: LifecycleEvent) => void) | null = null;
-  let activeTypes: readonly LifecycleEventKind[] = [];
-
-  const subscribe: LifecycleEventSubscriber = async (types, next) => {
-    activeTypes = [...types];
-    listener = next;
-    return () => {
-      activeTypes = [];
-      listener = null;
-    };
-  };
-
-  return {
-    emit(event: LifecycleEvent) {
-      listener?.(event);
-    },
-    getActiveTypes(): readonly LifecycleEventKind[] {
-      return activeTypes;
-    },
-    subscribe,
-  };
-}
+import type { TerminalRecord } from "@lifecycle/contracts";
+import { QueryClient, type QueryDescriptor } from "@/query/client";
+import type { QuerySource } from "@/query/source";
 
 function createMockSource() {
   const source: QuerySource = {
     async getWorkspace() {
       return null;
     },
-    async getWorkspaceSnapshot() {
+    async getWorkspaceEnvironment() {
       return {
-        services: [],
-        terminals: [],
-        workspace: null,
+        workspace_id: "ws-1",
+        status: "idle",
+        failure_reason: null,
+        failed_at: null,
+        created_at: "2026-03-09T00:00:00Z",
+        updated_at: "2026-03-09T00:00:00Z",
       };
     },
-    async getWorkspaceRuntimeProjection() {
-      return {
-        activity: [],
-        environmentTasks: [],
-        serviceLogs: [],
-        setup: [],
-      };
+    async getWorkspaceActivity() {
+      return [];
     },
     async getWorkspaceFile() {
       return {
@@ -63,6 +37,9 @@ function createMockSource() {
     },
     async getTerminal() {
       return null;
+    },
+    async getWorkspaceServiceLogs() {
+      return [];
     },
     async getWorkspaceServices() {
       return [];
@@ -148,34 +125,17 @@ describe("QueryClient", () => {
     }
   });
 
-  test("fetches query data and applies reducer patches from events", async () => {
+  test("fetches query data and refetches subscribed queries when invalidated", async () => {
     const source = createMockSource();
-    const subscriber = createMockSubscriber();
-    const client = new QueryClient(source, subscriber.subscribe);
+    const client = new QueryClient(source);
     cleanup.push(() => client.dispose());
 
+    let fetchCount = 0;
     const descriptor: QueryDescriptor<{ id: string; status: string }> = {
-      eventKinds: ["workspace.status_changed"],
       key: ["workspace", "ws-1"],
       async fetch() {
-        return { id: "ws-1", status: "idle" };
-      },
-      reduce(current, event) {
-        if (
-          event.kind !== "workspace.status_changed" ||
-          event.workspace_id !== "ws-1" ||
-          !current
-        ) {
-          return { kind: "none" };
-        }
-
-        return {
-          kind: "replace",
-          data: {
-            ...current,
-            status: event.status,
-          },
-        };
+        fetchCount += 1;
+        return { id: "ws-1", status: fetchCount === 1 ? "idle" : "running" };
       },
     };
 
@@ -189,17 +149,11 @@ describe("QueryClient", () => {
       status: "ready",
     });
 
-    subscriber.emit({
-      id: "evt-1",
-      occurred_at: "2026-03-09T00:00:00Z",
-      kind: "workspace.status_changed",
-      failure_reason: null,
-      status: "active",
-      workspace_id: "ws-1",
-    });
+    client.invalidate(descriptor.key);
+    await flush();
 
     expect(client.getSnapshot(descriptor)).toEqual({
-      data: { id: "ws-1", status: "active" },
+      data: { id: "ws-1", status: "running" },
       error: null,
       status: "ready",
     });
@@ -207,8 +161,7 @@ describe("QueryClient", () => {
 
   test("can prime query data before subscribers fetch", () => {
     const source = createMockSource();
-    const subscriber = createMockSubscriber();
-    const client = new QueryClient(source, subscriber.subscribe);
+    const client = new QueryClient(source);
     cleanup.push(() => client.dispose());
 
     const descriptor: QueryDescriptor<{ id: string; status: string }> = {
@@ -218,163 +171,218 @@ describe("QueryClient", () => {
       },
     };
 
-    client.setData(descriptor, { id: "ws-1", status: "active" });
+    client.setData(descriptor, { id: "ws-1", status: "running" });
 
     expect(client.getSnapshot(descriptor)).toEqual({
-      data: { id: "ws-1", status: "active" },
+      data: { id: "ws-1", status: "running" },
       error: null,
       status: "ready",
     });
   });
 
-  test("refetches subscribed queries when reducers invalidate them", async () => {
+  test("refetches invalidated cached queries when they subscribe again", async () => {
     const source = createMockSource();
-    const subscriber = createMockSubscriber();
-    const client = new QueryClient(source, subscriber.subscribe);
+    const client = new QueryClient(source);
     cleanup.push(() => client.dispose());
 
     let fetchCount = 0;
     const descriptor: QueryDescriptor<number> = {
-      eventKinds: ["service.status_changed"],
       key: ["workspace-services", "ws-1"],
       async fetch() {
         fetchCount += 1;
         return fetchCount;
       },
-      reduce(_current, event) {
-        if (event.kind === "service.status_changed") {
-          return { kind: "invalidate" };
-        }
-        return { kind: "none" };
-      },
     };
 
     const unsubscribe = client.subscribe(descriptor, () => {});
-    cleanup.push(unsubscribe);
+    await flush();
+    unsubscribe();
+
+    client.invalidate(descriptor.key);
+
+    const resubscribe = client.subscribe(descriptor, () => {});
+    cleanup.push(resubscribe);
     await flush();
 
-    expect(client.getSnapshot(descriptor).data).toBe(1);
-
-    subscriber.emit({
-      id: "evt-2",
-      occurred_at: "2026-03-09T00:00:00Z",
-      kind: "service.status_changed",
-      service_name: "web",
+    expect(client.getSnapshot(descriptor)).toEqual({
+      data: 2,
+      error: null,
       status: "ready",
-      status_reason: null,
-      workspace_id: "ws-1",
     });
-    await flush();
-
-    expect(client.getSnapshot(descriptor).data).toBe(2);
   });
 
-  test("refetches git queries when git fact events invalidate them", async () => {
+  test("dedupes overlapping refetch requests for the same query", async () => {
     const source = createMockSource();
-    const subscriber = createMockSubscriber();
-    const client = new QueryClient(source, subscriber.subscribe);
+    const client = new QueryClient(source);
     cleanup.push(() => client.dispose());
 
     let fetchCount = 0;
+    const pendingFetchResolvers: Array<() => void> = [];
     const descriptor: QueryDescriptor<number> = {
-      eventKinds: ["git.head_changed", "git.status_changed"],
-      key: ["workspace-git-status", "ws-1"],
-      async fetch() {
-        fetchCount += 1;
-        return fetchCount;
-      },
-      reduce(_current, event) {
-        if (
-          (event.kind === "git.head_changed" || event.kind === "git.status_changed") &&
-          event.workspace_id === "ws-1"
-        ) {
-          return { kind: "invalidate" };
-        }
-
-        return { kind: "none" };
-      },
-    };
-
-    const unsubscribe = client.subscribe(descriptor, () => {});
-    cleanup.push(unsubscribe);
-    await flush();
-
-    expect(client.getSnapshot(descriptor).data).toBe(1);
-
-    subscriber.emit({
-      id: "evt-3",
-      occurred_at: "2026-03-10T00:00:00Z",
-      kind: "git.status_changed",
-      workspace_id: "ws-1",
-      branch: "feature/git-events",
-      head_sha: "abcdef1234567890",
-      upstream: "origin/feature/git-events",
-    });
-    await flush();
-
-    expect(client.getSnapshot(descriptor).data).toBe(2);
-
-    subscriber.emit({
-      id: "evt-4",
-      occurred_at: "2026-03-10T00:00:00Z",
-      kind: "git.head_changed",
-      workspace_id: "ws-2",
-      branch: "other",
-      head_sha: "fedcba0987654321",
-      upstream: "origin/other",
-      ahead: 0,
-      behind: 0,
-    });
-    await flush();
-
-    expect(client.getSnapshot(descriptor).data).toBe(2);
-  });
-
-  test("subscribes only to the active query event types", async () => {
-    const source = createMockSource();
-    const subscriber = createMockSubscriber();
-    const client = new QueryClient(source, subscriber.subscribe);
-    cleanup.push(() => client.dispose());
-
-    const workspaceDescriptor: QueryDescriptor<number> = {
-      eventKinds: ["workspace.status_changed"],
       key: ["workspace", "ws-1"],
       async fetch() {
-        return 1;
-      },
-      reduce() {
-        return { kind: "none" };
+        fetchCount += 1;
+        await new Promise<void>((resolve) => {
+          pendingFetchResolvers.push(resolve);
+        });
+        return fetchCount;
       },
     };
-    const serviceDescriptor: QueryDescriptor<number> = {
-      eventKinds: ["service.status_changed"],
+
+    const unsubscribe = client.subscribe(descriptor, () => {});
+    cleanup.push(unsubscribe);
+
+    expect(fetchCount).toBe(1);
+
+    const firstRefetch = client.refetch(descriptor);
+    const secondRefetch = client.refetch(descriptor);
+
+    expect(fetchCount).toBe(1);
+
+    const releaseInitialFetch = pendingFetchResolvers.shift();
+    expect(releaseInitialFetch).toBeDefined();
+    releaseInitialFetch?.();
+    await Promise.all([firstRefetch, secondRefetch]);
+    await flush();
+
+    expect(fetchCount).toBe(1);
+    expect(client.getSnapshot(descriptor)).toEqual({
+      data: 1,
+      error: null,
+      status: "ready",
+    });
+  });
+
+  test("keeps ready data visible while invalidation-driven refetch is in flight", async () => {
+    const source = createMockSource();
+    const client = new QueryClient(source);
+    cleanup.push(() => client.dispose());
+
+    let fetchCount = 0;
+    const pendingFetchResolvers: Array<() => void> = [];
+    const descriptor: QueryDescriptor<number> = {
       key: ["workspace-services", "ws-1"],
       async fetch() {
-        return 1;
-      },
-      reduce() {
-        return { kind: "none" };
+        fetchCount += 1;
+        await new Promise<void>((resolve) => {
+          pendingFetchResolvers.push(resolve);
+        });
+        return fetchCount;
       },
     };
 
-    const unsubscribeWorkspace = client.subscribe(workspaceDescriptor, () => {});
-    cleanup.push(unsubscribeWorkspace);
+    const unsubscribe = client.subscribe(descriptor, () => {});
+    cleanup.push(unsubscribe);
+
+    const releaseInitialFetch = pendingFetchResolvers.shift();
+    expect(releaseInitialFetch).toBeDefined();
+    releaseInitialFetch?.();
+    await flush();
     await flush();
 
-    expect(subscriber.getActiveTypes()).toEqual(["workspace.status_changed"]);
+    expect(client.getSnapshot(descriptor)).toEqual({
+      data: 1,
+      error: null,
+      status: "ready",
+    });
 
-    const unsubscribeService = client.subscribe(serviceDescriptor, () => {});
-    cleanup.push(unsubscribeService);
+    client.invalidate(descriptor.key);
+
+    expect(fetchCount).toBe(2);
+    expect(client.getSnapshot(descriptor)).toEqual({
+      data: 1,
+      error: null,
+      status: "ready",
+    });
+
+    const releaseRefetch = pendingFetchResolvers.shift();
+    expect(releaseRefetch).toBeDefined();
+    releaseRefetch?.();
     await flush();
 
-    expect(subscriber.getActiveTypes()).toEqual([
-      "service.status_changed",
-      "workspace.status_changed",
-    ]);
+    expect(client.getSnapshot(descriptor)).toEqual({
+      data: 2,
+      error: null,
+      status: "ready",
+    });
+  });
 
-    unsubscribeService();
+  test("refetches queries whose keys match an invalidated prefix", async () => {
+    const source = createMockSource();
+    const client = new QueryClient(source);
+    cleanup.push(() => client.dispose());
+
+    let matchingFetchCount = 0;
+    let otherFetchCount = 0;
+    const matchingDescriptor: QueryDescriptor<number> = {
+      key: ["workspace-git-log", "ws-1", 50],
+      async fetch() {
+        matchingFetchCount += 1;
+        return matchingFetchCount;
+      },
+    };
+    const otherDescriptor: QueryDescriptor<number> = {
+      key: ["workspace-git-status", "ws-1"],
+      async fetch() {
+        otherFetchCount += 1;
+        return otherFetchCount;
+      },
+    };
+
+    const unsubscribeMatching = client.subscribe(matchingDescriptor, () => {});
+    const unsubscribeOther = client.subscribe(otherDescriptor, () => {});
+    cleanup.push(unsubscribeMatching, unsubscribeOther);
     await flush();
 
-    expect(subscriber.getActiveTypes()).toEqual(["workspace.status_changed"]);
+    client.invalidatePrefix(["workspace-git-log", "ws-1"]);
+    await flush();
+
+    expect(client.getSnapshot(matchingDescriptor).data).toBe(2);
+    expect(client.getSnapshot(otherDescriptor).data).toBe(1);
+  });
+
+  test("refetches again when invalidation lands during an in-flight fetch", async () => {
+    const source = createMockSource();
+    const client = new QueryClient(source);
+    cleanup.push(() => client.dispose());
+
+    let fetchCount = 0;
+    const pendingFetchResolvers: Array<() => void> = [];
+    const descriptor: QueryDescriptor<number> = {
+      key: ["workspace-environment", "ws-1"],
+      async fetch() {
+        fetchCount += 1;
+        await new Promise<void>((resolve) => {
+          pendingFetchResolvers.push(resolve);
+        });
+        return fetchCount;
+      },
+    };
+
+    const unsubscribe = client.subscribe(descriptor, () => {});
+    cleanup.push(unsubscribe);
+
+    expect(fetchCount).toBe(1);
+    client.invalidate(descriptor.key);
+
+    const releaseInitialFetch = pendingFetchResolvers.shift();
+    expect(releaseInitialFetch).toBeDefined();
+    releaseInitialFetch?.();
+    await flush();
+    await flush();
+
+    expect(fetchCount).toBe(2);
+
+    const releaseFollowUpFetch = pendingFetchResolvers.shift();
+    expect(releaseFollowUpFetch).toBeDefined();
+    releaseFollowUpFetch?.();
+    await flush();
+    await flush();
+
+    expect(client.getSnapshot(descriptor)).toEqual({
+      data: 2,
+      error: null,
+      status: "ready",
+    });
   });
 });

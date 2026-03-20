@@ -8,7 +8,7 @@ import {
   ShellIcon,
   SurfaceLaunchActions,
   type SurfaceLaunchAction,
-} from "./surface-launch-actions";
+} from "@/features/workspaces/components/surface-launch-actions";
 
 const actions: SurfaceLaunchAction[] = [
   {

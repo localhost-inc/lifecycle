@@ -1,7 +1,7 @@
 import type { GitPullRequestSummary, WorkspaceMode } from "@lifecycle/contracts";
 import { useEffect, useState } from "react";
-import { useCurrentGitPullRequest, useGitPullRequests } from "../hooks";
-import { PullRequestsTab } from "./pull-requests-tab";
+import { useCurrentGitPullRequest, useGitPullRequests } from "@/features/git/hooks";
+import { PullRequestsTab } from "@/features/git/components/pull-requests-tab";
 
 interface GitPullRequestsPanelProps {
   onOpenPullRequest: (pullRequest: GitPullRequestSummary) => void;

@@ -34,7 +34,6 @@ workspaces.create(projectId, sourceRef, mode?)
 workspaces.run(id)
 workspaces.reset(id)
 workspaces.destroy(id)
-workspaceServices.update(workspaceId, serviceName, { exposure?, portOverride? })
 terminals.create(workspaceId, harness?)
 terminals.mintAttachToken(terminalId)
 workspaceInvites.create(workspaceId, role?)
@@ -146,13 +145,13 @@ All non-2xx responses include: `code`, `message`, `details`, `request_id`, `sugg
 
 ## Failure Reason Enums
 
-### `workspace.failure_reason`
+### `environment.failure_reason`
 
-`capacity_unavailable`, `environment_task_failed`, `manifest_invalid`, `repo_clone_failed`, `repository_disconnected`, `setup_step_failed`, `service_start_failed`, `service_healthcheck_failed`, `sandbox_unreachable`, `local_docker_unavailable`, `local_port_conflict`, `local_app_not_running`, `operation_timeout`, `unknown`
+`capacity_unavailable`, `environment_task_failed`, `manifest_invalid`, `repo_clone_failed`, `repository_disconnected`, `prepare_step_failed`, `service_start_failed`, `service_healthcheck_failed`, `sandbox_unreachable`, `local_docker_unavailable`, `local_port_conflict`, `local_app_not_running`, `operation_timeout`, `unknown`
 
-### `workspace_service.status_reason`
+### `service.status_reason`
 
-`service_process_exited`, `service_dependency_failed`, `service_port_unreachable`, `unknown`
+`service_start_failed`, `service_process_exited`, `service_dependency_failed`, `service_port_unreachable`, `unknown`
 
 ### `terminal.failure_reason`
 
@@ -161,7 +160,7 @@ All non-2xx responses include: `code`, `message`, `details`, `request_id`, `sugg
 ## Mutation Concurrency
 
 1. Transitional states (`starting`, `stopping`) reject new mutations with `workspace_mutation_locked`
-2. Only `idle` and `active` accept mutation requests
+2. Only `idle` and `running` accept mutation requests
 3. Convex OCC handles serialization natively
 
 ---
@@ -172,7 +171,7 @@ All non-2xx responses include: `code`, `message`, `details`, `request_id`, `sugg
 
 - p95 workspace create to `ready`: <= 60s
 - p95 workspace wake: <= 15s
-- p95 setup phase: <= 30s
+- p95 prepare phase: <= 30s
 - p95 service startup to healthy: <= 45s
 - Log stream latency: <= 2s p95
 - Control-plane availability: 99.9% monthly
@@ -188,7 +187,7 @@ All non-2xx responses include: `code`, `message`, `details`, `request_id`, `sugg
 ## Desktop Interaction Budgets
 
 - Workspace route ready: under one perceived loading beat
-- Bootstrap from single workspace snapshot read model
+- Bootstrap from direct workspace, environment, and service reads
 - Heavy documents fetch without keeping siblings mounted
 - Git polling only while relevant surface is active and visible
 
@@ -253,7 +252,7 @@ Desktop-side attach contract for cloud terminals on native terminal host platfor
 ## Authority Boundary
 
 1. **Remote terminal session** — authoritative PTY in Cloudflare Sandbox
-2. **Terminal domain record** — provider-owned metadata and lifecycle
+2. **Terminal domain record** — workspace-runtime-owned metadata and lifecycle
 3. **Desktop attach helper** — ephemeral local process bridging to remote transport
 4. **Desktop surface state** — local UI state (not authoritative)
 

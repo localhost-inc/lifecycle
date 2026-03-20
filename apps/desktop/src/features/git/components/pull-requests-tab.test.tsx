@@ -3,7 +3,7 @@ import type { GitPullRequestListResult } from "@lifecycle/contracts";
 import { ThemeProvider } from "@lifecycle/ui";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { PullRequestsTab } from "./pull-requests-tab";
+import { PullRequestsTab } from "@/features/git/components/pull-requests-tab";
 
 function renderPullRequestsTab(props: Partial<Parameters<typeof PullRequestsTab>[0]> = {}) {
   return renderToStaticMarkup(

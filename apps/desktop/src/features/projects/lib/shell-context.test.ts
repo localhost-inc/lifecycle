@@ -5,7 +5,7 @@ import {
   filterProjectsForShellContext,
   resolveActiveShellContext,
   resolveProjectShellContextId,
-} from "./shell-context";
+} from "@/features/projects/lib/shell-context";
 
 function createProjectRecord(
   overrides: Partial<ProjectRecord> & Pick<ProjectRecord, "id" | "name">,

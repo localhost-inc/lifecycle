@@ -2,25 +2,18 @@ import { isTauri } from "@tauri-apps/api/core";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
-import {
-  IconButton,
-  Logo,
-  Wordmark,
-} from "@lifecycle/ui";
-import {
-  PanelLeftClose,
-  Plus,
-} from "lucide-react";
+import { IconButton, Logo, Wordmark } from "@lifecycle/ui";
+import { PanelLeftClose, Plus } from "lucide-react";
 import { type MouseEvent, useCallback, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { resolveProjectRepoWorkspace } from "../../features/projects/lib/project-repo-workspace";
+import { resolveProjectRepoWorkspace } from "@/features/projects/lib/project-repo-workspace";
 import {
   readProjectPaths,
   resolveProjectNavigationTarget,
-} from "../../features/projects/state/project-content-tabs";
-import { UserAvatar } from "../../features/user/components/user-avatar";
-import { ResponseReadyDot } from "../response-ready-dot";
-import type { AuthSession } from "../../features/auth/auth-session";
+} from "@/features/projects/state/project-content-tabs";
+import { UserAvatar } from "@/features/user/components/user-avatar";
+import { ResponseReadyDot } from "@/components/response-ready-dot";
+import type { AuthSession } from "@/features/auth/auth-session";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { version } from "../../../package.json";
 
@@ -196,7 +189,11 @@ export function AppSidebar({
             onMouseLeave={() => setLogoHovered(false)}
             type="button"
           >
-            <Logo animate={logoHovered} size={24} className="text-[var(--sidebar-muted-foreground)]" />
+            <Logo
+              animate={logoHovered}
+              size={24}
+              className="text-[var(--sidebar-muted-foreground)]"
+            />
           </button>
         </div>
       </aside>
@@ -285,8 +282,13 @@ export function AppSidebar({
 
         {/* Wordmark + version at bottom */}
         <div className="flex shrink-0 items-center px-4 pb-3 pt-1">
-          <Wordmark className="h-3 cursor-pointer text-[var(--sidebar-muted-foreground)]" onClick={() => openUrl("https://lifecycle.dev")} />
-          <span className="ml-auto font-mono text-[11px] text-[var(--sidebar-muted-foreground)]">v{version}</span>
+          <Wordmark
+            className="h-3 cursor-pointer text-[var(--sidebar-muted-foreground)]"
+            onClick={() => openUrl("https://lifecycle.dev")}
+          />
+          <span className="ml-auto font-mono text-[11px] text-[var(--sidebar-muted-foreground)]">
+            v{version}
+          </span>
         </div>
       </div>
     </aside>

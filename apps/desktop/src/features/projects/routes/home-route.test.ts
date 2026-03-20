@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { resolveHomeRouteTarget } from "./home-route";
+import { resolveHomeRouteTarget } from "@/features/projects/routes/home-route";
 
 function createProjectRecord(id: string, name: string, path: string) {
   return {
@@ -29,7 +29,7 @@ function createWorkspaceRecord(id: string, projectId: string) {
     project_id: projectId,
     source_ref: "main",
     source_workspace_id: null,
-    status: "idle" as const,
+    status: "stopped" as const,
     updated_at: "2026-03-14T12:00:00.000Z",
     worktree_path: "/tmp/lifecycle",
   };

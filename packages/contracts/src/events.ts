@@ -1,28 +1,20 @@
-import type { ServiceRecord, TerminalRecord } from "./db";
+import type { TerminalRecord } from "./db";
 import type { TerminalFailureReason, TerminalStatus } from "./terminal";
 import type {
-  WorkspaceFailureReason,
-  WorkspaceServiceStatus,
-  WorkspaceServiceStatusReason,
-  WorkspaceStatus,
+  EnvironmentFailureReason,
+  EnvironmentStatus,
+  ServiceStatus,
+  ServiceStatusReason,
 } from "./workspace";
-
-export type SetupStepEventKind =
-  | "started"
-  | "stdout"
-  | "stderr"
-  | "completed"
-  | "failed"
-  | "timeout";
 
 export type LifecycleEvent =
   | {
       id: string;
       occurred_at: string;
-      kind: "workspace.status_changed";
+      kind: "environment.status_changed";
       workspace_id: string;
-      status: WorkspaceStatus;
-      failure_reason: WorkspaceFailureReason | null;
+      status: EnvironmentStatus;
+      failure_reason: EnvironmentFailureReason | null;
     }
   | {
       id: string;
@@ -44,42 +36,9 @@ export type LifecycleEvent =
       occurred_at: string;
       kind: "service.status_changed";
       workspace_id: string;
-      service_name: string;
-      status: WorkspaceServiceStatus;
-      status_reason: WorkspaceServiceStatusReason | null;
-    }
-  | {
-      id: string;
-      occurred_at: string;
-      kind: "service.configuration_changed";
-      workspace_id: string;
-      service: ServiceRecord;
-    }
-  | {
-      id: string;
-      occurred_at: string;
-      kind: "workspace.setup_progress";
-      workspace_id: string;
-      step_name: string;
-      event_kind: SetupStepEventKind;
-      data: string | null;
-    }
-  | {
-      id: string;
-      occurred_at: string;
-      kind: "workspace.manifest_synced";
-      workspace_id: string;
-      manifest_fingerprint: string | null;
-      services: ServiceRecord[];
-    }
-  | {
-      id: string;
-      occurred_at: string;
-      kind: "environment.task_progress";
-      workspace_id: string;
-      step_name: string;
-      event_kind: SetupStepEventKind;
-      data: string | null;
+      name: string;
+      status: ServiceStatus;
+      status_reason: ServiceStatusReason | null;
     }
   | {
       id: string;
@@ -141,7 +100,7 @@ export type LifecycleEvent =
       occurred_at: string;
       kind: "service.process_exited";
       workspace_id: string;
-      service_name: string;
+      name: string;
       exit_code: number | null;
     }
   | {
@@ -149,7 +108,7 @@ export type LifecycleEvent =
       occurred_at: string;
       kind: "service.log_line";
       workspace_id: string;
-      service_name: string;
+      name: string;
       stream: "stdout" | "stderr";
       line: string;
     }

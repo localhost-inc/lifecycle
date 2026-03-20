@@ -1,14 +1,14 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useContext, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { CommandPaletteContext } from "../features/command-palette/command-palette-context";
+import { CommandPaletteContext } from "@/features/command-palette/command-palette-context";
 import {
   isMacPlatform,
   shouldHandleDomAppHotkey,
   subscribeToAppHotkeyEvents,
   type AppHotkeyEvent,
-} from "./app-hotkeys";
-import { SHORTCUT_HANDLER_PRIORITY, useShortcutRegistration } from "./shortcuts/shortcut-router";
+} from "@/app/app-hotkeys";
+import { SHORTCUT_HANDLER_PRIORITY, useShortcutRegistration } from "@/app/shortcuts/shortcut-router";
 
 interface AppHotkeyListenerProps {
   onSelectProjectIndex?: (index: number) => void;

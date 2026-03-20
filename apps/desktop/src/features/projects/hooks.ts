@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import type { ProjectRecord } from "@lifecycle/contracts";
-import type { ManifestStatus } from "./api/projects";
-import { useQuery, type QueryDescriptor, type QueryResult } from "../../query";
+import type { ManifestStatus } from "@/features/projects/api/projects";
+import { useQuery, type QueryDescriptor, type QueryResult } from "@/query";
 
 export interface ProjectCatalog {
   manifestsByProjectId: Record<string, ManifestStatus>;
@@ -45,42 +45,7 @@ function createProjectManifestQuery(projectId: string): QueryDescriptor<Manifest
 }
 
 export function useProjectCatalog() {
-  return useQuery(projectCatalogQuery, {
-    disabledData: undefined,
-  });
-}
-
-export function useProjects(): QueryResult<ProjectRecord[] | undefined> {
-  const query = useProjectCatalog();
-
-  return useMemo(
-    () => ({
-      ...query,
-      data: query.data?.projects,
-    }),
-    [query],
-  );
-}
-
-export function useProjectManifestStates(): QueryResult<
-  Record<string, ManifestStatus["state"]> | undefined
-> {
-  const query = useProjectCatalog();
-
-  return useMemo(
-    () => ({
-      ...query,
-      data: query.data
-        ? Object.fromEntries(
-            Object.entries(query.data.manifestsByProjectId).map(([projectId, manifest]) => [
-              projectId,
-              manifest.state,
-            ]),
-          )
-        : undefined,
-    }),
-    [query],
-  );
+  return useQuery(projectCatalogQuery);
 }
 
 export function useProjectManifest(projectId: string | null): QueryResult<ManifestStatus | null> {
@@ -89,7 +54,5 @@ export function useProjectManifest(projectId: string | null): QueryResult<Manife
     [projectId],
   );
 
-  return useQuery(descriptor, {
-    disabledData: null,
-  });
+  return useQuery(descriptor);
 }

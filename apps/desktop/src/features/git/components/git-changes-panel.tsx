@@ -1,10 +1,10 @@
 import type { GitPullRequestSummary, WorkspaceMode } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
 import { useCallback } from "react";
-import { stageGitFiles } from "../api";
-import { useGitActions } from "../hooks/use-git-actions";
-import { ChangesTab } from "./changes-tab";
-import { GitActionBar } from "./git-action-bar";
+import { stageGitFiles } from "@/features/git/api";
+import { useGitActions } from "@/features/git/hooks/use-git-actions";
+import { ChangesTab } from "@/features/git/components/changes-tab";
+import { GitActionBar } from "@/features/git/components/git-action-bar";
 
 export const GIT_CHANGES_PANEL_BODY_CLASS_NAME = "px-2.5 pb-4";
 export const GIT_CHANGES_PANEL_EMPTY_STATE_CLASS_NAME = "px-2.5 py-4";

@@ -1,20 +1,20 @@
-# Milestone 2: "I can start a workspace and it reaches active"
+# Milestone 2: "I can start a workspace and it reaches running"
 
 > Prerequisites: M1
-> Introduces: `workspace` entity, `workspace_service` entity, `LocalWorkspaceProvider` impl, workspace environment state machine
+> Introduces: `workspace`, `environment`, and `service` entities, `LocalControlPlane` + `LocalWorkspaceRuntime`, environment state machine
 > Tracker: high-level status/checklist lives in [`docs/plan.md`](../plan.md). This document is the detailed implementation contract.
 
 ## Goal
 
-User creates a local workspace, then clicks "Run" and watches its local environment progress through `idle → starting → active` with per-service health indicators.
+User creates a local workspace, then clicks "Run" and watches its local environment progress through `idle → starting → running` with per-service health indicators.
 
 ## What You Build
 
 1. Local workspace creation (git worktree checkout).
 2. Tauri Rust backend: process supervisor for service lifecycle.
 3. Docker Desktop integration for `image` runtime services.
-4. Health check gate (tcp + http) → active transition.
-5. Setup step execution (sequential, exactly-once on first start).
+4. Health check gate (tcp + http) → running transition.
+5. Prepare step execution (sequential, exactly-once on first start).
 6. Desktop app: workspace environment status display with service health indicators.
 
 ## Entity Contracts
@@ -31,54 +31,53 @@ User creates a local workspace, then clicks "Run" and watches its local environm
    - `source_ref`
    - `git_sha`
    - `worktree_path` — absolute filesystem path for local workspaces; null for cloud workspaces until cloud execution lands
-   - `mode` (`cloud|local`) — which `WorkspaceProvider` runs this workspace
-   - `status` (`idle|starting|active|stopping`)
-   - `failure_reason` (nullable typed enum; populated when the last start attempt failed and the workspace has returned to `idle`)
-   - `failed_at` (nullable timestamp; populated when the last start attempt failed)
+   - `mode` (`cloud|local`) — which `WorkspaceRuntime` runs this workspace
    - `created_by` (nullable — not set for local workspaces pre-auth)
    - `created_at`, `updated_at`, `last_active_at`, `expires_at`
+   - `prepared_at` (nullable timestamp; set once workspace preparation has completed successfully)
    - `source_workspace_id` (nullable UUID) — if this workspace was created via fork, references the originating workspace
 
    - workspace display name is derived from `source_ref` (e.g., branch name `feature/auth-fix` → "auth-fix"); no separate `name` field in V1
 
 3. Workspace invariants:
    - the workspace is the durable shell; ordinary environment up/down does not create or destroy it
-   - transitional environment status acts as implicit mutation lock — no concurrent mutations allowed
-   - the environment state machine is authoritative for start/stop/reset/sleep/wake behavior
+   - workspace preparation durability is tracked on `workspace.prepared_at`
+   - the environment state machine is authoritative for run/stop/reset/sleep/wake behavior
 
-4. Target contract direction:
-   - V1 still stores environment state on `workspace.status`, `workspace.failure_reason`, and `workspace.failed_at`
-   - M4 should split that overload into workspace lifecycle metadata plus environment state on the workspace record:
-     - workspace lifecycle: durable shell + archive metadata
-     - environment lifecycle: start/stop/reset/sleep/wake/fail state for the singleton execution environment attached to the workspace
-   - do not add new product behavior that deepens the meaning of `workspace.status` as if it were the durable workspace lifecycle
+### `environment` (singleton execution state per workspace)
 
-### `workspace_service` (per-service runtime state)
+1. Purpose:
+   - lifecycle state for the runnable execution layer attached to a workspace
+   - typed failure metadata for the last environment failure
+2. Required fields:
+   - `workspace_id` (primary key, foreign key to `workspace.id`)
+   - `status` (`idle|starting|running|stopping`)
+   - `failure_reason` (nullable typed enum)
+   - `failed_at` (nullable timestamp)
+   - `created_at`, `updated_at`
+3. Invariants:
+   - exactly one environment row per workspace
+   - environment up/down does not create or destroy the workspace shell
+   - transitional environment status acts as the mutation lock for environment-scoped operations
+
+### `service` (per-service runtime state)
 
 1. Purpose:
    - runtime state for a single service within a workspace; extracted from embedded map to eliminate OCC contention between concurrent service updates
 2. Required fields:
    - `id`
-   - `workspace_id`
-   - `service_name` — key from project `lifecycle.json` environment graph for `kind: "service"` nodes
-   - Writable fields (accepted by PATCH):
-     - `exposure` (`internal|organization|local`)
-     - `port_override` (nullable)
-   - Computed/runtime fields:
-     - `status` (`stopped|starting|ready|failed`)
-     - `status_reason` (nullable typed enum; required when `status=failed`)
-     - `default_port` (nullable) — from project `lifecycle.json` config
-     - `assigned_port` — local host port assigned for the current start/run; respects `port_override` when set and otherwise gives the provider a collision-free bind target for that runtime session
-     - `preview_status` (`disabled|provisioning|ready|sleeping|failed|expired`)
-     - `preview_failure_reason` (nullable typed enum; required when `preview_status=failed`)
-     - `preview_url` (nullable) — provider-owned stable preview route; may remain stable while `preview_status` moves between `provisioning|ready|sleeping|failed`
+   - `environment_id`
+   - `name` — key from project `lifecycle.json` environment graph for `kind: "service"` nodes
+   - `status` (`stopped|starting|ready|failed`)
+   - `status_reason` (nullable typed enum; required when `status=failed`)
+   - `assigned_port` (nullable) — local host port assigned for the current run and reserved by the provider for that runtime session
+   - `preview_url` (nullable) — workspace-runtime-owned stable preview route derived from workspace + service identity
+   - `created_at`
+   - `updated_at`
 3. Invariants:
-   - unique (`workspace_id`, `service_name`)
-   - `exposure=organization` requires an effective port
-   - `exposure=local` is valid only when parent `workspace.mode=local`; rejected for `cloud` workspaces
+   - unique (`environment_id`, `name`)
    - `assigned_port` must be null when the provider is not currently holding a runtime bind for the service
-   - `preview_url` must be null when no provider-owned preview route exists
-   - `preview_status=ready` requires `exposure=organization` or `exposure=local`
+   - `preview_url` is stable workspace-runtime-owned routing identity; whether it is openable is derived from runtime state, not from a separate preview status field
 
 ## Implementation Contracts
 
@@ -88,27 +87,27 @@ Full transition rules: [reference/state-machines.md](../reference/state-machines
 
 M2-relevant environment semantics (local mode):
 
-| State | `LocalWorkspaceProvider` behavior |
+| State | `LocalWorkspaceRuntime` behavior |
 |-------|----------------------------------|
 | `idle` | Worktree is ready; services are stopped |
-| `starting` | Running first-boot setup (if needed) and starting local processes + containers |
-| `active` | Health checks pass on localhost |
+| `starting` | Running first-boot preparation (if needed) and starting local processes + containers |
+| `running` | Health checks pass on localhost |
 | `stopping` | Services are shutting down before returning to `idle` |
 
-### `WorkspaceProvider` Interface
+### `ControlPlane` + `WorkspaceRuntime`
 
-Full interface: [reference/workspace-provider.md](../reference/workspace-provider.md)
+Full interface: [`/reference--workspace`](../../.skills/reference--workspace/SKILL.md)
 
-M2 implements `LocalWorkspaceProvider`:
+M2 implements `LocalControlPlane` + `LocalWorkspaceRuntime`:
 - `createWorkspace`: git worktree checkout
-- `startServices`: run setup on first start, then spawn local processes + Docker containers
+- `startServices`: run workspace preparation on first start, then spawn local processes + Docker containers
 - `healthCheck`: tcp/http probes against localhost
 - `stopServices`: SIGTERM process group
 
 ### Health Check Contract
 
 - Per-service `health_check` object with `kind` (`tcp` or `http`)
-- Workspace transitions to `active` only after all defined service health checks pass
+- Environment transitions to `running` only after all defined service health checks pass
 - Full spec: [reference/lifecycle-json.md](../reference/lifecycle-json.md)
 
 ### Workspace Topology
@@ -119,7 +118,7 @@ M2 implements `LocalWorkspaceProvider`:
 ### Testing Experience Design
 
 1. Project runtime config (`lifecycle.json`) drives execution:
-   - `workspace.setup` for filesystem-scoped first-start or every-start preparation
+   - `workspace.prepare` for filesystem-scoped first-start or every-start preparation
    - `environment` task and service nodes for runtime ordering and long-lived execution
    - fixture/seed behavior
 2. Fast reset path: deterministic seed and clean state restore
@@ -128,31 +127,31 @@ M2 implements `LocalWorkspaceProvider`:
 
 ### Reliability Baseline
 
-1. Workspace environment mutations use the status field as the implicit lock in V1. Failed starts surface typed errors through `failure_reason` and then return to `idle`. Local workspaces use SQLite transactions.
+1. Environment mutations use `environment.status` as the implicit lock in V1. Failed starts surface typed errors through `environment.failure_reason` and then return to `idle`. Local workspaces use SQLite transactions.
 2. Workspace health checks (service readiness + probe endpoints).
-3. Setup completion is persisted via `setup_completed_at`, so first-boot setup runs exactly once per workspace creation.
+3. Preparation completion is persisted via `prepared_at`, so first-boot preparation runs exactly once per workspace creation.
 
 ## Desktop App Surface
 
-- **Workspace environment status display**: idle → starting → active progression
+- **Workspace environment status display**: idle → starting → running progression
 - **Per-service health indicators**: spinner → green checkmark
-- **Setup step progress**: sequential progress with stdout
-- **Active state**: all services green, workspace badge "active"
+- **Prepare failures and service logs**: coarse state plus logs for debugging
+- **Running state**: all services green, workspace badge "running"
 
 ## Exit Gate
 
 - You create a workspace, then click "Run"
-- Watch progress: idle → starting → active
+- Watch progress: idle → starting → running
 - Each service shows health status (spinner → green checkmark)
-- Setup steps show sequential progress with stdout
-- When active, all services green, workspace badge says the environment is "active"
+- Prepare failures and service logs stay available for debugging
+- When running, all services green, workspace badge says the environment is "running"
 
 ## Test Scenarios
 
 ```
-select project → create workspace → click Run → watch idle→starting→active transitions
+select project → create workspace → click Run → watch idle→starting→running transitions
 services with health_check show individual status progression
-setup step failure → workspace returns to idle with failure reason and step output
-service health check failure → workspace returns to idle with failure reason and service context
-stop workspace → workspace transitions active→stopping→idle
+prepare step failure → environment returns to idle with failure reason and logs
+service health check failure → environment returns to idle with failure reason and service context
+stop workspace → environment transitions running→stopping→idle
 ```

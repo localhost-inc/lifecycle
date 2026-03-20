@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { LifecycleEventOf } from "@lifecycle/contracts";
-import { createTurnCompletionNotificationCopy } from "./turn-notification-runtime";
+import { createTurnCompletionNotificationCopy } from "@/features/notifications/lib/turn-notification-runtime";
 
 function createCompletedTurnEvent(
   overrides: Partial<LifecycleEventOf<"terminal.harness_turn_completed">> = {},
@@ -67,7 +67,11 @@ describe("createTurnCompletionNotificationCopy", () => {
     expect(
       createTurnCompletionNotificationCopy(
         createCompletedTurnEvent({ harness_provider: "claude" }),
-        { projectName: "lifecycle", sessionTitle: "Notification improvements", workspaceName: "main" },
+        {
+          projectName: "lifecycle",
+          sessionTitle: "Notification improvements",
+          workspaceName: "main",
+        },
       ),
     ).toEqual({
       body: "Claude finished in lifecycle:main.",
@@ -77,9 +81,7 @@ describe("createTurnCompletionNotificationCopy", () => {
 
   test("falls back to Agent when the provider is unavailable", () => {
     expect(
-      createTurnCompletionNotificationCopy(
-        createCompletedTurnEvent({ harness_provider: null }),
-      ),
+      createTurnCompletionNotificationCopy(createCompletedTurnEvent({ harness_provider: null })),
     ).toEqual({
       body: "Agent has a response ready.",
       title: "Response ready",

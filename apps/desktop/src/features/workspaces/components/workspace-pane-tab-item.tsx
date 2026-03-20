@@ -5,10 +5,10 @@ import type {
   ReactNode,
   RefObject,
 } from "react";
-import { TabChip } from "../../../components/tab-chip";
-import { TypedTitle } from "../../../components/typed-title";
-import { tabTitle, type WorkspaceCanvasTab } from "./workspace-canvas-tabs";
-import { canvasTabDomId, canvasTabPanelId } from "./workspace-canvas-ids";
+import { TabChip } from "@/components/tab-chip";
+import { TypedTitle } from "@/components/typed-title";
+import { tabTitle, type WorkspaceCanvasTab } from "@/features/workspaces/components/workspace-canvas-tabs";
+import { canvasTabDomId, canvasTabPanelId } from "@/features/workspaces/components/workspace-canvas-ids";
 
 interface WorkspacePaneTabItemProps {
   active: boolean;
@@ -113,10 +113,7 @@ export function WorkspacePaneTabItem({
           value={renameValue}
         />
       ) : (
-        <TypedTitle
-          className="min-w-0 flex-1 truncate leading-none font-medium"
-          text={tab.label}
-        />
+        <TypedTitle className="min-w-0 flex-1 truncate leading-none font-medium" text={tab.label} />
       )}
     </TabChip>
   );

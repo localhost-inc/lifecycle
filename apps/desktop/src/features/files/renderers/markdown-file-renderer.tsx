@@ -1,5 +1,5 @@
 import { lazy } from "react";
-import type { FileRendererDefinition } from "./file-renderer-types";
+import type { FileRendererDefinition } from "@/features/files/renderers/file-renderer-types";
 
 const MarkdownFileRendererView = lazy(async () => {
   const module = await import("./markdown-file-renderer-view");

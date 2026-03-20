@@ -6,8 +6,8 @@ import {
   createCommitDiffTab,
   createFileViewerTab,
   createPullRequestTab,
-} from "../state/workspace-canvas-state";
-import { WorkspaceSurfaceTabLeading } from "./surface-icons";
+} from "@/features/workspaces/state/workspace-canvas-state";
+import { WorkspaceSurfaceTabLeading } from "@/features/workspaces/components/surface-icons";
 
 describe("WorkspaceSurfaceTabLeading", () => {
   test("prefers the ready indicator over the spinner for harness tabs", () => {

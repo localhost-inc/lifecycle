@@ -5,7 +5,7 @@ import {
   getWorkspacePaneIdsWaitingForSelectedTerminalTab,
   getWorkspaceRenderedPaneActiveTabKeys,
   getWorkspaceUnassignedLiveTerminalTabKeys,
-} from "./workspace-canvas-terminal-state";
+} from "@/features/workspaces/components/workspace-canvas-terminal-state";
 
 describe("canvas terminal tab helpers", () => {
   test("only auto-attaches live terminal tabs that are not already assigned or hidden", () => {

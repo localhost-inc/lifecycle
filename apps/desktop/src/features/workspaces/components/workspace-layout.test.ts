@@ -1,17 +1,25 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import {
-  getManifestFingerprint,
+  type EnvironmentRecord,
   type ServiceRecord,
   type WorkspaceRecord,
 } from "@lifecycle/contracts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
-import { QueryProvider } from "../../../query";
-import { WorkspaceOpenRequestsProvider } from "../state/workspace-open-requests";
-import { WorkspaceToolbarProvider } from "../state/workspace-toolbar-context";
-import { workspaceSupportsFilesystemInteraction } from "../lib/workspace-capabilities";
-import { shouldSyncWorkspaceManifest } from "../lib/workspace-manifest-sync";
+import { QueryProvider } from "@/query";
+import { WorkspaceOpenRequestsProvider } from "@/features/workspaces/state/workspace-open-requests";
+import { WorkspaceToolbarProvider } from "@/features/workspaces/state/workspace-toolbar-context";
+import { workspaceSupportsFilesystemInteraction } from "@/features/workspaces/lib/workspace-capabilities";
+
+const baseEnvironment: EnvironmentRecord = {
+  workspace_id: "workspace_1",
+  status: "idle",
+  failure_reason: null,
+  failed_at: null,
+  created_at: "2026-03-10T10:00:00.000Z",
+  updated_at: "2026-03-10T10:00:00.000Z",
+};
 
 function renderWorkspaceLayout(element: ReturnType<typeof createElement>) {
   return renderToStaticMarkup(
@@ -42,14 +50,12 @@ describe("workspaceSupportsFilesystemInteraction", () => {
     expect(
       workspaceSupportsFilesystemInteraction({
         mode: "local",
-        status: "idle",
         worktree_path: "/tmp/worktree",
       }),
     ).toBeTrue();
     expect(
       workspaceSupportsFilesystemInteraction({
         mode: "local",
-        status: "starting",
         worktree_path: "/tmp/worktree",
       }),
     ).toBeTrue();
@@ -59,21 +65,18 @@ describe("workspaceSupportsFilesystemInteraction", () => {
     expect(
       workspaceSupportsFilesystemInteraction({
         mode: "local",
-        status: "idle",
         worktree_path: "/tmp/worktree",
       }),
     ).toBeTrue();
     expect(
       workspaceSupportsFilesystemInteraction({
         mode: "local",
-        status: "idle",
         worktree_path: null,
       }),
     ).toBeFalse();
     expect(
       workspaceSupportsFilesystemInteraction({
         mode: "cloud",
-        status: "active",
         worktree_path: "/tmp/worktree",
       }),
     ).toBeFalse();
@@ -85,34 +88,121 @@ describe("WorkspaceLayout", () => {
     mock.restore();
   });
 
+  test("blocks on environment data instead of treating it as optional", async () => {
+    const workspace: WorkspaceRecord = {
+      id: "workspace_1",
+      project_id: "project_1",
+      name: "frost-beacon",
+      kind: "managed",
+      source_ref: "lifecycle/frost-beacon",
+      git_sha: "1dd55398",
+      worktree_path: "/tmp/frost-beacon",
+      mode: "local",
+      manifest_fingerprint: "manifest_1",
+      created_by: null,
+      source_workspace_id: null,
+      created_at: "2026-03-10T10:00:00.000Z",
+      updated_at: "2026-03-10T10:00:00.000Z",
+      last_active_at: "2026-03-10T10:00:00.000Z",
+      expires_at: null,
+    };
+
+    const hooksModule = await import("../hooks");
+    spyOn(hooksModule, "useWorkspaceEnvironment").mockReturnValue({
+      data: undefined,
+      error: null,
+      isLoading: true,
+      refresh: async () => {},
+      status: "loading",
+    } as never);
+    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue({
+      data: [],
+      error: null,
+      isLoading: false,
+      refresh: async () => {},
+      status: "ready",
+    } as never);
+    await mockWorkspaceLayoutGitQueries();
+
+    const { WorkspaceLayout } = await import("./workspace-layout");
+    const markup = renderWorkspaceLayout(
+      createElement(WorkspaceLayout, {
+        manifestStatus: { state: "missing" },
+        workspace,
+      }),
+    );
+
+    expect(markup).toContain("Loading workspace environment...");
+  });
+
+  test("surfaces environment query failures instead of hiding the panel", async () => {
+    const workspace: WorkspaceRecord = {
+      id: "workspace_1",
+      project_id: "project_1",
+      name: "frost-beacon",
+      kind: "managed",
+      source_ref: "lifecycle/frost-beacon",
+      git_sha: "1dd55398",
+      worktree_path: "/tmp/frost-beacon",
+      mode: "local",
+      manifest_fingerprint: "manifest_1",
+      created_by: null,
+      source_workspace_id: null,
+      created_at: "2026-03-10T10:00:00.000Z",
+      updated_at: "2026-03-10T10:00:00.000Z",
+      last_active_at: "2026-03-10T10:00:00.000Z",
+      expires_at: null,
+    };
+
+    const hooksModule = await import("../hooks");
+    spyOn(hooksModule, "useWorkspaceEnvironment").mockReturnValue({
+      data: undefined,
+      error: new Error("environment exploded"),
+      isLoading: false,
+      refresh: async () => {},
+      status: "error",
+    } as never);
+    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue({
+      data: [],
+      error: null,
+      isLoading: false,
+      refresh: async () => {},
+      status: "ready",
+    } as never);
+    await mockWorkspaceLayoutGitQueries();
+
+    const { WorkspaceLayout } = await import("./workspace-layout");
+    const markup = renderWorkspaceLayout(
+      createElement(WorkspaceLayout, {
+        manifestStatus: { state: "missing" },
+        workspace,
+      }),
+    );
+
+    expect(markup).toContain("Failed to load environment");
+    expect(markup).toContain("environment exploded");
+  });
+
   test("keeps service summaries out of the workspace layout", async () => {
     const services: ServiceRecord[] = [
       {
         id: "svc_1",
-        workspace_id: "workspace_1",
-        service_name: "www",
-        exposure: "local",
-        port_override: null,
+        environment_id: "workspace_1",
+        name: "www",
         status: "stopped",
         status_reason: null,
         assigned_port: 3000,
-        preview_status: "sleeping",
-        preview_failure_reason: null,
         preview_url: "http://127.0.0.1:3000",
         created_at: "2026-03-10T10:00:00.000Z",
         updated_at: "2026-03-10T10:00:00.000Z",
       },
       {
         id: "svc_2",
-        workspace_id: "workspace_1",
-        service_name: "api",
-        exposure: "local",
-        port_override: null,
+        environment_id: "workspace_1",
+        name: "api",
         status: "stopped",
         status_reason: null,
         assigned_port: 8787,
-        preview_status: "sleeping",
-        preview_failure_reason: null,
         preview_url: "http://127.0.0.1:8787",
         created_at: "2026-03-10T10:00:00.000Z",
         updated_at: "2026-03-10T10:00:00.000Z",
@@ -128,10 +218,7 @@ describe("WorkspaceLayout", () => {
       git_sha: "1dd55398",
       worktree_path: "/tmp/frost-beacon",
       mode: "local",
-      status: "idle",
       manifest_fingerprint: "manifest_1",
-      failure_reason: null,
-      failed_at: null,
       created_by: null,
       source_workspace_id: null,
       created_at: "2026-03-10T10:00:00.000Z",
@@ -143,8 +230,10 @@ describe("WorkspaceLayout", () => {
     const hooksModule = await import("../hooks");
     const surfaceModule = await import("./workspace-canvas");
 
-    spyOn(hooksModule, "useWorkspaceEnvironmentTasks").mockReturnValue({ data: [] } as never);
-    spyOn(hooksModule, "useWorkspaceSetup").mockReturnValue({ data: [] } as never);
+    spyOn(hooksModule, "useWorkspaceEnvironment").mockReturnValue({
+      data: baseEnvironment,
+    } as never);
+    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue({ data: services } as never);
     spyOn(surfaceModule, "WorkspaceCanvas").mockImplementation((() =>
       createElement("div", null, "Workspace Surface")) as never);
     await mockWorkspaceLayoutGitQueries();
@@ -157,7 +246,7 @@ describe("WorkspaceLayout", () => {
           result: {
             valid: true,
             config: {
-              workspace: { setup: [], teardown: [] },
+              workspace: { prepare: [], teardown: [] },
               environment: {
                 www: {
                   kind: "service",
@@ -174,11 +263,6 @@ describe("WorkspaceLayout", () => {
           },
         },
         workspace,
-        workspaceSnapshot: {
-          services,
-          terminals: [],
-          workspace,
-        },
       }),
     );
 
@@ -191,7 +275,7 @@ describe("WorkspaceLayout", () => {
     expect(markup).not.toContain(">api<");
   });
 
-  test("keeps environment setup progress out of the workspace layout", async () => {
+  test("keeps environment preparation details out of the workspace layout", async () => {
     const workspace: WorkspaceRecord = {
       id: "workspace_1",
       project_id: "project_1",
@@ -201,10 +285,7 @@ describe("WorkspaceLayout", () => {
       git_sha: "1dd55398",
       worktree_path: "/tmp/frost-beacon",
       mode: "local",
-      status: "starting",
       manifest_fingerprint: "manifest_1",
-      failure_reason: null,
-      failed_at: null,
       created_by: null,
       source_workspace_id: null,
       created_at: "2026-03-10T10:00:00.000Z",
@@ -216,10 +297,10 @@ describe("WorkspaceLayout", () => {
     const hooksModule = await import("../hooks");
     const surfaceModule = await import("./workspace-canvas");
 
-    spyOn(hooksModule, "useWorkspaceEnvironmentTasks").mockReturnValue({ data: [] } as never);
-    spyOn(hooksModule, "useWorkspaceSetup").mockReturnValue({
-      data: [{ name: "install", output: ["bun install"], status: "completed" }],
+    spyOn(hooksModule, "useWorkspaceEnvironment").mockReturnValue({
+      data: { ...baseEnvironment, status: "starting" },
     } as never);
+    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue({ data: [] } as never);
     spyOn(surfaceModule, "WorkspaceCanvas").mockImplementation((() =>
       createElement("div", null, "Workspace Surface")) as never);
     await mockWorkspaceLayoutGitQueries();
@@ -233,7 +314,7 @@ describe("WorkspaceLayout", () => {
             valid: true,
             config: {
               workspace: {
-                setup: [{ command: "bun install", name: "install", timeout_seconds: 60 }],
+                prepare: [{ command: "bun install", name: "install", timeout_seconds: 60 }],
                 teardown: [],
               },
               environment: {
@@ -247,11 +328,6 @@ describe("WorkspaceLayout", () => {
           },
         },
         workspace,
-        workspaceSnapshot: {
-          services: [],
-          terminals: [],
-          workspace,
-        },
       }),
     );
 
@@ -274,10 +350,7 @@ describe("WorkspaceLayout", () => {
       git_sha: "1dd55398",
       worktree_path: null,
       mode: "cloud",
-      status: "idle",
       manifest_fingerprint: null,
-      failure_reason: null,
-      failed_at: null,
       created_by: null,
       source_workspace_id: null,
       created_at: "2026-03-10T10:00:00.000Z",
@@ -287,8 +360,10 @@ describe("WorkspaceLayout", () => {
     };
 
     const hooksModule = await import("../hooks");
-    spyOn(hooksModule, "useWorkspaceEnvironmentTasks").mockReturnValue({ data: [] } as never);
-    spyOn(hooksModule, "useWorkspaceSetup").mockReturnValue({ data: [] } as never);
+    spyOn(hooksModule, "useWorkspaceEnvironment").mockReturnValue({
+      data: baseEnvironment,
+    } as never);
+    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue({ data: [] } as never);
     await mockWorkspaceLayoutGitQueries();
 
     const { WorkspaceLayout } = await import("./workspace-layout");
@@ -298,11 +373,6 @@ describe("WorkspaceLayout", () => {
           state: "missing",
         },
         workspace,
-        workspaceSnapshot: {
-          services: [],
-          terminals: [],
-          workspace,
-        },
       }),
     );
 
@@ -312,78 +382,5 @@ describe("WorkspaceLayout", () => {
     expect(markup).toContain('data-slot="workspace-extension-strip"');
     expect(markup).not.toContain("No lifecycle.json found");
     expect(markup).not.toContain("Add a lifecycle.json file to the project root");
-  });
-});
-
-describe("shouldSyncWorkspaceManifest", () => {
-  test("syncs idle workspaces when a valid manifest declares services but none are persisted", () => {
-    expect(
-      shouldSyncWorkspaceManifest(
-        {
-          manifest_fingerprint: null,
-          status: "idle",
-        } as Pick<WorkspaceRecord, "manifest_fingerprint" | "status">,
-        {
-          state: "valid",
-          result: {
-            valid: true,
-            config: {
-              workspace: { setup: [], teardown: [] },
-              environment: {
-                api: {
-                  kind: "service",
-                  runtime: "process",
-                  command: "bun run dev",
-                },
-              },
-            },
-          },
-        },
-        0,
-      ),
-    ).toBeTrue();
-  });
-
-  test("does not sync when the idle workspace already matches the valid manifest and has services", () => {
-    const config = {
-      workspace: { setup: [], teardown: [] },
-      environment: {
-        api: {
-          kind: "service" as const,
-          runtime: "process" as const,
-          command: "bun run dev",
-        },
-      },
-    };
-
-    expect(
-      shouldSyncWorkspaceManifest(
-        {
-          manifest_fingerprint: getManifestFingerprint(config),
-          status: "idle",
-        } as Pick<WorkspaceRecord, "manifest_fingerprint" | "status">,
-        {
-          state: "valid",
-          result: {
-            valid: true,
-            config,
-          },
-        },
-        1,
-      ),
-    ).toBeFalse();
-  });
-
-  test("syncs missing or invalid manifests when persisted service state needs cleanup", () => {
-    expect(
-      shouldSyncWorkspaceManifest(
-        {
-          manifest_fingerprint: "stale-manifest",
-          status: "idle",
-        } as Pick<WorkspaceRecord, "manifest_fingerprint" | "status">,
-        { state: "missing" },
-        2,
-      ),
-    ).toBeTrue();
   });
 });

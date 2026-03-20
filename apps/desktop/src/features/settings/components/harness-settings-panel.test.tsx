@@ -5,8 +5,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   buildClaudeHarnessSettingsFromPreset,
   buildCodexHarnessSettingsFromPreset,
-} from "../state/harness-settings";
-import { HarnessSettingsPanel } from "./harness-settings-panel";
+} from "@/features/settings/state/harness-settings";
+import { HarnessSettingsPanel } from "@/features/settings/components/harness-settings-panel";
 
 function renderPanel(overrides: Record<string, unknown> = {}) {
   return renderToStaticMarkup(

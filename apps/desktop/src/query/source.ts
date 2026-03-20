@@ -1,9 +1,11 @@
 import type {
+  EnvironmentRecord,
   GitBranchPullRequestResult,
   GitLogEntry,
   GitPullRequestDetailResult,
   GitPullRequestListResult,
   GitStatusResult,
+  LifecycleEvent,
   ProjectRecord,
   ServiceRecord,
   TerminalRecord,
@@ -15,33 +17,34 @@ import {
   getGitPullRequest,
   getGitPullRequests,
   getGitStatus,
-} from "../features/git/api";
-import type { ManifestStatus } from "../features/projects/api/projects";
-import { getTerminal, listWorkspaceTerminals } from "../features/terminals/api";
-import { listProjects, readManifest } from "../features/projects/api/projects";
-import { listWorkspacesByProject } from "../features/workspaces/catalog-api";
+} from "@/features/git/api";
+import type { ManifestStatus } from "@/features/projects/api/projects";
+import { getTerminal, listWorkspaceTerminals } from "@/features/terminals/api";
+import { listProjects, readManifest } from "@/features/projects/api/projects";
+import { listWorkspacesByProject } from "@/features/workspaces/catalog-api";
 import {
+  getWorkspaceActivity,
   getWorkspaceById,
-  getWorkspaceRuntimeProjection,
-  getWorkspaceSnapshot,
+  getWorkspaceEnvironment,
+  getWorkspaceServiceLogs,
   listWorkspaceFiles,
   readWorkspaceFile,
   getWorkspaceServices,
   type WorkspaceFileTreeEntry,
   type WorkspaceFileReadResult,
-  type WorkspaceRuntimeProjectionResult,
-  type WorkspaceSnapshotResult,
-} from "../features/workspaces/api";
-import { measureAsyncPerformance } from "../lib/performance";
+  type ServiceLogSnapshot,
+} from "@/features/workspaces/api";
+import { measureAsyncPerformance } from "@/lib/performance";
 
 export interface QuerySource {
   listProjects(): Promise<ProjectRecord[]>;
   readManifest(projectPath: string): Promise<ManifestStatus>;
   listWorkspacesByProject(): Promise<Record<string, WorkspaceRecord[]>>;
   getWorkspace(workspaceId: string): Promise<WorkspaceRecord | null>;
-  getWorkspaceSnapshot(workspaceId: string): Promise<WorkspaceSnapshotResult>;
-  getWorkspaceRuntimeProjection(workspaceId: string): Promise<WorkspaceRuntimeProjectionResult>;
+  getWorkspaceEnvironment(workspaceId: string): Promise<EnvironmentRecord>;
+  getWorkspaceActivity(workspaceId: string): Promise<LifecycleEvent[]>;
   getWorkspaceFile(workspaceId: string, filePath: string): Promise<WorkspaceFileReadResult>;
+  getWorkspaceServiceLogs(workspaceId: string): Promise<ServiceLogSnapshot[]>;
   listWorkspaceFiles(workspaceId: string): Promise<WorkspaceFileTreeEntry[]>;
   getWorkspaceServices(workspaceId: string): Promise<ServiceRecord[]>;
   getWorkspaceGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]>;
@@ -77,19 +80,24 @@ export function createQuerySource(): QuerySource {
     async getWorkspace(workspaceId) {
       return measureWorkspace("query.workspace", workspaceId, () => getWorkspaceById(workspaceId));
     },
-    async getWorkspaceSnapshot(workspaceId) {
-      return measureWorkspace("query.workspace-snapshot", workspaceId, () =>
-        getWorkspaceSnapshot(workspaceId),
+    async getWorkspaceEnvironment(workspaceId) {
+      return measureWorkspace("query.workspace-environment", workspaceId, () =>
+        getWorkspaceEnvironment(workspaceId),
       );
     },
-    async getWorkspaceRuntimeProjection(workspaceId) {
-      return measureWorkspace("query.workspace-runtime-projection", workspaceId, () =>
-        getWorkspaceRuntimeProjection(workspaceId),
+    async getWorkspaceActivity(workspaceId) {
+      return measureWorkspace("query.workspace-activity", workspaceId, () =>
+        getWorkspaceActivity(workspaceId),
       );
     },
     async getWorkspaceFile(workspaceId, filePath) {
       return measureWorkspace("query.workspace-file", workspaceId, () =>
         readWorkspaceFile(workspaceId, filePath),
+      );
+    },
+    async getWorkspaceServiceLogs(workspaceId) {
+      return measureWorkspace("query.workspace-service-logs", workspaceId, () =>
+        getWorkspaceServiceLogs(workspaceId),
       );
     },
     async listWorkspaceFiles(workspaceId) {

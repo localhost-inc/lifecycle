@@ -70,11 +70,6 @@ export {
   sidebarMenuSubButtonVariants,
   useSidebar,
 } from "./components/sidebar";
-export {
-  SetupProgress,
-  type SetupProgressStep,
-  type SetupProgressStepStatus,
-} from "./components/setup-progress";
 export { Spinner } from "./components/spinner";
 export { Switch, SwitchThumb } from "./components/switch";
 export {

@@ -8,8 +8,8 @@ import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { EditorView } from "@codemirror/view";
 import { xml } from "@codemirror/lang-xml";
 import { tags as t } from "@lezer/highlight";
-import { workspaceFileExtension } from "../../workspaces/lib/workspace-file-paths";
-import type { FileRendererEditorConfig, FileEditorConfig } from "./file-editor-types";
+import { workspaceFileExtension } from "@/features/workspaces/lib/workspace-file-paths";
+import type { FileRendererEditorConfig, FileEditorConfig } from "@/features/files/lib/file-editor-types";
 
 function createBaseFileCodeEditorTheme() {
   return EditorView.theme({
@@ -63,7 +63,10 @@ const fileCodeEditorHighlightStyle = HighlightStyle.define([
   { tag: [t.number, t.bool], color: "var(--terminal-ansi-yellow)" },
   { tag: [t.propertyName, t.attributeName], color: "var(--terminal-ansi-blue)" },
   { tag: [t.typeName, t.className, t.namespace], color: "var(--terminal-ansi-cyan)" },
-  { tag: [t.function(t.variableName), t.function(t.propertyName)], color: "var(--terminal-ansi-yellow)" },
+  {
+    tag: [t.function(t.variableName), t.function(t.propertyName)],
+    color: "var(--terminal-ansi-yellow)",
+  },
   { tag: [t.definition(t.variableName)], color: "var(--terminal-ansi-bright-blue)" },
   { tag: [t.operator, t.punctuation], color: "var(--muted-foreground)" },
   { tag: [t.tagName], color: "var(--terminal-ansi-red)" },

@@ -1,8 +1,8 @@
-import { workspaceFileExtension } from "../../workspaces/lib/workspace-file-paths";
-import { markdownFileRenderer } from "./markdown-file-renderer";
-import { pencilFileRenderer } from "./pencil-file-renderer";
-import { textFileRenderer } from "./text-file-renderer";
-import type { FileRendererDefinition, FileViewerRendererKind } from "./file-renderer-types";
+import { workspaceFileExtension } from "@/features/workspaces/lib/workspace-file-paths";
+import { markdownFileRenderer } from "@/features/files/renderers/markdown-file-renderer";
+import { pencilFileRenderer } from "@/features/files/renderers/pencil-file-renderer";
+import { textFileRenderer } from "@/features/files/renderers/text-file-renderer";
+import type { FileRendererDefinition, FileViewerRendererKind } from "@/features/files/renderers/file-renderer-types";
 
 const fileRendererRegistry: FileRendererDefinition[] = [
   markdownFileRenderer,

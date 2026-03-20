@@ -11,7 +11,7 @@ import {
   DEFAULT_INTERFACE_FONT_FAMILY,
   DEFAULT_MONOSPACE_FONT_FAMILY,
   normalizeFontFamily,
-} from "../../../lib/typography";
+} from "@/lib/typography";
 import {
   buildDefaultHarnessSettings,
   normalizeClaudeHarnessSettings,
@@ -20,7 +20,7 @@ import {
   type ClaudeHarnessSettings,
   type CodexHarnessSettings,
   type HarnessSettings,
-} from "./harness-settings";
+} from "@/features/settings/state/harness-settings";
 import {
   DEFAULT_TURN_NOTIFICATION_MODE,
   DEFAULT_TURN_NOTIFICATION_SOUND,
@@ -28,7 +28,7 @@ import {
   normalizeTurnNotificationSound,
   type TurnNotificationMode,
   type TurnNotificationSound,
-} from "../../notifications/lib/notification-settings";
+} from "@/features/notifications/lib/notification-settings";
 
 export const DEFAULT_LIFECYCLE_ROOT = "~/.lifecycle";
 export const DEFAULT_WORKTREE_ROOT = `${DEFAULT_LIFECYCLE_ROOT}/worktrees`;

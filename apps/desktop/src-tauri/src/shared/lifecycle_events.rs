@@ -1,4 +1,4 @@
-use crate::capabilities::workspaces::query::{ServiceRecord, TerminalRecord};
+use crate::capabilities::workspaces::query::TerminalRecord;
 use crate::platform::db::DbPath;
 use crate::WorkspaceControllerRegistryHandle;
 use rusqlite::params;
@@ -20,8 +20,8 @@ pub struct LifecycleEnvelope {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind")]
 pub enum LifecycleEvent {
-    #[serde(rename = "workspace.status_changed")]
-    WorkspaceStatusChanged {
+    #[serde(rename = "environment.status_changed")]
+    EnvironmentStatusChanged {
         workspace_id: String,
         status: String,
         failure_reason: Option<String>,
@@ -38,34 +38,9 @@ pub enum LifecycleEvent {
     #[serde(rename = "service.status_changed")]
     ServiceStatusChanged {
         workspace_id: String,
-        service_name: String,
+        name: String,
         status: String,
         status_reason: Option<String>,
-    },
-    #[serde(rename = "service.configuration_changed")]
-    ServiceConfigurationChanged {
-        workspace_id: String,
-        service: ServiceRecord,
-    },
-    #[serde(rename = "workspace.setup_progress")]
-    WorkspaceSetupProgress {
-        workspace_id: String,
-        step_name: String,
-        event_kind: String,
-        data: Option<String>,
-    },
-    #[serde(rename = "workspace.manifest_synced")]
-    WorkspaceManifestSynced {
-        workspace_id: String,
-        manifest_fingerprint: Option<String>,
-        services: Vec<ServiceRecord>,
-    },
-    #[serde(rename = "environment.task_progress")]
-    EnvironmentTaskProgress {
-        workspace_id: String,
-        step_name: String,
-        event_kind: String,
-        data: Option<String>,
     },
     #[serde(rename = "terminal.created")]
     TerminalCreated {
@@ -113,13 +88,13 @@ pub enum LifecycleEvent {
     #[serde(rename = "service.process_exited")]
     ServiceProcessExited {
         workspace_id: String,
-        service_name: String,
+        name: String,
         exit_code: Option<i32>,
     },
     #[serde(rename = "service.log_line")]
     ServiceLogLine {
         workspace_id: String,
-        service_name: String,
+        name: String,
         stream: String,
         line: String,
     },
@@ -150,15 +125,11 @@ pub enum LifecycleEvent {
 impl LifecycleEvent {
     pub fn workspace_id(&self) -> &str {
         match self {
-            Self::WorkspaceStatusChanged { workspace_id, .. }
+            Self::EnvironmentStatusChanged { workspace_id, .. }
             | Self::WorkspaceRenamed { workspace_id, .. }
             | Self::WorkspaceDeleted { workspace_id }
             | Self::ServiceStatusChanged { workspace_id, .. }
-            | Self::ServiceConfigurationChanged { workspace_id, .. }
             | Self::ServiceProcessExited { workspace_id, .. }
-            | Self::WorkspaceSetupProgress { workspace_id, .. }
-            | Self::WorkspaceManifestSynced { workspace_id, .. }
-            | Self::EnvironmentTaskProgress { workspace_id, .. }
             | Self::TerminalCreated { workspace_id, .. }
             | Self::TerminalUpdated { workspace_id, .. }
             | Self::TerminalStatusChanged { workspace_id, .. }
@@ -174,10 +145,6 @@ impl LifecycleEvent {
 
     pub fn contributes_to_activity(&self) -> bool {
         match self {
-            Self::WorkspaceSetupProgress { event_kind, .. }
-            | Self::EnvironmentTaskProgress { event_kind, .. } => {
-                !matches!(event_kind.as_str(), "stdout" | "stderr")
-            }
             Self::ServiceLogLine { .. } => false,
             Self::TerminalUpdated { .. } => false,
             _ => true,
@@ -190,9 +157,9 @@ pub fn publish_lifecycle_event(app: &AppHandle, event: LifecycleEvent) {
     let process_exited = match &event {
         LifecycleEvent::ServiceProcessExited {
             workspace_id,
-            service_name,
+            name,
             exit_code,
-        } => Some((workspace_id.clone(), service_name.clone(), *exit_code)),
+        } => Some((workspace_id.clone(), name.clone(), *exit_code)),
         _ => None,
     };
 
@@ -214,12 +181,12 @@ pub fn publish_lifecycle_event(app: &AppHandle, event: LifecycleEvent) {
     let _ = app.emit(LIFECYCLE_EVENT_NAME, envelope);
 
     // React to ServiceProcessExited: transition "ready" services to "failed"
-    if let Some((workspace_id, service_name, _exit_code)) = process_exited {
-        handle_service_process_exited(app, &workspace_id, &service_name);
+    if let Some((workspace_id, name, _exit_code)) = process_exited {
+        handle_service_process_exited(app, &workspace_id, &name);
     }
 }
 
-fn handle_service_process_exited(app: &AppHandle, workspace_id: &str, service_name: &str) {
+fn handle_service_process_exited(app: &AppHandle, workspace_id: &str, name: &str) {
     let db_path = match app.try_state::<DbPath>() {
         Some(state) => state.0.clone(),
         None => return,
@@ -231,8 +198,8 @@ fn handle_service_process_exited(app: &AppHandle, workspace_id: &str, service_na
 
     let current_status: Option<String> = conn
         .query_row(
-            "SELECT status FROM workspace_service WHERE workspace_id = ?1 AND service_name = ?2",
-            params![workspace_id, service_name],
+            "SELECT status FROM service WHERE environment_id = ?1 AND name = ?2",
+            params![workspace_id, name],
             |row| row.get(0),
         )
         .ok();
@@ -242,20 +209,20 @@ fn handle_service_process_exited(app: &AppHandle, workspace_id: &str, service_na
     }
 
     let _ = conn.execute(
-        "UPDATE workspace_service
+        "UPDATE service
          SET status = 'failed',
              status_reason = 'service_process_exited',
              assigned_port = NULL,
              updated_at = datetime('now')
-         WHERE workspace_id = ?1 AND service_name = ?2",
-        params![workspace_id, service_name],
+         WHERE environment_id = ?1 AND name = ?2",
+        params![workspace_id, name],
     );
 
     publish_lifecycle_event(
         app,
         LifecycleEvent::ServiceStatusChanged {
             workspace_id: workspace_id.to_string(),
-            service_name: service_name.to_string(),
+            name: name.to_string(),
             status: "failed".to_string(),
             status_reason: Some("service_process_exited".to_string()),
         },
@@ -293,14 +260,14 @@ mod tests {
     }
 
     #[test]
-    fn completed_setup_events_continue_to_contribute_to_activity() {
-        let event = LifecycleEvent::WorkspaceSetupProgress {
+    fn service_log_events_do_not_contribute_to_activity() {
+        let event = LifecycleEvent::ServiceLogLine {
             workspace_id: "workspace-1".to_string(),
-            step_name: "install".to_string(),
-            event_kind: "completed".to_string(),
-            data: None,
+            name: "api".to_string(),
+            stream: "stdout".to_string(),
+            line: "booting".to_string(),
         };
 
-        assert!(event.contributes_to_activity());
+        assert!(!event.contributes_to_activity());
     }
 }

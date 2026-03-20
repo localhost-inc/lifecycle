@@ -540,8 +540,8 @@ mod tests {
         )
         .expect("insert project");
         conn.execute(
-            "INSERT INTO workspace (id, project_id, name, name_origin, kind, source_ref, source_ref_origin, worktree_path, status, mode)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'sleeping', 'local')",
+            "INSERT INTO workspace (id, project_id, name, name_origin, kind, source_ref, source_ref_origin, worktree_path, mode)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'local')",
             rusqlite::params![
                 workspace_id,
                 "project_1",
@@ -754,8 +754,8 @@ mod tests {
         .expect("insert project");
         conn.execute(
             "INSERT INTO workspace (
-                id, project_id, name, name_origin, kind, source_ref, source_ref_origin, worktree_path, status, mode
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                id, project_id, name, name_origin, kind, source_ref, source_ref_origin, worktree_path, mode
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             rusqlite::params![
                 "workspace_root",
                 "project_1",
@@ -765,7 +765,6 @@ mod tests {
                 source_ref,
                 "manual",
                 repo_path_str,
-                "sleeping",
                 "local"
             ],
         )
@@ -821,8 +820,8 @@ mod tests {
         .expect("insert project");
         conn.execute(
             "INSERT INTO workspace (
-                id, project_id, name, name_origin, kind, source_ref, source_ref_origin, worktree_path, status, mode
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                id, project_id, name, name_origin, kind, source_ref, source_ref_origin, worktree_path, mode
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             rusqlite::params![
                 "workspace_root",
                 "project_1",
@@ -832,7 +831,6 @@ mod tests {
                 source_ref,
                 "default",
                 repo_path_str,
-                "sleeping",
                 "local"
             ],
         )

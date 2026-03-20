@@ -3,7 +3,7 @@ import {
   hasFileViewerConflict,
   isFileViewerDirty,
   type FileViewerSessionState,
-} from "../lib/file-session";
+} from "@/features/files/lib/file-session";
 
 export type WorkspaceFileSessionsState = Record<string, FileViewerSessionState>;
 

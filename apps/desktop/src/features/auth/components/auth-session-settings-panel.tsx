@@ -1,7 +1,7 @@
 import { Button, Spinner } from "@lifecycle/ui";
 import { RefreshCcw } from "lucide-react";
-import type { AuthSession } from "../auth-session";
-import { UserAvatar } from "../../user/components/user-avatar";
+import type { AuthSession } from "@/features/auth/auth-session";
+import { UserAvatar } from "@/features/user/components/user-avatar";
 
 interface AuthSessionSettingsPanelProps {
   isLoading: boolean;

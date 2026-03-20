@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import type { ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
-
-const getWorkspaceProvider = mock(() => provider);
+import type { EnvironmentRecord, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
 
 const workspace: WorkspaceRecord = {
   id: "ws_1",
@@ -12,10 +10,7 @@ const workspace: WorkspaceRecord = {
   git_sha: null,
   worktree_path: "/tmp/project_1/.worktrees/ws_1",
   mode: "local",
-  status: "idle",
   manifest_fingerprint: "manifest_1",
-  failure_reason: null,
-  failed_at: null,
   created_by: null,
   source_workspace_id: null,
   created_at: "2026-03-13T00:00:00.000Z",
@@ -27,22 +22,27 @@ const workspace: WorkspaceRecord = {
 const services: ServiceRecord[] = [
   {
     id: "svc_1",
-    workspace_id: "ws_1",
-    service_name: "web",
-    exposure: "local",
-    port_override: null,
+    environment_id: "ws_1",
+    name: "web",
     status: "stopped",
     status_reason: null,
     assigned_port: 3000,
-    preview_status: "sleeping",
-    preview_failure_reason: null,
     preview_url: "http://127.0.0.1:3000",
     created_at: "2026-03-13T00:00:00.000Z",
     updated_at: "2026-03-13T00:00:00.000Z",
   },
 ];
 
-const provider = {
+const environment: EnvironmentRecord = {
+  workspace_id: "ws_1",
+  status: "idle",
+  failure_reason: null,
+  failed_at: null,
+  created_at: "2026-03-13T00:00:00.000Z",
+  updated_at: "2026-03-13T00:00:00.000Z",
+};
+
+const controlPlane = {
   createWorkspace: mock(async () => ({
     workspace,
     worktreePath: workspace.worktree_path ?? "",
@@ -51,71 +51,78 @@ const provider = {
     ...workspace,
     name,
   })),
-  startServices: mock(async () => services),
+  destroyWorkspace: mock(async () => {}),
   getWorkspace: mock(async () => workspace),
-  getWorkspaceServices: mock(async () => services),
-  getWorkspaceSnapshot: mock(async () => ({
-    services,
-    terminals: [],
-    workspace,
-  })),
-  getWorkspaceRuntimeProjection: mock(async () => ({
-    activity: [],
-    environmentTasks: [],
-    setup: [],
-  })),
-  updateWorkspaceService: mock(async () => {}),
-  syncWorkspaceManifest: mock(async () => {}),
-  readWorkspaceFile: mock(async () => ({
-    absolute_path: "/tmp/project_1/.worktrees/ws_1/README.md",
-    byte_len: 7,
-    content: "welcome",
-    extension: "md",
-    file_path: "README.md",
-    is_binary: false,
-    is_too_large: false,
-  })),
-  writeWorkspaceFile: mock(async () => ({
-    absolute_path: "/tmp/project_1/.worktrees/ws_1/README.md",
-    byte_len: 7,
-    content: "welcome",
-    extension: "md",
-    file_path: "README.md",
-    is_binary: false,
-    is_too_large: false,
-  })),
-  listWorkspaceFiles: mock(async () => [{ extension: "md", file_path: "README.md" }]),
-  openWorkspaceFile: mock(async () => {}),
 };
 
-mock.module("../../lib/workspace-provider", () => ({
-  getWorkspaceProvider,
+const runtime = {
+  startServices: mock(async () => services),
+  sleep: mock(async () => {}),
+  getEnvironment: mock(async () => environment),
+  getActivity: mock(async () => []),
+  getServiceLogs: mock(async () => []),
+  getServices: mock(async () => services),
+  readFile: mock(async () => ({
+    absolute_path: "/tmp/project_1/.worktrees/ws_1/README.md",
+    byte_len: 7,
+    content: "welcome",
+    extension: "md",
+    file_path: "README.md",
+    is_binary: false,
+    is_too_large: false,
+  })),
+  writeFile: mock(async () => ({
+    absolute_path: "/tmp/project_1/.worktrees/ws_1/README.md",
+    byte_len: 7,
+    content: "welcome",
+    extension: "md",
+    file_path: "README.md",
+    is_binary: false,
+    is_too_large: false,
+  })),
+  listFiles: mock(async () => [{ extension: "md", file_path: "README.md" }]),
+  openFile: mock(async () => {}),
+};
+
+const getControlPlane = mock(() => controlPlane);
+const getWorkspaceRuntime = mock(() => runtime);
+
+mock.module("../../lib/control-plane", () => ({
+  getControlPlane,
+}));
+
+mock.module("../../lib/workspace-runtime", () => ({
+  getWorkspaceRuntime,
 }));
 
 const {
   createWorkspace,
+  getWorkspaceActivity,
   getWorkspaceById,
-  getWorkspaceRuntimeProjection,
+  getWorkspaceEnvironment,
+  getWorkspaceServiceLogs,
   getWorkspaceServices,
-  getWorkspaceSnapshot,
   listWorkspaceFiles,
   openWorkspaceFile,
   readWorkspaceFile,
   renameWorkspace,
   startServices,
-  updateWorkspaceService,
   writeWorkspaceFile,
 } = await import("./api");
 
-describe("workspace api provider routing", () => {
+describe("workspace api boundary routing", () => {
   beforeEach(() => {
     Object.defineProperty(globalThis, "isTauri", {
       configurable: true,
       value: true,
       writable: true,
     });
-    getWorkspaceProvider.mockClear();
-    for (const method of Object.values(provider)) {
+    getControlPlane.mockClear();
+    getWorkspaceRuntime.mockClear();
+    for (const method of Object.values(controlPlane)) {
+      method.mockClear();
+    }
+    for (const method of Object.values(runtime)) {
       method.mockClear();
     }
   });
@@ -124,7 +131,7 @@ describe("workspace api provider routing", () => {
     delete (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri;
   });
 
-  test("routes workspace-scoped lifecycle and query calls through the provider", async () => {
+  test("routes workspace shell reads through the control plane and live reads through the runtime", async () => {
     expect(
       await createWorkspace({
         projectId: "project_1",
@@ -141,22 +148,10 @@ describe("workspace api provider routing", () => {
       manifestFingerprint: "manifest_2",
     });
     expect(await getWorkspaceById("ws_1")).toEqual(workspace);
+    expect(await getWorkspaceEnvironment("ws_1")).toEqual(environment);
+    expect(await getWorkspaceActivity("ws_1")).toEqual([]);
+    expect(await getWorkspaceServiceLogs("ws_1")).toEqual([]);
     expect(await getWorkspaceServices("ws_1")).toEqual(services);
-    expect(await getWorkspaceSnapshot("ws_1")).toEqual({
-      services,
-      terminals: [],
-      workspace,
-    });
-    expect(await getWorkspaceRuntimeProjection("ws_1")).toEqual({
-      activity: [],
-      environmentTasks: [],
-      serviceLogs: [],
-      setup: [],
-    });
-    await updateWorkspaceService("ws_1", "web", {
-      exposure: "local",
-      portOverride: 3001,
-    });
     expect(await readWorkspaceFile("ws_1", "README.md")).toEqual({
       absolute_path: "/tmp/project_1/.worktrees/ws_1/README.md",
       byte_len: 7,
@@ -178,29 +173,25 @@ describe("workspace api provider routing", () => {
     expect(await listWorkspaceFiles("ws_1")).toEqual([{ extension: "md", file_path: "README.md" }]);
     await openWorkspaceFile("ws_1", "README.md");
 
-    expect(getWorkspaceProvider).toHaveBeenCalled();
-    expect(provider.createWorkspace).toHaveBeenCalledTimes(1);
-    expect(provider.renameWorkspace).toHaveBeenCalledWith("ws_1", "Renamed Workspace");
-    expect(provider.startServices).toHaveBeenCalledWith({
+    expect(getControlPlane).toHaveBeenCalled();
+    expect(getWorkspaceRuntime).toHaveBeenCalled();
+    expect(controlPlane.createWorkspace).toHaveBeenCalledTimes(1);
+    expect(controlPlane.renameWorkspace).toHaveBeenCalledWith("ws_1", "Renamed Workspace");
+    expect(runtime.startServices).toHaveBeenCalledWith({
       serviceNames: undefined,
       workspace,
       services,
       manifestJson: '{"services":{"web":{}}}',
       manifestFingerprint: "manifest_2",
     });
-    expect(provider.getWorkspace).toHaveBeenCalledWith("ws_1");
-    expect(provider.getWorkspaceServices).toHaveBeenCalledWith("ws_1");
-    expect(provider.getWorkspaceSnapshot).toHaveBeenCalledWith("ws_1");
-    expect(provider.getWorkspaceRuntimeProjection).toHaveBeenCalledWith("ws_1");
-    expect(provider.updateWorkspaceService).toHaveBeenCalledWith({
-      workspaceId: "ws_1",
-      serviceName: "web",
-      exposure: "local",
-      portOverride: 3001,
-    });
-    expect(provider.readWorkspaceFile).toHaveBeenCalledWith("ws_1", "README.md");
-    expect(provider.writeWorkspaceFile).toHaveBeenCalledWith("ws_1", "README.md", "welcome");
-    expect(provider.listWorkspaceFiles).toHaveBeenCalledWith("ws_1");
-    expect(provider.openWorkspaceFile).toHaveBeenCalledWith("ws_1", "README.md");
+    expect(controlPlane.getWorkspace).toHaveBeenCalledWith("ws_1");
+    expect(runtime.getEnvironment).toHaveBeenCalledWith("ws_1");
+    expect(runtime.getActivity).toHaveBeenCalledWith("ws_1");
+    expect(runtime.getServiceLogs).toHaveBeenCalledWith("ws_1");
+    expect(runtime.getServices).toHaveBeenCalledWith("ws_1");
+    expect(runtime.readFile).toHaveBeenCalledWith("ws_1", "README.md");
+    expect(runtime.writeFile).toHaveBeenCalledWith("ws_1", "README.md", "welcome");
+    expect(runtime.listFiles).toHaveBeenCalledWith("ws_1");
+    expect(runtime.openFile).toHaveBeenCalledWith("ws_1", "README.md");
   });
 });

@@ -1,26 +1,25 @@
 export type {
-  CloudWorkspaceProviderCreateContext,
-  LocalWorkspaceProviderCreateContext,
-  WorkspaceProviderFileReadResult,
-  WorkspaceProviderFileTreeEntry,
-  WorkspaceProviderCreateTerminalInput,
-  WorkspaceProviderSaveTerminalAttachmentInput,
-  WorkspaceProviderSavedTerminalAttachment,
-  WorkspaceProvider,
-  WorkspaceProviderCreateContext,
-  WorkspaceProviderCreateInput,
-  WorkspaceProviderCreateResult,
-  WorkspaceProviderGitDiffInput,
-  WorkspaceProviderHealthResult,
-  WorkspaceProviderProgressStatus,
-  WorkspaceProviderRuntimeProjectionResult,
-  WorkspaceProviderSnapshotResult,
-  WorkspaceProviderStartInput,
-  WorkspaceProviderStepProgressSnapshot,
-  WorkspaceProviderSyncManifestInput,
-  WorkspaceProviderUpdateServiceInput,
-  WorkspaceProviderWakeInput,
-} from "./provider";
+  CloudWorkspaceCreateContext,
+  ControlPlane,
+  LocalWorkspaceCreateContext,
+  WorkspaceCreateContext,
+  WorkspaceCreateInput,
+  WorkspaceCreateResult,
+} from "./control-plane";
+export type {
+  CreateTerminalInput,
+  GitDiffInput,
+  SavedTerminalAttachment,
+  ServiceLogLine,
+  ServiceLogSnapshot,
+  SaveTerminalAttachmentInput,
+  WorkspaceFileReadResult,
+  WorkspaceFileTreeEntry,
+  WorkspaceHealthResult,
+  WorkspaceRuntime,
+  WorkspaceStartInput,
+  WorkspaceWakeInput,
+} from "./workspace-runtime";
 export type {
   ClaudePermissionMode,
   ClaudeHarnessLaunchConfigInput,
@@ -30,5 +29,10 @@ export type {
   HarnessLaunchConfigInput,
   HarnessPreset,
 } from "./harnesses";
-export { LocalWorkspaceProvider } from "./workspaces/providers/local";
-export { CloudWorkspaceProvider, type CloudWorkspaceClient } from "./workspaces/providers/cloud";
+export { LocalControlPlane } from "./local-control-plane";
+export { CloudControlPlane, type CloudControlPlaneClient } from "./cloud-control-plane";
+export { LocalWorkspaceRuntime } from "./local-workspace-runtime";
+export {
+  CloudWorkspaceRuntime,
+  type CloudWorkspaceRuntimeClient,
+} from "./cloud-workspace-runtime";

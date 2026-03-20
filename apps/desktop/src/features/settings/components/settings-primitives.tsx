@@ -15,7 +15,9 @@ export const SettingsSection = forwardRef<HTMLElement, SettingsSectionProps>(
         id={id}
         ref={ref}
       >
-        <h2 className="font-mono text-xs font-medium uppercase tracking-widest text-[var(--primary)]">{label}</h2>
+        <h2 className="font-mono text-xs font-medium uppercase tracking-widest text-[var(--primary)]">
+          {label}
+        </h2>
         {description && (
           <p className="mt-1 text-sm text-[var(--muted-foreground)]">{description}</p>
         )}

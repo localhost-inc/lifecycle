@@ -6,7 +6,7 @@ import {
   claudeHarnessSettingsUseCustomValues,
   codexHarnessSettingsUseCustomValues,
   normalizeHarnessSettings,
-} from "./harness-settings";
+} from "@/features/settings/state/harness-settings";
 
 describe("harness settings", () => {
   test("builds guarded defaults from presets", () => {

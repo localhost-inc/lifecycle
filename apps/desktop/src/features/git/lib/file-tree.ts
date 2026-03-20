@@ -1,5 +1,5 @@
 import type { FileDiffMetadata } from "@pierre/diffs/react";
-import { summarizeChanges } from "../components/git-file-header";
+import { summarizeChanges } from "@/features/git/components/git-file-header";
 
 export interface FileTreeLeaf {
   kind: "file";

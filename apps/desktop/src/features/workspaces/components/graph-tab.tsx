@@ -143,7 +143,7 @@ export function GraphTab({ config, services }: GraphTabProps) {
 
   const statusMap = new Map<string, ServiceRecord["status"]>();
   for (const svc of services) {
-    statusMap.set(svc.service_name, svc.status);
+    statusMap.set(svc.name, svc.status);
   }
 
   const { nodes, edges, layerCount, maxColumnsInLayer } = layout;

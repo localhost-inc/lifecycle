@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createChangesDiffTab } from "../state/workspace-canvas-state";
+import { createChangesDiffTab } from "@/features/workspaces/state/workspace-canvas-state";
 
 describe("WorkspacePaneContent", () => {
   afterEach(() => {
@@ -179,5 +179,4 @@ describe("WorkspacePaneContent", () => {
 
     expect(capturedOpacity).toBe(0.45);
   });
-
 });

@@ -1,12 +1,13 @@
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { Card, EmptyState } from "@lifecycle/ui";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
-import { formatRelativeTime } from "../../../lib/format";
-import { WorkspaceActivityFeed } from "../../workspaces/components/workspace-activity-feed";
-import { useWorkspaceActivity } from "../../workspaces/hooks";
-import { getWorkspaceDisplayName } from "../../workspaces/lib/workspace-display";
-import type { ProjectRouteOutletContext } from "../routes/project-route";
+import { formatRelativeTime } from "@/lib/format";
+import { WorkspaceActivityFeed } from "@/features/workspaces/components/workspace-activity-feed";
+import { useWorkspaceActivity } from "@/features/workspaces/hooks";
+import { getWorkspaceDisplayName } from "@/features/workspaces/lib/workspace-display";
+import { buildWorkspaceActivityItems } from "@/features/workspaces/state/workspace-activity";
+import type { ProjectRouteOutletContext } from "@/features/projects/routes/project-route";
 
 function ProjectActivityWorkspaceSection({
   workspace,
@@ -16,7 +17,10 @@ function ProjectActivityWorkspaceSection({
   onOpenWorkspace: (workspace: WorkspaceRecord) => void;
 }) {
   const activityQuery = useWorkspaceActivity(workspace.id);
-  const items = activityQuery.data ?? [];
+  const items = useMemo(
+    () => buildWorkspaceActivityItems(activityQuery.data ?? []),
+    [activityQuery.data],
+  );
 
   return (
     <Card className="rounded-xl border-[var(--border)] p-5">

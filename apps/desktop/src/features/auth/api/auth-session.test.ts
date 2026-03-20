@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import type { AuthSession } from "../auth-session";
+import type { AuthSession } from "@/features/auth/auth-session";
 
 const invokeTauri = mock(
   async () =>

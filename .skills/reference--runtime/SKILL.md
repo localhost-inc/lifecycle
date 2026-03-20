@@ -24,15 +24,23 @@ Shared type contracts and schemas, normalized command inputs and query outputs, 
 
 Does not own: process supervision, transport clients, platform SDK calls, workflow orchestration.
 
-### `providers`
+### `control_plane`
 
-Authority boundary for workspace-scoped lifecycle operations, local-vs-cloud runtime selection, provider-owned mutations and snapshots.
+Authority boundary for projects, workspaces, auth, ownership, and workspace-mode routing.
 
-Decision rule: If `workspace.mode` changes who is authoritative, the concern belongs here.
+Decision rule: If the concern lists records, changes workspace authority, or decides who owns a workspace, it belongs here.
+
+### `workspace_runtime`
+
+Workspace-scoped execution boundary once a workspace already exists.
+
+Subdomains: environment, service, terminal, process, preview, sources, git, activity, attachments.
+
+Decision rule: If it supervises or inspects a live workspace runtime, it belongs here.
 
 ### `execution`
 
-Live runtime behavior inside the authoritative provider.
+Live runtime behavior inside the authoritative workspace runtime.
 
 Subdomains: environment, service, terminal, process, preview, sources, git, activity, attachments.
 
@@ -65,23 +73,24 @@ Decision rule: If the feature is a verb that composes several domains, it belong
 ## Domain Interaction Rules
 
 1. `contracts` may be imported by every other domain.
-2. `providers` may assemble `execution`, `transport`, `integrations`, `workflows`.
-3. `execution` depends on `contracts` and narrow `integrations`.
-4. `transport` depends on `contracts` and narrow `integrations`.
-5. `workflows` may compose all other domains but keeps boundaries visible.
-6. Frontend code calls provider or workflow surfaces, not low-level execution/integration modules.
+2. `control_plane` may assemble `workspace_runtime`, `execution`, `transport`, `integrations`, `workflows`.
+3. `workspace_runtime` may assemble `execution`, `transport`, and narrow `integrations`.
+4. `execution` depends on `contracts` and narrow `integrations`.
+5. `transport` depends on `contracts` and narrow `integrations`.
+6. `workflows` may compose all other domains but keeps boundaries visible.
+7. Frontend code calls control-plane, workspace-runtime, or workflow surfaces, not low-level execution/integration modules.
 
 ## Naming Guardrails
 
-Prefer: `provider`, `execution`, `transport`, `integration`, `workflow`, concrete domain names.
+Prefer: `control_plane`, `workspace_runtime`, `execution`, `transport`, `integration`, `workflow`, concrete domain names.
 Avoid: `manager`, `helpers`, `misc`, `common`, `internal` as catch-all.
 
 ## Mapping to Current Repo
 
 1. `packages/contracts` — shared contracts and schemas
-2. `packages/runtime` — provider interfaces plus provider-agnostic runtime APIs
-3. `apps/desktop/src-tauri/src/platform/*` — local provider, execution, local transport
-4. Future cloud control-plane — cloud provider, transport, workflows, integrations
+2. `packages/runtime` — control-plane and workspace-runtime interfaces plus provider-agnostic runtime APIs
+3. `apps/desktop/src-tauri/src/platform/*` — local control plane, workspace runtime, execution, local transport
+4. Future cloud control-plane — cloud control plane, workspace runtime, transport, workflows, integrations
 5. `apps/desktop/src/features/*` — frontend feature ownership
 
 ---
@@ -106,23 +115,23 @@ Invariants:
 ## Workspace Environment `status`
 
 - `idle -> starting`
-- `starting -> active|stopping|idle`
-- `active -> starting|stopping`
+- `starting -> running|stopping|idle`
+- `running -> starting|stopping`
 - `stopping -> idle`
 
 Invariants:
-1. Allowed states: `idle`, `starting`, `active`, `stopping`
+1. Allowed states: `idle`, `starting`, `running`, `stopping`
 2. Transitional states act as implicit mutation lock.
-3. Failed cold starts land in `idle`; failed additive boots return to `active`.
+3. Failed starts land in `idle` with a typed environment failure reason.
 
 | State | Cloud | Local |
 |-------|-------|-------|
 | `idle` | No active sandbox services | No running services; worktree persists |
-| `starting` | Provisioning sandbox services | Running setup and starting services |
-| `active` | Health checks pass in sandbox | Health checks pass on localhost |
+| `starting` | Provisioning sandbox services | Running workspace preparation and starting services |
+| `running` | Health checks pass in sandbox | Health checks pass on localhost |
 | `stopping` | Sandbox shutting down | Processes/containers shutting down |
 
-## Workspace Service `status`
+## Service `status`
 
 - `stopped -> starting`
 - `starting -> ready|failed|stopped`
@@ -145,14 +154,14 @@ Invariants:
 2. `sleeping` terminals reject input.
 3. Workspace `destroy` hard-terminates non-finished/non-failed terminals.
 
-## Preview `preview_status`
+## Preview Routing
 
-- `disabled -> provisioning|expired`
-- `provisioning -> ready|failed|disabled|expired`
-- `ready -> provisioning|sleeping|failed|disabled|expired`
-- `sleeping -> provisioning|ready|failed|disabled|expired`
-- `failed -> provisioning|disabled|expired`
-- `expired` is terminal
+Preview availability is derived from environment + service runtime facts.
+
+Invariants:
+1. There is no separate preview state machine in the backend contract.
+2. `preview_url` is stable workspace-runtime-owned routing identity.
+3. `assigned_port` and `service.status` determine whether a preview is actually openable.
 
 ## Workspace Git Action State
 
@@ -179,14 +188,14 @@ Canonical specification for the checked-in workspace manifest.
 
 1. `lifecycle.json` is JSONC. Comments and trailing commas allowed.
 2. Required top-level: `workspace`, `environment`
-3. Graph-native. No `setup.services` compatibility layer.
+3. Graph-native. No `prepare.services` compatibility layer.
 
 ## Top-Level Shape
 
 ```jsonc
 {
   "workspace": {
-    "setup": [],
+    "prepare": [],
     "teardown": []
   },
   "environment": {}
@@ -195,7 +204,7 @@ Canonical specification for the checked-in workspace manifest.
 
 ## `workspace` Contract
 
-### `workspace.setup`
+### `workspace.prepare`
 
 Ordered filesystem-scoped preparation steps.
 
@@ -205,7 +214,7 @@ Ordered filesystem-scoped preparation steps.
 
 ### `workspace.teardown`
 
-Ordered workspace teardown steps. Same shape as setup but no `run_on`.
+Ordered workspace teardown steps. Same shape as prepare but no `run_on`.
 
 ## Step Actions
 
@@ -246,7 +255,7 @@ Required: `kind: "service"`, `runtime`
 
 ## Secret Handling
 
-Local manifests do not support managed secrets. `secrets` and `${secrets.*}` are invalid. Materialize env files in workspace setup instead.
+Local manifests do not support managed secrets. `secrets` and `${secrets.*}` are invalid. Materialize env files in workspace prepare instead.
 
 ---
 
@@ -286,7 +295,7 @@ interface LifecycleEvent<TPayload = unknown> {
   workspace_id?: string;
   project_id?: string;
   terminal_id?: string;
-  service_name?: string;
+  name?: string;
   correlation_id?: string;
   causation_id?: string;
   payload: TPayload;
@@ -301,7 +310,7 @@ interface LifecycleEvent<TPayload = unknown> {
 
 ### Environment Facts
 
-`workspace.status_changed` (current rollout — treat as environment-state fact)
+`environment.status_changed`
 
 ### Service Facts
 

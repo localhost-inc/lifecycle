@@ -11,7 +11,7 @@ import {
   reconcileHiddenTerminalTabKeys,
   reorderWorkspaceTabKeys,
   resolveWorkspaceVisibleTabs,
-} from "./workspace-canvas-tabs";
+} from "@/features/workspaces/components/workspace-canvas-tabs";
 import {
   changesDiffTabKey,
   createChangesDiffTab,
@@ -28,13 +28,13 @@ import {
   type WorkspaceCanvasDocument,
   type WorkspaceCanvasState,
   type WorkspaceCanvasTabViewState,
-} from "../state/workspace-canvas-state";
+} from "@/features/workspaces/state/workspace-canvas-state";
 import {
   readWorkspaceTabHotkeyAction,
   resolveWorkspaceCloseShortcutTarget,
   shouldTreatWindowCloseAsTabClose,
-} from "./workspace-canvas-shortcuts";
-import { workspaceCanvasReducer } from "./workspace-canvas-reducer";
+} from "@/features/workspaces/components/workspace-canvas-shortcuts";
+import { workspaceCanvasReducer } from "@/features/workspaces/components/workspace-canvas-reducer";
 
 const CHANGES_DIFF_TAB_KEY = changesDiffTabKey();
 

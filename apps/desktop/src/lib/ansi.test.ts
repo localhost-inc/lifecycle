@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { type ReactNode, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { hasAnsiCodes, renderAnsiLine, renderAnsiText, stripAnsi } from "./ansi";
+import { hasAnsiCodes, renderAnsiLine, renderAnsiText, stripAnsi } from "@/lib/ansi";
 
 function markup(node: ReactNode): string {
   return renderToStaticMarkup(createElement("span", null, node));
@@ -36,7 +36,7 @@ describe("renderAnsiLine", () => {
 
   test("renders foreground color", () => {
     const result = markup(renderAnsiLine("\x1b[31mred text\x1b[0m", "k"));
-    expect(result).toContain('color:var(--terminal-ansi-red)');
+    expect(result).toContain("color:var(--terminal-ansi-red)");
     expect(result).toContain("red text");
   });
 
@@ -82,7 +82,9 @@ describe("renderAnsiLine", () => {
     expect(result).toContain("red");
     expect(result).toContain(" plain");
     // "plain" should not be wrapped in a styled span
-    expect(result).toBe('<span><span style="color:var(--terminal-ansi-red)">red</span> plain</span>');
+    expect(result).toBe(
+      '<span><span style="color:var(--terminal-ansi-red)">red</span> plain</span>',
+    );
   });
 
   test("handles 256-color foreground", () => {

@@ -3,7 +3,7 @@ import {
   normalizeTurnNotificationMode,
   normalizeTurnNotificationSound,
   shouldNotifyForTurnCompletion,
-} from "./notification-settings";
+} from "@/features/notifications/lib/notification-settings";
 
 describe("turn notification settings", () => {
   test("normalizes invalid notification values to defaults", () => {

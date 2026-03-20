@@ -7,7 +7,7 @@ import {
   GitActionButton,
   GitActionMenuContent,
   performShowChangesAction,
-} from "./git-action-button";
+} from "@/features/git/components/git-action-button";
 
 function renderGitActionButton(props: Partial<Parameters<typeof GitActionButton>[0]> = {}) {
   return renderToStaticMarkup(

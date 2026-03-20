@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
-import { createFileViewerTab } from "../state/workspace-canvas-state";
-import { closeWorkspacePaneTabs } from "./workspace-pane-close";
+import { createFileViewerTab } from "@/features/workspaces/state/workspace-canvas-state";
+import { closeWorkspacePaneTabs } from "@/features/workspaces/components/workspace-pane-close";
 
 describe("closeWorkspacePaneTabs", () => {
   test("collapses empty panes without trying to close tabs", async () => {

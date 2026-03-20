@@ -167,9 +167,7 @@ function applyParams(style: AnsiStyle, params: number[]): void {
   }
 }
 
-function styleToInline(
-  style: AnsiStyle,
-): Record<string, string> | null {
+function styleToInline(style: AnsiStyle): Record<string, string> | null {
   const css: Record<string, string> = {};
   let hasStyle = false;
 
@@ -228,7 +226,11 @@ export function renderAnsiLine(line: string, keyPrefix: string): ReactNode {
       const inlineStyle = styleToInline(style);
       segments.push(
         inlineStyle
-          ? createElement("span", { key: `${keyPrefix}-${segmentIndex}`, style: inlineStyle }, textBefore)
+          ? createElement(
+              "span",
+              { key: `${keyPrefix}-${segmentIndex}`, style: inlineStyle },
+              textBefore,
+            )
           : textBefore,
       );
       segmentIndex++;
@@ -245,7 +247,11 @@ export function renderAnsiLine(line: string, keyPrefix: string): ReactNode {
     const inlineStyle = styleToInline(style);
     segments.push(
       inlineStyle
-        ? createElement("span", { key: `${keyPrefix}-${segmentIndex}`, style: inlineStyle }, trailing)
+        ? createElement(
+            "span",
+            { key: `${keyPrefix}-${segmentIndex}`, style: inlineStyle },
+            trailing,
+          )
         : trailing,
     );
   }

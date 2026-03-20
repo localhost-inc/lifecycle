@@ -1,5 +1,5 @@
 import { cn } from "@lifecycle/ui";
-import type { CommandPaletteCommand } from "./types";
+import type { CommandPaletteCommand } from "@/features/command-palette/types";
 
 function ShortcutKeys({ shortcut }: { shortcut: string }) {
   const parts = shortcut.split("+");

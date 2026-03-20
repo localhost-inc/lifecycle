@@ -1,7 +1,7 @@
 import { memo, useMemo, useState } from "react";
 import { ChevronRight, Folder, File } from "lucide-react";
 import type { FileDiffMetadata } from "@pierre/diffs/react";
-import { buildFileTree, type FileTreeNode } from "../lib/file-tree";
+import { buildFileTree, type FileTreeNode } from "@/features/git/lib/file-tree";
 
 interface DiffFileTreeProps {
   activeFilePath: string | null;

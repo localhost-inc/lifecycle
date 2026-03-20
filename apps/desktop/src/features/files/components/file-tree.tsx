@@ -1,7 +1,7 @@
 import { Alert, AlertDescription, Button } from "@lifecycle/ui";
 import { ChevronRight, File, Folder, RefreshCcw } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { WorkspaceFileTreeEntry } from "../../workspaces/api";
+import type { WorkspaceFileTreeEntry } from "@/features/workspaces/api";
 
 interface FileTreeProps {
   activeFilePath: string;

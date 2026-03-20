@@ -56,7 +56,7 @@ impl Supervisor {
 
     pub async fn start_process(
         &mut self,
-        service_name: &str,
+        name: &str,
         service: &ProcessService,
         worktree_path: &str,
         runtime_env: &HashMap<String, String>,
@@ -72,7 +72,7 @@ impl Supervisor {
         let mut cmd = Command::new("sh");
         cmd.args(["-c", &service.command]).current_dir(&cwd);
 
-        let resolved_env = resolve_service_env(service_name, service.env.as_ref(), runtime_env)?;
+        let resolved_env = resolve_service_env(name, service.env.as_ref(), runtime_env)?;
         for (key, value) in &resolved_env {
             cmd.env(key, value);
         }
@@ -101,7 +101,7 @@ impl Supervisor {
         let mut child = cmd
             .spawn()
             .map_err(|e| LifecycleError::ServiceStartFailed {
-                service: service_name.to_string(),
+                service: name.to_string(),
                 reason: e.to_string(),
             })?;
 
@@ -110,7 +110,7 @@ impl Supervisor {
         if let Some(stdout) = child.stdout.take() {
             let app_clone = app.clone();
             let ws_id = workspace_id.to_string();
-            let svc_name = service_name.to_string();
+            let svc_name = name.to_string();
             log_handles.push(tokio::spawn(async move {
                 let reader = BufReader::new(stdout);
                 let mut lines = reader.lines();
@@ -119,7 +119,7 @@ impl Supervisor {
                         &app_clone,
                         LifecycleEvent::ServiceLogLine {
                             workspace_id: ws_id.clone(),
-                            service_name: svc_name.clone(),
+                            name: svc_name.clone(),
                             stream: "stdout".to_string(),
                             line,
                         },
@@ -131,7 +131,7 @@ impl Supervisor {
         if let Some(stderr) = child.stderr.take() {
             let app_clone = app.clone();
             let ws_id = workspace_id.to_string();
-            let svc_name = service_name.to_string();
+            let svc_name = name.to_string();
             log_handles.push(tokio::spawn(async move {
                 let reader = BufReader::new(stderr);
                 let mut lines = reader.lines();
@@ -140,7 +140,7 @@ impl Supervisor {
                         &app_clone,
                         LifecycleEvent::ServiceLogLine {
                             workspace_id: ws_id.clone(),
-                            service_name: svc_name.clone(),
+                            name: svc_name.clone(),
                             stream: "stderr".to_string(),
                             line,
                         },
@@ -153,7 +153,7 @@ impl Supervisor {
         let exit_watcher = child.id().map(|pid| {
             let app_clone = app.clone();
             let ws_id = workspace_id.to_string();
-            let svc_name = service_name.to_string();
+            let svc_name = name.to_string();
             tokio::spawn(async move {
                 loop {
                     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
@@ -163,7 +163,7 @@ impl Supervisor {
                             &app_clone,
                             LifecycleEvent::ServiceProcessExited {
                                 workspace_id: ws_id,
-                                service_name: svc_name,
+                                name: svc_name,
                                 exit_code: None,
                             },
                         );
@@ -174,7 +174,7 @@ impl Supervisor {
         });
 
         self.processes.insert(
-            service_name.to_string(),
+            name.to_string(),
             ManagedProcess {
                 child,
                 log_handles,
@@ -186,7 +186,7 @@ impl Supervisor {
 
     pub async fn start_container(
         &mut self,
-        service_name: &str,
+        name: &str,
         service: &ImageService,
         workspace_id: &str,
         worktree_path: &str,
@@ -196,10 +196,10 @@ impl Supervisor {
     ) -> Result<(), LifecycleError> {
         let docker = self.ensure_docker().await?.clone();
         let image_ref = self
-            .resolve_image_ref(service_name, service, workspace_id, worktree_path)
+            .resolve_image_ref(name, service, workspace_id, worktree_path)
             .await?;
 
-        let container_name = format!("lifecycle-{}-{}", workspace_id, service_name);
+        let container_name = format!("lifecycle-{}-{}", workspace_id, name);
         self.remove_container_if_exists(&container_name).await;
 
         // Build port bindings
@@ -221,7 +221,7 @@ impl Supervisor {
 
         // Build env vars
         let env: Vec<String> =
-            resolve_service_env(service_name, service.env.as_ref(), runtime_env)?
+            resolve_service_env(name, service.env.as_ref(), runtime_env)?
                 .into_iter()
                 .map(|(key, value)| format!("{key}={value}"))
                 .collect();
@@ -237,7 +237,7 @@ impl Supervisor {
             service.args.clone()
         };
         let binds =
-            self.resolve_volume_binds(service_name, service, worktree_path, storage_root)?;
+            self.resolve_volume_binds(name, service, worktree_path, storage_root)?;
 
         let config = Config {
             image: Some(image_ref),
@@ -263,13 +263,13 @@ impl Supervisor {
             .map_err(|e| {
                 if is_port_conflict_error(&e.to_string()) && service.port.is_some() {
                     return LifecycleError::PortConflict {
-                        service: service_name.to_string(),
+                        service: name.to_string(),
                         port: service.port.unwrap_or_default(),
                     };
                 }
 
                 LifecycleError::ServiceStartFailed {
-                    service: service_name.to_string(),
+                    service: name.to_string(),
                     reason: format!("Container create failed: {e}"),
                 }
             })?;
@@ -293,27 +293,27 @@ impl Supervisor {
                 });
                 if is_port_conflict_error(&e.to_string()) && service.port.is_some() {
                     return LifecycleError::PortConflict {
-                        service: service_name.to_string(),
+                        service: name.to_string(),
                         port: service.port.unwrap_or_default(),
                     };
                 }
 
                 LifecycleError::ServiceStartFailed {
-                    service: service_name.to_string(),
+                    service: name.to_string(),
                     reason: format!("Container start failed: {e}"),
                 }
             })?;
 
         let container_id = container.id.clone();
         self.containers
-            .insert(service_name.to_string(), container_id.clone());
+            .insert(name.to_string(), container_id.clone());
 
         // Stream container logs
         {
             let docker_for_logs = docker.clone();
             let app_clone = app;
             let ws_id = workspace_id.to_string();
-            let svc_name = service_name.to_string();
+            let svc_name = name.to_string();
             let cid = container_id;
             let handle = tokio::spawn(async move {
                 let opts = LogsOptions::<String> {
@@ -340,7 +340,7 @@ impl Supervisor {
                                     &app_clone,
                                     LifecycleEvent::ServiceLogLine {
                                         workspace_id: ws_id.clone(),
-                                        service_name: svc_name.clone(),
+                                        name: svc_name.clone(),
                                         stream: stream_name.to_string(),
                                         line: line.to_string(),
                                     },
@@ -352,7 +352,7 @@ impl Supervisor {
                 }
             });
             self.container_log_handles
-                .insert(service_name.to_string(), handle);
+                .insert(name.to_string(), handle);
         }
 
         Ok(())
@@ -376,7 +376,7 @@ impl Supervisor {
 
     async fn resolve_image_ref(
         &mut self,
-        service_name: &str,
+        name: &str,
         service: &ImageService,
         workspace_id: &str,
         worktree_path: &str,
@@ -387,13 +387,13 @@ impl Supervisor {
             let tag = format!(
                 "lifecycle-{}-{}",
                 sanitize_docker_name(workspace_id),
-                sanitize_docker_name(service_name)
+                sanitize_docker_name(name)
             );
-            let context_path = resolve_host_path(service_name, worktree_path, &build.context)?;
+            let context_path = resolve_host_path(name, worktree_path, &build.context)?;
             let dockerfile_path = build
                 .dockerfile
                 .as_ref()
-                .map(|path| resolve_host_path(service_name, worktree_path, path))
+                .map(|path| resolve_host_path(name, worktree_path, path))
                 .transpose()?;
 
             let mut command = Command::new("docker");
@@ -410,7 +410,7 @@ impl Supervisor {
                     .output()
                     .await
                     .map_err(|error| LifecycleError::ServiceStartFailed {
-                        service: service_name.to_string(),
+                        service: name.to_string(),
                         reason: format!("Docker build failed to start: {error}"),
                     })?;
             if !output.status.success() {
@@ -424,7 +424,7 @@ impl Supervisor {
                     format!("docker build exited with {}", output.status)
                 };
                 return Err(LifecycleError::ServiceStartFailed {
-                    service: service_name.to_string(),
+                    service: name.to_string(),
                     reason: detail,
                 });
             }
@@ -434,7 +434,7 @@ impl Supervisor {
 
         let Some(image_ref) = service.image.clone() else {
             return Err(LifecycleError::ServiceStartFailed {
-                service: service_name.to_string(),
+                service: name.to_string(),
                 reason: "image service requires image or build".to_string(),
             });
         };
@@ -450,7 +450,7 @@ impl Supervisor {
             .try_collect::<Vec<_>>()
             .await
             .map_err(|e| LifecycleError::ServiceStartFailed {
-                service: service_name.to_string(),
+                service: name.to_string(),
                 reason: format!("Image pull failed: {e}"),
             })?;
 
@@ -459,7 +459,7 @@ impl Supervisor {
 
     fn resolve_volume_binds(
         &self,
-        service_name: &str,
+        name: &str,
         service: &ImageService,
         worktree_path: &str,
         storage_root: &Path,
@@ -469,12 +469,12 @@ impl Supervisor {
         for volume in service.volumes.as_deref().unwrap_or_default() {
             let host_path = match volume {
                 ImageVolume::Bind { source, .. } => {
-                    resolve_host_path(service_name, worktree_path, source)?
+                    resolve_host_path(name, worktree_path, source)?
                 }
                 ImageVolume::Volume { source, .. } => {
                     if !is_valid_named_volume_source(source) {
                         return Err(LifecycleError::ServiceStartFailed {
-                            service: service_name.to_string(),
+                            service: name.to_string(),
                             reason: "named volume source is invalid".to_string(),
                         });
                     }
@@ -482,7 +482,7 @@ impl Supervisor {
                     let path = storage_root.join(source);
                     std::fs::create_dir_all(&path).map_err(|error| {
                         LifecycleError::ServiceStartFailed {
-                            service: service_name.to_string(),
+                            service: name.to_string(),
                             reason: format!("failed to create named volume: {error}"),
                         }
                     })?;
@@ -548,8 +548,8 @@ impl Supervisor {
         }
     }
 
-    pub fn is_process_running(&mut self, service_name: &str) -> bool {
-        if let Some(managed) = self.processes.get_mut(service_name) {
+    pub fn is_process_running(&mut self, name: &str) -> bool {
+        if let Some(managed) = self.processes.get_mut(name) {
             match managed.child.try_wait() {
                 Ok(None) => true,
                 _ => false,
@@ -559,13 +559,13 @@ impl Supervisor {
         }
     }
 
-    pub fn container_ref(&self, service_name: &str) -> Option<String> {
-        self.containers.get(service_name).cloned()
+    pub fn container_ref(&self, name: &str) -> Option<String> {
+        self.containers.get(name).cloned()
     }
 }
 
 fn resolve_service_env(
-    service_name: &str,
+    name: &str,
     env: Option<&HashMap<String, String>>,
     runtime_env: &HashMap<String, String>,
 ) -> Result<HashMap<String, String>, LifecycleError> {
@@ -579,7 +579,7 @@ fn resolve_service_env(
         let expanded = expand_reserved_runtime_templates(
             value,
             runtime_env,
-            &format!("environment.{service_name}.env.{key}"),
+            &format!("environment.{name}.env.{key}"),
         )?;
         resolved.insert(key.clone(), expanded);
     }
@@ -593,7 +593,7 @@ fn is_port_conflict_error(message: &str) -> bool {
 }
 
 fn resolve_host_path(
-    service_name: &str,
+    name: &str,
     worktree_path: &str,
     source: &str,
 ) -> Result<PathBuf, LifecycleError> {
@@ -607,12 +607,12 @@ fn resolve_host_path(
     if path.exists() {
         path.canonicalize()
             .map_err(|error| LifecycleError::ServiceStartFailed {
-                service: service_name.to_string(),
+                service: name.to_string(),
                 reason: format!("failed to resolve mount path: {error}"),
             })
     } else {
         Err(LifecycleError::ServiceStartFailed {
-            service: service_name.to_string(),
+            service: name.to_string(),
             reason: format!("mount source does not exist: {}", path.display()),
         })
     }

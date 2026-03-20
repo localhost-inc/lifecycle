@@ -1,8 +1,8 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@lifecycle/ui";
-import { type ClaudeHarnessSettings, type CodexHarnessSettings } from "../state/harness-settings";
-import { ClaudeIcon, CodexIcon } from "../../workspaces/components/surface-icons";
-import { ClaudeHarnessSettingsContent } from "./harnesses/claude-harness-settings-card";
-import { CodexHarnessSettingsContent } from "./harnesses/codex-harness-settings-card";
+import { type ClaudeHarnessSettings, type CodexHarnessSettings } from "@/features/settings/state/harness-settings";
+import { ClaudeIcon, CodexIcon } from "@/features/workspaces/components/surface-icons";
+import { ClaudeHarnessSettingsContent } from "@/features/settings/components/harnesses/claude-harness-settings-card";
+import { CodexHarnessSettingsContent } from "@/features/settings/components/harnesses/codex-harness-settings-card";
 
 interface HarnessSettingsPanelProps {
   claude: ClaudeHarnessSettings;

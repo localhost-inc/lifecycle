@@ -8,7 +8,7 @@ import {
   Switch,
 } from "@lifecycle/ui";
 import { useState } from "react";
-import { SettingsRow } from "../settings-primitives";
+import { SettingsRow } from "@/features/settings/components/settings-primitives";
 import {
   buildCodexHarnessSettingsFromPreset,
   codexApprovalPolicyOptions,
@@ -17,7 +17,7 @@ import {
   harnessPresetOptions,
   type CodexHarnessSettings,
   type HarnessPreset,
-} from "../../state/harness-settings";
+} from "@/features/settings/state/harness-settings";
 
 interface CodexHarnessSettingsContentProps {
   defaultAdvancedOpen?: boolean;
@@ -78,10 +78,7 @@ export function CodexHarnessSettingsContent({
 
       {advancedOpen ? (
         <div className="space-y-3 pl-4">
-          <SettingsRow
-            label="Sandbox mode"
-            description="How much filesystem access Codex gets."
-          >
+          <SettingsRow label="Sandbox mode" description="How much filesystem access Codex gets.">
             <Select
               items={codexSandboxModeOptions}
               onValueChange={(value: string) =>

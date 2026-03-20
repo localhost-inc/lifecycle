@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   getTurnNotificationSoundProfile,
   turnNotificationSoundProfiles,
-} from "./turn-notification-sound-profiles";
+} from "@/features/notifications/lib/turn-notification-sound-profiles";
 
 describe("turnNotificationSoundProfiles", () => {
   test("defines a unique profile for each sound option", () => {

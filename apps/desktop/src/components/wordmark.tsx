@@ -1,4 +1,4 @@
-import styles from "./wordmark.module.css";
+import styles from "@/components/wordmark.module.css";
 
 const LETTERS = [
   // l

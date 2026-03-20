@@ -1,9 +1,9 @@
 import { EmptyState } from "@lifecycle/ui";
 import { useCallback } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
-import { useCurrentGitPullRequest, useGitPullRequests } from "../../git/hooks";
-import { PullRequestsTab } from "../../git/components/pull-requests-tab";
-import type { ProjectRouteOutletContext } from "../routes/project-route";
+import { useCurrentGitPullRequest, useGitPullRequests } from "@/features/git/hooks";
+import { PullRequestsTab } from "@/features/git/components/pull-requests-tab";
+import type { ProjectRouteOutletContext } from "@/features/projects/routes/project-route";
 
 export function ProjectPullRequestsSurface() {
   const { project, repositoryWorkspace } = useOutletContext<ProjectRouteOutletContext>();

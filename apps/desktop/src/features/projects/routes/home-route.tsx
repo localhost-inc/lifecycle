@@ -1,9 +1,9 @@
 import { Navigate, useOutletContext } from "react-router-dom";
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
-import { LAST_PATH_STORAGE_KEY } from "../../../components/layout/app-shell-layout";
-import { readLastProjectId } from "../state/project-content-tabs";
-import { readLastWorkspaceId } from "../../workspaces/state/workspace-canvas-state";
-import type { AppShellOutletContext } from "../../../components/layout/app-shell-context";
+import { LAST_PATH_STORAGE_KEY } from "@/components/layout/app-shell-layout";
+import { readLastProjectId } from "@/features/projects/state/project-content-tabs";
+import { readLastWorkspaceId } from "@/features/workspaces/state/workspace-canvas-state";
+import type { AppShellOutletContext } from "@/components/layout/app-shell-context";
 
 function safeReadLastProjectId(): string | null {
   try {

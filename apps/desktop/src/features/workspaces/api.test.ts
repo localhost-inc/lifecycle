@@ -4,7 +4,7 @@ import {
   browserWorktreeDirectoryName,
   shortWorkspaceId,
   slugifyWorkspaceName,
-} from "./api";
+} from "@/features/workspaces/api";
 
 describe("workspace naming helpers", () => {
   test("preserves human labels while deriving kebab-case managed identifiers", () => {

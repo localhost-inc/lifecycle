@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { StorageLike } from "./panel-layout";
+import type { StorageLike } from "@/lib/panel-layout";
 import {
   clampPanelSize,
   clampSplitRatio,
@@ -10,7 +10,7 @@ import {
   getVerticalSplitRatioFromPointer,
   readPersistedPanelValue,
   writePersistedPanelValue,
-} from "./panel-layout";
+} from "@/lib/panel-layout";
 
 class MemoryStorage implements StorageLike {
   private readonly values = new Map<string, string>();

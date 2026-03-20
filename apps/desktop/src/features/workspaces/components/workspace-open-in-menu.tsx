@@ -1,9 +1,9 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { cn } from "@lifecycle/ui";
 import { useEffect, useRef, useState } from "react";
-import type { OpenInAppId } from "../open-in-api";
-import type { OpenInTarget } from "../lib/open-in-targets";
-import { OpenInAppIcon } from "./open-in-app-icon";
+import type { OpenInAppId } from "@/features/workspaces/open-in-api";
+import type { OpenInTarget } from "@/features/workspaces/lib/open-in-targets";
+import { OpenInAppIcon } from "@/features/workspaces/components/open-in-app-icon";
 
 interface WorkspaceOpenInMenuProps {
   availableTargets: readonly OpenInTarget[];

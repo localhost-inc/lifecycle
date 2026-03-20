@@ -8,16 +8,16 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import type { FileDiffMetadata } from "@pierre/diffs/react";
-import { summarizeChanges } from "./git-file-header";
-import { DiffFileTree } from "./diff-file-tree";
-import { DiffFileSection } from "./diff-file-section";
+import { summarizeChanges } from "@/features/git/components/git-file-header";
+import { DiffFileTree } from "@/features/git/components/diff-file-tree";
+import { DiffFileSection } from "@/features/git/components/diff-file-section";
 import {
   DIFF_ACTIVE_FILE_SCROLL_OFFSET,
   buildDiffSectionLayout,
   findDiffSectionIndexAtOffset,
   getVirtualDiffRange,
   type DiffSectionLayout,
-} from "../lib/diff-virtualization";
+} from "@/features/git/lib/diff-virtualization";
 import {
   clampPanelSize,
   DEFAULT_DIFF_FILE_TREE_WIDTH,
@@ -27,8 +27,8 @@ import {
   MIN_DIFF_FILE_TREE_WIDTH,
   readPersistedPanelValue,
   writePersistedPanelValue,
-} from "../../../lib/panel-layout";
-import type { GitDiffStyle } from "../lib/diff-style";
+} from "@/lib/panel-layout";
+import type { GitDiffStyle } from "@/features/git/lib/diff-style";
 
 interface MultiFileDiffLayoutProps {
   diffStyle: GitDiffStyle;

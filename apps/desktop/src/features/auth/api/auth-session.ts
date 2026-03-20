@@ -1,6 +1,6 @@
 import { isTauri } from "@tauri-apps/api/core";
-import { invokeTauri } from "../../../lib/tauri-error";
-import { buildLoggedOutAuthSession, type AuthSession } from "../auth-session";
+import { invokeTauri } from "@/lib/tauri-error";
+import { buildLoggedOutAuthSession, type AuthSession } from "@/features/auth/auth-session";
 
 const DEV_AUTH_SESSION_ENDPOINT = "/__dev/auth/session";
 

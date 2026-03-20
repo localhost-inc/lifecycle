@@ -2,14 +2,14 @@ use crate::capabilities::workspaces::manifest::parse_lifecycle_config;
 use crate::platform::db::{map_database_result, open_db, optional_database_result, DbPath};
 use crate::platform::diagnostics;
 use crate::platform::git::worktree;
-use crate::shared::errors::{LifecycleError, WorkspaceFailureReason, WorkspaceStatus};
+use crate::shared::errors::{LifecycleError, EnvironmentFailureReason, EnvironmentStatus};
 use rusqlite::params;
 use std::time::Instant;
 use tauri::{AppHandle, State};
 
 use super::kind::{normalize_workspace_kind, ROOT_WORKSPACE_KIND};
 use super::shared::{
-    emit_workspace_status, reconcile_workspace_services_db, update_workspace_status_db,
+    emit_environment_status, reconcile_workspace_services_db, update_environment_status_db,
 };
 
 #[derive(Debug, Clone)]
@@ -91,8 +91,8 @@ pub async fn create_workspace(
     {
         let conn = open_db(&db)?;
         map_database_result(conn.execute(
-            "INSERT INTO workspace (id, project_id, name, name_origin, source_ref, source_ref_origin, kind, status, mode)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'idle', 'local')",
+            "INSERT INTO workspace (id, project_id, name, name_origin, source_ref, source_ref_origin, kind, mode)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'local')",
             params![
                 workspace_id,
                 request.project_id,
@@ -103,9 +103,14 @@ pub async fn create_workspace(
                 workspace_kind,
             ],
         ))?;
+        map_database_result(conn.execute(
+            "INSERT INTO environment (workspace_id, status)
+             VALUES (?1, 'idle')",
+            params![workspace_id],
+        ))?;
     }
 
-    emit_workspace_status(&app, &workspace_id, "idle", None);
+    emit_environment_status(&app, &workspace_id, "idle", None);
 
     let provision_started_at = Instant::now();
     if workspace_kind == ROOT_WORKSPACE_KIND {
@@ -222,13 +227,13 @@ async fn run_managed_workspace_creation(
     let resolved_base_ref = match resolve_base_ref(request.project_path, request.base_ref).await {
         Ok(value) => value,
         Err(error) => {
-            update_workspace_status_db(
+            update_environment_status_db(
                 request.db_path,
                 request.workspace_id,
-                &WorkspaceStatus::Idle,
-                Some(&WorkspaceFailureReason::RepoCloneFailed),
+                &EnvironmentStatus::Idle,
+                Some(&EnvironmentFailureReason::RepoCloneFailed),
             )?;
-            emit_workspace_status(
+            emit_environment_status(
                 request.app,
                 request.workspace_id,
                 "idle",
@@ -252,13 +257,13 @@ async fn run_managed_workspace_creation(
     {
         Ok(path) => path,
         Err(e) => {
-            update_workspace_status_db(
+            update_environment_status_db(
                 request.db_path,
                 request.workspace_id,
-                &WorkspaceStatus::Idle,
-                Some(&WorkspaceFailureReason::RepoCloneFailed),
+                &EnvironmentStatus::Idle,
+                Some(&EnvironmentFailureReason::RepoCloneFailed),
             )?;
-            emit_workspace_status(
+            emit_environment_status(
                 request.app,
                 request.workspace_id,
                 "idle",
@@ -275,13 +280,13 @@ async fn run_managed_workspace_creation(
 
     if let Err(e) = worktree::copy_local_config_files(request.project_path, &worktree_path) {
         let _ = worktree::remove_worktree(request.project_path, &worktree_path).await;
-        update_workspace_status_db(
+        update_environment_status_db(
             request.db_path,
             request.workspace_id,
-            &WorkspaceStatus::Idle,
-            Some(&WorkspaceFailureReason::RepoCloneFailed),
+            &EnvironmentStatus::Idle,
+            Some(&EnvironmentFailureReason::RepoCloneFailed),
         )?;
-        emit_workspace_status(
+        emit_environment_status(
             request.app,
             request.workspace_id,
             "idle",
@@ -303,13 +308,13 @@ async fn run_managed_workspace_creation(
     }
 
     // Workspace creation completes in the resting idle state.
-    update_workspace_status_db(
+    update_environment_status_db(
         request.db_path,
         request.workspace_id,
-        &WorkspaceStatus::Idle,
+        &EnvironmentStatus::Idle,
         None,
     )?;
-    emit_workspace_status(request.app, request.workspace_id, "idle", None);
+    emit_environment_status(request.app, request.workspace_id, "idle", None);
 
     Ok(())
 }
@@ -405,24 +410,28 @@ mod tests {
         )
         .expect("insert project");
         conn.execute(
-            "INSERT INTO workspace (id, project_id, kind, source_ref, status, mode)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6), (?7, ?8, ?9, ?10, ?11, ?12)",
+            "INSERT INTO workspace (id, project_id, kind, source_ref, mode)
+             VALUES (?1, ?2, ?3, ?4, ?5), (?6, ?7, ?8, ?9, ?10)",
             rusqlite::params![
                 "workspace_managed",
                 "project_1",
                 "managed",
                 "lifecycle/workspace-managed",
-                "idle",
                 "local",
                 "workspace_root",
                 "project_1",
                 "root",
                 "main",
-                "idle",
                 "local"
             ],
         )
         .expect("insert workspaces");
+        conn.execute(
+            "INSERT INTO environment (workspace_id, status)
+             VALUES (?1, 'idle'), (?2, 'idle')",
+            rusqlite::params!["workspace_managed", "workspace_root"],
+        )
+        .expect("insert environments");
         drop(conn);
 
         let existing =
@@ -458,8 +467,8 @@ mod tests {
         )
         .expect("insert project");
         conn.execute(
-            "INSERT INTO workspace (id, project_id, name, name_origin, kind, source_ref, source_ref_origin, status, mode)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO workspace (id, project_id, name, name_origin, kind, source_ref, source_ref_origin, mode)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             rusqlite::params![
                 "workspace_root",
                 "project_1",
@@ -468,11 +477,15 @@ mod tests {
                 "root",
                 source_ref,
                 "manual",
-                "idle",
                 "local"
             ],
         )
         .expect("insert workspace");
+        conn.execute(
+            "INSERT INTO environment (workspace_id, status) VALUES (?1, 'idle')",
+            rusqlite::params!["workspace_root"],
+        )
+        .expect("insert environment");
         drop(conn);
 
         run_root_workspace_creation(RootWorkspaceBootstrap {

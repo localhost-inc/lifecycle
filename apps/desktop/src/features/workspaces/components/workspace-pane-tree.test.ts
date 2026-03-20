@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   resolveWorkspacePaneOpacity,
   shouldAutoSelectWorkspacePaneFromPointerTarget,
-} from "./workspace-pane-tree";
+} from "@/features/workspaces/components/workspace-pane-tree";
 
 const originalElement = globalThis.Element;
 

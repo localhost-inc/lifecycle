@@ -5,7 +5,7 @@ import {
   SHORTCUT_HANDLER_PRIORITY,
   type ShortcutDispatchRegistration,
   type ShortcutRouterKeyEvent,
-} from "./shortcut-router";
+} from "@/app/shortcuts/shortcut-router";
 
 function createShortcutEvent(
   overrides: Partial<ShortcutRouterKeyEvent> = {},

@@ -1,11 +1,10 @@
-export type { ServiceRecord, TerminalRecord, WorkspaceRecord } from "./db";
+export type { EnvironmentRecord, ServiceRecord, TerminalRecord, WorkspaceRecord } from "./db";
 export type { ErrorEnvelope } from "./errors";
 export type {
   LifecycleEvent,
   LifecycleEventKind,
   LifecycleEventOf,
   LifecycleEventInput,
-  SetupStepEventKind,
 } from "./events";
 export type {
   GitBranchPullRequestResult,
@@ -36,13 +35,10 @@ export { getManifestFingerprint, LifecycleConfigSchema, parseManifest } from "./
 export type { ProjectRecord } from "./project";
 export type { TerminalFailureReason, TerminalStatus, TerminalType } from "./terminal";
 export type {
-  WorkspaceFailureReason,
+  EnvironmentFailureReason,
+  EnvironmentStatus,
+  ServiceStatus,
+  ServiceStatusReason,
   WorkspaceKind,
   WorkspaceMode,
-  WorkspaceServiceExposure,
-  WorkspaceServicePreviewFailureReason,
-  WorkspaceServicePreviewStatus,
-  WorkspaceServiceStatus,
-  WorkspaceServiceStatusReason,
-  WorkspaceStatus,
 } from "./workspace";

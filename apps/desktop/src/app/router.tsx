@@ -1,8 +1,8 @@
 import { Suspense, lazy, type ReactNode } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { Loading } from "@lifecycle/ui";
-import { AppShellLayout } from "../components/layout/app-shell-layout";
-import { RouteErrorPage } from "./route-error-page";
+import { AppShellLayout } from "@/components/layout/app-shell-layout";
+import { RouteErrorPage } from "@/app/route-error-page";
 
 const HomeRoute = lazy(async () => {
   const module = await import("../features/projects/routes/home-route");

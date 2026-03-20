@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { formatWorkspaceError } from "./workspace-errors";
+import { formatWorkspaceError } from "@/features/workspaces/lib/workspace-errors";
 
 describe("formatWorkspaceError", () => {
   test("prefers suggested actions for locked workspace mutations", () => {

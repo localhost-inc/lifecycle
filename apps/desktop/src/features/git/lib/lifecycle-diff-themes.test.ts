@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { LIFECYCLE_DARK_DIFF_THEME, LIFECYCLE_LIGHT_DIFF_THEME } from "@lifecycle/ui";
 import githubDarkDefault from "@shikijs/themes/github-dark-default";
 import githubLightDefault from "@shikijs/themes/github-light-default";
-import { buildLifecycleDiffTheme } from "./lifecycle-diff-themes";
+import { buildLifecycleDiffTheme } from "@/features/git/lib/lifecycle-diff-themes";
 
 describe("buildLifecycleDiffTheme", () => {
   test("retains github syntax tokens while aligning lifecycle light surfaces", () => {

@@ -3,7 +3,7 @@ import {
   COPYABLE_GIT_DIFF_CSS,
   getOpenableDiffFilePath,
   withCopyableGitDiffOptions,
-} from "./git-diff-rendering";
+} from "@/features/git/components/git-diff-rendering";
 
 describe("withCopyableGitDiffOptions", () => {
   test("injects copyable text CSS for diff renderers", () => {

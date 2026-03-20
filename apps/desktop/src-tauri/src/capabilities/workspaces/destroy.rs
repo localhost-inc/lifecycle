@@ -162,25 +162,30 @@ mod tests {
         )
         .expect("insert project");
         conn.execute(
-            "INSERT INTO workspace (id, project_id, kind, source_ref, worktree_path, mode, status)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO workspace (id, project_id, kind, source_ref, worktree_path, mode)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 "workspace_1",
                 "project_1",
                 "managed",
                 "lifecycle/test",
                 "/tmp/project_1/.worktrees/workspace_1",
-                "local",
-                "active"
+                "local"
             ],
         )
         .expect("insert workspace");
         conn.execute(
-            "INSERT INTO workspace_service (id, workspace_id, service_name)
+            "INSERT INTO environment (workspace_id, status)
+             VALUES (?1, ?2)",
+            params!["workspace_1", "running"],
+        )
+        .expect("insert environment");
+        conn.execute(
+            "INSERT INTO service (id, environment_id, name)
              VALUES (?1, ?2, ?3)",
             params!["service_1", "workspace_1", "web"],
         )
-        .expect("insert workspace service");
+        .expect("insert service");
         conn.execute(
             "INSERT INTO terminal (id, workspace_id, label, status)
              VALUES (?1, ?2, ?3, ?4)",
@@ -226,7 +231,7 @@ mod tests {
             .expect("count workspaces");
         let service_count: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM workspace_service WHERE workspace_id = ?1",
+                "SELECT COUNT(*) FROM service WHERE environment_id = ?1",
                 params!["workspace_1"],
                 |row| row.get(0),
             )

@@ -1,5 +1,5 @@
 import type { ComponentType, LazyExoticComponent } from "react";
-import type { FileRendererEditorConfig } from "../lib/file-editor-types";
+import type { FileRendererEditorConfig } from "@/features/files/lib/file-editor-types";
 
 export type FileViewerRendererKind = "markdown" | "pencil" | "text";
 

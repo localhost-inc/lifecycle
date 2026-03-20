@@ -146,10 +146,7 @@ export function RouteErrorSurface({
       data-slot="route-error-surface"
       role="alert"
     >
-      <div
-        aria-hidden="true"
-        className="absolute inset-x-0 top-0 h-px bg-[var(--foreground)]/10"
-      />
+      <div aria-hidden="true" className="absolute inset-x-0 top-0 h-px bg-[var(--foreground)]/10" />
       <div
         aria-hidden="true"
         className="absolute left-6 top-6 h-28 w-28 rounded-full border border-[var(--border)]"

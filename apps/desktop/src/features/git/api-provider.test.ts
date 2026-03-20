@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { getGitDiff } from "./api";
+import { getGitDiff } from "@/features/git/api";
 
-const getWorkspaceProvider = mock(() => provider);
-
-const provider = {
+const runtime = {
   getGitStatus: mock(async () => ({
     branch: "feature/runtime-boundary",
     headSha: "abcdef1234567890",
@@ -106,8 +104,10 @@ const provider = {
   })),
 };
 
-mock.module("../../lib/workspace-provider", () => ({
-  getWorkspaceProvider,
+const getWorkspaceRuntime = mock(() => runtime);
+
+mock.module("../../lib/workspace-runtime", () => ({
+  getWorkspaceRuntime,
 }));
 
 const {
@@ -121,15 +121,15 @@ const {
   getGitStatus,
 } = await import("./api");
 
-describe("git api provider routing", () => {
+describe("git api runtime routing", () => {
   beforeEach(() => {
     Object.defineProperty(globalThis, "isTauri", {
       configurable: true,
       value: true,
       writable: true,
     });
-    getWorkspaceProvider.mockClear();
-    for (const method of Object.values(provider)) {
+    getWorkspaceRuntime.mockClear();
+    for (const method of Object.values(runtime)) {
       method.mockClear();
     }
   });
@@ -138,7 +138,7 @@ describe("git api provider routing", () => {
     delete (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri;
   });
 
-  test("routes advanced workspace-scoped git reads through the provider", async () => {
+  test("routes advanced workspace-scoped git reads through the workspace runtime", async () => {
     expect(await getGitStatus("ws_1")).toEqual({
       branch: "feature/runtime-boundary",
       headSha: "abcdef1234567890",
@@ -172,19 +172,19 @@ describe("git api provider routing", () => {
       patch: "commit patch",
     });
 
-    expect(getWorkspaceProvider).toHaveBeenCalled();
-    expect(provider.getGitStatus).toHaveBeenCalledWith("ws_1");
-    expect(provider.getGitScopePatch).toHaveBeenCalledWith("ws_1", "working");
-    expect(provider.getGitChangesPatch).toHaveBeenCalledWith("ws_1");
-    expect(provider.getGitDiff).toHaveBeenCalledWith({
+    expect(getWorkspaceRuntime).toHaveBeenCalled();
+    expect(runtime.getGitStatus).toHaveBeenCalledWith("ws_1");
+    expect(runtime.getGitScopePatch).toHaveBeenCalledWith("ws_1", "working");
+    expect(runtime.getGitChangesPatch).toHaveBeenCalledWith("ws_1");
+    expect(runtime.getGitDiff).toHaveBeenCalledWith({
       workspaceId: "ws_1",
       filePath: "src/app.ts",
       scope: "working",
     });
-    expect(provider.getGitPullRequest).toHaveBeenCalledWith("ws_1", 42);
-    expect(provider.getGitBaseRef).toHaveBeenCalledWith("ws_1");
-    expect(provider.getGitRefDiffPatch).toHaveBeenCalledWith("ws_1", "main", "HEAD");
-    expect(provider.getGitPullRequestPatch).toHaveBeenCalledWith("ws_1", 42);
-    expect(provider.getGitCommitPatch).toHaveBeenCalledWith("ws_1", "abcdef1234567890");
+    expect(runtime.getGitPullRequest).toHaveBeenCalledWith("ws_1", 42);
+    expect(runtime.getGitBaseRef).toHaveBeenCalledWith("ws_1");
+    expect(runtime.getGitRefDiffPatch).toHaveBeenCalledWith("ws_1", "main", "HEAD");
+    expect(runtime.getGitPullRequestPatch).toHaveBeenCalledWith("ws_1", 42);
+    expect(runtime.getGitCommitPatch).toHaveBeenCalledWith("ws_1", "abcdef1234567890");
   });
 });

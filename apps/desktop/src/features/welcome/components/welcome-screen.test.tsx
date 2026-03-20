@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { ThemeProvider } from "@lifecycle/ui";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { WelcomeScreen } from "./welcome-screen";
+import { WelcomeScreen } from "@/features/welcome/components/welcome-screen";
 
 describe("WelcomeScreen", () => {
   test("renders the logo animation with the standard foreground color on first paint", () => {

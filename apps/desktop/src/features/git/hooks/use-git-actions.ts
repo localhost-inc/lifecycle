@@ -6,8 +6,8 @@ import {
   mergeGitPullRequest,
   pushGit,
   stageGitFiles,
-} from "../api";
-import { useCurrentGitPullRequest, useGitLog, useGitStatus } from "../hooks";
+} from "@/features/git/api";
+import { useCurrentGitPullRequest, useGitLog, useGitStatus } from "@/features/git/hooks";
 
 export interface UseGitActionsOptions {
   onCommitComplete: () => void;
@@ -80,11 +80,7 @@ export function useGitActions({
   const refreshCurrentPullRequest = currentPullRequestQuery.refresh;
 
   const refreshPullRequestState = useCallback(async (): Promise<void> => {
-    await Promise.all([
-      refreshGitStatus(),
-      refreshGitLog(),
-      refreshCurrentPullRequest(),
-    ]);
+    await Promise.all([refreshGitStatus(), refreshGitLog(), refreshCurrentPullRequest()]);
   }, [refreshCurrentPullRequest, refreshGitLog, refreshGitStatus]);
 
   const handlePushBranch = useCallback(async (): Promise<void> => {

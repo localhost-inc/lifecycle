@@ -8,9 +8,14 @@ Apply the following workspace contracts as context for the current task. All wor
 
 ---
 
-# WorkspaceProvider Interface
+# ControlPlane + WorkspaceRuntime
 
-The `WorkspaceProvider` is the primary extensibility seam for workspace lifecycle operations. It is the adapter layer between the control plane and the environment where workspaces actually run. Workspace mode is selected **per-workspace** at creation time and stored as `workspace.mode`.
+Lifecycle uses two explicit backend seams:
+
+1. `ControlPlane` — projects, workspaces, ownership, manifest reads, branch lookup, create/rename/destroy, and workspace-mode routing
+2. `WorkspaceRuntime` — live workspace-scoped execution once a workspace exists: environment, services, terminals, files, git, activity, and service logs
+
+Host-native concerns such as OS app launching and native terminal surface synchronization stay outside both seams. Workspace mode is selected **per-workspace** at creation time and stored as `workspace.mode`.
 
 ## Workspace vs Environment Boundary
 
@@ -18,9 +23,9 @@ Lifecycle should model three layers explicitly:
 
 1. `workspace` — durable shell, identity, worktree ownership, provider mode, archive metadata
 2. `environment` — singleton execution layer attached to the workspace; start/stop/reset/sleep/wake/fail semantics live here
-3. `workspace_service` — per-service runtime inside the environment
+3. `service` — per-service runtime inside the environment
 
-In V1, the environment is represented on the workspace record rather than as a separate table because there is exactly one environment per workspace.
+Environment lifecycle facts are stored separately from the workspace shell, keyed by `workspace_id`. Every persisted workspace must have exactly one environment row. Desktop startup migrations repair any historical workspace row that is missing its singleton environment.
 
 ## Workspace Kind (Local)
 
@@ -33,34 +38,40 @@ In V1, the environment is represented on the workspace record rather than as a s
 ## Interface
 
 ```typescript
-interface WorkspaceProvider {
+interface ControlPlane {
+  getProjectWorkspace(project_id) → workspace | null
+  listWorkspaces() → workspace[]
+  listWorkspacesByProject() → Record<project_id, workspace[]>
+  listProjects() → project[]
+  readManifestText(dir_path) → string | null
+  getCurrentBranch(project_path) → string
   createWorkspace(input + manifest_json? + manifest_fingerprint?) → { workspace, worktree_path }
   renameWorkspace(workspace_id, name) → workspace
+  destroyWorkspace(workspace_id) → void
+  getWorkspace(workspace_id) → workspace | null
+}
+
+interface WorkspaceRuntime {
   startServices(workspace + manifest_json + manifest_fingerprint + service_names?) → service_statuses
   healthCheck(manifest.environment[kind=service].health_check) → pass/fail per service
   stopServices(service_names[]) → void
-  runSetup(workspace_id) → void
   sleep(workspace_id) → void
   wake(workspace + manifest_json + manifest_fingerprint) → void
-  destroy(workspace_id) → void
-  getWorkspace(workspace_id) → workspace | null
-  getWorkspaceServices(workspace_id) → workspace_services[]
-  getWorkspaceSnapshot(workspace_id) → { workspace, services, terminals }
-  getWorkspaceRuntimeProjection(workspace_id) → { setup, environment_tasks, activity }
-  updateWorkspaceService(workspace_id, service, exposure, port_override?) → void
-  syncWorkspaceManifest(workspace_id, manifest_json?, manifest_fingerprint?) → void
+  getEnvironment(workspace_id) → environment
+  getActivity(workspace_id) → lifecycle_events[]
+  getServiceLogs(workspace_id) → service_logs[]
+  getServices(workspace_id) → services[]
   createTerminal(workspace_id, launch_type, harness_provider?, harness_session_id?) → terminal
-  listWorkspaceTerminals(workspace_id) → terminals[]
+  listTerminals(workspace_id) → terminals[]
   getTerminal(terminal_id) → terminal | null
   renameTerminal(terminal_id, label) → terminal
   saveTerminalAttachment(workspace_id, file_name, base64_data, media_type?) → attachment
   detachTerminal(terminal_id) → void
   killTerminal(terminal_id) → void
-  readWorkspaceFile(workspace_id, file_path) → file
-  writeWorkspaceFile(workspace_id, file_path, content) → file
-  listWorkspaceFiles(workspace_id) → file_entries[]
-  openWorkspaceFile(workspace_id, file_path) → void
-  exposePort(workspace_id, service, port) → access_url | null
+  readFile(workspace_id, file_path) → file
+  writeFile(workspace_id, file_path, content) → file
+  listFiles(workspace_id) → file_entries[]
+  openFile(workspace_id, file_path) → void
   getGitStatus(workspace_id) → git_status
   getGitScopePatch(workspace_id, scope) → unified_diff
   getGitChangesPatch(workspace_id) → unified_diff
@@ -80,26 +91,31 @@ interface WorkspaceProvider {
 }
 ```
 
-### Provider Responsibility Split
+### Responsibility Split
 
-1. `createWorkspace` and `destroy` are workspace-lifecycle operations.
-2. `startServices`, `stopServices`, `sleep`, `wake`, and reset flows operate on the environment attached to that workspace.
-3. `startServices(service_names?)` may target a single service chain; providers must honor manifest `depends_on` edges.
-4. When `startServices(service_names?)` is called against an already-active workspace, providers should treat `ready` dependency services as satisfied boundaries.
-5. Local create/start/wake flows must carry the exact manifest content plus `manifest_fingerprint`.
-6. The provider boundary should expose one coherent workspace-scoped API.
+1. `createWorkspace`, `renameWorkspace`, `destroyWorkspace`, and `getWorkspace` are control-plane operations.
+2. Project list reads, manifest reads, and current-branch lookup are control-plane operations.
+3. `startServices`, `stopServices`, `sleep`, `wake`, and reset flows operate on the environment attached to a workspace and belong to `WorkspaceRuntime`.
+4. File, git, terminal, activity, environment, service, and service-log reads are workspace-runtime operations.
+5. `startServices(service_names?)` may target a single service chain; runtimes must honor manifest `depends_on` edges.
+6. When `startServices(service_names?)` is called against an already-active workspace, runtimes should treat `ready` dependency services as satisfied boundaries.
+7. Local create/start/wake flows must carry the exact manifest content plus `manifest_fingerprint`.
+8. Desktop query reads should not bypass these seams with transport-local command calls.
+9. Frontend consumers should read concrete workspace-scoped facts through separate queries (`workspace`, `environment`, `services`, `terminals`, `activity`, `service_logs`) instead of depending on a synthetic snapshot aggregate.
+10. Backend-owned live selectors should stay split by concern as well; do not collapse activity, service logs, and other unrelated facts into a synthetic controller facts bag.
+11. Frontend manifest watchers may invalidate workspace queries when `lifecycle.json` changes, but reconciliation of persisted idle service state must remain backend-owned.
 
 ## Execution Model
 
-`lifecycle.json` describes **WHAT** to run. The `WorkspaceProvider` decides **WHERE**.
+`lifecycle.json` describes **WHAT** to run. The `ControlPlane` decides who owns the workspace, and the `WorkspaceRuntime` decides **WHERE** and **HOW** it runs.
 
-1. All workspaces are lifecycle-managed execution environments backed by a `WorkspaceProvider`.
-2. V1 ships both `CloudWorkspaceProvider` and `LocalWorkspaceProvider`.
+1. All workspaces are lifecycle-managed execution environments backed by a `WorkspaceRuntime`.
+2. V1 ships both `CloudWorkspaceRuntime` and `LocalWorkspaceRuntime`, with matching `ControlPlane` adapters.
 3. Platform stance is Cloudflare-first for cloud execution.
 
 ## Event Foundation Contract
 
-1. Provider-owned lifecycle mutations publish normalized fact events into the Lifecycle event foundation.
+1. Control-plane and workspace-runtime mutations publish normalized fact events into the Lifecycle event foundation.
 2. The desktop query cache, notifications, metrics, and future plugins are consumers of that foundation.
 3. Commands may expose `before|after|failed` hooks.
 4. High-frequency terminal rendering stays inside the native terminal host.
@@ -107,27 +123,27 @@ interface WorkspaceProvider {
 ## Terminal Session Contract (M3+)
 
 1. Control-plane operations stay typed and imperative (`create`, `detach`, `kill`).
-2. Session runtime stays provider-owned (local: native session; cloud: sandbox PTY).
-3. Desktop-only geometry, visibility, focus, theme, and font synchronization stay outside the provider interface.
+2. Session runtime stays workspace-runtime-owned (local: native session; cloud: sandbox PTY).
+3. Desktop-only geometry, visibility, focus, theme, and font synchronization stay outside the workspace-runtime interface.
 4. `detachTerminal(terminal_id)` hides the active surface without terminating the session.
 5. `killTerminal(terminal_id)` is the only action that intentionally ends a live session.
 
 ## Mode, Authority, and Aggregation
 
-1. `workspace.mode=local` means the local provider is authoritative.
-2. `workspace.mode=cloud` means the cloud provider is authoritative.
+1. `workspace.mode=local` means the local workspace runtime is authoritative.
+2. `workspace.mode=cloud` means the cloud workspace runtime is authoritative.
 3. Signing in enables cloud-mode workspaces; it does not change the authority of existing local-mode workspaces.
 4. Mixed-mode workspace lists must be aggregated from normalized domain records.
-5. Mutations from aggregated views must dispatch to the authoritative provider.
+5. Mutations from aggregated views must dispatch to the authoritative runtime.
 
 ## Git Operations Contract
 
-1. Git reads and writes are workspace-scoped provider operations.
+1. Git reads and writes are workspace-scoped runtime operations.
 2. Frontend callers should key git operations by `workspace_id`.
 3. The public git result types must stay provider-agnostic.
 4. Authoritative git mutations publish repository-level fact events.
 
-## `LocalWorkspaceProvider` (V1)
+## `LocalControlPlane` + `LocalWorkspaceRuntime` (V1)
 
 1. Local Git worktree on host filesystem.
 2. Tauri Rust backend handles process supervision, libghostty, Docker, local state persistence.
@@ -137,7 +153,7 @@ interface WorkspaceProvider {
 6. Worktree creation mirrors existing `.env` and `.env.local` files from the source repo.
 7. Local workspaces operate without network.
 
-## `CloudWorkspaceProvider` (V1)
+## `CloudControlPlane` + `CloudWorkspaceRuntime` (V1)
 
 1. Per-branch Cloudflare Sandbox instances.
 2. Sandbox-owned PTY sessions for terminal runtime.
@@ -245,9 +261,9 @@ The workspace execution model behind `lifecycle.json`.
 
 ### `workspace`
 
-Owns coarse worktree-scoped steps: `workspace.setup`, `workspace.teardown`
+Owns coarse worktree-scoped steps: `workspace.prepare`, `workspace.teardown`
 
-`workspace.setup` is for filesystem work only — install deps, generate code, materialize config. If something needs a running dependency, it belongs in `environment` as a `task`.
+`workspace.prepare` is for filesystem work only — install deps, generate code, materialize config. If something needs a running dependency, it belongs in `environment` as a `task`.
 
 ### `environment`
 
@@ -263,12 +279,12 @@ One-shot deterministic work. Dependency satisfied when task exits `0`. Failures 
 
 Supervised long-lived workload. Dependency satisfied when service becomes ready. Runtime may be `process` or `image`. Readiness via `health_check`.
 
-Only `kind: "service"` nodes seed `workspace_service` rows, previews, exposure settings, and port overrides.
+Only `kind: "service"` nodes seed `service` rows, derived preview routes, and port overrides.
 
 ## Execution Order
 
 1. Parse and validate `lifecycle.json`.
-2. Run eligible `workspace.setup` steps.
+2. Run eligible `workspace.prepare` steps.
 3. Build environment graph.
 4. Drop create-scoped task nodes after first successful start.
 5. Topologically sort; reject missing deps or cycles.

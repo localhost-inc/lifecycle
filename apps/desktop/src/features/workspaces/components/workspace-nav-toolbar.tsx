@@ -10,7 +10,7 @@ import {
 } from "@lifecycle/ui";
 import { ChevronDown, GitCommitHorizontal, Play, RotateCcw, Square } from "lucide-react";
 import { useState } from "react";
-import type { WorkspaceToolbarSlot } from "../state/workspace-toolbar-context";
+import type { WorkspaceToolbarSlot } from "@/features/workspaces/state/workspace-toolbar-context";
 
 interface WorkspaceNavToolbarProps {
   slot: WorkspaceToolbarSlot;
@@ -18,7 +18,8 @@ interface WorkspaceNavToolbarProps {
 
 function RunIcon({ label, loading }: { label: string; loading: boolean }) {
   if (loading) return <Spinner className="size-3.5" />;
-  if (label === "Stop" || label === "Stopping...") return <Square className="size-3 fill-current" strokeWidth={2.2} />;
+  if (label === "Stop" || label === "Stopping...")
+    return <Square className="size-3 fill-current" strokeWidth={2.2} />;
   return <Play className="size-3 fill-current" strokeWidth={2.2} />;
 }
 
@@ -28,12 +29,14 @@ export function WorkspaceNavToolbar({ slot }: WorkspaceNavToolbarProps) {
   return (
     <div className="flex items-center gap-1.5">
       {/* Run / Stop — plain button when no restart, split when restart is available */}
-      {slot.runAction && (
-        slot.restartAction ? (
+      {slot.runAction &&
+        (slot.restartAction ? (
           <SplitButton className="gap-0">
             <SplitButtonPrimary
               disabled={slot.runAction.disabled}
-              leadingIcon={<RunIcon label={slot.runAction.label} loading={slot.runAction.loading} />}
+              leadingIcon={
+                <RunIcon label={slot.runAction.label} loading={slot.runAction.loading} />
+              }
               onClick={slot.runAction.onClick}
               variant="outline"
             >
@@ -80,8 +83,7 @@ export function WorkspaceNavToolbar({ slot }: WorkspaceNavToolbarProps) {
             <RunIcon label={slot.runAction.label} loading={slot.runAction.loading} />
             <span>{slot.runAction.label}</span>
           </Button>
-        )
-      )}
+        ))}
 
       {/* Git action */}
       {slot.gitAction && (

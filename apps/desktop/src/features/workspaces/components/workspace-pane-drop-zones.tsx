@@ -1,6 +1,6 @@
-import { clampSplitRatio, getSplitRatioBounds } from "../../../lib/panel-layout";
-import type { WorkspacePaneTabDrag } from "./workspace-pane-tab-bar";
-import type { WorkspaceTabPlacement } from "./workspace-canvas-tabs";
+import { clampSplitRatio, getSplitRatioBounds } from "@/lib/panel-layout";
+import type { WorkspacePaneTabDrag } from "@/features/workspaces/components/workspace-pane-tab-bar";
+import type { WorkspaceTabPlacement } from "@/features/workspaces/components/workspace-canvas-tabs";
 
 const MIN_WORKSPACE_PANE_SIZE = 240;
 const PANE_DROP_EDGE_ZONE_RATIO = 0.22;
@@ -407,9 +407,7 @@ export function WorkspacePaneDropOverlay({
               data-workspace-pane-drop-zone={zone}
               data-workspace-pane-drop-zone-active={isActiveZone ? "true" : "false"}
               className={`absolute inset-0 rounded-[inherit] transition-[background-color,opacity,transform] duration-100 ease-out ${
-                isActiveZone
-                  ? "bg-[var(--ring)]/18 opacity-100"
-                  : "bg-[var(--ring)]/6 opacity-85"
+                isActiveZone ? "bg-[var(--ring)]/18 opacity-100" : "bg-[var(--ring)]/6 opacity-85"
               }`}
               style={{ clipPath: getWorkspacePaneBodyDropZoneClipPath(zone) }}
             />

@@ -8,7 +8,7 @@ import {
   getNativeMonospaceFontFamily,
   getPrimaryFontFamily,
   normalizeFontFamily,
-} from "./typography";
+} from "@/lib/typography";
 
 describe("typography", () => {
   test("keeps Geist defaults for interface and monospace fonts", () => {

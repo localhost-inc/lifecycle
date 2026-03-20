@@ -4,7 +4,7 @@ import {
   getResponseReadyWorkspaceIds,
   getRunningWorkspaceIds,
   terminalResponseReadyReducer,
-} from "./terminal-response-ready-provider";
+} from "@/features/terminals/state/terminal-response-ready-provider";
 
 describe("terminalResponseReadyReducer", () => {
   test("marks terminals as response-ready by workspace", () => {

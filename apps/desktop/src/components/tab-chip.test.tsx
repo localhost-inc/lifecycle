@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { TabChip } from "./tab-chip";
+import { TabChip } from "@/components/tab-chip";
 
 describe("TabChip", () => {
   test("renders active tabs edge-to-edge with a surface background", () => {

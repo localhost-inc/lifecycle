@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildFileTree, type FileTreeDirectory, type FileTreeLeaf } from "./file-tree";
+import { buildFileTree, type FileTreeDirectory, type FileTreeLeaf } from "@/features/git/lib/file-tree";
 import type { FileDiffMetadata } from "@pierre/diffs/react";
 
 function makeFile(name: string, additions: number = 0, deletions: number = 0): FileDiffMetadata {

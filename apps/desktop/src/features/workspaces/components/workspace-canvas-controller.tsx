@@ -1,14 +1,14 @@
-import type { TerminalRecord, TerminalStatus } from "@lifecycle/contracts";
+import type { TerminalStatus } from "@lifecycle/contracts";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { useQueryClient } from "../../../query";
+import { useQueryClient } from "@/query";
 import {
   SHORTCUT_HANDLER_PRIORITY,
   useShortcutRegistration,
-} from "../../../app/shortcuts/shortcut-router";
-import { recordWorkspaceFileUsage } from "../../files/lib/workspace-file-usage";
-import { useWorkspaceFileSessions } from "../../files/state/workspace-file-sessions";
+} from "@/app/shortcuts/shortcut-router";
+import { recordWorkspaceFileUsage } from "@/features/files/lib/workspace-file-usage";
+import { useWorkspaceFileSessions } from "@/features/files/state/workspace-file-sessions";
 import {
   createTerminal,
   detachTerminal,
@@ -17,18 +17,19 @@ import {
   terminalHasLiveSession,
   type CreateTerminalRequest,
   type HarnessProvider,
-} from "../../terminals/api";
-import { terminalKeys } from "../../terminals/hooks";
-import { hideNativeTerminalSurface } from "../../terminals/native-surface-api";
-import { useTerminalResponseReady } from "../../terminals/state/terminal-response-ready-provider";
-import { subscribeToNativeWorkspaceShortcutEvents } from "../native-shortcuts-api";
+} from "@/features/terminals/api";
+import { useWorkspaceTerminals } from "@/features/terminals/hooks";
+import { hideNativeTerminalSurface } from "@/features/terminals/native-surface-api";
+import { terminalKeys } from "@/features/terminals/queries";
+import { useTerminalResponseReady } from "@/features/terminals/state/terminal-response-ready-provider";
+import { subscribeToNativeWorkspaceShortcutEvents } from "@/features/workspaces/native-shortcuts-api";
 import {
   getAdjacentPaneId,
   inspectWorkspacePaneLayout,
   requireWorkspacePane,
-} from "../lib/workspace-pane-layout";
-import { formatWorkspaceError } from "../lib/workspace-errors";
-import { consumePendingTerminalFocus } from "../../notifications/lib/notification-navigation";
+} from "@/features/workspaces/lib/workspace-pane-layout";
+import { formatWorkspaceError } from "@/features/workspaces/lib/workspace-errors";
+import { consumePendingTerminalFocus } from "@/features/notifications/lib/notification-navigation";
 import {
   getWorkspaceDocument,
   isTerminalTabKey,
@@ -39,25 +40,25 @@ import {
   readWorkspaceCanvasState,
   type WorkspaceCanvasTabViewState,
   writeWorkspaceCanvasState,
-} from "../state/workspace-canvas-state";
+} from "@/features/workspaces/state/workspace-canvas-state";
 import {
   createWorkspacePaneId,
   createWorkspaceSplitId,
   createWorkspaceCanvasId,
-} from "./workspace-canvas-ids";
-import type { OpenDocumentRequest } from "./workspace-canvas-requests";
-import { workspaceCanvasReducer } from "./workspace-canvas-reducer";
+} from "@/features/workspaces/components/workspace-canvas-ids";
+import type { OpenDocumentRequest } from "@/features/workspaces/components/workspace-canvas-requests";
+import { workspaceCanvasReducer } from "@/features/workspaces/components/workspace-canvas-reducer";
 import {
   releaseWebviewFocus,
   resolveWorkspaceCloseShortcutTarget,
   shouldTreatWindowCloseAsTabClose,
   toWorkspaceTabHotkeyAction,
   type WorkspaceTabHotkeyAction,
-} from "./workspace-canvas-shortcuts";
-import { useSettings } from "../../settings/state/app-settings-provider";
-import { buildHarnessLaunchConfig } from "../../settings/state/harness-settings";
-import { type SurfaceLaunchAction, type SurfaceLaunchRequest } from "./surface-launch-actions";
-import { ClaudeIcon, CodexIcon, ShellIcon } from "./surface-icons";
+} from "@/features/workspaces/components/workspace-canvas-shortcuts";
+import { useSettings } from "@/features/settings/state/app-settings-provider";
+import { buildHarnessLaunchConfig } from "@/features/settings/state/harness-settings";
+import { type SurfaceLaunchAction, type SurfaceLaunchRequest } from "@/features/workspaces/components/surface-launch-actions";
+import { ClaudeIcon, CodexIcon, ShellIcon } from "@/features/workspaces/components/surface-icons";
 import {
   areStringArraysEqual,
   getWorkspaceAdjacentTabKey,
@@ -65,21 +66,20 @@ import {
   reconcileHiddenTerminalTabKeys,
   resolveWorkspaceVisibleTabs,
   type TerminalTab,
-} from "./workspace-canvas-tabs";
+} from "@/features/workspaces/components/workspace-canvas-tabs";
 import {
   getWorkspaceInactiveTerminalIds,
   getWorkspaceLiveTerminalTabKeys,
   getWorkspacePaneIdsWaitingForSelectedTerminalTab,
   getWorkspaceRenderedPaneActiveTabKeys,
   getWorkspaceUnassignedLiveTerminalTabKeys,
-} from "./workspace-canvas-terminal-state";
-import { closeWorkspacePaneTabs } from "./workspace-pane-close";
+} from "@/features/workspaces/components/workspace-canvas-terminal-state";
+import { closeWorkspacePaneTabs } from "@/features/workspaces/components/workspace-pane-close";
 
 export interface WorkspaceCanvasControllerInput {
   openDocumentRequest: OpenDocumentRequest | null;
   onCloseWorkspaceTab?: () => void;
   onOpenDocumentRequestHandled?: (requestId: string) => void;
-  snapshotTerminals: TerminalRecord[];
   workspaceId: string;
 }
 
@@ -87,10 +87,10 @@ export function useWorkspaceCanvasController({
   openDocumentRequest,
   onCloseWorkspaceTab,
   onOpenDocumentRequestHandled,
-  snapshotTerminals,
   workspaceId,
 }: WorkspaceCanvasControllerInput) {
   const client = useQueryClient();
+  const terminalsQuery = useWorkspaceTerminals(workspaceId);
   const { defaultNewTabLaunch, dimInactivePanes, harnesses, inactivePaneOpacity } = useSettings();
   const {
     clearTerminalResponseReady,
@@ -114,13 +114,13 @@ export function useWorkspaceCanvasController({
   const closeShortcutTriggeredAtRef = useRef(0);
   const closeShortcutHandledAtRef = useRef(0);
 
-  const terminalSnapshot = useMemo(() => snapshotTerminals, [snapshotTerminals]);
+  const workspaceTerminals = terminalsQuery.data ?? [];
   const terminals = useMemo(
     () =>
       orderWorkspaceTerminals(
-        terminalSnapshot.filter((terminal) => terminalHasLiveSession(terminal.status)),
+        workspaceTerminals.filter((terminal) => terminalHasLiveSession(terminal.status)),
       ),
-    [terminalSnapshot],
+    [workspaceTerminals],
   );
   const terminalTabs = useMemo<TerminalTab[]>(
     () =>
@@ -193,8 +193,8 @@ export function useWorkspaceCanvasController({
     [activePaneVisibleTabs],
   );
   const knownTerminalTabKeys = useMemo(
-    () => terminalSnapshot.map((terminal) => `terminal:${terminal.id}`),
-    [terminalSnapshot],
+    () => workspaceTerminals.map((terminal) => `terminal:${terminal.id}`),
+    [workspaceTerminals],
   );
   const assignedPaneTabKeys = useMemo(
     () => new Set(paneSnapshots.flatMap((pane) => pane.tabOrderKeys)),
@@ -598,8 +598,7 @@ export function useWorkspaceCanvasController({
             return true;
           }
 
-          const isLastTabInPane =
-            activePaneVisibleTabs.length === 1 && paneLayout.paneCount > 1;
+          const isLastTabInPane = activePaneVisibleTabs.length === 1 && paneLayout.paneCount > 1;
 
           closeShortcutHandledAtRef.current = Date.now();
           if (activeTab.kind === "terminal") {
@@ -874,6 +873,10 @@ export function useWorkspaceCanvasController({
     dispatch({ kind: "set-split-ratio", ratio, splitId });
   }, []);
 
+  const handleResetAllSplitRatios = useCallback(() => {
+    dispatch({ kind: "reset-all-split-ratios" });
+  }, []);
+
   const handleSplitPane = useCallback(
     (paneId: string, direction: "column" | "row") => {
       const newPaneId = createWorkspacePaneId();
@@ -979,6 +982,7 @@ export function useWorkspaceCanvasController({
     handleSelectPane,
     handleSelectTab,
     handleReconcilePaneVisibleTabOrder,
+    handleResetAllSplitRatios,
     handleSetSplitRatio,
     handleSplitPane,
     handleToggleZoom,

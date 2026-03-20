@@ -19,8 +19,7 @@ A developer (or agent) working inside a workspace worktree can use the Lifecycle
 4. **Context command** (designed for agents):
    - `lifecycle context` -- single command that dumps everything an agent needs to orient: workspace metadata, environment status, git info, all services with ports/health/preview URLs, available CLI commands. Structured, dense, one-shot. Always `--json`-shaped output even without the flag (this command exists for machines).
 5. **Service commands**:
-   - `lifecycle workspace service list` -- table of services with runtime, status, port, exposure, preview URL. `--json` for structured output.
-   - `lifecycle workspace service set` -- update service exposure and port overrides.
+   - `lifecycle workspace service list` -- table of services with runtime, status, assigned port, and preview URL. `--json` for structured output.
 6. **Local lifecycle commands**:
    - `lifecycle workspace create --project <id> --ref <branch> --local`
    - `lifecycle workspace run`
@@ -29,7 +28,7 @@ A developer (or agent) working inside a workspace worktree can use the Lifecycle
    - `lifecycle terminal start [--harness claude|codex|...]`
    - `lifecycle terminal status [terminal-id]`
 7. **Onboarding commands** (local-only):
-   - `lifecycle setup`
+   - `lifecycle prepare`
    - `lifecycle repo init`
    - `lifecycle repo list`
 8. **Help and discoverability**: every subcommand has `--help` with examples. `lifecycle` with no args prints a concise command map. Error messages suggest the right command when possible.
@@ -47,7 +46,7 @@ A developer (or agent) working inside a workspace worktree can use the Lifecycle
 
 #### Onboarding (Local)
 
-1. `lifecycle setup`
+1. `lifecycle prepare`
 2. `lifecycle repo init`
 3. `lifecycle repo list`
 

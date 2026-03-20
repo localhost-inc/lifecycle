@@ -1,4 +1,4 @@
-import type { FileRendererDefinition } from "./file-renderer-types";
+import type { FileRendererDefinition } from "@/features/files/renderers/file-renderer-types";
 
 export const textFileRenderer: FileRendererDefinition = {
   extensions: [],

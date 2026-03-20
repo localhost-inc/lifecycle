@@ -1,19 +1,20 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { useEffect, useRef } from "react";
-import { useQueryClient } from "../../query";
-import { router } from "../../app/router";
-import { useLifecycleEvent } from "../events";
-import { projectCatalogQuery } from "../projects/hooks";
-import { useSettings } from "../settings/state/app-settings-provider";
-import { createWorkspaceSnapshotQuery } from "../workspaces/hooks";
-import { setPendingTerminalFocus } from "./lib/notification-navigation";
-import { shouldNotifyForTurnCompletion } from "./lib/notification-settings";
+import { useQueryClient } from "@/query";
+import { router } from "@/app/router";
+import { useLifecycleEvent } from "@/features/events";
+import { projectCatalogQuery } from "@/features/projects/hooks";
+import { useSettings } from "@/features/settings/state/app-settings-provider";
+import { createWorkspaceTerminalsQuery } from "@/features/terminals/queries";
+import { createWorkspaceQuery } from "@/features/workspaces/queries";
+import { setPendingTerminalFocus } from "@/features/notifications/lib/notification-navigation";
+import { shouldNotifyForTurnCompletion } from "@/features/notifications/lib/notification-settings";
 import {
   listenForNotificationClicks,
   playTurnNotificationSound,
   sendTurnCompletionNotification,
   type NotificationNavigationData,
-} from "./lib/turn-notification-runtime";
+} from "@/features/notifications/lib/turn-notification-runtime";
 
 function readTurnNotificationAttentionState() {
   if (typeof document === "undefined") {
@@ -118,13 +119,14 @@ export function TurnNotificationListener() {
     recentCompletionKeys.add(event.completion_key);
     setTimeout(() => recentCompletionKeys.delete(event.completion_key), 5_000);
 
-    const snapshot = queryClient.getSnapshot(createWorkspaceSnapshotQuery(event.workspace_id));
-    const terminal = snapshot.data?.terminals.find((t) => t.id === event.terminal_id);
-    const projectId = snapshot.data?.workspace?.project_id;
+    const workspace =
+      queryClient.getSnapshot(createWorkspaceQuery(event.workspace_id)).data ?? null;
+    const terminals =
+      queryClient.getSnapshot(createWorkspaceTerminalsQuery(event.workspace_id)).data ?? [];
+    const terminal = terminals.find((item) => item.id === event.terminal_id);
+    const projectId = workspace?.project_id;
     const catalog = queryClient.getSnapshot(projectCatalogQuery);
-    const project = projectId
-      ? catalog.data?.projects.find((p) => p.id === projectId)
-      : undefined;
+    const project = projectId ? catalog.data?.projects.find((p) => p.id === projectId) : undefined;
 
     const context = {
       projectId: projectId ?? null,
@@ -132,7 +134,7 @@ export function TurnNotificationListener() {
       sessionTitle: terminal?.label,
       terminalId: event.terminal_id,
       workspaceId: event.workspace_id,
-      workspaceName: snapshot.data?.workspace?.name,
+      workspaceName: workspace?.name,
     };
 
     void sendTurnCompletionNotification(event, context).catch((error) => {

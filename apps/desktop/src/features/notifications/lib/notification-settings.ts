@@ -1,10 +1,10 @@
 import {
   turnNotificationSoundProfiles,
   type TurnNotificationSound,
-} from "./turn-notification-sound-profiles";
+} from "@/features/notifications/lib/turn-notification-sound-profiles";
 
 export type TurnNotificationMode = "always" | "when-unfocused" | "off";
-export type { TurnNotificationSound } from "./turn-notification-sound-profiles";
+export type { TurnNotificationSound } from "@/features/notifications/lib/turn-notification-sound-profiles";
 
 export interface TurnNotificationAttentionState {
   documentVisible: boolean;

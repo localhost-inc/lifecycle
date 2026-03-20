@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import githubDarkDefault from "@shikijs/themes/github-dark-default";
 import githubLightDefault from "@shikijs/themes/github-light-default";
-import { buildTerminalTheme, readTerminalThemeTokens } from "./terminal-theme";
+import { buildTerminalTheme, readTerminalThemeTokens } from "@/features/terminals/terminal-theme";
 
 const originalGetComputedStyle = globalThis.getComputedStyle;
 

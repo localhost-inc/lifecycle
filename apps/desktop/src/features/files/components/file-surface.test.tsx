@@ -2,19 +2,19 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ThemeProvider } from "@lifecycle/ui";
-import { buildFileCodeEditorExtensions, resolveFileEditorConfig } from "../lib/file-editor-config";
-import type { FileEditorConfig } from "../lib/file-editor-types";
+import { buildFileCodeEditorExtensions, resolveFileEditorConfig } from "@/features/files/lib/file-editor-config";
+import type { FileEditorConfig } from "@/features/files/lib/file-editor-types";
 import {
   getFileViewerScrollRestoreKey,
   readFileSaveHotkey,
   resolveFileViewerRenderer,
   resolveInitialFileViewerMode,
-} from "../lib/file-renderers";
-import { hasFileViewerConflict, isFileViewerDirty } from "../lib/file-session";
-import { resolveFileRendererDefinition } from "../renderers/registry";
-import { MarkdownFileRendererView } from "../renderers/markdown-file-renderer-view";
-import { summarizePencilDocument } from "../renderers/pencil-file-renderer";
-import type { WorkspaceFileReadResult } from "../../workspaces/api";
+} from "@/features/files/lib/file-renderers";
+import { hasFileViewerConflict, isFileViewerDirty } from "@/features/files/lib/file-session";
+import { resolveFileRendererDefinition } from "@/features/files/renderers/registry";
+import { MarkdownFileRendererView } from "@/features/files/renderers/markdown-file-renderer-view";
+import { summarizePencilDocument } from "@/features/files/renderers/pencil-file-renderer";
+import type { WorkspaceFileReadResult } from "@/features/workspaces/api";
 
 function readyQueryResult<T>(data: T) {
   return {
@@ -36,7 +36,6 @@ async function renderFileSurface(filePath: string, file: WorkspaceFileReadResult
     createElement(ThemeProvider, {
       children: createElement(FileSurface, {
         filePath,
-        onOpenFile: () => {},
         workspaceId: "workspace-1",
       }),
       storageKey: "test.theme",

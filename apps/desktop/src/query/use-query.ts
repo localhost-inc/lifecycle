@@ -1,40 +1,33 @@
 import { useCallback, useMemo, useSyncExternalStore } from "react";
-import type { QueryDescriptor } from "./client";
-import { useQueryClient } from "./provider";
+import type { QueryDescriptor, QuerySnapshot, QueryStatus } from "@/query/client";
+import { useQueryClient } from "@/query/provider";
 
 export interface QueryResult<T> {
   data: T | undefined;
   error: unknown;
   isLoading: boolean;
   refresh: () => Promise<void>;
-  status: "idle" | "loading" | "ready" | "error";
+  status: QueryStatus;
 }
 
-interface UseQueryOptions<T> {
-  disabledData: T;
-}
-
-export function useQuery<T>(
-  descriptor: QueryDescriptor<T> | null,
-  options: UseQueryOptions<T>,
-): QueryResult<T> {
+export function useQuery<TData>(
+  descriptor: QueryDescriptor<TData> | null,
+): QueryResult<TData> {
   const client = useQueryClient();
-  const { disabledData } = options;
   const disabledSnapshot = useMemo(
     () => ({
-      data: disabledData,
+      data: undefined,
       error: null,
-      status: "ready" as const,
+      status: "disabled" as const,
     }),
-    [disabledData],
+    [],
   );
-
   const subscribe = useCallback(
     (listener: () => void) => (descriptor ? client.subscribe(descriptor, listener) : () => {}),
     [client, descriptor],
   );
   const getSnapshot = useCallback(
-    () => (descriptor ? client.getSnapshot(descriptor) : disabledSnapshot),
+    (): QuerySnapshot<TData> => (descriptor ? client.getSnapshot(descriptor) : disabledSnapshot),
     [client, descriptor, disabledSnapshot],
   );
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
@@ -48,7 +41,9 @@ export function useQuery<T>(
     () => ({
       data: snapshot.data,
       error: snapshot.error,
-      isLoading: snapshot.status === "idle" || snapshot.status === "loading",
+      isLoading:
+        snapshot.data === undefined &&
+        (snapshot.status === "idle" || snapshot.status === "loading"),
       refresh,
       status: snapshot.status,
     }),

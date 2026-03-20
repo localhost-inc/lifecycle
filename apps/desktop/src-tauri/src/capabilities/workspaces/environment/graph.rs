@@ -3,12 +3,12 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use crate::shared::errors::LifecycleError;
 
 use super::super::manifest::{
-    EnvironmentNodeConfig, LifecycleConfig, ServiceConfig, SetupStep, TaskConfig,
+    EnvironmentNodeConfig, LifecycleConfig, ServiceConfig, PrepareStep, TaskConfig,
 };
 
 #[derive(Clone, Debug)]
 pub(in crate::capabilities::workspaces) struct LoweredEnvironmentGraph {
-    pub workspace_setup: Vec<SetupStep>,
+    pub workspace_prepare: Vec<PrepareStep>,
     pub environment_nodes: HashMap<String, EnvironmentNode>,
 }
 
@@ -26,26 +26,26 @@ impl EnvironmentNode {
 
 #[derive(Clone, Debug)]
 pub(in crate::capabilities::workspaces) enum EnvironmentNodeKind {
-    Task(SetupStep),
+    Task(PrepareStep),
     Service(ServiceConfig),
 }
 
-fn should_run_run_on(run_on: Option<&str>, setup_completed: bool) -> bool {
+fn should_run_run_on(run_on: Option<&str>, prepared: bool) -> bool {
     match run_on {
         Some("start") => true,
-        _ => !setup_completed,
+        _ => !prepared,
     }
 }
 
 pub(in crate::capabilities::workspaces) fn should_run_step(
-    step: &SetupStep,
-    setup_completed: bool,
+    step: &PrepareStep,
+    prepared: bool,
 ) -> bool {
-    should_run_run_on(step.run_on.as_deref(), setup_completed)
+    should_run_run_on(step.run_on.as_deref(), prepared)
 }
 
-fn should_run_task(step: &TaskConfig, setup_completed: bool) -> bool {
-    should_run_run_on(step.run_on.as_deref(), setup_completed)
+fn should_run_task(step: &TaskConfig, prepared: bool) -> bool {
+    should_run_run_on(step.run_on.as_deref(), prepared)
 }
 
 fn filter_satisfied_dependencies(
@@ -110,22 +110,22 @@ fn resolve_selected_node_names(
     }
 
     let mut selected = HashSet::new();
-    for service_name in target_service_names {
+    for name in target_service_names {
         let node =
             config
                 .environment
-                .get(service_name)
+                .get(name)
                 .ok_or_else(|| LifecycleError::InvalidInput {
                     field: "serviceNames".to_string(),
-                    reason: format!("unknown service '{service_name}'"),
+                    reason: format!("unknown service '{name}'"),
                 })?;
         if !matches!(node, EnvironmentNodeConfig::Service { .. }) {
             return Err(LifecycleError::InvalidInput {
                 field: "serviceNames".to_string(),
-                reason: format!("'{service_name}' is not a service node"),
+                reason: format!("'{name}' is not a service node"),
             });
         }
-        collect_selected_node_names(config, service_name, &mut selected, satisfied_service_names)?;
+        collect_selected_node_names(config, name, &mut selected, satisfied_service_names)?;
     }
 
     Ok(Some(selected))
@@ -133,18 +133,18 @@ fn resolve_selected_node_names(
 
 pub(in crate::capabilities::workspaces) fn lower_environment_graph(
     config: &LifecycleConfig,
-    setup_completed: bool,
+    prepared: bool,
     target_service_names: Option<&[String]>,
     satisfied_service_names: Option<&HashSet<String>>,
 ) -> Result<LoweredEnvironmentGraph, LifecycleError> {
     let satisfied_service_names = satisfied_service_names.cloned().unwrap_or_default();
     let selected_node_names =
         resolve_selected_node_names(config, target_service_names, &satisfied_service_names)?;
-    let workspace_setup = config
+    let workspace_prepare = config
         .workspace
-        .setup
+        .prepare
         .iter()
-        .filter(|step| should_run_step(step, setup_completed))
+        .filter(|step| should_run_step(step, prepared))
         .cloned()
         .collect::<Vec<_>>();
 
@@ -152,7 +152,7 @@ pub(in crate::capabilities::workspaces) fn lower_environment_graph(
         .environment
         .iter()
         .filter_map(|(node_name, node_config)| match node_config {
-            EnvironmentNodeConfig::Task(step) if !should_run_task(step, setup_completed) => {
+            EnvironmentNodeConfig::Task(step) if !should_run_task(step, prepared) => {
                 Some(node_name.clone())
             }
             _ => None,
@@ -171,10 +171,10 @@ pub(in crate::capabilities::workspaces) fn lower_environment_graph(
         }
         match node_config {
             EnvironmentNodeConfig::Task(step) => {
-                if !should_run_task(step, setup_completed) {
+                if !should_run_task(step, prepared) {
                     continue;
                 }
-                let lowered_step = step.clone().into_setup_step(node_name.clone());
+                let lowered_step = step.clone().into_prepare_step(node_name.clone());
                 environment_nodes.insert(
                     node_name.clone(),
                     EnvironmentNode {
@@ -206,7 +206,7 @@ pub(in crate::capabilities::workspaces) fn lower_environment_graph(
     validate_dependencies_exist(&environment_nodes)?;
 
     Ok(LoweredEnvironmentGraph {
-        workspace_setup,
+        workspace_prepare,
         environment_nodes,
     })
 }
@@ -333,11 +333,11 @@ mod tests {
     }
 
     #[test]
-    fn lowers_workspace_setup_and_environment_nodes() {
+    fn lowers_workspace_prepare_and_environment_nodes() {
         let config = parse_config(
             r#"{
                 "workspace": {
-                    "setup": [
+                    "prepare": [
                         { "name": "install", "command": "bun install", "timeout_seconds": 60 },
                         { "name": "codegen", "command": "bun run codegen", "timeout_seconds": 60, "run_on": "start" }
                     ]
@@ -356,7 +356,7 @@ mod tests {
 
         let graph = lower_environment_graph(&config, false, None, None).expect("graph lowers");
 
-        assert_eq!(graph.workspace_setup.len(), 2);
+        assert_eq!(graph.workspace_prepare.len(), 2);
         assert!(graph
             .environment_nodes
             .get("api")
@@ -372,7 +372,7 @@ mod tests {
         let config = parse_config(
             r#"{
                 "workspace": {
-                    "setup": [
+                    "prepare": [
                         { "name": "install", "command": "bun install", "timeout_seconds": 60 }
                     ]
                 },
@@ -397,7 +397,7 @@ mod tests {
 
         let graph = lower_environment_graph(&config, true, None, None).expect("graph lowers");
 
-        assert!(graph.workspace_setup.is_empty());
+        assert!(graph.workspace_prepare.is_empty());
         assert!(!graph.environment_nodes.contains_key("seed"));
         assert!(graph.environment_nodes.contains_key("migrate"));
     }
@@ -406,7 +406,7 @@ mod tests {
     fn lower_environment_graph_treats_skipped_create_tasks_as_satisfied_dependencies() {
         let config = parse_config(
             r#"{
-                "workspace": { "setup": [] },
+                "workspace": { "prepare": [] },
                 "environment": {
                     "postgres": { "kind": "service", "runtime": "image", "image": "postgres:16" },
                     "seed": {
@@ -442,7 +442,7 @@ mod tests {
     fn topo_sort_environment_nodes_orders_dependencies_before_dependents() {
         let config = parse_config(
             r#"{
-                "workspace": { "setup": [] },
+                "workspace": { "prepare": [] },
                 "environment": {
                     "web": { "kind": "service", "runtime": "process", "command": "bun run web", "depends_on": ["api"] },
                     "api": { "kind": "service", "runtime": "process", "command": "bun run api", "depends_on": ["postgres", "migrate"] },
@@ -490,7 +490,7 @@ mod tests {
     fn lower_environment_graph_can_select_a_service_and_its_dependencies() {
         let config = parse_config(
             r#"{
-                "workspace": { "setup": [] },
+                "workspace": { "prepare": [] },
                 "environment": {
                     "api": { "kind": "service", "runtime": "process", "command": "bun run api" },
                     "www": { "kind": "service", "runtime": "process", "command": "bun run www", "depends_on": ["api"] },
@@ -517,7 +517,7 @@ mod tests {
     fn lower_environment_graph_rejects_unknown_selected_services() {
         let config = parse_config(
             r#"{
-                "workspace": { "setup": [] },
+                "workspace": { "prepare": [] },
                 "environment": {
                     "api": { "kind": "service", "runtime": "process", "command": "bun run api" }
                 }
@@ -539,7 +539,7 @@ mod tests {
     fn lower_environment_graph_fails_when_dependency_is_missing() {
         let config = parse_config(
             r#"{
-                "workspace": { "setup": [] },
+                "workspace": { "prepare": [] },
                 "environment": {
                     "api": { "kind": "service", "runtime": "process", "command": "bun run api", "depends_on": ["postgres"] }
                 }
@@ -561,7 +561,7 @@ mod tests {
     fn topo_sort_environment_nodes_fails_on_cycle() {
         let config = parse_config(
             r#"{
-                "workspace": { "setup": [] },
+                "workspace": { "prepare": [] },
                 "environment": {
                     "api": { "kind": "service", "runtime": "process", "command": "bun run api", "depends_on": ["db"] },
                     "db": { "kind": "service", "runtime": "process", "command": "bun run db", "depends_on": ["api"] }
@@ -584,7 +584,7 @@ mod tests {
     fn lower_environment_graph_skips_ready_service_dependencies_for_targeted_boots() {
         let config = parse_config(
             r#"{
-                "workspace": { "setup": [] },
+                "workspace": { "prepare": [] },
                 "environment": {
                     "api": {
                         "kind": "service",

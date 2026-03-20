@@ -20,7 +20,7 @@ This document defines the **target desktop shell model** as Lifecycle completes 
 
 ## Relationship to Other Contracts
 
-1. `workspace-provider` remains authoritative for provider boundaries, runtime authority, Git authority, file authority, and terminal authority.
+1. `control-plane` and `workspace-runtime` remain authoritative for backend boundaries, runtime authority, Git authority, file authority, and terminal authority.
 2. `workspace-surface` remains the current center-pane contract inside the workspace layout until `workspace-canvas` replaces it.
 3. `workspace-canvas` owns the target split-only center workspace interior.
 4. This document owns only the **outer shell model** and the high-level contract for what belongs at the project level versus inside a workspace tab.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { filterAndSort, fuzzyMatch } from "./fuzzy-match";
-import type { CommandPaletteCommand } from "./types";
+import { filterAndSort, fuzzyMatch } from "@/features/command-palette/fuzzy-match";
+import type { CommandPaletteCommand } from "@/features/command-palette/types";
 
 describe("fuzzyMatch", () => {
   it("matches exact substring", () => {

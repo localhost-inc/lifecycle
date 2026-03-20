@@ -5,7 +5,7 @@ import {
   getLifecycleErrorEnvelope,
   getLifecycleErrorMessage,
   toErrorEnvelope,
-} from "./tauri-error";
+} from "@/lib/tauri-error";
 
 const envelope = {
   code: "workspace_mutation_locked",
@@ -43,8 +43,8 @@ describe("tauri-error helpers", () => {
   test("normalizes object envelopes from tauri", () => {
     const error = {
       code: "validation_failed",
-      details: { field: "port_override" },
-      message: "Invalid port_override: must be between 1 and 65535",
+      details: { field: "workspace_name" },
+      message: "Invalid workspace_name: must not be empty",
       requestId: "request-456",
       retryable: false,
       suggestedAction: "Correct the invalid input and retry.",
@@ -52,8 +52,8 @@ describe("tauri-error helpers", () => {
 
     expect(getLifecycleErrorEnvelope(error)).toEqual({
       code: "validation_failed",
-      details: { field: "port_override" },
-      message: "Invalid port_override: must be between 1 and 65535",
+      details: { field: "workspace_name" },
+      message: "Invalid workspace_name: must not be empty",
       requestId: "request-456",
       retryable: false,
       suggestedAction: "Correct the invalid input and retry.",

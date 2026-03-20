@@ -2,17 +2,17 @@ use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
 use crate::platform::diagnostics;
-use crate::platform::runtime::{health, setup};
+use crate::platform::runtime::{health, prepare};
 use crate::shared::errors::{
-    LifecycleError, ServiceStatus, WorkspaceFailureReason, WorkspaceStatus,
+    LifecycleError, ServiceStatus, EnvironmentFailureReason, EnvironmentStatus,
 };
 
 use super::super::controller::{ManagedWorkspaceController, WorkspaceControllerToken};
 use super::super::manifest::{HealthCheck, ServiceConfig};
 use super::super::shared::{
-    emit_service_status, emit_workspace_status, mark_nonfailed_services_stopped,
+    emit_service_status, emit_environment_status, mark_nonfailed_services_stopped,
     mark_services_failed, service_name_for_start_error, service_status_reason_for_start_error,
-    update_service_status_db, update_workspace_status_db, workspace_failure_reason_for_start_error,
+    update_service_status_db, update_environment_status_db, workspace_failure_reason_for_start_error,
 };
 use super::graph::{EnvironmentNode, EnvironmentNodeKind};
 use super::lifecycle::WorkspaceStartMode;
@@ -45,7 +45,7 @@ impl WorkspaceStartContext<'_> {
 
     pub(super) async fn record_failure(
         &self,
-        failure_reason: WorkspaceFailureReason,
+        failure_reason: EnvironmentFailureReason,
     ) -> Result<bool, LifecycleError> {
         record_start_failure(
             self.app,
@@ -61,7 +61,7 @@ impl WorkspaceStartContext<'_> {
 
     pub(super) async fn execute_service_node(
         &self,
-        service_name: &str,
+        name: &str,
         service: &ServiceConfig,
     ) -> Result<(), LifecycleError> {
         if self.abort_if_needed().await? {
@@ -71,11 +71,11 @@ impl WorkspaceStartContext<'_> {
         update_service_status_db(
             self.db_path,
             self.workspace_id,
-            service_name,
+            name,
             &ServiceStatus::Starting,
             None,
         )?;
-        emit_service_status(self.app, self.workspace_id, service_name, "starting", None);
+        emit_service_status(self.app, self.workspace_id, name, "starting", None);
 
         let service_start_started_at = Instant::now();
         let start_result = match service {
@@ -84,7 +84,7 @@ impl WorkspaceStartContext<'_> {
                 let mut managed = supervisor.lock().await;
                 managed
                     .start_process(
-                        service_name,
+                        name,
                         process_svc,
                         self.worktree_path,
                         self.runtime_env,
@@ -98,7 +98,7 @@ impl WorkspaceStartContext<'_> {
                 let mut managed = supervisor.lock().await;
                 managed
                     .start_container(
-                        service_name,
+                        name,
                         image_svc,
                         self.workspace_id,
                         self.worktree_path,
@@ -115,7 +115,7 @@ impl WorkspaceStartContext<'_> {
                 return Ok(());
             }
 
-            let failed_service_name = service_name_for_start_error(&error, service_name);
+            let failed_service_name = service_name_for_start_error(&error, name);
             let service_status_reason = service_status_reason_for_start_error(&error);
             let workspace_failure_reason = workspace_failure_reason_for_start_error(&error);
 
@@ -145,7 +145,7 @@ impl WorkspaceStartContext<'_> {
         diagnostics::append_timing(
             "workspace-start",
             &format!(
-                "workspace {} service {service_name} start",
+                "workspace {} service {name} start",
                 self.workspace_id
             ),
             service_start_started_at,
@@ -161,33 +161,33 @@ impl WorkspaceStartContext<'_> {
                 let is_running = {
                     let supervisor = self.controller.supervisor();
                     let mut managed = supervisor.lock().await;
-                    managed.is_process_running(service_name)
+                    managed.is_process_running(name)
                 };
 
                 if !is_running {
                     update_service_status_db(
                         self.db_path,
                         self.workspace_id,
-                        service_name,
+                        name,
                         &ServiceStatus::Failed,
                         Some("service_process_exited"),
                     )?;
                     emit_service_status(
                         self.app,
                         self.workspace_id,
-                        service_name,
+                        name,
                         "failed",
                         Some("service_process_exited"),
                     );
                     let recorded = self
-                        .record_failure(WorkspaceFailureReason::ServiceStartFailed)
+                        .record_failure(EnvironmentFailureReason::ServiceStartFailed)
                         .await?;
                     if !recorded {
                         return Ok(());
                     }
 
                     return Err(LifecycleError::ServiceStartFailed {
-                        service: service_name.to_string(),
+                        service: name.to_string(),
                         reason: "process exited before signaling ready".to_string(),
                     });
                 }
@@ -199,11 +199,11 @@ impl WorkspaceStartContext<'_> {
             update_service_status_db(
                 self.db_path,
                 self.workspace_id,
-                service_name,
+                name,
                 &ServiceStatus::Ready,
                 None,
             )?;
-            emit_service_status(self.app, self.workspace_id, service_name, "ready", None);
+            emit_service_status(self.app, self.workspace_id, name, "ready", None);
             return Ok(());
         }
 
@@ -212,7 +212,7 @@ impl WorkspaceStartContext<'_> {
                 .health_check()
                 .expect("health check already verified to exist"),
             self.runtime_env,
-            &format!("environment.{service_name}.health_check"),
+            &format!("environment.{name}.health_check"),
         )?;
         let timeout_secs = service.startup_timeout_seconds();
         let health_check_started_at = Instant::now();
@@ -220,7 +220,7 @@ impl WorkspaceStartContext<'_> {
             (ServiceConfig::Image(_), HealthCheck::Container { .. }) => {
                 let supervisor = self.controller.supervisor();
                 let managed = supervisor.lock().await;
-                managed.container_ref(service_name)
+                managed.container_ref(name)
             }
             _ => None,
         };
@@ -239,15 +239,15 @@ impl WorkspaceStartContext<'_> {
                 update_service_status_db(
                     self.db_path,
                     self.workspace_id,
-                    service_name,
+                    name,
                     &ServiceStatus::Ready,
                     None,
                 )?;
-                emit_service_status(self.app, self.workspace_id, service_name, "ready", None);
+                emit_service_status(self.app, self.workspace_id, name, "ready", None);
                 diagnostics::append_timing(
                     "workspace-start",
                     &format!(
-                        "workspace {} service {service_name} health check",
+                        "workspace {} service {name} health check",
                         self.workspace_id
                     ),
                     health_check_started_at,
@@ -260,26 +260,26 @@ impl WorkspaceStartContext<'_> {
                 update_service_status_db(
                     self.db_path,
                     self.workspace_id,
-                    service_name,
+                    name,
                     &ServiceStatus::Failed,
                     Some("service_port_unreachable"),
                 )?;
                 emit_service_status(
                     self.app,
                     self.workspace_id,
-                    service_name,
+                    name,
                     "failed",
                     Some("service_port_unreachable"),
                 );
                 let recorded = self
-                    .record_failure(WorkspaceFailureReason::ServiceHealthcheckFailed)
+                    .record_failure(EnvironmentFailureReason::ServiceHealthcheckFailed)
                     .await?;
                 if !recorded {
                     return Ok(());
                 }
 
                 return Err(LifecycleError::ServiceHealthcheckFailed {
-                    service: service_name.to_string(),
+                    service: name.to_string(),
                 });
             }
             None => return Ok(()),
@@ -291,30 +291,27 @@ impl WorkspaceStartContext<'_> {
     pub(super) async fn execute_task_node(
         &self,
         node_name: &str,
-        step: &crate::capabilities::workspaces::manifest::SetupStep,
+        step: &crate::capabilities::workspaces::manifest::PrepareStep,
     ) -> Result<(), LifecycleError> {
         if self.abort_if_needed().await? {
             return Ok(());
         }
 
         let step_field = format!("environment.{node_name}");
-        match setup::run_steps(
-            self.app,
-            self.workspace_id,
+        match prepare::run_steps(
             self.worktree_path,
             std::slice::from_ref(step),
             self.runtime_env,
             &step_field,
-            setup::StepProgressTarget::EnvironmentTask,
             Some(self.start_token.clone()),
         )
         .await
         {
-            Ok(setup::StepRunOutcome::Completed) => {}
-            Ok(setup::StepRunOutcome::Cancelled) => return Ok(()),
+            Ok(prepare::StepRunOutcome::Completed) => {}
+            Ok(prepare::StepRunOutcome::Cancelled) => return Ok(()),
             Err(error) => {
                 let recorded = self
-                    .record_failure(WorkspaceFailureReason::EnvironmentTaskFailed)
+                    .record_failure(EnvironmentFailureReason::EnvironmentTaskFailed)
                     .await?;
                 if !recorded {
                     return Ok(());
@@ -359,8 +356,10 @@ pub(super) async fn abort_start_if_needed(
     start_token: &WorkspaceControllerToken,
 ) -> Result<bool, LifecycleError> {
     if !start_token.is_cancelled()
-        && super::lifecycle::load_workspace_status(db_path, workspace_id)?
-            == WorkspaceStatus::Starting
+        && matches!(
+            super::lifecycle::load_workspace_status(db_path, workspace_id)?,
+            EnvironmentStatus::Starting
+        )
     {
         return Ok(false);
     }
@@ -376,31 +375,31 @@ pub(super) async fn record_start_failure(
     start_token: &WorkspaceControllerToken,
     start_mode: WorkspaceStartMode,
     workspace_id: &str,
-    failure_reason: WorkspaceFailureReason,
+    failure_reason: EnvironmentFailureReason,
 ) -> Result<bool, LifecycleError> {
     if abort_start_if_needed(db_path, workspace_id, controller, start_token).await? {
         return Ok(false);
     }
 
     let next_workspace_status = match start_mode {
-        WorkspaceStartMode::Cold => WorkspaceStatus::Idle,
-        WorkspaceStartMode::Incremental => WorkspaceStatus::Active,
+        WorkspaceStartMode::Cold => EnvironmentStatus::Idle,
+        WorkspaceStartMode::Incremental => EnvironmentStatus::Running,
     };
     let next_failure_reason = match start_mode {
         WorkspaceStartMode::Cold => Some(&failure_reason),
         WorkspaceStartMode::Incremental => None,
     };
-    update_workspace_status_db(
+    update_environment_status_db(
         db_path,
         workspace_id,
         &next_workspace_status,
         next_failure_reason,
     )?;
-    emit_workspace_status(
+    emit_environment_status(
         app,
         workspace_id,
         next_workspace_status.as_str(),
-        next_failure_reason.map(WorkspaceFailureReason::as_str),
+        next_failure_reason.map(EnvironmentFailureReason::as_str),
     );
     controller.finish_start(start_token).await;
 
@@ -408,8 +407,8 @@ pub(super) async fn record_start_failure(
         controller.stop_runtime().await;
 
         let stopped_services = mark_nonfailed_services_stopped(db_path, workspace_id)?;
-        for service_name in stopped_services {
-            emit_service_status(app, workspace_id, &service_name, "stopped", None);
+        for name in stopped_services {
+            emit_service_status(app, workspace_id, &name, "stopped", None);
         }
     }
 
@@ -462,11 +461,11 @@ fn mark_dependent_services_failed(
         "service_dependency_failed",
     )?;
 
-    for service_name in dependent_service_names {
+    for name in dependent_service_names {
         emit_service_status(
             ctx.app,
             ctx.workspace_id,
-            &service_name,
+            &name,
             "failed",
             Some("service_dependency_failed"),
         );
@@ -487,18 +486,18 @@ pub(super) async fn record_service_graph_failure(
         "service_dependency_failed",
     )?;
 
-    for service_name in service_names {
+    for name in service_names {
         emit_service_status(
             ctx.app,
             ctx.workspace_id,
-            service_name,
+            name,
             "failed",
             Some("service_dependency_failed"),
         );
     }
 
     let recorded = ctx
-        .record_failure(WorkspaceFailureReason::ServiceStartFailed)
+        .record_failure(EnvironmentFailureReason::ServiceStartFailed)
         .await?;
     if !recorded {
         return Ok(());
@@ -510,7 +509,7 @@ pub(super) async fn record_service_graph_failure(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capabilities::workspaces::manifest::{ProcessService, SetupStep};
+    use crate::capabilities::workspaces::manifest::{ProcessService, PrepareStep};
 
     #[test]
     fn collect_dependent_service_names_only_marks_impacted_service_descendants() {
@@ -532,7 +531,7 @@ mod tests {
             (
                 "migrate".to_string(),
                 EnvironmentNode {
-                    kind: EnvironmentNodeKind::Task(SetupStep {
+                    kind: EnvironmentNodeKind::Task(PrepareStep {
                         name: "migrate".to_string(),
                         command: Some("bun run db:migrate".to_string()),
                         write_files: None,

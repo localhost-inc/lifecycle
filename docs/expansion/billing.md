@@ -69,7 +69,7 @@ Usage metering, spend tracking, and budget enforcement for organizations. The we
 
 ## Provider Applicability
 
-| Meter | `CloudWorkspaceProvider` | `LocalWorkspaceProvider` |
+| Meter | `CloudWorkspaceRuntime` | `LocalWorkspaceRuntime` |
 |-------|-------------------|-------------------|
 | Workspace-hours (active) | Full metering | Not metered (runs on user hardware) |
 | Workspace create | Metered | Event logged for analytics only |

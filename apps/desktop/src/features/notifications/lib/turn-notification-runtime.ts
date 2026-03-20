@@ -6,8 +6,8 @@ import {
   requestPermission as requestTauriNotificationPermission,
   sendNotification as sendTauriNotification,
 } from "@tauri-apps/plugin-notification";
-import type { TurnNotificationSound } from "./notification-settings";
-import { getTurnNotificationSoundProfile } from "./turn-notification-sound-profiles";
+import type { TurnNotificationSound } from "@/features/notifications/lib/notification-settings";
+import { getTurnNotificationSoundProfile } from "@/features/notifications/lib/turn-notification-sound-profiles";
 
 let sharedAudioContext: AudioContext | null = null;
 
@@ -139,9 +139,7 @@ export async function sendTurnCompletionNotification(
 }
 
 function dispatchNotificationNavigation(navigation: NotificationNavigationData): void {
-  window.dispatchEvent(
-    new CustomEvent("lifecycle:notification-navigate", { detail: navigation }),
-  );
+  window.dispatchEvent(new CustomEvent("lifecycle:notification-navigate", { detail: navigation }));
 }
 
 /**

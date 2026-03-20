@@ -3,7 +3,7 @@ import {
   createOpenDocumentRequest,
   type OpenDocumentInput,
   type OpenDocumentRequest,
-} from "../components/workspace-canvas-requests";
+} from "@/features/workspaces/components/workspace-canvas-requests";
 
 interface WorkspaceOpenRequestsContextValue {
   clearDocumentRequest: (workspaceId: string, requestId: string) => void;

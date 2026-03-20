@@ -1,4 +1,4 @@
-import { toErrorEnvelope } from "../../../lib/tauri-error";
+import { toErrorEnvelope } from "@/lib/tauri-error";
 
 export function formatWorkspaceError(error: unknown, fallback: string): string {
   const envelope = toErrorEnvelope(error);
@@ -16,8 +16,8 @@ export function formatWorkspaceError(error: unknown, fallback: string): string {
       return "A required local port is already in use.";
     case "not_found":
       return "Workspace not found.";
-    case "setup_step_failed":
-      return "A setup step failed. Check the environment logs for details.";
+    case "prepare_step_failed":
+      return "A prepare step failed. Check the environment logs for details.";
     case "service_start_failed":
       return "A service failed to start. Check the environment logs for details.";
     case "service_healthcheck_failed":

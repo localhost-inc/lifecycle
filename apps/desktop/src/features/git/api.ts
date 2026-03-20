@@ -12,8 +12,8 @@ import type {
   GitStatusResult,
 } from "@lifecycle/contracts";
 import { isTauri } from "@tauri-apps/api/core";
-import { getWorkspaceProvider } from "../../lib/workspace-provider";
-import { publishBrowserLifecycleEvent } from "../events/api";
+import { publishBrowserLifecycleEvent } from "@/features/events/api";
+import { getWorkspaceRuntime } from "@/lib/workspace-runtime";
 
 const EMPTY_STATUS: GitStatusResult = {
   branch: null,
@@ -98,7 +98,7 @@ export async function getGitStatus(workspaceId: string): Promise<GitStatusResult
     return EMPTY_STATUS;
   }
 
-  return getWorkspaceProvider().getGitStatus(workspaceId);
+  return getWorkspaceRuntime().getGitStatus(workspaceId);
 }
 
 export async function getGitDiff(
@@ -115,7 +115,7 @@ export async function getGitDiff(
     };
   }
 
-  return getWorkspaceProvider().getGitDiff({
+  return getWorkspaceRuntime().getGitDiff({
     workspaceId,
     filePath,
     scope,
@@ -127,7 +127,7 @@ export async function getGitScopePatch(workspaceId: string, scope: GitDiffScope)
     return "";
   }
 
-  return getWorkspaceProvider().getGitScopePatch(workspaceId, scope);
+  return getWorkspaceRuntime().getGitScopePatch(workspaceId, scope);
 }
 
 export async function getGitChangesPatch(workspaceId: string): Promise<string> {
@@ -135,7 +135,7 @@ export async function getGitChangesPatch(workspaceId: string): Promise<string> {
     return "";
   }
 
-  return getWorkspaceProvider().getGitChangesPatch(workspaceId);
+  return getWorkspaceRuntime().getGitChangesPatch(workspaceId);
 }
 
 export async function getGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]> {
@@ -143,7 +143,7 @@ export async function getGitLog(workspaceId: string, limit: number): Promise<Git
     return [];
   }
 
-  return getWorkspaceProvider().listGitLog(workspaceId, limit);
+  return getWorkspaceRuntime().listGitLog(workspaceId, limit);
 }
 
 export async function getGitPullRequests(workspaceId: string): Promise<GitPullRequestListResult> {
@@ -151,7 +151,7 @@ export async function getGitPullRequests(workspaceId: string): Promise<GitPullRe
     return EMPTY_PULL_REQUEST_LIST_RESULT;
   }
 
-  return getWorkspaceProvider().listGitPullRequests(workspaceId);
+  return getWorkspaceRuntime().listGitPullRequests(workspaceId);
 }
 
 export async function getCurrentGitPullRequest(
@@ -161,7 +161,7 @@ export async function getCurrentGitPullRequest(
     return EMPTY_BRANCH_PULL_REQUEST_RESULT;
   }
 
-  return getWorkspaceProvider().getCurrentGitPullRequest(workspaceId);
+  return getWorkspaceRuntime().getCurrentGitPullRequest(workspaceId);
 }
 
 export async function getGitPullRequest(
@@ -172,7 +172,7 @@ export async function getGitPullRequest(
     return EMPTY_PULL_REQUEST_DETAIL_RESULT;
   }
 
-  return getWorkspaceProvider().getGitPullRequest(workspaceId, pullRequestNumber);
+  return getWorkspaceRuntime().getGitPullRequest(workspaceId, pullRequestNumber);
 }
 
 export async function getGitBaseRef(workspaceId: string): Promise<string | null> {
@@ -180,7 +180,7 @@ export async function getGitBaseRef(workspaceId: string): Promise<string | null>
     return null;
   }
 
-  return getWorkspaceProvider().getGitBaseRef(workspaceId);
+  return getWorkspaceRuntime().getGitBaseRef(workspaceId);
 }
 
 export async function getGitRefDiffPatch(
@@ -189,7 +189,7 @@ export async function getGitRefDiffPatch(
   headRef: string,
 ): Promise<string> {
   if (!isTauri()) return "";
-  return getWorkspaceProvider().getGitRefDiffPatch(workspaceId, baseRef, headRef);
+  return getWorkspaceRuntime().getGitRefDiffPatch(workspaceId, baseRef, headRef);
 }
 
 export async function getGitPullRequestPatch(
@@ -200,7 +200,7 @@ export async function getGitPullRequestPatch(
     return "";
   }
 
-  return getWorkspaceProvider().getGitPullRequestPatch(workspaceId, pullRequestNumber);
+  return getWorkspaceRuntime().getGitPullRequestPatch(workspaceId, pullRequestNumber);
 }
 
 export async function getGitCommitPatch(
@@ -214,7 +214,7 @@ export async function getGitCommitPatch(
     };
   }
 
-  return getWorkspaceProvider().getGitCommitPatch(workspaceId, sha);
+  return getWorkspaceRuntime().getGitCommitPatch(workspaceId, sha);
 }
 
 export async function stageGitFiles(workspaceId: string, filePaths: string[]): Promise<void> {
@@ -227,7 +227,7 @@ export async function stageGitFiles(workspaceId: string, filePaths: string[]): P
     return;
   }
 
-  await getWorkspaceProvider().stageGitFiles(workspaceId, filePaths);
+  await getWorkspaceRuntime().stageGitFiles(workspaceId, filePaths);
 }
 
 export async function unstageGitFiles(workspaceId: string, filePaths: string[]): Promise<void> {
@@ -240,7 +240,7 @@ export async function unstageGitFiles(workspaceId: string, filePaths: string[]):
     return;
   }
 
-  await getWorkspaceProvider().unstageGitFiles(workspaceId, filePaths);
+  await getWorkspaceRuntime().unstageGitFiles(workspaceId, filePaths);
 }
 
 export async function commitGit(workspaceId: string, message: string): Promise<GitCommitResult> {
@@ -252,7 +252,7 @@ export async function commitGit(workspaceId: string, message: string): Promise<G
     return result;
   }
 
-  return getWorkspaceProvider().commitGit(workspaceId, message);
+  return getWorkspaceRuntime().commitGit(workspaceId, message);
 }
 
 export async function pushGit(workspaceId: string): Promise<GitPushResult> {
@@ -268,7 +268,7 @@ export async function pushGit(workspaceId: string): Promise<GitPushResult> {
     return result;
   }
 
-  return getWorkspaceProvider().pushGit(workspaceId);
+  return getWorkspaceRuntime().pushGit(workspaceId);
 }
 
 export async function createGitPullRequest(workspaceId: string): Promise<GitPullRequestSummary> {
@@ -276,7 +276,7 @@ export async function createGitPullRequest(workspaceId: string): Promise<GitPull
     throw new Error("Pull request creation is only available in the desktop app.");
   }
 
-  return getWorkspaceProvider().createGitPullRequest(workspaceId);
+  return getWorkspaceRuntime().createGitPullRequest(workspaceId);
 }
 
 export async function mergeGitPullRequest(
@@ -287,5 +287,5 @@ export async function mergeGitPullRequest(
     throw new Error("Pull request merge is only available in the desktop app.");
   }
 
-  return getWorkspaceProvider().mergeGitPullRequest(workspaceId, pullRequestNumber);
+  return getWorkspaceRuntime().mergeGitPullRequest(workspaceId, pullRequestNumber);
 }

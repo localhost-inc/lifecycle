@@ -17,7 +17,6 @@ mod ports;
 pub(crate) mod preview;
 pub mod query;
 pub mod rename;
-pub mod service;
 mod shared;
 pub mod state_machine;
 pub mod stop;

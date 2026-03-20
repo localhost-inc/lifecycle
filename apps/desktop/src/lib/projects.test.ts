@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readManifestFromFs } from "./projects";
+import { readManifestFromFs } from "@/lib/projects";
 
 const VALID_MANIFEST = JSON.stringify({
   workspace: {

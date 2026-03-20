@@ -1,8 +1,8 @@
-import { WorkspacePaneTree } from "./workspace-pane-tree";
+import { WorkspacePaneTree } from "@/features/workspaces/components/workspace-pane-tree";
 import {
   useWorkspaceCanvasController,
   type WorkspaceCanvasControllerInput,
-} from "./workspace-canvas-controller";
+} from "@/features/workspaces/components/workspace-canvas-controller";
 
 export function WorkspaceCanvas(controllerInput: WorkspaceCanvasControllerInput) {
   const controller = useWorkspaceCanvasController(controllerInput);
@@ -33,6 +33,7 @@ export function WorkspaceCanvas(controllerInput: WorkspaceCanvasControllerInput)
         onSelectPane={controller.handleSelectPane}
         onSelectTab={controller.handleSelectTab}
         onReconcilePaneVisibleTabOrder={controller.handleReconcilePaneVisibleTabOrder}
+        onResetAllSplitRatios={controller.handleResetAllSplitRatios}
         onSetSplitRatio={controller.handleSetSplitRatio}
         onSplitPane={controller.handleSplitPane}
         onTabViewStateChange={controller.handleActiveTabViewStateChange}

@@ -3,7 +3,7 @@ import {
   readLocalStorageValue,
   removeLocalStorageValue,
   writeLocalStorageValue,
-} from "./use-local-storage";
+} from "@/lib/use-local-storage";
 
 function createStorage(initialEntries: Record<string, string> = {}) {
   const values = new Map(Object.entries(initialEntries));

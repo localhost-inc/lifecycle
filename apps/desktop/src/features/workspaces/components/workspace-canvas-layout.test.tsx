@@ -2,8 +2,8 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ThemeProvider } from "@lifecycle/ui";
-import { QueryProvider } from "../../../query";
-import { SettingsProvider } from "../../settings/state/app-settings-provider";
+import { QueryProvider } from "@/query";
+import { SettingsProvider } from "@/features/settings/state/app-settings-provider";
 
 function withTheme(element: ReturnType<typeof createElement>) {
   return createElement(ThemeProvider, {
@@ -47,7 +47,6 @@ describe("WorkspaceCanvas layout", () => {
           children: createElement(QueryProvider, {
             children: createElement(WorkspaceCanvas, {
               openDocumentRequest: null,
-              snapshotTerminals: [],
               workspaceId: "workspace-1",
             }),
           }),
@@ -56,7 +55,9 @@ describe("WorkspaceCanvas layout", () => {
     );
 
     expect(markup).toContain('data-workspace-pane-header="true"');
-    expect(markup).toContain('class="flex h-9 items-stretch gap-1 shadow-[inset_0_-1px_0_var(--border)]');
+    expect(markup).toContain(
+      'class="flex h-9 items-stretch gap-1 shadow-[inset_0_-1px_0_var(--border)]',
+    );
     expect(markup).toContain('data-slot="workspace-tab-bar"');
     expect(markup).toContain('class="flex shrink-0 items-center gap-px"');
   });
@@ -91,6 +92,7 @@ describe("WorkspaceCanvas layout", () => {
           onSelectPane: () => {},
           onSelectTab: () => {},
           onReconcilePaneVisibleTabOrder: () => {},
+          onResetAllSplitRatios: () => {},
           onSetSplitRatio: () => {},
           onSplitPane: () => {},
           onTabViewStateChange: () => {},
@@ -168,6 +170,7 @@ describe("WorkspaceCanvas layout", () => {
           onSelectPane: () => {},
           onSelectTab: () => {},
           onReconcilePaneVisibleTabOrder: () => {},
+          onResetAllSplitRatios: () => {},
           onSetSplitRatio: () => {},
           onSplitPane: () => {},
           onTabViewStateChange: () => {},
@@ -251,6 +254,7 @@ describe("WorkspaceCanvas layout", () => {
           onSelectPane: () => {},
           onSelectTab: () => {},
           onReconcilePaneVisibleTabOrder: () => {},
+          onResetAllSplitRatios: () => {},
           onSetSplitRatio: () => {},
           onSplitPane: () => {},
           onTabViewStateChange: () => {},

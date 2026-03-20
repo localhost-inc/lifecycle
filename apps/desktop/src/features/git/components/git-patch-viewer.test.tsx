@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { ThemeProvider } from "@lifecycle/ui";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { GIT_DIFF_STYLE_STORAGE_KEY } from "../lib/diff-style";
-import { GitPatchViewer } from "./git-patch-viewer";
+import { GIT_DIFF_STYLE_STORAGE_KEY } from "@/features/git/lib/diff-style";
+import { GitPatchViewer } from "@/features/git/components/git-patch-viewer";
 
 function renderViewer(node: ReturnType<typeof createElement>) {
   return renderToStaticMarkup(

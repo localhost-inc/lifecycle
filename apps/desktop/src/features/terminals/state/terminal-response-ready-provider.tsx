@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useReducer, type ReactNode } from "react";
 import type { LifecycleEventKind } from "@lifecycle/contracts";
-import { useLifecycleEvent } from "../../events";
+import { useLifecycleEvent } from "@/features/events";
 
 export interface TerminalResponseReadyState {
   acknowledgedCompletionKeyByTerminalId: Record<string, string>;

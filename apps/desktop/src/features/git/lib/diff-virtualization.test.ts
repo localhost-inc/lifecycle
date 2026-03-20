@@ -7,7 +7,7 @@ import {
   estimateDiffSectionHeight,
   findDiffSectionIndexAtOffset,
   getVirtualDiffRange,
-} from "./diff-virtualization";
+} from "@/features/git/lib/diff-virtualization";
 
 function makeFile(name: string, splitLineCount: number): FileDiffMetadata {
   return {

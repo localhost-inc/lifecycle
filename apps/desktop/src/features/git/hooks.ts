@@ -4,77 +4,28 @@ import type {
   GitPullRequestDetailResult,
   GitPullRequestListResult,
   GitStatusResult,
-  LifecycleEvent,
-  LifecycleEventKind,
 } from "@lifecycle/contracts";
 import { useEffect, useMemo } from "react";
-import type { QueryDescriptor, QueryResult, QueryUpdate } from "../../query";
-import { useQuery } from "../../query";
-
-export const gitKeys = {
-  currentPullRequest: (workspaceId: string) =>
-    ["workspace-git-current-pull-request", workspaceId] as const,
-  log: (workspaceId: string, limit: number) => ["workspace-git-log", workspaceId, limit] as const,
-  pullRequest: (workspaceId: string, pullRequestNumber: number) =>
-    ["workspace-git-pull-request", workspaceId, pullRequestNumber] as const,
-  pullRequests: (workspaceId: string) => ["workspace-git-pull-requests", workspaceId] as const,
-  status: (workspaceId: string) => ["workspace-git-status", workspaceId] as const,
-};
+import type { QueryDescriptor, QueryResult } from "@/query";
+import { useQuery } from "@/query";
+import { gitKeys } from "@/features/git/state/git-query-keys";
 
 interface GitQueryOptions {
   enabled?: boolean;
   polling?: boolean;
 }
 
-const GIT_STATUS_EVENT_KINDS = [
-  "git.head_changed",
-  "git.status_changed",
-] as const satisfies readonly LifecycleEventKind[];
-const GIT_LOG_EVENT_KINDS = [
-  "git.head_changed",
-  "git.log_changed",
-] as const satisfies readonly LifecycleEventKind[];
-const GIT_PULL_REQUEST_EVENT_KINDS = [
-  "git.head_changed",
-] as const satisfies readonly LifecycleEventKind[];
-
-function invalidateGitWorkspaceQuery<T>(
-  event: LifecycleEvent,
-  workspaceId: string,
-): QueryUpdate<T> {
-  switch (event.kind) {
-    case "git.status_changed":
-    case "git.head_changed":
-    case "git.log_changed":
-      return event.workspace_id === workspaceId ? { kind: "invalidate" } : { kind: "none" };
-    default:
-      return { kind: "none" };
-  }
-}
-
 function createGitStatusQuery(workspaceId: string): QueryDescriptor<GitStatusResult> {
   return {
-    eventKinds: GIT_STATUS_EVENT_KINDS,
     key: gitKeys.status(workspaceId),
-    fetch(source) {
-      return source.getWorkspaceGitStatus(workspaceId);
-    },
-    reduce(_current, event) {
-      return invalidateGitWorkspaceQuery(event, workspaceId);
-    },
+    fetch: (source) => source.getWorkspaceGitStatus(workspaceId),
   };
 }
 
 function createGitLogQuery(workspaceId: string, limit: number): QueryDescriptor<GitLogEntry[]> {
   return {
-    eventKinds: GIT_LOG_EVENT_KINDS,
     key: gitKeys.log(workspaceId, limit),
-    fetch(source) {
-      return source.getWorkspaceGitLog(workspaceId, limit);
-    },
-    reduce(_current, event) {
-      return invalidateGitWorkspaceQuery(event, workspaceId);
-    },
+    fetch: (source) => source.getWorkspaceGitLog(workspaceId, limit),
   };
 }
 
@@ -82,14 +33,8 @@ function createGitPullRequestsQuery(
   workspaceId: string,
 ): QueryDescriptor<GitPullRequestListResult> {
   return {
-    eventKinds: GIT_PULL_REQUEST_EVENT_KINDS,
     key: gitKeys.pullRequests(workspaceId),
-    fetch(source) {
-      return source.getWorkspaceGitPullRequests(workspaceId);
-    },
-    reduce(_current, event) {
-      return invalidateGitWorkspaceQuery(event, workspaceId);
-    },
+    fetch: (source) => source.getWorkspaceGitPullRequests(workspaceId),
   };
 }
 
@@ -98,14 +43,8 @@ function createGitPullRequestQuery(
   pullRequestNumber: number,
 ): QueryDescriptor<GitPullRequestDetailResult> {
   return {
-    eventKinds: GIT_PULL_REQUEST_EVENT_KINDS,
     key: gitKeys.pullRequest(workspaceId, pullRequestNumber),
-    fetch(source) {
-      return source.getWorkspaceGitPullRequest(workspaceId, pullRequestNumber);
-    },
-    reduce(_current, event) {
-      return invalidateGitWorkspaceQuery(event, workspaceId);
-    },
+    fetch: (source) => source.getWorkspaceGitPullRequest(workspaceId, pullRequestNumber),
   };
 }
 
@@ -113,14 +52,8 @@ function createCurrentGitPullRequestQuery(
   workspaceId: string,
 ): QueryDescriptor<GitBranchPullRequestResult> {
   return {
-    eventKinds: GIT_PULL_REQUEST_EVENT_KINDS,
     key: gitKeys.currentPullRequest(workspaceId),
-    fetch(source) {
-      return source.getWorkspaceCurrentGitPullRequest(workspaceId);
-    },
-    reduce(_current, event) {
-      return invalidateGitWorkspaceQuery(event, workspaceId);
-    },
+    fetch: (source) => source.getWorkspaceCurrentGitPullRequest(workspaceId),
   };
 }
 
@@ -170,9 +103,7 @@ export function useGitStatus(
     () => (workspaceId && enabled ? createGitStatusQuery(workspaceId) : null),
     [enabled, workspaceId],
   );
-  const query = useQuery(descriptor, {
-    disabledData: undefined,
-  });
+  const query = useQuery(descriptor);
   const polling = options?.polling ?? true;
 
   usePollingRefresh(query.refresh, Boolean(workspaceId) && enabled && polling, 3000);
@@ -189,9 +120,7 @@ export function useGitLog(
     () => (workspaceId && enabled ? createGitLogQuery(workspaceId, limit) : null),
     [enabled, limit, workspaceId],
   );
-  const query = useQuery(descriptor, {
-    disabledData: undefined,
-  });
+  const query = useQuery(descriptor);
 
   usePollingRefresh(
     query.refresh,
@@ -210,9 +139,7 @@ export function useGitPullRequests(
     () => (workspaceId && enabled ? createGitPullRequestsQuery(workspaceId) : null),
     [enabled, workspaceId],
   );
-  const query = useQuery(descriptor, {
-    disabledData: undefined,
-  });
+  const query = useQuery(descriptor);
 
   usePollingRefresh(
     query.refresh,
@@ -235,9 +162,7 @@ export function useGitPullRequest(
         : null,
     [enabled, pullRequestNumber, workspaceId],
   );
-  const query = useQuery(descriptor, {
-    disabledData: undefined,
-  });
+  const query = useQuery(descriptor);
 
   usePollingRefresh(
     query.refresh,
@@ -256,9 +181,7 @@ export function useCurrentGitPullRequest(
     () => (workspaceId && enabled ? createCurrentGitPullRequestQuery(workspaceId) : null),
     [enabled, workspaceId],
   );
-  const query = useQuery(descriptor, {
-    disabledData: undefined,
-  });
+  const query = useQuery(descriptor);
 
   usePollingRefresh(
     query.refresh,

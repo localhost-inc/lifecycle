@@ -4,7 +4,7 @@ import {
   readWorkspaceFileUsageVersion,
   recordWorkspaceFileUsage,
   scoreWorkspaceFileUsage,
-} from "./workspace-file-usage";
+} from "@/features/files/lib/workspace-file-usage";
 
 function createStorage(): {
   getItem: (key: string) => string | null;

@@ -1,4 +1,4 @@
-import type { WorkspaceShortcutEvent } from "../native-shortcuts-api";
+import type { WorkspaceShortcutEvent } from "@/features/workspaces/native-shortcuts-api";
 
 export const WORKSPACE_CLOSE_SHORTCUT_GRACE_MS = 250;
 

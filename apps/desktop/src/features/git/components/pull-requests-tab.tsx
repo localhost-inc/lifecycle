@@ -3,7 +3,7 @@ import { Badge, EmptyState, Loading } from "@lifecycle/ui";
 
 import { GitPullRequestDraft } from "lucide-react";
 
-import { GithubAvatar } from "./github-avatar";
+import { GithubAvatar } from "@/features/git/components/github-avatar";
 
 interface PullRequestsTabProps {
   currentBranchPullRequestNumber: number | null;

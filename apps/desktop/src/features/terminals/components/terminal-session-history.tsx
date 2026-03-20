@@ -1,7 +1,7 @@
 import type { TerminalRecord } from "@lifecycle/contracts";
-import { formatCompactRelativeTime } from "../../../lib/format";
-import { terminalHasLiveSession, type CreateTerminalRequest, type HarnessProvider } from "../api";
-import { ClaudeIcon, CodexIcon, ShellIcon } from "../../workspaces/components/surface-icons";
+import { formatCompactRelativeTime } from "@/lib/format";
+import { terminalHasLiveSession, type CreateTerminalRequest, type HarnessProvider } from "@/features/terminals/api";
+import { ClaudeIcon, CodexIcon, ShellIcon } from "@/features/workspaces/components/surface-icons";
 
 interface TerminalSessionHistoryProps {
   activeTerminalId: string | null;
@@ -68,9 +68,7 @@ export function TerminalSessionHistory({
               disabled={!isClickable}
               onClick={handleClick}
               className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] disabled:opacity-40 ${
-                isCurrent
-                  ? "bg-[var(--surface-hover)]"
-                  : "hover:bg-[var(--surface-hover)]"
+                isCurrent ? "bg-[var(--surface-hover)]" : "hover:bg-[var(--surface-hover)]"
               }`}
             >
               <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--muted-foreground)]">

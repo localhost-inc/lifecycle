@@ -2,15 +2,15 @@ export type WorkspaceMode = "local" | "cloud";
 
 export type WorkspaceKind = "root" | "managed";
 
-export type WorkspaceStatus = "idle" | "starting" | "active" | "stopping";
+export type EnvironmentStatus = "idle" | "starting" | "running" | "stopping";
 
-export type WorkspaceFailureReason =
+export type EnvironmentFailureReason =
   | "capacity_unavailable"
   | "environment_task_failed"
   | "manifest_invalid"
   | "repo_clone_failed"
   | "repository_disconnected"
-  | "setup_step_failed"
+  | "prepare_step_failed"
   | "service_start_failed"
   | "service_healthcheck_failed"
   | "sandbox_unreachable"
@@ -20,28 +20,11 @@ export type WorkspaceFailureReason =
   | "operation_timeout"
   | "unknown";
 
-export type WorkspaceServiceStatus = "starting" | "ready" | "failed" | "stopped";
+export type ServiceStatus = "starting" | "ready" | "failed" | "stopped";
 
-export type WorkspaceServiceStatusReason =
+export type ServiceStatusReason =
   | "service_start_failed"
   | "service_process_exited"
   | "service_dependency_failed"
   | "service_port_unreachable"
   | "unknown";
-
-export type WorkspaceServicePreviewStatus =
-  | "disabled"
-  | "provisioning"
-  | "ready"
-  | "sleeping"
-  | "failed"
-  | "expired";
-
-export type WorkspaceServicePreviewFailureReason =
-  | "route_bind_failed"
-  | "route_reconcile_failed"
-  | "service_unreachable"
-  | "policy_denied"
-  | "unknown";
-
-export type WorkspaceServiceExposure = "internal" | "organization" | "local";

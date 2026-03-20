@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Logo } from "@lifecycle/ui";
 import { FolderOpen } from "lucide-react";
-import { usePrefersReducedMotion } from "../../../hooks/use-prefers-reduced-motion";
-import "./welcome-screen.css";
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
+import "@/features/welcome/components/welcome-screen.css";
 
 const LIFECYCLE_TEXT = "lifecycle";
 const TYPE_INTERVAL_MS = 140;

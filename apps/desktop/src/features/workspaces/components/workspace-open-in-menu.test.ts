@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { getWorkspaceOpenInItemClassName } from "./workspace-open-in-menu";
+import { getWorkspaceOpenInItemClassName } from "@/features/workspaces/components/workspace-open-in-menu";
 
 describe("WorkspaceOpenInMenu", () => {
   test("does not keep any row selected when it is not highlighted", () => {

@@ -1,19 +1,10 @@
 use crate::capabilities::workspaces::controller::WorkspaceControllerToken;
-use crate::capabilities::workspaces::manifest::{SetupStep, SetupWriteFile};
+use crate::capabilities::workspaces::manifest::{PrepareStep, PrepareWriteFile};
 use crate::platform::runtime::templates::expand_reserved_runtime_templates;
 use crate::shared::errors::LifecycleError;
-use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
-use tauri::AppHandle;
-use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
-
-#[derive(Clone, Copy)]
-pub enum StepProgressTarget {
-    WorkspaceSetup,
-    EnvironmentTask,
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum StepRunOutcome {
@@ -22,13 +13,10 @@ pub enum StepRunOutcome {
 }
 
 pub async fn run_steps(
-    app: &AppHandle,
-    workspace_id: &str,
     worktree_path: &str,
-    steps: &[SetupStep],
+    steps: &[PrepareStep],
     runtime_env: &HashMap<String, String>,
     step_field_prefix: &str,
-    progress_target: StepProgressTarget,
     cancellation_token: Option<WorkspaceControllerToken>,
 ) -> Result<StepRunOutcome, LifecycleError> {
     for step in steps {
@@ -44,22 +32,10 @@ pub async fn run_steps(
         let step_field = format!("{step_field_prefix}.{}", step.name);
         let step_env = build_step_env(step, runtime_env, &step_field)?;
 
-        publish_step_progress_event(
-            app,
-            workspace_id,
-            &step.name,
-            progress_target,
-            "started",
-            None,
-        );
-
         match (step.command.as_deref(), step.write_files.as_deref()) {
             (Some(command), None) => {
                 run_command_step(
-                    app,
-                    workspace_id,
                     step,
-                    progress_target,
                     &cwd,
                     command,
                     &step_env,
@@ -69,10 +45,7 @@ pub async fn run_steps(
             }
             (None, Some(write_files)) => {
                 run_write_files_step(
-                    app,
-                    workspace_id,
                     step,
-                    progress_target,
                     worktree_path,
                     &cwd,
                     write_files,
@@ -83,36 +56,19 @@ pub async fn run_steps(
                 .await?;
             }
             _ => {
-                publish_step_progress_event(
-                    app,
-                    workspace_id,
-                    &step.name,
-                    progress_target,
-                    "failed",
-                    Some("setup step requires exactly one of command or write_files".to_string()),
-                );
                 return Err(LifecycleError::InvalidInput {
                     field: step_field,
-                    reason: "setup step requires exactly one of command or write_files".to_string(),
+                    reason: "prepare step requires exactly one of command or write_files".to_string(),
                 });
             }
         }
-
-        publish_step_progress_event(
-            app,
-            workspace_id,
-            &step.name,
-            progress_target,
-            "completed",
-            None,
-        );
     }
 
     Ok(StepRunOutcome::Completed)
 }
 
 fn build_step_env(
-    step: &SetupStep,
+    step: &PrepareStep,
     runtime_env: &HashMap<String, String>,
     step_field: &str,
 ) -> Result<HashMap<String, String>, LifecycleError> {
@@ -137,36 +93,8 @@ fn step_cwd(worktree_path: &str, step_cwd: Option<&str>) -> PathBuf {
     }
 }
 
-fn publish_step_progress_event(
-    app: &AppHandle,
-    workspace_id: &str,
-    step_name: &str,
-    progress_target: StepProgressTarget,
-    event_kind: &str,
-    data: Option<String>,
-) {
-    let event = match progress_target {
-        StepProgressTarget::WorkspaceSetup => LifecycleEvent::WorkspaceSetupProgress {
-            workspace_id: workspace_id.to_string(),
-            step_name: step_name.to_string(),
-            event_kind: event_kind.to_string(),
-            data,
-        },
-        StepProgressTarget::EnvironmentTask => LifecycleEvent::EnvironmentTaskProgress {
-            workspace_id: workspace_id.to_string(),
-            step_name: step_name.to_string(),
-            event_kind: event_kind.to_string(),
-            data,
-        },
-    };
-    publish_lifecycle_event(app, event);
-}
-
 async fn run_command_step(
-    app: &AppHandle,
-    workspace_id: &str,
-    step: &SetupStep,
-    progress_target: StepProgressTarget,
+    step: &PrepareStep,
     cwd: &Path,
     command: &str,
     step_env: &HashMap<String, String>,
@@ -183,60 +111,13 @@ async fn run_command_step(
     cmd.env("FORCE_COLOR", "1");
     cmd.env("CLICOLOR_FORCE", "1");
 
-    cmd.stdout(std::process::Stdio::piped());
-    cmd.stderr(std::process::Stdio::piped());
+    cmd.stdout(std::process::Stdio::null());
+    cmd.stderr(std::process::Stdio::null());
 
-    let mut child = cmd.spawn().map_err(|_| LifecycleError::SetupStepFailed {
+    let mut child = cmd.spawn().map_err(|_| LifecycleError::PrepareStepFailed {
         step: step.name.clone(),
         exit_code: -1,
     })?;
-
-    let stdout = child.stdout.take();
-    let stderr = child.stderr.take();
-
-    let app_clone = app.clone();
-    let ws_id = workspace_id.to_string();
-    let step_name = step.name.clone();
-
-    let stdout_handle = stdout.map(|stdout| {
-        let app_clone = app_clone.clone();
-        let ws_id = ws_id.clone();
-        let step_name = step_name.clone();
-        tokio::spawn(async move {
-            let reader = BufReader::new(stdout);
-            let mut lines = reader.lines();
-            while let Ok(Some(line)) = lines.next_line().await {
-                publish_step_progress_event(
-                    &app_clone,
-                    &ws_id,
-                    &step_name,
-                    progress_target,
-                    "stdout",
-                    Some(line),
-                );
-            }
-        })
-    });
-
-    let stderr_handle = stderr.map(|stderr| {
-        let app_clone = app.clone();
-        let ws_id = workspace_id.to_string();
-        let step_name = step.name.clone();
-        tokio::spawn(async move {
-            let reader = BufReader::new(stderr);
-            let mut lines = reader.lines();
-            while let Ok(Some(line)) = lines.next_line().await {
-                publish_step_progress_event(
-                    &app_clone,
-                    &ws_id,
-                    &step_name,
-                    progress_target,
-                    "stderr",
-                    Some(line),
-                );
-            }
-        })
-    });
 
     let result = wait_for_command_exit(
         &mut child,
@@ -245,66 +126,34 @@ async fn run_command_step(
     )
     .await;
 
-    // Drain remaining output with a timeout. If a grandchild process
-    // inherited our pipe file descriptors the readers will block
-    // indefinitely even though the direct child has already exited.
-    let drain_timeout = std::time::Duration::from_secs(2);
-    if let Some(handle) = stdout_handle {
-        let _ = tokio::time::timeout(drain_timeout, handle).await;
-    }
-    if let Some(handle) = stderr_handle {
-        let _ = tokio::time::timeout(drain_timeout, handle).await;
-    }
-
     match result {
         CommandStepWaitResult::Exited(Ok(exit_status)) => {
             if exit_status.success() {
                 Ok(StepRunOutcome::Completed)
             } else {
                 let exit_code = exit_status.code().unwrap_or(-1);
-                publish_step_progress_event(
-                    app,
-                    workspace_id,
-                    &step.name,
-                    progress_target,
-                    "failed",
-                    Some(format!("Exit code: {exit_code}")),
-                );
-                Err(LifecycleError::SetupStepFailed {
+                Err(LifecycleError::PrepareStepFailed {
                     step: step.name.clone(),
                     exit_code,
                 })
             }
         }
-        CommandStepWaitResult::Exited(Err(_)) => Err(LifecycleError::SetupStepFailed {
+        CommandStepWaitResult::Exited(Err(_)) => Err(LifecycleError::PrepareStepFailed {
             step: step.name.clone(),
             exit_code: -1,
         }),
         CommandStepWaitResult::Cancelled => Ok(StepRunOutcome::Cancelled),
-        CommandStepWaitResult::TimedOut => {
-            publish_step_progress_event(
-                app,
-                workspace_id,
-                &step.name,
-                progress_target,
-                "timeout",
-                None,
-            );
-            Err(LifecycleError::SetupStepTimeout {
-                step: step.name.clone(),
-            })
-        }
+        CommandStepWaitResult::TimedOut => Err(LifecycleError::PrepareStepTimeout {
+            step: step.name.clone(),
+        }),
     }
 }
 
 async fn run_write_files_step(
-    app: &AppHandle,
-    workspace_id: &str,
-    step: &SetupStep,
-    progress_target: StepProgressTarget,
+    step: &PrepareStep,
     worktree_path: &str,
     cwd: &Path,
-    write_files: &[SetupWriteFile],
+    write_files: &[PrepareWriteFile],
     step_env: &HashMap<String, String>,
     step_field: &str,
     cancellation_token: Option<WorkspaceControllerToken>,
@@ -321,17 +170,12 @@ async fn run_write_files_step(
             }
             let target_path =
                 resolve_write_target_path(&normalized_worktree, cwd, &file.path, step_field)?;
-            let rendered_path = target_path
-                .strip_prefix(&normalized_worktree)
-                .unwrap_or(&target_path)
-                .display()
-                .to_string();
             let content = render_write_file_content(file, step_env, step_field)?;
 
             if let Some(parent) = target_path.parent() {
                 tokio::fs::create_dir_all(parent).await.map_err(|error| {
                     LifecycleError::Io(format!(
-                        "failed to create setup file directory '{}': {error}",
+                        "failed to create prepare file directory '{}': {error}",
                         parent.display()
                     ))
                 })?;
@@ -340,19 +184,10 @@ async fn run_write_files_step(
                 .await
                 .map_err(|error| {
                     LifecycleError::Io(format!(
-                        "failed to write setup file '{}': {error}",
+                        "failed to write prepare file '{}': {error}",
                         target_path.display()
                     ))
                 })?;
-
-            publish_step_progress_event(
-                app,
-                workspace_id,
-                &step.name,
-                progress_target,
-                "stdout",
-                Some(format!("wrote {}", rendered_path)),
-            );
         }
 
         Ok::<StepRunOutcome, LifecycleError>(StepRunOutcome::Completed)
@@ -364,32 +199,10 @@ async fn run_write_files_step(
     )
     .await
     {
-        Ok(result) => {
-            if let Err(error) = &result {
-                publish_step_progress_event(
-                    app,
-                    workspace_id,
-                    &step.name,
-                    progress_target,
-                    "failed",
-                    Some(error.to_string()),
-                );
-            }
-            result
-        }
-        Err(_) => {
-            publish_step_progress_event(
-                app,
-                workspace_id,
-                &step.name,
-                progress_target,
-                "timeout",
-                None,
-            );
-            Err(LifecycleError::SetupStepTimeout {
-                step: step.name.clone(),
-            })
-        }
+        Ok(result) => result,
+        Err(_) => Err(LifecycleError::PrepareStepTimeout {
+            step: step.name.clone(),
+        }),
     }
 }
 
@@ -472,7 +285,7 @@ fn resolve_write_target_path(
 }
 
 fn render_write_file_content(
-    file: &SetupWriteFile,
+    file: &PrepareWriteFile,
     env: &HashMap<String, String>,
     step_field: &str,
 ) -> Result<String, LifecycleError> {
@@ -551,7 +364,7 @@ mod tests {
 
     #[test]
     fn build_step_env_expands_reserved_runtime_templates() {
-        let step = SetupStep {
+        let step = PrepareStep {
             name: "write-env".to_string(),
             command: Some("printenv".to_string()),
             write_files: None,
@@ -569,7 +382,7 @@ mod tests {
             "http://api.frost-beacon-57f59253.lifecycle.localhost:52300".to_string(),
         )]);
 
-        let env = build_step_env(&step, &runtime_env, "workspace.setup.write-env")
+        let env = build_step_env(&step, &runtime_env, "workspace.prepare.write-env")
             .expect("step env builds");
 
         assert_eq!(
@@ -591,7 +404,7 @@ mod tests {
         let rendered = expand_setup_template(
             "NAMESPACE=${LIFECYCLE_WORKSPACE_SLUG}\nPORT=${LIFECYCLE_SERVICE_API_PORT}",
             &env,
-            "workspace.setup.write-env.write_files.lines",
+            "workspace.prepare.write-env.write_files.lines",
         )
         .expect("template expansion succeeds");
 
@@ -604,13 +417,13 @@ mod tests {
         let error = expand_setup_template(
             "PORT=${LIFECYCLE_SERVICE_API_PORT}",
             &env,
-            "workspace.setup.write-env.write_files.lines",
+            "workspace.prepare.write-env.write_files.lines",
         )
         .expect_err("missing vars should fail");
 
         match error {
             LifecycleError::InvalidInput { field, reason } => {
-                assert_eq!(field, "workspace.setup.write-env.write_files.lines");
+                assert_eq!(field, "workspace.prepare.write-env.write_files.lines");
                 assert!(reason.contains("unknown template variable"));
             }
             other => panic!("unexpected error: {other}"),
@@ -620,13 +433,13 @@ mod tests {
     #[test]
     fn render_write_file_content_joins_lines_with_trailing_newline() {
         let env = HashMap::from([("NAME".to_string(), "kin".to_string())]);
-        let file = SetupWriteFile {
+        let file = PrepareWriteFile {
             path: "apps/api/.env.local".to_string(),
             content: None,
             lines: Some(vec!["NAME=${NAME}".to_string()]),
         };
 
-        let rendered = render_write_file_content(&file, &env, "workspace.setup.write-env")
+        let rendered = render_write_file_content(&file, &env, "workspace.prepare.write-env")
             .expect("line rendering succeeds");
 
         assert_eq!(rendered, "NAME=kin\n");
@@ -640,13 +453,13 @@ mod tests {
             &worktree,
             &cwd,
             "../../../outside.env",
-            "workspace.setup.write-env",
+            "workspace.prepare.write-env",
         )
         .expect_err("outside path should fail");
 
         match error {
             LifecycleError::InvalidInput { field, reason } => {
-                assert_eq!(field, "workspace.setup.write-env.write_files.path");
+                assert_eq!(field, "workspace.prepare.write-env.write_files.path");
                 assert!(reason.contains("path must stay inside workspace worktree"));
             }
             other => panic!("unexpected error: {other}"),

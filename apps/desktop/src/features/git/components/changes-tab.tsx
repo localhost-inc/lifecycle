@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import type React from "react";
-import { stageGitFiles, unstageGitFiles } from "../api";
+import { stageGitFiles, unstageGitFiles } from "@/features/git/api";
 
 interface ChangesTabProps {
   error: unknown;

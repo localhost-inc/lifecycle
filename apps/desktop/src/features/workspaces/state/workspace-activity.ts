@@ -1,5 +1,4 @@
 import type { LifecycleEvent, LifecycleEventKind } from "@lifecycle/contracts";
-import type { QueryUpdate } from "../../../query";
 
 export interface WorkspaceActivityItem {
   detail: string | null;
@@ -11,15 +10,11 @@ export interface WorkspaceActivityItem {
 }
 
 export const WORKSPACE_ACTIVITY_EVENT_KINDS = [
-  "workspace.status_changed",
+  "environment.status_changed",
   "workspace.renamed",
   "workspace.deleted",
-  "workspace.manifest_synced",
-  "service.configuration_changed",
   "service.log_line",
   "service.status_changed",
-  "workspace.setup_progress",
-  "environment.task_progress",
   "terminal.created",
   "terminal.status_changed",
   "terminal.renamed",
@@ -29,8 +24,6 @@ export const WORKSPACE_ACTIVITY_EVENT_KINDS = [
   "git.head_changed",
   "git.log_changed",
 ] as const satisfies readonly LifecycleEventKind[];
-
-const WORKSPACE_ACTIVITY_LIMIT = 32;
 
 function capitalizeWord(value: string): string {
   if (!value) {
@@ -113,19 +106,19 @@ function gitRefDetail(
 
 function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityItem | null {
   switch (event.kind) {
-    case "workspace.status_changed":
+    case "environment.status_changed":
       return {
         detail: event.failure_reason ? humanizeToken(event.failure_reason) : null,
         id: event.id,
         kind: event.kind,
         occurredAt: event.occurred_at,
-        title: `Workspace ${humanizeToken(event.status).toLowerCase()}`,
+        title: `Environment ${humanizeToken(event.status).toLowerCase()}`,
         tone:
           event.failure_reason !== null
             ? "danger"
-            : event.status === "active"
+            : event.status === "running"
               ? "success"
-              : event.status === "stopping"
+              : event.status === "starting" || event.status === "stopping"
                 ? "warning"
                 : "neutral",
       };
@@ -153,7 +146,7 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
         id: event.id,
         kind: event.kind,
         occurredAt: event.occurred_at,
-        title: `Service ${event.service_name} ${humanizeToken(event.status).toLowerCase()}`,
+        title: `Service ${event.name} ${humanizeToken(event.status).toLowerCase()}`,
         tone:
           event.status === "failed"
             ? "danger"
@@ -163,87 +156,6 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
                 ? "warning"
                 : "neutral",
       };
-    case "service.configuration_changed":
-      return {
-        detail: joinActivityDetail([
-          `exposure ${event.service.exposure}`,
-          event.service.preview_status !== "disabled"
-            ? `preview ${humanizeToken(event.service.preview_status).toLowerCase()}`
-            : null,
-        ]),
-        id: event.id,
-        kind: event.kind,
-        occurredAt: event.occurred_at,
-        title: `Service ${event.service.service_name} configuration updated`,
-        tone: "neutral",
-      };
-    case "workspace.manifest_synced":
-      return {
-        detail: joinActivityDetail([
-          event.manifest_fingerprint,
-          `${event.services.length} service${event.services.length === 1 ? "" : "s"}`,
-        ]),
-        id: event.id,
-        kind: event.kind,
-        occurredAt: event.occurred_at,
-        title: "Workspace manifest synced",
-        tone: "neutral",
-      };
-    case "workspace.setup_progress":
-    case "environment.task_progress": {
-      const label = event.kind === "workspace.setup_progress" ? "Setup" : "Task";
-      switch (event.event_kind) {
-        case "stdout":
-          return null;
-        case "stderr":
-          return {
-            detail: event.data ? trimActivityText(event.data) : null,
-            id: event.id,
-            kind: event.kind,
-            occurredAt: event.occurred_at,
-            title: `${label} ${event.step_name} stderr`,
-            tone: "warning",
-          };
-        case "started":
-          return {
-            detail: null,
-            id: event.id,
-            kind: event.kind,
-            occurredAt: event.occurred_at,
-            title: `${label} ${event.step_name} started`,
-            tone: "neutral",
-          };
-        case "completed":
-          return {
-            detail: null,
-            id: event.id,
-            kind: event.kind,
-            occurredAt: event.occurred_at,
-            title: `${label} ${event.step_name} completed`,
-            tone: "success",
-          };
-        case "failed":
-          return {
-            detail: event.data ? trimActivityText(event.data) : null,
-            id: event.id,
-            kind: event.kind,
-            occurredAt: event.occurred_at,
-            title: `${label} ${event.step_name} failed`,
-            tone: "danger",
-          };
-        case "timeout":
-          return {
-            detail: null,
-            id: event.id,
-            kind: event.kind,
-            occurredAt: event.occurred_at,
-            title: `${label} ${event.step_name} timed out`,
-            tone: "warning",
-          };
-        default:
-          return null;
-      }
-    }
     case "terminal.created":
       return {
         detail: event.terminal.label,
@@ -345,30 +257,11 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
   }
 }
 
-function eventContributesToWorkspaceActivity(event: LifecycleEvent): boolean {
-  if (event.kind === "service.log_line") {
-    return false;
-  }
-
-  return !(
-    (event.kind === "workspace.setup_progress" || event.kind === "environment.task_progress") &&
-    (event.event_kind === "stdout" || event.event_kind === "stderr")
-  );
-}
-
-export function reduceWorkspaceActivityEvents(
-  current: LifecycleEvent[],
+export function shouldRefreshWorkspaceActivity(
   event: LifecycleEvent,
   workspaceId: string,
-): LifecycleEvent[] {
-  if (event.workspace_id !== workspaceId || !eventContributesToWorkspaceActivity(event)) {
-    return current;
-  }
-
-  return [event, ...current.filter((item) => item.id !== event.id)].slice(
-    0,
-    WORKSPACE_ACTIVITY_LIMIT,
-  );
+): boolean {
+  return event.workspace_id === workspaceId && event.kind !== "service.log_line";
 }
 
 export function buildWorkspaceActivityItems(
@@ -377,27 +270,4 @@ export function buildWorkspaceActivityItems(
   return (events ?? [])
     .map((event) => summarizeWorkspaceActivity(event))
     .filter((item): item is WorkspaceActivityItem => item !== null);
-}
-
-export function reduceWorkspaceActivity(
-  current: WorkspaceActivityItem[] | undefined,
-  event: LifecycleEvent,
-  workspaceId: string,
-): QueryUpdate<WorkspaceActivityItem[]> {
-  if (event.workspace_id !== workspaceId) {
-    return { kind: "none" };
-  }
-
-  const activity = summarizeWorkspaceActivity(event);
-  if (!activity) {
-    return { kind: "none" };
-  }
-
-  return {
-    kind: "replace",
-    data: [activity, ...(current ?? []).filter((item) => item.id !== activity.id)].slice(
-      0,
-      WORKSPACE_ACTIVITY_LIMIT,
-    ),
-  };
 }

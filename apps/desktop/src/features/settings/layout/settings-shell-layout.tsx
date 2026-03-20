@@ -20,37 +20,37 @@ import { Volume2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { version } from "../../../../package.json";
-import { AppHotkeyListener } from "../../../app/app-hotkey-listener";
+import { AppHotkeyListener } from "@/app/app-hotkey-listener";
 import {
   detectPlatformHint,
   shouldInsetForWindowControls,
-} from "../../../components/layout/window-controls";
-import { getInterfaceFontPresets, getMonospaceFontPresets } from "../../../lib/typography";
-import { AuthSessionSettingsPanel } from "../../auth/components/auth-session-settings-panel";
-import { useAuthSession } from "../../auth/state/auth-session-provider";
+} from "@/components/layout/window-controls";
+import { getInterfaceFontPresets, getMonospaceFontPresets } from "@/lib/typography";
+import { AuthSessionSettingsPanel } from "@/features/auth/components/auth-session-settings-panel";
+import { useAuthSession } from "@/features/auth/state/auth-session-provider";
 import {
   turnNotificationModeOptions,
   turnNotificationSoundOptions,
   type TurnNotificationMode,
   type TurnNotificationSound,
-} from "../../notifications/lib/notification-settings";
+} from "@/features/notifications/lib/notification-settings";
 import {
   playTurnNotificationSound,
   warmAudioContext,
-} from "../../notifications/lib/turn-notification-runtime";
-import { HarnessSettingsPanel } from "../components/harness-settings-panel";
-import { SettingsFieldRow, SettingsRow, SettingsSection } from "../components/settings-primitives";
+} from "@/features/notifications/lib/turn-notification-runtime";
+import { HarnessSettingsPanel } from "@/features/settings/components/harness-settings-panel";
+import { SettingsFieldRow, SettingsRow, SettingsSection } from "@/features/settings/components/settings-primitives";
 import {
   INACTIVE_PANE_OPACITY_OPTIONS,
   DEFAULT_WORKTREE_ROOT,
   useSettings,
   type DefaultNewTabLaunch,
-} from "../state/app-settings-provider";
+} from "@/features/settings/state/app-settings-provider";
 import {
   readSettingsSectionHash,
   settingsSections,
   type SettingsSectionSlug,
-} from "../state/settings-sections";
+} from "@/features/settings/state/settings-sections";
 
 const ACTIVE_SECTION_OFFSET = 112;
 
@@ -695,7 +695,6 @@ export function SettingsShellLayout() {
                         </Select>
                       </div>
                     </SettingsRow>
-
                   </div>
                 </SettingsSection>
 

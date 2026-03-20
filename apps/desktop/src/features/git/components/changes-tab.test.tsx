@@ -3,7 +3,7 @@ import type { GitStatusResult } from "@lifecycle/contracts";
 import { ThemeProvider } from "@lifecycle/ui";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ChangesTab } from "./changes-tab";
+import { ChangesTab } from "@/features/git/components/changes-tab";
 
 function renderChangesTab({
   error = null,

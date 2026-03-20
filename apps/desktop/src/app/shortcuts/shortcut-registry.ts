@@ -16,11 +16,7 @@ export type RegisteredShortcutId =
   | "workspace.reopen-closed-tab"
   | "workspace.toggle-zoom";
 
-export type RegisteredShortcutScope =
-  | "app"
-  | "file-surface"
-  | "project-route"
-  | "workspace-canvas";
+export type RegisteredShortcutScope = "app" | "file-surface" | "project-route" | "workspace-canvas";
 
 export interface RegisteredShortcut {
   description: string;

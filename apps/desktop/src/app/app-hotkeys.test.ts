@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { formatAppHotkeyLabel, readAppHotkeyAction, shouldHandleDomAppHotkey } from "./app-hotkeys";
+import { formatAppHotkeyLabel, readAppHotkeyAction, shouldHandleDomAppHotkey } from "@/app/app-hotkeys";
 
 describe("readAppHotkeyAction", () => {
   test("reads Command+Comma on macOS", () => {

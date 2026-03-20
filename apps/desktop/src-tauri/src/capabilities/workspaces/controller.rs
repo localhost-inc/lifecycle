@@ -52,20 +52,14 @@ pub(crate) struct WorkspaceController {
     cancellation_tx: watch::Sender<u64>,
     state: AsyncMutex<WorkspaceControllerState>,
     supervisor: ManagedSupervisor,
-    runtime_projection: StdMutex<WorkspaceRuntimeProjectionState>,
+    activity: StdMutex<WorkspaceActivityStore>,
+    service_logs: StdMutex<WorkspaceServiceLogStore>,
     active_mutations: AtomicUsize,
     mutation_drained: Notify,
 }
 
 pub(crate) struct WorkspaceMutationGuard {
     controller: ManagedWorkspaceController,
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
-pub(crate) struct WorkspaceStepProgressSnapshot {
-    pub(crate) name: String,
-    pub(crate) output: Vec<String>,
-    pub(crate) status: String,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
@@ -78,27 +72,20 @@ pub(crate) struct ServiceLogLine {
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct ServiceLogSnapshot {
-    pub(crate) service_name: String,
+    pub(crate) name: String,
     pub(crate) lines: Vec<ServiceLogLine>,
 }
 
 const SERVICE_LOG_LINE_LIMIT: usize = 5000;
 
 #[derive(Clone, Debug, Default)]
-struct WorkspaceRuntimeProjectionState {
-    activity: Vec<LifecycleEnvelope>,
-    environment_tasks: Vec<WorkspaceStepProgressSnapshot>,
-    service_logs: Vec<ServiceLogSnapshot>,
-    setup: Vec<WorkspaceStepProgressSnapshot>,
+struct WorkspaceActivityStore {
+    items: Vec<LifecycleEnvelope>,
 }
 
-#[derive(Clone, Debug, Default, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct WorkspaceRuntimeProjectionSnapshot {
-    pub(crate) activity: Vec<LifecycleEnvelope>,
-    pub(crate) environment_tasks: Vec<WorkspaceStepProgressSnapshot>,
-    pub(crate) service_logs: Vec<ServiceLogSnapshot>,
-    pub(crate) setup: Vec<WorkspaceStepProgressSnapshot>,
+#[derive(Clone, Debug, Default)]
+struct WorkspaceServiceLogStore {
+    logs: Vec<ServiceLogSnapshot>,
 }
 
 impl Drop for WorkspaceMutationGuard {
@@ -124,7 +111,8 @@ impl WorkspaceController {
                 operation: WorkspaceControllerOperation::Idle,
             }),
             supervisor: Arc::new(AsyncMutex::new(Supervisor::new())),
-            runtime_projection: StdMutex::new(WorkspaceRuntimeProjectionState::default()),
+            activity: StdMutex::new(WorkspaceActivityStore::default()),
+            service_logs: StdMutex::new(WorkspaceServiceLogStore::default()),
             active_mutations: AtomicUsize::new(0),
             mutation_drained: Notify::new(),
         }
@@ -169,24 +157,28 @@ impl WorkspaceController {
     }
 
     pub(crate) fn record_lifecycle_envelope(&self, envelope: LifecycleEnvelope) {
-        let mut projection = self
-            .runtime_projection
+        self.activity
             .lock()
-            .expect("workspace runtime projection lock");
-        projection.apply_event(&envelope);
+            .expect("workspace activity lock")
+            .record(&envelope);
+        self.service_logs
+            .lock()
+            .expect("workspace service logs lock")
+            .record(&envelope);
     }
 
-    pub(crate) fn runtime_projection_snapshot(&self) -> WorkspaceRuntimeProjectionSnapshot {
-        let projection = self
-            .runtime_projection
+    pub(crate) fn activity(&self) -> Vec<LifecycleEnvelope> {
+        self.activity
             .lock()
-            .expect("workspace runtime projection lock");
-        WorkspaceRuntimeProjectionSnapshot {
-            activity: projection.activity.clone(),
-            environment_tasks: projection.environment_tasks.clone(),
-            service_logs: projection.service_logs.clone(),
-            setup: projection.setup.clone(),
-        }
+            .expect("workspace activity lock")
+            .snapshot()
+    }
+
+    pub(crate) fn service_logs(&self) -> Vec<ServiceLogSnapshot> {
+        self.service_logs
+            .lock()
+            .expect("workspace service logs lock")
+            .snapshot()
     }
 
     pub(crate) async fn stop_runtime(&self) {
@@ -313,44 +305,32 @@ impl WorkspaceControllerRegistry {
     }
 }
 
-impl WorkspaceRuntimeProjectionState {
-    fn apply_event(&mut self, envelope: &LifecycleEnvelope) {
+impl WorkspaceActivityStore {
+    fn record(&mut self, envelope: &LifecycleEnvelope) {
+        if !envelope.event.contributes_to_activity() {
+            return;
+        }
+
+        self.items.retain(|event| event.id != envelope.id);
+        self.items.insert(0, envelope.clone());
+        self.items.truncate(WORKSPACE_ACTIVITY_LIMIT);
+    }
+
+    fn snapshot(&self) -> Vec<LifecycleEnvelope> {
+        self.items.clone()
+    }
+}
+
+impl WorkspaceServiceLogStore {
+    fn record(&mut self, envelope: &LifecycleEnvelope) {
         match &envelope.event {
-            LifecycleEvent::WorkspaceStatusChanged {
-                status,
-                failure_reason,
-                ..
-            } => match status.as_str() {
-                "starting" => {
-                    self.setup.clear();
-                    self.environment_tasks.clear();
-                    self.service_logs.clear();
-                }
-                "idle" if failure_reason.is_some() => {
-                    normalize_running_steps(&mut self.setup, "failed");
-                    normalize_running_steps(&mut self.environment_tasks, "failed");
-                }
-                _ => {}
-            },
-            LifecycleEvent::WorkspaceSetupProgress {
-                step_name,
-                event_kind,
-                data,
-                ..
-            } => apply_step_progress_event(&mut self.setup, step_name, event_kind, data.as_deref()),
-            LifecycleEvent::EnvironmentTaskProgress {
-                step_name,
-                event_kind,
-                data,
-                ..
-            } => apply_step_progress_event(
-                &mut self.environment_tasks,
-                step_name,
-                event_kind,
-                data.as_deref(),
-            ),
+            LifecycleEvent::EnvironmentStatusChanged { status, .. }
+                if status == "preparing" || status == "starting" =>
+            {
+                self.logs.clear();
+            }
             LifecycleEvent::ServiceLogLine {
-                service_name,
+                name,
                 stream,
                 line,
                 ..
@@ -360,9 +340,9 @@ impl WorkspaceRuntimeProjectionState {
                     text: line.clone(),
                 };
                 let entry = self
-                    .service_logs
+                    .logs
                     .iter_mut()
-                    .find(|e| e.service_name == *service_name);
+                    .find(|existing| existing.name == *name);
                 if let Some(entry) = entry {
                     entry.lines.push(log_line);
                     if entry.lines.len() > SERVICE_LOG_LINE_LIMIT {
@@ -370,62 +350,18 @@ impl WorkspaceRuntimeProjectionState {
                         entry.lines.drain(..excess);
                     }
                 } else {
-                    self.service_logs.push(ServiceLogSnapshot {
-                        service_name: service_name.clone(),
+                    self.logs.push(ServiceLogSnapshot {
+                        name: name.clone(),
                         lines: vec![log_line],
                     });
                 }
             }
             _ => {}
         }
-
-        if envelope.event.contributes_to_activity() {
-            self.activity.retain(|event| event.id != envelope.id);
-            self.activity.insert(0, envelope.clone());
-            self.activity.truncate(WORKSPACE_ACTIVITY_LIMIT);
-        }
     }
-}
 
-fn normalize_running_steps(steps: &mut [WorkspaceStepProgressSnapshot], next_status: &str) {
-    for step in steps {
-        if step.status == "running" {
-            step.status = next_status.to_string();
-        }
-    }
-}
-
-fn apply_step_progress_event(
-    steps: &mut Vec<WorkspaceStepProgressSnapshot>,
-    step_name: &str,
-    event_kind: &str,
-    data: Option<&str>,
-) {
-    let index = steps
-        .iter()
-        .position(|step| step.name == step_name)
-        .unwrap_or_else(|| {
-            steps.push(WorkspaceStepProgressSnapshot {
-                name: step_name.to_string(),
-                output: Vec::new(),
-                status: "pending".to_string(),
-            });
-            steps.len() - 1
-        });
-
-    let step = &mut steps[index];
-    match event_kind {
-        "started" => step.status = "running".to_string(),
-        "stdout" | "stderr" => step.output.push(data.unwrap_or_default().to_string()),
-        "completed" => step.status = "completed".to_string(),
-        "failed" => {
-            if let Some(data) = data {
-                step.output.push(data.to_string());
-            }
-            step.status = "failed".to_string();
-        }
-        "timeout" => step.status = "timeout".to_string(),
-        _ => {}
+    fn snapshot(&self) -> Vec<ServiceLogSnapshot> {
+        self.logs.clone()
     }
 }
 
@@ -531,13 +467,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn runtime_projection_tracks_steps_and_filters_activity_noise() {
+    async fn controller_selectors_filter_activity_noise() {
         let registry = WorkspaceControllerRegistry::new();
         let controller = registry.get_or_create("workspace-1").await;
 
         controller.record_lifecycle_envelope(envelope(
             "event-1",
-            LifecycleEvent::WorkspaceStatusChanged {
+            LifecycleEvent::EnvironmentStatusChanged {
                 workspace_id: "workspace-1".to_string(),
                 status: "starting".to_string(),
                 failure_reason: None,
@@ -545,110 +481,53 @@ mod tests {
         ));
         controller.record_lifecycle_envelope(envelope(
             "event-2",
-            LifecycleEvent::WorkspaceSetupProgress {
+            LifecycleEvent::ServiceLogLine {
                 workspace_id: "workspace-1".to_string(),
-                step_name: "Clone".to_string(),
-                event_kind: "started".to_string(),
-                data: None,
+                name: "api".to_string(),
+                stream: "stdout".to_string(),
+                line: "booting".to_string(),
             },
         ));
         controller.record_lifecycle_envelope(envelope(
             "event-3",
-            LifecycleEvent::WorkspaceSetupProgress {
+            LifecycleEvent::TerminalUpdated {
                 workspace_id: "workspace-1".to_string(),
-                step_name: "Clone".to_string(),
-                event_kind: "stdout".to_string(),
-                data: Some("fetching".to_string()),
+                terminal: crate::capabilities::workspaces::query::TerminalRecord {
+                    id: "terminal-1".to_string(),
+                    workspace_id: "workspace-1".to_string(),
+                    launch_type: "shell".to_string(),
+                    harness_provider: None,
+                    harness_session_id: None,
+                    harness_launch_mode: "new".to_string(),
+                    created_by: None,
+                    label: "Shell".to_string(),
+                    label_origin: Some("default".to_string()),
+                    status: "active".to_string(),
+                    failure_reason: None,
+                    exit_code: None,
+                    started_at: "2026-03-15 10:00:00".to_string(),
+                    last_active_at: "2026-03-15 10:00:00".to_string(),
+                    ended_at: None,
+                },
             },
         ));
         controller.record_lifecycle_envelope(envelope(
             "event-4",
-            LifecycleEvent::WorkspaceSetupProgress {
+            LifecycleEvent::ServiceStatusChanged {
                 workspace_id: "workspace-1".to_string(),
-                step_name: "Clone".to_string(),
-                event_kind: "completed".to_string(),
-                data: None,
-            },
-        ));
-        controller.record_lifecycle_envelope(envelope(
-            "event-5",
-            LifecycleEvent::EnvironmentTaskProgress {
-                workspace_id: "workspace-1".to_string(),
-                step_name: "Install".to_string(),
-                event_kind: "failed".to_string(),
-                data: Some("npm install failed".to_string()),
+                name: "api".to_string(),
+                status: "ready".to_string(),
+                status_reason: None,
             },
         ));
 
-        let snapshot = controller.runtime_projection_snapshot();
-
+        let activity = controller.activity();
         assert_eq!(
-            snapshot.setup,
-            vec![super::WorkspaceStepProgressSnapshot {
-                name: "Clone".to_string(),
-                output: vec!["fetching".to_string()],
-                status: "completed".to_string(),
-            }]
-        );
-        assert_eq!(
-            snapshot.environment_tasks,
-            vec![super::WorkspaceStepProgressSnapshot {
-                name: "Install".to_string(),
-                output: vec!["npm install failed".to_string()],
-                status: "failed".to_string(),
-            }]
-        );
-        assert_eq!(
-            snapshot
-                .activity
+            activity
                 .iter()
                 .map(|event| event.id.as_str())
                 .collect::<Vec<_>>(),
-            vec!["event-5", "event-4", "event-2", "event-1"]
-        );
-    }
-
-    #[tokio::test]
-    async fn runtime_projection_marks_running_steps_failed_when_workspace_returns_to_idle_with_failure(
-    ) {
-        let registry = WorkspaceControllerRegistry::new();
-        let controller = registry.get_or_create("workspace-1").await;
-
-        controller.record_lifecycle_envelope(envelope(
-            "event-1",
-            LifecycleEvent::WorkspaceStatusChanged {
-                workspace_id: "workspace-1".to_string(),
-                status: "starting".to_string(),
-                failure_reason: None,
-            },
-        ));
-        controller.record_lifecycle_envelope(envelope(
-            "event-2",
-            LifecycleEvent::WorkspaceSetupProgress {
-                workspace_id: "workspace-1".to_string(),
-                step_name: "Install".to_string(),
-                event_kind: "started".to_string(),
-                data: None,
-            },
-        ));
-        controller.record_lifecycle_envelope(envelope(
-            "event-3",
-            LifecycleEvent::WorkspaceStatusChanged {
-                workspace_id: "workspace-1".to_string(),
-                status: "idle".to_string(),
-                failure_reason: Some("service_start_failed".to_string()),
-            },
-        ));
-
-        let snapshot = controller.runtime_projection_snapshot();
-
-        assert_eq!(
-            snapshot.setup,
-            vec![super::WorkspaceStepProgressSnapshot {
-                name: "Install".to_string(),
-                output: Vec::new(),
-                status: "failed".to_string(),
-            }]
+            vec!["event-4", "event-1"]
         );
     }
 }

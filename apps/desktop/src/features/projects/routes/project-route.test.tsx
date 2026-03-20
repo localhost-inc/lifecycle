@@ -4,9 +4,9 @@ import { ThemeProvider } from "@lifecycle/ui";
 import { createElement, type ComponentType } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, Outlet, Route, Routes } from "react-router-dom";
-import type { AppShellOutletContext } from "../../../components/layout/app-shell-context";
-import { TerminalResponseReadyProvider } from "../../terminals/state/terminal-response-ready-provider";
-import { WorkspaceToolbarProvider } from "../../workspaces/state/workspace-toolbar-context";
+import type { AppShellOutletContext } from "@/components/layout/app-shell-context";
+import { TerminalResponseReadyProvider } from "@/features/terminals/state/terminal-response-ready-provider";
+import { WorkspaceToolbarProvider } from "@/features/workspaces/state/workspace-toolbar-context";
 
 const project: ProjectRecord = {
   id: "project_1",
@@ -27,10 +27,7 @@ const workspace: WorkspaceRecord = {
   git_sha: "54012c8f",
   worktree_path: "/tmp/lifecycle-setup",
   mode: "local",
-  status: "idle",
   manifest_fingerprint: "manifest_1",
-  failure_reason: null,
-  failed_at: null,
   created_by: null,
   source_workspace_id: null,
   created_at: "2026-03-14T10:00:00.000Z",

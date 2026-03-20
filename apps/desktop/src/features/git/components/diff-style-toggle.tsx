@@ -1,5 +1,5 @@
 import { FloatingToggle } from "@lifecycle/ui";
-import { GIT_DIFF_STYLE_OPTIONS, gitDiffStyleLabel, type GitDiffStyle } from "../lib/diff-style";
+import { GIT_DIFF_STYLE_OPTIONS, gitDiffStyleLabel, type GitDiffStyle } from "@/features/git/lib/diff-style";
 
 interface DiffStyleToggleProps {
   diffStyle: GitDiffStyle;

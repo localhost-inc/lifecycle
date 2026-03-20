@@ -11,51 +11,49 @@ import {
 } from "react";
 import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { AppHotkeyListener } from "../../app/app-hotkey-listener";
-import { isMacPlatform, shouldHandleDomAppHotkey } from "../../app/app-hotkeys";
-import { useAuthSession } from "../../features/auth/state/auth-session-provider";
-import { CommandPaletteProvider } from "../../features/command-palette";
-import { getGitStatus } from "../../features/git/api";
-import { getCurrentBranch } from "../../features/projects/api/current-branch";
+import { AppHotkeyListener } from "@/app/app-hotkey-listener";
+import { isMacPlatform, shouldHandleDomAppHotkey } from "@/app/app-hotkeys";
+import { useAuthSession } from "@/features/auth/state/auth-session-provider";
+import { CommandPaletteProvider } from "@/features/command-palette";
+import { getGitStatus } from "@/features/git/api";
+import { getCurrentBranch } from "@/features/projects/api/current-branch";
 import {
   addProjectFromDirectory,
   readManifest,
   removeProject,
-} from "../../features/projects/api/projects";
-import { projectKeys, useProjectCatalog } from "../../features/projects/hooks";
+} from "@/features/projects/api/projects";
+import { projectKeys, useProjectCatalog } from "@/features/projects/hooks";
 import {
   buildShellContexts,
   filterProjectsForShellContext,
   readPersistedShellContextId,
   resolveActiveShellContext,
   writePersistedShellContextId,
-} from "../../features/projects/lib/shell-context";
-import { useSettings } from "../../features/settings/state/app-settings-provider";
-import { useTerminalResponseReady } from "../../features/terminals/state/terminal-response-ready-provider";
-import { WelcomeScreen } from "../../features/welcome/components/welcome-screen";
-import { createWorkspace, destroyWorkspace } from "../../features/workspaces/api";
-import {
-  createWorkspacesByProjectQuery,
-  useWorkspacesByProject,
-  workspaceKeys,
-} from "../../features/workspaces/hooks";
-import { getWorkspaceDisplayName } from "../../features/workspaces/lib/workspace-display";
-import { formatWorkspaceError } from "../../features/workspaces/lib/workspace-errors";
+} from "@/features/projects/lib/shell-context";
+import { useSettings } from "@/features/settings/state/app-settings-provider";
+import { useTerminalResponseReady } from "@/features/terminals/state/terminal-response-ready-provider";
+import { WelcomeScreen } from "@/features/welcome/components/welcome-screen";
+import { createWorkspace, destroyWorkspace } from "@/features/workspaces/api";
+import { useWorkspacesByProject } from "@/features/workspaces/hooks";
+import { getWorkspaceDisplayName } from "@/features/workspaces/lib/workspace-display";
+import { formatWorkspaceError } from "@/features/workspaces/lib/workspace-errors";
 import {
   clearLastProjectId,
   clearLastProjectSubPath,
   readLastProjectId,
   readLastProjectSubPath,
   writeLastProjectId,
-} from "../../features/projects/state/project-content-tabs";
+} from "@/features/projects/state/project-content-tabs";
 import {
   clearLastWorkspaceId,
   clearWorkspaceCanvasState,
   readLastWorkspaceId,
   writeLastWorkspaceId,
-} from "../../features/workspaces/state/workspace-canvas-state";
-import { WorkspaceOpenRequestsProvider } from "../../features/workspaces/state/workspace-open-requests";
-import { WorkspaceToolbarProvider } from "../../features/workspaces/state/workspace-toolbar-context";
+} from "@/features/workspaces/state/workspace-canvas-state";
+import { WorkspaceOpenRequestsProvider } from "@/features/workspaces/state/workspace-open-requests";
+import { createWorkspacesByProjectQuery } from "@/features/workspaces/queries";
+import { workspaceKeys } from "@/features/workspaces/state/workspace-query-keys";
+import { WorkspaceToolbarProvider } from "@/features/workspaces/state/workspace-toolbar-context";
 import {
   APP_SIDEBAR_COLLAPSED_STORAGE_KEY,
   APP_SIDEBAR_WIDTH_STORAGE_KEY,
@@ -67,15 +65,15 @@ import {
   getSidebarWidthBounds,
   readPersistedPanelValue,
   writePersistedPanelValue,
-} from "../../lib/panel-layout";
-import { useQueryClient } from "../../query";
+} from "@/lib/panel-layout";
+import { useQueryClient } from "@/query";
 import {
   SHORTCUT_HANDLER_PRIORITY,
   useShortcutRegistration,
-} from "../../app/shortcuts/shortcut-router";
-import { type AppShellOutletContext } from "./app-shell-context";
-import { AppSidebar } from "./app-sidebar";
-import { notifyShellResizeListeners, ShellResizeProvider } from "./shell-resize-provider";
+} from "@/app/shortcuts/shortcut-router";
+import { type AppShellOutletContext } from "@/components/layout/app-shell-context";
+import { AppSidebar } from "@/components/layout/app-sidebar";
+import { notifyShellResizeListeners, ShellResizeProvider } from "@/components/layout/shell-resize-provider";
 
 const SIDEBAR_RESIZE_STEP = 16;
 
@@ -671,52 +669,52 @@ export function AppShellLayout() {
   return (
     <WorkspaceOpenRequestsProvider>
       <WorkspaceToolbarProvider>
-      <CommandPaletteProvider projects={projects} workspacesByProjectId={workspacesByProjectId}>
-        <div
-          ref={shellViewportRef}
-          className="flex h-full w-full flex-row bg-[var(--background)] text-[var(--foreground)]"
-        >
-          <AppHotkeyListener onSelectProjectIndex={handleSelectProjectIndex} />
+        <CommandPaletteProvider projects={projects} workspacesByProjectId={workspacesByProjectId}>
+          <div
+            ref={shellViewportRef}
+            className="flex h-full w-full flex-row bg-[var(--background)] text-[var(--foreground)]"
+          >
+            <AppHotkeyListener onSelectProjectIndex={handleSelectProjectIndex} />
 
-          {/* App sidebar */}
-          <AppSidebar
-            activeContextName={activeShellContext.name}
-            authSession={authSession}
-            authSessionLoading={authSessionLoading}
-            collapsed={sidebarCollapsed}
-            onAddProject={handleAddProject}
-            onOpenSettings={handleOpenSettings}
-            onRemoveProject={handleRemoveProject}
-            onToggleCollapse={handleToggleSidebar}
-            projects={projects}
-            readyProjectIds={readyProjectIds}
-            workspacesByProjectId={workspacesByProjectId}
-            width={sidebarWidth}
-          />
-          {!sidebarCollapsed ? (
-            <div className="relative shrink-0">
-              <div
-                aria-label="Resize sidebar"
-                aria-orientation="vertical"
-                className="absolute inset-y-0 -left-2 z-10 w-4 cursor-col-resize"
-                onKeyDown={handleSidebarResizeKeyDown}
-                onPointerDown={handleSidebarResizePointerDown}
-                role="separator"
-                tabIndex={0}
-              />
-            </div>
-          ) : null}
-
-          {/* Main area */}
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--surface)]">
-            <ShellResizeProvider resizing={activeSidebarResize}>
-              <div className="min-h-0 flex-1">
-                <Outlet context={outletContext} />
+            {/* App sidebar */}
+            <AppSidebar
+              activeContextName={activeShellContext.name}
+              authSession={authSession}
+              authSessionLoading={authSessionLoading}
+              collapsed={sidebarCollapsed}
+              onAddProject={handleAddProject}
+              onOpenSettings={handleOpenSettings}
+              onRemoveProject={handleRemoveProject}
+              onToggleCollapse={handleToggleSidebar}
+              projects={projects}
+              readyProjectIds={readyProjectIds}
+              workspacesByProjectId={workspacesByProjectId}
+              width={sidebarWidth}
+            />
+            {!sidebarCollapsed ? (
+              <div className="relative shrink-0">
+                <div
+                  aria-label="Resize sidebar"
+                  aria-orientation="vertical"
+                  className="absolute inset-y-0 -left-2 z-10 w-4 cursor-col-resize"
+                  onKeyDown={handleSidebarResizeKeyDown}
+                  onPointerDown={handleSidebarResizePointerDown}
+                  role="separator"
+                  tabIndex={0}
+                />
               </div>
-            </ShellResizeProvider>
+            ) : null}
+
+            {/* Main area */}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--surface)]">
+              <ShellResizeProvider resizing={activeSidebarResize}>
+                <div className="min-h-0 flex-1">
+                  <Outlet context={outletContext} />
+                </div>
+              </ShellResizeProvider>
+            </div>
           </div>
-        </div>
-      </CommandPaletteProvider>
+        </CommandPaletteProvider>
       </WorkspaceToolbarProvider>
     </WorkspaceOpenRequestsProvider>
   );

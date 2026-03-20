@@ -1,23 +1,18 @@
 import { isTauri } from "@tauri-apps/api/core";
-import type { LifecycleConfig, WorkspaceRecord } from "@lifecycle/contracts";
+import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { watch, type UnwatchFn } from "@tauri-apps/plugin-fs";
 import { useEffect, useMemo } from "react";
-import { useQueryClient } from "../../../query";
-import { syncWorkspaceManifest } from "../../workspaces/api";
-import { useWorkspacesByProject, workspaceKeys } from "../../workspaces/hooks";
-import { readManifest, type ManifestStatus } from "../api/projects";
-import { useProjects, projectKeys } from "../hooks";
-import { watchEventTouchesManifest } from "../lib/manifest-watch";
-
-function configFromManifestStatus(manifestStatus: ManifestStatus): LifecycleConfig | null {
-  return manifestStatus.state === "valid" ? manifestStatus.result.config : null;
-}
+import { useQueryClient } from "@/query";
+import { useWorkspacesByProject } from "@/features/workspaces/hooks";
+import { workspaceKeys } from "@/features/workspaces/state/workspace-query-keys";
+import { projectKeys, useProjectCatalog } from "@/features/projects/hooks";
+import { watchEventTouchesManifest } from "@/features/projects/lib/manifest-watch";
 
 export function ProjectManifestWatcher() {
   const client = useQueryClient();
-  const projectsQuery = useProjects();
+  const projectCatalogQuery = useProjectCatalog();
   const workspacesByProjectQuery = useWorkspacesByProject();
-  const projects = projectsQuery.data;
+  const projects = projectCatalogQuery.data?.projects;
   const workspacesByProject = workspacesByProjectQuery.data;
   const workspaces = useMemo(
     () =>
@@ -98,9 +93,8 @@ export function ProjectManifestWatcher() {
 
               void (async () => {
                 client.invalidate(workspaceKeys.manifest(workspace.id));
-
-                const manifestStatus = await readManifest(workspace.worktree_path);
-                await syncWorkspaceManifest(workspace.id, configFromManifestStatus(manifestStatus));
+                client.invalidate(workspaceKeys.detail(workspace.id));
+                client.invalidate(workspaceKeys.services(workspace.id));
               })();
             },
             { delayMs: 150, recursive: false },

@@ -8,13 +8,13 @@ import { Alert, AlertDescription, Badge } from "@lifecycle/ui";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ArrowRight, ArrowUpRight, Check, Circle, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { formatRelativeTime } from "../../../lib/format";
-import { measureAsyncPerformance } from "../../../lib/performance";
-import { getGitPullRequestPatch } from "../api";
-import { useCurrentGitPullRequest, useGitPullRequest, useGitPullRequests } from "../hooks";
-import { useParsedGitPatchFiles } from "../lib/parsed-patch-files";
-import { GitPatchViewer } from "./git-patch-viewer";
-import { GithubAvatar } from "./github-avatar";
+import { formatRelativeTime } from "@/lib/format";
+import { measureAsyncPerformance } from "@/lib/performance";
+import { getGitPullRequestPatch } from "@/features/git/api";
+import { useCurrentGitPullRequest, useGitPullRequest, useGitPullRequests } from "@/features/git/hooks";
+import { useParsedGitPatchFiles } from "@/features/git/lib/parsed-patch-files";
+import { GitPatchViewer } from "@/features/git/components/git-patch-viewer";
+import { GithubAvatar } from "@/features/git/components/github-avatar";
 
 interface PullRequestSurfaceProps {
   initialScrollTop?: number;

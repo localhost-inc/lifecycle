@@ -62,8 +62,7 @@ const features = [
   },
   {
     name: "Preview URLs",
-    description:
-      "Every service with a port gets a shareable preview URL. Hot-reloading included.",
+    description: "Every service with a port gets a shareable preview URL. Hot-reloading included.",
   },
   {
     name: "Agent sessions",
@@ -94,15 +93,13 @@ export function LandingPage() {
         <h1 className="text-4xl font-semibold leading-[1.1] tracking-[-0.04em] text-[var(--foreground)] sm:text-5xl">
           Where teams and agents
           <br />
-          <span className="text-[var(--muted-foreground)]">
-            collaborate on code.
-          </span>
+          <span className="text-[var(--muted-foreground)]">collaborate on code.</span>
         </h1>
 
         <p className="mt-6 max-w-md text-base leading-relaxed text-[var(--muted-foreground)]">
-          Lifecycle is a native desktop app for running, sharing, and
-          collaborating on development environments. One manifest in your repo.
-          Deterministic dependency graph. Local-first — no accounts required.
+          Lifecycle is a native desktop app for running, sharing, and collaborating on development
+          environments. One manifest in your repo. Deterministic dependency graph. Local-first — no
+          accounts required.
         </p>
 
         <div className="mt-8 flex flex-wrap gap-3">
@@ -122,11 +119,12 @@ export function LandingPage() {
         </p>
         <ul className="mt-5 space-y-3">
           {features.map((feature) => (
-            <li key={feature.name} className="text-sm leading-relaxed text-[var(--muted-foreground)]">
-              <span className="font-semibold text-[var(--foreground)]">
-                {feature.name}
-              </span>{" "}
-              — {feature.description}
+            <li
+              key={feature.name}
+              className="text-sm leading-relaxed text-[var(--muted-foreground)]"
+            >
+              <span className="font-semibold text-[var(--foreground)]">{feature.name}</span> —{" "}
+              {feature.description}
             </li>
           ))}
         </ul>
@@ -142,8 +140,7 @@ export function LandingPage() {
           <code className="rounded-md bg-[var(--muted)] px-1.5 py-0.5 font-mono text-[0.9em] text-[var(--foreground)]">
             lifecycle.json
           </code>{" "}
-          to your repo. Lifecycle reads the dependency graph and boots your stack
-          in order.
+          to your repo. Lifecycle reads the dependency graph and boots your stack in order.
         </p>
 
         <pre className="mt-5">
@@ -151,8 +148,8 @@ export function LandingPage() {
         </pre>
 
         <p className="mt-4 max-w-md text-sm leading-relaxed text-[var(--muted-foreground)]">
-          Services, tasks, health checks, dependency ordering. Process or
-          container runtime. No Docker Compose. No shell scripts.
+          Services, tasks, health checks, dependency ordering. Process or container runtime. No
+          Docker Compose. No shell scripts.
         </p>
       </section>
 

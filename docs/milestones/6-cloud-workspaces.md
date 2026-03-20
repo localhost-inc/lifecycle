@@ -1,7 +1,7 @@
 # Milestone 6: "I can sign in, fork to cloud, share a preview, and create a PR"
 
 > Prerequisites: M5
-> Introduces: `organization` entity, `repository` entity, `activity` entity, auth, `CloudWorkspaceProvider`, fork-to-cloud, cloud preview, PR creation, cloud CLI commands
+> Introduces: `organization` entity, `repository` entity, `activity` entity, auth, `CloudControlPlane` + `CloudWorkspaceRuntime`, fork-to-cloud, cloud preview, PR creation, cloud CLI commands
 > Tracker: high-level status/checklist lives in [`docs/plan.md`](../plan.md). This document is the detailed implementation contract.
 
 ## Goal
@@ -15,7 +15,7 @@ User signs in via WorkOS, installs GitHub App, links project to repo, forks a lo
 3. GitHub App installation flow.
 4. Convex schemas: `organization`, `repository`, `activity`. Selective sync and mirror logic for portable `project` and workspace metadata across local and cloud boundaries, without transferring authority for local environment state.
 5. Project -> repository linking (auto-detect from git remote, manual override).
-6. Cloud workspace creation via `CloudWorkspaceProvider`.
+6. Cloud workspace creation via `CloudControlPlane` + `CloudWorkspaceRuntime`.
 7. Fork-to-cloud: local workspace -> push code -> create cloud workspace.
 8. Cloud-to-local fork.
 9. Org switcher and cloud workspace list.
@@ -231,7 +231,7 @@ Local workspaces are private to the machine. They are NOT visible to teammates i
 
 #### Fork-to-Cloud (the bridge)
 
-Fork-to-cloud is the bridge between local and cloud. A user working locally can fork their workspace to cloud to share it with teammates. The forked workspace runs full `create -> setup -> start` lifecycle -- it's a fresh cloud workspace at the same ref, not a migration.
+Fork-to-cloud is the bridge between local and cloud. A user working locally can fork their workspace to cloud to share it with teammates. The forked workspace runs full `create -> prepare -> start` lifecycle -- it's a fresh cloud workspace at the same ref, not a migration.
 
 - Fork flow: stash-commits dirty working tree to a temporary branch (`lifecycle/fork/<short-id>`), pushes it, and creates a cloud workspace at that branch via Convex mutation. The `includeUncommitted` option is especially important here -- local work may have significant uncommitted state.
 - Desktop app: "Fork to cloud" action on any local workspace (requires sign-in and GitHub App). Checkboxes: "Destroy local source after fork" and "Include uncommitted changes" (hidden when working tree is clean).
@@ -387,17 +387,17 @@ The share experience must feel effortless — one click to share, one click to j
 
 ### Cloud Preview
 
-#### `CloudWorkspaceProvider` Preview
+#### `CloudWorkspaceRuntime` Preview
 
 1. **Cloudflare routing model**:
-   - on service share enable, runtime calls Cloudflare Sandbox `exposePort(assigned_port, { type: "http", token })`
-   - token is deterministic per `{workspace_id, service_name}` to keep preview URL stable across restarts
+   - when a previewable service is running, runtime provisions an HTTP preview route for the current `assigned_port`
+   - token is deterministic per `{workspace_id, name}` to keep preview URL stable across restarts
    - canonical URL shape: `https://<workspace-slug>--<service>.preview.<organization-slug>.<domain>`
    - incoming requests are handled by a wildcard-edge Worker route and proxied via `proxyToSandbox(...)` to the target sandbox session
    - route target resolves through cloud environment metadata to `{sandbox_id, assigned_port}` and is reconciled on service restart/wake
 
 2. **Access control**:
-   - default audience is organization members only (`exposure=organization`)
+   - default audience is organization members only
    - auth is enforced at preview gateway using WorkOS JWT-based preview tokens (see Auth > Preview URL Auth)
    - raw preview tokens are treated as routing identifiers, not as sufficient authentication
    - optional external reviewer links are tokenized, scoped to one preview URL, and time-bound
@@ -474,7 +474,7 @@ Local indexes (Tauri SQLite):
 
 1. `project`: unique (`path`)
 2. `workspace`: index (`project_id`, `status`), index (`source_workspace_id`)
-3. `workspace_service`: unique (`workspace_id`, `service_name`)
+3. `workspace_service`: unique (`workspace_id`, `name`)
 4. `terminal`: index (`workspace_id`, `status`)
 
 Cloud indexes (Convex `defineTable().index()` syntax):
@@ -483,7 +483,7 @@ Cloud indexes (Convex `defineTable().index()` syntax):
 2. `project`: index (`organization_id`), index (`repository_id`)
 3. `repository`: unique (`organization_id`, `provider`, `provider_repo_id`), index (`organization_id`, `status`)
 4. `workspace`: index (`project_id`, `source_ref`, `status`), index (`project_id`, `mode`, `status`), index (`created_by`, `status`), index (`source_workspace_id`)
-5. `workspace_service`: unique (`workspace_id`, `service_name`), index (`workspace_id`)
+5. `workspace_service`: unique (`workspace_id`, `name`), index (`workspace_id`)
 6. `terminal`: index (`workspace_id`, `status`, `last_active_at`)
 7. `activity`: index (`workspace_id`, `created_at`), index (`organization_id`, `created_at`), index (`organization_id`, `type`, `created_at`)
 8. `workspace_invite`: unique (`token`), index (`workspace_id`, `revoked_at`), index (`workspace_id`, `redeemed_by`)

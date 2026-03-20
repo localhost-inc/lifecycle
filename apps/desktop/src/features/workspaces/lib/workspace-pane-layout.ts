@@ -2,7 +2,7 @@ import type {
   WorkspacePaneLeaf,
   WorkspacePaneNode,
   WorkspacePaneSplit,
-} from "../state/workspace-canvas-state";
+} from "@/features/workspaces/state/workspace-canvas-state";
 
 export const DEFAULT_WORKSPACE_PANE_ID = "pane-root";
 export const DEFAULT_WORKSPACE_SPLIT_RATIO = 0.5;
@@ -229,6 +229,24 @@ export function getAdjacentPaneId(
   const delta = direction === "left" || direction === "up" ? -1 : 1;
   const nextIndex = (currentIndex + delta + panes.length) % panes.length;
   return panes[nextIndex]?.id ?? null;
+}
+
+export function resetAllWorkspacePaneSplitRatios(root: WorkspacePaneNode): WorkspacePaneNode {
+  if (isWorkspacePaneLeaf(root)) {
+    return root;
+  }
+
+  const first = resetAllWorkspacePaneSplitRatios(root.first);
+  const second = resetAllWorkspacePaneSplitRatios(root.second);
+  if (
+    root.ratio === DEFAULT_WORKSPACE_SPLIT_RATIO &&
+    first === root.first &&
+    second === root.second
+  ) {
+    return root;
+  }
+
+  return { ...root, first, ratio: DEFAULT_WORKSPACE_SPLIT_RATIO, second };
 }
 
 export function closeWorkspacePaneLayout(

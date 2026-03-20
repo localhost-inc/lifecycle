@@ -1,14 +1,9 @@
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@lifecycle/ui";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@lifecycle/ui";
 import { AnimatePresence, motion } from "motion/react";
 import { Plus, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import type { HarnessProvider } from "../../terminals/api";
-import { ClaudeIcon, CodexIcon, ShellIcon } from "./surface-icons";
+import type { HarnessProvider } from "@/features/terminals/api";
+import { ClaudeIcon, CodexIcon, ShellIcon } from "@/features/workspaces/components/surface-icons";
 
 export type SurfaceLaunchRequest =
   | { kind: "terminal"; launchType: "shell" }

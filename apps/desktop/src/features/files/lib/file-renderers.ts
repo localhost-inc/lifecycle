@@ -1,9 +1,9 @@
 import {
   getFileRendererDefinitionByKind,
   resolveFileRendererDefinition,
-} from "../renderers/registry";
-import type { FileViewerMode } from "./file-view-mode";
-import type { FileViewerRendererKind } from "../renderers/file-renderer-types";
+} from "@/features/files/renderers/registry";
+import type { FileViewerMode } from "@/features/files/lib/file-view-mode";
+import type { FileViewerRendererKind } from "@/features/files/renderers/file-renderer-types";
 
 type FileSaveHotkeyEvent = Pick<
   KeyboardEvent,

@@ -1,7 +1,7 @@
 {
   // One-time workspace bootstrap for this repo.
   "workspace": {
-    "setup": [
+    "prepare": [
       {
         "name": "install",
         "command": "bun install --frozen-lockfile",

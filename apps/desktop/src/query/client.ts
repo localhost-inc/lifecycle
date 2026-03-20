@@ -1,10 +1,9 @@
-import type { LifecycleEvent, LifecycleEventKind } from "@lifecycle/contracts";
-import type { QuerySource } from "./source";
+import type { QuerySource } from "@/query/source";
 
 export type QueryKeyPart = string | number | boolean | null;
 export type QueryKey = readonly QueryKeyPart[];
 
-export type QueryStatus = "idle" | "loading" | "ready" | "error";
+export type QueryStatus = "disabled" | "idle" | "loading" | "ready" | "error";
 
 export interface QuerySnapshot<T> {
   data: T | undefined;
@@ -12,44 +11,41 @@ export interface QuerySnapshot<T> {
   status: QueryStatus;
 }
 
-export type QueryUpdate<T> =
-  | { kind: "replace"; data: T }
-  | { kind: "invalidate" }
-  | { kind: "none" };
-
-interface BaseQueryDescriptor<T> {
+export interface QueryDescriptor<T> {
   key: QueryKey;
   fetch(source: QuerySource): Promise<T>;
 }
 
-interface PassiveQueryDescriptor<T> extends BaseQueryDescriptor<T> {
-  eventKinds?: never;
-  reduce?: never;
-}
-
-interface EventQueryDescriptor<T> extends BaseQueryDescriptor<T> {
-  eventKinds: readonly LifecycleEventKind[];
-  reduce(current: T | undefined, event: LifecycleEvent): QueryUpdate<T>;
-}
-
-export type QueryDescriptor<T> = PassiveQueryDescriptor<T> | EventQueryDescriptor<T>;
-
 interface QueryEntry<T> {
   descriptor: QueryDescriptor<T>;
+  invalidationVersion: number;
   keyHash: string;
   listeners: Set<() => void>;
   promise: Promise<void> | null;
   snapshot: QuerySnapshot<T>;
+  stale: boolean;
 }
 
 function hashKey(key: QueryKey): string {
   return JSON.stringify(key);
 }
 
+function keyStartsWith(key: QueryKey, prefix: QueryKey): boolean {
+  if (prefix.length > key.length) {
+    return false;
+  }
+
+  return prefix.every((part, index) => key[index] === part);
+}
+
 function notify<T>(entry: QueryEntry<T>): void {
   for (const listener of entry.listeners) {
     listener();
   }
+}
+
+function hasSnapshotData<T>(entry: QueryEntry<T>): boolean {
+  return entry.snapshot.data !== undefined;
 }
 
 function createInitialSnapshot<T>(): QuerySnapshot<T> {
@@ -60,66 +56,28 @@ function createInitialSnapshot<T>(): QuerySnapshot<T> {
   };
 }
 
-function isEventQueryDescriptor<T>(
-  descriptor: QueryDescriptor<T>,
-): descriptor is EventQueryDescriptor<T> {
-  return "reduce" in descriptor && typeof descriptor.reduce === "function";
-}
-
-function eventKindsKey(kinds: readonly LifecycleEventKind[]): string {
-  return [...new Set(kinds)].sort().join("\0");
-}
-
-export type LifecycleEventSubscriber = (
-  kinds: readonly LifecycleEventKind[],
-  listener: (event: LifecycleEvent) => void,
-) => Promise<() => void>;
-
 export class QueryClient {
   private readonly entries = new Map<string, QueryEntry<unknown>>();
-  private readonly entriesByEventKind = new Map<LifecycleEventKind, Set<QueryEntry<unknown>>>();
   private readonly source: QuerySource;
-  private readonly subscribeToEvents: LifecycleEventSubscriber;
-  private sourceUnsubscribe: (() => void) | null = null;
-  private subscriptionKindsKey = "";
-  private syncPromise: Promise<void> = Promise.resolve();
 
-  constructor(source: QuerySource, subscribeToEvents: LifecycleEventSubscriber) {
+  constructor(source: QuerySource) {
     this.source = source;
-    this.subscribeToEvents = subscribeToEvents;
   }
 
   dispose(): void {
-    this.entriesByEventKind.clear();
-    this.subscriptionKindsKey = "";
-    this.sourceUnsubscribe?.();
-    this.sourceUnsubscribe = null;
-    this.syncPromise = Promise.resolve();
+    this.entries.clear();
   }
 
   subscribe<T>(descriptor: QueryDescriptor<T>, listener: () => void): () => void {
     const entry = this.ensureEntry(descriptor);
-    const wasActive = entry.listeners.size > 0;
     entry.listeners.add(listener);
 
-    if (!wasActive && isEventQueryDescriptor(entry.descriptor)) {
-      this.indexEntry(entry, entry.descriptor);
-      void this.syncEventSubscription();
-    }
-
-    if (entry.snapshot.status === "idle" && entry.promise === null) {
+    if ((entry.snapshot.status === "idle" || entry.stale) && entry.promise === null) {
       void this.fetchEntry(entry);
     }
 
     return () => {
-      if (!entry.listeners.delete(listener)) {
-        return;
-      }
-
-      if (entry.listeners.size === 0 && isEventQueryDescriptor(entry.descriptor)) {
-        this.unindexEntry(entry, entry.descriptor);
-        void this.syncEventSubscription();
-      }
+      entry.listeners.delete(listener);
     };
   }
 
@@ -128,11 +86,12 @@ export class QueryClient {
   }
 
   async refetch<T>(descriptor: QueryDescriptor<T>): Promise<void> {
-    await this.fetchEntry(this.ensureEntry(descriptor), true);
+    await this.fetchEntry(this.ensureEntry(descriptor));
   }
 
   setData<T>(descriptor: QueryDescriptor<T>, data: T): void {
     const entry = this.ensureEntry(descriptor);
+    entry.stale = false;
     entry.snapshot = {
       data,
       error: null,
@@ -143,21 +102,20 @@ export class QueryClient {
 
   invalidate(key: QueryKey): void {
     const keyHash = hashKey(key);
-    this.invalidateMatching((entryKey) => hashKey(entryKey) === keyHash);
+    this.invalidateMatching((_entryKey, entryKeyHash) => entryKeyHash === keyHash);
   }
 
-  invalidateMatching(match: (key: QueryKey) => boolean): void {
+  invalidatePrefix(prefix: QueryKey): void {
+    this.invalidateMatching((key) => keyStartsWith(key, prefix));
+  }
+
+  invalidateMatching(match: (key: QueryKey, keyHash: string) => boolean): void {
     for (const entry of this.entries.values()) {
-      if (!match(entry.descriptor.key)) {
+      if (!match(entry.descriptor.key, entry.keyHash)) {
         continue;
       }
 
-      entry.snapshot = {
-        ...entry.snapshot,
-        error: null,
-        status: "idle",
-      };
-      notify(entry);
+      this.invalidateEntry(entry);
 
       if (entry.listeners.size > 0) {
         void this.fetchEntry(entry);
@@ -171,75 +129,31 @@ export class QueryClient {
 
     if (existing) {
       const typedEntry = existing as QueryEntry<T>;
-      const previousDescriptor = typedEntry.descriptor;
-      const previousKindsKey = isEventQueryDescriptor(previousDescriptor)
-        ? eventKindsKey(previousDescriptor.eventKinds)
-        : "";
-      const nextKindsKey = isEventQueryDescriptor(descriptor)
-        ? eventKindsKey(descriptor.eventKinds)
-        : "";
-
-      if (typedEntry.listeners.size > 0 && previousKindsKey !== nextKindsKey) {
-        if (isEventQueryDescriptor(previousDescriptor)) {
-          this.unindexEntry(typedEntry, previousDescriptor);
-        }
-        if (isEventQueryDescriptor(descriptor)) {
-          this.indexEntry(typedEntry, descriptor);
-        }
-        void this.syncEventSubscription();
-      }
-
       typedEntry.descriptor = descriptor;
       return typedEntry;
     }
 
     const created: QueryEntry<T> = {
       descriptor,
+      invalidationVersion: 0,
       keyHash,
       listeners: new Set(),
       promise: null,
       snapshot: createInitialSnapshot(),
+      stale: false,
     };
     this.entries.set(keyHash, created as QueryEntry<unknown>);
     return created;
   }
 
-  private indexEntry<T>(entry: QueryEntry<T>, descriptor: EventQueryDescriptor<T>): void {
-    for (const kind of new Set(descriptor.eventKinds)) {
-      let entries = this.entriesByEventKind.get(kind);
-      if (!entries) {
-        entries = new Set();
-        this.entriesByEventKind.set(kind, entries);
-      }
-
-      entries.add(entry as QueryEntry<unknown>);
-    }
-  }
-
-  private unindexEntry<T>(entry: QueryEntry<T>, descriptor: EventQueryDescriptor<T>): void {
-    for (const kind of new Set(descriptor.eventKinds)) {
-      const entries = this.entriesByEventKind.get(kind);
-      if (!entries) {
-        continue;
-      }
-
-      entries.delete(entry as QueryEntry<unknown>);
-      if (entries.size === 0) {
-        this.entriesByEventKind.delete(kind);
-      }
-    }
-  }
-
-  private async fetchEntry<T>(entry: QueryEntry<T>, force = false): Promise<void> {
-    if (entry.promise && !force) {
+  private async fetchEntry<T>(entry: QueryEntry<T>): Promise<void> {
+    if (entry.promise) {
       return entry.promise;
     }
 
-    // Only show loading state if there's no existing data to display.
-    // Background refreshes (force=true with existing data) keep serving
-    // stale data to avoid unmount/remount flicker in renderers.
-    const hasData = entry.snapshot.data !== undefined;
-    if (!hasData) {
+    const invalidationVersion = entry.invalidationVersion;
+
+    if (!hasSnapshotData(entry)) {
       entry.snapshot = {
         ...entry.snapshot,
         error: null,
@@ -251,6 +165,7 @@ export class QueryClient {
     const fetchPromise = entry.descriptor
       .fetch(this.source)
       .then((data) => {
+        entry.stale = entry.invalidationVersion !== invalidationVersion;
         entry.snapshot = {
           data,
           error: null,
@@ -260,6 +175,7 @@ export class QueryClient {
       })
       .catch((error: unknown) => {
         console.error("Query failed:", entry.descriptor.key, error);
+        entry.stale = entry.invalidationVersion !== invalidationVersion;
         entry.snapshot = {
           ...entry.snapshot,
           error,
@@ -269,88 +185,29 @@ export class QueryClient {
       })
       .finally(() => {
         entry.promise = null;
+
+        if (entry.stale && entry.listeners.size > 0) {
+          void this.fetchEntry(entry);
+        }
       });
 
     entry.promise = fetchPromise;
     return fetchPromise;
   }
 
-  private syncEventSubscription(): Promise<void> {
-    const nextTask = this.syncPromise.then(async () => {
-      const nextKinds = [...this.entriesByEventKind.keys()].sort();
-      const nextKindsKey = eventKindsKey(nextKinds);
-
-      if (nextKindsKey === this.subscriptionKindsKey) {
-        return;
-      }
-
-      this.subscriptionKindsKey = nextKindsKey;
-      this.sourceUnsubscribe?.();
-      this.sourceUnsubscribe = null;
-
-      if (nextKinds.length === 0) {
-        return;
-      }
-
-      const unsubscribe = await this.subscribeToEvents(nextKinds, (event) => {
-        this.handleEvent(event);
-      });
-
-      if (this.subscriptionKindsKey !== nextKindsKey) {
-        unsubscribe();
-        return;
-      }
-
-      this.sourceUnsubscribe = unsubscribe;
-    });
-
-    this.syncPromise = nextTask.catch((error) => {
-      console.error("Failed to synchronize lifecycle event subscriptions:", error);
-    });
-
-    return nextTask;
-  }
-
-  private handleEvent(event: LifecycleEvent): void {
-    const entries = this.entriesByEventKind.get(event.kind);
-    if (!entries) {
+  private invalidateEntry<T>(entry: QueryEntry<T>): void {
+    entry.invalidationVersion += 1;
+    entry.stale = true;
+    const nextStatus = hasSnapshotData(entry) ? "ready" : "idle";
+    if (entry.snapshot.error === null && entry.snapshot.status === nextStatus) {
       return;
     }
 
-    for (const entry of entries) {
-      const descriptor = entry.descriptor;
-      if (!isEventQueryDescriptor(descriptor)) {
-        continue;
-      }
-
-      const reduce = descriptor.reduce;
-      const current = entry.snapshot.data;
-      const update = reduce(current, event);
-
-      if (update.kind === "none") {
-        continue;
-      }
-
-      if (update.kind === "replace") {
-        entry.snapshot = {
-          data: update.data,
-          error: null,
-          status: "ready",
-        };
-        notify(entry);
-        continue;
-      }
-
-      entry.snapshot = {
-        ...entry.snapshot,
-        error: null,
-        status: "idle",
-      };
-      notify(entry);
-
-      if (entry.listeners.size > 0) {
-        void this.fetchEntry(entry);
-      }
-    }
+    entry.snapshot = {
+      ...entry.snapshot,
+      error: null,
+      status: nextStatus,
+    };
+    notify(entry);
   }
 }

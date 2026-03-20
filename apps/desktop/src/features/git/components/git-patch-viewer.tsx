@@ -1,14 +1,14 @@
 import { Alert, AlertDescription, Loading } from "@lifecycle/ui";
 import type { FileDiffMetadata } from "@pierre/diffs/react";
 import { lazy, Suspense } from "react";
-import { useLocalStorage } from "../../../lib/use-local-storage";
+import { useLocalStorage } from "@/lib/use-local-storage";
 import {
   DEFAULT_GIT_DIFF_STYLE,
   GIT_DIFF_STYLE_STORAGE_KEY,
   isGitDiffStyle,
   type GitDiffStyle,
-} from "../lib/diff-style";
-import { DiffStyleToggle } from "./diff-style-toggle";
+} from "@/features/git/lib/diff-style";
+import { DiffStyleToggle } from "@/features/git/components/diff-style-toggle";
 
 const GitPatchViewerBody = lazy(async () => {
   const module = await import("./git-patch-viewer-body");

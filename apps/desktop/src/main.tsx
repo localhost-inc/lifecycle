@@ -3,17 +3,17 @@ import { ThemeProvider } from "@lifecycle/ui";
 import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
-import { ShortcutRouterProvider } from "./app/shortcuts/shortcut-router";
-import { router } from "./app/router";
-import { AuthSessionProvider } from "./features/auth/state/auth-session-provider";
-import { TurnNotificationListener } from "./features/notifications/turn-notification-listener";
-import { ProjectManifestWatcher } from "./features/projects/components/project-manifest-watcher";
-import { SettingsProvider } from "./features/settings/state/app-settings-provider";
-import { TerminalResponseReadyProvider } from "./features/terminals/state/terminal-response-ready-provider";
-import { markPerformance, measurePerformance } from "./lib/performance";
-import { QueryProvider } from "./query";
-import "./main.css";
-import { ThemeWindowSync } from "./theme/theme-window-sync";
+import { ShortcutRouterProvider } from "@/app/shortcuts/shortcut-router";
+import { router } from "@/app/router";
+import { AuthSessionProvider } from "@/features/auth/state/auth-session-provider";
+import { TurnNotificationListener } from "@/features/notifications/turn-notification-listener";
+import { ProjectManifestWatcher } from "@/features/projects/components/project-manifest-watcher";
+import { SettingsProvider } from "@/features/settings/state/app-settings-provider";
+import { TerminalResponseReadyProvider } from "@/features/terminals/state/terminal-response-ready-provider";
+import { markPerformance, measurePerformance } from "@/lib/performance";
+import { QueryProvider } from "@/query";
+import "@/main.css";
+import { ThemeWindowSync } from "@/theme/theme-window-sync";
 
 function BootstrapPerfMarker() {
   useEffect(() => {

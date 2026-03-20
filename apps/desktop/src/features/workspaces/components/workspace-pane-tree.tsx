@@ -3,8 +3,8 @@ import {
   getHorizontalSplitRatioFromPointer,
   getSplitRatioBounds,
   getVerticalSplitRatioFromPointer,
-} from "../../../lib/panel-layout";
-import { notifyShellResizeListeners } from "../../../components/layout/shell-resize-provider";
+} from "@/lib/panel-layout";
+import { notifyShellResizeListeners } from "@/components/layout/shell-resize-provider";
 import {
   Fragment,
   useCallback,
@@ -18,36 +18,36 @@ import {
 } from "react";
 import type { TerminalRecord } from "@lifecycle/contracts";
 import { AnimatePresence, motion } from "motion/react";
-import { type CreateTerminalRequest, type HarnessProvider } from "../../terminals/api";
+import { type CreateTerminalRequest, type HarnessProvider } from "@/features/terminals/api";
 import {
   SurfaceLaunchActions,
   type SurfaceLaunchAction,
   type SurfaceLaunchRequest,
-} from "./surface-launch-actions";
-import { WorkspacePaneContent } from "./workspace-pane-content";
+} from "@/features/workspaces/components/surface-launch-actions";
+import { WorkspacePaneContent } from "@/features/workspaces/components/workspace-pane-content";
 import {
   WorkspacePaneDropOverlay,
   resolveWorkspacePaneDropStateFromGeometry,
   type WorkspacePaneActiveTabDropState,
   type WorkspacePaneDropGeometry,
-} from "./workspace-pane-drop-zones";
+} from "@/features/workspaces/components/workspace-pane-drop-zones";
 import {
   WorkspacePaneTabBar,
   renderWorkspacePaneDefaultTabLeading,
   type WorkspacePaneTabBarDragPreview,
   type WorkspacePaneTabDrag,
-} from "./workspace-pane-tab-bar";
-import type { FileViewerSessionState } from "../../files/lib/file-session";
+} from "@/features/workspaces/components/workspace-pane-tab-bar";
+import type { FileViewerSessionState } from "@/features/files/lib/file-session";
 import type {
   WorkspacePaneNode,
   WorkspaceCanvasDocument,
   WorkspaceCanvasTabViewState,
-} from "../state/workspace-canvas-state";
+} from "@/features/workspaces/state/workspace-canvas-state";
 import {
   reorderWorkspaceTabKeys,
   type WorkspaceCanvasTab,
   type WorkspaceTabPlacement,
-} from "./workspace-canvas-tabs";
+} from "@/features/workspaces/components/workspace-canvas-tabs";
 
 const MIN_WORKSPACE_PANE_SIZE = 240;
 const PANE_RESIZE_STEP_PX = 32;
@@ -79,6 +79,7 @@ interface WorkspacePaneTreeProps {
   onSelectPane: (paneId: string) => void;
   onSelectTab: (paneId: string, key: string) => void;
   onReconcilePaneVisibleTabOrder: (paneId: string, keys: string[]) => void;
+  onResetAllSplitRatios: () => void;
   onSetSplitRatio: (splitId: string, ratio: number) => void;
   onSplitPane: (paneId: string, direction: "column" | "row") => void;
   onTabViewStateChange: (tabKey: string, viewState: WorkspaceCanvasTabViewState | null) => void;
@@ -187,14 +188,15 @@ function ZoomOutIcon() {
   );
 }
 
-
 function ResizeHandle({
   direction,
+  onDoubleClick,
   onKeyDown,
   onPointerDown,
   ratio,
 }: {
   direction: "column" | "row";
+  onDoubleClick: () => void;
   onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void;
   ratio: number;
@@ -210,6 +212,7 @@ function ResizeHandle({
         aria-valuenow={Math.round(ratio * 100)}
         data-workspace-split-resizer="row"
         tabIndex={0}
+        onDoubleClick={onDoubleClick}
         onKeyDown={onKeyDown}
         onPointerDown={onPointerDown}
         className="group absolute inset-y-0 -left-2 z-20 flex w-4 touch-none cursor-col-resize justify-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
@@ -227,6 +230,7 @@ function ResizeHandle({
         aria-valuemin={0}
         aria-valuenow={Math.round(ratio * 100)}
         tabIndex={0}
+        onDoubleClick={onDoubleClick}
         onKeyDown={onKeyDown}
         onPointerDown={onPointerDown}
         className="group absolute inset-x-0 top-1/2 z-10 flex h-3 -translate-y-1/2 cursor-row-resize items-center outline-none focus-visible:outline-2 focus-visible:outline-[var(--ring)]"
@@ -240,12 +244,14 @@ function ResizeHandle({
 function WorkspacePaneSplitNode({
   children,
   direction,
+  onResetAllSplitRatios,
   onSetSplitRatio,
   ratio,
   splitId,
 }: {
   children: [ReactNode, ReactNode];
   direction: "column" | "row";
+  onResetAllSplitRatios: () => void;
   onSetSplitRatio: (splitId: string, ratio: number) => void;
   ratio: number;
   splitId: string;
@@ -410,6 +416,7 @@ function WorkspacePaneSplitNode({
       </div>
       <ResizeHandle
         direction={direction}
+        onDoubleClick={onResetAllSplitRatios}
         onKeyDown={handleSeparatorKeyDown}
         onPointerDown={handleSeparatorPointerDown}
         ratio={clampedRatio}
@@ -528,6 +535,7 @@ export function WorkspacePaneTree({
   onSelectPane,
   onSelectTab,
   onReconcilePaneVisibleTabOrder,
+  onResetAllSplitRatios,
   onSetSplitRatio,
   onSplitPane,
   onTabViewStateChange,
@@ -719,6 +727,7 @@ export function WorkspacePaneTree({
           <WorkspacePaneSplitNode
             key={node.id}
             direction={node.direction}
+            onResetAllSplitRatios={onResetAllSplitRatios}
             onSetSplitRatio={onSetSplitRatio}
             ratio={node.ratio}
             splitId={node.id}
@@ -815,10 +824,16 @@ export function WorkspacePaneTree({
                         {zoomedPaneId ? <ZoomOutIcon /> : <ZoomInIcon />}
                       </PaneControlButton>
                     )}
-                    <PaneControlButton label="Split Right" onClick={() => onSplitPane(node.id, "row")}>
+                    <PaneControlButton
+                      label="Split Right"
+                      onClick={() => onSplitPane(node.id, "row")}
+                    >
                       <SplitRightIcon />
                     </PaneControlButton>
-                    <PaneControlButton label="Split Down" onClick={() => onSplitPane(node.id, "column")}>
+                    <PaneControlButton
+                      label="Split Down"
+                      onClick={() => onSplitPane(node.id, "column")}
+                    >
                       <SplitDownIcon />
                     </PaneControlButton>
                   </motion.div>
@@ -870,6 +885,7 @@ export function WorkspacePaneTree({
       onSelectPane,
       onSelectTab,
       onReconcilePaneVisibleTabOrder,
+      onResetAllSplitRatios,
       onSetSplitRatio,
       onSplitPane,
       onTabViewStateChange,

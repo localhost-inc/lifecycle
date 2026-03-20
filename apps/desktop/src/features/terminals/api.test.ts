@@ -9,7 +9,7 @@ import {
   renameTerminal,
   saveTerminalAttachment,
   terminalHasLiveSession,
-} from "./api";
+} from "@/features/terminals/api";
 
 const TERMINAL_RUNTIME_UNAVAILABLE_MESSAGE = "Terminal runtime requires the Tauri desktop shell.";
 

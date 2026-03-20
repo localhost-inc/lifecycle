@@ -1,10 +1,10 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
-import { CommandPaletteContext, type CommandPaletteContextValue } from "./command-palette-context";
-import { CommandPalette } from "./command-palette";
-import { useCommandPaletteCommands } from "./use-command-palette-commands";
-import { useCommandPaletteFiles } from "./use-command-palette-files";
-import type { CommandPaletteMode } from "./types";
+import { CommandPaletteContext, type CommandPaletteContextValue } from "@/features/command-palette/command-palette-context";
+import { CommandPalette } from "@/features/command-palette/command-palette";
+import { useCommandPaletteCommands } from "@/features/command-palette/use-command-palette-commands";
+import { useCommandPaletteFiles } from "@/features/command-palette/use-command-palette-files";
+import type { CommandPaletteMode } from "@/features/command-palette/types";
 
 interface CommandPaletteProviderProps {
   children: ReactNode;

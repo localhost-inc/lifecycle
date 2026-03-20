@@ -1,4 +1,4 @@
-import type { StorageLike } from "../../lib/panel-layout";
+import type { StorageLike } from "@/lib/panel-layout";
 
 export interface ExtensionBarState {
   activeExtensionId: string | null;

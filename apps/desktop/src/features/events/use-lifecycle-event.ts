@@ -1,6 +1,6 @@
 import type { LifecycleEvent, LifecycleEventOf, LifecycleEventKind } from "@lifecycle/contracts";
 import { useEffect, useRef } from "react";
-import { subscribeToLifecycleEvents } from "./api";
+import { subscribeToLifecycleEvents } from "@/features/events/api";
 
 export function useLifecycleEvent<Kind extends LifecycleEventKind>(
   kind: Kind,

@@ -1,82 +1,63 @@
 import type {
+  EnvironmentRecord,
   GitBranchPullRequestResult,
   GitCommitDiffResult,
   GitCommitResult,
   GitDiffResult,
-  GitDiffScope,
   GitLogEntry,
   GitPullRequestDetailResult,
   GitPullRequestListResult,
   GitPullRequestSummary,
   GitPushResult,
   GitStatusResult,
+  LifecycleEvent,
   ServiceRecord,
   TerminalRecord,
-  WorkspaceRecord,
 } from "@lifecycle/contracts";
 import type {
-  WorkspaceProviderFileReadResult,
-  WorkspaceProviderFileTreeEntry,
-  WorkspaceProvider,
-  WorkspaceProviderCreateTerminalInput,
-  WorkspaceProviderCreateInput,
-  WorkspaceProviderCreateResult,
-  WorkspaceProviderGitDiffInput,
-  WorkspaceProviderHealthResult,
-  WorkspaceProviderRuntimeProjectionResult,
-  WorkspaceProviderSaveTerminalAttachmentInput,
-  WorkspaceProviderSavedTerminalAttachment,
-  WorkspaceProviderSnapshotResult,
-  WorkspaceProviderStartInput,
-  WorkspaceProviderSyncManifestInput,
-  WorkspaceProviderUpdateServiceInput,
-  WorkspaceProviderWakeInput,
-} from "../../provider";
+  CreateTerminalInput,
+  GitDiffInput,
+  SavedTerminalAttachment,
+  ServiceLogSnapshot,
+  WorkspaceFileReadResult,
+  WorkspaceFileTreeEntry,
+  WorkspaceHealthResult,
+  WorkspaceRuntime,
+  WorkspaceStartInput,
+  WorkspaceWakeInput,
+  SaveTerminalAttachmentInput,
+} from "./workspace-runtime";
 
-export interface CloudWorkspaceClient {
-  createWorkspace(input: WorkspaceProviderCreateInput): Promise<WorkspaceProviderCreateResult>;
-  renameWorkspace(workspaceId: string, name: string): Promise<WorkspaceRecord>;
-  startServices(input: WorkspaceProviderStartInput): Promise<ServiceRecord[]>;
-  healthCheck(workspaceId: string): Promise<WorkspaceProviderHealthResult>;
+export interface CloudWorkspaceRuntimeClient {
+  startServices(input: WorkspaceStartInput): Promise<ServiceRecord[]>;
+  healthCheck(workspaceId: string): Promise<WorkspaceHealthResult>;
   stopServices(workspaceId: string, serviceNames?: string[]): Promise<void>;
-  runSetup(workspaceId: string): Promise<void>;
   sleep(workspaceId: string): Promise<void>;
-  wake(input: WorkspaceProviderWakeInput): Promise<void>;
-  destroy(workspaceId: string): Promise<void>;
-  getWorkspace(workspaceId: string): Promise<WorkspaceRecord | null>;
-  getWorkspaceServices(workspaceId: string): Promise<ServiceRecord[]>;
-  getWorkspaceSnapshot(workspaceId: string): Promise<WorkspaceProviderSnapshotResult>;
-  getWorkspaceRuntimeProjection(
-    workspaceId: string,
-  ): Promise<WorkspaceProviderRuntimeProjectionResult>;
-  updateWorkspaceService(input: WorkspaceProviderUpdateServiceInput): Promise<void>;
-  syncWorkspaceManifest(input: WorkspaceProviderSyncManifestInput): Promise<void>;
-  createTerminal(input: WorkspaceProviderCreateTerminalInput): Promise<TerminalRecord>;
-  listWorkspaceTerminals(workspaceId: string): Promise<TerminalRecord[]>;
+  wake(input: WorkspaceWakeInput): Promise<void>;
+  getEnvironment(workspaceId: string): Promise<EnvironmentRecord>;
+  getActivity(workspaceId: string): Promise<LifecycleEvent[]>;
+  getServiceLogs(workspaceId: string): Promise<ServiceLogSnapshot[]>;
+  getServices(workspaceId: string): Promise<ServiceRecord[]>;
+  createTerminal(input: CreateTerminalInput): Promise<TerminalRecord>;
+  listTerminals(workspaceId: string): Promise<TerminalRecord[]>;
   getTerminal(terminalId: string): Promise<TerminalRecord | null>;
   renameTerminal(terminalId: string, label: string): Promise<TerminalRecord>;
-  saveTerminalAttachment(
-    input: WorkspaceProviderSaveTerminalAttachmentInput,
-  ): Promise<WorkspaceProviderSavedTerminalAttachment>;
+  saveTerminalAttachment(input: SaveTerminalAttachmentInput): Promise<SavedTerminalAttachment>;
   detachTerminal(terminalId: string): Promise<void>;
   killTerminal(terminalId: string): Promise<void>;
   interruptTerminal(terminalId: string): Promise<void>;
-  readWorkspaceFile(
-    workspaceId: string,
-    filePath: string,
-  ): Promise<WorkspaceProviderFileReadResult>;
-  writeWorkspaceFile(
+  readFile(workspaceId: string, filePath: string): Promise<WorkspaceFileReadResult>;
+  writeFile(
     workspaceId: string,
     filePath: string,
     content: string,
-  ): Promise<WorkspaceProviderFileReadResult>;
-  listWorkspaceFiles(workspaceId: string): Promise<WorkspaceProviderFileTreeEntry[]>;
-  openWorkspaceFile(workspaceId: string, filePath: string): Promise<void>;
-  exposePort(workspaceId: string, serviceName: string, port: number): Promise<string | null>;
+  ): Promise<WorkspaceFileReadResult>;
+  listFiles(workspaceId: string): Promise<WorkspaceFileTreeEntry[]>;
+  openFile(workspaceId: string, filePath: string): Promise<void>;
   getGitStatus(workspaceId: string): Promise<GitStatusResult>;
-  getGitScopePatch(workspaceId: string, scope: GitDiffScope): Promise<string>;
+  getGitScopePatch(workspaceId: string, scope: GitDiffInput["scope"]): Promise<string>;
   getGitChangesPatch(workspaceId: string): Promise<string>;
-  getGitDiff(input: WorkspaceProviderGitDiffInput): Promise<GitDiffResult>;
+  getGitDiff(input: GitDiffInput): Promise<GitDiffResult>;
   listGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]>;
   listGitPullRequests(workspaceId: string): Promise<GitPullRequestListResult>;
   getGitPullRequest(
@@ -99,26 +80,18 @@ export interface CloudWorkspaceClient {
   ): Promise<GitPullRequestSummary>;
 }
 
-export class CloudWorkspaceProvider implements WorkspaceProvider {
-  private client: CloudWorkspaceClient;
+export class CloudWorkspaceRuntime implements WorkspaceRuntime {
+  private client: CloudWorkspaceRuntimeClient;
 
-  constructor(client: CloudWorkspaceClient) {
+  constructor(client: CloudWorkspaceRuntimeClient) {
     this.client = client;
   }
 
-  createWorkspace(input: WorkspaceProviderCreateInput): Promise<WorkspaceProviderCreateResult> {
-    return this.client.createWorkspace(input);
-  }
-
-  renameWorkspace(workspaceId: string, name: string): Promise<WorkspaceRecord> {
-    return this.client.renameWorkspace(workspaceId, name);
-  }
-
-  startServices(input: WorkspaceProviderStartInput): Promise<ServiceRecord[]> {
+  startServices(input: WorkspaceStartInput): Promise<ServiceRecord[]> {
     return this.client.startServices(input);
   }
 
-  healthCheck(workspaceId: string): Promise<WorkspaceProviderHealthResult> {
+  healthCheck(workspaceId: string): Promise<WorkspaceHealthResult> {
     return this.client.healthCheck(workspaceId);
   }
 
@@ -126,54 +99,36 @@ export class CloudWorkspaceProvider implements WorkspaceProvider {
     return this.client.stopServices(workspaceId, serviceNames);
   }
 
-  runSetup(workspaceId: string): Promise<void> {
-    return this.client.runSetup(workspaceId);
-  }
-
   sleep(workspaceId: string): Promise<void> {
     return this.client.sleep(workspaceId);
   }
 
-  wake(input: WorkspaceProviderWakeInput): Promise<void> {
+  wake(input: WorkspaceWakeInput): Promise<void> {
     return this.client.wake(input);
   }
 
-  destroy(workspaceId: string): Promise<void> {
-    return this.client.destroy(workspaceId);
+  getEnvironment(workspaceId: string): Promise<EnvironmentRecord> {
+    return this.client.getEnvironment(workspaceId);
   }
 
-  getWorkspace(workspaceId: string): Promise<WorkspaceRecord | null> {
-    return this.client.getWorkspace(workspaceId);
+  getActivity(workspaceId: string): Promise<LifecycleEvent[]> {
+    return this.client.getActivity(workspaceId);
   }
 
-  getWorkspaceServices(workspaceId: string): Promise<ServiceRecord[]> {
-    return this.client.getWorkspaceServices(workspaceId);
+  getServiceLogs(workspaceId: string): Promise<ServiceLogSnapshot[]> {
+    return this.client.getServiceLogs(workspaceId);
   }
 
-  getWorkspaceSnapshot(workspaceId: string): Promise<WorkspaceProviderSnapshotResult> {
-    return this.client.getWorkspaceSnapshot(workspaceId);
+  getServices(workspaceId: string): Promise<ServiceRecord[]> {
+    return this.client.getServices(workspaceId);
   }
 
-  getWorkspaceRuntimeProjection(
-    workspaceId: string,
-  ): Promise<WorkspaceProviderRuntimeProjectionResult> {
-    return this.client.getWorkspaceRuntimeProjection(workspaceId);
-  }
-
-  updateWorkspaceService(input: WorkspaceProviderUpdateServiceInput): Promise<void> {
-    return this.client.updateWorkspaceService(input);
-  }
-
-  syncWorkspaceManifest(input: WorkspaceProviderSyncManifestInput): Promise<void> {
-    return this.client.syncWorkspaceManifest(input);
-  }
-
-  createTerminal(input: WorkspaceProviderCreateTerminalInput): Promise<TerminalRecord> {
+  createTerminal(input: CreateTerminalInput): Promise<TerminalRecord> {
     return this.client.createTerminal(input);
   }
 
-  listWorkspaceTerminals(workspaceId: string): Promise<TerminalRecord[]> {
-    return this.client.listWorkspaceTerminals(workspaceId);
+  listTerminals(workspaceId: string): Promise<TerminalRecord[]> {
+    return this.client.listTerminals(workspaceId);
   }
 
   getTerminal(terminalId: string): Promise<TerminalRecord | null> {
@@ -184,9 +139,7 @@ export class CloudWorkspaceProvider implements WorkspaceProvider {
     return this.client.renameTerminal(terminalId, label);
   }
 
-  saveTerminalAttachment(
-    input: WorkspaceProviderSaveTerminalAttachmentInput,
-  ): Promise<WorkspaceProviderSavedTerminalAttachment> {
+  saveTerminalAttachment(input: SaveTerminalAttachmentInput): Promise<SavedTerminalAttachment> {
     return this.client.saveTerminalAttachment(input);
   }
 
@@ -202,38 +155,31 @@ export class CloudWorkspaceProvider implements WorkspaceProvider {
     return this.client.interruptTerminal(terminalId);
   }
 
-  readWorkspaceFile(
-    workspaceId: string,
-    filePath: string,
-  ): Promise<WorkspaceProviderFileReadResult> {
-    return this.client.readWorkspaceFile(workspaceId, filePath);
+  readFile(workspaceId: string, filePath: string): Promise<WorkspaceFileReadResult> {
+    return this.client.readFile(workspaceId, filePath);
   }
 
-  writeWorkspaceFile(
+  writeFile(
     workspaceId: string,
     filePath: string,
     content: string,
-  ): Promise<WorkspaceProviderFileReadResult> {
-    return this.client.writeWorkspaceFile(workspaceId, filePath, content);
+  ): Promise<WorkspaceFileReadResult> {
+    return this.client.writeFile(workspaceId, filePath, content);
   }
 
-  listWorkspaceFiles(workspaceId: string): Promise<WorkspaceProviderFileTreeEntry[]> {
-    return this.client.listWorkspaceFiles(workspaceId);
+  listFiles(workspaceId: string): Promise<WorkspaceFileTreeEntry[]> {
+    return this.client.listFiles(workspaceId);
   }
 
-  openWorkspaceFile(workspaceId: string, filePath: string): Promise<void> {
-    return this.client.openWorkspaceFile(workspaceId, filePath);
-  }
-
-  exposePort(workspaceId: string, serviceName: string, port: number): Promise<string | null> {
-    return this.client.exposePort(workspaceId, serviceName, port);
+  openFile(workspaceId: string, filePath: string): Promise<void> {
+    return this.client.openFile(workspaceId, filePath);
   }
 
   getGitStatus(workspaceId: string): Promise<GitStatusResult> {
     return this.client.getGitStatus(workspaceId);
   }
 
-  getGitScopePatch(workspaceId: string, scope: GitDiffScope): Promise<string> {
+  getGitScopePatch(workspaceId: string, scope: GitDiffInput["scope"]): Promise<string> {
     return this.client.getGitScopePatch(workspaceId, scope);
   }
 
@@ -241,7 +187,7 @@ export class CloudWorkspaceProvider implements WorkspaceProvider {
     return this.client.getGitChangesPatch(workspaceId);
   }
 
-  getGitDiff(input: WorkspaceProviderGitDiffInput): Promise<GitDiffResult> {
+  getGitDiff(input: GitDiffInput): Promise<GitDiffResult> {
     return this.client.getGitDiff(input);
   }
 

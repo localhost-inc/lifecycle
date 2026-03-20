@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { resolveContainedOverlayWidth } from "./overlay-boundary";
+import { resolveContainedOverlayWidth } from "@/lib/overlay-boundary";
 
 describe("resolveContainedOverlayWidth", () => {
   test("keeps the ideal width when there is no measured boundary", () => {

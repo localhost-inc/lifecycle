@@ -1,4 +1,4 @@
-import type { OpenInAppId } from "../open-in-api";
+import type { OpenInAppId } from "@/features/workspaces/open-in-api";
 
 export interface OpenInTarget {
   id: OpenInAppId;

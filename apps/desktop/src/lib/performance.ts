@@ -33,22 +33,28 @@ export function measurePerformance(
   const start = markName(startMark);
   const end = markName(endMark);
 
+  let duration: number | null = null;
+
   try {
     performance.measure(measure, start, end);
+    const entry = performance.getEntriesByName(measure).at(-1);
+    if (!entry) {
+      return null;
+    }
+
+    duration = entry.duration;
+    if (debugEnabled()) {
+      console.debug(`[perf] ${name}: ${duration.toFixed(1)}ms`);
+    }
+
+    return duration;
   } catch {
     return null;
+  } finally {
+    performance.clearMeasures(measure);
+    performance.clearMarks(start);
+    performance.clearMarks(end);
   }
-
-  const entry = performance.getEntriesByName(measure).at(-1);
-  if (!entry) {
-    return null;
-  }
-
-  if (debugEnabled()) {
-    console.debug(`[perf] ${name}: ${entry.duration.toFixed(1)}ms`);
-  }
-
-  return entry.duration;
 }
 
 export async function measureAsyncPerformance<T>(

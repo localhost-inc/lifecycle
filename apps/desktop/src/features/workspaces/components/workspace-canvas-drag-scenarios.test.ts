@@ -1,18 +1,18 @@
 import { describe, expect, test } from "bun:test";
-import { inspectWorkspacePaneLayout } from "../lib/workspace-pane-layout";
+import { inspectWorkspacePaneLayout } from "@/features/workspaces/lib/workspace-pane-layout";
 import {
   createFileViewerTab,
   createDefaultWorkspaceCanvasState,
   getWorkspacePaneTabState,
   type WorkspaceCanvasDocument,
   type WorkspaceCanvasState,
-} from "../state/workspace-canvas-state";
+} from "@/features/workspaces/state/workspace-canvas-state";
 import {
   resolveWorkspacePaneDropStateFromGeometry,
   type WorkspacePaneDropGeometry,
   type WorkspacePaneResolvedDropState,
-} from "./workspace-pane-drop-zones";
-import { workspaceCanvasReducer } from "./workspace-canvas-reducer";
+} from "@/features/workspaces/components/workspace-pane-drop-zones";
+import { workspaceCanvasReducer } from "@/features/workspaces/components/workspace-canvas-reducer";
 
 type TestWorkspacePaneNode =
   | {

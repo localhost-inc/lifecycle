@@ -4,9 +4,10 @@ import {
   getWorkspacePane,
   hasWorkspacePane,
   inspectWorkspacePaneLayout,
+  resetAllWorkspacePaneSplitRatios,
   splitWorkspacePaneLayout,
   updateWorkspacePaneLayoutSplit,
-} from "../lib/workspace-pane-layout";
+} from "@/features/workspaces/lib/workspace-pane-layout";
 import {
   changesDiffTabKey,
   commitDiffTabKey,
@@ -30,13 +31,13 @@ import {
   type WorkspaceCanvasTabStateByKey,
   type WorkspaceCanvasTabViewState,
   type WorkspaceCanvasState,
-} from "../state/workspace-canvas-state";
-import type { OpenDocumentRequest } from "./workspace-canvas-requests";
+} from "@/features/workspaces/state/workspace-canvas-state";
+import type { OpenDocumentRequest } from "@/features/workspaces/components/workspace-canvas-requests";
 import {
   areStringArraysEqual,
   getWorkspaceTabKeyAfterClose,
   type WorkspaceTabPlacement,
-} from "./workspace-canvas-tabs";
+} from "@/features/workspaces/components/workspace-canvas-tabs";
 
 export type WorkspaceCanvasAction =
   | { kind: "open-document"; request: OpenDocumentRequest }
@@ -69,7 +70,8 @@ export type WorkspaceCanvasAction =
     }
   | { kind: "collapse-pane"; paneId: string }
   | { kind: "close-pane"; paneId: string }
-  | { kind: "set-split-ratio"; ratio: number; splitId: string };
+  | { kind: "set-split-ratio"; ratio: number; splitId: string }
+  | { kind: "reset-all-split-ratios" };
 
 function appendWorkspaceTabKey(keys: readonly string[], key: string): string[] {
   return [...keys.filter((existingKey) => existingKey !== key), key];
@@ -880,6 +882,11 @@ export function workspaceCanvasReducer(
           ...split,
           ratio: action.ratio,
         })).nextRoot,
+      };
+    case "reset-all-split-ratios":
+      return {
+        ...state,
+        rootPane: resetAllWorkspacePaneSplitRatios(state.rootPane),
       };
     default:
       return state;

@@ -4,7 +4,7 @@ import {
   resolveWorkspacePaneDropIntentFromGeometry,
   resolveWorkspacePaneDropStateFromGeometry,
   resolveWorkspacePaneTabStripDropTarget,
-} from "./workspace-pane-drop-zones";
+} from "@/features/workspaces/components/workspace-pane-drop-zones";
 
 const PANE_RECT = {
   bottom: 600,

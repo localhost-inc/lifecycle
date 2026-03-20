@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import type { FileDiffMetadata } from "@pierre/diffs/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { DiffFileTree } from "./diff-file-tree";
-import { GitFileHeader } from "./git-file-header";
+import { DiffFileTree } from "@/features/git/components/diff-file-tree";
+import { GitFileHeader } from "@/features/git/components/git-file-header";
 
 function makeFile(name: string, additions: number = 0, deletions: number = 0): FileDiffMetadata {
   return {

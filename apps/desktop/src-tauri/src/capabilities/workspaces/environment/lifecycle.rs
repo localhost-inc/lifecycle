@@ -1,27 +1,29 @@
 use std::collections::HashSet;
+use std::path::PathBuf;
 use std::time::Instant;
 
-use crate::capabilities::workspaces::manifest::{parse_lifecycle_config, LifecycleConfig};
+use crate::capabilities::workspaces::manifest::{
+    parse_lifecycle_config, parse_lifecycle_config_with_fingerprint, LifecycleConfig,
+};
 use crate::platform::db::{map_database_result, open_db, DbPath};
 use crate::platform::diagnostics;
-use crate::platform::runtime::setup;
-use crate::shared::errors::{LifecycleError, WorkspaceFailureReason, WorkspaceStatus};
+use crate::platform::runtime::prepare;
+use crate::shared::errors::{LifecycleError, EnvironmentFailureReason, EnvironmentStatus};
 use crate::WorkspaceControllerRegistryHandle;
 use rusqlite::params;
 use tauri::{AppHandle, State};
 
 use super::super::controller::ManagedWorkspaceController;
 use super::super::shared::{
-    emit_service_status, emit_workspace_manifest_synced, emit_workspace_status,
-    mark_services_failed, reconcile_workspace_services_db, transition_workspace_to_starting,
-    update_workspace_status_db,
+    emit_environment_status, emit_service_status, mark_services_failed,
+    reconcile_workspace_services_db, transition_environment_to, update_environment_status_db,
 };
 use super::execution::{
     abort_start_if_needed, record_service_graph_failure, record_start_failure,
     WorkspaceStartContext,
 };
 use super::graph::{lower_environment_graph, topo_sort_environment_nodes, EnvironmentNodeKind};
-use super::port_assignment::{assign_ports_for_start, config_with_workspace_overrides};
+use super::port_assignment::{assign_ports_for_start, config_with_assigned_ports};
 use super::runtime_env::{build_runtime_env, workspace_volume_root};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -33,11 +35,11 @@ pub(super) enum WorkspaceStartMode {
 pub(super) fn load_workspace_status(
     db_path: &str,
     workspace_id: &str,
-) -> Result<WorkspaceStatus, LifecycleError> {
+) -> Result<EnvironmentStatus, LifecycleError> {
     let conn = open_db(db_path)?;
     let status = conn
         .query_row(
-            "SELECT status FROM workspace WHERE id = ?1",
+            "SELECT status FROM environment WHERE workspace_id = ?1",
             params![workspace_id],
             |row| row.get::<_, String>(0),
         )
@@ -48,20 +50,20 @@ pub(super) fn load_workspace_status(
             _ => LifecycleError::Database(error.to_string()),
         })?;
 
-    WorkspaceStatus::from_str(&status)
+    EnvironmentStatus::from_str(&status)
 }
 
-fn load_setup_completed(db_path: &str, workspace_id: &str) -> Result<bool, LifecycleError> {
+fn load_prepared(db_path: &str, workspace_id: &str) -> Result<bool, LifecycleError> {
     let conn = open_db(db_path)?;
-    let setup_completed_at: Option<String> = conn
+    let prepared_at: Option<String> = conn
         .query_row(
-            "SELECT setup_completed_at FROM workspace WHERE id = ?1",
+            "SELECT prepared_at FROM workspace WHERE id = ?1",
             params![workspace_id],
             |row| row.get(0),
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
 
-    Ok(setup_completed_at.is_some())
+    Ok(prepared_at.is_some())
 }
 
 fn load_ready_service_names(
@@ -71,9 +73,9 @@ fn load_ready_service_names(
     let conn = open_db(db_path)?;
     let mut stmt = conn
         .prepare(
-            "SELECT service_name
-             FROM workspace_service
-             WHERE workspace_id = ?1 AND status = 'ready'",
+            "SELECT name
+             FROM service
+             WHERE environment_id = ?1 AND status = 'ready'",
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
     let rows = stmt
@@ -89,10 +91,10 @@ fn load_ready_service_names(
     Ok(ready_service_names)
 }
 
-fn mark_setup_completed(db_path: &str, workspace_id: &str) -> Result<(), LifecycleError> {
+fn mark_prepared(db_path: &str, workspace_id: &str) -> Result<(), LifecycleError> {
     let conn = open_db(db_path)?;
     conn.execute(
-        "UPDATE workspace SET setup_completed_at = datetime('now'), updated_at = datetime('now') WHERE id = ?1",
+        "UPDATE workspace SET prepared_at = datetime('now'), updated_at = datetime('now') WHERE id = ?1",
         params![workspace_id],
     )
     .map_err(|error| LifecycleError::Database(error.to_string()))?;
@@ -122,7 +124,7 @@ async fn start_services_lifecycle(
     if abort_start_if_needed(db_path, workspace_id, controller, &start_token).await? {
         return Ok(());
     }
-    let setup_completed = load_setup_completed(db_path, workspace_id)?;
+    let prepared = load_prepared(db_path, workspace_id)?;
     let satisfied_service_names = if matches!(start_mode, WorkspaceStartMode::Incremental) {
         load_ready_service_names(db_path, workspace_id)?
     } else {
@@ -130,7 +132,7 @@ async fn start_services_lifecycle(
     };
     let planned_graph = match lower_environment_graph(
         config,
-        setup_completed,
+        prepared,
         service_names,
         Some(&satisfied_service_names),
     ) {
@@ -146,11 +148,11 @@ async fn start_services_lifecycle(
                 "service_dependency_failed",
             )?;
 
-            for service_name in &service_names {
+            for name in &service_names {
                 emit_service_status(
                     app,
                     workspace_id,
-                    service_name,
+                    name,
                     "failed",
                     Some("service_dependency_failed"),
                 );
@@ -163,7 +165,7 @@ async fn start_services_lifecycle(
                 &start_token,
                 start_mode,
                 workspace_id,
-                WorkspaceFailureReason::ServiceStartFailed,
+                EnvironmentFailureReason::ServiceStartFailed,
             )
             .await?;
             if !recorded {
@@ -182,16 +184,16 @@ async fn start_services_lifecycle(
         })
         .collect::<Vec<_>>();
     assign_ports_for_start(db_path, workspace_id, config, &selected_service_names)?;
-    let runtime_config = config_with_workspace_overrides(db_path, workspace_id, config)?;
+    let runtime_config = config_with_assigned_ports(db_path, workspace_id, config)?;
     let lowered_graph = lower_environment_graph(
         &runtime_config,
-        setup_completed,
+        prepared,
         service_names,
         Some(&satisfied_service_names),
     )?;
-    if lowered_graph.workspace_setup.is_empty() && lowered_graph.environment_nodes.is_empty() {
-        update_workspace_status_db(db_path, workspace_id, &WorkspaceStatus::Active, None)?;
-        emit_workspace_status(app, workspace_id, "active", None);
+    if lowered_graph.workspace_prepare.is_empty() && lowered_graph.environment_nodes.is_empty() {
+        update_environment_status_db(db_path, workspace_id, &EnvironmentStatus::Running, None)?;
+        emit_environment_status(app, workspace_id, "running", None);
         controller.finish_start(&start_token).await;
         diagnostics::append_timing(
             "workspace-start",
@@ -221,31 +223,28 @@ async fn start_services_lifecycle(
         }
     };
 
-    let setup_work_ran = !lowered_graph.workspace_setup.is_empty()
+    let prepare_work_ran = !lowered_graph.workspace_prepare.is_empty()
         || lowered_graph
             .environment_nodes
             .values()
             .any(|node| matches!(node.kind, EnvironmentNodeKind::Task(_)));
 
-    if !lowered_graph.workspace_setup.is_empty() {
-        let setup_started_at = Instant::now();
-        match setup::run_steps(
-            app,
-            workspace_id,
+    if !lowered_graph.workspace_prepare.is_empty() {
+        let prepare_started_at = Instant::now();
+        match prepare::run_steps(
             worktree_path,
-            &lowered_graph.workspace_setup,
+            &lowered_graph.workspace_prepare,
             &runtime_env,
-            "workspace.setup",
-            setup::StepProgressTarget::WorkspaceSetup,
+            "workspace.prepare",
             Some(start_token.clone()),
         )
         .await
         {
-            Ok(setup::StepRunOutcome::Completed) => {}
-            Ok(setup::StepRunOutcome::Cancelled) => return Ok(()),
+            Ok(prepare::StepRunOutcome::Completed) => {}
+            Ok(prepare::StepRunOutcome::Cancelled) => return Ok(()),
             Err(error) => {
                 let recorded = ctx
-                    .record_failure(WorkspaceFailureReason::SetupStepFailed)
+                    .record_failure(EnvironmentFailureReason::PrepareStepFailed)
                     .await?;
                 if !recorded {
                     return Ok(());
@@ -256,29 +255,32 @@ async fn start_services_lifecycle(
 
         diagnostics::append_timing(
             "workspace-start",
-            &format!("workspace {workspace_id} setup"),
-            setup_started_at,
+            &format!("workspace {workspace_id} prepare"),
+            prepare_started_at,
         );
 
         if ctx.abort_if_needed().await? {
             return Ok(());
         }
+
+        update_environment_status_db(db_path, workspace_id, &EnvironmentStatus::Starting, None)?;
+        emit_environment_status(app, workspace_id, "starting", None);
     }
 
     ctx.execute_environment_graph(&lowered_graph.environment_nodes, &sorted_nodes)
         .await?;
 
-    if !setup_completed && setup_work_ran {
-        mark_setup_completed(db_path, workspace_id)?;
+    if !prepared && prepare_work_ran {
+        mark_prepared(db_path, workspace_id)?;
     }
 
     if ctx.abort_if_needed().await? {
         return Ok(());
     }
 
-    // All healthy -> active.
-    update_workspace_status_db(db_path, workspace_id, &WorkspaceStatus::Active, None)?;
-    emit_workspace_status(app, workspace_id, "active", None);
+    // All healthy -> running.
+    update_environment_status_db(db_path, workspace_id, &EnvironmentStatus::Running, None)?;
+    emit_environment_status(app, workspace_id, "running", None);
     controller.finish_start(&start_token).await;
     diagnostics::append_timing(
         "workspace-start",
@@ -305,17 +307,17 @@ pub async fn start_services(
         .await?;
     let current_workspace_status = load_workspace_status(&db_path.0, &workspace_id)?;
     let start_mode = match (&current_workspace_status, service_names.as_ref()) {
-        (WorkspaceStatus::Idle, _) => WorkspaceStartMode::Cold,
-        (WorkspaceStatus::Active, Some(_)) => WorkspaceStartMode::Incremental,
-        (WorkspaceStatus::Starting | WorkspaceStatus::Stopping, _) => {
+        (EnvironmentStatus::Idle, _) => WorkspaceStartMode::Cold,
+        (EnvironmentStatus::Running, Some(_)) => WorkspaceStartMode::Incremental,
+        (EnvironmentStatus::Starting | EnvironmentStatus::Stopping, _) => {
             return Err(LifecycleError::WorkspaceMutationLocked {
                 status: current_workspace_status.as_str().to_string(),
             });
         }
-        (WorkspaceStatus::Active, None) => {
+        (EnvironmentStatus::Running, None) => {
             return Err(LifecycleError::InvalidStateTransition {
-                from: WorkspaceStatus::Active.as_str().to_string(),
-                to: WorkspaceStatus::Starting.as_str().to_string(),
+                from: EnvironmentStatus::Running.as_str().to_string(),
+                to: EnvironmentStatus::Starting.as_str().to_string(),
             });
         }
     };
@@ -335,7 +337,7 @@ pub async fn start_services(
             ))
         })?
     };
-    let setup_completed = load_setup_completed(&db_path.0, &workspace_id)?;
+    let prepared = load_prepared(&db_path.0, &workspace_id)?;
     let satisfied_service_names = if matches!(start_mode, WorkspaceStartMode::Incremental) {
         load_ready_service_names(&db_path.0, &workspace_id)?
     } else {
@@ -343,20 +345,20 @@ pub async fn start_services(
     };
     let lowered_graph = lower_environment_graph(
         &config,
-        setup_completed,
+        prepared,
         service_names.as_deref(),
         Some(&satisfied_service_names),
     )?;
     if matches!(start_mode, WorkspaceStartMode::Incremental)
-        && lowered_graph.workspace_setup.is_empty()
+        && lowered_graph.workspace_prepare.is_empty()
         && lowered_graph.environment_nodes.is_empty()
     {
         return Ok(());
     }
 
     // Acquire workspace lifecycle lock synchronously to prevent concurrent starts.
-    transition_workspace_to_starting(&db_path.0, &workspace_id)?;
-    emit_workspace_status(&app, &workspace_id, "starting", None);
+    transition_environment_to(&db_path.0, &workspace_id, &EnvironmentStatus::Starting)?;
+    emit_environment_status(&app, &workspace_id, EnvironmentStatus::Starting.as_str(), None);
 
     let db = db_path.0.clone();
     let controller = workspace_controllers.get_or_create(&workspace_id).await;
@@ -386,53 +388,131 @@ pub async fn start_services(
     Ok(())
 }
 
-pub async fn sync_workspace_manifest(
-    app: Option<&AppHandle>,
+fn sync_workspace_manifest_if_idle(
     db_path: &str,
-    workspace_id: String,
-    manifest_json: Option<String>,
-    manifest_fingerprint: Option<String>,
-) -> Result<(), LifecycleError> {
-    let config = manifest_json
-        .as_deref()
-        .map(parse_lifecycle_config)
-        .transpose()?;
-
+    workspace_id: &str,
+    config: Option<&LifecycleConfig>,
+    manifest_fingerprint: Option<&str>,
+) -> Result<bool, LifecycleError> {
     let conn = open_db(db_path)?;
     let status: String = conn
         .query_row(
-            "SELECT status FROM workspace WHERE id = ?1",
+            "SELECT status FROM environment WHERE workspace_id = ?1",
             params![workspace_id],
             |row| row.get(0),
         )
         .map_err(|e| match e {
             rusqlite::Error::QueryReturnedNoRows => {
-                LifecycleError::WorkspaceNotFound(workspace_id.clone())
+                LifecycleError::WorkspaceNotFound(workspace_id.to_string())
             }
             _ => LifecycleError::Database(e.to_string()),
         })?;
     drop(conn);
 
-    let workspace_status = WorkspaceStatus::from_str(&status)?;
-    if workspace_status == WorkspaceStatus::Idle {
-        reconcile_workspace_services_db(
-            db_path,
-            &workspace_id,
-            config.as_ref(),
-            manifest_fingerprint.as_deref(),
-            false,
-        )?;
-        if let Some(app) = app {
-            let services =
-                super::super::query::get_workspace_services(db_path, workspace_id.clone()).await?;
-            emit_workspace_manifest_synced(
-                app,
-                &workspace_id,
-                manifest_fingerprint.as_deref(),
-                &services,
-            );
-        }
+    let workspace_status = EnvironmentStatus::from_str(&status)?;
+    if workspace_status != EnvironmentStatus::Idle {
+        return Ok(false);
     }
 
-    Ok(())
+    reconcile_workspace_services_db(
+        db_path,
+        workspace_id,
+        config,
+        manifest_fingerprint,
+        false,
+    )?;
+    Ok(true)
+}
+
+pub fn sync_workspace_manifest_from_disk_if_idle(
+    db_path: &str,
+    workspace_id: &str,
+) -> Result<bool, LifecycleError> {
+    let conn = open_db(db_path)?;
+    let (
+        worktree_path,
+        current_manifest_fingerprint,
+        persisted_service_count,
+        has_environment,
+    ): (
+        Option<String>,
+        Option<String>,
+        usize,
+        bool,
+    ) = conn
+        .query_row(
+            "SELECT workspace.worktree_path,
+                    workspace.manifest_fingerprint,
+                    COUNT(service.id),
+                    environment.workspace_id IS NOT NULL
+             FROM workspace
+             LEFT JOIN environment ON environment.workspace_id = workspace.id
+             LEFT JOIN service ON service.environment_id = environment.workspace_id
+             WHERE workspace.id = ?1
+             GROUP BY workspace.worktree_path, workspace.manifest_fingerprint, environment.workspace_id",
+            params![workspace_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )
+        .map_err(|error| match error {
+            rusqlite::Error::QueryReturnedNoRows => {
+                LifecycleError::WorkspaceNotFound(workspace_id.to_string())
+            }
+            _ => LifecycleError::Database(error.to_string()),
+        })?;
+    drop(conn);
+
+    if !has_environment {
+        return Err(LifecycleError::Database(format!(
+            "workspace {workspace_id} is missing required environment row"
+        )));
+    }
+
+    let Some(worktree_path) = worktree_path else {
+        return Ok(false);
+    };
+
+    let manifest_path = PathBuf::from(worktree_path).join("lifecycle.json");
+    let manifest_text = match std::fs::read_to_string(&manifest_path) {
+        Ok(content) => Some(content),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => {
+            return Err(LifecycleError::Io(format!(
+                "failed to read {}: {}",
+                manifest_path.display(),
+                error
+            )));
+        }
+    };
+
+    let (config, manifest_fingerprint) = match manifest_text {
+        Some(text) => match parse_lifecycle_config_with_fingerprint(&text) {
+            Ok((config, fingerprint)) => (Some(config), Some(fingerprint)),
+            Err(LifecycleError::ManifestInvalid(_)) => (None, None),
+            Err(error) => return Err(error),
+        },
+        None => (None, None),
+    };
+
+    let declared_service_count = config
+        .as_ref()
+        .map(|manifest| manifest.declared_service_names().len())
+        .unwrap_or(0);
+    let should_reconcile = match manifest_fingerprint.as_deref() {
+        Some(next_manifest_fingerprint) => {
+            current_manifest_fingerprint.as_deref() != Some(next_manifest_fingerprint)
+                || (declared_service_count > 0 && persisted_service_count == 0)
+        }
+        None => current_manifest_fingerprint.is_some() || persisted_service_count > 0,
+    };
+
+    if !should_reconcile {
+        return Ok(false);
+    }
+
+    sync_workspace_manifest_if_idle(
+        db_path,
+        workspace_id,
+        config.as_ref(),
+        manifest_fingerprint.as_deref(),
+    )
 }

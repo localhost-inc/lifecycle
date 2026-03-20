@@ -7,8 +7,7 @@ const splitButtonPrimaryVariants = cva(
   {
     variants: {
       variant: {
-        foreground:
-          "bg-[var(--muted)] text-[var(--foreground)] hover:bg-[var(--surface-selected)]",
+        foreground: "bg-[var(--muted)] text-[var(--foreground)] hover:bg-[var(--surface-selected)]",
         active: "bg-[var(--muted)] text-[var(--foreground)]",
         outline:
           "border border-r-0 border-[var(--border)] bg-transparent text-[var(--foreground)] hover:bg-[var(--surface-hover)]",
@@ -105,7 +104,10 @@ interface SplitButtonSecondaryProps
     VariantProps<typeof splitButtonSecondaryVariants> {}
 
 const SplitButtonSecondary = React.forwardRef<HTMLButtonElement, SplitButtonSecondaryProps>(
-  function SplitButtonSecondary({ children, className, size, type = "button", variant, ...props }, ref) {
+  function SplitButtonSecondary(
+    { children, className, size, type = "button", variant, ...props },
+    ref,
+  ) {
     return (
       <button
         className={cn(splitButtonSecondaryVariants({ size, variant }), className)}

@@ -1,18 +1,10 @@
 import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Circle, File, GitFork, Home, Layers, Settings } from "lucide-react";
+import { Circle, File, GitFork, Home, Settings } from "lucide-react";
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
-import { getWorkspaceDisplayName } from "../workspaces/lib/workspace-display";
-import { formatAppHotkeyLabel, isMacPlatform } from "../../app/app-hotkeys";
-import type { CommandPaletteCommand } from "./types";
-
-function workspaceIcon(workspace: WorkspaceRecord): typeof Circle {
-  if (workspace.status === "active") {
-    return Layers;
-  }
-
-  return Circle;
-}
+import { getWorkspaceDisplayName } from "@/features/workspaces/lib/workspace-display";
+import { formatAppHotkeyLabel, isMacPlatform } from "@/app/app-hotkeys";
+import type { CommandPaletteCommand } from "@/features/command-palette/types";
 
 interface UseCommandPaletteCommandsOptions {
   onForkWorkspace?: () => void;
@@ -45,7 +37,7 @@ export function useCommandPaletteCommands(
             category: "workspace",
             label: `${project.name} / ${displayName}`,
             keywords: ["workspace", project.name, displayName, workspace.source_ref],
-            icon: workspaceIcon(workspace),
+            icon: Circle,
             onExecute: () =>
               void navigate(`/projects/${workspace.project_id}/workspaces/${workspace.id}`),
           } satisfies CommandPaletteCommand;

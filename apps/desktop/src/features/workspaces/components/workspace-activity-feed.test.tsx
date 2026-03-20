@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { WorkspaceActivityFeed } from "./workspace-activity-feed";
+import { WorkspaceActivityFeed } from "@/features/workspaces/components/workspace-activity-feed";
 
 describe("WorkspaceActivityFeed", () => {
   test("renders launcher activity rows and the raw event kind", () => {

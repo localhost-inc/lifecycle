@@ -2,22 +2,18 @@ import type { ServiceRecord } from "@lifecycle/contracts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
-import { resolvePreviewUrl, ServiceRow } from "./services-tab";
+import { resolvePreviewUrl, ServiceRow } from "@/features/workspaces/components/service-row";
 
 const failedService: ServiceRecord = {
   created_at: "2026-03-12T10:00:00.000Z",
   assigned_port: 44446,
-  exposure: "internal",
   id: "svc-postgres",
-  port_override: null,
-  preview_failure_reason: null,
-  preview_status: "disabled",
   preview_url: null,
-  service_name: "postgres",
+  name: "postgres",
   status: "failed",
   status_reason: "service_start_failed",
   updated_at: "2026-03-12T10:00:00.000Z",
-  workspace_id: "ws-1",
+  environment_id: "ws-1",
 };
 
 describe("ServiceRow", () => {
@@ -26,7 +22,6 @@ describe("ServiceRow", () => {
       resolvePreviewUrl({
         ...failedService,
         assigned_port: 3002,
-        exposure: "local",
         preview_url: "http://www.frost-beacon-57f59253.lifecycle.localhost:52300",
       }),
     ).toBe("http://www.frost-beacon-57f59253.lifecycle.localhost:52300");
@@ -35,7 +30,6 @@ describe("ServiceRow", () => {
   test("renders a friendly failed-service status reason", () => {
     const markup = renderToStaticMarkup(
       createElement(ServiceRow, {
-        onUpdateService: async () => {},
         runtime: "image",
         service: failedService,
       }),
@@ -48,7 +42,6 @@ describe("ServiceRow", () => {
   test("renders the service name without foregrounding runtime ports", () => {
     const markup = renderToStaticMarkup(
       createElement(ServiceRow, {
-        onUpdateService: async () => {},
         runtime: "image",
         service: failedService,
       }),
@@ -63,7 +56,6 @@ describe("ServiceRow", () => {
       createElement(ServiceRow, {
         logLines: [{ stream: "stdout", text: "ready" }],
         onToggleExpanded: () => {},
-        onUpdateService: async () => {},
         runtime: "image",
         service: failedService,
       }),
@@ -78,7 +70,6 @@ describe("ServiceRow", () => {
       createElement(ServiceRow, {
         onStartService: () => {},
         onToggleExpanded: () => {},
-        onUpdateService: async () => {},
         runtime: "image",
         service: failedService,
       }),

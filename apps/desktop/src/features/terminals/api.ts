@@ -1,7 +1,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import type { TerminalRecord, TerminalStatus } from "@lifecycle/contracts";
-import { getWorkspaceProvider } from "../../lib/workspace-provider";
-import type { HarnessLaunchConfig } from "../settings/state/harness-settings";
+import type { HarnessLaunchConfig } from "@/features/settings/state/harness-settings";
+import { getWorkspaceRuntime } from "@/lib/workspace-runtime";
 
 export type HarnessProvider = "claude" | "codex";
 const TERMINAL_RUNTIME_UNAVAILABLE_MESSAGE = "Terminal runtime requires the Tauri desktop shell.";
@@ -46,7 +46,7 @@ export async function listWorkspaceTerminals(workspaceId: string): Promise<Termi
     return [];
   }
 
-  return getWorkspaceProvider().listWorkspaceTerminals(workspaceId);
+  return getWorkspaceRuntime().listTerminals(workspaceId);
 }
 
 export async function getTerminal(terminalId: string): Promise<TerminalRecord | null> {
@@ -55,14 +55,14 @@ export async function getTerminal(terminalId: string): Promise<TerminalRecord | 
     return null;
   }
 
-  return getWorkspaceProvider().getTerminal(terminalId);
+  return getWorkspaceRuntime().getTerminal(terminalId);
 }
 
 export async function createTerminal(input: CreateTerminalInput): Promise<TerminalRecord> {
   requireNativeTerminalRuntime();
 
   if (input.launchType === "harness") {
-    return getWorkspaceProvider().createTerminal({
+    return getWorkspaceRuntime().createTerminal({
       workspaceId: input.workspaceId,
       launchType: input.launchType,
       harnessLaunchConfig: input.harnessLaunchConfig ?? null,
@@ -71,7 +71,7 @@ export async function createTerminal(input: CreateTerminalInput): Promise<Termin
     });
   }
 
-  return getWorkspaceProvider().createTerminal({
+  return getWorkspaceRuntime().createTerminal({
     workspaceId: input.workspaceId,
     launchType: input.launchType,
     harnessProvider: null,
@@ -87,7 +87,7 @@ export async function renameTerminal(terminalId: string, label: string): Promise
 
   requireNativeTerminalRuntime();
 
-  return getWorkspaceProvider().renameTerminal(terminalId, normalizedLabel);
+  return getWorkspaceRuntime().renameTerminal(terminalId, normalizedLabel);
 }
 
 export async function saveTerminalAttachment(
@@ -97,23 +97,23 @@ export async function saveTerminalAttachment(
     throw new Error("Image paste and drop are only available in the desktop app.");
   }
 
-  return getWorkspaceProvider().saveTerminalAttachment(input);
+  return getWorkspaceRuntime().saveTerminalAttachment(input);
 }
 
 export async function detachTerminal(terminalId: string): Promise<void> {
   requireNativeTerminalRuntime();
 
-  await getWorkspaceProvider().detachTerminal(terminalId);
+  await getWorkspaceRuntime().detachTerminal(terminalId);
 }
 
 export async function killTerminal(terminalId: string): Promise<void> {
   requireNativeTerminalRuntime();
 
-  await getWorkspaceProvider().killTerminal(terminalId);
+  await getWorkspaceRuntime().killTerminal(terminalId);
 }
 
 export async function interruptTerminal(terminalId: string): Promise<void> {
   requireNativeTerminalRuntime();
 
-  await getWorkspaceProvider().interruptTerminal(terminalId);
+  await getWorkspaceRuntime().interruptTerminal(terminalId);
 }

@@ -228,15 +228,14 @@ mod tests {
         )
         .expect("insert project");
         conn.execute(
-            "INSERT INTO workspace (id, project_id, source_ref, worktree_path, mode, status)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO workspace (id, project_id, source_ref, worktree_path, mode)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
             rusqlite::params![
                 workspace_id,
                 "project_1",
                 "lifecycle/test",
                 worktree_path.to_str().expect("worktree path is utf8"),
-                "local",
-                "active"
+                "local"
             ],
         )
         .expect("insert workspace");

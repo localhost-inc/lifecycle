@@ -1,7 +1,7 @@
 import type { FileDiffMetadata } from "@pierre/diffs/react";
 import { parsePatchFiles } from "@pierre/diffs";
 import { useMemo } from "react";
-import { buildPatchRenderCacheKey } from "./diff-virtualization";
+import { buildPatchRenderCacheKey } from "@/features/git/lib/diff-virtualization";
 
 export function useParsedGitPatchFiles(
   cacheKeyPrefix: string,

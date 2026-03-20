@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import type { StorageLike } from "../../lib/panel-layout";
+import type { StorageLike } from "@/lib/panel-layout";
 import {
   readPersistedActiveExtensionId,
   readPersistedExtensionPreference,
   toggleActiveExtension,
   writePersistedActiveExtensionId,
   writePersistedExtensionPreference,
-} from "./extension-bar-state";
+} from "@/features/extensions/extension-bar-state";
 
 class MemoryStorage implements StorageLike {
   private readonly values = new Map<string, string>();

@@ -1,16 +1,16 @@
 import type { ReactNode } from "react";
 import { Spinner } from "@lifecycle/ui";
 import { FileDiff, FileText, GitBranch, GitCommitHorizontal, PenTool } from "lucide-react";
-import { ResponseReadyDot } from "../../../components/response-ready-dot";
+import { ResponseReadyDot } from "@/components/response-ready-dot";
 import {
   isChangesDiffDocument,
   isCommitDiffDocument,
   isFileViewerDocument,
   isPullRequestDocument,
-} from "../state/workspace-canvas-state";
-import type { HarnessProvider } from "../../terminals/api";
-import type { WorkspaceCanvasTab } from "./workspace-canvas-tabs";
-import { getWorkspaceSessionStatusState } from "./workspace-session-status";
+} from "@/features/workspaces/state/workspace-canvas-state";
+import type { HarnessProvider } from "@/features/terminals/api";
+import type { WorkspaceCanvasTab } from "@/features/workspaces/components/workspace-canvas-tabs";
+import { getWorkspaceSessionStatusState } from "@/features/workspaces/components/workspace-session-status";
 
 export function ShellIcon({ size = 14 }: { size?: number }) {
   return (

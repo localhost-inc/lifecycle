@@ -86,7 +86,7 @@ Detail spec: [3-terminal-runtime](./milestones/3-terminal-runtime.md)
 Detail spec: [4-workspace-environments](./milestones/4-workspace-environments.md)
 
 - [ ] `run`, `reset`, `sleep`, `wake`, and `destroy` flows are complete for local mode
-- [ ] Local preview and service exposure controls are wired
+- [ ] Local preview routing and service previews are wired
 - [ ] Workspace, environment, and service lifecycle boundaries are enforced
 - [x] Desktop workspace extension strip supports local environment lifecycle controls
 - [ ] Local terminal sessions survive desktop app restart

@@ -1,7 +1,7 @@
 use crate::capabilities::workspaces::harness::HarnessLaunchConfig;
 use crate::platform::db::open_db;
 use crate::shared::errors::{
-    LifecycleError, TerminalFailureReason, TerminalStatus, TerminalType, WorkspaceStatus,
+    LifecycleError, TerminalFailureReason, TerminalStatus, TerminalType, EnvironmentStatus,
 };
 use rusqlite::params;
 
@@ -11,7 +11,7 @@ use super::super::rename::TitleOrigin;
 use super::launch::HarnessLaunchMode;
 
 pub(crate) struct WorkspaceRuntime {
-    pub(crate) status: WorkspaceStatus,
+    pub(crate) status: EnvironmentStatus,
     pub(crate) project_path: String,
     pub(crate) worktree_path: String,
 }
@@ -179,8 +179,9 @@ pub(crate) fn load_workspace_runtime(
     let conn = open_db(db_path)?;
     let (status, project_path, worktree_path): (String, String, Option<String>) = conn
         .query_row(
-            "SELECT workspace.status, project.path, workspace.worktree_path
+            "SELECT environment.status, project.path, workspace.worktree_path
              FROM workspace
+             INNER JOIN environment ON environment.workspace_id = workspace.id
              INNER JOIN project ON project.id = workspace.project_id
              WHERE workspace.id = ?1
              LIMIT 1",
@@ -195,7 +196,7 @@ pub(crate) fn load_workspace_runtime(
         })?;
 
     Ok(WorkspaceRuntime {
-        status: WorkspaceStatus::from_str(&status)?,
+        status: EnvironmentStatus::from_str(&status)?,
         project_path,
         worktree_path: worktree_path.unwrap_or_default(),
     })
@@ -271,7 +272,7 @@ mod tests {
     };
     use crate::capabilities::workspaces::rename::TitleOrigin;
     use crate::platform::db::{open_db, run_migrations};
-    use crate::shared::errors::{TerminalStatus, TerminalType, WorkspaceStatus};
+    use crate::shared::errors::{TerminalStatus, TerminalType, EnvironmentStatus};
 
     use super::super::launch::HarnessLaunchMode;
     use super::{
@@ -298,27 +299,31 @@ mod tests {
         )
         .expect("insert project");
         conn.execute(
-            "INSERT INTO workspace (id, project_id, source_ref, worktree_path, mode, status)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO workspace (id, project_id, source_ref, worktree_path, mode)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
             rusqlite::params![
                 workspace_id,
                 "project_1",
                 "lifecycle/test",
                 "/tmp/project_1",
-                "local",
-                "active"
+                "local"
             ],
         )
         .expect("insert workspace");
+        conn.execute(
+            "INSERT INTO environment (workspace_id, status) VALUES (?1, ?2)",
+            rusqlite::params![workspace_id, "running"],
+        )
+        .expect("insert environment");
     }
 
     #[test]
     fn interactive_terminal_context_requires_worktree_lifecycle_to_exist() {
         let interactive_statuses = [
-            WorkspaceStatus::Idle,
-            WorkspaceStatus::Starting,
-            WorkspaceStatus::Active,
-            WorkspaceStatus::Stopping,
+            EnvironmentStatus::Idle,
+            EnvironmentStatus::Starting,
+            EnvironmentStatus::Running,
+            EnvironmentStatus::Stopping,
         ];
 
         for status in interactive_statuses {
@@ -332,15 +337,15 @@ mod tests {
         }
 
         assert!(!workspace_has_interactive_terminal_context(
-            &WorkspaceRuntime {
-                status: WorkspaceStatus::Idle,
-                project_path: String::new(),
-                worktree_path: String::new(),
-            }
+                &WorkspaceRuntime {
+                    status: EnvironmentStatus::Idle,
+                    project_path: String::new(),
+                    worktree_path: String::new(),
+                }
         ));
         assert!(!workspace_has_interactive_terminal_context(
             &WorkspaceRuntime {
-                status: WorkspaceStatus::Stopping,
+                status: EnvironmentStatus::Stopping,
                 project_path: String::new(),
                 worktree_path: String::new(),
             }

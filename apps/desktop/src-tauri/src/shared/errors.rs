@@ -3,19 +3,19 @@ use serde_json::{json, Map, Value};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum WorkspaceStatus {
+pub enum EnvironmentStatus {
     Idle,
     Starting,
-    Active,
+    Running,
     Stopping,
 }
 
-impl WorkspaceStatus {
+impl EnvironmentStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Idle => "idle",
             Self::Starting => "starting",
-            Self::Active => "active",
+            Self::Running => "running",
             Self::Stopping => "stopping",
         }
     }
@@ -24,7 +24,7 @@ impl WorkspaceStatus {
         match s {
             "idle" => Ok(Self::Idle),
             "starting" => Ok(Self::Starting),
-            "active" => Ok(Self::Active),
+            "running" => Ok(Self::Running),
             "stopping" => Ok(Self::Stopping),
             _ => Err(LifecycleError::InvalidStateTransition {
                 from: s.to_string(),
@@ -34,7 +34,7 @@ impl WorkspaceStatus {
     }
 }
 
-impl std::fmt::Display for WorkspaceStatus {
+impl std::fmt::Display for EnvironmentStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
     }
@@ -42,13 +42,13 @@ impl std::fmt::Display for WorkspaceStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum WorkspaceFailureReason {
+pub enum EnvironmentFailureReason {
     CapacityUnavailable,
     EnvironmentTaskFailed,
     ManifestInvalid,
     RepoCloneFailed,
     RepositoryDisconnected,
-    SetupStepFailed,
+    PrepareStepFailed,
     ServiceStartFailed,
     ServiceHealthcheckFailed,
     SandboxUnreachable,
@@ -59,7 +59,7 @@ pub enum WorkspaceFailureReason {
     Unknown,
 }
 
-impl WorkspaceFailureReason {
+impl EnvironmentFailureReason {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::CapacityUnavailable => "capacity_unavailable",
@@ -67,7 +67,7 @@ impl WorkspaceFailureReason {
             Self::ManifestInvalid => "manifest_invalid",
             Self::RepoCloneFailed => "repo_clone_failed",
             Self::RepositoryDisconnected => "repository_disconnected",
-            Self::SetupStepFailed => "setup_step_failed",
+            Self::PrepareStepFailed => "prepare_step_failed",
             Self::ServiceStartFailed => "service_start_failed",
             Self::ServiceHealthcheckFailed => "service_healthcheck_failed",
             Self::SandboxUnreachable => "sandbox_unreachable",
@@ -221,11 +221,11 @@ pub enum LifecycleError {
     #[error("Repository clone failed: {0}")]
     RepoCloneFailed(String),
 
-    #[error("Setup step failed: {step} (exit code {exit_code})")]
-    SetupStepFailed { step: String, exit_code: i32 },
+    #[error("Prepare step failed: {step} (exit code {exit_code})")]
+    PrepareStepFailed { step: String, exit_code: i32 },
 
-    #[error("Setup step timed out: {step}")]
-    SetupStepTimeout { step: String },
+    #[error("Prepare step timed out: {step}")]
+    PrepareStepTimeout { step: String },
 
     #[error("Service start failed: {service} - {reason}")]
     ServiceStartFailed { service: String, reason: String },
@@ -316,22 +316,22 @@ impl LifecycleError {
                 Some("Check repository access and retry the workspace creation.".to_string()),
                 false,
             ),
-            Self::SetupStepFailed { step, exit_code } => (
-                "setup_step_failed",
+            Self::PrepareStepFailed { step, exit_code } => (
+                "prepare_step_failed",
                 Some(Map::from_iter([
                     ("step".to_string(), Value::String(step.clone())),
                     ("exitCode".to_string(), json!(*exit_code)),
                 ])),
-                Some("Inspect the setup step output, fix the failure, and retry.".to_string()),
+                Some("Inspect the prepare step output, fix the failure, and retry.".to_string()),
                 false,
             ),
-            Self::SetupStepTimeout { step } => (
-                "setup_step_failed",
+            Self::PrepareStepTimeout { step } => (
+                "prepare_step_failed",
                 Some(Map::from_iter([
                     ("step".to_string(), Value::String(step.clone())),
                     ("timeout".to_string(), Value::Bool(true)),
                 ])),
-                Some("Inspect the setup step output and increase the timeout or fix the step before retrying.".to_string()),
+                Some("Inspect the prepare step output and increase the timeout or fix the step before retrying.".to_string()),
                 true,
             ),
             Self::ServiceStartFailed { service, reason } => (
@@ -483,14 +483,14 @@ mod tests {
     #[test]
     fn workspace_status_roundtrip() {
         let statuses = vec![
-            WorkspaceStatus::Idle,
-            WorkspaceStatus::Starting,
-            WorkspaceStatus::Active,
-            WorkspaceStatus::Stopping,
+            EnvironmentStatus::Idle,
+            EnvironmentStatus::Starting,
+            EnvironmentStatus::Running,
+            EnvironmentStatus::Stopping,
         ];
         for status in statuses {
             let s = status.as_str();
-            let parsed = WorkspaceStatus::from_str(s).unwrap();
+            let parsed = EnvironmentStatus::from_str(s).unwrap();
             assert_eq!(status, parsed);
         }
     }
@@ -550,8 +550,8 @@ mod tests {
     #[test]
     fn invalid_input_errors_keep_field_level_details() {
         let value = serde_json::to_value(LifecycleError::InvalidInput {
-            field: "port_override".to_string(),
-            reason: "must be between 1 and 65535".to_string(),
+            field: "workspace_name".to_string(),
+            reason: "must not be empty".to_string(),
         })
         .expect("serialize invalid input lifecycle error");
 
@@ -561,11 +561,11 @@ mod tests {
         );
         assert_eq!(
             value.pointer("/details/field"),
-            Some(&Value::String("port_override".into()))
+            Some(&Value::String("workspace_name".into()))
         );
         assert_eq!(
             value.pointer("/details/reason"),
-            Some(&Value::String("must be between 1 and 65535".into()))
+            Some(&Value::String("must not be empty".into()))
         );
         assert_eq!(value.get("retryable"), Some(&Value::Bool(false)));
     }

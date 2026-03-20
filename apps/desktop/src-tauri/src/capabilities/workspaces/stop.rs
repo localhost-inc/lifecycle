@@ -1,11 +1,11 @@
-use crate::capabilities::workspaces::state_machine::validate_workspace_transition;
+use crate::capabilities::workspaces::state_machine::validate_environment_transition;
 use crate::platform::db::{open_db, DbPath};
-use crate::shared::errors::{LifecycleError, WorkspaceStatus};
+use crate::shared::errors::{LifecycleError, EnvironmentStatus};
 use crate::WorkspaceControllerRegistryHandle;
 use rusqlite::params;
 use tauri::{AppHandle, State};
 
-use super::shared::{emit_service_status, emit_workspace_status, update_workspace_status_db};
+use super::shared::{emit_service_status, emit_environment_status, update_environment_status_db};
 
 pub async fn stop_workspace(
     app: AppHandle,
@@ -18,7 +18,7 @@ pub async fn stop_workspace(
     let service_names = {
         let conn = open_db(&db)?;
         let mut stmt = conn
-            .prepare("SELECT service_name FROM workspace_service WHERE workspace_id = ?1")
+            .prepare("SELECT name FROM service WHERE environment_id = ?1")
             .map_err(|e| LifecycleError::Database(e.to_string()))?;
         let rows = stmt
             .query_map(params![workspace_id.clone()], |row| row.get::<_, String>(0))
@@ -35,17 +35,17 @@ pub async fn stop_workspace(
         let conn = open_db(&db)?;
         let status: String = conn
             .query_row(
-                "SELECT status FROM workspace WHERE id = ?1",
+                "SELECT status FROM environment WHERE workspace_id = ?1",
                 params![workspace_id.clone()],
                 |row| row.get(0),
             )
             .map_err(|e| LifecycleError::Database(e.to_string()))?;
-        WorkspaceStatus::from_str(&status)?
+        EnvironmentStatus::from_str(&status)?
     };
-    validate_workspace_transition(&current_status, &WorkspaceStatus::Stopping)?;
+    validate_environment_transition(&current_status, &EnvironmentStatus::Stopping)?;
 
-    update_workspace_status_db(&db, &workspace_id, &WorkspaceStatus::Stopping, None)?;
-    emit_workspace_status(&app, &workspace_id, "stopping", None);
+    update_environment_status_db(&db, &workspace_id, &EnvironmentStatus::Stopping, None)?;
+    emit_environment_status(&app, &workspace_id, "stopping", None);
 
     // Stop all services after the stopping transition is visible to DB- and UI-based callers.
     if let Some(controller) = workspace_controllers.get(&workspace_id).await {
@@ -57,23 +57,23 @@ pub async fn stop_workspace(
     {
         let conn = open_db(&db)?;
         conn.execute(
-            "UPDATE workspace_service
+            "UPDATE service
              SET status = 'stopped',
                  status_reason = NULL,
                  assigned_port = NULL,
                  updated_at = datetime('now')
-             WHERE workspace_id = ?1",
+             WHERE environment_id = ?1",
             params![workspace_id.clone()],
         )
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
     }
 
-    for service_name in service_names {
-        emit_service_status(&app, &workspace_id, &service_name, "stopped", None);
+    for name in service_names {
+        emit_service_status(&app, &workspace_id, &name, "stopped", None);
     }
 
-    update_workspace_status_db(&db, &workspace_id, &WorkspaceStatus::Idle, None)?;
-    emit_workspace_status(&app, &workspace_id, "idle", None);
+    update_environment_status_db(&db, &workspace_id, &EnvironmentStatus::Idle, None)?;
+    emit_environment_status(&app, &workspace_id, "idle", None);
 
     Ok(())
 }

@@ -1,12 +1,12 @@
 import type { GitLogEntry, GitStatusResult } from "@lifecycle/contracts";
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
-import { formatRelativeTime } from "../../../lib/format";
-import { measureAsyncPerformance } from "../../../lib/performance";
-import { GithubAvatar } from "./github-avatar";
-import { getGitChangesPatch, getGitCommitPatch } from "../api";
-import { useGitStatus } from "../hooks";
-import { useParsedGitPatchFiles } from "../lib/parsed-patch-files";
-import { GitPatchViewer } from "./git-patch-viewer";
+import { formatRelativeTime } from "@/lib/format";
+import { measureAsyncPerformance } from "@/lib/performance";
+import { GithubAvatar } from "@/features/git/components/github-avatar";
+import { getGitChangesPatch, getGitCommitPatch } from "@/features/git/api";
+import { useGitStatus } from "@/features/git/hooks";
+import { useParsedGitPatchFiles } from "@/features/git/lib/parsed-patch-files";
+import { GitPatchViewer } from "@/features/git/components/git-patch-viewer";
 
 type GitDiffSurfaceSource =
   | {
@@ -118,10 +118,12 @@ export function GitDiffSurface({
     setIsLoading(true);
 
     frameId = window.requestAnimationFrame(() => {
-      const patchRequest = measureAsyncPerformance(`git-diff-surface.patch:${surfaceIdentity}`, () =>
-        source.mode === "changes"
-          ? getGitChangesPatch(workspaceId)
-          : getGitCommitPatch(workspaceId, commitSha ?? "").then((result) => result.patch),
+      const patchRequest = measureAsyncPerformance(
+        `git-diff-surface.patch:${surfaceIdentity}`,
+        () =>
+          source.mode === "changes"
+            ? getGitChangesPatch(workspaceId)
+            : getGitCommitPatch(workspaceId, commitSha ?? "").then((result) => result.patch),
       );
 
       void patchRequest

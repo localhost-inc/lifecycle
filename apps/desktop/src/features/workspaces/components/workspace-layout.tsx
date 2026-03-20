@@ -2,10 +2,9 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   getManifestFingerprint,
   type GitPullRequestSummary,
-  type ServiceRecord,
   type WorkspaceRecord,
 } from "@lifecycle/contracts";
-import { EmptyState } from "@lifecycle/ui";
+import { Alert, AlertDescription, AlertTitle, EmptyState, Loading } from "@lifecycle/ui";
 import {
   useCallback,
   useEffect,
@@ -15,7 +14,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { notifyShellResizeListeners } from "../../../components/layout/shell-resize-provider";
+import { notifyShellResizeListeners } from "@/components/layout/shell-resize-provider";
 import {
   DEFAULT_WORKSPACE_EXTENSION_PANEL_WIDTH,
   MAX_WORKSPACE_EXTENSION_PANEL_WIDTH,
@@ -25,50 +24,46 @@ import {
   getSidebarWidthBounds,
   readPersistedPanelValue,
   writePersistedPanelValue,
-} from "../../../lib/panel-layout";
-import { OVERLAY_BOUNDARY_ATTRIBUTE } from "../../../lib/overlay-boundary";
+} from "@/lib/panel-layout";
+import { OVERLAY_BOUNDARY_ATTRIBUTE } from "@/lib/overlay-boundary";
+import { toErrorEnvelope } from "@/lib/tauri-error";
 import {
   readPersistedActiveExtensionId,
   WORKSPACE_EXTENSION_PANEL_WIDTH_STORAGE_KEY,
   writePersistedActiveExtensionId,
-} from "../../extensions/extension-bar-state";
-import type { WorkspaceExtensionLaunchActions } from "../../extensions/extension-bar-types";
-import { ExtensionBar } from "../../extensions/extension-bar";
-import { getBuiltinExtensionSlots } from "../../extensions/builtin-extensions";
-import { ExtensionPanel } from "../../extensions/extension-panel";
-import { useGitStatus } from "../../git/hooks";
-import type { ManifestStatus } from "../../projects/api/projects";
-import { WorkspaceCanvas } from "./workspace-canvas";
+} from "@/features/extensions/extension-bar-state";
+import type { WorkspaceExtensionLaunchActions } from "@/features/extensions/extension-bar-types";
+import { ExtensionBar } from "@/features/extensions/extension-bar";
+import { getBuiltinExtensionSlots } from "@/features/extensions/builtin-extensions";
+import { ExtensionPanel } from "@/features/extensions/extension-panel";
+import { useGitStatus } from "@/features/git/hooks";
+import type { ManifestStatus } from "@/features/projects/api/projects";
+import { hasBlockingQueryError, hasBlockingQueryLoad } from "@/features/workspaces/routes/workspace-route-query-state";
+import { WorkspaceCanvas } from "@/features/workspaces/components/workspace-canvas";
 import {
   createChangesDiffOpenInput,
   createCommitDiffOpenInput,
   createFileViewerOpenInput,
   createPullRequestOpenInput,
-} from "./workspace-canvas-requests";
+} from "@/features/workspaces/components/workspace-canvas-requests";
 import {
-  syncWorkspaceManifest,
   startServices,
   stopWorkspace,
-  updateWorkspaceService,
-  type WorkspaceSnapshotResult,
-} from "../api";
-import { useWorkspaceEnvironmentTasks, useWorkspaceServiceLogs, useWorkspaceSetup } from "../hooks";
-import { workspaceSupportsFilesystemInteraction } from "../lib/workspace-capabilities";
-import { shouldSyncWorkspaceManifest } from "../lib/workspace-manifest-sync";
-import { useWorkspaceOpenRequests } from "../state/workspace-open-requests";
+} from "@/features/workspaces/api";
+import { useWorkspaceEnvironment, useWorkspaceServices } from "@/features/workspaces/hooks";
+import { workspaceSupportsFilesystemInteraction } from "@/features/workspaces/lib/workspace-capabilities";
+import { useWorkspaceOpenRequests } from "@/features/workspaces/state/workspace-open-requests";
 
 const SIDEBAR_RESIZE_STEP = 16;
 
 interface WorkspaceLayoutProps {
   workspace: WorkspaceRecord;
-  workspaceSnapshot: WorkspaceSnapshotResult | null;
   manifestStatus: ManifestStatus | null;
   onCloseWorkspaceTab?: () => void;
 }
 
 export function WorkspaceLayout({
   workspace,
-  workspaceSnapshot,
   manifestStatus,
   onCloseWorkspaceTab,
 }: WorkspaceLayoutProps) {
@@ -84,28 +79,25 @@ export function WorkspaceLayout({
     readPersistedActiveExtensionId(workspace.id),
   );
   const [activePanelResize, setActivePanelResize] = useState(false);
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
   const { clearDocumentRequest, openDocument, requestsByWorkspaceId } = useWorkspaceOpenRequests();
   const openDocumentRequest = requestsByWorkspaceId[workspace.id] ?? null;
   const hasManifest = manifestStatus?.state === "valid";
   const config = hasManifest ? manifestStatus.result.config : null;
   const manifestState = manifestStatus?.state ?? "missing";
-  const manifestFingerprint = config ? getManifestFingerprint(config) : null;
-  const environmentTasksQuery = useWorkspaceEnvironmentTasks(workspace.id);
-  const serviceLogsQuery = useWorkspaceServiceLogs(workspace.id);
-  const setupQuery = useWorkspaceSetup(workspace.id);
-  const services = workspaceSnapshot?.services ?? [];
-  const terminals = workspaceSnapshot?.terminals ?? [];
-  const environmentTasks = environmentTasksQuery.data ?? [];
-  const serviceLogs = serviceLogsQuery.data ?? [];
-  const setupSteps = setupQuery.data ?? [];
   const supportsTerminalInteraction = workspaceSupportsFilesystemInteraction(workspace);
+  const environmentQuery = useWorkspaceEnvironment(workspace.id);
+  const servicesQuery = useWorkspaceServices(workspace.id);
   const gitStatusQuery = useGitStatus(
     workspace.mode === "local" && workspace.worktree_path !== null ? workspace.id : null,
   );
 
+  const environment = environmentQuery.data;
+  const services = servicesQuery.data;
+
   const handleRun = useCallback(
     async (serviceNames?: string[]) => {
-      if (!config) return;
+      if (!config || !services) return;
       try {
         const manifestJson = JSON.stringify(config);
         await startServices({
@@ -124,7 +116,7 @@ export function WorkspaceLayout({
   );
 
   const handleRestart = useCallback(async () => {
-    if (!config) {
+    if (!config || !services) {
       return;
     }
 
@@ -151,48 +143,6 @@ export function WorkspaceLayout({
       throw err;
     }
   }, [workspace.id]);
-
-  const handleUpdateService = useCallback(
-    async ({
-      exposure,
-      portOverride,
-      serviceName,
-    }: {
-      exposure: ServiceRecord["exposure"];
-      portOverride: number | null;
-      serviceName: string;
-    }) => {
-      try {
-        await updateWorkspaceService(workspace.id, serviceName, { exposure, portOverride });
-      } catch (err) {
-        console.error("Failed to update workspace service:", err);
-        throw err;
-      }
-    },
-    [workspace.id],
-  );
-
-  const isManifestStale =
-    manifestState === "valid" &&
-    manifestFingerprint !== null &&
-    workspace.manifest_fingerprint !== null &&
-    workspace.manifest_fingerprint !== undefined &&
-    workspace.manifest_fingerprint !== manifestFingerprint;
-
-  useEffect(() => {
-    if (!shouldSyncWorkspaceManifest(workspace, manifestStatus, services.length)) {
-      return;
-    }
-
-    const configToSync = manifestStatus?.state === "valid" ? manifestStatus.result.config : null;
-    void (async () => {
-      try {
-        await syncWorkspaceManifest(workspace.id, configToSync);
-      } catch (error) {
-        console.error("Failed to sync workspace manifest:", error);
-      }
-    })();
-  }, [manifestStatus, services.length, workspace]);
 
   const launchActions = useMemo<WorkspaceExtensionLaunchActions>(
     () => ({
@@ -371,41 +321,35 @@ export function WorkspaceLayout({
 
   const extensionSlots = useMemo(
     () =>
-      getBuiltinExtensionSlots({
-        config,
-        environmentTasks,
-        gitStatus: gitStatusQuery.data,
-        hasManifest,
-        isManifestStale,
-        launchActions,
-        manifestState,
-        onFocusTerminal: handleFocusTerminal,
-        onRestart: handleRestart,
-        onRun: handleRun,
-        onStop: handleStop,
-        onSwitchToExtension: (id) => setActiveExtensionId(id),
-        onUpdateService: handleUpdateService,
-        serviceLogs,
-        services,
-        setupSteps,
-        workspace,
-      }),
+      environment && services
+        ? getBuiltinExtensionSlots({
+            config,
+            environment,
+            gitStatus: gitStatusQuery.data,
+            hasManifest,
+            launchActions,
+            manifestState,
+            onFocusTerminal: handleFocusTerminal,
+            onRestart: handleRestart,
+            onRun: handleRun,
+            onStop: handleStop,
+            onSwitchToExtension: (id) => setActiveExtensionId(id),
+            services,
+            workspace,
+          })
+        : [],
     [
       config,
-      environmentTasks,
+      environment,
       gitStatusQuery.data,
       handleFocusTerminal,
       handleRestart,
       handleRun,
       handleStop,
-      handleUpdateService,
-      serviceLogs,
       hasManifest,
-      isManifestStale,
       launchActions,
       manifestState,
       services,
-      setupSteps,
       workspace,
     ],
   );
@@ -428,8 +372,6 @@ export function WorkspaceLayout({
     setPanelCollapsed(false);
   }, []);
 
-  const [panelCollapsed, setPanelCollapsed] = useState(false);
-
   useEffect(() => {
     const handleTogglePanel = () => {
       setPanelCollapsed((current) => !current);
@@ -447,6 +389,58 @@ export function WorkspaceLayout({
     );
   }, [panelCollapsed]);
 
+  // — Early returns (after all hooks to preserve hook order) —
+
+  if (hasBlockingQueryLoad(environmentQuery) || hasBlockingQueryLoad(servicesQuery)) {
+    return <Loading delay={0} message="Loading workspace environment..." />;
+  }
+
+  if (hasBlockingQueryError(environmentQuery)) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <Alert className="max-w-lg" variant="destructive">
+          <AlertTitle>Failed to load environment</AlertTitle>
+          <AlertDescription>{toErrorEnvelope(environmentQuery.error).message}</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  if (hasBlockingQueryError(servicesQuery)) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <Alert className="max-w-lg" variant="destructive">
+          <AlertTitle>Failed to load services</AlertTitle>
+          <AlertDescription>{toErrorEnvelope(servicesQuery.error).message}</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  if (environment === undefined) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <Alert className="max-w-lg" variant="destructive">
+          <AlertTitle>Workspace environment missing</AlertTitle>
+          <AlertDescription>
+            Every workspace must have exactly one environment.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
+  if (services === undefined) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <Alert className="max-w-lg" variant="destructive">
+          <AlertTitle>Workspace services missing</AlertTitle>
+          <AlertDescription>Service state could not be resolved for this environment.</AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
   const canvasContent = supportsTerminalInteraction ? (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1 flex-col">
@@ -457,7 +451,6 @@ export function WorkspaceLayout({
           onOpenDocumentRequestHandled={(requestId) =>
             clearDocumentRequest(workspace.id, requestId)
           }
-          snapshotTerminals={terminals}
           workspaceId={workspace.id}
         />
       </div>
@@ -466,7 +459,7 @@ export function WorkspaceLayout({
     <div className="flex-1 overflow-y-auto p-8">
       <div className="mx-auto max-w-2xl">
         <EmptyState
-          description="Use the Environment panel for lifecycle state and setup details until this workspace exposes an interactive surface."
+          description="Use the Environment panel for lifecycle state and preparation details until this workspace exposes an interactive surface."
           title="Workspace surface unavailable"
         />
       </div>

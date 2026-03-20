@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { ThemeProvider } from "@lifecycle/ui";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { RouteErrorSurface, summarizeRouteError } from "./route-error-page";
+import { RouteErrorSurface, summarizeRouteError } from "@/app/route-error-page";
 
 describe("summarizeRouteError", () => {
   test("treats module import failures as bundle sync faults", () => {

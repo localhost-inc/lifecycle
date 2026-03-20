@@ -5,10 +5,10 @@
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",
   "observability": {
-    "enabled": true
+    "enabled": true,
   },
   "routes": [
     { "pattern": "lifecycle.dev", "custom_domain": true },
-    { "pattern": "www.lifecycle.dev", "custom_domain": true }
-  ]
+    { "pattern": "www.lifecycle.dev", "custom_domain": true },
+  ],
 }

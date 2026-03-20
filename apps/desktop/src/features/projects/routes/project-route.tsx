@@ -2,16 +2,16 @@ import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
 import { useEffect, useMemo } from "react";
 import { Outlet, useLocation, useOutletContext, useParams } from "react-router-dom";
-import type { AppShellOutletContext } from "../../../components/layout/app-shell-context";
-import { useTerminalResponseReady } from "../../terminals/state/terminal-response-ready-provider";
-import { useWorkspaceToolbarSlot } from "../../workspaces/state/workspace-toolbar-context";
-import { WorkspaceNavToolbar } from "../../workspaces/components/workspace-nav-toolbar";
-import { ProjectNavBar } from "../components/project-nav-bar";
-import { resolveProjectRepoWorkspace } from "../lib/project-repo-workspace";
+import type { AppShellOutletContext } from "@/components/layout/app-shell-context";
+import { useTerminalResponseReady } from "@/features/terminals/state/terminal-response-ready-provider";
+import { useWorkspaceToolbarSlot } from "@/features/workspaces/state/workspace-toolbar-context";
+import { WorkspaceNavToolbar } from "@/features/workspaces/components/workspace-nav-toolbar";
+import { ProjectNavBar } from "@/features/projects/components/project-nav-bar";
+import { resolveProjectRepoWorkspace } from "@/features/projects/lib/project-repo-workspace";
 import {
   resolvePersistedProjectSubPath,
   writeLastProjectSubPath,
-} from "../state/project-content-tabs";
+} from "@/features/projects/state/project-content-tabs";
 
 export interface ProjectRouteOutletContext {
   onCreateWorkspace: () => Promise<void>;

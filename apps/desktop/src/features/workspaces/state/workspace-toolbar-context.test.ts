@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import type { WorkspaceToolbarSlot } from "./workspace-toolbar-context";
+import type { WorkspaceToolbarSlot } from "@/features/workspaces/state/workspace-toolbar-context";
 import {
   areWorkspaceToolbarSlotsEqual,
   removeWorkspaceToolbarSlot,
   upsertWorkspaceToolbarSlot,
-} from "./workspace-toolbar-context";
+} from "@/features/workspaces/state/workspace-toolbar-context";
 
 function createToolbarSlot(label: string): WorkspaceToolbarSlot {
   return {

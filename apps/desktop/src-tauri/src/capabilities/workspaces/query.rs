@@ -1,4 +1,6 @@
 use super::kind::is_root_workspace_kind;
+use super::preview::preview_url_for_service;
+use super::environment::sync_workspace_manifest_from_disk_if_idle;
 #[cfg(test)]
 use crate::platform::db::open_db;
 use crate::platform::db::run_blocking_db_read;
@@ -18,31 +20,34 @@ pub struct WorkspaceRecord {
     pub git_sha: Option<String>,
     pub worktree_path: Option<String>,
     pub mode: String,
-    pub status: String,
     pub manifest_fingerprint: Option<String>,
-    pub failure_reason: Option<String>,
-    pub failed_at: Option<String>,
     pub created_by: Option<String>,
     pub source_workspace_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
     pub last_active_at: String,
     pub expires_at: Option<String>,
-    pub setup_completed_at: Option<String>,
+    pub prepared_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnvironmentRecord {
+    pub workspace_id: String,
+    pub status: String,
+    pub failure_reason: Option<String>,
+    pub failed_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceRecord {
     pub id: String,
-    pub workspace_id: String,
-    pub service_name: String,
-    pub exposure: String,
-    pub port_override: Option<i64>,
+    pub environment_id: String,
+    pub name: String,
     pub status: String,
     pub status_reason: Option<String>,
     pub assigned_port: Option<i64>,
-    pub preview_status: String,
-    pub preview_failure_reason: Option<String>,
     pub preview_url: Option<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -69,13 +74,6 @@ pub struct TerminalRecord {
     pub started_at: String,
     pub last_active_at: String,
     pub ended_at: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct WorkspaceSnapshotResult {
-    pub workspace: Option<WorkspaceRecord>,
-    pub services: Vec<ServiceRecord>,
-    pub terminals: Vec<TerminalRecord>,
 }
 
 fn map_terminal_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<TerminalRecord> {
@@ -108,17 +106,25 @@ fn map_workspace_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRe
         git_sha: row.get(5)?,
         worktree_path: row.get(6)?,
         mode: row.get(7)?,
-        status: row.get(8)?,
-        manifest_fingerprint: row.get(9)?,
-        failure_reason: row.get(10)?,
-        failed_at: row.get(11)?,
-        created_by: row.get(12)?,
-        source_workspace_id: row.get(13)?,
-        created_at: row.get(14)?,
-        updated_at: row.get(15)?,
-        last_active_at: row.get(16)?,
-        expires_at: row.get(17)?,
-        setup_completed_at: row.get(18)?,
+        manifest_fingerprint: row.get(8)?,
+        created_by: row.get(9)?,
+        source_workspace_id: row.get(10)?,
+        created_at: row.get(11)?,
+        updated_at: row.get(12)?,
+        last_active_at: row.get(13)?,
+        expires_at: row.get(14)?,
+        prepared_at: row.get(15)?,
+    })
+}
+
+fn map_environment_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<EnvironmentRecord> {
+    Ok(EnvironmentRecord {
+        workspace_id: row.get(0)?,
+        status: row.get(1)?,
+        failure_reason: row.get(2)?,
+        failed_at: row.get(3)?,
+        created_at: row.get(4)?,
+        updated_at: row.get(5)?,
     })
 }
 
@@ -140,7 +146,7 @@ fn get_workspace_sync(
     project_id: String,
 ) -> Result<Option<WorkspaceRecord>, LifecycleError> {
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, name, kind, source_ref, git_sha, worktree_path, mode, status, manifest_fingerprint, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at, setup_completed_at
+        "SELECT id, project_id, name, kind, source_ref, git_sha, worktree_path, mode, manifest_fingerprint, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at, prepared_at
          FROM workspace
          WHERE project_id = ?1
          ORDER BY CASE WHEN kind = 'root' THEN 0 ELSE 1 END, created_at DESC
@@ -171,7 +177,7 @@ fn get_workspace_by_id_sync(
     workspace_id: String,
 ) -> Result<Option<WorkspaceRecord>, LifecycleError> {
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, name, kind, source_ref, git_sha, worktree_path, mode, status, manifest_fingerprint, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at, setup_completed_at
+        "SELECT id, project_id, name, kind, source_ref, git_sha, worktree_path, mode, manifest_fingerprint, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at, prepared_at
          FROM workspace
          WHERE id = ?1
          LIMIT 1"
@@ -200,7 +206,7 @@ fn list_workspaces_sync(
     conn: &rusqlite::Connection,
 ) -> Result<Vec<WorkspaceRecord>, LifecycleError> {
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, name, kind, source_ref, git_sha, worktree_path, mode, status, manifest_fingerprint, failure_reason, failed_at, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at, setup_completed_at
+        "SELECT id, project_id, name, kind, source_ref, git_sha, worktree_path, mode, manifest_fingerprint, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at, prepared_at
          FROM workspace
          ORDER BY created_at DESC"
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;
@@ -214,6 +220,19 @@ fn list_workspaces_sync(
         result.push(row.map_err(|e| LifecycleError::Database(e.to_string()))?);
     }
     Ok(result)
+}
+
+fn workspace_exists_sync(
+    conn: &rusqlite::Connection,
+    workspace_id: &str,
+) -> Result<bool, LifecycleError> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM workspace WHERE id = ?1)",
+        params![workspace_id],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|exists| exists > 0)
+    .map_err(|error| LifecycleError::Database(error.to_string()))
 }
 
 pub async fn list_workspaces(db_path: &str) -> Result<Vec<WorkspaceRecord>, LifecycleError> {
@@ -251,37 +270,115 @@ pub async fn list_workspaces_by_project(
     .await
 }
 
+fn get_workspace_environment_sync(
+    conn: &rusqlite::Connection,
+    workspace_id: String,
+) -> Result<EnvironmentRecord, LifecycleError> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT workspace_id, status, failure_reason, failed_at, created_at, updated_at
+             FROM environment
+             WHERE workspace_id = ?1
+             LIMIT 1",
+        )
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+
+    let row = stmt.query_row(params![workspace_id.clone()], map_environment_record);
+    match row {
+        Ok(row) => Ok(row),
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            if workspace_exists_sync(conn, &workspace_id)? {
+                Err(LifecycleError::Database(format!(
+                    "workspace {workspace_id} is missing required environment row"
+                )))
+            } else {
+                Err(LifecycleError::WorkspaceNotFound(workspace_id))
+            }
+        }
+        Err(error) => Err(LifecycleError::Database(error.to_string())),
+    }
+}
+
+pub async fn get_workspace_environment(
+    db_path: &str,
+    workspace_id: String,
+) -> Result<EnvironmentRecord, LifecycleError> {
+    run_blocking_db_read(
+        db_path.to_string(),
+        "workspace.environment",
+        move |conn| get_workspace_environment_sync(conn, workspace_id),
+    )
+    .await
+}
+
 fn get_workspace_services_sync(
     conn: &rusqlite::Connection,
     workspace_id: String,
 ) -> Result<Vec<ServiceRecord>, LifecycleError> {
+    if !workspace_exists_sync(conn, &workspace_id)? {
+        return Err(LifecycleError::WorkspaceNotFound(workspace_id));
+    }
+
+    let has_environment = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM environment WHERE workspace_id = ?1)",
+            params![workspace_id.as_str()],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|exists| exists > 0)
+        .map_err(|error| LifecycleError::Database(error.to_string()))?;
+    if !has_environment {
+        return Err(LifecycleError::Database(format!(
+            "workspace {workspace_id} is missing required environment row"
+        )));
+    }
+
     let mut stmt = conn.prepare(
-        "SELECT id, workspace_id, service_name, exposure, port_override, status, status_reason, assigned_port, preview_status, preview_failure_reason, preview_url, created_at, updated_at FROM workspace_service WHERE workspace_id = ?1 ORDER BY service_name"
+        "SELECT id, environment_id, name, status, status_reason, assigned_port, created_at, updated_at
+         FROM service
+         WHERE environment_id = ?1
+         ORDER BY name"
     ).map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     let rows = stmt
         .query_map(params![workspace_id], |row| {
-            Ok(ServiceRecord {
-                id: row.get(0)?,
-                workspace_id: row.get(1)?,
-                service_name: row.get(2)?,
-                exposure: row.get(3)?,
-                port_override: row.get(4)?,
-                status: row.get(5)?,
-                status_reason: row.get(6)?,
-                assigned_port: row.get(7)?,
-                preview_status: row.get(8)?,
-                preview_failure_reason: row.get(9)?,
-                preview_url: row.get(10)?,
-                created_at: row.get(11)?,
-                updated_at: row.get(12)?,
-            })
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, Option<i64>>(5)?,
+                row.get::<_, String>(6)?,
+                row.get::<_, String>(7)?,
+            ))
         })
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
 
     let mut result = Vec::new();
     for row in rows {
-        result.push(row.map_err(|e| LifecycleError::Database(e.to_string()))?);
+        let (
+            id,
+            environment_id,
+            name,
+            status,
+            status_reason,
+            assigned_port,
+            created_at,
+            updated_at,
+        ) = row.map_err(|e| LifecycleError::Database(e.to_string()))?;
+        let preview_url = preview_url_for_service(conn, &environment_id, &name)?;
+        result.push(ServiceRecord {
+            id,
+            environment_id,
+            name,
+            status,
+            status_reason,
+            assigned_port,
+            preview_url,
+            created_at,
+            updated_at,
+        });
     }
     Ok(result)
 }
@@ -290,33 +387,20 @@ pub async fn get_workspace_services(
     db_path: &str,
     workspace_id: String,
 ) -> Result<Vec<ServiceRecord>, LifecycleError> {
-    run_blocking_db_read(db_path.to_string(), "workspace.services", move |conn| {
-        get_workspace_services_sync(conn, workspace_id)
+    let sync_db_path = db_path.to_string();
+    let sync_workspace_id = workspace_id.clone();
+    tokio::task::spawn_blocking(move || {
+        sync_workspace_manifest_from_disk_if_idle(&sync_db_path, &sync_workspace_id)
     })
     .await
-}
+    .map_err(|error| {
+        LifecycleError::Database(format!(
+            "blocking manifest sync task 'workspace.services.sync' failed: {error}"
+        ))
+    })??;
 
-fn get_workspace_snapshot_sync(
-    conn: &rusqlite::Connection,
-    workspace_id: String,
-) -> Result<WorkspaceSnapshotResult, LifecycleError> {
-    let workspace = get_workspace_by_id_sync(conn, workspace_id.clone())?;
-    let services = get_workspace_services_sync(conn, workspace_id.clone())?;
-    let terminals = list_workspace_terminals_sync(conn, workspace_id)?;
-
-    Ok(WorkspaceSnapshotResult {
-        workspace,
-        services,
-        terminals,
-    })
-}
-
-pub async fn get_workspace_snapshot(
-    db_path: &str,
-    workspace_id: String,
-) -> Result<WorkspaceSnapshotResult, LifecycleError> {
-    run_blocking_db_read(db_path.to_string(), "workspace.snapshot", move |conn| {
-        get_workspace_snapshot_sync(conn, workspace_id)
+    run_blocking_db_read(db_path.to_string(), "workspace.services", move |conn| {
+        get_workspace_services_sync(conn, workspace_id)
     })
     .await
 }
@@ -394,6 +478,7 @@ pub async fn get_terminal_by_id(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::capabilities::workspaces::manifest::parse_lifecycle_config_with_fingerprint;
     use crate::platform::db::run_migrations;
 
     fn temp_db_path() -> String {
@@ -423,19 +508,18 @@ mod tests {
         .expect("insert projects");
         conn.execute(
             "INSERT INTO workspace (
-                id, project_id, name, kind, source_ref, status, mode, created_at, updated_at, last_active_at
+                id, project_id, name, kind, source_ref, mode, created_at, updated_at, last_active_at
             ) VALUES
-                (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?8),
-                (?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?16, ?16),
-                (?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?24, ?24),
-                (?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?32, ?32)",
+                (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, ?7),
+                (?8, ?9, ?10, ?11, ?12, ?13, ?14, ?14, ?14),
+                (?15, ?16, ?17, ?18, ?19, ?20, ?21, ?21, ?21),
+                (?22, ?23, ?24, ?25, ?26, ?27, ?28, ?28, ?28)",
             rusqlite::params![
                 "workspace_root",
                 "project_1",
                 "Root",
                 "root",
                 "main",
-                "idle",
                 "local",
                 "2026-03-10 12:00:00",
                 "workspace_managed_old",
@@ -443,7 +527,6 @@ mod tests {
                 "Old Managed",
                 "managed",
                 "lifecycle/old",
-                "idle",
                 "local",
                 "2026-03-10 12:05:00",
                 "workspace_managed_new",
@@ -451,7 +534,6 @@ mod tests {
                 "New Managed",
                 "managed",
                 "lifecycle/new",
-                "idle",
                 "local",
                 "2026-03-10 12:10:00",
                 "workspace_other_project",
@@ -459,80 +541,11 @@ mod tests {
                 "Other Root",
                 "root",
                 "develop",
-                "idle",
                 "local",
                 "2026-03-10 12:15:00"
             ],
         )
         .expect("insert workspaces");
-    }
-
-    #[tokio::test]
-    async fn get_workspace_snapshot_returns_workspace_services_and_terminals() {
-        let db_path = temp_db_path();
-        run_migrations(&db_path).expect("run migrations");
-
-        let conn = open_db(&db_path).expect("open db");
-        conn.execute(
-            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
-            rusqlite::params!["project_1", "/tmp/project_1", "Project 1"],
-        )
-        .expect("insert project");
-        conn.execute(
-            "INSERT INTO workspace (
-                id, project_id, name, kind, source_ref, worktree_path, mode, status
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            rusqlite::params![
-                "workspace_1",
-                "project_1",
-                "Workspace 1",
-                "managed",
-                "main",
-                "/tmp/project_1/worktree",
-                "local",
-                "active"
-            ],
-        )
-        .expect("insert workspace");
-        conn.execute(
-            "INSERT INTO workspace_service (
-                id, workspace_id, service_name, exposure, status, assigned_port
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            rusqlite::params![
-                "service_1",
-                "workspace_1",
-                "web",
-                "local",
-                "ready",
-                3000_i64
-            ],
-        )
-        .expect("insert service");
-        conn.execute(
-            "INSERT INTO terminal (id, workspace_id, label, status)
-             VALUES (?1, ?2, ?3, ?4)",
-            rusqlite::params!["terminal_1", "workspace_1", "Shell", "detached"],
-        )
-        .expect("insert terminal");
-        drop(conn);
-
-        let snapshot = get_workspace_snapshot(&db_path, "workspace_1".to_string())
-            .await
-            .expect("query workspace snapshot");
-
-        assert_eq!(
-            snapshot
-                .workspace
-                .as_ref()
-                .map(|workspace| workspace.id.as_str()),
-            Some("workspace_1")
-        );
-        assert_eq!(snapshot.services.len(), 1);
-        assert_eq!(snapshot.services[0].service_name, "web");
-        assert_eq!(snapshot.terminals.len(), 1);
-        assert_eq!(snapshot.terminals[0].id, "terminal_1");
-
-        let _ = std::fs::remove_file(db_path);
     }
 
     #[tokio::test]
@@ -573,6 +586,140 @@ mod tests {
                 "workspace_managed_old",
             ]
         );
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[tokio::test]
+    async fn get_workspace_services_reconciles_idle_manifest_from_disk() {
+        let db_path = temp_db_path();
+        run_migrations(&db_path).expect("run migrations");
+        let worktree_path = std::env::temp_dir()
+            .join(format!("lifecycle-query-worktree-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&worktree_path).expect("create worktree dir");
+        let manifest_text = r#"{
+            "workspace": { "prepare": [], "teardown": [] },
+            "environment": {
+                "api": {
+                    "kind": "service",
+                    "runtime": "process",
+                    "command": "bun run api"
+                }
+            }
+        }"#;
+        std::fs::write(worktree_path.join("lifecycle.json"), manifest_text)
+            .expect("write manifest");
+        let (_, manifest_fingerprint) =
+            parse_lifecycle_config_with_fingerprint(manifest_text).expect("parse manifest");
+
+        let conn = open_db(&db_path).expect("open db");
+        conn.execute(
+            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["project_1", "/tmp/project_1", "Project 1"],
+        )
+        .expect("insert project");
+        conn.execute(
+            "INSERT INTO workspace (
+                id, project_id, name, kind, source_ref, worktree_path, mode, manifest_fingerprint,
+                created_at, updated_at, last_active_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, ?9)",
+            rusqlite::params![
+                "workspace_1",
+                "project_1",
+                "Workspace 1",
+                "managed",
+                "lifecycle/workspace-1",
+                worktree_path.to_string_lossy().to_string(),
+                "local",
+                "stale-manifest",
+                "2026-03-19 12:00:00"
+            ],
+        )
+        .expect("insert workspace");
+        conn.execute(
+            "INSERT INTO environment (workspace_id, status) VALUES (?1, 'idle')",
+            rusqlite::params!["workspace_1"],
+        )
+        .expect("insert environment");
+        conn.execute(
+            "INSERT INTO service (
+                id, environment_id, name, status, status_reason, assigned_port
+            ) VALUES (?1, ?2, ?3, 'stopped', NULL, NULL)",
+            rusqlite::params!["svc_old", "workspace_1", "web"],
+        )
+        .expect("insert stale service");
+        drop(conn);
+
+        let services = get_workspace_services(&db_path, "workspace_1".to_string())
+            .await
+            .expect("load services");
+
+        assert_eq!(services.len(), 1);
+        assert_eq!(services[0].name, "api");
+
+        let conn = open_db(&db_path).expect("reopen db");
+        let fingerprint: Option<String> = conn
+            .query_row(
+                "SELECT manifest_fingerprint FROM workspace WHERE id = ?1",
+                rusqlite::params!["workspace_1"],
+                |row| row.get(0),
+            )
+            .expect("load manifest fingerprint");
+        assert_eq!(fingerprint.as_deref(), Some(manifest_fingerprint.as_str()));
+
+        let persisted_names = conn
+            .prepare("SELECT name FROM service WHERE environment_id = ?1 ORDER BY name")
+            .expect("prepare service query")
+            .query_map(rusqlite::params!["workspace_1"], |row| row.get::<_, String>(0))
+            .expect("query services")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("collect services");
+        assert_eq!(persisted_names, vec!["api"]);
+
+        let _ = std::fs::remove_file(db_path);
+        let _ = std::fs::remove_dir_all(worktree_path);
+    }
+
+    #[tokio::test]
+    async fn get_workspace_services_fails_when_workspace_environment_invariant_is_broken() {
+        let db_path = temp_db_path();
+        run_migrations(&db_path).expect("run migrations");
+
+        let conn = open_db(&db_path).expect("open db");
+        conn.execute(
+            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["project_1", "/tmp/project_1", "Project 1"],
+        )
+        .expect("insert project");
+        conn.execute(
+            "INSERT INTO workspace (
+                id, project_id, name, kind, source_ref, worktree_path, mode,
+                created_at, updated_at, last_active_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?8)",
+            rusqlite::params![
+                "workspace_1",
+                "project_1",
+                "Workspace 1",
+                "managed",
+                "lifecycle/workspace-1",
+                "/tmp/project_1/worktree",
+                "local",
+                "2026-03-20 10:00:00"
+            ],
+        )
+        .expect("insert workspace");
+        drop(conn);
+
+        let error = get_workspace_services(&db_path, "workspace_1".to_string())
+            .await
+            .expect_err("broken environment invariant should fail");
+
+        match error {
+            LifecycleError::Database(message) => {
+                assert!(message.contains("missing required environment row"));
+            }
+            other => panic!("expected database invariant error, got {other:?}"),
+        }
 
         let _ = std::fs::remove_file(db_path);
     }

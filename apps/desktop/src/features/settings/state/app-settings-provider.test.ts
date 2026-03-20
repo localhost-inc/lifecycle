@@ -2,14 +2,14 @@ import { describe, expect, test } from "bun:test";
 import {
   DEFAULT_INTERFACE_FONT_FAMILY,
   DEFAULT_MONOSPACE_FONT_FAMILY,
-} from "../../../lib/typography";
-import { buildDefaultHarnessSettings } from "./harness-settings";
+} from "@/lib/typography";
+import { buildDefaultHarnessSettings } from "@/features/settings/state/harness-settings";
 
 import {
   DEFAULT_INACTIVE_PANE_OPACITY,
   applyFontSettings,
   parseStoredSettings,
-} from "./app-settings-provider";
+} from "@/features/settings/state/app-settings-provider";
 
 describe("applyFontSettings", () => {
   test("writes interface and monospace font tokens to the root style", () => {

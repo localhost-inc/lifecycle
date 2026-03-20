@@ -8,7 +8,7 @@ import {
   inspectWorkspacePaneLayout,
   splitWorkspacePaneLayout,
   updateWorkspacePaneLayoutSplit,
-} from "./workspace-pane-layout";
+} from "@/features/workspaces/lib/workspace-pane-layout";
 
 const NESTED_LAYOUT = {
   direction: "row" as const,

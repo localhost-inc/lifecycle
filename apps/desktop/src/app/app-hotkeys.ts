@@ -3,11 +3,15 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   formatRegisteredShortcutLabel,
   type RegisteredShortcutId,
-} from "./shortcuts/shortcut-registry";
+} from "@/app/shortcuts/shortcut-registry";
 
 export const APP_HOTKEY_EVENT_NAME = "app:shortcut";
 
-export type AppHotkeyAction = "open-settings" | "open-command-palette" | "open-file-picker" | "select-project-index";
+export type AppHotkeyAction =
+  | "open-settings"
+  | "open-command-palette"
+  | "open-file-picker"
+  | "select-project-index";
 
 export interface AppHotkeyEvent {
   action: AppHotkeyAction;

@@ -1,22 +1,49 @@
 import type {
+  EnvironmentRecord,
   GitStatusResult,
   LifecycleConfig,
   ServiceRecord,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
-import { FileDiff, GitCommitHorizontal, GitPullRequest, Layers, TerminalSquare } from "lucide-react";
+import {
+  FileDiff,
+  GitCommitHorizontal,
+  GitPullRequest,
+  Layers,
+  TerminalSquare,
+} from "lucide-react";
+import { lazy } from "react";
 import type {
   ExtensionBadge,
   ExtensionSlot,
   WorkspaceExtensionId,
   WorkspaceExtensionLaunchActions,
-} from "./extension-bar-types";
-import { EnvironmentPanel } from "../workspaces/components/environment-panel";
-import type { EnvironmentTaskState, ServiceLogState, SetupStepState } from "../workspaces/hooks";
-import { GitChangesPanel } from "../git/components/git-changes-panel";
-import { GitHistoryPanel } from "../git/components/git-history-panel";
-import { GitPullRequestsPanel } from "../git/components/git-pull-requests-panel";
-import { SessionHistoryPanel } from "../terminals/components/session-history-panel";
+} from "@/features/extensions/extension-bar-types";
+
+const GitChangesPanel = lazy(async () => {
+  const module = await import("../git/components/git-changes-panel");
+  return { default: module.GitChangesPanel };
+});
+
+const GitHistoryPanel = lazy(async () => {
+  const module = await import("../git/components/git-history-panel");
+  return { default: module.GitHistoryPanel };
+});
+
+const GitPullRequestsPanel = lazy(async () => {
+  const module = await import("../git/components/git-pull-requests-panel");
+  return { default: module.GitPullRequestsPanel };
+});
+
+const SessionHistoryPanel = lazy(async () => {
+  const module = await import("../terminals/components/session-history-panel");
+  return { default: module.SessionHistoryPanel };
+});
+
+const EnvironmentPanel = lazy(async () => {
+  const module = await import("../workspaces/components/environment-panel");
+  return { default: module.EnvironmentPanel };
+});
 
 export function getGitExtensionBadge(
   gitStatus: GitStatusResult | undefined,
@@ -26,25 +53,24 @@ export function getGitExtensionBadge(
 }
 
 export function getEnvironmentExtensionBadge({
+  environment,
   services,
-  workspace,
 }: {
+  environment: EnvironmentRecord;
   services: ServiceRecord[];
-  workspace: WorkspaceRecord;
 }): ExtensionBadge {
-  const hasFailedService = services.some(
-    (service) => service.status === "failed" || service.preview_status === "failed",
-  );
-  const hasTransitionalService = services.some(
-    (service) => service.status === "starting" || service.preview_status === "provisioning",
-  );
+  const hasFailedService = services.some((service) => service.status === "failed");
+  const hasTransitionalService = services.some((service) => service.status === "starting");
+  const hasFailedEnvironment = environment.failure_reason !== null;
 
   const tone =
-    workspace.failure_reason !== null || hasFailedService
+    hasFailedEnvironment || hasFailedService
       ? "danger"
-      : workspace.status === "starting" || workspace.status === "stopping" || hasTransitionalService
+      : environment.status === "starting" ||
+          environment.status === "stopping" ||
+          hasTransitionalService
         ? "warning"
-        : workspace.status === "active"
+        : environment.status === "running"
           ? "success"
           : "neutral";
 
@@ -53,10 +79,9 @@ export function getEnvironmentExtensionBadge({
 
 interface BuiltinExtensionsOptions {
   config: LifecycleConfig | null;
-  environmentTasks: EnvironmentTaskState[];
+  environment: EnvironmentRecord;
   gitStatus: GitStatusResult | undefined;
   hasManifest: boolean;
-  isManifestStale: boolean;
   launchActions: WorkspaceExtensionLaunchActions;
   manifestState: "invalid" | "missing" | "valid";
   onFocusTerminal: (terminalId: string) => void;
@@ -64,23 +89,15 @@ interface BuiltinExtensionsOptions {
   onRun: () => Promise<void>;
   onStop: () => Promise<void>;
   onSwitchToExtension: (id: WorkspaceExtensionId) => void;
-  onUpdateService: (input: {
-    exposure: ServiceRecord["exposure"];
-    portOverride: number | null;
-    serviceName: string;
-  }) => Promise<void>;
-  serviceLogs: ServiceLogState[];
   services: ServiceRecord[];
-  setupSteps: SetupStepState[];
   workspace: WorkspaceRecord;
 }
 
 export function getBuiltinExtensionSlots({
   config,
-  environmentTasks,
+  environment,
   gitStatus,
   hasManifest,
-  isManifestStale,
   launchActions,
   manifestState,
   onFocusTerminal,
@@ -88,13 +105,10 @@ export function getBuiltinExtensionSlots({
   onRun,
   onStop,
   onSwitchToExtension,
-  onUpdateService,
-  serviceLogs,
   services,
-  setupSteps,
   workspace,
 }: BuiltinExtensionsOptions): ExtensionSlot[] {
-  return [
+  const slots: ExtensionSlot[] = [
     {
       badge: getGitExtensionBadge(gitStatus),
       icon: FileDiff,
@@ -144,35 +158,29 @@ export function getBuiltinExtensionSlots({
       icon: TerminalSquare,
       id: "session-history",
       label: "Sessions",
-      panel: (
-        <SessionHistoryPanel
-          onFocusTerminal={onFocusTerminal}
-          workspaceId={workspace.id}
-        />
-      ),
-    },
-    {
-      badge: getEnvironmentExtensionBadge({ services, workspace }),
-      icon: Layers,
-      id: "environment",
-      label: "Environment",
-      panel: (
-        <EnvironmentPanel
-          config={config}
-          environmentTasks={environmentTasks}
-          hasManifest={hasManifest}
-          isManifestStale={isManifestStale}
-          manifestState={manifestState}
-          onRestart={onRestart}
-          onRun={onRun}
-          onStop={onStop}
-          onUpdateService={onUpdateService}
-          serviceLogs={serviceLogs}
-          services={services}
-          setupSteps={setupSteps}
-          workspace={workspace}
-        />
-      ),
+      panel: <SessionHistoryPanel onFocusTerminal={onFocusTerminal} workspaceId={workspace.id} />,
     },
   ];
+
+  slots.push({
+    badge: getEnvironmentExtensionBadge({ environment, services }),
+    icon: Layers,
+    id: "environment",
+    label: "Environment",
+    panel: (
+      <EnvironmentPanel
+        config={config}
+        environment={environment}
+        hasManifest={hasManifest}
+        manifestState={manifestState}
+        onRestart={onRestart}
+        onRun={onRun}
+        onStop={onStop}
+        services={services}
+        workspace={workspace}
+      />
+    ),
+  });
+
+  return slots;
 }

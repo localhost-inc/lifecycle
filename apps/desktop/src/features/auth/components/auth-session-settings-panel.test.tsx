@@ -2,8 +2,8 @@ import { ThemeProvider } from "@lifecycle/ui";
 import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { AuthSession } from "../auth-session";
-import { AuthSessionSettingsPanel } from "./auth-session-settings-panel";
+import type { AuthSession } from "@/features/auth/auth-session";
+import { AuthSessionSettingsPanel } from "@/features/auth/components/auth-session-settings-panel";
 
 const loggedInAuthSession: AuthSession = {
   identity: {

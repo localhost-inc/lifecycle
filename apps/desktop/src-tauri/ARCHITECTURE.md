@@ -34,7 +34,7 @@ This backend follows a capability + platform layout.
     - `git/status/runner.rs`: shared git subprocess execution policy.
     - `git/status/z_records.rs`: shared NUL-delimited parser cursor for `-z` git output.
   - `runtime/supervisor.rs`: process/container lifecycle.
-  - `runtime/setup.rs`: setup step execution + event streaming.
+  - `runtime/prepare.rs`: setup step execution + event streaming.
   - `runtime/health.rs`: readiness probes.
 - `src/shared/`
   - `errors.rs`: typed errors + status enums.

@@ -5,7 +5,7 @@ import {
   getWorkspaceActiveTabScrollLeft,
   hasStartedWorkspaceTabDrag,
   WorkspacePaneTabBar,
-} from "./workspace-pane-tab-bar";
+} from "@/features/workspaces/components/workspace-pane-tab-bar";
 
 describe("WorkspacePaneTabBar", () => {
   test("renders caller-provided leading content for surface tabs", () => {

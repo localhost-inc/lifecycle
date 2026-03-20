@@ -48,7 +48,10 @@ export function buildShellContexts(
     .sort((left, right) => left.localeCompare(right));
 
   return [
-    createPersonalShellContext(options.personalContextPersisted ?? false, options.personalDisplayName),
+    createPersonalShellContext(
+      options.personalContextPersisted ?? false,
+      options.personalDisplayName,
+    ),
     ...organizationIds.map((organizationId, index) => ({
       id: organizationShellContextId(organizationId),
       kind: "organization" as const,

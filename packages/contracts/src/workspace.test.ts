@@ -1,10 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import type {
+  EnvironmentStatus,
   WorkspaceKind,
   WorkspaceMode,
-  WorkspaceServicePreviewStatus,
-  WorkspaceStatus,
 } from "./workspace";
 
 describe("workspace contracts", () => {
@@ -18,13 +17,8 @@ describe("workspace contracts", () => {
     expect(kinds).toEqual(["root", "managed"]);
   });
 
-  test("contains active status", () => {
-    const status: WorkspaceStatus = "active";
-    expect(status).toBe("active");
-  });
-
-  test("contains preview ready state", () => {
-    const previewState: WorkspaceServicePreviewStatus = "ready";
-    expect(previewState).toBe("ready");
+  test("contains running status", () => {
+    const status: EnvironmentStatus = "running";
+    expect(status).toBe("running");
   });
 });

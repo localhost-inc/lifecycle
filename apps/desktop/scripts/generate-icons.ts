@@ -1,5 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, unlinkSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  unlinkSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +17,9 @@ const appDir = dirname(scriptDir);
 const sourceIcon = join(appDir, "src-tauri", "app-icon.svg");
 const outputDir = join(appDir, "src-tauri", "icons");
 const tempDir = mkdtempSync(join(tmpdir(), "lifecycle-tauri-icons-"));
+const roundedShellRectPattern =
+  /<rect[^>]*x="44"[^>]*y="44"[^>]*width="424"[^>]*height="424"[^>]*rx="104"[^>]*\/?>/;
+const roundedShellClipPattern = /clip-path="url\(#icon-clip\)"/;
 const generatedExtensions = new Set([".png", ".icns", ".ico"]);
 const trackedBundleFiles = new Set([
   "32x32.png",
@@ -29,7 +40,19 @@ const trackedBundleFiles = new Set([
   "icon.png",
 ]);
 
+function assertRoundedShell(sourceSvg: string): void {
+  if (roundedShellRectPattern.test(sourceSvg) && roundedShellClipPattern.test(sourceSvg)) {
+    return;
+  }
+
+  throw new Error(
+    "apps/desktop/src-tauri/app-icon.svg must preserve the rounded 424x424 shell clipped by #icon-clip.",
+  );
+}
+
 try {
+  assertRoundedShell(readFileSync(sourceIcon, "utf8"));
+
   const result = spawnSync(process.execPath, ["x", "tauri", "icon", sourceIcon, "-o", tempDir], {
     cwd: appDir,
     stdio: "inherit",

@@ -7,17 +7,17 @@ import {
   scoreWorkspaceFileUsage,
   subscribeWorkspaceFileUsage,
   type WorkspaceFileUsageEntry,
-} from "../files/lib/workspace-file-usage";
-import { useWorkspaceFileTree, useWorkspacesByProject } from "../workspaces/hooks";
-import { workspaceSupportsFilesystemInteraction } from "../workspaces/lib/workspace-capabilities";
+} from "@/features/files/lib/workspace-file-usage";
+import { useWorkspaceFileTree, useWorkspacesByProject } from "@/features/workspaces/hooks";
+import { workspaceSupportsFilesystemInteraction } from "@/features/workspaces/lib/workspace-capabilities";
 import {
   normalizeWorkspaceFilePath,
   workspaceFileBasename,
   workspaceFileDirname,
-} from "../workspaces/lib/workspace-file-paths";
-import { useWorkspaceOpenRequests } from "../workspaces/state/workspace-open-requests";
-import { createFileViewerOpenInput } from "../workspaces/components/workspace-canvas-requests";
-import type { CommandPaletteCommand } from "./types";
+} from "@/features/workspaces/lib/workspace-file-paths";
+import { useWorkspaceOpenRequests } from "@/features/workspaces/state/workspace-open-requests";
+import { createFileViewerOpenInput } from "@/features/workspaces/components/workspace-canvas-requests";
+import type { CommandPaletteCommand } from "@/features/command-palette/types";
 
 interface UseCommandPaletteFilesResult {
   error: unknown;

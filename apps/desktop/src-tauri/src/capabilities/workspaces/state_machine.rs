@@ -1,22 +1,22 @@
-use crate::shared::errors::{LifecycleError, WorkspaceStatus};
+use crate::shared::errors::{LifecycleError, EnvironmentStatus};
 
-pub fn validate_workspace_transition(
-    from: &WorkspaceStatus,
-    to: &WorkspaceStatus,
+pub fn validate_environment_transition(
+    from: &EnvironmentStatus,
+    to: &EnvironmentStatus,
 ) -> Result<(), LifecycleError> {
     let allowed = matches!(
         (from, to),
         // idle -> starting
-        (WorkspaceStatus::Idle, WorkspaceStatus::Starting)
-            // starting -> active | stopping | idle
-            | (WorkspaceStatus::Starting, WorkspaceStatus::Active)
-            | (WorkspaceStatus::Starting, WorkspaceStatus::Stopping)
-            | (WorkspaceStatus::Starting, WorkspaceStatus::Idle)
-            // active -> starting | stopping
-            | (WorkspaceStatus::Active, WorkspaceStatus::Starting)
-            | (WorkspaceStatus::Active, WorkspaceStatus::Stopping)
+        (EnvironmentStatus::Idle, EnvironmentStatus::Starting)
+            // starting -> running | stopping | idle
+            | (EnvironmentStatus::Starting, EnvironmentStatus::Running)
+            | (EnvironmentStatus::Starting, EnvironmentStatus::Stopping)
+            | (EnvironmentStatus::Starting, EnvironmentStatus::Idle)
+            // running -> starting | stopping
+            | (EnvironmentStatus::Running, EnvironmentStatus::Starting)
+            | (EnvironmentStatus::Running, EnvironmentStatus::Stopping)
             // stopping -> idle
-            | (WorkspaceStatus::Stopping, WorkspaceStatus::Idle)
+            | (EnvironmentStatus::Stopping, EnvironmentStatus::Idle)
     );
 
     if allowed {
@@ -36,18 +36,18 @@ mod tests {
     #[test]
     fn valid_transitions() {
         let cases = vec![
-            (WorkspaceStatus::Idle, WorkspaceStatus::Starting),
-            (WorkspaceStatus::Starting, WorkspaceStatus::Active),
-            (WorkspaceStatus::Starting, WorkspaceStatus::Stopping),
-            (WorkspaceStatus::Starting, WorkspaceStatus::Idle),
-            (WorkspaceStatus::Active, WorkspaceStatus::Starting),
-            (WorkspaceStatus::Active, WorkspaceStatus::Stopping),
-            (WorkspaceStatus::Stopping, WorkspaceStatus::Idle),
+            (EnvironmentStatus::Idle, EnvironmentStatus::Starting),
+            (EnvironmentStatus::Starting, EnvironmentStatus::Running),
+            (EnvironmentStatus::Starting, EnvironmentStatus::Stopping),
+            (EnvironmentStatus::Starting, EnvironmentStatus::Idle),
+            (EnvironmentStatus::Running, EnvironmentStatus::Starting),
+            (EnvironmentStatus::Running, EnvironmentStatus::Stopping),
+            (EnvironmentStatus::Stopping, EnvironmentStatus::Idle),
         ];
 
         for (from, to) in cases {
             assert!(
-                validate_workspace_transition(&from, &to).is_ok(),
+                validate_environment_transition(&from, &to).is_ok(),
                 "Expected {from} -> {to} to be valid"
             );
         }
@@ -56,17 +56,17 @@ mod tests {
     #[test]
     fn invalid_transitions() {
         let cases = vec![
-            (WorkspaceStatus::Idle, WorkspaceStatus::Active),
-            (WorkspaceStatus::Idle, WorkspaceStatus::Stopping),
-            (WorkspaceStatus::Starting, WorkspaceStatus::Starting),
-            (WorkspaceStatus::Active, WorkspaceStatus::Active),
-            (WorkspaceStatus::Stopping, WorkspaceStatus::Starting),
-            (WorkspaceStatus::Stopping, WorkspaceStatus::Active),
+            (EnvironmentStatus::Idle, EnvironmentStatus::Running),
+            (EnvironmentStatus::Idle, EnvironmentStatus::Stopping),
+            (EnvironmentStatus::Starting, EnvironmentStatus::Starting),
+            (EnvironmentStatus::Running, EnvironmentStatus::Running),
+            (EnvironmentStatus::Stopping, EnvironmentStatus::Starting),
+            (EnvironmentStatus::Stopping, EnvironmentStatus::Running),
         ];
 
         for (from, to) in cases {
             assert!(
-                validate_workspace_transition(&from, &to).is_err(),
+                validate_environment_transition(&from, &to).is_err(),
                 "Expected {from} -> {to} to be invalid"
             );
         }

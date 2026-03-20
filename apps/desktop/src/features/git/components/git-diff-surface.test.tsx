@@ -3,8 +3,8 @@ import type { GitStatusResult } from "@lifecycle/contracts";
 import { ThemeProvider } from "@lifecycle/ui";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { QueryProvider } from "../../../query";
-import { buildChangesPatchReloadKey, GitDiffSurface } from "./git-diff-surface";
+import { QueryProvider } from "@/query";
+import { buildChangesPatchReloadKey, GitDiffSurface } from "@/features/git/components/git-diff-surface";
 
 function renderSurface(node: ReturnType<typeof createElement>) {
   return renderToStaticMarkup(
@@ -95,9 +95,7 @@ describe("GitDiffSurface", () => {
       })),
     });
 
-    expect(buildChangesPatchReloadKey(equivalentStatus)).toBe(
-      buildChangesPatchReloadKey(status),
-    );
+    expect(buildChangesPatchReloadKey(equivalentStatus)).toBe(buildChangesPatchReloadKey(status));
   });
 
   test("changes the changes reload key when git status changes", () => {
@@ -113,8 +111,6 @@ describe("GitDiffSurface", () => {
       ],
     });
 
-    expect(buildChangesPatchReloadKey(stagedStatus)).not.toBe(
-      buildChangesPatchReloadKey(status),
-    );
+    expect(buildChangesPatchReloadKey(stagedStatus)).not.toBe(buildChangesPatchReloadKey(status));
   });
 });

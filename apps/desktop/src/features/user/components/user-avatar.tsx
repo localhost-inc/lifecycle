@@ -1,7 +1,7 @@
 import { Spinner } from "@lifecycle/ui";
 import { CircleUserRound } from "lucide-react";
 import { useState } from "react";
-import type { AuthSession } from "../../auth/auth-session";
+import type { AuthSession } from "@/features/auth/auth-session";
 
 function avatarHue(seed: string): number {
   let hash = 5381;
@@ -21,10 +21,8 @@ interface UserAvatarProps {
 export function UserAvatar({ loading, session, size = 20 }: UserAvatarProps) {
   const [imageFailed, setImageFailed] = useState(false);
   const identity = session.identity;
-  const avatarUrl =
-    session.state === "logged_in" ? (identity?.avatarUrl ?? null) : null;
-  const seed =
-    identity?.handle ?? identity?.displayName ?? session.provider ?? "lifecycle";
+  const avatarUrl = session.state === "logged_in" ? (identity?.avatarUrl ?? null) : null;
+  const seed = identity?.handle ?? identity?.displayName ?? session.provider ?? "lifecycle";
 
   const px = `${size}px`;
   const style = { width: px, height: px };
@@ -54,13 +52,7 @@ export function UserAvatar({ loading, session, size = 20 }: UserAvatarProps) {
   }
 
   if (session.state === "logged_in") {
-    const letter = (
-      identity?.displayName ??
-      identity?.handle ??
-      "L"
-    )
-      .charAt(0)
-      .toUpperCase();
+    const letter = (identity?.displayName ?? identity?.handle ?? "L").charAt(0).toUpperCase();
     return (
       <span
         className={`flex items-center justify-center ${base} font-semibold leading-none text-white`}

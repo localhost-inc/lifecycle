@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   resolvePersistedProjectSubPath,
   resolveProjectNavigationTarget,
-} from "./project-content-tabs";
+} from "@/features/projects/state/project-content-tabs";
 
 describe("resolvePersistedProjectSubPath", () => {
   test("returns null for the project index route", () => {

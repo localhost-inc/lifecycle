@@ -1,8 +1,8 @@
 import type { FileDiffMetadata } from "@pierre/diffs/react";
 import { diffTheme, useTheme } from "@lifecycle/ui";
-import type { GitDiffStyle } from "../lib/diff-style";
-import { DiffRenderProvider } from "./diff-render-provider";
-import { MultiFileDiffLayout } from "./multi-file-diff-layout";
+import type { GitDiffStyle } from "@/features/git/lib/diff-style";
+import { DiffRenderProvider } from "@/features/git/components/diff-render-provider";
+import { MultiFileDiffLayout } from "@/features/git/components/multi-file-diff-layout";
 
 interface GitPatchViewerBodyProps {
   diffStyle: GitDiffStyle;

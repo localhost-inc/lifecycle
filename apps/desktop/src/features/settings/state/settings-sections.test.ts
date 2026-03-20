@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readSettingsSectionHash, settingsSections } from "./settings-sections";
+import { readSettingsSectionHash, settingsSections } from "@/features/settings/state/settings-sections";
 
 describe("settingsSections", () => {
   test("lists only live settings sections", () => {

@@ -1,27 +1,27 @@
 use crate::shared::errors::LifecycleError;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
 #[allow(dead_code)]
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LifecycleConfig {
     pub workspace: WorkspaceConfig,
     pub environment: HashMap<String, EnvironmentNodeConfig>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct WorkspaceConfig {
     #[serde(default)]
-    pub setup: Vec<SetupStep>,
-    pub teardown: Option<Vec<SetupStep>>,
+    pub prepare: Vec<PrepareStep>,
+    pub teardown: Option<Vec<PrepareStep>>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
-pub struct SetupStep {
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct PrepareStep {
     pub name: String,
     pub command: Option<String>,
-    pub write_files: Option<Vec<SetupWriteFile>>,
+    pub write_files: Option<Vec<PrepareWriteFile>>,
     pub timeout_seconds: u64,
     pub cwd: Option<String>,
     pub env: Option<HashMap<String, String>>,
@@ -29,10 +29,10 @@ pub struct SetupStep {
     pub run_on: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct TaskConfig {
     pub command: Option<String>,
-    pub write_files: Option<Vec<SetupWriteFile>>,
+    pub write_files: Option<Vec<PrepareWriteFile>>,
     pub timeout_seconds: u64,
     pub cwd: Option<String>,
     pub env: Option<HashMap<String, String>>,
@@ -45,8 +45,8 @@ impl TaskConfig {
         self.depends_on.as_deref().unwrap_or_default()
     }
 
-    pub fn into_setup_step(self, name: String) -> SetupStep {
-        SetupStep {
+    pub fn into_prepare_step(self, name: String) -> PrepareStep {
+        PrepareStep {
             name,
             command: self.command,
             write_files: self.write_files,
@@ -59,14 +59,14 @@ impl TaskConfig {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
-pub struct SetupWriteFile {
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct PrepareWriteFile {
     pub path: String,
     pub content: Option<String>,
     pub lines: Option<Vec<String>>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind")]
 pub enum EnvironmentNodeConfig {
     #[serde(rename = "task")]
@@ -94,7 +94,7 @@ impl EnvironmentNodeConfig {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "runtime")]
 pub enum ServiceConfig {
     #[serde(rename = "process")]
@@ -134,7 +134,7 @@ impl ServiceConfig {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ProcessService {
     pub command: String,
     pub cwd: Option<String>,
@@ -144,7 +144,7 @@ pub struct ProcessService {
     pub health_check: Option<HealthCheck>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ImageService {
     pub image: Option<String>,
     pub build: Option<ImageBuild>,
@@ -160,13 +160,13 @@ pub struct ImageService {
     pub resolved_port: Option<u16>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ImageBuild {
     pub context: String,
     pub dockerfile: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum ImageVolume {
     Bind {
@@ -197,14 +197,14 @@ impl ImageVolume {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum HealthCheckPort {
     Number(u16),
     Template(String),
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "kind")]
 pub enum HealthCheck {
     #[serde(rename = "tcp")]
@@ -220,9 +220,9 @@ pub enum HealthCheck {
 }
 
 const UNSUPPORTED_SECRETS_MESSAGE: &str =
-    "managed secrets are not supported in local lifecycle.json yet; materialize local env files in workspace setup instead";
+    "managed secrets are not supported in local lifecycle.json yet; materialize local env files in workspace prepare instead";
 const UNSUPPORTED_SECRET_TEMPLATE_MESSAGE: &str =
-    "`${secrets.*}` is not supported in local lifecycle.json; materialize local env files in workspace setup instead";
+    "`${secrets.*}` is not supported in local lifecycle.json; materialize local env files in workspace prepare instead";
 const UNSUPPORTED_RESET_MESSAGE: &str =
     "`reset` is not part of the current lifecycle.json contract yet; remove it from the manifest for now";
 const UNSUPPORTED_MCPS_MESSAGE: &str =
@@ -239,6 +239,52 @@ pub fn parse_lifecycle_config(json: &str) -> Result<LifecycleConfig, LifecycleEr
     Ok(config)
 }
 
+fn stable_serialize_value(value: &Value) -> Result<String, LifecycleError> {
+    match value {
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {
+            serde_json::to_string(value)
+                .map_err(|error| LifecycleError::ManifestInvalid(error.to_string()))
+        }
+        Value::Array(values) => {
+            let serialized = values
+                .iter()
+                .map(stable_serialize_value)
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(format!("[{}]", serialized.join(",")))
+        }
+        Value::Object(entries) => {
+            let mut sorted_entries = entries.iter().collect::<Vec<_>>();
+            sorted_entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+            let serialized = sorted_entries
+                .into_iter()
+                .map(|(key, entry_value)| {
+                    Ok(format!(
+                        "{}:{}",
+                        serde_json::to_string(key)
+                            .map_err(|error| LifecycleError::ManifestInvalid(error.to_string()))?,
+                        stable_serialize_value(entry_value)?,
+                    ))
+                })
+                .collect::<Result<Vec<_>, LifecycleError>>()?;
+            Ok(format!("{{{}}}", serialized.join(",")))
+        }
+    }
+}
+
+pub fn get_manifest_fingerprint(config: &LifecycleConfig) -> Result<String, LifecycleError> {
+    let value = serde_json::to_value(config)
+        .map_err(|error| LifecycleError::ManifestInvalid(error.to_string()))?;
+    stable_serialize_value(&value)
+}
+
+pub fn parse_lifecycle_config_with_fingerprint(
+    json: &str,
+) -> Result<(LifecycleConfig, String), LifecycleError> {
+    let config = parse_lifecycle_config(json)?;
+    let fingerprint = get_manifest_fingerprint(&config)?;
+    Ok((config, fingerprint))
+}
+
 impl LifecycleConfig {
     pub fn declared_services(&self) -> impl Iterator<Item = (&String, &ServiceConfig)> + '_ {
         self.environment
@@ -252,15 +298,15 @@ impl LifecycleConfig {
             .collect()
     }
 
-    pub fn service_mut(&mut self, service_name: &str) -> Option<&mut ServiceConfig> {
+    pub fn service_mut(&mut self, name: &str) -> Option<&mut ServiceConfig> {
         self.environment
-            .get_mut(service_name)
+            .get_mut(name)
             .and_then(EnvironmentNodeConfig::service_mut)
     }
 
     pub fn validate(&self) -> Result<(), LifecycleError> {
-        for (index, step) in self.workspace.setup.iter().enumerate() {
-            validate_step(step, &format!("workspace.setup.{index}"), false, true)?;
+        for (index, step) in self.workspace.prepare.iter().enumerate() {
+            validate_step(step, &format!("workspace.prepare.{index}"), false, true)?;
         }
 
         if let Some(teardown_steps) = self.workspace.teardown.as_ref() {
@@ -308,7 +354,7 @@ impl LifecycleConfig {
 }
 
 fn validate_step(
-    step: &SetupStep,
+    step: &PrepareStep,
     field: &str,
     allow_depends_on: bool,
     allow_run_on: bool,
@@ -497,7 +543,7 @@ mod tests {
     fn parse_process_service_and_task_nodes() {
         let json = r#"{
             "workspace": {
-                "setup": [
+                "prepare": [
                     { "name": "install", "command": "bun install", "timeout_seconds": 120 }
                 ],
                 "teardown": [
@@ -527,7 +573,7 @@ mod tests {
         }"#;
 
         let config = parse_config(json);
-        assert_eq!(config.workspace.setup.len(), 1);
+        assert_eq!(config.workspace.prepare.len(), 1);
         assert_eq!(config.workspace.teardown.as_ref().map(Vec::len), Some(1));
         assert!(matches!(
             config.environment.get("api").unwrap(),
@@ -543,7 +589,7 @@ mod tests {
     fn parse_image_service() {
         let json = r#"{
             "workspace": {
-                "setup": [
+                "prepare": [
                     { "name": "init", "command": "echo hello", "timeout_seconds": 10 }
                 ]
             },
@@ -574,7 +620,7 @@ mod tests {
     fn parse_tcp_health_check_templates() {
         let json = r#"{
             "workspace": {
-                "setup": [
+                "prepare": [
                     { "name": "init", "command": "echo hello", "timeout_seconds": 10 }
                 ]
             },
@@ -617,7 +663,7 @@ mod tests {
     fn parse_container_health_check() {
         let json = r#"{
             "workspace": {
-                "setup": [
+                "prepare": [
                     { "name": "init", "command": "echo hello", "timeout_seconds": 10 }
                 ]
             },
@@ -656,7 +702,7 @@ mod tests {
         let error = parse_lifecycle_config(
             r#"{
                 "workspace": {
-                    "setup": [
+                    "prepare": [
                         { "name": "init", "command": "echo hello", "timeout_seconds": 10 }
                     ]
                 },
@@ -687,7 +733,7 @@ mod tests {
     fn parse_image_service_with_build_and_volumes() {
         let json = r#"{
             "workspace": {
-                "setup": [
+                "prepare": [
                     { "name": "install", "command": "bun install", "timeout_seconds": 120 }
                 ]
             },
@@ -730,7 +776,7 @@ mod tests {
         let error = parse_lifecycle_config(
             r#"{
                 "workspace": {
-                    "setup": [
+                    "prepare": [
                         { "name": "install", "command": "bun install", "timeout_seconds": 120 }
                     ]
                 },
@@ -760,7 +806,7 @@ mod tests {
     fn parse_workspace_step_with_write_files() {
         let json = r#"{
             "workspace": {
-                "setup": [
+                "prepare": [
                     {
                         "name": "write-env",
                         "write_files": [
@@ -788,7 +834,7 @@ mod tests {
         }"#;
 
         let config = parse_config(json);
-        let step = &config.workspace.setup[0];
+        let step = &config.workspace.prepare[0];
         assert_eq!(step.name, "write-env");
         assert!(step.command.is_none());
         assert_eq!(step.run_on.as_deref(), Some("start"));
@@ -796,11 +842,11 @@ mod tests {
     }
 
     #[test]
-    fn rejects_workspace_setup_depends_on() {
+    fn rejects_workspace_prepare_depends_on() {
         let error = parse_lifecycle_config(
             r#"{
                 "workspace": {
-                    "setup": [
+                    "prepare": [
                         {
                             "name": "install",
                             "command": "bun install",
@@ -818,7 +864,7 @@ mod tests {
 
         match error {
             LifecycleError::ManifestInvalid(message) => {
-                assert!(message.contains("workspace.setup.0.depends_on"));
+                assert!(message.contains("workspace.prepare.0.depends_on"));
             }
             other => panic!("unexpected error: {other}"),
         }
@@ -829,7 +875,7 @@ mod tests {
         let error = parse_lifecycle_config(
             r#"{
                 "workspace": {
-                    "setup": [
+                    "prepare": [
                         { "name": "install", "command": "bun install", "timeout_seconds": 10 }
                     ]
                 },
@@ -854,7 +900,7 @@ mod tests {
         let error = parse_lifecycle_config(
             r#"{
                 "workspace": {
-                    "setup": [
+                    "prepare": [
                         { "name": "install", "command": "bun install", "timeout_seconds": 10 }
                     ]
                 },
@@ -883,7 +929,7 @@ mod tests {
         let error = parse_lifecycle_config(
             r#"{
                 "workspace": {
-                    "setup": [
+                    "prepare": [
                         { "name": "install", "command": "bun install", "timeout_seconds": 10 }
                     ]
                 },
@@ -909,7 +955,7 @@ mod tests {
         let error = parse_lifecycle_config(
             r#"{
                 "workspace": {
-                    "setup": [
+                    "prepare": [
                         { "name": "install", "command": "bun install", "timeout_seconds": 10 }
                     ]
                 },

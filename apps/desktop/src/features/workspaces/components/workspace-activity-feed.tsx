@@ -1,6 +1,6 @@
 import { StatusDot } from "@lifecycle/ui";
-import { formatCompactRelativeTime } from "../../../lib/format";
-import type { WorkspaceActivityItem } from "../hooks";
+import { formatCompactRelativeTime } from "@/lib/format";
+import type { WorkspaceActivityItem } from "@/features/workspaces/state/workspace-activity";
 
 interface WorkspaceActivityFeedProps {
   items: WorkspaceActivityItem[];

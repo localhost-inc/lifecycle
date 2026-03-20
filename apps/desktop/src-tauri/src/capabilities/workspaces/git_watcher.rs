@@ -618,16 +618,15 @@ mod tests {
         )
         .expect("insert project");
         conn.execute(
-            "INSERT INTO workspace (id, project_id, name, kind, source_ref, mode, status)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO workspace (id, project_id, name, kind, source_ref, mode)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 "workspace_root",
                 "project_1",
                 "Root",
                 "root",
                 "main",
-                "local",
-                "idle"
+                "local"
             ],
         )
         .expect("insert root workspace");

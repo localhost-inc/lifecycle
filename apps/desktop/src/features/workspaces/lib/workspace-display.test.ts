@@ -3,7 +3,7 @@ import {
   canInlineRenameWorkspace,
   getWorkspaceDisplayName,
   isRootWorkspace,
-} from "./workspace-display";
+} from "@/features/workspaces/lib/workspace-display";
 
 describe("workspace display", () => {
   test("keeps managed workspace names as the primary display label", () => {

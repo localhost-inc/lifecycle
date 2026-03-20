@@ -1,4 +1,4 @@
-import type { WorkspaceCanvasTab } from "./workspace-canvas-tabs";
+import type { WorkspaceCanvasTab } from "@/features/workspaces/components/workspace-canvas-tabs";
 
 export interface CloseWorkspacePaneOperations {
   collapseEmptyPane: () => void;

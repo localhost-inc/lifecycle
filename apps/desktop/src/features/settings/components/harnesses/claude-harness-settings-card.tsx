@@ -8,7 +8,7 @@ import {
   Switch,
 } from "@lifecycle/ui";
 import { useState } from "react";
-import { SettingsRow } from "../settings-primitives";
+import { SettingsRow } from "@/features/settings/components/settings-primitives";
 import {
   buildClaudeHarnessSettingsFromPreset,
   claudeHarnessSettingsUseCustomValues,
@@ -16,7 +16,7 @@ import {
   harnessPresetOptions,
   type ClaudeHarnessSettings,
   type HarnessPreset,
-} from "../../state/harness-settings";
+} from "@/features/settings/state/harness-settings";
 
 interface ClaudeHarnessSettingsContentProps {
   defaultAdvancedOpen?: boolean;

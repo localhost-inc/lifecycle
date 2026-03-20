@@ -1,5 +1,5 @@
 import { isTauri } from "@tauri-apps/api/core";
-import { invokeTauri } from "../../lib/tauri-error";
+import { invokeTauri } from "@/lib/tauri-error";
 
 export interface NativeTerminalTheme {
   background: string;

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Circle } from "lucide-react";
-import type { CommandPaletteCommand } from "./types";
-import { buildCommandPaletteSections } from "./command-palette-sections";
+import type { CommandPaletteCommand } from "@/features/command-palette/types";
+import { buildCommandPaletteSections } from "@/features/command-palette/command-palette-sections";
 
 function createCommand(
   id: string,

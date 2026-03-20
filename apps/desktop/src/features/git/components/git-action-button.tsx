@@ -17,7 +17,7 @@ import {
 } from "@lifecycle/ui";
 import { ChevronDown } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
-import { buildWorkspaceGitActionState } from "../lib/workspace-git-action-state";
+import { buildWorkspaceGitActionState } from "@/features/git/lib/workspace-git-action-state";
 
 interface GitActionButtonProps {
   actionError: string | null;

@@ -1,7 +1,7 @@
 import CodeMirror from "@uiw/react-codemirror";
 import { useMemo } from "react";
-import { buildFileCodeEditorExtensions } from "../lib/file-editor-config";
-import type { FileEditorConfig } from "../lib/file-editor-types";
+import { buildFileCodeEditorExtensions } from "@/features/files/lib/file-editor-config";
+import type { FileEditorConfig } from "@/features/files/lib/file-editor-types";
 
 interface FileCodeEditorProps {
   config: FileEditorConfig;

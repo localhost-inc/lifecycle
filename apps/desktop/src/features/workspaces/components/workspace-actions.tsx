@@ -15,20 +15,20 @@ import {
 } from "@lifecycle/ui";
 import { ChevronDown, GitFork, Trash2 } from "lucide-react";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
-import { isMacPlatform } from "../../../app/app-hotkeys";
+import { isMacPlatform } from "@/app/app-hotkeys";
 import {
   listWorkspaceOpenInApps,
   openWorkspaceInApp,
   type WorkspaceOpenInAppInfo,
   type OpenInAppId,
-} from "../open-in-api";
-import { OpenInAppIcon } from "./open-in-app-icon";
-import { WorkspaceOpenInMenu } from "./workspace-open-in-menu";
+} from "@/features/workspaces/open-in-api";
+import { OpenInAppIcon } from "@/features/workspaces/components/open-in-app-icon";
+import { WorkspaceOpenInMenu } from "@/features/workspaces/components/workspace-open-in-menu";
 import {
   listAvailableOpenInTargets,
   resolveDefaultOpenTarget,
   type OpenInTarget,
-} from "../lib/open-in-targets";
+} from "@/features/workspaces/lib/open-in-targets";
 
 interface WorkspaceActionsProps {
   workspace: WorkspaceRecord;
@@ -228,7 +228,12 @@ export function WorkspaceActions({ workspace, onDestroy, onFork }: WorkspaceActi
       {onFork && (
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button aria-label="Fork workspace" disabled={interactionLocked} onClick={onFork} size="icon">
+            <Button
+              aria-label="Fork workspace"
+              disabled={interactionLocked}
+              onClick={onFork}
+              size="icon"
+            >
               <GitFork size={14} strokeWidth={2.2} />
             </Button>
           </TooltipTrigger>
@@ -247,7 +252,9 @@ export function WorkspaceActions({ workspace, onDestroy, onFork }: WorkspaceActi
               <Trash2 size={14} strokeWidth={2.2} />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>{destroying ? "Destroying workspace" : "Destroy workspace"}</TooltipContent>
+          <TooltipContent>
+            {destroying ? "Destroying workspace" : "Destroy workspace"}
+          </TooltipContent>
         </Tooltip>
       )}
     </TooltipProvider>

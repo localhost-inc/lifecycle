@@ -9,7 +9,7 @@ const SECRET_API_KEY_TEMPLATE = "${secrets.API_KEY}";
 
 const VALID_CONFIG = `{
   "workspace": {
-    "setup": [
+    "prepare": [
       { "name": "install", "command": "bun install --frozen-lockfile", "timeout_seconds": 300 },
       {
         "name": "write-root-env",
@@ -64,9 +64,9 @@ describe("parseManifest", () => {
     const result = parseManifest(VALID_CONFIG);
     expect(result.valid).toBe(true);
     if (!result.valid) return;
-    expect(result.config.workspace.setup).toHaveLength(2);
-    expect(result.config.workspace.setup[0]!.name).toBe("install");
-    expect(result.config.workspace.setup[1]!.run_on).toBe("start");
+    expect(result.config.workspace.prepare).toHaveLength(2);
+    expect(result.config.workspace.prepare[0]!.name).toBe("install");
+    expect(result.config.workspace.prepare[1]!.run_on).toBe("start");
     expect(result.config.workspace.teardown?.[0]?.name).toBe("cleanup");
     expect(result.config.environment["postgres"]!.kind).toBe("service");
     expect(result.config.environment["migrate"]!.kind).toBe("task");
@@ -90,7 +90,7 @@ describe("parseManifest", () => {
 
   test("returns errors for missing required environment field", () => {
     const result = parseManifest(`{
-      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] }
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] }
     }`);
     expect(result.valid).toBe(false);
     if (result.valid) return;
@@ -103,7 +103,7 @@ describe("parseManifest", () => {
 
   test("returns errors for invalid field types", () => {
     const result = parseManifest(`{
-      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": "not-a-number" }] },
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": "not-a-number" }] },
       "environment": {}
     }`);
     expect(result.valid).toBe(false);
@@ -111,9 +111,9 @@ describe("parseManifest", () => {
     expect(result.errors.length).toBeGreaterThan(0);
   });
 
-  test("returns errors when a workspace setup step omits both command and write_files", () => {
+  test("returns errors when a workspace prepare step omits both command and write_files", () => {
     const result = parseManifest(`{
-      "workspace": { "setup": [{ "name": "write-env", "timeout_seconds": 10 }] },
+      "workspace": { "prepare": [{ "name": "write-env", "timeout_seconds": 10 }] },
       "environment": {}
     }`);
     expect(result.valid).toBe(false);
@@ -121,10 +121,10 @@ describe("parseManifest", () => {
     expect(result.errors.some((e) => e.path.includes("command"))).toBe(true);
   });
 
-  test("accepts workspace setup steps that write files", () => {
+  test("accepts workspace prepare steps that write files", () => {
     const result = parseManifest(`{
       "workspace": {
-        "setup": [{
+        "prepare": [{
           "name": "write-env",
           "write_files": [{
             "path": "apps/api/.env.local",
@@ -140,16 +140,16 @@ describe("parseManifest", () => {
     }`);
     expect(result.valid).toBe(true);
     if (!result.valid) return;
-    const step = result.config.workspace.setup[0]!;
+    const step = result.config.workspace.prepare[0]!;
     expect(step.command).toBeUndefined();
     expect(step.write_files).toHaveLength(1);
     expect(step.write_files?.[0]?.path).toBe("apps/api/.env.local");
   });
 
-  test("rejects workspace setup steps with depends_on", () => {
+  test("rejects workspace prepare steps with depends_on", () => {
     const result = parseManifest(`{
       "workspace": {
-        "setup": [{
+        "prepare": [{
           "name": "install",
           "command": "bun install",
           "timeout_seconds": 10,
@@ -164,8 +164,8 @@ describe("parseManifest", () => {
     if (result.valid) return;
     expect(result.errors).toEqual([
       {
-        path: "workspace.setup.0.depends_on",
-        message: "workspace.setup steps cannot declare depends_on",
+        path: "workspace.prepare.0.depends_on",
+        message: "workspace.prepare steps cannot declare depends_on",
       },
     ]);
   });
@@ -173,7 +173,7 @@ describe("parseManifest", () => {
   test("rejects workspace teardown steps with run_on", () => {
     const result = parseManifest(`{
       "workspace": {
-        "setup": [],
+        "prepare": [],
         "teardown": [{
           "name": "cleanup",
           "command": "rm -f .env.local",
@@ -195,7 +195,7 @@ describe("parseManifest", () => {
 
   test("accepts task nodes with depends_on and run_on", () => {
     const result = parseManifest(`{
-      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
       "environment": {
         "postgres": { "kind": "service", "runtime": "image", "image": "postgres:16" },
         "migrate": {
@@ -217,7 +217,7 @@ describe("parseManifest", () => {
 
   test("returns errors for invalid service runtime", () => {
     const result = parseManifest(`{
-      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
       "environment": { "api": { "kind": "service", "runtime": "unknown", "command": "run" } }
     }`);
     expect(result.valid).toBe(false);
@@ -225,7 +225,7 @@ describe("parseManifest", () => {
 
   test("returns errors for process service missing command", () => {
     const result = parseManifest(`{
-      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
       "environment": { "api": { "kind": "service", "runtime": "process" } }
     }`);
     expect(result.valid).toBe(false);
@@ -233,7 +233,7 @@ describe("parseManifest", () => {
 
   test("returns errors for image service missing image", () => {
     const result = parseManifest(`{
-      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
       "environment": { "db": { "kind": "service", "runtime": "image" } }
     }`);
     expect(result.valid).toBe(false);
@@ -242,7 +242,7 @@ describe("parseManifest", () => {
   test("handles JSONC comments correctly", () => {
     const result = parseManifest(`{
       // This is a comment
-      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
       /* Block comment */
       "environment": { "api": { "kind": "service", "runtime": "process", "command": "run" } }
     }`);
@@ -251,7 +251,7 @@ describe("parseManifest", () => {
 
   test("handles trailing commas", () => {
     const result = parseManifest(`{
-      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10, },], },
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10, },], },
       "environment": { "api": { "kind": "service", "runtime": "process", "command": "run", }, },
     }`);
     expect(result.valid).toBe(true);
@@ -269,7 +269,7 @@ describe("parseManifest", () => {
 
   test("validates health check kinds", () => {
     const result = parseManifest(`{
-      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
       "environment": {
         "api": {
           "kind": "service",
@@ -284,7 +284,7 @@ describe("parseManifest", () => {
 
   test("accepts runtime templates in http health check urls", () => {
     const result = parseManifest(`{
-      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
       "environment": {
         "web": {
           "kind": "service",
@@ -303,7 +303,7 @@ describe("parseManifest", () => {
 
   test("accepts runtime templates in tcp health check ports", () => {
     const result = parseManifest(`{
-      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
       "environment": {
         "redis": {
           "kind": "service",
@@ -323,7 +323,7 @@ describe("parseManifest", () => {
 
   test("accepts container health checks", () => {
     const result = parseManifest(`{
-      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
       "environment": {
         "postgres": {
           "kind": "service",
@@ -342,7 +342,7 @@ describe("parseManifest", () => {
 
   test("rejects container health checks on process services", () => {
     const result = parseManifest(`{
-      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
       "environment": {
         "api": {
           "kind": "service",
@@ -357,7 +357,7 @@ describe("parseManifest", () => {
 
   test("accepts image services with build and volumes", () => {
     const result = parseManifest(`{
-      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
       "environment": {
         "postgres": {
           "kind": "service",
@@ -382,7 +382,7 @@ describe("parseManifest", () => {
 
   test("rejects invalid named volume sources", () => {
     const result = parseManifest(`{
-      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
       "environment": {
         "postgres": {
           "kind": "service",
@@ -407,7 +407,7 @@ describe("parseManifest", () => {
 
   test("rejects managed secrets blocks", () => {
     const result = parseManifest(`{
-      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
       "environment": { "api": { "kind": "service", "runtime": "process", "command": "run" } },
       "secrets": { "KEY": { "ref": "org/key", "required": true } }
     }`);
@@ -417,14 +417,14 @@ describe("parseManifest", () => {
       {
         path: "secrets",
         message:
-          "Managed secrets are not supported in local lifecycle.json yet. Materialize local env files in workspace setup instead.",
+          "Managed secrets are not supported in local lifecycle.json yet. Materialize local env files in workspace prepare instead.",
       },
     ]);
   });
 
   test("rejects `${secrets.*}` references in manifest strings", () => {
     const result = parseManifest(`{
-      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
       "environment": {
         "api": {
           "kind": "service",
@@ -440,14 +440,14 @@ describe("parseManifest", () => {
       {
         path: "environment.api.env.API_KEY",
         message:
-          "`${secrets.*}` is not supported in local lifecycle.json. Materialize local env files in workspace setup instead.",
+          "`${secrets.*}` is not supported in local lifecycle.json. Materialize local env files in workspace prepare instead.",
       },
     ]);
   });
 
   test("rejects top-level reset blocks", () => {
     const result = parseManifest(`{
-      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
       "environment": { "api": { "kind": "service", "runtime": "process", "command": "run" } },
       "reset": { "strategy": "reseed", "command": "bun run seed", "timeout_seconds": 60 }
     }`);
@@ -464,7 +464,7 @@ describe("parseManifest", () => {
 
   test("rejects top-level mcps blocks", () => {
     const result = parseManifest(`{
-      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
       "environment": { "api": { "kind": "service", "runtime": "process", "command": "run" } },
       "mcps": {
         "notion": {
@@ -497,7 +497,7 @@ describe("parseManifest", () => {
 
   test("produces a stable fingerprint independent of object key order", () => {
     const left = parseManifest(`{
-      "workspace": { "setup": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
+      "workspace": { "prepare": [{ "name": "install", "command": "bun install", "timeout_seconds": 10 }] },
       "environment": {
         "web": {
           "kind": "service",
@@ -528,7 +528,7 @@ describe("parseManifest", () => {
           "kind": "service"
         }
       },
-      "workspace": { "setup": [{ "timeout_seconds": 10, "command": "bun install", "name": "install" }] }
+      "workspace": { "prepare": [{ "timeout_seconds": 10, "command": "bun install", "name": "install" }] }
     }`);
 
     expect(left.valid).toBe(true);

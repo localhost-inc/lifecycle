@@ -3,7 +3,7 @@ import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { ThemeProvider } from "@lifecycle/ui";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { WorkspaceActions } from "./workspace-actions";
+import { WorkspaceActions } from "@/features/workspaces/components/workspace-actions";
 
 const interactiveWorkspace: WorkspaceRecord = {
   id: "workspace_1",
@@ -14,9 +14,6 @@ const interactiveWorkspace: WorkspaceRecord = {
   git_sha: "abcdef1234567890",
   worktree_path: "/tmp/workspace_1",
   mode: "local",
-  status: "active",
-  failure_reason: null,
-  failed_at: null,
   created_by: null,
   source_workspace_id: null,
   created_at: "2026-03-08T10:00:00.000Z",

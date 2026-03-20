@@ -17,30 +17,30 @@ M4 should stop treating "workspace" and "environment" as the same thing.
 2. `environment`
    - the singleton runnable service/process/container layer attached to a workspace
    - can go up and down without destroying the workspace
-3. `workspace_service`
+3. `service`
    - per-service runtime state inside the environment
 
 Implementation direction:
 
-1. V1 still stores environment state on `workspace.status`.
+1. Environment lifecycle state lives on a dedicated `environment` record keyed by `workspace_id`.
 2. M4 should normalize toward:
    - workspace lifecycle metadata on `workspace`
-   - environment lifecycle state on the workspace record as `environment_status` plus failure metadata
+   - environment lifecycle state and failure metadata on `environment`
 3. `archive` is a workspace-lifecycle action and must drive the environment down as part of that transition.
 4. `destroy` is a workspace-lifecycle action that tears the environment down and then removes the workspace.
 5. Ordinary `start` and `stop` act on the environment, not on durable workspace existence.
 
 ## What You Build
 
-1. `run` (start from `idle` or restart through a full stop cycle) and `reset` (restore post-setup baseline without introducing a separate `resetting` status).
+1. `run` (start from `idle`, including workspace preparation when required, or restart through a full stop cycle) and `reset` (restore post-prepare baseline without introducing a separate `resetting` status).
 2. Local stop (explicit SIGTERM process group with visible `stopping` state).
 3. Local destroy (kill process group, prune git worktree, clean SQLite).
 4. Local preview (stable Lifecycle-owned local proxy URL routed to the current service port).
 5. Service share toggles and port overrides in desktop UI (local-scoped).
 6. Terminal access stays available while services are stopped, as long as the workspace worktree still exists.
 7. Mutation locking hardened with typed errors.
-8. Desktop app: local environment controls, destruction confirmation, and explicit `idle|starting|active|stopping` indicators.
-9. A Rust-side per-workspace runtime controller that owns setup tasks, environment tasks, service supervisors, terminal runtime state, and destructive locking.
+8. Desktop app: local environment controls, destruction confirmation, and explicit `idle|starting|running|stopping` indicators.
+9. A Rust-side per-workspace runtime controller that owns preparation tasks, environment tasks, service supervisors, terminal runtime state, and destructive locking.
 10. Provider-owned terminal creation so `createTerminal(...)` returns a live session rather than a deferred attach placeholder.
 11. Terminal create must return a live session immediately; cross-restart session continuity remains deferred until a stable external host is worth the tradeoffs.
 12. Authoritative fact coverage and reload-safe query hydration for lifecycle progress, service configuration, and activity state.
@@ -49,7 +49,7 @@ Implementation direction:
 
 ### Run/Reset Semantics
 
-- **`run`**: restart all workspace service nodes using project-level `environment` config plus workspace-level service overrides from `workspace_service` records.
+- **`run`**: restart all workspace service nodes using project-level `environment` config plus workspace-level service overrides from `service` records.
 - **`reset`**: restore baseline fixtures and restart all defined services. This remains a runtime/product flow; it is not manifest-configurable in `lifecycle.json` yet.
 
 ### Workspace Persistence Contract (Local)
@@ -58,9 +58,9 @@ Implementation direction:
 
 Part of the local environment stop/start contract.
 
-#### `LocalWorkspaceProvider` Persistence
+#### Local Workspace Runtime Persistence
 
-What survives while the workspace is idle:
+What survives while the environment is idle:
 
 | Resource                            | Survives sleep? | Mechanism                                        |
 | ----------------------------------- | --------------- | ------------------------------------------------ |
@@ -74,14 +74,14 @@ What survives while the workspace is idle:
 
 Stop/start contract:
 
-1. Stop: transition `active -> stopping -> idle` while sending SIGTERM to the process group (services + containers). Worktree remains on disk.
-2. Run from idle: transition `idle -> starting -> active` after restarting services from manifest. Skip `setup` and `git clone` once `setup_completed_at` is set.
+1. Stop: transition `running -> stopping -> idle` while sending SIGTERM to the process group (services + containers). Worktree remains on disk.
+2. Run from idle: transition `idle -> starting -> running`. Workspace preparation may run during `starting`, but it is not a separate public environment status. Skip workspace preparation and `git clone` once `prepared_at` is set.
 3. Docker volumes survive idle periods; no re-seed is needed unless explicitly requested via `reset`.
 
 #### Restart vs Reset
 
-- **Restart from idle** = restore "where you left off." Filesystem preserved, all services restarted, no re-seed. Skips `setup` and `git clone`.
-- **Reset** = restore "known-good baseline." Filesystem reset to post-setup state, data re-seeded, services restarted.
+- **Restart from idle** = restore "where you left off." Filesystem preserved, all services restarted, no re-seed. Skips workspace preparation and `git clone`.
+- **Reset** = restore "known-good baseline." Filesystem reset to post-prepare state, data re-seeded, services restarted.
 
 ### Destroy Flow (Local)
 
@@ -93,35 +93,27 @@ Stop/start contract:
 #### Contract (provider-agnostic)
 
 1. **Scope**:
-   - preview is defined per `workspace_service` record and represents routable access to an active service port inside a workspace execution environment
+   - preview is defined per `service` record and represents routable access to an active service port inside a workspace execution environment
    - one workspace can expose multiple preview endpoints (for example `api`, `admin`, `docs`)
-   - `exposure=local` enables localhost-only access
+   - preview routing is workspace-runtime-owned; openability is derived from environment + service runtime state
 
-2. **Preview status machine** (`workspace_service.preview_status`):
-   - Full transition rules: [reference/state-machines.md](../reference/state-machines.md)
-   - The state machine is portable across providers -- trigger conditions apply regardless of mode
-
-3. **Protocol support**:
+2. **Protocol support**:
    - HTTP/HTTPS and WebSocket (`ws/wss`) upgrade must be supported
    - Long polling and server-sent events must pass through without gateway buffering breakage
-   - Raw TCP/UDP exposure is out of scope for preview URLs
+   - Raw TCP/UDP access is out of scope for preview URLs
 
-4. **UX guarantees**:
+3. **UX guarantees**:
    - preview URL remains stable for the life of the workspace (including hot reload, port reassignment, and wake cycles)
 
-#### `LocalWorkspaceProvider` Preview
+#### Local Workspace Runtime Preview
 
 1. **Routing model**:
    - `preview_url` is a stable Lifecycle-owned local proxy URL under `*.lifecycle.localhost`, using readable hostnames in the shape `<service>.<workspace>.lifecycle.localhost`
-   - the proxy resolves the current `workspace_service.assigned_port` at request time
+   - the proxy resolves the current `service.assigned_port` at request time
    - `assigned_port` is discovered and assigned at start time for the current run; it is not the user-facing preview address
-   - `provisioning` still maps to local service startup, but the preview URL itself does not change when the backing port changes
+   - there is no separate preview status machine; the UI derives preview availability from `environment.status`, `service.status`, and `assigned_port`
 
-2. **Access control**:
-   - `exposure=local`: no auth required (localhost only)
-   - `exposure=organization`: optional tunnel integration for sharing with teammates (deferred to expansion)
-
-3. **Limitations**:
+2. **Limitations**:
    - no TLS by default
    - tunnel-based sharing (e.g., Cloudflare Tunnel, ngrok) is expansion-scope
 
@@ -129,8 +121,8 @@ Stop/start contract:
 
 Full error catalog: [reference/errors.md](../reference/errors.md)
 
-- Transitional environment states reject new workspace/service mutations with `workspace_mutation_locked` error
-- Only `idle` and `active` states accept mutation requests
+- Transitional environment states reject new workspace/environment mutations with `workspace_mutation_locked` error
+- Only `idle` and `running` states accept mutation requests
 
 ### Remediation Order (Current Architecture Gaps)
 
@@ -139,7 +131,7 @@ The current local runtime still splits authority across React surface state, Tau
 #### Phase 1: Per-Workspace Runtime Controller
 
 1. Introduce a Rust-side controller/actor keyed by `workspace_id`.
-2. The controller owns setup subprocess handles, environment task handles, service supervisors, terminal runtime handles, and destructive lock state.
+2. The controller owns preparation subprocess handles, environment task handles, service supervisors, terminal runtime handles, and destructive lock state.
 3. `run`, `stop`, `reset`, `destroy`, `createTerminal`, `detachTerminal`, `killTerminal`, and future `sleep`/`wake` route through controller entrypoints rather than mutating each subsystem independently.
 
 First implementation slice:
@@ -180,9 +172,9 @@ Status (2026-03-15):
 
 #### Phase 3: Destructive Locking And Cancellation
 
-1. Add a dedicated destructive mutation lock separate from the environment status machine. Do not overload `workspace.status` with a new destructive enum.
-2. `stop` and `destroy` must cancel setup and environment task subprocesses in addition to supervisor-managed services and live terminal sessions.
-3. Rename, service updates, terminal create/attach, and other mutable operations reject during the destructive window with typed conflict errors.
+1. Add a dedicated destructive mutation lock separate from the environment status machine. Do not overload the workspace shell record with a new destructive enum.
+2. `stop` and `destroy` must cancel preparation and environment task subprocesses in addition to supervisor-managed services and live terminal sessions.
+3. Rename, terminal create/attach, and other mutable operations reject during the destructive window with typed conflict errors.
 
 First implementation slice:
 
@@ -190,7 +182,7 @@ First implementation slice:
 
 Exit condition:
 
-1. No setup task, environment task, service process, or terminal can outlive a completed local stop or destroy flow.
+1. No preparation task, environment task, service process, or terminal can outlive a completed local stop or destroy flow.
 
 Status (2026-03-13):
 
@@ -200,32 +192,32 @@ Status (2026-03-13):
 #### Phase 4: Typed Errors And Authoritative Fact Coverage
 
 1. The Tauri boundary must return an error envelope aligned with [reference/errors.md](../reference/errors.md): `code`, `message`, `details`, `request_id`, `suggested_action`, `retryable`.
-2. Provider-owned lifecycle mutations publish normalized facts for service configuration, preview projection changes, manifest sync outcomes, and terminal/workspace lifecycle changes.
+2. Provider-owned lifecycle mutations publish normalized facts for manifest sync outcomes, service status/log changes, and terminal/workspace lifecycle changes.
 3. React surfaces branch on error `code` and consume facts; they must stop repairing cache state manually after local mutations.
 
 First implementation slice:
 
-1. Serialize `LifecycleError` into a typed envelope and add authoritative fact emission for service exposure/port/preview changes plus manifest sync completion.
+1. Serialize `LifecycleError` into a typed envelope and add authoritative fact emission for manifest sync completion.
 
 Exit condition:
 
-1. Workspace and service mutations can drive desktop updates without component-local cache invalidation or `String(error)` fallbacks.
+1. Workspace and environment mutations can drive desktop updates without component-local cache invalidation or `String(error)` fallbacks.
 
 Status (2026-03-13):
 
 1. `LifecycleError` now serializes through a typed Tauri error envelope with `code`, `message`, `details`, `requestId`, `suggestedAction`, and `retryable` fields, and the desktop workspace/terminal APIs normalize object or string payloads through a shared helper.
-2. Local service mutations now emit authoritative `service.configuration_changed` facts, manifest reconciliation emits `workspace.manifest_synced` facts with the reconciled service projection, and the workspace query reducers consume those facts directly.
-3. `WorkspaceLayout` no longer manually invalidates workspace/service queries after service updates or manifest sync, and the main workspace lifecycle surfaces now format user-facing failures from typed error codes instead of raw `String(error)` fallbacks.
+2. Manifest file watchers only invalidate the affected workspace queries. Backend-owned service reads reconcile idle manifest state from `lifecycle.json` before returning data.
+3. `WorkspaceLayout` no longer manually invalidates workspace/service queries after manifest sync, and the main workspace lifecycle surfaces now format user-facing failures from typed error codes instead of raw `String(error)` fallbacks.
 
 #### Phase 5: Recoverable Projections And Provider Adoption
 
-1. Setup progress, environment task progress, and activity projections must hydrate from authoritative snapshot/query APIs on initial load, then continue reducing future facts.
-2. The desktop app should adopt the existing `WorkspaceProvider` abstraction in `packages/runtime` instead of calling Tauri commands directly from feature APIs and query source code.
-3. Query and mutation call sites should target provider-owned workspace operations keyed by `workspace_id`, not transport-local command names.
+1. Environment state, services, service logs, and activity must load from authoritative workspace-scoped selector/query APIs on initial mount and continue refreshing from those backend-owned selectors as future facts arrive.
+2. The desktop app should adopt explicit `ControlPlane` and `WorkspaceRuntime` abstractions in `packages/runtime` instead of calling Tauri commands directly from feature APIs and query source code.
+3. Query and mutation call sites should target control-plane or workspace-runtime operations keyed by project/workspace identity, not transport-local command names.
 
 First implementation slice:
 
-1. Add snapshot reads for setup/task/activity state and introduce provider-backed adapters in the desktop query source and mutation paths.
+1. Add direct reads for service log and activity state, and introduce control-plane/runtime-backed adapters in the desktop query source and mutation paths.
 
 Exit condition:
 
@@ -233,11 +225,11 @@ Exit condition:
 
 Status (2026-03-13):
 
-1. The Rust workspace controller now records setup progress, environment task progress, and bounded activity facts into a runtime projection that can be fetched through `get_workspace_runtime_projection`.
-2. Desktop setup, environment-task, and activity hooks now hydrate from one authoritative runtime projection query and continue reducing future lifecycle facts on top of that fetched baseline.
-3. Desktop workspace create/start/stop/destroy, rename, manifest sync, service configuration updates, runtime snapshot/projection reads, workspace file reads/writes, terminal list/get/create/rename/attach-save/detach/kill, and git operations now flow through the shared local `WorkspaceProvider` adapter instead of calling Tauri command names directly from those feature APIs and query source paths.
-4. `features/workspaces/api.ts`, `features/terminals/api.ts`, `features/git/api.ts`, and the desktop query source no longer invoke transport-local Tauri command names directly for workspace-scoped runtime authority.
-5. The remaining direct desktop calls are intentionally narrower and explicitly separated into non-provider modules: aggregate control-plane queries (`get_workspace` by project, `list_workspaces*`), project-level branch lookup, host app-launch helpers, and native terminal surface synchronization.
+1. The Rust workspace controller now owns service-log and activity selectors that can be fetched through `get_workspace_service_logs` and `get_workspace_activity`.
+2. Desktop service-log and activity hooks read those workspace-scoped selectors directly, and future lifecycle facts only invalidate/refetch the affected queries instead of being reduced into frontend-owned projections.
+3. Desktop workspace create/rename/destroy, workspace catalog reads, project list/manifest reads, and project-level branch lookup now flow through the local `ControlPlane`; live workspace environment/service/file/terminal/git reads and mutations flow through the local `WorkspaceRuntime`.
+4. `features/workspaces/api.ts`, `features/workspaces/catalog-api.ts`, `features/projects/api/projects.ts`, `features/projects/api/current-branch.ts`, `features/terminals/api.ts`, `features/git/api.ts`, and the desktop query source no longer invoke transport-local Tauri command names directly for control-plane or runtime-backed reads.
+5. The remaining direct desktop calls are intentionally narrower and explicitly separated into non-runtime modules: project import/remove flows, host app-launch helpers, and native terminal surface synchronization.
 
 #### Phase 6: Workspace Surface Split And Tab Store Normalization
 
@@ -252,7 +244,7 @@ First implementation slice:
 
 Exit condition:
 
-1. The workspace canvas host is for provider-backed runtime tabs and document tabs, not the implementation owner of file editing behavior.
+1. The workspace canvas host is for runtime-backed tabs and document tabs, not the implementation owner of file editing behavior.
 
 Status (2026-03-13):
 
@@ -281,7 +273,7 @@ Status (2026-03-13):
 
 #### Sequencing Guardrails
 
-1. Do not introduce new ad hoc `workspace.status` values to represent destroy or reset; use explicit lock/context state instead.
+1. Do not reintroduce environment lifecycle state onto `workspace`; use `environment.status` plus explicit lock/context state instead.
 2. Do not let native surface sync remain session-launch authoritative after Phase 2.
 3. Do not ship new UI-local cache repair for service or manifest mutations; missing fact coverage should block completion instead.
 4. Keep the local terminal path native-host-only. This plan does not revive PTY fallback semantics.
@@ -289,7 +281,7 @@ Status (2026-03-13):
 
 ### Terminal / Service Separation
 
-- Environment `idle` means services are stopped while the worktree remains available for interactive terminal work.
+- Environment `idle` means services are down while the worktree remains available for interactive terminal work.
 - Terminal create/attach stays available whenever the workspace has interactive context.
 - Workspace `destroy` still hard-terminates any non-finished/non-failed terminal.
 - Terminal state machine: [reference/state-machines.md](../reference/state-machines.md)
@@ -301,18 +293,18 @@ Full SLO targets: [reference/slos.md](../reference/slos.md)
 Key M4 targets:
 
 - p95 workspace restart from idle: <= 5s (local)
-- p95 workspace create to `active`: <= 30s (local)
+- p95 workspace create to `running`: <= 30s (local)
 
 ## Desktop App Surface
 
 - **Run button**: restart all services from manifest + overrides
-- **Per-service run controls**: boot an individual service and whatever its dependency chain requires, from either `idle` or an already-`active` workspace
-- **Reset button**: restore post-setup baseline, re-seed, restart
+- **Per-service run controls**: boot an individual service and whatever its dependency chain requires, from either `idle` or an already-`running` environment
+- **Reset button**: restore post-prepare baseline, re-seed, restart
 - **Destroy button**: kill workspace with confirmation dialog
 - **Reset/destroy confirmation**: explicit confirmation dialogs with workspace identifier
 - **Workspace extension strip**: workspace-scoped right-edge strip for Git and Environment, visible only on workspace tabs
 - **Extension panel model**: one active extension panel at a time, opening to the left of the strip with persisted width
-- **Environment status indicators**: `idle`, `starting`, `active`, and `stopping`
+- **Environment status indicators**: `idle`, `starting`, `running`, and `stopping`
 - **Service share toggles**: per-service on/off toggle in the Environment extension (local-scoped)
 - **Port overrides**: editable port field per service in the Environment extension
 - **Preview URL display**: stable `*.lifecycle.localhost` URL with copy button in the Environment extension
@@ -320,11 +312,11 @@ Key M4 targets:
 ## Exit Gate
 
 - Full local environment loop works: create -> run -> terminal -> reset -> stop -> run -> preview -> destroy
-- `run` restarts services without re-running setup
+- `run` restarts services without re-running workspace preparation
 - Per-service run boots the selected service plus its manifest dependencies
-- Additive per-service run from `active` preserves already-ready dependency services instead of restarting them
-- `reset` restores post-setup baseline and re-seeds data
-- Idle workspace shows `idle` state and can be started again without recreating the worktree
+- Additive per-service run from `running` preserves already-ready dependency services instead of restarting them
+- `reset` restores post-prepare baseline and re-seeds data
+- Idle environment shows `idle` state and can be started again without recreating the worktree
 - Destroy shows confirmation dialog -> confirms -> workspace gone, worktree pruned
 - Terminal remains usable while services are idle
 - Share toggle -> preview URL shows stable `*.lifecycle.localhost`
@@ -332,12 +324,12 @@ Key M4 targets:
 ## Test Scenarios
 
 ```
-workspace active -> run -> services stop, then restart through idle, then active again
-workspace active -> run docs -> docs chain boots through starting -> active without restarting unrelated ready services
-workspace idle -> run www -> api boots automatically through depends_on -> active
-workspace active -> reset -> services restart and data is re-seeded without a separate resetting status
-workspace active -> stop -> SIGTERM sent -> stopping -> idle
-workspace idle -> terminal remains usable -> run -> services restart -> active
+workspace running -> run -> services stop, then restart through idle, then running again
+workspace running -> run docs -> docs chain boots through starting -> running without restarting unrelated ready services
+workspace idle -> run www -> api boots automatically through depends_on -> running
+workspace running -> reset -> services restart and data is re-seeded without a separate resetting status
+workspace running -> stop -> SIGTERM sent -> stopping -> idle
+workspace idle -> terminal remains usable -> run -> services restart -> running
 destroy workspace -> confirmation dialog -> confirm -> workspace removed -> worktree pruned -> clean state
 share service -> preview URL shows stable `*.lifecycle.localhost` -> opens in browser
 mutation during transitional state -> workspace_mutation_locked error

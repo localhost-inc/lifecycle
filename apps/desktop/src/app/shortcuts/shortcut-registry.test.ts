@@ -4,7 +4,7 @@ import {
   getRegisteredShortcut,
   listRegisteredShortcutsForScope,
   REGISTERED_SHORTCUTS,
-} from "./shortcut-registry";
+} from "@/app/shortcuts/shortcut-registry";
 
 describe("shortcut registry", () => {
   test("collects the registered shortcuts in one place", () => {

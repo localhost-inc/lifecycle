@@ -95,28 +95,6 @@ pub async fn start_services(
 }
 
 #[tauri::command]
-pub async fn sync_workspace_manifest(
-    app: AppHandle,
-    db_path: State<'_, DbPath>,
-    workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
-    workspace_id: String,
-    manifest_json: Option<String>,
-    manifest_fingerprint: Option<String>,
-) -> Result<(), LifecycleError> {
-    let _mutation_guard = workspace_controllers
-        .acquire_mutation_guard(&workspace_id)
-        .await?;
-    super::super::environment::sync_workspace_manifest(
-        Some(&app),
-        &db_path.0,
-        workspace_id,
-        manifest_json,
-        manifest_fingerprint,
-    )
-    .await
-}
-
-#[tauri::command]
 pub async fn stop_workspace(
     app: AppHandle,
     db_path: State<'_, DbPath>,
@@ -161,22 +139,34 @@ pub async fn get_workspace_by_id(
 }
 
 #[tauri::command]
-pub async fn get_workspace_snapshot(
+pub async fn get_workspace_environment(
     db_path: State<'_, DbPath>,
     workspace_id: String,
-) -> Result<super::super::query::WorkspaceSnapshotResult, LifecycleError> {
-    super::super::query::get_workspace_snapshot(&db_path.0, workspace_id).await
+) -> Result<super::super::query::EnvironmentRecord, LifecycleError> {
+    super::super::query::get_workspace_environment(&db_path.0, workspace_id).await
 }
 
 #[tauri::command]
-pub async fn get_workspace_runtime_projection(
+pub async fn get_workspace_activity(
     workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
     workspace_id: String,
-) -> Result<super::super::controller::WorkspaceRuntimeProjectionSnapshot, LifecycleError> {
+) -> Result<Vec<crate::shared::lifecycle_events::LifecycleEnvelope>, LifecycleError> {
     Ok(workspace_controllers
         .get(&workspace_id)
         .await
-        .map(|controller| controller.runtime_projection_snapshot())
+        .map(|controller| controller.activity())
+        .unwrap_or_default())
+}
+
+#[tauri::command]
+pub async fn get_workspace_service_logs(
+    workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
+    workspace_id: String,
+) -> Result<Vec<super::super::controller::ServiceLogSnapshot>, LifecycleError> {
+    Ok(workspace_controllers
+        .get(&workspace_id)
+        .await
+        .map(|controller| controller.service_logs())
         .unwrap_or_default())
 }
 
@@ -200,31 +190,6 @@ pub async fn get_workspace_services(
     workspace_id: String,
 ) -> Result<Vec<super::super::query::ServiceRecord>, LifecycleError> {
     super::super::query::get_workspace_services(&db_path.0, workspace_id).await
-}
-
-#[tauri::command]
-pub async fn update_workspace_service(
-    app: AppHandle,
-    db_path: State<'_, DbPath>,
-    workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
-    workspace_id: String,
-    service_name: String,
-    exposure: String,
-    port_override: Option<i64>,
-) -> Result<(), LifecycleError> {
-    let _mutation_guard = workspace_controllers
-        .acquire_mutation_guard(&workspace_id)
-        .await?;
-    let _service = super::super::service::update_workspace_service(
-        Some(&app),
-        &db_path.0,
-        workspace_id,
-        service_name,
-        exposure,
-        port_override,
-    )
-    .await?;
-    Ok(())
 }
 
 #[tauri::command]

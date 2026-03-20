@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { GitBranchPullRequestResult, GitStatusResult } from "@lifecycle/contracts";
-import { buildWorkspaceGitActionState } from "./workspace-git-action-state";
+import { buildWorkspaceGitActionState } from "@/features/git/lib/workspace-git-action-state";
 
 const baseStatus: GitStatusResult = {
   ahead: 0,

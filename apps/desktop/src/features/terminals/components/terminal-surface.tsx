@@ -1,5 +1,5 @@
 import type { TerminalRecord } from "@lifecycle/contracts";
-import { NativeTerminalSurface } from "./native-terminal-surface";
+import { NativeTerminalSurface } from "@/features/terminals/components/native-terminal-surface";
 
 interface TerminalSurfaceProps {
   focused: boolean;

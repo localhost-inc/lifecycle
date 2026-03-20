@@ -3,18 +3,18 @@ import type {
   GitPullRequestCheckSummary,
   GitPullRequestSummary,
 } from "@lifecycle/contracts";
-import type { FileViewerMode } from "../../files/lib/file-view-mode";
+import type { FileViewerMode } from "@/features/files/lib/file-view-mode";
 import {
   createWorkspacePane,
   DEFAULT_WORKSPACE_PANE_ID,
   inspectWorkspacePaneLayout,
   isWorkspacePaneLeaf,
-} from "../lib/workspace-pane-layout";
+} from "@/features/workspaces/lib/workspace-pane-layout";
 import {
   normalizeWorkspaceFilePath,
   workspaceFileBasename,
   workspaceFileExtension,
-} from "../lib/workspace-file-paths";
+} from "@/features/workspaces/lib/workspace-file-paths";
 
 const LAST_WORKSPACE_ID_STORAGE_KEY = "lifecycle.desktop.last-workspace-id";
 const WORKSPACE_CANVAS_STATE_STORAGE_KEY = "lifecycle.desktop.workspace-canvas";

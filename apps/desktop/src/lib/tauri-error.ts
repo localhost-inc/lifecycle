@@ -123,4 +123,3 @@ export async function invokeTauri<T>(command: string, args?: InvokeArgs): Promis
     throw error;
   }
 }
-

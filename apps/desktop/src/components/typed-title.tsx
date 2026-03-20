@@ -1,6 +1,6 @@
 import { cn } from "@lifecycle/ui";
 import { useEffect, useRef, useState } from "react";
-import { usePrefersReducedMotion } from "../hooks/use-prefers-reduced-motion";
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 
 const TYPE_MIN_INTERVAL_MS = 18;
 const TYPE_MAX_INTERVAL_MS = 42;

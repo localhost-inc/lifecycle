@@ -39,18 +39,18 @@ fn is_host_port_available(port: i64) -> bool {
 fn load_reserved_assigned_ports(
     conn: &rusqlite::Connection,
     workspace_id: &str,
-    service_name: &str,
+    name: &str,
 ) -> Result<std::collections::HashSet<i64>, LifecycleError> {
     let mut stmt = conn
         .prepare(
             "SELECT assigned_port
-             FROM workspace_service
+             FROM service
              WHERE assigned_port IS NOT NULL
-               AND NOT (workspace_id = ?1 AND service_name = ?2)",
+               AND NOT (environment_id = ?1 AND name = ?2)",
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
     let rows = stmt
-        .query_map(params![workspace_id, service_name], |row| {
+        .query_map(params![workspace_id, name], |row| {
             row.get::<_, i64>(0)
         })
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
@@ -66,12 +66,11 @@ fn load_reserved_assigned_ports(
 pub(crate) fn resolve_assigned_port(
     conn: &rusqlite::Connection,
     workspace_id: &str,
-    service_name: &str,
-    port_override: Option<i64>,
+    name: &str,
     current_assigned_port: Option<i64>,
     allow_bound_current_port: bool,
 ) -> Result<i64, LifecycleError> {
-    let reserved_ports = load_reserved_assigned_ports(conn, workspace_id, service_name)?;
+    let reserved_ports = load_reserved_assigned_ports(conn, workspace_id, name)?;
 
     let is_port_usable = |candidate: i64| {
         !reserved_ports.contains(&candidate)
@@ -82,35 +81,24 @@ pub(crate) fn resolve_assigned_port(
             }
     };
 
-    if let Some(port_override) = port_override {
-        if is_port_usable(port_override) {
-            return Ok(port_override);
-        }
-
-        return Err(LifecycleError::PortConflict {
-            service: service_name.to_string(),
-            port: port_override as u16,
-        });
-    }
-
     if let Some(current_assigned_port) = current_assigned_port {
         if is_port_usable(current_assigned_port) {
             return Ok(current_assigned_port);
         }
     }
 
-    if let Some(candidate) = resolve_randomized_port(workspace_id, service_name, &is_port_usable) {
+    if let Some(candidate) = resolve_randomized_port(workspace_id, name, &is_port_usable) {
         return Ok(candidate);
     }
 
     Err(LifecycleError::PortExhausted {
-        service: service_name.to_string(),
+        service: name.to_string(),
     })
 }
 
 fn resolve_randomized_port(
     workspace_id: &str,
-    service_name: &str,
+    name: &str,
     is_port_usable: &dyn Fn(i64) -> bool,
 ) -> Option<i64> {
     let span = RANDOMIZED_PORT_RANGE_END - RANDOMIZED_PORT_RANGE_START + 1;
@@ -120,7 +108,7 @@ fn resolve_randomized_port(
 
     let mut hasher = DefaultHasher::new();
     workspace_id.hash(&mut hasher);
-    service_name.hash(&mut hasher);
+    name.hash(&mut hasher);
     let offset = (hasher.finish() % span as u64) as i64;
 
     for step in 0..span {
@@ -139,13 +127,13 @@ mod tests {
 
     fn init_workspace_service_table(conn: &rusqlite::Connection) {
         conn.execute_batch(
-            "CREATE TABLE workspace_service (
-                workspace_id TEXT NOT NULL,
-                service_name TEXT NOT NULL,
+            "CREATE TABLE service (
+                environment_id TEXT NOT NULL,
+                name TEXT NOT NULL,
                 assigned_port INTEGER
             );",
         )
-        .expect("create workspace_service table");
+        .expect("create service table");
     }
 
     #[test]
@@ -161,7 +149,7 @@ mod tests {
                 .port(),
         );
 
-        let assigned_port = resolve_assigned_port(&conn, "ws-1", "web", None, None, false)
+        let assigned_port = resolve_assigned_port(&conn, "ws-1", "web", None, false)
             .expect("port resolution should succeed");
 
         assert_ne!(assigned_port, occupied_port);
@@ -184,21 +172,10 @@ mod tests {
                 .port(),
         );
 
-        let assigned_port = resolve_assigned_port(&conn, "ws-1", "web", None, None, false)
+        let assigned_port = resolve_assigned_port(&conn, "ws-1", "web", None, false)
             .expect("port resolution should succeed");
 
         assert!((RANDOMIZED_PORT_RANGE_START..=RANDOMIZED_PORT_RANGE_END).contains(&assigned_port));
-    }
-
-    #[test]
-    fn resolve_assigned_port_honors_override() {
-        let conn = rusqlite::Connection::open_in_memory().expect("open in-memory db");
-        init_workspace_service_table(&conn);
-
-        let assigned_port = resolve_assigned_port(&conn, "ws-1", "web", Some(9999), None, false)
-            .expect("port resolution should succeed");
-
-        assert_eq!(assigned_port, 9999);
     }
 
     #[test]
@@ -206,7 +183,7 @@ mod tests {
         let conn = rusqlite::Connection::open_in_memory().expect("open in-memory db");
         init_workspace_service_table(&conn);
 
-        let assigned_port = resolve_assigned_port(&conn, "ws-1", "web", None, Some(42000), true)
+        let assigned_port = resolve_assigned_port(&conn, "ws-1", "web", Some(42000), true)
             .expect("port resolution should succeed");
 
         assert_eq!(assigned_port, 42000);

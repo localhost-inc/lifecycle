@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import type { CommandPaletteMode } from "./types";
+import type { CommandPaletteMode } from "@/features/command-palette/types";
 
 export interface CommandPaletteContextValue {
   canOpenFiles: boolean;

@@ -1,1 +1,1 @@
-export * from "../features/projects/api/projects";
+export * from "@/features/projects/api/projects";

@@ -1,5 +1,5 @@
-import type { WorkspacePaneTabSnapshot } from "../state/workspace-canvas-state";
-import type { TerminalTab } from "./workspace-canvas-tabs";
+import type { WorkspacePaneTabSnapshot } from "@/features/workspaces/state/workspace-canvas-state";
+import type { TerminalTab } from "@/features/workspaces/components/workspace-canvas-tabs";
 
 export function getWorkspaceLiveTerminalTabKeys(
   terminalTabs: readonly Pick<TerminalTab, "key">[],

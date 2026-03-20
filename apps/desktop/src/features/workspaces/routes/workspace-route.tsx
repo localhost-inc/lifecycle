@@ -1,6 +1,6 @@
 import { useOutletContext, useParams } from "react-router-dom";
-import type { ProjectRouteOutletContext } from "../../projects/routes/project-route";
-import { WorkspaceTabContent } from "../components/workspace-tab-content";
+import type { ProjectRouteOutletContext } from "@/features/projects/routes/project-route";
+import { WorkspaceTabContent } from "@/features/workspaces/components/workspace-tab-content";
 
 export function WorkspaceRoute() {
   const { workspaceId } = useParams();

@@ -1,6 +1,6 @@
 import { StatusDot } from "@lifecycle/ui";
 import { AnimatePresence, motion } from "motion/react";
-import type { ExtensionSlot } from "./extension-bar-types";
+import type { ExtensionSlot } from "@/features/extensions/extension-bar-types";
 
 interface ExtensionBarProps {
   activeExtensionId: string | null;

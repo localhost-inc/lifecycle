@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { GitPullRequestSummary } from "@lifecycle/contracts";
-import type { StorageLike } from "./workspace-canvas-state";
+import type { StorageLike } from "@/features/workspaces/state/workspace-canvas-state";
 import {
   changesDiffTabKey,
   clearLastWorkspaceId,
@@ -19,7 +19,7 @@ import {
   type WorkspaceCanvasState,
   writeLastWorkspaceId,
   writeWorkspaceCanvasState,
-} from "./workspace-canvas-state";
+} from "@/features/workspaces/state/workspace-canvas-state";
 
 const WORKSPACE_CANVAS_STATE_STORAGE_KEY = "lifecycle.desktop.workspace-canvas";
 const CHANGES_DIFF_TAB_KEY = changesDiffTabKey();

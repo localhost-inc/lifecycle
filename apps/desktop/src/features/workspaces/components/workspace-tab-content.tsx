@@ -1,9 +1,9 @@
 import { Alert, AlertDescription, AlertTitle, Loading } from "@lifecycle/ui";
 import { Suspense, lazy, useEffect, useRef } from "react";
-import { markPerformance, measurePerformance } from "../../../lib/performance";
-import { toErrorEnvelope } from "../../../lib/tauri-error";
-import { useWorkspaceManifest, useWorkspaceSnapshot } from "../hooks";
-import { hasBlockingQueryError, hasBlockingQueryLoad } from "../routes/workspace-route-query-state";
+import { markPerformance, measurePerformance } from "@/lib/performance";
+import { toErrorEnvelope } from "@/lib/tauri-error";
+import { useWorkspace, useWorkspaceManifest } from "@/features/workspaces/hooks";
+import { hasBlockingQueryError, hasBlockingQueryLoad } from "@/features/workspaces/routes/workspace-route-query-state";
 
 const WorkspaceLayout = lazy(async () => {
   const module = await import("./workspace-layout");
@@ -21,9 +21,9 @@ export function WorkspaceTabContent({
   onCloseWorkspaceTab,
   workspaceId,
 }: WorkspaceTabContentProps) {
-  const workspaceSnapshotQuery = useWorkspaceSnapshot(workspaceId);
+  const workspaceQuery = useWorkspace(workspaceId);
   const readyMeasuredRef = useRef(false);
-  const workspace = workspaceSnapshotQuery.data?.workspace ?? null;
+  const workspace = workspaceQuery.data ?? null;
   const manifestQuery = useWorkspaceManifest(
     workspace?.id ?? null,
     workspace?.worktree_path ?? null,
@@ -44,20 +44,18 @@ export function WorkspaceTabContent({
     measurePerformance("workspace-route", "workspace-route:start", "workspace-route:ready");
   }, [manifestQuery.status, workspace]);
 
-  if (hasBlockingQueryError(workspaceSnapshotQuery)) {
+  if (hasBlockingQueryError(workspaceQuery)) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <Alert className="max-w-lg" variant="destructive">
           <AlertTitle>Failed to load workspace</AlertTitle>
-          <AlertDescription>
-            {toErrorEnvelope(workspaceSnapshotQuery.error).message}
-          </AlertDescription>
+          <AlertDescription>{toErrorEnvelope(workspaceQuery.error).message}</AlertDescription>
         </Alert>
       </div>
     );
   }
 
-  if (hasBlockingQueryLoad(workspaceSnapshotQuery)) {
+  if (hasBlockingQueryLoad(workspaceQuery)) {
     return <Loading message="Loading workspace..." />;
   }
 
@@ -90,7 +88,6 @@ export function WorkspaceTabContent({
         manifestStatus={manifestQuery.data ?? null}
         onCloseWorkspaceTab={onCloseWorkspaceTab}
         workspace={workspace}
-        workspaceSnapshot={workspaceSnapshotQuery.data ?? null}
       />
     </Suspense>
   );

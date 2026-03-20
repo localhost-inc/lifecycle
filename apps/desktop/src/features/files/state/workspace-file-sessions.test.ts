@@ -4,7 +4,7 @@ import {
   pruneWorkspaceFileSessions,
   updateWorkspaceFileSession,
   type WorkspaceFileSessionsState,
-} from "./workspace-file-sessions";
+} from "@/features/files/state/workspace-file-sessions";
 
 describe("workspace file sessions", () => {
   test("prunes sessions for tabs that are no longer open", () => {

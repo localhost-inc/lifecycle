@@ -7,7 +7,7 @@ import type {
 import {
   buildPullRequestDiffReloadKey,
   resolvePullRequestSurfaceState,
-} from "./pull-request-surface";
+} from "@/features/git/components/pull-request-surface";
 
 function createPullRequestSummary(
   overrides: Partial<GitPullRequestSummary> = {},

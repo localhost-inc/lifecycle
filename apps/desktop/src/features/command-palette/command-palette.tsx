@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState, type KeyboardEvent } from "react";
 import { Dialog, DialogPopup } from "@lifecycle/ui";
-import { filterAndSort } from "./fuzzy-match";
-import { CommandPaletteInput } from "./command-palette-input";
-import { CommandPaletteList } from "./command-palette-list";
-import type { CommandPaletteCommand, CommandPaletteMode } from "./types";
+import { filterAndSort } from "@/features/command-palette/fuzzy-match";
+import { CommandPaletteInput } from "@/features/command-palette/command-palette-input";
+import { CommandPaletteList } from "@/features/command-palette/command-palette-list";
+import type { CommandPaletteCommand, CommandPaletteMode } from "@/features/command-palette/types";
 
 const MAX_VISIBLE_RESULTS = 200;
 

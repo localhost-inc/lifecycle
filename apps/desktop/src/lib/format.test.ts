@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { formatCompactRelativeTime } from "./format";
+import { formatCompactRelativeTime } from "@/lib/format";
 
 describe("formatCompactRelativeTime", () => {
   test("returns Now for timestamps within the current minute", () => {

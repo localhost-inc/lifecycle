@@ -1,4 +1,4 @@
-import type { QueryResult } from "../../../query";
+import type { QueryResult } from "@/query";
 
 export function hasBlockingQueryLoad<T>(
   query: Pick<QueryResult<T>, "data" | "isLoading">,
