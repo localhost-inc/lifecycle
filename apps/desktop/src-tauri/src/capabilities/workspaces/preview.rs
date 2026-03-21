@@ -15,9 +15,16 @@ pub(crate) fn preview_url_for_service(
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
 
-    let workspace_label =
-        preview_proxy::workspace_host_label(workspace_id, &checkout_type, &workspace_name, &source_ref);
-    Ok(Some(preview_proxy::local_preview_url(&workspace_label, name)))
+    let workspace_label = preview_proxy::workspace_host_label(
+        workspace_id,
+        &checkout_type,
+        &workspace_name,
+        &source_ref,
+    );
+    Ok(Some(preview_proxy::local_preview_url(
+        &workspace_label,
+        name,
+    )))
 }
 
 #[cfg(test)]
@@ -64,8 +71,7 @@ mod tests {
         )
         .expect("insert workspace");
 
-        let preview_url =
-            preview_url_for_service(&conn, "ws_preview", "www").expect("preview url");
+        let preview_url = preview_url_for_service(&conn, "ws_preview", "www").expect("preview url");
 
         assert_eq!(
             preview_url,

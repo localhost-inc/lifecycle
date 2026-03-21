@@ -86,6 +86,7 @@ Rules:
 1. A service preview is openable when the service is `ready` and `assigned_port` is set.
 2. Stopped or failed services may still keep the same `preview_url`, but opening them should fail cleanly until runtime returns.
 3. `preview_url` is derived from workspace + service identity, not stored as its own lifecycle state.
+4. Desktop preview launches treat `preview_url` as the browser surface destination; opening in the system browser is an explicit secondary action.
 
 Key files:
 - `apps/desktop/src-tauri/src/platform/preview_proxy.rs` — Axum preview proxy

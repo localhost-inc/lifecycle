@@ -24,7 +24,7 @@ function createWorkspaceRecord(id: string, projectId: string) {
     id,
     checkout_type: "root" as const,
     last_active_at: "2026-03-14T12:00:00.000Z",
-    target: "host" as const,
+    target: "local" as const,
     name: "main",
     project_id: projectId,
     source_ref: "main",

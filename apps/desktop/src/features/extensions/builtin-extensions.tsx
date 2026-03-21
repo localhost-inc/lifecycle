@@ -6,6 +6,7 @@ import type {
 } from "@lifecycle/contracts";
 import {
   FileDiff,
+  FolderOpen,
   GitCommitHorizontal,
   GitPullRequest,
   Layers,
@@ -37,6 +38,11 @@ const GitPullRequestsPanel = lazy(async () => {
 const SessionHistoryPanel = lazy(async () => {
   const module = await import("../terminals/components/session-history-panel");
   return { default: module.SessionHistoryPanel };
+});
+
+const FilesPanel = lazy(async () => {
+  const module = await import("../files/components/files-panel");
+  return { default: module.FilesPanel };
 });
 
 const EnvironmentPanel = lazy(async () => {
@@ -126,6 +132,19 @@ export function getBuiltinExtensionSlots({
       ),
     },
     {
+      icon: FolderOpen,
+      id: "files",
+      label: "Files",
+      panel: (
+        <FilesPanel
+          onOpenFile={launchActions.openFileViewer}
+          workspaceId={workspace.id}
+          workspaceTarget={workspace.target}
+          worktreePath={workspace.worktree_path}
+        />
+      ),
+    },
+    {
       icon: GitCommitHorizontal,
       id: "git-history",
       label: "History",
@@ -170,6 +189,7 @@ export function getBuiltinExtensionSlots({
         config={config}
         hasManifest={hasManifest}
         manifestState={manifestState}
+        onOpenBrowser={launchActions.openBrowser}
         onRestart={onRestart}
         onRun={onRun}
         onStop={onStop}

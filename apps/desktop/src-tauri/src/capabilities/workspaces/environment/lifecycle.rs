@@ -239,6 +239,8 @@ async fn start_workspace_services_lifecycle(
         set_workspace_status(app, db_path, workspace_id, &WorkspaceStatus::Preparing)?;
         let prepare_started_at = Instant::now();
         match prepare::run_steps(
+            app,
+            workspace_id,
             worktree_path,
             &lowered_graph.workspace_prepare,
             &runtime_env,
@@ -420,13 +422,7 @@ fn sync_workspace_manifest_if_idle(
         return Ok(false);
     }
 
-    reconcile_workspace_services_db(
-        db_path,
-        workspace_id,
-        config,
-        manifest_fingerprint,
-        false,
-    )?;
+    reconcile_workspace_services_db(db_path, workspace_id, config, manifest_fingerprint, false)?;
     Ok(true)
 }
 
@@ -435,11 +431,11 @@ pub fn sync_workspace_manifest_from_disk_if_idle(
     workspace_id: &str,
 ) -> Result<bool, LifecycleError> {
     let conn = open_db(db_path)?;
-    let (
-        worktree_path,
-        current_manifest_fingerprint,
-        persisted_service_count,
-    ): (Option<String>, Option<String>, usize) = conn
+    let (worktree_path, current_manifest_fingerprint, persisted_service_count): (
+        Option<String>,
+        Option<String>,
+        usize,
+    ) = conn
         .query_row(
             "SELECT workspace.worktree_path,
                     workspace.manifest_fingerprint,

@@ -261,7 +261,7 @@ mod tests {
                 "Workspace 1",
                 "lifecycle/test",
                 worktree_path.to_str().expect("worktree path is utf8"),
-                "host",
+                "local",
                 "active"
             ],
         )

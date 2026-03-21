@@ -324,24 +324,17 @@ impl WorkspaceActivityStore {
 impl WorkspaceServiceLogStore {
     fn record(&mut self, envelope: &LifecycleEnvelope) {
         match &envelope.event {
-            LifecycleEvent::WorkspaceStatusChanged { status, .. } if status == "preparing" =>
-            {
+            LifecycleEvent::WorkspaceStatusChanged { status, .. } if status == "preparing" => {
                 self.logs.clear();
             }
             LifecycleEvent::ServiceLogLine {
-                name,
-                stream,
-                line,
-                ..
+                name, stream, line, ..
             } => {
                 let log_line = ServiceLogLine {
                     stream: stream.clone(),
                     text: line.clone(),
                 };
-                let entry = self
-                    .logs
-                    .iter_mut()
-                    .find(|existing| existing.name == *name);
+                let entry = self.logs.iter_mut().find(|existing| existing.name == *name);
                 if let Some(entry) = entry {
                     entry.lines.push(log_line);
                     if entry.lines.len() > SERVICE_LOG_LINE_LIMIT {

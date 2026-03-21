@@ -1,36 +1,17 @@
-import type {
-  LifecycleConfig,
-  ServiceRecord,
-  WorkspaceRecord,
-} from "@lifecycle/contracts";
+import type { LifecycleConfig, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { Alert, AlertDescription, Button } from "@lifecycle/ui";
 import { AlertTriangle } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ServiceLogSnapshot } from "@/features/workspaces/api";
 import { useWorkspaceServiceLogs } from "@/features/workspaces/hooks";
 import { formatWorkspaceError } from "@/features/workspaces/lib/workspace-errors";
 import { ServiceRow } from "@/features/workspaces/components/service-row";
 
-const FAILURE_REASON_LABELS: Record<string, string> = {
-  capacity_unavailable: "No capacity available to run this workspace.",
-  environment_task_failed: "An environment task failed.",
-  local_app_not_running: "Stopped because the app was quit while running.",
-  local_docker_unavailable: "Docker is not available on this machine.",
-  local_port_conflict: "A required port is already in use.",
-  manifest_invalid: "lifecycle.json is invalid.",
-  operation_timeout: "The operation timed out.",
-  repo_clone_failed: "Failed to clone the repository.",
-  repository_disconnected: "Lost connection to the repository.",
-  sandbox_unreachable: "The sandbox is unreachable.",
-  service_healthcheck_failed: "A service health check failed.",
-  service_start_failed: "A service failed to start.",
-  prepare_step_failed: "A workspace prepare step failed.",
-};
-
 interface EnvironmentPanelProps {
   config: LifecycleConfig | null;
   hasManifest: boolean;
   manifestState: "invalid" | "missing" | "valid";
+  onOpenBrowser: (service: Pick<ServiceRecord, "name" | "preview_url">) => void;
   onRestart: () => Promise<void>;
   onRun: (serviceNames?: string[]) => Promise<void>;
   onStop: () => Promise<void>;
@@ -94,6 +75,7 @@ export function EnvironmentPanel({
   config,
   hasManifest,
   manifestState,
+  onOpenBrowser,
   onRestart,
   onRun,
   onStop,
@@ -107,6 +89,7 @@ export function EnvironmentPanel({
   const [expandedServiceName, setExpandedServiceName] = useState<string | null>(() =>
     getInitialExpandedServiceName(workspace, services, serviceLogs),
   );
+  const prevIsRunningRef = useRef(false);
   const serviceRuntimeByName = useMemo(() => getServiceRuntimeByName(config), [config]);
   const serviceLogsByName = useMemo(
     () => new Map(serviceLogs.map((log) => [log.name, log.lines])),
@@ -130,8 +113,6 @@ export function EnvironmentPanel({
     hasManifest && workspaceStatus === "active" && !hasStartingService && !hasReadyService;
   const canStop = workspaceStatus === "active" && (hasStartingService || hasReadyService);
   const canRestart = workspaceStatus === "active" && hasReadyService && hasManifest;
-  const isFailed = workspaceFailureReason !== null || hasFailedService;
-  const isTransitioning = isPreparing || isArchiving || hasStartingService;
   const isRunning = workspaceStatus === "active" && hasReadyService;
   const showServiceLogs =
     !isArchived &&
@@ -141,6 +122,7 @@ export function EnvironmentPanel({
       workspaceFailureReason !== null ||
       serviceLogs.length > 0);
   const hasServiceContent = services.length > 0 || serviceLogs.length > 0;
+  const serviceNameSet = useMemo(() => new Set(services.map((s) => s.name)), [services]);
   const showRunActions = canStop || hasManifest;
 
   const handleRunAction = useCallback(async () => {
@@ -198,27 +180,37 @@ export function EnvironmentPanel({
   }
 
   useEffect(() => {
+    const isRunning = workspaceStatus === "active" && !hasStartingService && hasReadyService;
+    const wasRunning = prevIsRunningRef.current;
+    prevIsRunningRef.current = isRunning;
+
+    // Auto-collapse only on the transition to running, not on every poll
+    if (isRunning && !wasRunning) {
+      setExpandedServiceName(null);
+      return;
+    }
+
+    // Once in steady running state, don't override user's expand/collapse choice
+    if (isRunning) {
+      return;
+    }
+
     const preferredExpandedServiceName = getInitialExpandedServiceName(
       workspace,
       services,
       serviceLogs,
     );
-    if (workspaceStatus === "active" && !hasStartingService && hasReadyService) {
-      setExpandedServiceName(null);
-      return;
-    }
     if (preferredExpandedServiceName !== null) {
       setExpandedServiceName(preferredExpandedServiceName);
     }
   }, [hasReadyService, hasStartingService, serviceLogs, services, workspace, workspaceStatus]);
 
-  const runButtonLabel =
-    isPreparing
-      ? "Preparing..."
-      : isArchiving
-        ? "Archiving..."
-        : runActionBusy && canStop
-          ? "Stopping..."
+  const runButtonLabel = isPreparing
+    ? "Preparing..."
+    : isArchiving
+      ? "Archiving..."
+      : runActionBusy && canStop
+        ? "Stopping..."
         : canStop
           ? "Stop"
           : runActionBusy
@@ -227,65 +219,81 @@ export function EnvironmentPanel({
 
   const runButtonDisabled = runActionBusy || isPreparing || isArchiving || (!canRun && !canStop);
 
-  const statusLabel = isPreparing
-    ? "Preparing"
-    : isArchiving
-      ? "Archiving"
-      : isArchived
-        ? "Archived"
-        : isRunning
-          ? "Running"
-          : hasStartingService
-            ? "Starting"
-            : isFailed
-              ? "Failed"
-              : "Idle";
-
-  const statusDotClass = isRunning
-    ? "bg-[var(--status-success)]"
-    : isTransitioning
-      ? "bg-[var(--status-info)] lifecycle-motion-soft-pulse"
-      : isFailed
-        ? "bg-[var(--status-danger)]"
-        : "bg-[var(--muted-foreground)]/40";
+  const configPrepareSteps = config?.workspace?.prepare ?? [];
 
   function renderServiceList() {
-    if (!hasServiceContent) {
+    if (!hasServiceContent && configPrepareSteps.length === 0) {
       return null;
     }
 
+    // Build prepare step entries from config (always shown if defined),
+    // plus any log-only entries not in config or services
+    const configPrepareNames = new Set(configPrepareSteps.map((s) => s.name));
+    const prepareStepEntries: ServiceRecord[] = [
+      ...configPrepareSteps.map((step, index) => ({
+        id: `prepare-log:${step.name}:${index}`,
+        workspace_id: workspace.id,
+        name: step.name,
+        status: "stopped" as const,
+        status_reason: null,
+        assigned_port: null,
+        preview_url: null,
+        created_at: workspace.updated_at,
+        updated_at: workspace.updated_at,
+      })),
+      ...serviceLogs
+        .filter((log) => !serviceNameSet.has(log.name) && !configPrepareNames.has(log.name))
+        .map((log, index) => ({
+          id: `prepare-log:${log.name}:${configPrepareSteps.length + index}`,
+          workspace_id: workspace.id,
+          name: log.name,
+          status: "stopped" as const,
+          status_reason: null,
+          assigned_port: null,
+          preview_url: null,
+          created_at: workspace.updated_at,
+          updated_at: workspace.updated_at,
+        })),
+    ];
+
     const renderedServices =
-      services.length > 0
-            ? services
-          : serviceLogs.map((log, index) => ({
-              id: `service-log:${log.name}:${index}`,
-              workspace_id: workspace.id,
-              name: log.name,
-              status: "stopped" as const,
-              status_reason: null,
-              assigned_port: null,
-              preview_url: null,
-              created_at: workspace.updated_at,
-              updated_at: workspace.updated_at,
-            }));
+      services.length > 0 || prepareStepEntries.length > 0
+        ? [...prepareStepEntries, ...services]
+        : serviceLogs.map((log, index) => ({
+            id: `service-log:${log.name}:${index}`,
+            workspace_id: workspace.id,
+            name: log.name,
+            status: "stopped" as const,
+            status_reason: null,
+            assigned_port: null,
+            preview_url: null,
+            created_at: workspace.updated_at,
+            updated_at: workspace.updated_at,
+          }));
 
     return (
       <div className="shrink-0">
-        {renderedServices.map((service) => (
-          <ServiceRow
-            expanded={showServiceLogs ? expandedServiceName === service.name : undefined}
-            key={service.id}
-            logLines={showServiceLogs ? serviceLogsByName.get(service.name) : undefined}
-            onStartService={(serviceName) => void handleRunService(serviceName)}
-            onToggleExpanded={
-              showServiceLogs ? () => handleOpenServiceLogs(service.name) : undefined
-            }
-            runDisabled={!canStartService || activeServiceStartName !== null}
-            runPending={activeServiceStartName === service.name}
-            runtime={serviceRuntimeByName[service.name] ?? null}
-            service={service}
-          />
-        ))}
+        {renderedServices.map((service) => {
+          const isPrepareStep = service.id.startsWith("prepare-log:");
+          return (
+            <ServiceRow
+              expanded={showServiceLogs ? expandedServiceName === service.name : undefined}
+              key={service.id}
+              logLines={showServiceLogs ? serviceLogsByName.get(service.name) : undefined}
+              onOpenPreview={isPrepareStep ? undefined : onOpenBrowser}
+              onStartService={
+                isPrepareStep ? undefined : (serviceName) => void handleRunService(serviceName)
+              }
+              onToggleExpanded={
+                showServiceLogs ? () => handleOpenServiceLogs(service.name) : undefined
+              }
+              runDisabled={!canStartService || activeServiceStartName !== null}
+              runPending={activeServiceStartName === service.name}
+              runtime={isPrepareStep ? null : (serviceRuntimeByName[service.name] ?? null)}
+              service={service}
+            />
+          );
+        })}
       </div>
     );
   }
@@ -337,41 +345,14 @@ export function EnvironmentPanel({
 
   return (
     <section className="relative flex h-full min-h-0 flex-col">
-      {!isRunning && (
-        <div className="shrink-0 px-3 pt-3 pb-2">
-          <div className="flex items-center gap-2">
-            <span className={`inline-block size-[7px] shrink-0 rounded-full ${statusDotClass}`} />
-            <span className="text-[13px] font-medium text-[var(--foreground)]">{statusLabel}</span>
-          </div>
-        </div>
-      )}
-
-      <div className="shrink-0 px-3 pb-1 flex flex-col gap-2">
-        {isFailed && (
-          <Alert variant="destructive">
-            <AlertTriangle className="size-4" />
-            <AlertDescription>
-              {workspaceFailureReason === null
-                ? null
-                : FAILURE_REASON_LABELS[workspaceFailureReason] ?? workspaceFailureReason}
-            </AlertDescription>
-          </Alert>
-        )}
-        {isRunning && manifestState === "invalid" && (
-          <Alert variant="destructive">
-            <AlertTriangle className="size-4" />
-            <AlertDescription>
-              lifecycle.json is invalid. Current services keep running until you stop them.
-            </AlertDescription>
-          </Alert>
-        )}
-        {actionError && (
+      {actionError && (
+        <div className="shrink-0 px-3 pt-3 pb-1">
           <Alert variant="destructive">
             <AlertTriangle className="size-4" />
             <AlertDescription>{actionError}</AlertDescription>
           </Alert>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {renderServiceList() ?? renderEmptyState()}

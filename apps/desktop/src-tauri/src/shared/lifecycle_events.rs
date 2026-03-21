@@ -35,6 +35,11 @@ pub enum LifecycleEvent {
     },
     #[serde(rename = "workspace.deleted")]
     WorkspaceDeleted { workspace_id: String },
+    #[serde(rename = "workspace.file_changed")]
+    WorkspaceFileChanged {
+        workspace_id: String,
+        file_path: String,
+    },
     #[serde(rename = "service.status_changed")]
     ServiceStatusChanged {
         workspace_id: String,
@@ -72,6 +77,14 @@ pub enum LifecycleEvent {
         terminal_id: String,
         workspace_id: String,
         prompt_text: String,
+        harness_provider: Option<String>,
+        harness_session_id: Option<String>,
+        turn_id: Option<String>,
+    },
+    #[serde(rename = "terminal.harness_turn_started")]
+    TerminalHarnessTurnStarted {
+        terminal_id: String,
+        workspace_id: String,
         harness_provider: Option<String>,
         harness_session_id: Option<String>,
         turn_id: Option<String>,
@@ -128,6 +141,7 @@ impl LifecycleEvent {
             Self::WorkspaceStatusChanged { workspace_id, .. }
             | Self::WorkspaceRenamed { workspace_id, .. }
             | Self::WorkspaceDeleted { workspace_id }
+            | Self::WorkspaceFileChanged { workspace_id, .. }
             | Self::ServiceStatusChanged { workspace_id, .. }
             | Self::ServiceProcessExited { workspace_id, .. }
             | Self::TerminalCreated { workspace_id, .. }
@@ -135,6 +149,7 @@ impl LifecycleEvent {
             | Self::TerminalStatusChanged { workspace_id, .. }
             | Self::TerminalRenamed { workspace_id, .. }
             | Self::TerminalHarnessPromptSubmitted { workspace_id, .. }
+            | Self::TerminalHarnessTurnStarted { workspace_id, .. }
             | Self::TerminalHarnessTurnCompleted { workspace_id, .. }
             | Self::ServiceLogLine { workspace_id, .. }
             | Self::GitStatusChanged { workspace_id, .. }
@@ -147,6 +162,8 @@ impl LifecycleEvent {
         match self {
             Self::ServiceLogLine { .. } => false,
             Self::TerminalUpdated { .. } => false,
+            Self::WorkspaceFileChanged { .. } => false,
+            Self::TerminalHarnessTurnStarted { .. } => false,
             _ => true,
         }
     }
@@ -266,6 +283,29 @@ mod tests {
             name: "api".to_string(),
             stream: "stdout".to_string(),
             line: "booting".to_string(),
+        };
+
+        assert!(!event.contributes_to_activity());
+    }
+
+    #[test]
+    fn workspace_file_changed_events_do_not_contribute_to_activity() {
+        let event = LifecycleEvent::WorkspaceFileChanged {
+            workspace_id: "workspace-1".to_string(),
+            file_path: "src/app.tsx".to_string(),
+        };
+
+        assert!(!event.contributes_to_activity());
+    }
+
+    #[test]
+    fn harness_turn_started_events_do_not_contribute_to_activity() {
+        let event = LifecycleEvent::TerminalHarnessTurnStarted {
+            terminal_id: "terminal-1".to_string(),
+            workspace_id: "workspace-1".to_string(),
+            harness_provider: Some("codex".to_string()),
+            harness_session_id: Some("session-1".to_string()),
+            turn_id: Some("turn-1".to_string()),
         };
 
         assert!(!event.contributes_to_activity());

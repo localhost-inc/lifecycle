@@ -6,6 +6,7 @@ import {
 import { buildDefaultHarnessSettings } from "@/features/settings/state/harness-settings";
 
 import {
+  DEFAULT_BASE_FONT_SIZE,
   DEFAULT_INACTIVE_PANE_OPACITY,
   applyFontSettings,
   parseSettingsJson,
@@ -22,12 +23,14 @@ describe("applyFontSettings", () => {
 
     applyFontSettings(
       {
+        baseFontSize: 16,
         interfaceFontFamily: '"Geist", system-ui, sans-serif',
         monospaceFontFamily: '"Geist Mono", ui-monospace, monospace',
       },
       root,
     );
 
+    expect(properties.get("font-size")).toBe("16px");
     expect(properties.get("--font-heading")).toBe('"Geist", system-ui, sans-serif');
     expect(properties.get("--font-body")).toBe('"Geist", system-ui, sans-serif');
     expect(properties.get("--font-mono")).toBe('"Geist Mono", ui-monospace, monospace');
@@ -37,6 +40,7 @@ describe("applyFontSettings", () => {
 describe("parseSettingsJson", () => {
   test("returns defaults when config is empty", () => {
     expect(parseSettingsJson(null)).toEqual({
+      baseFontSize: DEFAULT_BASE_FONT_SIZE,
       theme: "dark",
       defaultNewTabLaunch: "shell",
       dimInactivePanes: false,
@@ -74,6 +78,7 @@ describe("parseSettingsJson", () => {
         worktreeRoot: "  ~/workspace-root  ",
       }),
     ).toEqual({
+      baseFontSize: DEFAULT_BASE_FONT_SIZE,
       theme: "catppuccin",
       defaultNewTabLaunch: "shell",
       dimInactivePanes: true,
@@ -118,6 +123,7 @@ describe("parseSettingsJson", () => {
         turnNotificationsMode: "broken",
       }),
     ).toEqual({
+      baseFontSize: DEFAULT_BASE_FONT_SIZE,
       theme: "dark",
       defaultNewTabLaunch: "shell",
       dimInactivePanes: false,

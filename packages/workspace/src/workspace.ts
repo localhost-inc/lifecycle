@@ -76,6 +76,19 @@ export interface WorkspaceFileTreeEntry {
   file_path: string;
 }
 
+export interface WorkspaceFileEvent {
+  kind: "changed";
+  workspaceId: string;
+}
+
+export type WorkspaceFileEventListener = (event: WorkspaceFileEvent) => void;
+export type WorkspaceFileEventSubscription = () => void;
+
+export interface SubscribeWorkspaceFileEventsInput {
+  workspaceId: string;
+  worktreePath?: string | null;
+}
+
 export interface SavedTerminalAttachment {
   absolutePath: string;
   fileName: string;
@@ -102,6 +115,10 @@ export interface WorkspaceClient {
     filePath: string,
     content: string,
   ): Promise<WorkspaceFileReadResult>;
+  subscribeFileEvents(
+    input: SubscribeWorkspaceFileEventsInput,
+    listener: WorkspaceFileEventListener,
+  ): Promise<WorkspaceFileEventSubscription>;
   listFiles(workspaceId: string): Promise<WorkspaceFileTreeEntry[]>;
   openFile(workspaceId: string, filePath: string): Promise<void>;
   getGitStatus(workspaceId: string): Promise<GitStatusResult>;

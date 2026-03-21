@@ -59,6 +59,26 @@ pub(crate) fn emit_harness_prompt_submitted(
     );
 }
 
+pub(crate) fn emit_harness_turn_started(
+    app: &AppHandle,
+    terminal_id: &str,
+    workspace_id: &str,
+    harness_provider: Option<&str>,
+    harness_session_id: &str,
+    turn_id: Option<&str>,
+) {
+    publish_lifecycle_event(
+        app,
+        LifecycleEvent::TerminalHarnessTurnStarted {
+            terminal_id: terminal_id.to_string(),
+            workspace_id: workspace_id.to_string(),
+            harness_provider: harness_provider.map(str::to_string),
+            harness_session_id: Some(harness_session_id.to_string()),
+            turn_id: turn_id.map(str::to_string),
+        },
+    );
+}
+
 pub(crate) fn emit_harness_turn_completed(
     app: &AppHandle,
     terminal_id: &str,

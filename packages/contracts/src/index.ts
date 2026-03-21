@@ -1,4 +1,37 @@
 export type { ServiceRecord, TerminalRecord, WorkspaceRecord } from "./db";
+export {
+  DESKTOP_BRIDGE_VERSION,
+  BridgeErrorSchema,
+  BridgeRequestSchema,
+  BridgeResponseSchema,
+  BridgeSessionSchema,
+  BridgeShellRequestSchema,
+  BridgeShellResultSchema,
+  ContextRequestSchema,
+  LIFECYCLE_CLI_PATH_ENV,
+  LIFECYCLE_BRIDGE_ENV,
+  LIFECYCLE_BRIDGE_SESSION_TOKEN_ENV,
+  LIFECYCLE_TERMINAL_ID_ENV,
+  LIFECYCLE_WORKSPACE_ID_ENV,
+  LIFECYCLE_WORKTREE_PATH_ENV,
+  ServiceInfoRequestSchema,
+  ServiceListRequestSchema,
+  ServiceStartRequestSchema,
+  TabOpenRequestSchema,
+} from "./desktop/bridge";
+export type {
+  BridgeError,
+  BridgeRequest,
+  BridgeResponse,
+  BridgeSession,
+  BridgeShellRequest,
+  BridgeShellResult,
+  ContextRequest,
+  ServiceInfoRequest,
+  ServiceListRequest,
+  ServiceStartRequest,
+  TabOpenRequest,
+} from "./desktop/bridge";
 export type { ErrorEnvelope } from "./errors";
 export type {
   LifecycleEvent,

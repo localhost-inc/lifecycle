@@ -1,6 +1,6 @@
 use super::{NativeTerminalSurfaceFrameSyncRequest, NativeTerminalSurfaceSyncRequest};
 use crate::shared::errors::LifecycleError;
-use tauri::{AppHandle, WebviewWindow};
+use tauri::{AppHandle, Webview};
 
 pub(super) fn initialize(
     _app: AppHandle,
@@ -11,7 +11,7 @@ pub(super) fn initialize(
 }
 
 pub(super) fn sync_surface(
-    _window: &WebviewWindow,
+    _webview: &Webview,
     _request: NativeTerminalSurfaceSyncRequest<'_>,
 ) -> Result<(), LifecycleError> {
     Err(LifecycleError::AttachFailed(
@@ -20,7 +20,7 @@ pub(super) fn sync_surface(
 }
 
 pub(super) fn sync_surface_frame(
-    _window: &WebviewWindow,
+    _webview: &Webview,
     _request: NativeTerminalSurfaceFrameSyncRequest<'_>,
 ) -> Result<(), LifecycleError> {
     Err(LifecycleError::AttachFailed(

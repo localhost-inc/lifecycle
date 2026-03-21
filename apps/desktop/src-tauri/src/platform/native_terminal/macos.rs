@@ -11,7 +11,7 @@ use serde::Serialize;
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
 use std::path::Path;
 use std::sync::OnceLock;
-use tauri::{AppHandle, Emitter, WebviewWindow};
+use tauri::{AppHandle, Emitter, Webview};
 
 #[derive(Clone)]
 struct NativeTerminalRuntimeContext {
@@ -322,7 +322,7 @@ pub(super) fn initialize(
 }
 
 pub(super) fn sync_surface(
-    window: &WebviewWindow,
+    webview: &Webview,
     request: NativeTerminalSurfaceSyncRequest<'_>,
 ) -> Result<(), LifecycleError> {
     let terminal_id = cstring(request.terminal_id, "terminal id")?;
@@ -336,7 +336,7 @@ pub(super) fn sync_surface(
     let theme_config_path = cstring(request.theme_config_path, "theme config path")?;
     let (sender, receiver) = std::sync::mpsc::sync_channel(1);
 
-    window
+    webview
         .with_webview(move |webview| {
             let config = LifecycleNativeTerminalConfig {
                 terminal_id: terminal_id.as_ptr(),
@@ -372,13 +372,13 @@ pub(super) fn sync_surface(
 }
 
 pub(super) fn sync_surface_frame(
-    window: &WebviewWindow,
+    webview: &Webview,
     request: NativeTerminalSurfaceFrameSyncRequest<'_>,
 ) -> Result<(), LifecycleError> {
     let terminal_id = cstring(request.terminal_id, "terminal id")?;
     let (sender, receiver) = std::sync::mpsc::sync_channel(1);
 
-    window
+    webview
         .with_webview(move |webview| {
             let config = LifecycleNativeTerminalFrameConfig {
                 terminal_id: terminal_id.as_ptr(),

@@ -16,7 +16,7 @@ function createBaseFileCodeEditorTheme() {
     "&.cm-editor": {
       backgroundColor: "var(--surface)",
       color: "var(--foreground)",
-      fontSize: "12px",
+      fontSize: "0.75rem",
       height: "100%",
     },
     ".cm-content": {
@@ -24,7 +24,7 @@ function createBaseFileCodeEditorTheme() {
       fontFamily:
         '"SF Mono", "SFMono-Regular", Menlo, Monaco, "Cascadia Mono", "Segoe UI Mono", monospace',
       minHeight: "100%",
-      padding: "16px 0",
+      padding: "1rem 0",
     },
     ".cm-cursor, .cm-dropCursor": {
       borderLeftColor: "var(--foreground)",

@@ -22,6 +22,7 @@ Terminal sessions follow a strict state machine:
 - `finished` and `failed` are terminal states
 
 Lifecycle boundaries:
+
 1. Local terminal sessions are **app-owned**, not daemon-owned. If the desktop app disappears, stale `active`/`detached`/`sleeping` rows must be reconciled on next boot.
 2. `create`/`attach` require workspace interactive context (worktree exists, workspace not in create/destroy teardown).
 3. `sleeping` terminals reject input.
@@ -36,13 +37,14 @@ All terminal control operations are scoped by `workspace_id`; terminal IDs ident
 
 Every terminal session has an explicit `launch_type` discriminator:
 
-| Launch Type | Description | Lifecycle |
-|---|---|---|
-| `shell` | Interactive user shell | Standard terminal lifecycle |
-| `harness` | Agent session (Claude, Codex, etc.) | Extended with harness metadata |
-| `service_log` | Service log viewer | Read-only, tied to service lifecycle |
+| Launch Type   | Description                         | Lifecycle                            |
+| ------------- | ----------------------------------- | ------------------------------------ |
+| `shell`       | Interactive user shell              | Standard terminal lifecycle          |
+| `harness`     | Agent session (Claude, Codex, etc.) | Extended with harness metadata       |
+| `service_log` | Service log viewer                  | Read-only, tied to service lifecycle |
 
 Rules:
+
 - `harness_provider` is only set when `launch_type = harness`.
 - `harness_session_id` is optional harness-owned resume metadata.
 - Provider-specific launch details stay behind adapter resolution — raw command arguments are not persisted on the terminal record.
@@ -71,12 +73,31 @@ Terminal-to-session ownership is a **launch contract**, not a reconciliation pro
 3. A terminal that needs post-launch discovery should only discover inside its own runtime-owned scope. Global session stores are not acceptable when multiple terminals share one workspace.
 4. Frontend cache updates for harness session metadata need an explicit terminal update event — not incidental refetches.
 
+### Session CLI Environment
+
+Harness terminals inject a small Lifecycle session envelope so agents can drive the local CLI without extra setup:
+
+1. `LIFECYCLE_WORKSPACE_ID`
+2. `LIFECYCLE_TERMINAL_ID`
+3. `LIFECYCLE_WORKTREE_PATH` when the workspace has a concrete worktree
+4. `LIFECYCLE_CLI_PATH` when the app has resolved a local `lifecycle` executable
+5. `LIFECYCLE_BRIDGE` for the local bridge socket
+6. `LIFECYCLE_BRIDGE_SESSION_TOKEN` for bridge authorization on shell-driven surface actions
+
+Rules:
+
+- This session envelope is explicit workspace-scoped context, not a substitute for startup-time login-shell hydration.
+- Harness launch env may include both general Lifecycle session vars and provider-specific vars like `CODEX_HOME`.
+- The desktop process should prepend the resolved Lifecycle CLI directory to `PATH` so both harness and plain shell terminals can discover `lifecycle` consistently.
+- Desktop-shell bridge commands must validate the session token against the current terminal/workspace scope instead of trusting the caller blindly.
+
 ### Prompt Submission
 
 Prompt-boundary facts come from **authoritative session logs**, not renderer input plumbing:
 
 - Claude and Codex session logs record submitted user messages with stable timestamps.
 - The backend emits `terminal.harness_prompt_submitted` from log records.
+- Running-turn UI should use the dedicated `terminal.harness_turn_started` signal; providers that lack a native start record should be normalized onto that fact by the backend instead of inferring "running" in the renderer.
 - Session-log watchers re-read from the start filtered by terminal launch time — they do not blindly seek to EOF on first attach.
 - Codex auto-title triggers use `event_msg.user_message` as the source of truth, not `response_item` records (which may contain AGENTS/context scaffolding).
 
@@ -134,5 +155,6 @@ Native-terminal suppression is scoped to modal flows only — never reused for l
 - Per-workspace restore state persists split topology, tab order, and active pane — but must not override provider/runtime authority.
 
 Key files:
+
 - `apps/desktop/src-tauri/src/capabilities/workspaces/terminal/` — all terminal capability files
 - `apps/desktop/src/features/terminals/` — frontend terminal features

@@ -36,7 +36,19 @@ export interface FileViewerOpenRequest extends FileViewerOpenInput {
   id: string;
 }
 
+export interface BrowserOpenInput {
+  browserKey: string;
+  kind: "browser";
+  label: string;
+  url: string;
+}
+
+export interface BrowserOpenRequest extends BrowserOpenInput {
+  id: string;
+}
+
 export type OpenDocumentInput =
+  | BrowserOpenInput
   | ChangesDiffOpenInput
   | CommitDiffOpenInput
   | FileViewerOpenInput
@@ -81,7 +93,21 @@ export function createFileViewerOpenInput(filePath: string): FileViewerOpenInput
   };
 }
 
+export function createBrowserOpenInput(input: {
+  browserKey: string;
+  label: string;
+  url: string;
+}): BrowserOpenInput {
+  return {
+    browserKey: input.browserKey,
+    kind: "browser",
+    label: input.label,
+    url: input.url,
+  };
+}
+
 export type OpenDocumentRequest =
+  | BrowserOpenRequest
   | ChangesDiffOpenRequest
   | CommitDiffOpenRequest
   | FileViewerOpenRequest

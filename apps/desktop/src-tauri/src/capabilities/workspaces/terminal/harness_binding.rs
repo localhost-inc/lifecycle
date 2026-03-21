@@ -5,6 +5,7 @@ use tauri::{AppHandle, Manager};
 
 use super::super::query::TerminalRecord;
 use super::launch::HarnessLaunchMode;
+use super::persistence::load_terminal_workspace_context;
 
 const HARNESS_STATE_DIR: &str = "harness-state";
 const CODEX_STATE_DIR: &str = "codex";
@@ -64,17 +65,56 @@ pub(crate) fn resolve_harness_launch_environment(
     app: &AppHandle,
     terminal: &TerminalRecord,
 ) -> Result<Vec<(String, String)>, LifecycleError> {
+    let workspace_context = load_terminal_workspace_context(
+        &app.state::<crate::platform::db::DbPath>().0,
+        &terminal.workspace_id,
+    )?;
+    let desktop_bridge = app.state::<crate::capabilities::desktop_bridge::DesktopBridgeState>();
+    let desktop_bridge_path = desktop_bridge.endpoint_path();
+    let desktop_session_token =
+        desktop_bridge.register_terminal_session(&terminal.workspace_id, &terminal.id);
+    let lifecycle_cli = app.state::<crate::platform::lifecycle_cli::LifecycleCliState>();
+
+    let mut environment = Vec::new();
+    if let Some(path_value) = lifecycle_cli.path_value() {
+        environment.push(("PATH".to_string(), path_value.to_string()));
+    }
+    if let Some(cli_path) = lifecycle_cli.binary_path() {
+        environment.push(("LIFECYCLE_CLI_PATH".to_string(), cli_path.to_string()));
+    }
+    environment.push((
+        "LIFECYCLE_WORKSPACE_ID".to_string(),
+        terminal.workspace_id.clone(),
+    ));
+    environment.push(("LIFECYCLE_TERMINAL_ID".to_string(), terminal.id.clone()));
+    if !workspace_context.worktree_path.is_empty() {
+        environment.push((
+            "LIFECYCLE_WORKTREE_PATH".to_string(),
+            workspace_context.worktree_path,
+        ));
+    }
+    if let Some(desktop_bridge_path) = desktop_bridge_path {
+        environment.push(("LIFECYCLE_BRIDGE".to_string(), desktop_bridge_path));
+    }
+    if let Some(desktop_session_token) = desktop_session_token {
+        environment.push((
+            "LIFECYCLE_BRIDGE_SESSION_TOKEN".to_string(),
+            desktop_session_token,
+        ));
+    }
+
     if terminal.harness_provider.as_deref() != Some("codex") {
-        return Ok(Vec::new());
+        return Ok(environment);
     }
 
     let codex_home = resolve_codex_home_override(app, terminal)?;
     ensure_codex_home(&codex_home)?;
-
-    Ok(vec![(
+    environment.push((
         "CODEX_HOME".to_string(),
         codex_home.to_string_lossy().to_string(),
-    )])
+    ));
+
+    Ok(environment)
 }
 
 pub(crate) fn resolve_bound_harness_session_store_root(

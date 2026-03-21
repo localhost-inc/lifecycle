@@ -261,7 +261,11 @@ export function shouldRefreshWorkspaceActivity(
   event: LifecycleEvent,
   workspaceId: string,
 ): boolean {
-  return event.workspace_id === workspaceId && event.kind !== "service.log_line";
+  return (
+    event.workspace_id === workspaceId &&
+    event.kind !== "service.log_line" &&
+    event.kind !== "workspace.file_changed"
+  );
 }
 
 export function buildWorkspaceActivityItems(

@@ -1,5 +1,5 @@
 use crate::shared::errors::LifecycleError;
-use tauri::{AppHandle, WebviewWindow};
+use tauri::{AppHandle, Webview};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct NativeTerminalFrame {
@@ -80,17 +80,17 @@ pub fn initialize(app: AppHandle, db_path: String) -> Result<(), LifecycleError>
 }
 
 pub fn sync_surface(
-    window: &WebviewWindow,
+    webview: &Webview,
     request: NativeTerminalSurfaceSyncRequest<'_>,
 ) -> Result<(), LifecycleError> {
-    platform::sync_surface(window, request)
+    platform::sync_surface(webview, request)
 }
 
 pub fn sync_surface_frame(
-    window: &WebviewWindow,
+    webview: &Webview,
     request: NativeTerminalSurfaceFrameSyncRequest<'_>,
 ) -> Result<(), LifecycleError> {
-    platform::sync_surface_frame(window, request)
+    platform::sync_surface_frame(webview, request)
 }
 
 pub fn hide_surface(app: &AppHandle, terminal_id: &str) -> Result<(), LifecycleError> {

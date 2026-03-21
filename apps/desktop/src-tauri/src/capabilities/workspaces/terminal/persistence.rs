@@ -303,7 +303,7 @@ mod tests {
                 "Workspace 1",
                 "lifecycle/test",
                 "/tmp/project_1",
-                "host",
+                "local",
                 "root",
                 "active",
             ],
@@ -321,10 +321,10 @@ mod tests {
         ));
 
         assert!(!workspace_has_interactive_terminal_context(
-                &TerminalWorkspaceContext {
-                    project_path: String::new(),
-                    worktree_path: String::new(),
-                }
+            &TerminalWorkspaceContext {
+                project_path: String::new(),
+                worktree_path: String::new(),
+            }
         ));
     }
 

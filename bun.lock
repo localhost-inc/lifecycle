@@ -34,8 +34,8 @@
         "@codemirror/view": "^6.40.0",
         "@lifecycle/backend": "workspace:*",
         "@lifecycle/contracts": "workspace:*",
-        "@lifecycle/runtime": "workspace:*",
         "@lifecycle/ui": "workspace:*",
+        "@lifecycle/workspace": "workspace:*",
         "@pierre/diffs": "^1.0.11",
         "@shikijs/themes": "^3.23.0",
         "@tauri-apps/api": "^2",
@@ -102,6 +102,18 @@
       "bin": {
         "lifecycle": "./dist/index.js",
       },
+      "dependencies": {
+        "@lifecycle/cmd": "workspace:*",
+        "@lifecycle/contracts": "workspace:*",
+        "zod": "^4.3.6",
+      },
+    },
+    "packages/cmd": {
+      "name": "@lifecycle/cmd",
+      "version": "0.0.0",
+      "dependencies": {
+        "zod": "^4.3.6",
+      },
     },
     "packages/config": {
       "name": "@lifecycle/config",
@@ -113,13 +125,6 @@
       "dependencies": {
         "jsonc-parser": "^3.3.1",
         "zod": "^4.3.6",
-      },
-    },
-    "packages/runtime": {
-      "name": "@lifecycle/runtime",
-      "version": "0.0.0",
-      "dependencies": {
-        "@lifecycle/contracts": "workspace:*",
       },
     },
     "packages/ui": {
@@ -141,6 +146,13 @@
       "peerDependencies": {
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
+      },
+    },
+    "packages/workspace": {
+      "name": "@lifecycle/workspace",
+      "version": "0.0.0",
+      "dependencies": {
+        "@lifecycle/contracts": "workspace:*",
       },
     },
   },
@@ -389,15 +401,17 @@
 
     "@lifecycle/cli": ["@lifecycle/cli@workspace:packages/cli"],
 
+    "@lifecycle/cmd": ["@lifecycle/cmd@workspace:packages/cmd"],
+
     "@lifecycle/config": ["@lifecycle/config@workspace:packages/config"],
 
     "@lifecycle/contracts": ["@lifecycle/contracts@workspace:packages/contracts"],
 
     "@lifecycle/desktop": ["@lifecycle/desktop@workspace:apps/desktop"],
 
-    "@lifecycle/runtime": ["@lifecycle/runtime@workspace:packages/runtime"],
-
     "@lifecycle/ui": ["@lifecycle/ui@workspace:packages/ui"],
+
+    "@lifecycle/workspace": ["@lifecycle/workspace@workspace:packages/workspace"],
 
     "@lifecycle/www": ["@lifecycle/www@workspace:apps/www"],
 

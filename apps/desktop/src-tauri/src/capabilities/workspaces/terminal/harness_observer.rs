@@ -13,7 +13,8 @@ use time::{macros::format_description, PrimitiveDateTime};
 use super::super::harness::{self, HarnessAdapter};
 use super::super::query::TerminalRecord;
 use super::events::{
-    emit_harness_prompt_submitted, emit_harness_turn_completed, emit_terminal_updated,
+    emit_harness_prompt_submitted, emit_harness_turn_completed, emit_harness_turn_started,
+    emit_terminal_updated,
 };
 use super::harness_binding::{
     promote_harness_session_scope, resolve_bound_harness_session_store_root,
@@ -101,6 +102,7 @@ impl HarnessCompletionWatchContext {
 
     fn watch(self, harness_session_id: String) {
         let mut session_log_path: Option<PathBuf> = None;
+        let mut emitted_turn_started_keys = HashSet::new();
         let mut emitted_prompt_keys = HashSet::new();
         let mut emitted_completion_keys = HashSet::new();
         let mut log_offset = 0_u64;
@@ -175,73 +177,13 @@ impl HarnessCompletionWatchContext {
 
             match read_new_harness_log_lines(path, &mut log_offset, &mut pending_line_fragment) {
                 Ok(lines) => {
-                    for line in lines {
-                        let Ok(value) = serde_json::from_str::<Value>(&line) else {
-                            continue;
-                        };
-                        if !harness::line_is_within_launched_session(&value, self.launched_after) {
-                            continue;
-                        }
-
-                        if let Some(prompt) = self.provider.parse_prompt_submission(&value, &line) {
-                            if emitted_prompt_keys.insert(prompt.prompt_key.clone()) {
-                                tracing::info!(
-                                    terminal_id = self.terminal_id,
-                                    workspace_id = self.workspace_id,
-                                    harness_provider = self.harness_provider.as_deref().unwrap_or(self.provider.name),
-                                    harness_session_id,
-                                    prompt_key = %prompt.prompt_key,
-                                    turn_id = ?prompt.turn_id,
-                                    "harness prompt submitted; scheduling auto title"
-                                );
-                                emit_harness_prompt_submitted(
-                                    &self.app,
-                                    &self.terminal_id,
-                                    &self.workspace_id,
-                                    self.harness_provider.as_deref(),
-                                    &harness_session_id,
-                                    &prompt.prompt_text,
-                                    prompt.turn_id.as_deref(),
-                                );
-                                super::super::identity::maybe_schedule_workspace_identity_from_prompt(
-                                    &self.app,
-                                    &self.db_path,
-                                    &self.terminal_id,
-                                    &self.workspace_id,
-                                    &prompt.prompt_text,
-                                );
-                            }
-                        }
-
-                        if let Some(completion) = self.provider.parse_turn_completion(&value, &line)
-                        {
-                            if !emitted_completion_keys.insert(completion.completion_key.clone()) {
-                                continue;
-                            }
-
-                            emit_harness_turn_completed(
-                                &self.app,
-                                &self.terminal_id,
-                                &self.workspace_id,
-                                self.harness_provider.as_deref(),
-                                &harness_session_id,
-                                &completion.completion_key,
-                                completion.turn_id.as_deref(),
-                            );
-                        } else {
-                            // Log unmatched lines that look like they could be completions
-                            // to aid debugging of format mismatches.
-                            let line_type = value.get("type").and_then(Value::as_str);
-                            if matches!(line_type, Some("assistant" | "result" | "event_msg")) {
-                                tracing::debug!(
-                                    terminal_id = self.terminal_id,
-                                    harness_provider = self.harness_provider.as_deref().unwrap_or(self.provider.name),
-                                    line_type = ?line_type,
-                                    "harness log line has completion-like type but did not match as turn completion"
-                                );
-                            }
-                        }
-                    }
+                    self.process_log_lines(
+                        &lines,
+                        &harness_session_id,
+                        &mut emitted_turn_started_keys,
+                        &mut emitted_prompt_keys,
+                        &mut emitted_completion_keys,
+                    );
                 }
                 Err(error) => {
                     tracing::debug!(
@@ -255,10 +197,158 @@ impl HarnessCompletionWatchContext {
             }
 
             if terminal_finished {
+                // The harness process may buffer writes. Give it a moment to flush,
+                // then drain any remaining data so we don't miss the final completion.
+                if !pending_line_fragment.is_empty() {
+                    thread::sleep(Duration::from_millis(100));
+                    if let Ok(lines) = read_new_harness_log_lines(
+                        path,
+                        &mut log_offset,
+                        &mut pending_line_fragment,
+                    ) {
+                        self.process_log_lines(
+                            &lines,
+                            &harness_session_id,
+                            &mut emitted_turn_started_keys,
+                            &mut emitted_prompt_keys,
+                            &mut emitted_completion_keys,
+                        );
+                    }
+                }
+                if !pending_line_fragment.is_empty() {
+                    tracing::warn!(
+                        terminal_id = self.terminal_id,
+                        harness_provider = self
+                            .harness_provider
+                            .as_deref()
+                            .unwrap_or(self.provider.name),
+                        fragment_len = pending_line_fragment.len(),
+                        "harness observer exiting with unflushed fragment"
+                    );
+                }
                 return;
             }
 
             thread::sleep(HARNESS_COMPLETION_WATCH_POLL_INTERVAL);
+        }
+    }
+
+    fn process_log_lines(
+        &self,
+        lines: &[String],
+        harness_session_id: &str,
+        emitted_turn_started_keys: &mut HashSet<String>,
+        emitted_prompt_keys: &mut HashSet<String>,
+        emitted_completion_keys: &mut HashSet<String>,
+    ) {
+        for line in lines {
+            let Ok(value) = serde_json::from_str::<Value>(line) else {
+                continue;
+            };
+            if !harness::line_is_within_launched_session(&value, self.launched_after) {
+                continue;
+            }
+
+            if let Some(turn_started) = self.provider.parse_turn_started(&value, line) {
+                if !emitted_turn_started_keys.insert(turn_started.start_key.clone()) {
+                    continue;
+                }
+                emit_harness_turn_started(
+                    &self.app,
+                    &self.terminal_id,
+                    &self.workspace_id,
+                    self.harness_provider.as_deref(),
+                    harness_session_id,
+                    turn_started.turn_id.as_deref(),
+                );
+            }
+
+            if let Some(prompt) = self.provider.parse_prompt_submission(&value, line) {
+                if emitted_turn_started_keys.insert(prompt.turn_start_key.clone()) {
+                    emit_harness_turn_started(
+                        &self.app,
+                        &self.terminal_id,
+                        &self.workspace_id,
+                        self.harness_provider.as_deref(),
+                        harness_session_id,
+                        prompt.turn_id.as_deref(),
+                    );
+                }
+
+                if emitted_prompt_keys.insert(prompt.prompt_key.clone()) {
+                    tracing::info!(
+                        terminal_id = self.terminal_id,
+                        workspace_id = self.workspace_id,
+                        harness_provider = self
+                            .harness_provider
+                            .as_deref()
+                            .unwrap_or(self.provider.name),
+                        harness_session_id,
+                        prompt_key = %prompt.prompt_key,
+                        turn_id = ?prompt.turn_id,
+                        "harness prompt submitted; scheduling auto title"
+                    );
+                    emit_harness_prompt_submitted(
+                        &self.app,
+                        &self.terminal_id,
+                        &self.workspace_id,
+                        self.harness_provider.as_deref(),
+                        harness_session_id,
+                        &prompt.prompt_text,
+                        prompt.turn_id.as_deref(),
+                    );
+                    super::super::identity::maybe_schedule_workspace_identity_from_prompt(
+                        &self.app,
+                        &self.db_path,
+                        &self.terminal_id,
+                        &self.workspace_id,
+                        &prompt.prompt_text,
+                    );
+                }
+            }
+
+            if let Some(completion) = self.provider.parse_turn_completion(&value, line) {
+                if !emitted_completion_keys.insert(completion.completion_key.clone()) {
+                    continue;
+                }
+
+                tracing::info!(
+                    terminal_id = self.terminal_id,
+                    workspace_id = self.workspace_id,
+                    harness_provider = self
+                        .harness_provider
+                        .as_deref()
+                        .unwrap_or(self.provider.name),
+                    harness_session_id,
+                    completion_key = %completion.completion_key,
+                    turn_id = ?completion.turn_id,
+                    "harness turn completed"
+                );
+                emit_harness_turn_completed(
+                    &self.app,
+                    &self.terminal_id,
+                    &self.workspace_id,
+                    self.harness_provider.as_deref(),
+                    harness_session_id,
+                    &completion.completion_key,
+                    completion.turn_id.as_deref(),
+                );
+            } else {
+                // Log unmatched lines that look like they could be completions
+                // to aid debugging of format mismatches.
+                let line_type = value.get("type").and_then(Value::as_str);
+                if matches!(line_type, Some("assistant" | "result" | "event_msg")) {
+                    tracing::debug!(
+                        terminal_id = self.terminal_id,
+                        harness_provider = self
+                            .harness_provider
+                            .as_deref()
+                            .unwrap_or(self.provider.name),
+                        line_type = ?line_type,
+                        "harness log line has completion-like type but did not match as turn completion"
+                    );
+                }
+            }
         }
     }
 }

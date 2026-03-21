@@ -125,7 +125,9 @@ pub async fn destroy_workspace(
 
     destroy_native_terminal_surfaces(&app, &context.terminal_ids);
 
-    if context.target == "host" && !is_root_workspace_checkout_type(&context.checkout_type) {
+    if matches!(context.target.as_str(), "local" | "docker")
+        && !is_root_workspace_checkout_type(&context.checkout_type)
+    {
         if let Some(worktree_path) = context.worktree_path.as_deref() {
             worktree::remove_worktree(&context.project_path, worktree_path).await?;
         }
@@ -172,7 +174,7 @@ mod tests {
                 "worktree",
                 "lifecycle/test",
                 "/tmp/project_1/.worktrees/workspace_1",
-                "host",
+                "local",
                 "active",
             ],
         )
@@ -200,7 +202,7 @@ mod tests {
             load_destroy_workspace_context(&db_path, "workspace_1").expect("load destroy context");
 
         assert_eq!(context.checkout_type, "worktree");
-        assert_eq!(context.target, "host");
+        assert_eq!(context.target, "local");
         assert_eq!(context.project_path, "/tmp/project_1");
         assert_eq!(
             context.worktree_path.as_deref(),

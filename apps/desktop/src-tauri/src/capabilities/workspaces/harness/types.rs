@@ -8,11 +8,16 @@ pub(crate) struct HarnessAdapter {
     pub(crate) name: &'static str,
     pub(crate) display_name: &'static str,
     pub(crate) program: &'static str,
-    pub(crate) new_session_args:
-        fn(Option<&str>, Option<&HarnessLaunchConfig>) -> Result<Vec<String>, LifecycleError>,
+    pub(crate) new_session_args: fn(
+        Option<&str>,
+        Option<&HarnessLaunchConfig>,
+        Option<&str>,
+    ) -> Result<Vec<String>, LifecycleError>,
     pub(crate) resume_args:
-        fn(&str, Option<&HarnessLaunchConfig>) -> Result<Vec<String>, LifecycleError>,
+        fn(&str, Option<&HarnessLaunchConfig>, Option<&str>) -> Result<Vec<String>, LifecycleError>,
     pub(in crate::capabilities::workspaces::harness) session_store: Option<SessionStoreConfig>,
+    pub(in crate::capabilities::workspaces::harness) parse_turn_started:
+        fn(&Value, &str) -> Option<HarnessTurnStarted>,
     pub(in crate::capabilities::workspaces::harness) parse_prompt_submission:
         fn(&Value, &str) -> Option<HarnessPromptSubmission>,
     pub(in crate::capabilities::workspaces::harness) parse_turn_completion:
@@ -20,9 +25,16 @@ pub(crate) struct HarnessAdapter {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct HarnessTurnStarted {
+    pub(crate) start_key: String,
+    pub(crate) turn_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct HarnessPromptSubmission {
     pub(crate) prompt_key: String,
     pub(crate) prompt_text: String,
+    pub(crate) turn_start_key: String,
     pub(crate) turn_id: Option<String>,
 }
 
@@ -62,6 +74,14 @@ pub(in crate::capabilities::workspaces::harness) enum SessionStoreScope {
 impl HarnessAdapter {
     pub(crate) fn supports_session_observer(self) -> bool {
         self.session_store.is_some()
+    }
+
+    pub(crate) fn parse_turn_started(
+        self,
+        value: &Value,
+        line: &str,
+    ) -> Option<HarnessTurnStarted> {
+        (self.parse_turn_started)(value, line)
     }
 
     pub(crate) fn parse_prompt_submission(

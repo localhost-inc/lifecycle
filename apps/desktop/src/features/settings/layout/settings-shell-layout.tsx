@@ -3,7 +3,6 @@ import {
   Button,
   IconButton,
   Input,
-  ScrollFade,
   Select,
   SelectContent,
   SelectItem,
@@ -40,6 +39,7 @@ import {
 import { HarnessSettingsPanel } from "@/features/settings/components/harness-settings-panel";
 import { SettingsFieldRow, SettingsRow, SettingsSection } from "@/features/settings/components/settings-primitives";
 import {
+  BASE_FONT_SIZE_OPTIONS,
   INACTIVE_PANE_OPACITY_OPTIONS,
   DEFAULT_WORKTREE_ROOT,
   useSettings,
@@ -64,6 +64,7 @@ export function SettingsShellLayout() {
     session: authSession,
   } = useAuthSession();
   const {
+    baseFontSize,
     theme,
     resolvedAppearance,
     defaultNewTabLaunch,
@@ -73,6 +74,7 @@ export function SettingsShellLayout() {
     inactivePaneOpacity,
     monospaceFontFamily,
     resetTypography,
+    setBaseFontSize,
     setClaudeHarnessSettings,
     setCodexHarnessSettings,
     setDefaultNewTabLaunch,
@@ -99,6 +101,14 @@ export function SettingsShellLayout() {
       themeOptions.map((option) => ({
         label: option.label,
         value: option.value,
+      })),
+    [],
+  );
+  const baseFontSizeItems = useMemo(
+    () =>
+      BASE_FONT_SIZE_OPTIONS.map((option) => ({
+        label: option.label,
+        value: String(option.value),
       })),
     [],
   );
@@ -340,13 +350,6 @@ export function SettingsShellLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <main className="flex min-h-0 flex-1">
           <div className="min-h-0 flex-1 overflow-y-auto" ref={scrollContainerRef}>
-            <ScrollFade
-              aria-hidden="true"
-              className="sticky top-0 z-10 -mb-11 h-11"
-              data-tauri-drag-region
-              direction="top"
-              size={44}
-            />
             <div className="px-6 pb-8 pt-14 md:px-12 md:pb-10 md:pt-16">
               <div className="mx-auto w-full max-w-3xl">
                 <header>
@@ -403,6 +406,28 @@ export function SettingsShellLayout() {
                         <SelectContent alignItemWithTrigger={false}>
                           {themeOptions.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </SettingsRow>
+
+                    <SettingsRow
+                      label="Base font size"
+                      description="Scales the entire interface. All spacing and layout adapts with the font size."
+                    >
+                      <Select
+                        items={baseFontSizeItems}
+                        onValueChange={(value: string) => setBaseFontSize(Number(value))}
+                        value={String(baseFontSize)}
+                      >
+                        <SelectTrigger className="w-full min-w-0 md:w-48" id="base-font-size">
+                          <SelectValue placeholder="Select a size" />
+                        </SelectTrigger>
+                        <SelectContent alignItemWithTrigger={false}>
+                          {BASE_FONT_SIZE_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={String(option.value)}>
                               {option.label}
                             </SelectItem>
                           ))}
@@ -716,12 +741,6 @@ export function SettingsShellLayout() {
                 </SettingsSection>
               </div>
             </div>
-            <ScrollFade
-              aria-hidden="true"
-              className="sticky bottom-0 z-10 -mt-11 h-11"
-              direction="bottom"
-              size={44}
-            />
           </div>
         </main>
       </div>

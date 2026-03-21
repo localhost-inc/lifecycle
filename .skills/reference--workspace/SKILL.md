@@ -31,7 +31,7 @@ Lifecycle models the workspace as the concrete runnable instance:
 
 1. `root` — backed directly by `project.path`; `workspace.worktree_path` resolves to the repo root
 2. `worktree` — backed by a Lifecycle-created derived git worktree; Lifecycle owns the derived branch/worktree naming and cleanup lifecycle
-3. `checkout_type` is distinct from `workspace.target`: `target` answers where the workspace runs (`host|docker|remote_host|cloud`), `checkout_type` answers how the local workspace's git context is sourced
+3. `checkout_type` is distinct from `workspace.target`: `target` answers where the workspace runs (`local|docker|remote|cloud`), `checkout_type` answers how the local workspace's git context is sourced
 
 ## Interface
 
@@ -65,6 +65,7 @@ interface WorkspaceClient {
   interruptTerminal(workspace_id, terminal_id) → void
   readFile(workspace_id, file_path) → file
   writeFile(workspace_id, file_path, content) → file
+  subscribeFileEvents(workspace_id, worktree_path?) → unsubscribe
   listFiles(workspace_id) → file_entries[]
   openFile(workspace_id, file_path) → void
   getGitStatus(workspace_id) → git_status
@@ -92,14 +93,15 @@ interface WorkspaceClient {
 2. Project list reads, manifest reads, and current-branch lookup are backend operations.
 3. `startServices`, `stopServices`, and reset flows operate on the workspace's runnable services and belong to `WorkspaceClient`.
 4. File, git, terminal, activity, service, and service-log reads are workspace operations.
-5. `startServices(service_names?)` may target a single service chain; workspace execution must honor manifest `depends_on` edges.
-6. When `startServices(service_names?)` is called against an already-active workspace, `ready` dependency services should be treated as satisfied boundaries.
-7. Local create/start flows must carry the exact manifest content plus `manifest_fingerprint`.
-8. Backend create owns workspace identity, source-ref derivation, and the returned workspace record. Desktop clients must not synthesize those fields locally.
-9. Desktop query reads should not bypass these seams with transport-local command calls.
-10. Frontend consumers should read concrete workspace-scoped facts through separate queries (`workspace`, `services`, `terminals`, `activity`, `service_logs`) instead of depending on a synthetic snapshot aggregate.
-11. Backend-owned live selectors should stay split by concern as well; do not collapse activity, service logs, and other unrelated facts into a synthetic controller facts bag.
-12. Frontend manifest watchers may invalidate workspace queries when `lifecycle.json` changes, but reconciliation of persisted idle service state must remain backend-owned.
+5. Desktop file reads, writes, listings, open actions, and file-event subscriptions may route through the local host file client when the workspace has a local `worktree_path`, even if the runtime target is not `local`.
+6. `startServices(service_names?)` may target a single service chain; workspace execution must honor manifest `depends_on` edges.
+7. When `startServices(service_names?)` is called against an already-active workspace, `ready` dependency services should be treated as satisfied boundaries.
+8. Local create/start flows must carry the exact manifest content plus `manifest_fingerprint`.
+9. Backend create owns workspace identity, source-ref derivation, and the returned workspace record. Desktop clients must not synthesize those fields locally.
+10. Desktop query reads should not bypass these seams with transport-local command calls.
+11. Frontend consumers should read concrete workspace-scoped facts through separate queries (`workspace`, `services`, `terminals`, `activity`, `service_logs`) instead of depending on a synthetic snapshot aggregate.
+12. Backend-owned live selectors should stay split by concern as well; do not collapse activity, service logs, and other unrelated facts into a synthetic controller facts bag.
+13. Frontend manifest watchers may invalidate workspace queries when `lifecycle.json` changes, but reconciliation of persisted idle service state must remain backend-owned.
 
 ## Execution Model
 
@@ -107,7 +109,7 @@ interface WorkspaceClient {
 
 1. All workspaces are lifecycle-managed execution instances backed by `WorkspaceClient`.
 2. V1 ships a host-backed workspace implementation.
-3. `docker`, `remote_host`, and `cloud` are explicit workspace targets, but the desktop client currently fails fast for non-`host` targets.
+3. `docker`, `remote`, and `cloud` are explicit workspace targets. The desktop client currently routes `docker` workspaces through the same host workspace client path as `local` when a local worktree is available; `remote` and `cloud` still fail fast until they have target-native clients.
 
 ## Event Foundation Contract
 
@@ -115,6 +117,7 @@ interface WorkspaceClient {
 2. The desktop query cache, notifications, metrics, and future plugins are consumers of that foundation.
 3. Commands may expose `before|after|failed` hooks.
 4. High-frequency terminal rendering stays inside the native terminal host.
+5. `WorkspaceClient.writeFile(...)` publishes a `workspace.file_changed` fact event for cache invalidation; it is not a workspace activity entry.
 
 ## Terminal Session Contract (M3+)
 
@@ -126,12 +129,14 @@ interface WorkspaceClient {
 
 ## Targets and Aggregation
 
-1. `workspace.target=host` means the desktop host workspace client is authoritative.
-2. `workspace.target=docker|remote_host|cloud` reserve explicit non-host placements in the shared contract.
-3. Mixed-target workspace lists must be aggregated from normalized domain records.
-4. Mutations from aggregated views must dispatch to the authoritative workspace client for that target.
-5. Workspace resolution must dispatch calls by `workspace.target`.
-6. Terminal control operations are workspace-scoped; `terminal_id` is never an authority boundary by itself.
+1. `workspace.target=local` means the desktop host workspace client is authoritative.
+2. `workspace.target=docker` currently reuses the desktop host workspace client path for mounted local-worktree flows.
+3. `workspace.target=remote|cloud` reserve explicit non-local placements in the shared contract.
+4. Mixed-target workspace lists must be aggregated from normalized domain records.
+5. Mutations from aggregated views must dispatch to the authoritative workspace client for that target.
+6. Workspace resolution must dispatch calls by `workspace.target`.
+7. Terminal control operations are workspace-scoped; `terminal_id` is never an authority boundary by itself.
+8. File-tree freshness is gated by local worktree availability. Workspaces with a local `worktree_path` may use the host file subscription implementation; remote-only targets without a local path must use target-native subscriptions.
 
 ## Git Operations Contract
 
@@ -178,7 +183,7 @@ The canvas is a recursive row/column split tree. Each leaf pane contains a compa
 
 ## Surface Kinds
 
-The canvas may host: terminal session, file surface, local changes review, workspace-local commit detail, service preview, empty pane
+The canvas may host: terminal session, file surface, local changes review, workspace-local commit detail, browser surface, empty pane
 
 Project-scoped artifacts (pull request detail) should normally open as **page tabs**.
 
@@ -212,7 +217,7 @@ The **current implementation contract** for the mixed live/document tab model.
 ## Tab Classes
 
 1. Live tabs: backed by workspace-owned session entities (`terminal_id`, future `agent_session_id`)
-2. Document tabs: backed by workspace content (`diff:commit:<sha>`, `file:<path>`)
+2. Document tabs: backed by workspace content or canvas-owned browser state (`diff:commit:<sha>`, `file:<path>`, `browser:<key>`)
 
 ## Ownership Rules
 
@@ -239,6 +244,12 @@ The **current implementation contract** for the mixed live/document tab model.
 1. Current local edits open as a single route-driven `Changes` dialog over the workspace canvas.
 2. Repeated `Changes` opens update dialog inputs instead of opening new tabs.
 3. History commit diffs remain commit-scoped document tabs keyed by SHA.
+
+## Browser Surfaces
+
+1. Browser tabs are document tabs keyed by `browser:<key>`.
+2. Service previews open in the workspace browser surface by default, keyed per service identity so repeated opens focus the existing pane.
+3. Browser tabs are desktop-owned state and may keep embedded webview session state alive across pane switches until the tab is explicitly closed.
 
 ---
 

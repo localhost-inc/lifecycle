@@ -23,7 +23,8 @@ export function GitHistoryPanel({
   const [documentVisible, setDocumentVisible] = useState(() =>
     typeof document === "undefined" ? true : document.visibilityState === "visible",
   );
-  const supportsHistory = workspaceTarget === "host" && worktreePath !== null;
+  const supportsHistory =
+    (workspaceTarget === "local" || workspaceTarget === "docker") && worktreePath !== null;
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -58,7 +59,7 @@ export function GitHistoryPanel({
           ) : (
             <div className={GIT_HISTORY_PANEL_EMPTY_STATE_CLASS_NAME}>
               <EmptyState
-                description="Commit history is only available for host workspaces right now."
+                description="Commit history is only available for workspaces with a local checkout right now."
                 size="sm"
                 title="History unavailable"
               />

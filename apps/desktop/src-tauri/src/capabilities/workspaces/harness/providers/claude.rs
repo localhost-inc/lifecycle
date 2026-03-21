@@ -7,8 +7,8 @@ use crate::capabilities::workspaces::harness::parsing::{
     normalize_prompt_text,
 };
 use crate::capabilities::workspaces::harness::types::{
-    HarnessAdapter, HarnessPromptSubmission, HarnessTurnCompletion, SessionStoreConfig,
-    SessionStoreScope,
+    HarnessAdapter, HarnessPromptSubmission, HarnessTurnCompletion, HarnessTurnStarted,
+    SessionStoreConfig, SessionStoreScope,
 };
 use crate::shared::errors::LifecycleError;
 
@@ -90,6 +90,7 @@ pub(super) const ADAPTER: HarnessAdapter = HarnessAdapter {
         session_id_path: Some(&["sessionId"]),
         session_id_from_file_stem: true,
     }),
+    parse_turn_started,
     parse_prompt_submission,
     parse_turn_completion,
 };
@@ -97,6 +98,7 @@ pub(super) const ADAPTER: HarnessAdapter = HarnessAdapter {
 fn claude_new_session_args(
     session_id: Option<&str>,
     launch_config: Option<&HarnessLaunchConfig>,
+    instructions: Option<&str>,
 ) -> Result<Vec<String>, LifecycleError> {
     let mut args = match session_id {
         Some(session_id) => vec!["--session-id".to_string(), session_id.to_string()],
@@ -106,6 +108,10 @@ fn claude_new_session_args(
     if let Some(launch_config) = launch_config {
         args.extend(resolve_claude_launch_config(launch_config)?.cli_args());
     }
+    if let Some(instructions) = instructions {
+        args.push("--append-system-prompt".to_string());
+        args.push(instructions.to_string());
+    }
 
     Ok(args)
 }
@@ -113,10 +119,15 @@ fn claude_new_session_args(
 fn claude_resume_args(
     session_id: &str,
     launch_config: Option<&HarnessLaunchConfig>,
+    instructions: Option<&str>,
 ) -> Result<Vec<String>, LifecycleError> {
     let mut args = vec!["--resume".to_string(), session_id.to_string()];
     if let Some(launch_config) = launch_config {
         args.extend(resolve_claude_launch_config(launch_config)?.cli_args());
+    }
+    if let Some(instructions) = instructions {
+        args.push("--append-system-prompt".to_string());
+        args.push(instructions.to_string());
     }
 
     Ok(args)
@@ -148,8 +159,18 @@ fn parse_prompt_submission(value: &Value, line: &str) -> Option<HarnessPromptSub
     Some(HarnessPromptSubmission {
         prompt_key: build_harness_event_key("claude", "prompt", line, &[prompt_id, turn_id]),
         prompt_text,
+        turn_start_key: build_harness_event_key(
+            "claude",
+            "turn_started",
+            line,
+            &[turn_id, prompt_id],
+        ),
         turn_id: turn_id.map(ToString::to_string),
     })
+}
+
+fn parse_turn_started(_value: &Value, _line: &str) -> Option<HarnessTurnStarted> {
+    None
 }
 
 fn parse_turn_completion(value: &Value, line: &str) -> Option<HarnessTurnCompletion> {

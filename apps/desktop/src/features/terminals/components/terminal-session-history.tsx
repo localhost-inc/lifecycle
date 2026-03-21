@@ -89,13 +89,16 @@ export function TerminalSessionHistory({
               <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--foreground)]">
                 {terminal.label}
               </span>
-              <WorkspaceSessionStatus
-                className="min-w-4 justify-center"
-                state={sessionStatusState}
-              />
-              <span className="shrink-0 text-[11px] tabular-nums text-[var(--muted-foreground)]/60">
-                {activityTime(terminal)}
-              </span>
+              {sessionStatusState !== "hidden" ? (
+                <WorkspaceSessionStatus
+                  className="min-w-4 justify-center"
+                  state={sessionStatusState}
+                />
+              ) : (
+                <span className="shrink-0 text-[11px] tabular-nums text-[var(--muted-foreground)]/60">
+                  {activityTime(terminal)}
+                </span>
+              )}
             </button>
           </li>
         );

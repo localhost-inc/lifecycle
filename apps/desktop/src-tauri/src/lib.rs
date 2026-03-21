@@ -90,6 +90,17 @@ pub fn run() {
                 }
             }
 
+            let lifecycle_cli = match crate::platform::lifecycle_cli::LifecycleCliState::initialize(
+                &app.handle(),
+            ) {
+                Ok(cli) => cli,
+                Err(error) => {
+                    crate::platform::diagnostics::append_error("lifecycle-cli", error);
+                    crate::platform::lifecycle_cli::LifecycleCliState::disabled()
+                }
+            };
+            app.manage(lifecycle_cli);
+
             run_migrations(&db_path_str).expect("failed to run migrations");
             crate::platform::preview_proxy::start_preview_proxy(&app_data_dir, db_path_str.clone())
                 .expect("failed to initialize local preview proxy");
@@ -98,6 +109,17 @@ pub fn run() {
             let config_path =
                 crate::platform::app_config::resolve_config_path().expect("failed to resolve config path");
             app.manage(AppConfigPath(config_path));
+
+            let desktop_bridge = match capabilities::desktop_bridge::DesktopBridgeState::start(
+                app.handle().clone(),
+            ) {
+                Ok(bridge) => bridge,
+                Err(error) => {
+                    crate::platform::diagnostics::append_error("desktop-bridge", error);
+                    capabilities::desktop_bridge::DesktopBridgeState::disabled()
+                }
+            };
+            app.manage(desktop_bridge);
 
             if let Err(error) = capabilities::workspaces::git_watcher::start_root_git_watchers(
                 &app.handle(),
@@ -212,6 +234,8 @@ pub fn run() {
             capabilities::app::commands::get_app_config,
             capabilities::app::commands::write_app_config,
             capabilities::app::commands::get_auth_session,
+            capabilities::desktop_bridge::desktop_bridge_complete_shell_request,
+            capabilities::desktop_bridge::desktop_bridge_fail_shell_request,
             capabilities::app::commands::set_window_accepts_mouse_moved_events,
             capabilities::app::commands::set_window_pointing_cursor,
             capabilities::app::commands::get_window_mouse_position,

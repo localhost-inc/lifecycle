@@ -8,3 +8,6 @@
 
 # Local macOS native terminal artifacts
 /.generated/
+
+# Generated bundled Lifecycle CLI binary
+/resources/lifecycle*

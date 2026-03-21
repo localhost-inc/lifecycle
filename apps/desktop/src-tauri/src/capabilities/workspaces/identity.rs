@@ -6,8 +6,8 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 use tauri::AppHandle;
 
-use super::harness::normalize_prompt_text;
 use super::checkout_type::is_root_workspace_checkout_type;
+use super::harness::normalize_prompt_text;
 use super::naming;
 use super::rename;
 use super::title;

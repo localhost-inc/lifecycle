@@ -14,6 +14,7 @@ use super::shared::{
 
 #[derive(Debug, Clone)]
 pub(crate) struct CreateWorkspaceRequest {
+    pub(crate) target: String,
     pub(crate) project_id: String,
     pub(crate) project_path: String,
     pub(crate) workspace_name: Option<String>,
@@ -42,12 +43,23 @@ struct WorktreeWorkspaceCreation<'a> {
     worktree_root: Option<&'a str>,
 }
 
+fn normalize_workspace_target(target: &str) -> Result<&str, LifecycleError> {
+    match target {
+        "local" | "docker" | "remote" | "cloud" => Ok(target),
+        _ => Err(LifecycleError::InvalidInput {
+            field: "target".to_string(),
+            reason: format!("unsupported workspace target '{target}'"),
+        }),
+    }
+}
+
 pub async fn create_workspace(
     app: AppHandle,
     db_path: State<'_, DbPath>,
     request: CreateWorkspaceRequest,
 ) -> Result<String, LifecycleError> {
     let total_started_at = Instant::now();
+    let workspace_target = normalize_workspace_target(&request.target)?;
     let workspace_checkout_type =
         normalize_workspace_checkout_type(request.checkout_type.as_deref());
     if workspace_checkout_type == ROOT_WORKSPACE_CHECKOUT_TYPE {
@@ -83,10 +95,10 @@ pub async fn create_workspace(
         .unwrap_or_else(|| worktree::workspace_branch_name(&workspace_name, &workspace_id));
     let (name_origin, source_ref_origin) =
         if workspace_checkout_type == ROOT_WORKSPACE_CHECKOUT_TYPE {
-        ("manual", "manual")
-    } else {
-        ("default", "default")
-    };
+            ("manual", "manual")
+        } else {
+            ("default", "default")
+        };
     let db = db_path.0.clone();
 
     // Insert workspace row
@@ -95,7 +107,7 @@ pub async fn create_workspace(
         map_database_result(conn.execute(
             "INSERT INTO workspace (
                 id, project_id, name, name_origin, source_ref, source_ref_origin, checkout_type, target, status
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'host', 'active')",
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'active')",
             params![
                 workspace_id,
                 request.project_id,
@@ -104,6 +116,7 @@ pub async fn create_workspace(
                 source_ref,
                 source_ref_origin,
                 workspace_checkout_type,
+                workspace_target,
             ],
         ))?;
     }
@@ -335,13 +348,20 @@ fn normalize_optional_ref(value: &str) -> Option<&str> {
 }
 
 fn auto_workspace_name(workspace_id: &str) -> String {
-    const ADJECTIVES: [&str; 12] = [
-        "amber", "brisk", "clear", "delta", "ember", "frost", "glint", "hollow", "ion", "lunar",
-        "north", "swift",
+    const ADJECTIVES: [&str; 48] = [
+        "amber", "arctic", "ashen", "azure", "birch", "blaze", "brisk", "calm", "cedar", "clear",
+        "cobalt", "coral", "crisp", "dusk", "ember", "fern", "flint", "frost", "gilt", "glint",
+        "haze", "hollow", "hushed", "iron", "ivory", "jade", "keen", "lapis", "lunar", "maple",
+        "misty", "moss", "north", "onyx", "pale", "pine", "quiet", "rapid", "reed", "ridge",
+        "sage", "slate", "solar", "stark", "still", "swift", "tidal", "vast",
     ];
-    const NOUNS: [&str; 12] = [
-        "atlas", "beacon", "canal", "drift", "echo", "forge", "grove", "harbor", "junction",
-        "keystone", "meridian", "orbit",
+    const NOUNS: [&str; 48] = [
+        "alcove", "arch", "atlas", "basin", "beacon", "bluff", "canal", "cove", "delta", "drift",
+        "dune", "echo", "fjord", "flume", "forge", "glen", "gorge", "grove", "harbor", "haven",
+        "isle", "junction", "keystone", "lagoon", "ledge", "loft", "marsh", "meadow", "mesa",
+        "moraine", "narrows", "orbit", "outcrop", "pass", "pier", "plinth", "quarry", "ravine",
+        "reef", "ridge", "shoal", "spire", "summit", "terrace", "vale", "vertex", "wharf",
+        "zenith",
     ];
 
     let bytes = workspace_id.as_bytes();
@@ -415,14 +435,14 @@ mod tests {
                 "Worktree",
                 "worktree",
                 "lifecycle/worktree-fixture",
-                "host",
+                "local",
                 "active",
                 "workspace_root",
                 "project_1",
                 "Root",
                 "root",
                 "main",
-                "host",
+                "local",
                 "active"
             ],
         )
@@ -473,7 +493,7 @@ mod tests {
                 "root",
                 source_ref,
                 "manual",
-                "host",
+                "local",
                 "active"
             ],
         )
@@ -505,5 +525,37 @@ mod tests {
 
         let _ = fs::remove_dir_all(repo_path);
         let _ = fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn normalize_workspace_target_accepts_canonical_targets() {
+        assert_eq!(
+            normalize_workspace_target("local").expect("local target"),
+            "local"
+        );
+        assert_eq!(
+            normalize_workspace_target("docker").expect("docker target"),
+            "docker"
+        );
+        assert_eq!(
+            normalize_workspace_target("remote").expect("remote target"),
+            "remote"
+        );
+        assert_eq!(
+            normalize_workspace_target("cloud").expect("cloud target"),
+            "cloud"
+        );
+    }
+
+    #[test]
+    fn normalize_workspace_target_rejects_unknown_targets() {
+        let error = normalize_workspace_target("host").expect_err("legacy target should fail");
+        match error {
+            LifecycleError::InvalidInput { field, reason } => {
+                assert_eq!(field, "target");
+                assert_eq!(reason, "unsupported workspace target 'host'");
+            }
+            other => panic!("expected invalid input, got {other:?}"),
+        }
     }
 }

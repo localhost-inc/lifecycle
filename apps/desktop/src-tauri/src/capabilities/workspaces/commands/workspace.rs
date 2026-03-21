@@ -9,6 +9,7 @@ use tauri::{AppHandle, State};
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateWorkspaceCommandInput {
+    target: String,
     project_id: String,
     project_path: String,
     workspace_name: Option<String>,
@@ -38,6 +39,7 @@ pub async fn create_workspace(
         app.clone(),
         db_path,
         super::super::create::CreateWorkspaceRequest {
+            target: input.target,
             project_id: input.project_id,
             project_path: input.project_path,
             workspace_name: input.workspace_name,

@@ -58,7 +58,10 @@ import {
 } from "@/features/workspaces/components/workspace-canvas-shortcuts";
 import { useSettings } from "@/features/settings/state/settings-provider";
 import { buildHarnessLaunchConfig } from "@/features/settings/state/harness-settings";
-import { type SurfaceLaunchAction, type SurfaceLaunchRequest } from "@/features/workspaces/components/surface-launch-actions";
+import {
+  type SurfaceLaunchAction,
+  type SurfaceLaunchRequest,
+} from "@/features/workspaces/components/surface-launch-actions";
 import { ClaudeIcon, CodexIcon, ShellIcon } from "@/features/workspaces/components/surface-icons";
 import {
   areStringArraysEqual,
@@ -76,6 +79,7 @@ import {
   getWorkspaceUnassignedLiveTerminalTabKeys,
 } from "@/features/workspaces/components/workspace-canvas-terminal-state";
 import { closeWorkspacePaneTabs } from "@/features/workspaces/components/workspace-pane-close";
+import { closeBrowserWebview } from "@/features/workspaces/components/browser-surface";
 
 export interface WorkspaceCanvasControllerInput {
   openDocumentRequest: OpenDocumentRequest | null;
@@ -316,7 +320,13 @@ export function useWorkspaceCanvasController({
         select: false,
       });
     }
-  }, [activePaneId, assignedPaneTabKeys, hiddenTerminalTabKeys, liveTerminalTabKeys, terminalsResolved]);
+  }, [
+    activePaneId,
+    assignedPaneTabKeys,
+    hiddenTerminalTabKeys,
+    liveTerminalTabKeys,
+    terminalsResolved,
+  ]);
 
   useEffect(() => {
     if (!activeTerminalId || !documentVisible) {
@@ -333,7 +343,11 @@ export function useWorkspaceCanvasController({
   useEffect(() => {
     renderedTerminalIdSetRef.current = new Set(
       Object.values(renderedActiveTabKeyByPaneId).flatMap((key) =>
-        key ? [terminalIdFromTabKey(key)].filter((terminalId): terminalId is string => terminalId !== null) : [],
+        key
+          ? [terminalIdFromTabKey(key)].filter(
+              (terminalId): terminalId is string => terminalId !== null,
+            )
+          : [],
       ),
     );
   }, [renderedActiveTabKeyByPaneId]);
@@ -411,7 +425,12 @@ export function useWorkspaceCanvasController({
     (terminalId: string, paneId?: string) => {
       releaseWebviewFocus();
       clearTerminalResponseReady(terminalId);
-      dispatch({ key: terminalTabKey(terminalId), kind: "show-terminal-tab", paneId, select: true });
+      dispatch({
+        key: terminalTabKey(terminalId),
+        kind: "show-terminal-tab",
+        paneId,
+        select: true,
+      });
     },
     [clearTerminalResponseReady],
   );
@@ -495,7 +514,6 @@ export function useWorkspaceCanvasController({
     terminalsResolved,
   ]);
 
-
   const surfaceActions: SurfaceLaunchAction[] = useMemo(
     () => [
       {
@@ -529,6 +547,7 @@ export function useWorkspaceCanvasController({
   const closeTerminalTab = useCallback(
     async (tabKey: string, terminalId: string) => {
       try {
+        clearTerminalResponseReady(terminalId);
         await detachTerminal(workspaceId, terminalId);
         client.invalidate(terminalKeys.byWorkspace(workspaceId));
         dispatch({
@@ -542,7 +561,7 @@ export function useWorkspaceCanvasController({
         return false;
       }
     },
-    [client, workspaceId],
+    [clearTerminalResponseReady, client, workspaceId],
   );
 
   const closeDocumentTab = useCallback(
@@ -559,6 +578,9 @@ export function useWorkspaceCanvasController({
         key: tabKey,
         kind: "close-document",
       });
+      if (closingDocument?.kind === "browser") {
+        void closeBrowserWebview(closingDocument.key).catch(() => undefined);
+      }
       clearFileSession(tabKey);
       return true;
     },
@@ -910,9 +932,12 @@ export function useWorkspaceCanvasController({
     [],
   );
 
-  const handleRenameTerminalTab = useCallback((terminalId: string, label: string) => {
-    return renameTerminal(workspaceId, terminalId, label);
-  }, [workspaceId]);
+  const handleRenameTerminalTab = useCallback(
+    (terminalId: string, label: string) => {
+      return renameTerminal(workspaceId, terminalId, label);
+    },
+    [workspaceId],
+  );
 
   const handleReconcilePaneVisibleTabOrder = useCallback((paneId: string, keys: string[]) => {
     dispatch({ keys, kind: "reconcile-pane-visible-tab-order", paneId });

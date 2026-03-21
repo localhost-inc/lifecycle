@@ -50,6 +50,29 @@ describe("terminalResponseReadyReducer", () => {
     ).toEqual({});
   });
 
+  test("does not replace a known running turn id with a later null turn id", () => {
+    const runningState = terminalResponseReadyReducer(createDefaultTerminalResponseReadyState(), {
+      terminalId: "terminal_1",
+      turnId: "turn_1",
+      kind: "mark-running",
+      workspaceId: "workspace_1",
+    });
+
+    expect(
+      terminalResponseReadyReducer(runningState, {
+        terminalId: "terminal_1",
+        turnId: null,
+        kind: "mark-running",
+        workspaceId: "workspace_1",
+      }).runningStateByTerminalId,
+    ).toEqual({
+      terminal_1: {
+        turnId: "turn_1",
+        workspaceId: "workspace_1",
+      },
+    });
+  });
+
   test("acknowledges a ready terminal without disturbing others", () => {
     const initialState = {
       acknowledgedCompletionKeyByTerminalId: {},

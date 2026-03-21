@@ -12,9 +12,16 @@ Apply the following design language and animation specs as context for the curre
 
 Component-level rules for building Lifecycle UI. All tokens referenced below are CSS custom properties defined in `packages/ui/src/styles/theme.css`.
 
+## Units
+
+- **Use `rem` for all sizing, spacing, and layout values** — font sizes, padding, margins, widths, radii, indentation. The app sets a configurable base font size on `<html>` (Settings → Appearance), so `rem` values scale the entire interface when the user adjusts it.
+- **Exceptions that stay in `px`**: native compositor alignment (e.g. terminal surface gutters), pointer-coordinate math from drag/resize interactions, and `border-width` (1px borders should not scale).
+- When computing `rem` from a pixel design spec, divide by 16 (the default base). A `48px` sidebar becomes `3rem`; a `12px` font becomes `0.75rem`.
+- Inline styles that derive from numeric props (e.g. an avatar `size` prop in pixels) should convert at render time: `` `${size / 16}rem` ``.
+
 ## Surfaces & Containers
 
-- Radius scale: `--radius-xs` (2px), `--radius-sm` (4px), `--radius` (6px), `--radius-md` (8px), `--radius-lg` (10px), `--radius-xl` (12px), `--radius-2xl` (18px), `--radius-3xl` (24px). Cards and buttons use `rounded-xl` (12px), inputs use `rounded-lg` (10px), badges use `rounded-full`.
+- Radius scale: `--radius-xs` (0.125rem), `--radius-sm` (0.25rem), `--radius` (0.375rem), `--radius-md` (0.5rem), `--radius-lg` (0.625rem), `--radius-xl` (0.75rem), `--radius-2xl` (1.125rem), `--radius-3xl` (1.5rem). Cards and buttons use `rounded-xl`, inputs use `rounded-lg`, badges use `rounded-full`.
 - Thin 1px borders using `var(--border)` for structure
 - Shadows reserved for floating affordances only — tabs use `var(--tab-shadow)`; general surfaces use borders and background shifts
 - Cards use `var(--card)` bg with 1px border — bordered containers, not floating surfaces

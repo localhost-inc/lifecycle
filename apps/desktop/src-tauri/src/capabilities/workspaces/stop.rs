@@ -40,7 +40,10 @@ pub async fn stop_workspace_services(
             .map_err(|e| LifecycleError::Database(e.to_string()))?;
         WorkspaceStatus::from_str(&status)?
     };
-    if matches!(current_status, WorkspaceStatus::Preparing | WorkspaceStatus::Archiving) {
+    if matches!(
+        current_status,
+        WorkspaceStatus::Preparing | WorkspaceStatus::Archiving
+    ) {
         return Err(LifecycleError::WorkspaceMutationLocked {
             status: current_status.as_str().to_string(),
         });

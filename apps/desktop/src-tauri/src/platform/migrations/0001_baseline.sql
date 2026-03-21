@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS workspace (
     source_ref_origin TEXT NOT NULL DEFAULT 'manual',
     git_sha TEXT,
     worktree_path TEXT,
-    target TEXT NOT NULL DEFAULT 'host',
+    target TEXT NOT NULL DEFAULT 'local',
     checkout_type TEXT NOT NULL DEFAULT 'worktree',
     created_by TEXT,
     source_workspace_id TEXT REFERENCES workspace(id),

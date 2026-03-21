@@ -39,13 +39,13 @@ describe("workspaceSupportsFilesystemInteraction", () => {
   test("allows terminals once a worktree exists outside create and destroy", () => {
     expect(
       workspaceSupportsFilesystemInteraction({
-        target: "host",
+        target: "local",
         worktree_path: "/tmp/worktree",
       }),
     ).toBeTrue();
     expect(
       workspaceSupportsFilesystemInteraction({
-        target: "host",
+        target: "docker",
         worktree_path: "/tmp/worktree",
       }),
     ).toBeTrue();
@@ -54,20 +54,20 @@ describe("workspaceSupportsFilesystemInteraction", () => {
   test("rejects workspaces without an interactive filesystem context", () => {
     expect(
       workspaceSupportsFilesystemInteraction({
-        target: "host",
+        target: "local",
         worktree_path: "/tmp/worktree",
       }),
     ).toBeTrue();
     expect(
       workspaceSupportsFilesystemInteraction({
-        target: "host",
+        target: "local",
         worktree_path: null,
       }),
     ).toBeFalse();
     expect(
       workspaceSupportsFilesystemInteraction({
         target: "docker",
-        worktree_path: "/tmp/worktree",
+        worktree_path: null,
       }),
     ).toBeFalse();
   });
@@ -87,7 +87,7 @@ describe("WorkspaceLayout", () => {
       source_ref: "lifecycle/frost-beacon",
       git_sha: "1dd55398",
       worktree_path: "/tmp/frost-beacon",
-      target: "host",
+      target: "local",
       manifest_fingerprint: "manifest_1",
       created_by: null,
       source_workspace_id: null,
@@ -130,7 +130,7 @@ describe("WorkspaceLayout", () => {
       source_ref: "lifecycle/frost-beacon",
       git_sha: "1dd55398",
       worktree_path: "/tmp/frost-beacon",
-      target: "host",
+      target: "local",
       manifest_fingerprint: "manifest_1",
       created_by: null,
       source_workspace_id: null,
@@ -199,7 +199,7 @@ describe("WorkspaceLayout", () => {
       source_ref: "lifecycle/frost-beacon",
       git_sha: "1dd55398",
       worktree_path: "/tmp/frost-beacon",
-      target: "host",
+      target: "local",
       manifest_fingerprint: "manifest_1",
       created_by: null,
       source_workspace_id: null,
@@ -266,7 +266,7 @@ describe("WorkspaceLayout", () => {
       source_ref: "lifecycle/frost-beacon",
       git_sha: "1dd55398",
       worktree_path: "/tmp/frost-beacon",
-      target: "host",
+      target: "local",
       manifest_fingerprint: "manifest_1",
       created_by: null,
       source_workspace_id: null,

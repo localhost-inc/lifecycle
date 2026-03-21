@@ -15,15 +15,15 @@
   --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
   --font-pixel: "Geist Pixel Square", monospace;
 
-  --radius-xs: 2px;
-  --radius-sm: 4px;
-  --radius: 6px;
-  --radius-md: 8px;
-  --radius-lg: 10px;
-  --radius-xl: 12px;
-  --radius-2xl: 18px;
-  --radius-3xl: 24px;
-  --project-shell-radius: 16px;
+  --radius-xs: 0.125rem;
+  --radius-sm: 0.25rem;
+  --radius: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1.125rem;
+  --radius-3xl: 1.5rem;
+  --project-shell-radius: 1rem;
 }
 
 :where(button, [role="button"]):where(:not(:disabled)):where(:not([aria-disabled="true"])) {
@@ -32,11 +32,17 @@
 
 .app-panel-title {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 500;
   color: var(--sidebar-muted-foreground);
   text-transform: uppercase;
   letter-spacing: 0.1em;
+}
+
+@keyframes lifecycle-spin {
+  to {
+    stroke-dashoffset: -62.83;
+  }
 }
 
 @keyframes lifecycle-soft-pulse {
@@ -123,6 +129,10 @@
   }
 }
 
+.lifecycle-motion-spin {
+  animation: lifecycle-spin 1s linear infinite;
+}
+
 .lifecycle-motion-soft-pulse {
   animation: lifecycle-soft-pulse 2.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   transform-origin: center;
@@ -153,6 +163,7 @@
     will-change: auto;
   }
 
+  .lifecycle-motion-spin,
   .lifecycle-motion-soft-pulse,
   .lifecycle-motion-ready-ring {
     animation: none;

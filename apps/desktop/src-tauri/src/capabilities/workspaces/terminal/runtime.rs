@@ -8,7 +8,7 @@ use crate::platform::native_terminal::{
 };
 use crate::shared::errors::{LifecycleError, TerminalFailureReason, TerminalStatus, TerminalType};
 use crate::WorkspaceControllerRegistryHandle;
-use tauri::{AppHandle, Manager, State, WebviewWindow};
+use tauri::{AppHandle, Manager, State, Webview};
 use tokio::sync::Mutex as TokioMutex;
 
 use super::super::query::TerminalRecord;
@@ -120,12 +120,16 @@ pub(crate) async fn create_terminal(
         harness_provider.as_deref(),
         harness_session_id.as_deref(),
     )?;
+    let lifecycle_cli = app.state::<crate::platform::lifecycle_cli::LifecycleCliState>();
+    let harness_instructions = matches!(launch_type, TerminalType::Harness)
+        .then(|| lifecycle_cli.render_agent_instructions());
     resolve_terminal_launch(
         &launch_type,
         harness_provider.as_deref(),
         prepared_harness_terminal.harness_session_id.as_deref(),
         prepared_harness_terminal.harness_launch_mode,
         harness_launch_config.as_ref(),
+        harness_instructions.as_deref(),
     )?;
 
     if !native_terminal::is_available() {
@@ -153,7 +157,7 @@ pub(crate) async fn create_terminal(
 }
 
 pub(crate) async fn sync_native_terminal_surface(
-    window: WebviewWindow,
+    webview: Webview,
     db_path: State<'_, DbPath>,
     input: NativeTerminalSurfaceSyncInput,
 ) -> Result<(), LifecycleError> {
@@ -170,25 +174,32 @@ pub(crate) async fn sync_native_terminal_surface(
         terminal_status(&terminal)?,
         TerminalStatus::Finished | TerminalStatus::Failed
     ) {
-        native_terminal::hide_surface(window.app_handle(), &input.terminal_id)?;
+        native_terminal::hide_surface(webview.app_handle(), &input.terminal_id)?;
         return Ok(());
     }
 
     let workspace =
         require_interactive_workspace_context(&db, &terminal.workspace_id, "terminal_access")?;
-    let controller = lookup_workspace_controller(window.app_handle(), &terminal.workspace_id).await;
+    let controller =
+        lookup_workspace_controller(webview.app_handle(), &terminal.workspace_id).await;
     let _mutation_guard = controller.acquire_mutation_guard().await?;
     let launch_type = TerminalType::from_str(&terminal.launch_type)?;
     let harness_launch_mode = HarnessLaunchMode::from_str(&terminal.harness_launch_mode)?;
     let harness_launch_config = load_terminal_harness_launch_config(&db, &terminal.id)?;
+    let lifecycle_cli = webview
+        .app_handle()
+        .state::<crate::platform::lifecycle_cli::LifecycleCliState>();
+    let harness_instructions = matches!(launch_type, TerminalType::Harness)
+        .then(|| lifecycle_cli.render_agent_instructions());
     let launch = resolve_terminal_launch(
         &launch_type,
         terminal.harness_provider.as_deref(),
         terminal.harness_session_id.as_deref(),
         harness_launch_mode,
         harness_launch_config.as_ref(),
+        harness_instructions.as_deref(),
     )?;
-    let launch_environment = resolve_harness_launch_environment(&window.app_handle(), &terminal)?;
+    let launch_environment = resolve_harness_launch_environment(&webview.app_handle(), &terminal)?;
     let theme_override_path =
         write_native_terminal_theme_override(&input.theme, &input.font_family)?;
     let color_scheme = parse_native_terminal_color_scheme(&input.appearance)?;
@@ -210,7 +221,7 @@ pub(crate) async fn sync_native_terminal_surface(
     };
 
     native_terminal::sync_surface(
-        &window,
+        &webview,
         NativeTerminalSurfaceSyncRequest {
             background_color: &input.theme.background,
             color_scheme,
@@ -232,7 +243,7 @@ pub(crate) async fn sync_native_terminal_surface(
             working_directory: &working_directory,
         },
     )?;
-    maybe_schedule_harness_observers(window.app_handle(), &db, &terminal, &working_directory);
+    maybe_schedule_harness_observers(webview.app_handle(), &db, &terminal, &working_directory);
 
     if is_initial_harness_sync {
         let mut registry = launched_harness_terminals().lock().unwrap();
@@ -247,14 +258,14 @@ pub(crate) async fn sync_native_terminal_surface(
     if terminal.status != target_status.as_str() {
         let terminal =
             update_terminal_state(&db, &input.terminal_id, target_status, None, None, false)?;
-        emit_terminal_status(window.app_handle(), &terminal);
+        emit_terminal_status(webview.app_handle(), &terminal);
     }
 
     Ok(())
 }
 
 pub(crate) async fn sync_native_terminal_surface_frame(
-    window: WebviewWindow,
+    webview: Webview,
     input: NativeTerminalSurfaceFrameSyncInput,
 ) -> Result<(), LifecycleError> {
     if !native_terminal::is_available() {
@@ -262,7 +273,7 @@ pub(crate) async fn sync_native_terminal_surface_frame(
     }
 
     native_terminal::sync_surface_frame(
-        &window,
+        &webview,
         NativeTerminalSurfaceFrameSyncRequest {
             frame: NativeTerminalFrame {
                 x: input.x,
@@ -383,6 +394,7 @@ pub(crate) fn complete_native_terminal_exit(
         terminal.harness_session_id.as_deref(),
         HarnessLaunchMode::from_str(&terminal.harness_launch_mode)?,
         harness_launch_config.as_ref(),
+        None,
     )?;
     let (status, failure_reason) = if exit_code == 0 {
         (TerminalStatus::Finished, None)

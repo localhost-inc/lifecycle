@@ -18,6 +18,7 @@ import {
   SHORTCUT_HANDLER_PRIORITY,
   useShortcutRegistration,
 } from "@/app/shortcuts/shortcut-router";
+import type { WorkspaceCreateMode } from "@/features/workspaces/api";
 import { ResponseReadyDot } from "@/components/response-ready-dot";
 import { NavigationControls } from "@/components/layout/navigation-controls";
 import { getWorkspaceSessionStatusState } from "@/features/workspaces/components/workspace-session-status";
@@ -36,7 +37,7 @@ interface ProjectNavBarProps {
   activeWorkspaceId: string | null;
   hasWorkspaceResponseReady: (workspaceId: string) => boolean;
   hasWorkspaceRunningTurn: (workspaceId: string) => boolean;
-  onCreateWorkspace: () => void;
+  onCreateWorkspace: (mode: WorkspaceCreateMode) => void;
   onDestroyWorkspace: (workspace: WorkspaceRecord) => void;
   onForkWorkspace: (workspace: WorkspaceRecord) => void;
   onOpenSettings: () => void;
@@ -193,6 +194,31 @@ export function ProjectNavBar({
     [onDestroyWorkspace, onForkWorkspace],
   );
 
+  const handleCreateWorkspaceMenu = useCallback(
+    async (event: MouseEvent<HTMLElement>) => {
+      event.preventDefault();
+
+      if (!isTauri()) {
+        onCreateWorkspace("local");
+        return;
+      }
+
+      const localItem = await MenuItem.new({
+        id: "create-workspace-local",
+        text: "Local",
+        action: () => onCreateWorkspace("local"),
+      });
+      const dockerItem = await MenuItem.new({
+        id: "create-workspace-docker",
+        text: "Docker",
+        action: () => onCreateWorkspace("docker"),
+      });
+      const menu = await Menu.new({ items: [localItem, dockerItem] });
+      await menu.popup();
+    },
+    [onCreateWorkspace],
+  );
+
   const handleMouseDown = (event: MouseEvent<HTMLElement>) => {
     if (event.button !== 0 || !isTauri()) {
       return;
@@ -262,7 +288,7 @@ export function ProjectNavBar({
           <div className="flex items-center px-1">
             <Button
               aria-label="Create workspace"
-              onClick={onCreateWorkspace}
+              onClick={(event) => void handleCreateWorkspaceMenu(event)}
               size="icon"
               variant="ghost"
             >

@@ -8,8 +8,11 @@ import type {
 import { getBackend } from "@/lib/backend";
 import { getWorkspaceClient } from "@/lib/workspace";
 
+export type WorkspaceCreateMode = "local" | "docker";
+
 export interface CreateWorkspaceInput {
   checkoutType?: WorkspaceCheckoutType;
+  target?: WorkspaceCreateMode;
   projectId: string;
   projectPath: string;
   workspaceName?: string;
@@ -29,7 +32,7 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<stri
     manifestJson: input.manifestJson ?? null,
     manifestFingerprint: input.manifestFingerprint ?? null,
     context: {
-      target: "host",
+      target: input.target ?? "local",
       checkoutType: input.checkoutType ?? "worktree",
       projectId: input.projectId,
       projectPath: input.projectPath,

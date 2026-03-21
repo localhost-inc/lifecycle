@@ -16,7 +16,8 @@ export function GitPullRequestsPanel({
   workspaceTarget,
   worktreePath,
 }: GitPullRequestsPanelProps) {
-  const supportsGit = workspaceTarget === "host" && worktreePath !== null;
+  const supportsGit =
+    (workspaceTarget === "local" || workspaceTarget === "docker") && worktreePath !== null;
   const [documentVisible, setDocumentVisible] = useState(() =>
     typeof document === "undefined" ? true : document.visibilityState === "visible",
   );

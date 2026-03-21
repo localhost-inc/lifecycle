@@ -33,7 +33,11 @@ import {
 import { useSettings } from "@/features/settings/state/settings-provider";
 import { useTerminalResponseReady } from "@/features/terminals/state/terminal-response-ready-provider";
 import { WelcomeScreen } from "@/features/welcome/components/welcome-screen";
-import { createWorkspace, destroyWorkspace } from "@/features/workspaces/api";
+import {
+  createWorkspace,
+  destroyWorkspace,
+  type WorkspaceCreateMode,
+} from "@/features/workspaces/api";
 import { useWorkspacesByProject } from "@/features/workspaces/hooks";
 import { getWorkspaceDisplayName } from "@/features/workspaces/lib/workspace-display";
 import { formatWorkspaceError } from "@/features/workspaces/lib/workspace-errors";
@@ -50,6 +54,7 @@ import {
   readLastWorkspaceId,
   writeLastWorkspaceId,
 } from "@/features/workspaces/state/workspace-canvas-state";
+import { DesktopBridgeListener } from "@/features/workspaces/state/desktop-bridge-listener";
 import { WorkspaceOpenRequestsProvider } from "@/features/workspaces/state/workspace-open-requests";
 import { createWorkspacesByProjectQuery } from "@/features/workspaces/queries";
 import { workspaceKeys } from "@/features/workspaces/state/workspace-query-keys";
@@ -73,7 +78,10 @@ import {
 } from "@/app/shortcuts/shortcut-router";
 import { type AppShellOutletContext } from "@/components/layout/app-shell-context";
 import { AppSidebar } from "@/components/layout/app-sidebar";
-import { notifyShellResizeListeners, ShellResizeProvider } from "@/components/layout/shell-resize-provider";
+import {
+  notifyShellResizeListeners,
+  ShellResizeProvider,
+} from "@/components/layout/shell-resize-provider";
 
 const SIDEBAR_RESIZE_STEP = 16;
 
@@ -374,7 +382,7 @@ export function AppShellLayout() {
   }, [client, navigate, refreshWorkspaceList]);
 
   const handleCreateWorkspace = useCallback(
-    async (nextProjectId: string) => {
+    async (nextProjectId: string, target: WorkspaceCreateMode) => {
       const project = allProjects.find((item) => item.id === nextProjectId);
       if (!project) {
         return;
@@ -405,6 +413,7 @@ export function AppShellLayout() {
           manifestJson,
           projectId: project.id,
           projectPath: project.path,
+          target,
           worktreeRoot,
         });
 
@@ -417,9 +426,9 @@ export function AppShellLayout() {
       }
     },
     [
+      allProjects,
       navigate,
       projectCatalogQuery.data,
-      allProjects,
       refreshWorkspaceList,
       workspacesByProjectId,
       worktreeRoot,
@@ -472,7 +481,10 @@ export function AppShellLayout() {
   const handleDestroyWorkspace = useCallback(
     async (workspace: WorkspaceRecord) => {
       try {
-        if (workspace.target === "host" && workspace.worktree_path) {
+        if (
+          (workspace.target === "local" || workspace.target === "docker") &&
+          workspace.worktree_path
+        ) {
           const gitStatus = await getGitStatus(workspace.id);
           if (gitStatus.files.length > 0) {
             const workspaceLabel = getWorkspaceDisplayName(workspace);
@@ -672,6 +684,7 @@ export function AppShellLayout() {
 
   return (
     <WorkspaceOpenRequestsProvider>
+      <DesktopBridgeListener />
       <WorkspaceToolbarProvider>
         <CommandPaletteProvider projects={projects} workspacesByProjectId={workspacesByProjectId}>
           <div

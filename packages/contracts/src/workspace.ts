@@ -1,7 +1,7 @@
 export type WorkspaceTarget =
-  | "host"
+  | "local"
   | "docker"
-  | "remote_host"
+  | "remote"
   | "cloud";
 
 export type WorkspaceCheckoutType = "root" | "worktree";

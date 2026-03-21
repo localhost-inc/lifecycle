@@ -6,8 +6,10 @@ import { TerminalSurface } from "@/features/terminals/components/terminal-surfac
 import { GitDiffSurface } from "@/features/git/components/git-diff-surface";
 import { PullRequestSurface } from "@/features/git/components/pull-request-surface";
 import { FileSurface } from "@/features/files/components/file-surface";
+import { BrowserSurface } from "@/features/workspaces/components/browser-surface";
 import type { FileViewerSessionState } from "@/features/files/lib/file-session";
 import {
+  isBrowserDocument,
   isChangesDiffDocument,
   isCommitDiffDocument,
   isFileViewerDocument,
@@ -17,7 +19,10 @@ import {
   type WorkspaceCanvasTabViewState,
 } from "@/features/workspaces/state/workspace-canvas-state";
 import { WorkspaceEmptyPaneState } from "@/features/workspaces/components/workspace-empty-pane-state";
-import { canvasTabDomId, canvasTabPanelId } from "@/features/workspaces/components/workspace-canvas-ids";
+import {
+  canvasTabDomId,
+  canvasTabPanelId,
+} from "@/features/workspaces/components/workspace-canvas-ids";
 
 interface WorkspacePaneContentProps {
   activeTabKey: string | null;
@@ -129,6 +134,12 @@ export function WorkspacePaneContent({
           }}
           source={{ commit: activeDocument, mode: "commit" }}
           workspaceId={workspaceId}
+        />
+      ) : activeDocument && isBrowserDocument(activeDocument) ? (
+        <BrowserSurface
+          tabKey={activeDocument.key}
+          title={activeDocument.label}
+          url={activeDocument.url}
         />
       ) : activeDocument && isPullRequestDocument(activeDocument) ? (
         <PullRequestSurface

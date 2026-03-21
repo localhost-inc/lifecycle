@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type {
-  GitStatusResult,
-  ServiceRecord,
-  WorkspaceRecord,
-} from "@lifecycle/contracts";
+import type { GitStatusResult, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import {
   getBuiltinExtensionSlots,
   getEnvironmentExtensionBadge,
@@ -18,7 +14,7 @@ const baseWorkspace: WorkspaceRecord = {
   source_ref: "lifecycle/workspace",
   git_sha: "abcdef12",
   worktree_path: "/tmp/workspace",
-  target: "host",
+  target: "local",
   manifest_fingerprint: null,
   created_by: null,
   source_workspace_id: null,
@@ -100,12 +96,13 @@ describe("builtin extension badges", () => {
 });
 
 describe("builtin extension slots", () => {
-  test("declares git-owned canvas document kinds only for tab-backed history surfaces", () => {
+  test("registers the built-in extension order and owned canvas document kinds", () => {
     const slots = getBuiltinExtensionSlots({
       config: null,
       gitStatus: undefined,
       hasManifest: false,
       launchActions: {
+        openBrowser: () => {},
         openChangesDiff: () => {},
         openCommitDiff: () => {},
         openFileViewer: () => {},
@@ -121,11 +118,22 @@ describe("builtin extension slots", () => {
       workspace: baseWorkspace,
     });
 
+    expect(slots.map((slot) => slot.id)).toEqual([
+      "git-changes",
+      "files",
+      "git-history",
+      "pull-requests",
+      "session-history",
+      "environment",
+    ]);
+
     const changesSlot = slots.find((slot) => slot.id === "git-changes");
+    const filesSlot = slots.find((slot) => slot.id === "files");
     const historySlot = slots.find((slot) => slot.id === "git-history");
     const environmentSlot = slots.find((slot) => slot.id === "environment");
 
     expect(changesSlot?.ownedDocumentKinds).toBeUndefined();
+    expect(filesSlot?.ownedDocumentKinds).toBeUndefined();
     expect(historySlot?.ownedDocumentKinds).toEqual(["commit-diff"]);
     expect(environmentSlot?.ownedDocumentKinds).toBeUndefined();
   });

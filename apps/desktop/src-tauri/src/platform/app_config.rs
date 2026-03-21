@@ -11,10 +11,7 @@ pub fn resolve_config_path() -> Result<PathBuf, LifecycleError> {
 pub fn read_config(path: &Path) -> Result<serde_json::Value, LifecycleError> {
     match std::fs::read_to_string(path) {
         Ok(contents) => serde_json::from_str(&contents).map_err(|error| {
-            LifecycleError::Io(format!(
-                "failed to parse {}: {error}",
-                path.display()
-            ))
+            LifecycleError::Io(format!("failed to parse {}: {error}", path.display()))
         }),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             Ok(serde_json::Value::Object(serde_json::Map::new()))
@@ -27,9 +24,8 @@ pub fn read_config(path: &Path) -> Result<serde_json::Value, LifecycleError> {
 }
 
 pub fn write_config(path: &Path, value: &serde_json::Value) -> Result<(), LifecycleError> {
-    let json = serde_json::to_string_pretty(value).map_err(|error| {
-        LifecycleError::Io(format!("failed to serialize config: {error}"))
-    })?;
+    let json = serde_json::to_string_pretty(value)
+        .map_err(|error| LifecycleError::Io(format!("failed to serialize config: {error}")))?;
 
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|error| {
@@ -42,10 +38,7 @@ pub fn write_config(path: &Path, value: &serde_json::Value) -> Result<(), Lifecy
 
     let tmp_path = path.with_extension("json.tmp");
     std::fs::write(&tmp_path, format!("{json}\n")).map_err(|error| {
-        LifecycleError::Io(format!(
-            "failed to write {}: {error}",
-            tmp_path.display()
-        ))
+        LifecycleError::Io(format!("failed to write {}: {error}", tmp_path.display()))
     })?;
 
     std::fs::rename(&tmp_path, path).map_err(|error| {

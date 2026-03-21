@@ -18,7 +18,7 @@ function createWorkspaceRecord(
     id,
     checkout_type: overrides.checkout_type ?? "worktree",
     last_active_at: overrides.last_active_at ?? "2026-03-14T12:00:00.000Z",
-    target: "host" as const,
+    target: "local" as const,
     name: id,
     project_id: "project_1",
     source_ref: id,

@@ -2,8 +2,10 @@ import { describe, expect, test } from "bun:test";
 import type { GitPullRequestSummary } from "@lifecycle/contracts";
 import type { StorageLike } from "@/features/workspaces/state/workspace-canvas-state";
 import {
+  browserTabKey,
   changesDiffTabKey,
   clearLastWorkspaceId,
+  createBrowserTab,
   commitDiffTabKey,
   createChangesDiffTab,
   createCommitDiffTab,
@@ -364,6 +366,63 @@ describe("workspace canvas state persistence", () => {
           "pane-root": {
             activeTabKey: fileViewerTabKey("README.md"),
             tabOrderKeys: [fileViewerTabKey("README.md")],
+          },
+        },
+        rootPane: {
+          id: "pane-root",
+          kind: "leaf",
+        },
+      },
+    });
+  });
+
+  test("persists browser tabs with stable keys and preview URLs", () => {
+    const storage = new MemoryStorage();
+
+    writeWorkspaceCanvasState(
+      "ws-1",
+      withDefaultState({
+        activeTabKey: browserTabKey("service:web"),
+        documents: [
+          createBrowserTab({
+            key: "service:web",
+            label: "web",
+            url: "http://web.sydney.lifecycle.localhost",
+          }),
+        ],
+        tabOrderKeys: [browserTabKey("service:web")],
+      }),
+      storage,
+    );
+
+    expect(readWorkspaceCanvasState("ws-1", storage)).toEqual(
+      withDefaultState({
+        activeTabKey: browserTabKey("service:web"),
+        documents: [
+          createBrowserTab({
+            key: "service:web",
+            label: "web",
+            url: "http://web.sydney.lifecycle.localhost",
+          }),
+        ],
+        tabOrderKeys: [browserTabKey("service:web")],
+      }),
+    );
+    expect(JSON.parse(storage.getItem(WORKSPACE_CANVAS_STATE_STORAGE_KEY) ?? "null")).toEqual({
+      "ws-1": {
+        activePaneId: "pane-root",
+        documents: [
+          {
+            key: "service:web",
+            kind: "browser",
+            label: "web",
+            url: "http://web.sydney.lifecycle.localhost",
+          },
+        ],
+        paneTabStateById: {
+          "pane-root": {
+            activeTabKey: browserTabKey("service:web"),
+            tabOrderKeys: [browserTabKey("service:web")],
           },
         },
         rootPane: {

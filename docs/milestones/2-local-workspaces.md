@@ -6,7 +6,7 @@
 
 ## Goal
 
-User creates a host workspace, then clicks "Run" and watches workspace preparation and service startup complete with per-service health indicators.
+User creates a local workspace, then clicks "Run" and watches workspace preparation and service startup complete with per-service health indicators.
 
 ## What You Build
 
@@ -30,8 +30,8 @@ User creates a host workspace, then clicks "Run" and watches workspace preparati
    - `project_id`
    - `source_ref`
    - `git_sha`
-   - `worktree_path` — absolute filesystem path for host workspaces; null for non-host targets until they expose a local mirror path
-   - `target` (`host|docker|remote_host|cloud`) — where the workspace runs
+   - `worktree_path` — absolute filesystem path for local workspaces; null for non-local targets until they expose a local mirror path
+   - `target` (`local|docker|remote|cloud`) — where the workspace runs
    - `checkout_type` (`root|worktree`) — how the host git checkout is materialized
    - `created_by` (nullable — not set for local workspaces pre-auth)
    - `created_at`, `updated_at`, `last_active_at`, `expires_at`

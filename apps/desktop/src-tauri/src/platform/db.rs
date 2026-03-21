@@ -2,7 +2,16 @@ use crate::platform::diagnostics;
 use crate::shared::errors::LifecycleError;
 use std::time::Instant;
 
-const MIGRATIONS: [(&str, &str); 1] = [("0001_baseline", include_str!("migrations/0001_baseline.sql"))];
+const MIGRATIONS: [(&str, &str); 2] = [
+    (
+        "0001_baseline",
+        include_str!("migrations/0001_baseline.sql"),
+    ),
+    (
+        "0002_workspace_target_rename",
+        include_str!("migrations/0002_workspace_target_rename.sql"),
+    ),
+];
 
 /// Holds the resolved path to the SQLite database file.
 pub struct DbPath(pub String);
@@ -153,8 +162,7 @@ fn reconcile_ephemeral_terminals(conn: &rusqlite::Connection) -> Result<(), Life
          SET status = 'sleeping',
              failure_reason = NULL,
              exit_code = NULL,
-             ended_at = NULL,
-             last_active_at = datetime('now')
+             ended_at = NULL
         WHERE status IN ('active', 'detached', 'sleeping')",
         [],
     )
@@ -167,11 +175,11 @@ fn reconcile_workspaces(conn: &rusqlite::Connection) -> Result<(), LifecycleErro
     mark_interrupted_workspaces(conn)?;
     conn.execute(
         "UPDATE service
-         SET status = CASE WHEN status = 'failed' THEN status ELSE 'stopped' END,
-             status_reason = CASE WHEN status = 'failed' THEN status_reason ELSE NULL END,
+         SET status = 'stopped',
+             status_reason = NULL,
              assigned_port = NULL,
              updated_at = datetime('now')
-         WHERE status NOT IN ('stopped', 'failed')",
+         WHERE status != 'stopped'",
         [],
     )
     .map_err(database_error)?;
@@ -280,7 +288,75 @@ mod tests {
             rows.map(|row| row.expect("migration row"))
                 .collect::<Vec<String>>()
         };
-        assert_eq!(versions, vec!["0001_baseline".to_string()]);
+        assert_eq!(
+            versions,
+            vec![
+                "0001_baseline".to_string(),
+                "0002_workspace_target_rename".to_string(),
+            ]
+        );
+
+        drop(conn);
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn run_migrations_renames_legacy_workspace_targets() {
+        let db_path = temp_db_path();
+        let conn = open_db(&db_path).expect("open db");
+        conn.execute_batch(include_str!("migrations/0001_baseline.sql"))
+            .expect("apply baseline schema");
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS schema_migration (
+                version TEXT PRIMARY KEY NOT NULL,
+                applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )",
+            [],
+        )
+        .expect("create schema migration table");
+        conn.execute(
+            "INSERT INTO schema_migration (version) VALUES ('0001_baseline')",
+            [],
+        )
+        .expect("record baseline migration");
+        conn.execute(
+            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["project_1", "/tmp/project_1", "Project 1"],
+        )
+        .expect("insert project");
+        conn.execute(
+            "INSERT INTO workspace (id, project_id, checkout_type, source_ref, target)
+             VALUES (?1, ?2, ?3, ?4, ?5), (?6, ?7, ?8, ?9, ?10)",
+            rusqlite::params![
+                "workspace_local",
+                "project_1",
+                "worktree",
+                "lifecycle/local",
+                "host",
+                "workspace_remote",
+                "project_1",
+                "worktree",
+                "lifecycle/remote",
+                "remote_host",
+            ],
+        )
+        .expect("insert legacy workspaces");
+        drop(conn);
+
+        run_migrations(&db_path).expect("migration run succeeds");
+
+        let conn = open_db(&db_path).expect("open migrated db");
+        let targets = {
+            let mut stmt = conn
+                .prepare("SELECT target FROM workspace ORDER BY id")
+                .expect("prepare target select");
+            let rows = stmt
+                .query_map([], |row| row.get::<_, String>(0))
+                .expect("query targets");
+            rows.map(|row| row.expect("target row"))
+                .collect::<Vec<String>>()
+        };
+        assert_eq!(targets, vec!["local".to_string(), "remote".to_string()]);
 
         drop(conn);
         let _ = std::fs::remove_file(db_path);
@@ -500,9 +576,9 @@ mod tests {
                 (
                     "workspace_started".to_string(),
                     "api".to_string(),
-                    "failed".to_string(),
-                    Some("service_port_unreachable".to_string()),
-                    Some(3001_i64),
+                    "stopped".to_string(),
+                    None,
+                    None,
                 ),
                 (
                     "workspace_started".to_string(),
@@ -578,8 +654,14 @@ mod tests {
         assert_eq!(
             rows,
             vec![
-                ("workspace_missing_environment".to_string(), "active".to_string()),
-                ("workspace_with_environment".to_string(), "active".to_string()),
+                (
+                    "workspace_missing_environment".to_string(),
+                    "active".to_string()
+                ),
+                (
+                    "workspace_with_environment".to_string(),
+                    "active".to_string()
+                ),
             ]
         );
 
@@ -606,7 +688,12 @@ mod tests {
         conn.execute(
             "INSERT INTO workspace (id, project_id, checkout_type, source_ref)
              VALUES (?1, ?2, ?3, ?4)",
-            rusqlite::params!["workspace_worktree", "project_root", "worktree", "lifecycle/worktree"],
+            rusqlite::params![
+                "workspace_worktree",
+                "project_root",
+                "worktree",
+                "lifecycle/worktree"
+            ],
         )
         .expect("insert worktree workspace");
 
@@ -705,13 +792,7 @@ mod tests {
             "INSERT INTO service (
                 id, workspace_id, name, status, assigned_port, created_at, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'), datetime('now'))",
-            rusqlite::params![
-                "service_1",
-                "workspace_1",
-                "web",
-                "ready",
-                Some(3000_i64),
-            ],
+            rusqlite::params!["service_1", "workspace_1", "web", "ready", Some(3000_i64),],
         )
         .expect("insert service");
         conn.execute(

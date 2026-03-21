@@ -2,8 +2,11 @@ use crate::capabilities::workspaces::controller::WorkspaceControllerToken;
 use crate::capabilities::workspaces::manifest::{PrepareStep, PrepareWriteFile};
 use crate::platform::runtime::templates::expand_reserved_runtime_templates;
 use crate::shared::errors::LifecycleError;
+use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
+use tauri::AppHandle;
+use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -13,6 +16,8 @@ pub enum StepRunOutcome {
 }
 
 pub async fn run_steps(
+    app: &AppHandle,
+    workspace_id: &str,
     worktree_path: &str,
     steps: &[PrepareStep],
     runtime_env: &HashMap<String, String>,
@@ -35,6 +40,8 @@ pub async fn run_steps(
         match (step.command.as_deref(), step.write_files.as_deref()) {
             (Some(command), None) => {
                 run_command_step(
+                    app,
+                    workspace_id,
                     step,
                     &cwd,
                     command,
@@ -58,7 +65,8 @@ pub async fn run_steps(
             _ => {
                 return Err(LifecycleError::InvalidInput {
                     field: step_field,
-                    reason: "prepare step requires exactly one of command or write_files".to_string(),
+                    reason: "prepare step requires exactly one of command or write_files"
+                        .to_string(),
                 });
             }
         }
@@ -94,6 +102,8 @@ fn step_cwd(worktree_path: &str, step_cwd: Option<&str>) -> PathBuf {
 }
 
 async fn run_command_step(
+    app: &AppHandle,
+    workspace_id: &str,
     step: &PrepareStep,
     cwd: &Path,
     command: &str,
@@ -111,13 +121,57 @@ async fn run_command_step(
     cmd.env("FORCE_COLOR", "1");
     cmd.env("CLICOLOR_FORCE", "1");
 
-    cmd.stdout(std::process::Stdio::null());
-    cmd.stderr(std::process::Stdio::null());
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
 
     let mut child = cmd.spawn().map_err(|_| LifecycleError::PrepareStepFailed {
         step: step.name.clone(),
         exit_code: -1,
     })?;
+
+    // Stream stdout as ServiceLogLine events
+    if let Some(stdout) = child.stdout.take() {
+        let app_clone = app.clone();
+        let ws_id = workspace_id.to_string();
+        let name = step.name.clone();
+        tokio::spawn(async move {
+            let reader = BufReader::new(stdout);
+            let mut lines = reader.lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                publish_lifecycle_event(
+                    &app_clone,
+                    LifecycleEvent::ServiceLogLine {
+                        workspace_id: ws_id.clone(),
+                        name: name.clone(),
+                        stream: "stdout".to_string(),
+                        line,
+                    },
+                );
+            }
+        });
+    }
+
+    // Stream stderr as ServiceLogLine events
+    if let Some(stderr) = child.stderr.take() {
+        let app_clone = app.clone();
+        let ws_id = workspace_id.to_string();
+        let name = step.name.clone();
+        tokio::spawn(async move {
+            let reader = BufReader::new(stderr);
+            let mut lines = reader.lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                publish_lifecycle_event(
+                    &app_clone,
+                    LifecycleEvent::ServiceLogLine {
+                        workspace_id: ws_id.clone(),
+                        name: name.clone(),
+                        stream: "stderr".to_string(),
+                        line,
+                    },
+                );
+            }
+        });
+    }
 
     let result = wait_for_command_exit(
         &mut child,

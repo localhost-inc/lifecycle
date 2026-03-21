@@ -104,6 +104,7 @@ It is not a tab strip and it is not a workspace launcher. It changes the active 
 ### Project Sidebar
 
 The sidebar is project-scoped and should contain:
+
 1. project-level views and actions
 2. the workspace list for the active project
 
@@ -115,6 +116,7 @@ Clicking a workspace opens or focuses a **workspace tab**.
 Page tabs are the only top-level tab strip in the project layout.
 
 They represent durable open destinations for the active project:
+
 1. **Project view tabs** such as Overview, Inbox, Memory, Plans, or Activity
 2. **Pull request tabs** for PR detail and review
 3. **Workspace tabs** such as `Workspace: setup`
@@ -126,10 +128,12 @@ These are not editor buffers and not pane-local working sets.
 A workspace is one kind of page tab.
 
 Inside that tab, the workspace contains:
+
 1. a workspace header for workspace identity and actions
 2. a center canvas for pane-based work
 
 The canvas is a **split-only** center area with:
+
 1. recursive row/column split tree
 2. one surface per pane
 3. compact pane header strip for local identity and actions
@@ -166,11 +170,13 @@ Workspace extension panels and the workspace extension strip live alongside the 
 The same renderer may appear from more than one access point. That does **not** mean the same shell layer owns it.
 
 The rule is:
+
 1. shared renderer is allowed
 2. access point determines shell ownership
 3. shell ownership determines where the surface opens
 
 Example: shared patch viewer
+
 - Project entry points (pull request detail, repo-level commit detail) → opens as a **project page tab**
 - Workspace entry points (local changes diff, workspace-local commit detail) → opens inside the **workspace canvas**
 
@@ -194,6 +200,7 @@ The canonical shell route should identify the project context:
 ```
 
 Local restore rules:
+
 1. project tab sets may restore per project
 2. workspace canvas layout may restore per workspace
 3. restore should never override provider/runtime authority
@@ -214,6 +221,6 @@ Use these terms consistently:
 10. **Workspace header**: the workspace-scoped header rail below the page tabs
 11. **Workspace canvas**: the split-only center pane surface inside a workspace
 12. **Pane header**: compact strip at the top of a workspace pane
-13. **Workspace extension strip**: optional workspace-scoped right-edge strip for Git, Environment, and future workspace extensions
+13. **Workspace extension strip**: optional workspace-scoped right-edge strip for Files, Git, Environment, and future workspace extensions
 14. **Workspace extension panel**: optional workspace-scoped panel opened from the extension strip
 15. **App shell**: the full outer frame

@@ -1,3 +1,5 @@
+import { isTauri } from "@tauri-apps/api/core";
+import { watch, type UnwatchFn } from "@tauri-apps/plugin-fs";
 import type { WorkspaceRecord, TerminalRecord } from "@lifecycle/contracts";
 import {
   type StartServicesInput,
@@ -8,6 +10,9 @@ import {
   type SavedTerminalAttachment,
   type SaveTerminalAttachmentInput,
   type ServiceLogSnapshot,
+  type SubscribeWorkspaceFileEventsInput,
+  type WorkspaceFileEventListener,
+  type WorkspaceFileEventSubscription,
   type WorkspaceFileReadResult,
   type WorkspaceFileTreeEntry,
   type WorkspaceHealthResult,
@@ -31,8 +36,73 @@ export function resetWorkspaceClientForTests(): void {
   hostWorkspaceClient = null;
 }
 
+async function subscribeHostWorkspaceFileEvents(
+  input: SubscribeWorkspaceFileEventsInput,
+  listener: WorkspaceFileEventListener,
+): Promise<WorkspaceFileEventSubscription> {
+  if (!isTauri() || !input.worktreePath) {
+    return () => {};
+  }
+
+  let disposed = false;
+  let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
+  let unwatch: UnwatchFn | undefined;
+
+  const emitChanged = () => {
+    if (refreshTimeout !== null) {
+      clearTimeout(refreshTimeout);
+    }
+
+    refreshTimeout = setTimeout(() => {
+      refreshTimeout = null;
+      listener({
+        kind: "changed",
+        workspaceId: input.workspaceId,
+      });
+    }, 100);
+  };
+
+  try {
+    unwatch = await watch(
+      input.worktreePath,
+      () => {
+        if (!disposed) {
+          emitChanged();
+        }
+      },
+      { delayMs: 150, recursive: true },
+    );
+  } catch (error) {
+    console.error("Failed to watch workspace file tree:", input.worktreePath, error);
+  }
+
+  const handleVisibilityChange = () => {
+    if (typeof document !== "undefined" && document.visibilityState === "visible") {
+      emitChanged();
+    }
+  };
+
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+  }
+
+  return () => {
+    disposed = true;
+    if (refreshTimeout !== null) {
+      clearTimeout(refreshTimeout);
+    }
+    unwatch?.();
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    }
+  };
+}
+
 function getHostWorkspaceClient(): WorkspaceClient {
-  hostWorkspaceClient ??= new HostWorkspaceClient((command, args) => invokeTauri(command, args));
+  hostWorkspaceClient ??= new HostWorkspaceClient(
+    (command, args) => invokeTauri(command, args),
+    subscribeHostWorkspaceFileEvents,
+  );
   return hostWorkspaceClient;
 }
 
@@ -44,7 +114,10 @@ export function createWorkspaceClientRouter(dependencies: {
 }
 
 class WorkspaceClientRouter implements WorkspaceClient {
-  private readonly targetCache = new Map<string, WorkspaceRecord["target"]>();
+  private readonly workspaceFactsCache = new Map<
+    string,
+    Pick<WorkspaceRecord, "target" | "worktree_path">
+  >();
 
   constructor(
     private readonly backend: Pick<ReturnType<typeof getBackend>, "getWorkspace">,
@@ -54,7 +127,7 @@ class WorkspaceClientRouter implements WorkspaceClient {
   private resolveWorkspaceClientForRecord(
     workspace: Pick<WorkspaceRecord, "id" | "target">,
   ): WorkspaceClient {
-    if (workspace.target === "host") {
+    if (workspace.target === "local" || workspace.target === "docker") {
       return this.hostWorkspaceClient;
     }
 
@@ -63,17 +136,43 @@ class WorkspaceClientRouter implements WorkspaceClient {
     );
   }
 
-  private async resolveWorkspaceClientForId(workspaceId: string): Promise<WorkspaceClient> {
-    const cachedTarget = this.targetCache.get(workspaceId);
-    if (cachedTarget) {
-      return this.resolveWorkspaceClientForRecord({ id: workspaceId, target: cachedTarget });
+  private resolveWorkspaceFileClientForRecord(
+    workspace: Pick<WorkspaceRecord, "id" | "target" | "worktree_path">,
+  ): WorkspaceClient {
+    if (workspace.worktree_path !== null) {
+      return this.hostWorkspaceClient;
     }
+
+    return this.resolveWorkspaceClientForRecord(workspace);
+  }
+
+  private async resolveWorkspaceFacts(
+    workspaceId: string,
+  ): Promise<Pick<WorkspaceRecord, "id" | "target" | "worktree_path">> {
+    const cachedFacts = this.workspaceFactsCache.get(workspaceId);
+    if (cachedFacts) {
+      return { id: workspaceId, ...cachedFacts };
+    }
+
     const workspace = await this.backend.getWorkspace(workspaceId);
     if (!workspace) {
       throw new Error(`Workspace ${workspaceId} was not found.`);
     }
-    this.targetCache.set(workspaceId, workspace.target);
-    return this.resolveWorkspaceClientForRecord(workspace);
+
+    this.workspaceFactsCache.set(workspaceId, {
+      target: workspace.target,
+      worktree_path: workspace.worktree_path,
+    });
+
+    return {
+      id: workspace.id,
+      target: workspace.target,
+      worktree_path: workspace.worktree_path,
+    };
+  }
+
+  private async resolveWorkspaceClientForId(workspaceId: string): Promise<WorkspaceClient> {
+    return this.resolveWorkspaceClientForRecord(await this.resolveWorkspaceFacts(workspaceId));
   }
 
   private async withWorkspaceClient<T>(
@@ -89,6 +188,13 @@ class WorkspaceClientRouter implements WorkspaceClient {
     run: (client: WorkspaceClient) => Promise<T>,
   ): Promise<T> {
     return run(this.resolveWorkspaceClientForRecord(workspace));
+  }
+
+  private async withWorkspaceFileClient<T>(
+    workspaceId: string,
+    run: (client: WorkspaceClient) => Promise<T>,
+  ): Promise<T> {
+    return run(this.resolveWorkspaceFileClientForRecord(await this.resolveWorkspaceFacts(workspaceId)));
   }
 
   startServices(input: StartServicesInput) {
@@ -158,7 +264,9 @@ class WorkspaceClientRouter implements WorkspaceClient {
   }
 
   readFile(workspaceId: string, filePath: string): Promise<WorkspaceFileReadResult> {
-    return this.withWorkspaceClient(workspaceId, (client) => client.readFile(workspaceId, filePath));
+    return this.withWorkspaceFileClient(workspaceId, (client) =>
+      client.readFile(workspaceId, filePath),
+    );
   }
 
   writeFile(
@@ -166,17 +274,28 @@ class WorkspaceClientRouter implements WorkspaceClient {
     filePath: string,
     content: string,
   ): Promise<WorkspaceFileReadResult> {
-    return this.withWorkspaceClient(workspaceId, (client) =>
+    return this.withWorkspaceFileClient(workspaceId, (client) =>
       client.writeFile(workspaceId, filePath, content),
     );
   }
 
+  subscribeFileEvents(
+    input: SubscribeWorkspaceFileEventsInput,
+    listener: WorkspaceFileEventListener,
+  ): Promise<WorkspaceFileEventSubscription> {
+    return this.withWorkspaceFileClient(input.workspaceId, (client) =>
+      client.subscribeFileEvents(input, listener),
+    );
+  }
+
   listFiles(workspaceId: string): Promise<WorkspaceFileTreeEntry[]> {
-    return this.withWorkspaceClient(workspaceId, (client) => client.listFiles(workspaceId));
+    return this.withWorkspaceFileClient(workspaceId, (client) => client.listFiles(workspaceId));
   }
 
   openFile(workspaceId: string, filePath: string): Promise<void> {
-    return this.withWorkspaceClient(workspaceId, (client) => client.openFile(workspaceId, filePath));
+    return this.withWorkspaceFileClient(workspaceId, (client) =>
+      client.openFile(workspaceId, filePath),
+    );
   }
 
   getGitStatus(workspaceId: string) {

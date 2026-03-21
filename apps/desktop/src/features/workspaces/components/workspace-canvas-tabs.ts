@@ -3,6 +3,7 @@ import type { TerminalRecord, TerminalStatus } from "@lifecycle/contracts";
 import type { HarnessProvider } from "@/features/terminals/api";
 import {
   getWorkspaceDocument,
+  isBrowserDocument,
   isChangesDiffDocument,
   isCommitDiffDocument,
   isFileViewerDocument,
@@ -195,6 +196,10 @@ export function tabTitle(tab: WorkspaceCanvasTab): string {
 
   if (isFileViewerDocument(tab)) {
     return tab.filePath;
+  }
+
+  if (isBrowserDocument(tab)) {
+    return tab.url;
   }
 
   if (isChangesDiffDocument(tab)) {

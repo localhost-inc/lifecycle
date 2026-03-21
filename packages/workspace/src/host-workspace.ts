@@ -18,10 +18,13 @@ import type {
   CreateTerminalInput,
   StartServicesInput,
   GitDiffInput,
+  SubscribeWorkspaceFileEventsInput,
   WorkspaceClient,
   SavedTerminalAttachment,
   SaveTerminalAttachmentInput,
   ServiceLogSnapshot,
+  WorkspaceFileEventListener,
+  WorkspaceFileEventSubscription,
   WorkspaceFileReadResult,
   WorkspaceFileTreeEntry,
   WorkspaceHealthResult,
@@ -31,11 +34,23 @@ interface TauriInvoke {
   (cmd: string, args?: Record<string, unknown>): Promise<unknown>;
 }
 
+interface SubscribeWorkspaceFileEvents {
+  (
+    input: SubscribeWorkspaceFileEventsInput,
+    listener: WorkspaceFileEventListener,
+  ): Promise<WorkspaceFileEventSubscription>;
+}
+
 export class HostWorkspaceClient implements WorkspaceClient {
   private invoke: TauriInvoke;
+  private subscribeWorkspaceFileEvents: SubscribeWorkspaceFileEvents | undefined;
 
-  constructor(invoke: TauriInvoke) {
+  constructor(
+    invoke: TauriInvoke,
+    subscribeWorkspaceFileEvents?: SubscribeWorkspaceFileEvents,
+  ) {
     this.invoke = invoke;
+    this.subscribeWorkspaceFileEvents = subscribeWorkspaceFileEvents;
   }
 
   async startServices(input: StartServicesInput): Promise<ServiceRecord[]> {
@@ -135,6 +150,15 @@ export class HostWorkspaceClient implements WorkspaceClient {
       filePath,
       content,
     }) as Promise<WorkspaceFileReadResult>;
+  }
+
+  async subscribeFileEvents(
+    input: SubscribeWorkspaceFileEventsInput,
+    listener: WorkspaceFileEventListener,
+  ): Promise<WorkspaceFileEventSubscription> {
+    return this.subscribeWorkspaceFileEvents
+      ? this.subscribeWorkspaceFileEvents(input, listener)
+      : () => {};
   }
 
   async listFiles(workspaceId: string): Promise<WorkspaceFileTreeEntry[]> {

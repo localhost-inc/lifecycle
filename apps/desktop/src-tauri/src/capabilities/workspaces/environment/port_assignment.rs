@@ -86,12 +86,7 @@ pub(super) fn assign_ports_for_start(
                  FROM service
                  WHERE workspace_id = ?1 AND name = ?2",
                 params![workspace_id, name],
-                |row| {
-                    Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, Option<i64>>(1)?,
-                    ))
-                },
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<i64>>(1)?)),
             )
             .map_err(|error| LifecycleError::Database(error.to_string()))?;
         let assigned_port = resolve_assigned_port(

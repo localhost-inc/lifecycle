@@ -63,7 +63,8 @@ pub(super) fn update_workspace_status_db(
              SET status = ?1, failure_reason = NULL, failed_at = NULL, updated_at = datetime('now')
              WHERE id = ?2",
             params![status.as_str(), workspace_id],
-        ).map_err(|e| LifecycleError::Database(e.to_string()))?;
+        )
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
     }
     conn.execute(
         "UPDATE workspace
@@ -182,9 +183,9 @@ pub(super) fn reconcile_workspace_services_db(
             for (name, _service_config) in config.declared_services() {
                 let (current_status, current_status_reason, current_assigned_port) =
                     existing_rows_by_service
-                    .get(name)
-                    .cloned()
-                    .unwrap_or_else(|| ("stopped".to_string(), None, None));
+                        .get(name)
+                        .cloned()
+                        .unwrap_or_else(|| ("stopped".to_string(), None, None));
                 let assigned_port = if preserve_runtime_state
                     && matches!(current_status.as_str(), "ready" | "starting")
                 {
@@ -290,7 +291,8 @@ pub(super) fn transition_workspace_to(
              SET status = ?1, failure_reason = NULL, failed_at = NULL, updated_at = datetime('now')
              WHERE id = ?2",
             params![target_status.as_str(), workspace_id],
-        ).map_err(|e| LifecycleError::Database(e.to_string()))?;
+        )
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
         conn.execute(
             "UPDATE workspace
              SET updated_at = datetime('now'), last_active_at = datetime('now')
@@ -368,9 +370,7 @@ pub(super) fn mark_nonfailed_services_stopped(
 ) -> Result<Vec<String>, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn
-        .prepare(
-            "SELECT name FROM service WHERE workspace_id = ?1 AND status != 'failed'",
-        )
+        .prepare("SELECT name FROM service WHERE workspace_id = ?1 AND status != 'failed'")
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
     let rows = stmt
         .query_map(params![workspace_id], |row| row.get::<_, String>(0))
@@ -384,13 +384,7 @@ pub(super) fn mark_nonfailed_services_stopped(
     drop(conn);
 
     for name in &names {
-        update_service_status_db(
-            db_path,
-            workspace_id,
-            name,
-            &ServiceStatus::Stopped,
-            None,
-        )?;
+        update_service_status_db(db_path, workspace_id, name, &ServiceStatus::Stopped, None)?;
     }
 
     Ok(names)
@@ -683,24 +677,14 @@ mod tests {
         assert_eq!(
             values,
             vec![
-                (
-                    "api".to_string(),
-                    "stopped".to_string(),
-                    None,
-                    None,
-                ),
+                ("api".to_string(), "stopped".to_string(), None, None,),
                 (
                     "db".to_string(),
                     "failed".to_string(),
                     Some("service_port_unreachable".to_string()),
                     Some(5432_i64),
                 ),
-                (
-                    "worker".to_string(),
-                    "stopped".to_string(),
-                    None,
-                    None,
-                ),
+                ("worker".to_string(), "stopped".to_string(), None, None,),
             ]
         );
 
@@ -782,33 +766,15 @@ mod tests {
                 ))
             })
             .expect("query services");
-        let values = rows.map(|row| row.expect("row")).collect::<Vec<(
-            String,
-            String,
-            Option<String>,
-            Option<i64>,
-        )>>();
+        let values =
+            rows.map(|row| row.expect("row"))
+                .collect::<Vec<(String, String, Option<String>, Option<i64>)>>();
         assert_eq!(
             values,
             vec![
-                (
-                    "admin".to_string(),
-                    "stopped".to_string(),
-                    None,
-                    None,
-                ),
-                (
-                    "api".to_string(),
-                    "stopped".to_string(),
-                    None,
-                    None,
-                ),
-                (
-                    "web".to_string(),
-                    "stopped".to_string(),
-                    None,
-                    None,
-                ),
+                ("admin".to_string(), "stopped".to_string(), None, None,),
+                ("api".to_string(), "stopped".to_string(), None, None,),
+                ("web".to_string(), "stopped".to_string(), None, None,),
             ]
         );
 
@@ -885,9 +851,9 @@ mod tests {
                 ))
             })
             .expect("query services");
-        let values = rows
-            .map(|row| row.expect("row"))
-            .collect::<Vec<(String, String, Option<String>, Option<i64>)>>();
+        let values =
+            rows.map(|row| row.expect("row"))
+                .collect::<Vec<(String, String, Option<String>, Option<i64>)>>();
         drop(stmt);
         assert_eq!(
             values,
@@ -914,13 +880,7 @@ mod tests {
             "INSERT INTO service (
                 id, workspace_id, name, status, assigned_port, created_at, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'), datetime('now'))",
-            rusqlite::params![
-                "svc_a",
-                "ws_a",
-                "web",
-                "stopped",
-                Some(test_port),
-            ],
+            rusqlite::params!["svc_a", "ws_a", "web", "stopped", Some(test_port),],
         )
         .expect("insert reserved service");
         drop(conn);

@@ -11,7 +11,7 @@ const localWorkspace: WorkspaceRecord = {
   source_ref: "main",
   git_sha: null,
   worktree_path: "/tmp/project_1/.worktrees/ws_local",
-  target: "host",
+  target: "local",
   manifest_fingerprint: "manifest_local",
   created_by: null,
   source_workspace_id: null,
@@ -31,6 +31,14 @@ const dockerWorkspace: WorkspaceRecord = {
   target: "docker",
 };
 
+const cloudWorkspace: WorkspaceRecord = {
+  ...localWorkspace,
+  id: "ws_cloud",
+  name: "Cloud Workspace",
+  target: "cloud",
+  worktree_path: null,
+};
+
 const backend = {
   getWorkspace: mock(async (workspaceId: string) => {
     if (workspaceId === localWorkspace.id) {
@@ -38,6 +46,9 @@ const backend = {
     }
     if (workspaceId === dockerWorkspace.id) {
       return dockerWorkspace;
+    }
+    if (workspaceId === cloudWorkspace.id) {
+      return cloudWorkspace;
     }
     return null;
   }),
@@ -65,8 +76,15 @@ const hostWorkspaceMethods = {
     exit_code: null,
     started_at: "2026-03-20T00:00:00.000Z",
     last_active_at: "2026-03-20T00:00:00.000Z",
-    ended_at: null,
-  })),
+      ended_at: null,
+    })),
+  subscribeFileEvents: mock(
+    async (
+      _input: { workspaceId: string; worktreePath?: string | null },
+      _listener: (event: { kind: "changed"; workspaceId: string }) => void,
+    ) => () => {},
+  ),
+  listFiles: mock(async (_workspaceId: string) => [{ extension: "md", file_path: "README.md" }]),
 };
 
 const hostWorkspace = {
@@ -76,6 +94,17 @@ const hostWorkspace = {
 
   renameTerminal(workspaceId: string, terminalId: string, label: string) {
     return hostWorkspaceMethods.renameTerminal(workspaceId, terminalId, label);
+  },
+
+  subscribeFileEvents(
+    input: { workspaceId: string; worktreePath?: string | null },
+    listener: (event: { kind: "changed"; workspaceId: string }) => void,
+  ) {
+    return hostWorkspaceMethods.subscribeFileEvents(input, listener);
+  },
+
+  listFiles(workspaceId: string) {
+    return hostWorkspaceMethods.listFiles(workspaceId);
   },
 } as unknown as WorkspaceClient;
 
@@ -107,17 +136,36 @@ describe("workspace target dispatch", () => {
     expect(hostWorkspaceMethods.getGitStatus).toHaveBeenCalledWith(localWorkspace.id);
   });
 
+  test("routes docker workspace-scoped reads through the local host client", async () => {
+    const workspaceClient = createWorkspaceClientRouter({
+      backend: { getWorkspace: backend.getWorkspace },
+      hostWorkspaceClient: hostWorkspace,
+    });
+
+    expect(await workspaceClient.getGitStatus(dockerWorkspace.id)).toEqual({
+      branch: "feature/workspace-dispatch",
+      headSha: "abcdef1234567890",
+      upstream: "origin/feature/workspace-dispatch",
+      ahead: 1,
+      behind: 0,
+      files: [],
+    });
+
+    expect(backend.getWorkspace).toHaveBeenCalledWith(dockerWorkspace.id);
+    expect(hostWorkspaceMethods.getGitStatus).toHaveBeenCalledWith(dockerWorkspace.id);
+  });
+
   test("fails fast for unsupported workspace targets", async () => {
     const workspaceClient = createWorkspaceClientRouter({
       backend: { getWorkspace: backend.getWorkspace },
       hostWorkspaceClient: hostWorkspace,
     });
 
-    await expect(workspaceClient.getGitStatus(dockerWorkspace.id)).rejects.toThrow(
-      "Workspace ws_docker uses unsupported target 'docker'.",
+    await expect(workspaceClient.getGitStatus(cloudWorkspace.id)).rejects.toThrow(
+      "Workspace ws_cloud uses unsupported target 'cloud'.",
     );
 
-    expect(backend.getWorkspace).toHaveBeenCalledWith(dockerWorkspace.id);
+    expect(backend.getWorkspace).toHaveBeenCalledWith(cloudWorkspace.id);
     expect(hostWorkspaceMethods.getGitStatus).not.toHaveBeenCalled();
   });
 
@@ -151,6 +199,109 @@ describe("workspace target dispatch", () => {
       "Renamed Terminal",
     );
     expect(backend.getWorkspace).toHaveBeenCalledWith(localWorkspace.id);
+  });
+
+  test("routes docker terminal mutations through the local host client", async () => {
+    const workspaceClient = createWorkspaceClientRouter({
+      backend: { getWorkspace: backend.getWorkspace },
+      hostWorkspaceClient: hostWorkspace,
+    });
+
+    await workspaceClient.renameTerminal(dockerWorkspace.id, "term_local", "Docker Terminal");
+
+    expect(hostWorkspaceMethods.renameTerminal).toHaveBeenCalledWith(
+      dockerWorkspace.id,
+      "term_local",
+      "Docker Terminal",
+    );
+    expect(backend.getWorkspace).toHaveBeenCalledWith(dockerWorkspace.id);
+  });
+
+  test("routes workspace file subscriptions by workspace target", async () => {
+    const workspaceClient = createWorkspaceClientRouter({
+      backend: { getWorkspace: backend.getWorkspace },
+      hostWorkspaceClient: hostWorkspace,
+    });
+    const listener = mock(() => {});
+
+    const cleanup = await workspaceClient.subscribeFileEvents(
+      {
+        workspaceId: localWorkspace.id,
+        worktreePath: localWorkspace.worktree_path,
+      },
+      listener,
+    );
+
+    expect(typeof cleanup).toBe("function");
+    expect(hostWorkspaceMethods.subscribeFileEvents).toHaveBeenCalledWith(
+      {
+        workspaceId: localWorkspace.id,
+        worktreePath: localWorkspace.worktree_path,
+      },
+      listener,
+    );
+    expect(backend.getWorkspace).toHaveBeenCalledWith(localWorkspace.id);
+  });
+
+  test("routes docker workspace file subscriptions through the local host client when a worktree exists", async () => {
+    const workspaceClient = createWorkspaceClientRouter({
+      backend: { getWorkspace: backend.getWorkspace },
+      hostWorkspaceClient: hostWorkspace,
+    });
+    const listener = mock(() => {});
+
+    const cleanup = await workspaceClient.subscribeFileEvents(
+      {
+        workspaceId: dockerWorkspace.id,
+        worktreePath: dockerWorkspace.worktree_path,
+      },
+      listener,
+    );
+
+    expect(typeof cleanup).toBe("function");
+    expect(hostWorkspaceMethods.subscribeFileEvents).toHaveBeenCalledWith(
+      {
+        workspaceId: dockerWorkspace.id,
+        worktreePath: dockerWorkspace.worktree_path,
+      },
+      listener,
+    );
+    expect(backend.getWorkspace).toHaveBeenCalledWith(dockerWorkspace.id);
+  });
+
+  test("routes docker workspace file reads through the local host client when a worktree exists", async () => {
+    const workspaceClient = createWorkspaceClientRouter({
+      backend: { getWorkspace: backend.getWorkspace },
+      hostWorkspaceClient: hostWorkspace,
+    });
+
+    expect(await workspaceClient.listFiles(dockerWorkspace.id)).toEqual([
+      { extension: "md", file_path: "README.md" },
+    ]);
+
+    expect(hostWorkspaceMethods.listFiles).toHaveBeenCalledWith(dockerWorkspace.id);
+    expect(backend.getWorkspace).toHaveBeenCalledWith(dockerWorkspace.id);
+  });
+
+  test("still fails fast for remote-only file subscriptions without a local worktree", async () => {
+    const workspaceClient = createWorkspaceClientRouter({
+      backend: { getWorkspace: backend.getWorkspace },
+      hostWorkspaceClient: hostWorkspace,
+    });
+    const listener = mock(() => {});
+
+    await expect(
+      workspaceClient.subscribeFileEvents(
+        {
+          workspaceId: cloudWorkspace.id,
+          worktreePath: cloudWorkspace.worktree_path,
+        },
+        listener,
+      ),
+    ).rejects.toThrow("Workspace ws_cloud uses unsupported target 'cloud'.");
+
+    expect(backend.getWorkspace).toHaveBeenCalledWith(cloudWorkspace.id);
+    expect(hostWorkspaceMethods.subscribeFileEvents).not.toHaveBeenCalled();
   });
 
   test("caches workspace target after first lookup", async () => {

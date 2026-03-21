@@ -10,6 +10,6 @@ describe("Spinner", () => {
     expect(markup).toContain('data-slot="spinner"');
     expect(markup).toContain('role="status"');
     expect(markup).toContain('aria-label="Loading"');
-    expect(markup).toContain("animate-spin");
+    expect(markup).toContain("lifecycle-motion-spin");
   });
 });

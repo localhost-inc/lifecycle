@@ -131,7 +131,7 @@ pub(super) fn workspace_volume_root(
             "failed to resolve workspace volume root for workspace '{workspace_id}'"
         ))
     })?;
-    let root = base_dir.join("workspace-volumes").join(workspace_id);
+    let root = base_dir.join("volumes").join(workspace_id);
     std::fs::create_dir_all(&root).map_err(|error| {
         LifecycleError::Io(format!(
             "failed to create workspace volume root '{}': {error}",
@@ -214,13 +214,7 @@ mod tests {
             "INSERT INTO service (
                 id, workspace_id, name, status, assigned_port, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
-            params![
-                "svc_api",
-                "ws_env",
-                "api",
-                "ready",
-                Some(43123_i64),
-            ],
+            params!["svc_api", "ws_env", "api", "ready", Some(43123_i64),],
         )
         .expect("insert service");
         drop(conn);

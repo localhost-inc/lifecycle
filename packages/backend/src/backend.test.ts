@@ -23,20 +23,20 @@ describe("backend contract", () => {
     expect(requiredMethods).toHaveLength(10);
   });
 
-  test("accepts host workspace creation contexts through one backend seam", () => {
-    const hostContext: WorkspaceCreateContext = {
-      target: "host",
+  test("accepts local workspace creation contexts through one backend seam", () => {
+    const localContext: WorkspaceCreateContext = {
+      target: "local",
       checkoutType: "worktree",
-      projectId: "project_host",
+      projectId: "project_local",
       projectPath: "/tmp/project-host",
-      workspaceName: "Host Workspace",
+      workspaceName: "Local Workspace",
       baseRef: "main",
       worktreeRoot: "/tmp/project-host/.worktrees",
     };
 
-    const contexts: WorkspaceCreateContext[] = [hostContext];
+    const contexts: WorkspaceCreateContext[] = [localContext];
 
-    expect(contexts.map((context) => context.target)).toEqual(["host"]);
+    expect(contexts.map((context) => context.target)).toEqual(["local"]);
   });
 
   test("keeps create input target-specific while the backend contract stays centralized", () => {
@@ -44,14 +44,14 @@ describe("backend contract", () => {
       manifestJson: '{"workspace":{"prepare":[]},"environment":{}}',
       manifestFingerprint: "manifest_123",
       context: {
-        target: "host",
+        target: "local",
         checkoutType: "worktree",
         projectId: "project_123",
         projectPath: "/tmp/project-123",
       },
     };
 
-    expect(input.context.target).toBe("host");
+    expect(input.context.target).toBe("local");
     expect(input.context.projectId).toBe("project_123");
   });
 });

@@ -10,7 +10,7 @@ const workspace: WorkspaceRecord = {
   source_ref: "lifecycle/local-workspace-wslocal",
   git_sha: null,
   worktree_path: "/tmp/project_1/.worktrees/ws_local",
-  target: "host",
+  target: "local",
   manifest_fingerprint: "manifest_local",
   created_by: null,
   source_workspace_id: null,
@@ -41,7 +41,7 @@ describe("tauri backend adapter", () => {
     invokeTauri.mockClear();
   });
 
-  test("routes host workspace creation through tauri and returns authoritative persisted data", async () => {
+  test("routes local workspace creation through tauri and returns authoritative persisted data", async () => {
     const backend = createTauriBackend(invokeTauri);
 
     await expect(
@@ -49,7 +49,7 @@ describe("tauri backend adapter", () => {
         manifestJson: '{"workspace":{"prepare":[]},"environment":{}}',
         manifestFingerprint: "manifest_local",
         context: {
-          target: "host",
+          target: "local",
           checkoutType: "worktree",
           projectId: "project_1",
           projectPath: "/tmp/project_1",
@@ -62,6 +62,41 @@ describe("tauri backend adapter", () => {
 
     expect(invokeTauri).toHaveBeenCalledWith("create_workspace", {
       input: {
+        target: "local",
+        checkoutType: "worktree",
+        projectId: "project_1",
+        projectPath: "/tmp/project_1",
+        workspaceName: "Local Workspace",
+        baseRef: "main",
+        worktreeRoot: "/tmp/project_1/.worktrees",
+        manifestJson: '{"workspace":{"prepare":[]},"environment":{}}',
+        manifestFingerprint: "manifest_local",
+      },
+    });
+  });
+
+  test("routes docker workspace creation through tauri and returns authoritative persisted data", async () => {
+    const backend = createTauriBackend(invokeTauri);
+
+    await expect(
+      backend.createWorkspace({
+        manifestJson: '{"workspace":{"prepare":[]},"environment":{}}',
+        manifestFingerprint: "manifest_local",
+        context: {
+          target: "docker",
+          checkoutType: "worktree",
+          projectId: "project_1",
+          projectPath: "/tmp/project_1",
+          workspaceName: "Local Workspace",
+          baseRef: "main",
+          worktreeRoot: "/tmp/project_1/.worktrees",
+        },
+      }),
+    ).resolves.toEqual(createWorkspaceResult);
+
+    expect(invokeTauri).toHaveBeenCalledWith("create_workspace", {
+      input: {
+        target: "docker",
         checkoutType: "worktree",
         projectId: "project_1",
         projectPath: "/tmp/project_1",

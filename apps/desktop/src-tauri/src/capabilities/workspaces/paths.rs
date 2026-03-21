@@ -10,6 +10,10 @@ fn workspace_path_failure(operation: &str, reason: impl Into<String>) -> Lifecyc
     }
 }
 
+pub(crate) fn target_supports_local_worktree_access(target: &str) -> bool {
+    matches!(target, "local" | "docker")
+}
+
 fn resolve_workspace_target_and_worktree_path(
     db_path: &str,
     workspace_id: &str,
@@ -43,7 +47,7 @@ pub(crate) fn require_local_worktree(
     let (target, worktree_path) =
         resolve_workspace_target_and_worktree_path(db_path, workspace_id)?;
 
-    if target != "host" {
+    if !target_supports_local_worktree_access(&target) {
         return Err(workspace_path_failure(
             operation,
             format!("workspace {workspace_id} uses unsupported target '{target}'"),
@@ -53,7 +57,7 @@ pub(crate) fn require_local_worktree(
     worktree_path.ok_or_else(|| {
         workspace_path_failure(
             operation,
-            format!("workspace {workspace_id} has no host worktree path"),
+            format!("workspace {workspace_id} has no local worktree path"),
         )
     })
 }
@@ -220,7 +224,7 @@ mod tests {
         path.to_string_lossy().into_owned()
     }
 
-    fn seed_workspace(db_path: &str, workspace_id: &str, worktree_path: &Path) {
+    fn seed_workspace(db_path: &str, workspace_id: &str, worktree_path: &Path, target: &str) {
         run_migrations(db_path).expect("run migrations");
         let conn = open_db(db_path).expect("open db");
         conn.execute(
@@ -237,7 +241,7 @@ mod tests {
                 "Workspace 1",
                 "lifecycle/test",
                 worktree_path.to_str().expect("worktree path is utf8"),
-                "host",
+                target,
                 "active"
             ],
         )
@@ -253,7 +257,7 @@ mod tests {
 
         fs::create_dir_all(file_path.parent().expect("file parent")).expect("create file parent");
         fs::write(&file_path, "fn main() {}\n").expect("write repo file");
-        seed_workspace(&db_path, "workspace_1", &worktree_path);
+        seed_workspace(&db_path, "workspace_1", &worktree_path, "local");
 
         let resolved = resolve_workspace_file_path(&db_path, "workspace_1", "./src/main.rs")
             .expect("resolve workspace file path");
@@ -275,7 +279,7 @@ mod tests {
 
         fs::create_dir_all(&worktree_path).expect("create worktree");
         fs::write(&outside_path, "outside\n").expect("write outside file");
-        seed_workspace(&db_path, "workspace_1", &worktree_path);
+        seed_workspace(&db_path, "workspace_1", &worktree_path, "local");
 
         let error = resolve_workspace_file_path(&db_path, "workspace_1", "../outside.txt")
             .expect_err("reject path outside worktree");
@@ -299,7 +303,7 @@ mod tests {
         let db_path = temp_db_path();
 
         fs::create_dir_all(&existing_dir).expect("create existing dir");
-        seed_workspace(&db_path, "workspace_1", &worktree_path);
+        seed_workspace(&db_path, "workspace_1", &worktree_path, "local");
 
         let resolved = resolve_workspace_write_path_for_operation(
             &db_path,
@@ -334,7 +338,7 @@ mod tests {
         std::os::unix::fs::symlink(&outside_path, &docs_path).expect("create symlink");
         #[cfg(windows)]
         std::os::windows::fs::symlink_dir(&outside_path, &docs_path).expect("create symlink");
-        seed_workspace(&db_path, "workspace_1", &worktree_path);
+        seed_workspace(&db_path, "workspace_1", &worktree_path, "local");
 
         let error = resolve_workspace_write_path_for_operation(
             &db_path,
@@ -351,6 +355,23 @@ mod tests {
             }
             other => panic!("unexpected error: {other:?}"),
         }
+
+        let _ = fs::remove_dir_all(root);
+        let _ = fs::remove_file(db_path);
+    }
+
+    #[test]
+    fn require_local_worktree_accepts_docker_workspaces_with_local_checkouts() {
+        let root = temp_fixture_root();
+        let worktree_path = root.join("worktree");
+        let db_path = temp_db_path();
+
+        fs::create_dir_all(&worktree_path).expect("create worktree");
+        seed_workspace(&db_path, "workspace_1", &worktree_path, "docker");
+
+        let resolved = require_local_worktree(&db_path, "workspace_1", "read workspace file")
+            .expect("resolve docker worktree");
+        assert_eq!(resolved, worktree_path.to_string_lossy());
 
         let _ = fs::remove_dir_all(root);
         let _ = fs::remove_file(db_path);

@@ -1,4 +1,6 @@
-use super::paths::{require_local_worktree, resolve_workspace_git_context};
+use super::paths::{
+    require_local_worktree, resolve_workspace_git_context, target_supports_local_worktree_access,
+};
 use crate::platform::db::open_db;
 use crate::platform::git::pull_request::{
     self, GitBranchPullRequestResult, GitPullRequestDetailResult, GitPullRequestListResult,
@@ -142,10 +144,10 @@ pub async fn list_workspace_git_pull_requests(
     workspace_id: String,
 ) -> Result<GitPullRequestListResult, LifecycleError> {
     let (target, worktree_path) = resolve_workspace_git_context(db_path, &workspace_id)?;
-    if target != "host" {
+    if !target_supports_local_worktree_access(&target) {
         return Ok(GitPullRequestListResult {
             support: pull_request::mode_not_supported(
-                "Pull requests are only available for host workspaces right now.",
+                "Pull requests are only available for local workspaces right now.",
             ),
             pull_requests: Vec::new(),
         });
@@ -153,7 +155,7 @@ pub async fn list_workspace_git_pull_requests(
 
     let worktree_path = worktree_path.ok_or_else(|| LifecycleError::GitOperationFailed {
         operation: "list GitHub pull requests".to_string(),
-        reason: format!("workspace {workspace_id} has no host worktree path"),
+        reason: format!("workspace {workspace_id} has no local worktree path"),
     })?;
 
     pull_request::list_open_pull_requests(&worktree_path).await
@@ -164,10 +166,10 @@ pub async fn get_workspace_current_git_pull_request(
     workspace_id: String,
 ) -> Result<GitBranchPullRequestResult, LifecycleError> {
     let (target, worktree_path) = resolve_workspace_git_context(db_path, &workspace_id)?;
-    if target != "host" {
+    if !target_supports_local_worktree_access(&target) {
         return Ok(GitBranchPullRequestResult {
             support: pull_request::mode_not_supported(
-                "Pull requests are only available for host workspaces right now.",
+                "Pull requests are only available for local workspaces right now.",
             ),
             branch: None,
             has_pull_request_changes: None,
@@ -179,7 +181,7 @@ pub async fn get_workspace_current_git_pull_request(
 
     let worktree_path = worktree_path.ok_or_else(|| LifecycleError::GitOperationFailed {
         operation: "read current branch GitHub pull request".to_string(),
-        reason: format!("workspace {workspace_id} has no host worktree path"),
+        reason: format!("workspace {workspace_id} has no local worktree path"),
     })?;
 
     pull_request::get_current_branch_pull_request(&worktree_path).await
@@ -191,10 +193,10 @@ pub async fn get_workspace_git_pull_request(
     pull_request_number: u64,
 ) -> Result<GitPullRequestDetailResult, LifecycleError> {
     let (target, worktree_path) = resolve_workspace_git_context(db_path, &workspace_id)?;
-    if target != "host" {
+    if !target_supports_local_worktree_access(&target) {
         return Ok(GitPullRequestDetailResult {
             support: pull_request::mode_not_supported(
-                "Pull requests are only available for host workspaces right now.",
+                "Pull requests are only available for local workspaces right now.",
             ),
             pull_request: None,
         });
@@ -202,7 +204,7 @@ pub async fn get_workspace_git_pull_request(
 
     let worktree_path = worktree_path.ok_or_else(|| LifecycleError::GitOperationFailed {
         operation: "read GitHub pull request".to_string(),
-        reason: format!("workspace {workspace_id} has no host worktree path"),
+        reason: format!("workspace {workspace_id} has no local worktree path"),
     })?;
 
     pull_request::get_pull_request_detail(&worktree_path, pull_request_number).await
@@ -234,17 +236,17 @@ pub async fn get_workspace_git_pull_request_patch(
     pull_request_number: u64,
 ) -> Result<String, LifecycleError> {
     let (target, worktree_path) = resolve_workspace_git_context(db_path, &workspace_id)?;
-    if target != "host" {
+    if !target_supports_local_worktree_access(&target) {
         return Err(LifecycleError::GitOperationFailed {
             operation: "read GitHub pull request diff patch".to_string(),
-            reason: "Pull request diff patches are only available for host workspaces right now."
+            reason: "Pull request diff patches are only available for local workspaces right now."
                 .to_string(),
         });
     }
 
     let worktree_path = worktree_path.ok_or_else(|| LifecycleError::GitOperationFailed {
         operation: "read GitHub pull request diff patch".to_string(),
-        reason: format!("workspace {workspace_id} has no host worktree path"),
+        reason: format!("workspace {workspace_id} has no local worktree path"),
     })?;
 
     pull_request::get_pull_request_patch(&worktree_path, pull_request_number).await

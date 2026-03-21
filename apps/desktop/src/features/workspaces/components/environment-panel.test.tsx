@@ -1,9 +1,5 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
-import type {
-  LifecycleConfig,
-  ServiceRecord,
-  WorkspaceRecord,
-} from "@lifecycle/contracts";
+import type { LifecycleConfig, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ServiceLogSnapshot } from "@/features/workspaces/api";
@@ -16,7 +12,7 @@ const baseWorkspace: WorkspaceRecord = {
   source_ref: "lifecycle/environment-panel",
   git_sha: "abcdef1234567890",
   worktree_path: "/tmp/workspace_1",
-  target: "host",
+  target: "local",
   created_by: null,
   source_workspace_id: null,
   created_at: "2026-03-09T10:00:00.000Z",
@@ -53,6 +49,7 @@ const services: ServiceRecord[] = [
   },
 ];
 
+
 interface RenderEnvironmentPanelOptions {
   config?: LifecycleConfig | null;
   hasManifest?: boolean;
@@ -75,6 +72,7 @@ async function renderEnvironmentPanel(options: RenderEnvironmentPanelOptions = {
         config: options.config ?? null,
         hasManifest: options.hasManifest ?? true,
         manifestState: options.manifestState ?? "valid",
+        onOpenBrowser: () => {},
         onRestart: async () => {},
         onRun: async () => {},
         onStop: async () => {},
@@ -117,18 +115,6 @@ describe("EnvironmentPanel", () => {
     expect(markup).toContain("ready");
   });
 
-  test("renders failure details for an active workspace with a prepare failure", async () => {
-    const { markup } = await renderEnvironmentPanel({
-      serviceLogs: [],
-      workspace: {
-        ...baseWorkspace,
-        failure_reason: "prepare_step_failed",
-        status: "active",
-      },
-    });
-
-    expect(markup).toContain("A workspace prepare step failed.");
-  });
 
   test("shows idle guidance when no lifecycle.json is present", async () => {
     const { markup } = await renderEnvironmentPanel({

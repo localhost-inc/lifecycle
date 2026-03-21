@@ -160,7 +160,8 @@ async fn update_workspace_identity(
     }
 
     let mut next_worktree_path = context.worktree_path.clone();
-    if !is_root_workspace_checkout_type(&context.checkout_type) && context.current_name != next_name {
+    if !is_root_workspace_checkout_type(&context.checkout_type) && context.current_name != next_name
+    {
         if let Some(current_worktree_path) = context.worktree_path.as_deref() {
             next_worktree_path = Some(
                 worktree::move_worktree(
@@ -770,7 +771,7 @@ mod tests {
                 source_ref,
                 "manual",
                 repo_path_str,
-                "host",
+                "local",
                 "active"
             ],
         )
@@ -837,7 +838,7 @@ mod tests {
                 source_ref,
                 "default",
                 repo_path_str,
-                "host",
+                "local",
                 "active"
             ],
         )

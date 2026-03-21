@@ -23,6 +23,7 @@ const WORKSPACE_RECORD_EVENT_KIND_SET = new Set<LifecycleEventKind>(WORKSPACE_RE
 const QUERY_INVALIDATION_EVENT_KINDS_SET = new Set<LifecycleEventKind>([
   ...WORKSPACE_ACTIVITY_EVENT_KINDS,
   ...WORKSPACE_RECORD_EVENT_KINDS,
+  "workspace.file_changed",
   "service.status_changed",
   "service.log_line",
   "terminal.created",
@@ -83,6 +84,11 @@ export function getInvalidationTargetsForLifecycleEvent(
 
   if (event.kind === "service.status_changed") {
     targets.push(exact(workspaceKeys.services(workspaceId)));
+  }
+
+  if (event.kind === "workspace.file_changed") {
+    targets.push(exact(workspaceKeys.fileTree(workspaceId)));
+    targets.push(exact(workspaceKeys.file(workspaceId, event.file_path)));
   }
 
   if (

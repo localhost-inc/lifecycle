@@ -26,7 +26,7 @@ const workspace: WorkspaceRecord = {
   source_ref: "lifecycle/setup",
   git_sha: "54012c8f",
   worktree_path: "/tmp/lifecycle-setup",
-  target: "host",
+  target: "local",
   manifest_fingerprint: "manifest_1",
   created_by: null,
   source_workspace_id: null,

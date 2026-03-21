@@ -1,7 +1,7 @@
 use crate::platform::app_config::AppConfigPath;
 use crate::shared::errors::LifecycleError;
 use serde::Serialize;
-use tauri::{State, WebviewWindow};
+use tauri::{State, Webview};
 
 #[derive(Clone, Copy, Serialize)]
 pub struct WindowMousePosition {
@@ -31,14 +31,14 @@ pub async fn get_auth_session() -> Result<crate::platform::auth::AuthSession, Li
 
 #[tauri::command]
 pub async fn set_window_accepts_mouse_moved_events(
-    window: WebviewWindow,
+    webview: Webview,
     enabled: bool,
 ) -> Result<(), LifecycleError> {
     #[cfg(target_os = "macos")]
     {
         use objc2_app_kit::{NSView, NSWindow};
 
-        window
+        webview
             .with_webview(move |webview| unsafe {
                 let view: &NSView = &*webview.inner().cast();
                 if let Some(host_window) = view.window() {
@@ -50,21 +50,21 @@ pub async fn set_window_accepts_mouse_moved_events(
     }
 
     #[cfg(not(target_os = "macos"))]
-    let _ = (&window, enabled);
+    let _ = (&webview, enabled);
 
     Ok(())
 }
 
 #[tauri::command]
 pub async fn set_window_pointing_cursor(
-    window: WebviewWindow,
+    webview: Webview,
     pointing: bool,
 ) -> Result<(), LifecycleError> {
     #[cfg(target_os = "macos")]
     {
         use objc2_app_kit::{NSCursor, NSView};
 
-        window
+        webview
             .with_webview(move |webview| unsafe {
                 let view: &NSView = &*webview.inner().cast();
                 if view.window().is_some() {
@@ -80,21 +80,21 @@ pub async fn set_window_pointing_cursor(
     }
 
     #[cfg(not(target_os = "macos"))]
-    let _ = (&window, pointing);
+    let _ = (&webview, pointing);
 
     Ok(())
 }
 
 #[tauri::command]
 pub async fn get_window_mouse_position(
-    window: WebviewWindow,
+    webview: Webview,
 ) -> Result<Option<WindowMousePosition>, LifecycleError> {
     #[cfg(target_os = "macos")]
     {
         use objc2_app_kit::NSView;
         let (sender, receiver) = std::sync::mpsc::sync_channel(1);
 
-        window
+        webview
             .with_webview(move |webview| unsafe {
                 let view: &NSView = &*webview.inner().cast();
                 let position = view.window().map(|host_window| {
@@ -123,7 +123,7 @@ pub async fn get_window_mouse_position(
 
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = &window;
+        let _ = &webview;
         Ok(None)
     }
 }

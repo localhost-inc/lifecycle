@@ -38,18 +38,19 @@ import { getBuiltinExtensionSlots } from "@/features/extensions/builtin-extensio
 import { ExtensionPanel } from "@/features/extensions/extension-panel";
 import { useGitStatus } from "@/features/git/hooks";
 import type { ManifestStatus } from "@/features/projects/api/projects";
-import { hasBlockingQueryError, hasBlockingQueryLoad } from "@/features/workspaces/routes/workspace-route-query-state";
+import {
+  hasBlockingQueryError,
+  hasBlockingQueryLoad,
+} from "@/features/workspaces/routes/workspace-route-query-state";
 import { WorkspaceCanvas } from "@/features/workspaces/components/workspace-canvas";
 import {
+  createBrowserOpenInput,
   createChangesDiffOpenInput,
   createCommitDiffOpenInput,
   createFileViewerOpenInput,
   createPullRequestOpenInput,
 } from "@/features/workspaces/components/workspace-canvas-requests";
-import {
-  startServices,
-  stopServices,
-} from "@/features/workspaces/api";
+import { startServices, stopServices } from "@/features/workspaces/api";
 import { useWorkspaceServices } from "@/features/workspaces/hooks";
 import { workspaceSupportsFilesystemInteraction } from "@/features/workspaces/lib/workspace-capabilities";
 import { useWorkspaceOpenRequests } from "@/features/workspaces/state/workspace-open-requests";
@@ -88,7 +89,7 @@ export function WorkspaceLayout({
   const supportsTerminalInteraction = workspaceSupportsFilesystemInteraction(workspace);
   const servicesQuery = useWorkspaceServices(workspace.id);
   const gitStatusQuery = useGitStatus(
-    workspace.target === "host" && workspace.worktree_path !== null ? workspace.id : null,
+    supportsTerminalInteraction ? workspace.id : null,
   );
 
   const services = servicesQuery.data;
@@ -144,6 +145,20 @@ export function WorkspaceLayout({
 
   const launchActions = useMemo<WorkspaceExtensionLaunchActions>(
     () => ({
+      openBrowser: (service) => {
+        if (!service.preview_url) {
+          return;
+        }
+
+        openDocument(
+          workspace.id,
+          createBrowserOpenInput({
+            browserKey: `service:${service.name}`,
+            label: service.name,
+            url: service.preview_url,
+          }),
+        );
+      },
       openChangesDiff: (focusPath) => {
         openDocument(workspace.id, createChangesDiffOpenInput(focusPath));
       },
@@ -407,7 +422,9 @@ export function WorkspaceLayout({
       <div className="flex flex-1 items-center justify-center p-8">
         <Alert className="max-w-lg" variant="destructive">
           <AlertTitle>Workspace services missing</AlertTitle>
-          <AlertDescription>Service state could not be resolved for this workspace.</AlertDescription>
+          <AlertDescription>
+            Service state could not be resolved for this workspace.
+          </AlertDescription>
         </Alert>
       </div>
     );
@@ -454,7 +471,7 @@ export function WorkspaceLayout({
       {!panelCollapsed && (
         <div
           className="relative z-[1] flex shrink-0 flex-col border-l border-[var(--border)] bg-[var(--surface)]"
-          style={activeExtensionSlot ? { width: `${panelWidth}px` } : undefined}
+          style={activeExtensionSlot ? { width: `${panelWidth / 16}rem` } : undefined}
         >
           {activeExtensionSlot && (
             <div

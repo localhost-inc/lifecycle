@@ -220,11 +220,10 @@ impl Supervisor {
         }
 
         // Build env vars
-        let env: Vec<String> =
-            resolve_service_env(name, service.env.as_ref(), runtime_env)?
-                .into_iter()
-                .map(|(key, value)| format!("{key}={value}"))
-                .collect();
+        let env: Vec<String> = resolve_service_env(name, service.env.as_ref(), runtime_env)?
+            .into_iter()
+            .map(|(key, value)| format!("{key}={value}"))
+            .collect();
 
         // Build cmd
         let cmd: Option<Vec<String>> = if let Some(ref command) = service.command {
@@ -236,8 +235,7 @@ impl Supervisor {
         } else {
             service.args.clone()
         };
-        let binds =
-            self.resolve_volume_binds(name, service, worktree_path, storage_root)?;
+        let binds = self.resolve_volume_binds(name, service, worktree_path, storage_root)?;
 
         let config = Config {
             image: Some(image_ref),
@@ -351,8 +349,7 @@ impl Supervisor {
                     }
                 }
             });
-            self.container_log_handles
-                .insert(name.to_string(), handle);
+            self.container_log_handles.insert(name.to_string(), handle);
         }
 
         Ok(())
@@ -468,9 +465,7 @@ impl Supervisor {
 
         for volume in service.volumes.as_deref().unwrap_or_default() {
             let host_path = match volume {
-                ImageVolume::Bind { source, .. } => {
-                    resolve_host_path(name, worktree_path, source)?
-                }
+                ImageVolume::Bind { source, .. } => resolve_host_path(name, worktree_path, source)?,
                 ImageVolume::Volume { source, .. } => {
                     if !is_valid_named_volume_source(source) {
                         return Err(LifecycleError::ServiceStartFailed {

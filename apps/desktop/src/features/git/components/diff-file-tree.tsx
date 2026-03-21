@@ -92,7 +92,7 @@ function TreeNodeRow({
       <button
         type="button"
         className={`flex w-full items-center gap-1.5 py-1 pr-3 text-left text-xs transition-colors hover:bg-[var(--surface-hover)] ${isActive ? "bg-[var(--surface-selected)]" : ""}`}
-        style={{ paddingLeft: `${depth * 12 + 12}px` }}
+        style={{ paddingLeft: `${depth * 1 + 0.75}rem` }}
         onClick={() => onSelectFile(node.path)}
         title={node.path}
       >
@@ -116,7 +116,7 @@ function TreeNodeRow({
       <button
         type="button"
         className="flex w-full items-center gap-1.5 py-1 pr-3 text-left text-xs transition-colors hover:bg-[var(--surface-hover)]"
-        style={{ paddingLeft: `${depth * 12 + 12}px` }}
+        style={{ paddingLeft: `${depth * 1 + 0.75}rem` }}
         onClick={() => onToggleDir(node.path)}
         title={node.path}
       >

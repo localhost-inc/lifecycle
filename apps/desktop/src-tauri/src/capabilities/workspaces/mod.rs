@@ -1,3 +1,4 @@
+mod checkout_type;
 pub mod commands;
 pub mod controller;
 pub mod create;
@@ -8,7 +9,6 @@ pub mod git;
 pub mod git_watcher;
 mod harness;
 mod identity;
-mod checkout_type;
 pub mod manifest;
 mod naming;
 pub mod open;

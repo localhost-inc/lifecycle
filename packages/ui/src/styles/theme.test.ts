@@ -93,7 +93,7 @@ describe("theme.css", () => {
 
     expect(css).toContain(".app-panel-title");
     expect(css).toContain("font-family: var(--font-mono);");
-    expect(css).toContain("font-size: 12px;");
+    expect(css.includes("font-size: 12px;") || css.includes("font-size: 0.75rem;")).toBe(true);
     expect(css).toContain("font-weight: 500;");
     expect(css).toContain("color: var(--sidebar-muted-foreground);");
   });

@@ -82,6 +82,21 @@ describe("getInvalidationTargetsForLifecycleEvent", () => {
     ]);
   });
 
+  test("targets workspace file queries without refreshing activity", () => {
+    const event: LifecycleEvent = {
+      file_path: "src/app.tsx",
+      id: "event-1",
+      kind: "workspace.file_changed",
+      occurred_at: "2026-03-20T12:00:00.000Z",
+      workspace_id: "ws-1",
+    };
+
+    expect(getInvalidationTargetsForLifecycleEvent(event)).toEqual([
+      { kind: "exact", key: workspaceKeys.fileTree("ws-1") },
+      { kind: "exact", key: workspaceKeys.file("ws-1", "src/app.tsx") },
+    ]);
+  });
+
   test("targets terminal list for terminal lifecycle events", () => {
     const event: LifecycleEvent = {
       id: "event-1",

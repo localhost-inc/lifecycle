@@ -1,4 +1,4 @@
-import type { GitLogEntry, GitPullRequestSummary } from "@lifecycle/contracts";
+import type { GitLogEntry, GitPullRequestSummary, ServiceRecord } from "@lifecycle/contracts";
 import type { StatusDotTone } from "@lifecycle/ui";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
@@ -6,6 +6,7 @@ import type { WorkspaceDocumentKind } from "@/features/workspaces/components/wor
 
 export type WorkspaceExtensionId =
   | "environment"
+  | "files"
   | "git-changes"
   | "git-history"
   | "pull-requests"
@@ -17,6 +18,7 @@ export interface ExtensionBadge {
 }
 
 export interface WorkspaceExtensionLaunchActions {
+  openBrowser: (service: Pick<ServiceRecord, "name" | "preview_url">) => void;
   openChangesDiff: (focusPath: string | null) => void;
   openCommitDiff: (entry: GitLogEntry) => void;
   openFileViewer: (filePath: string) => void;

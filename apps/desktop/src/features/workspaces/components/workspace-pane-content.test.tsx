@@ -2,6 +2,7 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  createBrowserTab,
   createChangesDiffTab,
   terminalTabKey,
 } from "@/features/workspaces/state/workspace-canvas-state";
@@ -128,6 +129,55 @@ describe("WorkspacePaneContent", () => {
     expect(markup).toContain("Shell");
     expect(markup).toContain("Claude");
     expect(markup).toContain("Codex");
+  });
+
+  test("renders the browser surface for browser documents", async () => {
+    const browserSurfaceModule = await import("./browser-surface");
+
+    spyOn(browserSurfaceModule, "BrowserSurface").mockImplementation(((
+      props: Parameters<typeof browserSurfaceModule.BrowserSurface>[0],
+    ) =>
+      createElement(
+        "div",
+        {
+          "data-slot": "browser-surface",
+          "data-tab-key": props.tabKey,
+          "data-url": props.url,
+        },
+        props.title,
+      )) as never);
+
+    const { WorkspacePaneContent } = await import("./workspace-pane-content");
+    const browserTab = createBrowserTab({
+      key: "service:web",
+      label: "web",
+      url: "http://web.sydney.lifecycle.localhost",
+    });
+
+    const markup = renderToStaticMarkup(
+      createElement(WorkspacePaneContent, {
+        activeTabKey: browserTab.key,
+        activeFileSessionState: null,
+        activeTabViewState: null,
+        creatingSelection: null,
+        documents: [browserTab],
+        hasVisibleTabs: true,
+        onCreateTerminal: async () => {},
+        onFileSessionStateChange: () => {},
+        onOpenFile: () => {},
+        onTabViewStateChange: () => {},
+        paneDragInProgress: false,
+        paneFocused: true,
+        surfaceOpacity: 1,
+        terminals: [],
+        waitingForSelectedTerminalTab: false,
+        workspaceId: "workspace-1",
+      }),
+    );
+
+    expect(markup).toContain('data-slot="browser-surface"');
+    expect(markup).toContain('data-tab-key="browser:service:web"');
+    expect(markup).toContain('data-url="http://web.sydney.lifecycle.localhost"');
   });
 
   test("threads pane opacity into native terminal surfaces", async () => {

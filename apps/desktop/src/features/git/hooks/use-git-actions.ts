@@ -49,7 +49,8 @@ export function useGitActions({
   const [documentVisible, setDocumentVisible] = useState(() =>
     typeof document === "undefined" ? true : document.visibilityState === "visible",
   );
-  const supportsChanges = workspaceTarget === "host" && worktreePath !== null;
+  const supportsChanges =
+    (workspaceTarget === "local" || workspaceTarget === "docker") && worktreePath !== null;
 
   useEffect(() => {
     if (typeof document === "undefined") {

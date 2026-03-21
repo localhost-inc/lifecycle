@@ -52,7 +52,15 @@ export interface FileViewerDocument {
   label: string;
 }
 
+export interface BrowserDocument {
+  key: string;
+  kind: "browser";
+  label: string;
+  url: string;
+}
+
 export type WorkspaceCanvasDocument =
+  | BrowserDocument
   | ChangesDiffDocument
   | CommitDiffDocument
   | FileViewerDocument
@@ -140,6 +148,13 @@ type PersistedCommitDiffDocument = {
 type PersistedFileViewerDocument = {
   filePath?: unknown;
   kind?: unknown;
+};
+
+type PersistedBrowserDocument = {
+  key?: unknown;
+  kind?: unknown;
+  label?: unknown;
+  url?: unknown;
 };
 
 type PersistedPullRequestDocument = {
@@ -240,6 +255,10 @@ export function fileViewerTabKey(filePath: string): string {
   return `file:${normalizeWorkspaceFilePath(filePath)}`;
 }
 
+export function browserTabKey(key: string): string {
+  return `browser:${key}`;
+}
+
 export function createChangesDiffTab(focusPath: string | null = null): ChangesDiffDocument {
   return {
     focusPath,
@@ -292,6 +311,19 @@ export function createFileViewerTab(filePath: string): FileViewerDocument {
   };
 }
 
+export function createBrowserTab(input: {
+  key: string;
+  label: string;
+  url: string;
+}): BrowserDocument {
+  return {
+    key: browserTabKey(input.key),
+    kind: "browser",
+    label: input.label,
+    url: input.url,
+  };
+}
+
 export function isChangesDiffDocument(
   document: WorkspaceCanvasDocument,
 ): document is ChangesDiffDocument {
@@ -314,6 +346,10 @@ export function isFileViewerDocument(
   document: WorkspaceCanvasDocument,
 ): document is FileViewerDocument {
   return document.kind === "file-viewer";
+}
+
+export function isBrowserDocument(document: WorkspaceCanvasDocument): document is BrowserDocument {
+  return document.kind === "browser";
 }
 
 export function createDefaultWorkspaceCanvasState(): WorkspaceCanvasState {
@@ -676,6 +712,21 @@ function parseFileViewerDocument(value: Record<string, unknown>): FileViewerDocu
   return createFileViewerTab(filePath);
 }
 
+function parseBrowserDocument(value: Record<string, unknown>): BrowserDocument | null {
+  const key = getOptionalString(value, "key");
+  const label = getOptionalString(value, "label");
+  const url = getOptionalString(value, "url");
+  if (!key || !label || !url) {
+    return null;
+  }
+
+  return createBrowserTab({
+    key,
+    label,
+    url,
+  });
+}
+
 function isValidPullRequestState(value: unknown): value is PullRequestDocument["state"] {
   return value === "open" || value === "closed" || value === "merged";
 }
@@ -824,6 +875,10 @@ function parseWorkspaceCanvasDocument(value: unknown): WorkspaceCanvasDocument |
 
   if (documentKind === "file-viewer") {
     return parseFileViewerDocument(value as PersistedFileViewerDocument);
+  }
+
+  if (documentKind === "browser") {
+    return parseBrowserDocument(value as PersistedBrowserDocument);
   }
 
   if (documentKind === "pull-request") {
@@ -1012,6 +1067,15 @@ function serializeWorkspaceCanvasDocument(
     return {
       filePath: document.filePath,
       kind: document.kind,
+    };
+  }
+
+  if (isBrowserDocument(document)) {
+    return {
+      key: document.key.slice("browser:".length),
+      kind: document.kind,
+      label: document.label,
+      url: document.url,
     };
   }
 

@@ -28,6 +28,7 @@ Use these terms consistently in docs, code, tests, and reviews.
 The full desktop frame.
 
 Includes:
+
 1. shell plane
 2. project layout
 3. app-level routes such as settings
@@ -37,6 +38,7 @@ Includes:
 The outer `--background` chrome layer.
 
 Contains:
+
 1. project switcher strip
 
 Avoid: top chrome, title bar, header bar
@@ -50,6 +52,7 @@ The active personal or shared organization scope that owns the visible project s
 Examples: `Personal`, `Kin Health`
 
 Local-first note:
+
 1. projects without an `organization_id` still resolve into the implicit `Personal` shell context
 2. sign-in can later persist that `Personal` context without changing the shell hierarchy
 
@@ -62,6 +65,7 @@ The current shell renders it horizontally to the right of macOS window controls 
 It changes the active shell context.
 
 The expected read is:
+
 1. leading personal/shared context control, for example `Personal`
 2. project switching within that context
 
@@ -168,6 +172,7 @@ Use `workspace` for the full workspace-scoped area.
 Use `workspace canvas` for the center pane area.
 
 Implementation note:
+
 1. use `canvas`-prefixed module names for center-host state, restore, and orchestration
 2. use `pane`-prefixed module names for split layout and pane-local chrome
 3. use `surface` for rendered content units and feature-owned renderers only
@@ -182,7 +187,7 @@ Includes: workspace extension panel, workspace extension strip
 
 The optional workspace-scoped right-edge strip attached to the workspace, beside the workspace canvas.
 
-It hosts entry points for workspace extensions such as Git and Environment.
+It hosts entry points for workspace extensions such as Files, Git, and Environment.
 
 It is not: the project sidebar, app shell chrome
 
@@ -223,6 +228,14 @@ It is not a tab strip.
 ### Pane content
 
 The active surface shown inside a pane.
+
+### Browser surface
+
+An embedded workspace-canvas surface that renders a URL inside the app.
+
+Service previews open in a browser surface by default.
+
+Use `browser` for the canvas document kind and `browser surface` for the rendered pane content.
 
 ### Empty pane
 
@@ -274,7 +287,7 @@ Examples: project pages, pull request tabs, project activity
 
 Live execution or local worktree context tied to one workspace.
 
-Examples: terminals, services and previews, local changes, workspace canvas layout
+Examples: terminals, services and browser surfaces, local changes, workspace canvas layout
 
 ## Current vs Target Terms
 

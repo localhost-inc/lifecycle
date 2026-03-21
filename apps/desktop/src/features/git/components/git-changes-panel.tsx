@@ -30,7 +30,8 @@ export function GitChangesPanel({
   workspaceTarget,
   worktreePath,
 }: GitChangesPanelProps) {
-  const supportsChanges = workspaceTarget === "host" && worktreePath !== null;
+  const supportsChanges =
+    (workspaceTarget === "local" || workspaceTarget === "docker") && worktreePath !== null;
   const gitActions = useGitActions({
     onCommitComplete,
     onOpenPullRequest,
@@ -68,7 +69,7 @@ export function GitChangesPanel({
           ) : (
             <div className={GIT_CHANGES_PANEL_EMPTY_STATE_CLASS_NAME}>
               <EmptyState
-                description="Change tracking is only available for host workspaces right now."
+                description="Change tracking is only available for workspaces with a local checkout right now."
                 size="sm"
                 title="Changes unavailable"
               />

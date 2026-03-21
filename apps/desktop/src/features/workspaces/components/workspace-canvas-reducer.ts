@@ -9,7 +9,9 @@ import {
   updateWorkspacePaneLayoutSplit,
 } from "@/features/workspaces/lib/workspace-pane-layout";
 import {
+  browserTabKey,
   changesDiffTabKey,
+  createBrowserTab,
   commitDiffTabKey,
   createChangesDiffTab,
   createCommitDiffTab,
@@ -381,6 +383,14 @@ export function workspaceCanvasReducer(
               changesDiffTabKey(),
             )
           : null;
+      const existingPaneForBrowser =
+        request.kind === "browser"
+          ? findWorkspacePaneIdContainingTab(
+              state.rootPane,
+              state.paneTabStateById,
+              browserTabKey(request.browserKey),
+            )
+          : null;
       const existingPaneForFile =
         request.kind === "file-viewer"
           ? findWorkspacePaneIdContainingTab(
@@ -440,6 +450,34 @@ export function workspaceCanvasReducer(
         const existingPaneId = existingPaneForCommit;
         const targetPaneId = existingPaneId ?? resolveWorkspaceTargetPaneId(state);
         const nextTab = createCommitDiffTab(request.commit);
+
+        return {
+          ...state,
+          activePaneId: targetPaneId,
+          documentsByKey: upsertWorkspaceDocument(state.documentsByKey, nextTab),
+          paneTabStateById: updateWorkspacePaneTabState(
+            state.paneTabStateById,
+            targetPaneId,
+            (pane) => ({
+              ...pane,
+              activeTabKey: key,
+              tabOrderKeys: existingPaneId
+                ? pane.tabOrderKeys
+                : appendWorkspaceTabKey(pane.tabOrderKeys, key),
+            }),
+          ),
+        };
+      }
+
+      if (request.kind === "browser") {
+        const key = browserTabKey(request.browserKey);
+        const existingPaneId = existingPaneForBrowser;
+        const targetPaneId = existingPaneId ?? resolveWorkspaceTargetPaneId(state);
+        const nextTab = createBrowserTab({
+          key: request.browserKey,
+          label: request.label,
+          url: request.url,
+        });
 
         return {
           ...state,
@@ -523,7 +561,11 @@ export function workspaceCanvasReducer(
       const closingViewState = state.tabStateByKey[action.key]?.viewState ?? null;
       const nextClosedTabStack = closingDocument
         ? [
-            { document: closingDocument, kind: "document", viewState: closingViewState } satisfies ClosedTabEntry,
+            {
+              document: closingDocument,
+              kind: "document",
+              viewState: closingViewState,
+            } satisfies ClosedTabEntry,
             ...state.closedTabStack,
           ].slice(0, MAX_CLOSED_TAB_STACK_SIZE)
         : state.closedTabStack;

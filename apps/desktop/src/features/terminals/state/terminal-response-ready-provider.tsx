@@ -41,6 +41,7 @@ interface TerminalResponseReadyContextValue {
 
 const TerminalResponseReadyContext = createContext<TerminalResponseReadyContextValue | null>(null);
 const TERMINAL_RESPONSE_READY_EVENT_KINDS = [
+  "terminal.harness_turn_started",
   "terminal.harness_prompt_submitted",
   "terminal.harness_turn_completed",
   "terminal.status_changed",
@@ -64,6 +65,14 @@ export function terminalResponseReadyReducer(
       if (
         currentRunningState?.workspaceId === action.workspaceId &&
         currentRunningState.turnId === action.turnId
+      ) {
+        return state;
+      }
+
+      if (
+        currentRunningState?.workspaceId === action.workspaceId &&
+        currentRunningState.turnId !== null &&
+        action.turnId === null
       ) {
         return state;
       }
@@ -257,18 +266,27 @@ export function TerminalResponseReadyProvider({ children }: { children: ReactNod
   const [state, dispatch] = useReducer(
     terminalResponseReadyReducer,
     undefined,
-    createDefaultTerminalResponseReadyState,
+    () =>
+      (import.meta.hot?.data?.terminalResponseReadyState as TerminalResponseReadyState) ??
+      createDefaultTerminalResponseReadyState(),
   );
+
+  // Persist state across HMR so active spinners survive hot reload.
+  if (import.meta.hot) {
+    import.meta.hot.data.terminalResponseReadyState = state;
+  }
 
   useLifecycleEvent(TERMINAL_RESPONSE_READY_EVENT_KINDS, (event) => {
     switch (event.kind) {
-      case "terminal.harness_prompt_submitted":
+      case "terminal.harness_turn_started":
         dispatch({
           terminalId: event.terminal_id,
           turnId: event.turn_id,
           kind: "mark-running",
           workspaceId: event.workspace_id,
         });
+        break;
+      case "terminal.harness_prompt_submitted":
         break;
       case "terminal.harness_turn_completed":
         dispatch({

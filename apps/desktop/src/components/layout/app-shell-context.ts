@@ -1,6 +1,7 @@
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import type { ProjectCatalog } from "@/features/projects/hooks";
 import type { ShellContext } from "@/features/projects/lib/shell-context";
+import type { WorkspaceCreateMode } from "@/features/workspaces/api";
 
 export interface AppShellOutletContext {
   activeShellContext: ShellContext;
@@ -8,7 +9,7 @@ export interface AppShellOutletContext {
   projects: ProjectRecord[];
   sidebarCollapsed: boolean;
   workspacesByProjectId: Record<string, WorkspaceRecord[]>;
-  onCreateWorkspace: (projectId: string) => Promise<void>;
+  onCreateWorkspace: (projectId: string, mode: WorkspaceCreateMode) => Promise<void>;
   onDestroyWorkspace: (workspace: WorkspaceRecord) => Promise<void>;
   onForkWorkspace: (workspace: WorkspaceRecord) => Promise<void>;
   onOpenSettings: () => void;

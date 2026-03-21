@@ -103,6 +103,7 @@ For local mode in M3:
 3. The event is emitted by authoritative runtime/backend code and carries normalized prompt context rather than renderer-local input state.
 4. If `terminal.label_origin == default` and `workspace.name_origin == default`, the first submitted harness prompt may generate titles and then emit `terminal.renamed` and `workspace.renamed`.
 5. Manual renames remain authoritative and must not be overwritten by later generated titles.
+6. Live running-turn indicators should use a dedicated `terminal.harness_turn_started` fact; providers that lack a native start record should be normalized onto that fact by the backend, while `terminal.harness_prompt_submitted` remains the titling/activity hook.
 
 ### Provider Contract (M3 Scope)
 

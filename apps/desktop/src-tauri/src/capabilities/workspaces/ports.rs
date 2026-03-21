@@ -50,9 +50,7 @@ fn load_reserved_assigned_ports(
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
     let rows = stmt
-        .query_map(params![workspace_id, name], |row| {
-            row.get::<_, i64>(0)
-        })
+        .query_map(params![workspace_id, name], |row| row.get::<_, i64>(0))
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
 
     let mut reserved = std::collections::HashSet::new();

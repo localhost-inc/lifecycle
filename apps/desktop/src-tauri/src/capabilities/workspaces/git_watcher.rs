@@ -132,7 +132,9 @@ pub(crate) fn ensure_root_git_watcher(
         return Ok(());
     };
 
-    if !is_root_workspace_checkout_type(&context.checkout_type) || context.target != "host" {
+    if !is_root_workspace_checkout_type(&context.checkout_type)
+        || !matches!(context.target.as_str(), "local" | "docker")
+    {
         return Ok(());
     }
 
@@ -212,7 +214,7 @@ fn list_root_workspace_ids(db_path: &str) -> Result<Vec<String>, LifecycleError>
         .prepare(
             "SELECT id
              FROM workspace
-             WHERE checkout_type = 'root' AND target = 'host'
+             WHERE checkout_type = 'root' AND target IN ('local', 'docker')
              ORDER BY created_at ASC",
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
@@ -235,7 +237,7 @@ fn list_root_workspace_ids_by_project(
         .prepare(
             "SELECT id
              FROM workspace
-             WHERE project_id = ?1 AND checkout_type = 'root' AND target = 'host'
+             WHERE project_id = ?1 AND checkout_type = 'root' AND target IN ('local', 'docker')
              ORDER BY created_at ASC",
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
@@ -626,7 +628,7 @@ mod tests {
                 "Root",
                 "root",
                 "main",
-                "host",
+                "local",
                 "active"
             ],
         )

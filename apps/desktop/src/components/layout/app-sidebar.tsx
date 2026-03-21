@@ -17,7 +17,7 @@ import type { AuthSession } from "@/features/auth/auth-session";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { version } from "../../../package.json";
 
-const COLLAPSED_WIDTH = 48;
+const COLLAPSED_WIDTH_REM = 3;
 
 interface AppSidebarProps {
   activeContextName: string;
@@ -122,7 +122,7 @@ export function AppSidebar({
         className="flex h-full min-h-0 shrink-0 flex-col items-center bg-[var(--background)] text-[var(--sidebar-foreground)]"
         data-slot="app-sidebar"
         onMouseDown={handleMouseDown}
-        style={{ width: `${COLLAPSED_WIDTH}px` }}
+        style={{ width: `${COLLAPSED_WIDTH_REM}rem` }}
       >
         {/* Spacer to align below nav bar — no border in traffic light zone */}
         <div className="h-10 w-full shrink-0" />
@@ -205,7 +205,7 @@ export function AppSidebar({
       className="flex h-full min-h-0 shrink-0 flex-col bg-[var(--background)] text-[var(--sidebar-foreground)]"
       data-slot="app-sidebar"
       onMouseDown={handleMouseDown}
-      style={{ width: `${width}px` }}
+      style={{ width: `${width / 16}rem` }}
     >
       {/* Collapse button — inline with traffic lights */}
       <div className="flex h-10 shrink-0 items-center justify-end px-2">

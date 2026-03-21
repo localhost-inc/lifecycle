@@ -113,6 +113,7 @@ pub(crate) fn resolve_terminal_launch(
     harness_session_id: Option<&str>,
     harness_launch_mode: HarnessLaunchMode,
     harness_launch_config: Option<&HarnessLaunchConfig>,
+    harness_instructions: Option<&str>,
 ) -> Result<TerminalLaunchSpec, LifecycleError> {
     match (launch_type, harness_provider, harness_session_id) {
         (TerminalType::Shell, Some(_), _) => Err(LifecycleError::AttachFailed(
@@ -139,16 +140,22 @@ pub(crate) fn resolve_terminal_launch(
             Ok(TerminalLaunchSpec {
                 program: provider.program.to_string(),
                 args: match harness_launch_mode {
-                    HarnessLaunchMode::New => {
-                        (provider.new_session_args)(harness_session_id, harness_launch_config)?
-                    }
+                    HarnessLaunchMode::New => (provider.new_session_args)(
+                        harness_session_id,
+                        harness_launch_config,
+                        harness_instructions,
+                    )?,
                     HarnessLaunchMode::Resume => {
                         let session_id = harness_session_id.ok_or_else(|| {
                             LifecycleError::AttachFailed(
                                 "harness resume requires a harness session id".to_string(),
                             )
                         })?;
-                        (provider.resume_args)(session_id, harness_launch_config)?
+                        (provider.resume_args)(
+                            session_id,
+                            harness_launch_config,
+                            harness_instructions,
+                        )?
                     }
                 },
                 treat_nonzero_as_failure: true,
@@ -223,6 +230,7 @@ mod tests {
             None,
             HarnessLaunchMode::New,
             None,
+            None,
         )
         .expect_err("must fail");
         match error {
@@ -241,6 +249,7 @@ mod tests {
             Some("session-123"),
             HarnessLaunchMode::Resume,
             None,
+            None,
         )
         .expect("claude resume launch");
         assert_eq!(claude.program, "claude");
@@ -251,6 +260,7 @@ mod tests {
             Some("codex"),
             Some("session-456"),
             HarnessLaunchMode::Resume,
+            None,
             None,
         )
         .expect("codex resume");
@@ -266,6 +276,7 @@ mod tests {
             Some("session-123"),
             HarnessLaunchMode::New,
             None,
+            None,
         )
         .expect("claude new launch");
         assert_eq!(claude.program, "claude");
@@ -276,6 +287,7 @@ mod tests {
             Some("codex"),
             None,
             HarnessLaunchMode::New,
+            None,
             None,
         )
         .expect("codex new launch");
@@ -290,6 +302,7 @@ mod tests {
             Some("claude"),
             None,
             HarnessLaunchMode::Resume,
+            None,
             None,
         )
         .expect_err("resume requires session id");
@@ -308,6 +321,7 @@ mod tests {
             None,
             Some("session-123"),
             HarnessLaunchMode::Resume,
+            None,
             None,
         )
         .expect_err("shell resume fails");
@@ -373,6 +387,7 @@ mod tests {
             None,
             HarnessLaunchMode::New,
             Some(&guarded_codex_config()),
+            None,
         )
         .expect("codex guarded launch");
 
@@ -395,6 +410,7 @@ mod tests {
             Some("session-456"),
             HarnessLaunchMode::Resume,
             Some(&trusted_codex_config()),
+            None,
         )
         .expect("codex trusted resume");
 
@@ -416,6 +432,7 @@ mod tests {
             Some("session-123"),
             HarnessLaunchMode::New,
             Some(&guarded_claude_config()),
+            None,
         )
         .expect("claude guarded launch");
 
@@ -438,6 +455,7 @@ mod tests {
             Some("session-123"),
             HarnessLaunchMode::Resume,
             Some(&trusted_claude_config()),
+            None,
         )
         .expect("claude trusted launch");
 
@@ -455,6 +473,7 @@ mod tests {
             None,
             HarnessLaunchMode::New,
             Some(&guarded_claude_config()),
+            None,
         )
         .expect_err("mismatched config fails");
 
@@ -464,5 +483,49 @@ mod tests {
             }
             other => panic!("unexpected error: {other}"),
         }
+    }
+
+    #[test]
+    fn resolve_terminal_launch_appends_codex_developer_instructions() {
+        let codex = resolve_terminal_launch(
+            &TerminalType::Harness,
+            Some("codex"),
+            None,
+            HarnessLaunchMode::New,
+            None,
+            Some("Run lifecycle context first."),
+        )
+        .expect("codex launch with instructions");
+
+        assert_eq!(
+            codex.args,
+            vec![
+                "-c",
+                "developer_instructions=\"Run lifecycle context first.\"",
+            ]
+        );
+    }
+
+    #[test]
+    fn resolve_terminal_launch_appends_claude_system_prompt() {
+        let claude = resolve_terminal_launch(
+            &TerminalType::Harness,
+            Some("claude"),
+            Some("session-123"),
+            HarnessLaunchMode::New,
+            None,
+            Some("Run lifecycle context first."),
+        )
+        .expect("claude launch with instructions");
+
+        assert_eq!(
+            claude.args,
+            vec![
+                "--session-id",
+                "session-123",
+                "--append-system-prompt",
+                "Run lifecycle context first.",
+            ]
+        );
     }
 }

@@ -34,6 +34,13 @@ export type LifecycleEvent =
   | {
       id: string;
       occurred_at: string;
+      kind: "workspace.file_changed";
+      workspace_id: string;
+      file_path: string;
+    }
+  | {
+      id: string;
+      occurred_at: string;
       kind: "service.status_changed";
       workspace_id: string;
       name: string;
@@ -80,6 +87,16 @@ export type LifecycleEvent =
       terminal_id: string;
       workspace_id: string;
       prompt_text: string;
+      harness_provider: string | null;
+      harness_session_id: string | null;
+      turn_id: string | null;
+    }
+  | {
+      id: string;
+      occurred_at: string;
+      kind: "terminal.harness_turn_started";
+      terminal_id: string;
+      workspace_id: string;
       harness_provider: string | null;
       harness_session_id: string | null;
       turn_id: string | null;

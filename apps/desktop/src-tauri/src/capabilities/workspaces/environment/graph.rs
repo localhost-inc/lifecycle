@@ -3,7 +3,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 use crate::shared::errors::LifecycleError;
 
 use super::super::manifest::{
-    EnvironmentNodeConfig, LifecycleConfig, ServiceConfig, PrepareStep, TaskConfig,
+    EnvironmentNodeConfig, LifecycleConfig, PrepareStep, ServiceConfig, TaskConfig,
 };
 
 #[derive(Clone, Debug)]
@@ -111,14 +111,13 @@ fn resolve_selected_node_names(
 
     let mut selected = HashSet::new();
     for name in target_service_names {
-        let node =
-            config
-                .environment
-                .get(name)
-                .ok_or_else(|| LifecycleError::InvalidInput {
-                    field: "serviceNames".to_string(),
-                    reason: format!("unknown service '{name}'"),
-                })?;
+        let node = config
+            .environment
+            .get(name)
+            .ok_or_else(|| LifecycleError::InvalidInput {
+                field: "serviceNames".to_string(),
+                reason: format!("unknown service '{name}'"),
+            })?;
         if !matches!(node, EnvironmentNodeConfig::Service { .. }) {
             return Err(LifecycleError::InvalidInput {
                 field: "serviceNames".to_string(),

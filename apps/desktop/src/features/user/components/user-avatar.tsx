@@ -24,8 +24,8 @@ export function UserAvatar({ loading, session, size = 20 }: UserAvatarProps) {
   const avatarUrl = session.state === "logged_in" ? (identity?.avatarUrl ?? null) : null;
   const seed = identity?.handle ?? identity?.displayName ?? session.provider ?? "lifecycle";
 
-  const px = `${size}px`;
-  const style = { width: px, height: px };
+  const rem = `${size / 16}rem`;
+  const style = { width: rem, height: rem };
   const base = "shrink-0 rounded-full";
 
   if (loading) {
@@ -58,7 +58,7 @@ export function UserAvatar({ loading, session, size = 20 }: UserAvatarProps) {
         className={`flex items-center justify-center ${base} font-semibold leading-none text-white`}
         style={{
           ...style,
-          fontSize: `${Math.round(size * 0.4)}px`,
+          fontSize: `${(size * 0.4) / 16}rem`,
           backgroundColor: `hsl(${avatarHue(seed)}, 48%, 44%)`,
         }}
       >

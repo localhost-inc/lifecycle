@@ -7,8 +7,8 @@ use crate::capabilities::workspaces::harness::parsing::{
     normalize_prompt_text,
 };
 use crate::capabilities::workspaces::harness::types::{
-    HarnessAdapter, HarnessPromptSubmission, HarnessTurnCompletion, SessionStoreConfig,
-    SessionStoreScope,
+    HarnessAdapter, HarnessPromptSubmission, HarnessTurnCompletion, HarnessTurnStarted,
+    SessionStoreConfig, SessionStoreScope,
 };
 use crate::shared::errors::LifecycleError;
 
@@ -102,6 +102,7 @@ pub(super) const ADAPTER: HarnessAdapter = HarnessAdapter {
         session_id_path: Some(&["payload", "id"]),
         session_id_from_file_stem: false,
     }),
+    parse_turn_started,
     parse_prompt_submission,
     parse_turn_completion,
 };
@@ -109,10 +110,18 @@ pub(super) const ADAPTER: HarnessAdapter = HarnessAdapter {
 fn codex_new_session_args(
     _session_id: Option<&str>,
     launch_config: Option<&HarnessLaunchConfig>,
+    instructions: Option<&str>,
 ) -> Result<Vec<String>, LifecycleError> {
     let mut args = Vec::new();
     if let Some(launch_config) = launch_config {
         args.extend(resolve_codex_launch_config(launch_config)?.cli_args());
+    }
+    if let Some(instructions) = instructions {
+        args.push("-c".to_string());
+        args.push(format!(
+            "developer_instructions={}",
+            toml_basic_string(instructions)
+        ));
     }
 
     Ok(args)
@@ -121,13 +130,25 @@ fn codex_new_session_args(
 fn codex_resume_args(
     session_id: &str,
     launch_config: Option<&HarnessLaunchConfig>,
+    instructions: Option<&str>,
 ) -> Result<Vec<String>, LifecycleError> {
     let mut args = vec!["resume".to_string(), session_id.to_string()];
     if let Some(launch_config) = launch_config {
         args.extend(resolve_codex_launch_config(launch_config)?.cli_args());
     }
+    if let Some(instructions) = instructions {
+        args.push("-c".to_string());
+        args.push(format!(
+            "developer_instructions={}",
+            toml_basic_string(instructions)
+        ));
+    }
 
     Ok(args)
+}
+
+fn toml_basic_string(value: &str) -> String {
+    format!("{value:?}")
 }
 
 fn parse_prompt_submission(value: &Value, line: &str) -> Option<HarnessPromptSubmission> {
@@ -157,7 +178,31 @@ fn parse_prompt_submission(value: &Value, line: &str) -> Option<HarnessPromptSub
     Some(HarnessPromptSubmission {
         prompt_key: build_harness_event_key("codex", "prompt", line, &[prompt_id, turn_id]),
         prompt_text,
+        turn_start_key: build_harness_event_key(
+            "codex",
+            "turn_started",
+            line,
+            &[turn_id, prompt_id],
+        ),
         turn_id: turn_id.map(ToString::to_string),
+    })
+}
+
+fn parse_turn_started(value: &Value, _line: &str) -> Option<HarnessTurnStarted> {
+    if json_string_at_path(value, &["type"]) != Some("event_msg")
+        || json_string_at_path(value, &["payload", "type"]) != Some("task_started")
+    {
+        return None;
+    }
+
+    Some(HarnessTurnStarted {
+        start_key: build_harness_event_key(
+            "codex",
+            "turn_started",
+            _line,
+            &[json_string_at_path(value, &["payload", "turn_id"])],
+        ),
+        turn_id: json_string_at_path(value, &["payload", "turn_id"]).map(ToString::to_string),
     })
 }
 

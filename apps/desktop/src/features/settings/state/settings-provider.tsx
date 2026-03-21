@@ -48,8 +48,20 @@ export const DEFAULT_WORKTREE_ROOT = `${DEFAULT_LIFECYCLE_ROOT}/worktrees`;
 export type DefaultNewTabLaunch = "shell" | "claude" | "codex";
 
 export const DEFAULT_NEW_TAB_LAUNCH: DefaultNewTabLaunch = "shell";
+export const DEFAULT_BASE_FONT_SIZE = 16;
 export const DEFAULT_DIM_INACTIVE_PANES = false;
 export const DEFAULT_INACTIVE_PANE_OPACITY = 0.65;
+
+export const BASE_FONT_SIZE_OPTIONS = [
+  { label: "12px", value: 12 },
+  { label: "13px", value: 13 },
+  { label: "14px", value: 14 },
+  { label: "15px", value: 15 },
+  { label: "16px (default)", value: 16 },
+  { label: "17px", value: 17 },
+  { label: "18px", value: 18 },
+  { label: "20px", value: 20 },
+] as const;
 
 export const INACTIVE_PANE_OPACITY_OPTIONS = [
   { label: "85%", value: 0.85 },
@@ -61,9 +73,19 @@ export const INACTIVE_PANE_OPACITY_OPTIONS = [
 ] as const;
 
 const VALID_NEW_TAB_LAUNCH_VALUES = new Set<string>(["shell", "claude", "codex"]);
+const VALID_BASE_FONT_SIZE_VALUES = new Set<number>(
+  BASE_FONT_SIZE_OPTIONS.map((option) => option.value),
+);
 const VALID_INACTIVE_PANE_OPACITY_VALUES = new Set<string>(
   INACTIVE_PANE_OPACITY_OPTIONS.map((option) => option.value.toFixed(2)),
 );
+
+function normalizeBaseFontSize(value: number | undefined | null): number {
+  if (typeof value === "number" && VALID_BASE_FONT_SIZE_VALUES.has(value)) {
+    return value;
+  }
+  return DEFAULT_BASE_FONT_SIZE;
+}
 
 function normalizeDefaultNewTabLaunch(value: string | undefined | null): DefaultNewTabLaunch {
   if (typeof value === "string" && VALID_NEW_TAB_LAUNCH_VALUES.has(value)) {
@@ -103,6 +125,7 @@ function normalizeTheme(value: unknown): Theme {
 }
 
 export interface AppSettings {
+  baseFontSize: number;
   theme: Theme;
   defaultNewTabLaunch: DefaultNewTabLaunch;
   dimInactivePanes: boolean;
@@ -119,6 +142,7 @@ interface SettingsContextValue extends AppSettings {
   resolvedTheme: ResolvedTheme;
   resolvedAppearance: "light" | "dark";
   resetTypography: () => void;
+  setBaseFontSize: (value: number) => void;
   setClaudeHarnessSettings: (value: ClaudeHarnessSettings) => void;
   setCodexHarnessSettings: (value: CodexHarnessSettings) => void;
   setDefaultNewTabLaunch: (value: DefaultNewTabLaunch) => void;
@@ -147,13 +171,14 @@ function getFontSettingsRoot(): FontSettingsRoot | null {
 }
 
 export function applyFontSettings(
-  settings: Pick<AppSettings, "interfaceFontFamily" | "monospaceFontFamily">,
+  settings: Pick<AppSettings, "baseFontSize" | "interfaceFontFamily" | "monospaceFontFamily">,
   root: FontSettingsRoot | null = getFontSettingsRoot(),
 ): void {
   if (!root) {
     return;
   }
 
+  root.setProperty("font-size", `${settings.baseFontSize}px`);
   root.setProperty("--font-heading", settings.interfaceFontFamily);
   root.setProperty("--font-body", settings.interfaceFontFamily);
   root.setProperty("--font-mono", settings.monospaceFontFamily);
@@ -161,6 +186,7 @@ export function applyFontSettings(
 
 function buildDefaultSettings(): AppSettings {
   return {
+    baseFontSize: DEFAULT_BASE_FONT_SIZE,
     theme: "dark",
     defaultNewTabLaunch: DEFAULT_NEW_TAB_LAUNCH,
     dimInactivePanes: DEFAULT_DIM_INACTIVE_PANES,
@@ -179,6 +205,7 @@ export function parseSettingsJson(raw: Record<string, unknown> | null | undefine
   if (!raw) return defaults;
 
   return {
+    baseFontSize: normalizeBaseFontSize(raw.baseFontSize as number),
     theme: normalizeTheme(raw.theme),
     defaultNewTabLaunch: normalizeDefaultNewTabLaunch(raw.defaultNewTabLaunch as string),
     dimInactivePanes: normalizeDimInactivePanes(raw.dimInactivePanes as boolean),
@@ -263,12 +290,21 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   // Apply font settings
   useEffect(() => {
     applyFontSettings(settings);
-  }, [settings.interfaceFontFamily, settings.monospaceFontFamily]);
+  }, [settings.baseFontSize, settings.interfaceFontFamily, settings.monospaceFontFamily]);
 
   const persistSettings = useCallback((next: AppSettings) => {
     writeAppSettings(settingsToJson(next));
     return next;
   }, []);
+
+  const setBaseFontSize = useCallback(
+    (value: number) => {
+      setSettingsState((prev) =>
+        persistSettings({ ...prev, baseFontSize: normalizeBaseFontSize(value) }),
+      );
+    },
+    [persistSettings],
+  );
 
   const setTheme = useCallback(
     (value: Theme) => {
@@ -395,6 +431,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setSettingsState((prev) =>
       persistSettings({
         ...prev,
+        baseFontSize: DEFAULT_BASE_FONT_SIZE,
         interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
         monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
       }),
@@ -407,6 +444,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       resolvedTheme,
       resolvedAppearance,
       resetTypography,
+      setBaseFontSize,
       setClaudeHarnessSettings,
       setCodexHarnessSettings,
       setDefaultNewTabLaunch,
@@ -424,6 +462,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       resolvedTheme,
       resolvedAppearance,
       resetTypography,
+      setBaseFontSize,
       setClaudeHarnessSettings,
       setCodexHarnessSettings,
       setDefaultNewTabLaunch,

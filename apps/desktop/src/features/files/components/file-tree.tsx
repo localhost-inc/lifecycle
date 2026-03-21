@@ -1,6 +1,7 @@
-import { Alert, AlertDescription, Button } from "@lifecycle/ui";
-import { ChevronRight, File, Folder, RefreshCcw } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Alert, AlertDescription } from "@lifecycle/ui";
+import { ChevronRight, Folder, FolderOpen } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { resolveFileTreeIcon } from "@/features/files/lib/file-tree-icons";
 import type { WorkspaceFileTreeEntry } from "@/features/workspaces/api";
 
 interface FileTreeProps {
@@ -9,7 +10,6 @@ interface FileTreeProps {
   error: unknown;
   isLoading: boolean;
   onOpenFile: (filePath: string) => void;
-  onRefresh: () => void;
 }
 
 interface FileTreeLeaf {
@@ -124,16 +124,80 @@ function finalizeFileTree(
   });
 }
 
+export function collectCollapsedDirectoryPaths(nodes: readonly FileTreeNode[]): Set<string> {
+  const paths = new Set<string>();
+
+  for (const node of nodes) {
+    if (node.kind !== "directory") {
+      continue;
+    }
+
+    paths.add(node.path);
+    for (const childPath of collectCollapsedDirectoryPaths(node.children)) {
+      paths.add(childPath);
+    }
+  }
+
+  return paths;
+}
+
+export function reconcileCollapsedDirectoryPaths(
+  previousCollapsedPaths: ReadonlySet<string>,
+  previousDirectoryPaths: ReadonlySet<string>,
+  nextDirectoryPaths: ReadonlySet<string>,
+): Set<string> {
+  const nextCollapsedPaths = new Set<string>();
+
+  for (const path of nextDirectoryPaths) {
+    if (!previousDirectoryPaths.has(path) || previousCollapsedPaths.has(path)) {
+      nextCollapsedPaths.add(path);
+    }
+  }
+
+  return nextCollapsedPaths;
+}
+
+function areSetsEqual(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  if (left.size !== right.size) {
+    return false;
+  }
+
+  for (const value of left) {
+    if (!right.has(value)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export function FileTree({
   activeFilePath,
   entries,
   error,
   isLoading,
   onOpenFile,
-  onRefresh,
 }: FileTreeProps) {
   const tree = useMemo(() => buildFileTree(entries ?? []), [entries]);
-  const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(() => new Set());
+  const directoryPaths = useMemo(() => collectCollapsedDirectoryPaths(tree), [tree]);
+  const previousDirectoryPathsRef = useRef<Set<string>>(directoryPaths);
+  const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(() => new Set(directoryPaths));
+
+  useEffect(() => {
+    const previousDirectoryPaths = previousDirectoryPathsRef.current;
+    const nextCollapsedPaths = reconcileCollapsedDirectoryPaths(
+      collapsedPaths,
+      previousDirectoryPaths,
+      directoryPaths,
+    );
+
+    previousDirectoryPathsRef.current = directoryPaths;
+    if (areSetsEqual(collapsedPaths, nextCollapsedPaths)) {
+      return;
+    }
+
+    setCollapsedPaths(nextCollapsedPaths);
+  }, [collapsedPaths, directoryPaths]);
 
   const toggleDirectory = (path: string) => {
     setCollapsedPaths((previous) => {
@@ -148,21 +212,7 @@ export function FileTree({
   };
 
   return (
-    <aside className="flex h-full min-h-0 w-72 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)]">
-      <div className="flex min-h-14 items-center gap-2 border-b border-[var(--border)] px-3 py-3">
-        <div className="min-w-0">
-          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
-            Files
-          </p>
-          <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-            {entries ? Intl.NumberFormat().format(entries.length) : "0"} items
-          </p>
-        </div>
-        <Button className="ml-auto" onClick={onRefresh} size="icon" variant="ghost">
-          <RefreshCcw className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-
+    <aside className="flex h-full min-h-0 w-full min-w-0 flex-col bg-[var(--surface)]">
       <div className="min-h-0 flex-1 overflow-auto py-2">
         {isLoading && !entries ? (
           <p className="px-3 text-xs text-[var(--muted-foreground)]">Loading workspace files...</p>
@@ -209,6 +259,7 @@ function FileTreeRow({
 }: FileTreeRowProps) {
   if (node.kind === "file") {
     const isActive = node.path === activeFilePath;
+    const { Icon, name } = resolveFileTreeIcon(node.path, node.extension);
 
     return (
       <button
@@ -216,11 +267,16 @@ function FileTreeRow({
           isActive ? "bg-[var(--surface-selected)]" : ""
         }`}
         onClick={() => onOpenFile(node.path)}
-        style={{ paddingLeft: `${depth * 12 + 12}px` }}
+        style={{ paddingLeft: `${depth * 1.25 + 0.75}rem` }}
         title={node.path}
         type="button"
       >
-        <File className="h-3 w-3 shrink-0 text-[var(--muted-foreground)]" />
+        <span
+          className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-[var(--muted-foreground)]"
+          data-file-tree-icon={name}
+        >
+          <Icon className="h-3.5 w-3.5" strokeWidth={1.8} />
+        </span>
         <span className="min-w-0 truncate font-mono text-[var(--foreground)]">{node.name}</span>
       </button>
     );
@@ -233,7 +289,7 @@ function FileTreeRow({
       <button
         className="flex w-full items-center gap-2 py-1.5 pr-3 text-left text-xs transition-colors hover:bg-[var(--surface-hover)]"
         onClick={() => onToggleDirectory(node.path)}
-        style={{ paddingLeft: `${depth * 12 + 12}px` }}
+        style={{ paddingLeft: `${depth * 1.25 + 0.75}rem` }}
         title={node.path}
         type="button"
       >
@@ -242,7 +298,11 @@ function FileTreeRow({
             isCollapsed ? "" : "rotate-90"
           }`}
         />
-        <Folder className="h-3.5 w-3.5 shrink-0 text-[var(--muted-foreground)]" />
+        {isCollapsed ? (
+          <Folder className="h-3.5 w-3.5 shrink-0 text-[var(--muted-foreground)]" />
+        ) : (
+          <FolderOpen className="h-3.5 w-3.5 shrink-0 text-[var(--muted-foreground)]" />
+        )}
         <span className="min-w-0 truncate font-mono text-[var(--muted-foreground)]">
           {node.name}
         </span>

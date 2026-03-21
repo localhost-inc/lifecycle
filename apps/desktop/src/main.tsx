@@ -2,6 +2,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { StrictMode, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
+import { RootErrorBoundary } from "@/app/root-error-boundary";
 import { ShortcutRouterProvider } from "@/app/shortcuts/shortcut-router";
 import { router } from "@/app/router";
 import { AuthSessionProvider } from "@/features/auth/state/auth-session-provider";
@@ -45,20 +46,22 @@ markPerformance("bootstrap:start");
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <SettingsProvider>
-      <BootstrapPerfMarker />
-      <ContextMenuBlocker />
-      <QueryProvider>
-        <AuthSessionProvider>
-          <ProjectManifestWatcher />
-          <TurnNotificationListener />
-          <TerminalResponseReadyProvider>
-            <ShortcutRouterProvider>
-              <RouterProvider router={router} />
-            </ShortcutRouterProvider>
-          </TerminalResponseReadyProvider>
-        </AuthSessionProvider>
-      </QueryProvider>
-    </SettingsProvider>
+    <RootErrorBoundary>
+      <SettingsProvider>
+        <BootstrapPerfMarker />
+        <ContextMenuBlocker />
+        <QueryProvider>
+          <AuthSessionProvider>
+            <ProjectManifestWatcher />
+            <TurnNotificationListener />
+            <TerminalResponseReadyProvider>
+              <ShortcutRouterProvider>
+                <RouterProvider router={router} />
+              </ShortcutRouterProvider>
+            </TerminalResponseReadyProvider>
+          </AuthSessionProvider>
+        </QueryProvider>
+      </SettingsProvider>
+    </RootErrorBoundary>
   </StrictMode>,
 );

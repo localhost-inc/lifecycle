@@ -308,6 +308,7 @@ Key M4 targets:
 - **Service share toggles**: per-service on/off toggle in the Environment extension (local-scoped)
 - **Port overrides**: editable port field per service in the Environment extension
 - **Preview URL display**: stable `*.lifecycle.localhost` URL with copy button in the Environment extension
+- **Browser canvas launch**: service preview opens route into a workspace browser surface by default, with explicit external-open action from the browser toolbar
 
 ## Exit Gate
 
@@ -320,6 +321,7 @@ Key M4 targets:
 - Destroy shows confirmation dialog -> confirms -> workspace gone, worktree pruned
 - Terminal remains usable while services are idle
 - Share toggle -> preview URL shows stable `*.lifecycle.localhost`
+- Service preview opens in the workspace browser surface and can still be opened externally on demand
 
 ## Test Scenarios
 
@@ -331,6 +333,6 @@ workspace running -> reset -> services restart and data is re-seeded without a s
 workspace running -> stop -> SIGTERM sent -> stopping -> idle
 workspace idle -> terminal remains usable -> run -> services restart -> running
 destroy workspace -> confirmation dialog -> confirm -> workspace removed -> worktree pruned -> clean state
-share service -> preview URL shows stable `*.lifecycle.localhost` -> opens in browser
+share service -> preview URL shows stable `*.lifecycle.localhost` -> opens in workspace browser surface
 mutation during transitional state -> workspace_mutation_locked error
 ```

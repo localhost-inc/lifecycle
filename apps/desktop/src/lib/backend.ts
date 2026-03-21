@@ -59,9 +59,10 @@ class TauriBackend implements Backend {
   }
 
   async createWorkspace(input: WorkspaceCreateInput): Promise<WorkspaceCreateResult> {
-    const context = requireHostCreateContext(input.context);
+    const context = requireDesktopCreateContext(input.context);
     return this.invoke("create_workspace", {
       input: {
+        target: context.target,
         checkoutType: context.checkoutType ?? "worktree",
         projectId: context.projectId,
         projectPath: context.projectPath,
@@ -90,20 +91,20 @@ class TauriBackend implements Backend {
   }
 }
 
-function requireHostCreateContext(
+function requireDesktopCreateContext(
   context: WorkspaceCreateInput["context"],
-): WorkspaceCreateInput["context"] & { target: "host"; projectPath: string } {
-  if (context.target !== "host") {
+): WorkspaceCreateInput["context"] & { target: "local" | "docker"; projectPath: string } {
+  if (context.target !== "local" && context.target !== "docker") {
     throw new Error(`This backend does not support workspace target '${context.target}' yet.`);
   }
 
   if (!context.projectPath) {
-    throw new Error("Host workspace creation requires a project path.");
+    throw new Error(`${context.target} workspace creation requires a project path.`);
   }
 
   return {
     ...context,
-    target: "host",
+    target: context.target,
     projectPath: context.projectPath,
   };
 }

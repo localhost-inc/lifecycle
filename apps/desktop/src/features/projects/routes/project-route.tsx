@@ -7,6 +7,7 @@ import { useTerminalResponseReady } from "@/features/terminals/state/terminal-re
 import { useWorkspaceToolbarSlot } from "@/features/workspaces/state/workspace-toolbar-context";
 import { WorkspaceNavToolbar } from "@/features/workspaces/components/workspace-nav-toolbar";
 import { ProjectNavBar } from "@/features/projects/components/project-nav-bar";
+import type { WorkspaceCreateMode } from "@/features/workspaces/api";
 import { resolveProjectRepoWorkspace } from "@/features/projects/lib/project-repo-workspace";
 import {
   resolvePersistedProjectSubPath,
@@ -14,7 +15,7 @@ import {
 } from "@/features/projects/state/project-content-tabs";
 
 export interface ProjectRouteOutletContext {
-  onCreateWorkspace: () => Promise<void>;
+  onCreateWorkspace: (mode: WorkspaceCreateMode) => Promise<void>;
   onDestroyWorkspace: (workspace: WorkspaceRecord) => Promise<void>;
   onForkWorkspace: (workspace: WorkspaceRecord) => Promise<void>;
   onOpenWorkspace: (workspace: WorkspaceRecord) => void;
@@ -78,7 +79,7 @@ export function ProjectRoute() {
     }
 
     return {
-      onCreateWorkspace: () => onCreateWorkspace(project.id),
+      onCreateWorkspace: (mode) => onCreateWorkspace(project.id, mode),
       onDestroyWorkspace,
       onForkWorkspace,
       onOpenWorkspace,
@@ -121,7 +122,7 @@ export function ProjectRoute() {
         activeWorkspaceId={activeWorkspace?.id ?? null}
         hasWorkspaceResponseReady={hasWorkspaceResponseReady}
         hasWorkspaceRunningTurn={hasWorkspaceRunningTurn}
-        onCreateWorkspace={() => void onCreateWorkspace(project.id)}
+        onCreateWorkspace={(mode) => void onCreateWorkspace(project.id, mode)}
         onDestroyWorkspace={onDestroyWorkspace}
         onForkWorkspace={onForkWorkspace}
         onOpenSettings={onOpenSettings}

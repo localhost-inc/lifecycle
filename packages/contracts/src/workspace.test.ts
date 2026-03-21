@@ -9,12 +9,12 @@ import type {
 describe("workspace contracts", () => {
   test("keeps canonical workspace targets", () => {
     const targets: WorkspaceTarget[] = [
-      "host",
+      "local",
       "docker",
-      "remote_host",
+      "remote",
       "cloud",
     ];
-    expect(targets).toEqual(["host", "docker", "remote_host", "cloud"]);
+    expect(targets).toEqual(["local", "docker", "remote", "cloud"]);
   });
 
   test("keeps canonical workspace checkout types", () => {

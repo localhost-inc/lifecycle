@@ -209,6 +209,9 @@ mod tests {
             .expect("codex prompt submission");
 
         assert!(prompt.prompt_key.starts_with("codex:prompt:hash:"));
+        assert!(prompt
+            .turn_start_key
+            .starts_with("codex:turn_started:hash:"));
         assert_eq!(prompt.prompt_text, "fix auto tab titles");
         assert_eq!(prompt.turn_id.as_deref(), None);
     }
@@ -229,6 +232,7 @@ mod tests {
             .expect("claude prompt submission");
 
         assert_eq!(prompt.prompt_key, "claude:prompt:user-123");
+        assert_eq!(prompt.turn_start_key, "claude:turn_started:user-123");
         assert_eq!(prompt.prompt_text, "rename the terminal tab");
         assert_eq!(prompt.turn_id.as_deref(), Some("user-123"));
     }
@@ -250,6 +254,25 @@ mod tests {
 
         assert_eq!(completion.completion_key, "codex:completion:turn-123");
         assert_eq!(completion.turn_id.as_deref(), Some("turn-123"));
+    }
+
+    #[test]
+    fn parses_codex_task_started_lines_as_turn_started() {
+        let provider = resolve_harness_adapter(Some("codex")).expect("codex provider");
+        let value = serde_json::from_str::<Value>(
+            "{\"type\":\"event_msg\",\"payload\":{\"type\":\"task_started\",\"turn_id\":\"turn-123\"}}",
+        )
+        .expect("valid codex task started");
+
+        let started = provider
+            .parse_turn_started(
+                &value,
+                "{\"type\":\"event_msg\",\"payload\":{\"type\":\"task_started\",\"turn_id\":\"turn-123\"}}",
+            )
+            .expect("codex task started");
+
+        assert_eq!(started.start_key, "codex:turn_started:turn-123");
+        assert_eq!(started.turn_id.as_deref(), Some("turn-123"));
     }
 
     #[test]

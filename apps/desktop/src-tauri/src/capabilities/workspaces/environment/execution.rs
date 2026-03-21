@@ -3,9 +3,7 @@ use std::time::Instant;
 
 use crate::platform::diagnostics;
 use crate::platform::runtime::{health, prepare};
-use crate::shared::errors::{
-    LifecycleError, ServiceStatus, WorkspaceFailureReason,
-};
+use crate::shared::errors::{LifecycleError, ServiceStatus, WorkspaceFailureReason};
 
 use super::super::controller::{ManagedWorkspaceController, WorkspaceControllerToken};
 use super::super::manifest::{HealthCheck, ServiceConfig};
@@ -144,10 +142,7 @@ impl WorkspaceStartContext<'_> {
 
         diagnostics::append_timing(
             "workspace-start",
-            &format!(
-                "workspace {} service {name} start",
-                self.workspace_id
-            ),
+            &format!("workspace {} service {name} start", self.workspace_id),
             service_start_started_at,
         );
 
@@ -299,6 +294,8 @@ impl WorkspaceStartContext<'_> {
 
         let step_field = format!("environment.{node_name}");
         match prepare::run_steps(
+            self.app,
+            self.workspace_id,
             self.worktree_path,
             std::slice::from_ref(step),
             self.runtime_env,
@@ -501,7 +498,7 @@ pub(super) async fn record_service_graph_failure(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capabilities::workspaces::manifest::{ProcessService, PrepareStep};
+    use crate::capabilities::workspaces::manifest::{PrepareStep, ProcessService};
 
     #[test]
     fn collect_dependent_service_names_only_marks_impacted_service_descendants() {

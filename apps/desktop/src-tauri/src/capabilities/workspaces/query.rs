@@ -1,6 +1,6 @@
 use super::checkout_type::is_root_workspace_checkout_type;
-use super::preview::preview_url_for_service;
 use super::environment::sync_workspace_manifest_from_disk_if_idle;
+use super::preview::preview_url_for_service;
 #[cfg(test)]
 use crate::platform::db::open_db;
 use crate::platform::db::run_blocking_db_read;
@@ -287,16 +287,8 @@ fn get_workspace_services_sync(
 
     let mut result = Vec::new();
     for row in rows {
-        let (
-            id,
-            workspace_id,
-            name,
-            status,
-            status_reason,
-            assigned_port,
-            created_at,
-            updated_at,
-        ) = row.map_err(|e| LifecycleError::Database(e.to_string()))?;
+        let (id, workspace_id, name, status, status_reason, assigned_port, created_at, updated_at) =
+            row.map_err(|e| LifecycleError::Database(e.to_string()))?;
         let preview_url = preview_url_for_service(conn, &workspace_id, &name)?;
         result.push(ServiceRecord {
             id,
@@ -419,7 +411,7 @@ mod tests {
                 "Root",
                 "root",
                 "main",
-                "host",
+                "local",
                 "active",
                 "2026-03-10 12:00:00",
                 "workspace_worktree_old",
@@ -427,7 +419,7 @@ mod tests {
                 "Old Worktree",
                 "worktree",
                 "lifecycle/old",
-                "host",
+                "local",
                 "active",
                 "2026-03-10 12:05:00",
                 "workspace_worktree_new",
@@ -435,7 +427,7 @@ mod tests {
                 "New Worktree",
                 "worktree",
                 "lifecycle/new",
-                "host",
+                "local",
                 "active",
                 "2026-03-10 12:10:00",
                 "workspace_other_project",
@@ -443,7 +435,7 @@ mod tests {
                 "Other Root",
                 "root",
                 "develop",
-                "host",
+                "local",
                 "active",
                 "2026-03-10 12:15:00"
             ],
@@ -497,8 +489,8 @@ mod tests {
     async fn get_workspace_services_reconciles_idle_manifest_from_disk() {
         let db_path = temp_db_path();
         run_migrations(&db_path).expect("run migrations");
-        let worktree_path = std::env::temp_dir()
-            .join(format!("lifecycle-query-worktree-{}", uuid::Uuid::new_v4()));
+        let worktree_path =
+            std::env::temp_dir().join(format!("lifecycle-query-worktree-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&worktree_path).expect("create worktree dir");
         let manifest_text = r#"{
             "workspace": { "prepare": [], "teardown": [] },
@@ -533,7 +525,7 @@ mod tests {
                 "worktree",
                 "lifecycle/workspace-1",
                 worktree_path.to_string_lossy().to_string(),
-                "host",
+                "local",
                 "active",
                 "stale-manifest",
                 "2026-03-19 12:00:00"
@@ -569,7 +561,9 @@ mod tests {
         let persisted_names = conn
             .prepare("SELECT name FROM service WHERE workspace_id = ?1 ORDER BY name")
             .expect("prepare service query")
-            .query_map(rusqlite::params!["workspace_1"], |row| row.get::<_, String>(0))
+            .query_map(rusqlite::params!["workspace_1"], |row| {
+                row.get::<_, String>(0)
+            })
             .expect("query services")
             .collect::<Result<Vec<_>, _>>()
             .expect("collect services");

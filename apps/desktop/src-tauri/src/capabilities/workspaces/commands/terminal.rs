@@ -2,7 +2,7 @@ use crate::capabilities::workspaces::harness::HarnessLaunchConfig;
 use crate::platform::db::DbPath;
 use crate::shared::errors::LifecycleError;
 use crate::WorkspaceControllerRegistryHandle;
-use tauri::{AppHandle, State, WebviewWindow};
+use tauri::{AppHandle, State, Webview};
 
 fn require_workspace_terminal(
     db_path: &str,
@@ -89,19 +89,19 @@ pub async fn save_terminal_attachment(
 
 #[tauri::command]
 pub async fn sync_native_terminal_surface(
-    window: WebviewWindow,
+    webview: Webview,
     db_path: State<'_, DbPath>,
     input: super::super::terminal::NativeTerminalSurfaceSyncInput,
 ) -> Result<(), LifecycleError> {
-    super::super::terminal::sync_native_terminal_surface(window, db_path, input).await
+    super::super::terminal::sync_native_terminal_surface(webview, db_path, input).await
 }
 
 #[tauri::command]
 pub async fn sync_native_terminal_surface_frame(
-    window: WebviewWindow,
+    webview: Webview,
     input: super::super::terminal::NativeTerminalSurfaceFrameSyncInput,
 ) -> Result<(), LifecycleError> {
-    super::super::terminal::sync_native_terminal_surface_frame(window, input).await
+    super::super::terminal::sync_native_terminal_surface_frame(webview, input).await
 }
 
 #[tauri::command]

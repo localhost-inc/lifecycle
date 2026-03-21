@@ -1,7 +1,7 @@
 import type { ServiceRecord } from "@lifecycle/contracts";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { IconButton, Spinner } from "@lifecycle/ui";
-import { ChevronRight, ExternalLink, Layers, Play, TerminalSquare } from "lucide-react";
+import { Globe, Layers, Play, TerminalSquare } from "lucide-react";
 import {
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
@@ -176,6 +176,7 @@ function useResizeHandle(minHeight = 60) {
 export function ServiceRow({
   expanded: expandedProp,
   logLines,
+  onOpenPreview,
   onStartService,
   onToggleExpanded,
   runDisabled = false,
@@ -185,6 +186,7 @@ export function ServiceRow({
 }: {
   expanded?: boolean;
   logLines?: ServiceLogLine[];
+  onOpenPreview?: (service: Pick<ServiceRecord, "name" | "preview_url">) => void;
   onStartService?: (serviceName: string) => void;
   onToggleExpanded?: () => void;
   runDisabled?: boolean;
@@ -199,7 +201,7 @@ export function ServiceRow({
   } = useResizeHandle();
   const previewUrl = resolvePreviewUrl(service);
   const statusReasonLabel = formatServiceStatusReason(service.status_reason);
-  const canOpenPreview = previewUrl !== null && service.status === "ready" && service.assigned_port !== null;
+  const hasPreview = previewUrl !== null;
   const hasLogs = logLines !== undefined && logLines.length > 0;
   const isExpandable = onToggleExpanded !== undefined;
   const expanded = expandedProp ?? false;
@@ -215,11 +217,19 @@ export function ServiceRow({
     ) : null;
 
   function handleOpenPreview(): void {
-    if (!previewUrl || !canOpenPreview) {
+    if (!previewUrl) {
       return;
     }
 
-    openUrl(previewUrl);
+    if (onOpenPreview) {
+      onOpenPreview({
+        name: service.name,
+        preview_url: previewUrl,
+      });
+      return;
+    }
+
+    void openUrl(previewUrl);
   }
 
   return (
@@ -246,7 +256,7 @@ export function ServiceRow({
             </span>
           )}
         </span>
-        {canOpenPreview && (
+        {hasPreview && (
           <button
             aria-label={`Open preview for ${service.name}`}
             className="cursor-pointer rounded-md p-1 text-[var(--muted-foreground)]/40 transition-colors hover:text-[var(--foreground)]"
@@ -256,7 +266,7 @@ export function ServiceRow({
             }}
             type="button"
           >
-            <ExternalLink className="size-3.5" />
+            <Globe className="size-3.5" />
           </button>
         )}
         {canStartService && (
@@ -276,17 +286,6 @@ export function ServiceRow({
             )}
           </IconButton>
         )}
-        {hasLogs && (
-          <span className="shrink-0 text-[11px] tabular-nums text-[var(--muted-foreground)]/60">
-            {logLines.length}
-          </span>
-        )}
-        {isExpandable && (
-          <ChevronRight
-            className={`size-3 shrink-0 text-[var(--muted-foreground)] transition-transform duration-150 ${expanded ? "rotate-90" : ""}`}
-            strokeWidth={2.4}
-          />
-        )}
       </div>
 
       {isExpandable && (
@@ -302,15 +301,15 @@ export function ServiceRow({
               {hasLogs ? (
                 <ServiceLogBody height={logHeight} lines={logLines} />
               ) : (
-                <div className="bg-[var(--background)] px-3 py-2 text-xs text-[var(--muted-foreground)]/60">
-                  No output yet
+                <div className="bg-[var(--background)] px-3 py-2 text-xs text-[var(--muted-foreground)]/60 text-center">
+                  No logs yet
                 </div>
               )}
             </div>
             {hasLogs && (
               // biome-ignore lint: resize handle
               <div
-                className="h-1.5 cursor-row-resize border-b border-[var(--border)] bg-[var(--surface)] transition-colors hover:bg-[var(--muted-foreground)]/15 active:bg-[var(--muted-foreground)]/25"
+                className="h-px cursor-row-resize border-b border-[var(--border)] bg-[var(--border)] transition-colors hover:bg-[var(--muted-foreground)]/15 active:bg-[var(--muted-foreground)]/25"
                 {...resizeHandleProps}
               />
             )}

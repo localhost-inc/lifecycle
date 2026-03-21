@@ -25,6 +25,7 @@ describe("workspace contract", () => {
       "interruptTerminal",
       "readFile",
       "writeFile",
+      "subscribeFileEvents",
       "listFiles",
       "openFile",
       "getGitStatus",
@@ -47,7 +48,7 @@ describe("workspace contract", () => {
       "mergeGitPullRequest",
     ];
 
-    expect(requiredMethods).toHaveLength(35);
+    expect(requiredMethods).toHaveLength(36);
   });
 
   test("host workspace client exposes the full contract surface", () => {
@@ -69,6 +70,7 @@ describe("workspace contract", () => {
     expect(typeof client.interruptTerminal).toBe("function");
     expect(typeof client.readFile).toBe("function");
     expect(typeof client.writeFile).toBe("function");
+    expect(typeof client.subscribeFileEvents).toBe("function");
     expect(typeof client.listFiles).toBe("function");
     expect(typeof client.openFile).toBe("function");
     expect(typeof client.getGitStatus).toBe("function");
@@ -91,6 +93,38 @@ describe("workspace contract", () => {
     expect(typeof client.mergeGitPullRequest).toBe("function");
   });
 
+  test("host workspace client forwards file event subscriptions", async () => {
+    const subscribeCalls: Array<{
+      input: { workspaceId: string; worktreePath?: string | null };
+      listener: Parameters<WorkspaceClient["subscribeFileEvents"]>[1];
+    }> = [];
+    const subscribe = async (
+      input: { workspaceId: string; worktreePath?: string | null },
+      listener: Parameters<WorkspaceClient["subscribeFileEvents"]>[1],
+    ) => {
+      subscribeCalls.push({ input, listener });
+      return () => {};
+    };
+    const client = new HostWorkspaceClient(async () => "", subscribe);
+    const listener: Parameters<WorkspaceClient["subscribeFileEvents"]>[1] = () => {};
+
+    const cleanup = await client.subscribeFileEvents(
+      {
+        workspaceId: "ws_1",
+        worktreePath: "/tmp/project_1/.worktrees/ws_1",
+      },
+      listener,
+    );
+
+    expect(subscribeCalls).toHaveLength(1);
+    expect(subscribeCalls[0]?.input).toEqual({
+      workspaceId: "ws_1",
+      worktreePath: "/tmp/project_1/.worktrees/ws_1",
+    });
+    expect(subscribeCalls[0]?.listener).toBe(listener);
+    expect(typeof cleanup).toBe("function");
+  });
+
   test("host workspace client forwards manifest fingerprint when starting services", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
@@ -106,7 +140,7 @@ describe("workspace contract", () => {
       source_ref: "lifecycle/workspace-1",
       git_sha: null,
       worktree_path: "/tmp/project_1/.worktrees/ws_1",
-      target: "host",
+      target: "local",
       manifest_fingerprint: "manifest_1",
       created_by: null,
       source_workspace_id: null,
@@ -172,7 +206,7 @@ describe("workspace contract", () => {
         source_ref: "lifecycle/workspace-1",
         git_sha: null,
         worktree_path: "/tmp/project_1/.worktrees/ws_1",
-        target: "host",
+        target: "local",
         manifest_fingerprint: "manifest_1",
         created_by: null,
         source_workspace_id: null,
@@ -220,7 +254,7 @@ describe("workspace contract", () => {
         source_ref: "lifecycle/workspace-1",
         git_sha: null,
         worktree_path: "/tmp/project_1/.worktrees/ws_1",
-        target: "host",
+        target: "local",
         manifest_fingerprint: "manifest_1",
         created_by: null,
         source_workspace_id: null,
