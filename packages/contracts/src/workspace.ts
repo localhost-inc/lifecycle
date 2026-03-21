@@ -1,10 +1,14 @@
-export type WorkspaceMode = "local" | "cloud";
+export type WorkspaceTarget =
+  | "host"
+  | "docker"
+  | "remote_host"
+  | "cloud";
 
-export type WorkspaceKind = "root" | "managed";
+export type WorkspaceCheckoutType = "root" | "worktree";
 
-export type EnvironmentStatus = "idle" | "starting" | "running" | "stopping";
+export type WorkspaceStatus = "preparing" | "active" | "archiving" | "archived";
 
-export type EnvironmentFailureReason =
+export type WorkspaceFailureReason =
   | "capacity_unavailable"
   | "environment_task_failed"
   | "manifest_invalid"

@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { createChangesDiffTab } from "@/features/workspaces/state/workspace-canvas-state";
+import {
+  createChangesDiffTab,
+  terminalTabKey,
+} from "@/features/workspaces/state/workspace-canvas-state";
 
 describe("WorkspacePaneContent", () => {
   afterEach(() => {
@@ -58,7 +61,7 @@ describe("WorkspacePaneContent", () => {
     const { WorkspacePaneContent } = await import("./workspace-pane-content");
     const markup = renderToStaticMarkup(
       createElement(WorkspacePaneContent, {
-        activeTabKey: "terminal:term-1",
+        activeTabKey: terminalTabKey("term-1"),
         activeFileSessionState: null,
         activeTabViewState: null,
         creatingSelection: null,
@@ -142,7 +145,7 @@ describe("WorkspacePaneContent", () => {
 
     renderToStaticMarkup(
       createElement(WorkspacePaneContent, {
-        activeTabKey: "terminal:term-1",
+        activeTabKey: terminalTabKey("term-1"),
         activeFileSessionState: null,
         activeTabViewState: null,
         creatingSelection: null,

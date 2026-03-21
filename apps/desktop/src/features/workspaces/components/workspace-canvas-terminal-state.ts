@@ -1,4 +1,7 @@
-import type { WorkspacePaneTabSnapshot } from "@/features/workspaces/state/workspace-canvas-state";
+import {
+  terminalIdFromTabKey,
+  type WorkspacePaneTabSnapshot,
+} from "@/features/workspaces/state/workspace-canvas-state";
 import type { TerminalTab } from "@/features/workspaces/components/workspace-canvas-tabs";
 
 export function getWorkspaceLiveTerminalTabKeys(
@@ -31,11 +34,10 @@ export function getWorkspaceInactiveTerminalIds(
     Object.values(renderedActiveTabKeyByPaneId).filter((key): key is string => key !== null),
   );
 
-  return liveTerminalTabKeys.flatMap((key) =>
-    renderedTerminalTabKeys.has(key) || !key.startsWith("terminal:")
-      ? []
-      : [key.slice("terminal:".length)],
-  );
+  return liveTerminalTabKeys.flatMap((key) => {
+    const terminalId = terminalIdFromTabKey(key);
+    return renderedTerminalTabKeys.has(key) || terminalId === null ? [] : [terminalId];
+  });
 }
 
 export function getWorkspaceUnassignedLiveTerminalTabKeys(

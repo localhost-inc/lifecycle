@@ -7,6 +7,17 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import {
+  applyThemeToRoot,
+  getSystemThemeAppearance,
+  isTheme,
+  resolveTheme,
+  themeAppearance,
+  type ResolvedTheme,
+  type Theme,
+} from "@lifecycle/ui";
 import {
   DEFAULT_INTERFACE_FONT_FAMILY,
   DEFAULT_MONOSPACE_FONT_FAMILY,
@@ -29,10 +40,10 @@ import {
   type TurnNotificationMode,
   type TurnNotificationSound,
 } from "@/features/notifications/lib/notification-settings";
+import { readAppSettings, writeAppSettings } from "@/lib/config";
 
 export const DEFAULT_LIFECYCLE_ROOT = "~/.lifecycle";
 export const DEFAULT_WORKTREE_ROOT = `${DEFAULT_LIFECYCLE_ROOT}/worktrees`;
-const SETTINGS_STORAGE_KEY = "lifecycle.desktop.settings";
 
 export type DefaultNewTabLaunch = "shell" | "claude" | "codex";
 
@@ -80,7 +91,19 @@ function normalizeInactivePaneOpacity(value: number | undefined | null): number 
   return DEFAULT_INACTIVE_PANE_OPACITY;
 }
 
+function normalizeWorktreeRoot(value: string | undefined | null): string {
+  if (!value) return DEFAULT_WORKTREE_ROOT;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : DEFAULT_WORKTREE_ROOT;
+}
+
+function normalizeTheme(value: unknown): Theme {
+  if (isTheme(value)) return value;
+  return "dark";
+}
+
 export interface AppSettings {
+  theme: Theme;
   defaultNewTabLaunch: DefaultNewTabLaunch;
   dimInactivePanes: boolean;
   harnesses: HarnessSettings;
@@ -93,6 +116,8 @@ export interface AppSettings {
 }
 
 interface SettingsContextValue extends AppSettings {
+  resolvedTheme: ResolvedTheme;
+  resolvedAppearance: "light" | "dark";
   resetTypography: () => void;
   setClaudeHarnessSettings: (value: ClaudeHarnessSettings) => void;
   setCodexHarnessSettings: (value: CodexHarnessSettings) => void;
@@ -101,6 +126,7 @@ interface SettingsContextValue extends AppSettings {
   setInactivePaneOpacity: (value: number) => void;
   setInterfaceFontFamily: (value: string) => void;
   setMonospaceFontFamily: (value: string) => void;
+  setTheme: (value: Theme) => void;
   setTurnNotificationSound: (value: TurnNotificationSound) => void;
   setTurnNotificationsMode: (value: TurnNotificationMode) => void;
   setWorktreeRoot: (value: string) => void;
@@ -133,14 +159,9 @@ export function applyFontSettings(
   root.setProperty("--font-mono", settings.monospaceFontFamily);
 }
 
-function normalizeWorktreeRoot(value: string | undefined | null): string {
-  if (!value) return DEFAULT_WORKTREE_ROOT;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : DEFAULT_WORKTREE_ROOT;
-}
-
 function buildDefaultSettings(): AppSettings {
   return {
+    theme: "dark",
     defaultNewTabLaunch: DEFAULT_NEW_TAB_LAUNCH,
     dimInactivePanes: DEFAULT_DIM_INACTIVE_PANES,
     harnesses: buildDefaultHarnessSettings(),
@@ -153,219 +174,238 @@ function buildDefaultSettings(): AppSettings {
   };
 }
 
-export function parseStoredSettings(raw: string | null | undefined): AppSettings {
+export function parseSettingsJson(raw: Record<string, unknown> | null | undefined): AppSettings {
   const defaults = buildDefaultSettings();
   if (!raw) return defaults;
 
-  try {
-    const parsed = JSON.parse(raw) as Partial<AppSettings>;
-    return {
-      defaultNewTabLaunch: normalizeDefaultNewTabLaunch(parsed.defaultNewTabLaunch),
-      dimInactivePanes: normalizeDimInactivePanes(parsed.dimInactivePanes),
-      harnesses: normalizeHarnessSettings(parsed.harnesses),
-      inactivePaneOpacity: normalizeInactivePaneOpacity(parsed.inactivePaneOpacity),
-      interfaceFontFamily: normalizeFontFamily(
-        parsed.interfaceFontFamily,
-        defaults.interfaceFontFamily,
-      ),
-      monospaceFontFamily: normalizeFontFamily(
-        parsed.monospaceFontFamily,
-        defaults.monospaceFontFamily,
-      ),
-      turnNotificationsMode: normalizeTurnNotificationMode(
-        parsed.turnNotificationsMode,
-        defaults.turnNotificationsMode,
-      ),
-      turnNotificationSound: normalizeTurnNotificationSound(
-        parsed.turnNotificationSound,
-        defaults.turnNotificationSound,
-      ),
-      worktreeRoot: normalizeWorktreeRoot(parsed.worktreeRoot),
-    };
-  } catch {
-    return defaults;
-  }
+  return {
+    theme: normalizeTheme(raw.theme),
+    defaultNewTabLaunch: normalizeDefaultNewTabLaunch(raw.defaultNewTabLaunch as string),
+    dimInactivePanes: normalizeDimInactivePanes(raw.dimInactivePanes as boolean),
+    harnesses: normalizeHarnessSettings(raw.harnesses),
+    inactivePaneOpacity: normalizeInactivePaneOpacity(raw.inactivePaneOpacity as number),
+    interfaceFontFamily: normalizeFontFamily(
+      raw.interfaceFontFamily as string,
+      defaults.interfaceFontFamily,
+    ),
+    monospaceFontFamily: normalizeFontFamily(
+      raw.monospaceFontFamily as string,
+      defaults.monospaceFontFamily,
+    ),
+    turnNotificationsMode: normalizeTurnNotificationMode(
+      raw.turnNotificationsMode as string,
+      defaults.turnNotificationsMode,
+    ),
+    turnNotificationSound: normalizeTurnNotificationSound(
+      raw.turnNotificationSound as string,
+      defaults.turnNotificationSound,
+    ),
+    worktreeRoot: normalizeWorktreeRoot(raw.worktreeRoot as string),
+  };
 }
 
-function readStoredSettings(): AppSettings {
-  if (typeof window === "undefined") return buildDefaultSettings();
+function settingsToJson(settings: AppSettings): Record<string, unknown> {
+  return { ...settings };
+}
 
-  return parseStoredSettings(window.localStorage.getItem(SETTINGS_STORAGE_KEY));
+function syncNativeWindowTheme(appearance: "light" | "dark"): void {
+  if (!isTauri()) return;
+  void getCurrentWindow()
+    .setTheme(appearance)
+    .catch((error) => {
+      console.warn("Failed to sync native window theme:", error);
+    });
 }
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<AppSettings>(() => readStoredSettings());
+  const [settings, setSettingsState] = useState<AppSettings>(buildDefaultSettings);
+  const [systemAppearance, setSystemAppearance] = useState<"light" | "dark">(() =>
+    getSystemThemeAppearance(),
+  );
 
-  const persistSettings = useCallback((next: AppSettings) => {
-    window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(next));
-    return next;
+  const resolvedTheme = resolveTheme(settings.theme, systemAppearance);
+  const resolvedAppearance = themeAppearance(resolvedTheme);
+
+  // Load settings from file on mount
+  useEffect(() => {
+    readAppSettings()
+      .then((raw) => {
+        const loaded = parseSettingsJson(raw);
+        setSettingsState(loaded);
+      })
+      .catch((error) => {
+        console.error("Failed to read app settings:", error);
+      });
   }, []);
 
+  // Watch system theme changes
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => {
+      setSystemAppearance(media.matches ? "dark" : "light");
+    };
+
+    onChange();
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+
+  // Apply theme to DOM and native window
+  useEffect(() => {
+    applyThemeToRoot(resolvedTheme);
+    syncNativeWindowTheme(resolvedAppearance);
+  }, [resolvedTheme, resolvedAppearance]);
+
+  // Apply font settings
   useEffect(() => {
     applyFontSettings(settings);
   }, [settings.interfaceFontFamily, settings.monospaceFontFamily]);
 
+  const persistSettings = useCallback((next: AppSettings) => {
+    writeAppSettings(settingsToJson(next));
+    return next;
+  }, []);
+
+  const setTheme = useCallback(
+    (value: Theme) => {
+      setSettingsState((prev) => persistSettings({ ...prev, theme: normalizeTheme(value) }));
+    },
+    [persistSettings],
+  );
+
   const setDefaultNewTabLaunch = useCallback(
     (value: DefaultNewTabLaunch) => {
-      setSettings((prev) => {
-        const next = {
-          ...prev,
-          defaultNewTabLaunch: normalizeDefaultNewTabLaunch(value),
-        };
-        return persistSettings(next);
-      });
+      setSettingsState((prev) =>
+        persistSettings({ ...prev, defaultNewTabLaunch: normalizeDefaultNewTabLaunch(value) }),
+      );
     },
     [persistSettings],
   );
 
   const setDimInactivePanes = useCallback(
     (value: boolean) => {
-      setSettings((prev) => {
-        const next = {
-          ...prev,
-          dimInactivePanes: normalizeDimInactivePanes(value),
-        };
-        return persistSettings(next);
-      });
+      setSettingsState((prev) =>
+        persistSettings({ ...prev, dimInactivePanes: normalizeDimInactivePanes(value) }),
+      );
     },
     [persistSettings],
   );
 
   const setInactivePaneOpacity = useCallback(
     (value: number) => {
-      setSettings((prev) => {
-        const next = {
-          ...prev,
-          inactivePaneOpacity: normalizeInactivePaneOpacity(value),
-        };
-        return persistSettings(next);
-      });
+      setSettingsState((prev) =>
+        persistSettings({ ...prev, inactivePaneOpacity: normalizeInactivePaneOpacity(value) }),
+      );
     },
     [persistSettings],
   );
 
   const setCodexHarnessSettings = useCallback(
     (value: CodexHarnessSettings) => {
-      setSettings((prev) => {
-        const next = {
+      setSettingsState((prev) =>
+        persistSettings({
           ...prev,
-          harnesses: {
-            ...prev.harnesses,
-            codex: normalizeCodexHarnessSettings(value),
-          },
-        };
-        return persistSettings(next);
-      });
+          harnesses: { ...prev.harnesses, codex: normalizeCodexHarnessSettings(value) },
+        }),
+      );
     },
     [persistSettings],
   );
 
   const setClaudeHarnessSettings = useCallback(
     (value: ClaudeHarnessSettings) => {
-      setSettings((prev) => {
-        const next = {
+      setSettingsState((prev) =>
+        persistSettings({
           ...prev,
-          harnesses: {
-            ...prev.harnesses,
-            claude: normalizeClaudeHarnessSettings(value),
-          },
-        };
-        return persistSettings(next);
-      });
+          harnesses: { ...prev.harnesses, claude: normalizeClaudeHarnessSettings(value) },
+        }),
+      );
     },
     [persistSettings],
   );
 
   const setWorktreeRoot = useCallback(
     (value: string) => {
-      setSettings((prev) => {
-        const next = {
-          ...prev,
-          worktreeRoot: normalizeWorktreeRoot(value),
-        };
-        return persistSettings(next);
-      });
+      setSettingsState((prev) =>
+        persistSettings({ ...prev, worktreeRoot: normalizeWorktreeRoot(value) }),
+      );
     },
     [persistSettings],
   );
 
   const setInterfaceFontFamily = useCallback(
     (value: string) => {
-      setSettings((prev) => {
-        const next = {
+      setSettingsState((prev) =>
+        persistSettings({
           ...prev,
           interfaceFontFamily: normalizeFontFamily(value, DEFAULT_INTERFACE_FONT_FAMILY),
-        };
-        return persistSettings(next);
-      });
+        }),
+      );
     },
     [persistSettings],
   );
 
   const setMonospaceFontFamily = useCallback(
     (value: string) => {
-      setSettings((prev) => {
-        const next = {
+      setSettingsState((prev) =>
+        persistSettings({
           ...prev,
           monospaceFontFamily: normalizeFontFamily(value, DEFAULT_MONOSPACE_FONT_FAMILY),
-        };
-        return persistSettings(next);
-      });
+        }),
+      );
     },
     [persistSettings],
   );
 
   const setTurnNotificationsMode = useCallback(
     (value: TurnNotificationMode) => {
-      setSettings((prev) => {
-        const next = {
+      setSettingsState((prev) =>
+        persistSettings({
           ...prev,
           turnNotificationsMode: normalizeTurnNotificationMode(
             value,
             DEFAULT_TURN_NOTIFICATION_MODE,
           ),
-        };
-        return persistSettings(next);
-      });
+        }),
+      );
     },
     [persistSettings],
   );
 
   const setTurnNotificationSound = useCallback(
     (value: TurnNotificationSound) => {
-      setSettings((prev) => {
-        const next = {
+      setSettingsState((prev) =>
+        persistSettings({
           ...prev,
           turnNotificationSound: normalizeTurnNotificationSound(
             value,
             DEFAULT_TURN_NOTIFICATION_SOUND,
           ),
-        };
-        return persistSettings(next);
-      });
+        }),
+      );
     },
     [persistSettings],
   );
 
   const resetTypography = useCallback(() => {
-    setSettings((prev) => {
-      const next: AppSettings = {
+    setSettingsState((prev) =>
+      persistSettings({
         ...prev,
         interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
         monospaceFontFamily: DEFAULT_MONOSPACE_FONT_FAMILY,
-      };
-      return persistSettings(next);
-    });
+      }),
+    );
   }, [persistSettings]);
 
   const contextValue = useMemo<SettingsContextValue>(
     () => ({
-      defaultNewTabLaunch: settings.defaultNewTabLaunch,
-      dimInactivePanes: settings.dimInactivePanes,
-      harnesses: settings.harnesses,
-      inactivePaneOpacity: settings.inactivePaneOpacity,
-      interfaceFontFamily: settings.interfaceFontFamily,
-      monospaceFontFamily: settings.monospaceFontFamily,
+      ...settings,
+      resolvedTheme,
+      resolvedAppearance,
       resetTypography,
       setClaudeHarnessSettings,
       setCodexHarnessSettings,
@@ -374,23 +414,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setInactivePaneOpacity,
       setInterfaceFontFamily,
       setMonospaceFontFamily,
+      setTheme,
       setTurnNotificationSound,
       setTurnNotificationsMode,
-      turnNotificationSound: settings.turnNotificationSound,
-      turnNotificationsMode: settings.turnNotificationsMode,
-      worktreeRoot: settings.worktreeRoot,
       setWorktreeRoot,
     }),
     [
-      settings.defaultNewTabLaunch,
-      settings.dimInactivePanes,
-      settings.harnesses,
-      settings.inactivePaneOpacity,
-      settings.interfaceFontFamily,
-      settings.monospaceFontFamily,
-      settings.turnNotificationSound,
-      settings.turnNotificationsMode,
-      settings.worktreeRoot,
+      settings,
+      resolvedTheme,
+      resolvedAppearance,
       resetTypography,
       setClaudeHarnessSettings,
       setCodexHarnessSettings,
@@ -399,6 +431,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       setInactivePaneOpacity,
       setInterfaceFontFamily,
       setMonospaceFontFamily,
+      setTheme,
       setTurnNotificationSound,
       setTurnNotificationsMode,
       setWorktreeRoot,

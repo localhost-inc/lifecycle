@@ -10,7 +10,7 @@ export interface WorkspaceActivityItem {
 }
 
 export const WORKSPACE_ACTIVITY_EVENT_KINDS = [
-  "environment.status_changed",
+  "workspace.status_changed",
   "workspace.renamed",
   "workspace.deleted",
   "service.log_line",
@@ -106,19 +106,19 @@ function gitRefDetail(
 
 function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityItem | null {
   switch (event.kind) {
-    case "environment.status_changed":
+    case "workspace.status_changed":
       return {
         detail: event.failure_reason ? humanizeToken(event.failure_reason) : null,
         id: event.id,
         kind: event.kind,
         occurredAt: event.occurred_at,
-        title: `Environment ${humanizeToken(event.status).toLowerCase()}`,
+        title: `Workspace ${humanizeToken(event.status).toLowerCase()}`,
         tone:
           event.failure_reason !== null
             ? "danger"
-            : event.status === "running"
+            : event.status === "active"
               ? "success"
-              : event.status === "starting" || event.status === "stopping"
+              : event.status === "preparing" || event.status === "archiving"
                 ? "warning"
                 : "neutral",
       };

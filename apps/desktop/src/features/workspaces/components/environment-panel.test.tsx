@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import type {
-  EnvironmentRecord,
   LifecycleConfig,
   ServiceRecord,
   WorkspaceRecord,
@@ -13,32 +12,26 @@ const baseWorkspace: WorkspaceRecord = {
   id: "workspace_1",
   project_id: "project_1",
   name: "Environment Panel",
-  kind: "managed",
+  checkout_type: "worktree",
   source_ref: "lifecycle/environment-panel",
   git_sha: "abcdef1234567890",
   worktree_path: "/tmp/workspace_1",
-  mode: "local",
+  target: "host",
   created_by: null,
   source_workspace_id: null,
   created_at: "2026-03-09T10:00:00.000Z",
   updated_at: "2026-03-09T10:00:00.000Z",
   last_active_at: "2026-03-09T10:00:00.000Z",
   expires_at: null,
-};
-
-const baseEnvironment: EnvironmentRecord = {
-  workspace_id: "workspace_1",
-  status: "running",
+  status: "active",
   failure_reason: null,
   failed_at: null,
-  created_at: "2026-03-09T10:00:00.000Z",
-  updated_at: "2026-03-09T10:00:00.000Z",
 };
 
 const services: ServiceRecord[] = [
   {
     id: "svc_1",
-    environment_id: "workspace_1",
+    workspace_id: "workspace_1",
     name: "web",
     status: "ready",
     status_reason: null,
@@ -49,7 +42,7 @@ const services: ServiceRecord[] = [
   },
   {
     id: "svc_2",
-    environment_id: "workspace_1",
+    workspace_id: "workspace_1",
     name: "api",
     status: "starting",
     status_reason: null,
@@ -62,7 +55,6 @@ const services: ServiceRecord[] = [
 
 interface RenderEnvironmentPanelOptions {
   config?: LifecycleConfig | null;
-  environment?: EnvironmentRecord;
   hasManifest?: boolean;
   manifestState?: "invalid" | "missing" | "valid";
   serviceLogs?: ServiceLogSnapshot[] | undefined;
@@ -81,7 +73,6 @@ async function renderEnvironmentPanel(options: RenderEnvironmentPanelOptions = {
     markup: renderToStaticMarkup(
       createElement(EnvironmentPanel, {
         config: options.config ?? null,
-        environment: options.environment ?? baseEnvironment,
         hasManifest: options.hasManifest ?? true,
         manifestState: options.manifestState ?? "valid",
         onRestart: async () => {},
@@ -115,10 +106,10 @@ describe("EnvironmentPanel", () => {
     const { markup } = await renderEnvironmentPanel({
       serviceLogs: [{ lines: [{ stream: "stdout", text: "ready" }], name: "worker" }],
       services: [],
-      environment: {
-        ...baseEnvironment,
+      workspace: {
+        ...baseWorkspace,
         failure_reason: "service_start_failed",
-        status: "idle",
+        status: "active",
       },
     });
 
@@ -126,18 +117,17 @@ describe("EnvironmentPanel", () => {
     expect(markup).toContain("ready");
   });
 
-  test("renders failure details for an idle environment with a failure", async () => {
+  test("renders failure details for an active workspace with a prepare failure", async () => {
     const { markup } = await renderEnvironmentPanel({
       serviceLogs: [],
-      environment: {
-        ...baseEnvironment,
-        failure_reason: "service_start_failed",
-        status: "idle",
+      workspace: {
+        ...baseWorkspace,
+        failure_reason: "prepare_step_failed",
+        status: "active",
       },
     });
 
-    expect(markup).toContain("Failed");
-    expect(markup).toContain("A service failed to start.");
+    expect(markup).toContain("A workspace prepare step failed.");
   });
 
   test("shows idle guidance when no lifecycle.json is present", async () => {
@@ -146,9 +136,9 @@ describe("EnvironmentPanel", () => {
       manifestState: "missing",
       serviceLogs: [],
       services: [],
-      environment: {
-        ...baseEnvironment,
-        status: "idle",
+      workspace: {
+        ...baseWorkspace,
+        status: "active",
       },
     });
 
@@ -162,9 +152,9 @@ describe("EnvironmentPanel", () => {
       manifestState: "invalid",
       serviceLogs: [],
       services: [],
-      environment: {
-        ...baseEnvironment,
-        status: "idle",
+      workspace: {
+        ...baseWorkspace,
+        status: "active",
       },
     });
 

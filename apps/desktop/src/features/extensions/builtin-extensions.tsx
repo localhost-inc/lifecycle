@@ -1,5 +1,4 @@
 import type {
-  EnvironmentRecord,
   GitStatusResult,
   LifecycleConfig,
   ServiceRecord,
@@ -53,24 +52,25 @@ export function getGitExtensionBadge(
 }
 
 export function getEnvironmentExtensionBadge({
-  environment,
+  workspace,
   services,
 }: {
-  environment: EnvironmentRecord;
+  workspace: Pick<WorkspaceRecord, "status" | "failure_reason">;
   services: ServiceRecord[];
 }): ExtensionBadge {
   const hasFailedService = services.some((service) => service.status === "failed");
   const hasTransitionalService = services.some((service) => service.status === "starting");
-  const hasFailedEnvironment = environment.failure_reason !== null;
+  const hasReadyService = services.some((service) => service.status === "ready");
+  const hasFailedEnvironment = workspace.failure_reason !== null;
 
   const tone =
     hasFailedEnvironment || hasFailedService
       ? "danger"
-      : environment.status === "starting" ||
-          environment.status === "stopping" ||
+      : workspace.status === "preparing" ||
+          workspace.status === "archiving" ||
           hasTransitionalService
         ? "warning"
-        : environment.status === "running"
+        : workspace.status === "active" && hasReadyService
           ? "success"
           : "neutral";
 
@@ -79,7 +79,6 @@ export function getEnvironmentExtensionBadge({
 
 interface BuiltinExtensionsOptions {
   config: LifecycleConfig | null;
-  environment: EnvironmentRecord;
   gitStatus: GitStatusResult | undefined;
   hasManifest: boolean;
   launchActions: WorkspaceExtensionLaunchActions;
@@ -95,7 +94,6 @@ interface BuiltinExtensionsOptions {
 
 export function getBuiltinExtensionSlots({
   config,
-  environment,
   gitStatus,
   hasManifest,
   launchActions,
@@ -122,7 +120,7 @@ export function getBuiltinExtensionSlots({
           onOpenPullRequest={launchActions.openPullRequest}
           onShowChanges={() => onSwitchToExtension("git-changes")}
           workspaceId={workspace.id}
-          workspaceMode={workspace.mode}
+          workspaceTarget={workspace.target}
           worktreePath={workspace.worktree_path}
         />
       ),
@@ -136,7 +134,7 @@ export function getBuiltinExtensionSlots({
         <GitHistoryPanel
           onOpenCommitDiff={launchActions.openCommitDiff}
           workspaceId={workspace.id}
-          workspaceMode={workspace.mode}
+          workspaceTarget={workspace.target}
           worktreePath={workspace.worktree_path}
         />
       ),
@@ -149,7 +147,7 @@ export function getBuiltinExtensionSlots({
         <GitPullRequestsPanel
           onOpenPullRequest={launchActions.openPullRequest}
           workspaceId={workspace.id}
-          workspaceMode={workspace.mode}
+          workspaceTarget={workspace.target}
           worktreePath={workspace.worktree_path}
         />
       ),
@@ -163,14 +161,13 @@ export function getBuiltinExtensionSlots({
   ];
 
   slots.push({
-    badge: getEnvironmentExtensionBadge({ environment, services }),
+    badge: getEnvironmentExtensionBadge({ workspace, services }),
     icon: Layers,
     id: "environment",
     label: "Environment",
     panel: (
       <EnvironmentPanel
         config={config}
-        environment={environment}
         hasManifest={hasManifest}
         manifestState={manifestState}
         onRestart={onRestart}

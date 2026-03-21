@@ -13,6 +13,7 @@ export type QueryInvalidationTarget =
   | { kind: "prefix"; prefix: QueryKey };
 
 const WORKSPACE_RECORD_EVENT_KINDS = [
+  "workspace.status_changed",
   "git.head_changed",
   "workspace.renamed",
   "workspace.deleted",
@@ -22,7 +23,6 @@ const WORKSPACE_RECORD_EVENT_KIND_SET = new Set<LifecycleEventKind>(WORKSPACE_RE
 const QUERY_INVALIDATION_EVENT_KINDS_SET = new Set<LifecycleEventKind>([
   ...WORKSPACE_ACTIVITY_EVENT_KINDS,
   ...WORKSPACE_RECORD_EVENT_KINDS,
-  "environment.status_changed",
   "service.status_changed",
   "service.log_line",
   "terminal.created",
@@ -77,8 +77,7 @@ export function getInvalidationTargetsForLifecycleEvent(
     targets.push(exact(workspaceKeys.detail(workspaceId)));
   }
 
-  if (event.kind === "environment.status_changed" || event.kind === "workspace.deleted") {
-    targets.push(exact(workspaceKeys.environment(workspaceId)));
+  if (event.kind === "workspace.status_changed" || event.kind === "workspace.deleted") {
     targets.push(exact(workspaceKeys.services(workspaceId)));
   }
 
@@ -89,7 +88,7 @@ export function getInvalidationTargetsForLifecycleEvent(
   if (
     event.kind === "service.log_line" ||
     event.kind === "workspace.deleted" ||
-    (event.kind === "environment.status_changed" && event.status === "starting")
+    (event.kind === "workspace.status_changed" && event.status === "preparing")
   ) {
     targets.push(exact(workspaceKeys.serviceLogs(workspaceId)));
   }

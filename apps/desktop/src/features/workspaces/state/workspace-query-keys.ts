@@ -2,7 +2,6 @@ export const workspaceKeys = {
   activity: (workspaceId: string) => ["workspace-activity", workspaceId] as const,
   byProject: () => ["workspaces", "by-project"] as const,
   detail: (workspaceId: string) => ["workspace", workspaceId] as const,
-  environment: (workspaceId: string) => ["workspace-environment", workspaceId] as const,
   file: (workspaceId: string, filePath: string) =>
     ["workspace-file", workspaceId, filePath] as const,
   fileTree: (workspaceId: string) => ["workspace-file-tree", workspaceId] as const,

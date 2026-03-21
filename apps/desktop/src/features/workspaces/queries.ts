@@ -1,5 +1,4 @@
 import type {
-  EnvironmentRecord,
   LifecycleEvent,
   ServiceRecord,
   WorkspaceRecord,
@@ -25,17 +24,6 @@ export function createWorkspaceQuery(workspaceId: string): QueryDescriptor<Works
     key: workspaceKeys.detail(workspaceId),
     fetch(source) {
       return source.getWorkspace(workspaceId);
-    },
-  };
-}
-
-export function createWorkspaceEnvironmentQuery(
-  workspaceId: string,
-): QueryDescriptor<EnvironmentRecord> {
-  return {
-    key: workspaceKeys.environment(workspaceId),
-    fetch(source) {
-      return source.getWorkspaceEnvironment(workspaceId);
     },
   };
 }

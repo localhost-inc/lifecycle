@@ -1,5 +1,8 @@
 import { describe, expect, mock, test } from "bun:test";
-import { createFileViewerTab } from "@/features/workspaces/state/workspace-canvas-state";
+import {
+  createFileViewerTab,
+  terminalTabKey,
+} from "@/features/workspaces/state/workspace-canvas-state";
 import { closeWorkspacePaneTabs } from "@/features/workspaces/components/workspace-pane-close";
 
 describe("closeWorkspacePaneTabs", () => {
@@ -22,14 +25,18 @@ describe("closeWorkspacePaneTabs", () => {
   });
 
   test("closes every tab in a populated pane", async () => {
-    const calls: string[] = [];
+    const calls: Array<
+      | { kind: "document"; tabKey: string }
+      | { kind: "terminal"; tabKey: string; terminalId: string }
+      | { kind: "collapse" }
+    > = [];
 
     await expect(
       closeWorkspacePaneTabs(
         [
           {
             harnessProvider: null,
-            key: "terminal:term-1",
+            key: terminalTabKey("term-1"),
             kind: "terminal",
             label: "Shell",
             launchType: "shell",
@@ -42,45 +49,52 @@ describe("closeWorkspacePaneTabs", () => {
         ],
         {
           collapseEmptyPane: () => {
-            calls.push("collapse");
+            calls.push({ kind: "collapse" });
           },
           closeDocumentTab: (tabKey) => {
-            calls.push(`document:${tabKey}`);
+            calls.push({ kind: "document", tabKey });
             return true;
           },
           closeTerminalTab: async (tabKey, terminalId) => {
-            calls.push(`runtime:${tabKey}:${terminalId}`);
+            calls.push({ kind: "terminal", tabKey, terminalId });
             return true;
           },
         },
       ),
     ).resolves.toBe(true);
 
-    expect(calls).toEqual(["runtime:terminal:term-1:term-1", "document:file:README.md"]);
+    expect(calls).toEqual([
+      { kind: "terminal", tabKey: terminalTabKey("term-1"), terminalId: "term-1" },
+      { kind: "document", tabKey: "file:README.md" },
+    ]);
   });
 
   test("stops once a pane tab refuses to close", async () => {
-    const calls: string[] = [];
+    const calls: Array<
+      | { kind: "document"; tabKey: string }
+      | { kind: "terminal"; tabKey: string; terminalId: string }
+      | { kind: "collapse" }
+    > = [];
 
     await expect(
       closeWorkspacePaneTabs(
         [createFileViewerTab("README.md"), createFileViewerTab("docs/plan.md")],
         {
           collapseEmptyPane: () => {
-            calls.push("collapse");
+            calls.push({ kind: "collapse" });
           },
           closeDocumentTab: (tabKey) => {
-            calls.push(`document:${tabKey}`);
+            calls.push({ kind: "document", tabKey });
             return false;
           },
           closeTerminalTab: async (tabKey, terminalId) => {
-            calls.push(`runtime:${tabKey}:${terminalId}`);
+            calls.push({ kind: "terminal", tabKey, terminalId });
             return true;
           },
         },
       ),
     ).resolves.toBe(false);
 
-    expect(calls).toEqual(["document:file:README.md"]);
+    expect(calls).toEqual([{ kind: "document", tabKey: "file:README.md" }]);
   });
 });

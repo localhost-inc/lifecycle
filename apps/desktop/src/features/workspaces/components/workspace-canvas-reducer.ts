@@ -21,6 +21,7 @@ import {
   getWorkspaceDocument,
   getWorkspacePaneTabState,
   isChangesDiffDocument,
+  isTerminalTabKey,
   MAX_CLOSED_TAB_STACK_SIZE,
   pullRequestTabKey,
   type ClosedTabEntry,
@@ -187,7 +188,7 @@ function reconcileWorkspaceHiddenTerminalTabState(
   let nextTabStateByKey = tabStateByKey;
 
   for (const [key, tabState] of Object.entries(tabStateByKey)) {
-    if (!key.startsWith("terminal:")) {
+    if (!isTerminalTabKey(key)) {
       continue;
     }
 

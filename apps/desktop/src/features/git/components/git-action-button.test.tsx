@@ -66,18 +66,18 @@ function renderGitActionMenuContent(
 
 describe("GitActionButton", () => {
   test("closes the menu before opening changes", () => {
-    const calls: string[] = [];
+    const calls: Array<{ kind: "menu"; open: boolean } | { kind: "show-changes" }> = [];
 
     performShowChangesAction(
       (open) => {
-        calls.push(`open:${String(open)}`);
+        calls.push({ kind: "menu", open });
       },
       () => {
-        calls.push("show-changes");
+        calls.push({ kind: "show-changes" });
       },
     );
 
-    expect(calls).toEqual(["open:false", "show-changes"]);
+    expect(calls).toEqual([{ kind: "menu", open: false }, { kind: "show-changes" }]);
   });
 
   test("keeps the semantic action label while loading", () => {

@@ -1,20 +1,20 @@
 import type { TerminalRecord } from "./db";
 import type { TerminalFailureReason, TerminalStatus } from "./terminal";
 import type {
-  EnvironmentFailureReason,
-  EnvironmentStatus,
   ServiceStatus,
   ServiceStatusReason,
+  WorkspaceFailureReason,
+  WorkspaceStatus,
 } from "./workspace";
 
 export type LifecycleEvent =
   | {
       id: string;
       occurred_at: string;
-      kind: "environment.status_changed";
+      kind: "workspace.status_changed";
       workspace_id: string;
-      status: EnvironmentStatus;
-      failure_reason: EnvironmentFailureReason | null;
+      status: WorkspaceStatus;
+      failure_reason: WorkspaceFailureReason | null;
     }
   | {
       id: string;

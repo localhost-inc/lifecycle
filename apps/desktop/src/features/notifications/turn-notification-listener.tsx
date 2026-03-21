@@ -4,7 +4,7 @@ import { useQueryClient } from "@/query";
 import { router } from "@/app/router";
 import { useLifecycleEvent } from "@/features/events";
 import { projectCatalogQuery } from "@/features/projects/hooks";
-import { useSettings } from "@/features/settings/state/app-settings-provider";
+import { useSettings } from "@/features/settings/state/settings-provider";
 import { createWorkspaceTerminalsQuery } from "@/features/terminals/queries";
 import { createWorkspaceQuery } from "@/features/workspaces/queries";
 import { setPendingTerminalFocus } from "@/features/notifications/lib/notification-navigation";

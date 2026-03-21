@@ -1,8 +1,6 @@
 use crate::capabilities::workspaces::harness::HarnessLaunchConfig;
 use crate::platform::db::open_db;
-use crate::shared::errors::{
-    LifecycleError, TerminalFailureReason, TerminalStatus, TerminalType, EnvironmentStatus,
-};
+use crate::shared::errors::{LifecycleError, TerminalFailureReason, TerminalStatus, TerminalType};
 use rusqlite::params;
 
 use super::super::harness::default_harness_terminal_label;
@@ -11,7 +9,6 @@ use super::super::rename::TitleOrigin;
 use super::launch::HarnessLaunchMode;
 
 pub(crate) struct TerminalWorkspaceContext {
-    pub(crate) status: EnvironmentStatus,
     pub(crate) project_path: String,
     pub(crate) worktree_path: String,
 }
@@ -170,25 +167,23 @@ pub(crate) fn load_terminal_harness_launch_config(
 pub(crate) fn workspace_has_interactive_terminal_context(
     workspace: &TerminalWorkspaceContext,
 ) -> bool {
-    let _ = workspace.status;
     !workspace.worktree_path.is_empty() || !workspace.project_path.is_empty()
 }
 
-pub(crate) fn load_workspace_runtime(
+pub(crate) fn load_terminal_workspace_context(
     db_path: &str,
     workspace_id: &str,
 ) -> Result<TerminalWorkspaceContext, LifecycleError> {
     let conn = open_db(db_path)?;
-    let (status, project_path, worktree_path): (String, String, Option<String>) = conn
+    let (project_path, worktree_path): (String, Option<String>) = conn
         .query_row(
-            "SELECT environment.status, project.path, workspace.worktree_path
+            "SELECT project.path, workspace.worktree_path
              FROM workspace
-             INNER JOIN environment ON environment.workspace_id = workspace.id
              INNER JOIN project ON project.id = workspace.project_id
              WHERE workspace.id = ?1
              LIMIT 1",
             params![workspace_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .map_err(|error| match error {
             rusqlite::Error::QueryReturnedNoRows => {
@@ -198,7 +193,6 @@ pub(crate) fn load_workspace_runtime(
         })?;
 
     Ok(TerminalWorkspaceContext {
-        status: EnvironmentStatus::from_str(&status)?,
         project_path,
         worktree_path: worktree_path.unwrap_or_default(),
     })
@@ -274,7 +268,7 @@ mod tests {
     };
     use crate::capabilities::workspaces::rename::TitleOrigin;
     use crate::platform::db::{open_db, run_migrations};
-    use crate::shared::errors::{TerminalStatus, TerminalType, EnvironmentStatus};
+    use crate::shared::errors::{TerminalStatus, TerminalType};
 
     use super::super::launch::HarnessLaunchMode;
     use super::{
@@ -301,56 +295,36 @@ mod tests {
         )
         .expect("insert project");
         conn.execute(
-            "INSERT INTO workspace (id, project_id, source_ref, worktree_path, mode)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO workspace (id, project_id, name, source_ref, worktree_path, target, checkout_type, status)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             rusqlite::params![
                 workspace_id,
                 "project_1",
+                "Workspace 1",
                 "lifecycle/test",
                 "/tmp/project_1",
-                "local"
+                "host",
+                "root",
+                "active",
             ],
         )
         .expect("insert workspace");
-        conn.execute(
-            "INSERT INTO environment (workspace_id, status) VALUES (?1, ?2)",
-            rusqlite::params![workspace_id, "running"],
-        )
-        .expect("insert environment");
     }
 
     #[test]
     fn interactive_terminal_context_requires_worktree_lifecycle_to_exist() {
-        let interactive_statuses = [
-            EnvironmentStatus::Idle,
-            EnvironmentStatus::Starting,
-            EnvironmentStatus::Running,
-            EnvironmentStatus::Stopping,
-        ];
-
-        for status in interactive_statuses {
-            assert!(workspace_has_interactive_terminal_context(
-                &TerminalWorkspaceContext {
-                    status,
-                    project_path: String::new(),
-                    worktree_path: "/tmp/worktree".to_string(),
-                }
-            ));
-        }
+        assert!(workspace_has_interactive_terminal_context(
+            &TerminalWorkspaceContext {
+                project_path: String::new(),
+                worktree_path: "/tmp/worktree".to_string(),
+            }
+        ));
 
         assert!(!workspace_has_interactive_terminal_context(
                 &TerminalWorkspaceContext {
-                    status: EnvironmentStatus::Idle,
                     project_path: String::new(),
                     worktree_path: String::new(),
                 }
-        ));
-        assert!(!workspace_has_interactive_terminal_context(
-            &TerminalWorkspaceContext {
-                status: EnvironmentStatus::Stopping,
-                project_path: String::new(),
-                worktree_path: String::new(),
-            }
         ));
     }
 

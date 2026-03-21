@@ -38,7 +38,7 @@ Those belong in milestone or reference docs.
 | M3        | done    | M2         | Terminal and harness runtime in workspace               | [3-terminal-runtime](./milestones/3-terminal-runtime.md) |
 | M4        | in_progress | M3         | Run and control local workspace environments            | [4-workspace-environments](./milestones/4-workspace-environments.md) |
 | M5        | planned | M4         | First-class local CLI                                   | [5-local-cli](./milestones/5-local-cli.md) |
-| M6        | planned | M5         | Auth, cloud workspaces, previews, PR flow               | [6-cloud-workspaces](./milestones/6-cloud-workspaces.md) |
+| M6        | planned | M5         | Auth, remote workspaces, previews, PR flow              | [6-cloud-workspaces](./milestones/6-cloud-workspaces.md) |
 | M7        | planned | M6         | Cloud lifecycle hardening (sleep/wake, TTL, quotas)     | [7-cloud-hardening](./milestones/7-cloud-hardening.md) |
 
 ## Milestone Checklists (High-Level Only)
@@ -88,7 +88,7 @@ Detail spec: [4-workspace-environments](./milestones/4-workspace-environments.md
 - [ ] `run`, `reset`, `sleep`, `wake`, and `destroy` flows are complete for local mode
 - [ ] Local preview routing and service previews are wired
 - [ ] Workspace, environment, and service lifecycle boundaries are enforced
-- [x] Desktop workspace extension strip supports local environment lifecycle controls
+- [x] Workspace extension strip supports local environment lifecycle controls
 - [ ] Local terminal sessions survive desktop app restart
 - [ ] Local lifecycle round-trip behavior is tested
 

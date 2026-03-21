@@ -1,23 +1,19 @@
-import type { ProjectRecord, WorkspaceKind, WorkspaceRecord } from "@lifecycle/contracts";
+import type {
+  ProjectRecord,
+  WorkspaceCheckoutType,
+  WorkspaceRecord,
+  WorkspaceTarget,
+} from "@lifecycle/contracts";
 
-export interface LocalWorkspaceCreateContext {
-  mode: "local";
-  kind?: WorkspaceKind;
+export interface WorkspaceCreateContext {
+  target: WorkspaceTarget;
+  checkoutType?: WorkspaceCheckoutType;
   projectId: string;
-  projectPath: string;
+  projectPath?: string;
   workspaceName?: string;
   baseRef?: string;
   worktreeRoot?: string;
 }
-
-export interface CloudWorkspaceCreateContext {
-  mode: "cloud";
-  organizationId: string;
-  repositoryId: string;
-  projectId: string;
-}
-
-export type WorkspaceCreateContext = LocalWorkspaceCreateContext | CloudWorkspaceCreateContext;
 
 export interface WorkspaceCreateInput {
   manifestJson?: string | null;

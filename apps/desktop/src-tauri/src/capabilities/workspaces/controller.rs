@@ -324,8 +324,7 @@ impl WorkspaceActivityStore {
 impl WorkspaceServiceLogStore {
     fn record(&mut self, envelope: &LifecycleEnvelope) {
         match &envelope.event {
-            LifecycleEvent::EnvironmentStatusChanged { status, .. }
-                if status == "preparing" || status == "starting" =>
+            LifecycleEvent::WorkspaceStatusChanged { status, .. } if status == "preparing" =>
             {
                 self.logs.clear();
             }
@@ -473,9 +472,9 @@ mod tests {
 
         controller.record_lifecycle_envelope(envelope(
             "event-1",
-            LifecycleEvent::EnvironmentStatusChanged {
+            LifecycleEvent::WorkspaceStatusChanged {
                 workspace_id: "workspace-1".to_string(),
-                status: "starting".to_string(),
+                status: "preparing".to_string(),
                 failure_reason: None,
             },
         ));

@@ -8,11 +8,11 @@ use crate::WorkspaceControllerRegistryHandle;
 use rusqlite::params;
 use tauri::{AppHandle, State};
 
-use super::kind::is_root_workspace_kind;
+use super::checkout_type::is_root_workspace_checkout_type;
 
 struct DestroyWorkspaceContext {
-    kind: String,
-    mode: String,
+    checkout_type: String,
+    target: String,
     project_path: String,
     terminal_ids: Vec<String>,
     worktree_path: Option<String>,
@@ -23,9 +23,9 @@ fn load_destroy_workspace_context(
     workspace_id: &str,
 ) -> Result<DestroyWorkspaceContext, LifecycleError> {
     let conn = open_db(db_path)?;
-    let (kind, mode, project_path, worktree_path) = conn
+    let (checkout_type, target, project_path, worktree_path) = conn
         .query_row(
-            "SELECT workspace.kind, workspace.mode, project.path, workspace.worktree_path
+            "SELECT workspace.checkout_type, workspace.target, project.path, workspace.worktree_path
              FROM workspace
              INNER JOIN project ON project.id = workspace.project_id
              WHERE workspace.id = ?1
@@ -58,8 +58,8 @@ fn load_destroy_workspace_context(
     }
 
     Ok(DestroyWorkspaceContext {
-        kind,
-        mode,
+        checkout_type,
+        target,
         project_path,
         terminal_ids,
         worktree_path,
@@ -117,7 +117,7 @@ pub async fn destroy_workspace(
         }
     };
 
-    if is_root_workspace_kind(&context.kind) {
+    if is_root_workspace_checkout_type(&context.checkout_type) {
         super::git_watcher::stop_root_git_watcher(&root_git_watchers, &workspace_id);
     }
 
@@ -125,7 +125,7 @@ pub async fn destroy_workspace(
 
     destroy_native_terminal_surfaces(&app, &context.terminal_ids);
 
-    if context.mode == "local" && !is_root_workspace_kind(&context.kind) {
+    if context.target == "host" && !is_root_workspace_checkout_type(&context.checkout_type) {
         if let Some(worktree_path) = context.worktree_path.as_deref() {
             worktree::remove_worktree(&context.project_path, worktree_path).await?;
         }
@@ -162,26 +162,23 @@ mod tests {
         )
         .expect("insert project");
         conn.execute(
-            "INSERT INTO workspace (id, project_id, kind, source_ref, worktree_path, mode)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO workspace (
+                id, project_id, name, checkout_type, source_ref, worktree_path, target, status
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 "workspace_1",
                 "project_1",
-                "managed",
+                "Workspace 1",
+                "worktree",
                 "lifecycle/test",
                 "/tmp/project_1/.worktrees/workspace_1",
-                "local"
+                "host",
+                "active",
             ],
         )
         .expect("insert workspace");
         conn.execute(
-            "INSERT INTO environment (workspace_id, status)
-             VALUES (?1, ?2)",
-            params!["workspace_1", "running"],
-        )
-        .expect("insert environment");
-        conn.execute(
-            "INSERT INTO service (id, environment_id, name)
+            "INSERT INTO service (id, workspace_id, name)
              VALUES (?1, ?2, ?3)",
             params!["service_1", "workspace_1", "web"],
         )
@@ -202,8 +199,8 @@ mod tests {
         let context =
             load_destroy_workspace_context(&db_path, "workspace_1").expect("load destroy context");
 
-        assert_eq!(context.kind, "managed");
-        assert_eq!(context.mode, "local");
+        assert_eq!(context.checkout_type, "worktree");
+        assert_eq!(context.target, "host");
         assert_eq!(context.project_path, "/tmp/project_1");
         assert_eq!(
             context.worktree_path.as_deref(),
@@ -231,7 +228,7 @@ mod tests {
             .expect("count workspaces");
         let service_count: i64 = conn
             .query_row(
-                "SELECT COUNT(*) FROM service WHERE environment_id = ?1",
+                "SELECT COUNT(*) FROM service WHERE workspace_id = ?1",
                 params!["workspace_1"],
                 |row| row.get(0),
             )

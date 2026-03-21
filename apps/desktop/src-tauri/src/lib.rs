@@ -2,6 +2,7 @@ mod capabilities;
 mod platform;
 mod shared;
 
+use crate::platform::app_config::AppConfigPath;
 use crate::platform::db::{cleanup_for_exit, run_migrations, DbPath};
 use crate::platform::native_terminal;
 use crate::platform::runtime::supervisor::Supervisor;
@@ -93,6 +94,10 @@ pub fn run() {
             crate::platform::preview_proxy::start_preview_proxy(&app_data_dir, db_path_str.clone())
                 .expect("failed to initialize local preview proxy");
             app.manage(DbPath(db_path_str.clone()));
+
+            let config_path =
+                crate::platform::app_config::resolve_config_path().expect("failed to resolve config path");
+            app.manage(AppConfigPath(config_path));
 
             if let Err(error) = capabilities::workspaces::git_watcher::start_root_git_watchers(
                 &app.handle(),
@@ -204,6 +209,8 @@ pub fn run() {
         .manage(workspace_controllers)
         .manage(root_git_watchers)
         .invoke_handler(tauri::generate_handler![
+            capabilities::app::commands::get_app_config,
+            capabilities::app::commands::write_app_config,
             capabilities::app::commands::get_auth_session,
             capabilities::app::commands::set_window_accepts_mouse_moved_events,
             capabilities::app::commands::set_window_pointing_cursor,
@@ -215,12 +222,11 @@ pub fn run() {
             capabilities::projects::commands::update_manifest_status,
             capabilities::workspaces::commands::create_workspace,
             capabilities::workspaces::commands::rename_workspace,
-            capabilities::workspaces::commands::start_environment,
-            capabilities::workspaces::commands::stop_environment,
+            capabilities::workspaces::commands::start_workspace_services,
+            capabilities::workspaces::commands::stop_workspace_services,
             capabilities::workspaces::commands::destroy_workspace,
             capabilities::workspaces::commands::get_workspace,
             capabilities::workspaces::commands::get_workspace_by_id,
-            capabilities::workspaces::commands::get_workspace_environment,
             capabilities::workspaces::commands::get_workspace_activity,
             capabilities::workspaces::commands::get_workspace_service_logs,
             capabilities::workspaces::commands::list_workspaces,
@@ -306,7 +312,7 @@ async fn confirm_and_exit(app: tauri::AppHandle) {
             };
             let workspace_count: i64 = conn
                 .query_row(
-                    "SELECT COUNT(*) FROM environment WHERE status IN ('starting', 'running', 'stopping')",
+                    "SELECT COUNT(*) FROM workspace WHERE status IN ('starting', 'running', 'stopping')",
                     [],
                     |row| row.get(0),
                 )

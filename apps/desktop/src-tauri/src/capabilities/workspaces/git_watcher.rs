@@ -1,4 +1,4 @@
-use super::kind::is_root_workspace_kind;
+use super::checkout_type::is_root_workspace_checkout_type;
 use crate::platform::db::open_db;
 use crate::shared::errors::LifecycleError;
 use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
@@ -35,8 +35,8 @@ struct PersistedWorkspaceGitSnapshot {
 
 #[derive(Debug)]
 struct RootWorkspaceWatchContext {
-    mode: String,
-    kind: String,
+    target: String,
+    checkout_type: String,
     repo_path: String,
 }
 
@@ -132,7 +132,7 @@ pub(crate) fn ensure_root_git_watcher(
         return Ok(());
     };
 
-    if !is_root_workspace_kind(&context.kind) || context.mode != "local" {
+    if !is_root_workspace_checkout_type(&context.checkout_type) || context.target != "host" {
         return Ok(());
     }
 
@@ -212,7 +212,7 @@ fn list_root_workspace_ids(db_path: &str) -> Result<Vec<String>, LifecycleError>
         .prepare(
             "SELECT id
              FROM workspace
-             WHERE kind = 'root' AND mode = 'local'
+             WHERE checkout_type = 'root' AND target = 'host'
              ORDER BY created_at ASC",
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
@@ -235,7 +235,7 @@ fn list_root_workspace_ids_by_project(
         .prepare(
             "SELECT id
              FROM workspace
-             WHERE project_id = ?1 AND kind = 'root' AND mode = 'local'
+             WHERE project_id = ?1 AND checkout_type = 'root' AND target = 'host'
              ORDER BY created_at ASC",
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
@@ -255,7 +255,7 @@ fn load_root_workspace_watch_context(
 ) -> Result<Option<RootWorkspaceWatchContext>, LifecycleError> {
     let conn = open_db(db_path)?;
     let result = conn.query_row(
-        "SELECT workspace.kind, workspace.mode, project.path
+        "SELECT workspace.checkout_type, workspace.target, project.path
          FROM workspace
          INNER JOIN project ON project.id = workspace.project_id
          WHERE workspace.id = ?1
@@ -263,8 +263,8 @@ fn load_root_workspace_watch_context(
         params![workspace_id],
         |row| {
             Ok(RootWorkspaceWatchContext {
-                kind: row.get(0)?,
-                mode: row.get(1)?,
+                checkout_type: row.get(0)?,
+                target: row.get(1)?,
                 repo_path: row.get(2)?,
             })
         },
@@ -536,7 +536,7 @@ fn load_persisted_workspace_git_snapshot(
 ) -> Result<Option<PersistedWorkspaceGitSnapshot>, LifecycleError> {
     let conn = open_db(db_path)?;
     let result = conn.query_row(
-        "SELECT kind, source_ref, git_sha
+        "SELECT checkout_type, source_ref, git_sha
          FROM workspace
          WHERE id = ?1
          LIMIT 1",
@@ -553,8 +553,8 @@ fn load_persisted_workspace_git_snapshot(
     );
 
     match result {
-        Ok((kind, snapshot)) => {
-            if is_root_workspace_kind(&kind) {
+        Ok((checkout_type, snapshot)) => {
+            if is_root_workspace_checkout_type(&checkout_type) {
                 Ok(Some(snapshot))
             } else {
                 Ok(None)
@@ -618,15 +618,16 @@ mod tests {
         )
         .expect("insert project");
         conn.execute(
-            "INSERT INTO workspace (id, project_id, name, kind, source_ref, mode)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO workspace (id, project_id, name, checkout_type, source_ref, target, status)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 "workspace_root",
                 "project_1",
                 "Root",
                 "root",
                 "main",
-                "local"
+                "host",
+                "active"
             ],
         )
         .expect("insert root workspace");

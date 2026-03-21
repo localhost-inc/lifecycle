@@ -4,15 +4,15 @@ use std::time::Instant;
 use crate::platform::diagnostics;
 use crate::platform::runtime::{health, prepare};
 use crate::shared::errors::{
-    LifecycleError, ServiceStatus, EnvironmentFailureReason, EnvironmentStatus,
+    LifecycleError, ServiceStatus, WorkspaceFailureReason,
 };
 
 use super::super::controller::{ManagedWorkspaceController, WorkspaceControllerToken};
 use super::super::manifest::{HealthCheck, ServiceConfig};
 use super::super::shared::{
-    emit_service_status, emit_environment_status, mark_nonfailed_services_stopped,
+    emit_service_status, emit_workspace_status, mark_nonfailed_services_stopped,
     mark_services_failed, service_name_for_start_error, service_status_reason_for_start_error,
-    update_service_status_db, update_environment_status_db, workspace_failure_reason_for_start_error,
+    update_service_status_db, update_workspace_status_db, workspace_failure_reason_for_start_error,
 };
 use super::graph::{EnvironmentNode, EnvironmentNodeKind};
 use super::lifecycle::WorkspaceStartMode;
@@ -45,7 +45,7 @@ impl WorkspaceStartContext<'_> {
 
     pub(super) async fn record_failure(
         &self,
-        failure_reason: EnvironmentFailureReason,
+        failure_reason: WorkspaceFailureReason,
     ) -> Result<bool, LifecycleError> {
         record_start_failure(
             self.app,
@@ -180,7 +180,7 @@ impl WorkspaceStartContext<'_> {
                         Some("service_process_exited"),
                     );
                     let recorded = self
-                        .record_failure(EnvironmentFailureReason::ServiceStartFailed)
+                        .record_failure(WorkspaceFailureReason::ServiceStartFailed)
                         .await?;
                     if !recorded {
                         return Ok(());
@@ -272,7 +272,7 @@ impl WorkspaceStartContext<'_> {
                     Some("service_port_unreachable"),
                 );
                 let recorded = self
-                    .record_failure(EnvironmentFailureReason::ServiceHealthcheckFailed)
+                    .record_failure(WorkspaceFailureReason::ServiceHealthcheckFailed)
                     .await?;
                 if !recorded {
                     return Ok(());
@@ -311,7 +311,7 @@ impl WorkspaceStartContext<'_> {
             Ok(prepare::StepRunOutcome::Cancelled) => return Ok(()),
             Err(error) => {
                 let recorded = self
-                    .record_failure(EnvironmentFailureReason::EnvironmentTaskFailed)
+                    .record_failure(WorkspaceFailureReason::EnvironmentTaskFailed)
                     .await?;
                 if !recorded {
                     return Ok(());
@@ -350,17 +350,12 @@ impl WorkspaceStartContext<'_> {
 }
 
 pub(super) async fn abort_start_if_needed(
-    db_path: &str,
-    workspace_id: &str,
+    _db_path: &str,
+    _workspace_id: &str,
     controller: &ManagedWorkspaceController,
     start_token: &WorkspaceControllerToken,
 ) -> Result<bool, LifecycleError> {
-    if !start_token.is_cancelled()
-        && matches!(
-            super::lifecycle::load_workspace_status(db_path, workspace_id)?,
-            EnvironmentStatus::Starting
-        )
-    {
+    if !start_token.is_cancelled() {
         return Ok(false);
     }
 
@@ -375,31 +370,28 @@ pub(super) async fn record_start_failure(
     start_token: &WorkspaceControllerToken,
     start_mode: WorkspaceStartMode,
     workspace_id: &str,
-    failure_reason: EnvironmentFailureReason,
+    failure_reason: WorkspaceFailureReason,
 ) -> Result<bool, LifecycleError> {
     if abort_start_if_needed(db_path, workspace_id, controller, start_token).await? {
         return Ok(false);
     }
 
-    let next_workspace_status = match start_mode {
-        WorkspaceStartMode::Cold => EnvironmentStatus::Idle,
-        WorkspaceStartMode::Incremental => EnvironmentStatus::Running,
-    };
+    let next_workspace_status = crate::shared::errors::WorkspaceStatus::Active;
     let next_failure_reason = match start_mode {
         WorkspaceStartMode::Cold => Some(&failure_reason),
         WorkspaceStartMode::Incremental => None,
     };
-    update_environment_status_db(
+    update_workspace_status_db(
         db_path,
         workspace_id,
         &next_workspace_status,
         next_failure_reason,
     )?;
-    emit_environment_status(
+    emit_workspace_status(
         app,
         workspace_id,
         next_workspace_status.as_str(),
-        next_failure_reason.map(EnvironmentFailureReason::as_str),
+        next_failure_reason.map(WorkspaceFailureReason::as_str),
     );
     controller.finish_start(start_token).await;
 
@@ -497,7 +489,7 @@ pub(super) async fn record_service_graph_failure(
     }
 
     let recorded = ctx
-        .record_failure(EnvironmentFailureReason::ServiceStartFailed)
+        .record_failure(WorkspaceFailureReason::ServiceStartFailed)
         .await?;
     if !recorded {
         return Ok(());

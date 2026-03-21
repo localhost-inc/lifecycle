@@ -1,12 +1,14 @@
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 
-type WorkspaceDisplayRecord = Pick<WorkspaceRecord, "kind" | "name" | "source_ref">;
+type WorkspaceDisplayRecord = Pick<WorkspaceRecord, "checkout_type" | "name" | "source_ref">;
 
-export function isRootWorkspace(workspace: Pick<WorkspaceRecord, "kind">): boolean {
-  return workspace.kind === "root";
+export function isRootWorkspace(workspace: Pick<WorkspaceRecord, "checkout_type">): boolean {
+  return workspace.checkout_type === "root";
 }
 
-export function canInlineRenameWorkspace(workspace: Pick<WorkspaceRecord, "kind">): boolean {
+export function canInlineRenameWorkspace(
+  workspace: Pick<WorkspaceRecord, "checkout_type">,
+): boolean {
   return !isRootWorkspace(workspace);
 }
 

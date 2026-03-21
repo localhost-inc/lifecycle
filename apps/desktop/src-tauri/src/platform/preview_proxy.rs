@@ -292,9 +292,9 @@ async fn load_preview_target(
         let conn = open_db(&db_path)?;
         let mut stmt = conn
             .prepare(
-                "SELECT ws.assigned_port, ws.status, ws.name, w.id, w.kind, w.name, w.source_ref
+                "SELECT ws.assigned_port, ws.status, ws.name, w.id, w.checkout_type, w.name, w.source_ref
                  FROM service ws
-                 INNER JOIN workspace w ON w.id = ws.environment_id",
+                 INNER JOIN workspace w ON w.id = ws.workspace_id",
             )
             .map_err(|error| LifecycleError::Database(error.to_string()))?;
         let rows = stmt
@@ -317,7 +317,7 @@ async fn load_preview_target(
                 service_status,
                 name,
                 workspace_id,
-                kind,
+                checkout_type,
                 workspace_name,
                 source_ref,
             ) = row.map_err(|error| LifecycleError::Database(error.to_string()))?;
@@ -326,7 +326,7 @@ async fn load_preview_target(
             }
 
             let workspace_label =
-                workspace_host_label(&workspace_id, &kind, &workspace_name, &source_ref);
+                workspace_host_label(&workspace_id, &checkout_type, &workspace_name, &source_ref);
             if workspace_label != route.workspace_label {
                 continue;
             }
@@ -345,12 +345,12 @@ async fn load_preview_target(
 
 pub(crate) fn workspace_host_label(
     workspace_id: &str,
-    kind: &str,
+    checkout_type: &str,
     name: &str,
     source_ref: &str,
 ) -> String {
     let short_id = short_workspace_id(workspace_id);
-    let base = preferred_workspace_host_base(kind, name, source_ref, &short_id);
+    let base = preferred_workspace_host_base(checkout_type, name, source_ref, &short_id);
     if base.ends_with(&format!("-{short_id}")) {
         base
     } else {
@@ -359,13 +359,13 @@ pub(crate) fn workspace_host_label(
 }
 
 fn preferred_workspace_host_base(
-    kind: &str,
+    checkout_type: &str,
     name: &str,
     source_ref: &str,
     short_id: &str,
 ) -> String {
-    if kind == "managed" {
-        if let Some(slug) = managed_workspace_branch_slug(source_ref, short_id) {
+    if checkout_type == "worktree" {
+        if let Some(slug) = lifecycle_worktree_branch_slug(source_ref, short_id) {
             return slug;
         }
     }
@@ -378,7 +378,7 @@ fn preferred_workspace_host_base(
     slugify_workspace_name(name)
 }
 
-fn managed_workspace_branch_slug(source_ref: &str, short_id: &str) -> Option<String> {
+fn lifecycle_worktree_branch_slug(source_ref: &str, short_id: &str) -> Option<String> {
     let branch_slug = source_ref.trim().strip_prefix("lifecycle/")?;
     let branch_slug = branch_slug.strip_suffix(&format!("-{short_id}"))?;
     let slug = slugify_workspace_name(branch_slug);
@@ -476,7 +476,7 @@ mod tests {
     fn preview_host_round_trips_readable_route_labels() {
         let workspace_label = workspace_host_label(
             "123e4567-e89b-12d3-a456-426614174000",
-            "managed",
+            "worktree",
             "Fix auth callback",
             "lifecycle/fix-auth-callback-123e4567",
         );
@@ -528,12 +528,12 @@ mod tests {
         conn.execute_batch(
             "CREATE TABLE workspace (
                 id TEXT NOT NULL,
-                kind TEXT NOT NULL,
+                checkout_type TEXT NOT NULL,
                 name TEXT NOT NULL,
                 source_ref TEXT NOT NULL
             );
             CREATE TABLE service (
-                environment_id TEXT NOT NULL,
+                workspace_id TEXT NOT NULL,
                 name TEXT NOT NULL,
                 assigned_port INTEGER,
                 status TEXT NOT NULL
@@ -541,10 +541,10 @@ mod tests {
         )
         .expect("create workspace tables");
         conn.execute(
-            "INSERT INTO workspace (id, kind, name, source_ref) VALUES (?1, ?2, ?3, ?4)",
+            "INSERT INTO workspace (id, checkout_type, name, source_ref) VALUES (?1, ?2, ?3, ?4)",
             params![
                 "ws_test",
-                "managed",
+                "worktree",
                 "Frost beacon",
                 "lifecycle/frost-beacon-ws-test"
             ],
@@ -566,7 +566,7 @@ mod tests {
 
         let conn = open_db(&db_path_str).expect("re-open db");
         conn.execute(
-            "INSERT INTO service (environment_id, name, assigned_port, status)
+            "INSERT INTO service (workspace_id, name, assigned_port, status)
              VALUES (?1, ?2, ?3, 'ready')",
             params!["ws_test", "www", i64::from(upstream_port)],
         )
@@ -599,7 +599,7 @@ mod tests {
                 preview_host(
                     &workspace_host_label(
                         "ws_test",
-                        "managed",
+                        "worktree",
                         "Frost beacon",
                         "lifecycle/frost-beacon-ws-test",
                     ),

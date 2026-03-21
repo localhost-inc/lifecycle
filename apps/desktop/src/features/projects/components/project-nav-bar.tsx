@@ -47,11 +47,11 @@ interface ProjectNavBarProps {
 }
 
 function WorkspaceNavIcon({
-  kind,
+  checkoutType,
   responseReady,
   running,
 }: {
-  kind: WorkspaceRecord["kind"];
+  checkoutType: WorkspaceRecord["checkout_type"];
   responseReady: boolean;
   running: boolean;
 }) {
@@ -65,7 +65,7 @@ function WorkspaceNavIcon({
     return <Spinner className="size-4 text-[var(--muted-foreground)]" />;
   }
 
-  const Icon = kind === "root" ? FolderGit2 : GitBranch;
+  const Icon = checkoutType === "root" ? FolderGit2 : GitBranch;
   return <Icon className="size-4" strokeWidth={2} />;
 }
 
@@ -251,7 +251,7 @@ export function ProjectNavBar({
                 to={`${basePath}/workspaces/${workspace.id}`}
               >
                 <WorkspaceNavIcon
-                  kind={workspace.kind}
+                  checkoutType={workspace.checkout_type}
                   responseReady={responseReady}
                   running={running}
                 />

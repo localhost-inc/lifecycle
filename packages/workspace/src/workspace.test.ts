@@ -1,21 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import type {
-  EnvironmentRecord,
   ServiceRecord,
   TerminalRecord,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
-import type { GitDiffInput, Runtime } from "./runtime";
-import { CloudRuntime, type CloudRuntimeClient } from "./cloud-runtime";
-import { LocalRuntime } from "./local-runtime";
+import type { WorkspaceClient } from "./workspace";
+import { HostWorkspaceClient } from "./host-workspace";
 
-describe("runtime contract", () => {
-  test("defines the expected runtime method names", () => {
-    const requiredMethods: Array<keyof Runtime> = [
-      "startEnvironment",
+describe("workspace contract", () => {
+  test("defines the expected workspace method names", () => {
+    const requiredMethods: Array<keyof WorkspaceClient> = [
+      "startServices",
       "healthCheck",
-      "stopEnvironment",
-      "getEnvironment",
+      "stopServices",
       "getActivity",
       "getServiceLogs",
       "getServices",
@@ -50,271 +47,66 @@ describe("runtime contract", () => {
       "mergeGitPullRequest",
     ];
 
-    expect(requiredMethods).toHaveLength(36);
+    expect(requiredMethods).toHaveLength(35);
   });
 
-  test("local runtime exposes the full contract surface", () => {
+  test("host workspace client exposes the full contract surface", () => {
     const invoke = async () => "";
-    const runtime = new LocalRuntime(invoke);
+    const client = new HostWorkspaceClient(invoke);
 
-    expect(typeof runtime.startEnvironment).toBe("function");
-    expect(typeof runtime.healthCheck).toBe("function");
-    expect(typeof runtime.stopEnvironment).toBe("function");
-    expect(typeof runtime.getEnvironment).toBe("function");
-    expect(typeof runtime.getActivity).toBe("function");
-    expect(typeof runtime.getServiceLogs).toBe("function");
-    expect(typeof runtime.getServices).toBe("function");
-    expect(typeof runtime.createTerminal).toBe("function");
-    expect(typeof runtime.listTerminals).toBe("function");
-    expect(typeof runtime.renameTerminal).toBe("function");
-    expect(typeof runtime.saveTerminalAttachment).toBe("function");
-    expect(typeof runtime.detachTerminal).toBe("function");
-    expect(typeof runtime.killTerminal).toBe("function");
-    expect(typeof runtime.interruptTerminal).toBe("function");
-    expect(typeof runtime.readFile).toBe("function");
-    expect(typeof runtime.writeFile).toBe("function");
-    expect(typeof runtime.listFiles).toBe("function");
-    expect(typeof runtime.openFile).toBe("function");
-    expect(typeof runtime.getGitStatus).toBe("function");
-    expect(typeof runtime.getGitScopePatch).toBe("function");
-    expect(typeof runtime.getGitChangesPatch).toBe("function");
-    expect(typeof runtime.getGitDiff).toBe("function");
-    expect(typeof runtime.listGitLog).toBe("function");
-    expect(typeof runtime.listGitPullRequests).toBe("function");
-    expect(typeof runtime.getGitPullRequest).toBe("function");
-    expect(typeof runtime.getCurrentGitPullRequest).toBe("function");
-    expect(typeof runtime.getGitBaseRef).toBe("function");
-    expect(typeof runtime.getGitRefDiffPatch).toBe("function");
-    expect(typeof runtime.getGitPullRequestPatch).toBe("function");
-    expect(typeof runtime.getGitCommitPatch).toBe("function");
-    expect(typeof runtime.stageGitFiles).toBe("function");
-    expect(typeof runtime.unstageGitFiles).toBe("function");
-    expect(typeof runtime.commitGit).toBe("function");
-    expect(typeof runtime.pushGit).toBe("function");
-    expect(typeof runtime.createGitPullRequest).toBe("function");
-    expect(typeof runtime.mergeGitPullRequest).toBe("function");
+    expect(typeof client.startServices).toBe("function");
+    expect(typeof client.healthCheck).toBe("function");
+    expect(typeof client.stopServices).toBe("function");
+    expect(typeof client.getActivity).toBe("function");
+    expect(typeof client.getServiceLogs).toBe("function");
+    expect(typeof client.getServices).toBe("function");
+    expect(typeof client.createTerminal).toBe("function");
+    expect(typeof client.listTerminals).toBe("function");
+    expect(typeof client.renameTerminal).toBe("function");
+    expect(typeof client.saveTerminalAttachment).toBe("function");
+    expect(typeof client.detachTerminal).toBe("function");
+    expect(typeof client.killTerminal).toBe("function");
+    expect(typeof client.interruptTerminal).toBe("function");
+    expect(typeof client.readFile).toBe("function");
+    expect(typeof client.writeFile).toBe("function");
+    expect(typeof client.listFiles).toBe("function");
+    expect(typeof client.openFile).toBe("function");
+    expect(typeof client.getGitStatus).toBe("function");
+    expect(typeof client.getGitScopePatch).toBe("function");
+    expect(typeof client.getGitChangesPatch).toBe("function");
+    expect(typeof client.getGitDiff).toBe("function");
+    expect(typeof client.listGitLog).toBe("function");
+    expect(typeof client.listGitPullRequests).toBe("function");
+    expect(typeof client.getGitPullRequest).toBe("function");
+    expect(typeof client.getCurrentGitPullRequest).toBe("function");
+    expect(typeof client.getGitBaseRef).toBe("function");
+    expect(typeof client.getGitRefDiffPatch).toBe("function");
+    expect(typeof client.getGitPullRequestPatch).toBe("function");
+    expect(typeof client.getGitCommitPatch).toBe("function");
+    expect(typeof client.stageGitFiles).toBe("function");
+    expect(typeof client.unstageGitFiles).toBe("function");
+    expect(typeof client.commitGit).toBe("function");
+    expect(typeof client.pushGit).toBe("function");
+    expect(typeof client.createGitPullRequest).toBe("function");
+    expect(typeof client.mergeGitPullRequest).toBe("function");
   });
 
-  test("cloud runtime delegates the full contract surface", async () => {
-    const terminalResult: TerminalRecord = {
-      id: "term_1",
-      workspace_id: "ws_1",
-      launch_type: "shell",
-      harness_provider: null,
-      harness_session_id: null,
-      created_by: null,
-      label: "Terminal 1",
-      status: "active",
-      failure_reason: null,
-      exit_code: null,
-      started_at: "2026-03-05T08:00:00.000Z",
-      last_active_at: "2026-03-05T08:00:00.000Z",
-      ended_at: null,
-    };
-    const environmentResult: EnvironmentRecord = {
-      workspace_id: "ws_1",
-      status: "idle",
-      failure_reason: null,
-      failed_at: null,
-      created_at: "2026-03-05T08:00:00.000Z",
-      updated_at: "2026-03-05T08:00:00.000Z",
-    };
-    const client: CloudRuntimeClient = {
-      startEnvironment: async () => [],
-      healthCheck: async () => ({ healthy: false, services: [] }),
-      stopEnvironment: async () => {},
-      getEnvironment: async () => environmentResult,
-      getActivity: async () => [],
-      getServiceLogs: async () => [],
-      getServices: async () => [],
-      createTerminal: async () => terminalResult,
-      listTerminals: async () => [],
-      renameTerminal: async () => terminalResult,
-      saveTerminalAttachment: async () => ({
-        absolutePath: "/tmp/workspace/.lifecycle/attachments/screenshot.png",
-        fileName: "screenshot.png",
-        relativePath: ".lifecycle/attachments/screenshot.png",
-      }),
-      detachTerminal: async () => {},
-      killTerminal: async () => {},
-      interruptTerminal: async () => {},
-      readFile: async () => ({
-        absolute_path: "/tmp/workspace/README.md",
-        byte_len: 0,
-        content: "",
-        extension: "md",
-        file_path: "README.md",
-        is_binary: false,
-        is_too_large: false,
-      }),
-      writeFile: async () => ({
-        absolute_path: "/tmp/workspace/README.md",
-        byte_len: 0,
-        content: "",
-        extension: "md",
-        file_path: "README.md",
-        is_binary: false,
-        is_too_large: false,
-      }),
-      listFiles: async () => [],
-      openFile: async () => {},
-      getGitStatus: async () => ({
-        branch: "feature/version-control",
-        headSha: "abcdef1234567890",
-        upstream: "origin/feature/version-control",
-        ahead: 1,
-        behind: 0,
-        files: [],
-      }),
-      getGitScopePatch: async () => "",
-      getGitChangesPatch: async () => "",
-      getGitDiff: async (input: GitDiffInput) => ({
-        scope: input.scope,
-        filePath: input.filePath,
-        patch: "",
-        isBinary: false,
-      }),
-      listGitLog: async () => [],
-      listGitPullRequests: async () => ({
-        support: {
-          available: true,
-          message: null,
-          provider: "github",
-          reason: null,
-        },
-        pullRequests: [],
-      }),
-      getGitPullRequest: async () => ({
-        support: {
-          available: true,
-          message: null,
-          provider: "github",
-          reason: null,
-        },
-        pullRequest: null,
-      }),
-      getCurrentGitPullRequest: async () => ({
-        support: {
-          available: true,
-          message: null,
-          provider: "github",
-          reason: null,
-        },
-        branch: "feature/version-control",
-        hasPullRequestChanges: true,
-        upstream: "origin/feature/version-control",
-        suggestedBaseRef: "main",
-        pullRequest: null,
-      }),
-      getGitBaseRef: async () => "main",
-      getGitRefDiffPatch: async () => "",
-      getGitPullRequestPatch: async () => "",
-      getGitCommitPatch: async (_workspaceId, sha) => ({
-        sha,
-        patch: "",
-      }),
-      stageGitFiles: async () => {},
-      unstageGitFiles: async () => {},
-      commitGit: async (_workspaceId, message) => ({
-        sha: "abcdef1234567890",
-        shortSha: "abcdef12",
-        message,
-      }),
-      pushGit: async () => ({
-        branch: "feature/version-control",
-        remote: "origin",
-        ahead: 0,
-        behind: 0,
-      }),
-      createGitPullRequest: async () => ({
-        author: "kyle",
-        baseRefName: "main",
-        createdAt: "2026-03-09T10:00:00.000Z",
-        headRefName: "feature/version-control",
-        isDraft: false,
-        mergeStateStatus: "CLEAN",
-        mergeable: "mergeable",
-        number: 42,
-        reviewDecision: "approved",
-        checks: null,
-        state: "open",
-        title: "feat: add version control",
-        updatedAt: "2026-03-09T11:00:00.000Z",
-        url: "https://github.com/example/repo/pull/42",
-      }),
-      mergeGitPullRequest: async () => ({
-        author: "kyle",
-        baseRefName: "main",
-        createdAt: "2026-03-09T10:00:00.000Z",
-        headRefName: "feature/version-control",
-        isDraft: false,
-        mergeStateStatus: "CLEAN",
-        mergeable: "mergeable",
-        number: 42,
-        reviewDecision: "approved",
-        checks: null,
-        state: "merged",
-        title: "feat: add version control",
-        updatedAt: "2026-03-09T11:30:00.000Z",
-        url: "https://github.com/example/repo/pull/42",
-      }),
-    };
-    const runtime = new CloudRuntime(client);
-
-    expect(typeof runtime.startEnvironment).toBe("function");
-    expect(typeof runtime.healthCheck).toBe("function");
-    expect(typeof runtime.stopEnvironment).toBe("function");
-    expect(typeof runtime.getEnvironment).toBe("function");
-    expect(typeof runtime.getActivity).toBe("function");
-    expect(typeof runtime.getServiceLogs).toBe("function");
-    expect(typeof runtime.getServices).toBe("function");
-    expect(typeof runtime.createTerminal).toBe("function");
-    expect(typeof runtime.listTerminals).toBe("function");
-    expect(typeof runtime.renameTerminal).toBe("function");
-    expect(typeof runtime.saveTerminalAttachment).toBe("function");
-    expect(typeof runtime.detachTerminal).toBe("function");
-    expect(typeof runtime.killTerminal).toBe("function");
-    expect(typeof runtime.interruptTerminal).toBe("function");
-    expect(typeof runtime.readFile).toBe("function");
-    expect(typeof runtime.writeFile).toBe("function");
-    expect(typeof runtime.listFiles).toBe("function");
-    expect(typeof runtime.openFile).toBe("function");
-    expect(typeof runtime.getGitStatus).toBe("function");
-    expect(typeof runtime.getGitScopePatch).toBe("function");
-    expect(typeof runtime.getGitChangesPatch).toBe("function");
-    expect(typeof runtime.getGitDiff).toBe("function");
-    expect(typeof runtime.listGitLog).toBe("function");
-    expect(typeof runtime.listGitPullRequests).toBe("function");
-    expect(typeof runtime.getGitPullRequest).toBe("function");
-    expect(typeof runtime.getCurrentGitPullRequest).toBe("function");
-    expect(typeof runtime.getGitBaseRef).toBe("function");
-    expect(typeof runtime.getGitRefDiffPatch).toBe("function");
-    expect(typeof runtime.getGitPullRequestPatch).toBe("function");
-    expect(typeof runtime.getGitCommitPatch).toBe("function");
-    expect(typeof runtime.stageGitFiles).toBe("function");
-    expect(typeof runtime.unstageGitFiles).toBe("function");
-    expect(typeof runtime.commitGit).toBe("function");
-    expect(typeof runtime.pushGit).toBe("function");
-    expect(typeof runtime.createGitPullRequest).toBe("function");
-    expect(typeof runtime.mergeGitPullRequest).toBe("function");
-  });
-
-  test("local runtime forwards manifest fingerprint when starting services", async () => {
+  test("host workspace client forwards manifest fingerprint when starting services", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
       calls.push(args ? { cmd, args } : { cmd });
       return undefined;
     };
-    const runtime = new LocalRuntime(invoke);
+    const client = new HostWorkspaceClient(invoke);
     const workspace: WorkspaceRecord = {
       id: "ws_1",
       project_id: "project_1",
       name: "Workspace 1",
-      kind: "managed",
+      checkout_type: "worktree",
       source_ref: "lifecycle/workspace-1",
       git_sha: null,
       worktree_path: "/tmp/project_1/.worktrees/ws_1",
-      mode: "local",
+      target: "host",
       manifest_fingerprint: "manifest_1",
       created_by: null,
       source_workspace_id: null,
@@ -322,11 +114,14 @@ describe("runtime contract", () => {
       updated_at: "2026-03-12T00:00:00.000Z",
       last_active_at: "2026-03-12T00:00:00.000Z",
       expires_at: null,
+      status: "active",
+      failure_reason: null,
+      failed_at: null,
     };
     const services: ServiceRecord[] = [
       {
         id: "svc_1",
-        environment_id: "ws_1",
+        workspace_id: "ws_1",
         name: "web",
         status: "stopped",
         status_reason: null,
@@ -337,7 +132,7 @@ describe("runtime contract", () => {
       },
     ];
 
-    const result = await runtime.startEnvironment({
+    const result = await client.startServices({
       workspace,
       services,
       manifestJson:
@@ -348,7 +143,7 @@ describe("runtime contract", () => {
     expect(result).toEqual(services);
     expect(calls).toEqual([
       {
-        cmd: "start_environment",
+        cmd: "start_workspace_services",
         args: {
           workspaceId: "ws_1",
           manifestJson:
@@ -360,24 +155,24 @@ describe("runtime contract", () => {
     ]);
   });
 
-  test("local runtime startEnvironment reuses the environment start contract", async () => {
+  test("host workspace client startServices reuses the service start contract", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
       calls.push(args ? { cmd, args } : { cmd });
       return undefined;
     };
-    const runtime = new LocalRuntime(invoke);
+    const client = new HostWorkspaceClient(invoke);
 
-    await runtime.startEnvironment({
+    await client.startServices({
       workspace: {
         id: "ws_1",
         project_id: "project_1",
         name: "Workspace 1",
-        kind: "managed",
+        checkout_type: "worktree",
         source_ref: "lifecycle/workspace-1",
         git_sha: null,
         worktree_path: "/tmp/project_1/.worktrees/ws_1",
-        mode: "local",
+        target: "host",
         manifest_fingerprint: "manifest_1",
         created_by: null,
         source_workspace_id: null,
@@ -385,6 +180,9 @@ describe("runtime contract", () => {
         updated_at: "2026-03-12T00:00:00.000Z",
         last_active_at: "2026-03-12T00:00:00.000Z",
         expires_at: null,
+        status: "active",
+        failure_reason: null,
+        failed_at: null,
       },
       services: [],
       manifestJson: '{"workspace":{"prepare":[],"teardown":[]},"environment":{}}',
@@ -393,7 +191,7 @@ describe("runtime contract", () => {
 
     expect(calls).toEqual([
       {
-        cmd: "start_environment",
+        cmd: "start_workspace_services",
         args: {
           workspaceId: "ws_1",
           manifestJson: '{"workspace":{"prepare":[],"teardown":[]},"environment":{}}',
@@ -404,25 +202,25 @@ describe("runtime contract", () => {
     ]);
   });
 
-  test("local runtime forwards targeted service starts", async () => {
+  test("host workspace client forwards targeted service starts", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
       calls.push(args ? { cmd, args } : { cmd });
       return undefined;
     };
-    const runtime = new LocalRuntime(invoke);
+    const client = new HostWorkspaceClient(invoke);
 
-    await runtime.startEnvironment({
+    await client.startServices({
       serviceNames: ["www"],
       workspace: {
         id: "ws_1",
         project_id: "project_1",
         name: "Workspace 1",
-        kind: "managed",
+        checkout_type: "worktree",
         source_ref: "lifecycle/workspace-1",
         git_sha: null,
         worktree_path: "/tmp/project_1/.worktrees/ws_1",
-        mode: "local",
+        target: "host",
         manifest_fingerprint: "manifest_1",
         created_by: null,
         source_workspace_id: null,
@@ -430,6 +228,9 @@ describe("runtime contract", () => {
         updated_at: "2026-03-12T00:00:00.000Z",
         last_active_at: "2026-03-12T00:00:00.000Z",
         expires_at: null,
+        status: "active",
+        failure_reason: null,
+        failed_at: null,
       },
       services: [],
       manifestJson:
@@ -439,7 +240,7 @@ describe("runtime contract", () => {
 
     expect(calls).toEqual([
       {
-        cmd: "start_environment",
+        cmd: "start_workspace_services",
         args: {
           workspaceId: "ws_1",
           manifestJson:
@@ -451,7 +252,7 @@ describe("runtime contract", () => {
     ]);
   });
 
-  test("local runtime forwards runtime reads, files, terminals, and health checks", async () => {
+  test("host workspace client forwards workspace reads, files, terminals, and health checks", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const terminal: TerminalRecord = {
       id: "term_1",
@@ -471,7 +272,7 @@ describe("runtime contract", () => {
     const services: ServiceRecord[] = [
       {
         id: "svc_1",
-        environment_id: "ws_1",
+        workspace_id: "ws_1",
         name: "web",
         status: "ready",
         status_reason: null,
@@ -499,15 +300,6 @@ describe("runtime contract", () => {
       calls.push(args ? { cmd, args } : { cmd });
 
       switch (cmd) {
-        case "get_workspace_environment":
-          return {
-            workspace_id: "ws_1",
-            status: "idle",
-            failure_reason: null,
-            failed_at: null,
-            created_at: "2026-03-12T00:00:00.000Z",
-            updated_at: "2026-03-12T00:00:00.000Z",
-          } satisfies EnvironmentRecord;
         case "get_workspace_activity":
         case "get_workspace_service_logs":
           return [];
@@ -531,38 +323,31 @@ describe("runtime contract", () => {
           return undefined;
       }
     };
-    const runtime = new LocalRuntime(invoke);
+    const client = new HostWorkspaceClient(invoke);
 
-    await runtime.healthCheck("ws_1");
-    await runtime.getEnvironment("ws_1");
-    await runtime.getActivity("ws_1");
-    await runtime.getServiceLogs("ws_1");
-    await runtime.getServices("ws_1");
-    await runtime.listTerminals("ws_1");
-    await runtime.renameTerminal("ws_1", "term_1", "Codex Session");
-    await runtime.saveTerminalAttachment({
+    await client.healthCheck("ws_1");
+    await client.getActivity("ws_1");
+    await client.getServiceLogs("ws_1");
+    await client.getServices("ws_1");
+    await client.listTerminals("ws_1");
+    await client.renameTerminal("ws_1", "term_1", "Codex Session");
+    await client.saveTerminalAttachment({
       base64Data: "ZmFrZQ==",
       fileName: "screenshot.png",
       workspaceId: "ws_1",
     });
-    await runtime.readFile("ws_1", "README.md");
-    await runtime.writeFile("ws_1", "README.md", "welcome");
-    await runtime.listFiles("ws_1");
-    await runtime.openFile("ws_1", "README.md");
-    await runtime.stopEnvironment("ws_1");
-    await runtime.detachTerminal("ws_1", "term_1");
-    await runtime.killTerminal("ws_1", "term_1");
-    await runtime.interruptTerminal("ws_1", "term_1");
+    await client.readFile("ws_1", "README.md");
+    await client.writeFile("ws_1", "README.md", "welcome");
+    await client.listFiles("ws_1");
+    await client.openFile("ws_1", "README.md");
+    await client.stopServices("ws_1");
+    await client.detachTerminal("ws_1", "term_1");
+    await client.killTerminal("ws_1", "term_1");
+    await client.interruptTerminal("ws_1", "term_1");
 
     expect(calls).toEqual([
       {
         cmd: "get_workspace_services",
-        args: {
-          workspaceId: "ws_1",
-        },
-      },
-      {
-        cmd: "get_workspace_environment",
         args: {
           workspaceId: "ws_1",
         },
@@ -637,7 +422,7 @@ describe("runtime contract", () => {
         },
       },
       {
-        cmd: "stop_environment",
+        cmd: "stop_workspace_services",
         args: {
           workspaceId: "ws_1",
         },
@@ -666,7 +451,7 @@ describe("runtime contract", () => {
     ]);
   });
 
-  test("local runtime forwards optional harness session ids", async () => {
+  test("host workspace client forwards optional harness session ids", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
       if (args) {
@@ -690,9 +475,9 @@ describe("runtime contract", () => {
         ended_at: null,
       };
     };
-    const runtime = new LocalRuntime(invoke);
+    const client = new HostWorkspaceClient(invoke);
 
-    await runtime.createTerminal({
+    await client.createTerminal({
       workspaceId: "ws_1",
       launchType: "harness",
       harnessProvider: "claude",
@@ -713,7 +498,7 @@ describe("runtime contract", () => {
     ]);
   });
 
-  test("local runtime forwards git operations by workspace id", async () => {
+  test("host workspace client forwards git operations by workspace id", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
       if (args) {
@@ -841,30 +626,30 @@ describe("runtime contract", () => {
           return undefined;
       }
     };
-    const runtime = new LocalRuntime(invoke);
+    const client = new HostWorkspaceClient(invoke);
 
-    await runtime.getGitStatus("ws_1");
-    await runtime.getGitScopePatch("ws_1", "working");
-    await runtime.getGitChangesPatch("ws_1");
-    await runtime.getGitDiff({
+    await client.getGitStatus("ws_1");
+    await client.getGitScopePatch("ws_1", "working");
+    await client.getGitChangesPatch("ws_1");
+    await client.getGitDiff({
       workspaceId: "ws_1",
       filePath: "src/app.ts",
       scope: "working",
     });
-    await runtime.listGitLog("ws_1", 25);
-    await runtime.listGitPullRequests("ws_1");
-    await runtime.getGitPullRequest("ws_1", 42);
-    await runtime.getCurrentGitPullRequest("ws_1");
-    await runtime.getGitBaseRef("ws_1");
-    await runtime.getGitRefDiffPatch("ws_1", "main", "HEAD");
-    await runtime.getGitPullRequestPatch("ws_1", 42);
-    await runtime.getGitCommitPatch("ws_1", "abcdef1234567890");
-    await runtime.stageGitFiles("ws_1", ["src/app.ts"]);
-    await runtime.unstageGitFiles("ws_1", ["src/app.ts"]);
-    await runtime.commitGit("ws_1", "feat: add version control");
-    await runtime.pushGit("ws_1");
-    await runtime.createGitPullRequest("ws_1");
-    await runtime.mergeGitPullRequest("ws_1", 42);
+    await client.listGitLog("ws_1", 25);
+    await client.listGitPullRequests("ws_1");
+    await client.getGitPullRequest("ws_1", 42);
+    await client.getCurrentGitPullRequest("ws_1");
+    await client.getGitBaseRef("ws_1");
+    await client.getGitRefDiffPatch("ws_1", "main", "HEAD");
+    await client.getGitPullRequestPatch("ws_1", 42);
+    await client.getGitCommitPatch("ws_1", "abcdef1234567890");
+    await client.stageGitFiles("ws_1", ["src/app.ts"]);
+    await client.unstageGitFiles("ws_1", ["src/app.ts"]);
+    await client.commitGit("ws_1", "feat: add version control");
+    await client.pushGit("ws_1");
+    await client.createGitPullRequest("ws_1");
+    await client.mergeGitPullRequest("ws_1", 42);
 
     expect(calls).toEqual([
       {

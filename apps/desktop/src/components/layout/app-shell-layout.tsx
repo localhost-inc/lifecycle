@@ -30,7 +30,7 @@ import {
   resolveActiveShellContext,
   writePersistedShellContextId,
 } from "@/features/projects/lib/shell-context";
-import { useSettings } from "@/features/settings/state/app-settings-provider";
+import { useSettings } from "@/features/settings/state/settings-provider";
 import { useTerminalResponseReady } from "@/features/terminals/state/terminal-response-ready-provider";
 import { WelcomeScreen } from "@/features/welcome/components/welcome-screen";
 import { createWorkspace, destroyWorkspace } from "@/features/workspaces/api";
@@ -351,7 +351,7 @@ export function AppShellLayout() {
       const branch = await getCurrentBranch(project.path);
       const workspaceId = await createWorkspace({
         baseRef: branch,
-        kind: "root",
+        checkoutType: "root",
         manifestFingerprint,
         manifestJson,
         projectId: project.id,
@@ -381,8 +381,10 @@ export function AppShellLayout() {
       }
 
       const existingWorkspaces = workspacesByProjectId[project.id] ?? [];
-      const kind = existingWorkspaces.some((workspace) => workspace.kind === "root")
-        ? "managed"
+      const checkoutType = existingWorkspaces.some(
+        (workspace) => workspace.checkout_type === "root",
+      )
+        ? "worktree"
         : "root";
       const manifestStatus = projectCatalogQuery.data?.manifestsByProjectId[project.id];
       const manifestJson =
@@ -398,7 +400,7 @@ export function AppShellLayout() {
         const branch = await getCurrentBranch(project.path);
         const workspaceId = await createWorkspace({
           baseRef: branch,
-          kind,
+          checkoutType,
           manifestFingerprint,
           manifestJson,
           projectId: project.id,
@@ -443,10 +445,12 @@ export function AppShellLayout() {
 
       try {
         const baseRef =
-          workspace.kind === "root" ? await getCurrentBranch(project.path) : workspace.source_ref;
+          workspace.checkout_type === "root"
+            ? await getCurrentBranch(project.path)
+            : workspace.source_ref;
         const newWorkspaceId = await createWorkspace({
           baseRef,
-          kind: "managed",
+          checkoutType: "worktree",
           manifestFingerprint,
           manifestJson,
           projectId: project.id,
@@ -468,7 +472,7 @@ export function AppShellLayout() {
   const handleDestroyWorkspace = useCallback(
     async (workspace: WorkspaceRecord) => {
       try {
-        if (workspace.mode === "local" && workspace.worktree_path) {
+        if (workspace.target === "host" && workspace.worktree_path) {
           const gitStatus = await getGitStatus(workspace.id);
           if (gitStatus.files.length > 0) {
             const workspaceLabel = getWorkspaceDisplayName(workspace);

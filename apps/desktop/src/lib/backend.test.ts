@@ -1,15 +1,16 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
+import { createTauriBackend } from "./backend";
 
 const workspace: WorkspaceRecord = {
   id: "ws_local",
   project_id: "project_1",
   name: "Local Workspace",
-  kind: "managed",
+  checkout_type: "worktree",
   source_ref: "lifecycle/local-workspace-wslocal",
   git_sha: null,
   worktree_path: "/tmp/project_1/.worktrees/ws_local",
-  mode: "local",
+  target: "host",
   manifest_fingerprint: "manifest_local",
   created_by: null,
   source_workspace_id: null,
@@ -17,6 +18,9 @@ const workspace: WorkspaceRecord = {
   updated_at: "2026-03-20T00:00:00.000Z",
   last_active_at: "2026-03-20T00:00:00.000Z",
   expires_at: null,
+  status: "active",
+  failure_reason: null,
+  failed_at: null,
 };
 
 const createWorkspaceResult = {
@@ -32,26 +36,21 @@ const invokeTauri = mock(async (command: string) => {
   throw new Error(`Unexpected command: ${command}`);
 });
 
-mock.module("./tauri-error", () => ({
-  invokeTauri,
-}));
-
-const { getBackend, resetBackendForTests } = await import("./backend");
-
-describe("desktop backend", () => {
+describe("tauri backend adapter", () => {
   beforeEach(() => {
-    resetBackendForTests();
     invokeTauri.mockClear();
   });
 
-  test("routes local workspace creation through tauri and returns authoritative persisted data", async () => {
+  test("routes host workspace creation through tauri and returns authoritative persisted data", async () => {
+    const backend = createTauriBackend(invokeTauri);
+
     await expect(
-      getBackend().createWorkspace({
+      backend.createWorkspace({
         manifestJson: '{"workspace":{"prepare":[]},"environment":{}}',
         manifestFingerprint: "manifest_local",
         context: {
-          mode: "local",
-          kind: "managed",
+          target: "host",
+          checkoutType: "worktree",
           projectId: "project_1",
           projectPath: "/tmp/project_1",
           workspaceName: "Local Workspace",
@@ -63,7 +62,7 @@ describe("desktop backend", () => {
 
     expect(invokeTauri).toHaveBeenCalledWith("create_workspace", {
       input: {
-        kind: "managed",
+        checkoutType: "worktree",
         projectId: "project_1",
         projectPath: "/tmp/project_1",
         workspaceName: "Local Workspace",

@@ -205,19 +205,19 @@ Exit condition:
 
 Status (2026-03-13):
 
-1. `LifecycleError` now serializes through a typed Tauri error envelope with `code`, `message`, `details`, `requestId`, `suggestedAction`, and `retryable` fields, and the desktop workspace/terminal APIs normalize object or string payloads through a shared helper.
+1. `LifecycleError` now serializes through a typed Tauri error envelope with `code`, `message`, `details`, `requestId`, `suggestedAction`, and `retryable` fields, and the workspace/terminal APIs normalize object or string payloads through a shared helper.
 2. Manifest file watchers only invalidate the affected workspace queries. Backend-owned service reads reconcile idle manifest state from `lifecycle.json` before returning data.
 3. `WorkspaceLayout` no longer manually invalidates workspace/service queries after manifest sync, and the main workspace lifecycle surfaces now format user-facing failures from typed error codes instead of raw `String(error)` fallbacks.
 
 #### Phase 5: Recoverable Projections And Provider Adoption
 
 1. Environment state, services, service logs, and activity must load from authoritative workspace-scoped selector/query APIs on initial mount and continue refreshing from those backend-owned selectors as future facts arrive.
-2. The desktop app should adopt explicit `Backend` and `Runtime` abstractions in `packages/backend` and `packages/runtime` instead of calling Tauri commands directly from feature APIs and query source code.
-3. Query and mutation call sites should target backend or runtime operations keyed by project/workspace identity, not transport-local command names.
+2. The desktop app should adopt explicit `Backend` and `Workspace` abstractions in `packages/backend` and `packages/workspace` instead of calling Tauri commands directly from feature APIs and query source code.
+3. Query and mutation call sites should target backend or workspace operations keyed by project/workspace identity, not transport-local command names.
 
 First implementation slice:
 
-1. Add direct reads for service log and activity state, and introduce backend/runtime-backed adapters in the desktop query source and mutation paths.
+1. Add direct reads for service log and activity state, and introduce backend/workspace-backed adapters in the desktop query source and mutation paths.
 
 Exit condition:
 
@@ -227,16 +227,16 @@ Status (2026-03-13):
 
 1. The Rust workspace controller now owns service-log and activity selectors that can be fetched through `get_workspace_service_logs` and `get_workspace_activity`.
 2. Desktop service-log and activity hooks read those workspace-scoped selectors directly, and future lifecycle facts only invalidate/refetch the affected queries instead of being reduced into frontend-owned projections.
-3. Desktop workspace create/rename/destroy, workspace catalog reads, project list/manifest reads, and project-level branch lookup now flow through the centralized `Backend`; live workspace environment/service/file/terminal/git reads and mutations flow through the local `Runtime`.
-4. `features/workspaces/api.ts`, `features/workspaces/catalog-api.ts`, `features/projects/api/projects.ts`, `features/projects/api/current-branch.ts`, `features/terminals/api.ts`, `features/git/api.ts`, and the desktop query source no longer invoke transport-local Tauri command names directly for backend or runtime-backed reads.
-5. The remaining direct desktop calls are intentionally narrower and explicitly separated into non-runtime modules: project import/remove flows, host app-launch helpers, and native terminal surface synchronization.
+3. Workspace create/rename/destroy, workspace catalog reads, project list/manifest reads, and project-level branch lookup now flow through the centralized `Backend`; live workspace service/file/terminal/git reads and mutations flow through `packages/workspace`.
+4. `features/workspaces/api.ts`, `features/workspaces/catalog-api.ts`, `features/projects/api/projects.ts`, `features/projects/api/current-branch.ts`, `features/terminals/api.ts`, `features/git/api.ts`, and the desktop query source no longer invoke transport-local Tauri command names directly for backend or workspace-backed reads.
+5. The remaining direct desktop calls are intentionally narrower and explicitly separated into non-workspace modules: project import/remove flows, host app-launch helpers, and native terminal surface synchronization.
 
 #### Phase 6: Workspace Surface Split And Tab Store Normalization
 
 1. `features/workspaces` owns pane and tab orchestration only.
 2. File draft state, conflict state, save/discard prompts, and file-session bookkeeping live in `features/files`.
 3. Extract a controller layer from the workspace canvas host so the rendered view stays declarative and does not carry mutation authority or file-editor lifecycle.
-4. Normalize runtime-tab identity, document-tab identity, pane-local order, hidden runtime keys, and per-tab view state into one coherent store model.
+4. Normalize live-tab identity, document-tab identity, pane-local order, hidden terminal keys, and per-tab view state into one coherent store model.
 
 First implementation slice:
 
@@ -244,22 +244,22 @@ First implementation slice:
 
 Exit condition:
 
-1. The workspace canvas host is for runtime-backed tabs and document tabs, not the implementation owner of file editing behavior.
+1. The workspace canvas host is for live tabs and document tabs, not the implementation owner of file editing behavior.
 
 Status (2026-03-13):
 
 1. File-session ownership for dirty state, conflict tracking, pruning, and close-confirmation copy now lives in `features/files/state/workspace-file-sessions.ts` instead of being embedded directly in the canvas host.
 2. `WorkspaceCanvas` now composes that file-session controller as feature-owned state while continuing to host pane/tab orchestration.
-3. `WorkspaceCanvas` now delegates runtime/document/pane derived state, terminal/document mutation handlers, and keyboard/native-shortcut side effects to `workspace-canvas-controller.tsx`, leaving the render component as a thin declarative shell over `WorkspacePaneTree`.
+3. `WorkspaceCanvas` now delegates live/document/pane derived state, terminal/document mutation handlers, and keyboard/native-shortcut side effects to `workspace-canvas-controller.tsx`, leaving the render component as a thin declarative shell over `WorkspacePaneTree`.
 4. Workspace-surface state now keys document tabs by `documentsByKey` internally, and the controller derives ordered document arrays for view-only consumers instead of treating the array as authoritative state.
-5. Hidden runtime visibility and per-tab view state now share one `tabStateByKey` store instead of being tracked in parallel `hiddenRuntimeTabKeys` and `viewStateByTabKey` maps.
+5. Hidden terminal visibility and per-tab view state now share one `tabStateByKey` store instead of being tracked in parallel `hiddenTerminalTabKeys` and `viewStateByTabKey` maps.
 6. The old pre-`rootPane` persistence fallback is gone; legacy snapshots that only stored `activeTabKey` or `tabOrderKeys` without a pane tree now normalize to the default empty pane layout instead of being silently reconstructed.
 7. The previous `workspace-surface-logic.ts` grab bag has been replaced by focused modules for reducer transitions, tab helpers, shortcut/platform helpers, IDs, and open-document request types.
 8. Pane layout nodes are now layout-only; `paneTabStateById` owns per-pane active selection and tab membership, so tab/document/runtime mutations no longer rewrite the pane tree just to move tabs around.
 9. Controller/runtime derivation now consumes pane snapshots built from `paneTabStateById` instead of reading raw pane-state maps directly in each helper call site.
 10. Pane drag/drop targeting now resolves against measured pane geometry and reuses the last visible drop intent at commit time, removing the old `elementFromPoint(...)` dependency and keeping preview/result behavior aligned.
 11. Pane selection now validates pane existence and tab membership at the reducer boundary, so stale `select-tab` actions can no longer create orphan pane state or point `activePaneId` at a non-existent layout leaf.
-12. Rendered pane activity is now derived separately from stored pane selection intent, and runtime waiting state only appears when a pane has no visible fallback tab while a selected live runtime tab is still attaching.
+12. Rendered pane activity is now derived separately from stored pane selection intent, and live-tab waiting state only appears when a pane has no visible fallback tab while a selected live tab is still attaching.
 13. Workspace pane topology now flows through an explicit layout contract (`inspect/split/close/update`) instead of letting reducers and controllers manipulate the recursive pane tree through scattered helper combinations.
 14. `activePaneId` is now canonical non-null surface state, and controller/render code no longer carries a “fallback to the first pane” recovery path when pane selection is invalid.
 15. Drag-created pane splits now carry an explicit initial ratio instead of defaulting every drag split to `0.5`, which makes nested pane sizing more predictable.

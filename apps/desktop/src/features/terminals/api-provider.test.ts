@@ -21,7 +21,7 @@ const terminal: TerminalRecord = {
   ended_at: null,
 };
 
-const runtime = {
+const workspaceClient = {
   listTerminals: mock(async () => [terminal]),
   createTerminal: mock(async () => terminal),
   renameTerminal: mock(async () => ({ ...terminal, label: "Codex Session" })),
@@ -35,10 +35,10 @@ const runtime = {
   interruptTerminal: mock(async () => {}),
 };
 
-const getRuntime = mock(() => runtime);
+const getWorkspaceClient = mock(() => workspaceClient);
 
-mock.module("../../lib/runtime", () => ({
-  getRuntime,
+mock.module("../../lib/workspace", () => ({
+  getWorkspaceClient,
 }));
 
 const {
@@ -51,15 +51,15 @@ const {
   saveTerminalAttachment,
 } = await import("./api");
 
-describe("terminal api runtime routing", () => {
+describe("terminal api workspace routing", () => {
   beforeEach(() => {
     Object.defineProperty(globalThis, "isTauri", {
       configurable: true,
       value: true,
       writable: true,
     });
-    getRuntime.mockClear();
-    for (const method of Object.values(runtime)) {
+    getWorkspaceClient.mockClear();
+    for (const method of Object.values(workspaceClient)) {
       method.mockClear();
     }
   });
@@ -68,7 +68,7 @@ describe("terminal api runtime routing", () => {
     delete (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri;
   });
 
-  test("routes terminal lifecycle reads and mutations through the runtime", async () => {
+  test("routes terminal lifecycle reads and mutations through the workspace client", async () => {
     expect(await listWorkspaceTerminals("ws_1")).toEqual([terminal]);
     expect(await createTerminal({ workspaceId: "ws_1", launchType: "shell" })).toEqual(terminal);
     expect(
@@ -98,15 +98,15 @@ describe("terminal api runtime routing", () => {
     await killTerminal("ws_1", "term_1");
     await interruptTerminal("ws_1", "term_1");
 
-    expect(getRuntime).toHaveBeenCalled();
-    expect(runtime.listTerminals).toHaveBeenCalledWith("ws_1");
-    expect(runtime.createTerminal).toHaveBeenCalledWith({
+    expect(getWorkspaceClient).toHaveBeenCalled();
+    expect(workspaceClient.listTerminals).toHaveBeenCalledWith("ws_1");
+    expect(workspaceClient.createTerminal).toHaveBeenCalledWith({
       workspaceId: "ws_1",
       launchType: "shell",
       harnessProvider: null,
       harnessSessionId: null,
     });
-    expect(runtime.createTerminal).toHaveBeenCalledWith({
+    expect(workspaceClient.createTerminal).toHaveBeenCalledWith({
       workspaceId: "ws_1",
       launchType: "harness",
       harnessLaunchConfig: {
@@ -119,14 +119,14 @@ describe("terminal api runtime routing", () => {
       harnessProvider: "codex",
       harnessSessionId: null,
     });
-    expect(runtime.renameTerminal).toHaveBeenCalledWith("ws_1", "term_1", "Codex Session");
-    expect(runtime.saveTerminalAttachment).toHaveBeenCalledWith({
+    expect(workspaceClient.renameTerminal).toHaveBeenCalledWith("ws_1", "term_1", "Codex Session");
+    expect(workspaceClient.saveTerminalAttachment).toHaveBeenCalledWith({
       base64Data: "ZmFrZQ==",
       fileName: "screenshot.png",
       workspaceId: "ws_1",
     });
-    expect(runtime.detachTerminal).toHaveBeenCalledWith("ws_1", "term_1");
-    expect(runtime.killTerminal).toHaveBeenCalledWith("ws_1", "term_1");
-    expect(runtime.interruptTerminal).toHaveBeenCalledWith("ws_1", "term_1");
+    expect(workspaceClient.detachTerminal).toHaveBeenCalledWith("ws_1", "term_1");
+    expect(workspaceClient.killTerminal).toHaveBeenCalledWith("ws_1", "term_1");
+    expect(workspaceClient.interruptTerminal).toHaveBeenCalledWith("ws_1", "term_1");
   });
 });

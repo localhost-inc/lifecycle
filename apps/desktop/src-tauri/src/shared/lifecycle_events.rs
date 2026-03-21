@@ -20,8 +20,8 @@ pub struct LifecycleEnvelope {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind")]
 pub enum LifecycleEvent {
-    #[serde(rename = "environment.status_changed")]
-    EnvironmentStatusChanged {
+    #[serde(rename = "workspace.status_changed")]
+    WorkspaceStatusChanged {
         workspace_id: String,
         status: String,
         failure_reason: Option<String>,
@@ -125,7 +125,7 @@ pub enum LifecycleEvent {
 impl LifecycleEvent {
     pub fn workspace_id(&self) -> &str {
         match self {
-            Self::EnvironmentStatusChanged { workspace_id, .. }
+            Self::WorkspaceStatusChanged { workspace_id, .. }
             | Self::WorkspaceRenamed { workspace_id, .. }
             | Self::WorkspaceDeleted { workspace_id }
             | Self::ServiceStatusChanged { workspace_id, .. }
@@ -198,7 +198,7 @@ fn handle_service_process_exited(app: &AppHandle, workspace_id: &str, name: &str
 
     let current_status: Option<String> = conn
         .query_row(
-            "SELECT status FROM service WHERE environment_id = ?1 AND name = ?2",
+            "SELECT status FROM service WHERE workspace_id = ?1 AND name = ?2",
             params![workspace_id, name],
             |row| row.get(0),
         )
@@ -214,7 +214,7 @@ fn handle_service_process_exited(app: &AppHandle, workspace_id: &str, name: &str
              status_reason = 'service_process_exited',
              assigned_port = NULL,
              updated_at = datetime('now')
-         WHERE environment_id = ?1 AND name = ?2",
+         WHERE workspace_id = ?1 AND name = ?2",
         params![workspace_id, name],
     );
 

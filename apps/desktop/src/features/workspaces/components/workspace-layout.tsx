@@ -47,10 +47,10 @@ import {
   createPullRequestOpenInput,
 } from "@/features/workspaces/components/workspace-canvas-requests";
 import {
-  startEnvironment,
-  stopEnvironment,
+  startServices,
+  stopServices,
 } from "@/features/workspaces/api";
-import { useWorkspaceEnvironment, useWorkspaceServices } from "@/features/workspaces/hooks";
+import { useWorkspaceServices } from "@/features/workspaces/hooks";
 import { workspaceSupportsFilesystemInteraction } from "@/features/workspaces/lib/workspace-capabilities";
 import { useWorkspaceOpenRequests } from "@/features/workspaces/state/workspace-open-requests";
 
@@ -86,13 +86,11 @@ export function WorkspaceLayout({
   const config = hasManifest ? manifestStatus.result.config : null;
   const manifestState = manifestStatus?.state ?? "missing";
   const supportsTerminalInteraction = workspaceSupportsFilesystemInteraction(workspace);
-  const environmentQuery = useWorkspaceEnvironment(workspace.id);
   const servicesQuery = useWorkspaceServices(workspace.id);
   const gitStatusQuery = useGitStatus(
-    workspace.mode === "local" && workspace.worktree_path !== null ? workspace.id : null,
+    workspace.target === "host" && workspace.worktree_path !== null ? workspace.id : null,
   );
 
-  const environment = environmentQuery.data;
   const services = servicesQuery.data;
 
   const handleRun = useCallback(
@@ -100,7 +98,7 @@ export function WorkspaceLayout({
       if (!config || !services) return;
       try {
         const manifestJson = JSON.stringify(config);
-        await startEnvironment({
+        await startServices({
           serviceNames,
           workspace,
           services,
@@ -122,8 +120,8 @@ export function WorkspaceLayout({
 
     try {
       const manifestJson = JSON.stringify(config);
-      await stopEnvironment(workspace.id);
-      await startEnvironment({
+      await stopServices(workspace.id);
+      await startServices({
         workspace,
         services,
         manifestJson,
@@ -137,7 +135,7 @@ export function WorkspaceLayout({
 
   const handleStop = useCallback(async () => {
     try {
-      await stopEnvironment(workspace.id);
+      await stopServices(workspace.id);
     } catch (err) {
       console.error("Failed to stop workspace:", err);
       throw err;
@@ -321,10 +319,9 @@ export function WorkspaceLayout({
 
   const extensionSlots = useMemo(
     () =>
-      environment && services
+      services
         ? getBuiltinExtensionSlots({
             config,
-            environment,
             gitStatus: gitStatusQuery.data,
             hasManifest,
             launchActions,
@@ -340,7 +337,6 @@ export function WorkspaceLayout({
         : [],
     [
       config,
-      environment,
       gitStatusQuery.data,
       handleFocusTerminal,
       handleRestart,
@@ -391,19 +387,8 @@ export function WorkspaceLayout({
 
   // — Early returns (after all hooks to preserve hook order) —
 
-  if (hasBlockingQueryLoad(environmentQuery) || hasBlockingQueryLoad(servicesQuery)) {
-    return <Loading delay={0} message="Loading workspace environment..." />;
-  }
-
-  if (hasBlockingQueryError(environmentQuery)) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <Alert className="max-w-lg" variant="destructive">
-          <AlertTitle>Failed to load environment</AlertTitle>
-          <AlertDescription>{toErrorEnvelope(environmentQuery.error).message}</AlertDescription>
-        </Alert>
-      </div>
-    );
+  if (hasBlockingQueryLoad(servicesQuery)) {
+    return <Loading delay={0} message="Loading workspace services..." />;
   }
 
   if (hasBlockingQueryError(servicesQuery)) {
@@ -417,25 +402,12 @@ export function WorkspaceLayout({
     );
   }
 
-  if (environment === undefined) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <Alert className="max-w-lg" variant="destructive">
-          <AlertTitle>Workspace environment missing</AlertTitle>
-          <AlertDescription>
-            Every workspace must have exactly one environment.
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
-
   if (services === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <Alert className="max-w-lg" variant="destructive">
           <AlertTitle>Workspace services missing</AlertTitle>
-          <AlertDescription>Service state could not be resolved for this environment.</AlertDescription>
+          <AlertDescription>Service state could not be resolved for this workspace.</AlertDescription>
         </Alert>
       </div>
     );

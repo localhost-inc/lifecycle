@@ -14,7 +14,7 @@ pub struct CreateWorkspaceCommandInput {
     workspace_name: Option<String>,
     base_ref: Option<String>,
     worktree_root: Option<String>,
-    kind: Option<String>,
+    checkout_type: Option<String>,
     manifest_json: Option<String>,
     manifest_fingerprint: Option<String>,
 }
@@ -43,7 +43,7 @@ pub async fn create_workspace(
             workspace_name: input.workspace_name,
             base_ref: input.base_ref,
             worktree_root: input.worktree_root,
-            kind: input.kind,
+            checkout_type: input.checkout_type,
             manifest_json: input.manifest_json,
             manifest_fingerprint: input.manifest_fingerprint,
         },
@@ -84,7 +84,7 @@ pub async fn rename_workspace(
 }
 
 #[tauri::command]
-pub async fn start_environment(
+pub async fn start_workspace_services(
     app: AppHandle,
     db_path: State<'_, DbPath>,
     workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
@@ -96,7 +96,7 @@ pub async fn start_environment(
     let _mutation_guard = workspace_controllers
         .acquire_mutation_guard(&workspace_id)
         .await?;
-    super::super::environment::start_environment(
+    super::super::environment::start_workspace_services(
         app,
         db_path,
         workspace_controllers,
@@ -109,13 +109,14 @@ pub async fn start_environment(
 }
 
 #[tauri::command]
-pub async fn stop_environment(
+pub async fn stop_workspace_services(
     app: AppHandle,
     db_path: State<'_, DbPath>,
     workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
     workspace_id: String,
 ) -> Result<(), LifecycleError> {
-    super::super::stop::stop_environment(app, db_path, workspace_controllers, workspace_id).await
+    super::super::stop::stop_workspace_services(app, db_path, workspace_controllers, workspace_id)
+        .await
 }
 
 #[tauri::command]
@@ -150,14 +151,6 @@ pub async fn get_workspace_by_id(
     workspace_id: String,
 ) -> Result<Option<super::super::query::WorkspaceRecord>, LifecycleError> {
     super::super::query::get_workspace_by_id(&db_path.0, workspace_id).await
-}
-
-#[tauri::command]
-pub async fn get_workspace_environment(
-    db_path: State<'_, DbPath>,
-    workspace_id: String,
-) -> Result<super::super::query::EnvironmentRecord, LifecycleError> {
-    super::super::query::get_workspace_environment(&db_path.0, workspace_id).await
 }
 
 #[tauri::command]

@@ -1,5 +1,4 @@
 import type {
-  EnvironmentRecord,
   GitBranchPullRequestResult,
   GitCommitDiffResult,
   GitCommitResult,
@@ -17,30 +16,30 @@ import type {
 } from "@lifecycle/contracts";
 import type {
   CreateTerminalInput,
-  EnvironmentStartInput,
+  StartServicesInput,
   GitDiffInput,
-  Runtime,
+  WorkspaceClient,
   SavedTerminalAttachment,
   SaveTerminalAttachmentInput,
   ServiceLogSnapshot,
   WorkspaceFileReadResult,
   WorkspaceFileTreeEntry,
   WorkspaceHealthResult,
-} from "./runtime";
+} from "./workspace";
 
 interface TauriInvoke {
   (cmd: string, args?: Record<string, unknown>): Promise<unknown>;
 }
 
-export class LocalRuntime implements Runtime {
+export class HostWorkspaceClient implements WorkspaceClient {
   private invoke: TauriInvoke;
 
   constructor(invoke: TauriInvoke) {
     this.invoke = invoke;
   }
 
-  async startEnvironment(input: EnvironmentStartInput): Promise<ServiceRecord[]> {
-    await this.invokeStartEnvironment(input);
+  async startServices(input: StartServicesInput): Promise<ServiceRecord[]> {
+    await this.invokeStartWorkspaceServices(input);
     return input.services;
   }
 
@@ -52,14 +51,8 @@ export class LocalRuntime implements Runtime {
     return { healthy, services };
   }
 
-  async stopEnvironment(workspaceId: string): Promise<void> {
-    await this.invoke("stop_environment", { workspaceId });
-  }
-
-  async getEnvironment(workspaceId: string): Promise<EnvironmentRecord> {
-    return this.invoke("get_workspace_environment", {
-      workspaceId,
-    }) as Promise<EnvironmentRecord>;
+  async stopServices(workspaceId: string): Promise<void> {
+    await this.invoke("stop_workspace_services", { workspaceId });
   }
 
   async getActivity(workspaceId: string): Promise<LifecycleEvent[]> {
@@ -270,8 +263,8 @@ export class LocalRuntime implements Runtime {
     }) as Promise<GitPullRequestSummary>;
   }
 
-  private async invokeStartEnvironment(input: EnvironmentStartInput): Promise<void> {
-    await this.invoke("start_environment", {
+  private async invokeStartWorkspaceServices(input: StartServicesInput): Promise<void> {
+    await this.invoke("start_workspace_services", {
       workspaceId: input.workspace.id,
       manifestJson: input.manifestJson,
       manifestFingerprint: input.manifestFingerprint,

@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 use tauri::State;
 
 use super::persistence::{
-    load_terminal_record, load_workspace_runtime, workspace_has_interactive_terminal_context,
+    load_terminal_record, load_terminal_workspace_context,
+    workspace_has_interactive_terminal_context,
 };
 use super::types::SavedTerminalAttachment;
 
@@ -145,10 +146,10 @@ fn persist_terminal_attachment_bytes(
     media_type: Option<&str>,
     bytes: &[u8],
 ) -> Result<SavedTerminalAttachment, LifecycleError> {
-    let workspace = load_workspace_runtime(db_path, workspace_id)?;
+    let workspace = load_terminal_workspace_context(db_path, workspace_id)?;
     if !workspace_has_interactive_terminal_context(&workspace) {
         return Err(LifecycleError::InvalidStateTransition {
-            from: workspace.status.as_str().to_string(),
+            from: "workspace_inactive".to_string(),
             to: "terminal_attachment".to_string(),
         });
     }

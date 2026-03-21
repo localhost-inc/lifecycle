@@ -8,7 +8,7 @@
 
 ## Goal
 
-User opens a workspace, lands in the shared workspace surface, optionally launches a coding agent harness (Claude Code, Codex, etc.) from an empty pane, and interacts with a native terminal session that supports detach/restore within the running desktop app. Newly created workspaces should default to an empty pane state so session choice stays inside the shared workspace tab surface without requiring a synthetic launcher tab. Adding a project should create a repo-backed root workspace immediately so work can start without managed-worktree ceremony.
+User opens a workspace, lands in the shared workspace surface, optionally launches a coding agent harness (Claude Code, Codex, etc.) from an empty pane, and interacts with a native terminal session that supports detach/restore within the running desktop app. Newly created workspaces should default to an empty pane state so session choice stays inside the shared workspace tab surface without requiring a synthetic launcher tab. Adding a project should create a repo-backed root workspace immediately so work can start without derived-worktree ceremony.
 
 ## What You Build
 
@@ -77,7 +77,7 @@ For local mode in M3:
 
 ### Workspace Surface Compatibility
 
-1. Terminal tabs are the first runtime-backed tab type in the workspace surface.
+1. Terminal tabs are the first live tab type in the workspace surface.
 2. Future document tabs (for example git diff or file editors) must not redefine terminal lifecycle semantics.
 3. Runtime-backed terminal panels may stay mounted while inactive so detach/reattach and native host behavior remain correct.
 4. The shared workspace surface may restore as a split-pane tree with pane-local tab strips, but terminal runtime ownership and detach/restore semantics must remain identical across single-pane and multi-pane layouts.

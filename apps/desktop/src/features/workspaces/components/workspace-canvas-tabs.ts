@@ -58,9 +58,9 @@ export function resolveWorkspaceVisibleTabs(
       return visibleTabs;
     }
 
-    const runtimeTab = terminalTabsByKey.get(key);
-    if (runtimeTab) {
-      visibleTabs.push(runtimeTab);
+    const terminalTab = terminalTabsByKey.get(key);
+    if (terminalTab) {
+      visibleTabs.push(terminalTab);
       return visibleTabs;
     }
 

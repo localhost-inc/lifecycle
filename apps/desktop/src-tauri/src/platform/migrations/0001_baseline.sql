@@ -19,8 +19,8 @@ CREATE TABLE IF NOT EXISTS workspace (
     source_ref_origin TEXT NOT NULL DEFAULT 'manual',
     git_sha TEXT,
     worktree_path TEXT,
-    mode TEXT NOT NULL DEFAULT 'local',
-    kind TEXT NOT NULL DEFAULT 'managed',
+    target TEXT NOT NULL DEFAULT 'host',
+    checkout_type TEXT NOT NULL DEFAULT 'worktree',
     created_by TEXT,
     source_workspace_id TEXT REFERENCES workspace(id),
     manifest_fingerprint TEXT,
@@ -28,34 +28,28 @@ CREATE TABLE IF NOT EXISTS workspace (
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     last_active_at TEXT NOT NULL DEFAULT (datetime('now')),
     expires_at TEXT,
-    prepared_at TEXT
+    prepared_at TEXT,
+    status TEXT NOT NULL DEFAULT 'active',
+    failure_reason TEXT,
+    failed_at TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_workspace_project_kind ON workspace(project_id, kind);
+CREATE INDEX IF NOT EXISTS idx_workspace_project_checkout_type ON workspace(project_id, checkout_type);
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_project_root_unique
 ON workspace(project_id)
-WHERE kind = 'root';
-
-CREATE TABLE IF NOT EXISTS environment (
-    workspace_id TEXT PRIMARY KEY NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
-    status TEXT NOT NULL DEFAULT 'idle',
-    failure_reason TEXT,
-    failed_at TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
+WHERE checkout_type = 'root';
 
 CREATE TABLE IF NOT EXISTS service (
     id TEXT PRIMARY KEY NOT NULL,
-    environment_id TEXT NOT NULL REFERENCES environment(workspace_id) ON DELETE CASCADE,
+    workspace_id TEXT NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'stopped',
     status_reason TEXT,
     assigned_port INTEGER,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(environment_id, name)
+    UNIQUE(workspace_id, name)
 );
 
 CREATE TABLE IF NOT EXISTS terminal (

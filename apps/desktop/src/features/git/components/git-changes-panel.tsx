@@ -1,4 +1,4 @@
-import type { GitPullRequestSummary, WorkspaceMode } from "@lifecycle/contracts";
+import type { GitPullRequestSummary, WorkspaceTarget } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
 import { useCallback } from "react";
 import { stageGitFiles } from "@/features/git/api";
@@ -16,7 +16,7 @@ interface GitChangesPanelProps {
   onOpenPullRequest: (pullRequest: GitPullRequestSummary) => void;
   onShowChanges: () => void;
   workspaceId: string;
-  workspaceMode: WorkspaceMode;
+  workspaceTarget: WorkspaceTarget;
   worktreePath: string | null;
 }
 
@@ -27,15 +27,15 @@ export function GitChangesPanel({
   onOpenPullRequest,
   onShowChanges: _onShowChanges,
   workspaceId,
-  workspaceMode,
+  workspaceTarget,
   worktreePath,
 }: GitChangesPanelProps) {
-  const supportsChanges = workspaceMode === "local" && worktreePath !== null;
+  const supportsChanges = workspaceTarget === "host" && worktreePath !== null;
   const gitActions = useGitActions({
     onCommitComplete,
     onOpenPullRequest,
     workspaceId,
-    workspaceMode,
+    workspaceTarget,
     worktreePath,
   });
 
@@ -68,7 +68,7 @@ export function GitChangesPanel({
           ) : (
             <div className={GIT_CHANGES_PANEL_EMPTY_STATE_CLASS_NAME}>
               <EmptyState
-                description="Workspace change tracking will use the cloud provider once cloud Git state exists."
+                description="Change tracking is only available for host workspaces right now."
                 size="sm"
                 title="Changes unavailable"
               />

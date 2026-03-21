@@ -1,6 +1,5 @@
 import type {
   Backend,
-  LocalWorkspaceCreateContext,
   WorkspaceCreateInput,
   WorkspaceCreateResult,
 } from "@lifecycle/backend";
@@ -10,7 +9,7 @@ import { invokeTauri } from "@/lib/tauri-error";
 let backend: Backend | null = null;
 
 export function getBackend(): Backend {
-  backend ??= new TauriBackend((command, args) => invokeTauri(command, args));
+  backend ??= createTauriBackend((command, args) => invokeTauri(command, args));
   return backend;
 }
 
@@ -20,6 +19,10 @@ export function resetBackendForTests(): void {
 
 interface TauriInvoke {
   (cmd: string, args?: Record<string, unknown>): Promise<unknown>;
+}
+
+export function createTauriBackend(invoke: TauriInvoke): Backend {
+  return new TauriBackend(invoke);
 }
 
 class TauriBackend implements Backend {
@@ -56,10 +59,10 @@ class TauriBackend implements Backend {
   }
 
   async createWorkspace(input: WorkspaceCreateInput): Promise<WorkspaceCreateResult> {
-    const context = requireLocalCreateContext(input.context);
+    const context = requireHostCreateContext(input.context);
     return this.invoke("create_workspace", {
       input: {
-        kind: context.kind ?? "managed",
+        checkoutType: context.checkoutType ?? "worktree",
         projectId: context.projectId,
         projectPath: context.projectPath,
         workspaceName: context.workspaceName,
@@ -87,11 +90,20 @@ class TauriBackend implements Backend {
   }
 }
 
-function requireLocalCreateContext(
+function requireHostCreateContext(
   context: WorkspaceCreateInput["context"],
-): LocalWorkspaceCreateContext {
-  if (context.mode !== "local") {
-    throw new Error("Desktop backend createWorkspace does not support cloud mode yet");
+): WorkspaceCreateInput["context"] & { target: "host"; projectPath: string } {
+  if (context.target !== "host") {
+    throw new Error(`This backend does not support workspace target '${context.target}' yet.`);
   }
-  return context;
+
+  if (!context.projectPath) {
+    throw new Error("Host workspace creation requires a project path.");
+  }
+
+  return {
+    ...context,
+    target: "host",
+    projectPath: context.projectPath,
+  };
 }

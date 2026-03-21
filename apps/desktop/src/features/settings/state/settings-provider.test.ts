@@ -8,8 +8,8 @@ import { buildDefaultHarnessSettings } from "@/features/settings/state/harness-s
 import {
   DEFAULT_INACTIVE_PANE_OPACITY,
   applyFontSettings,
-  parseStoredSettings,
-} from "@/features/settings/state/app-settings-provider";
+  parseSettingsJson,
+} from "@/features/settings/state/settings-provider";
 
 describe("applyFontSettings", () => {
   test("writes interface and monospace font tokens to the root style", () => {
@@ -34,9 +34,10 @@ describe("applyFontSettings", () => {
   });
 });
 
-describe("parseStoredSettings", () => {
-  test("returns defaults when storage is empty", () => {
-    expect(parseStoredSettings(null)).toEqual({
+describe("parseSettingsJson", () => {
+  test("returns defaults when config is empty", () => {
+    expect(parseSettingsJson(null)).toEqual({
+      theme: "dark",
       defaultNewTabLaunch: "shell",
       dimInactivePanes: false,
       harnesses: buildDefaultHarnessSettings(),
@@ -49,31 +50,31 @@ describe("parseStoredSettings", () => {
     });
   });
 
-  test("keeps valid notification settings and normalizes invalid ones", () => {
+  test("keeps valid settings and normalizes invalid ones", () => {
     expect(
-      parseStoredSettings(
-        JSON.stringify({
-          dimInactivePanes: true,
-          harnesses: {
-            claude: {
-              dangerousSkipPermissions: true,
-              permissionMode: "bypassPermissions",
-              preset: "trusted_host",
-            },
-            codex: {
-              approvalPolicy: "never",
-              dangerousBypass: true,
-              preset: "trusted_host",
-              sandboxMode: "danger-full-access",
-            },
+      parseSettingsJson({
+        theme: "catppuccin",
+        dimInactivePanes: true,
+        harnesses: {
+          claude: {
+            dangerousSkipPermissions: true,
+            permissionMode: "bypassPermissions",
+            preset: "trusted_host",
           },
-          inactivePaneOpacity: 0.45,
-          turnNotificationSound: "signal",
-          turnNotificationsMode: "always",
-          worktreeRoot: "  ~/workspace-root  ",
-        }),
-      ),
+          codex: {
+            approvalPolicy: "never",
+            dangerousBypass: true,
+            preset: "trusted_host",
+            sandboxMode: "danger-full-access",
+          },
+        },
+        inactivePaneOpacity: 0.45,
+        turnNotificationSound: "signal",
+        turnNotificationsMode: "always",
+        worktreeRoot: "  ~/workspace-root  ",
+      }),
     ).toEqual({
+      theme: "catppuccin",
       defaultNewTabLaunch: "shell",
       dimInactivePanes: true,
       harnesses: {
@@ -98,26 +99,26 @@ describe("parseStoredSettings", () => {
     });
 
     expect(
-      parseStoredSettings(
-        JSON.stringify({
-          dimInactivePanes: "broken",
-          harnesses: {
-            claude: {
-              dangerousSkipPermissions: "broken",
-              permissionMode: "broken",
-            },
-            codex: {
-              approvalPolicy: "broken",
-              dangerousBypass: "broken",
-              sandboxMode: "broken",
-            },
+      parseSettingsJson({
+        theme: "broken",
+        dimInactivePanes: "broken",
+        harnesses: {
+          claude: {
+            dangerousSkipPermissions: "broken",
+            permissionMode: "broken",
           },
-          inactivePaneOpacity: 0.62,
-          turnNotificationSound: "broken",
-          turnNotificationsMode: "broken",
-        }),
-      ),
+          codex: {
+            approvalPolicy: "broken",
+            dangerousBypass: "broken",
+            sandboxMode: "broken",
+          },
+        },
+        inactivePaneOpacity: 0.62,
+        turnNotificationSound: "broken",
+        turnNotificationsMode: "broken",
+      }),
     ).toEqual({
+      theme: "dark",
       defaultNewTabLaunch: "shell",
       dimInactivePanes: false,
       harnesses: buildDefaultHarnessSettings(),

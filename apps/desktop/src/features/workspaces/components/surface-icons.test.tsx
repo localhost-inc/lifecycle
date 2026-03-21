@@ -6,6 +6,7 @@ import {
   createCommitDiffTab,
   createFileViewerTab,
   createPullRequestTab,
+  terminalTabKey,
 } from "@/features/workspaces/state/workspace-canvas-state";
 import { WorkspaceSurfaceTabLeading } from "@/features/workspaces/components/surface-icons";
 
@@ -15,7 +16,7 @@ describe("WorkspaceSurfaceTabLeading", () => {
       createElement(WorkspaceSurfaceTabLeading, {
         tab: {
           harnessProvider: "claude",
-          key: "terminal:term-1",
+          key: terminalTabKey("term-1"),
           kind: "terminal",
           label: "Claude · auth-fix",
           launchType: "harness",
@@ -37,7 +38,7 @@ describe("WorkspaceSurfaceTabLeading", () => {
       createElement(WorkspaceSurfaceTabLeading, {
         tab: {
           harnessProvider: "codex",
-          key: "terminal:term-1",
+          key: terminalTabKey("term-1"),
           kind: "terminal",
           label: "Codex · auth-fix",
           launchType: "harness",
@@ -59,7 +60,7 @@ describe("WorkspaceSurfaceTabLeading", () => {
       createElement(WorkspaceSurfaceTabLeading, {
         tab: {
           harnessProvider: null,
-          key: "terminal:term-2",
+          key: terminalTabKey("term-2"),
           kind: "terminal",
           label: "Shell",
           launchType: "shell",

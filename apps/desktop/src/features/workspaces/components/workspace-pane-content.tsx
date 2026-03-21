@@ -12,6 +12,7 @@ import {
   isCommitDiffDocument,
   isFileViewerDocument,
   isPullRequestDocument,
+  terminalTabKey,
   type WorkspaceCanvasDocument,
   type WorkspaceCanvasTabViewState,
 } from "@/features/workspaces/state/workspace-canvas-state";
@@ -75,7 +76,7 @@ export function WorkspacePaneContent({
   const activeTerminal =
     activeTabKey === null
       ? null
-      : (terminals.find((terminal) => `terminal:${terminal.id}` === activeTabKey) ?? null);
+      : (terminals.find((terminal) => terminalTabKey(terminal.id) === activeTabKey) ?? null);
   const activeDocument =
     activeTabKey === null
       ? null

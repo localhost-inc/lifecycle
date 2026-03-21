@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type {
   Backend,
-  CloudWorkspaceCreateContext,
-  LocalWorkspaceCreateContext,
   WorkspaceCreateContext,
   WorkspaceCreateInput,
 } from "./backend";
@@ -25,42 +23,35 @@ describe("backend contract", () => {
     expect(requiredMethods).toHaveLength(10);
   });
 
-  test("accepts local and cloud workspace creation contexts through one backend seam", () => {
-    const localContext: LocalWorkspaceCreateContext = {
-      mode: "local",
-      kind: "managed",
-      projectId: "project_local",
-      projectPath: "/tmp/project-local",
-      workspaceName: "Local Workspace",
+  test("accepts host workspace creation contexts through one backend seam", () => {
+    const hostContext: WorkspaceCreateContext = {
+      target: "host",
+      checkoutType: "worktree",
+      projectId: "project_host",
+      projectPath: "/tmp/project-host",
+      workspaceName: "Host Workspace",
       baseRef: "main",
-      worktreeRoot: "/tmp/project-local/.worktrees",
+      worktreeRoot: "/tmp/project-host/.worktrees",
     };
 
-    const cloudContext: CloudWorkspaceCreateContext = {
-      mode: "cloud",
-      organizationId: "org_123",
-      repositoryId: "repo_123",
-      projectId: "project_cloud",
-    };
+    const contexts: WorkspaceCreateContext[] = [hostContext];
 
-    const contexts: WorkspaceCreateContext[] = [localContext, cloudContext];
-
-    expect(contexts.map((context) => context.mode)).toEqual(["local", "cloud"]);
+    expect(contexts.map((context) => context.target)).toEqual(["host"]);
   });
 
-  test("keeps create input mode-specific while the backend contract stays centralized", () => {
+  test("keeps create input target-specific while the backend contract stays centralized", () => {
     const input: WorkspaceCreateInput = {
       manifestJson: '{"workspace":{"prepare":[]},"environment":{}}',
       manifestFingerprint: "manifest_123",
       context: {
-        mode: "cloud",
-        organizationId: "org_123",
-        repositoryId: "repo_123",
+        target: "host",
+        checkoutType: "worktree",
         projectId: "project_123",
+        projectPath: "/tmp/project-123",
       },
     };
 
-    expect(input.context.mode).toBe("cloud");
+    expect(input.context.target).toBe("host");
     expect(input.context.projectId).toBe("project_123");
   });
 });

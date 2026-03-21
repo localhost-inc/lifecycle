@@ -1,14 +1,13 @@
 use crate::capabilities::workspaces::manifest::LifecycleConfig;
-use crate::capabilities::workspaces::state_machine::validate_environment_transition;
 use crate::platform::db::open_db;
 use crate::shared::errors::{
-    LifecycleError, ServiceStatus, EnvironmentFailureReason, EnvironmentStatus,
+    LifecycleError, ServiceStatus, WorkspaceFailureReason, WorkspaceStatus,
 };
 use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
 use rusqlite::params;
 use tauri::AppHandle;
 
-pub(super) fn emit_environment_status(
+pub(super) fn emit_workspace_status(
     app: &AppHandle,
     workspace_id: &str,
     status: &str,
@@ -16,7 +15,7 @@ pub(super) fn emit_environment_status(
 ) {
     publish_lifecycle_event(
         app,
-        LifecycleEvent::EnvironmentStatusChanged {
+        LifecycleEvent::WorkspaceStatusChanged {
             workspace_id: workspace_id.to_string(),
             status: status.to_string(),
             failure_reason: failure_reason.map(|s| s.to_string()),
@@ -42,27 +41,27 @@ pub(super) fn emit_service_status(
     );
 }
 
-pub(super) fn update_environment_status_db(
+pub(super) fn update_workspace_status_db(
     db_path: &str,
     workspace_id: &str,
-    status: &EnvironmentStatus,
-    failure_reason: Option<&EnvironmentFailureReason>,
+    status: &WorkspaceStatus,
+    failure_reason: Option<&WorkspaceFailureReason>,
 ) -> Result<(), LifecycleError> {
     let conn = open_db(db_path)?;
     let failure_str: Option<&str> = failure_reason.map(|r| r.as_str());
 
     if failure_reason.is_some() {
         conn.execute(
-            "UPDATE environment
+            "UPDATE workspace
              SET status = ?1, failure_reason = ?2, failed_at = datetime('now'), updated_at = datetime('now')
-             WHERE workspace_id = ?3",
+             WHERE id = ?3",
             params![status.as_str(), failure_str, workspace_id],
         ).map_err(|e| LifecycleError::Database(e.to_string()))?;
     } else {
         conn.execute(
-            "UPDATE environment
+            "UPDATE workspace
              SET status = ?1, failure_reason = NULL, failed_at = NULL, updated_at = datetime('now')
-             WHERE workspace_id = ?2",
+             WHERE id = ?2",
             params![status.as_str(), workspace_id],
         ).map_err(|e| LifecycleError::Database(e.to_string()))?;
     }
@@ -87,7 +86,7 @@ pub(super) fn update_service_status_db(
     let conn = open_db(db_path)?;
     let current_assigned_port: Option<i64> = conn
         .query_row(
-            "SELECT assigned_port FROM service WHERE environment_id = ?1 AND name = ?2",
+            "SELECT assigned_port FROM service WHERE workspace_id = ?1 AND name = ?2",
             params![workspace_id, name],
             |row| row.get(0),
         )
@@ -102,7 +101,7 @@ pub(super) fn update_service_status_db(
              status_reason = ?2,
              assigned_port = ?3,
              updated_at = datetime('now')
-         WHERE environment_id = ?4 AND name = ?5",
+         WHERE workspace_id = ?4 AND name = ?5",
         params![
             status.as_str(),
             reason,
@@ -132,7 +131,7 @@ pub(super) fn reconcile_workspace_services_db(
                 .prepare(
                     "SELECT name, status, status_reason, assigned_port
                      FROM service
-                     WHERE environment_id = ?1",
+                     WHERE workspace_id = ?1",
                 )
                 .map_err(|e| LifecycleError::Database(e.to_string()))?;
             let existing = existing_rows
@@ -162,7 +161,7 @@ pub(super) fn reconcile_workspace_services_db(
 
             if service_names.is_empty() {
                 tx.execute(
-                    "DELETE FROM service WHERE environment_id = ?1",
+                    "DELETE FROM service WHERE workspace_id = ?1",
                     params![workspace_id],
                 )
                 .map_err(|e| LifecycleError::Database(e.to_string()))?;
@@ -172,7 +171,7 @@ pub(super) fn reconcile_workspace_services_db(
                     .collect::<Vec<_>>()
                     .join(", ");
                 let query = format!(
-                    "DELETE FROM service WHERE environment_id = ?1 AND name NOT IN ({placeholders})"
+                    "DELETE FROM service WHERE workspace_id = ?1 AND name NOT IN ({placeholders})"
                 );
                 let delete_params =
                     std::iter::once(workspace_id).chain(service_names.iter().copied());
@@ -211,7 +210,7 @@ pub(super) fn reconcile_workspace_services_db(
                              status_reason = ?2,
                              assigned_port = ?3,
                              updated_at = datetime('now')
-                         WHERE environment_id = ?4 AND name = ?5",
+                         WHERE workspace_id = ?4 AND name = ?5",
                         params![
                             next_status,
                             next_status_reason,
@@ -225,7 +224,7 @@ pub(super) fn reconcile_workspace_services_db(
                 if updated == 0 {
                     tx.execute(
                         "INSERT INTO service (
-                            id, environment_id, name, status, status_reason, assigned_port
+                            id, workspace_id, name, status, status_reason, assigned_port
                          ) VALUES (?1, ?2, ?3, 'stopped', NULL, ?4)",
                         params![
                             uuid::Uuid::new_v4().to_string(),
@@ -240,7 +239,7 @@ pub(super) fn reconcile_workspace_services_db(
         }
         None => {
             tx.execute(
-                "DELETE FROM service WHERE environment_id = ?1",
+                "DELETE FROM service WHERE workspace_id = ?1",
                 params![workspace_id],
             )
             .map_err(|e| LifecycleError::Database(e.to_string()))?;
@@ -258,11 +257,14 @@ pub(super) fn reconcile_workspace_services_db(
     Ok(())
 }
 
-pub(super) fn transition_environment_to(
+#[cfg(test)]
+pub(super) fn transition_workspace_to(
     db_path: &str,
     workspace_id: &str,
-    target_status: &EnvironmentStatus,
+    target_status: &WorkspaceStatus,
 ) -> Result<(), LifecycleError> {
+    use crate::capabilities::workspaces::state_machine::validate_workspace_transition;
+
     let conn = open_db(db_path)?;
     conn.execute_batch("BEGIN IMMEDIATE TRANSACTION")
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
@@ -270,7 +272,7 @@ pub(super) fn transition_environment_to(
     let result = (|| -> Result<(), LifecycleError> {
         let status: String = conn
             .query_row(
-                "SELECT status FROM environment WHERE workspace_id = ?1",
+                "SELECT status FROM workspace WHERE id = ?1",
                 params![workspace_id],
                 |row| row.get(0),
             )
@@ -280,13 +282,13 @@ pub(super) fn transition_environment_to(
                 }
                 _ => LifecycleError::Database(e.to_string()),
             })?;
-        let current_status = EnvironmentStatus::from_str(&status)?;
-        validate_environment_transition(&current_status, target_status)?;
+        let current_status = WorkspaceStatus::from_str(&status)?;
+        validate_workspace_transition(&current_status, target_status)?;
 
         conn.execute(
-            "UPDATE environment
+            "UPDATE workspace
              SET status = ?1, failure_reason = NULL, failed_at = NULL, updated_at = datetime('now')
-             WHERE workspace_id = ?2",
+             WHERE id = ?2",
             params![target_status.as_str(), workspace_id],
         ).map_err(|e| LifecycleError::Database(e.to_string()))?;
         conn.execute(
@@ -312,13 +314,13 @@ pub(super) fn transition_environment_to(
 
 pub(super) fn workspace_failure_reason_for_start_error(
     error: &LifecycleError,
-) -> EnvironmentFailureReason {
+) -> WorkspaceFailureReason {
     match error {
-        LifecycleError::DockerUnavailable(_) => EnvironmentFailureReason::LocalDockerUnavailable,
+        LifecycleError::DockerUnavailable(_) => WorkspaceFailureReason::LocalDockerUnavailable,
         LifecycleError::PortConflict { .. } | LifecycleError::PortExhausted { .. } => {
-            EnvironmentFailureReason::LocalPortConflict
+            WorkspaceFailureReason::LocalPortConflict
         }
-        _ => EnvironmentFailureReason::ServiceStartFailed,
+        _ => WorkspaceFailureReason::ServiceStartFailed,
     }
 }
 
@@ -367,7 +369,7 @@ pub(super) fn mark_nonfailed_services_stopped(
     let conn = open_db(db_path)?;
     let mut stmt = conn
         .prepare(
-            "SELECT name FROM service WHERE environment_id = ?1 AND status != 'failed'",
+            "SELECT name FROM service WHERE workspace_id = ?1 AND status != 'failed'",
         )
         .map_err(|e| LifecycleError::Database(e.to_string()))?;
     let rows = stmt
@@ -425,24 +427,19 @@ mod tests {
         conn.execute_batch(
             "CREATE TABLE workspace (
                 id TEXT PRIMARY KEY NOT NULL,
-                kind TEXT NOT NULL,
+                checkout_type TEXT NOT NULL,
                 name TEXT NOT NULL,
                 source_ref TEXT NOT NULL,
                 manifest_fingerprint TEXT,
-                updated_at TEXT,
-                last_active_at TEXT NOT NULL DEFAULT (datetime('now'))
-            );
-            CREATE TABLE environment (
-                workspace_id TEXT PRIMARY KEY NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
                 status TEXT NOT NULL,
                 failure_reason TEXT,
                 failed_at TEXT,
-                created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                updated_at TEXT,
+                last_active_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
             CREATE TABLE service (
                 id TEXT PRIMARY KEY NOT NULL,
-                environment_id TEXT NOT NULL REFERENCES environment(workspace_id) ON DELETE CASCADE,
+                workspace_id TEXT NOT NULL REFERENCES workspace(id) ON DELETE CASCADE,
                 name TEXT NOT NULL,
                 status TEXT NOT NULL,
                 status_reason TEXT,
@@ -454,29 +451,32 @@ mod tests {
         .expect("create tables");
     }
 
-    fn seed_managed_workspace(
+    fn seed_worktree_workspace(
         conn: &rusqlite::Connection,
         workspace_id: &str,
-        environment_status: &str,
+        workspace_status: &str,
         failure_reason: Option<&str>,
         failed_at: Option<&str>,
     ) {
-        let (name, source_ref) = managed_workspace_identity(workspace_id);
+        let (name, source_ref) = worktree_workspace_identity(workspace_id);
         conn.execute(
-            "INSERT INTO workspace (id, kind, name, source_ref, updated_at) VALUES (?1, ?2, ?3, ?4, datetime('now'))",
-            rusqlite::params![workspace_id, "managed", name, source_ref],
+            "INSERT INTO workspace (
+                id, checkout_type, name, source_ref, status, failure_reason, failed_at, updated_at
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))",
+            rusqlite::params![
+                workspace_id,
+                "worktree",
+                name,
+                source_ref,
+                workspace_status,
+                failure_reason,
+                failed_at
+            ],
         )
         .expect("insert workspace shell");
-        conn.execute(
-            "INSERT INTO environment (
-                workspace_id, status, failure_reason, failed_at, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, datetime('now'), datetime('now'))",
-            rusqlite::params![workspace_id, environment_status, failure_reason, failed_at],
-        )
-        .expect("insert environment");
     }
 
-    fn managed_workspace_identity(workspace_id: &str) -> (String, String) {
+    fn worktree_workspace_identity(workspace_id: &str) -> (String, String) {
         let name = workspace_id.replace('_', " ");
         let source_ref = format!(
             "lifecycle/{}-{}",
@@ -514,34 +514,34 @@ mod tests {
     }
 
     #[test]
-    fn transition_environment_to_starting_updates_status_and_clears_failure_fields() {
+    fn transition_workspace_to_preparing_updates_status_and_clears_failure_fields() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
-        seed_managed_workspace(
+        seed_worktree_workspace(
             &conn,
             "ws_1",
-            "idle",
+            "active",
             Some("service_start_failed"),
             Some("2026-03-04T00:00:00Z"),
         );
         drop(conn);
 
-        transition_environment_to(&db_path, "ws_1", &EnvironmentStatus::Starting)
+        transition_workspace_to(&db_path, "ws_1", &WorkspaceStatus::Preparing)
             .expect("transition succeeds");
 
         let conn = open_db(&db_path).expect("re-open db");
         let (status, failure_reason, failed_at): (String, Option<String>, Option<String>) = conn
             .query_row(
                 "SELECT status, failure_reason, failed_at
-                 FROM environment
-                 WHERE workspace_id = ?1",
+                 FROM workspace
+                 WHERE id = ?1",
                 rusqlite::params!["ws_1"],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
             .expect("workspace exists");
-        assert_eq!(status, "starting");
+        assert_eq!(status, "preparing");
         assert!(failure_reason.is_none());
         assert!(failed_at.is_none());
 
@@ -550,48 +550,48 @@ mod tests {
     }
 
     #[test]
-    fn transition_environment_to_starting_allows_incremental_boots_from_running() {
+    fn transition_workspace_to_preparing_allows_prepare_from_active() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
-        seed_managed_workspace(&conn, "ws_started", "running", None, None);
+        seed_worktree_workspace(&conn, "ws_started", "active", None, None);
         drop(conn);
 
-        transition_environment_to(&db_path, "ws_started", &EnvironmentStatus::Starting)
+        transition_workspace_to(&db_path, "ws_started", &WorkspaceStatus::Preparing)
             .expect("transition succeeds");
 
         let conn = open_db(&db_path).expect("re-open db");
         let status: String = conn
             .query_row(
                 "SELECT status
-                 FROM environment
-                 WHERE workspace_id = ?1",
+                 FROM workspace
+                 WHERE id = ?1",
                 rusqlite::params!["ws_started"],
                 |row| row.get(0),
             )
             .expect("query state");
-        assert_eq!(status, "starting");
+        assert_eq!(status, "preparing");
 
         drop(conn);
         let _ = std::fs::remove_file(db_path);
     }
 
     #[test]
-    fn transition_environment_to_starting_rejects_invalid_transition() {
+    fn transition_workspace_to_preparing_rejects_invalid_transition() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
-        seed_managed_workspace(&conn, "ws_2", "starting", None, None);
+        seed_worktree_workspace(&conn, "ws_2", "preparing", None, None);
         drop(conn);
 
-        let err = transition_environment_to(&db_path, "ws_2", &EnvironmentStatus::Starting)
+        let err = transition_workspace_to(&db_path, "ws_2", &WorkspaceStatus::Preparing)
             .expect_err("must fail");
         match err {
             LifecycleError::InvalidStateTransition { from, to } => {
-                assert_eq!(from, "starting");
-                assert_eq!(to, "starting");
+                assert_eq!(from, "preparing");
+                assert_eq!(to, "preparing");
             }
             other => panic!("unexpected error: {other}"),
         }
@@ -605,10 +605,10 @@ mod tests {
         init_workspace_tables(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
-        seed_managed_workspace(&conn, "ws_3", "idle", None, None);
+        seed_worktree_workspace(&conn, "ws_3", "active", None, None);
         conn.execute(
             "INSERT INTO service (
-                id, environment_id, name, status, status_reason, assigned_port, updated_at
+                id, workspace_id, name, status, status_reason, assigned_port, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))",
             rusqlite::params![
                 "svc_1",
@@ -622,7 +622,7 @@ mod tests {
         .expect("insert api");
         conn.execute(
             "INSERT INTO service (
-                id, environment_id, name, status, status_reason, assigned_port, updated_at
+                id, workspace_id, name, status, status_reason, assigned_port, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))",
             rusqlite::params![
                 "svc_2",
@@ -636,7 +636,7 @@ mod tests {
         .expect("insert db");
         conn.execute(
             "INSERT INTO service (
-                id, environment_id, name, status, status_reason, assigned_port, updated_at
+                id, workspace_id, name, status, status_reason, assigned_port, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))",
             rusqlite::params![
                 "svc_3",
@@ -660,7 +660,7 @@ mod tests {
                 .prepare(
                     "SELECT name, status, status_reason, assigned_port
                      FROM service
-                     WHERE environment_id = ?1
+                     WHERE workspace_id = ?1
                      ORDER BY name",
                 )
                 .expect("prepare");
@@ -714,10 +714,10 @@ mod tests {
         let stale_web_port = available_test_port();
 
         let conn = open_db(&db_path).expect("open db");
-        seed_managed_workspace(&conn, "ws_seed", "idle", None, None);
+        seed_worktree_workspace(&conn, "ws_seed", "active", None, None);
         conn.execute(
             "INSERT INTO service (
-                id, environment_id, name, status, status_reason,
+                id, workspace_id, name, status, status_reason,
                 assigned_port, created_at, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'), datetime('now'))",
             rusqlite::params![
@@ -768,7 +768,7 @@ mod tests {
             .prepare(
                 "SELECT name, status, status_reason, assigned_port
                  FROM service
-                 WHERE environment_id = ?1
+                 WHERE workspace_id = ?1
                  ORDER BY name",
             )
             .expect("prepare select");
@@ -821,10 +821,10 @@ mod tests {
         init_workspace_tables(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
-        seed_managed_workspace(&conn, "ws_started", "running", None, None);
+        seed_worktree_workspace(&conn, "ws_started", "active", None, None);
         conn.execute(
             "INSERT INTO service (
-                id, environment_id, name, status, status_reason,
+                id, workspace_id, name, status, status_reason,
                 assigned_port,
                 created_at, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'), datetime('now'))",
@@ -871,7 +871,7 @@ mod tests {
             .prepare(
                 "SELECT name, status, status_reason, assigned_port
                  FROM service
-                 WHERE environment_id = ?1
+                 WHERE workspace_id = ?1
                  ORDER BY name",
             )
             .expect("prepare query");
@@ -902,17 +902,17 @@ mod tests {
     }
 
     #[test]
-    fn reconcile_workspace_services_db_does_not_assign_runtime_ports_while_idle() {
+    fn reconcile_workspace_services_db_does_not_assign_ports_during_reconcile() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
         let test_port = available_test_port();
 
         let conn = open_db(&db_path).expect("open db");
-        seed_managed_workspace(&conn, "ws_a", "idle", None, None);
-        seed_managed_workspace(&conn, "ws_b", "idle", None, None);
+        seed_worktree_workspace(&conn, "ws_a", "active", None, None);
+        seed_worktree_workspace(&conn, "ws_b", "active", None, None);
         conn.execute(
             "INSERT INTO service (
-                id, environment_id, name, status, assigned_port, created_at, updated_at
+                id, workspace_id, name, status, assigned_port, created_at, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'), datetime('now'))",
             rusqlite::params![
                 "svc_a",
@@ -947,7 +947,7 @@ mod tests {
         let conn = open_db(&db_path).expect("re-open db");
         let assigned_port: Option<i64> = conn
             .query_row(
-                "SELECT assigned_port FROM service WHERE environment_id = ?1 AND name = ?2",
+                "SELECT assigned_port FROM service WHERE workspace_id = ?1 AND name = ?2",
                 rusqlite::params!["ws_b", "web"],
                 |row| row.get(0),
             )
@@ -958,7 +958,7 @@ mod tests {
     }
 
     #[test]
-    fn reconcile_workspace_services_db_clears_stale_assigned_port_when_environment_is_idle() {
+    fn reconcile_workspace_services_db_clears_stale_assigned_port_when_reconciling() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
         let port_guard = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("bind port");
@@ -970,10 +970,10 @@ mod tests {
         );
 
         let conn = open_db(&db_path).expect("open db");
-        seed_managed_workspace(&conn, "ws_stopped", "idle", None, None);
+        seed_worktree_workspace(&conn, "ws_stopped", "active", None, None);
         conn.execute(
             "INSERT INTO service (
-                id, environment_id, name, status, assigned_port, created_at, updated_at
+                id, workspace_id, name, status, assigned_port, created_at, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'), datetime('now'))",
             rusqlite::params![
                 "svc_idle",
@@ -1010,7 +1010,7 @@ mod tests {
         let conn = open_db(&db_path).expect("re-open db");
         let assigned_port: Option<i64> = conn
             .query_row(
-                "SELECT assigned_port FROM service WHERE environment_id = ?1 AND name = ?2",
+                "SELECT assigned_port FROM service WHERE workspace_id = ?1 AND name = ?2",
                 rusqlite::params!["ws_stopped", "postgres"],
                 |row| row.get(0),
             )
@@ -1027,7 +1027,7 @@ mod tests {
         init_workspace_tables(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
-        seed_managed_workspace(&conn, "ws_image", "idle", None, None);
+        seed_worktree_workspace(&conn, "ws_image", "active", None, None);
         drop(conn);
 
         let config_json = r#"{
@@ -1053,14 +1053,14 @@ mod tests {
         let conn = open_db(&db_path).expect("re-open db");
         let postgres_port: Option<i64> = conn
             .query_row(
-                "SELECT assigned_port FROM service WHERE environment_id = ?1 AND name = ?2",
+                "SELECT assigned_port FROM service WHERE workspace_id = ?1 AND name = ?2",
                 rusqlite::params!["ws_image", "postgres"],
                 |row| row.get(0),
             )
             .expect("query postgres");
         let web_port: Option<i64> = conn
             .query_row(
-                "SELECT assigned_port FROM service WHERE environment_id = ?1 AND name = ?2",
+                "SELECT assigned_port FROM service WHERE workspace_id = ?1 AND name = ?2",
                 rusqlite::params!["ws_image", "web"],
                 |row| row.get(0),
             )

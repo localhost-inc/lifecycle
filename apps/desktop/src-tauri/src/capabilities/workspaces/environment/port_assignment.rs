@@ -28,7 +28,7 @@ pub(super) fn config_with_assigned_ports(
 ) -> Result<LifecycleConfig, LifecycleError> {
     let conn = open_db(db_path)?;
     let mut stmt = conn
-        .prepare("SELECT name, assigned_port FROM service WHERE environment_id = ?1")
+        .prepare("SELECT name, assigned_port FROM service WHERE workspace_id = ?1")
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
     let rows = stmt
         .query_map(params![workspace_id], |row| {
@@ -84,7 +84,7 @@ pub(super) fn assign_ports_for_start(
             .query_row(
                 "SELECT status, assigned_port
                  FROM service
-                 WHERE environment_id = ?1 AND name = ?2",
+                 WHERE workspace_id = ?1 AND name = ?2",
                 params![workspace_id, name],
                 |row| {
                     Ok((
@@ -106,7 +106,7 @@ pub(super) fn assign_ports_for_start(
             "UPDATE service
              SET assigned_port = ?1,
                  updated_at = datetime('now')
-             WHERE environment_id = ?2 AND name = ?3",
+             WHERE workspace_id = ?2 AND name = ?3",
             params![Some(assigned_port), workspace_id, name],
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
@@ -138,7 +138,7 @@ mod tests {
         conn.execute_batch(
             "CREATE TABLE service (
                 id TEXT PRIMARY KEY NOT NULL,
-                environment_id TEXT NOT NULL,
+                workspace_id TEXT NOT NULL,
                 name TEXT NOT NULL,
                 status TEXT NOT NULL,
                 status_reason TEXT,
@@ -157,20 +157,20 @@ mod tests {
                 id TEXT PRIMARY KEY NOT NULL,
                 name TEXT NOT NULL,
                 source_ref TEXT NOT NULL,
-                kind TEXT NOT NULL
+                checkout_type TEXT NOT NULL
             );",
         )
         .expect("create workspace");
     }
 
-    fn managed_workspace_identity(workspace_id: &str) -> (String, String, String) {
+    fn worktree_workspace_identity(workspace_id: &str) -> (String, String, String) {
         let name = workspace_id.replace('_', " ");
         let source_ref = format!(
             "lifecycle/{}-{}",
             slugify_workspace_name(&name),
             short_workspace_id(workspace_id)
         );
-        let label = workspace_host_label(workspace_id, "managed", &name, &source_ref);
+        let label = workspace_host_label(workspace_id, "worktree", &name, &source_ref);
         (name, source_ref, label)
     }
 
@@ -181,15 +181,15 @@ mod tests {
         init_workspace_service_tables(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
-        let (name, source_ref, _workspace_label) = managed_workspace_identity("ws_start");
+        let (name, source_ref, _workspace_label) = worktree_workspace_identity("ws_start");
         conn.execute(
-            "INSERT INTO workspace (id, name, source_ref, kind) VALUES (?1, ?2, ?3, ?4)",
-            params!["ws_start", name, source_ref, "managed"],
+            "INSERT INTO workspace (id, name, source_ref, checkout_type) VALUES (?1, ?2, ?3, ?4)",
+            params!["ws_start", name, source_ref, "worktree"],
         )
         .expect("insert workspace");
         conn.execute(
             "INSERT INTO service (
-                id, environment_id, name, status, assigned_port, updated_at
+                id, workspace_id, name, status, assigned_port, updated_at
             ) VALUES (?1, ?2, ?3, ?4, NULL, datetime('now'))",
             params!["svc_web", "ws_start", "web", "stopped"],
         )
@@ -212,7 +212,7 @@ mod tests {
             .query_row(
                 "SELECT assigned_port
                  FROM service
-                 WHERE environment_id = ?1 AND name = ?2",
+                 WHERE workspace_id = ?1 AND name = ?2",
                 params!["ws_start", "web"],
                 |row| row.get(0),
             )
@@ -231,15 +231,15 @@ mod tests {
         let occupied_port = i64::from(guard.local_addr().expect("local addr").port());
 
         let conn = open_db(&db_path).expect("open db");
-        let (name, source_ref, _workspace_label) = managed_workspace_identity("ws_start");
+        let (name, source_ref, _workspace_label) = worktree_workspace_identity("ws_start");
         conn.execute(
-            "INSERT INTO workspace (id, name, source_ref, kind) VALUES (?1, ?2, ?3, ?4)",
-            params!["ws_start", name, source_ref, "managed"],
+            "INSERT INTO workspace (id, name, source_ref, checkout_type) VALUES (?1, ?2, ?3, ?4)",
+            params!["ws_start", name, source_ref, "worktree"],
         )
         .expect("insert workspace");
         conn.execute(
             "INSERT INTO service (
-                id, environment_id, name, status, assigned_port, updated_at
+                id, workspace_id, name, status, assigned_port, updated_at
             ) VALUES (?1, ?2, ?3, ?4, NULL, datetime('now'))",
             params!["svc_api", "ws_start", "api", "stopped"],
         )
@@ -260,7 +260,7 @@ mod tests {
         let conn = open_db(&db_path).expect("re-open db");
         let assigned_port: Option<i64> = conn
             .query_row(
-                "SELECT assigned_port FROM service WHERE environment_id = ?1 AND name = ?2",
+                "SELECT assigned_port FROM service WHERE workspace_id = ?1 AND name = ?2",
                 params!["ws_start", "api"],
                 |row| row.get(0),
             )

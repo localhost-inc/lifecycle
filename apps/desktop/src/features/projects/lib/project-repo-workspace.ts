@@ -11,7 +11,7 @@ export function resolveProjectRepoWorkspace(
     return null;
   }
 
-  const rootWorkspace = workspaces.find((workspace) => workspace.kind === "root");
+  const rootWorkspace = workspaces.find((workspace) => workspace.checkout_type === "root");
   if (rootWorkspace) {
     return rootWorkspace;
   }

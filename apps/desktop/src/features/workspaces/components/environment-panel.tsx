@@ -1,5 +1,4 @@
 import type {
-  EnvironmentRecord,
   LifecycleConfig,
   ServiceRecord,
   WorkspaceRecord,
@@ -35,7 +34,6 @@ interface EnvironmentPanelProps {
   onRestart: () => Promise<void>;
   onRun: (serviceNames?: string[]) => Promise<void>;
   onStop: () => Promise<void>;
-  environment: EnvironmentRecord;
   services: ServiceRecord[];
   workspace: WorkspaceRecord;
 }
@@ -62,11 +60,14 @@ function getServiceRuntimeByName(
 }
 
 function getInitialExpandedServiceName(
-  environment: EnvironmentRecord,
+  workspace: Pick<WorkspaceRecord, "status" | "failure_reason">,
   services: ServiceRecord[],
   serviceLogs: ServiceLogSnapshot[],
 ): string | null {
-  if (environment.status === "starting") {
+  if (
+    workspace.status === "preparing" ||
+    services.some((service) => service.status === "starting")
+  ) {
     return (
       services.find((service) => service.status === "starting")?.name ??
       serviceLogs.find((log) => log.lines.length > 0)?.name ??
@@ -74,7 +75,10 @@ function getInitialExpandedServiceName(
     );
   }
 
-  if (environment.failure_reason !== null) {
+  if (
+    workspace.failure_reason !== null ||
+    services.some((service) => service.status === "failed")
+  ) {
     return (
       services.find((service) => service.status === "failed")?.name ??
       serviceLogs.find((log) => log.lines.length > 0)?.name ??
@@ -88,7 +92,6 @@ function getInitialExpandedServiceName(
 
 export function EnvironmentPanel({
   config,
-  environment,
   hasManifest,
   manifestState,
   onRestart,
@@ -102,7 +105,7 @@ export function EnvironmentPanel({
   const serviceLogsQuery = useWorkspaceServiceLogs(workspace.id);
   const serviceLogs = serviceLogsQuery.data ?? [];
   const [expandedServiceName, setExpandedServiceName] = useState<string | null>(() =>
-    getInitialExpandedServiceName(environment, services, serviceLogs),
+    getInitialExpandedServiceName(workspace, services, serviceLogs),
   );
   const serviceRuntimeByName = useMemo(() => getServiceRuntimeByName(config), [config]);
   const serviceLogsByName = useMemo(
@@ -113,21 +116,30 @@ export function EnvironmentPanel({
     () => Object.values(config?.environment ?? {}).filter((node) => node.kind === "service").length,
     [config],
   );
-  const environmentStatus = environment.status;
-  const environmentFailureReason = environment.failure_reason;
-
-  const canStartService =
-    hasManifest && (environmentStatus === "idle" || environmentStatus === "running");
+  const workspaceStatus = workspace.status;
+  const workspaceFailureReason = workspace.failure_reason;
+  const hasStartingService = services.some((service) => service.status === "starting");
+  const hasReadyService = services.some((service) => service.status === "ready");
+  const hasFailedService = services.some((service) => service.status === "failed");
+  const isPreparing = workspaceStatus === "preparing";
+  const isArchiving = workspaceStatus === "archiving";
+  const isArchived = workspaceStatus === "archived";
+  const canStartService = hasManifest && workspaceStatus === "active" && !isArchiving;
   const [runActionBusy, setRunActionBusy] = useState(false);
-  const canRun = hasManifest && environmentStatus === "idle";
-  const canStop = environmentStatus === "starting" || environmentStatus === "running";
-  const canRestart = environmentStatus === "running" && hasManifest;
-  const stopping = environmentStatus === "stopping";
-  const isFailed = environmentStatus === "idle" && environmentFailureReason !== null;
-  const isTransitioning =
-    environmentStatus === "starting" || environmentStatus === "stopping";
-  const isRunning = environmentStatus === "running";
-  const showServiceLogs = environmentStatus !== "idle" || environmentFailureReason !== null;
+  const canRun =
+    hasManifest && workspaceStatus === "active" && !hasStartingService && !hasReadyService;
+  const canStop = workspaceStatus === "active" && (hasStartingService || hasReadyService);
+  const canRestart = workspaceStatus === "active" && hasReadyService && hasManifest;
+  const isFailed = workspaceFailureReason !== null || hasFailedService;
+  const isTransitioning = isPreparing || isArchiving || hasStartingService;
+  const isRunning = workspaceStatus === "active" && hasReadyService;
+  const showServiceLogs =
+    !isArchived &&
+    (hasStartingService ||
+      hasReadyService ||
+      hasFailedService ||
+      workspaceFailureReason !== null ||
+      serviceLogs.length > 0);
   const hasServiceContent = services.length > 0 || serviceLogs.length > 0;
   const showRunActions = canStop || hasManifest;
 
@@ -187,41 +199,47 @@ export function EnvironmentPanel({
 
   useEffect(() => {
     const preferredExpandedServiceName = getInitialExpandedServiceName(
-      environment,
+      workspace,
       services,
       serviceLogs,
     );
-    if (environmentStatus === "running") {
+    if (workspaceStatus === "active" && !hasStartingService && hasReadyService) {
       setExpandedServiceName(null);
       return;
     }
     if (preferredExpandedServiceName !== null) {
       setExpandedServiceName(preferredExpandedServiceName);
     }
-  }, [environment, environmentStatus, serviceLogs, services]);
+  }, [hasReadyService, hasStartingService, serviceLogs, services, workspace, workspaceStatus]);
 
   const runButtonLabel =
-    environmentStatus === "starting"
-      ? "Starting..."
-      : stopping || (runActionBusy && canStop)
-        ? "Stopping..."
+    isPreparing
+      ? "Preparing..."
+      : isArchiving
+        ? "Archiving..."
+        : runActionBusy && canStop
+          ? "Stopping..."
         : canStop
           ? "Stop"
           : runActionBusy
             ? "Starting..."
             : "Start";
 
-  const runButtonDisabled = runActionBusy || stopping || (!canRun && !canStop);
+  const runButtonDisabled = runActionBusy || isPreparing || isArchiving || (!canRun && !canStop);
 
-  const statusLabel = isTransitioning
-    ? environmentStatus === "stopping"
-      ? "Stopping"
-      : "Starting"
-    : isRunning
-      ? "Running"
-      : isFailed
-        ? "Failed"
-        : "Idle";
+  const statusLabel = isPreparing
+    ? "Preparing"
+    : isArchiving
+      ? "Archiving"
+      : isArchived
+        ? "Archived"
+        : isRunning
+          ? "Running"
+          : hasStartingService
+            ? "Starting"
+            : isFailed
+              ? "Failed"
+              : "Idle";
 
   const statusDotClass = isRunning
     ? "bg-[var(--status-success)]"
@@ -241,7 +259,7 @@ export function EnvironmentPanel({
             ? services
           : serviceLogs.map((log, index) => ({
               id: `service-log:${log.name}:${index}`,
-              environment_id: environment.workspace_id,
+              workspace_id: workspace.id,
               name: log.name,
               status: "stopped" as const,
               status_reason: null,
@@ -333,9 +351,9 @@ export function EnvironmentPanel({
           <Alert variant="destructive">
             <AlertTriangle className="size-4" />
             <AlertDescription>
-              {environmentFailureReason === null
+              {workspaceFailureReason === null
                 ? null
-                : FAILURE_REASON_LABELS[environmentFailureReason] ?? environmentFailureReason}
+                : FAILURE_REASON_LABELS[workspaceFailureReason] ?? workspaceFailureReason}
             </AlertDescription>
           </Alert>
         )}

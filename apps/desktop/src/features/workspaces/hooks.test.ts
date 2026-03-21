@@ -8,9 +8,9 @@ describe("buildWorkspaceActivityItems", () => {
       {
         failure_reason: null,
         id: "event-1",
-        kind: "environment.status_changed",
+        kind: "workspace.status_changed",
         occurred_at: "2026-03-10T10:00:00.000Z",
-        status: "starting",
+        status: "preparing",
         workspace_id: "ws_1",
       },
       {
@@ -28,9 +28,9 @@ describe("buildWorkspaceActivityItems", () => {
       {
         detail: null,
         id: "event-1",
-        kind: "environment.status_changed",
+        kind: "workspace.status_changed",
         occurredAt: "2026-03-10T10:00:00.000Z",
-        title: "Environment starting",
+        title: "Workspace preparing",
         tone: "warning",
       },
       {

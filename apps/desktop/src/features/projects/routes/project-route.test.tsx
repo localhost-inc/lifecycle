@@ -22,11 +22,11 @@ const workspace: WorkspaceRecord = {
   id: "workspace_1",
   project_id: "project_1",
   name: "setup",
-  kind: "managed",
+  checkout_type: "worktree",
   source_ref: "lifecycle/setup",
   git_sha: "54012c8f",
   worktree_path: "/tmp/lifecycle-setup",
-  mode: "local",
+  target: "host",
   manifest_fingerprint: "manifest_1",
   created_by: null,
   source_workspace_id: null,
@@ -34,6 +34,9 @@ const workspace: WorkspaceRecord = {
   updated_at: "2026-03-14T10:00:00.000Z",
   last_active_at: "2026-03-14T10:00:00.000Z",
   expires_at: null,
+  status: "active",
+  failure_reason: null,
+  failed_at: null,
 };
 
 function renderProjectRoute(

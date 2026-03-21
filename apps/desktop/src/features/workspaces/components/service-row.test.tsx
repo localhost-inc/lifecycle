@@ -13,7 +13,7 @@ const failedService: ServiceRecord = {
   status: "failed",
   status_reason: "service_start_failed",
   updated_at: "2026-03-12T10:00:00.000Z",
-  environment_id: "ws-1",
+  workspace_id: "ws-1",
 };
 
 describe("ServiceRow", () => {

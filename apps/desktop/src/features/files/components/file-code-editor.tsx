@@ -17,7 +17,7 @@ export function FileCodeEditor({ config, onChange, value }: FileCodeEditorProps)
 
   return (
     <CodeMirror
-      basicSetup
+      basicSetup={{ lineNumbers: false, foldGutter: false }}
       className="h-full min-h-0 [&_.cm-editor]:h-full [&_.cm-scroller]:overflow-auto"
       extensions={extensions}
       height="100%"

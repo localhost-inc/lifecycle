@@ -7,16 +7,16 @@ pub(crate) fn preview_url_for_service(
     workspace_id: &str,
     name: &str,
 ) -> Result<Option<String>, LifecycleError> {
-    let (kind, workspace_name, source_ref): (String, String, String) = conn
+    let (checkout_type, workspace_name, source_ref): (String, String, String) = conn
         .query_row(
-            "SELECT kind, name, source_ref FROM workspace WHERE id = ?1",
+            "SELECT checkout_type, name, source_ref FROM workspace WHERE id = ?1",
             params![workspace_id],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
 
     let workspace_label =
-        preview_proxy::workspace_host_label(workspace_id, &kind, &workspace_name, &source_ref);
+        preview_proxy::workspace_host_label(workspace_id, &checkout_type, &workspace_name, &source_ref);
     Ok(Some(preview_proxy::local_preview_url(&workspace_label, name)))
 }
 
@@ -40,7 +40,7 @@ mod tests {
         conn.execute_batch(
             "CREATE TABLE workspace (
                 id TEXT PRIMARY KEY NOT NULL,
-                kind TEXT NOT NULL,
+                checkout_type TEXT NOT NULL,
                 name TEXT NOT NULL,
                 source_ref TEXT NOT NULL
             );",
@@ -49,15 +49,15 @@ mod tests {
 
         let workspace_label = preview_proxy::workspace_host_label(
             "ws_preview",
-            "managed",
+            "worktree",
             "Frost beacon",
             "lifecycle/frost-beacon-wsprevie",
         );
         conn.execute(
-            "INSERT INTO workspace (id, kind, name, source_ref) VALUES (?1, ?2, ?3, ?4)",
+            "INSERT INTO workspace (id, checkout_type, name, source_ref) VALUES (?1, ?2, ?3, ?4)",
             params![
                 "ws_preview",
-                "managed",
+                "worktree",
                 "Frost beacon",
                 "lifecycle/frost-beacon-wsprevie"
             ],

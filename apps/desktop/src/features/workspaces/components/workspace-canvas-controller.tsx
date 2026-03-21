@@ -32,12 +32,13 @@ import { formatWorkspaceError } from "@/features/workspaces/lib/workspace-errors
 import { consumePendingTerminalFocus } from "@/features/notifications/lib/notification-navigation";
 import {
   getWorkspaceDocument,
-  isTerminalTabKey,
   listWorkspaceDocuments,
   listWorkspaceHiddenTerminalTabKeys,
   listWorkspacePaneTabSnapshots,
   listWorkspaceTabViewStateByKey,
   readWorkspaceCanvasState,
+  terminalIdFromTabKey,
+  terminalTabKey,
   type WorkspaceCanvasTabViewState,
   writeWorkspaceCanvasState,
 } from "@/features/workspaces/state/workspace-canvas-state";
@@ -55,7 +56,7 @@ import {
   toWorkspaceTabHotkeyAction,
   type WorkspaceTabHotkeyAction,
 } from "@/features/workspaces/components/workspace-canvas-shortcuts";
-import { useSettings } from "@/features/settings/state/app-settings-provider";
+import { useSettings } from "@/features/settings/state/settings-provider";
 import { buildHarnessLaunchConfig } from "@/features/settings/state/harness-settings";
 import { type SurfaceLaunchAction, type SurfaceLaunchRequest } from "@/features/workspaces/components/surface-launch-actions";
 import { ClaudeIcon, CodexIcon, ShellIcon } from "@/features/workspaces/components/surface-icons";
@@ -81,6 +82,14 @@ export interface WorkspaceCanvasControllerInput {
   onCloseWorkspaceTab?: () => void;
   onOpenDocumentRequestHandled?: (requestId: string) => void;
   workspaceId: string;
+}
+
+export function shouldAutoCreateDefaultWorkspaceTerminal(input: {
+  documentCount: number;
+  terminalCount: number;
+  terminalsResolved: boolean;
+}): boolean {
+  return input.terminalsResolved && input.terminalCount === 0 && input.documentCount === 0;
 }
 
 export function useWorkspaceCanvasController({
@@ -126,7 +135,7 @@ export function useWorkspaceCanvasController({
     () =>
       terminals.map((terminal) => ({
         harnessProvider: terminal.harness_provider as HarnessProvider | null,
-        key: `terminal:${terminal.id}`,
+        key: terminalTabKey(terminal.id),
         kind: "terminal",
         label: terminal.label,
         launchType: terminal.launch_type,
@@ -193,7 +202,7 @@ export function useWorkspaceCanvasController({
     [activePaneVisibleTabs],
   );
   const knownTerminalTabKeys = useMemo(
-    () => workspaceTerminals.map((terminal) => `terminal:${terminal.id}`),
+    () => workspaceTerminals.map((terminal) => terminalTabKey(terminal.id)),
     [workspaceTerminals],
   );
   const assignedPaneTabKeys = useMemo(
@@ -201,8 +210,7 @@ export function useWorkspaceCanvasController({
     [paneSnapshots],
   );
   const activeTabKey = activePane ? (renderedActiveTabKeyByPaneId[activePane.id] ?? null) : null;
-  const activeTerminalId =
-    activeTabKey && isTerminalTabKey(activeTabKey) ? activeTabKey.slice("terminal:".length) : null;
+  const activeTerminalId = activeTabKey ? terminalIdFromTabKey(activeTabKey) : null;
   const handleToggleZoom = useCallback(() => {
     setZoomedTabKey((current) => {
       if (current !== null) {
@@ -317,7 +325,7 @@ export function useWorkspaceCanvasController({
   useEffect(() => {
     renderedTerminalIdSetRef.current = new Set(
       Object.values(renderedActiveTabKeyByPaneId).flatMap((key) =>
-        key && isTerminalTabKey(key) ? [key.slice("terminal:".length)] : [],
+        key ? [terminalIdFromTabKey(key)].filter((terminalId): terminalId is string => terminalId !== null) : [],
       ),
     );
   }, [renderedActiveTabKeyByPaneId]);
@@ -355,8 +363,9 @@ export function useWorkspaceCanvasController({
       }
 
       releaseWebviewFocus();
-      if (isTerminalTabKey(key)) {
-        clearTerminalResponseReady(key.slice("terminal:".length));
+      const terminalId = terminalIdFromTabKey(key);
+      if (terminalId !== null) {
+        clearTerminalResponseReady(terminalId);
       }
       dispatch({ key, kind: "select-tab", paneId });
     },
@@ -394,7 +403,7 @@ export function useWorkspaceCanvasController({
     (terminalId: string, paneId?: string) => {
       releaseWebviewFocus();
       clearTerminalResponseReady(terminalId);
-      dispatch({ key: `terminal:${terminalId}`, kind: "show-terminal-tab", paneId, select: true });
+      dispatch({ key: terminalTabKey(terminalId), kind: "show-terminal-tab", paneId, select: true });
     },
     [clearTerminalResponseReady],
   );
@@ -441,23 +450,43 @@ export function useWorkspaceCanvasController({
     [handleCreateTerminal],
   );
 
-  // Auto-create a default terminal when a workspace opens with no tabs
+  // Auto-create a default terminal when a workspace opens with no tabs.
+  // Wait for the terminal query to resolve so hot reload does not treat
+  // an already-populated workspace as empty during remount.
   const didAutoCreateTerminalRef = useRef(false);
   useEffect(() => {
     if (didAutoCreateTerminalRef.current) {
       return;
     }
-    if (terminals.length > 0 || documents.length > 0) {
-      didAutoCreateTerminalRef.current = true;
+
+    if (
+      !shouldAutoCreateDefaultWorkspaceTerminal({
+        documentCount: documents.length,
+        terminalCount: terminals.length,
+        terminalsResolved: terminalsQuery.data !== undefined,
+      })
+    ) {
+      if (terminalsQuery.data !== undefined && (terminals.length > 0 || documents.length > 0)) {
+        didAutoCreateTerminalRef.current = true;
+      }
       return;
     }
+
     didAutoCreateTerminalRef.current = true;
     const request: CreateTerminalRequest =
       defaultNewTabLaunch === "shell"
         ? { launchType: "shell" }
         : { launchType: "harness", harnessProvider: defaultNewTabLaunch };
     void handleCreateTerminal(request, activePaneId);
-  }, [activePaneId, defaultNewTabLaunch, documents.length, handleCreateTerminal, terminals.length]);
+  }, [
+    activePaneId,
+    defaultNewTabLaunch,
+    documents.length,
+    handleCreateTerminal,
+    terminals.length,
+    terminalsQuery.data,
+  ]);
+
 
   const surfaceActions: SurfaceLaunchAction[] = useMemo(
     () => [
@@ -663,6 +692,7 @@ export function useWorkspaceCanvasController({
     handler: () => handleWorkspaceTabHotkeyAction({ kind: "new-tab" }),
     id: "workspace.new-tab",
     priority: SHORTCUT_HANDLER_PRIORITY.workspace,
+    allowInEditable: true,
   });
 
   useShortcutRegistration({
@@ -672,24 +702,28 @@ export function useWorkspaceCanvasController({
     },
     id: "workspace.close-active-tab",
     priority: SHORTCUT_HANDLER_PRIORITY.workspace,
+    allowInEditable: true,
   });
 
   useShortcutRegistration({
     handler: () => handleWorkspaceTabHotkeyAction({ kind: "reopen-closed-tab" }),
     id: "workspace.reopen-closed-tab",
     priority: SHORTCUT_HANDLER_PRIORITY.workspace,
+    allowInEditable: true,
   });
 
   useShortcutRegistration({
     handler: () => handleWorkspaceTabHotkeyAction({ kind: "previous-tab" }),
     id: "workspace.previous-tab",
     priority: SHORTCUT_HANDLER_PRIORITY.workspace,
+    allowInEditable: true,
   });
 
   useShortcutRegistration({
     handler: () => handleWorkspaceTabHotkeyAction({ kind: "next-tab" }),
     id: "workspace.next-tab",
     priority: SHORTCUT_HANDLER_PRIORITY.workspace,
+    allowInEditable: true,
   });
 
   useShortcutRegistration({
@@ -705,6 +739,7 @@ export function useWorkspaceCanvasController({
     },
     id: "workspace.focus-pane",
     priority: SHORTCUT_HANDLER_PRIORITY.workspace,
+    allowInEditable: true,
   });
 
   useEffect(() => {
@@ -921,6 +956,7 @@ export function useWorkspaceCanvasController({
     },
     id: "workspace.toggle-zoom",
     priority: SHORTCUT_HANDLER_PRIORITY.workspace,
+    allowInEditable: true,
   });
 
   // Escape to unzoom

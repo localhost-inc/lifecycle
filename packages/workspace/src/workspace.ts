@@ -1,5 +1,4 @@
 import type {
-  EnvironmentRecord,
   GitBranchPullRequestResult,
   GitCommitDiffResult,
   GitCommitResult,
@@ -18,7 +17,7 @@ import type {
 } from "@lifecycle/contracts";
 import type { HarnessLaunchConfigInput } from "./harnesses";
 
-export interface EnvironmentStartInput {
+export interface StartServicesInput {
   serviceNames?: string[];
   workspace: WorkspaceRecord;
   services: ServiceRecord[];
@@ -83,11 +82,10 @@ export interface SavedTerminalAttachment {
   relativePath: string;
 }
 
-export interface Runtime {
-  startEnvironment(input: EnvironmentStartInput): Promise<ServiceRecord[]>;
+export interface WorkspaceClient {
+  startServices(input: StartServicesInput): Promise<ServiceRecord[]>;
   healthCheck(workspaceId: string): Promise<WorkspaceHealthResult>;
-  stopEnvironment(workspaceId: string): Promise<void>;
-  getEnvironment(workspaceId: string): Promise<EnvironmentRecord>;
+  stopServices(workspaceId: string): Promise<void>;
   getActivity(workspaceId: string): Promise<LifecycleEvent[]>;
   getServiceLogs(workspaceId: string): Promise<ServiceLogSnapshot[]>;
   getServices(workspaceId: string): Promise<ServiceRecord[]>;

@@ -1,5 +1,6 @@
 import type { FileDiffMetadata } from "@pierre/diffs/react";
-import { diffTheme, useTheme } from "@lifecycle/ui";
+import { diffTheme } from "@lifecycle/ui";
+import { useSettings } from "@/features/settings/state/settings-provider";
 import type { GitDiffStyle } from "@/features/git/lib/diff-style";
 import { DiffRenderProvider } from "@/features/git/components/diff-render-provider";
 import { MultiFileDiffLayout } from "@/features/git/components/multi-file-diff-layout";
@@ -21,7 +22,7 @@ export function GitPatchViewerBody({
   onScrollTopChange,
   parsedFiles,
 }: GitPatchViewerBodyProps) {
-  const { resolvedAppearance, resolvedTheme } = useTheme();
+  const { resolvedAppearance, resolvedTheme } = useSettings();
   const theme = diffTheme(resolvedTheme);
 
   return (

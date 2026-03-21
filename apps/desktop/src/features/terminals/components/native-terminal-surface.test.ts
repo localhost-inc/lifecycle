@@ -6,6 +6,7 @@ import {
   resolveNativeTerminalSurfaceSyncResultAction,
   resolveNativeTerminalSurfaceInteraction,
   scheduleNativeTerminalSurfaceLeaseHide,
+  shouldRequestNativeTerminalSurfaceFocus,
   shouldHideNativeTerminalSurfaceForTabDrag,
   shouldShowNativeTerminalSurface,
 } from "@/features/terminals/components/native-terminal-surface";
@@ -74,6 +75,29 @@ describe("resolveNativeTerminalSurfaceInteraction", () => {
       focused: false,
       pointerPassthrough: true,
     });
+  });
+});
+
+describe("shouldRequestNativeTerminalSurfaceFocus", () => {
+  test("requests focus only when entering the focused interaction state", () => {
+    expect(
+      shouldRequestNativeTerminalSurfaceFocus({
+        nextFocused: true,
+        previousFocused: false,
+      }),
+    ).toBeTrue();
+    expect(
+      shouldRequestNativeTerminalSurfaceFocus({
+        nextFocused: true,
+        previousFocused: true,
+      }),
+    ).toBeFalse();
+    expect(
+      shouldRequestNativeTerminalSurfaceFocus({
+        nextFocused: false,
+        previousFocused: true,
+      }),
+    ).toBeFalse();
   });
 });
 

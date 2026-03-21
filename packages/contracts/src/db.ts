@@ -1,22 +1,22 @@
 import type { TerminalFailureReason, TerminalStatus, TerminalType } from "./terminal";
 import type {
-  EnvironmentFailureReason,
-  EnvironmentStatus,
   ServiceStatus,
   ServiceStatusReason,
-  WorkspaceKind,
-  WorkspaceMode,
+  WorkspaceCheckoutType,
+  WorkspaceFailureReason,
+  WorkspaceStatus,
+  WorkspaceTarget,
 } from "./workspace";
 
 export interface WorkspaceRecord {
   id: string;
   project_id: string;
   name: string;
-  kind: WorkspaceKind;
+  checkout_type: WorkspaceCheckoutType;
   source_ref: string;
   git_sha: string | null;
   worktree_path: string | null;
-  mode: WorkspaceMode;
+  target: WorkspaceTarget;
   manifest_fingerprint?: string | null;
   created_by: string | null;
   source_workspace_id: string | null;
@@ -25,20 +25,14 @@ export interface WorkspaceRecord {
   last_active_at: string;
   expires_at: string | null;
   prepared_at?: string | null;
-}
-
-export interface EnvironmentRecord {
-  workspace_id: string;
-  status: EnvironmentStatus;
-  failure_reason: EnvironmentFailureReason | null;
+  status: WorkspaceStatus;
+  failure_reason: WorkspaceFailureReason | null;
   failed_at: string | null;
-  created_at: string;
-  updated_at: string;
 }
 
 export interface ServiceRecord {
   id: string;
-  environment_id: string;
+  workspace_id: string;
   name: string;
   status: ServiceStatus;
   status_reason: ServiceStatusReason | null;

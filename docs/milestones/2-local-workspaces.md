@@ -1,12 +1,12 @@
 # Milestone 2: "I can start a workspace and it reaches running"
 
 > Prerequisites: M1
-> Introduces: `workspace`, `environment`, and `service` entities, `Backend` + `LocalRuntime`, environment state machine
+> Introduces: `workspace` and `service` entities, `Backend` + host-backed `Workspace`, workspace lifecycle state
 > Tracker: high-level status/checklist lives in [`docs/plan.md`](../plan.md). This document is the detailed implementation contract.
 
 ## Goal
 
-User creates a local workspace, then clicks "Run" and watches its local environment progress through `idle → starting → running` with per-service health indicators.
+User creates a host workspace, then clicks "Run" and watches workspace preparation and service startup complete with per-service health indicators.
 
 ## What You Build
 
@@ -30,8 +30,9 @@ User creates a local workspace, then clicks "Run" and watches its local environm
    - `project_id`
    - `source_ref`
    - `git_sha`
-   - `worktree_path` — absolute filesystem path for local workspaces; null for cloud workspaces until cloud execution lands
-   - `mode` (`cloud|local`) — which `Runtime` runs this workspace
+   - `worktree_path` — absolute filesystem path for host workspaces; null for non-host targets until they expose a local mirror path
+   - `target` (`host|docker|remote_host|cloud`) — where the workspace runs
+   - `checkout_type` (`root|worktree`) — how the host git checkout is materialized
    - `created_by` (nullable — not set for local workspaces pre-auth)
    - `created_at`, `updated_at`, `last_active_at`, `expires_at`
    - `prepared_at` (nullable timestamp; set once workspace preparation has completed successfully)
@@ -40,25 +41,10 @@ User creates a local workspace, then clicks "Run" and watches its local environm
    - workspace display name is derived from `source_ref` (e.g., branch name `feature/auth-fix` → "auth-fix"); no separate `name` field in V1
 
 3. Workspace invariants:
-   - the workspace is the durable shell; ordinary environment up/down does not create or destroy it
+   - the workspace is the durable shell; ordinary service up/down does not create or destroy it
    - workspace preparation durability is tracked on `workspace.prepared_at`
-   - the environment state machine is authoritative for run/stop/reset/sleep/wake behavior
-
-### `environment` (singleton execution state per workspace)
-
-1. Purpose:
-   - lifecycle state for the runnable execution layer attached to a workspace
-   - typed failure metadata for the last environment failure
-2. Required fields:
-   - `workspace_id` (primary key, foreign key to `workspace.id`)
-   - `status` (`idle|starting|running|stopping`)
-   - `failure_reason` (nullable typed enum)
-   - `failed_at` (nullable timestamp)
-   - `created_at`, `updated_at`
-3. Invariants:
-   - exactly one environment row per workspace
-   - environment up/down does not create or destroy the workspace shell
-   - transitional environment status acts as the mutation lock for environment-scoped operations
+   - workspace lifecycle status is tracked directly on the workspace record
+   - typed failure metadata for the last failed preparation or service-start attempt
 
 ### `service` (per-service runtime state)
 
@@ -66,7 +52,7 @@ User creates a local workspace, then clicks "Run" and watches its local environm
    - runtime state for a single service within a workspace; extracted from embedded map to eliminate OCC contention between concurrent service updates
 2. Required fields:
    - `id`
-   - `environment_id`
+   - `workspace_id`
    - `name` — key from project `lifecycle.json` environment graph for `kind: "service"` nodes
    - `status` (`stopped|starting|ready|failed`)
    - `status_reason` (nullable typed enum; required when `status=failed`)
@@ -75,44 +61,41 @@ User creates a local workspace, then clicks "Run" and watches its local environm
    - `created_at`
    - `updated_at`
 3. Invariants:
-   - unique (`environment_id`, `name`)
+   - unique (`workspace_id`, `name`)
    - `assigned_port` must be null when the provider is not currently holding a runtime bind for the service
    - `preview_url` is stable runtime-owned routing identity; whether it is openable is derived from runtime state, not from a separate preview status field
 
 ## Implementation Contracts
 
-### Workspace Environment State Machine
+### Workspace Lifecycle State
 
-Full transition rules: [reference/state-machines.md](../reference/state-machines.md)
+1. `workspace.status` is coarse workspace lifecycle state, not per-service run state.
+2. Canonical workspace states:
+   - `preparing`
+   - `active`
+   - `archiving`
+   - `archived`
+3. Service run state lives on `service.status` (`stopped|starting|ready|failed`).
 
-M2-relevant environment semantics (local mode):
-
-| State | `LocalRuntime` behavior |
-|-------|----------------------------------|
-| `idle` | Worktree is ready; services are stopped |
-| `starting` | Running first-boot preparation (if needed) and starting local processes + containers |
-| `running` | Health checks pass on localhost |
-| `stopping` | Services are shutting down before returning to `idle` |
-
-### `Backend` + `Runtime`
+### `Backend` + `Workspace`
 
 Full interface: [`/reference--workspace`](../../.skills/reference--workspace/SKILL.md)
 
-M2 implements `Backend` + `LocalRuntime`:
+M2 implements `Backend` + a host-backed `Workspace`:
 - `createWorkspace`: git worktree checkout
-- `startEnvironment`: run workspace preparation on first start, then spawn local processes + Docker containers
+- `startServices`: run workspace preparation on first start, then spawn local processes + Docker containers
 - `healthCheck`: tcp/http probes against localhost
-- `stopEnvironment`: SIGTERM process group
+- `stopServices`: SIGTERM process group
 
 ### Health Check Contract
 
 - Per-service `health_check` object with `kind` (`tcp` or `http`)
-- Environment transitions to `running` only after all defined service health checks pass
+- Services transition to `ready` only after their defined health checks pass
 - Full spec: [reference/lifecycle-json.md](../reference/lifecycle-json.md)
 
 ### Workspace Topology
 
-- One workspace owns one execution environment in V1, logically mapped to one Git worktree path
+- One workspace owns one set of services in V1, logically mapped to one Git worktree path
 - Lifecycle manages worktree create/prune to avoid branch checkout collisions
 
 ### Testing Experience Design

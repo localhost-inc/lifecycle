@@ -35,7 +35,7 @@
     "@codemirror/view": "^6.40.0",
     "@lifecycle/backend": "workspace:*",
     "@lifecycle/contracts": "workspace:*",
-    "@lifecycle/runtime": "workspace:*",
+    "@lifecycle/workspace": "workspace:*",
     "@lifecycle/ui": "workspace:*",
     "@pierre/diffs": "^1.0.11",
     "@shikijs/themes": "^3.23.0",

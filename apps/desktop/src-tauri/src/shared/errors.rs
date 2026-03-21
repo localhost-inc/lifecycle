@@ -3,29 +3,29 @@ use serde_json::{json, Map, Value};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum EnvironmentStatus {
-    Idle,
-    Starting,
-    Running,
-    Stopping,
+pub enum WorkspaceStatus {
+    Preparing,
+    Active,
+    Archiving,
+    Archived,
 }
 
-impl EnvironmentStatus {
+impl WorkspaceStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Idle => "idle",
-            Self::Starting => "starting",
-            Self::Running => "running",
-            Self::Stopping => "stopping",
+            Self::Preparing => "preparing",
+            Self::Active => "active",
+            Self::Archiving => "archiving",
+            Self::Archived => "archived",
         }
     }
 
     pub fn from_str(s: &str) -> Result<Self, LifecycleError> {
         match s {
-            "idle" => Ok(Self::Idle),
-            "starting" => Ok(Self::Starting),
-            "running" => Ok(Self::Running),
-            "stopping" => Ok(Self::Stopping),
+            "preparing" => Ok(Self::Preparing),
+            "active" => Ok(Self::Active),
+            "archiving" => Ok(Self::Archiving),
+            "archived" => Ok(Self::Archived),
             _ => Err(LifecycleError::InvalidStateTransition {
                 from: s.to_string(),
                 to: "unknown".to_string(),
@@ -34,7 +34,7 @@ impl EnvironmentStatus {
     }
 }
 
-impl std::fmt::Display for EnvironmentStatus {
+impl std::fmt::Display for WorkspaceStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_str())
     }
@@ -42,7 +42,7 @@ impl std::fmt::Display for EnvironmentStatus {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum EnvironmentFailureReason {
+pub enum WorkspaceFailureReason {
     CapacityUnavailable,
     EnvironmentTaskFailed,
     ManifestInvalid,
@@ -59,7 +59,7 @@ pub enum EnvironmentFailureReason {
     Unknown,
 }
 
-impl EnvironmentFailureReason {
+impl WorkspaceFailureReason {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::CapacityUnavailable => "capacity_unavailable",
@@ -212,7 +212,7 @@ pub enum LifecycleError {
     #[error("Invalid state transition from '{from}' to '{to}'")]
     InvalidStateTransition { from: String, to: String },
 
-    #[error("Workspace mutation locked while environment status is '{status}'")]
+    #[error("Workspace mutation locked while workspace status is '{status}'")]
     WorkspaceMutationLocked { status: String },
 
     #[error("Workspace not found: {0}")]
@@ -483,14 +483,14 @@ mod tests {
     #[test]
     fn workspace_status_roundtrip() {
         let statuses = vec![
-            EnvironmentStatus::Idle,
-            EnvironmentStatus::Starting,
-            EnvironmentStatus::Running,
-            EnvironmentStatus::Stopping,
+            WorkspaceStatus::Preparing,
+            WorkspaceStatus::Active,
+            WorkspaceStatus::Archiving,
+            WorkspaceStatus::Archived,
         ];
         for status in statuses {
             let s = status.as_str();
-            let parsed = EnvironmentStatus::from_str(s).unwrap();
+            let parsed = WorkspaceStatus::from_str(s).unwrap();
             assert_eq!(status, parsed);
         }
     }
@@ -522,7 +522,7 @@ mod tests {
     #[test]
     fn lifecycle_errors_serialize_to_typed_envelopes() {
         let value = serde_json::to_value(LifecycleError::WorkspaceMutationLocked {
-            status: "stopping".to_string(),
+            status: "archiving".to_string(),
         })
         .expect("serialize typed lifecycle error");
 
@@ -533,12 +533,12 @@ mod tests {
         assert_eq!(
             value.get("message"),
             Some(&Value::String(
-                "Workspace mutation locked while environment status is 'stopping'".into()
+                "Workspace mutation locked while workspace status is 'archiving'".into()
             ))
         );
         assert_eq!(
             value.pointer("/details/status"),
-            Some(&Value::String("stopping".into()))
+            Some(&Value::String("archiving".into()))
         );
         assert_eq!(value.get("retryable"), Some(&Value::Bool(true)));
         assert!(matches!(

@@ -2,14 +2,14 @@ use crate::capabilities::workspaces::manifest::parse_lifecycle_config;
 use crate::platform::db::{map_database_result, open_db, optional_database_result, DbPath};
 use crate::platform::diagnostics;
 use crate::platform::git::worktree;
-use crate::shared::errors::{LifecycleError, EnvironmentFailureReason, EnvironmentStatus};
+use crate::shared::errors::{LifecycleError, WorkspaceFailureReason, WorkspaceStatus};
 use rusqlite::params;
 use std::time::Instant;
 use tauri::{AppHandle, State};
 
-use super::kind::{normalize_workspace_kind, ROOT_WORKSPACE_KIND};
+use super::checkout_type::{normalize_workspace_checkout_type, ROOT_WORKSPACE_CHECKOUT_TYPE};
 use super::shared::{
-    emit_environment_status, reconcile_workspace_services_db, update_environment_status_db,
+    emit_workspace_status, reconcile_workspace_services_db, update_workspace_status_db,
 };
 
 #[derive(Debug, Clone)]
@@ -19,7 +19,7 @@ pub(crate) struct CreateWorkspaceRequest {
     pub(crate) workspace_name: Option<String>,
     pub(crate) base_ref: Option<String>,
     pub(crate) worktree_root: Option<String>,
-    pub(crate) kind: Option<String>,
+    pub(crate) checkout_type: Option<String>,
     pub(crate) manifest_json: Option<String>,
     pub(crate) manifest_fingerprint: Option<String>,
 }
@@ -31,7 +31,7 @@ struct RootWorkspaceBootstrap<'a> {
     source_ref: &'a str,
 }
 
-struct ManagedWorkspaceCreation<'a> {
+struct WorktreeWorkspaceCreation<'a> {
     app: &'a AppHandle,
     db_path: &'a str,
     workspace_id: &'a str,
@@ -48,8 +48,9 @@ pub async fn create_workspace(
     request: CreateWorkspaceRequest,
 ) -> Result<String, LifecycleError> {
     let total_started_at = Instant::now();
-    let workspace_kind = normalize_workspace_kind(request.kind.as_deref());
-    if workspace_kind == ROOT_WORKSPACE_KIND {
+    let workspace_checkout_type =
+        normalize_workspace_checkout_type(request.checkout_type.as_deref());
+    if workspace_checkout_type == ROOT_WORKSPACE_CHECKOUT_TYPE {
         if let Some(existing_workspace_id) =
             find_existing_root_workspace_id(&db_path.0, &request.project_id)?
         {
@@ -62,7 +63,7 @@ pub async fn create_workspace(
         .as_deref()
         .map(parse_lifecycle_config)
         .transpose()?;
-    let root_source_ref = if workspace_kind == ROOT_WORKSPACE_KIND {
+    let root_source_ref = if workspace_checkout_type == ROOT_WORKSPACE_CHECKOUT_TYPE {
         Some(resolve_base_ref(&request.project_path, request.base_ref.as_deref()).await?)
     } else {
         None
@@ -72,7 +73,7 @@ pub async fn create_workspace(
         .workspace_name
         .and_then(normalize_optional_string)
         .unwrap_or_else(|| {
-            if workspace_kind == ROOT_WORKSPACE_KIND {
+            if workspace_checkout_type == ROOT_WORKSPACE_CHECKOUT_TYPE {
                 "Root".to_string()
             } else {
                 auto_workspace_name(&workspace_id)
@@ -80,7 +81,8 @@ pub async fn create_workspace(
         });
     let source_ref = root_source_ref
         .unwrap_or_else(|| worktree::workspace_branch_name(&workspace_name, &workspace_id));
-    let (name_origin, source_ref_origin) = if workspace_kind == ROOT_WORKSPACE_KIND {
+    let (name_origin, source_ref_origin) =
+        if workspace_checkout_type == ROOT_WORKSPACE_CHECKOUT_TYPE {
         ("manual", "manual")
     } else {
         ("default", "default")
@@ -91,8 +93,9 @@ pub async fn create_workspace(
     {
         let conn = open_db(&db)?;
         map_database_result(conn.execute(
-            "INSERT INTO workspace (id, project_id, name, name_origin, source_ref, source_ref_origin, kind, mode)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'local')",
+            "INSERT INTO workspace (
+                id, project_id, name, name_origin, source_ref, source_ref_origin, checkout_type, target, status
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'host', 'active')",
             params![
                 workspace_id,
                 request.project_id,
@@ -100,20 +103,15 @@ pub async fn create_workspace(
                 name_origin,
                 source_ref,
                 source_ref_origin,
-                workspace_kind,
+                workspace_checkout_type,
             ],
-        ))?;
-        map_database_result(conn.execute(
-            "INSERT INTO environment (workspace_id, status)
-             VALUES (?1, 'idle')",
-            params![workspace_id],
         ))?;
     }
 
-    emit_environment_status(&app, &workspace_id, "idle", None);
+    emit_workspace_status(&app, &workspace_id, "active", None);
 
     let provision_started_at = Instant::now();
-    if workspace_kind == ROOT_WORKSPACE_KIND {
+    if workspace_checkout_type == ROOT_WORKSPACE_CHECKOUT_TYPE {
         run_root_workspace_creation(RootWorkspaceBootstrap {
             db_path: &db,
             workspace_id: &workspace_id,
@@ -122,7 +120,7 @@ pub async fn create_workspace(
         })
         .await?;
     } else {
-        run_managed_workspace_creation(ManagedWorkspaceCreation {
+        run_worktree_workspace_creation(WorktreeWorkspaceCreation {
             app: &app,
             db_path: &db,
             workspace_id: &workspace_id,
@@ -138,7 +136,7 @@ pub async fn create_workspace(
         "workspace-create",
         &format!(
             "workspace {workspace_id} {}",
-            if workspace_kind == ROOT_WORKSPACE_KIND {
+            if workspace_checkout_type == ROOT_WORKSPACE_CHECKOUT_TYPE {
                 "root bootstrap"
             } else {
                 "worktree create"
@@ -177,7 +175,7 @@ fn find_existing_root_workspace_id(
     optional_database_result(conn.query_row(
         "SELECT id
          FROM workspace
-         WHERE project_id = ?1 AND kind = 'root'
+         WHERE project_id = ?1 AND checkout_type = 'root'
          LIMIT 1",
         params![project_id],
         |row| row.get::<_, String>(0),
@@ -221,22 +219,22 @@ async fn run_root_workspace_creation(
     Ok(())
 }
 
-async fn run_managed_workspace_creation(
-    request: ManagedWorkspaceCreation<'_>,
+async fn run_worktree_workspace_creation(
+    request: WorktreeWorkspaceCreation<'_>,
 ) -> Result<(), LifecycleError> {
     let resolved_base_ref = match resolve_base_ref(request.project_path, request.base_ref).await {
         Ok(value) => value,
         Err(error) => {
-            update_environment_status_db(
+            update_workspace_status_db(
                 request.db_path,
                 request.workspace_id,
-                &EnvironmentStatus::Idle,
-                Some(&EnvironmentFailureReason::RepoCloneFailed),
+                &WorkspaceStatus::Active,
+                Some(&WorkspaceFailureReason::RepoCloneFailed),
             )?;
-            emit_environment_status(
+            emit_workspace_status(
                 request.app,
                 request.workspace_id,
-                "idle",
+                "active",
                 Some("repo_clone_failed"),
             );
             return Err(error);
@@ -257,16 +255,16 @@ async fn run_managed_workspace_creation(
     {
         Ok(path) => path,
         Err(e) => {
-            update_environment_status_db(
+            update_workspace_status_db(
                 request.db_path,
                 request.workspace_id,
-                &EnvironmentStatus::Idle,
-                Some(&EnvironmentFailureReason::RepoCloneFailed),
+                &WorkspaceStatus::Active,
+                Some(&WorkspaceFailureReason::RepoCloneFailed),
             )?;
-            emit_environment_status(
+            emit_workspace_status(
                 request.app,
                 request.workspace_id,
-                "idle",
+                "active",
                 Some("repo_clone_failed"),
             );
             return Err(e);
@@ -280,16 +278,16 @@ async fn run_managed_workspace_creation(
 
     if let Err(e) = worktree::copy_local_config_files(request.project_path, &worktree_path) {
         let _ = worktree::remove_worktree(request.project_path, &worktree_path).await;
-        update_environment_status_db(
+        update_workspace_status_db(
             request.db_path,
             request.workspace_id,
-            &EnvironmentStatus::Idle,
-            Some(&EnvironmentFailureReason::RepoCloneFailed),
+            &WorkspaceStatus::Active,
+            Some(&WorkspaceFailureReason::RepoCloneFailed),
         )?;
-        emit_environment_status(
+        emit_workspace_status(
             request.app,
             request.workspace_id,
-            "idle",
+            "active",
             Some("repo_clone_failed"),
         );
         return Err(e);
@@ -307,14 +305,13 @@ async fn run_managed_workspace_creation(
         ))?;
     }
 
-    // Workspace creation completes in the resting idle state.
-    update_environment_status_db(
+    update_workspace_status_db(
         request.db_path,
         request.workspace_id,
-        &EnvironmentStatus::Idle,
+        &WorkspaceStatus::Active,
         None,
     )?;
-    emit_environment_status(request.app, request.workspace_id, "idle", None);
+    emit_workspace_status(request.app, request.workspace_id, "active", None);
 
     Ok(())
 }
@@ -410,28 +407,26 @@ mod tests {
         )
         .expect("insert project");
         conn.execute(
-            "INSERT INTO workspace (id, project_id, kind, source_ref, mode)
-             VALUES (?1, ?2, ?3, ?4, ?5), (?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO workspace (id, project_id, name, checkout_type, source_ref, target, status)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7), (?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             rusqlite::params![
-                "workspace_managed",
+                "workspace_worktree",
                 "project_1",
-                "managed",
-                "lifecycle/workspace-managed",
-                "local",
+                "Worktree",
+                "worktree",
+                "lifecycle/worktree-fixture",
+                "host",
+                "active",
                 "workspace_root",
                 "project_1",
+                "Root",
                 "root",
                 "main",
-                "local"
+                "host",
+                "active"
             ],
         )
         .expect("insert workspaces");
-        conn.execute(
-            "INSERT INTO environment (workspace_id, status)
-             VALUES (?1, 'idle'), (?2, 'idle')",
-            rusqlite::params!["workspace_managed", "workspace_root"],
-        )
-        .expect("insert environments");
         drop(conn);
 
         let existing =
@@ -467,8 +462,9 @@ mod tests {
         )
         .expect("insert project");
         conn.execute(
-            "INSERT INTO workspace (id, project_id, name, name_origin, kind, source_ref, source_ref_origin, mode)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO workspace (
+                id, project_id, name, name_origin, checkout_type, source_ref, source_ref_origin, target, status
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             rusqlite::params![
                 "workspace_root",
                 "project_1",
@@ -477,15 +473,11 @@ mod tests {
                 "root",
                 source_ref,
                 "manual",
-                "local"
+                "host",
+                "active"
             ],
         )
         .expect("insert workspace");
-        conn.execute(
-            "INSERT INTO environment (workspace_id, status) VALUES (?1, 'idle')",
-            rusqlite::params!["workspace_root"],
-        )
-        .expect("insert environment");
         drop(conn);
 
         run_root_workspace_creation(RootWorkspaceBootstrap {

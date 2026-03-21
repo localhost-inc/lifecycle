@@ -1,5 +1,4 @@
 import type {
-  EnvironmentRecord,
   GitBranchPullRequestResult,
   GitLogEntry,
   GitPullRequestDetailResult,
@@ -25,7 +24,6 @@ import { listWorkspacesByProject } from "@/features/workspaces/catalog-api";
 import {
   getWorkspaceActivity,
   getWorkspaceById,
-  getWorkspaceEnvironment,
   getWorkspaceServiceLogs,
   listWorkspaceFiles,
   readWorkspaceFile,
@@ -41,7 +39,6 @@ export interface QuerySource {
   readManifest(projectPath: string): Promise<ManifestStatus>;
   listWorkspacesByProject(): Promise<Record<string, WorkspaceRecord[]>>;
   getWorkspace(workspaceId: string): Promise<WorkspaceRecord | null>;
-  getWorkspaceEnvironment(workspaceId: string): Promise<EnvironmentRecord>;
   getWorkspaceActivity(workspaceId: string): Promise<LifecycleEvent[]>;
   getWorkspaceFile(workspaceId: string, filePath: string): Promise<WorkspaceFileReadResult>;
   getWorkspaceServiceLogs(workspaceId: string): Promise<ServiceLogSnapshot[]>;
@@ -78,11 +75,6 @@ export function createQuerySource(): QuerySource {
     },
     async getWorkspace(workspaceId) {
       return measureWorkspace("query.workspace", workspaceId, () => getWorkspaceById(workspaceId));
-    },
-    async getWorkspaceEnvironment(workspaceId) {
-      return measureWorkspace("query.workspace-environment", workspaceId, () =>
-        getWorkspaceEnvironment(workspaceId),
-      );
     },
     async getWorkspaceActivity(workspaceId) {
       return measureWorkspace("query.workspace-activity", workspaceId, () =>

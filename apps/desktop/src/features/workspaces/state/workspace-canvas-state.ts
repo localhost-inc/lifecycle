@@ -198,8 +198,18 @@ function defaultCommitMessage(shortSha: string): string {
   return `Commit ${shortSha}`;
 }
 
+const TERMINAL_TAB_KEY_PREFIX = "terminal:";
+
 export function isTerminalTabKey(value: string): boolean {
-  return value.startsWith("terminal:");
+  return value.startsWith(TERMINAL_TAB_KEY_PREFIX);
+}
+
+export function terminalTabKey(terminalId: string): string {
+  return `${TERMINAL_TAB_KEY_PREFIX}${terminalId}`;
+}
+
+export function terminalIdFromTabKey(value: string): string | null {
+  return isTerminalTabKey(value) ? value.slice(TERMINAL_TAB_KEY_PREFIX.length) : null;
 }
 
 function shortShaFromSha(sha: string): string {

@@ -14,6 +14,7 @@ import {
   pullRequestTabKey,
   readLastWorkspaceId,
   readWorkspaceCanvasState,
+  terminalTabKey,
   type WorkspaceCanvasTabViewState,
   type WorkspaceCanvasDocument,
   type WorkspaceCanvasState,
@@ -385,7 +386,7 @@ describe("workspace canvas state persistence", () => {
           [fileViewerTabKey("README.md")]: {
             scrollTop: 128,
           },
-          "terminal:term-1": {
+          [terminalTabKey("term-1")]: {
             scrollTop: 64,
           },
         },
@@ -511,7 +512,7 @@ describe("workspace canvas state persistence", () => {
     writeWorkspaceCanvasState(
       "ws-1",
       withDefaultState({
-        activeTabKey: "terminal:term-42",
+        activeTabKey: terminalTabKey("term-42"),
         documents: [],
       }),
       storage,
@@ -519,9 +520,9 @@ describe("workspace canvas state persistence", () => {
 
     expect(readWorkspaceCanvasState("ws-1", storage)).toEqual(
       withDefaultState({
-        activeTabKey: "terminal:term-42",
+        activeTabKey: terminalTabKey("term-42"),
         documents: [],
-        tabOrderKeys: ["terminal:term-42"],
+        tabOrderKeys: [terminalTabKey("term-42")],
       }),
     );
     expect(JSON.parse(storage.getItem(WORKSPACE_CANVAS_STATE_STORAGE_KEY) ?? "null")).toEqual({
@@ -530,8 +531,8 @@ describe("workspace canvas state persistence", () => {
         documents: [],
         paneTabStateById: {
           "pane-root": {
-            activeTabKey: "terminal:term-42",
-            tabOrderKeys: ["terminal:term-42"],
+            activeTabKey: terminalTabKey("term-42"),
+            tabOrderKeys: [terminalTabKey("term-42")],
           },
         },
         rootPane: {

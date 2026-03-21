@@ -1,8 +1,8 @@
 export type {
   CreateTerminalInput,
-  EnvironmentStartInput,
+  StartServicesInput,
   GitDiffInput,
-  Runtime,
+  WorkspaceClient,
   SavedTerminalAttachment,
   ServiceLogLine,
   ServiceLogSnapshot,
@@ -10,7 +10,7 @@ export type {
   WorkspaceFileReadResult,
   WorkspaceFileTreeEntry,
   WorkspaceHealthResult,
-} from "./runtime";
+} from "./workspace";
 export type {
   ClaudePermissionMode,
   ClaudeHarnessLaunchConfigInput,
@@ -20,5 +20,4 @@ export type {
   HarnessLaunchConfigInput,
   HarnessPreset,
 } from "./harnesses";
-export { CloudRuntime, type CloudRuntimeClient } from "./cloud-runtime";
-export { LocalRuntime } from "./local-runtime";
+export { HostWorkspaceClient } from "./host-workspace";

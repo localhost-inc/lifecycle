@@ -8,15 +8,15 @@ use crate::capabilities::workspaces::manifest::{
 use crate::platform::db::{map_database_result, open_db, DbPath};
 use crate::platform::diagnostics;
 use crate::platform::runtime::prepare;
-use crate::shared::errors::{LifecycleError, EnvironmentFailureReason, EnvironmentStatus};
+use crate::shared::errors::{LifecycleError, WorkspaceFailureReason, WorkspaceStatus};
 use crate::WorkspaceControllerRegistryHandle;
 use rusqlite::params;
 use tauri::{AppHandle, State};
 
 use super::super::controller::ManagedWorkspaceController;
 use super::super::shared::{
-    emit_environment_status, emit_service_status, mark_services_failed,
-    reconcile_workspace_services_db, transition_environment_to, update_environment_status_db,
+    emit_service_status, emit_workspace_status, mark_services_failed,
+    reconcile_workspace_services_db, update_workspace_status_db,
 };
 use super::execution::{
     abort_start_if_needed, record_service_graph_failure, record_start_failure,
@@ -35,11 +35,11 @@ pub(super) enum WorkspaceStartMode {
 pub(super) fn load_workspace_status(
     db_path: &str,
     workspace_id: &str,
-) -> Result<EnvironmentStatus, LifecycleError> {
+) -> Result<WorkspaceStatus, LifecycleError> {
     let conn = open_db(db_path)?;
     let status = conn
         .query_row(
-            "SELECT status FROM environment WHERE workspace_id = ?1",
+            "SELECT status FROM workspace WHERE id = ?1",
             params![workspace_id],
             |row| row.get::<_, String>(0),
         )
@@ -50,7 +50,7 @@ pub(super) fn load_workspace_status(
             _ => LifecycleError::Database(error.to_string()),
         })?;
 
-    EnvironmentStatus::from_str(&status)
+    WorkspaceStatus::from_str(&status)
 }
 
 fn load_prepared(db_path: &str, workspace_id: &str) -> Result<bool, LifecycleError> {
@@ -75,7 +75,7 @@ fn load_ready_service_names(
         .prepare(
             "SELECT name
              FROM service
-             WHERE environment_id = ?1 AND status = 'ready'",
+             WHERE workspace_id = ?1 AND status = 'ready'",
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
     let rows = stmt
@@ -101,7 +101,18 @@ fn mark_prepared(db_path: &str, workspace_id: &str) -> Result<(), LifecycleError
     Ok(())
 }
 
-async fn start_environment_lifecycle(
+fn set_workspace_status(
+    app: &AppHandle,
+    db_path: &str,
+    workspace_id: &str,
+    status: &WorkspaceStatus,
+) -> Result<(), LifecycleError> {
+    update_workspace_status_db(db_path, workspace_id, status, None)?;
+    emit_workspace_status(app, workspace_id, status.as_str(), None);
+    Ok(())
+}
+
+async fn start_workspace_services_lifecycle(
     app: &AppHandle,
     controller: &ManagedWorkspaceController,
     db_path: &str,
@@ -165,7 +176,7 @@ async fn start_environment_lifecycle(
                 &start_token,
                 start_mode,
                 workspace_id,
-                EnvironmentFailureReason::ServiceStartFailed,
+                WorkspaceFailureReason::ServiceStartFailed,
             )
             .await?;
             if !recorded {
@@ -192,8 +203,7 @@ async fn start_environment_lifecycle(
         Some(&satisfied_service_names),
     )?;
     if lowered_graph.workspace_prepare.is_empty() && lowered_graph.environment_nodes.is_empty() {
-        update_environment_status_db(db_path, workspace_id, &EnvironmentStatus::Running, None)?;
-        emit_environment_status(app, workspace_id, "running", None);
+        update_workspace_status_db(db_path, workspace_id, &WorkspaceStatus::Active, None)?;
         controller.finish_start(&start_token).await;
         diagnostics::append_timing(
             "workspace-start",
@@ -223,13 +233,10 @@ async fn start_environment_lifecycle(
         }
     };
 
-    let prepare_work_ran = !lowered_graph.workspace_prepare.is_empty()
-        || lowered_graph
-            .environment_nodes
-            .values()
-            .any(|node| matches!(node.kind, EnvironmentNodeKind::Task(_)));
+    let prepare_work_ran = !lowered_graph.workspace_prepare.is_empty();
 
     if !lowered_graph.workspace_prepare.is_empty() {
+        set_workspace_status(app, db_path, workspace_id, &WorkspaceStatus::Preparing)?;
         let prepare_started_at = Instant::now();
         match prepare::run_steps(
             worktree_path,
@@ -244,7 +251,7 @@ async fn start_environment_lifecycle(
             Ok(prepare::StepRunOutcome::Cancelled) => return Ok(()),
             Err(error) => {
                 let recorded = ctx
-                    .record_failure(EnvironmentFailureReason::PrepareStepFailed)
+                    .record_failure(WorkspaceFailureReason::PrepareStepFailed)
                     .await?;
                 if !recorded {
                     return Ok(());
@@ -263,8 +270,7 @@ async fn start_environment_lifecycle(
             return Ok(());
         }
 
-        update_environment_status_db(db_path, workspace_id, &EnvironmentStatus::Starting, None)?;
-        emit_environment_status(app, workspace_id, "starting", None);
+        set_workspace_status(app, db_path, workspace_id, &WorkspaceStatus::Active)?;
     }
 
     ctx.execute_environment_graph(&lowered_graph.environment_nodes, &sorted_nodes)
@@ -278,9 +284,7 @@ async fn start_environment_lifecycle(
         return Ok(());
     }
 
-    // All healthy -> running.
-    update_environment_status_db(db_path, workspace_id, &EnvironmentStatus::Running, None)?;
-    emit_environment_status(app, workspace_id, "running", None);
+    update_workspace_status_db(db_path, workspace_id, &WorkspaceStatus::Active, None)?;
     controller.finish_start(&start_token).await;
     diagnostics::append_timing(
         "workspace-start",
@@ -291,7 +295,7 @@ async fn start_environment_lifecycle(
     Ok(())
 }
 
-pub async fn start_environment(
+pub async fn start_workspace_services(
     app: AppHandle,
     db_path: State<'_, DbPath>,
     workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
@@ -306,19 +310,25 @@ pub async fn start_environment(
         .acquire_mutation_guard(&workspace_id)
         .await?;
     let current_workspace_status = load_workspace_status(&db_path.0, &workspace_id)?;
-    let start_mode = match (&current_workspace_status, service_names.as_ref()) {
-        (EnvironmentStatus::Idle, _) => WorkspaceStartMode::Cold,
-        (EnvironmentStatus::Running, Some(_)) => WorkspaceStartMode::Incremental,
-        (EnvironmentStatus::Starting | EnvironmentStatus::Stopping, _) => {
+    let start_mode = match current_workspace_status {
+        WorkspaceStatus::Preparing | WorkspaceStatus::Archiving => {
             return Err(LifecycleError::WorkspaceMutationLocked {
                 status: current_workspace_status.as_str().to_string(),
             });
         }
-        (EnvironmentStatus::Running, None) => {
+        WorkspaceStatus::Archived => {
             return Err(LifecycleError::InvalidStateTransition {
-                from: EnvironmentStatus::Running.as_str().to_string(),
-                to: EnvironmentStatus::Starting.as_str().to_string(),
+                from: WorkspaceStatus::Archived.as_str().to_string(),
+                to: WorkspaceStatus::Preparing.as_str().to_string(),
             });
+        }
+        WorkspaceStatus::Active => {
+            let ready_service_names = load_ready_service_names(&db_path.0, &workspace_id)?;
+            if service_names.is_some() && !ready_service_names.is_empty() {
+                WorkspaceStartMode::Incremental
+            } else {
+                WorkspaceStartMode::Cold
+            }
         }
     };
 
@@ -356,10 +366,6 @@ pub async fn start_environment(
         return Ok(());
     }
 
-    // Acquire workspace lifecycle lock synchronously to prevent concurrent starts.
-    transition_environment_to(&db_path.0, &workspace_id, &EnvironmentStatus::Starting)?;
-    emit_environment_status(&app, &workspace_id, EnvironmentStatus::Starting.as_str(), None);
-
     let db = db_path.0.clone();
     let controller = workspace_controllers.get_or_create(&workspace_id).await;
     let start_token = controller.begin_start().await?;
@@ -367,7 +373,7 @@ pub async fn start_environment(
     let requested_service_names = service_names.clone();
 
     tokio::spawn(async move {
-        if let Err(e) = start_environment_lifecycle(
+        if let Err(e) = start_workspace_services_lifecycle(
             &app,
             &controller,
             &db,
@@ -381,7 +387,7 @@ pub async fn start_environment(
         )
         .await
         {
-            tracing::error!("start_environment failed for {}: {e}", ws_id);
+            tracing::error!("start_workspace_services failed for {}: {e}", ws_id);
         }
     });
 
@@ -397,7 +403,7 @@ fn sync_workspace_manifest_if_idle(
     let conn = open_db(db_path)?;
     let status: String = conn
         .query_row(
-            "SELECT status FROM environment WHERE workspace_id = ?1",
+            "SELECT status FROM workspace WHERE id = ?1",
             params![workspace_id],
             |row| row.get(0),
         )
@@ -409,8 +415,8 @@ fn sync_workspace_manifest_if_idle(
         })?;
     drop(conn);
 
-    let workspace_status = EnvironmentStatus::from_str(&status)?;
-    if workspace_status != EnvironmentStatus::Idle {
+    let workspace_status = WorkspaceStatus::from_str(&status)?;
+    if workspace_status != WorkspaceStatus::Active {
         return Ok(false);
     }
 
@@ -433,25 +439,17 @@ pub fn sync_workspace_manifest_from_disk_if_idle(
         worktree_path,
         current_manifest_fingerprint,
         persisted_service_count,
-        has_environment,
-    ): (
-        Option<String>,
-        Option<String>,
-        usize,
-        bool,
-    ) = conn
+    ): (Option<String>, Option<String>, usize) = conn
         .query_row(
             "SELECT workspace.worktree_path,
                     workspace.manifest_fingerprint,
-                    COUNT(service.id),
-                    environment.workspace_id IS NOT NULL
+                    COUNT(service.id)
              FROM workspace
-             LEFT JOIN environment ON environment.workspace_id = workspace.id
-             LEFT JOIN service ON service.environment_id = environment.workspace_id
+             LEFT JOIN service ON service.workspace_id = workspace.id
              WHERE workspace.id = ?1
-             GROUP BY workspace.worktree_path, workspace.manifest_fingerprint, environment.workspace_id",
+             GROUP BY workspace.worktree_path, workspace.manifest_fingerprint",
             params![workspace_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .map_err(|error| match error {
             rusqlite::Error::QueryReturnedNoRows => {
@@ -460,12 +458,6 @@ pub fn sync_workspace_manifest_from_disk_if_idle(
             _ => LifecycleError::Database(error.to_string()),
         })?;
     drop(conn);
-
-    if !has_environment {
-        return Err(LifecycleError::Database(format!(
-            "workspace {workspace_id} is missing required environment row"
-        )));
-    }
 
     let Some(worktree_path) = worktree_path else {
         return Ok(false);

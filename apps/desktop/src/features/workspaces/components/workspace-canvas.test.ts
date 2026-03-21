@@ -25,6 +25,7 @@ import {
   listWorkspaceDocuments,
   listWorkspaceTabViewStateByKey,
   pullRequestTabKey,
+  terminalTabKey,
   type WorkspaceCanvasDocument,
   type WorkspaceCanvasState,
   type WorkspaceCanvasTabViewState,
@@ -575,7 +576,7 @@ describe("workspace canvas reducer", () => {
           activeTabKey: null,
           id: "pane-2",
           kind: "leaf" as const,
-          tabOrderKeys: ["terminal:stale"],
+          tabOrderKeys: [terminalTabKey("stale")],
         },
       },
       viewStateByTabKey: {},
@@ -904,16 +905,20 @@ describe("workspace canvas reducer", () => {
     );
   });
 
-  test("hides runtime tabs instead of removing terminal ownership from state", () => {
+  test("hides live tabs instead of removing terminal ownership from state", () => {
     expect(
       workspaceCanvasReducer(
         withSinglePaneState({
-          activeTabKey: "terminal:term-2",
+          activeTabKey: terminalTabKey("term-2"),
           documents: [createCommitDiffTab("abc12345")],
-          tabOrderKeys: ["terminal:term-1", "terminal:term-2", "diff:commit:abc12345"],
+          tabOrderKeys: [
+            terminalTabKey("term-1"),
+            terminalTabKey("term-2"),
+            "diff:commit:abc12345",
+          ],
         }),
         {
-          key: "terminal:term-2",
+          key: terminalTabKey("term-2"),
           kind: "hide-terminal-tab",
         },
       ),
@@ -921,13 +926,13 @@ describe("workspace canvas reducer", () => {
       withSinglePaneState({
         activeTabKey: "diff:commit:abc12345",
         documents: [createCommitDiffTab("abc12345")],
-        hiddenTerminalTabKeys: ["terminal:term-2"],
-        tabOrderKeys: ["terminal:term-1", "diff:commit:abc12345"],
+        hiddenTerminalTabKeys: [terminalTabKey("term-2")],
+        tabOrderKeys: [terminalTabKey("term-1"), "diff:commit:abc12345"],
       }),
     );
   });
 
-  test("closing the last runtime tab removes the empty pane when sibling panes exist", () => {
+  test("closing the last live tab removes the empty pane when sibling panes exist", () => {
     const splitState = withWorkspaceState({
       activePaneId: "pane-2",
       hiddenTerminalTabKeys: [],
@@ -943,10 +948,10 @@ describe("workspace canvas reducer", () => {
         kind: "split" as const,
         ratio: 0.5,
         second: {
-          activeTabKey: "terminal:term-1",
+          activeTabKey: terminalTabKey("term-1"),
           id: "pane-2",
           kind: "leaf" as const,
-          tabOrderKeys: ["terminal:term-1"],
+          tabOrderKeys: [terminalTabKey("term-1")],
         },
       },
       viewStateByTabKey: {},
@@ -954,27 +959,27 @@ describe("workspace canvas reducer", () => {
 
     expect(
       workspaceCanvasReducer(splitState, {
-        key: "terminal:term-1",
+        key: terminalTabKey("term-1"),
         kind: "hide-terminal-tab",
       }),
     ).toEqual(
       withSinglePaneState({
-        hiddenTerminalTabKeys: ["terminal:term-1"],
+        hiddenTerminalTabKeys: [terminalTabKey("term-1")],
       }),
     );
   });
 
-  test("restores hidden runtime tabs at the right edge when reopened", () => {
+  test("restores hidden live tabs at the right edge when reopened", () => {
     expect(
       workspaceCanvasReducer(
         withSinglePaneState({
           activeTabKey: CHANGES_DIFF_TAB_KEY,
           documents: [createChangesDiffTab("src/app.tsx")],
-          hiddenTerminalTabKeys: ["terminal:term-2"],
+          hiddenTerminalTabKeys: [terminalTabKey("term-2")],
           tabOrderKeys: [CHANGES_DIFF_TAB_KEY],
         }),
         {
-          key: "terminal:term-2",
+          key: terminalTabKey("term-2"),
           paneId: "pane-root",
           select: true,
           kind: "show-terminal-tab",
@@ -982,15 +987,15 @@ describe("workspace canvas reducer", () => {
       ),
     ).toEqual(
       withSinglePaneState({
-        activeTabKey: "terminal:term-2",
+        activeTabKey: terminalTabKey("term-2"),
         documents: [createChangesDiffTab("src/app.tsx")],
         hiddenTerminalTabKeys: [],
-        tabOrderKeys: [CHANGES_DIFF_TAB_KEY, "terminal:term-2"],
+        tabOrderKeys: [CHANGES_DIFF_TAB_KEY, terminalTabKey("term-2")],
       }),
     );
   });
 
-  test("moves an auto-assigned runtime tab into the explicitly requested pane", () => {
+  test("moves an auto-assigned live tab into the explicitly requested pane", () => {
     const splitState = withWorkspaceState({
       activePaneId: "pane-root",
       documents: [createChangesDiffTab("src/app.tsx")],
@@ -998,10 +1003,10 @@ describe("workspace canvas reducer", () => {
       rootPane: {
         direction: "row" as const,
         first: {
-          activeTabKey: "terminal:term-1",
+          activeTabKey: terminalTabKey("term-1"),
           id: "pane-root",
           kind: "leaf" as const,
-          tabOrderKeys: [CHANGES_DIFF_TAB_KEY, "terminal:term-1"],
+          tabOrderKeys: [CHANGES_DIFF_TAB_KEY, terminalTabKey("term-1")],
         },
         id: "split-1",
         kind: "split" as const,
@@ -1018,7 +1023,7 @@ describe("workspace canvas reducer", () => {
 
     expect(
       workspaceCanvasReducer(splitState, {
-        key: "terminal:term-1",
+        key: terminalTabKey("term-1"),
         kind: "show-terminal-tab",
         paneId: "pane-2",
         select: true,
@@ -1040,10 +1045,10 @@ describe("workspace canvas reducer", () => {
           kind: "split",
           ratio: 0.5,
           second: {
-            activeTabKey: "terminal:term-1",
+            activeTabKey: terminalTabKey("term-1"),
             id: "pane-2",
             kind: "leaf",
-            tabOrderKeys: ["terminal:term-1"],
+            tabOrderKeys: [terminalTabKey("term-1")],
           },
         },
         viewStateByTabKey: {},
@@ -1222,13 +1227,13 @@ describe("canvas tab helpers", () => {
     ).toEqual(["terminal_1", "terminal_2"]);
   });
 
-  test("resolves mixed visible tabs using persisted order and hidden runtime tabs", () => {
+  test("resolves mixed visible tabs using persisted order and hidden live tabs", () => {
     expect(
       resolveWorkspaceVisibleTabs(
         [
           {
             harnessProvider: null,
-            key: "terminal:term-1",
+            key: terminalTabKey("term-1"),
             kind: "terminal",
             label: "Terminal 1",
             launchType: "shell",
@@ -1238,7 +1243,7 @@ describe("canvas tab helpers", () => {
           },
           {
             harnessProvider: null,
-            key: "terminal:term-2",
+            key: terminalTabKey("term-2"),
             kind: "terminal",
             label: "Terminal 2",
             launchType: "shell",
@@ -1248,17 +1253,22 @@ describe("canvas tab helpers", () => {
           },
         ],
         indexDocuments([createChangesDiffTab("src/app.tsx"), createFileViewerTab("README.md")]),
-        [fileViewerTabKey("README.md"), "terminal:term-2", CHANGES_DIFF_TAB_KEY, "terminal:term-1"],
-        ["terminal:term-2"],
+        [
+          fileViewerTabKey("README.md"),
+          terminalTabKey("term-2"),
+          CHANGES_DIFF_TAB_KEY,
+          terminalTabKey("term-1"),
+        ],
+        [terminalTabKey("term-2")],
       ).map((tab) => tab.key),
-    ).toEqual([fileViewerTabKey("README.md"), CHANGES_DIFF_TAB_KEY, "terminal:term-1"]);
+    ).toEqual([fileViewerTabKey("README.md"), CHANGES_DIFF_TAB_KEY, terminalTabKey("term-1")]);
   });
 
   test("resolves only the tabs assigned to each pane instead of mirroring global tabs", () => {
     const terminalTabs = [
       {
         harnessProvider: null,
-        key: "terminal:term-1",
+        key: terminalTabKey("term-1"),
         kind: "terminal" as const,
         label: "Terminal 1",
         launchType: "shell" as const,
@@ -1268,7 +1278,7 @@ describe("canvas tab helpers", () => {
       },
       {
         harnessProvider: null,
-        key: "terminal:term-2",
+        key: terminalTabKey("term-2"),
         kind: "terminal" as const,
         label: "Terminal 2",
         launchType: "shell" as const,
@@ -1286,25 +1296,25 @@ describe("canvas tab helpers", () => {
       resolveWorkspaceVisibleTabs(
         terminalTabs,
         documents,
-        ["terminal:term-1", fileViewerTabKey("README.md")],
+        [terminalTabKey("term-1"), fileViewerTabKey("README.md")],
         [],
       ).map((tab) => tab.key),
-    ).toEqual(["terminal:term-1", fileViewerTabKey("README.md")]);
+    ).toEqual([terminalTabKey("term-1"), fileViewerTabKey("README.md")]);
     expect(
       resolveWorkspaceVisibleTabs(
         terminalTabs,
         documents,
-        [CHANGES_DIFF_TAB_KEY, "terminal:term-2"],
+        [CHANGES_DIFF_TAB_KEY, terminalTabKey("term-2")],
         [],
       ).map((tab) => tab.key),
-    ).toEqual([CHANGES_DIFF_TAB_KEY, "terminal:term-2"]);
+    ).toEqual([CHANGES_DIFF_TAB_KEY, terminalTabKey("term-2")]);
   });
 
   test("returns the key for the rightmost tab", () => {
     expect(
       getRightmostWorkspaceTabKey([
-        { key: "terminal:1" },
-        { key: "terminal:2" },
+        { key: terminalTabKey("1") },
+        { key: terminalTabKey("2") },
         { key: "commit:abc123" },
       ]),
     ).toBe("commit:abc123");
@@ -1313,25 +1323,28 @@ describe("canvas tab helpers", () => {
   test("selects the tab to the right before falling back to the left when closing", () => {
     expect(
       getWorkspaceTabKeyAfterClose(
-        ["terminal:1", CHANGES_DIFF_TAB_KEY, fileViewerTabKey("README.md")],
+        [terminalTabKey("1"), CHANGES_DIFF_TAB_KEY, fileViewerTabKey("README.md")],
         CHANGES_DIFF_TAB_KEY,
       ),
     ).toBe(fileViewerTabKey("README.md"));
     expect(
       getWorkspaceTabKeyAfterClose(
-        ["terminal:1", fileViewerTabKey("README.md")],
+        [terminalTabKey("1"), fileViewerTabKey("README.md")],
         fileViewerTabKey("README.md"),
       ),
-    ).toBe("terminal:1");
+    ).toBe(terminalTabKey("1"));
   });
 
   test("returns only the adjacent visible tab when planning a close", () => {
-    expect(getWorkspaceTabClosePlan(["terminal:1"], "terminal:1")).toEqual({
+    expect(getWorkspaceTabClosePlan([terminalTabKey("1")], terminalTabKey("1"))).toEqual({
       nextActiveKey: null,
     });
 
     expect(
-      getWorkspaceTabClosePlan(["terminal:1", fileViewerTabKey("README.md")], "terminal:1"),
+      getWorkspaceTabClosePlan(
+        [terminalTabKey("1"), fileViewerTabKey("README.md")],
+        terminalTabKey("1"),
+      ),
     ).toEqual({
       nextActiveKey: fileViewerTabKey("README.md"),
     });
@@ -1357,35 +1370,44 @@ describe("canvas tab helpers", () => {
     expect(resolveWorkspaceCloseShortcutTarget(0)).toBeNull();
   });
 
-  test("preserves hidden runtime tabs until terminal queries finish loading", () => {
-    expect(reconcileHiddenTerminalTabKeys(["terminal:1", "terminal:2"], [], false)).toEqual([
-      "terminal:1",
-      "terminal:2",
+  test("preserves hidden live tabs until terminal queries finish loading", () => {
+    expect(
+      reconcileHiddenTerminalTabKeys([terminalTabKey("1"), terminalTabKey("2")], [], false),
+    ).toEqual([
+      terminalTabKey("1"),
+      terminalTabKey("2"),
     ]);
 
     expect(
       reconcileHiddenTerminalTabKeys(
-        ["terminal:1", "terminal:2"],
-        ["terminal:2", "terminal:3"],
+        [terminalTabKey("1"), terminalTabKey("2")],
+        [terminalTabKey("2"), terminalTabKey("3")],
         true,
       ),
-    ).toEqual(["terminal:2"]);
+    ).toEqual([terminalTabKey("2")]);
   });
 
   test("moves to adjacent tabs without wrapping", () => {
-    const keys = ["terminal:1", CHANGES_DIFF_TAB_KEY, fileViewerTabKey("README.md")];
+    const keys = [terminalTabKey("1"), CHANGES_DIFF_TAB_KEY, fileViewerTabKey("README.md")];
 
     expect(getWorkspaceAdjacentTabKey(keys, CHANGES_DIFF_TAB_KEY, "next")).toBe(
       fileViewerTabKey("README.md"),
     );
-    expect(getWorkspaceAdjacentTabKey(keys, CHANGES_DIFF_TAB_KEY, "previous")).toBe("terminal:1");
+    expect(getWorkspaceAdjacentTabKey(keys, CHANGES_DIFF_TAB_KEY, "previous")).toBe(
+      terminalTabKey("1"),
+    );
     expect(getWorkspaceAdjacentTabKey(keys, fileViewerTabKey("README.md"), "next")).toBeNull();
   });
 
   test("maps numeric shortcuts to visible tab positions", () => {
-    const keys = ["terminal:1", "terminal:2", CHANGES_DIFF_TAB_KEY, fileViewerTabKey("README.md")];
+    const keys = [
+      terminalTabKey("1"),
+      terminalTabKey("2"),
+      CHANGES_DIFF_TAB_KEY,
+      fileViewerTabKey("README.md"),
+    ];
 
-    expect(getWorkspaceTabKeyByIndex(keys, 1)).toBe("terminal:1");
+    expect(getWorkspaceTabKeyByIndex(keys, 1)).toBe(terminalTabKey("1"));
     expect(getWorkspaceTabKeyByIndex(keys, 3)).toBe(CHANGES_DIFF_TAB_KEY);
     expect(getWorkspaceTabKeyByIndex(keys, 9)).toBe(fileViewerTabKey("README.md"));
   });
@@ -1393,19 +1415,19 @@ describe("canvas tab helpers", () => {
   test("reorders visible tab keys based on drag placement", () => {
     expect(
       reorderWorkspaceTabKeys(
-        ["terminal:1", CHANGES_DIFF_TAB_KEY, fileViewerTabKey("README.md")],
-        "terminal:1",
+        [terminalTabKey("1"), CHANGES_DIFF_TAB_KEY, fileViewerTabKey("README.md")],
+        terminalTabKey("1"),
         fileViewerTabKey("README.md"),
         "after",
       ),
-    ).toEqual([CHANGES_DIFF_TAB_KEY, fileViewerTabKey("README.md"), "terminal:1"]);
+    ).toEqual([CHANGES_DIFF_TAB_KEY, fileViewerTabKey("README.md"), terminalTabKey("1")]);
   });
 
   test("shifts intervening tabs left when previewing a drag to the right", () => {
     expect(
       getWorkspaceTabDragShiftDirection(
-        ["terminal:1", CHANGES_DIFF_TAB_KEY, fileViewerTabKey("README.md")],
-        "terminal:1",
+        [terminalTabKey("1"), CHANGES_DIFF_TAB_KEY, fileViewerTabKey("README.md")],
+        terminalTabKey("1"),
         fileViewerTabKey("README.md"),
         "after",
         CHANGES_DIFF_TAB_KEY,
@@ -1414,8 +1436,8 @@ describe("canvas tab helpers", () => {
 
     expect(
       getWorkspaceTabDragShiftDirection(
-        ["terminal:1", CHANGES_DIFF_TAB_KEY, fileViewerTabKey("README.md")],
-        "terminal:1",
+        [terminalTabKey("1"), CHANGES_DIFF_TAB_KEY, fileViewerTabKey("README.md")],
+        terminalTabKey("1"),
         fileViewerTabKey("README.md"),
         "after",
         fileViewerTabKey("README.md"),
@@ -1426,19 +1448,19 @@ describe("canvas tab helpers", () => {
   test("shifts intervening tabs right when previewing a drag to the left", () => {
     expect(
       getWorkspaceTabDragShiftDirection(
-        ["terminal:1", CHANGES_DIFF_TAB_KEY, fileViewerTabKey("README.md")],
+        [terminalTabKey("1"), CHANGES_DIFF_TAB_KEY, fileViewerTabKey("README.md")],
         fileViewerTabKey("README.md"),
-        "terminal:1",
+        terminalTabKey("1"),
         "before",
-        "terminal:1",
+        terminalTabKey("1"),
       ),
     ).toBe(1);
 
     expect(
       getWorkspaceTabDragShiftDirection(
-        ["terminal:1", CHANGES_DIFF_TAB_KEY, fileViewerTabKey("README.md")],
+        [terminalTabKey("1"), CHANGES_DIFF_TAB_KEY, fileViewerTabKey("README.md")],
         fileViewerTabKey("README.md"),
-        "terminal:1",
+        terminalTabKey("1"),
         "before",
         CHANGES_DIFF_TAB_KEY,
       ),

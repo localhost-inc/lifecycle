@@ -819,22 +819,8 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
 
 - (NSView *)hitTest:(NSPoint)point {
   if (self.pointerPassthrough) {
-    // During a drag-and-drop operation we still need to accept drops even when
-    // pointer passthrough is active (terminal unfocused).  Detect an active drag
-    // by checking whether the left mouse button is held and the drag pasteboard
-    // contains file/image content we handle.
-    if (NSEvent.pressedMouseButtons & 1) {
-      NSPasteboard *dragPasteboard = [NSPasteboard pasteboardWithName:NSPasteboardNameDrag];
-      NSArray<NSPasteboardType> *types = dragPasteboard.types;
-      if ([types containsObject:NSPasteboardTypeFileURL] ||
-          [types containsObject:NSPasteboardTypeTIFF] ||
-          [types containsObject:NSPasteboardTypePNG]) {
-        return [super hitTest:point];
-      }
-    }
     return nil;
   }
-
   return [super hitTest:point];
 }
 
@@ -2419,11 +2405,26 @@ bool lifecycle_native_terminal_sync(void *webview_view,
         ghostty_surface_set_occlusion(view.surface, !config->hidden);
       }
 
-      view.pointerPassthrough = config->pointer_passthrough;
-      view.wantsFocus = config->focused && !config->hidden;
-      view.hidden = config->hidden;
+      BOOL previousPointerPassthrough = view.pointerPassthrough;
+      BOOL previousWantsFocus = view.wantsFocus;
+      BOOL previousHidden = view.hidden;
+      BOOL nextPointerPassthrough = config->pointer_passthrough;
+      BOOL nextWantsFocus = config->focused && !config->hidden;
+      BOOL nextHidden = config->hidden;
+
+      view.pointerPassthrough = nextPointerPassthrough;
+      view.wantsFocus = nextWantsFocus;
+      if (previousHidden != nextHidden) {
+        view.hidden = nextHidden;
+      }
       [view syncGhosttyFocusState];
-      [view requestFocusIfNeeded];
+
+      BOOL focusStateChanged = previousPointerPassthrough != nextPointerPassthrough ||
+                               previousWantsFocus != nextWantsFocus ||
+                               previousHidden != nextHidden;
+      if (focusStateChanged && previousHidden == nextHidden) {
+        [view requestFocusIfNeeded];
+      }
 
       gLastError = nil;
       return true;

@@ -1,5 +1,6 @@
 import type { TerminalRecord } from "@lifecycle/contracts";
-import { Alert, AlertDescription, EmptyState, themeAppearance, useTheme } from "@lifecycle/ui";
+import { Alert, AlertDescription, EmptyState, themeAppearance } from "@lifecycle/ui";
+import { useSettings } from "@/features/settings/state/settings-provider";
 import { TerminalSquare } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { subscribeToShellResize } from "@/components/layout/shell-resize-provider";
@@ -83,6 +84,16 @@ export function resolveNativeTerminalSurfaceInteraction({
     focused: visible && focused && !shellResizeInProgress,
     pointerPassthrough: shellResizeInProgress || !focused,
   };
+}
+
+export function shouldRequestNativeTerminalSurfaceFocus({
+  nextFocused,
+  previousFocused,
+}: {
+  nextFocused: boolean;
+  previousFocused: boolean;
+}): boolean {
+  return nextFocused && !previousFocused;
 }
 
 export function createNativeTerminalSurfaceLeaseRegistry(): Map<
@@ -251,7 +262,7 @@ export function NativeTerminalSurface({
   tabDragInProgress = false,
   terminal,
 }: NativeTerminalSurfaceProps) {
-  const { resolvedTheme } = useTheme();
+  const { resolvedTheme } = useSettings();
   const ownerRef = useRef(Symbol("native-terminal-surface-owner"));
   const hostRef = useRef<HTMLDivElement | null>(null);
   const lifecycleTokenRef = useRef(0);
@@ -260,6 +271,7 @@ export function NativeTerminalSurface({
   const shellResizeInProgressRef = useRef(false);
   const syncResizeFrameRef = useRef<() => Promise<void>>(async () => {});
   const syncCoordinatorRef = useRef<NativeTerminalSurfaceSyncCoordinator | null>(null);
+  const terminalFocusActiveRef = useRef(false);
   const syncSurfaceRef = useRef<() => Promise<void>>(async () => {});
   const [attachState, setAttachState] = useState<NativeTerminalSurfaceAttachState>(() =>
     terminalHasLiveSession(terminal.status) ? "attaching" : "attached",
@@ -340,11 +352,16 @@ export function NativeTerminalSurface({
         shellResizeInProgress: shellResizeInProgressRef.current,
         visible,
       });
+      const shouldRequestFocus = shouldRequestNativeTerminalSurfaceFocus({
+        nextFocused: interaction.focused,
+        previousFocused: terminalFocusActiveRef.current,
+      });
+      terminalFocusActiveRef.current = interaction.focused;
       const terminalTheme = resolveTerminalTheme(host, resolvedTheme);
       const terminalFontFamily = readNativeTerminalMonospaceFontFamily();
 
       if (
-        interaction.focused &&
+        shouldRequestFocus &&
         document.activeElement instanceof HTMLElement &&
         document.activeElement !== document.body
       ) {
@@ -448,6 +465,7 @@ export function NativeTerminalSurface({
   useEffect(() => {
     setAttachState(hasLiveSession ? "attaching" : "attached");
     setError(null);
+    terminalFocusActiveRef.current = false;
   }, [hasLiveSession, terminal.id]);
 
   useEffect(() => {

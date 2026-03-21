@@ -1,11 +1,27 @@
+use crate::platform::app_config::AppConfigPath;
 use crate::shared::errors::LifecycleError;
 use serde::Serialize;
-use tauri::WebviewWindow;
+use tauri::{State, WebviewWindow};
 
 #[derive(Clone, Copy, Serialize)]
 pub struct WindowMousePosition {
     x: f64,
     y: f64,
+}
+
+#[tauri::command]
+pub fn get_app_config(
+    config_path: State<'_, AppConfigPath>,
+) -> Result<serde_json::Value, LifecycleError> {
+    crate::platform::app_config::read_config(&config_path.0)
+}
+
+#[tauri::command]
+pub fn write_app_config(
+    config_path: State<'_, AppConfigPath>,
+    config: serde_json::Value,
+) -> Result<(), LifecycleError> {
+    crate::platform::app_config::write_config(&config_path.0, &config)
 }
 
 #[tauri::command]

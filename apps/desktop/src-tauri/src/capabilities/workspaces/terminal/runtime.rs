@@ -25,7 +25,7 @@ use super::native_surface::{
 };
 use super::persistence::{
     insert_terminal_record, load_terminal_harness_launch_config, load_terminal_record,
-    load_workspace_runtime, next_terminal_label, update_terminal_state,
+    load_terminal_workspace_context, next_terminal_label, update_terminal_state,
     workspace_has_interactive_terminal_context,
 };
 use super::types::{NativeTerminalSurfaceFrameSyncInput, NativeTerminalSurfaceSyncInput};
@@ -52,15 +52,15 @@ fn terminal_status(record: &TerminalRecord) -> Result<TerminalStatus, LifecycleE
     TerminalStatus::from_str(&record.status)
 }
 
-fn require_interactive_workspace_runtime(
+fn require_interactive_workspace_context(
     db_path: &str,
     workspace_id: &str,
     target: &str,
 ) -> Result<super::persistence::TerminalWorkspaceContext, LifecycleError> {
-    let workspace = load_workspace_runtime(db_path, workspace_id)?;
+    let workspace = load_terminal_workspace_context(db_path, workspace_id)?;
     if !workspace_has_interactive_terminal_context(&workspace) {
         return Err(LifecycleError::InvalidStateTransition {
-            from: workspace.status.as_str().to_string(),
+            from: "workspace_inactive".to_string(),
             to: target.to_string(),
         });
     }
@@ -103,7 +103,7 @@ pub(crate) async fn create_terminal(
     let workspace_controllers = app.state::<WorkspaceControllerRegistryHandle>();
     let controller = workspace_controllers.get_or_create(&workspace_id).await;
     let _mutation_guard = controller.acquire_mutation_guard().await?;
-    require_interactive_workspace_runtime(&db, &workspace_id, "terminal_access")?;
+    require_interactive_workspace_context(&db, &workspace_id, "terminal_access")?;
 
     let launch_type = TerminalType::from_str(&launch_type)?;
     let label = next_terminal_label(
@@ -175,7 +175,7 @@ pub(crate) async fn sync_native_terminal_surface(
     }
 
     let workspace =
-        require_interactive_workspace_runtime(&db, &terminal.workspace_id, "terminal_access")?;
+        require_interactive_workspace_context(&db, &terminal.workspace_id, "terminal_access")?;
     let controller = lookup_workspace_controller(window.app_handle(), &terminal.workspace_id).await;
     let _mutation_guard = controller.acquire_mutation_guard().await?;
     let launch_type = TerminalType::from_str(&terminal.launch_type)?;

@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import type {
-  EnvironmentRecord,
   GitStatusResult,
   ServiceRecord,
   WorkspaceRecord,
@@ -15,11 +14,11 @@ const baseWorkspace: WorkspaceRecord = {
   id: "workspace_1",
   project_id: "project_1",
   name: "Workspace",
-  kind: "managed",
+  checkout_type: "worktree",
   source_ref: "lifecycle/workspace",
   git_sha: "abcdef12",
   worktree_path: "/tmp/workspace",
-  mode: "local",
+  target: "host",
   manifest_fingerprint: null,
   created_by: null,
   source_workspace_id: null,
@@ -27,20 +26,14 @@ const baseWorkspace: WorkspaceRecord = {
   updated_at: "2026-03-14T10:00:00.000Z",
   last_active_at: "2026-03-14T10:00:00.000Z",
   expires_at: null,
-};
-
-const baseEnvironment: EnvironmentRecord = {
-  workspace_id: "workspace_1",
-  status: "idle",
+  status: "active",
   failure_reason: null,
   failed_at: null,
-  created_at: "2026-03-14T10:00:00.000Z",
-  updated_at: "2026-03-14T10:00:00.000Z",
 };
 
 const readyService: ServiceRecord = {
   id: "svc_1",
-  environment_id: "workspace_1",
+  workspace_id: "workspace_1",
   name: "web",
   status: "ready",
   status_reason: null,
@@ -78,28 +71,28 @@ describe("builtin extension badges", () => {
   test("derives environment badge tone from workspace and service state", () => {
     expect(
       getEnvironmentExtensionBadge({
-        environment: { ...baseEnvironment, status: "running" },
+        workspace: { ...baseWorkspace, status: "active" },
         services: [readyService],
       }),
     ).toEqual({ kind: "dot", tone: "success" });
 
     expect(
       getEnvironmentExtensionBadge({
-        environment: { ...baseEnvironment, status: "starting" },
+        workspace: { ...baseWorkspace, status: "preparing" },
         services: [{ ...readyService, status: "starting" }],
       }),
     ).toEqual({ kind: "dot", tone: "warning" });
 
     expect(
       getEnvironmentExtensionBadge({
-        environment: { ...baseEnvironment, failure_reason: "service_start_failed" },
+        workspace: { ...baseWorkspace, failure_reason: "service_start_failed" },
         services: [{ ...readyService, status: "failed" }],
       }),
     ).toEqual({ kind: "dot", tone: "danger" });
 
     expect(
       getEnvironmentExtensionBadge({
-        environment: baseEnvironment,
+        workspace: baseWorkspace,
         services: [],
       }),
     ).toEqual({ kind: "dot", tone: "neutral" });
@@ -110,7 +103,6 @@ describe("builtin extension slots", () => {
   test("declares git-owned canvas document kinds only for tab-backed history surfaces", () => {
     const slots = getBuiltinExtensionSlots({
       config: null,
-      environment: baseEnvironment,
       gitStatus: undefined,
       hasManifest: false,
       launchActions: {

@@ -5,7 +5,7 @@ use crate::WorkspaceControllerRegistryHandle;
 use rusqlite::params;
 use tauri::{AppHandle, Manager};
 
-use super::kind::is_root_workspace_kind;
+use super::checkout_type::is_root_workspace_checkout_type;
 use super::query::{self, TerminalRecord, WorkspaceRecord};
 use super::terminal::load_terminal_record;
 
@@ -30,7 +30,7 @@ impl TitleOrigin {
 struct WorkspaceIdentityContext {
     current_name: String,
     name_origin: String,
-    kind: String,
+    checkout_type: String,
     current_source_ref: String,
     source_ref_origin: String,
     project_path: String,
@@ -95,7 +95,7 @@ pub async fn maybe_apply_generated_workspace_identity(
         .acquire_mutation_guard(workspace_id)
         .await?;
     let context = load_workspace_identity_context(db_path, workspace_id)?;
-    if is_root_workspace_kind(&context.kind) {
+    if is_root_workspace_checkout_type(&context.checkout_type) {
         return Ok(None);
     }
     if context.name_origin != TitleOrigin::Default.as_str()
@@ -160,7 +160,7 @@ async fn update_workspace_identity(
     }
 
     let mut next_worktree_path = context.worktree_path.clone();
-    if !is_root_workspace_kind(&context.kind) && context.current_name != next_name {
+    if !is_root_workspace_checkout_type(&context.checkout_type) && context.current_name != next_name {
         if let Some(current_worktree_path) = context.worktree_path.as_deref() {
             next_worktree_path = Some(
                 worktree::move_worktree(
@@ -259,7 +259,7 @@ async fn determine_workspace_branch_rename_disposition(
     workspace_id: &str,
     next_source_ref: &str,
 ) -> Result<WorkspaceBranchRenameDisposition, LifecycleError> {
-    if is_root_workspace_kind(&context.kind) {
+    if is_root_workspace_checkout_type(&context.checkout_type) {
         return Ok(WorkspaceBranchRenameDisposition::Skip(
             "root workspaces do not rename the project branch",
         ));
@@ -277,9 +277,9 @@ async fn determine_workspace_branch_rename_disposition(
         ));
     };
 
-    if !worktree::is_managed_workspace_branch(&context.current_source_ref, workspace_id) {
+    if !worktree::is_lifecycle_worktree_branch(&context.current_source_ref, workspace_id) {
         return Ok(WorkspaceBranchRenameDisposition::Skip(
-            "current branch is not lifecycle-managed",
+            "current branch is not a lifecycle worktree branch",
         ));
     }
 
@@ -300,7 +300,7 @@ async fn determine_workspace_branch_rename_disposition(
 }
 
 fn next_source_ref_origin(context: &WorkspaceIdentityContext, origin: TitleOrigin) -> String {
-    if is_root_workspace_kind(&context.kind) {
+    if is_root_workspace_checkout_type(&context.checkout_type) {
         context.source_ref_origin.clone()
     } else {
         origin.as_str().to_string()
@@ -344,7 +344,7 @@ fn load_workspace_identity_context(
 ) -> Result<WorkspaceIdentityContext, LifecycleError> {
     let conn = open_db(db_path)?;
     conn.query_row(
-        "SELECT workspace.name, workspace.name_origin, workspace.kind, workspace.source_ref, workspace.source_ref_origin, workspace.worktree_path, project.path
+        "SELECT workspace.name, workspace.name_origin, workspace.checkout_type, workspace.source_ref, workspace.source_ref_origin, workspace.worktree_path, project.path
          FROM workspace
          INNER JOIN project ON project.id = workspace.project_id
          WHERE workspace.id = ?1
@@ -354,7 +354,7 @@ fn load_workspace_identity_context(
             Ok(WorkspaceIdentityContext {
                 current_name: row.get(0)?,
                 name_origin: row.get(1)?,
-                kind: row.get(2)?,
+                checkout_type: row.get(2)?,
                 current_source_ref: row.get(3)?,
                 source_ref_origin: row.get(4)?,
                 worktree_path: row.get(5)?,
@@ -511,7 +511,7 @@ mod tests {
         repo_path: &Path,
         workspace_name: &str,
         workspace_id: &str,
-        kind: &str,
+        checkout_type: &str,
         name_origin: &str,
         source_ref_origin: &str,
     ) -> (String, String) {
@@ -544,14 +544,15 @@ mod tests {
         )
         .expect("insert project");
         conn.execute(
-            "INSERT INTO workspace (id, project_id, name, name_origin, kind, source_ref, source_ref_origin, worktree_path, mode)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'local')",
+            "INSERT INTO workspace (
+                id, project_id, name, name_origin, checkout_type, source_ref, source_ref_origin, worktree_path, target, status
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'host', 'active')",
             rusqlite::params![
                 workspace_id,
                 "project_1",
                 workspace_name,
                 name_origin,
-                kind,
+                checkout_type,
                 source_ref,
                 source_ref_origin,
                 worktree_path
@@ -599,7 +600,7 @@ mod tests {
             &repo_path,
             "amber-atlas",
             workspace_id,
-            "managed",
+            "worktree",
             "default",
             "default",
         )
@@ -677,7 +678,7 @@ mod tests {
             &repo_path,
             "amber-atlas",
             workspace_id,
-            "managed",
+            "worktree",
             "manual",
             "manual",
         )
@@ -758,8 +759,8 @@ mod tests {
         .expect("insert project");
         conn.execute(
             "INSERT INTO workspace (
-                id, project_id, name, name_origin, kind, source_ref, source_ref_origin, worktree_path, mode
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                id, project_id, name, name_origin, checkout_type, source_ref, source_ref_origin, worktree_path, target, status
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             rusqlite::params![
                 "workspace_root",
                 "project_1",
@@ -769,7 +770,8 @@ mod tests {
                 source_ref,
                 "manual",
                 repo_path_str,
-                "local"
+                "host",
+                "active"
             ],
         )
         .expect("insert root workspace");
@@ -824,8 +826,8 @@ mod tests {
         .expect("insert project");
         conn.execute(
             "INSERT INTO workspace (
-                id, project_id, name, name_origin, kind, source_ref, source_ref_origin, worktree_path, mode
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                id, project_id, name, name_origin, checkout_type, source_ref, source_ref_origin, worktree_path, target, status
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             rusqlite::params![
                 "workspace_root",
                 "project_1",
@@ -835,7 +837,8 @@ mod tests {
                 source_ref,
                 "default",
                 repo_path_str,
-                "local"
+                "host",
+                "active"
             ],
         )
         .expect("insert root workspace");
@@ -868,7 +871,7 @@ mod tests {
         name: &str,
     ) -> Result<Option<WorkspaceRecord>, LifecycleError> {
         let context = load_workspace_identity_context(db_path, workspace_id)?;
-        if is_root_workspace_kind(&context.kind) {
+        if is_root_workspace_checkout_type(&context.checkout_type) {
             return Ok(None);
         }
         if context.name_origin != TitleOrigin::Default.as_str()

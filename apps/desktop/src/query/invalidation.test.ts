@@ -34,30 +34,32 @@ describe("getInvalidationTargetsForLifecycleEvent", () => {
     ]);
   });
 
-  test("targets environment logs only when environment enters starting", () => {
+  test("targets workspace logs only when the workspace enters preparing", () => {
     const startingEvent: LifecycleEvent = {
       id: "event-1",
-      kind: "environment.status_changed",
+      kind: "workspace.status_changed",
       failure_reason: null,
       occurred_at: "2026-03-20T12:00:00.000Z",
-      status: "starting",
+      status: "preparing",
       workspace_id: "ws-1",
     };
     const idleEvent: LifecycleEvent = {
       ...startingEvent,
       id: "event-2",
-      status: "idle",
+      status: "active",
     };
 
     expect(getInvalidationTargetsForLifecycleEvent(startingEvent)).toEqual([
-      { kind: "exact", key: workspaceKeys.environment("ws-1") },
+      { kind: "exact", key: workspaceKeys.byProject() },
+      { kind: "exact", key: workspaceKeys.detail("ws-1") },
       { kind: "exact", key: workspaceKeys.services("ws-1") },
       { kind: "exact", key: workspaceKeys.serviceLogs("ws-1") },
       { kind: "exact", key: workspaceKeys.activity("ws-1") },
     ]);
 
     expect(getInvalidationTargetsForLifecycleEvent(idleEvent)).toEqual([
-      { kind: "exact", key: workspaceKeys.environment("ws-1") },
+      { kind: "exact", key: workspaceKeys.byProject() },
+      { kind: "exact", key: workspaceKeys.detail("ws-1") },
       { kind: "exact", key: workspaceKeys.services("ws-1") },
       { kind: "exact", key: workspaceKeys.activity("ws-1") },
     ]);

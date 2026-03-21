@@ -6,10 +6,10 @@ import {
 } from "@/features/workspaces/lib/workspace-display";
 
 describe("workspace display", () => {
-  test("keeps managed workspace names as the primary display label", () => {
+  test("keeps worktree workspace names as the primary display label", () => {
     expect(
       getWorkspaceDisplayName({
-        kind: "managed",
+        checkout_type: "worktree",
         name: "Auth Flow Fix",
         source_ref: "lifecycle/auth-flow-fix",
       }),
@@ -20,7 +20,7 @@ describe("workspace display", () => {
     expect(
       getWorkspaceDisplayName(
         {
-          kind: "root",
+          checkout_type: "root",
           name: "Root",
           source_ref: "main",
         },
@@ -32,7 +32,7 @@ describe("workspace display", () => {
   test("falls back to the stored source ref for root workspaces", () => {
     expect(
       getWorkspaceDisplayName({
-        kind: "root",
+        checkout_type: "root",
         name: "Root",
         source_ref: "main",
       }),
@@ -40,8 +40,8 @@ describe("workspace display", () => {
   });
 
   test("recognizes root workspaces as non-renameable in the inline tree UI", () => {
-    expect(isRootWorkspace({ kind: "root" })).toBeTrue();
-    expect(canInlineRenameWorkspace({ kind: "root" })).toBeFalse();
-    expect(canInlineRenameWorkspace({ kind: "managed" })).toBeTrue();
+    expect(isRootWorkspace({ checkout_type: "root" })).toBeTrue();
+    expect(canInlineRenameWorkspace({ checkout_type: "root" })).toBeFalse();
+    expect(canInlineRenameWorkspace({ checkout_type: "worktree" })).toBeTrue();
   });
 });

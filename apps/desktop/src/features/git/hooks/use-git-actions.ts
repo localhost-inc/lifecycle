@@ -1,4 +1,4 @@
-import type { GitPullRequestSummary, WorkspaceMode } from "@lifecycle/contracts";
+import type { GitPullRequestSummary, WorkspaceTarget } from "@lifecycle/contracts";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   commitGit,
@@ -13,7 +13,7 @@ export interface UseGitActionsOptions {
   onCommitComplete: () => void;
   onOpenPullRequest: (pullRequest: GitPullRequestSummary) => void;
   workspaceId: string;
-  workspaceMode: WorkspaceMode;
+  workspaceTarget: WorkspaceTarget;
   worktreePath: string | null;
 }
 
@@ -38,7 +38,7 @@ export function useGitActions({
   onCommitComplete,
   onOpenPullRequest,
   workspaceId,
-  workspaceMode,
+  workspaceTarget,
   worktreePath,
 }: UseGitActionsOptions): UseGitActionsResult {
   const [actionError, setActionError] = useState<string | null>(null);
@@ -49,7 +49,7 @@ export function useGitActions({
   const [documentVisible, setDocumentVisible] = useState(() =>
     typeof document === "undefined" ? true : document.visibilityState === "visible",
   );
-  const supportsChanges = workspaceMode === "local" && worktreePath !== null;
+  const supportsChanges = workspaceTarget === "host" && worktreePath !== null;
 
   useEffect(() => {
     if (typeof document === "undefined") {

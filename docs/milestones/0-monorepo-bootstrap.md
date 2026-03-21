@@ -64,7 +64,7 @@ docs/
 ### 3) Seed Runtime-Oriented Packages
 
 - [x] Add `packages/contracts` with initial shared types (`workspace`, `workspace_service`, error envelope).
-- [x] Add `packages/backend` and `packages/runtime` with `Backend` and `Runtime` interface placeholders.
+- [x] Add `packages/backend` and `packages/workspace` with `Backend` and `Workspace` interface placeholders.
 - [x] Add `packages/cli` command scaffold with no-op `lifecycle --help`.
 - [x] Add `apps/desktop`, `apps/api`, and `apps/www` starter scaffolds.
 

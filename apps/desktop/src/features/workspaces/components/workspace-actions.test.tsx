@@ -9,17 +9,20 @@ const interactiveWorkspace: WorkspaceRecord = {
   id: "workspace_1",
   project_id: "project_1",
   name: "Fix Landing Hero",
-  kind: "managed",
+  checkout_type: "worktree",
   source_ref: "lifecycle/fix-landing-hero",
   git_sha: "abcdef1234567890",
   worktree_path: "/tmp/workspace_1",
-  mode: "local",
+  target: "host",
   created_by: null,
   source_workspace_id: null,
   created_at: "2026-03-08T10:00:00.000Z",
   updated_at: "2026-03-08T10:00:00.000Z",
   last_active_at: "2026-03-08T10:00:00.000Z",
   expires_at: null,
+  status: "active",
+  failure_reason: null,
+  failed_at: null,
 };
 
 describe("WorkspaceActions", () => {

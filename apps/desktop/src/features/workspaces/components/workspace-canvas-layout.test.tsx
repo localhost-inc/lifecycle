@@ -1,16 +1,11 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { ThemeProvider } from "@lifecycle/ui";
 import { QueryProvider } from "@/query";
-import { SettingsProvider } from "@/features/settings/state/app-settings-provider";
+import { SettingsProvider } from "@/features/settings/state/settings-provider";
 
-function withTheme(element: ReturnType<typeof createElement>) {
-  return createElement(ThemeProvider, {
-    children: element,
-    defaultPreference: { theme: "light" },
-    storageKey: "lifecycle.desktop.theme.test",
-  });
+function withConfig(element: ReturnType<typeof createElement>) {
+  return createElement(SettingsProvider, { children: element });
 }
 
 describe("WorkspaceCanvas layout", () => {
@@ -42,13 +37,11 @@ describe("WorkspaceCanvas layout", () => {
 
     const { WorkspaceCanvas } = await import("./workspace-canvas");
     const markup = renderToStaticMarkup(
-      withTheme(
-        createElement(SettingsProvider, {
-          children: createElement(QueryProvider, {
-            children: createElement(WorkspaceCanvas, {
-              openDocumentRequest: null,
-              workspaceId: "workspace-1",
-            }),
+      withConfig(
+        createElement(QueryProvider, {
+          children: createElement(WorkspaceCanvas, {
+            openDocumentRequest: null,
+            workspaceId: "workspace-1",
           }),
         }),
       ),
@@ -73,7 +66,7 @@ describe("WorkspaceCanvas layout", () => {
 
     const { WorkspacePaneTree } = await import("./workspace-pane-tree");
     const markup = renderToStaticMarkup(
-      withTheme(
+      withConfig(
         createElement(WorkspacePaneTree, {
           activePaneId: "pane-root",
           creatingSelection: null,
@@ -151,7 +144,7 @@ describe("WorkspaceCanvas layout", () => {
 
     const { WorkspacePaneTree } = await import("./workspace-pane-tree");
     const markup = renderToStaticMarkup(
-      withTheme(
+      withConfig(
         createElement(WorkspacePaneTree, {
           activePaneId: "pane-1",
           creatingSelection: null,
@@ -235,7 +228,7 @@ describe("WorkspaceCanvas layout", () => {
 
     const { WorkspacePaneTree } = await import("./workspace-pane-tree");
     const markup = renderToStaticMarkup(
-      withTheme(
+      withConfig(
         createElement(WorkspacePaneTree, {
           activePaneId: "pane-root",
           creatingSelection: null,

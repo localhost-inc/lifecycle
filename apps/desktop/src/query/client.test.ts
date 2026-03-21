@@ -8,16 +8,6 @@ function createMockSource() {
     async getWorkspace() {
       return null;
     },
-    async getWorkspaceEnvironment() {
-      return {
-        workspace_id: "ws-1",
-        status: "idle",
-        failure_reason: null,
-        failed_at: null,
-        created_at: "2026-03-09T00:00:00Z",
-        updated_at: "2026-03-09T00:00:00Z",
-      };
-    },
     async getWorkspaceActivity() {
       return [];
     },
@@ -128,11 +118,11 @@ describe("QueryClient", () => {
     cleanup.push(() => client.dispose());
 
     let fetchCount = 0;
-    const descriptor: QueryDescriptor<{ id: string; status: string }> = {
+    const descriptor: QueryDescriptor<{ id: string; phase: string }> = {
       key: ["workspace", "ws-1"],
       async fetch() {
         fetchCount += 1;
-        return { id: "ws-1", status: fetchCount === 1 ? "idle" : "running" };
+        return { id: "ws-1", phase: fetchCount === 1 ? "cold" : "warm" };
       },
     };
 
@@ -141,7 +131,7 @@ describe("QueryClient", () => {
     await flush();
 
     expect(client.getSnapshot(descriptor)).toEqual({
-      data: { id: "ws-1", status: "idle" },
+      data: { id: "ws-1", phase: "cold" },
       error: null,
       status: "ready",
     });
@@ -150,7 +140,7 @@ describe("QueryClient", () => {
     await flush();
 
     expect(client.getSnapshot(descriptor)).toEqual({
-      data: { id: "ws-1", status: "running" },
+      data: { id: "ws-1", phase: "warm" },
       error: null,
       status: "ready",
     });
@@ -161,17 +151,17 @@ describe("QueryClient", () => {
     const client = new QueryClient(source);
     cleanup.push(() => client.dispose());
 
-    const descriptor: QueryDescriptor<{ id: string; status: string }> = {
+    const descriptor: QueryDescriptor<{ id: string; phase: string }> = {
       key: ["workspace", "ws-1"],
       async fetch() {
-        return { id: "ws-1", status: "idle" };
+        return { id: "ws-1", phase: "cold" };
       },
     };
 
-    client.setData(descriptor, { id: "ws-1", status: "running" });
+    client.setData(descriptor, { id: "ws-1", phase: "warm" });
 
     expect(client.getSnapshot(descriptor)).toEqual({
-      data: { id: "ws-1", status: "running" },
+      data: { id: "ws-1", phase: "warm" },
       error: null,
       status: "ready",
     });

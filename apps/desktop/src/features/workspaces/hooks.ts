@@ -1,5 +1,4 @@
 import type {
-  EnvironmentRecord,
   LifecycleEvent,
   ServiceRecord,
   WorkspaceRecord,
@@ -15,7 +14,6 @@ import type {
 } from "@/features/workspaces/api";
 import {
   createWorkspaceActivityQuery,
-  createWorkspaceEnvironmentQuery,
   createWorkspaceFileQuery,
   createWorkspaceFileTreeQuery,
   createWorkspaceManifestQuery,
@@ -34,14 +32,6 @@ export function useWorkspace(workspaceId: string | null): QueryResult<WorkspaceR
     () => (workspaceId ? createWorkspaceQuery(workspaceId) : null),
     [workspaceId],
   );
-
-  return useQuery(descriptor);
-}
-
-export function useWorkspaceEnvironment(
-  workspaceId: string,
-): QueryResult<EnvironmentRecord> {
-  const descriptor = useMemo(() => createWorkspaceEnvironmentQuery(workspaceId), [workspaceId]);
 
   return useQuery(descriptor);
 }

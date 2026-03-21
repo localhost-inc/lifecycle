@@ -8,32 +8,30 @@ Apply the following workspace contracts as context for the current task. All wor
 
 ---
 
-# Backend + Runtime
+# Backend + Workspace
 
-Lifecycle uses two explicit backend seams:
+Lifecycle uses two explicit seams:
 
-1. `Backend` — projects, workspaces, ownership, manifest reads, branch lookup, create/rename/destroy, and workspace-mode routing
-2. `Runtime` — live workspace-scoped execution once a workspace exists: environment, services, terminals, files, git, activity, and service logs
+1. `Backend` — projects, workspaces, ownership, manifest reads, branch lookup, and workspace create/rename/destroy
+2. `WorkspaceClient` — live workspace-scoped execution once a workspace exists: services, terminals, files, git, activity, and service logs
 
-Host-native concerns such as OS app launching and native terminal surface synchronization stay outside both seams. Workspace mode is selected **per-workspace** at creation time and stored as `workspace.mode`.
+Host-native concerns such as OS app launching and native terminal surface synchronization stay outside both seams. Workspace placement is selected **per-workspace** at creation time and stored as `workspace.target`.
 
-## Workspace vs Environment Boundary
+## Workspace Boundary
 
-Lifecycle should model three layers explicitly:
+Lifecycle models the workspace as the concrete runnable instance:
 
-1. `workspace` — durable shell, identity, worktree ownership, provider mode, archive metadata
-2. `environment` — singleton execution layer attached to the workspace; start/stop/reset/sleep/wake/fail semantics live here
-3. `service` — per-service runtime inside the environment
+1. `workspace` — identity, worktree ownership, target placement, preparation/archive state, and failure metadata
+2. `service` — per-service execution inside the workspace
+3. `terminal` — per-session interactive surface attached to the workspace
 
-Environment lifecycle facts are stored separately from the workspace shell, keyed by `workspace_id`. Every persisted workspace must have exactly one environment row. Desktop startup migrations repair any historical workspace row that is missing its singleton environment.
+## Workspace Checkout Type (Local)
 
-## Workspace Kind (Local)
-
-`workspace.kind` captures how a local workspace gets its git context.
+`workspace.checkout_type` captures how a local workspace gets its git context.
 
 1. `root` — backed directly by `project.path`; `workspace.worktree_path` resolves to the repo root
-2. `managed` — backed by a Lifecycle-created derived git worktree; Lifecycle owns the derived branch/worktree naming and cleanup lifecycle
-3. `kind` is distinct from `workspace.mode`: `mode` answers who is authoritative (`local|cloud`), `kind` answers how the local workspace's git context is sourced
+2. `worktree` — backed by a Lifecycle-created derived git worktree; Lifecycle owns the derived branch/worktree naming and cleanup lifecycle
+3. `checkout_type` is distinct from `workspace.target`: `target` answers where the workspace runs (`host|docker|remote_host|cloud`), `checkout_type` answers how the local workspace's git context is sourced
 
 ## Interface
 
@@ -51,11 +49,10 @@ interface Backend {
   getWorkspace(workspace_id) → workspace | null
 }
 
-interface Runtime {
-  startEnvironment(workspace + manifest_json + manifest_fingerprint + service_names?) → service_statuses
+interface WorkspaceClient {
+  startServices(workspace + manifest_json + manifest_fingerprint + service_names?) → service_statuses
   healthCheck(manifest.environment[kind=service].health_check) → pass/fail per service
-  stopEnvironment(workspace_id) → void
-  getEnvironment(workspace_id) → environment
+  stopServices(workspace_id) → void
   getActivity(workspace_id) → lifecycle_events[]
   getServiceLogs(workspace_id) → service_logs[]
   getServices(workspace_id) → services[]
@@ -93,28 +90,28 @@ interface Runtime {
 
 1. `createWorkspace`, `renameWorkspace`, `destroyWorkspace`, and `getWorkspace` are backend operations.
 2. Project list reads, manifest reads, and current-branch lookup are backend operations.
-3. `startEnvironment`, `stopEnvironment`, and reset flows operate on the environment attached to a workspace and belong to `Runtime`.
-4. File, git, terminal, activity, environment, service, and service-log reads are runtime operations.
-5. `startEnvironment(service_names?)` may target a single service chain; runtimes must honor manifest `depends_on` edges.
-6. When `startEnvironment(service_names?)` is called against an already-active workspace, runtimes should treat `ready` dependency services as satisfied boundaries.
+3. `startServices`, `stopServices`, and reset flows operate on the workspace's runnable services and belong to `WorkspaceClient`.
+4. File, git, terminal, activity, service, and service-log reads are workspace operations.
+5. `startServices(service_names?)` may target a single service chain; workspace execution must honor manifest `depends_on` edges.
+6. When `startServices(service_names?)` is called against an already-active workspace, `ready` dependency services should be treated as satisfied boundaries.
 7. Local create/start flows must carry the exact manifest content plus `manifest_fingerprint`.
 8. Backend create owns workspace identity, source-ref derivation, and the returned workspace record. Desktop clients must not synthesize those fields locally.
 9. Desktop query reads should not bypass these seams with transport-local command calls.
-10. Frontend consumers should read concrete workspace-scoped facts through separate queries (`workspace`, `environment`, `services`, `terminals`, `activity`, `service_logs`) instead of depending on a synthetic snapshot aggregate.
+10. Frontend consumers should read concrete workspace-scoped facts through separate queries (`workspace`, `services`, `terminals`, `activity`, `service_logs`) instead of depending on a synthetic snapshot aggregate.
 11. Backend-owned live selectors should stay split by concern as well; do not collapse activity, service logs, and other unrelated facts into a synthetic controller facts bag.
 12. Frontend manifest watchers may invalidate workspace queries when `lifecycle.json` changes, but reconciliation of persisted idle service state must remain backend-owned.
 
 ## Execution Model
 
-`lifecycle.json` describes **WHAT** to run. The `Backend` decides who owns the workspace, and the `Runtime` decides **WHERE** and **HOW** it runs.
+`lifecycle.json` describes **WHAT** to run. The `Backend` decides workspace identity and target placement, and `WorkspaceClient` owns the live workspace operations.
 
-1. All workspaces are lifecycle-managed execution environments backed by a `Runtime`.
-2. V1 ships both `CloudRuntime` and `LocalRuntime`, with a shared `Backend` authority boundary.
-3. Platform stance is Cloudflare-first for cloud execution.
+1. All workspaces are lifecycle-managed execution instances backed by `WorkspaceClient`.
+2. V1 ships a host-backed workspace implementation.
+3. `docker`, `remote_host`, and `cloud` are explicit workspace targets, but the desktop client currently fails fast for non-`host` targets.
 
 ## Event Foundation Contract
 
-1. Backend and runtime mutations publish normalized fact events into the Lifecycle event foundation.
+1. Backend and workspace mutations publish normalized fact events into the Lifecycle event foundation.
 2. The desktop query cache, notifications, metrics, and future plugins are consumers of that foundation.
 3. Commands may expose `before|after|failed` hooks.
 4. High-frequency terminal rendering stays inside the native terminal host.
@@ -122,45 +119,36 @@ interface Runtime {
 ## Terminal Session Contract (M3+)
 
 1. Backend operations stay typed and imperative (`create`, `detach`, `kill`).
-2. Session runtime stays runtime-owned (local: native session; cloud: sandbox PTY).
-3. Desktop-only geometry, visibility, focus, theme, and font synchronization stay outside the runtime interface.
+2. Session execution stays terminal-owned (local: native session; cloud: sandbox PTY).
+3. Desktop-only geometry, visibility, focus, theme, and font synchronization stay outside the workspace client interface.
 4. `detachTerminal(workspace_id, terminal_id)` hides the active surface without terminating the session.
 5. `killTerminal(workspace_id, terminal_id)` is the only action that intentionally ends a live session.
 
-## Mode, Authority, and Aggregation
+## Targets and Aggregation
 
-1. `workspace.mode=local` means the local runtime is authoritative.
-2. `workspace.mode=cloud` means the cloud runtime is authoritative.
-3. Signing in enables cloud-mode workspaces; it does not change the authority of existing local-mode workspaces.
-4. Mixed-mode workspace lists must be aggregated from normalized domain records.
-5. Mutations from aggregated views must dispatch to the authoritative runtime.
-6. Desktop runtime resolution must dispatch runtime calls by `workspace.mode`.
-7. Terminal control operations are workspace-scoped; `terminal_id` is never an authority boundary by itself.
+1. `workspace.target=host` means the desktop host workspace client is authoritative.
+2. `workspace.target=docker|remote_host|cloud` reserve explicit non-host placements in the shared contract.
+3. Mixed-target workspace lists must be aggregated from normalized domain records.
+4. Mutations from aggregated views must dispatch to the authoritative workspace client for that target.
+5. Workspace resolution must dispatch calls by `workspace.target`.
+6. Terminal control operations are workspace-scoped; `terminal_id` is never an authority boundary by itself.
 
 ## Git Operations Contract
 
-1. Git reads and writes are workspace-scoped runtime operations.
+1. Git reads and writes are workspace-scoped execution operations.
 2. Frontend callers should key git operations by `workspace_id`.
 3. The public git result types must stay provider-agnostic.
 4. Authoritative git mutations publish repository-level fact events.
 
-## `Backend` + `LocalRuntime` (V1)
+## `Backend` + Host Workspace (V1)
 
 1. Local Git worktree on host filesystem.
 2. Tauri Rust backend handles process supervision, libghostty, Docker, local state persistence.
 3. Lifecycle-managed loopback binds plus `*.lifecycle.localhost` routing.
-4. `workspace.kind=root` uses `project.path` as `workspace.worktree_path`.
-5. `workspace.kind=managed` uses a Lifecycle-owned derived git worktree.
+4. `workspace.checkout_type=root` uses `project.path` as `workspace.worktree_path`.
+5. `workspace.checkout_type=worktree` uses a Lifecycle-owned derived git worktree.
 6. Worktree creation mirrors existing `.env` and `.env.local` files from the source repo.
 7. Local workspaces operate without network.
-
-## `Backend` + `CloudRuntime` (V1)
-
-1. Per-branch Cloudflare Sandbox instances.
-2. Sandbox-owned PTY sessions for terminal runtime.
-3. Desktop terminal attach via provider-minted credentials.
-4. Shared terminal fan-in/fan-out via Durable Object multiplexer.
-5. Preview URLs via Cloudflare Workers routing.
 
 ---
 
@@ -213,24 +201,24 @@ Empty panes are first-class canvas states. They show quick launch actions and ar
 
 ## Restore Rules
 
-Per workspace. Persist: split topology, split ratios, pane contents by identifier-only snapshot, active pane. Must **not** override provider/runtime authority.
+Per workspace. Persist: split topology, split ratios, pane contents by identifier-only snapshot, active pane. Must **not** override backend or workspace-client authority.
 
 ---
 
 # Workspace Surface Contract
 
-The **current implementation contract** for the mixed runtime/document tab model.
+The **current implementation contract** for the mixed live/document tab model.
 
 ## Tab Classes
 
-1. Runtime tabs: backed by provider/runtime entity (`terminal_id`, future `agent_session_id`)
+1. Live tabs: backed by workspace-owned session entities (`terminal_id`, future `agent_session_id`)
 2. Document tabs: backed by workspace content (`diff:commit:<sha>`, `file:<path>`)
 
 ## Ownership Rules
 
-1. Runtime lifecycle remains provider-authoritative.
+1. Live session lifecycle remains workspace-client-authoritative.
 2. Document tabs are desktop-owned UI state.
-3. Desktop-owned surface layout includes `activePaneId`, split tree, per-pane `tabOrderKeys`, `hiddenRuntimeTabKeys`.
+3. Desktop-owned surface layout includes `activePaneId`, split tree, per-pane `tabOrderKeys`, `hiddenTerminalTabKeys`.
 
 ## Pane Tree Model
 
@@ -242,9 +230,9 @@ The **current implementation contract** for the mixed runtime/document tab model
 
 ## Runtime Mount Semantics
 
-1. Inactive runtime tabs must remain mounted when their host depends on attachment continuity.
-2. Switching tabs hides runtime presentation without destroying the resource.
-3. Closing a runtime tab detaches/hides, does not kill.
+1. Inactive live tabs must remain mounted when their host depends on attachment continuity.
+2. Switching tabs hides live presentation without destroying the resource.
+3. Closing a live tab detaches/hides, does not kill.
 
 ## Git Diff Surfaces
 

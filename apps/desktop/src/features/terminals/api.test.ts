@@ -10,14 +10,14 @@ import {
   terminalHasLiveSession,
 } from "@/features/terminals/api";
 
-const TERMINAL_RUNTIME_UNAVAILABLE_MESSAGE = "Terminal runtime requires the Tauri desktop shell.";
+const TERMINAL_ACCESS_UNAVAILABLE_MESSAGE = "Terminal access requires the Tauri desktop shell.";
 
-async function expectTerminalRuntimeError(promise: Promise<unknown>): Promise<void> {
+async function expectTerminalAccessError(promise: Promise<unknown>): Promise<void> {
   try {
     await promise;
-    throw new Error("Expected terminal runtime error.");
+    throw new Error("Expected terminal access error.");
   } catch (error) {
-    expect(String(error)).toContain(TERMINAL_RUNTIME_UNAVAILABLE_MESSAGE);
+    expect(String(error)).toContain(TERMINAL_ACCESS_UNAVAILABLE_MESSAGE);
   }
 }
 
@@ -34,16 +34,16 @@ describe("terminal api", () => {
     expect(await listWorkspaceTerminals("workspace_1")).toEqual([]);
   });
 
-  test("requires tauri for terminal runtime mutations", async () => {
-    await expectTerminalRuntimeError(
+  test("requires tauri for terminal mutations", async () => {
+    await expectTerminalAccessError(
       createTerminal({
         launchType: "shell",
         workspaceId: "workspace_1",
       }),
     );
-    await expectTerminalRuntimeError(detachTerminal("workspace_1", "terminal_1"));
-    await expectTerminalRuntimeError(killTerminal("workspace_1", "terminal_1"));
-    await expectTerminalRuntimeError(interruptTerminal("workspace_1", "terminal_1"));
+    await expectTerminalAccessError(detachTerminal("workspace_1", "terminal_1"));
+    await expectTerminalAccessError(killTerminal("workspace_1", "terminal_1"));
+    await expectTerminalAccessError(interruptTerminal("workspace_1", "terminal_1"));
     await expect(
       saveTerminalAttachment({
         base64Data: "ZmFrZQ==",
@@ -53,8 +53,8 @@ describe("terminal api", () => {
     ).rejects.toThrow("Image paste and drop are only available in the desktop app.");
   });
 
-  test("normalizes labels before checking runtime support", async () => {
-    await expectTerminalRuntimeError(
+  test("normalizes labels before checking terminal access support", async () => {
+    await expectTerminalAccessError(
       renameTerminal("workspace_1", "terminal_1", "  Codex   Session  "),
     );
   });

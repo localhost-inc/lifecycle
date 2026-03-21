@@ -8,7 +8,7 @@ pub mod git;
 pub mod git_watcher;
 mod harness;
 mod identity;
-mod kind;
+mod checkout_type;
 pub mod manifest;
 mod naming;
 pub mod open;
@@ -18,6 +18,7 @@ pub(crate) mod preview;
 pub mod query;
 pub mod rename;
 mod shared;
+#[cfg(test)]
 pub mod state_machine;
 pub mod stop;
 pub mod terminal;

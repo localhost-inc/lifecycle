@@ -46,7 +46,7 @@ fn load_reserved_assigned_ports(
             "SELECT assigned_port
              FROM service
              WHERE assigned_port IS NOT NULL
-               AND NOT (environment_id = ?1 AND name = ?2)",
+               AND NOT (workspace_id = ?1 AND name = ?2)",
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
     let rows = stmt
@@ -128,7 +128,7 @@ mod tests {
     fn init_workspace_service_table(conn: &rusqlite::Connection) {
         conn.execute_batch(
             "CREATE TABLE service (
-                environment_id TEXT NOT NULL,
+                workspace_id TEXT NOT NULL,
                 name TEXT NOT NULL,
                 assigned_port INTEGER
             );",

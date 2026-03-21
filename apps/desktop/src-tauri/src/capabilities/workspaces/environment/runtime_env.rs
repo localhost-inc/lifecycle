@@ -46,16 +46,16 @@ pub(super) fn build_runtime_env(
     worktree_path: &str,
 ) -> Result<HashMap<String, String>, LifecycleError> {
     let conn = open_db(db_path)?;
-    let (workspace_name, source_ref, workspace_kind): (String, String, String) = conn
+    let (workspace_name, source_ref, workspace_checkout_type): (String, String, String) = conn
         .query_row(
-            "SELECT name, source_ref, kind FROM workspace WHERE id = ?1",
+            "SELECT name, source_ref, checkout_type FROM workspace WHERE id = ?1",
             params![workspace_id],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
     let workspace_label = preview_proxy::workspace_host_label(
         workspace_id,
-        &workspace_kind,
+        &workspace_checkout_type,
         &workspace_name,
         &source_ref,
     );
@@ -84,7 +84,7 @@ pub(super) fn build_runtime_env(
         .prepare(
             "SELECT name, assigned_port
              FROM service
-             WHERE environment_id = ?1",
+             WHERE workspace_id = ?1",
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
     let rows = stmt
@@ -161,7 +161,7 @@ mod tests {
         conn.execute_batch(
             "CREATE TABLE service (
                 id TEXT PRIMARY KEY NOT NULL,
-                environment_id TEXT NOT NULL,
+                workspace_id TEXT NOT NULL,
                 name TEXT NOT NULL,
                 status TEXT NOT NULL,
                 status_reason TEXT,
@@ -180,20 +180,20 @@ mod tests {
                 id TEXT PRIMARY KEY NOT NULL,
                 name TEXT NOT NULL,
                 source_ref TEXT NOT NULL,
-                kind TEXT NOT NULL
+                checkout_type TEXT NOT NULL
             );",
         )
         .expect("create workspace");
     }
 
-    fn managed_workspace_identity(workspace_id: &str) -> (String, String, String) {
+    fn worktree_workspace_identity(workspace_id: &str) -> (String, String, String) {
         let name = workspace_id.replace('_', " ");
         let source_ref = format!(
             "lifecycle/{}-{}",
             slugify_workspace_name(&name),
             short_workspace_id(workspace_id)
         );
-        let label = workspace_host_label(workspace_id, "managed", &name, &source_ref);
+        let label = workspace_host_label(workspace_id, "worktree", &name, &source_ref);
         (name, source_ref, label)
     }
 
@@ -204,15 +204,15 @@ mod tests {
         init_workspace_service_tables(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
-        let (name, source_ref, workspace_label) = managed_workspace_identity("ws_env");
+        let (name, source_ref, workspace_label) = worktree_workspace_identity("ws_env");
         conn.execute(
-            "INSERT INTO workspace (id, name, source_ref, kind) VALUES (?1, ?2, ?3, ?4)",
-            params!["ws_env", name, source_ref, "managed"],
+            "INSERT INTO workspace (id, name, source_ref, checkout_type) VALUES (?1, ?2, ?3, ?4)",
+            params!["ws_env", name, source_ref, "worktree"],
         )
         .expect("insert workspace");
         conn.execute(
             "INSERT INTO service (
-                id, environment_id, name, status, assigned_port, updated_at
+                id, workspace_id, name, status, assigned_port, updated_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
             params![
                 "svc_api",

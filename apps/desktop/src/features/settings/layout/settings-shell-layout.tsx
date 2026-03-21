@@ -13,7 +13,6 @@ import {
   cn,
   sidebarMenuSubButtonVariants,
   themeOptions,
-  useTheme,
   type Theme,
 } from "@lifecycle/ui";
 import { Volume2 } from "lucide-react";
@@ -45,7 +44,7 @@ import {
   DEFAULT_WORKTREE_ROOT,
   useSettings,
   type DefaultNewTabLaunch,
-} from "@/features/settings/state/app-settings-provider";
+} from "@/features/settings/state/settings-provider";
 import {
   readSettingsSectionHash,
   settingsSections,
@@ -59,13 +58,14 @@ export function SettingsShellLayout() {
   const shouldInset = shouldInsetForWindowControls(detectPlatformHint(), tauriApp);
   const location = useLocation();
   const navigate = useNavigate();
-  const { theme, resolvedAppearance, setTheme } = useTheme();
   const {
     isLoading: authSessionLoading,
     refresh: refreshAuthSession,
     session: authSession,
   } = useAuthSession();
   const {
+    theme,
+    resolvedAppearance,
     defaultNewTabLaunch,
     dimInactivePanes,
     harnesses,
@@ -80,6 +80,7 @@ export function SettingsShellLayout() {
     setInactivePaneOpacity,
     setInterfaceFontFamily,
     setMonospaceFontFamily,
+    setTheme,
     setTurnNotificationSound,
     setTurnNotificationsMode,
     setWorktreeRoot,

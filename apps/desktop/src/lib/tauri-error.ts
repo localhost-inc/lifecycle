@@ -104,7 +104,7 @@ export function toErrorEnvelope(error: unknown): ErrorEnvelope {
   return (
     getLifecycleErrorEnvelope(error) ?? {
       code: "internal_error",
-      message: getLifecycleErrorMessage(error, "Unexpected desktop runtime error."),
+      message: getLifecycleErrorMessage(error, "Unexpected desktop error."),
       requestId: fallbackRequestId(),
       retryable: false,
     }

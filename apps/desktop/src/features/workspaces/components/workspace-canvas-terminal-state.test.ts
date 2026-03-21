@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { terminalTabKey } from "@/features/workspaces/state/workspace-canvas-state";
 import {
   getWorkspaceInactiveTerminalIds,
   getWorkspaceLiveTerminalTabKeys,
@@ -12,28 +13,28 @@ describe("canvas terminal tab helpers", () => {
     expect(
       getWorkspaceUnassignedLiveTerminalTabKeys(
         getWorkspaceLiveTerminalTabKeys([
-          { key: "terminal:term-1" },
-          { key: "terminal:term-2" },
-          { key: "terminal:term-3" },
+          { key: terminalTabKey("term-1") },
+          { key: terminalTabKey("term-2") },
+          { key: terminalTabKey("term-3") },
         ]),
-        new Set(["terminal:term-1"]),
-        ["terminal:term-3"],
+        new Set([terminalTabKey("term-1")]),
+        [terminalTabKey("term-3")],
       ),
-    ).toEqual(["terminal:term-2"]);
+    ).toEqual([terminalTabKey("term-2")]);
   });
 
   test("marks panes as waiting only for live terminal tabs that have not rendered yet", () => {
     expect(
       getWorkspacePaneIdsWaitingForSelectedTerminalTab(
         [
-          { activeTabKey: "terminal:term-1", id: "pane-a" },
+          { activeTabKey: terminalTabKey("term-1"), id: "pane-a" },
           { activeTabKey: "file:README.md", id: "pane-b" },
         ],
         {
           "pane-a": [],
           "pane-b": [{ key: "file:README.md" }],
         },
-        new Set(["terminal:term-1"]),
+        new Set([terminalTabKey("term-1")]),
       ),
     ).toEqual(new Set(["pane-a"]));
   });
@@ -41,9 +42,9 @@ describe("canvas terminal tab helpers", () => {
   test("does not wait on non-live terminal tabs that no longer have a live session", () => {
     expect(
       getWorkspacePaneIdsWaitingForSelectedTerminalTab(
-        [{ activeTabKey: "terminal:term-9", id: "pane-a" }],
+        [{ activeTabKey: terminalTabKey("term-9"), id: "pane-a" }],
         { "pane-a": [] },
-        new Set(["terminal:term-1"]),
+        new Set([terminalTabKey("term-1")]),
       ),
     ).toEqual(new Set());
   });
@@ -51,9 +52,9 @@ describe("canvas terminal tab helpers", () => {
   test("does not mark a pane as waiting when a visible fallback tab is already rendering", () => {
     expect(
       getWorkspacePaneIdsWaitingForSelectedTerminalTab(
-        [{ activeTabKey: "terminal:term-1", id: "pane-a" }],
+        [{ activeTabKey: terminalTabKey("term-1"), id: "pane-a" }],
         { "pane-a": [{ key: "file:README.md" }] },
-        new Set(["terminal:term-1"]),
+        new Set([terminalTabKey("term-1")]),
       ),
     ).toEqual(new Set());
   });
@@ -62,16 +63,16 @@ describe("canvas terminal tab helpers", () => {
     expect(
       getWorkspaceRenderedPaneActiveTabKeys(
         [
-          { activeTabKey: "terminal:missing", id: "pane-a" },
+          { activeTabKey: terminalTabKey("missing"), id: "pane-a" },
           { activeTabKey: "file:README.md", id: "pane-b" },
         ],
         {
-          "pane-a": [{ key: "terminal:term-1" }],
+          "pane-a": [{ key: terminalTabKey("term-1") }],
           "pane-b": [{ key: "file:README.md" }],
         },
       ),
     ).toEqual({
-      "pane-a": "terminal:term-1",
+      "pane-a": terminalTabKey("term-1"),
       "pane-b": "file:README.md",
     });
   });
@@ -80,12 +81,12 @@ describe("canvas terminal tab helpers", () => {
     expect(
       getWorkspaceInactiveTerminalIds(
         getWorkspaceLiveTerminalTabKeys([
-          { key: "terminal:term-1" },
-          { key: "terminal:term-2" },
-          { key: "terminal:term-3" },
+          { key: terminalTabKey("term-1") },
+          { key: terminalTabKey("term-2") },
+          { key: terminalTabKey("term-3") },
         ]),
         {
-          "pane-a": "terminal:term-1",
+          "pane-a": terminalTabKey("term-1"),
           "pane-b": "file:README.md",
           "pane-c": null,
         },

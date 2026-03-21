@@ -328,7 +328,7 @@ pub fn workspace_branch_name(workspace_name: &str, workspace_id: &str) -> String
     format!("lifecycle/{}-{}", name_slug, short_id)
 }
 
-pub fn is_managed_workspace_branch(source_ref: &str, workspace_id: &str) -> bool {
+pub fn is_lifecycle_worktree_branch(source_ref: &str, workspace_id: &str) -> bool {
     let Some(slug) = source_ref.strip_prefix("lifecycle/") else {
         return false;
     };
@@ -595,13 +595,16 @@ mod tests {
     }
 
     #[test]
-    fn is_managed_workspace_branch_requires_lifecycle_prefix_and_workspace_suffix() {
-        assert!(is_managed_workspace_branch(
+    fn is_lifecycle_worktree_branch_requires_lifecycle_prefix_and_workspace_suffix() {
+        assert!(is_lifecycle_worktree_branch(
             "lifecycle/fix-auth-1234abcd",
             "1234abcd"
         ));
-        assert!(!is_managed_workspace_branch("feature/fix-auth", "1234abcd"));
-        assert!(!is_managed_workspace_branch(
+        assert!(!is_lifecycle_worktree_branch(
+            "feature/fix-auth",
+            "1234abcd"
+        ));
+        assert!(!is_lifecycle_worktree_branch(
             "lifecycle/fix-auth-9876ffff",
             "1234abcd"
         ));

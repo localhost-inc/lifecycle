@@ -1,3 +1,4 @@
+pub mod app_config;
 pub mod auth;
 pub mod db;
 pub mod diagnostics;
