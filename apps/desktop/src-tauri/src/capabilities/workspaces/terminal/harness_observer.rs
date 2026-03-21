@@ -107,21 +107,18 @@ impl HarnessCompletionWatchContext {
         let mut pending_line_fragment = String::new();
 
         loop {
-            match load_terminal_record(&self.db_path, &self.terminal_id) {
-                Ok(Some(terminal)) => {
-                    if terminal_is_finished(&terminal.status) {
-                        return;
-                    }
-                }
+            let terminal_finished = match load_terminal_record(&self.db_path, &self.terminal_id) {
+                Ok(Some(terminal)) => terminal_is_finished(&terminal.status),
                 Ok(None) => return,
                 Err(error) => {
                     tracing::warn!(
                         "failed to load terminal {} while watching harness completion: {error}",
                         self.terminal_id
                     );
-                    return;
+                    thread::sleep(HARNESS_COMPLETION_WATCH_POLL_INTERVAL);
+                    continue;
                 }
-            }
+            };
 
             if session_log_path.is_none() {
                 session_log_path = harness::resolve_harness_session_log_path(
@@ -131,6 +128,9 @@ impl HarnessCompletionWatchContext {
                     self.bound_session_store_root.as_deref(),
                 );
                 if session_log_path.is_none() {
+                    if terminal_finished {
+                        return;
+                    }
                     thread::sleep(HARNESS_COMPLETION_WATCH_POLL_INTERVAL);
                     continue;
                 }
@@ -228,6 +228,18 @@ impl HarnessCompletionWatchContext {
                                 &completion.completion_key,
                                 completion.turn_id.as_deref(),
                             );
+                        } else {
+                            // Log unmatched lines that look like they could be completions
+                            // to aid debugging of format mismatches.
+                            let line_type = value.get("type").and_then(Value::as_str);
+                            if matches!(line_type, Some("assistant" | "result" | "event_msg")) {
+                                tracing::debug!(
+                                    terminal_id = self.terminal_id,
+                                    harness_provider = self.harness_provider.as_deref().unwrap_or(self.provider.name),
+                                    line_type = ?line_type,
+                                    "harness log line has completion-like type but did not match as turn completion"
+                                );
+                            }
                         }
                     }
                 }
@@ -240,6 +252,10 @@ impl HarnessCompletionWatchContext {
                     log_offset = 0;
                     pending_line_fragment.clear();
                 }
+            }
+
+            if terminal_finished {
+                return;
             }
 
             thread::sleep(HARNESS_COMPLETION_WATCH_POLL_INTERVAL);
@@ -451,11 +467,9 @@ fn read_new_harness_log_lines(
     file.read_to_end(&mut bytes)?;
     *offset = file_len;
 
-    if bytes.is_empty() {
-        return Ok(Vec::new());
+    if !bytes.is_empty() {
+        pending_line_fragment.push_str(&String::from_utf8_lossy(&bytes));
     }
-
-    pending_line_fragment.push_str(&String::from_utf8_lossy(&bytes));
 
     let mut lines = Vec::new();
     while let Some(newline_index) = pending_line_fragment.find('\n') {
@@ -465,6 +479,17 @@ fn read_new_harness_log_lines(
         pending_line_fragment.drain(..=newline_index);
         if !line.is_empty() {
             lines.push(line);
+        }
+    }
+
+    // Flush the remaining fragment if it is already valid JSON. This handles
+    // JSONL entries that haven't been newline-terminated yet (e.g. the last
+    // line written by the harness before going idle between turns).
+    if !pending_line_fragment.is_empty() {
+        let candidate = pending_line_fragment.trim_end_matches('\r');
+        if !candidate.is_empty() && serde_json::from_str::<Value>(candidate).is_ok() {
+            lines.push(candidate.to_string());
+            pending_line_fragment.clear();
         }
     }
 

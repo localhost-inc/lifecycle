@@ -160,8 +160,8 @@ fn parse_turn_completion(value: &Value, line: &str) -> Option<HarnessTurnComplet
     let stop_reason = json_string_at_path(value, &["message", "stop_reason"])?;
 
     // end_turn is the normal completion; stop_sequence covers interrupted
-    // or externally-halted turns so the spinner doesn't get stuck.
-    if !matches!(stop_reason, "end_turn" | "stop_sequence") {
+    // or externally-halted turns; max_tokens covers output length limits.
+    if !matches!(stop_reason, "end_turn" | "stop_sequence" | "max_tokens") {
         return None;
     }
 
