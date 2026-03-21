@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-const controlPlane = {
+const backend = {
   getCurrentBranch: mock(async () => "feature/provider-boundary"),
 };
 
-const getControlPlane = mock(() => controlPlane);
+const getBackend = mock(() => backend);
 
-mock.module("../../../lib/control-plane", () => ({
-  getControlPlane,
+mock.module("../../../lib/backend", () => ({
+  getBackend,
 }));
 
 const { getCurrentBranch } = await import("./current-branch");
@@ -19,17 +19,17 @@ describe("project current branch api", () => {
       value: true,
       writable: true,
     });
-    getControlPlane.mockClear();
-    controlPlane.getCurrentBranch.mockClear();
+    getBackend.mockClear();
+    backend.getCurrentBranch.mockClear();
   });
 
   afterEach(() => {
     delete (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri;
   });
 
-  test("routes branch lookup through the project control plane", async () => {
+  test("routes branch lookup through the backend", async () => {
     expect(await getCurrentBranch("/tmp/project_1")).toBe("feature/provider-boundary");
-    expect(getControlPlane).toHaveBeenCalledTimes(1);
-    expect(controlPlane.getCurrentBranch).toHaveBeenCalledWith("/tmp/project_1");
+    expect(getBackend).toHaveBeenCalledTimes(1);
+    expect(backend.getCurrentBranch).toHaveBeenCalledWith("/tmp/project_1");
   });
 });

@@ -10,7 +10,7 @@ use super::super::query::TerminalRecord;
 use super::super::rename::TitleOrigin;
 use super::launch::HarnessLaunchMode;
 
-pub(crate) struct WorkspaceRuntime {
+pub(crate) struct TerminalWorkspaceContext {
     pub(crate) status: EnvironmentStatus,
     pub(crate) project_path: String,
     pub(crate) worktree_path: String,
@@ -167,7 +167,9 @@ pub(crate) fn load_terminal_harness_launch_config(
     deserialize_harness_launch_config(config_json.as_deref())
 }
 
-pub(crate) fn workspace_has_interactive_terminal_context(workspace: &WorkspaceRuntime) -> bool {
+pub(crate) fn workspace_has_interactive_terminal_context(
+    workspace: &TerminalWorkspaceContext,
+) -> bool {
     let _ = workspace.status;
     !workspace.worktree_path.is_empty() || !workspace.project_path.is_empty()
 }
@@ -175,7 +177,7 @@ pub(crate) fn workspace_has_interactive_terminal_context(workspace: &WorkspaceRu
 pub(crate) fn load_workspace_runtime(
     db_path: &str,
     workspace_id: &str,
-) -> Result<WorkspaceRuntime, LifecycleError> {
+) -> Result<TerminalWorkspaceContext, LifecycleError> {
     let conn = open_db(db_path)?;
     let (status, project_path, worktree_path): (String, String, Option<String>) = conn
         .query_row(
@@ -195,7 +197,7 @@ pub(crate) fn load_workspace_runtime(
             _ => LifecycleError::Database(error.to_string()),
         })?;
 
-    Ok(WorkspaceRuntime {
+    Ok(TerminalWorkspaceContext {
         status: EnvironmentStatus::from_str(&status)?,
         project_path,
         worktree_path: worktree_path.unwrap_or_default(),
@@ -277,7 +279,7 @@ mod tests {
     use super::super::launch::HarnessLaunchMode;
     use super::{
         insert_terminal_record, load_terminal_harness_launch_config,
-        workspace_has_interactive_terminal_context, WorkspaceRuntime,
+        workspace_has_interactive_terminal_context, TerminalWorkspaceContext,
     };
 
     fn temp_db_path() -> String {
@@ -328,7 +330,7 @@ mod tests {
 
         for status in interactive_statuses {
             assert!(workspace_has_interactive_terminal_context(
-                &WorkspaceRuntime {
+                &TerminalWorkspaceContext {
                     status,
                     project_path: String::new(),
                     worktree_path: "/tmp/worktree".to_string(),
@@ -337,14 +339,14 @@ mod tests {
         }
 
         assert!(!workspace_has_interactive_terminal_context(
-                &WorkspaceRuntime {
+                &TerminalWorkspaceContext {
                     status: EnvironmentStatus::Idle,
                     project_path: String::new(),
                     worktree_path: String::new(),
                 }
         ));
         assert!(!workspace_has_interactive_terminal_context(
-            &WorkspaceRuntime {
+            &TerminalWorkspaceContext {
                 status: EnvironmentStatus::Stopping,
                 project_path: String::new(),
                 worktree_path: String::new(),

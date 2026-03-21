@@ -252,7 +252,7 @@ Desktop-side attach contract for cloud terminals on native terminal host platfor
 ## Authority Boundary
 
 1. **Remote terminal session** — authoritative PTY in Cloudflare Sandbox
-2. **Terminal domain record** — workspace-runtime-owned metadata and lifecycle
+2. **Terminal domain record** — runtime-owned metadata and lifecycle
 3. **Desktop attach helper** — ephemeral local process bridging to remote transport
 4. **Desktop surface state** — local UI state (not authoritative)
 

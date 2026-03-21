@@ -2,7 +2,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { parseManifest } from "@lifecycle/contracts";
 import type { ManifestParseResult, ProjectRecord } from "@lifecycle/contracts";
-import { getControlPlane } from "@/lib/control-plane";
+import { getBackend } from "@/lib/backend";
 import { invokeTauri } from "@/lib/tauri-error";
 
 export type ManifestStatus =
@@ -90,7 +90,7 @@ export async function readManifest(dirPath: string): Promise<ManifestStatus> {
     return { state: "missing" };
   }
 
-  const text = await getControlPlane().readManifestText(dirPath);
+  const text = await getBackend().readManifestText(dirPath);
   if (text === null) {
     return { state: "missing" };
   }
@@ -108,7 +108,7 @@ export async function listProjects(): Promise<ProjectRecord[]> {
     return [];
   }
 
-  return getControlPlane().listProjects();
+  return getBackend().listProjects();
 }
 
 export async function addProjectFromDirectory(): Promise<ProjectRecord | null> {

@@ -22,9 +22,9 @@ Cloud workspaces get the same lifecycle depth as local: sleep, wake, and destroy
 
 **Mental model:** A Lifecycle workspace is a reproducible environment with optional hibernation, not a persistent VM. Every wake is a partial reconstruction. Reproducibility > persistence.
 
-Part of `WorkspaceRuntime.sleep()` / `.wake()`.
+Part of `Runtime.stopEnvironment()` / `.startEnvironment()`.
 
-#### `CloudWorkspaceRuntime` Persistence
+#### `CloudRuntime` Persistence
 
 What survives sleep:
 

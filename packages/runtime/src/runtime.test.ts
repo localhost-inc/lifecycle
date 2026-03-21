@@ -5,25 +5,22 @@ import type {
   TerminalRecord,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
-import type { GitDiffInput, WorkspaceRuntime, WorkspaceWakeInput } from "./workspace-runtime";
-import { CloudWorkspaceRuntime, type CloudWorkspaceRuntimeClient } from "./cloud-workspace-runtime";
-import { LocalWorkspaceRuntime } from "./local-workspace-runtime";
+import type { GitDiffInput, Runtime } from "./runtime";
+import { CloudRuntime, type CloudRuntimeClient } from "./cloud-runtime";
+import { LocalRuntime } from "./local-runtime";
 
-describe("workspace runtime contract", () => {
+describe("runtime contract", () => {
   test("defines the expected runtime method names", () => {
-    const requiredMethods: Array<keyof WorkspaceRuntime> = [
-      "startServices",
+    const requiredMethods: Array<keyof Runtime> = [
+      "startEnvironment",
       "healthCheck",
-      "stopServices",
-      "sleep",
-      "wake",
+      "stopEnvironment",
       "getEnvironment",
       "getActivity",
       "getServiceLogs",
       "getServices",
       "createTerminal",
       "listTerminals",
-      "getTerminal",
       "renameTerminal",
       "saveTerminalAttachment",
       "detachTerminal",
@@ -53,25 +50,22 @@ describe("workspace runtime contract", () => {
       "mergeGitPullRequest",
     ];
 
-    expect(requiredMethods).toHaveLength(39);
+    expect(requiredMethods).toHaveLength(36);
   });
 
-  test("local workspace runtime exposes the full contract surface", () => {
+  test("local runtime exposes the full contract surface", () => {
     const invoke = async () => "";
-    const runtime = new LocalWorkspaceRuntime(invoke);
+    const runtime = new LocalRuntime(invoke);
 
-    expect(typeof runtime.startServices).toBe("function");
+    expect(typeof runtime.startEnvironment).toBe("function");
     expect(typeof runtime.healthCheck).toBe("function");
-    expect(typeof runtime.stopServices).toBe("function");
-    expect(typeof runtime.sleep).toBe("function");
-    expect(typeof runtime.wake).toBe("function");
+    expect(typeof runtime.stopEnvironment).toBe("function");
     expect(typeof runtime.getEnvironment).toBe("function");
     expect(typeof runtime.getActivity).toBe("function");
     expect(typeof runtime.getServiceLogs).toBe("function");
     expect(typeof runtime.getServices).toBe("function");
     expect(typeof runtime.createTerminal).toBe("function");
     expect(typeof runtime.listTerminals).toBe("function");
-    expect(typeof runtime.getTerminal).toBe("function");
     expect(typeof runtime.renameTerminal).toBe("function");
     expect(typeof runtime.saveTerminalAttachment).toBe("function");
     expect(typeof runtime.detachTerminal).toBe("function");
@@ -101,7 +95,7 @@ describe("workspace runtime contract", () => {
     expect(typeof runtime.mergeGitPullRequest).toBe("function");
   });
 
-  test("cloud workspace runtime delegates the full contract surface", async () => {
+  test("cloud runtime delegates the full contract surface", async () => {
     const terminalResult: TerminalRecord = {
       id: "term_1",
       workspace_id: "ws_1",
@@ -125,19 +119,16 @@ describe("workspace runtime contract", () => {
       created_at: "2026-03-05T08:00:00.000Z",
       updated_at: "2026-03-05T08:00:00.000Z",
     };
-    const client: CloudWorkspaceRuntimeClient = {
-      startServices: async () => [],
+    const client: CloudRuntimeClient = {
+      startEnvironment: async () => [],
       healthCheck: async () => ({ healthy: false, services: [] }),
-      stopServices: async () => {},
-      sleep: async () => {},
-      wake: async (_input: WorkspaceWakeInput) => {},
+      stopEnvironment: async () => {},
       getEnvironment: async () => environmentResult,
       getActivity: async () => [],
       getServiceLogs: async () => [],
       getServices: async () => [],
       createTerminal: async () => terminalResult,
       listTerminals: async () => [],
-      getTerminal: async () => null,
       renameTerminal: async () => terminalResult,
       saveTerminalAttachment: async () => ({
         absolutePath: "/tmp/workspace/.lifecycle/attachments/screenshot.png",
@@ -268,20 +259,17 @@ describe("workspace runtime contract", () => {
         url: "https://github.com/example/repo/pull/42",
       }),
     };
-    const runtime = new CloudWorkspaceRuntime(client);
+    const runtime = new CloudRuntime(client);
 
-    expect(typeof runtime.startServices).toBe("function");
+    expect(typeof runtime.startEnvironment).toBe("function");
     expect(typeof runtime.healthCheck).toBe("function");
-    expect(typeof runtime.stopServices).toBe("function");
-    expect(typeof runtime.sleep).toBe("function");
-    expect(typeof runtime.wake).toBe("function");
+    expect(typeof runtime.stopEnvironment).toBe("function");
     expect(typeof runtime.getEnvironment).toBe("function");
     expect(typeof runtime.getActivity).toBe("function");
     expect(typeof runtime.getServiceLogs).toBe("function");
     expect(typeof runtime.getServices).toBe("function");
     expect(typeof runtime.createTerminal).toBe("function");
     expect(typeof runtime.listTerminals).toBe("function");
-    expect(typeof runtime.getTerminal).toBe("function");
     expect(typeof runtime.renameTerminal).toBe("function");
     expect(typeof runtime.saveTerminalAttachment).toBe("function");
     expect(typeof runtime.detachTerminal).toBe("function");
@@ -317,7 +305,7 @@ describe("workspace runtime contract", () => {
       calls.push(args ? { cmd, args } : { cmd });
       return undefined;
     };
-    const runtime = new LocalWorkspaceRuntime(invoke);
+    const runtime = new LocalRuntime(invoke);
     const workspace: WorkspaceRecord = {
       id: "ws_1",
       project_id: "project_1",
@@ -349,7 +337,7 @@ describe("workspace runtime contract", () => {
       },
     ];
 
-    const result = await runtime.startServices({
+    const result = await runtime.startEnvironment({
       workspace,
       services,
       manifestJson:
@@ -360,7 +348,7 @@ describe("workspace runtime contract", () => {
     expect(result).toEqual(services);
     expect(calls).toEqual([
       {
-        cmd: "start_services",
+        cmd: "start_environment",
         args: {
           workspaceId: "ws_1",
           manifestJson:
@@ -372,15 +360,15 @@ describe("workspace runtime contract", () => {
     ]);
   });
 
-  test("local runtime wake reuses the start-services contract", async () => {
+  test("local runtime startEnvironment reuses the environment start contract", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
       calls.push(args ? { cmd, args } : { cmd });
       return undefined;
     };
-    const runtime = new LocalWorkspaceRuntime(invoke);
+    const runtime = new LocalRuntime(invoke);
 
-    await runtime.wake({
+    await runtime.startEnvironment({
       workspace: {
         id: "ws_1",
         project_id: "project_1",
@@ -405,7 +393,7 @@ describe("workspace runtime contract", () => {
 
     expect(calls).toEqual([
       {
-        cmd: "start_services",
+        cmd: "start_environment",
         args: {
           workspaceId: "ws_1",
           manifestJson: '{"workspace":{"prepare":[],"teardown":[]},"environment":{}}',
@@ -422,9 +410,9 @@ describe("workspace runtime contract", () => {
       calls.push(args ? { cmd, args } : { cmd });
       return undefined;
     };
-    const runtime = new LocalWorkspaceRuntime(invoke);
+    const runtime = new LocalRuntime(invoke);
 
-    await runtime.startServices({
+    await runtime.startEnvironment({
       serviceNames: ["www"],
       workspace: {
         id: "ws_1",
@@ -451,7 +439,7 @@ describe("workspace runtime contract", () => {
 
     expect(calls).toEqual([
       {
-        cmd: "start_services",
+        cmd: "start_environment",
         args: {
           workspaceId: "ws_1",
           manifestJson:
@@ -530,8 +518,6 @@ describe("workspace runtime contract", () => {
           return fileResult;
         case "list_workspace_files":
           return [{ extension: "md", file_path: "README.md" }];
-        case "get_terminal":
-          return terminal;
         case "rename_terminal":
           return {
             ...terminal,
@@ -545,7 +531,7 @@ describe("workspace runtime contract", () => {
           return undefined;
       }
     };
-    const runtime = new LocalWorkspaceRuntime(invoke);
+    const runtime = new LocalRuntime(invoke);
 
     await runtime.healthCheck("ws_1");
     await runtime.getEnvironment("ws_1");
@@ -553,8 +539,7 @@ describe("workspace runtime contract", () => {
     await runtime.getServiceLogs("ws_1");
     await runtime.getServices("ws_1");
     await runtime.listTerminals("ws_1");
-    await runtime.getTerminal("term_1");
-    await runtime.renameTerminal("term_1", "Codex Session");
+    await runtime.renameTerminal("ws_1", "term_1", "Codex Session");
     await runtime.saveTerminalAttachment({
       base64Data: "ZmFrZQ==",
       fileName: "screenshot.png",
@@ -564,11 +549,10 @@ describe("workspace runtime contract", () => {
     await runtime.writeFile("ws_1", "README.md", "welcome");
     await runtime.listFiles("ws_1");
     await runtime.openFile("ws_1", "README.md");
-    await runtime.stopServices("ws_1");
-    await runtime.sleep("ws_1");
-    await runtime.detachTerminal("term_1");
-    await runtime.killTerminal("term_1");
-    await runtime.interruptTerminal("term_1");
+    await runtime.stopEnvironment("ws_1");
+    await runtime.detachTerminal("ws_1", "term_1");
+    await runtime.killTerminal("ws_1", "term_1");
+    await runtime.interruptTerminal("ws_1", "term_1");
 
     expect(calls).toEqual([
       {
@@ -608,14 +592,9 @@ describe("workspace runtime contract", () => {
         },
       },
       {
-        cmd: "get_terminal",
-        args: {
-          terminalId: "term_1",
-        },
-      },
-      {
         cmd: "rename_terminal",
         args: {
+          workspaceId: "ws_1",
           terminalId: "term_1",
           label: "Codex Session",
         },
@@ -658,13 +637,7 @@ describe("workspace runtime contract", () => {
         },
       },
       {
-        cmd: "stop_workspace",
-        args: {
-          workspaceId: "ws_1",
-        },
-      },
-      {
-        cmd: "stop_workspace",
+        cmd: "stop_environment",
         args: {
           workspaceId: "ws_1",
         },
@@ -672,18 +645,21 @@ describe("workspace runtime contract", () => {
       {
         cmd: "detach_terminal",
         args: {
+          workspaceId: "ws_1",
           terminalId: "term_1",
         },
       },
       {
         cmd: "kill_terminal",
         args: {
+          workspaceId: "ws_1",
           terminalId: "term_1",
         },
       },
       {
         cmd: "interrupt_terminal",
         args: {
+          workspaceId: "ws_1",
           terminalId: "term_1",
         },
       },
@@ -714,7 +690,7 @@ describe("workspace runtime contract", () => {
         ended_at: null,
       };
     };
-    const runtime = new LocalWorkspaceRuntime(invoke);
+    const runtime = new LocalRuntime(invoke);
 
     await runtime.createTerminal({
       workspaceId: "ws_1",
@@ -865,7 +841,7 @@ describe("workspace runtime contract", () => {
           return undefined;
       }
     };
-    const runtime = new LocalWorkspaceRuntime(invoke);
+    const runtime = new LocalRuntime(invoke);
 
     await runtime.getGitStatus("ws_1");
     await runtime.getGitScopePatch("ws_1", "working");

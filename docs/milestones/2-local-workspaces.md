@@ -1,7 +1,7 @@
 # Milestone 2: "I can start a workspace and it reaches running"
 
 > Prerequisites: M1
-> Introduces: `workspace`, `environment`, and `service` entities, `LocalControlPlane` + `LocalWorkspaceRuntime`, environment state machine
+> Introduces: `workspace`, `environment`, and `service` entities, `Backend` + `LocalRuntime`, environment state machine
 > Tracker: high-level status/checklist lives in [`docs/plan.md`](../plan.md). This document is the detailed implementation contract.
 
 ## Goal
@@ -31,7 +31,7 @@ User creates a local workspace, then clicks "Run" and watches its local environm
    - `source_ref`
    - `git_sha`
    - `worktree_path` — absolute filesystem path for local workspaces; null for cloud workspaces until cloud execution lands
-   - `mode` (`cloud|local`) — which `WorkspaceRuntime` runs this workspace
+   - `mode` (`cloud|local`) — which `Runtime` runs this workspace
    - `created_by` (nullable — not set for local workspaces pre-auth)
    - `created_at`, `updated_at`, `last_active_at`, `expires_at`
    - `prepared_at` (nullable timestamp; set once workspace preparation has completed successfully)
@@ -71,13 +71,13 @@ User creates a local workspace, then clicks "Run" and watches its local environm
    - `status` (`stopped|starting|ready|failed`)
    - `status_reason` (nullable typed enum; required when `status=failed`)
    - `assigned_port` (nullable) — local host port assigned for the current run and reserved by the provider for that runtime session
-   - `preview_url` (nullable) — workspace-runtime-owned stable preview route derived from workspace + service identity
+   - `preview_url` (nullable) — runtime-owned stable preview route derived from workspace + service identity
    - `created_at`
    - `updated_at`
 3. Invariants:
    - unique (`environment_id`, `name`)
    - `assigned_port` must be null when the provider is not currently holding a runtime bind for the service
-   - `preview_url` is stable workspace-runtime-owned routing identity; whether it is openable is derived from runtime state, not from a separate preview status field
+   - `preview_url` is stable runtime-owned routing identity; whether it is openable is derived from runtime state, not from a separate preview status field
 
 ## Implementation Contracts
 
@@ -87,22 +87,22 @@ Full transition rules: [reference/state-machines.md](../reference/state-machines
 
 M2-relevant environment semantics (local mode):
 
-| State | `LocalWorkspaceRuntime` behavior |
+| State | `LocalRuntime` behavior |
 |-------|----------------------------------|
 | `idle` | Worktree is ready; services are stopped |
 | `starting` | Running first-boot preparation (if needed) and starting local processes + containers |
 | `running` | Health checks pass on localhost |
 | `stopping` | Services are shutting down before returning to `idle` |
 
-### `ControlPlane` + `WorkspaceRuntime`
+### `Backend` + `Runtime`
 
 Full interface: [`/reference--workspace`](../../.skills/reference--workspace/SKILL.md)
 
-M2 implements `LocalControlPlane` + `LocalWorkspaceRuntime`:
+M2 implements `Backend` + `LocalRuntime`:
 - `createWorkspace`: git worktree checkout
-- `startServices`: run workspace preparation on first start, then spawn local processes + Docker containers
+- `startEnvironment`: run workspace preparation on first start, then spawn local processes + Docker containers
 - `healthCheck`: tcp/http probes against localhost
-- `stopServices`: SIGTERM process group
+- `stopEnvironment`: SIGTERM process group
 
 ### Health Check Contract
 

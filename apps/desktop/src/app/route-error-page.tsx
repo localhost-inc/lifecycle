@@ -155,7 +155,7 @@ export function RouteErrorSurface({
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-6 py-6 sm:px-10 sm:py-10">
         <div className="flex items-center justify-between gap-4">
           <p className="text-[11px] font-medium uppercase tracking-[0.22em] text-[var(--muted-foreground)]">
-            Lifecycle / workspace control plane
+            Lifecycle / workspace backend
           </p>
           <p className="rounded-full border border-[var(--border)] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
             {summary.eyebrow}

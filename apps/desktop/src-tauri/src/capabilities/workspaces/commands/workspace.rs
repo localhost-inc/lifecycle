@@ -2,7 +2,7 @@ use crate::platform::db::DbPath;
 use crate::shared::errors::LifecycleError;
 use crate::RootGitWatcherMap;
 use crate::WorkspaceControllerRegistryHandle;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tauri::{AppHandle, State};
 
@@ -19,13 +19,20 @@ pub struct CreateWorkspaceCommandInput {
     manifest_fingerprint: Option<String>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateWorkspaceCommandResult {
+    workspace: super::super::query::WorkspaceRecord,
+    worktree_path: String,
+}
+
 #[tauri::command]
 pub async fn create_workspace(
     app: AppHandle,
     db_path: State<'_, DbPath>,
     root_git_watchers: State<'_, RootGitWatcherMap>,
     input: CreateWorkspaceCommandInput,
-) -> Result<String, LifecycleError> {
+) -> Result<CreateWorkspaceCommandResult, LifecycleError> {
     let db_path_value = db_path.0.clone();
     let workspace_id = super::super::create::create_workspace(
         app.clone(),
@@ -52,7 +59,14 @@ pub async fn create_workspace(
         crate::platform::diagnostics::append_error("root-git-watcher-create", error);
     }
 
-    Ok(workspace_id)
+    let workspace = super::super::query::get_workspace_by_id(&db_path_value, workspace_id.clone())
+        .await?
+        .ok_or(LifecycleError::WorkspaceNotFound(workspace_id))?;
+
+    Ok(CreateWorkspaceCommandResult {
+        worktree_path: workspace.worktree_path.clone().unwrap_or_default(),
+        workspace,
+    })
 }
 
 #[tauri::command]
@@ -70,7 +84,7 @@ pub async fn rename_workspace(
 }
 
 #[tauri::command]
-pub async fn start_services(
+pub async fn start_environment(
     app: AppHandle,
     db_path: State<'_, DbPath>,
     workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
@@ -82,7 +96,7 @@ pub async fn start_services(
     let _mutation_guard = workspace_controllers
         .acquire_mutation_guard(&workspace_id)
         .await?;
-    super::super::environment::start_services(
+    super::super::environment::start_environment(
         app,
         db_path,
         workspace_controllers,
@@ -95,13 +109,13 @@ pub async fn start_services(
 }
 
 #[tauri::command]
-pub async fn stop_workspace(
+pub async fn stop_environment(
     app: AppHandle,
     db_path: State<'_, DbPath>,
     workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
     workspace_id: String,
 ) -> Result<(), LifecycleError> {
-    super::super::stop::stop_workspace(app, db_path, workspace_controllers, workspace_id).await
+    super::super::stop::stop_environment(app, db_path, workspace_controllers, workspace_id).await
 }
 
 #[tauri::command]

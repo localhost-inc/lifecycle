@@ -42,7 +42,7 @@ const environment: EnvironmentRecord = {
   updated_at: "2026-03-13T00:00:00.000Z",
 };
 
-const controlPlane = {
+const backend = {
   createWorkspace: mock(async () => ({
     workspace,
     worktreePath: workspace.worktree_path ?? "",
@@ -56,8 +56,8 @@ const controlPlane = {
 };
 
 const runtime = {
-  startServices: mock(async () => services),
-  sleep: mock(async () => {}),
+  startEnvironment: mock(async () => services),
+  stopEnvironment: mock(async () => {}),
   getEnvironment: mock(async () => environment),
   getActivity: mock(async () => []),
   getServiceLogs: mock(async () => []),
@@ -84,15 +84,15 @@ const runtime = {
   openFile: mock(async () => {}),
 };
 
-const getControlPlane = mock(() => controlPlane);
-const getWorkspaceRuntime = mock(() => runtime);
+const getBackend = mock(() => backend);
+const getRuntime = mock(() => runtime);
 
-mock.module("../../lib/control-plane", () => ({
-  getControlPlane,
+mock.module("../../lib/backend", () => ({
+  getBackend,
 }));
 
-mock.module("../../lib/workspace-runtime", () => ({
-  getWorkspaceRuntime,
+mock.module("../../lib/runtime", () => ({
+  getRuntime,
 }));
 
 const {
@@ -106,7 +106,7 @@ const {
   openWorkspaceFile,
   readWorkspaceFile,
   renameWorkspace,
-  startServices,
+  startEnvironment,
   writeWorkspaceFile,
 } = await import("./api");
 
@@ -117,9 +117,9 @@ describe("workspace api boundary routing", () => {
       value: true,
       writable: true,
     });
-    getControlPlane.mockClear();
-    getWorkspaceRuntime.mockClear();
-    for (const method of Object.values(controlPlane)) {
+    getBackend.mockClear();
+    getRuntime.mockClear();
+    for (const method of Object.values(backend)) {
       method.mockClear();
     }
     for (const method of Object.values(runtime)) {
@@ -131,7 +131,7 @@ describe("workspace api boundary routing", () => {
     delete (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri;
   });
 
-  test("routes workspace shell reads through the control plane and live reads through the runtime", async () => {
+  test("routes workspace shell reads through the backend and live reads through the runtime", async () => {
     expect(
       await createWorkspace({
         projectId: "project_1",
@@ -141,7 +141,7 @@ describe("workspace api boundary routing", () => {
       }),
     ).toBe("ws_1");
     await renameWorkspace("ws_1", "  Renamed   Workspace  ");
-    await startServices({
+    await startEnvironment({
       workspace,
       services,
       manifestJson: '{"services":{"web":{}}}',
@@ -173,18 +173,31 @@ describe("workspace api boundary routing", () => {
     expect(await listWorkspaceFiles("ws_1")).toEqual([{ extension: "md", file_path: "README.md" }]);
     await openWorkspaceFile("ws_1", "README.md");
 
-    expect(getControlPlane).toHaveBeenCalled();
-    expect(getWorkspaceRuntime).toHaveBeenCalled();
-    expect(controlPlane.createWorkspace).toHaveBeenCalledTimes(1);
-    expect(controlPlane.renameWorkspace).toHaveBeenCalledWith("ws_1", "Renamed Workspace");
-    expect(runtime.startServices).toHaveBeenCalledWith({
+    expect(getBackend).toHaveBeenCalled();
+    expect(getRuntime).toHaveBeenCalled();
+    expect(backend.createWorkspace).toHaveBeenCalledTimes(1);
+    expect(backend.createWorkspace).toHaveBeenCalledWith({
+      manifestJson: null,
+      manifestFingerprint: null,
+      context: {
+        mode: "local",
+        kind: "managed",
+        projectId: "project_1",
+        projectPath: "/tmp/project_1",
+        workspaceName: "Workspace 1",
+        baseRef: "main",
+        worktreeRoot: undefined,
+      },
+    });
+    expect(backend.renameWorkspace).toHaveBeenCalledWith("ws_1", "Renamed Workspace");
+    expect(runtime.startEnvironment).toHaveBeenCalledWith({
       serviceNames: undefined,
       workspace,
       services,
       manifestJson: '{"services":{"web":{}}}',
       manifestFingerprint: "manifest_2",
     });
-    expect(controlPlane.getWorkspace).toHaveBeenCalledWith("ws_1");
+    expect(backend.getWorkspace).toHaveBeenCalledWith("ws_1");
     expect(runtime.getEnvironment).toHaveBeenCalledWith("ws_1");
     expect(runtime.getActivity).toHaveBeenCalledWith("ws_1");
     expect(runtime.getServiceLogs).toHaveBeenCalledWith("ws_1");

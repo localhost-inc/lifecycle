@@ -1,6 +1,6 @@
 import { isTauri } from "@tauri-apps/api/core";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
-import { getControlPlane } from "@/lib/control-plane";
+import { getBackend } from "@/lib/backend";
 
 export async function getProjectWorkspace(projectId: string): Promise<WorkspaceRecord | null> {
   if (!isTauri()) {
@@ -8,7 +8,7 @@ export async function getProjectWorkspace(projectId: string): Promise<WorkspaceR
     return null;
   }
 
-  return getControlPlane().getProjectWorkspace(projectId);
+  return getBackend().getProjectWorkspace(projectId);
 }
 
 export async function listWorkspaces(): Promise<WorkspaceRecord[]> {
@@ -16,7 +16,7 @@ export async function listWorkspaces(): Promise<WorkspaceRecord[]> {
     return [];
   }
 
-  return getControlPlane().listWorkspaces();
+  return getBackend().listWorkspaces();
 }
 
 export async function listWorkspacesByProject(): Promise<Record<string, WorkspaceRecord[]>> {
@@ -24,5 +24,5 @@ export async function listWorkspacesByProject(): Promise<Record<string, Workspac
     return {};
   }
 
-  return getControlPlane().listWorkspacesByProject();
+  return getBackend().listWorkspacesByProject();
 }

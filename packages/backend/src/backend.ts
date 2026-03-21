@@ -20,12 +20,8 @@ export interface CloudWorkspaceCreateContext {
 export type WorkspaceCreateContext = LocalWorkspaceCreateContext | CloudWorkspaceCreateContext;
 
 export interface WorkspaceCreateInput {
-  workspaceId: string;
-  sourceRef: string;
-  manifestPath: string;
   manifestJson?: string | null;
   manifestFingerprint?: string | null;
-  resolvedSecrets: Record<string, string>;
   context: WorkspaceCreateContext;
 }
 
@@ -34,7 +30,7 @@ export interface WorkspaceCreateResult {
   worktreePath: string;
 }
 
-export interface ControlPlane {
+export interface Backend {
   getProjectWorkspace(projectId: string): Promise<WorkspaceRecord | null>;
   listWorkspaces(): Promise<WorkspaceRecord[]>;
   listWorkspacesByProject(): Promise<Record<string, WorkspaceRecord[]>>;

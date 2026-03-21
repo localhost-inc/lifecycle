@@ -17,31 +17,30 @@ import type {
 } from "@lifecycle/contracts";
 import type {
   CreateTerminalInput,
+  EnvironmentStartInput,
   GitDiffInput,
+  Runtime,
   SavedTerminalAttachment,
+  SaveTerminalAttachmentInput,
   ServiceLogSnapshot,
   WorkspaceFileReadResult,
   WorkspaceFileTreeEntry,
   WorkspaceHealthResult,
-  WorkspaceRuntime,
-  WorkspaceStartInput,
-  WorkspaceWakeInput,
-  SaveTerminalAttachmentInput,
-} from "./workspace-runtime";
+} from "./runtime";
 
 interface TauriInvoke {
   (cmd: string, args?: Record<string, unknown>): Promise<unknown>;
 }
 
-export class LocalWorkspaceRuntime implements WorkspaceRuntime {
+export class LocalRuntime implements Runtime {
   private invoke: TauriInvoke;
 
   constructor(invoke: TauriInvoke) {
     this.invoke = invoke;
   }
 
-  async startServices(input: WorkspaceStartInput): Promise<ServiceRecord[]> {
-    await this.invokeStartServices(input);
+  async startEnvironment(input: EnvironmentStartInput): Promise<ServiceRecord[]> {
+    await this.invokeStartEnvironment(input);
     return input.services;
   }
 
@@ -53,16 +52,8 @@ export class LocalWorkspaceRuntime implements WorkspaceRuntime {
     return { healthy, services };
   }
 
-  async stopServices(workspaceId: string): Promise<void> {
-    await this.invoke("stop_workspace", { workspaceId });
-  }
-
-  async sleep(workspaceId: string): Promise<void> {
-    await this.invoke("stop_workspace", { workspaceId });
-  }
-
-  async wake(input: WorkspaceWakeInput): Promise<void> {
-    await this.invokeStartServices(input);
+  async stopEnvironment(workspaceId: string): Promise<void> {
+    await this.invoke("stop_environment", { workspaceId });
   }
 
   async getEnvironment(workspaceId: string): Promise<EnvironmentRecord> {
@@ -99,12 +90,13 @@ export class LocalWorkspaceRuntime implements WorkspaceRuntime {
     return this.invoke("list_workspace_terminals", { workspaceId }) as Promise<TerminalRecord[]>;
   }
 
-  async getTerminal(terminalId: string): Promise<TerminalRecord | null> {
-    return this.invoke("get_terminal", { terminalId }) as Promise<TerminalRecord | null>;
-  }
-
-  async renameTerminal(terminalId: string, label: string): Promise<TerminalRecord> {
+  async renameTerminal(
+    workspaceId: string,
+    terminalId: string,
+    label: string,
+  ): Promise<TerminalRecord> {
     return this.invoke("rename_terminal", {
+      workspaceId,
       terminalId,
       label,
     }) as Promise<TerminalRecord>;
@@ -121,16 +113,16 @@ export class LocalWorkspaceRuntime implements WorkspaceRuntime {
     }) as Promise<SavedTerminalAttachment>;
   }
 
-  async detachTerminal(terminalId: string): Promise<void> {
-    await this.invoke("detach_terminal", { terminalId });
+  async detachTerminal(workspaceId: string, terminalId: string): Promise<void> {
+    await this.invoke("detach_terminal", { workspaceId, terminalId });
   }
 
-  async killTerminal(terminalId: string): Promise<void> {
-    await this.invoke("kill_terminal", { terminalId });
+  async killTerminal(workspaceId: string, terminalId: string): Promise<void> {
+    await this.invoke("kill_terminal", { workspaceId, terminalId });
   }
 
-  async interruptTerminal(terminalId: string): Promise<void> {
-    await this.invoke("interrupt_terminal", { terminalId });
+  async interruptTerminal(workspaceId: string, terminalId: string): Promise<void> {
+    await this.invoke("interrupt_terminal", { workspaceId, terminalId });
   }
 
   async readFile(workspaceId: string, filePath: string): Promise<WorkspaceFileReadResult> {
@@ -278,8 +270,8 @@ export class LocalWorkspaceRuntime implements WorkspaceRuntime {
     }) as Promise<GitPullRequestSummary>;
   }
 
-  private async invokeStartServices(input: WorkspaceStartInput): Promise<void> {
-    await this.invoke("start_services", {
+  private async invokeStartEnvironment(input: EnvironmentStartInput): Promise<void> {
+    await this.invoke("start_environment", {
       workspaceId: input.workspace.id,
       manifestJson: input.manifestJson,
       manifestFingerprint: input.manifestFingerprint,

@@ -444,37 +444,6 @@ pub async fn list_workspace_terminals(
     .await
 }
 
-fn get_terminal_by_id_sync(
-    conn: &rusqlite::Connection,
-    terminal_id: String,
-) -> Result<Option<TerminalRecord>, LifecycleError> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, harness_launch_mode, created_by, label, label_origin, status, failure_reason, exit_code, started_at, last_active_at, ended_at
-             FROM terminal
-             WHERE id = ?1
-             LIMIT 1",
-        )
-        .map_err(|e| LifecycleError::Database(e.to_string()))?;
-
-    let row = stmt.query_row(params![terminal_id], map_terminal_record);
-    match row {
-        Ok(row) => Ok(Some(row)),
-        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(error) => Err(LifecycleError::Database(error.to_string())),
-    }
-}
-
-pub async fn get_terminal_by_id(
-    db_path: &str,
-    terminal_id: String,
-) -> Result<Option<TerminalRecord>, LifecycleError> {
-    run_blocking_db_read(db_path.to_string(), "terminal.get_by_id", move |conn| {
-        get_terminal_by_id_sync(conn, terminal_id)
-    })
-    .await
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -30,6 +30,7 @@ Lifecycle boundaries:
 6. `killTerminal` is the only action that intentionally ends a live session.
 
 Control operations use typed commands (`create`, `attach`, `write`, `resize`, `detach`, `kill`). Raw PTY bytes travel on a dedicated ordered stream channel, not the generic store event bus.
+All terminal control operations are scoped by `workspace_id`; terminal IDs identify a child session, not an authority boundary.
 
 ## Launch Types
 
@@ -67,7 +68,7 @@ Terminal-to-session ownership is a **launch contract**, not a reconciliation pro
 
 1. Claude launches with an explicit session ID from the start; respawns switch to resume once the session log exists.
 2. Codex runs inside a terminal-owned `CODEX_HOME` so session files live in an exclusive namespace from terminal creation.
-3. A terminal that needs post-launch discovery should only discover inside its own workspace-runtime-owned scope. Global session stores are not acceptable when multiple terminals share one workspace.
+3. A terminal that needs post-launch discovery should only discover inside its own runtime-owned scope. Global session stores are not acceptable when multiple terminals share one workspace.
 4. Frontend cache updates for harness session metadata need an explicit terminal update event — not incidental refetches.
 
 ### Prompt Submission

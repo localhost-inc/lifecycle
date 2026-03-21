@@ -16,7 +16,7 @@ User opens a workspace, lands in the shared workspace surface, optionally launch
    - `libghostty` embedded as an `NSView` mounted above the Tauri `WKWebView`
 2. Local `terminal` entity and desktop-owned terminal session supervision.
 3. Terminal transport split by responsibility:
-   - Tauri `invoke` for control-plane operations (`create`, `detach`, `kill`, native host sync`)
+   - Tauri `invoke` for backend operations (`create`, `detach`, `kill`, native host sync`)
    - normalized terminal fact events for metadata and lifecycle changes only
 4. Harness adapters for plain shell plus supported coding CLIs.
 5. Runtime-backed terminal tabs with live state powered by the desktop query layer.
@@ -109,8 +109,8 @@ For local mode in M3:
 The current M2 placeholder `openTerminal(workspaceId, cols, rows)` is insufficient for M3. The actual terminal surface should expand to explicit lifecycle operations:
 
 1. `createTerminal(workspaceId, launchType, harnessProvider?, harnessSessionId?)` → terminal metadata
-2. `detachTerminal(terminalId)` → hide the active native surface without killing the process
-3. `killTerminal(terminalId)` → terminate the native-backed terminal session
+2. `detachTerminal(workspaceId, terminalId)` → hide the active native surface without killing the process
+3. `killTerminal(workspaceId, terminalId)` → terminate the native-backed terminal session
 
 ### Local Terminal Architecture (M3 Scope)
 

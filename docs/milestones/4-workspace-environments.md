@@ -95,7 +95,7 @@ Stop/start contract:
 1. **Scope**:
    - preview is defined per `service` record and represents routable access to an active service port inside a workspace execution environment
    - one workspace can expose multiple preview endpoints (for example `api`, `admin`, `docs`)
-   - preview routing is workspace-runtime-owned; openability is derived from environment + service runtime state
+   - preview routing is runtime-owned; openability is derived from environment + service runtime state
 
 2. **Protocol support**:
    - HTTP/HTTPS and WebSocket (`ws/wss`) upgrade must be supported
@@ -212,12 +212,12 @@ Status (2026-03-13):
 #### Phase 5: Recoverable Projections And Provider Adoption
 
 1. Environment state, services, service logs, and activity must load from authoritative workspace-scoped selector/query APIs on initial mount and continue refreshing from those backend-owned selectors as future facts arrive.
-2. The desktop app should adopt explicit `ControlPlane` and `WorkspaceRuntime` abstractions in `packages/runtime` instead of calling Tauri commands directly from feature APIs and query source code.
-3. Query and mutation call sites should target control-plane or workspace-runtime operations keyed by project/workspace identity, not transport-local command names.
+2. The desktop app should adopt explicit `Backend` and `Runtime` abstractions in `packages/backend` and `packages/runtime` instead of calling Tauri commands directly from feature APIs and query source code.
+3. Query and mutation call sites should target backend or runtime operations keyed by project/workspace identity, not transport-local command names.
 
 First implementation slice:
 
-1. Add direct reads for service log and activity state, and introduce control-plane/runtime-backed adapters in the desktop query source and mutation paths.
+1. Add direct reads for service log and activity state, and introduce backend/runtime-backed adapters in the desktop query source and mutation paths.
 
 Exit condition:
 
@@ -227,8 +227,8 @@ Status (2026-03-13):
 
 1. The Rust workspace controller now owns service-log and activity selectors that can be fetched through `get_workspace_service_logs` and `get_workspace_activity`.
 2. Desktop service-log and activity hooks read those workspace-scoped selectors directly, and future lifecycle facts only invalidate/refetch the affected queries instead of being reduced into frontend-owned projections.
-3. Desktop workspace create/rename/destroy, workspace catalog reads, project list/manifest reads, and project-level branch lookup now flow through the local `ControlPlane`; live workspace environment/service/file/terminal/git reads and mutations flow through the local `WorkspaceRuntime`.
-4. `features/workspaces/api.ts`, `features/workspaces/catalog-api.ts`, `features/projects/api/projects.ts`, `features/projects/api/current-branch.ts`, `features/terminals/api.ts`, `features/git/api.ts`, and the desktop query source no longer invoke transport-local Tauri command names directly for control-plane or runtime-backed reads.
+3. Desktop workspace create/rename/destroy, workspace catalog reads, project list/manifest reads, and project-level branch lookup now flow through the centralized `Backend`; live workspace environment/service/file/terminal/git reads and mutations flow through the local `Runtime`.
+4. `features/workspaces/api.ts`, `features/workspaces/catalog-api.ts`, `features/projects/api/projects.ts`, `features/projects/api/current-branch.ts`, `features/terminals/api.ts`, `features/git/api.ts`, and the desktop query source no longer invoke transport-local Tauri command names directly for backend or runtime-backed reads.
 5. The remaining direct desktop calls are intentionally narrower and explicitly separated into non-runtime modules: project import/remove flows, host app-launch helpers, and native terminal surface synchronization.
 
 #### Phase 6: Workspace Surface Split And Tab Store Normalization

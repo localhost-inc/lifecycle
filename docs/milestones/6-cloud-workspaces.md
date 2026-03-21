@@ -1,7 +1,7 @@
 # Milestone 6: "I can sign in, fork to cloud, share a preview, and create a PR"
 
 > Prerequisites: M5
-> Introduces: `organization` entity, `repository` entity, `activity` entity, auth, `CloudControlPlane` + `CloudWorkspaceRuntime`, fork-to-cloud, cloud preview, PR creation, cloud CLI commands
+> Introduces: `organization` entity, `repository` entity, `activity` entity, auth, `Backend` + `CloudRuntime`, fork-to-cloud, cloud preview, PR creation, cloud CLI commands
 > Tracker: high-level status/checklist lives in [`docs/plan.md`](../plan.md). This document is the detailed implementation contract.
 
 ## Goal
@@ -15,7 +15,7 @@ User signs in via WorkOS, installs GitHub App, links project to repo, forks a lo
 3. GitHub App installation flow.
 4. Convex schemas: `organization`, `repository`, `activity`. Selective sync and mirror logic for portable `project` and workspace metadata across local and cloud boundaries, without transferring authority for local environment state.
 5. Project -> repository linking (auto-detect from git remote, manual override).
-6. Cloud workspace creation via `CloudControlPlane` + `CloudWorkspaceRuntime`.
+6. Cloud workspace creation via `Backend` + `CloudRuntime`.
 7. Fork-to-cloud: local workspace -> push code -> create cloud workspace.
 8. Cloud-to-local fork.
 9. Org switcher and cloud workspace list.
@@ -124,7 +124,7 @@ WorkOS AuthKit is the auth provider for Lifecycle. The rationale:
 
 1. **Desktop app**: WorkOS Device Authorization Flow -> user confirms in system browser -> app receives tokens -> stored securely in OS keychain via Tauri's secure storage. Convex validates WorkOS JWT via `ctx.auth.getUserIdentity()`.
 2. **CLI**: Device Authorization Flow -> user confirms in browser -> CLI polls for tokens -> stored at `~/.lifecycle/credentials.json` (0600). Subsequent calls use `Authorization: Bearer <access_token>`. Auto-refresh on expiry.
-3. **Preview URLs**: preview tokens (JWT, 1-hour TTL) minted by control plane via existing WorkOS session. Vanity Worker validates JWT on each request.
+3. **Preview URLs**: preview tokens (JWT, 1-hour TTL) minted by backend via existing WorkOS session. Vanity Worker validates JWT on each request.
 
 #### Implementation Surface
 
@@ -153,7 +153,7 @@ Permission enforcement: Convex functions check `identity.permissions` from the J
 
 1. Control plane mints short-lived preview tokens (JWT, 1-hour TTL) when a user requests preview access via existing WorkOS session.
 2. Vanity Worker on `*.preview.lifecycle.dev` validates the JWT on each request (signature + expiry + org membership claim).
-3. Token stored as cookie on `*.preview.lifecycle.dev` domain after first validation; unauthenticated requests redirect to control plane for token issuance.
+3. Token stored as cookie on `*.preview.lifecycle.dev` domain after first validation; unauthenticated requests redirect to backend for token issuance.
 
 #### Environment Variables
 
@@ -219,7 +219,7 @@ github.handleWebhook(payload, signature)
 `workspace.mode` remains the authority boundary in M6.
 
 1. `local` workspaces continue to use the local provider, local persistence, and local environment authority even when the user is signed in.
-2. `cloud` workspaces use the cloud provider and Convex as the authoritative control plane.
+2. `cloud` workspaces use the cloud runtime and Convex-backed backend as the authoritative administration boundary.
 3. Signing in adds cloud capabilities; it does not convert existing local workspaces into cloud-authoritative workspaces.
 4. Desktop views may show local and cloud workspaces together, but aggregation happens after both sources are normalized into shared workspace records.
 5. UI code must not compose raw SQLite rows and raw Convex results directly. Aggregation belongs in a domain-layer adapter or hook.
@@ -387,7 +387,7 @@ The share experience must feel effortless — one click to share, one click to j
 
 ### Cloud Preview
 
-#### `CloudWorkspaceRuntime` Preview
+#### `CloudRuntime` Preview
 
 1. **Cloudflare routing model**:
    - when a previewable service is running, runtime provisions an HTTP preview route for the current `assigned_port`
@@ -425,11 +425,11 @@ The share experience must feel effortless — one click to share, one click to j
 
 ### PR Creation
 
-- PR is created via GitHub App permissions through control plane (Convex action)
+- PR is created via GitHub App permissions through backend (Convex action)
 - Control plane validates head/base refs and commit diff
 - Returns PR URL, number, and status context
 - No-diff and permission failures return typed errors with suggested next action
-- `lifecycle pr create` always targets the control plane; `gh` CLI is optional and not required
+- `lifecycle pr create` always targets the backend; `gh` CLI is optional and not required
 
 ### Event Ingress
 
@@ -444,10 +444,10 @@ The share experience must feel effortless — one click to share, one click to j
 ### GitHub Integration and PR Permissions
 
 1. GitHub App installation is required for repository onboarding and automation.
-2. Workspace git permissions are fetch/push only using short-lived credentials minted by control plane.
+2. Workspace git permissions are fetch/push only using short-lived credentials minted by backend.
 3. Workspace git credentials are repo-scoped and branch-scoped to lifecycle workspace branches.
-4. Pull request creation is performed by control plane via GitHub App permissions, not by workspace user tokens.
-5. `lifecycle pr create` always targets the control plane (Convex action); `gh` CLI is optional and not required.
+4. Pull request creation is performed by backend via GitHub App permissions, not by workspace user tokens.
+5. `lifecycle pr create` always targets the backend (Convex action); `gh` CLI is optional and not required.
 6. Git credentials are rotated and revoked on workspace sleep/destroy.
 7. Token mint, token redemption, push, and PR actions are all audit logged.
 

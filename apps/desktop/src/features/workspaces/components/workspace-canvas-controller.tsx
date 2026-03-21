@@ -420,7 +420,6 @@ export function useWorkspaceCanvasController({
                 workspaceId,
               });
         client.invalidate(terminalKeys.byWorkspace(workspaceId));
-        client.invalidate(terminalKeys.detail(terminal.id));
         handleShowTerminalTab(terminal.id, paneId);
       } catch (createError) {
         setError(formatWorkspaceError(createError, "Failed to create session."));
@@ -493,9 +492,8 @@ export function useWorkspaceCanvasController({
   const closeTerminalTab = useCallback(
     async (tabKey: string, terminalId: string) => {
       try {
-        await detachTerminal(terminalId);
+        await detachTerminal(workspaceId, terminalId);
         client.invalidate(terminalKeys.byWorkspace(workspaceId));
-        client.invalidate(terminalKeys.detail(terminalId));
         dispatch({
           key: tabKey,
           kind: "hide-terminal-tab",
@@ -862,8 +860,8 @@ export function useWorkspaceCanvasController({
   );
 
   const handleRenameTerminalTab = useCallback((terminalId: string, label: string) => {
-    return renameTerminal(terminalId, label);
-  }, []);
+    return renameTerminal(workspaceId, terminalId, label);
+  }, [workspaceId]);
 
   const handleReconcilePaneVisibleTabOrder = useCallback((paneId: string, keys: string[]) => {
     dispatch({ keys, kind: "reconcile-pane-visible-tab-order", paneId });
@@ -956,7 +954,7 @@ export function useWorkspaceCanvasController({
       }
       event.preventDefault();
       clearTerminalTurnRunning(activeTerminalId);
-      void interruptTerminal(activeTerminalId);
+      void interruptTerminal(workspaceId, activeTerminalId);
     };
 
     window.addEventListener("keydown", handleKeyDown);

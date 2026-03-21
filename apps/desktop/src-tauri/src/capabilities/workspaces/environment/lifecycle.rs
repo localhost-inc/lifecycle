@@ -101,7 +101,7 @@ fn mark_prepared(db_path: &str, workspace_id: &str) -> Result<(), LifecycleError
     Ok(())
 }
 
-async fn start_services_lifecycle(
+async fn start_environment_lifecycle(
     app: &AppHandle,
     controller: &ManagedWorkspaceController,
     db_path: &str,
@@ -291,7 +291,7 @@ async fn start_services_lifecycle(
     Ok(())
 }
 
-pub async fn start_services(
+pub async fn start_environment(
     app: AppHandle,
     db_path: State<'_, DbPath>,
     workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
@@ -367,7 +367,7 @@ pub async fn start_services(
     let requested_service_names = service_names.clone();
 
     tokio::spawn(async move {
-        if let Err(e) = start_services_lifecycle(
+        if let Err(e) = start_environment_lifecycle(
             &app,
             &controller,
             &db,
@@ -381,7 +381,7 @@ pub async fn start_services(
         )
         .await
         {
-            tracing::error!("start_services failed for {}: {e}", ws_id);
+            tracing::error!("start_environment failed for {}: {e}", ws_id);
         }
     });
 

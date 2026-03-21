@@ -13,7 +13,7 @@ import type {
 } from "@lifecycle/contracts";
 import { isTauri } from "@tauri-apps/api/core";
 import { publishBrowserLifecycleEvent } from "@/features/events/api";
-import { getWorkspaceRuntime } from "@/lib/workspace-runtime";
+import { getRuntime } from "@/lib/runtime";
 
 const EMPTY_STATUS: GitStatusResult = {
   branch: null,
@@ -98,7 +98,7 @@ export async function getGitStatus(workspaceId: string): Promise<GitStatusResult
     return EMPTY_STATUS;
   }
 
-  return getWorkspaceRuntime().getGitStatus(workspaceId);
+  return getRuntime().getGitStatus(workspaceId);
 }
 
 export async function getGitDiff(
@@ -115,7 +115,7 @@ export async function getGitDiff(
     };
   }
 
-  return getWorkspaceRuntime().getGitDiff({
+  return getRuntime().getGitDiff({
     workspaceId,
     filePath,
     scope,
@@ -127,7 +127,7 @@ export async function getGitScopePatch(workspaceId: string, scope: GitDiffScope)
     return "";
   }
 
-  return getWorkspaceRuntime().getGitScopePatch(workspaceId, scope);
+  return getRuntime().getGitScopePatch(workspaceId, scope);
 }
 
 export async function getGitChangesPatch(workspaceId: string): Promise<string> {
@@ -135,7 +135,7 @@ export async function getGitChangesPatch(workspaceId: string): Promise<string> {
     return "";
   }
 
-  return getWorkspaceRuntime().getGitChangesPatch(workspaceId);
+  return getRuntime().getGitChangesPatch(workspaceId);
 }
 
 export async function getGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]> {
@@ -143,7 +143,7 @@ export async function getGitLog(workspaceId: string, limit: number): Promise<Git
     return [];
   }
 
-  return getWorkspaceRuntime().listGitLog(workspaceId, limit);
+  return getRuntime().listGitLog(workspaceId, limit);
 }
 
 export async function getGitPullRequests(workspaceId: string): Promise<GitPullRequestListResult> {
@@ -151,7 +151,7 @@ export async function getGitPullRequests(workspaceId: string): Promise<GitPullRe
     return EMPTY_PULL_REQUEST_LIST_RESULT;
   }
 
-  return getWorkspaceRuntime().listGitPullRequests(workspaceId);
+  return getRuntime().listGitPullRequests(workspaceId);
 }
 
 export async function getCurrentGitPullRequest(
@@ -161,7 +161,7 @@ export async function getCurrentGitPullRequest(
     return EMPTY_BRANCH_PULL_REQUEST_RESULT;
   }
 
-  return getWorkspaceRuntime().getCurrentGitPullRequest(workspaceId);
+  return getRuntime().getCurrentGitPullRequest(workspaceId);
 }
 
 export async function getGitPullRequest(
@@ -172,7 +172,7 @@ export async function getGitPullRequest(
     return EMPTY_PULL_REQUEST_DETAIL_RESULT;
   }
 
-  return getWorkspaceRuntime().getGitPullRequest(workspaceId, pullRequestNumber);
+  return getRuntime().getGitPullRequest(workspaceId, pullRequestNumber);
 }
 
 export async function getGitBaseRef(workspaceId: string): Promise<string | null> {
@@ -180,7 +180,7 @@ export async function getGitBaseRef(workspaceId: string): Promise<string | null>
     return null;
   }
 
-  return getWorkspaceRuntime().getGitBaseRef(workspaceId);
+  return getRuntime().getGitBaseRef(workspaceId);
 }
 
 export async function getGitRefDiffPatch(
@@ -189,7 +189,7 @@ export async function getGitRefDiffPatch(
   headRef: string,
 ): Promise<string> {
   if (!isTauri()) return "";
-  return getWorkspaceRuntime().getGitRefDiffPatch(workspaceId, baseRef, headRef);
+  return getRuntime().getGitRefDiffPatch(workspaceId, baseRef, headRef);
 }
 
 export async function getGitPullRequestPatch(
@@ -200,7 +200,7 @@ export async function getGitPullRequestPatch(
     return "";
   }
 
-  return getWorkspaceRuntime().getGitPullRequestPatch(workspaceId, pullRequestNumber);
+  return getRuntime().getGitPullRequestPatch(workspaceId, pullRequestNumber);
 }
 
 export async function getGitCommitPatch(
@@ -214,7 +214,7 @@ export async function getGitCommitPatch(
     };
   }
 
-  return getWorkspaceRuntime().getGitCommitPatch(workspaceId, sha);
+  return getRuntime().getGitCommitPatch(workspaceId, sha);
 }
 
 export async function stageGitFiles(workspaceId: string, filePaths: string[]): Promise<void> {
@@ -227,7 +227,7 @@ export async function stageGitFiles(workspaceId: string, filePaths: string[]): P
     return;
   }
 
-  await getWorkspaceRuntime().stageGitFiles(workspaceId, filePaths);
+  await getRuntime().stageGitFiles(workspaceId, filePaths);
 }
 
 export async function unstageGitFiles(workspaceId: string, filePaths: string[]): Promise<void> {
@@ -240,7 +240,7 @@ export async function unstageGitFiles(workspaceId: string, filePaths: string[]):
     return;
   }
 
-  await getWorkspaceRuntime().unstageGitFiles(workspaceId, filePaths);
+  await getRuntime().unstageGitFiles(workspaceId, filePaths);
 }
 
 export async function commitGit(workspaceId: string, message: string): Promise<GitCommitResult> {
@@ -252,7 +252,7 @@ export async function commitGit(workspaceId: string, message: string): Promise<G
     return result;
   }
 
-  return getWorkspaceRuntime().commitGit(workspaceId, message);
+  return getRuntime().commitGit(workspaceId, message);
 }
 
 export async function pushGit(workspaceId: string): Promise<GitPushResult> {
@@ -268,7 +268,7 @@ export async function pushGit(workspaceId: string): Promise<GitPushResult> {
     return result;
   }
 
-  return getWorkspaceRuntime().pushGit(workspaceId);
+  return getRuntime().pushGit(workspaceId);
 }
 
 export async function createGitPullRequest(workspaceId: string): Promise<GitPullRequestSummary> {
@@ -276,7 +276,7 @@ export async function createGitPullRequest(workspaceId: string): Promise<GitPull
     throw new Error("Pull request creation is only available in the desktop app.");
   }
 
-  return getWorkspaceRuntime().createGitPullRequest(workspaceId);
+  return getRuntime().createGitPullRequest(workspaceId);
 }
 
 export async function mergeGitPullRequest(
@@ -287,5 +287,5 @@ export async function mergeGitPullRequest(
     throw new Error("Pull request merge is only available in the desktop app.");
   }
 
-  return getWorkspaceRuntime().mergeGitPullRequest(workspaceId, pullRequestNumber);
+  return getRuntime().mergeGitPullRequest(workspaceId, pullRequestNumber);
 }

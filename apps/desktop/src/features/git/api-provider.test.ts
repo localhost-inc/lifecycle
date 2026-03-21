@@ -104,10 +104,10 @@ const runtime = {
   })),
 };
 
-const getWorkspaceRuntime = mock(() => runtime);
+const getRuntime = mock(() => runtime);
 
-mock.module("../../lib/workspace-runtime", () => ({
-  getWorkspaceRuntime,
+mock.module("../../lib/runtime", () => ({
+  getRuntime,
 }));
 
 const {
@@ -128,7 +128,7 @@ describe("git api runtime routing", () => {
       value: true,
       writable: true,
     });
-    getWorkspaceRuntime.mockClear();
+    getRuntime.mockClear();
     for (const method of Object.values(runtime)) {
       method.mockClear();
     }
@@ -138,7 +138,7 @@ describe("git api runtime routing", () => {
     delete (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri;
   });
 
-  test("routes advanced workspace-scoped git reads through the workspace runtime", async () => {
+  test("routes advanced workspace-scoped git reads through the runtime", async () => {
     expect(await getGitStatus("ws_1")).toEqual({
       branch: "feature/runtime-boundary",
       headSha: "abcdef1234567890",
@@ -172,7 +172,7 @@ describe("git api runtime routing", () => {
       patch: "commit patch",
     });
 
-    expect(getWorkspaceRuntime).toHaveBeenCalled();
+    expect(getRuntime).toHaveBeenCalled();
     expect(runtime.getGitStatus).toHaveBeenCalledWith("ws_1");
     expect(runtime.getGitScopePatch).toHaveBeenCalledWith("ws_1", "working");
     expect(runtime.getGitChangesPatch).toHaveBeenCalledWith("ws_1");

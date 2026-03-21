@@ -4,6 +4,20 @@ use crate::shared::errors::LifecycleError;
 use crate::WorkspaceControllerRegistryHandle;
 use tauri::{AppHandle, State, WebviewWindow};
 
+fn require_workspace_terminal(
+    db_path: &str,
+    workspace_id: &str,
+    terminal_id: &str,
+) -> Result<super::super::query::TerminalRecord, LifecycleError> {
+    let terminal = super::super::terminal::load_terminal_record(db_path, terminal_id)?
+        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()))?;
+    if terminal.workspace_id != workspace_id {
+        return Err(LifecycleError::WorkspaceNotFound(terminal_id.to_string()));
+    }
+
+    Ok(terminal)
+}
+
 #[tauri::command]
 pub async fn list_workspace_terminals(
     db_path: State<'_, DbPath>,
@@ -13,28 +27,20 @@ pub async fn list_workspace_terminals(
 }
 
 #[tauri::command]
-pub async fn get_terminal(
-    db_path: State<'_, DbPath>,
-    terminal_id: String,
-) -> Result<Option<super::super::query::TerminalRecord>, LifecycleError> {
-    super::super::query::get_terminal_by_id(&db_path.0, terminal_id).await
-}
-
-#[tauri::command]
 pub async fn rename_terminal(
     app: AppHandle,
     db_path: State<'_, DbPath>,
     workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
+    workspace_id: String,
     terminal_id: String,
     label: String,
 ) -> Result<super::super::query::TerminalRecord, LifecycleError> {
-    let terminal = super::super::query::get_terminal_by_id(&db_path.0, terminal_id.clone())
-        .await?
-        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.clone()))?;
+    require_workspace_terminal(&db_path.0, &workspace_id, &terminal_id)?;
     let _mutation_guard = workspace_controllers
-        .acquire_mutation_guard(&terminal.workspace_id)
+        .acquire_mutation_guard(&workspace_id)
         .await?;
-    super::super::rename::rename_terminal(&app, &db_path.0, &terminal_id, &label).await
+    super::super::rename::rename_terminal(&app, &db_path.0, &workspace_id, &terminal_id, &label)
+        .await
 }
 
 #[tauri::command]
@@ -111,21 +117,28 @@ pub async fn hide_native_terminal_surface(
 pub async fn detach_terminal(
     app: AppHandle,
     db_path: State<'_, DbPath>,
+    workspace_id: String,
     terminal_id: String,
 ) -> Result<(), LifecycleError> {
-    super::super::terminal::detach_terminal(app, db_path, terminal_id).await
+    super::super::terminal::detach_terminal(app, db_path, workspace_id, terminal_id).await
 }
 
 #[tauri::command]
 pub async fn kill_terminal(
     app: AppHandle,
     db_path: State<'_, DbPath>,
+    workspace_id: String,
     terminal_id: String,
 ) -> Result<(), LifecycleError> {
-    super::super::terminal::kill_terminal(app, db_path, terminal_id).await
+    super::super::terminal::kill_terminal(app, db_path, workspace_id, terminal_id).await
 }
 
 #[tauri::command]
-pub async fn interrupt_terminal(app: AppHandle, terminal_id: String) -> Result<(), LifecycleError> {
-    super::super::terminal::interrupt_terminal(app, terminal_id).await
+pub async fn interrupt_terminal(
+    app: AppHandle,
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    terminal_id: String,
+) -> Result<(), LifecycleError> {
+    super::super::terminal::interrupt_terminal(app, db_path, workspace_id, terminal_id).await
 }

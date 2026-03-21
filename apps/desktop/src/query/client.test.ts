@@ -35,9 +35,6 @@ function createMockSource() {
     async listWorkspaceFiles() {
       return [];
     },
-    async getTerminal() {
-      return null;
-    },
     async getWorkspaceServiceLogs() {
       return [];
     },

@@ -63,7 +63,7 @@ describe("auth session api", () => {
     globalThis.fetch = originalFetch;
   });
 
-  test("routes auth status lookup through the desktop control plane", async () => {
+  test("routes auth status lookup through the desktop backend", async () => {
     expect(await readCurrentAuthSession()).toEqual({
       identity: {
         avatarUrl: "https://avatars.githubusercontent.com/u/14184138?v=4",

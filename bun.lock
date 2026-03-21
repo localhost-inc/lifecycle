@@ -32,7 +32,9 @@
         "@codemirror/lang-rust": "^6.0.2",
         "@codemirror/lang-xml": "^6.1.0",
         "@codemirror/view": "^6.40.0",
+        "@lifecycle/backend": "workspace:*",
         "@lifecycle/contracts": "workspace:*",
+        "@lifecycle/runtime": "workspace:*",
         "@lifecycle/ui": "workspace:*",
         "@pierre/diffs": "^1.0.11",
         "@shikijs/themes": "^3.23.0",
@@ -85,6 +87,13 @@
         "typescript": "^5.9.3",
         "vite": "^6.3.5",
         "wrangler": "^4.0.0",
+      },
+    },
+    "packages/backend": {
+      "name": "@lifecycle/backend",
+      "version": "0.0.0",
+      "dependencies": {
+        "@lifecycle/contracts": "workspace:*",
       },
     },
     "packages/cli": {
@@ -375,6 +384,8 @@
     "@lezer/xml": ["@lezer/xml@1.0.6", "", { "dependencies": { "@lezer/common": "^1.2.0", "@lezer/highlight": "^1.0.0", "@lezer/lr": "^1.0.0" } }, "sha512-CdDwirL0OEaStFue/66ZmFSeppuL6Dwjlk8qk153mSQwiSH/Dlri4GNymrNWnUmPl2Um7QfV1FO9KFUyX3Twww=="],
 
     "@lifecycle/api": ["@lifecycle/api@workspace:apps/api"],
+
+    "@lifecycle/backend": ["@lifecycle/backend@workspace:packages/backend"],
 
     "@lifecycle/cli": ["@lifecycle/cli@workspace:packages/cli"],
 

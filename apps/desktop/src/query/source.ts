@@ -19,7 +19,7 @@ import {
   getGitStatus,
 } from "@/features/git/api";
 import type { ManifestStatus } from "@/features/projects/api/projects";
-import { getTerminal, listWorkspaceTerminals } from "@/features/terminals/api";
+import { listWorkspaceTerminals } from "@/features/terminals/api";
 import { listProjects, readManifest } from "@/features/projects/api/projects";
 import { listWorkspacesByProject } from "@/features/workspaces/catalog-api";
 import {
@@ -56,7 +56,6 @@ export interface QuerySource {
   getWorkspaceCurrentGitPullRequest(workspaceId: string): Promise<GitBranchPullRequestResult>;
   getWorkspaceGitStatus(workspaceId: string): Promise<GitStatusResult>;
   listWorkspaceTerminals(workspaceId: string): Promise<TerminalRecord[]>;
-  getTerminal(terminalId: string): Promise<TerminalRecord | null>;
 }
 
 export function createQuerySource(): QuerySource {
@@ -135,9 +134,6 @@ export function createQuerySource(): QuerySource {
       return measureWorkspace("query.workspace-terminals", workspaceId, () =>
         listWorkspaceTerminals(workspaceId),
       );
-    },
-    async getTerminal(terminalId) {
-      return measureAsyncPerformance(`query.terminal:${terminalId}`, () => getTerminal(terminalId));
     },
   };
 }

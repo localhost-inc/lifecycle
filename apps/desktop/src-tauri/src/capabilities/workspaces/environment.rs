@@ -9,4 +9,4 @@ mod port_assignment;
 #[path = "environment/runtime_env.rs"]
 mod runtime_env;
 
-pub use lifecycle::{start_services, sync_workspace_manifest_from_disk_if_idle};
+pub use lifecycle::{start_environment, sync_workspace_manifest_from_disk_if_idle};

@@ -47,8 +47,8 @@ import {
   createPullRequestOpenInput,
 } from "@/features/workspaces/components/workspace-canvas-requests";
 import {
-  startServices,
-  stopWorkspace,
+  startEnvironment,
+  stopEnvironment,
 } from "@/features/workspaces/api";
 import { useWorkspaceEnvironment, useWorkspaceServices } from "@/features/workspaces/hooks";
 import { workspaceSupportsFilesystemInteraction } from "@/features/workspaces/lib/workspace-capabilities";
@@ -100,7 +100,7 @@ export function WorkspaceLayout({
       if (!config || !services) return;
       try {
         const manifestJson = JSON.stringify(config);
-        await startServices({
+        await startEnvironment({
           serviceNames,
           workspace,
           services,
@@ -122,8 +122,8 @@ export function WorkspaceLayout({
 
     try {
       const manifestJson = JSON.stringify(config);
-      await stopWorkspace(workspace.id);
-      await startServices({
+      await stopEnvironment(workspace.id);
+      await startEnvironment({
         workspace,
         services,
         manifestJson,
@@ -137,7 +137,7 @@ export function WorkspaceLayout({
 
   const handleStop = useCallback(async () => {
     try {
-      await stopWorkspace(workspace.id);
+      await stopEnvironment(workspace.id);
     } catch (err) {
       console.error("Failed to stop workspace:", err);
       throw err;

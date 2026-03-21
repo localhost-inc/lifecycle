@@ -1,7 +1,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import type { TerminalRecord, TerminalStatus } from "@lifecycle/contracts";
 import type { HarnessLaunchConfig } from "@/features/settings/state/harness-settings";
-import { getWorkspaceRuntime } from "@/lib/workspace-runtime";
+import { getRuntime } from "@/lib/runtime";
 
 export type HarnessProvider = "claude" | "codex";
 const TERMINAL_RUNTIME_UNAVAILABLE_MESSAGE = "Terminal runtime requires the Tauri desktop shell.";
@@ -46,23 +46,14 @@ export async function listWorkspaceTerminals(workspaceId: string): Promise<Termi
     return [];
   }
 
-  return getWorkspaceRuntime().listTerminals(workspaceId);
-}
-
-export async function getTerminal(terminalId: string): Promise<TerminalRecord | null> {
-  if (!isTauri()) {
-    void terminalId;
-    return null;
-  }
-
-  return getWorkspaceRuntime().getTerminal(terminalId);
+  return getRuntime().listTerminals(workspaceId);
 }
 
 export async function createTerminal(input: CreateTerminalInput): Promise<TerminalRecord> {
   requireNativeTerminalRuntime();
 
   if (input.launchType === "harness") {
-    return getWorkspaceRuntime().createTerminal({
+    return getRuntime().createTerminal({
       workspaceId: input.workspaceId,
       launchType: input.launchType,
       harnessLaunchConfig: input.harnessLaunchConfig ?? null,
@@ -71,7 +62,7 @@ export async function createTerminal(input: CreateTerminalInput): Promise<Termin
     });
   }
 
-  return getWorkspaceRuntime().createTerminal({
+  return getRuntime().createTerminal({
     workspaceId: input.workspaceId,
     launchType: input.launchType,
     harnessProvider: null,
@@ -79,7 +70,11 @@ export async function createTerminal(input: CreateTerminalInput): Promise<Termin
   });
 }
 
-export async function renameTerminal(terminalId: string, label: string): Promise<TerminalRecord> {
+export async function renameTerminal(
+  workspaceId: string,
+  terminalId: string,
+  label: string,
+): Promise<TerminalRecord> {
   const normalizedLabel = label.trim().replace(/\s+/g, " ");
   if (normalizedLabel.length === 0) {
     throw new Error("Session title cannot be empty.");
@@ -87,7 +82,7 @@ export async function renameTerminal(terminalId: string, label: string): Promise
 
   requireNativeTerminalRuntime();
 
-  return getWorkspaceRuntime().renameTerminal(terminalId, normalizedLabel);
+  return getRuntime().renameTerminal(workspaceId, terminalId, normalizedLabel);
 }
 
 export async function saveTerminalAttachment(
@@ -97,23 +92,23 @@ export async function saveTerminalAttachment(
     throw new Error("Image paste and drop are only available in the desktop app.");
   }
 
-  return getWorkspaceRuntime().saveTerminalAttachment(input);
+  return getRuntime().saveTerminalAttachment(input);
 }
 
-export async function detachTerminal(terminalId: string): Promise<void> {
+export async function detachTerminal(workspaceId: string, terminalId: string): Promise<void> {
   requireNativeTerminalRuntime();
 
-  await getWorkspaceRuntime().detachTerminal(terminalId);
+  await getRuntime().detachTerminal(workspaceId, terminalId);
 }
 
-export async function killTerminal(terminalId: string): Promise<void> {
+export async function killTerminal(workspaceId: string, terminalId: string): Promise<void> {
   requireNativeTerminalRuntime();
 
-  await getWorkspaceRuntime().killTerminal(terminalId);
+  await getRuntime().killTerminal(workspaceId, terminalId);
 }
 
-export async function interruptTerminal(terminalId: string): Promise<void> {
+export async function interruptTerminal(workspaceId: string, terminalId: string): Promise<void> {
   requireNativeTerminalRuntime();
 
-  await getWorkspaceRuntime().interruptTerminal(terminalId);
+  await getRuntime().interruptTerminal(workspaceId, terminalId);
 }

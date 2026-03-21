@@ -18,15 +18,13 @@ import type {
 } from "@lifecycle/contracts";
 import type { HarnessLaunchConfigInput } from "./harnesses";
 
-export interface WorkspaceStartInput {
+export interface EnvironmentStartInput {
   serviceNames?: string[];
   workspace: WorkspaceRecord;
   services: ServiceRecord[];
   manifestJson: string;
   manifestFingerprint: string;
 }
-
-export type WorkspaceWakeInput = WorkspaceStartInput;
 
 export interface WorkspaceHealthResult {
   healthy: boolean;
@@ -85,24 +83,21 @@ export interface SavedTerminalAttachment {
   relativePath: string;
 }
 
-export interface WorkspaceRuntime {
-  startServices(input: WorkspaceStartInput): Promise<ServiceRecord[]>;
+export interface Runtime {
+  startEnvironment(input: EnvironmentStartInput): Promise<ServiceRecord[]>;
   healthCheck(workspaceId: string): Promise<WorkspaceHealthResult>;
-  stopServices(workspaceId: string, serviceNames?: string[]): Promise<void>;
-  sleep(workspaceId: string): Promise<void>;
-  wake(input: WorkspaceWakeInput): Promise<void>;
+  stopEnvironment(workspaceId: string): Promise<void>;
   getEnvironment(workspaceId: string): Promise<EnvironmentRecord>;
   getActivity(workspaceId: string): Promise<LifecycleEvent[]>;
   getServiceLogs(workspaceId: string): Promise<ServiceLogSnapshot[]>;
   getServices(workspaceId: string): Promise<ServiceRecord[]>;
   createTerminal(input: CreateTerminalInput): Promise<TerminalRecord>;
   listTerminals(workspaceId: string): Promise<TerminalRecord[]>;
-  getTerminal(terminalId: string): Promise<TerminalRecord | null>;
-  renameTerminal(terminalId: string, label: string): Promise<TerminalRecord>;
+  renameTerminal(workspaceId: string, terminalId: string, label: string): Promise<TerminalRecord>;
   saveTerminalAttachment(input: SaveTerminalAttachmentInput): Promise<SavedTerminalAttachment>;
-  detachTerminal(terminalId: string): Promise<void>;
-  killTerminal(terminalId: string): Promise<void>;
-  interruptTerminal(terminalId: string): Promise<void>;
+  detachTerminal(workspaceId: string, terminalId: string): Promise<void>;
+  killTerminal(workspaceId: string, terminalId: string): Promise<void>;
+  interruptTerminal(workspaceId: string, terminalId: string): Promise<void>;
   readFile(workspaceId: string, filePath: string): Promise<WorkspaceFileReadResult>;
   writeFile(
     workspaceId: string,

@@ -66,18 +66,6 @@ function isTerminalEvent(event: LifecycleEvent): boolean {
   );
 }
 
-function getTerminalId(event: LifecycleEvent): string | null {
-  if (event.kind === "terminal.created" || event.kind === "terminal.updated") {
-    return event.terminal.id;
-  }
-
-  if (event.kind === "terminal.status_changed" || event.kind === "terminal.renamed") {
-    return event.terminal_id;
-  }
-
-  return null;
-}
-
 export function getInvalidationTargetsForLifecycleEvent(
   event: LifecycleEvent,
 ): QueryInvalidationTarget[] {
@@ -112,10 +100,6 @@ export function getInvalidationTargetsForLifecycleEvent(
 
   if (isTerminalEvent(event)) {
     targets.push(exact(terminalKeys.byWorkspace(workspaceId)));
-    const terminalId = getTerminalId(event);
-    if (terminalId !== null) {
-      targets.push(exact(terminalKeys.detail(terminalId)));
-    }
   }
 
   if (event.kind === "git.status_changed" || event.kind === "git.head_changed") {

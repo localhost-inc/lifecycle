@@ -32,7 +32,7 @@ Local preview hostnames are **human-readable and deterministic**:
 Rules:
 1. The workspace portion derives from branch or worktree identity.
 2. Hostnames use deterministic disambiguation — the workspace label keeps a short workspace suffix when needed for stability.
-3. Ports are runtime plumbing. The user-facing HTTP contract stays on workspace-runtime-owned `.lifecycle.localhost` routes.
+3. Ports are runtime plumbing. The user-facing HTTP contract stays on runtime-owned `.lifecycle.localhost` routes.
 4. The same readable hostname shape applies to any future HTTPS local preview mode.
 
 ## Port Assignment
@@ -46,7 +46,7 @@ Rules:
 
 Two distinct concerns must stay separate:
 - **Runtime state**: the host port actually bound for the current run
-- **Preview identity**: the stable workspace-runtime-owned `preview_url`
+- **Preview identity**: the stable runtime-owned `preview_url`
 
 ## Startup Boundary
 

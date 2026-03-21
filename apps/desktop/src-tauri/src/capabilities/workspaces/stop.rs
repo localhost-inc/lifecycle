@@ -7,7 +7,7 @@ use tauri::{AppHandle, State};
 
 use super::shared::{emit_service_status, emit_environment_status, update_environment_status_db};
 
-pub async fn stop_workspace(
+pub async fn stop_environment(
     app: AppHandle,
     db_path: State<'_, DbPath>,
     workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,

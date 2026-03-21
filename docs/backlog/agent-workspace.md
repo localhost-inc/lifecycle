@@ -246,7 +246,7 @@ Attachments and tools are different capabilities:
 1. Tool registry and schemas should be shared across local and future cloud execution environments.
 2. Actual tool execution remains provider-authoritative:
    - local mode uses desktop/Tauri-owned workspace access
-   - cloud mode later uses cloud provider/control-plane workspace access
+   - cloud mode later uses cloud provider/backend workspace access
 3. Tool execution must never depend on scraping terminal output.
 
 ## Entity Contracts

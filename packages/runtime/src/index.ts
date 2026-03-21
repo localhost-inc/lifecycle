@@ -1,14 +1,8 @@
 export type {
-  CloudWorkspaceCreateContext,
-  ControlPlane,
-  LocalWorkspaceCreateContext,
-  WorkspaceCreateContext,
-  WorkspaceCreateInput,
-  WorkspaceCreateResult,
-} from "./control-plane";
-export type {
   CreateTerminalInput,
+  EnvironmentStartInput,
   GitDiffInput,
+  Runtime,
   SavedTerminalAttachment,
   ServiceLogLine,
   ServiceLogSnapshot,
@@ -16,10 +10,7 @@ export type {
   WorkspaceFileReadResult,
   WorkspaceFileTreeEntry,
   WorkspaceHealthResult,
-  WorkspaceRuntime,
-  WorkspaceStartInput,
-  WorkspaceWakeInput,
-} from "./workspace-runtime";
+} from "./runtime";
 export type {
   ClaudePermissionMode,
   ClaudeHarnessLaunchConfigInput,
@@ -29,10 +20,5 @@ export type {
   HarnessLaunchConfigInput,
   HarnessPreset,
 } from "./harnesses";
-export { LocalControlPlane } from "./local-control-plane";
-export { CloudControlPlane, type CloudControlPlaneClient } from "./cloud-control-plane";
-export { LocalWorkspaceRuntime } from "./local-workspace-runtime";
-export {
-  CloudWorkspaceRuntime,
-  type CloudWorkspaceRuntimeClient,
-} from "./cloud-workspace-runtime";
+export { CloudRuntime, type CloudRuntimeClient } from "./cloud-runtime";
+export { LocalRuntime } from "./local-runtime";

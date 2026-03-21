@@ -80,7 +80,7 @@ describe("getInvalidationTargetsForLifecycleEvent", () => {
     ]);
   });
 
-  test("targets terminal list and matching terminal detail", () => {
+  test("targets terminal list for terminal lifecycle events", () => {
     const event: LifecycleEvent = {
       id: "event-1",
       kind: "terminal.updated",
@@ -106,7 +106,6 @@ describe("getInvalidationTargetsForLifecycleEvent", () => {
     expect(getInvalidationTargetsForLifecycleEvent(event)).toEqual([
       { kind: "exact", key: workspaceKeys.activity("ws-1") },
       { kind: "exact", key: terminalKeys.byWorkspace("ws-1") },
-      { kind: "exact", key: terminalKeys.detail("terminal-1") },
     ]);
   });
 

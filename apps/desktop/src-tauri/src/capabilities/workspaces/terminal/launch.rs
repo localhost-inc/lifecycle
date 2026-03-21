@@ -3,7 +3,7 @@ use std::path::Path;
 
 use super::super::harness;
 use super::super::harness::HarnessLaunchConfig;
-use super::persistence::WorkspaceRuntime;
+use super::persistence::TerminalWorkspaceContext;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum HarnessLaunchMode {
@@ -54,7 +54,7 @@ pub(crate) fn login_shell_command(command: &str) -> String {
 }
 
 pub(crate) fn resolve_terminal_working_directory(
-    workspace: &WorkspaceRuntime,
+    workspace: &TerminalWorkspaceContext,
 ) -> Result<String, LifecycleError> {
     if !workspace.worktree_path.is_empty() && Path::new(&workspace.worktree_path).is_dir() {
         return Ok(workspace.worktree_path.clone());

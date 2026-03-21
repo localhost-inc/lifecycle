@@ -8,12 +8,12 @@ Apply the following workspace contracts as context for the current task. All wor
 
 ---
 
-# ControlPlane + WorkspaceRuntime
+# Backend + Runtime
 
 Lifecycle uses two explicit backend seams:
 
-1. `ControlPlane` — projects, workspaces, ownership, manifest reads, branch lookup, create/rename/destroy, and workspace-mode routing
-2. `WorkspaceRuntime` — live workspace-scoped execution once a workspace exists: environment, services, terminals, files, git, activity, and service logs
+1. `Backend` — projects, workspaces, ownership, manifest reads, branch lookup, create/rename/destroy, and workspace-mode routing
+2. `Runtime` — live workspace-scoped execution once a workspace exists: environment, services, terminals, files, git, activity, and service logs
 
 Host-native concerns such as OS app launching and native terminal surface synchronization stay outside both seams. Workspace mode is selected **per-workspace** at creation time and stored as `workspace.mode`.
 
@@ -38,36 +38,34 @@ Environment lifecycle facts are stored separately from the workspace shell, keye
 ## Interface
 
 ```typescript
-interface ControlPlane {
+interface Backend {
   getProjectWorkspace(project_id) → workspace | null
   listWorkspaces() → workspace[]
   listWorkspacesByProject() → Record<project_id, workspace[]>
   listProjects() → project[]
   readManifestText(dir_path) → string | null
   getCurrentBranch(project_path) → string
-  createWorkspace(input + manifest_json? + manifest_fingerprint?) → { workspace, worktree_path }
+  createWorkspace(local_create_context + manifest_json? + manifest_fingerprint?) → { workspace, worktree_path }
   renameWorkspace(workspace_id, name) → workspace
   destroyWorkspace(workspace_id) → void
   getWorkspace(workspace_id) → workspace | null
 }
 
-interface WorkspaceRuntime {
-  startServices(workspace + manifest_json + manifest_fingerprint + service_names?) → service_statuses
+interface Runtime {
+  startEnvironment(workspace + manifest_json + manifest_fingerprint + service_names?) → service_statuses
   healthCheck(manifest.environment[kind=service].health_check) → pass/fail per service
-  stopServices(service_names[]) → void
-  sleep(workspace_id) → void
-  wake(workspace + manifest_json + manifest_fingerprint) → void
+  stopEnvironment(workspace_id) → void
   getEnvironment(workspace_id) → environment
   getActivity(workspace_id) → lifecycle_events[]
   getServiceLogs(workspace_id) → service_logs[]
   getServices(workspace_id) → services[]
   createTerminal(workspace_id, launch_type, harness_provider?, harness_session_id?) → terminal
   listTerminals(workspace_id) → terminals[]
-  getTerminal(terminal_id) → terminal | null
-  renameTerminal(terminal_id, label) → terminal
+  renameTerminal(workspace_id, terminal_id, label) → terminal
   saveTerminalAttachment(workspace_id, file_name, base64_data, media_type?) → attachment
-  detachTerminal(terminal_id) → void
-  killTerminal(terminal_id) → void
+  detachTerminal(workspace_id, terminal_id) → void
+  killTerminal(workspace_id, terminal_id) → void
+  interruptTerminal(workspace_id, terminal_id) → void
   readFile(workspace_id, file_path) → file
   writeFile(workspace_id, file_path, content) → file
   listFiles(workspace_id) → file_entries[]
@@ -93,48 +91,51 @@ interface WorkspaceRuntime {
 
 ### Responsibility Split
 
-1. `createWorkspace`, `renameWorkspace`, `destroyWorkspace`, and `getWorkspace` are control-plane operations.
-2. Project list reads, manifest reads, and current-branch lookup are control-plane operations.
-3. `startServices`, `stopServices`, `sleep`, `wake`, and reset flows operate on the environment attached to a workspace and belong to `WorkspaceRuntime`.
-4. File, git, terminal, activity, environment, service, and service-log reads are workspace-runtime operations.
-5. `startServices(service_names?)` may target a single service chain; runtimes must honor manifest `depends_on` edges.
-6. When `startServices(service_names?)` is called against an already-active workspace, runtimes should treat `ready` dependency services as satisfied boundaries.
-7. Local create/start/wake flows must carry the exact manifest content plus `manifest_fingerprint`.
-8. Desktop query reads should not bypass these seams with transport-local command calls.
-9. Frontend consumers should read concrete workspace-scoped facts through separate queries (`workspace`, `environment`, `services`, `terminals`, `activity`, `service_logs`) instead of depending on a synthetic snapshot aggregate.
-10. Backend-owned live selectors should stay split by concern as well; do not collapse activity, service logs, and other unrelated facts into a synthetic controller facts bag.
-11. Frontend manifest watchers may invalidate workspace queries when `lifecycle.json` changes, but reconciliation of persisted idle service state must remain backend-owned.
+1. `createWorkspace`, `renameWorkspace`, `destroyWorkspace`, and `getWorkspace` are backend operations.
+2. Project list reads, manifest reads, and current-branch lookup are backend operations.
+3. `startEnvironment`, `stopEnvironment`, and reset flows operate on the environment attached to a workspace and belong to `Runtime`.
+4. File, git, terminal, activity, environment, service, and service-log reads are runtime operations.
+5. `startEnvironment(service_names?)` may target a single service chain; runtimes must honor manifest `depends_on` edges.
+6. When `startEnvironment(service_names?)` is called against an already-active workspace, runtimes should treat `ready` dependency services as satisfied boundaries.
+7. Local create/start flows must carry the exact manifest content plus `manifest_fingerprint`.
+8. Backend create owns workspace identity, source-ref derivation, and the returned workspace record. Desktop clients must not synthesize those fields locally.
+9. Desktop query reads should not bypass these seams with transport-local command calls.
+10. Frontend consumers should read concrete workspace-scoped facts through separate queries (`workspace`, `environment`, `services`, `terminals`, `activity`, `service_logs`) instead of depending on a synthetic snapshot aggregate.
+11. Backend-owned live selectors should stay split by concern as well; do not collapse activity, service logs, and other unrelated facts into a synthetic controller facts bag.
+12. Frontend manifest watchers may invalidate workspace queries when `lifecycle.json` changes, but reconciliation of persisted idle service state must remain backend-owned.
 
 ## Execution Model
 
-`lifecycle.json` describes **WHAT** to run. The `ControlPlane` decides who owns the workspace, and the `WorkspaceRuntime` decides **WHERE** and **HOW** it runs.
+`lifecycle.json` describes **WHAT** to run. The `Backend` decides who owns the workspace, and the `Runtime` decides **WHERE** and **HOW** it runs.
 
-1. All workspaces are lifecycle-managed execution environments backed by a `WorkspaceRuntime`.
-2. V1 ships both `CloudWorkspaceRuntime` and `LocalWorkspaceRuntime`, with matching `ControlPlane` adapters.
+1. All workspaces are lifecycle-managed execution environments backed by a `Runtime`.
+2. V1 ships both `CloudRuntime` and `LocalRuntime`, with a shared `Backend` authority boundary.
 3. Platform stance is Cloudflare-first for cloud execution.
 
 ## Event Foundation Contract
 
-1. Control-plane and workspace-runtime mutations publish normalized fact events into the Lifecycle event foundation.
+1. Backend and runtime mutations publish normalized fact events into the Lifecycle event foundation.
 2. The desktop query cache, notifications, metrics, and future plugins are consumers of that foundation.
 3. Commands may expose `before|after|failed` hooks.
 4. High-frequency terminal rendering stays inside the native terminal host.
 
 ## Terminal Session Contract (M3+)
 
-1. Control-plane operations stay typed and imperative (`create`, `detach`, `kill`).
-2. Session runtime stays workspace-runtime-owned (local: native session; cloud: sandbox PTY).
-3. Desktop-only geometry, visibility, focus, theme, and font synchronization stay outside the workspace-runtime interface.
-4. `detachTerminal(terminal_id)` hides the active surface without terminating the session.
-5. `killTerminal(terminal_id)` is the only action that intentionally ends a live session.
+1. Backend operations stay typed and imperative (`create`, `detach`, `kill`).
+2. Session runtime stays runtime-owned (local: native session; cloud: sandbox PTY).
+3. Desktop-only geometry, visibility, focus, theme, and font synchronization stay outside the runtime interface.
+4. `detachTerminal(workspace_id, terminal_id)` hides the active surface without terminating the session.
+5. `killTerminal(workspace_id, terminal_id)` is the only action that intentionally ends a live session.
 
 ## Mode, Authority, and Aggregation
 
-1. `workspace.mode=local` means the local workspace runtime is authoritative.
-2. `workspace.mode=cloud` means the cloud workspace runtime is authoritative.
+1. `workspace.mode=local` means the local runtime is authoritative.
+2. `workspace.mode=cloud` means the cloud runtime is authoritative.
 3. Signing in enables cloud-mode workspaces; it does not change the authority of existing local-mode workspaces.
 4. Mixed-mode workspace lists must be aggregated from normalized domain records.
 5. Mutations from aggregated views must dispatch to the authoritative runtime.
+6. Desktop runtime resolution must dispatch runtime calls by `workspace.mode`.
+7. Terminal control operations are workspace-scoped; `terminal_id` is never an authority boundary by itself.
 
 ## Git Operations Contract
 
@@ -143,7 +144,7 @@ interface WorkspaceRuntime {
 3. The public git result types must stay provider-agnostic.
 4. Authoritative git mutations publish repository-level fact events.
 
-## `LocalControlPlane` + `LocalWorkspaceRuntime` (V1)
+## `Backend` + `LocalRuntime` (V1)
 
 1. Local Git worktree on host filesystem.
 2. Tauri Rust backend handles process supervision, libghostty, Docker, local state persistence.
@@ -153,7 +154,7 @@ interface WorkspaceRuntime {
 6. Worktree creation mirrors existing `.env` and `.env.local` files from the source repo.
 7. Local workspaces operate without network.
 
-## `CloudControlPlane` + `CloudWorkspaceRuntime` (V1)
+## `Backend` + `CloudRuntime` (V1)
 
 1. Per-branch Cloudflare Sandbox instances.
 2. Sandbox-owned PTY sessions for terminal runtime.

@@ -30,7 +30,7 @@ describe("RouteErrorSurface", () => {
     );
 
     expect(markup).toContain('data-slot="route-error-surface"');
-    expect(markup).toContain("Lifecycle / workspace control plane");
+    expect(markup).toContain("Lifecycle / workspace backend");
     expect(markup).toContain("Workspace surface failed to load");
     expect(markup).toContain("Reload app");
     expect(markup).toContain("Return home");

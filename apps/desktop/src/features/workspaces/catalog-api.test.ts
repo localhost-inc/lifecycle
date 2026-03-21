@@ -19,16 +19,16 @@ const workspace: WorkspaceRecord = {
   expires_at: null,
 };
 
-const controlPlane = {
+const backend = {
   getProjectWorkspace: mock(async () => workspace),
   listWorkspaces: mock(async () => [workspace]),
   listWorkspacesByProject: mock(async () => ({ project_1: [workspace] })),
 };
 
-const getControlPlane = mock(() => controlPlane);
+const getBackend = mock(() => backend);
 
-mock.module("../../lib/control-plane", () => ({
-  getControlPlane,
+mock.module("../../lib/backend", () => ({
+  getBackend,
 }));
 
 const { getProjectWorkspace, listWorkspaces, listWorkspacesByProject } =
@@ -41,24 +41,24 @@ describe("workspace catalog api", () => {
       value: true,
       writable: true,
     });
-    getControlPlane.mockClear();
-    controlPlane.getProjectWorkspace.mockClear();
-    controlPlane.listWorkspaces.mockClear();
-    controlPlane.listWorkspacesByProject.mockClear();
+    getBackend.mockClear();
+    backend.getProjectWorkspace.mockClear();
+    backend.listWorkspaces.mockClear();
+    backend.listWorkspacesByProject.mockClear();
   });
 
   afterEach(() => {
     delete (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri;
   });
 
-  test("routes workspace catalog queries through the desktop control plane", async () => {
+  test("routes workspace catalog queries through the desktop backend", async () => {
     expect(await getProjectWorkspace("project_1")).toEqual(workspace);
     expect(await listWorkspaces()).toEqual([workspace]);
     expect(await listWorkspacesByProject()).toEqual({ project_1: [workspace] });
 
-    expect(getControlPlane).toHaveBeenCalledTimes(3);
-    expect(controlPlane.getProjectWorkspace).toHaveBeenCalledWith("project_1");
-    expect(controlPlane.listWorkspaces).toHaveBeenCalledTimes(1);
-    expect(controlPlane.listWorkspacesByProject).toHaveBeenCalledTimes(1);
+    expect(getBackend).toHaveBeenCalledTimes(3);
+    expect(backend.getProjectWorkspace).toHaveBeenCalledWith("project_1");
+    expect(backend.listWorkspaces).toHaveBeenCalledTimes(1);
+    expect(backend.listWorkspacesByProject).toHaveBeenCalledTimes(1);
   });
 });

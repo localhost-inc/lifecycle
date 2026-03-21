@@ -16,36 +16,32 @@ import type {
 } from "@lifecycle/contracts";
 import type {
   CreateTerminalInput,
+  EnvironmentStartInput,
   GitDiffInput,
+  Runtime,
   SavedTerminalAttachment,
+  SaveTerminalAttachmentInput,
   ServiceLogSnapshot,
   WorkspaceFileReadResult,
   WorkspaceFileTreeEntry,
   WorkspaceHealthResult,
-  WorkspaceRuntime,
-  WorkspaceStartInput,
-  WorkspaceWakeInput,
-  SaveTerminalAttachmentInput,
-} from "./workspace-runtime";
+} from "./runtime";
 
-export interface CloudWorkspaceRuntimeClient {
-  startServices(input: WorkspaceStartInput): Promise<ServiceRecord[]>;
+export interface CloudRuntimeClient {
+  startEnvironment(input: EnvironmentStartInput): Promise<ServiceRecord[]>;
   healthCheck(workspaceId: string): Promise<WorkspaceHealthResult>;
-  stopServices(workspaceId: string, serviceNames?: string[]): Promise<void>;
-  sleep(workspaceId: string): Promise<void>;
-  wake(input: WorkspaceWakeInput): Promise<void>;
+  stopEnvironment(workspaceId: string): Promise<void>;
   getEnvironment(workspaceId: string): Promise<EnvironmentRecord>;
   getActivity(workspaceId: string): Promise<LifecycleEvent[]>;
   getServiceLogs(workspaceId: string): Promise<ServiceLogSnapshot[]>;
   getServices(workspaceId: string): Promise<ServiceRecord[]>;
   createTerminal(input: CreateTerminalInput): Promise<TerminalRecord>;
   listTerminals(workspaceId: string): Promise<TerminalRecord[]>;
-  getTerminal(terminalId: string): Promise<TerminalRecord | null>;
-  renameTerminal(terminalId: string, label: string): Promise<TerminalRecord>;
+  renameTerminal(workspaceId: string, terminalId: string, label: string): Promise<TerminalRecord>;
   saveTerminalAttachment(input: SaveTerminalAttachmentInput): Promise<SavedTerminalAttachment>;
-  detachTerminal(terminalId: string): Promise<void>;
-  killTerminal(terminalId: string): Promise<void>;
-  interruptTerminal(terminalId: string): Promise<void>;
+  detachTerminal(workspaceId: string, terminalId: string): Promise<void>;
+  killTerminal(workspaceId: string, terminalId: string): Promise<void>;
+  interruptTerminal(workspaceId: string, terminalId: string): Promise<void>;
   readFile(workspaceId: string, filePath: string): Promise<WorkspaceFileReadResult>;
   writeFile(
     workspaceId: string,
@@ -80,31 +76,23 @@ export interface CloudWorkspaceRuntimeClient {
   ): Promise<GitPullRequestSummary>;
 }
 
-export class CloudWorkspaceRuntime implements WorkspaceRuntime {
-  private client: CloudWorkspaceRuntimeClient;
+export class CloudRuntime implements Runtime {
+  private client: CloudRuntimeClient;
 
-  constructor(client: CloudWorkspaceRuntimeClient) {
+  constructor(client: CloudRuntimeClient) {
     this.client = client;
   }
 
-  startServices(input: WorkspaceStartInput): Promise<ServiceRecord[]> {
-    return this.client.startServices(input);
+  startEnvironment(input: EnvironmentStartInput): Promise<ServiceRecord[]> {
+    return this.client.startEnvironment(input);
   }
 
   healthCheck(workspaceId: string): Promise<WorkspaceHealthResult> {
     return this.client.healthCheck(workspaceId);
   }
 
-  stopServices(workspaceId: string, serviceNames?: string[]): Promise<void> {
-    return this.client.stopServices(workspaceId, serviceNames);
-  }
-
-  sleep(workspaceId: string): Promise<void> {
-    return this.client.sleep(workspaceId);
-  }
-
-  wake(input: WorkspaceWakeInput): Promise<void> {
-    return this.client.wake(input);
+  stopEnvironment(workspaceId: string): Promise<void> {
+    return this.client.stopEnvironment(workspaceId);
   }
 
   getEnvironment(workspaceId: string): Promise<EnvironmentRecord> {
@@ -131,28 +119,24 @@ export class CloudWorkspaceRuntime implements WorkspaceRuntime {
     return this.client.listTerminals(workspaceId);
   }
 
-  getTerminal(terminalId: string): Promise<TerminalRecord | null> {
-    return this.client.getTerminal(terminalId);
-  }
-
-  renameTerminal(terminalId: string, label: string): Promise<TerminalRecord> {
-    return this.client.renameTerminal(terminalId, label);
+  renameTerminal(workspaceId: string, terminalId: string, label: string): Promise<TerminalRecord> {
+    return this.client.renameTerminal(workspaceId, terminalId, label);
   }
 
   saveTerminalAttachment(input: SaveTerminalAttachmentInput): Promise<SavedTerminalAttachment> {
     return this.client.saveTerminalAttachment(input);
   }
 
-  detachTerminal(terminalId: string): Promise<void> {
-    return this.client.detachTerminal(terminalId);
+  detachTerminal(workspaceId: string, terminalId: string): Promise<void> {
+    return this.client.detachTerminal(workspaceId, terminalId);
   }
 
-  killTerminal(terminalId: string): Promise<void> {
-    return this.client.killTerminal(terminalId);
+  killTerminal(workspaceId: string, terminalId: string): Promise<void> {
+    return this.client.killTerminal(workspaceId, terminalId);
   }
 
-  interruptTerminal(terminalId: string): Promise<void> {
-    return this.client.interruptTerminal(terminalId);
+  interruptTerminal(workspaceId: string, terminalId: string): Promise<void> {
+    return this.client.interruptTerminal(workspaceId, terminalId);
   }
 
   readFile(workspaceId: string, filePath: string): Promise<WorkspaceFileReadResult> {

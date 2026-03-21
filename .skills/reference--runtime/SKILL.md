@@ -10,7 +10,7 @@ Apply the following runtime contracts as context for the current task. Use these
 
 # Runtime Domains
 
-Canonical runtime/control-plane domain taxonomy for Lifecycle backend and CLI work.
+Canonical runtime/backend domain taxonomy for Lifecycle backend and CLI work.
 
 ## Core Rule
 
@@ -24,13 +24,13 @@ Shared type contracts and schemas, normalized command inputs and query outputs, 
 
 Does not own: process supervision, transport clients, platform SDK calls, workflow orchestration.
 
-### `control_plane`
+### `backend`
 
 Authority boundary for projects, workspaces, auth, ownership, and workspace-mode routing.
 
 Decision rule: If the concern lists records, changes workspace authority, or decides who owns a workspace, it belongs here.
 
-### `workspace_runtime`
+### `runtime`
 
 Workspace-scoped execution boundary once a workspace already exists.
 
@@ -73,25 +73,26 @@ Decision rule: If the feature is a verb that composes several domains, it belong
 ## Domain Interaction Rules
 
 1. `contracts` may be imported by every other domain.
-2. `control_plane` may assemble `workspace_runtime`, `execution`, `transport`, `integrations`, `workflows`.
-3. `workspace_runtime` may assemble `execution`, `transport`, and narrow `integrations`.
+2. `backend` may assemble `runtime`, `execution`, `transport`, `integrations`, `workflows`.
+3. `runtime` may assemble `execution`, `transport`, and narrow `integrations`.
 4. `execution` depends on `contracts` and narrow `integrations`.
 5. `transport` depends on `contracts` and narrow `integrations`.
 6. `workflows` may compose all other domains but keeps boundaries visible.
-7. Frontend code calls control-plane, workspace-runtime, or workflow surfaces, not low-level execution/integration modules.
+7. Frontend code calls backend, runtime, or workflow surfaces, not low-level execution/integration modules.
 
 ## Naming Guardrails
 
-Prefer: `control_plane`, `workspace_runtime`, `execution`, `transport`, `integration`, `workflow`, concrete domain names.
+Prefer: `backend`, `runtime`, `execution`, `transport`, `integration`, `workflow`, concrete domain names.
 Avoid: `manager`, `helpers`, `misc`, `common`, `internal` as catch-all.
 
 ## Mapping to Current Repo
 
 1. `packages/contracts` — shared contracts and schemas
-2. `packages/runtime` — control-plane and workspace-runtime interfaces plus provider-agnostic runtime APIs
-3. `apps/desktop/src-tauri/src/platform/*` — local control plane, workspace runtime, execution, local transport
-4. Future cloud control-plane — cloud control plane, workspace runtime, transport, workflows, integrations
-5. `apps/desktop/src/features/*` — frontend feature ownership
+2. `packages/backend` — centralized backend interfaces for auth, projects, workspace records, and authority routing
+3. `packages/runtime` — workspace development runtime interfaces plus local/cloud runtime adapters
+4. `apps/desktop/src-tauri/src/platform/*` — backend, runtime, execution, local transport
+5. Future remote services — centralized backend, cloud runtime, transport, workflows, integrations
+6. `apps/desktop/src/features/*` — frontend feature ownership
 
 ---
 
@@ -160,7 +161,7 @@ Preview availability is derived from environment + service runtime facts.
 
 Invariants:
 1. There is no separate preview state machine in the backend contract.
-2. `preview_url` is stable workspace-runtime-owned routing identity.
+2. `preview_url` is stable runtime-owned routing identity.
 3. `assigned_port` and `service.status` determine whether a preview is actually openable.
 
 ## Workspace Git Action State
@@ -274,7 +275,7 @@ Five concerns:
 
 ## Authority Boundary
 
-1. Provider/runtime code is authoritative for facts.
+1. Backend/runtime code is authoritative for facts.
 2. UI/query code is delivery, not canonical.
 3. Recovery from missed events: refetch authoritative state.
 
@@ -287,7 +288,7 @@ interface LifecycleEvent<TPayload = unknown> {
   version: number;
   occurred_at: string;
   source: {
-    layer: "provider" | "control_plane" | "desktop" | "cli" | "system";
+    layer: "runtime" | "backend" | "desktop" | "cli" | "system";
     component: string;
     runtime: "local" | "cloud" | "system";
     provider?: string;

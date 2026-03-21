@@ -68,14 +68,18 @@ pub async fn rename_workspace(
 pub async fn rename_terminal(
     app: &AppHandle,
     db_path: &str,
+    workspace_id: &str,
     terminal_id: &str,
     label: &str,
 ) -> Result<TerminalRecord, LifecycleError> {
     let terminal = load_terminal_record(db_path, terminal_id)?
         .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()))?;
+    if terminal.workspace_id != workspace_id {
+        return Err(LifecycleError::WorkspaceNotFound(terminal_id.to_string()));
+    }
     let workspace_controllers = app.state::<WorkspaceControllerRegistryHandle>();
     let _mutation_guard = workspace_controllers
-        .acquire_mutation_guard(&terminal.workspace_id)
+        .acquire_mutation_guard(workspace_id)
         .await?;
     update_terminal_label(app, db_path, terminal_id, label, TitleOrigin::Manual)
 }

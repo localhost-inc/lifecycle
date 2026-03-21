@@ -1,16 +1,28 @@
-import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import type {
-  ControlPlane,
+  Backend,
   LocalWorkspaceCreateContext,
   WorkspaceCreateInput,
   WorkspaceCreateResult,
-} from "./control-plane";
+} from "@lifecycle/backend";
+import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
+import { invokeTauri } from "@/lib/tauri-error";
+
+let backend: Backend | null = null;
+
+export function getBackend(): Backend {
+  backend ??= new TauriBackend((command, args) => invokeTauri(command, args));
+  return backend;
+}
+
+export function resetBackendForTests(): void {
+  backend = null;
+}
 
 interface TauriInvoke {
   (cmd: string, args?: Record<string, unknown>): Promise<unknown>;
 }
 
-export class LocalControlPlane implements ControlPlane {
+class TauriBackend implements Backend {
   private invoke: TauriInvoke;
 
   constructor(invoke: TauriInvoke) {
@@ -44,40 +56,19 @@ export class LocalControlPlane implements ControlPlane {
   }
 
   async createWorkspace(input: WorkspaceCreateInput): Promise<WorkspaceCreateResult> {
-    const context = requireLocalContext(input.context);
-    const workspaceId = (await this.invoke("create_workspace", {
+    const context = requireLocalCreateContext(input.context);
+    return this.invoke("create_workspace", {
       input: {
         kind: context.kind ?? "managed",
         projectId: context.projectId,
         projectPath: context.projectPath,
         workspaceName: context.workspaceName,
-        baseRef: context.baseRef ?? input.sourceRef,
+        baseRef: context.baseRef,
         worktreeRoot: context.worktreeRoot,
         manifestJson: input.manifestJson,
         manifestFingerprint: input.manifestFingerprint,
       },
-    })) as string;
-
-    return {
-      workspace: {
-        id: workspaceId,
-        project_id: context.projectId,
-        name: context.workspaceName ?? (context.kind === "root" ? "Root" : input.sourceRef),
-        kind: context.kind ?? "managed",
-        source_ref: input.sourceRef,
-        git_sha: null,
-        worktree_path: null,
-        mode: "local",
-        manifest_fingerprint: input.manifestFingerprint ?? null,
-        created_by: null,
-        source_workspace_id: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        last_active_at: new Date().toISOString(),
-        expires_at: null,
-      },
-      worktreePath: "",
-    };
+    }) as Promise<WorkspaceCreateResult>;
   }
 
   async renameWorkspace(workspaceId: string, name: string): Promise<WorkspaceRecord> {
@@ -96,9 +87,11 @@ export class LocalControlPlane implements ControlPlane {
   }
 }
 
-function requireLocalContext(context: WorkspaceCreateInput["context"]): LocalWorkspaceCreateContext {
+function requireLocalCreateContext(
+  context: WorkspaceCreateInput["context"],
+): LocalWorkspaceCreateContext {
   if (context.mode !== "local") {
-    throw new Error("LocalControlPlane requires context.mode='local'");
+    throw new Error("Desktop backend createWorkspace does not support cloud mode yet");
   }
   return context;
 }

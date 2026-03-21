@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import {
   createTerminal,
   detachTerminal,
-  getTerminal,
   interruptTerminal,
   killTerminal,
   listWorkspaceTerminals,
@@ -33,7 +32,6 @@ describe("terminal api", () => {
 
   test("returns empty terminal state outside tauri", async () => {
     expect(await listWorkspaceTerminals("workspace_1")).toEqual([]);
-    expect(await getTerminal("terminal_1")).toBeNull();
   });
 
   test("requires tauri for terminal runtime mutations", async () => {
@@ -43,9 +41,9 @@ describe("terminal api", () => {
         workspaceId: "workspace_1",
       }),
     );
-    await expectTerminalRuntimeError(detachTerminal("terminal_1"));
-    await expectTerminalRuntimeError(killTerminal("terminal_1"));
-    await expectTerminalRuntimeError(interruptTerminal("terminal_1"));
+    await expectTerminalRuntimeError(detachTerminal("workspace_1", "terminal_1"));
+    await expectTerminalRuntimeError(killTerminal("workspace_1", "terminal_1"));
+    await expectTerminalRuntimeError(interruptTerminal("workspace_1", "terminal_1"));
     await expect(
       saveTerminalAttachment({
         base64Data: "ZmFrZQ==",
@@ -56,12 +54,14 @@ describe("terminal api", () => {
   });
 
   test("normalizes labels before checking runtime support", async () => {
-    await expectTerminalRuntimeError(renameTerminal("terminal_1", "  Codex   Session  "));
+    await expectTerminalRuntimeError(
+      renameTerminal("workspace_1", "terminal_1", "  Codex   Session  "),
+    );
   });
 
   test("rejects empty labels before runtime checks", async () => {
     try {
-      await renameTerminal("terminal_1", "   ");
+      await renameTerminal("workspace_1", "terminal_1", "   ");
       throw new Error("Expected empty label validation error.");
     } catch (error) {
       expect(String(error)).toContain("Session title cannot be empty.");

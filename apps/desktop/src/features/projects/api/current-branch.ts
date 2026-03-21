@@ -1,10 +1,10 @@
 import { isTauri } from "@tauri-apps/api/core";
-import { getControlPlane } from "@/lib/control-plane";
+import { getBackend } from "@/lib/backend";
 
 export async function getCurrentBranch(projectPath: string): Promise<string> {
   if (!isTauri()) {
     return "main";
   }
 
-  return getControlPlane().getCurrentBranch(projectPath);
+  return getBackend().getCurrentBranch(projectPath);
 }

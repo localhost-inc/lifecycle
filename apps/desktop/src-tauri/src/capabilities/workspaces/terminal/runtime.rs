@@ -56,7 +56,7 @@ fn require_interactive_workspace_runtime(
     db_path: &str,
     workspace_id: &str,
     target: &str,
-) -> Result<super::persistence::WorkspaceRuntime, LifecycleError> {
+) -> Result<super::persistence::TerminalWorkspaceContext, LifecycleError> {
     let workspace = load_workspace_runtime(db_path, workspace_id)?;
     if !workspace_has_interactive_terminal_context(&workspace) {
         return Err(LifecycleError::InvalidStateTransition {
@@ -74,6 +74,20 @@ async fn lookup_workspace_controller(
 ) -> ManagedWorkspaceController {
     let workspace_controllers = app.state::<WorkspaceControllerRegistryHandle>();
     workspace_controllers.get_or_create(workspace_id).await
+}
+
+fn require_workspace_terminal(
+    db_path: &str,
+    workspace_id: &str,
+    terminal_id: &str,
+) -> Result<TerminalRecord, LifecycleError> {
+    let terminal = load_terminal_record(db_path, terminal_id)?
+        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()))?;
+    if terminal.workspace_id != workspace_id {
+        return Err(LifecycleError::WorkspaceNotFound(terminal_id.to_string()));
+    }
+
+    Ok(terminal)
 }
 
 pub(crate) async fn create_terminal(
@@ -296,39 +310,38 @@ pub(crate) async fn hide_native_terminal_surface(
 pub(crate) async fn detach_terminal(
     app: AppHandle,
     db_path: State<'_, DbPath>,
+    workspace_id: String,
     terminal_id: String,
 ) -> Result<(), LifecycleError> {
+    require_workspace_terminal(&db_path.0, &workspace_id, &terminal_id)?;
     hide_native_terminal_surface(app, db_path, terminal_id).await
 }
 
 pub(crate) async fn kill_terminal(
     app: AppHandle,
     db_path: State<'_, DbPath>,
+    workspace_id: String,
     terminal_id: String,
 ) -> Result<(), LifecycleError> {
     let db = db_path.0.clone();
-    if let Some(terminal) = load_terminal_record(&db, &terminal_id)? {
-        let controller = lookup_workspace_controller(&app, &terminal.workspace_id).await;
-        let _mutation_guard = controller.acquire_mutation_guard().await?;
-        let terminal_id_for_surface = terminal_id.clone();
-        native_terminal::destroy_surface(&app, &terminal_id_for_surface)?;
-        if !matches!(
-            terminal_status(&terminal)?,
-            TerminalStatus::Finished | TerminalStatus::Failed
-        ) {
-            let terminal = update_terminal_state(
-                &db,
-                &terminal_id,
-                TerminalStatus::Finished,
-                None,
-                Some(130),
-                true,
-            )?;
-            emit_terminal_status(&app, &terminal);
-        }
-    } else {
-        let terminal_id_for_surface = terminal_id.clone();
-        native_terminal::destroy_surface(&app, &terminal_id_for_surface)?;
+    let terminal = require_workspace_terminal(&db, &workspace_id, &terminal_id)?;
+    let controller = lookup_workspace_controller(&app, &workspace_id).await;
+    let _mutation_guard = controller.acquire_mutation_guard().await?;
+    let terminal_id_for_surface = terminal_id.clone();
+    native_terminal::destroy_surface(&app, &terminal_id_for_surface)?;
+    if !matches!(
+        terminal_status(&terminal)?,
+        TerminalStatus::Finished | TerminalStatus::Failed
+    ) {
+        let terminal = update_terminal_state(
+            &db,
+            &terminal_id,
+            TerminalStatus::Finished,
+            None,
+            Some(130),
+            true,
+        )?;
+        emit_terminal_status(&app, &terminal);
     }
 
     Ok(())
@@ -336,8 +349,11 @@ pub(crate) async fn kill_terminal(
 
 pub(crate) async fn interrupt_terminal(
     app: AppHandle,
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
     terminal_id: String,
 ) -> Result<(), LifecycleError> {
+    require_workspace_terminal(&db_path.0, &workspace_id, &terminal_id)?;
     native_terminal::send_text(&app, &terminal_id, "\x03")
 }
 
