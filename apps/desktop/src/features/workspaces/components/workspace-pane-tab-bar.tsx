@@ -61,6 +61,7 @@ export interface WorkspacePaneTabBarDragPreview {
 
 interface WorkspacePaneTabBarProps {
   activeTabKey: string | null;
+  dirtyTabKeys?: ReadonlySet<string>;
   dragPreview?: WorkspacePaneTabBarDragPreview | null;
   onCloseDocumentTab: (tabKey: string) => void;
   onCloseTerminalTab: (tabKey: string, terminalId: string) => void;
@@ -131,6 +132,7 @@ export function renderWorkspacePaneDefaultTabLeading(tab: WorkspaceCanvasTab) {
 
 export function WorkspacePaneTabBar({
   activeTabKey,
+  dirtyTabKeys,
   dragPreview = null,
   onCloseDocumentTab,
   onCloseTerminalTab,
@@ -532,6 +534,7 @@ export function WorkspacePaneTabBar({
             <WorkspacePaneTabItem
               key={tab.key}
               active={active}
+              dirty={dirtyTabKeys?.has(tab.key)}
               isDraggedTab={isDraggedTab}
               isDropTarget={isDropTarget}
               isRenaming={Boolean(isRenaming)}

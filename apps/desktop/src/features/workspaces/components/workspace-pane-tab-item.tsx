@@ -12,6 +12,7 @@ import { canvasTabDomId, canvasTabPanelId } from "@/features/workspaces/componen
 
 interface WorkspacePaneTabItemProps {
   active: boolean;
+  dirty?: boolean;
   isDraggedTab: boolean;
   isDropTarget: boolean;
   isRenaming: boolean;
@@ -36,6 +37,7 @@ interface WorkspacePaneTabItemProps {
 
 export function WorkspacePaneTabItem({
   active,
+  dirty,
   isDraggedTab,
   isDropTarget,
   isRenaming,
@@ -72,6 +74,7 @@ export function WorkspacePaneTabItem({
       activeSurface="surface"
       className={`max-w-[300px] touch-none select-none ${dragDropClasses}`}
       closable={!isRenaming}
+      dirty={dirty}
       id={canvasTabDomId(tab.key)}
       indicator={undefined}
       label={tab.label}

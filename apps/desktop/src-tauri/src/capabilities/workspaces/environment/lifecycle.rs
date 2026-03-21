@@ -479,7 +479,11 @@ pub fn sync_workspace_manifest_from_disk_if_idle(
     let (config, manifest_fingerprint) = match manifest_text {
         Some(text) => match parse_lifecycle_config_with_fingerprint(&text) {
             Ok((config, fingerprint)) => (Some(config), Some(fingerprint)),
-            Err(LifecycleError::ManifestInvalid(_)) => (None, None),
+            Err(LifecycleError::ManifestInvalid(_)) => {
+                // The file exists but is malformed — leave existing services untouched
+                // rather than wiping them. The UI will show the invalid-manifest alert.
+                return Ok(false);
+            }
             Err(error) => return Err(error),
         },
         None => (None, None),

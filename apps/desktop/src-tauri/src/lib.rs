@@ -512,17 +512,17 @@ enum EditMenuItem {
     Copy,
     Cut,
     Paste,
-    Redo,
     SelectAll,
     Separator,
-    Undo,
 }
 
 #[cfg(target_os = "macos")]
 const EDIT_MENU_ITEMS: &[EditMenuItem] = &[
-    EditMenuItem::Undo,
-    EditMenuItem::Redo,
-    EditMenuItem::Separator,
+    // Undo and Redo are intentionally omitted. Their native macOS
+    // accelerators (Cmd+Z / Cmd+Shift+Z) intercept the keydown event
+    // before it reaches the webview, preventing CodeMirror's own undo
+    // system from working.  The browser handles undo/redo natively for
+    // standard input elements, so omitting these menu items is safe.
     EditMenuItem::Cut,
     EditMenuItem::Copy,
     EditMenuItem::Paste,
@@ -542,8 +542,6 @@ fn build_edit_menu<R: tauri::Runtime>(
         .fold(
             SubmenuBuilder::new(app, "Edit"),
             |builder, item| match item {
-                EditMenuItem::Undo => builder.undo(),
-                EditMenuItem::Redo => builder.redo(),
                 EditMenuItem::Separator => builder.separator(),
                 EditMenuItem::Cut => builder.cut(),
                 EditMenuItem::Copy => builder.copy(),
@@ -649,9 +647,6 @@ mod tests {
         assert_eq!(
             EDIT_MENU_ITEMS,
             &[
-                EditMenuItem::Undo,
-                EditMenuItem::Redo,
-                EditMenuItem::Separator,
                 EditMenuItem::Cut,
                 EditMenuItem::Copy,
                 EditMenuItem::Paste,

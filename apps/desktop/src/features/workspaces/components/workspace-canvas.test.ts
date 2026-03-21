@@ -630,7 +630,7 @@ describe("workspace canvas reducer", () => {
       }),
     ).toEqual({
       ...createDefaultWorkspaceCanvasState(),
-      closedTabStack: [{ document: fileTab, viewState: null }],
+      closedTabStack: [{ document: fileTab, kind: "document", viewState: null }],
     });
   });
 

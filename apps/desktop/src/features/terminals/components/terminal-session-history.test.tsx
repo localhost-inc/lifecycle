@@ -9,6 +9,8 @@ describe("TerminalSessionHistory", () => {
       createElement(TerminalSessionHistory, {
         activeTerminalId: "term-active",
         creatingSelection: null,
+        isTerminalResponseReady: () => false,
+        isTerminalTurnRunning: () => false,
         onOpenTerminal: () => {},
         onResumeTerminal: () => {},
         terminals: [
@@ -72,5 +74,53 @@ describe("TerminalSessionHistory", () => {
     expect(codexButton).not.toContain('disabled=""');
     const claudeButton = markup.split("Claude")[0]!.split("<button").pop()!;
     expect(claudeButton).toContain('disabled=""');
+  });
+
+  test("renders running and ready indicators for active session rows", () => {
+    const markup = renderToStaticMarkup(
+      createElement(TerminalSessionHistory, {
+        activeTerminalId: null,
+        creatingSelection: null,
+        isTerminalResponseReady: (terminalId) => terminalId === "term-ready",
+        isTerminalTurnRunning: (terminalId) => terminalId === "term-running",
+        onOpenTerminal: () => {},
+        onResumeTerminal: () => {},
+        terminals: [
+          {
+            created_by: null,
+            ended_at: null,
+            exit_code: null,
+            failure_reason: null,
+            harness_provider: "codex",
+            harness_session_id: "running-session",
+            id: "term-running",
+            label: "Codex · Running",
+            last_active_at: "2026-03-08T10:02:00.000Z",
+            launch_type: "harness",
+            started_at: "2026-03-08T10:00:00.000Z",
+            status: "active",
+            workspace_id: "ws_1",
+          },
+          {
+            created_by: null,
+            ended_at: null,
+            exit_code: null,
+            failure_reason: null,
+            harness_provider: "claude",
+            harness_session_id: "ready-session",
+            id: "term-ready",
+            label: "Claude · Ready",
+            last_active_at: "2026-03-08T10:03:00.000Z",
+            launch_type: "harness",
+            started_at: "2026-03-08T10:01:00.000Z",
+            status: "detached",
+            workspace_id: "ws_1",
+          },
+        ],
+      }),
+    );
+
+    expect(markup).toContain('title="Generating response"');
+    expect(markup).toContain('aria-label="Response ready"');
   });
 });

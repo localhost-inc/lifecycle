@@ -2,10 +2,16 @@ import type { TerminalRecord } from "@lifecycle/contracts";
 import { formatCompactRelativeTime } from "@/lib/format";
 import { terminalHasLiveSession, type CreateTerminalRequest, type HarnessProvider } from "@/features/terminals/api";
 import { ClaudeIcon, CodexIcon, ShellIcon } from "@/features/workspaces/components/surface-icons";
+import {
+  getWorkspaceSessionStatusState,
+  WorkspaceSessionStatus,
+} from "@/features/workspaces/components/workspace-session-status";
 
 interface TerminalSessionHistoryProps {
   activeTerminalId: string | null;
   creatingSelection: "shell" | HarnessProvider | null;
+  isTerminalResponseReady: (terminalId: string) => boolean;
+  isTerminalTurnRunning: (terminalId: string) => boolean;
   onOpenTerminal: (terminalId: string) => void;
   onResumeTerminal: (input: Extract<CreateTerminalRequest, { launchType: "harness" }>) => void;
   terminals: TerminalRecord[];
@@ -32,6 +38,8 @@ function activityTime(terminal: TerminalRecord): string {
 export function TerminalSessionHistory({
   activeTerminalId,
   creatingSelection,
+  isTerminalResponseReady,
+  isTerminalTurnRunning,
   onOpenTerminal,
   onResumeTerminal,
   terminals,
@@ -41,6 +49,10 @@ export function TerminalSessionHistory({
       {terminals.map((terminal) => {
         const hasLiveSession = terminalHasLiveSession(terminal.status);
         const isCurrent = terminal.id === activeTerminalId;
+        const sessionStatusState = getWorkspaceSessionStatusState({
+          responseReady: isTerminalResponseReady(terminal.id),
+          running: isTerminalTurnRunning(terminal.id),
+        });
         const canResume =
           !hasLiveSession &&
           terminal.launch_type === "harness" &&
@@ -77,6 +89,10 @@ export function TerminalSessionHistory({
               <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--foreground)]">
                 {terminal.label}
               </span>
+              <WorkspaceSessionStatus
+                className="min-w-4 justify-center"
+                state={sessionStatusState}
+              />
               <span className="shrink-0 text-[11px] tabular-nums text-[var(--muted-foreground)]/60">
                 {activityTime(terminal)}
               </span>

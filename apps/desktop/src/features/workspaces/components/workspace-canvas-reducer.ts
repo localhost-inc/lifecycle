@@ -46,7 +46,8 @@ export type WorkspaceCanvasAction =
   | { kind: "select-pane"; paneId: string }
   | { key: string | null; kind: "select-tab"; paneId: string }
   | { key: string; kind: "close-document" }
-  | { key: string; kind: "hide-terminal-tab" }
+  | { key: string; kind: "hide-terminal-tab"; terminalId?: string }
+  | { kind: "pop-closed-tab" }
   | { key: string; kind: "show-terminal-tab"; paneId?: string; select: boolean }
   | { keys: string[]; kind: "set-hidden-terminal-tab-keys" }
   | { keys: string[]; kind: "reconcile-pane-visible-tab-order"; paneId: string }
@@ -522,7 +523,7 @@ export function workspaceCanvasReducer(
       const closingViewState = state.tabStateByKey[action.key]?.viewState ?? null;
       const nextClosedTabStack = closingDocument
         ? [
-            { document: closingDocument, viewState: closingViewState } satisfies ClosedTabEntry,
+            { document: closingDocument, kind: "document", viewState: closingViewState } satisfies ClosedTabEntry,
             ...state.closedTabStack,
           ].slice(0, MAX_CLOSED_TAB_STACK_SIZE)
         : state.closedTabStack;
@@ -578,6 +579,10 @@ export function workspaceCanvasReducer(
 
       while (stack.length > 0) {
         const candidate = stack.shift()!;
+        if (candidate.kind === "terminal") {
+          entry = candidate;
+          break;
+        }
         if (!(candidate.document.key in state.documentsByKey)) {
           entry = candidate;
           break;
@@ -586,6 +591,13 @@ export function workspaceCanvasReducer(
 
       if (!entry) {
         return state;
+      }
+
+      if (entry.kind === "terminal") {
+        return {
+          ...state,
+          closedTabStack: stack,
+        };
       }
 
       const targetPaneId = resolveWorkspaceTargetPaneId(state);
@@ -609,7 +621,25 @@ export function workspaceCanvasReducer(
           : state.tabStateByKey,
       };
     }
+    case "pop-closed-tab": {
+      const stack = [...state.closedTabStack];
+      stack.shift();
+      return {
+        ...state,
+        closedTabStack: stack,
+      };
+    }
     case "hide-terminal-tab": {
+      const nextClosedTabStack = action.terminalId
+        ? [
+            {
+              kind: "terminal" as const,
+              terminalId: action.terminalId,
+            },
+            ...state.closedTabStack,
+          ].slice(0, MAX_CLOSED_TAB_STACK_SIZE)
+        : state.closedTabStack;
+
       const paneId = findWorkspacePaneIdContainingTab(
         state.rootPane,
         state.paneTabStateById,
@@ -618,6 +648,7 @@ export function workspaceCanvasReducer(
       if (!paneId) {
         return {
           ...state,
+          closedTabStack: nextClosedTabStack,
           tabStateByKey: updateWorkspaceTabState(state.tabStateByKey, action.key, {
             hidden: true,
           }),
@@ -631,6 +662,7 @@ export function workspaceCanvasReducer(
           : paneTabState.activeTabKey;
       const nextState: WorkspaceCanvasState = {
         ...state,
+        closedTabStack: nextClosedTabStack,
         tabStateByKey: updateWorkspaceTabState(state.tabStateByKey, action.key, {
           hidden: true,
         }),

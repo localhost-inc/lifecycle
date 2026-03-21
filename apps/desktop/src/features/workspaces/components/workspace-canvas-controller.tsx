@@ -120,6 +120,8 @@ export function useWorkspaceCanvasController({
     workspaceId,
     readWorkspaceCanvasState,
   );
+  const closedTabStackRef = useRef(state.closedTabStack);
+  closedTabStackRef.current = state.closedTabStack;
   const closeShortcutTriggeredAtRef = useRef(0);
   const closeShortcutHandledAtRef = useRef(0);
 
@@ -275,11 +277,13 @@ export function useWorkspaceCanvasController({
     };
   }, []);
 
+  const terminalsResolved = terminalsQuery.data !== undefined;
+
   useEffect(() => {
     const nextHiddenTerminalTabKeys = reconcileHiddenTerminalTabKeys(
       hiddenTerminalTabKeys,
       knownTerminalTabKeys,
-      true,
+      terminalsResolved,
     );
 
     if (!areStringArraysEqual(hiddenTerminalTabKeys, nextHiddenTerminalTabKeys)) {
@@ -288,9 +292,13 @@ export function useWorkspaceCanvasController({
         kind: "set-hidden-terminal-tab-keys",
       });
     }
-  }, [hiddenTerminalTabKeys, knownTerminalTabKeys]);
+  }, [hiddenTerminalTabKeys, knownTerminalTabKeys, terminalsResolved]);
 
   useEffect(() => {
+    if (!terminalsResolved) {
+      return;
+    }
+
     const unassignedTerminalKeys = getWorkspaceUnassignedLiveTerminalTabKeys(
       liveTerminalTabKeys,
       assignedPaneTabKeys,
@@ -308,7 +316,7 @@ export function useWorkspaceCanvasController({
         select: false,
       });
     }
-  }, [activePaneId, assignedPaneTabKeys, hiddenTerminalTabKeys, liveTerminalTabKeys]);
+  }, [activePaneId, assignedPaneTabKeys, hiddenTerminalTabKeys, liveTerminalTabKeys, terminalsResolved]);
 
   useEffect(() => {
     if (!activeTerminalId || !documentVisible) {
@@ -463,10 +471,10 @@ export function useWorkspaceCanvasController({
       !shouldAutoCreateDefaultWorkspaceTerminal({
         documentCount: documents.length,
         terminalCount: terminals.length,
-        terminalsResolved: terminalsQuery.data !== undefined,
+        terminalsResolved,
       })
     ) {
-      if (terminalsQuery.data !== undefined && (terminals.length > 0 || documents.length > 0)) {
+      if (terminalsResolved && (terminals.length > 0 || documents.length > 0)) {
         didAutoCreateTerminalRef.current = true;
       }
       return;
@@ -484,7 +492,7 @@ export function useWorkspaceCanvasController({
     documents.length,
     handleCreateTerminal,
     terminals.length,
-    terminalsQuery.data,
+    terminalsResolved,
   ]);
 
 
@@ -526,6 +534,7 @@ export function useWorkspaceCanvasController({
         dispatch({
           key: tabKey,
           kind: "hide-terminal-tab",
+          terminalId,
         });
         return true;
       } catch (closeError) {
@@ -667,7 +676,13 @@ export function useWorkspaceCanvasController({
           return true;
         }
         case "reopen-closed-tab": {
-          dispatch({ kind: "reopen-closed-tab" });
+          const topEntry = closedTabStackRef.current[0];
+          if (topEntry?.kind === "terminal") {
+            dispatch({ kind: "pop-closed-tab" });
+            handleShowTerminalTab(topEntry.terminalId, activePaneId);
+          } else {
+            dispatch({ kind: "reopen-closed-tab" });
+          }
           return true;
         }
       }
@@ -682,6 +697,7 @@ export function useWorkspaceCanvasController({
       handleCloseDocumentTab,
       handleCloseTerminalTab,
       handleCreateTerminal,
+      handleShowTerminalTab,
       onCloseWorkspaceTab,
       paneLayout.paneCount,
       handleSelectTab,

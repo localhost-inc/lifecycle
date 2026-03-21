@@ -228,8 +228,72 @@ const UNSUPPORTED_RESET_MESSAGE: &str =
 const UNSUPPORTED_MCPS_MESSAGE: &str =
     "`mcps` is not part of the current lifecycle.json contract yet; remove it from the manifest for now";
 
+/// Strip `//` line comments and `/* */` block comments from JSONC, respecting
+/// string literals so quoted slashes are left untouched.
+fn strip_jsonc_comments(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let len = bytes.len();
+    let mut out = String::with_capacity(len);
+    let mut i = 0;
+
+    while i < len {
+        match bytes[i] {
+            b'"' => {
+                // Walk the full JSON string literal (including escapes).
+                out.push('"');
+                i += 1;
+                while i < len {
+                    match bytes[i] {
+                        b'\\' => {
+                            out.push('\\');
+                            i += 1;
+                            if i < len {
+                                out.push(bytes[i] as char);
+                                i += 1;
+                            }
+                        }
+                        b'"' => {
+                            out.push('"');
+                            i += 1;
+                            break;
+                        }
+                        _ => {
+                            out.push(bytes[i] as char);
+                            i += 1;
+                        }
+                    }
+                }
+            }
+            b'/' if i + 1 < len && bytes[i + 1] == b'/' => {
+                // Line comment — skip until newline.
+                i += 2;
+                while i < len && bytes[i] != b'\n' {
+                    i += 1;
+                }
+            }
+            b'/' if i + 1 < len && bytes[i + 1] == b'*' => {
+                // Block comment — skip until `*/`.
+                i += 2;
+                while i + 1 < len && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                    i += 1;
+                }
+                if i + 1 < len {
+                    i += 2; // skip closing */
+                }
+            }
+            _ => {
+                out.push(bytes[i] as char);
+                i += 1;
+            }
+        }
+    }
+
+    out
+}
+
 pub fn parse_lifecycle_config(json: &str) -> Result<LifecycleConfig, LifecycleError> {
-    let value: Value = serde_json::from_str(json)
+    let stripped = strip_jsonc_comments(json);
+    let value: Value = serde_json::from_str(&stripped)
         .map_err(|error| LifecycleError::ManifestInvalid(error.to_string()))?;
     validate_manifest_value(&value)?;
 
@@ -980,5 +1044,65 @@ mod tests {
             }
             other => panic!("unexpected error: {other}"),
         }
+    }
+
+    #[test]
+    fn parse_jsonc_with_line_comments() {
+        let json = r#"{
+            // This is a line comment
+            "workspace": {
+                "prepare": [
+                    { "name": "install", "command": "bun install", "timeout_seconds": 120 }
+                ]
+            },
+            // Another comment
+            "environment": {
+                "api": {
+                    "kind": "service",
+                    "runtime": "process",
+                    "command": "bun run dev"
+                }
+            }
+        }"#;
+
+        let config = parse_config(json);
+        assert_eq!(config.workspace.prepare.len(), 1);
+        assert!(config.environment.contains_key("api"));
+    }
+
+    #[test]
+    fn parse_jsonc_with_block_comments() {
+        let json = r#"{
+            /* block comment */
+            "workspace": {
+                "prepare": [
+                    { "name": "install", "command": "bun install", "timeout_seconds": 120 }
+                ]
+            },
+            "environment": {
+                "api": {
+                    "kind": "service",
+                    "runtime": "process",
+                    "command": "bun run dev" /* inline block */
+                }
+            }
+        }"#;
+
+        let config = parse_config(json);
+        assert!(config.environment.contains_key("api"));
+    }
+
+    #[test]
+    fn strip_jsonc_preserves_slashes_in_strings() {
+        let input = r#"{"url": "http://localhost/health", "path": "a//b"}"#;
+        let stripped = strip_jsonc_comments(input);
+        assert_eq!(stripped, input);
+    }
+
+    #[test]
+    fn strip_jsonc_preserves_escaped_quotes_in_strings() {
+        let input = r#"{"msg": "say \"hello\" // not a comment"}"#;
+        let stripped = strip_jsonc_comments(input);
+        assert_eq!(stripped, input);
     }
 }

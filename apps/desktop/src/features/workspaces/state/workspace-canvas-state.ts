@@ -72,10 +72,18 @@ export interface WorkspaceCanvasTabState {
 
 export type WorkspaceCanvasTabStateByKey = Record<string, WorkspaceCanvasTabState>;
 
-export interface ClosedTabEntry {
+export interface ClosedDocumentTabEntry {
   document: WorkspaceCanvasDocument;
+  kind: "document";
   viewState: WorkspaceCanvasTabViewState | null;
 }
+
+export interface ClosedTerminalTabEntry {
+  kind: "terminal";
+  terminalId: string;
+}
+
+export type ClosedTabEntry = ClosedDocumentTabEntry | ClosedTerminalTabEntry;
 
 export const MAX_CLOSED_TAB_STACK_SIZE = 20;
 

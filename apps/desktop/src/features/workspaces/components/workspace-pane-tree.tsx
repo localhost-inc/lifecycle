@@ -37,7 +37,7 @@ import {
   type WorkspacePaneTabBarDragPreview,
   type WorkspacePaneTabDrag,
 } from "@/features/workspaces/components/workspace-pane-tab-bar";
-import type { FileViewerSessionState } from "@/features/files/lib/file-session";
+import { isFileViewerDirty, type FileViewerSessionState } from "@/features/files/lib/file-session";
 import type {
   WorkspacePaneNode,
   WorkspaceCanvasDocument,
@@ -563,6 +563,16 @@ export function WorkspacePaneTree({
     return null;
   }, [visibleTabsByPaneId, zoomedTabKey]);
 
+  const dirtyTabKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const [key, session] of Object.entries(fileSessionsByTabKey)) {
+      if (isFileViewerDirty(session)) {
+        keys.add(key);
+      }
+    }
+    return keys;
+  }, [fileSessionsByTabKey]);
+
   const [activeTabDrag, setActiveTabDrag] = useState<WorkspacePaneActiveTabDropState | null>(null);
   const [hoveredPaneId, setHoveredPaneId] = useState<string | null>(null);
   const [surfaceLaunchOpenPaneId, setSurfaceLaunchOpenPaneId] = useState<string | null>(null);
@@ -787,6 +797,7 @@ export function WorkspacePaneTree({
           >
             <WorkspacePaneTabBar
               activeTabKey={activeTabKey}
+              dirtyTabKeys={dirtyTabKeys}
               dragPreview={tabBarDragPreview}
               onCloseDocumentTab={onCloseDocumentTab}
               onCloseTerminalTab={onCloseTerminalTab}

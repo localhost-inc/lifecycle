@@ -7,6 +7,7 @@ interface TabChipProps {
   children?: ReactNode;
   className?: string;
   closable?: boolean;
+  dirty?: boolean;
   id?: string;
   label: string;
   leading?: ReactNode;
@@ -32,6 +33,7 @@ export function TabChip({
   children,
   className,
   closable = true,
+  dirty = false,
   id,
   label,
   leading,
@@ -98,7 +100,7 @@ export function TabChip({
       {closable && onClose ? (
         <button
           aria-label={`Close ${label}`}
-          className="flex size-4 items-center justify-center rounded-[4px] transition-colors hover:bg-[var(--surface-hover)]"
+          className="group/close flex size-4 items-center justify-center rounded-[4px] transition-colors hover:bg-[var(--surface-hover)]"
           data-tab-action="close"
           onClick={(event) => {
             event.stopPropagation();
@@ -109,7 +111,14 @@ export function TabChip({
           }}
           type="button"
         >
-          <X className="size-3.5" />
+          {dirty ? (
+            <>
+              <span className="size-2 rounded-full bg-current group-hover/close:hidden" />
+              <X className="hidden size-3.5 group-hover/close:block" />
+            </>
+          ) : (
+            <X className="size-3.5" />
+          )}
         </button>
       ) : null}
     </div>

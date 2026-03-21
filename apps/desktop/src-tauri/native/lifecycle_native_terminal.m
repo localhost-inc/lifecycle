@@ -71,6 +71,30 @@ static const int32_t kLifecycleShortcutGoForward = 7;
 static const int32_t kLifecycleShortcutReopenClosedTab = 8;
 static const int32_t kLifecycleShortcutToggleZoom = 9;
 
+static NSView *lifecycleFindWebView(NSView *root) {
+  if (root == nil) {
+    return nil;
+  }
+
+  Class wkWebViewClass = NSClassFromString(@"WKWebView");
+  if (wkWebViewClass == Nil) {
+    return nil;
+  }
+
+  for (NSView *child in root.subviews) {
+    if ([child isKindOfClass:wkWebViewClass]) {
+      return child;
+    }
+
+    NSView *found = lifecycleFindWebView(child);
+    if (found != nil) {
+      return found;
+    }
+  }
+
+  return nil;
+}
+
 static void lifecycleWriteDiagnosticUTF8(const char *value, size_t length) {
   if (value == NULL || length == 0) {
     return;
@@ -911,7 +935,8 @@ static BOOL lifecycleGhosttyAppShouldBeFocused(void) {
   if (hidden) {
     NSWindow *window = self.window;
     if (window != nil && window.firstResponder == self) {
-      [window makeFirstResponder:window.contentView];
+      NSResponder *target = lifecycleFindWebView(window.contentView) ?: window.contentView;
+      [window makeFirstResponder:target];
     }
   }
   [self syncGhosttyFocusState];

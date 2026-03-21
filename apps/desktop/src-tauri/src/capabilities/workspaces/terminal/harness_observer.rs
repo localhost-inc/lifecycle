@@ -413,8 +413,10 @@ fn capture_harness_session(
             workspace_id: updated_terminal.workspace_id.clone(),
             harness_provider: updated_terminal.harness_provider.clone(),
             provider,
-            harness_launch_mode: HarnessLaunchMode::from_str(&updated_terminal.harness_launch_mode)
-                .unwrap_or(HarnessLaunchMode::Resume),
+            // Use New so the observer reads from the start of the log — the
+            // session was just captured so we must not skip events that were
+            // written before the observer started.
+            harness_launch_mode: HarnessLaunchMode::New,
             worktree_path: worktree_path.to_string(),
             bound_session_store_root: resolve_bound_harness_session_store_root(
                 app,
