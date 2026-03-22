@@ -18,8 +18,9 @@ Use this file for:
 2. `agent_session` is the canonical product object.
 3. Claude and Codex are `agent providers` behind one Lifecycle-owned session, turn, tool, approval, attachment, and artifact model.
 4. `workspace runtime` means where work runs: `local`, `docker`, `remote`, or `cloud`.
-5. `terminal` means the separate shell surface in the product. It is not the harness and not the source of truth for agent state.
+5. `terminal` means the separate shell surface in the product. It is not the harness, not the provider boundary, and not the source of truth for agent state.
 6. Each milestone here should ship a coherent vertical slice, not only scaffolding.
+7. Legacy harness-terminal integration is a reset target. Rebuild through the provider model rather than preserving compatibility layers.
 
 ## Product Shape
 
@@ -28,6 +29,29 @@ Use this file for:
 3. `agent provider` means the Claude or Codex integration behind that session.
 4. `workspace runtime` means the execution placement for the workspace.
 5. `terminal` remains a first-class shell surface in the product, but separate from harness state.
+6. Provider-native events must enter the desktop through a Lifecycle-owned agent provider/orchestrator layer that emits normalized `agent.*` facts for the UI and persistence layers.
+7. `WorkspaceRuntime` should expose the agent-provider boundary for the current workspace target.
+8. The harness UI should talk to `AgentProvider`, not terminal APIs or provider-specific transport details.
+
+## Architectural Reset
+
+The existing agent integration should be treated as legacy and replaced through one forward-only model:
+
+```text
+Harness UI
+  -> AgentProvider
+    -> ClaudeAgentProvider | CodexAgentProvider
+      -> WorkspaceRuntime
+        -> local | docker | remote | cloud execution
+```
+
+Rules:
+
+1. `AgentProvider` is the only UI-facing runtime contract for agent execution.
+2. `ClaudeAgentProvider` and `CodexAgentProvider` normalize provider-native streams into Lifecycle `agent.*` facts.
+3. `WorkspaceRuntime` owns provider access for the active workspace target.
+4. `terminal` becomes a dumb shell/filesystem surface and must not carry harness state, transcript state, or approval state.
+5. Existing harness-terminal glue should be deleted rather than migrated behind compatibility shims.
 
 ## Execution Status
 
@@ -70,7 +94,7 @@ Done.
 
 **Outcome**
 
-A user can open an agent tab, type a prompt, and route it into a real local Claude or Codex provider session while Lifecycle owns the harness UI, tab, and session identity.
+A user can open an agent tab, type a prompt, and route it into a real local Claude or Codex provider session while Lifecycle owns the harness UI, tab, session identity, and normalized event flow.
 
 **Status**
 
@@ -79,19 +103,33 @@ In progress.
 **Tasks**
 
 - [x] Create `AgentTab` / `AgentSurface` naming across the workspace canvas.
-- [x] Launch a real harness terminal when creating an `agent_session`.
-- [x] Persist the bound runtime terminal id on `agent_session.runtime_session_id`.
-- [x] Add terminal write-through API for sending prompt text to a bound runtime.
-- [x] Add desktop query for reading normalized transcript messages from provider session logs.
+- [ ] Define `AgentProvider` as the first-class harness runtime contract.
+- [ ] Extend `WorkspaceRuntime` so the harness resolves provider access through runtime instead of terminal APIs.
+- [ ] Implement `ClaudeAgentProvider` and `CodexAgentProvider` against the shared contract.
+- [x] Create a real local bridge that can bind an `agent_session` to a provider-owned local runtime.
+- [x] Persist the bound provider/runtime session identifier on `agent_session.runtime_session_id`.
+- [x] Add first-party turn submission that routes prompts through the agent provider boundary to the bound runtime.
+- [x] Add a temporary desktop transcript bridge for reading normalized provider output while first-party transcript persistence is still landing.
 - [x] Render a real agent transcript in the center panel from query data instead of fake local state.
 - [x] Restyle the center panel to a TUI-like transcript and prompt buffer.
-- [ ] Update `agent_session.status` and `last_message_at` from runtime events instead of leaving sessions mostly idle.
+- [ ] Route provider activity through a desktop agent provider/orchestrator that emits normalized `agent.*` facts for the UI and persistence layers.
+- [ ] Delete the current terminal-coupled harness integration instead of preserving it behind fallback layers.
+- [ ] Update `agent_session.status` and `last_message_at` from normalized agent-provider events instead of leaving sessions mostly idle.
 - [ ] Add a focused end-to-end desktop test that creates an agent tab, sends a prompt, and verifies transcript hydration.
-- [ ] Decide whether the hidden native-terminal bootstrap remains the right local provider bridge or should move behind a cleaner runtime activation command.
+- [ ] Remove `AgentSurface` dependence on terminal lifecycle events and hidden native-terminal bootstrap state.
+- [ ] Decide the clean local runtime activation boundary for the temporary bridge without reintroducing terminal-owned harness state.
+
+**Clarifications**
+
+1. A1 may still use a temporary local bridge to reach a real provider runtime, but that bridge is an adapter implementation detail rather than a UI contract.
+2. The harness center panel must render from Lifecycle-owned `agent_*` state and normalized `agent.*` events, not from `terminal.*` lifecycle facts.
+3. Claude should be modeled against Claude Agent SDK session continuity, hooks, and runtime approval controls.
+4. Codex should be modeled against Codex App Server thread, turn, item, and approval flows.
+5. Nothing in the current terminal-coupled harness path is a compatibility constraint. The target architecture is the provider model above.
 
 **Exit gate**
 
-- A real Claude session can be opened from the workspace and accept typed prompts through the agent surface.
+- A real Claude session can be opened from the workspace and accept typed prompts through the agent surface, with agent state owned by the first-party provider/orchestrator boundary rather than the terminal surface.
 
 ## A2. Persisted Center-Panel Transcript
 
@@ -219,11 +257,14 @@ The agent workspace is still local-first, but its contracts are ready to back on
 
 These are the next high-value tasks on the current path.
 
-1. Update `agent_session.status` and `last_message_at` from runtime activity.
-2. Add `agent_message` and `agent_message_part` persistence so transcript state stops depending on harness log replay.
-3. Add one focused end-to-end Claude session test for create -> send prompt -> transcript appears.
-4. Decide the clean runtime activation boundary that replaces the hidden native-terminal bootstrap if needed.
-5. Start attachment import/store work immediately after persisted transcript rows land.
+1. Define `AgentProvider` and wire provider access onto `WorkspaceRuntime`.
+2. Move harness UI command/event flow onto `AgentProvider` and remove direct terminal dependencies.
+3. Route local provider activity through the desktop agent provider/orchestrator so `agent.*` events drive transcript, status, and approvals.
+4. Delete the current terminal-coupled harness path instead of preserving it.
+5. Add `agent_message` and `agent_message_part` persistence so transcript state stops depending on bridge log replay.
+6. Add one focused end-to-end Claude session test for create -> send prompt -> transcript appears.
+7. Decide the clean local runtime activation boundary that remains inside provider implementations if a temporary local bridge is still needed.
+8. Start attachment import/store work immediately after persisted transcript rows land.
 
 ## Promotion Rule
 
