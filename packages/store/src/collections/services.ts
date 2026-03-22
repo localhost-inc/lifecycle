@@ -1,5 +1,5 @@
 import type { ServiceRecord } from "@lifecycle/contracts";
-import type { SqlDriver } from "./driver";
+import type { SqlDriver } from "../driver";
 
 interface ServiceRow {
   id: string;

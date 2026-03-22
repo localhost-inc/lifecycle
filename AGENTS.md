@@ -11,9 +11,10 @@ This file defines engineering execution standards for agents working in this rep
 ## Core References
 
 1. `README.md`
-2. `docs/plan.md` — milestone roadmap and status board
-3. `docs/milestones/*.md` — milestone specs (scope, contracts, test scenarios)
-4. `docs/reference/*.md` — canonical cross-milestone contracts (see Reference Docs below)
+2. `docs/milestones/README.md` — active milestone index and archive boundary
+3. `docs/milestones/*.md` — active milestone specs (scope, contracts, test scenarios)
+4. `docs/plans/*.md` — tracked execution plans outside the active milestone set
+5. `docs/reference/*.md` — canonical cross-milestone contracts (see Reference Docs below)
 
 When behavior changes and docs are now wrong, update the corresponding reference doc in the same change.
 
@@ -40,17 +41,17 @@ Canonical contract documents for each domain. Read the relevant doc before start
 Use this section to route work before implementation.
 
 1. Anchor UI decisions to the destination design and map them to the active milestone contract.
-2. Compare current implementation against `docs/plan.md` before starting broad UI changes.
-3. If destination and milestone text diverge, update docs first, then implement.
+2. Compare current implementation against the relevant milestone doc, plan doc, and reference contract before starting broad UI changes.
+3. If destination and contract text diverge, update docs first, then implement.
 
-### Destination-to-Milestone Mapping
+### Destination-to-Contract Mapping
 
-1. Center terminal workspace (tabbed sessions, harness flows, attach/detach) -> M3.
+1. Center terminal workspace (tabbed sessions, shell flows, attach/detach) -> `docs/reference/terminal.md`.
 2. Workspace lifecycle controls, service runtime states, local preview exposure, sleep/wake/destroy UX -> M4.
-3. CLI-centric workspace control and observability flows -> M5.
-4. Org/workspace hierarchy, auth, cloud surfaces, activity, previews, and PR actions -> M6.
-5. Cloud lifecycle hardening (sleep/wake restore, TTL, quotas) -> M7.
-6. Deferred agent workspace/native runtime concepts -> `docs/backlog/*` (not active milestone work).
+3. CLI-centric workspace control and observability flows -> `docs/plans/local-cli.md`.
+4. Org/workspace hierarchy, auth, cloud surfaces, activity, previews, and PR actions -> `docs/plans/cloud-workspaces.md`.
+5. Cloud lifecycle hardening (sleep/wake restore, TTL, quotas) -> `docs/plans/cloud-hardening.md`.
+6. First-party harness and `agent_session` work -> `docs/plans/agent-workspace.md`.
 
 ### Frontend Organization Rules
 

@@ -1,32 +1,44 @@
-# Agent Workspace Execution Plan
+# Plan: Lifecycle-native agent workspace
 
-> Status: active backlog execution plan
-> Parent spec: [agent-workspace.md](./agent-workspace.md)
-> Related: [docs/plan.md](../plan.md), [docs/learnings/2026-03-21-first-party-agent-backends-spike.md](../learnings/2026-03-21-first-party-agent-backends-spike.md)
+> Status: active execution plan
+> Context: parallel to the active milestone contract in [docs/milestones/README.md](../milestones/README.md) and tracked with other future work in [docs/plans/README.md](./README.md)
+> Related: [docs/learnings/2026-03-21-first-party-agent-backends-spike.md](../learnings/2026-03-21-first-party-agent-backends-spike.md), [docs/reference/vision.md](../reference/vision.md), [docs/reference/workspace.md](../reference/workspace.md), [docs/reference/vocabulary.md](../reference/vocabulary.md)
 
-This document is the working build plan for the Lifecycle-native agent workspace.
+This document is the canonical build plan for the Lifecycle-native agent workspace.
 
-Use [agent-workspace.md](./agent-workspace.md) for the full product contract and durable architecture.
-Use this file for sequencing, implementation slices, and task-level tracking.
+Use this file for:
+1. the product shape we are actually building
+2. milestone sequencing for this execution stream
+3. task-level execution tracking
+4. exit gates for each delivery slice
 
 ## Planning Rules
 
-1. This plan does not promote agent workspace work into the main milestone board yet.
+1. This plan sits outside the active milestone set until the harness becomes a primary tracked delivery stream.
 2. `agent_session` is the canonical product object.
-3. Claude and Codex are backend adapters behind one Lifecycle-owned session, turn, tool, approval, attachment, and artifact model.
-4. Raw harness terminals remain available, but they are fallback surfaces rather than the center-panel authority.
-5. Each milestone here should ship a coherent vertical slice, not only scaffolding.
+3. Claude and Codex are `agent providers` behind one Lifecycle-owned session, turn, tool, approval, attachment, and artifact model.
+4. `workspace runtime` means where work runs: `local`, `docker`, `remote`, or `cloud`.
+5. `terminal` means the separate shell surface in the product. It is not the harness and not the source of truth for agent state.
+6. Each milestone here should ship a coherent vertical slice, not only scaffolding.
+
+## Product Shape
+
+1. Lifecycle owns a first-party GUI `harness` in the workspace center panel.
+2. `agent_session` is the first-party interaction thread inside that harness.
+3. `agent provider` means the Claude or Codex integration behind that session.
+4. `workspace runtime` means the execution placement for the workspace.
+5. `terminal` remains a first-class shell surface in the product, but separate from harness state.
 
 ## Execution Status
 
 | Milestone | Status | Outcome |
 | --- | --- | --- |
 | A0 | done | Shared agent contracts and initial desktop persistence exist |
-| A1 | in_progress | A real local agent session can bind to a harness runtime and accept prompt input |
+| A1 | in_progress | A real local agent session can bind to a local provider session and accept prompt input |
 | A2 | planned | Agent transcript becomes a real persisted center-panel surface |
 | A3 | planned | Attachments and image-first composer flows work end-to-end |
 | A4 | planned | Structured tools, approvals, and task state replace terminal inference |
-| A5 | planned | Claude runs through a first-party adapter rather than terminal write-through |
+| A5 | planned | Claude runs through a first-party provider integration rather than terminal write-through |
 | A6 | planned | Codex runs through the same first-party contract |
 | A7 | planned | Local and cloud-ready portability boundaries are locked |
 
@@ -42,23 +54,23 @@ Done.
 
 **Tasks**
 
-- [x] Add `packages/contracts/src/agent.ts` with canonical backend, runtime, session status, and message role types.
+- [x] Add `packages/contracts/src/agent.ts` with canonical provider/runtime/session/message contracts.
 - [x] Export agent contracts through `packages/contracts/src/index.ts`.
 - [x] Add contract coverage in `packages/contracts/src/agent.test.ts`.
 - [x] Add `agent_session` desktop migration and indexes.
 - [x] Add desktop `agents` capability with create/list/get session commands.
 - [x] Add frontend `features/agents/api.ts`, query keys, queries, and hooks for session records.
-- [x] Add `packages/agents` for shared adapter/orchestrator/runtime contracts.
+- [x] Add `packages/agents` for shared provider/orchestrator/runtime contracts.
 
 **Exit gate**
 
 - Sessions exist as first-party records independent of terminal ids or provider thread ids.
 
-## A1. Harness-Backed Local Agent Session
+## A1. Local Provider Session Bridge
 
 **Outcome**
 
-A user can open an agent tab, type a prompt, and route it into a real local Claude or Codex harness session while Lifecycle owns the tab and session identity.
+A user can open an agent tab, type a prompt, and route it into a real local Claude or Codex provider session while Lifecycle owns the harness UI, tab, and session identity.
 
 **Status**
 
@@ -70,12 +82,12 @@ In progress.
 - [x] Launch a real harness terminal when creating an `agent_session`.
 - [x] Persist the bound runtime terminal id on `agent_session.runtime_session_id`.
 - [x] Add terminal write-through API for sending prompt text to a bound runtime.
-- [x] Add desktop query for reading normalized transcript messages from harness session logs.
+- [x] Add desktop query for reading normalized transcript messages from provider session logs.
 - [x] Render a real agent transcript in the center panel from query data instead of fake local state.
 - [x] Restyle the center panel to a TUI-like transcript and prompt buffer.
 - [ ] Update `agent_session.status` and `last_message_at` from runtime events instead of leaving sessions mostly idle.
 - [ ] Add a focused end-to-end desktop test that creates an agent tab, sends a prompt, and verifies transcript hydration.
-- [ ] Decide whether the hidden native-terminal bootstrap remains the right local runtime bridge or should move behind a cleaner runtime activation command.
+- [ ] Decide whether the hidden native-terminal bootstrap remains the right local provider bridge or should move behind a cleaner runtime activation command.
 
 **Exit gate**
 
@@ -85,12 +97,12 @@ In progress.
 
 **Outcome**
 
-The center panel stops being a harness-log view and becomes a Lifecycle-owned transcript with replayable turns and renderable message parts.
+The center panel stops being a provider-log view and becomes a Lifecycle-owned transcript with replayable turns and renderable message parts.
 
 **Tasks**
 
 - [ ] Add `agent_message` and `agent_message_part` tables plus indexes.
-- [ ] Persist normalized user and assistant turns into `agent_*` tables instead of reading raw harness logs on every load.
+- [ ] Persist normalized user and assistant turns into `agent_*` tables instead of reading provider logs on every load.
 - [ ] Add agent event reducers or explicit invalidation rules for transcript updates.
 - [ ] Build a message mapper from persisted rows to center-panel render state.
 - [ ] Support streaming text updates through `agent.message.part.delta` / `completed` events.
@@ -144,27 +156,27 @@ Lifecycle owns tool history, approval requests, and task state without scraping 
 
 - File writes, shell actions, and explicit questions are represented as structured Lifecycle approvals and tool history.
 
-## A5. First-Party Claude Adapter
+## A5. First-Party Claude Provider
 
 **Outcome**
 
-Claude runs through a Lifecycle-owned adapter and event normalization layer rather than through terminal input plus transcript log parsing.
+Claude runs through a Lifecycle-owned provider integration and event normalization layer rather than through terminal input plus transcript log parsing.
 
 **Tasks**
 
-- [ ] Define the concrete `AgentBackendAdapter` runtime contract for local execution.
-- [ ] Implement Claude adapter using Claude Agent SDK sessions, hooks, and tool boundaries.
-- [ ] Map Claude session identifiers into adapter metadata instead of UI identifiers.
+- [ ] Define the concrete agent-provider runtime contract for local execution.
+- [ ] Implement the Claude provider using Claude Agent SDK sessions, hooks, and tool boundaries.
+- [ ] Map Claude session identifiers into provider metadata instead of UI identifiers.
 - [ ] Persist normalized session, turn, message-part, tool, task, approval, and artifact events.
-- [ ] Replace harness log parsing as the primary source of truth for Claude-backed agent sessions.
-- [ ] Keep raw Claude harness terminal available as an explicit fallback/escape hatch.
+- [ ] Replace provider log parsing as the primary source of truth for Claude-backed agent sessions.
+- [ ] Keep the separate terminal shell surface available for normal shell work without coupling it to harness state.
 - [ ] Add local auth/configuration handling for Claude credentials through Lifecycle settings.
 
 **Exit gate**
 
-- Claude-backed agent sessions run through first-party Lifecycle state while raw Claude terminal access remains optional.
+- Claude-backed agent sessions run through first-party Lifecycle state.
 
-## A6. First-Party Codex Adapter
+## A6. First-Party Codex Provider
 
 **Outcome**
 
@@ -172,12 +184,12 @@ Codex runs through the same Lifecycle-owned session and event model as Claude.
 
 **Tasks**
 
-- [ ] Implement Codex adapter against Codex App Server thread/turn/item flows.
+- [ ] Implement the Codex provider against Codex App Server thread/turn/item flows.
 - [ ] Map Codex approvals into Lifecycle approval classes.
 - [ ] Normalize Codex items into `agent_message_part`, `agent_tool_call`, `agent_task`, and `agent_artifact`.
 - [ ] Add Codex auth/configuration handling through Lifecycle settings.
 - [ ] Ensure UI code does not branch on Codex-specific transcript semantics.
-- [ ] Keep raw Codex harness terminal available as an explicit fallback/escape hatch.
+- [ ] Keep the separate terminal shell surface available for normal shell work without coupling it to harness state.
 
 **Exit gate**
 
@@ -217,5 +229,5 @@ These are the next high-value tasks on the current path.
 
 Promote this work into `docs/milestones/*` only when both are true:
 
-1. It becomes the next actively tracked delivery stream rather than parallel backlog execution.
-2. We are willing to update [docs/plan.md](../plan.md) so the main milestone board reflects that change.
+1. It becomes the next actively tracked delivery stream rather than a parallel execution plan.
+2. We are willing to maintain it as an active milestone contract alongside M4-M7.

@@ -4,7 +4,7 @@ Lifecycle is a desktop-first workspace runtime for local-first software work. Th
 
 ## Status
 
-Lifecycle is under active development. The current milestone is M4: local workspace environment controls and preview/service lifecycle work. Cloud, auth, organization, preview, and PR workflows are documented but not yet shipped. See [docs/plan.md](./docs/plan.md) for the live milestone board and [docs/reference/vision.md](./docs/reference/vision.md) for the product direction.
+Lifecycle is under active development. The current active milestone contract is M4: local workspace environment controls and preview/service lifecycle work. Future local CLI, cloud, and first-party harness work is tracked in [docs/plans](./docs/plans). See [docs/milestones/README.md](./docs/milestones/README.md) for the active milestone set and [docs/reference/vision.md](./docs/reference/vision.md) for the product direction.
 
 This repository is public and source-available for evaluation, discussion, and limited contribution. It is not released under an OSI-approved open source license. Read [LICENSE](./LICENSE), [CONTRIBUTING.md](./CONTRIBUTING.md), and [SECURITY.md](./SECURITY.md) before reusing or contributing to the code.
 
@@ -80,10 +80,10 @@ packages/
   runtime/      Workspace development runtime contracts plus local/cloud adapters
   ui/           Shared UI primitives and theme tokens
 docs/
-  plan.md       Milestone status and program-level tracking
-  milestones/   Milestone implementation contracts
+  milestones/   Active milestone implementation contracts
+  archive/      Historical milestone specs and retired docs
   reference/    Canonical product, runtime, UI, and infra contracts
-  backlog/      Deferred product/workspace ideas
+  plans/        Execution plans outside the main milestone board
   expansion/    Deferred product surfaces beyond the active milestones
 AGENTS.md       Engineering workflow, quality bar, and review rules
 vendor/
@@ -97,11 +97,11 @@ Start here:
 1. [Vision](./docs/reference/vision.md) for product direction and V1 boundaries
 2. [Vocabulary](./docs/reference/vocabulary.md) for canonical shell, project, and workspace terms
 3. [Brand](./docs/reference/brand.md) for voice and visual identity
-4. [Plan](./docs/plan.md) for high-level milestone tracking
+4. [Milestones](./docs/milestones/README.md) for the active milestone set and archive boundary
 5. [Milestones](./docs/milestones) for detailed implementation contracts and acceptance scenarios
 6. [Reference Docs](./docs/reference/) for cross-milestone contracts
 7. [AGENTS.md](./AGENTS.md) for engineering workflow and review expectations
-8. [Backlog](./docs/backlog) and [Expansion](./docs/expansion) for intentionally deferred work
+8. [Plans](./docs/plans/README.md) and [Expansion](./docs/expansion) for tracked future work outside the active milestone set
 
 ## Desktop App Icon
 

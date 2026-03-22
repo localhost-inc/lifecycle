@@ -1,8 +1,8 @@
-# Milestone 5: "I can inspect and control local workspaces from the CLI"
+# Plan: Local CLI
 
-> Prerequisites: M4
-> Introduces: CLI workspace context auto-detection, observability commands, `lifecycle context`, local lifecycle CLI commands
-> Tracker: high-level status/checklist lives in [`docs/plan.md`](../plan.md). This document is the detailed implementation contract.
+> Status: planned execution plan
+> Depends on: [M4 workspace environments](../milestones/4-workspace-environments.md)
+> Plan index: [docs/plans/README.md](./README.md). This document is the target contract for the local CLI workstream.
 
 ## Goal
 

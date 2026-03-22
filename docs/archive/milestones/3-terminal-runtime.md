@@ -2,7 +2,7 @@
 
 > Prerequisites: M2
 > Introduces: `terminal` entity, local terminal architecture, harness integration
-> Tracker: high-level status/checklist lives in [`docs/plan.md`](../plan.md). This document is the detailed implementation contract.
+> Archived: historical milestone spec retained for context only.
 
 > Update (2026-03-15): the brief external `tmux` session-host experiment was rolled back. Local terminals are again desktop-process-owned Ghostty sessions, so app restart returns to being a terminal termination boundary.
 

@@ -1,5 +1,5 @@
 import type { ProjectRecord } from "@lifecycle/contracts";
-import type { SqlDriver } from "./driver";
+import type { SqlDriver } from "../driver";
 
 interface ProjectRow {
   id: string;

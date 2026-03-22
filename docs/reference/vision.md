@@ -96,9 +96,10 @@ A successful V1 means:
 
 The implementation plan and contracts live in:
 
-1. `docs/plan.md`
-2. `docs/milestones`
-3. `docs/reference/*.md`
-4. `AGENTS.md`
+1. `docs/milestones/README.md`
+2. `docs/milestones/*.md`
+3. `docs/plans/*.md`
+4. `docs/reference/*.md`
+5. `AGENTS.md`
 
-This document defines the product direction. The plan, milestone docs, reference skills, and engineering playbook define implementation detail, sequencing, and acceptance gates.
+This document defines the product direction. The milestone docs, execution plans, reference docs, and engineering playbook define implementation detail, sequencing, and acceptance gates.

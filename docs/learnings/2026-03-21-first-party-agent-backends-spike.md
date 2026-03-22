@@ -3,7 +3,7 @@
 > Status: investigation
 > Date: 2026-03-21
 > Scope: Lifecycle-owned agent system with Claude and Codex as backend adapters
-> Related: [docs/backlog/agent-workspace.md](../backlog/agent-workspace.md), [docs/reference/vision.md](../reference/vision.md), [docs/reference/terminal.md](../reference/terminal.md)
+> Related: [docs/plans/agent-workspace.md](../plans/agent-workspace.md), [docs/reference/vision.md](../reference/vision.md), [docs/reference/terminal.md](../reference/terminal.md)
 
 ## Decision
 
@@ -20,7 +20,7 @@ The current terminal-first approach has the wrong center of gravity for the prod
 1. The user experience depends on third-party terminal rendering, input, clipboard, and overlay behavior.
 2. Agent state is harder to reason about because session, turn, tool, and approval semantics are mixed with terminal transport.
 3. Claude and Codex already expose enough structured surface area that Lifecycle can own the interaction model instead of mirroring their TUIs.
-4. The repo already points in this direction through the deferred [agent workspace backlog](../backlog/agent-workspace.md).
+4. The repo already points in this direction through the [agent workspace plan](../plans/agent-workspace.md).
 
 If terminal harnesses are the core product today, then a first-party agent surface is not optional follow-up work. It is the path to make the product coherent.
 

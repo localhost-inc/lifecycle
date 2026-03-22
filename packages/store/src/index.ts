@@ -1,5 +1,5 @@
 export type { SqlDriver } from "./driver";
-export { createSqlCollection, type SqlCollection } from "./sql-collection";
+export { createSqlCollection, type SqlCollection } from "./collection";
 export type { Collection } from "@tanstack/db";
 export { createHostOnlyRegistry, type RuntimeRegistry } from "./runtime";
 
@@ -8,27 +8,27 @@ export {
   insertProject,
   deleteProject,
   updateProjectManifestStatus,
-} from "./project-queries";
+} from "./collections/projects";
 
 export {
   selectAllWorkspaces,
   selectWorkspaceById,
   groupWorkspacesByProject,
-} from "./workspace-queries";
+} from "./collections/workspaces";
 
 export {
   selectServicesByWorkspace,
   selectAllServices,
-} from "./service-queries";
+} from "./collections/services";
 
 export {
   selectTerminalsByWorkspace,
   selectAllTerminals,
   updateTerminalLabel,
-} from "./terminal-queries";
+} from "./collections/terminals";
 
 export {
   selectAgentSessionsByWorkspace,
   selectAgentSessionById,
   insertAgentSession,
-} from "./agent-session-queries";
+} from "./collections/agent-sessions";

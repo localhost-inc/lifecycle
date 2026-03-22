@@ -78,7 +78,7 @@ describe("closeWorkspacePaneTabs", () => {
 
     await expect(
       closeWorkspacePaneTabs(
-        [createFileViewerTab("README.md"), createFileViewerTab("docs/plan.md")],
+        [createFileViewerTab("README.md"), createFileViewerTab("docs/plans/agent-workspace.md")],
         {
           collapseEmptyPane: () => {
             calls.push({ kind: "collapse" });

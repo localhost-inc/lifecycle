@@ -2,7 +2,7 @@
 
 > Prerequisites: M3
 > Introduces: local environment run/restart/stop/destroy, local preview, mutation locking, terminal/service separation
-> Tracker: high-level status/checklist lives in [`docs/plan.md`](../plan.md). This document is the detailed implementation contract.
+> Status index: [docs/milestones/README.md](./README.md). This document is the detailed implementation contract.
 
 ## Goal
 

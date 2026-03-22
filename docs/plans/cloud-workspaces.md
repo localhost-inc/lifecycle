@@ -1,16 +1,16 @@
-# Milestone 6: "I can sign in, fork to cloud, share a preview, and create a PR"
+# Plan: Cloud Workspaces
 
-> Prerequisites: M5
-> Introduces: `organization` entity, `repository` entity, `activity` entity, auth, `Backend` + `CloudRuntime`, fork-to-cloud, cloud preview, PR creation, cloud CLI commands
-> Tracker: high-level status/checklist lives in [`docs/plan.md`](../plan.md). This document is the detailed implementation contract.
+> Status: planned execution plan
+> Depends on: [Local CLI](./local-cli.md)
+> Plan index: [docs/plans/README.md](./README.md). This document is the target contract for the first cloud delivery stream.
 
 ## Goal
 
-User signs in via WorkOS, installs GitHub App, links project to repo, forks a local workspace to cloud, shares a preview URL with teammates, and creates a PR -- all from desktop app or CLI.
+User signs in, installs GitHub App, links project to repo, forks a local workspace to cloud, shares a preview URL with teammates, and creates a PR -- all from desktop app or CLI.
 
 ## What You Build
 
-1. WorkOS auth flow (device authorization, opens system browser).
+1. Desktop and CLI auth flow suitable for local-first apps (device/browser-confirmed is acceptable).
 2. Convex connection from Tauri webview.
 3. GitHub App installation flow.
 4. Convex schemas: `organization`, `repository`, `activity`. Selective sync and mirror logic for portable `project` and workspace metadata across local and cloud boundaries, without transferring authority for local environment state.
@@ -23,7 +23,7 @@ User signs in via WorkOS, installs GitHub App, links project to repo, forks a lo
 11. RBAC enforcement.
 12. GitHub webhook handling.
 13. Cloud preview: Cloudflare Worker + `proxyToSandbox()` routing.
-14. Preview auth (WorkOS JWT-based preview tokens).
+14. Preview auth with Lifecycle-issued short-lived tokens.
 15. PR creation via GitHub App.
 16. Shared terminal sessions: Durable Object multiplexer, native desktop attach bridge, invite flow, role-based input control, presence.
 17. Cloud CLI commands: `auth login`, `org select`, `repo add`, `pr create`, `workspace fork --mode cloud`.
@@ -94,82 +94,39 @@ User signs in via WorkOS, installs GitHub App, links project to repo, forks a lo
 
 ### Auth and Identity
 
-#### Decision: WorkOS AuthKit
+M6 needs one org-scoped auth contract across desktop, CLI, preview, and cloud actions. The repo should stay explicit about the required shape without hard-wiring provider-specific implementation detail into the milestone.
 
-WorkOS AuthKit is the auth provider for Lifecycle. The rationale:
+#### Auth contract
 
-1. **Enterprise alignment**: B2B infrastructure needs SSO (SAML/OIDC), SCIM, RBAC, and audit logs. WorkOS includes these at no extra cost vs Clerk's per-SSO-connection pricing.
-2. **Convex auto-provision**: `convex.json` `{ "authKit": {} }` auto-provisions dev/preview/production environments. `npx convex dev` writes credentials to `.env.local`.
-3. **CLI + Desktop auth is first-class**: WorkOS Device Authorization Flow maps directly to `lifecycle auth login` and desktop app sign-in.
-4. **Identity model match**: GitHub OAuth = WorkOS connection type -> WorkOS user in organization. Same model as Lifecycle's identity mapping.
-5. **Organization primitives**: WorkOS organizations map 1:1 to Lifecycle organizations.
-
-#### Auth Architecture
-
-```
-+--------------+     +---------------+     +-------------+
-|  CLI         |---->|  WorkOS       |---->|  Convex     |
-|  (device     |     |  AuthKit      |     |  (JWT       |
-|   flow)      |<----|  (hosted UI)  |     |   verify)   |
-+--------------+     +---------------+     +-------------+
-                           |
-+--------------+           |
-|  Desktop     |-----------+
-|  (Tauri)     |  device flow
-|              |  + OS keychain
-+--------------+
-```
-
-#### Token Flow
-
-1. **Desktop app**: WorkOS Device Authorization Flow -> user confirms in system browser -> app receives tokens -> stored securely in OS keychain via Tauri's secure storage. Convex validates WorkOS JWT via `ctx.auth.getUserIdentity()`.
-2. **CLI**: Device Authorization Flow -> user confirms in browser -> CLI polls for tokens -> stored at `~/.lifecycle/credentials.json` (0600). Subsequent calls use `Authorization: Bearer <access_token>`. Auto-refresh on expiry.
-3. **Preview URLs**: preview tokens (JWT, 1-hour TTL) minted by backend via existing WorkOS session. Vanity Worker validates JWT on each request.
-
-#### Implementation Surface
-
-> No web session, no cookie, no redirect flow. Both desktop app and CLI use WorkOS Device Authorization Flow.
-
-Key integration points:
-
-- **Desktop app**: WorkOS Device Authorization Flow -- app opens system browser for confirmation, polls for tokens, stores in OS keychain via Tauri secure storage. On launch, checks keychain for valid tokens and auto-refreshes if expired.
-- **Org switcher**: desktop app calls WorkOS to switch organization context; updates `organizationId` used for all Convex queries.
-- **CLI**: `POST /authorize/device` to WorkOS -> user confirms in browser -> CLI polls -> access + refresh tokens.
-- **Convex**: `auth.config.ts` with `{ providers: [{ domain: "https://auth.workos.com" }] }`. Identity via `ctx.auth.getUserIdentity()` returns `subject` (user ID), `orgId`, `role`. All org-scoped data enforces `identity.orgId === resource.organization_id`.
+1. Desktop and CLI sign-in must share one identity system and one org-scoped permission model.
+2. Browser-confirmed auth is acceptable for both desktop and CLI as long as the local clients receive renewable credentials without requiring a web session shell.
+3. Desktop stores credentials in OS-managed secure storage. CLI stores credentials in a user-scoped credential file or secure store with equivalent protections.
+4. Cloud API calls and reactive queries must carry a validated user identity plus `organization_id`.
+5. Preview access must use Lifecycle-issued short-lived tokens instead of public unauthenticated URLs.
+6. Org switching changes the active `organization_id` used by desktop views, CLI commands, and cloud mutations.
 
 #### RBAC
 
-| Lifecycle role | WorkOS role | Permissions                                                                                              |
-| -------------- | ----------- | -------------------------------------------------------------------------------------------------------- |
-| `viewer`       | `viewer`    | `workspaces:read`, `terminals:read`, `services:read`                                                     |
-| `editor`       | `editor`    | viewer + `workspaces:create`, `workspaces:run`, `workspaces:reset`, `terminals:create`, `services:update` |
-| `admin`        | `admin`     | editor + `workspaces:destroy`, `org:settings`, `org:members`                                             |
+| Lifecycle role | Permissions                                                                                              |
+| -------------- | -------------------------------------------------------------------------------------------------------- |
+| `viewer`       | `workspaces:read`, `terminals:read`, `services:read`                                                     |
+| `editor`       | viewer + `workspaces:create`, `workspaces:run`, `workspaces:reset`, `terminals:create`, `services:update` |
+| `admin`        | editor + `workspaces:destroy`, `org:settings`, `org:members`                                             |
 
-Permission enforcement: Convex functions check `identity.permissions` from the JWT. Roles configured in WorkOS dashboard (manual, SCIM sync, or SSO group mapping). Multiple roles per user -- permissions are the union.
+Permission enforcement must happen at the authoritative cloud boundary. Multiple assigned roles may combine by union if the auth system supports that shape.
 
 #### Preview URL Auth
 
-> **Correction**: The original spec assumed Cloudflare Access with WorkOS as OIDC identity provider. WorkOS is not an OIDC provider -- it consumes OIDC from upstream IdPs. Preview auth uses token-based JWTs instead. See ENG-79 SDK Audit Notes for full analysis.
-
-1. Control plane mints short-lived preview tokens (JWT, 1-hour TTL) when a user requests preview access via existing WorkOS session.
+1. Control plane mints short-lived preview tokens (JWT, 1-hour TTL) when a user requests preview access via an authenticated Lifecycle session.
 2. Vanity Worker on `*.preview.lifecycle.dev` validates the JWT on each request (signature + expiry + org membership claim).
 3. Token stored as cookie on `*.preview.lifecycle.dev` domain after first validation; unauthenticated requests redirect to backend for token issuance.
-
-#### Environment Variables
-
-| Context     | Variable                     | Description                                     |
-| ----------- | ---------------------------- | ----------------------------------------------- |
-| Desktop app | `WORKOS_CLIENT_ID`           | Bundled in Tauri app per environment            |
-| CLI         | `LIFECYCLE_WORKOS_CLIENT_ID` | Hardcoded in CLI binary per environment         |
-
-No API key in desktop app or CLI -- device flow uses only `client_id` (public client). Tokens stored in OS keychain (desktop) or `~/.lifecycle/credentials.json` (CLI).
 
 #### Risks
 
 | Risk                                         | Mitigation                                                           |
 | -------------------------------------------- | -------------------------------------------------------------------- |
-| WorkOS less documented for Convex than Clerk | Auto-provision + official Convex + AuthKit template                  |
-| Fewer pre-built React components than Clerk  | Custom product UI; hosted AuthKit page covers login flows            |
+| Auth provider fit changes during implementation | Keep the milestone contract provider-agnostic; bind vendor choice in reference docs once shipped |
+| Hosted auth UX tradeoffs                     | Keep the auth UI separate from core workspace surfaces and verify the browser-confirmed flow early |
 | Preview JWT issuance and Worker validation drift | Keep one Lifecycle-owned token contract; add integration tests for mint, expiry, org mismatch, and cookie bootstrap |
 | Tauri secure storage cross-platform behavior | Test keychain integration on macOS/Windows/Linux early               |
 
@@ -257,7 +214,7 @@ Cloud terminals should extend the native-first desktop terminal model establishe
 2. On desktop platforms with a native terminal host, cloud terminal tabs should use that same native-host lane.
 3. The cloud-specific difference is the attach transport: token minting, WebSocket redemption, and shared-session multiplexing live behind the provider boundary.
 4. PTY output is the authoritative shared terminal state. Collaborator key events are not mirrored into peer renderers; only the controlling client's input is forwarded to the remote PTY.
-5. Browser join pages are for auth, invite redemption, and desktop deep-link bootstrap. Browser terminal fallback remains expansion-scope.
+5. Browser join pages are for auth, invite redemption, and desktop deep-link bootstrap. They are not a second primary terminal client in M6.
 6. Detailed desktop attach-helper rules live in [reference/cloud-terminal-attach.md](../reference/cloud-terminal-attach.md).
 
 #### Architecture
@@ -360,10 +317,10 @@ The share experience must feel effortless — one click to share, one click to j
 
 **Hurshal (guest):**
 1. Hurshal clicks the link → opens in browser → landing page shows workspace name, host name, and "Join" button
-2. If not signed in: "Sign in with GitHub" → WorkOS auth → redirected back to join page
+2. If not signed in: "Sign in" → Lifecycle auth flow → redirected back to join page
 3. Clicks "Join" → `workspaceInvites.join(token)` validates org membership → success
 4. If Hurshal has the desktop app: deep link opens Lifecycle desktop → attaches to workspace as viewer
-5. If Hurshal doesn't have the desktop app: landing page prompts download (expansion: web terminal fallback)
+5. If Hurshal doesn't have the desktop app: landing page prompts download instead of becoming a second primary terminal client
 6. Hurshal sees Kyle's terminal, output streaming live. Kyle sees Hurshal's avatar appear in the presence bar.
 7. Kyle clicks Hurshal's avatar → "Grant editor" → Hurshal can now type
 
@@ -383,7 +340,7 @@ The share experience must feel effortless — one click to share, one click to j
 - Shared terminals are cloud-only. Local terminals use Tauri IPC with no multiplexing layer.
 - Maximum 10 concurrent participants per workspace session (Durable Object WebSocket limit consideration)
 - Shared terminal sessions do not survive workspace sleep — participants are disconnected on sleep, can reconnect after wake
-- Web landing pages do not become a second primary terminal client in M6; browser-terminal fallback remains expansion-scope
+- Web landing pages do not become a second primary terminal client in M6
 
 ### Cloud Preview
 
@@ -398,7 +355,7 @@ The share experience must feel effortless — one click to share, one click to j
 
 2. **Access control**:
    - default audience is organization members only
-   - auth is enforced at preview gateway using WorkOS JWT-based preview tokens (see Auth > Preview URL Auth)
+   - auth is enforced at preview gateway using Lifecycle-issued preview tokens (see Auth > Preview URL Auth)
    - raw preview tokens are treated as routing identifiers, not as sufficient authentication
    - optional external reviewer links are tokenized, scoped to one preview URL, and time-bound
 
@@ -439,7 +396,7 @@ The share experience must feel effortless — one click to share, one click to j
    - signature verified
    - deduplicated by delivery ID
    - acknowledged quickly and processed async
-3. Slack and Linear ingress are expansion-scope (see `docs/plans/lifecycle/expansion/threads.md`).
+3. Slack and Linear ingress are expansion-scope (see `docs/expansion`).
 
 ### GitHub Integration and PR Permissions
 
@@ -498,7 +455,7 @@ Index rationale:
 
 ## Desktop App Surface
 
-- **Sign-in button**: triggers WorkOS Device Authorization Flow in system browser
+- **Sign-in button**: triggers the chosen browser-confirmed auth flow in the system browser
 - **Org switcher**: top-left, Linear-style compact control (org mark, org name, chevron)
 - **GitHub App install**: in-app flow to install and connect repos
 - **Project -> repo linking**: auto-detect from git remote with manual override

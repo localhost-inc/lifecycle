@@ -1,5 +1,5 @@
 import type { WorkspaceRecord } from "@lifecycle/contracts";
-import type { SqlDriver } from "./driver";
+import type { SqlDriver } from "../driver";
 
 export async function selectAllWorkspaces(driver: SqlDriver): Promise<WorkspaceRecord[]> {
   return driver.select<WorkspaceRecord>(

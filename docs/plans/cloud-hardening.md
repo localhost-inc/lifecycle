@@ -1,8 +1,8 @@
-# Milestone 7: "Cloud workspaces have full lifecycle with TTL enforcement"
+# Plan: Cloud Hardening
 
-> Prerequisites: M6
-> Introduces: cloud sleep/wake (R2), cloud destroy, TTL enforcement, org quotas
-> Tracker: high-level status/checklist lives in [`docs/plan.md`](../plan.md). This document is the detailed implementation contract.
+> Status: planned execution plan
+> Depends on: [Cloud Workspaces](./cloud-workspaces.md)
+> Plan index: [docs/plans/README.md](./README.md). This document is the target contract for lifecycle hardening after initial cloud delivery.
 
 ## Goal
 

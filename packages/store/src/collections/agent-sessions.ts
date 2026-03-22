@@ -1,5 +1,5 @@
 import type { AgentSessionRecord } from "@lifecycle/contracts";
-import type { SqlDriver } from "./driver";
+import type { SqlDriver } from "../driver";
 
 export async function selectAgentSessionsByWorkspace(
   driver: SqlDriver,

@@ -25,7 +25,7 @@ body:
     attributes:
       label: Milestone or contract impact
       description: Note any related docs, milestones, or reference specs if you know them.
-      placeholder: docs/milestones/m4.md, docs/reference/state-machines.md
+      placeholder: docs/milestones/4-workspace-environments.md, docs/reference/workspace.md
   - type: textarea
     id: alternatives
     attributes:

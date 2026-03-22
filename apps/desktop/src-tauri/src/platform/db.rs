@@ -54,11 +54,6 @@ pub fn open_db(db_path: &str) -> Result<rusqlite::Connection, LifecycleError> {
     Ok(conn)
 }
 
-#[tauri::command]
-pub fn get_db_path(db_path: tauri::State<'_, DbPath>) -> String {
-    db_path.0.clone()
-}
-
 pub async fn run_blocking_db_read<T, F>(
     db_path: String,
     label: &'static str,

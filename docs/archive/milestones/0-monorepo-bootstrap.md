@@ -2,7 +2,7 @@
 
 > Prerequisites: none  
 > Introduces: Bun workspaces monorepo, shared toolchain, CI baseline, execution scaffolding
-> Tracker: high-level status/checklist lives in [`docs/plan.md`](../plan.md). This document is the detailed implementation contract.
+> Archived: historical milestone spec retained for context only.
 
 ## Goal
 

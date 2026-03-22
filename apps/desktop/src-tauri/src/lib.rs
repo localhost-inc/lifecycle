@@ -234,7 +234,6 @@ pub fn run() {
         .manage(workspace_controllers)
         .manage(root_git_watchers)
         .invoke_handler(tauri::generate_handler![
-            crate::platform::db::get_db_path,
             capabilities::app::commands::get_app_config,
             capabilities::app::commands::write_app_config,
             capabilities::app::commands::get_auth_session,

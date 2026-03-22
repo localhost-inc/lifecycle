@@ -2,7 +2,7 @@
 
 > Prerequisites: M1
 > Introduces: `workspace` and `service` entities, `Backend` + host-backed `Workspace`, workspace lifecycle state
-> Tracker: high-level status/checklist lives in [`docs/plan.md`](../plan.md). This document is the detailed implementation contract.
+> Archived: historical milestone spec retained for context only.
 
 ## Goal
 
