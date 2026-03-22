@@ -3,6 +3,7 @@ import { Spinner } from "@lifecycle/ui";
 import { FileDiff, FileText, GitBranch, GitCommitHorizontal, Globe, PenTool } from "lucide-react";
 import { ResponseReadyDot } from "@/components/response-ready-dot";
 import {
+  isAgentTab,
   isBrowserDocument,
   isChangesDiffDocument,
   isCommitDiffDocument,
@@ -82,6 +83,10 @@ function tabIconName(tab: WorkspaceCanvasTab): string {
     return "browser";
   }
 
+  if (isAgentTab(tab)) {
+    return tab.backend;
+  }
+
   if (isCommitDiffDocument(tab)) {
     return "commit-diff";
   }
@@ -158,6 +163,14 @@ export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceCanvasTab })
     return (
       <SurfaceBubble tab={tab}>
         <Globe className="h-3.5 w-3.5" strokeWidth={1.8} />
+      </SurfaceBubble>
+    );
+  }
+
+  if (isAgentTab(tab)) {
+    return (
+      <SurfaceBubble tab={tab}>
+        {tab.backend === "claude" ? <ClaudeIcon size={14} /> : <CodexIcon size={14} />}
       </SurfaceBubble>
     );
   }

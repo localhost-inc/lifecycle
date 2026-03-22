@@ -1,8 +1,9 @@
 import type { TerminalRecord } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
 import { TerminalSquare } from "lucide-react";
-import type { CreateTerminalRequest, HarnessProvider } from "@/features/terminals/api";
+import type { HarnessProvider } from "@/features/terminals/api";
 import { TerminalSurface } from "@/features/terminals/components/terminal-surface";
+import { AgentSurface } from "@/features/agents/components/agent-surface";
 import { GitDiffSurface } from "@/features/git/components/git-diff-surface";
 import { PullRequestSurface } from "@/features/git/components/pull-request-surface";
 import { FileSurface } from "@/features/explorer/components/file-surface";
@@ -10,6 +11,7 @@ import { BrowserSurface } from "@/features/workspaces/components/browser-surface
 import type { FileViewerSessionState } from "@/features/explorer/lib/file-session";
 import {
   isBrowserDocument,
+  isAgentTab,
   isChangesDiffDocument,
   isCommitDiffDocument,
   isFileViewerDocument,
@@ -23,6 +25,7 @@ import {
   canvasTabDomId,
   canvasTabPanelId,
 } from "@/features/workspaces/components/workspace-canvas-ids";
+import type { SurfaceLaunchRequest } from "@/features/workspaces/components/surface-launch-actions";
 
 interface WorkspacePaneContentProps {
   activeTabKey: string | null;
@@ -32,7 +35,7 @@ interface WorkspacePaneContentProps {
   documents: WorkspaceCanvasDocument[];
   hasVisibleTabs: boolean;
   onFileSessionStateChange: (tabKey: string, state: FileViewerSessionState | null) => void;
-  onCreateTerminal: (input: CreateTerminalRequest) => Promise<void>;
+  onLaunchSurface: (request: SurfaceLaunchRequest) => void;
   onOpenFile: (filePath: string) => void;
   onTabViewStateChange: (tabKey: string, viewState: WorkspaceCanvasTabViewState | null) => void;
   paneDragInProgress: boolean;
@@ -51,7 +54,7 @@ export function WorkspacePaneContent({
   documents,
   hasVisibleTabs,
   onFileSessionStateChange,
-  onCreateTerminal,
+  onLaunchSurface,
   onOpenFile,
   onTabViewStateChange,
   paneDragInProgress,
@@ -71,9 +74,7 @@ export function WorkspacePaneContent({
     ) : (
       <WorkspaceEmptyPaneState
         creatingSelection={creatingSelection}
-        onCreateTerminal={(input) => {
-          void onCreateTerminal(input);
-        }}
+        onLaunchSurface={onLaunchSurface}
       />
     );
   }
@@ -141,6 +142,8 @@ export function WorkspacePaneContent({
           title={activeDocument.label}
           url={activeDocument.url}
         />
+      ) : activeDocument && isAgentTab(activeDocument) ? (
+        <AgentSurface agentSessionId={activeDocument.agentSessionId} workspaceId={workspaceId} />
       ) : activeDocument && isPullRequestDocument(activeDocument) ? (
         <PullRequestSurface
           initialScrollTop={activeTabViewState?.scrollTop ?? 0}

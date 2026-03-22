@@ -1,9 +1,20 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { TerminalRecord } from "@lifecycle/contracts";
+import type { WorkspaceRuntime } from "@lifecycle/workspace";
 import {
   buildHarnessLaunchConfig,
   buildDefaultHarnessSettings,
 } from "@/features/settings/state/harness-settings";
+import {
+  createTerminal,
+  detachTerminal,
+  interruptTerminal,
+  killTerminal,
+  listWorkspaceTerminals,
+  renameTerminal,
+  saveTerminalAttachment,
+  sendTerminalText,
+} from "@/features/terminals/api";
 
 const terminal: TerminalRecord = {
   id: "term_1",
@@ -21,10 +32,11 @@ const terminal: TerminalRecord = {
   ended_at: null,
 };
 
-const workspaceClient = {
+const runtime = {
   listTerminals: mock(async () => [terminal]),
   createTerminal: mock(async () => terminal),
   renameTerminal: mock(async () => ({ ...terminal, label: "Codex Session" })),
+  sendTerminalText: mock(async () => {}),
   saveTerminalAttachment: mock(async () => ({
     absolutePath: "/tmp/ws_1/attachments/screenshot.png",
     fileName: "screenshot.png",
@@ -33,23 +45,7 @@ const workspaceClient = {
   detachTerminal: mock(async () => {}),
   killTerminal: mock(async () => {}),
   interruptTerminal: mock(async () => {}),
-};
-
-const getWorkspaceClient = mock(() => workspaceClient);
-
-mock.module("../../lib/workspace", () => ({
-  getWorkspaceClient,
-}));
-
-const {
-  createTerminal,
-  detachTerminal,
-  interruptTerminal,
-  killTerminal,
-  listWorkspaceTerminals,
-  renameTerminal,
-  saveTerminalAttachment,
-} = await import("./api");
+} as unknown as WorkspaceRuntime;
 
 describe("terminal api workspace routing", () => {
   beforeEach(() => {
@@ -58,9 +54,10 @@ describe("terminal api workspace routing", () => {
       value: true,
       writable: true,
     });
-    getWorkspaceClient.mockClear();
-    for (const method of Object.values(workspaceClient)) {
-      method.mockClear();
+    for (const method of Object.values(runtime)) {
+      if (typeof method === "function" && "mockClear" in method) {
+        (method as ReturnType<typeof mock>).mockClear();
+      }
     }
   });
 
@@ -68,23 +65,23 @@ describe("terminal api workspace routing", () => {
     delete (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri;
   });
 
-  test("routes terminal lifecycle reads and mutations through the workspace client", async () => {
-    expect(await listWorkspaceTerminals("ws_1")).toEqual([terminal]);
-    expect(await createTerminal({ workspaceId: "ws_1", launchType: "shell" })).toEqual(terminal);
+  test("routes terminal lifecycle reads and mutations through the runtime", async () => {
+    expect(await listWorkspaceTerminals(runtime, "ws_1")).toEqual([terminal]);
+    expect(await createTerminal(runtime, { workspaceId: "ws_1", launchType: "shell" })).toEqual(terminal);
     expect(
-      await createTerminal({
+      await createTerminal(runtime, {
         workspaceId: "ws_1",
         launchType: "harness",
         harnessProvider: "codex",
         harnessLaunchConfig: buildHarnessLaunchConfig("codex", buildDefaultHarnessSettings()),
       }),
     ).toEqual(terminal);
-    expect(await renameTerminal("ws_1", "term_1", "  Codex   Session  ")).toEqual({
+    expect(await renameTerminal(runtime, "ws_1", "term_1", "  Codex   Session  ")).toEqual({
       ...terminal,
       label: "Codex Session",
     });
     expect(
-      await saveTerminalAttachment({
+      await saveTerminalAttachment(runtime, {
         base64Data: "ZmFrZQ==",
         fileName: "screenshot.png",
         workspaceId: "ws_1",
@@ -94,19 +91,19 @@ describe("terminal api workspace routing", () => {
       fileName: "screenshot.png",
       relativePath: ".lifecycle/attachments/screenshot.png",
     });
-    await detachTerminal("ws_1", "term_1");
-    await killTerminal("ws_1", "term_1");
-    await interruptTerminal("ws_1", "term_1");
+    await sendTerminalText(runtime, "ws_1", "term_1", "status\n");
+    await detachTerminal(runtime, "ws_1", "term_1");
+    await killTerminal(runtime, "ws_1", "term_1");
+    await interruptTerminal(runtime, "ws_1", "term_1");
 
-    expect(getWorkspaceClient).toHaveBeenCalled();
-    expect(workspaceClient.listTerminals).toHaveBeenCalledWith("ws_1");
-    expect(workspaceClient.createTerminal).toHaveBeenCalledWith({
+    expect((runtime.listTerminals as ReturnType<typeof mock>).mock.calls.length).toBeGreaterThanOrEqual(1);
+    expect((runtime.createTerminal as ReturnType<typeof mock>)).toHaveBeenCalledWith({
       workspaceId: "ws_1",
       launchType: "shell",
       harnessProvider: null,
       harnessSessionId: null,
     });
-    expect(workspaceClient.createTerminal).toHaveBeenCalledWith({
+    expect((runtime.createTerminal as ReturnType<typeof mock>)).toHaveBeenCalledWith({
       workspaceId: "ws_1",
       launchType: "harness",
       harnessLaunchConfig: {
@@ -119,14 +116,15 @@ describe("terminal api workspace routing", () => {
       harnessProvider: "codex",
       harnessSessionId: null,
     });
-    expect(workspaceClient.renameTerminal).toHaveBeenCalledWith("ws_1", "term_1", "Codex Session");
-    expect(workspaceClient.saveTerminalAttachment).toHaveBeenCalledWith({
+    expect((runtime.renameTerminal as ReturnType<typeof mock>)).toHaveBeenCalledWith("ws_1", "term_1", "Codex Session");
+    expect((runtime.sendTerminalText as ReturnType<typeof mock>)).toHaveBeenCalledWith("ws_1", "term_1", "status\n");
+    expect((runtime.saveTerminalAttachment as ReturnType<typeof mock>)).toHaveBeenCalledWith({
       base64Data: "ZmFrZQ==",
       fileName: "screenshot.png",
       workspaceId: "ws_1",
     });
-    expect(workspaceClient.detachTerminal).toHaveBeenCalledWith("ws_1", "term_1");
-    expect(workspaceClient.killTerminal).toHaveBeenCalledWith("ws_1", "term_1");
-    expect(workspaceClient.interruptTerminal).toHaveBeenCalledWith("ws_1", "term_1");
+    expect((runtime.detachTerminal as ReturnType<typeof mock>)).toHaveBeenCalledWith("ws_1", "term_1");
+    expect((runtime.killTerminal as ReturnType<typeof mock>)).toHaveBeenCalledWith("ws_1", "term_1");
+    expect((runtime.interruptTerminal as ReturnType<typeof mock>)).toHaveBeenCalledWith("ws_1", "term_1");
   });
 });

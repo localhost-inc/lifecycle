@@ -368,6 +368,18 @@ pub(crate) async fn interrupt_terminal(
     native_terminal::send_text(&app, &terminal_id, "\x03")
 }
 
+pub(crate) async fn send_terminal_text(
+    app: AppHandle,
+    terminal_id: String,
+    text: String,
+) -> Result<(), LifecycleError> {
+    if text.is_empty() {
+        return Ok(());
+    }
+
+    native_terminal::send_text(&app, &terminal_id, &text)
+}
+
 #[allow(dead_code)]
 pub(crate) fn complete_native_terminal_exit(
     app: &AppHandle,

@@ -2,6 +2,7 @@ import type { DragEvent as ReactDragEvent } from "react";
 import type { TerminalRecord, TerminalStatus } from "@lifecycle/contracts";
 import type { HarnessProvider } from "@/features/terminals/api";
 import {
+  isAgentTab,
   getWorkspaceDocument,
   isBrowserDocument,
   isChangesDiffDocument,
@@ -200,6 +201,10 @@ export function tabTitle(tab: WorkspaceCanvasTab): string {
 
   if (isBrowserDocument(tab)) {
     return tab.url;
+  }
+
+  if (isAgentTab(tab)) {
+    return tab.label;
   }
 
   if (isChangesDiffDocument(tab)) {

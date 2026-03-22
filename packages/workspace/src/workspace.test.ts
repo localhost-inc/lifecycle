@@ -4,12 +4,12 @@ import type {
   TerminalRecord,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
-import type { WorkspaceClient } from "./workspace";
-import { HostWorkspaceClient } from "./host-workspace";
+import type { WorkspaceRuntime } from "./workspace";
+import { LocalRuntime } from "./runtimes/local";
 
 describe("workspace contract", () => {
   test("defines the expected workspace method names", () => {
-    const requiredMethods: Array<keyof WorkspaceClient> = [
+    const requiredMethods: Array<keyof WorkspaceRuntime> = [
       "startServices",
       "healthCheck",
       "stopServices",
@@ -18,6 +18,7 @@ describe("workspace contract", () => {
       "getServices",
       "createTerminal",
       "listTerminals",
+      "sendTerminalText",
       "renameTerminal",
       "saveTerminalAttachment",
       "detachTerminal",
@@ -46,14 +47,20 @@ describe("workspace contract", () => {
       "pushGit",
       "createGitPullRequest",
       "mergeGitPullRequest",
+      "createWorkspace",
+      "renameWorkspace",
+      "destroyWorkspace",
+      "readManifestText",
+      "getCurrentBranch",
+      "cleanupProject",
     ];
 
-    expect(requiredMethods).toHaveLength(36);
+    expect(requiredMethods).toHaveLength(43);
   });
 
   test("host workspace client exposes the full contract surface", () => {
     const invoke = async () => "";
-    const client = new HostWorkspaceClient(invoke);
+    const client = new LocalRuntime({ invoke });
 
     expect(typeof client.startServices).toBe("function");
     expect(typeof client.healthCheck).toBe("function");
@@ -63,6 +70,7 @@ describe("workspace contract", () => {
     expect(typeof client.getServices).toBe("function");
     expect(typeof client.createTerminal).toBe("function");
     expect(typeof client.listTerminals).toBe("function");
+    expect(typeof client.sendTerminalText).toBe("function");
     expect(typeof client.renameTerminal).toBe("function");
     expect(typeof client.saveTerminalAttachment).toBe("function");
     expect(typeof client.detachTerminal).toBe("function");
@@ -93,35 +101,25 @@ describe("workspace contract", () => {
     expect(typeof client.mergeGitPullRequest).toBe("function");
   });
 
-  test("host workspace client forwards file event subscriptions", async () => {
-    const subscribeCalls: Array<{
-      input: { workspaceId: string; worktreePath?: string | null };
-      listener: Parameters<WorkspaceClient["subscribeFileEvents"]>[1];
-    }> = [];
-    const subscribe = async (
-      input: { workspaceId: string; worktreePath?: string | null },
-      listener: Parameters<WorkspaceClient["subscribeFileEvents"]>[1],
-    ) => {
-      subscribeCalls.push({ input, listener });
-      return () => {};
-    };
-    const client = new HostWorkspaceClient(async () => "", subscribe);
-    const listener: Parameters<WorkspaceClient["subscribeFileEvents"]>[1] = () => {};
+  test("local runtime sets up file watching via watchPath", async () => {
+    let watchedPath = "";
+    const client = new LocalRuntime({
+      invoke: async () => "",
+      watchPath: async (path, _callback, _options) => {
+        watchedPath = path;
+        return () => {};
+      },
+    });
 
     const cleanup = await client.subscribeFileEvents(
       {
         workspaceId: "ws_1",
         worktreePath: "/tmp/project_1/.worktrees/ws_1",
       },
-      listener,
+      () => {},
     );
 
-    expect(subscribeCalls).toHaveLength(1);
-    expect(subscribeCalls[0]?.input).toEqual({
-      workspaceId: "ws_1",
-      worktreePath: "/tmp/project_1/.worktrees/ws_1",
-    });
-    expect(subscribeCalls[0]?.listener).toBe(listener);
+    expect(watchedPath).toBe("/tmp/project_1/.worktrees/ws_1");
     expect(typeof cleanup).toBe("function");
   });
 
@@ -131,7 +129,7 @@ describe("workspace contract", () => {
       calls.push(args ? { cmd, args } : { cmd });
       return undefined;
     };
-    const client = new HostWorkspaceClient(invoke);
+    const client = new LocalRuntime({ invoke });
     const workspace: WorkspaceRecord = {
       id: "ws_1",
       project_id: "project_1",
@@ -195,7 +193,7 @@ describe("workspace contract", () => {
       calls.push(args ? { cmd, args } : { cmd });
       return undefined;
     };
-    const client = new HostWorkspaceClient(invoke);
+    const client = new LocalRuntime({ invoke });
 
     await client.startServices({
       workspace: {
@@ -242,7 +240,7 @@ describe("workspace contract", () => {
       calls.push(args ? { cmd, args } : { cmd });
       return undefined;
     };
-    const client = new HostWorkspaceClient(invoke);
+    const client = new LocalRuntime({ invoke });
 
     await client.startServices({
       serviceNames: ["www"],
@@ -357,7 +355,7 @@ describe("workspace contract", () => {
           return undefined;
       }
     };
-    const client = new HostWorkspaceClient(invoke);
+    const client = new LocalRuntime({ invoke });
 
     await client.healthCheck("ws_1");
     await client.getActivity("ws_1");
@@ -509,7 +507,7 @@ describe("workspace contract", () => {
         ended_at: null,
       };
     };
-    const client = new HostWorkspaceClient(invoke);
+    const client = new LocalRuntime({ invoke });
 
     await client.createTerminal({
       workspaceId: "ws_1",
@@ -660,7 +658,7 @@ describe("workspace contract", () => {
           return undefined;
       }
     };
-    const client = new HostWorkspaceClient(invoke);
+    const client = new LocalRuntime({ invoke });
 
     await client.getGitStatus("ws_1");
     await client.getGitScopePatch("ws_1", "working");

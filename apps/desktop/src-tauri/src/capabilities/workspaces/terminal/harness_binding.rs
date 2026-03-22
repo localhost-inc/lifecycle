@@ -71,7 +71,8 @@ pub(crate) fn resolve_harness_launch_environment(
     )?;
     let bridge = app.state::<crate::capabilities::bridge::BridgeState>();
     let bridge_path = bridge.endpoint_path();
-    let bridge_session_token = bridge.register_terminal_session(&terminal.workspace_id, &terminal.id);
+    let bridge_session_token =
+        bridge.register_terminal_session(&terminal.workspace_id, &terminal.id);
     let lifecycle_cli = app.state::<crate::platform::lifecycle_cli::LifecycleCliState>();
 
     let mut environment = Vec::new();

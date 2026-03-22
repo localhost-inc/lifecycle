@@ -2,6 +2,7 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  createAgentTab,
   createBrowserTab,
   createChangesDiffTab,
   terminalTabKey,
@@ -35,8 +36,8 @@ describe("WorkspacePaneContent", () => {
         creatingSelection: null,
         documents: [changesTab],
         hasVisibleTabs: true,
-        onCreateTerminal: async () => {},
         onFileSessionStateChange: () => {},
+        onLaunchSurface: () => {},
         onOpenFile,
         paneDragInProgress: false,
         paneFocused: true,
@@ -68,8 +69,8 @@ describe("WorkspacePaneContent", () => {
         creatingSelection: null,
         documents: [],
         hasVisibleTabs: true,
-        onCreateTerminal: async () => {},
         onFileSessionStateChange: () => {},
+        onLaunchSurface: () => {},
         onOpenFile: () => {},
         onTabViewStateChange: () => {},
         paneDragInProgress: false,
@@ -112,8 +113,8 @@ describe("WorkspacePaneContent", () => {
         creatingSelection: null,
         documents: [],
         hasVisibleTabs: false,
-        onCreateTerminal: async () => {},
         onFileSessionStateChange: () => {},
+        onLaunchSurface: () => {},
         onOpenFile: () => {},
         onTabViewStateChange: () => {},
         paneDragInProgress: false,
@@ -162,8 +163,8 @@ describe("WorkspacePaneContent", () => {
         creatingSelection: null,
         documents: [browserTab],
         hasVisibleTabs: true,
-        onCreateTerminal: async () => {},
         onFileSessionStateChange: () => {},
+        onLaunchSurface: () => {},
         onOpenFile: () => {},
         onTabViewStateChange: () => {},
         paneDragInProgress: false,
@@ -178,6 +179,53 @@ describe("WorkspacePaneContent", () => {
     expect(markup).toContain('data-slot="browser-surface"');
     expect(markup).toContain('data-tab-key="browser:service:web"');
     expect(markup).toContain('data-url="http://web.sydney.lifecycle.localhost"');
+  });
+
+  test("renders the agent surface for agent tabs", async () => {
+    const agentSurfaceModule = await import("../../agents/components/agent-surface");
+
+    spyOn(agentSurfaceModule, "AgentSurface").mockImplementation(((
+      props: Parameters<typeof agentSurfaceModule.AgentSurface>[0],
+    ) =>
+      createElement(
+        "div",
+        {
+          "data-agent-session-id": props.agentSessionId,
+          "data-slot": "agent-surface",
+        },
+        props.workspaceId,
+      )) as never);
+
+    const { WorkspacePaneContent } = await import("./workspace-pane-content");
+    const agentTab = createAgentTab({
+      agentSessionId: "agent_session_1",
+      backend: "claude",
+      label: "Claude",
+    });
+
+    const markup = renderToStaticMarkup(
+      createElement(WorkspacePaneContent, {
+        activeTabKey: agentTab.key,
+        activeFileSessionState: null,
+        activeTabViewState: null,
+        creatingSelection: null,
+        documents: [agentTab],
+        hasVisibleTabs: true,
+        onFileSessionStateChange: () => {},
+        onLaunchSurface: () => {},
+        onOpenFile: () => {},
+        onTabViewStateChange: () => {},
+        paneDragInProgress: false,
+        paneFocused: true,
+        surfaceOpacity: 1,
+        terminals: [],
+        waitingForSelectedTerminalTab: false,
+        workspaceId: "workspace-1",
+      }),
+    );
+
+    expect(markup).toContain('data-slot="agent-surface"');
+    expect(markup).toContain('data-agent-session-id="agent_session_1"');
   });
 
   test("threads pane opacity into native terminal surfaces", async () => {
@@ -201,8 +249,8 @@ describe("WorkspacePaneContent", () => {
         creatingSelection: null,
         documents: [],
         hasVisibleTabs: true,
-        onCreateTerminal: async () => {},
         onFileSessionStateChange: () => {},
+        onLaunchSurface: () => {},
         onOpenFile: () => {},
         onTabViewStateChange: () => {},
         paneDragInProgress: false,

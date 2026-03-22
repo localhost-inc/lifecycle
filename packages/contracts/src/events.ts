@@ -1,3 +1,4 @@
+import type { AgentSessionRecord } from "./agent";
 import type { TerminalRecord } from "./db";
 import type { TerminalFailureReason, TerminalStatus } from "./terminal";
 import type {
@@ -111,6 +112,20 @@ export type LifecycleEvent =
       harness_session_id: string | null;
       completion_key: string;
       turn_id: string | null;
+    }
+  | {
+      id: string;
+      occurred_at: string;
+      kind: "agent.session.created";
+      workspace_id: string;
+      session: AgentSessionRecord;
+    }
+  | {
+      id: string;
+      occurred_at: string;
+      kind: "agent.session.updated";
+      workspace_id: string;
+      session: AgentSessionRecord;
     }
   | {
       id: string;

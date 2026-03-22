@@ -18,7 +18,7 @@ import {
 } from "react";
 import type { TerminalRecord } from "@lifecycle/contracts";
 import { AnimatePresence, motion } from "motion/react";
-import { type CreateTerminalRequest, type HarnessProvider } from "@/features/terminals/api";
+import { type HarnessProvider } from "@/features/terminals/api";
 import {
   SurfaceLaunchActions,
   type SurfaceLaunchAction,
@@ -37,7 +37,10 @@ import {
   type WorkspacePaneTabBarDragPreview,
   type WorkspacePaneTabDrag,
 } from "@/features/workspaces/components/workspace-pane-tab-bar";
-import { isFileViewerDirty, type FileViewerSessionState } from "@/features/explorer/lib/file-session";
+import {
+  isFileViewerDirty,
+  type FileViewerSessionState,
+} from "@/features/explorer/lib/file-session";
 import type {
   WorkspacePaneNode,
   WorkspaceCanvasDocument,
@@ -61,7 +64,6 @@ interface WorkspacePaneTreeProps {
   inactivePaneOpacity?: number;
   onCloseDocumentTab: (tabKey: string) => void;
   onCloseTerminalTab: (tabKey: string, terminalId: string) => Promise<void>;
-  onCreateTerminal: (input: CreateTerminalRequest, paneId?: string) => Promise<void>;
   onFileSessionStateChange: (tabKey: string, state: FileViewerSessionState | null) => void;
   onLaunchSurface: (paneId: string, request: SurfaceLaunchRequest) => void;
   onMoveTabToPane: (
@@ -526,7 +528,6 @@ export function WorkspacePaneTree({
   inactivePaneOpacity = 1,
   onCloseDocumentTab,
   onCloseTerminalTab,
-  onCreateTerminal,
   onFileSessionStateChange,
   onLaunchSurface,
   onMoveTabToPane,
@@ -861,8 +862,8 @@ export function WorkspacePaneTree({
               creatingSelection={creatingSelection}
               documents={documents}
               hasVisibleTabs={visibleTabs.length > 0}
-              onCreateTerminal={(input) => onCreateTerminal(input, node.id)}
               onFileSessionStateChange={onFileSessionStateChange}
+              onLaunchSurface={(request) => onLaunchSurface(node.id, request)}
               onOpenFile={onOpenFile}
               onTabViewStateChange={onTabViewStateChange}
               paneDragInProgress={activeTabDrag !== null}
@@ -887,7 +888,6 @@ export function WorkspacePaneTree({
       inactivePaneOpacity,
       onCloseDocumentTab,
       onCloseTerminalTab,
-      onCreateTerminal,
       onFileSessionStateChange,
       onLaunchSurface,
       onMoveTabToPane,

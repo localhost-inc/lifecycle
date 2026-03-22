@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { mockStoreContext } from "@/test/store-mock";
 import type { WorkspaceFileTreeEntry } from "@/features/workspaces/api";
 
 function readyQueryResult<T>(data: T) {
@@ -42,9 +43,8 @@ async function renderExplorerPanel({
 }
 
 describe("ExplorerPanel", () => {
-  afterEach(() => {
-    mock.restore();
-  });
+  beforeEach(() => mockStoreContext());
+  afterEach(() => mock.restore());
 
   test("reads and renders the explorer tree for local workspaces", async () => {
     const { explorerTreeSpy, markup } = await renderExplorerPanel({

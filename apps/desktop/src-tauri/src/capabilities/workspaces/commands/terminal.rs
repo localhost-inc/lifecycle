@@ -66,6 +66,18 @@ pub async fn create_terminal(
 }
 
 #[tauri::command]
+pub async fn send_terminal_text(
+    app: AppHandle,
+    db_path: State<'_, DbPath>,
+    workspace_id: String,
+    terminal_id: String,
+    text: String,
+) -> Result<(), LifecycleError> {
+    require_workspace_terminal(&db_path.0, &workspace_id, &terminal_id)?;
+    super::super::terminal::send_terminal_text(app, terminal_id, text).await
+}
+
+#[tauri::command]
 pub async fn save_terminal_attachment(
     db_path: State<'_, DbPath>,
     workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,

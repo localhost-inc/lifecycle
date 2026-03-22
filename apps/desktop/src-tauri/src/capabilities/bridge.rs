@@ -7,12 +7,12 @@ use crate::WorkspaceControllerRegistryHandle;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+#[cfg(unix)]
+use std::os::unix::net::UnixListener as StdUnixListener;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex as StdMutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
-#[cfg(unix)]
-use std::os::unix::net::UnixListener as StdUnixListener;
 #[cfg(unix)]
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 #[cfg(unix)]
@@ -30,9 +30,8 @@ pub struct BridgeState {
 
 struct BridgeStateInner {
     endpoint_path: Option<String>,
-    pending_shell_requests: StdMutex<
-        HashMap<String, oneshot::Sender<Result<BridgeShellResult, LifecycleError>>>,
-    >,
+    pending_shell_requests:
+        StdMutex<HashMap<String, oneshot::Sender<Result<BridgeShellResult, LifecycleError>>>>,
     session_scopes: StdMutex<HashMap<String, BridgeSessionScope>>,
 }
 
@@ -153,7 +152,7 @@ impl BridgeState {
 
     pub(crate) fn disabled() -> Self {
         Self {
-                inner: Arc::new(BridgeStateInner {
+            inner: Arc::new(BridgeStateInner {
                 endpoint_path: None,
                 pending_shell_requests: StdMutex::new(HashMap::new()),
                 session_scopes: StdMutex::new(HashMap::new()),
@@ -528,9 +527,7 @@ impl BridgeState {
             .await?;
 
         Ok(serde_json::to_value(result).map_err(|error| {
-            LifecycleError::Io(format!(
-                "failed to serialize bridge shell result: {error}"
-            ))
+            LifecycleError::Io(format!("failed to serialize bridge shell result: {error}"))
         })?)
     }
 
@@ -639,10 +636,7 @@ impl BridgeState {
         Ok(scope.workspace_id)
     }
 
-    fn lookup_session_scope(
-        &self,
-        token: &str,
-    ) -> Result<BridgeSessionScope, LifecycleError> {
+    fn lookup_session_scope(&self, token: &str) -> Result<BridgeSessionScope, LifecycleError> {
         self.inner
             .session_scopes
             .lock()
@@ -793,9 +787,9 @@ fn default_browser_label(url: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::build_socket_path;
     #[cfg(unix)]
     use super::bind_socket_listener;
+    use super::build_socket_path;
     #[cfg(unix)]
     use std::io::ErrorKind;
 
@@ -816,7 +810,9 @@ mod tests {
 
         let accept_result = listener.accept();
         assert_eq!(
-            accept_result.expect_err("listener should be nonblocking").kind(),
+            accept_result
+                .expect_err("listener should be nonblocking")
+                .kind(),
             ErrorKind::WouldBlock
         );
 

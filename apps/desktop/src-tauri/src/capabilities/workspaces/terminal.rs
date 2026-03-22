@@ -20,10 +20,11 @@ mod types;
 #[allow(unused_imports)]
 pub(crate) use attachments::{prepare_native_terminal_attachment_paste, save_terminal_attachment};
 pub(crate) use persistence::load_terminal_record;
+pub(crate) use persistence::{load_terminal_workspace_context, resolve_harness_worktree_path};
 #[allow(unused_imports)]
 pub(crate) use runtime::{
     complete_native_terminal_exit, create_terminal, detach_terminal, hide_native_terminal_surface,
-    interrupt_terminal, kill_terminal, sync_native_terminal_surface,
+    interrupt_terminal, kill_terminal, send_terminal_text, sync_native_terminal_surface,
     sync_native_terminal_surface_frame,
 };
 pub(crate) use types::{

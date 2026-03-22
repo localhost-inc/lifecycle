@@ -72,6 +72,7 @@ apps/
   desktop/      Tauri app (Rust backend + React webview)
   www/          Landing page app
 packages/
+  agents/       First-party agent orchestration contracts and adapter interfaces
   cli/          `lifecycle` CLI package scaffold
   config/       Shared TypeScript config presets
   contracts/    Shared domain contracts and manifest parsing/validation

@@ -1,3 +1,4 @@
+import type { AgentSessionRecord } from "./agent";
 import type { TerminalFailureReason, TerminalStatus, TerminalType } from "./terminal";
 import type {
   ServiceStatus,
@@ -57,3 +58,5 @@ export interface TerminalRecord {
   last_active_at: string;
   ended_at: string | null;
 }
+
+export type { AgentSessionRecord };

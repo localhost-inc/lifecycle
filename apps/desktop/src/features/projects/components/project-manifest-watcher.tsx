@@ -2,18 +2,17 @@ import { isTauri } from "@tauri-apps/api/core";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { watch, type UnwatchFn } from "@tauri-apps/plugin-fs";
 import { useEffect, useMemo } from "react";
-import { useQueryClient } from "@/query";
-import { useWorkspacesByProject } from "@/features/workspaces/hooks";
+import { useQueryClient } from "@tanstack/react-query";
+import { useWorkspacesByProject } from "@/store";
 import { workspaceKeys } from "@/features/workspaces/state/workspace-query-keys";
 import { projectKeys, useProjectCatalog } from "@/features/projects/hooks";
 import { watchEventTouchesManifest } from "@/features/projects/lib/manifest-watch";
 
 export function ProjectManifestWatcher() {
-  const client = useQueryClient();
+  const queryClient = useQueryClient();
   const projectCatalogQuery = useProjectCatalog();
-  const workspacesByProjectQuery = useWorkspacesByProject();
+  const workspacesByProject = useWorkspacesByProject();
   const projects = projectCatalogQuery.data?.projects;
-  const workspacesByProject = workspacesByProjectQuery.data;
   const workspaces = useMemo(
     () =>
       workspacesByProject
@@ -45,10 +44,12 @@ export function ProjectManifestWatcher() {
                 return;
               }
 
-              void (async () => {
-                client.invalidate(projectKeys.manifest(project.id));
-                client.invalidate(projectKeys.catalog());
-              })();
+              void queryClient.invalidateQueries({
+                queryKey: projectKeys.manifest(project.id),
+              });
+              void queryClient.invalidateQueries({
+                queryKey: projectKeys.catalog(),
+              });
             },
             { delayMs: 150, recursive: false },
           );
@@ -71,7 +72,7 @@ export function ProjectManifestWatcher() {
         unwatch();
       }
     };
-  }, [client, projects]);
+  }, [queryClient, projects]);
 
   useEffect(() => {
     if (!isTauri() || !workspaces || workspaces.length === 0) {
@@ -91,11 +92,9 @@ export function ProjectManifestWatcher() {
                 return;
               }
 
-              void (async () => {
-                client.invalidate(workspaceKeys.manifest(workspace.id));
-                client.invalidate(workspaceKeys.detail(workspace.id));
-                client.invalidate(workspaceKeys.services(workspace.id));
-              })();
+              void queryClient.invalidateQueries({
+                queryKey: workspaceKeys.manifest(workspace.id),
+              });
             },
             { delayMs: 150, recursive: false },
           );
@@ -118,7 +117,7 @@ export function ProjectManifestWatcher() {
         unwatch();
       }
     };
-  }, [client, workspaces]);
+  }, [queryClient, workspaces]);
 
   return null;
 }

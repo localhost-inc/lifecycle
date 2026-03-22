@@ -9,6 +9,8 @@ import {
   updateWorkspacePaneLayoutSplit,
 } from "@/features/workspaces/lib/workspace-pane-layout";
 import {
+  agentTabKey,
+  createAgentTab,
   browserTabKey,
   changesDiffTabKey,
   createBrowserTab,
@@ -391,6 +393,14 @@ export function workspaceCanvasReducer(
               browserTabKey(request.browserKey),
             )
           : null;
+      const existingPaneForAgentTab =
+        request.kind === "agent"
+          ? findWorkspacePaneIdContainingTab(
+              state.rootPane,
+              state.paneTabStateById,
+              agentTabKey(request.agentSessionId),
+            )
+          : null;
       const existingPaneForFile =
         request.kind === "file-viewer"
           ? findWorkspacePaneIdContainingTab(
@@ -477,6 +487,34 @@ export function workspaceCanvasReducer(
           key: request.browserKey,
           label: request.label,
           url: request.url,
+        });
+
+        return {
+          ...state,
+          activePaneId: targetPaneId,
+          documentsByKey: upsertWorkspaceDocument(state.documentsByKey, nextTab),
+          paneTabStateById: updateWorkspacePaneTabState(
+            state.paneTabStateById,
+            targetPaneId,
+            (pane) => ({
+              ...pane,
+              activeTabKey: key,
+              tabOrderKeys: existingPaneId
+                ? pane.tabOrderKeys
+                : appendWorkspaceTabKey(pane.tabOrderKeys, key),
+            }),
+          ),
+        };
+      }
+
+      if (request.kind === "agent") {
+        const key = agentTabKey(request.agentSessionId);
+        const existingPaneId = existingPaneForAgentTab;
+        const targetPaneId = existingPaneId ?? resolveWorkspaceTargetPaneId(state);
+        const nextTab = createAgentTab({
+          agentSessionId: request.agentSessionId,
+          backend: request.backend,
+          label: request.label,
         });
 
         return {

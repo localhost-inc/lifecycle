@@ -5,6 +5,7 @@ import { measureAsyncPerformance } from "@/lib/performance";
 import { GithubAvatar } from "@/features/git/components/github-avatar";
 import { getGitChangesPatch, getGitCommitPatch } from "@/features/git/api";
 import { useGitStatus } from "@/features/git/hooks";
+import { useRuntime } from "@/store";
 import { useParsedGitPatchFiles } from "@/features/git/lib/parsed-patch-files";
 import { GitPatchViewer } from "@/features/git/components/git-patch-viewer";
 
@@ -80,6 +81,7 @@ export function GitDiffSurface({
   source,
   workspaceId,
 }: GitDiffSurfaceProps) {
+  const runtime = useRuntime();
   const [patch, setPatch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -122,8 +124,8 @@ export function GitDiffSurface({
         `git-diff-surface.patch:${surfaceIdentity}`,
         () =>
           source.mode === "changes"
-            ? getGitChangesPatch(workspaceId)
-            : getGitCommitPatch(workspaceId, commitSha ?? "").then((result) => result.patch),
+            ? getGitChangesPatch(runtime, workspaceId)
+            : getGitCommitPatch(runtime, workspaceId, commitSha ?? "").then((result) => result.patch),
       );
 
       void patchRequest
@@ -151,7 +153,7 @@ export function GitDiffSurface({
       cancelled = true;
       window.cancelAnimationFrame(frameId);
     };
-  }, [changesPatchReloadKey, commitSha, source.mode, surfaceIdentity, workspaceId]);
+  }, [changesPatchReloadKey, commitSha, runtime, source.mode, surfaceIdentity, workspaceId]);
   const parsedFiles = useParsedGitPatchFiles(diffCacheKeyPrefix, patch);
 
   return (

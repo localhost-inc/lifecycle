@@ -11,9 +11,9 @@ import type {
   GitPushResult,
   GitStatusResult,
 } from "@lifecycle/contracts";
+import type { WorkspaceRuntime } from "@lifecycle/workspace";
 import { isTauri } from "@tauri-apps/api/core";
 import { publishBrowserLifecycleEvent } from "@/features/events/api";
-import { getWorkspaceClient } from "@/lib/workspace";
 
 const EMPTY_STATUS: GitStatusResult = {
   branch: null,
@@ -93,15 +93,19 @@ function emitBrowserGitLogChanged(workspaceId: string, headSha: string | null): 
   });
 }
 
-export async function getGitStatus(workspaceId: string): Promise<GitStatusResult> {
+export async function getGitStatus(
+  runtime: WorkspaceRuntime,
+  workspaceId: string,
+): Promise<GitStatusResult> {
   if (!isTauri()) {
     return EMPTY_STATUS;
   }
 
-  return getWorkspaceClient().getGitStatus(workspaceId);
+  return runtime.getGitStatus(workspaceId);
 }
 
 export async function getGitDiff(
+  runtime: WorkspaceRuntime,
   workspaceId: string,
   filePath: string,
   scope: GitDiffScope,
@@ -115,56 +119,72 @@ export async function getGitDiff(
     };
   }
 
-  return getWorkspaceClient().getGitDiff({
+  return runtime.getGitDiff({
     workspaceId,
     filePath,
     scope,
   });
 }
 
-export async function getGitScopePatch(workspaceId: string, scope: GitDiffScope): Promise<string> {
+export async function getGitScopePatch(
+  runtime: WorkspaceRuntime,
+  workspaceId: string,
+  scope: GitDiffScope,
+): Promise<string> {
   if (!isTauri()) {
     return "";
   }
 
-  return getWorkspaceClient().getGitScopePatch(workspaceId, scope);
+  return runtime.getGitScopePatch(workspaceId, scope);
 }
 
-export async function getGitChangesPatch(workspaceId: string): Promise<string> {
+export async function getGitChangesPatch(
+  runtime: WorkspaceRuntime,
+  workspaceId: string,
+): Promise<string> {
   if (!isTauri()) {
     return "";
   }
 
-  return getWorkspaceClient().getGitChangesPatch(workspaceId);
+  return runtime.getGitChangesPatch(workspaceId);
 }
 
-export async function getGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]> {
+export async function getGitLog(
+  runtime: WorkspaceRuntime,
+  workspaceId: string,
+  limit: number,
+): Promise<GitLogEntry[]> {
   if (!isTauri()) {
     return [];
   }
 
-  return getWorkspaceClient().listGitLog(workspaceId, limit);
+  return runtime.listGitLog(workspaceId, limit);
 }
 
-export async function getGitPullRequests(workspaceId: string): Promise<GitPullRequestListResult> {
+export async function getGitPullRequests(
+  runtime: WorkspaceRuntime,
+  workspaceId: string,
+): Promise<GitPullRequestListResult> {
   if (!isTauri()) {
     return EMPTY_PULL_REQUEST_LIST_RESULT;
   }
 
-  return getWorkspaceClient().listGitPullRequests(workspaceId);
+  return runtime.listGitPullRequests(workspaceId);
 }
 
 export async function getCurrentGitPullRequest(
+  runtime: WorkspaceRuntime,
   workspaceId: string,
 ): Promise<GitBranchPullRequestResult> {
   if (!isTauri()) {
     return EMPTY_BRANCH_PULL_REQUEST_RESULT;
   }
 
-  return getWorkspaceClient().getCurrentGitPullRequest(workspaceId);
+  return runtime.getCurrentGitPullRequest(workspaceId);
 }
 
 export async function getGitPullRequest(
+  runtime: WorkspaceRuntime,
   workspaceId: string,
   pullRequestNumber: number,
 ): Promise<GitPullRequestDetailResult> {
@@ -172,27 +192,32 @@ export async function getGitPullRequest(
     return EMPTY_PULL_REQUEST_DETAIL_RESULT;
   }
 
-  return getWorkspaceClient().getGitPullRequest(workspaceId, pullRequestNumber);
+  return runtime.getGitPullRequest(workspaceId, pullRequestNumber);
 }
 
-export async function getGitBaseRef(workspaceId: string): Promise<string | null> {
+export async function getGitBaseRef(
+  runtime: WorkspaceRuntime,
+  workspaceId: string,
+): Promise<string | null> {
   if (!isTauri()) {
     return null;
   }
 
-  return getWorkspaceClient().getGitBaseRef(workspaceId);
+  return runtime.getGitBaseRef(workspaceId);
 }
 
 export async function getGitRefDiffPatch(
+  runtime: WorkspaceRuntime,
   workspaceId: string,
   baseRef: string,
   headRef: string,
 ): Promise<string> {
   if (!isTauri()) return "";
-  return getWorkspaceClient().getGitRefDiffPatch(workspaceId, baseRef, headRef);
+  return runtime.getGitRefDiffPatch(workspaceId, baseRef, headRef);
 }
 
 export async function getGitPullRequestPatch(
+  runtime: WorkspaceRuntime,
   workspaceId: string,
   pullRequestNumber: number,
 ): Promise<string> {
@@ -200,10 +225,11 @@ export async function getGitPullRequestPatch(
     return "";
   }
 
-  return getWorkspaceClient().getGitPullRequestPatch(workspaceId, pullRequestNumber);
+  return runtime.getGitPullRequestPatch(workspaceId, pullRequestNumber);
 }
 
 export async function getGitCommitPatch(
+  runtime: WorkspaceRuntime,
   workspaceId: string,
   sha: string,
 ): Promise<GitCommitDiffResult> {
@@ -214,10 +240,14 @@ export async function getGitCommitPatch(
     };
   }
 
-  return getWorkspaceClient().getGitCommitPatch(workspaceId, sha);
+  return runtime.getGitCommitPatch(workspaceId, sha);
 }
 
-export async function stageGitFiles(workspaceId: string, filePaths: string[]): Promise<void> {
+export async function stageGitFiles(
+  runtime: WorkspaceRuntime,
+  workspaceId: string,
+  filePaths: string[],
+): Promise<void> {
   if (filePaths.length === 0) {
     return;
   }
@@ -227,10 +257,14 @@ export async function stageGitFiles(workspaceId: string, filePaths: string[]): P
     return;
   }
 
-  await getWorkspaceClient().stageGitFiles(workspaceId, filePaths);
+  await runtime.stageGitFiles(workspaceId, filePaths);
 }
 
-export async function unstageGitFiles(workspaceId: string, filePaths: string[]): Promise<void> {
+export async function unstageGitFiles(
+  runtime: WorkspaceRuntime,
+  workspaceId: string,
+  filePaths: string[],
+): Promise<void> {
   if (filePaths.length === 0) {
     return;
   }
@@ -240,10 +274,14 @@ export async function unstageGitFiles(workspaceId: string, filePaths: string[]):
     return;
   }
 
-  await getWorkspaceClient().unstageGitFiles(workspaceId, filePaths);
+  await runtime.unstageGitFiles(workspaceId, filePaths);
 }
 
-export async function commitGit(workspaceId: string, message: string): Promise<GitCommitResult> {
+export async function commitGit(
+  runtime: WorkspaceRuntime,
+  workspaceId: string,
+  message: string,
+): Promise<GitCommitResult> {
   if (!isTauri()) {
     const result = browserCommitResult(message);
     emitBrowserGitHeadChanged(workspaceId, { headSha: result.sha });
@@ -252,10 +290,13 @@ export async function commitGit(workspaceId: string, message: string): Promise<G
     return result;
   }
 
-  return getWorkspaceClient().commitGit(workspaceId, message);
+  return runtime.commitGit(workspaceId, message);
 }
 
-export async function pushGit(workspaceId: string): Promise<GitPushResult> {
+export async function pushGit(
+  runtime: WorkspaceRuntime,
+  workspaceId: string,
+): Promise<GitPushResult> {
   if (!isTauri()) {
     const result = {
       branch: null,
@@ -268,18 +309,22 @@ export async function pushGit(workspaceId: string): Promise<GitPushResult> {
     return result;
   }
 
-  return getWorkspaceClient().pushGit(workspaceId);
+  return runtime.pushGit(workspaceId);
 }
 
-export async function createGitPullRequest(workspaceId: string): Promise<GitPullRequestSummary> {
+export async function createGitPullRequest(
+  runtime: WorkspaceRuntime,
+  workspaceId: string,
+): Promise<GitPullRequestSummary> {
   if (!isTauri()) {
     throw new Error("Pull request creation is only available in the desktop app.");
   }
 
-  return getWorkspaceClient().createGitPullRequest(workspaceId);
+  return runtime.createGitPullRequest(workspaceId);
 }
 
 export async function mergeGitPullRequest(
+  runtime: WorkspaceRuntime,
   workspaceId: string,
   pullRequestNumber: number,
 ): Promise<GitPullRequestSummary> {
@@ -287,5 +332,5 @@ export async function mergeGitPullRequest(
     throw new Error("Pull request merge is only available in the desktop app.");
   }
 
-  return getWorkspaceClient().mergeGitPullRequest(workspaceId, pullRequestNumber);
+  return runtime.mergeGitPullRequest(workspaceId, pullRequestNumber);
 }

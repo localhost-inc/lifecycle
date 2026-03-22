@@ -61,6 +61,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(
+            tauri_plugin_sql::Builder::default()
+                .add_migrations("sqlite:lifecycle.db", crate::platform::db::migrations())
+                .build(),
+        )
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .setup(move |app| {
@@ -229,35 +234,34 @@ pub fn run() {
         .manage(workspace_controllers)
         .manage(root_git_watchers)
         .invoke_handler(tauri::generate_handler![
+            crate::platform::db::get_db_path,
             capabilities::app::commands::get_app_config,
             capabilities::app::commands::write_app_config,
             capabilities::app::commands::get_auth_session,
+            capabilities::agents::commands::create_agent_session,
+            capabilities::agents::commands::list_agent_sessions_for_workspace,
+            capabilities::agents::commands::get_agent_session,
+            capabilities::agents::commands::list_agent_session_messages,
             capabilities::bridge::bridge_complete_shell_request,
             capabilities::bridge::bridge_fail_shell_request,
             capabilities::app::commands::set_window_accepts_mouse_moved_events,
             capabilities::app::commands::set_window_pointing_cursor,
             capabilities::app::commands::get_window_mouse_position,
-            capabilities::projects::commands::list_projects,
-            capabilities::projects::commands::add_project,
-            capabilities::projects::commands::remove_project,
+            capabilities::projects::commands::cleanup_project,
             capabilities::projects::commands::read_manifest_text,
-            capabilities::projects::commands::update_manifest_status,
             capabilities::workspaces::commands::create_workspace,
             capabilities::workspaces::commands::rename_workspace,
             capabilities::workspaces::commands::start_workspace_services,
             capabilities::workspaces::commands::stop_workspace_services,
             capabilities::workspaces::commands::destroy_workspace,
-            capabilities::workspaces::commands::get_workspace,
-            capabilities::workspaces::commands::get_workspace_by_id,
             capabilities::workspaces::commands::get_workspace_activity,
             capabilities::workspaces::commands::get_workspace_service_logs,
-            capabilities::workspaces::commands::list_workspaces,
-            capabilities::workspaces::commands::list_workspaces_by_project,
             capabilities::workspaces::commands::get_workspace_services,
             capabilities::workspaces::commands::get_current_branch,
             capabilities::workspaces::commands::list_workspace_terminals,
             capabilities::workspaces::commands::rename_terminal,
             capabilities::workspaces::commands::create_terminal,
+            capabilities::workspaces::commands::send_terminal_text,
             capabilities::workspaces::commands::save_terminal_attachment,
             capabilities::workspaces::commands::sync_native_terminal_surface,
             capabilities::workspaces::commands::sync_native_terminal_surface_frame,

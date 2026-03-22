@@ -22,7 +22,7 @@ import {
   readManifest,
   removeProject,
 } from "@/features/projects/api/projects";
-import { projectKeys, useProjectCatalog } from "@/features/projects/hooks";
+import { useProjectCatalog } from "@/features/projects/hooks";
 import {
   buildShellContexts,
   filterProjectsForShellContext,
@@ -56,8 +56,6 @@ import {
 } from "@/features/workspaces/state/workspace-canvas-state";
 import { BridgeListener } from "@/features/workspaces/state/bridge-listener";
 import { WorkspaceOpenRequestsProvider } from "@/features/workspaces/state/workspace-open-requests";
-import { createWorkspacesByProjectQuery } from "@/features/workspaces/queries";
-import { workspaceKeys } from "@/features/workspaces/state/workspace-query-keys";
 import { WorkspaceToolbarProvider } from "@/features/workspaces/state/workspace-toolbar-context";
 import {
   APP_SIDEBAR_COLLAPSED_STORAGE_KEY,
@@ -71,7 +69,7 @@ import {
   readPersistedPanelValue,
   writePersistedPanelValue,
 } from "@/lib/panel-layout";
-import { useQueryClient } from "@/query";
+import { useRuntime, useStoreContext } from "@/store";
 import {
   SHORTCUT_HANDLER_PRIORITY,
   useShortcutRegistration,
@@ -112,13 +110,14 @@ function safeClearWorkspaceUiState(workspaceId: string): void {
 export const LAST_PATH_STORAGE_KEY = "lifecycle.desktop.last-path";
 
 export function AppShellLayout() {
-  const client = useQueryClient();
+  const { collections } = useStoreContext();
+  const runtime = useRuntime();
   const navigate = useNavigate();
   const location = useLocation();
   const { projectId } = useParams();
   const shellViewportRef = useRef<HTMLDivElement | null>(null);
   const projectCatalogQuery = useProjectCatalog();
-  const workspacesByProjectQuery = useWorkspacesByProject();
+  const workspacesByProject = useWorkspacesByProject();
   const { isLoading: authSessionLoading, session: authSession } = useAuthSession();
   const { hasWorkspaceResponseReady } = useTerminalResponseReady();
   const { worktreeRoot } = useSettings();
@@ -154,8 +153,8 @@ export function AppShellLayout() {
     () => filterProjectsForShellContext(allProjects, activeShellContext),
     [activeShellContext, allProjects],
   );
-  const rawWorkspacesByProjectId = workspacesByProjectQuery.data ?? {};
-  const workspacesByProjectId = useMemo(() => {
+  const rawWorkspacesByProjectId: Record<string, WorkspaceRecord[]> = workspacesByProject;
+  const workspacesByProjectId = useMemo((): Record<string, WorkspaceRecord[]> => {
     const visibleProjectIds = new Set(projects.map((project) => project.id));
     return Object.fromEntries(
       Object.entries(rawWorkspacesByProjectId).filter(([candidateProjectId]) =>
@@ -319,15 +318,10 @@ export function AppShellLayout() {
   }, [activeSidebarResize]);
 
   const refreshWorkspaceList = useCallback(
-    async (context: string) => {
-      try {
-        await client.refetch(createWorkspacesByProjectQuery());
-      } catch (error) {
-        console.warn(`Failed to refresh workspace list after ${context}:`, error);
-        client.invalidate(workspaceKeys.byProject());
-      }
+    async (_context: string) => {
+      await collections.workspaces.refresh();
     },
-    [client],
+    [collections],
   );
 
   const handleOpenWorkspace = useCallback(
@@ -348,16 +342,16 @@ export function AppShellLayout() {
       }
 
       importedProjectId = project.id;
-      client.invalidate(projectKeys.catalog());
-      const manifestStatus = await readManifest(project.path);
+      void collections.projects.refresh();
+      const manifestStatus = await readManifest(runtime, project.path);
       const manifestJson =
         manifestStatus.state === "valid" ? JSON.stringify(manifestStatus.result.config) : undefined;
       const manifestFingerprint =
         manifestStatus.state === "valid"
           ? getManifestFingerprint(manifestStatus.result.config)
           : null;
-      const branch = await getCurrentBranch(project.path);
-      const workspaceId = await createWorkspace({
+      const branch = await getCurrentBranch(runtime, project.path);
+      const workspaceId = await createWorkspace(runtime, {
         baseRef: branch,
         checkoutType: "root",
         manifestFingerprint,
@@ -379,7 +373,7 @@ export function AppShellLayout() {
 
       alert(`Failed to add project: ${error}`);
     }
-  }, [client, navigate, refreshWorkspaceList]);
+  }, [collections, navigate, refreshWorkspaceList, runtime]);
 
   const handleCreateWorkspace = useCallback(
     async (nextProjectId: string, target: WorkspaceCreateMode) => {
@@ -405,8 +399,8 @@ export function AppShellLayout() {
           : null;
 
       try {
-        const branch = await getCurrentBranch(project.path);
-        const workspaceId = await createWorkspace({
+        const branch = await getCurrentBranch(runtime, project.path);
+        const workspaceId = await createWorkspace(runtime, {
           baseRef: branch,
           checkoutType,
           manifestFingerprint,
@@ -430,6 +424,7 @@ export function AppShellLayout() {
       navigate,
       projectCatalogQuery.data,
       refreshWorkspaceList,
+      runtime,
       workspacesByProjectId,
       worktreeRoot,
     ],
@@ -455,9 +450,9 @@ export function AppShellLayout() {
       try {
         const baseRef =
           workspace.checkout_type === "root"
-            ? await getCurrentBranch(project.path)
+            ? await getCurrentBranch(runtime, project.path)
             : workspace.source_ref;
-        const newWorkspaceId = await createWorkspace({
+        const newWorkspaceId = await createWorkspace(runtime, {
           baseRef,
           checkoutType: "worktree",
           manifestFingerprint,
@@ -475,7 +470,7 @@ export function AppShellLayout() {
         alert(`Failed to fork workspace: ${error}`);
       }
     },
-    [navigate, projectCatalogQuery.data, allProjects, refreshWorkspaceList, worktreeRoot],
+    [navigate, projectCatalogQuery.data, allProjects, refreshWorkspaceList, runtime, worktreeRoot],
   );
 
   const handleDestroyWorkspace = useCallback(
@@ -485,7 +480,7 @@ export function AppShellLayout() {
           (workspace.target === "local" || workspace.target === "docker") &&
           workspace.worktree_path
         ) {
-          const gitStatus = await getGitStatus(workspace.id);
+          const gitStatus = await getGitStatus(runtime, workspace.id);
           if (gitStatus.files.length > 0) {
             const workspaceLabel = getWorkspaceDisplayName(workspace);
             const shouldProceed = window.confirm(
@@ -497,9 +492,10 @@ export function AppShellLayout() {
           }
         }
 
-        await destroyWorkspace(workspace.id);
-        client.invalidate(workspaceKeys.byProject());
-        client.invalidateMatching((key) => key.includes(workspace.id));
+        await destroyWorkspace(runtime, workspace.id);
+        void collections.workspaces.refresh();
+        void collections.services.refresh();
+        void collections.terminals.refresh();
         safeClearWorkspaceUiState(workspace.id);
 
         if (readLastWorkspaceId() === workspace.id) {
@@ -519,14 +515,14 @@ export function AppShellLayout() {
         alert(formatWorkspaceError(error, "Failed to archive workspace."));
       }
     },
-    [client, navigate],
+    [collections, navigate, runtime],
   );
 
   const handleRemoveProject = useCallback(
     async (nextProjectId: string) => {
       try {
-        await removeProject(nextProjectId);
-        client.invalidate(projectKeys.catalog());
+        await removeProject(runtime, nextProjectId);
+        void collections.projects.refresh();
 
         if (readLastProjectId() === nextProjectId) {
           clearLastProjectId();
@@ -548,7 +544,7 @@ export function AppShellLayout() {
         alert(`Failed to remove project: ${error}`);
       }
     },
-    [client, navigate, projectId, projects],
+    [collections, navigate, projectId, projects, runtime],
   );
 
   const handleOpenSettings = useCallback(() => {

@@ -1,4 +1,5 @@
 import type {
+  AgentBackend,
   GitLogEntry,
   GitPullRequestCheckSummary,
   GitPullRequestSummary,
@@ -59,7 +60,16 @@ export interface BrowserDocument {
   url: string;
 }
 
+export interface AgentTab {
+  agentSessionId: string;
+  backend: AgentBackend;
+  key: string;
+  kind: "agent";
+  label: string;
+}
+
 export type WorkspaceCanvasDocument =
+  | AgentTab
   | BrowserDocument
   | ChangesDiffDocument
   | CommitDiffDocument
@@ -155,6 +165,13 @@ type PersistedBrowserDocument = {
   kind?: unknown;
   label?: unknown;
   url?: unknown;
+};
+
+type PersistedAgentTab = {
+  agentSessionId?: unknown;
+  backend?: unknown;
+  kind?: unknown;
+  label?: unknown;
 };
 
 type PersistedPullRequestDocument = {
@@ -259,6 +276,10 @@ export function browserTabKey(key: string): string {
   return `browser:${key}`;
 }
 
+export function agentTabKey(agentSessionId: string): string {
+  return `agent:${agentSessionId}`;
+}
+
 export function createChangesDiffTab(focusPath: string | null = null): ChangesDiffDocument {
   return {
     focusPath,
@@ -324,6 +345,20 @@ export function createBrowserTab(input: {
   };
 }
 
+export function createAgentTab(input: {
+  agentSessionId: string;
+  backend: AgentBackend;
+  label: string;
+}): AgentTab {
+  return {
+    agentSessionId: input.agentSessionId,
+    backend: input.backend,
+    key: agentTabKey(input.agentSessionId),
+    kind: "agent",
+    label: input.label,
+  };
+}
+
 export function isChangesDiffDocument(
   document: WorkspaceCanvasDocument,
 ): document is ChangesDiffDocument {
@@ -350,6 +385,10 @@ export function isFileViewerDocument(
 
 export function isBrowserDocument(document: WorkspaceCanvasDocument): document is BrowserDocument {
   return document.kind === "browser";
+}
+
+export function isAgentTab(document: WorkspaceCanvasDocument): document is AgentTab {
+  return document.kind === "agent";
 }
 
 export function createDefaultWorkspaceCanvasState(): WorkspaceCanvasState {
@@ -727,6 +766,25 @@ function parseBrowserDocument(value: Record<string, unknown>): BrowserDocument |
   });
 }
 
+function isValidAgentBackend(value: unknown): value is AgentBackend {
+  return value === "claude" || value === "codex";
+}
+
+function parseAgentTab(value: Record<string, unknown>): AgentTab | null {
+  const agentSessionId = getOptionalString(value, "agentSessionId");
+  const label = getOptionalString(value, "label");
+  const backend = value.backend;
+  if (!agentSessionId || !label || !isValidAgentBackend(backend)) {
+    return null;
+  }
+
+  return createAgentTab({
+    agentSessionId,
+    backend,
+    label,
+  });
+}
+
 function isValidPullRequestState(value: unknown): value is PullRequestDocument["state"] {
   return value === "open" || value === "closed" || value === "merged";
 }
@@ -879,6 +937,10 @@ function parseWorkspaceCanvasDocument(value: unknown): WorkspaceCanvasDocument |
 
   if (documentKind === "browser") {
     return parseBrowserDocument(value as PersistedBrowserDocument);
+  }
+
+  if (documentKind === "agent") {
+    return parseAgentTab(value as PersistedAgentTab);
   }
 
   if (documentKind === "pull-request") {
@@ -1076,6 +1138,15 @@ function serializeWorkspaceCanvasDocument(
       kind: document.kind,
       label: document.label,
       url: document.url,
+    };
+  }
+
+  if (isAgentTab(document)) {
+    return {
+      agentSessionId: document.agentSessionId,
+      backend: document.backend,
+      kind: document.kind,
+      label: document.label,
     };
   }
 

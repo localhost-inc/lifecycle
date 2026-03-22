@@ -1,3 +1,4 @@
+import type { AgentBackend } from "@lifecycle/contracts";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@lifecycle/ui";
 import { AnimatePresence, motion } from "motion/react";
 import { Plus, X } from "lucide-react";
@@ -7,6 +8,7 @@ import { ClaudeIcon, CodexIcon, ShellIcon } from "@/features/workspaces/componen
 
 export type SurfaceLaunchRequest =
   | { kind: "terminal"; launchType: "shell" }
+  | { backend: AgentBackend; kind: "agent" }
   | { kind: "terminal"; launchType: "harness"; harnessProvider: HarnessProvider };
 
 export interface SurfaceLaunchAction {

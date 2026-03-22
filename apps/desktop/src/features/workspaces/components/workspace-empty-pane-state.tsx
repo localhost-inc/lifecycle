@@ -1,12 +1,13 @@
 import { Button, EmptyState } from "@lifecycle/ui";
 import { TerminalSquare } from "lucide-react";
 import type { ReactNode } from "react";
-import type { CreateTerminalRequest, HarnessProvider } from "@/features/terminals/api";
+import type { HarnessProvider } from "@/features/terminals/api";
+import type { SurfaceLaunchRequest } from "@/features/workspaces/components/surface-launch-actions";
 import { ClaudeIcon, CodexIcon, ShellIcon } from "@/features/workspaces/components/surface-icons";
 
 interface WorkspaceEmptyPaneStateProps {
   creatingSelection: "shell" | HarnessProvider | null;
-  onCreateTerminal: (input: CreateTerminalRequest) => void;
+  onLaunchSurface: (request: SurfaceLaunchRequest) => void;
 }
 
 function LaunchButton({
@@ -32,7 +33,7 @@ function LaunchButton({
 
 export function WorkspaceEmptyPaneState({
   creatingSelection,
-  onCreateTerminal,
+  onLaunchSurface,
 }: WorkspaceEmptyPaneStateProps) {
   const busy = creatingSelection !== null;
 
@@ -43,7 +44,7 @@ export function WorkspaceEmptyPaneState({
           <LaunchButton
             active={creatingSelection === "shell"}
             disabled={busy}
-            onClick={() => onCreateTerminal({ launchType: "shell" })}
+            onClick={() => onLaunchSurface({ kind: "terminal", launchType: "shell" })}
           >
             {creatingSelection === "shell" ? null : <ShellIcon />}
             <span>Shell</span>
@@ -51,7 +52,7 @@ export function WorkspaceEmptyPaneState({
           <LaunchButton
             active={creatingSelection === "claude"}
             disabled={busy}
-            onClick={() => onCreateTerminal({ harnessProvider: "claude", launchType: "harness" })}
+            onClick={() => onLaunchSurface({ backend: "claude", kind: "agent" })}
           >
             {creatingSelection === "claude" ? null : <ClaudeIcon />}
             <span>Claude</span>
@@ -59,14 +60,14 @@ export function WorkspaceEmptyPaneState({
           <LaunchButton
             active={creatingSelection === "codex"}
             disabled={busy}
-            onClick={() => onCreateTerminal({ harnessProvider: "codex", launchType: "harness" })}
+            onClick={() => onLaunchSurface({ backend: "codex", kind: "agent" })}
           >
             {creatingSelection === "codex" ? null : <CodexIcon />}
             <span>Codex</span>
           </LaunchButton>
         </div>
       }
-      description="Launch a shell or harness session to get started."
+      description="Launch a shell or agent to get started."
       icon={<TerminalSquare />}
       title="No open tabs"
     />

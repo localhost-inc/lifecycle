@@ -1,5 +1,18 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
+import type { WorkspaceRuntime } from "@lifecycle/workspace";
+import {
+  createWorkspace,
+  getWorkspaceActivity,
+  getWorkspaceServiceLogs,
+  getWorkspaceServices,
+  listWorkspaceFiles,
+  openWorkspaceFile,
+  readWorkspaceFile,
+  renameWorkspace,
+  startServices,
+  writeWorkspaceFile,
+} from "@/features/workspaces/api";
 
 const workspace: WorkspaceRecord = {
   id: "ws_1",
@@ -36,7 +49,7 @@ const services: ServiceRecord[] = [
   },
 ];
 
-const backend = {
+const runtime = {
   createWorkspace: mock(async () => ({
     workspace,
     worktreePath: workspace.worktree_path ?? "",
@@ -46,10 +59,6 @@ const backend = {
     name,
   })),
   destroyWorkspace: mock(async () => {}),
-  getWorkspace: mock(async () => workspace),
-};
-
-const workspaceClient = {
   startServices: mock(async () => services),
   stopServices: mock(async () => {}),
   getActivity: mock(async () => []),
@@ -75,32 +84,7 @@ const workspaceClient = {
   })),
   listFiles: mock(async () => [{ extension: "md", file_path: "README.md" }]),
   openFile: mock(async () => {}),
-};
-
-const getBackend = mock(() => backend);
-const getWorkspaceClient = mock(() => workspaceClient);
-
-mock.module("../../lib/backend", () => ({
-  getBackend,
-}));
-
-mock.module("../../lib/workspace", () => ({
-  getWorkspaceClient,
-}));
-
-const {
-  createWorkspace,
-  getWorkspaceActivity,
-  getWorkspaceById,
-  getWorkspaceServiceLogs,
-  getWorkspaceServices,
-  listWorkspaceFiles,
-  openWorkspaceFile,
-  readWorkspaceFile,
-  renameWorkspace,
-  startServices,
-  writeWorkspaceFile,
-} = await import("./api");
+} as unknown as WorkspaceRuntime;
 
 describe("workspace api boundary routing", () => {
   beforeEach(() => {
@@ -109,13 +93,10 @@ describe("workspace api boundary routing", () => {
       value: true,
       writable: true,
     });
-    getBackend.mockClear();
-    getWorkspaceClient.mockClear();
-    for (const method of Object.values(backend)) {
-      method.mockClear();
-    }
-    for (const method of Object.values(workspaceClient)) {
-      method.mockClear();
+    for (const method of Object.values(runtime)) {
+      if (typeof method === "function" && "mockClear" in method) {
+        (method as ReturnType<typeof mock>).mockClear();
+      }
     }
   });
 
@@ -123,27 +104,26 @@ describe("workspace api boundary routing", () => {
     delete (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri;
   });
 
-  test("routes workspace shell reads through the backend and live reads through the workspace client", async () => {
+  test("routes workspace operations through the runtime", async () => {
     expect(
-      await createWorkspace({
+      await createWorkspace(runtime, {
         projectId: "project_1",
         projectPath: "/tmp/project_1",
         workspaceName: "Workspace 1",
         baseRef: "main",
       }),
     ).toBe("ws_1");
-    await renameWorkspace("ws_1", "  Renamed   Workspace  ");
-    await startServices({
+    await renameWorkspace(runtime, "ws_1", "  Renamed   Workspace  ");
+    await startServices(runtime, {
       workspace,
       services,
       manifestJson: '{"services":{"web":{}}}',
       manifestFingerprint: "manifest_2",
     });
-    expect(await getWorkspaceById("ws_1")).toEqual(workspace);
-    expect(await getWorkspaceActivity("ws_1")).toEqual([]);
-    expect(await getWorkspaceServiceLogs("ws_1")).toEqual([]);
-    expect(await getWorkspaceServices("ws_1")).toEqual(services);
-    expect(await readWorkspaceFile("ws_1", "README.md")).toEqual({
+    expect(await getWorkspaceActivity(runtime, "ws_1")).toEqual([]);
+    expect(await getWorkspaceServiceLogs(runtime, "ws_1")).toEqual([]);
+    expect(await getWorkspaceServices(runtime, "ws_1")).toEqual(services);
+    expect(await readWorkspaceFile(runtime, "ws_1", "README.md")).toEqual({
       absolute_path: "/tmp/project_1/.worktrees/ws_1/README.md",
       byte_len: 7,
       content: "welcome",
@@ -152,7 +132,7 @@ describe("workspace api boundary routing", () => {
       is_binary: false,
       is_too_large: false,
     });
-    expect(await writeWorkspaceFile("ws_1", "README.md", "welcome")).toEqual({
+    expect(await writeWorkspaceFile(runtime, "ws_1", "README.md", "welcome")).toEqual({
       absolute_path: "/tmp/project_1/.worktrees/ws_1/README.md",
       byte_len: 7,
       content: "welcome",
@@ -161,13 +141,11 @@ describe("workspace api boundary routing", () => {
       is_binary: false,
       is_too_large: false,
     });
-    expect(await listWorkspaceFiles("ws_1")).toEqual([{ extension: "md", file_path: "README.md" }]);
-    await openWorkspaceFile("ws_1", "README.md");
+    expect(await listWorkspaceFiles(runtime, "ws_1")).toEqual([{ extension: "md", file_path: "README.md" }]);
+    await openWorkspaceFile(runtime, "ws_1", "README.md");
 
-    expect(getBackend).toHaveBeenCalled();
-    expect(getWorkspaceClient).toHaveBeenCalled();
-    expect(backend.createWorkspace).toHaveBeenCalledTimes(1);
-    expect(backend.createWorkspace).toHaveBeenCalledWith({
+    expect((runtime.createWorkspace as ReturnType<typeof mock>)).toHaveBeenCalledTimes(1);
+    expect((runtime.createWorkspace as ReturnType<typeof mock>)).toHaveBeenCalledWith({
       manifestJson: null,
       manifestFingerprint: null,
       context: {
@@ -180,21 +158,20 @@ describe("workspace api boundary routing", () => {
         worktreeRoot: undefined,
       },
     });
-    expect(backend.renameWorkspace).toHaveBeenCalledWith("ws_1", "Renamed Workspace");
-    expect(workspaceClient.startServices).toHaveBeenCalledWith({
+    expect((runtime.renameWorkspace as ReturnType<typeof mock>)).toHaveBeenCalledWith("ws_1", "Renamed Workspace");
+    expect((runtime.startServices as ReturnType<typeof mock>)).toHaveBeenCalledWith({
       serviceNames: undefined,
       workspace,
       services,
       manifestJson: '{"services":{"web":{}}}',
       manifestFingerprint: "manifest_2",
     });
-    expect(backend.getWorkspace).toHaveBeenCalledWith("ws_1");
-    expect(workspaceClient.getActivity).toHaveBeenCalledWith("ws_1");
-    expect(workspaceClient.getServiceLogs).toHaveBeenCalledWith("ws_1");
-    expect(workspaceClient.getServices).toHaveBeenCalledWith("ws_1");
-    expect(workspaceClient.readFile).toHaveBeenCalledWith("ws_1", "README.md");
-    expect(workspaceClient.writeFile).toHaveBeenCalledWith("ws_1", "README.md", "welcome");
-    expect(workspaceClient.listFiles).toHaveBeenCalledWith("ws_1");
-    expect(workspaceClient.openFile).toHaveBeenCalledWith("ws_1", "README.md");
+    expect((runtime.getActivity as ReturnType<typeof mock>)).toHaveBeenCalledWith("ws_1");
+    expect((runtime.getServiceLogs as ReturnType<typeof mock>)).toHaveBeenCalledWith("ws_1");
+    expect((runtime.getServices as ReturnType<typeof mock>)).toHaveBeenCalledWith("ws_1");
+    expect((runtime.readFile as ReturnType<typeof mock>)).toHaveBeenCalledWith("ws_1", "README.md");
+    expect((runtime.writeFile as ReturnType<typeof mock>)).toHaveBeenCalledWith("ws_1", "README.md", "welcome");
+    expect((runtime.listFiles as ReturnType<typeof mock>)).toHaveBeenCalledWith("ws_1");
+    expect((runtime.openFile as ReturnType<typeof mock>)).toHaveBeenCalledWith("ws_1", "README.md");
   });
 });

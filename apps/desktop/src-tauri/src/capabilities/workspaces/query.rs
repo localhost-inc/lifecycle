@@ -1,4 +1,3 @@
-use super::checkout_type::is_root_workspace_checkout_type;
 use super::environment::sync_workspace_manifest_from_disk_if_idle;
 use super::preview::preview_url_for_service;
 #[cfg(test)]
@@ -8,7 +7,6 @@ use crate::platform::git::worktree;
 use crate::shared::errors::LifecycleError;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct WorkspaceRecord {
@@ -113,50 +111,6 @@ fn map_workspace_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRe
     })
 }
 
-fn sort_project_workspaces(workspaces: &mut [WorkspaceRecord]) {
-    workspaces.sort_by(|left, right| {
-        match (
-            is_root_workspace_checkout_type(&left.checkout_type),
-            is_root_workspace_checkout_type(&right.checkout_type),
-        ) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => right.created_at.cmp(&left.created_at),
-        }
-    });
-}
-
-fn get_workspace_sync(
-    conn: &rusqlite::Connection,
-    project_id: String,
-) -> Result<Option<WorkspaceRecord>, LifecycleError> {
-    let mut stmt = conn.prepare(
-        "SELECT id, project_id, name, checkout_type, source_ref, git_sha, worktree_path, target, manifest_fingerprint, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at, prepared_at, status, failure_reason, failed_at
-         FROM workspace
-         WHERE project_id = ?1
-         ORDER BY CASE WHEN checkout_type = 'root' THEN 0 ELSE 1 END, created_at DESC
-         LIMIT 1"
-    ).map_err(|e| LifecycleError::Database(e.to_string()))?;
-
-    let row = stmt.query_row(params![project_id], map_workspace_record);
-
-    match row {
-        Ok(r) => Ok(Some(r)),
-        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(e) => Err(LifecycleError::Database(e.to_string())),
-    }
-}
-
-pub async fn get_workspace(
-    db_path: &str,
-    project_id: String,
-) -> Result<Option<WorkspaceRecord>, LifecycleError> {
-    run_blocking_db_read(db_path.to_string(), "workspace.get", move |conn| {
-        get_workspace_sync(conn, project_id)
-    })
-    .await
-}
-
 fn get_workspace_by_id_sync(
     conn: &rusqlite::Connection,
     workspace_id: String,
@@ -187,26 +141,6 @@ pub async fn get_workspace_by_id(
     .await
 }
 
-fn list_workspaces_sync(
-    conn: &rusqlite::Connection,
-) -> Result<Vec<WorkspaceRecord>, LifecycleError> {
-    let mut stmt = conn.prepare(
-        "SELECT id, project_id, name, checkout_type, source_ref, git_sha, worktree_path, target, manifest_fingerprint, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at, prepared_at, status, failure_reason, failed_at
-         FROM workspace
-         ORDER BY created_at DESC"
-    ).map_err(|e| LifecycleError::Database(e.to_string()))?;
-
-    let rows = stmt
-        .query_map([], map_workspace_record)
-        .map_err(|e| LifecycleError::Database(e.to_string()))?;
-
-    let mut result = Vec::new();
-    for row in rows {
-        result.push(row.map_err(|e| LifecycleError::Database(e.to_string()))?);
-    }
-    Ok(result)
-}
-
 fn workspace_exists_sync(
     conn: &rusqlite::Connection,
     workspace_id: &str,
@@ -218,41 +152,6 @@ fn workspace_exists_sync(
     )
     .map(|exists| exists > 0)
     .map_err(|error| LifecycleError::Database(error.to_string()))
-}
-
-pub async fn list_workspaces(db_path: &str) -> Result<Vec<WorkspaceRecord>, LifecycleError> {
-    run_blocking_db_read(db_path.to_string(), "workspace.list", list_workspaces_sync).await
-}
-
-fn list_workspaces_by_project_sync(
-    conn: &rusqlite::Connection,
-) -> Result<HashMap<String, Vec<WorkspaceRecord>>, LifecycleError> {
-    let workspace_rows = list_workspaces_sync(conn)?;
-    let mut grouped: HashMap<String, Vec<WorkspaceRecord>> = HashMap::new();
-
-    for workspace in workspace_rows {
-        grouped
-            .entry(workspace.project_id.clone())
-            .or_default()
-            .push(workspace);
-    }
-
-    for workspaces in grouped.values_mut() {
-        sort_project_workspaces(workspaces);
-    }
-
-    Ok(grouped)
-}
-
-pub async fn list_workspaces_by_project(
-    db_path: &str,
-) -> Result<HashMap<String, Vec<WorkspaceRecord>>, LifecycleError> {
-    run_blocking_db_read(
-        db_path.to_string(),
-        "workspace.list_by_project",
-        list_workspaces_by_project_sync,
-    )
-    .await
 }
 
 fn get_workspace_services_sync(
@@ -380,109 +279,6 @@ mod tests {
             ))
             .to_string_lossy()
             .into_owned()
-    }
-
-    fn seed_project_workspaces(db_path: &str) {
-        run_migrations(db_path).expect("run migrations");
-        let conn = open_db(db_path).expect("open db");
-        conn.execute(
-            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3), (?4, ?5, ?6)",
-            rusqlite::params![
-                "project_1",
-                "/tmp/project_1",
-                "Project 1",
-                "project_2",
-                "/tmp/project_2",
-                "Project 2"
-            ],
-        )
-        .expect("insert projects");
-        conn.execute(
-            "INSERT INTO workspace (
-                id, project_id, name, checkout_type, source_ref, target, status, created_at, updated_at, last_active_at
-            ) VALUES
-                (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?8),
-                (?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?16, ?16),
-                (?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?24, ?24),
-                (?25, ?26, ?27, ?28, ?29, ?30, ?31, ?32, ?32, ?32)",
-            rusqlite::params![
-                "workspace_root",
-                "project_1",
-                "Root",
-                "root",
-                "main",
-                "local",
-                "active",
-                "2026-03-10 12:00:00",
-                "workspace_worktree_old",
-                "project_1",
-                "Old Worktree",
-                "worktree",
-                "lifecycle/old",
-                "local",
-                "active",
-                "2026-03-10 12:05:00",
-                "workspace_worktree_new",
-                "project_1",
-                "New Worktree",
-                "worktree",
-                "lifecycle/new",
-                "local",
-                "active",
-                "2026-03-10 12:10:00",
-                "workspace_other_project",
-                "project_2",
-                "Other Root",
-                "root",
-                "develop",
-                "local",
-                "active",
-                "2026-03-10 12:15:00"
-            ],
-        )
-        .expect("insert workspaces");
-    }
-
-    #[tokio::test]
-    async fn get_workspace_prefers_root_workspace_for_project() {
-        let db_path = temp_db_path();
-        seed_project_workspaces(&db_path);
-
-        let workspace = get_workspace(&db_path, "project_1".to_string())
-            .await
-            .expect("load workspace")
-            .expect("workspace exists");
-
-        assert_eq!(workspace.id, "workspace_root");
-        assert_eq!(workspace.checkout_type, "root");
-
-        let _ = std::fs::remove_file(db_path);
-    }
-
-    #[tokio::test]
-    async fn list_workspaces_by_project_orders_root_first_then_newest_worktree() {
-        let db_path = temp_db_path();
-        seed_project_workspaces(&db_path);
-
-        let grouped = list_workspaces_by_project(&db_path)
-            .await
-            .expect("list workspaces by project");
-        let project_workspaces = grouped.get("project_1").expect("project group exists");
-        let ordered_ids = project_workspaces
-            .iter()
-            .map(|workspace| workspace.id.as_str())
-            .collect::<Vec<_>>();
-
-        assert_eq!(
-            ordered_ids,
-            vec![
-                "workspace_root",
-                "workspace_worktree_new",
-                "workspace_worktree_old",
-            ]
-        );
-
-        let _ = std::fs::remove_file(db_path);
     }
 
     #[tokio::test]

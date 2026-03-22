@@ -1,11 +1,12 @@
 # Backend + Workspace
 
-Lifecycle uses two explicit seams:
+Lifecycle uses three explicit seams:
 
 1. `Backend` — projects, workspaces, ownership, manifest reads, branch lookup, and workspace create/rename/destroy
 2. `WorkspaceClient` — live workspace-scoped execution once a workspace exists: services, terminals, files, git, activity, and service logs
+3. `AgentClient` — first-party agent sessions, turns, approvals, attachments, and artifacts behind a Lifecycle-owned agent model
 
-Host-native concerns such as OS app launching and native terminal surface synchronization stay outside both seams. Workspace placement is selected **per-workspace** at creation time and stored as `workspace.target`.
+Host-native concerns such as OS app launching and native terminal surface synchronization stay outside these seams. Workspace placement is selected **per-workspace** at creation time and stored as `workspace.target`.
 
 ## Workspace Boundary
 
@@ -14,6 +15,7 @@ Lifecycle models the workspace as the concrete runnable instance:
 1. `workspace` — identity, worktree ownership, target placement, preparation/archive state, and failure metadata
 2. `service` — per-service execution inside the workspace
 3. `terminal` — per-session interactive surface attached to the workspace
+4. `agent_session` — first-party agent interaction thread attached to the workspace
 
 ## Workspace Checkout Type (Local)
 
@@ -83,15 +85,16 @@ interface WorkspaceClient {
 2. Project list reads, manifest reads, and current-branch lookup are backend operations.
 3. `startServices`, `stopServices`, and reset flows operate on the workspace's runnable services and belong to `WorkspaceClient`.
 4. File, git, terminal, activity, service, and service-log reads are workspace operations.
-5. Desktop file reads, writes, listings, open actions, and file-event subscriptions may route through the local host file client when the workspace has a local `worktree_path`, even if the runtime target is not `local`.
-6. `startServices(service_names?)` may target a single service chain; workspace execution must honor manifest `depends_on` edges.
-7. When `startServices(service_names?)` is called against an already-active workspace, `ready` dependency services should be treated as satisfied boundaries.
-8. Local create/start flows must carry the exact manifest content plus `manifest_fingerprint`.
-9. Backend create owns workspace identity, source-ref derivation, and the returned workspace record. Desktop clients must not synthesize those fields locally.
-10. Desktop query reads should not bypass these seams with transport-local command calls.
-11. Frontend consumers should read concrete workspace-scoped facts through separate queries (`workspace`, `services`, `terminals`, `activity`, `service_logs`) instead of depending on a synthetic snapshot aggregate.
-12. Backend-owned live selectors should stay split by concern as well; do not collapse activity, service logs, and other unrelated facts into a synthetic controller facts bag.
-13. Frontend manifest watchers may invalidate workspace queries when `lifecycle.json` changes, but reconciliation of persisted idle service state must remain backend-owned.
+5. Agent session create/list/get and future turn or approval operations belong to `AgentClient`, not `WorkspaceClient`.
+6. Desktop file reads, writes, listings, open actions, and file-event subscriptions may route through the local host file client when the workspace has a local `worktree_path`, even if the runtime target is not `local`.
+7. `startServices(service_names?)` may target a single service chain; workspace execution must honor manifest `depends_on` edges.
+8. When `startServices(service_names?)` is called against an already-active workspace, `ready` dependency services should be treated as satisfied boundaries.
+9. Local create/start flows must carry the exact manifest content plus `manifest_fingerprint`.
+10. Backend create owns workspace identity, source-ref derivation, and the returned workspace record. Desktop clients must not synthesize those fields locally.
+11. Desktop query reads should not bypass these seams with transport-local command calls.
+12. Frontend consumers should read concrete workspace-scoped facts through separate queries (`workspace`, `services`, `terminals`, `activity`, `service_logs`, `agent_sessions`) instead of depending on a synthetic snapshot aggregate.
+13. Backend-owned live selectors should stay split by concern as well; do not collapse activity, service logs, and other unrelated facts into a synthetic controller facts bag.
+14. Frontend manifest watchers may invalidate workspace queries when `lifecycle.json` changes, but reconciliation of persisted idle service state must remain backend-owned.
 
 ## Execution Model
 

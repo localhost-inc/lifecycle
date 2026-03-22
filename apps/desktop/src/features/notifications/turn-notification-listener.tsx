@@ -1,12 +1,10 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { useEffect, useRef } from "react";
-import { useQueryClient } from "@/query";
+import { useStoreContext } from "@/store/provider";
+import { useProjects } from "@/store";
 import { router } from "@/app/router";
 import { useLifecycleEvent } from "@/features/events";
-import { projectCatalogQuery } from "@/features/projects/hooks";
 import { useSettings } from "@/features/settings/state/settings-provider";
-import { createWorkspaceTerminalsQuery } from "@/features/terminals/queries";
-import { createWorkspaceQuery } from "@/features/workspaces/queries";
 import { setPendingTerminalFocus } from "@/features/notifications/lib/notification-navigation";
 import { shouldNotifyForTurnCompletion } from "@/features/notifications/lib/notification-settings";
 import {
@@ -65,7 +63,8 @@ const recentCompletionKeys = new Set<string>();
 export function TurnNotificationListener() {
   const { turnNotificationSound, turnNotificationsMode } = useSettings();
   const attentionStateRef = useRef(readTurnNotificationAttentionState());
-  const queryClient = useQueryClient();
+  const { collections } = useStoreContext();
+  const projects = useProjects();
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -119,14 +118,12 @@ export function TurnNotificationListener() {
     recentCompletionKeys.add(event.completion_key);
     setTimeout(() => recentCompletionKeys.delete(event.completion_key), 5_000);
 
-    const workspace =
-      queryClient.getSnapshot(createWorkspaceQuery(event.workspace_id)).data ?? null;
-    const terminals =
-      queryClient.getSnapshot(createWorkspaceTerminalsQuery(event.workspace_id)).data ?? [];
+    const workspace = collections.workspaces.collection.get(event.workspace_id);
+    const allTerminals = collections.terminals.collection.toArray;
+    const terminals = allTerminals.filter((t) => t.workspace_id === event.workspace_id);
     const terminal = terminals.find((item) => item.id === event.terminal_id);
     const projectId = workspace?.project_id;
-    const catalog = queryClient.getSnapshot(projectCatalogQuery);
-    const project = projectId ? catalog.data?.projects.find((p) => p.id === projectId) : undefined;
+    const project = projectId ? projects.find((p) => p.id === projectId) : undefined;
 
     const context = {
       projectId: projectId ?? null,

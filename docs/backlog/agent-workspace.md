@@ -4,6 +4,7 @@
 > Former milestone concept deferred from the active delivery sequence
 > Introduces: `agent_session`, `agent_message`, `agent_message_part`, `agent_attachment`, `agent_tool_call`, `agent_task`, `agent_approval_request`, `agent_artifact`, center-panel agent UI, AI SDK `useChat` integration, structured tool execution, local/remote portable persistence
 > Tracker: high-level backlog reference lives in [`docs/plan.md`](../plan.md). This document preserves the deferred implementation concept.
+> Execution plan: [agent-workspace-plan.md](./agent-workspace-plan.md)
 
 ## Goal
 

@@ -1,4 +1,4 @@
-import type { GitLogEntry, GitPullRequestSummary } from "@lifecycle/contracts";
+import type { AgentBackend, GitLogEntry, GitPullRequestSummary } from "@lifecycle/contracts";
 
 export interface ChangesDiffOpenInput {
   focusPath: string | null;
@@ -47,7 +47,19 @@ export interface BrowserOpenRequest extends BrowserOpenInput {
   id: string;
 }
 
+export interface AgentOpenInput {
+  agentSessionId: string;
+  backend: AgentBackend;
+  kind: "agent";
+  label: string;
+}
+
+export interface AgentOpenRequest extends AgentOpenInput {
+  id: string;
+}
+
 export type OpenDocumentInput =
+  | AgentOpenInput
   | BrowserOpenInput
   | ChangesDiffOpenInput
   | CommitDiffOpenInput
@@ -106,7 +118,21 @@ export function createBrowserOpenInput(input: {
   };
 }
 
+export function createAgentOpenInput(input: {
+  agentSessionId: string;
+  backend: AgentBackend;
+  label: string;
+}): AgentOpenInput {
+  return {
+    agentSessionId: input.agentSessionId,
+    backend: input.backend,
+    kind: "agent",
+    label: input.label,
+  };
+}
+
 export type OpenDocumentRequest =
+  | AgentOpenRequest
   | BrowserOpenRequest
   | ChangesDiffOpenRequest
   | CommitDiffOpenRequest

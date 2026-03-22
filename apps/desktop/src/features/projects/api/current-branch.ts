@@ -1,10 +1,13 @@
 import { isTauri } from "@tauri-apps/api/core";
-import { getBackend } from "@/lib/backend";
+import type { WorkspaceRuntime } from "@lifecycle/workspace";
 
-export async function getCurrentBranch(projectPath: string): Promise<string> {
+export async function getCurrentBranch(
+  runtime: WorkspaceRuntime,
+  projectPath: string,
+): Promise<string> {
   if (!isTauri()) {
     return "main";
   }
 
-  return getBackend().getCurrentBranch(projectPath);
+  return runtime.getCurrentBranch(projectPath);
 }

@@ -11,7 +11,12 @@ import { ProjectManifestWatcher } from "@/features/projects/components/project-m
 import { SettingsProvider } from "@/features/settings/state/settings-provider";
 import { TerminalResponseReadyProvider } from "@/features/terminals/state/terminal-response-ready-provider";
 import { markPerformance, measurePerformance } from "@/lib/performance";
-import { QueryProvider } from "@/query";
+import { watch } from "@tauri-apps/plugin-fs";
+import { LocalRuntime } from "@lifecycle/workspace";
+import { StoreProvider } from "@/store/provider";
+import { ReactQueryProvider } from "@/store/react-query-provider";
+import { tauriSqlDriver } from "@/lib/sql-driver";
+import { invokeTauri } from "@/lib/tauri-error";
 import "@/main.css";
 
 function BootstrapPerfMarker() {
@@ -44,23 +49,30 @@ function ContextMenuBlocker() {
 
 markPerformance("bootstrap:start");
 
+const hostRuntime = new LocalRuntime({
+  invoke: (command, args) => invokeTauri(command, args),
+  watchPath: (path, callback, options) => watch(path, callback, options),
+});
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <RootErrorBoundary>
       <SettingsProvider>
         <BootstrapPerfMarker />
         <ContextMenuBlocker />
-        <QueryProvider>
-          <AuthSessionProvider>
-            <ProjectManifestWatcher />
-            <TurnNotificationListener />
-            <TerminalResponseReadyProvider>
-              <ShortcutRouterProvider>
-                <RouterProvider router={router} />
-              </ShortcutRouterProvider>
-            </TerminalResponseReadyProvider>
-          </AuthSessionProvider>
-        </QueryProvider>
+        <StoreProvider driver={tauriSqlDriver} runtime={hostRuntime}>
+          <ReactQueryProvider>
+            <AuthSessionProvider>
+              <ProjectManifestWatcher />
+              <TurnNotificationListener />
+              <TerminalResponseReadyProvider>
+                <ShortcutRouterProvider>
+                  <RouterProvider router={router} />
+                </ShortcutRouterProvider>
+              </TerminalResponseReadyProvider>
+            </AuthSessionProvider>
+          </ReactQueryProvider>
+        </StoreProvider>
       </SettingsProvider>
     </RootErrorBoundary>
   </StrictMode>,

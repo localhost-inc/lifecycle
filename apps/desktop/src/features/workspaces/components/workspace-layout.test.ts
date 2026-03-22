@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import {
   type ServiceRecord,
   type WorkspaceRecord,
@@ -6,7 +6,8 @@ import {
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
-import { QueryProvider } from "@/query";
+import { mockStoreContext } from "@/test/store-mock";
+import { ReactQueryProvider } from "@/store/react-query-provider";
 import { WorkspaceOpenRequestsProvider } from "@/features/workspaces/state/workspace-open-requests";
 import { WorkspaceToolbarProvider } from "@/features/workspaces/state/workspace-toolbar-context";
 import { workspaceSupportsFilesystemInteraction } from "@/features/workspaces/lib/workspace-capabilities";
@@ -15,7 +16,7 @@ function renderWorkspaceLayout(element: ReturnType<typeof createElement>) {
   return renderToStaticMarkup(
     createElement(MemoryRouter, {
       initialEntries: ["/projects/project_1/workspaces/workspace_1"],
-      children: createElement(QueryProvider, {
+      children: createElement(ReactQueryProvider, {
         children: createElement(WorkspaceOpenRequestsProvider, {
           children: createElement(WorkspaceToolbarProvider, {
             children: element,
@@ -74,11 +75,10 @@ describe("workspaceSupportsFilesystemInteraction", () => {
 });
 
 describe("WorkspaceLayout", () => {
-  afterEach(() => {
-    mock.restore();
-  });
+  beforeEach(() => mockStoreContext());
+  afterEach(() => mock.restore());
 
-  test("blocks on service data instead of treating it as optional", async () => {
+  test("renders the layout with an empty services array when no services exist", async () => {
     const workspace: WorkspaceRecord = {
       id: "workspace_1",
       project_id: "project_1",
@@ -101,13 +101,11 @@ describe("WorkspaceLayout", () => {
     };
 
     const hooksModule = await import("../hooks");
-    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue({
-      data: undefined,
-      error: null,
-      isLoading: true,
-      refresh: async () => {},
-      status: "loading",
-    } as never);
+    const surfaceModule = await import("./workspace-canvas");
+
+    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue([] as never);
+    spyOn(surfaceModule, "WorkspaceCanvas").mockImplementation((() =>
+      createElement("div", null, "Workspace Surface")) as never);
     await mockWorkspaceLayoutGitQueries();
 
     const { WorkspaceLayout } = await import("./workspace-layout");
@@ -118,51 +116,7 @@ describe("WorkspaceLayout", () => {
       }),
     );
 
-    expect(markup).toContain("Loading workspace services...");
-  });
-
-  test("surfaces services query failures instead of hiding the panel", async () => {
-    const workspace: WorkspaceRecord = {
-      id: "workspace_1",
-      project_id: "project_1",
-      name: "frost-beacon",
-      checkout_type: "worktree",
-      source_ref: "lifecycle/frost-beacon",
-      git_sha: "1dd55398",
-      worktree_path: "/tmp/frost-beacon",
-      target: "local",
-      manifest_fingerprint: "manifest_1",
-      created_by: null,
-      source_workspace_id: null,
-      created_at: "2026-03-10T10:00:00.000Z",
-      updated_at: "2026-03-10T10:00:00.000Z",
-      last_active_at: "2026-03-10T10:00:00.000Z",
-      expires_at: null,
-      status: "active",
-      failure_reason: null,
-      failed_at: null,
-    };
-
-    const hooksModule = await import("../hooks");
-    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue({
-      data: undefined,
-      error: new Error("services exploded"),
-      isLoading: false,
-      refresh: async () => {},
-      status: "error",
-    } as never);
-    await mockWorkspaceLayoutGitQueries();
-
-    const { WorkspaceLayout } = await import("./workspace-layout");
-    const markup = renderWorkspaceLayout(
-      createElement(WorkspaceLayout, {
-        manifestStatus: { state: "missing" },
-        workspace,
-      }),
-    );
-
-    expect(markup).toContain("Failed to load services");
-    expect(markup).toContain("services exploded");
+    expect(markup).toContain('data-slot="workspace-layout"');
   });
 
   test("keeps service summaries out of the workspace layout", async () => {
@@ -215,7 +169,7 @@ describe("WorkspaceLayout", () => {
     const hooksModule = await import("../hooks");
     const surfaceModule = await import("./workspace-canvas");
 
-    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue({ data: services } as never);
+    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue(services as never);
     spyOn(surfaceModule, "WorkspaceCanvas").mockImplementation((() =>
       createElement("div", null, "Workspace Surface")) as never);
     await mockWorkspaceLayoutGitQueries();
@@ -282,7 +236,7 @@ describe("WorkspaceLayout", () => {
     const hooksModule = await import("../hooks");
     const surfaceModule = await import("./workspace-canvas");
 
-    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue({ data: [] } as never);
+    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue([] as never);
     spyOn(surfaceModule, "WorkspaceCanvas").mockImplementation((() =>
       createElement("div", null, "Workspace Surface")) as never);
     await mockWorkspaceLayoutGitQueries();
@@ -345,7 +299,7 @@ describe("WorkspaceLayout", () => {
     };
 
     const hooksModule = await import("../hooks");
-    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue({ data: [] } as never);
+    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue([] as never);
     await mockWorkspaceLayoutGitQueries();
 
     const { WorkspaceLayout } = await import("./workspace-layout");

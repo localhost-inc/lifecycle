@@ -1,7 +1,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import type { TerminalRecord, TerminalStatus } from "@lifecycle/contracts";
+import type { WorkspaceRuntime } from "@lifecycle/workspace";
 import type { HarnessLaunchConfig } from "@/features/settings/state/harness-settings";
-import { getWorkspaceClient } from "@/lib/workspace";
 
 export type HarnessProvider = "claude" | "codex";
 const TERMINAL_ACCESS_UNAVAILABLE_MESSAGE = "Terminal access requires the Tauri desktop shell.";
@@ -40,20 +40,26 @@ function requireDesktopTerminalAccess(): void {
   }
 }
 
-export async function listWorkspaceTerminals(workspaceId: string): Promise<TerminalRecord[]> {
+export async function listWorkspaceTerminals(
+  runtime: WorkspaceRuntime,
+  workspaceId: string,
+): Promise<TerminalRecord[]> {
   if (!isTauri()) {
     void workspaceId;
     return [];
   }
 
-  return getWorkspaceClient().listTerminals(workspaceId);
+  return runtime.listTerminals(workspaceId);
 }
 
-export async function createTerminal(input: CreateTerminalInput): Promise<TerminalRecord> {
+export async function createTerminal(
+  runtime: WorkspaceRuntime,
+  input: CreateTerminalInput,
+): Promise<TerminalRecord> {
   requireDesktopTerminalAccess();
 
   if (input.launchType === "harness") {
-    return getWorkspaceClient().createTerminal({
+    return runtime.createTerminal({
       workspaceId: input.workspaceId,
       launchType: input.launchType,
       harnessLaunchConfig: input.harnessLaunchConfig ?? null,
@@ -62,7 +68,7 @@ export async function createTerminal(input: CreateTerminalInput): Promise<Termin
     });
   }
 
-  return getWorkspaceClient().createTerminal({
+  return runtime.createTerminal({
     workspaceId: input.workspaceId,
     launchType: input.launchType,
     harnessProvider: null,
@@ -71,6 +77,7 @@ export async function createTerminal(input: CreateTerminalInput): Promise<Termin
 }
 
 export async function renameTerminal(
+  runtime: WorkspaceRuntime,
   workspaceId: string,
   terminalId: string,
   label: string,
@@ -82,33 +89,60 @@ export async function renameTerminal(
 
   requireDesktopTerminalAccess();
 
-  return getWorkspaceClient().renameTerminal(workspaceId, terminalId, normalizedLabel);
+  return runtime.renameTerminal(workspaceId, terminalId, normalizedLabel);
+}
+
+export async function sendTerminalText(
+  runtime: WorkspaceRuntime,
+  workspaceId: string,
+  terminalId: string,
+  text: string,
+): Promise<void> {
+  if (text.length === 0) {
+    return;
+  }
+
+  requireDesktopTerminalAccess();
+  await runtime.sendTerminalText(workspaceId, terminalId, text);
 }
 
 export async function saveTerminalAttachment(
+  runtime: WorkspaceRuntime,
   input: SaveTerminalAttachmentInput,
 ): Promise<SavedTerminalAttachment> {
   if (!isTauri()) {
     throw new Error("Image paste and drop are only available in the desktop app.");
   }
 
-  return getWorkspaceClient().saveTerminalAttachment(input);
+  return runtime.saveTerminalAttachment(input);
 }
 
-export async function detachTerminal(workspaceId: string, terminalId: string): Promise<void> {
+export async function detachTerminal(
+  runtime: WorkspaceRuntime,
+  workspaceId: string,
+  terminalId: string,
+): Promise<void> {
   requireDesktopTerminalAccess();
 
-  await getWorkspaceClient().detachTerminal(workspaceId, terminalId);
+  await runtime.detachTerminal(workspaceId, terminalId);
 }
 
-export async function killTerminal(workspaceId: string, terminalId: string): Promise<void> {
+export async function killTerminal(
+  runtime: WorkspaceRuntime,
+  workspaceId: string,
+  terminalId: string,
+): Promise<void> {
   requireDesktopTerminalAccess();
 
-  await getWorkspaceClient().killTerminal(workspaceId, terminalId);
+  await runtime.killTerminal(workspaceId, terminalId);
 }
 
-export async function interruptTerminal(workspaceId: string, terminalId: string): Promise<void> {
+export async function interruptTerminal(
+  runtime: WorkspaceRuntime,
+  workspaceId: string,
+  terminalId: string,
+): Promise<void> {
   requireDesktopTerminalAccess();
 
-  await getWorkspaceClient().interruptTerminal(workspaceId, terminalId);
+  await runtime.interruptTerminal(workspaceId, terminalId);
 }

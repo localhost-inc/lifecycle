@@ -3,6 +3,7 @@ import { useWorkspaceTerminals } from "@/features/terminals/hooks";
 import { createTerminal, type CreateTerminalRequest } from "@/features/terminals/api";
 import { TerminalSessionHistory } from "@/features/terminals/components/terminal-session-history";
 import { useTerminalResponseReady } from "@/features/terminals/state/terminal-response-ready-provider";
+import { useRuntime } from "@/store";
 
 interface SessionHistoryPanelProps { 
   onFocusTerminal: (terminalId: string) => void;
@@ -10,8 +11,8 @@ interface SessionHistoryPanelProps {
 }
 
 export function SessionHistoryPanel({ onFocusTerminal, workspaceId }: SessionHistoryPanelProps) {
-  const terminalsQuery = useWorkspaceTerminals(workspaceId);
-  const terminals = terminalsQuery.data ?? [];
+  const runtime = useRuntime();
+  const terminals = useWorkspaceTerminals(workspaceId);
   const { isTerminalResponseReady, isTerminalTurnRunning } = useTerminalResponseReady();
 
   function handleOpenTerminal(terminalId: string) {
@@ -19,7 +20,7 @@ export function SessionHistoryPanel({ onFocusTerminal, workspaceId }: SessionHis
   }
 
   function handleResumeTerminal(input: Extract<CreateTerminalRequest, { launchType: "harness" }>) {
-    void createTerminal({ ...input, workspaceId });
+    void createTerminal(runtime, { ...input, workspaceId });
   }
 
   return (

@@ -1,8 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { GitStatusResult } from "@lifecycle/contracts";
 import { ThemeProvider } from "@lifecycle/ui";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { mockStoreContext } from "@/test/store-mock";
 import { ChangesTab } from "@/features/git/components/changes-tab";
 
 function renderChangesTab({
@@ -31,6 +32,9 @@ function renderChangesTab({
 }
 
 describe("ChangesTab", () => {
+  beforeEach(() => mockStoreContext());
+  afterEach(() => mock.restore());
+
   test("renders working and staged sections with staging actions", () => {
     const markup = renderChangesTab({
       gitStatus: {

@@ -13,6 +13,8 @@ import {
   resolveWorkspaceVisibleTabs,
 } from "@/features/workspaces/components/workspace-canvas-tabs";
 import {
+  agentTabKey,
+  createAgentTab,
   changesDiffTabKey,
   createChangesDiffTab,
   createCommitDiffTab,
@@ -1108,6 +1110,33 @@ describe("workspace canvas reducer", () => {
     );
   });
 
+  test("opens agent tabs from the workspace launcher", () => {
+    const agentTab = createAgentTab({
+      agentSessionId: "agent_session_1",
+      backend: "claude",
+      label: "Claude",
+    });
+
+    expect(
+      workspaceCanvasReducer(createDefaultWorkspaceCanvasState(), {
+        request: {
+          agentSessionId: "agent_session_1",
+          backend: "claude",
+          id: "agent-1",
+          kind: "agent",
+          label: "Claude",
+        },
+        kind: "open-document",
+      }),
+    ).toEqual(
+      withSinglePaneState({
+        activeTabKey: agentTabKey("agent_session_1"),
+        documents: [agentTab],
+        tabOrderKeys: [agentTabKey("agent_session_1")],
+      }),
+    );
+  });
+
   test("opens file viewer documents with path-based reuse", () => {
     const firstState = workspaceCanvasReducer(createDefaultWorkspaceCanvasState(), {
       request: {
@@ -1373,10 +1402,7 @@ describe("canvas tab helpers", () => {
   test("preserves hidden live tabs until terminal queries finish loading", () => {
     expect(
       reconcileHiddenTerminalTabKeys([terminalTabKey("1"), terminalTabKey("2")], [], false),
-    ).toEqual([
-      terminalTabKey("1"),
-      terminalTabKey("2"),
-    ]);
+    ).toEqual([terminalTabKey("1"), terminalTabKey("2")]);
 
     expect(
       reconcileHiddenTerminalTabKeys(

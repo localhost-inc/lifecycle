@@ -29,15 +29,15 @@ interface UseCommandPaletteExplorerResult {
 export function useCommandPaletteExplorer(): UseCommandPaletteExplorerResult {
   const { workspaceId } = useParams();
   const { openDocument } = useWorkspaceOpenRequests();
-  const workspacesByProjectQuery = useWorkspacesByProject();
+  const workspacesByProject = useWorkspacesByProject();
   const currentWorkspace = useMemo(
     () =>
       workspaceId
-        ? (Object.values(workspacesByProjectQuery.data ?? {})
+        ? (Object.values(workspacesByProject)
             .flat()
             .find((workspace) => workspace.id === workspaceId) ?? null)
         : null,
-    [workspaceId, workspacesByProjectQuery.data],
+    [workspaceId, workspacesByProject],
   );
   const isAvailable =
     currentWorkspace !== null && workspaceSupportsFilesystemInteraction(currentWorkspace);

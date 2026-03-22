@@ -7,7 +7,7 @@ pub mod environment;
 pub mod file;
 pub mod git;
 pub mod git_watcher;
-mod harness;
+pub(crate) mod harness;
 mod identity;
 pub mod manifest;
 mod naming;

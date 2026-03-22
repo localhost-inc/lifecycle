@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { createWorkspaceManifestQuery } from "@/features/workspaces/queries";
 import { buildWorkspaceActivityItems } from "@/features/workspaces/state/workspace-activity";
 
 describe("buildWorkspaceActivityItems", () => {
@@ -58,23 +57,5 @@ describe("buildWorkspaceActivityItems", () => {
     ]);
 
     expect(items).toEqual([]);
-  });
-});
-
-describe("createWorkspaceManifestQuery", () => {
-  test("reads lifecycle.json from the selected workspace worktree path", async () => {
-    const descriptor = createWorkspaceManifestQuery("ws_1", "/tmp/frost-grove");
-    const manifestReads: string[] = [];
-
-    const result = await descriptor.fetch({
-      readManifest: async (dirPath: string) => {
-        manifestReads.push(dirPath);
-        return { state: "missing" } as const;
-      },
-    } as never);
-
-    expect(descriptor.key).toEqual(["workspace-manifest", "ws_1"]);
-    expect(manifestReads).toEqual(["/tmp/frost-grove"]);
-    expect(result).toEqual({ state: "missing" });
   });
 });

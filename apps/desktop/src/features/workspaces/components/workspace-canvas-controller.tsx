@@ -1,8 +1,9 @@
-import type { TerminalStatus } from "@lifecycle/contracts";
+import type { AgentBackend, TerminalStatus } from "@lifecycle/contracts";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { useQueryClient } from "@/query";
+import { useStoreContext } from "@/store/provider";
+import { useAgentSessionRefresh, useRuntime } from "@/store";
 import {
   SHORTCUT_HANDLER_PRIORITY,
   useShortcutRegistration,
@@ -18,9 +19,9 @@ import {
   type CreateTerminalRequest,
   type HarnessProvider,
 } from "@/features/terminals/api";
+import { createDesktopAgentSession } from "@/features/agents/runtime/desktop-agent-orchestrator";
 import { useWorkspaceTerminals } from "@/features/terminals/hooks";
 import { hideNativeTerminalSurface } from "@/features/terminals/native-surface-api";
-import { terminalKeys } from "@/features/terminals/queries";
 import { useTerminalResponseReady } from "@/features/terminals/state/terminal-response-ready-provider";
 import { subscribeToNativeWorkspaceShortcutEvents } from "@/features/workspaces/native-shortcuts-api";
 import {
@@ -43,11 +44,14 @@ import {
   writeWorkspaceCanvasState,
 } from "@/features/workspaces/state/workspace-canvas-state";
 import {
+  createWorkspaceCanvasId,
   createWorkspacePaneId,
   createWorkspaceSplitId,
-  createWorkspaceCanvasId,
 } from "@/features/workspaces/components/workspace-canvas-ids";
-import type { OpenDocumentRequest } from "@/features/workspaces/components/workspace-canvas-requests";
+import {
+  createAgentOpenInput,
+  type OpenDocumentRequest,
+} from "@/features/workspaces/components/workspace-canvas-requests";
 import { workspaceCanvasReducer } from "@/features/workspaces/components/workspace-canvas-reducer";
 import {
   releaseWebviewFocus,
@@ -102,8 +106,10 @@ export function useWorkspaceCanvasController({
   onOpenDocumentRequestHandled,
   workspaceId,
 }: WorkspaceCanvasControllerInput) {
-  const client = useQueryClient();
-  const terminalsQuery = useWorkspaceTerminals(workspaceId);
+  const { collections } = useStoreContext();
+  const runtime = useRuntime();
+  const refreshAgentSessions = useAgentSessionRefresh(workspaceId);
+  const workspaceTerminals = useWorkspaceTerminals(workspaceId);
   const { defaultNewTabLaunch, dimInactivePanes, harnesses, inactivePaneOpacity } = useSettings();
   const {
     clearTerminalResponseReady,
@@ -129,7 +135,6 @@ export function useWorkspaceCanvasController({
   const closeShortcutTriggeredAtRef = useRef(0);
   const closeShortcutHandledAtRef = useRef(0);
 
-  const workspaceTerminals = terminalsQuery.data ?? [];
   const terminals = useMemo(
     () =>
       orderWorkspaceTerminals(
@@ -281,7 +286,7 @@ export function useWorkspaceCanvasController({
     };
   }, []);
 
-  const terminalsResolved = terminalsQuery.data !== undefined;
+  const terminalsResolved = true; // TanStack DB collections are synchronous
 
   useEffect(() => {
     const nextHiddenTerminalTabKeys = reconcileHiddenTerminalTabKeys(
@@ -446,16 +451,16 @@ export function useWorkspaceCanvasController({
       try {
         const terminal =
           input.launchType === "harness"
-            ? await createTerminal({
+            ? await createTerminal(runtime, {
                 ...input,
                 harnessLaunchConfig: buildHarnessLaunchConfig(input.harnessProvider, harnesses),
                 workspaceId,
               })
-            : await createTerminal({
+            : await createTerminal(runtime, {
                 ...input,
                 workspaceId,
               });
-        client.invalidate(terminalKeys.byWorkspace(workspaceId));
+        void collections.terminals.refresh();
         handleShowTerminalTab(terminal.id, paneId);
       } catch (createError) {
         setError(formatWorkspaceError(createError, "Failed to create session."));
@@ -463,18 +468,57 @@ export function useWorkspaceCanvasController({
         setCreatingSelection(null);
       }
     },
-    [client, handleShowTerminalTab, harnesses, workspaceId],
+    [collections.terminals, handleShowTerminalTab, harnesses, runtime, workspaceId],
+  );
+
+  const handleOpenAgentTab = useCallback(
+    async (backend: AgentBackend, paneId?: string) => {
+      if (paneId) {
+        dispatch({ kind: "select-pane", paneId });
+      }
+      setCreatingSelection(backend);
+      setError(null);
+
+      try {
+        const session = await createDesktopAgentSession({
+          runtime,
+          backend,
+          harnessLaunchConfig: buildHarnessLaunchConfig(backend, harnesses),
+          workspaceId,
+        });
+        refreshAgentSessions();
+        dispatch({
+          kind: "open-document",
+          request: {
+            ...createAgentOpenInput({
+              agentSessionId: session.id,
+              backend: session.backend,
+              label: session.title,
+            }),
+            id: createWorkspaceCanvasId(),
+          },
+        });
+      } catch (createError) {
+        setError(formatWorkspaceError(createError, "Failed to open agent."));
+      } finally {
+        setCreatingSelection(null);
+      }
+    },
+    [refreshAgentSessions, harnesses, runtime, workspaceId],
   );
 
   const handleLaunchSurface = useCallback(
     (paneId: string, request: SurfaceLaunchRequest) => {
       switch (request.kind) {
+        case "agent":
+          void handleOpenAgentTab(request.backend, paneId);
+          break;
         case "terminal":
           void handleCreateTerminal(request, paneId);
           break;
       }
     },
-    [handleCreateTerminal],
+    [handleCreateTerminal, handleOpenAgentTab],
   );
 
   // Auto-create a default terminal when a workspace opens with no tabs.
@@ -500,16 +544,16 @@ export function useWorkspaceCanvasController({
     }
 
     didAutoCreateTerminalRef.current = true;
-    const request: CreateTerminalRequest =
+    const request: SurfaceLaunchRequest =
       defaultNewTabLaunch === "shell"
-        ? { launchType: "shell" }
-        : { launchType: "harness", harnessProvider: defaultNewTabLaunch };
-    void handleCreateTerminal(request, activePaneId);
+        ? { kind: "terminal", launchType: "shell" }
+        : { backend: defaultNewTabLaunch, kind: "agent" };
+    handleLaunchSurface(activePaneId, request);
   }, [
     activePaneId,
     defaultNewTabLaunch,
     documents.length,
-    handleCreateTerminal,
+    handleLaunchSurface,
     terminals.length,
     terminalsResolved,
   ]);
@@ -528,7 +572,7 @@ export function useWorkspaceCanvasController({
         key: "claude",
         title: "Claude",
         icon: <ClaudeIcon />,
-        request: { kind: "terminal", launchType: "harness", harnessProvider: "claude" as const },
+        request: { backend: "claude", kind: "agent" },
         loading: creatingSelection === "claude",
         disabled: creatingSelection !== null,
       },
@@ -536,7 +580,7 @@ export function useWorkspaceCanvasController({
         key: "codex",
         title: "Codex",
         icon: <CodexIcon />,
-        request: { kind: "terminal", launchType: "harness", harnessProvider: "codex" as const },
+        request: { backend: "codex", kind: "agent" },
         loading: creatingSelection === "codex",
         disabled: creatingSelection !== null,
       },
@@ -548,8 +592,8 @@ export function useWorkspaceCanvasController({
     async (tabKey: string, terminalId: string) => {
       try {
         clearTerminalResponseReady(terminalId);
-        await detachTerminal(workspaceId, terminalId);
-        client.invalidate(terminalKeys.byWorkspace(workspaceId));
+        await detachTerminal(runtime, workspaceId, terminalId);
+        void collections.terminals.refresh();
         dispatch({
           key: tabKey,
           kind: "hide-terminal-tab",
@@ -561,7 +605,7 @@ export function useWorkspaceCanvasController({
         return false;
       }
     },
-    [clearTerminalResponseReady, client, workspaceId],
+    [clearTerminalResponseReady, collections.terminals, runtime, workspaceId],
   );
 
   const closeDocumentTab = useCallback(
@@ -623,11 +667,11 @@ export function useWorkspaceCanvasController({
     (action: WorkspaceTabHotkeyAction): boolean => {
       switch (action.kind) {
         case "new-tab": {
-          const request: CreateTerminalRequest =
+          const request: SurfaceLaunchRequest =
             defaultNewTabLaunch === "shell"
-              ? { launchType: "shell" }
-              : { launchType: "harness", harnessProvider: defaultNewTabLaunch };
-          void handleCreateTerminal(request, activePaneId);
+              ? { kind: "terminal", launchType: "shell" }
+              : { backend: defaultNewTabLaunch, kind: "agent" };
+          handleLaunchSurface(activePaneId, request);
           return true;
         }
         case "close-active-tab": {
@@ -718,7 +762,7 @@ export function useWorkspaceCanvasController({
       defaultNewTabLaunch,
       handleCloseDocumentTab,
       handleCloseTerminalTab,
-      handleCreateTerminal,
+      handleLaunchSurface,
       handleShowTerminalTab,
       onCloseWorkspaceTab,
       paneLayout.paneCount,
@@ -934,9 +978,9 @@ export function useWorkspaceCanvasController({
 
   const handleRenameTerminalTab = useCallback(
     (terminalId: string, label: string) => {
-      return renameTerminal(workspaceId, terminalId, label);
+      return renameTerminal(runtime, workspaceId, terminalId, label);
     },
-    [workspaceId],
+    [runtime, workspaceId],
   );
 
   const handleReconcilePaneVisibleTabOrder = useCallback((paneId: string, keys: string[]) => {
@@ -962,13 +1006,13 @@ export function useWorkspaceCanvasController({
         placement: "after",
         splitId: createWorkspaceSplitId(),
       });
-      const request: CreateTerminalRequest =
+      const request: SurfaceLaunchRequest =
         defaultNewTabLaunch === "shell"
-          ? { launchType: "shell" }
-          : { launchType: "harness", harnessProvider: defaultNewTabLaunch };
-      void handleCreateTerminal(request, newPaneId);
+          ? { kind: "terminal", launchType: "shell" }
+          : { backend: defaultNewTabLaunch, kind: "agent" };
+      handleLaunchSurface(newPaneId, request);
     },
-    [defaultNewTabLaunch, handleCreateTerminal],
+    [defaultNewTabLaunch, handleLaunchSurface],
   );
 
   const handleUnzoom = useCallback(() => {
@@ -1031,12 +1075,12 @@ export function useWorkspaceCanvasController({
       }
       event.preventDefault();
       clearTerminalTurnRunning(activeTerminalId);
-      void interruptTerminal(workspaceId, activeTerminalId);
+      void interruptTerminal(runtime, workspaceId, activeTerminalId);
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeTerminalId, clearTerminalTurnRunning, isTerminalTurnRunning, zoomedTabKey]);
+  }, [activeTerminalId, clearTerminalTurnRunning, isTerminalTurnRunning, runtime, workspaceId, zoomedTabKey]);
 
   return {
     activePaneId,

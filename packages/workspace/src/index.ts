@@ -2,7 +2,10 @@ export type {
   CreateTerminalInput,
   StartServicesInput,
   GitDiffInput,
-  WorkspaceClient,
+  WorkspaceRuntime,
+  WorkspaceCreateContext,
+  WorkspaceCreateInput,
+  WorkspaceCreateResult,
   SavedTerminalAttachment,
   SubscribeWorkspaceFileEventsInput,
   ServiceLogLine,
@@ -24,4 +27,8 @@ export type {
   HarnessLaunchConfigInput,
   HarnessPreset,
 } from "./harnesses";
-export { HostWorkspaceClient } from "./host-workspace";
+export { LocalRuntime, type LocalRuntimeDeps } from "./runtimes/local";
+/** @deprecated Use LocalRuntime instead */
+export { LocalRuntime as HostWorkspaceRuntime } from "./runtimes/local";
+/** @deprecated Use LocalRuntime instead */
+export { LocalRuntime as HostWorkspaceClient } from "./runtimes/local";

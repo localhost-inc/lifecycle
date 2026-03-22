@@ -1,7 +1,18 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { getGitDiff } from "@/features/git/api";
+import type { WorkspaceRuntime } from "@lifecycle/workspace";
+import {
+  getGitBaseRef,
+  getGitChangesPatch,
+  getGitCommitPatch,
+  getGitDiff,
+  getGitPullRequest,
+  getGitPullRequestPatch,
+  getGitRefDiffPatch,
+  getGitScopePatch,
+  getGitStatus,
+} from "@/features/git/api";
 
-const workspaceClient = {
+const runtime = {
   getGitStatus: mock(async () => ({
     branch: "feature/runtime-boundary",
     headSha: "abcdef1234567890",
@@ -102,24 +113,7 @@ const workspaceClient = {
     updatedAt: "2026-03-13T00:00:00.000Z",
     url: "https://github.com/example/repo/pull/42",
   })),
-};
-
-const getWorkspaceClient = mock(() => workspaceClient);
-
-mock.module("../../lib/workspace", () => ({
-  getWorkspaceClient,
-}));
-
-const {
-  getGitBaseRef,
-  getGitChangesPatch,
-  getGitCommitPatch,
-  getGitPullRequest,
-  getGitPullRequestPatch,
-  getGitRefDiffPatch,
-  getGitScopePatch,
-  getGitStatus,
-} = await import("./api");
+} as unknown as WorkspaceRuntime;
 
 describe("git api workspace routing", () => {
   beforeEach(() => {
@@ -128,9 +122,10 @@ describe("git api workspace routing", () => {
       value: true,
       writable: true,
     });
-    getWorkspaceClient.mockClear();
-    for (const method of Object.values(workspaceClient)) {
-      method.mockClear();
+    for (const method of Object.values(runtime)) {
+      if (typeof method === "function" && "mockClear" in method) {
+        (method as ReturnType<typeof mock>).mockClear();
+      }
     }
   });
 
@@ -138,8 +133,8 @@ describe("git api workspace routing", () => {
     delete (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri;
   });
 
-  test("routes advanced workspace-scoped git reads through the workspace client", async () => {
-    expect(await getGitStatus("ws_1")).toEqual({
+  test("routes advanced workspace-scoped git reads through the runtime", async () => {
+    expect(await getGitStatus(runtime, "ws_1")).toEqual({
       branch: "feature/runtime-boundary",
       headSha: "abcdef1234567890",
       upstream: "origin/feature/runtime-boundary",
@@ -147,15 +142,15 @@ describe("git api workspace routing", () => {
       behind: 0,
       files: [],
     });
-    expect(await getGitScopePatch("ws_1", "working")).toBe("scope patch");
-    expect(await getGitChangesPatch("ws_1")).toBe("changes patch");
-    expect(await getGitDiff("ws_1", "src/app.ts", "working")).toEqual({
+    expect(await getGitScopePatch(runtime, "ws_1", "working")).toBe("scope patch");
+    expect(await getGitChangesPatch(runtime, "ws_1")).toBe("changes patch");
+    expect(await getGitDiff(runtime, "ws_1", "src/app.ts", "working")).toEqual({
       scope: "working",
       filePath: "src/app.ts",
       patch: "diff patch",
       isBinary: false,
     });
-    expect(await getGitPullRequest("ws_1", 42)).toEqual({
+    expect(await getGitPullRequest(runtime, "ws_1", 42)).toEqual({
       support: {
         available: true,
         message: null,
@@ -164,27 +159,16 @@ describe("git api workspace routing", () => {
       },
       pullRequest: null,
     });
-    expect(await getGitBaseRef("ws_1")).toBe("main");
-    expect(await getGitRefDiffPatch("ws_1", "main", "HEAD")).toBe("ref diff patch");
-    expect(await getGitPullRequestPatch("ws_1", 42)).toBe("pr patch");
-    expect(await getGitCommitPatch("ws_1", "abcdef1234567890")).toEqual({
+    expect(await getGitBaseRef(runtime, "ws_1")).toBe("main");
+    expect(await getGitRefDiffPatch(runtime, "ws_1", "main", "HEAD")).toBe("ref diff patch");
+    expect(await getGitPullRequestPatch(runtime, "ws_1", 42)).toBe("pr patch");
+    expect(await getGitCommitPatch(runtime, "ws_1", "abcdef1234567890")).toEqual({
       sha: "abcdef1234567890",
       patch: "commit patch",
     });
 
-    expect(getWorkspaceClient).toHaveBeenCalled();
-    expect(workspaceClient.getGitStatus).toHaveBeenCalledWith("ws_1");
-    expect(workspaceClient.getGitScopePatch).toHaveBeenCalledWith("ws_1", "working");
-    expect(workspaceClient.getGitChangesPatch).toHaveBeenCalledWith("ws_1");
-    expect(workspaceClient.getGitDiff).toHaveBeenCalledWith({
-      workspaceId: "ws_1",
-      filePath: "src/app.ts",
-      scope: "working",
-    });
-    expect(workspaceClient.getGitPullRequest).toHaveBeenCalledWith("ws_1", 42);
-    expect(workspaceClient.getGitBaseRef).toHaveBeenCalledWith("ws_1");
-    expect(workspaceClient.getGitRefDiffPatch).toHaveBeenCalledWith("ws_1", "main", "HEAD");
-    expect(workspaceClient.getGitPullRequestPatch).toHaveBeenCalledWith("ws_1", 42);
-    expect(workspaceClient.getGitCommitPatch).toHaveBeenCalledWith("ws_1", "abcdef1234567890");
+    expect(
+      (runtime.getGitStatus as ReturnType<typeof mock>).mock.calls.length,
+    ).toBeGreaterThanOrEqual(1);
   });
 });

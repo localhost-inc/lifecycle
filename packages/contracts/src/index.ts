@@ -1,3 +1,11 @@
+export type {
+  AgentBackend,
+  AgentMessageRecord,
+  AgentMessageRole,
+  AgentRuntimeKind,
+  AgentSessionRecord,
+  AgentSessionStatus,
+} from "./agent";
 export type { ServiceRecord, TerminalRecord, WorkspaceRecord } from "./db";
 export {
   BRIDGE_VERSION,

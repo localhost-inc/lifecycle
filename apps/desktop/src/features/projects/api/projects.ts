@@ -2,8 +2,9 @@ import { isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { parseManifest } from "@lifecycle/contracts";
 import type { ManifestParseResult, ProjectRecord } from "@lifecycle/contracts";
-import { getBackend } from "@/lib/backend";
-import { invokeTauri } from "@/lib/tauri-error";
+import type { WorkspaceRuntime } from "@lifecycle/workspace";
+import { insertProject, deleteProject, updateProjectManifestStatus } from "@lifecycle/store";
+import { tauriSqlDriver } from "@/lib/sql-driver";
 
 export type ManifestStatus =
   | { state: "valid"; result: ManifestParseResult & { valid: true } }
@@ -85,12 +86,15 @@ export async function readManifestFromFs(
   }
 }
 
-export async function readManifest(dirPath: string): Promise<ManifestStatus> {
+export async function readManifest(
+  runtime: WorkspaceRuntime,
+  dirPath: string,
+): Promise<ManifestStatus> {
   if (!isTauri()) {
     return { state: "missing" };
   }
 
-  const text = await getBackend().readManifestText(dirPath);
+  const text = await runtime.readManifestText(dirPath);
   if (text === null) {
     return { state: "missing" };
   }
@@ -103,14 +107,6 @@ export async function readManifest(dirPath: string): Promise<ManifestStatus> {
   return { state: "invalid", result };
 }
 
-export async function listProjects(): Promise<ProjectRecord[]> {
-  if (!isTauri()) {
-    return [];
-  }
-
-  return getBackend().listProjects();
-}
-
 export async function addProjectFromDirectory(): Promise<ProjectRecord | null> {
   if (!isTauri()) {
     throw new Error("Project import requires the Tauri desktop shell.");
@@ -120,24 +116,32 @@ export async function addProjectFromDirectory(): Promise<ProjectRecord | null> {
   if (!dirPath) return null;
 
   const name = nameFromPath(dirPath);
-  const status = await readManifest(dirPath);
-  const manifestValid = status.state === "valid";
   const id = generateId();
 
-  const row = await invokeTauri<ProjectRow>("add_project", {
+  await insertProject(tauriSqlDriver, { id, path: dirPath, name });
+
+  return {
     id,
     path: dirPath,
     name,
-    manifestValid,
-  });
-
-  return rowToRecord(row);
+    manifestPath: "lifecycle.json",
+    manifestValid: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
-export async function removeProject(id: string): Promise<void> {
+export async function removeProject(runtime: WorkspaceRuntime, id: string): Promise<void> {
   if (!isTauri()) {
     return;
   }
 
-  await invokeTauri("remove_project", { id });
+  // Rust side-effects: stop git watchers, clean up controllers
+  await runtime.cleanupProject(id);
+  // Delete from SQLite via TypeScript
+  await deleteProject(tauriSqlDriver, id);
+}
+
+export async function setProjectManifestValid(id: string, valid: boolean): Promise<void> {
+  await updateProjectManifestStatus(tauriSqlDriver, id, valid);
 }

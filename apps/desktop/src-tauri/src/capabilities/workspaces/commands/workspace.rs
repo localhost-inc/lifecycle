@@ -3,7 +3,6 @@ use crate::shared::errors::LifecycleError;
 use crate::RootGitWatcherMap;
 use crate::WorkspaceControllerRegistryHandle;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use tauri::{AppHandle, State};
 
 #[derive(Debug, Deserialize)]
@@ -140,22 +139,6 @@ pub async fn destroy_workspace(
 }
 
 #[tauri::command]
-pub async fn get_workspace(
-    db_path: State<'_, DbPath>,
-    project_id: String,
-) -> Result<Option<super::super::query::WorkspaceRecord>, LifecycleError> {
-    super::super::query::get_workspace(&db_path.0, project_id).await
-}
-
-#[tauri::command]
-pub async fn get_workspace_by_id(
-    db_path: State<'_, DbPath>,
-    workspace_id: String,
-) -> Result<Option<super::super::query::WorkspaceRecord>, LifecycleError> {
-    super::super::query::get_workspace_by_id(&db_path.0, workspace_id).await
-}
-
-#[tauri::command]
 pub async fn get_workspace_activity(
     workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
     workspace_id: String,
@@ -177,20 +160,6 @@ pub async fn get_workspace_service_logs(
         .await
         .map(|controller| controller.service_logs())
         .unwrap_or_default())
-}
-
-#[tauri::command]
-pub async fn list_workspaces(
-    db_path: State<'_, DbPath>,
-) -> Result<Vec<super::super::query::WorkspaceRecord>, LifecycleError> {
-    super::super::query::list_workspaces(&db_path.0).await
-}
-
-#[tauri::command]
-pub async fn list_workspaces_by_project(
-    db_path: State<'_, DbPath>,
-) -> Result<HashMap<String, Vec<super::super::query::WorkspaceRecord>>, LifecycleError> {
-    super::super::query::list_workspaces_by_project(&db_path.0).await
 }
 
 #[tauri::command]

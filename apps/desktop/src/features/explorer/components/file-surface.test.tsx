@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ThemeProvider } from "@lifecycle/ui";
+import { mockStoreContext } from "@/test/store-mock";
 import { buildFileCodeEditorExtensions, resolveFileEditorConfig } from "@/features/explorer/lib/file-editor-config";
 import type { FileEditorConfig } from "@/features/explorer/lib/file-editor-types";
 import {
@@ -197,9 +198,8 @@ describe("FileSurface helpers", () => {
 });
 
 describe("FileSurface", () => {
-  afterEach(() => {
-    mock.restore();
-  });
+  beforeEach(() => mockStoreContext());
+  afterEach(() => mock.restore());
 
   test("renders markdown files with the markdown renderer", async () => {
     const markup = await renderFileSurface("README.md", {

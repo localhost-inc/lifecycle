@@ -1,16 +1,10 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import type { WorkspaceRuntime } from "@lifecycle/workspace";
+import { getCurrentBranch } from "./current-branch";
 
-const backend = {
+const runtime = {
   getCurrentBranch: mock(async () => "feature/provider-boundary"),
-};
-
-const getBackend = mock(() => backend);
-
-mock.module("../../../lib/backend", () => ({
-  getBackend,
-}));
-
-const { getCurrentBranch } = await import("./current-branch");
+} as unknown as WorkspaceRuntime;
 
 describe("project current branch api", () => {
   beforeEach(() => {
@@ -19,17 +13,15 @@ describe("project current branch api", () => {
       value: true,
       writable: true,
     });
-    getBackend.mockClear();
-    backend.getCurrentBranch.mockClear();
+    (runtime.getCurrentBranch as ReturnType<typeof mock>).mockClear();
   });
 
   afterEach(() => {
     delete (globalThis as typeof globalThis & { isTauri?: boolean }).isTauri;
   });
 
-  test("routes branch lookup through the backend", async () => {
-    expect(await getCurrentBranch("/tmp/project_1")).toBe("feature/provider-boundary");
-    expect(getBackend).toHaveBeenCalledTimes(1);
-    expect(backend.getCurrentBranch).toHaveBeenCalledWith("/tmp/project_1");
+  test("routes branch lookup through the runtime", async () => {
+    expect(await getCurrentBranch(runtime, "/tmp/project_1")).toBe("feature/provider-boundary");
+    expect((runtime.getCurrentBranch as ReturnType<typeof mock>)).toHaveBeenCalledWith("/tmp/project_1");
   });
 });

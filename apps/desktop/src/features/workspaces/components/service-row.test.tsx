@@ -51,7 +51,7 @@ describe("ServiceRow", () => {
     expect(markup).not.toContain(":44446");
   });
 
-  test("renders expandable chevron when toggle handler is provided", () => {
+  test("renders expandable row when toggle handler is provided", () => {
     const markup = renderToStaticMarkup(
       createElement(ServiceRow, {
         logLines: [{ stream: "stdout", text: "ready" }],
@@ -61,7 +61,8 @@ describe("ServiceRow", () => {
       }),
     );
 
-    expect(markup).toContain("chevron");
+    expect(markup).toContain("cursor-pointer");
+    expect(markup).toContain("grid-template-rows");
     expect(markup).not.toContain("Exposure");
   });
 

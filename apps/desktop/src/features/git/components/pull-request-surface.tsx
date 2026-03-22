@@ -12,6 +12,7 @@ import { formatRelativeTime } from "@/lib/format";
 import { measureAsyncPerformance } from "@/lib/performance";
 import { getGitPullRequestPatch } from "@/features/git/api";
 import { useCurrentGitPullRequest, useGitPullRequest, useGitPullRequests } from "@/features/git/hooks";
+import { useRuntime } from "@/store";
 import { useParsedGitPatchFiles } from "@/features/git/lib/parsed-patch-files";
 import { GitPatchViewer } from "@/features/git/components/git-patch-viewer";
 import { GithubAvatar } from "@/features/git/components/github-avatar";
@@ -193,6 +194,7 @@ export function PullRequestSurface({
   pullRequest: snapshot,
   workspaceId,
 }: PullRequestSurfaceProps) {
+  const runtime = useRuntime();
   const [documentVisible, setDocumentVisible] = useState(() =>
     typeof document === "undefined" ? true : document.visibilityState === "visible",
   );
@@ -289,7 +291,7 @@ export function PullRequestSurface({
 
     void measureAsyncPerformance(
       `pull-request-surface.patch:${workspaceId}:${pullRequest.number}`,
-      () => getGitPullRequestPatch(workspaceId, pullRequest.number),
+      () => getGitPullRequestPatch(runtime, workspaceId, pullRequest.number),
     )
       .then((result) => {
         if (!cancelled) setPatch(result);
@@ -304,7 +306,7 @@ export function PullRequestSurface({
     return () => {
       cancelled = true;
     };
-  }, [diffReloadKey, pullRequest.number, workspaceId]);
+  }, [diffReloadKey, pullRequest.number, runtime, workspaceId]);
   const parsedFiles = useParsedGitPatchFiles(`pr-diff:${workspaceId}:${pullRequest.number}`, patch);
   const [checksExpanded, setChecksExpanded] = useState(false);
 

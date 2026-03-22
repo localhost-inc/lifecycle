@@ -1,17 +1,30 @@
 use crate::platform::diagnostics;
 use crate::shared::errors::LifecycleError;
 use std::time::Instant;
+use tauri_plugin_sql::{Migration, MigrationKind};
 
-const MIGRATIONS: [(&str, &str); 2] = [
-    (
-        "0001_baseline",
-        include_str!("migrations/0001_baseline.sql"),
-    ),
-    (
-        "0002_workspace_target_rename",
-        include_str!("migrations/0002_workspace_target_rename.sql"),
-    ),
-];
+pub fn migrations() -> Vec<Migration> {
+    vec![
+        Migration {
+            version: 1,
+            description: "baseline",
+            sql: include_str!("migrations/0001_baseline.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 2,
+            description: "workspace_target_rename",
+            sql: include_str!("migrations/0002_workspace_target_rename.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 3,
+            description: "agent_sessions",
+            sql: include_str!("migrations/0003_agent_sessions.sql"),
+            kind: MigrationKind::Up,
+        },
+    ]
+}
 
 /// Holds the resolved path to the SQLite database file.
 pub struct DbPath(pub String);
@@ -36,8 +49,14 @@ pub fn optional_database_result<T>(
 
 pub fn open_db(db_path: &str) -> Result<rusqlite::Connection, LifecycleError> {
     let conn = map_database_result(rusqlite::Connection::open(db_path))?;
+    map_database_result(conn.pragma_update(None, "journal_mode", "WAL"))?;
     map_database_result(conn.pragma_update(None, "foreign_keys", true))?;
     Ok(conn)
+}
+
+#[tauri::command]
+pub fn get_db_path(db_path: tauri::State<'_, DbPath>) -> String {
+    db_path.0.clone()
 }
 
 pub async fn run_blocking_db_read<T, F>(
@@ -71,12 +90,19 @@ where
 }
 
 pub fn run_migrations(db_path: &str) -> Result<(), LifecycleError> {
-    let mut conn = open_db(db_path)?;
-    initialize_migration_table(&conn)?;
+    let conn = open_db(db_path)?;
 
-    for (version, sql) in MIGRATIONS {
-        apply_migration(&mut conn, version, sql)?;
+    // Apply all migration SQL directly — DDL is idempotent (IF NOT EXISTS),
+    // data migrations are safe to re-run. The tauri-plugin-sql plugin owns
+    // migration tracking via its _sqlx_migrations table.
+    for m in migrations() {
+        conn.execute_batch(m.sql)
+            .map_err(|error| database_error(format!("migration {} failed: {error}", m.description)))?;
     }
+
+    // Drop the legacy migration tracker — plugin handles this now.
+    conn.execute_batch("DROP TABLE IF EXISTS schema_migration")
+        .map_err(database_error)?;
 
     reconcile_workspaces(&conn)?;
     reconcile_ephemeral_terminals(&conn)?;
@@ -110,48 +136,6 @@ pub fn cleanup_for_exit(db_path: &str) -> Result<(), LifecycleError> {
         [],
     )
     .map_err(database_error)?;
-
-    Ok(())
-}
-
-fn initialize_migration_table(conn: &rusqlite::Connection) -> Result<(), LifecycleError> {
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS schema_migration (
-            version TEXT PRIMARY KEY NOT NULL,
-            applied_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )",
-        [],
-    )
-    .map_err(database_error)?;
-
-    Ok(())
-}
-
-fn apply_migration(
-    conn: &mut rusqlite::Connection,
-    version: &str,
-    sql: &str,
-) -> Result<(), LifecycleError> {
-    let already_applied: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM schema_migration WHERE version = ?1",
-            [version],
-            |row| row.get(0),
-        )
-        .map_err(database_error)?;
-    if already_applied > 0 {
-        return Ok(());
-    }
-
-    let tx = conn.transaction().map_err(database_error)?;
-    tx.execute_batch(sql)
-        .map_err(|error| database_error(format!("migration {version} failed: {error}")))?;
-    tx.execute(
-        "INSERT INTO schema_migration (version) VALUES (?1)",
-        [version],
-    )
-    .map_err(database_error)?;
-    tx.commit().map_err(database_error)?;
 
     Ok(())
 }
@@ -276,25 +260,10 @@ mod tests {
         assert!(column_exists(&conn, "terminal", "harness_launch_mode"));
         assert!(column_exists(&conn, "terminal", "label_origin"));
         assert!(column_exists(&conn, "terminal", "status"));
+        assert!(column_exists(&conn, "agent_session", "backend"));
+        assert!(column_exists(&conn, "agent_session", "runtime_session_id"));
         assert!(!column_exists(&conn, "service", "preview_state"));
         assert!(!column_exists(&conn, "environment", "status"));
-        let versions = {
-            let mut stmt = conn
-                .prepare("SELECT version FROM schema_migration ORDER BY version")
-                .expect("prepare migration select");
-            let rows = stmt
-                .query_map([], |row| row.get::<_, String>(0))
-                .expect("query migrations");
-            rows.map(|row| row.expect("migration row"))
-                .collect::<Vec<String>>()
-        };
-        assert_eq!(
-            versions,
-            vec![
-                "0001_baseline".to_string(),
-                "0002_workspace_target_rename".to_string(),
-            ]
-        );
 
         drop(conn);
         let _ = std::fs::remove_file(db_path);
@@ -306,19 +275,6 @@ mod tests {
         let conn = open_db(&db_path).expect("open db");
         conn.execute_batch(include_str!("migrations/0001_baseline.sql"))
             .expect("apply baseline schema");
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS schema_migration (
-                version TEXT PRIMARY KEY NOT NULL,
-                applied_at TEXT NOT NULL DEFAULT (datetime('now'))
-            )",
-            [],
-        )
-        .expect("create schema migration table");
-        conn.execute(
-            "INSERT INTO schema_migration (version) VALUES ('0001_baseline')",
-            [],
-        )
-        .expect("record baseline migration");
         conn.execute(
             "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
             rusqlite::params!["project_1", "/tmp/project_1", "Project 1"],

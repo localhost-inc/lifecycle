@@ -199,6 +199,18 @@ Legacy/current term for the old combined right-side rail.
 
 Avoid this term in new target-state docs; use `workspace extension strip` or `workspace extension panel` instead.
 
+## Agent
+
+### Agent session
+
+The first-party Lifecycle interaction thread for an agent within a workspace.
+
+It is the canonical record for center-panel agent history.
+
+It is not: a terminal id, a provider thread id, or a provider session id
+
+Provider-owned identifiers may be attached as metadata, but `agent session` is the product object.
+
 ## Panes
 
 ### Pane

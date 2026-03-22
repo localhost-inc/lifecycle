@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { QueryProvider } from "@/query";
+import { mockStoreContext } from "@/test/store-mock";
+import { ReactQueryProvider } from "@/store/react-query-provider";
 import { SettingsProvider } from "@/features/settings/state/settings-provider";
 
 function withConfig(element: ReturnType<typeof createElement>) {
@@ -9,24 +10,22 @@ function withConfig(element: ReturnType<typeof createElement>) {
 }
 
 describe("WorkspaceCanvas layout", () => {
-  afterEach(() => {
-    mock.restore();
-  });
+  beforeEach(() => mockStoreContext());
+  afterEach(() => mock.restore());
 
   test("renders pane headers with a dedicated tab strip region beside the right-side controls", async () => {
     const terminalHooksModule = await import("../../terminals/hooks");
     const responseReadyModule =
       await import("../../terminals/state/terminal-response-ready-provider");
+    const storeModule = await import("@/store");
     const panelsModule = await import("./workspace-pane-content");
     const tabBarModule = await import("./workspace-pane-tab-bar");
 
-    spyOn(terminalHooksModule, "useWorkspaceTerminals").mockReturnValue({
-      data: [],
-      isLoading: false,
-      status: "ready",
-    } as never);
+    spyOn(terminalHooksModule, "useWorkspaceTerminals").mockReturnValue([] as never);
+    spyOn(storeModule, "useAgentSessionRefresh").mockReturnValue((() => {}) as never);
     spyOn(responseReadyModule, "useTerminalResponseReady").mockReturnValue({
       clearTerminalResponseReady: () => {},
+      clearTerminalTurnRunning: () => {},
       isTerminalResponseReady: () => false,
       isTerminalTurnRunning: () => false,
     } as never);
@@ -38,7 +37,7 @@ describe("WorkspaceCanvas layout", () => {
     const { WorkspaceCanvas } = await import("./workspace-canvas");
     const markup = renderToStaticMarkup(
       withConfig(
-        createElement(QueryProvider, {
+        createElement(ReactQueryProvider, {
           children: createElement(WorkspaceCanvas, {
             openDocumentRequest: null,
             workspaceId: "workspace-1",
@@ -76,7 +75,6 @@ describe("WorkspaceCanvas layout", () => {
           inactivePaneOpacity: 0.65,
           onCloseDocumentTab: () => {},
           onCloseTerminalTab: async () => {},
-          onCreateTerminal: async () => {},
           onFileSessionStateChange: () => {},
           onLaunchSurface: () => {},
           onMoveTabToPane: () => {},
@@ -154,7 +152,6 @@ describe("WorkspaceCanvas layout", () => {
           inactivePaneOpacity: 0.65,
           onCloseDocumentTab: () => {},
           onCloseTerminalTab: async () => {},
-          onCreateTerminal: async () => {},
           onFileSessionStateChange: () => {},
           onLaunchSurface: () => {},
           onMoveTabToPane: () => {},
@@ -238,7 +235,6 @@ describe("WorkspaceCanvas layout", () => {
           inactivePaneOpacity: 0.45,
           onCloseDocumentTab: () => {},
           onCloseTerminalTab: async () => {},
-          onCreateTerminal: async () => {},
           onFileSessionStateChange: () => {},
           onLaunchSurface: () => {},
           onMoveTabToPane: () => {},

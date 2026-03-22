@@ -2,9 +2,11 @@ import { describe, expect, test } from "bun:test";
 import type { GitPullRequestSummary } from "@lifecycle/contracts";
 import type { StorageLike } from "@/features/workspaces/state/workspace-canvas-state";
 import {
+  agentTabKey,
   browserTabKey,
   changesDiffTabKey,
   clearLastWorkspaceId,
+  createAgentTab,
   createBrowserTab,
   commitDiffTabKey,
   createChangesDiffTab,
@@ -423,6 +425,63 @@ describe("workspace canvas state persistence", () => {
           "pane-root": {
             activeTabKey: browserTabKey("service:web"),
             tabOrderKeys: [browserTabKey("service:web")],
+          },
+        },
+        rootPane: {
+          id: "pane-root",
+          kind: "leaf",
+        },
+      },
+    });
+  });
+
+  test("persists agent tabs with stable session ids", () => {
+    const storage = new MemoryStorage();
+
+    writeWorkspaceCanvasState(
+      "ws-1",
+      withDefaultState({
+        activeTabKey: agentTabKey("agent_session_1"),
+        documents: [
+          createAgentTab({
+            agentSessionId: "agent_session_1",
+            backend: "claude",
+            label: "Claude",
+          }),
+        ],
+        tabOrderKeys: [agentTabKey("agent_session_1")],
+      }),
+      storage,
+    );
+
+    expect(readWorkspaceCanvasState("ws-1", storage)).toEqual(
+      withDefaultState({
+        activeTabKey: agentTabKey("agent_session_1"),
+        documents: [
+          createAgentTab({
+            agentSessionId: "agent_session_1",
+            backend: "claude",
+            label: "Claude",
+          }),
+        ],
+        tabOrderKeys: [agentTabKey("agent_session_1")],
+      }),
+    );
+    expect(JSON.parse(storage.getItem(WORKSPACE_CANVAS_STATE_STORAGE_KEY) ?? "null")).toEqual({
+      "ws-1": {
+        activePaneId: "pane-root",
+        documents: [
+          {
+            agentSessionId: "agent_session_1",
+            backend: "claude",
+            kind: "agent",
+            label: "Claude",
+          },
+        ],
+        paneTabStateById: {
+          "pane-root": {
+            activeTabKey: agentTabKey("agent_session_1"),
+            tabOrderKeys: [agentTabKey("agent_session_1")],
           },
         },
         rootPane: {

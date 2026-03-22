@@ -4,7 +4,7 @@ import {
   type GitPullRequestSummary,
   type WorkspaceRecord,
 } from "@lifecycle/contracts";
-import { Alert, AlertDescription, AlertTitle, EmptyState, Loading } from "@lifecycle/ui";
+import { EmptyState } from "@lifecycle/ui";
 import {
   useCallback,
   useEffect,
@@ -26,7 +26,6 @@ import {
   writePersistedPanelValue,
 } from "@/lib/panel-layout";
 import { OVERLAY_BOUNDARY_ATTRIBUTE } from "@/lib/overlay-boundary";
-import { toErrorEnvelope } from "@/lib/tauri-error";
 import {
   readPersistedActiveExtensionId,
   WORKSPACE_EXTENSION_PANEL_WIDTH_STORAGE_KEY,
@@ -38,10 +37,6 @@ import { getBuiltinExtensionSlots } from "@/features/extensions/builtin-extensio
 import { ExtensionPanel } from "@/features/extensions/extension-panel";
 import { useGitStatus } from "@/features/git/hooks";
 import type { ManifestStatus } from "@/features/projects/api/projects";
-import {
-  hasBlockingQueryError,
-  hasBlockingQueryLoad,
-} from "@/features/workspaces/routes/workspace-route-query-state";
 import { WorkspaceCanvas } from "@/features/workspaces/components/workspace-canvas";
 import {
   createBrowserOpenInput,
@@ -52,6 +47,7 @@ import {
 } from "@/features/workspaces/components/workspace-canvas-requests";
 import { startServices, stopServices } from "@/features/workspaces/api";
 import { useWorkspaceServices } from "@/features/workspaces/hooks";
+import { useRuntime } from "@/store";
 import { workspaceSupportsFilesystemInteraction } from "@/features/workspaces/lib/workspace-capabilities";
 import { useWorkspaceOpenRequests } from "@/features/workspaces/state/workspace-open-requests";
 
@@ -68,6 +64,7 @@ export function WorkspaceLayout({
   manifestStatus,
   onCloseWorkspaceTab,
 }: WorkspaceLayoutProps) {
+  const runtime = useRuntime();
   const workspaceLayoutRef = useRef<HTMLDivElement | null>(null);
   const [workspaceLayoutWidth, setWorkspaceLayoutWidth] = useState(0);
   const [panelWidth, setPanelWidth] = useState(() =>
@@ -87,19 +84,17 @@ export function WorkspaceLayout({
   const config = hasManifest ? manifestStatus.result.config : null;
   const manifestState = manifestStatus?.state ?? "missing";
   const supportsTerminalInteraction = workspaceSupportsFilesystemInteraction(workspace);
-  const servicesQuery = useWorkspaceServices(workspace.id);
+  const services = useWorkspaceServices(workspace.id);
   const gitStatusQuery = useGitStatus(
     supportsTerminalInteraction ? workspace.id : null,
   );
-
-  const services = servicesQuery.data;
 
   const handleRun = useCallback(
     async (serviceNames?: string[]) => {
       if (!config || !services) return;
       try {
         const manifestJson = JSON.stringify(config);
-        await startServices({
+        await startServices(runtime, {
           serviceNames,
           workspace,
           services,
@@ -111,7 +106,7 @@ export function WorkspaceLayout({
         throw err;
       }
     },
-    [config, services, workspace],
+    [config, runtime, services, workspace],
   );
 
   const handleRestart = useCallback(async () => {
@@ -121,8 +116,8 @@ export function WorkspaceLayout({
 
     try {
       const manifestJson = JSON.stringify(config);
-      await stopServices(workspace.id);
-      await startServices({
+      await stopServices(runtime, workspace.id);
+      await startServices(runtime, {
         workspace,
         services,
         manifestJson,
@@ -132,16 +127,16 @@ export function WorkspaceLayout({
       console.error("Failed to restart workspace:", err);
       throw err;
     }
-  }, [config, services, workspace]);
+  }, [config, runtime, services, workspace]);
 
   const handleStop = useCallback(async () => {
     try {
-      await stopServices(workspace.id);
+      await stopServices(runtime, workspace.id);
     } catch (err) {
       console.error("Failed to stop workspace:", err);
       throw err;
     }
-  }, [workspace.id]);
+  }, [runtime, workspace.id]);
 
   const launchActions = useMemo<WorkspaceExtensionLaunchActions>(
     () => ({
@@ -402,33 +397,7 @@ export function WorkspaceLayout({
 
   // — Early returns (after all hooks to preserve hook order) —
 
-  if (hasBlockingQueryLoad(servicesQuery)) {
-    return <Loading delay={0} message="Loading workspace services..." />;
-  }
-
-  if (hasBlockingQueryError(servicesQuery)) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <Alert className="max-w-lg" variant="destructive">
-          <AlertTitle>Failed to load services</AlertTitle>
-          <AlertDescription>{toErrorEnvelope(servicesQuery.error).message}</AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
-
-  if (services === undefined) {
-    return (
-      <div className="flex flex-1 items-center justify-center p-8">
-        <Alert className="max-w-lg" variant="destructive">
-          <AlertTitle>Workspace services missing</AlertTitle>
-          <AlertDescription>
-            Service state could not be resolved for this workspace.
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
+  // Services are loaded from TanStack DB collection (always available as an array)
 
   const canvasContent = supportsTerminalInteraction ? (
     <div className="flex min-h-0 flex-1 flex-col">

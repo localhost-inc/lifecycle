@@ -24,7 +24,6 @@ export function WorkspaceCanvas(controllerInput: WorkspaceCanvasControllerInput)
         inactivePaneOpacity={controller.inactivePaneOpacity}
         onCloseDocumentTab={controller.handleCloseDocumentTab}
         onCloseTerminalTab={controller.handleCloseTerminalTab}
-        onCreateTerminal={controller.handleCreateTerminal}
         onFileSessionStateChange={controller.handleFileSessionStateChange}
         onLaunchSurface={controller.handleLaunchSurface}
         onMoveTabToPane={controller.handleMoveTabToPane}

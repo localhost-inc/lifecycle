@@ -14,6 +14,7 @@ import {
 import { useMemo, useState } from "react";
 import type React from "react";
 import { stageGitFiles, unstageGitFiles } from "@/features/git/api";
+import { useRuntime } from "@/store";
 
 interface ChangesTabProps {
   error: unknown;
@@ -353,6 +354,7 @@ export function ChangesTab({
   onRefresh,
   workspaceId,
 }: ChangesTabProps) {
+  const runtime = useRuntime();
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [pendingMutation, setPendingMutation] = useState<PendingMutation | null>(null);
   const files = gitStatus?.files ?? [];
@@ -370,9 +372,9 @@ export function ChangesTab({
 
     try {
       if (kind === "stage") {
-        await stageGitFiles(workspaceId, filePaths);
+        await stageGitFiles(runtime, workspaceId, filePaths);
       } else {
-        await unstageGitFiles(workspaceId, filePaths);
+        await unstageGitFiles(runtime, workspaceId, filePaths);
       }
       await onRefresh();
     } catch (nextError) {

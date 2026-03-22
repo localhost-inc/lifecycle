@@ -10,6 +10,7 @@ import {
 import { workspaceFileBasename } from "@/features/workspaces/lib/workspace-file-paths";
 import { writeWorkspaceFile } from "@/features/workspaces/api";
 import { useWorkspaceFile } from "@/features/workspaces/hooks";
+import { useRuntime } from "@/store";
 import { resolveFileEditorConfig } from "@/features/explorer/lib/file-editor-config";
 import type { FileViewerMode } from "@/features/explorer/lib/file-view-mode";
 import { isFileViewerDirty, type FileViewerSessionState } from "@/features/explorer/lib/file-session";
@@ -43,6 +44,7 @@ export function FileSurface({
   sessionState,
   workspaceId,
 }: FileSurfaceProps) {
+  const runtime = useRuntime();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [mode, setMode] = useState<FileViewerMode>(() =>
     resolveInitialFileViewerMode(filePath, initialMode),
@@ -121,8 +123,8 @@ export function FileSurface({
   // Watch the file on disk for external changes instead of polling.
   const absolutePath = fileQuery.data?.absolute_path ?? null;
   const isWatchable = textContent !== null;
-  const fileRefreshRef = useRef(fileQuery.refresh);
-  fileRefreshRef.current = fileQuery.refresh;
+  const fileRefreshRef = useRef(fileQuery.refetch);
+  fileRefreshRef.current = fileQuery.refetch;
 
   useEffect(() => {
     if (!absolutePath || !isWatchable) {
@@ -204,14 +206,14 @@ export function FileSurface({
     setSaveError(null);
 
     try {
-      const result = await writeWorkspaceFile(workspaceId, displayPath, draftContent);
+      const result = await writeWorkspaceFile(runtime, workspaceId, displayPath, draftContent);
       const nextContent = result.content ?? draftContent;
       onSessionStateChange?.({
         conflictDiskContent: null,
         draftContent: nextContent,
         savedContent: nextContent,
       });
-      await fileQuery.refresh();
+      await fileQuery.refetch();
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : String(error));
     }
@@ -221,6 +223,7 @@ export function FileSurface({
     draftContent,
     fileQuery,
     onSessionStateChange,
+    runtime,
     textContent,
     workspaceId,
   ]);

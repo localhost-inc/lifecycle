@@ -1,105 +1,99 @@
-import type {
-  LifecycleEvent,
-  ServiceRecord,
-  WorkspaceRecord,
-} from "@lifecycle/contracts";
-import { useMemo } from "react";
-import type { QueryResult } from "@/query";
-import { useQuery } from "@/query";
+import type { LifecycleEvent } from "@lifecycle/contracts";
+import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import type { ManifestStatus } from "@/features/projects/api/projects";
+import { readManifest } from "@/features/projects/api/projects";
 import type {
   ServiceLogSnapshot,
   WorkspaceFileReadResult,
   WorkspaceFileTreeEntry,
 } from "@/features/workspaces/api";
 import {
-  createWorkspaceActivityQuery,
-  createWorkspaceFileQuery,
-  createWorkspaceFileTreeQuery,
-  createWorkspaceManifestQuery,
-  createWorkspaceQuery,
-  createWorkspaceServiceLogsQuery,
-  createWorkspaceServicesQuery,
-  createWorkspacesByProjectQuery,
-} from "@/features/workspaces/queries";
+  getWorkspaceActivity,
+  getWorkspaceServiceLogs,
+  listWorkspaceFiles,
+  readWorkspaceFile,
+} from "@/features/workspaces/api";
+import { workspaceKeys } from "@/features/workspaces/state/workspace-query-keys";
+import { useRuntime } from "@/store";
 
-export function useWorkspacesByProject() {
-  return useQuery(createWorkspacesByProjectQuery());
-}
-
-export function useWorkspace(workspaceId: string | null): QueryResult<WorkspaceRecord | null> {
-  const descriptor = useMemo(
-    () => (workspaceId ? createWorkspaceQuery(workspaceId) : null),
-    [workspaceId],
-  );
-
-  return useQuery(descriptor);
-}
+// Entity-data hooks are provided by TanStack DB collections via @/store
+export { useWorkspacesByProject, useWorkspace, useWorkspaceServices } from "@/store";
 
 export function useWorkspaceManifest(
   workspaceId: string | null,
   worktreePath: string | null,
-): QueryResult<ManifestStatus | null> {
-  const descriptor = useMemo(
-    () =>
-      workspaceId && worktreePath ? createWorkspaceManifestQuery(workspaceId, worktreePath) : null,
-    [workspaceId, worktreePath],
-  );
+): UseQueryResult<ManifestStatus> {
+  const runtime = useRuntime();
+  const enabled = workspaceId !== null && worktreePath !== null;
 
-  return useQuery(descriptor);
-}
-
-export function useWorkspaceServices(
-  workspaceId: string,
-): QueryResult<ServiceRecord[]> {
-  const descriptor = useMemo(() => createWorkspaceServicesQuery(workspaceId), [workspaceId]);
-
-  return useQuery(descriptor);
+  return useQuery({
+    queryKey: workspaceId
+      ? workspaceKeys.manifest(workspaceId)
+      : ["workspace-manifest", "disabled"],
+    queryFn: () => readManifest(runtime, worktreePath!),
+    enabled,
+  });
 }
 
 export function useWorkspaceFile(
   workspaceId: string | null,
   filePath: string | null,
-): QueryResult<WorkspaceFileReadResult | null> {
-  const descriptor = useMemo(
-    () => (workspaceId && filePath ? createWorkspaceFileQuery(workspaceId, filePath) : null),
-    [filePath, workspaceId],
-  );
+): UseQueryResult<WorkspaceFileReadResult> {
+  const runtime = useRuntime();
+  const enabled = workspaceId !== null && filePath !== null;
 
-  return useQuery(descriptor);
+  return useQuery({
+    queryKey:
+      workspaceId && filePath
+        ? workspaceKeys.file(workspaceId, filePath)
+        : ["workspace-file", "disabled"],
+    queryFn: () => readWorkspaceFile(runtime, workspaceId!, filePath!),
+    enabled,
+  });
 }
 
 export function useWorkspaceFileTree(
   workspaceId: string | null,
-): QueryResult<WorkspaceFileTreeEntry[] | undefined> {
-  const descriptor = useMemo(
-    () => (workspaceId ? createWorkspaceFileTreeQuery(workspaceId) : null),
-    [workspaceId],
-  );
+): UseQueryResult<WorkspaceFileTreeEntry[]> {
+  const runtime = useRuntime();
+  const enabled = workspaceId !== null;
 
-  return useQuery(descriptor);
+  return useQuery({
+    queryKey: workspaceId
+      ? workspaceKeys.fileTree(workspaceId)
+      : ["workspace-file-tree", "disabled"],
+    queryFn: () => listWorkspaceFiles(runtime, workspaceId!),
+    enabled,
+  });
 }
 
 export function useWorkspaceServiceLogs(
   workspaceId: string | null,
   options?: { enabled?: boolean },
-): QueryResult<ServiceLogSnapshot[] | undefined> {
-  const enabled = options?.enabled ?? true;
-  const descriptor = useMemo(
-    () => (workspaceId && enabled ? createWorkspaceServiceLogsQuery(workspaceId) : null),
-    [enabled, workspaceId],
-  );
+): UseQueryResult<ServiceLogSnapshot[]> {
+  const runtime = useRuntime();
+  const enabled = (options?.enabled ?? true) && workspaceId !== null;
 
-  return useQuery(descriptor);
+  return useQuery({
+    queryKey: workspaceId
+      ? workspaceKeys.serviceLogs(workspaceId)
+      : ["workspace-service-logs", "disabled"],
+    queryFn: () => getWorkspaceServiceLogs(runtime, workspaceId!),
+    enabled,
+  });
 }
 
 export function useWorkspaceActivity(
   workspaceId: string | null,
-): QueryResult<LifecycleEvent[] | undefined> {
-  const descriptor = useMemo(
-    () => (workspaceId ? createWorkspaceActivityQuery(workspaceId) : null),
-    [workspaceId],
-  );
+): UseQueryResult<LifecycleEvent[]> {
+  const runtime = useRuntime();
+  const enabled = workspaceId !== null;
 
-  return useQuery(descriptor);
+  return useQuery({
+    queryKey: workspaceId
+      ? workspaceKeys.activity(workspaceId)
+      : ["workspace-activity", "disabled"],
+    queryFn: () => getWorkspaceActivity(runtime, workspaceId!),
+    enabled,
+  });
 }

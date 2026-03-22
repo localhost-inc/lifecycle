@@ -1,14 +1,15 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { GitStatusResult } from "@lifecycle/contracts";
 import { ThemeProvider } from "@lifecycle/ui";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { QueryProvider } from "@/query";
+import { mockStoreContext } from "@/test/store-mock";
+import { ReactQueryProvider } from "@/store/react-query-provider";
 import { buildChangesPatchReloadKey, GitDiffSurface } from "@/features/git/components/git-diff-surface";
 
 function renderSurface(node: ReturnType<typeof createElement>) {
   return renderToStaticMarkup(
-    createElement(QueryProvider, {
+    createElement(ReactQueryProvider, {
       children: createElement(ThemeProvider, { children: node, storageKey: "test.theme" }),
     }),
   );
@@ -40,6 +41,9 @@ function createGitStatus(overrides: Partial<GitStatusResult> = {}): GitStatusRes
 }
 
 describe("GitDiffSurface", () => {
+  beforeEach(() => mockStoreContext());
+  afterEach(() => mock.restore());
+
   test("renders changes mode without scope controls while keeping the diff view toggle", () => {
     const markup = renderSurface(
       createElement(GitDiffSurface, {

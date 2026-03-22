@@ -13,7 +13,9 @@ import type {
   LifecycleEvent,
   ServiceRecord,
   TerminalRecord,
+  WorkspaceCheckoutType,
   WorkspaceRecord,
+  WorkspaceTarget,
 } from "@lifecycle/contracts";
 import type { HarnessLaunchConfigInput } from "./harnesses";
 
@@ -95,7 +97,7 @@ export interface SavedTerminalAttachment {
   relativePath: string;
 }
 
-export interface WorkspaceClient {
+export interface WorkspaceRuntime {
   startServices(input: StartServicesInput): Promise<ServiceRecord[]>;
   healthCheck(workspaceId: string): Promise<WorkspaceHealthResult>;
   stopServices(workspaceId: string): Promise<void>;
@@ -104,6 +106,7 @@ export interface WorkspaceClient {
   getServices(workspaceId: string): Promise<ServiceRecord[]>;
   createTerminal(input: CreateTerminalInput): Promise<TerminalRecord>;
   listTerminals(workspaceId: string): Promise<TerminalRecord[]>;
+  sendTerminalText(workspaceId: string, terminalId: string, text: string): Promise<void>;
   renameTerminal(workspaceId: string, terminalId: string, label: string): Promise<TerminalRecord>;
   saveTerminalAttachment(input: SaveTerminalAttachmentInput): Promise<SavedTerminalAttachment>;
   detachTerminal(workspaceId: string, terminalId: string): Promise<void>;
@@ -145,4 +148,33 @@ export interface WorkspaceClient {
     workspaceId: string,
     pullRequestNumber: number,
   ): Promise<GitPullRequestSummary>;
+
+  // Workspace lifecycle
+  createWorkspace(input: WorkspaceCreateInput): Promise<WorkspaceCreateResult>;
+  renameWorkspace(workspaceId: string, name: string): Promise<WorkspaceRecord>;
+  destroyWorkspace(workspaceId: string): Promise<void>;
+  readManifestText(dirPath: string): Promise<string | null>;
+  getCurrentBranch(projectPath: string): Promise<string>;
+  cleanupProject(projectId: string): Promise<void>;
+}
+
+export interface WorkspaceCreateContext {
+  target: WorkspaceTarget;
+  checkoutType?: WorkspaceCheckoutType;
+  projectId: string;
+  projectPath?: string;
+  workspaceName?: string;
+  baseRef?: string;
+  worktreeRoot?: string;
+}
+
+export interface WorkspaceCreateInput {
+  manifestJson?: string | null;
+  manifestFingerprint?: string | null;
+  context: WorkspaceCreateContext;
+}
+
+export interface WorkspaceCreateResult {
+  workspace: WorkspaceRecord;
+  worktreePath: string;
 }
