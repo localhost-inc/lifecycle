@@ -17,8 +17,8 @@ import {
   LIFECYCLE_BRIDGE_ENV,
   LIFECYCLE_BRIDGE_SESSION_TOKEN_ENV,
   LIFECYCLE_TERMINAL_ID_ENV,
+  LIFECYCLE_WORKSPACE_PATH_ENV,
   LIFECYCLE_WORKSPACE_ID_ENV,
-  LIFECYCLE_WORKTREE_PATH_ENV,
   parseManifest,
 } from "@lifecycle/contracts";
 
@@ -105,9 +105,9 @@ async function pathExists(candidatePath: string): Promise<boolean> {
 }
 
 async function findManifestPath(): Promise<string> {
-  const injectedWorktreePath = process.env[LIFECYCLE_WORKTREE_PATH_ENV];
-  if (injectedWorktreePath) {
-    const injectedManifestPath = path.join(injectedWorktreePath, "lifecycle.json");
+  const injectedWorkspacePath = process.env[LIFECYCLE_WORKSPACE_PATH_ENV];
+  if (injectedWorkspacePath) {
+    const injectedManifestPath = path.join(injectedWorkspacePath, "lifecycle.json");
     if (await pathExists(injectedManifestPath)) {
       return injectedManifestPath;
     }
@@ -132,7 +132,7 @@ async function findManifestPath(): Promise<string> {
     code: "manifest_not_found",
     message: "Lifecycle could not find lifecycle.json for this workspace command.",
     suggestedAction:
-      "Set LIFECYCLE_WORKTREE_PATH or run the command from inside a workspace worktree.",
+      "Set LIFECYCLE_WORKSPACE_PATH or run the command from inside a workspace checkout.",
   });
 }
 

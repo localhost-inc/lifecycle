@@ -4,7 +4,7 @@ Lifecycle is a desktop-first workspace runtime for local-first software work. Th
 
 ## Status
 
-Lifecycle is under active development. The current milestone is M4: local workspace environment controls and preview/service lifecycle work. Cloud, auth, organization, preview, and PR workflows are documented but not yet shipped. See [docs/plan.md](./docs/plan.md) for the live milestone board and [`.skills/reference--vision/SKILL.md`](./.skills/reference--vision/SKILL.md) for the product direction.
+Lifecycle is under active development. The current milestone is M4: local workspace environment controls and preview/service lifecycle work. Cloud, auth, organization, preview, and PR workflows are documented but not yet shipped. See [docs/plan.md](./docs/plan.md) for the live milestone board and [docs/reference/vision.md](./docs/reference/vision.md) for the product direction.
 
 This repository is public and source-available for evaluation, discussion, and limited contribution. It is not released under an OSI-approved open source license. Read [LICENSE](./LICENSE), [CONTRIBUTING.md](./CONTRIBUTING.md), and [SECURITY.md](./SECURITY.md) before reusing or contributing to the code.
 
@@ -15,7 +15,7 @@ This repository is public and source-available for evaluation, discussion, and l
 3. A landing-page surface (`apps/www`) under active development
 4. Shared packages for contracts, runtime abstractions, CLI surface, and UI primitives
 
-The desktop app currently renders a project shell with project-scoped page tabs and workspace-scoped interiors. Cross-milestone workspace, shell, runtime, preview, and vocabulary contracts live in the matching reference skills under [`.skills/reference--*/SKILL.md`](./.skills/).
+The desktop app currently renders a project shell with project-scoped page tabs and workspace-scoped interiors. Cross-milestone workspace, shell, runtime, preview, and vocabulary contracts live in the matching reference docs under [docs/reference/](./docs/reference/).
 
 ## Prerequisites
 
@@ -78,11 +78,10 @@ packages/
   backend/      Administration, auth, projects, and workspace-record contracts
   runtime/      Workspace development runtime contracts plus local/cloud adapters
   ui/           Shared UI primitives and theme tokens
-.skills/
-  reference--*/ Canonical product, runtime, UI, and infra contracts
 docs/
   plan.md       Milestone status and program-level tracking
   milestones/   Milestone implementation contracts
+  reference/    Canonical product, runtime, UI, and infra contracts
   backlog/      Deferred product/workspace ideas
   expansion/    Deferred product surfaces beyond the active milestones
 AGENTS.md       Engineering workflow, quality bar, and review rules
@@ -94,12 +93,12 @@ vendor/
 
 Start here:
 
-1. [Vision](./.skills/reference--vision/SKILL.md) for product direction and V1 boundaries
-2. [Vocabulary](./.skills/reference--vocabulary/SKILL.md) for canonical shell, project, and workspace terms
-3. [Brand](./.skills/reference--brand/SKILL.md) for voice and visual identity
+1. [Vision](./docs/reference/vision.md) for product direction and V1 boundaries
+2. [Vocabulary](./docs/reference/vocabulary.md) for canonical shell, project, and workspace terms
+3. [Brand](./docs/reference/brand.md) for voice and visual identity
 4. [Plan](./docs/plan.md) for high-level milestone tracking
 5. [Milestones](./docs/milestones) for detailed implementation contracts and acceptance scenarios
-6. [Reference Skills](./.skills/) for cross-milestone contracts
+6. [Reference Docs](./docs/reference/) for cross-milestone contracts
 7. [AGENTS.md](./AGENTS.md) for engineering workflow and review expectations
 8. [Backlog](./docs/backlog) and [Expansion](./docs/expansion) for intentionally deferred work
 

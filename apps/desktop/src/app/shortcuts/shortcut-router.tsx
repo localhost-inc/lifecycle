@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
-import { readFileSaveHotkey } from "@/features/files/lib/file-renderers";
+import { readFileSaveHotkey } from "@/features/explorer/lib/file-renderers";
 import { readWorkspaceTabHotkeyAction } from "@/features/workspaces/components/workspace-canvas-shortcuts";
 import { isEditableTarget, isMacPlatform, readAppHotkeyAction } from "@/app/app-hotkeys";
 import type { RegisteredShortcutId } from "@/app/shortcuts/shortcut-registry";
@@ -167,8 +167,8 @@ export function readRegisteredShortcutMatch(
       return readAppHotkeyAction(event, macPlatform) === "open-command-palette"
         ? { id: shortcutId }
         : null;
-    case "app.open-file-picker":
-      return readAppHotkeyAction(event, macPlatform) === "open-file-picker"
+    case "app.open-explorer":
+      return readAppHotkeyAction(event, macPlatform) === "open-explorer"
         ? { id: shortcutId }
         : null;
     case "project.go-back":

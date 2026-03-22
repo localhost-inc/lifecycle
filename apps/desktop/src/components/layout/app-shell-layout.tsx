@@ -54,7 +54,7 @@ import {
   readLastWorkspaceId,
   writeLastWorkspaceId,
 } from "@/features/workspaces/state/workspace-canvas-state";
-import { DesktopBridgeListener } from "@/features/workspaces/state/desktop-bridge-listener";
+import { BridgeListener } from "@/features/workspaces/state/bridge-listener";
 import { WorkspaceOpenRequestsProvider } from "@/features/workspaces/state/workspace-open-requests";
 import { createWorkspacesByProjectQuery } from "@/features/workspaces/queries";
 import { workspaceKeys } from "@/features/workspaces/state/workspace-query-keys";
@@ -684,7 +684,7 @@ export function AppShellLayout() {
 
   return (
     <WorkspaceOpenRequestsProvider>
-      <DesktopBridgeListener />
+      <BridgeListener />
       <WorkspaceToolbarProvider>
         <CommandPaletteProvider projects={projects} workspacesByProjectId={workspacesByProjectId}>
           <div

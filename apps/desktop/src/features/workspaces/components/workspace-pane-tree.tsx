@@ -37,7 +37,7 @@ import {
   type WorkspacePaneTabBarDragPreview,
   type WorkspacePaneTabDrag,
 } from "@/features/workspaces/components/workspace-pane-tab-bar";
-import { isFileViewerDirty, type FileViewerSessionState } from "@/features/files/lib/file-session";
+import { isFileViewerDirty, type FileViewerSessionState } from "@/features/explorer/lib/file-session";
 import type {
   WorkspacePaneNode,
   WorkspaceCanvasDocument,

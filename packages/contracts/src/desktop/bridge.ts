@@ -1,13 +1,13 @@
 import { z } from "zod";
 
-export const DESKTOP_BRIDGE_VERSION = 1;
+export const BRIDGE_VERSION = 1;
 
 export const LIFECYCLE_BRIDGE_ENV = "LIFECYCLE_BRIDGE";
 export const LIFECYCLE_BRIDGE_SESSION_TOKEN_ENV = "LIFECYCLE_BRIDGE_SESSION_TOKEN";
 export const LIFECYCLE_CLI_PATH_ENV = "LIFECYCLE_CLI_PATH";
 export const LIFECYCLE_TERMINAL_ID_ENV = "LIFECYCLE_TERMINAL_ID";
 export const LIFECYCLE_WORKSPACE_ID_ENV = "LIFECYCLE_WORKSPACE_ID";
-export const LIFECYCLE_WORKTREE_PATH_ENV = "LIFECYCLE_WORKTREE_PATH";
+export const LIFECYCLE_WORKSPACE_PATH_ENV = "LIFECYCLE_WORKSPACE_PATH";
 
 export const BridgeErrorSchema = z.object({
   code: z.string(),
@@ -114,7 +114,7 @@ export const ServiceInfoRequestSchema = z.object({
     workspaceId: z.string().optional(),
   }),
   session: BridgeSessionSchema,
-  version: z.literal(DESKTOP_BRIDGE_VERSION),
+  version: z.literal(BRIDGE_VERSION),
 });
 
 export const ServiceListRequestSchema = z.object({
@@ -124,7 +124,7 @@ export const ServiceListRequestSchema = z.object({
     workspaceId: z.string().optional(),
   }),
   session: BridgeSessionSchema,
-  version: z.literal(DESKTOP_BRIDGE_VERSION),
+  version: z.literal(BRIDGE_VERSION),
 });
 
 export const ServiceStartRequestSchema = z.object({
@@ -137,7 +137,7 @@ export const ServiceStartRequestSchema = z.object({
     workspaceId: z.string().optional(),
   }),
   session: BridgeSessionSchema,
-  version: z.literal(DESKTOP_BRIDGE_VERSION),
+  version: z.literal(BRIDGE_VERSION),
 });
 
 export const ContextRequestSchema = z.object({
@@ -147,7 +147,7 @@ export const ContextRequestSchema = z.object({
     workspaceId: z.string().optional(),
   }),
   session: BridgeSessionSchema,
-  version: z.literal(DESKTOP_BRIDGE_VERSION),
+  version: z.literal(BRIDGE_VERSION),
 });
 
 export const TabOpenRequestSchema = z.object({
@@ -163,7 +163,7 @@ export const TabOpenRequestSchema = z.object({
     workspaceId: z.string().optional(),
   }),
   session: BridgeSessionSchema,
-  version: z.literal(DESKTOP_BRIDGE_VERSION),
+  version: z.literal(BRIDGE_VERSION),
 });
 
 export const BridgeRequestSchema = z.discriminatedUnion("method", [

@@ -11,6 +11,10 @@ use super::types::{
 };
 use super::HARNESS_SESSION_CAPTURE_GRACE;
 
+fn worktree_paths_match(candidate_cwd: &str, expected_worktree_path: &str) -> bool {
+    candidate_cwd == expected_worktree_path
+}
+
 pub(crate) fn discover_harness_session_candidates(
     provider: HarnessAdapter,
     worktree_path: &str,
@@ -85,7 +89,7 @@ fn resolve_harness_session_log_path_from_tree(
             let Some((cwd, candidate_session_id)) = read_session_metadata(&path, store) else {
                 continue;
             };
-            if cwd == worktree_path && candidate_session_id == session_id {
+            if worktree_paths_match(&cwd, worktree_path) && candidate_session_id == session_id {
                 return Some(path);
             }
         }
@@ -191,7 +195,7 @@ fn collect_session_candidates_from_directory(
         let Some((cwd, session_id)) = read_session_metadata(&path, store) else {
             continue;
         };
-        if cwd != worktree_path {
+        if !worktree_paths_match(&cwd, worktree_path) {
             continue;
         }
 
@@ -244,7 +248,7 @@ fn collect_session_candidates_from_tree(
             let Some((cwd, session_id)) = read_session_metadata(&path, store) else {
                 continue;
             };
-            if cwd != worktree_path {
+            if !worktree_paths_match(&cwd, worktree_path) {
                 continue;
             }
 

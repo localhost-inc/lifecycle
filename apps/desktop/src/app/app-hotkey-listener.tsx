@@ -32,9 +32,9 @@ export function AppHotkeyListener({ onSelectProjectIndex }: AppHotkeyListenerPro
         case "open-command-palette":
           commandPalette?.toggle("commands");
           return;
-        case "open-file-picker":
-          if (commandPalette?.canOpenFiles) {
-            commandPalette.toggle("files");
+        case "open-explorer":
+          if (commandPalette?.canOpenExplorer) {
+            commandPalette.toggle("explorer");
           }
           return;
         case "select-project-index":
@@ -72,14 +72,14 @@ export function AppHotkeyListener({ onSelectProjectIndex }: AppHotkeyListenerPro
   });
 
   useShortcutRegistration({
-    enabled: shouldHandleDomAppHotkey("open-file-picker", {
+    enabled: shouldHandleDomAppHotkey("open-explorer", {
       isTauriApp: tauriApp,
       macPlatform,
     }),
     handler: () => {
-      handleEvent({ action: "open-file-picker", index: null, source: "menu" });
+      handleEvent({ action: "open-explorer", index: null, source: "menu" });
     },
-    id: "app.open-file-picker",
+    id: "app.open-explorer",
     priority: SHORTCUT_HANDLER_PRIORITY.app,
   });
 

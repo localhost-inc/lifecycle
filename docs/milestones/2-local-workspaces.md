@@ -79,7 +79,7 @@ User creates a local workspace, then clicks "Run" and watches workspace preparat
 
 ### `Backend` + `Workspace`
 
-Full interface: [`/reference--workspace`](../../.skills/reference--workspace/SKILL.md)
+Full interface: [workspace reference](../reference/workspace.md)
 
 M2 implements `Backend` + a host-backed `Workspace`:
 - `createWorkspace`: git worktree checkout

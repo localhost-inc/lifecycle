@@ -8,7 +8,7 @@ import type { CommandPaletteCommand } from "@/features/command-palette/types";
 
 interface UseCommandPaletteCommandsOptions {
   onForkWorkspace?: () => void;
-  onOpenFiles?: () => void;
+  onOpenExplorer?: () => void;
   projects: ProjectRecord[];
   workspacesByProjectId: Record<string, WorkspaceRecord[]>;
 }
@@ -16,7 +16,7 @@ interface UseCommandPaletteCommandsOptions {
 export function useCommandPaletteCommands(
   options: UseCommandPaletteCommandsOptions,
 ): CommandPaletteCommand[] {
-  const { onForkWorkspace, onOpenFiles, projects, workspacesByProjectId } = options;
+  const { onForkWorkspace, onOpenExplorer, projects, workspacesByProjectId } = options;
   const navigate = useNavigate();
   const { workspaceId } = useParams();
   const mac = isMacPlatform();
@@ -46,16 +46,16 @@ export function useCommandPaletteCommands(
     );
     const actionCommands = workspaceId
       ? [
-          ...(onOpenFiles
+          ...(onOpenExplorer
             ? [
                 {
-                  id: "action:open-file",
+                  id: "action:open-explorer",
                   category: "action",
-                  label: "Open File...",
+                  label: "Open Explorer...",
                   keywords: ["file", "path", "picker", "search"],
                   icon: File,
-                  shortcut: formatAppHotkeyLabel("open-file-picker", mac),
-                  onExecute: onOpenFiles,
+                  shortcut: formatAppHotkeyLabel("open-explorer", mac),
+                  onExecute: onOpenExplorer,
                 } satisfies CommandPaletteCommand,
               ]
             : []),
@@ -95,5 +95,5 @@ export function useCommandPaletteCommands(
       ...workspaceCommands,
       ...actionCommands,
     ];
-  }, [mac, navigate, onForkWorkspace, onOpenFiles, projects, workspaceId, workspacesByProjectId]);
+  }, [mac, navigate, onForkWorkspace, onOpenExplorer, projects, workspaceId, workspacesByProjectId]);
 }

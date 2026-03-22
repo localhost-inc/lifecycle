@@ -363,7 +363,7 @@ Required environment variables:
 1. `LIFECYCLE_WORKSPACE_ID`
 2. `LIFECYCLE_PROJECT_ID`
 3. `LIFECYCLE_TERMINAL_ID`
-4. `LIFECYCLE_WORKTREE_PATH`
+4. `LIFECYCLE_WORKSPACE_PATH`
 5. `LIFECYCLE_CLI_PATH`
 6. `LIFECYCLE_BRIDGE`
 7. `LIFECYCLE_BRIDGE_SESSION_TOKEN`
@@ -401,7 +401,7 @@ Rules:
 - **Quiet by default**: commands print only what you need. No banners, no tips, no emoji. `--verbose` for debug output.
 - **Stable `--json` contracts**: once a `--json` shape ships, it's a public API. Additive changes only.
 - **Agent-friendly, human-first**: default output is for humans. `--json` is for agents and scripts. Both are first-class.
-- **Desktop-aware when available**: commands that affect app UI go through the desktop-shell bridge, not through ad hoc browser automation.
+- **Desktop-aware when available**: commands that affect app UI go through the bridge, not through ad hoc browser automation.
 
 ## Desktop App Surface
 

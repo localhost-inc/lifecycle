@@ -234,7 +234,7 @@ Status (2026-03-13):
 #### Phase 6: Workspace Surface Split And Tab Store Normalization
 
 1. `features/workspaces` owns pane and tab orchestration only.
-2. File draft state, conflict state, save/discard prompts, and file-session bookkeeping live in `features/files`.
+2. File draft state, conflict state, save/discard prompts, and file-session bookkeeping live in `features/explorer`.
 3. Extract a controller layer from the workspace canvas host so the rendered view stays declarative and does not carry mutation authority or file-editor lifecycle.
 4. Normalize live-tab identity, document-tab identity, pane-local order, hidden terminal keys, and per-tab view state into one coherent store model.
 
@@ -248,7 +248,7 @@ Exit condition:
 
 Status (2026-03-13):
 
-1. File-session ownership for dirty state, conflict tracking, pruning, and close-confirmation copy now lives in `features/files/state/workspace-file-sessions.ts` instead of being embedded directly in the canvas host.
+1. File-session ownership for dirty state, conflict tracking, pruning, and close-confirmation copy now lives in `features/explorer/state/workspace-file-sessions.ts` instead of being embedded directly in the canvas host.
 2. `WorkspaceCanvas` now composes that file-session controller as feature-owned state while continuing to host pane/tab orchestration.
 3. `WorkspaceCanvas` now delegates live/document/pane derived state, terminal/document mutation handlers, and keyboard/native-shortcut side effects to `workspace-canvas-controller.tsx`, leaving the render component as a thin declarative shell over `WorkspacePaneTree`.
 4. Workspace-surface state now keys document tabs by `documentsByKey` internally, and the controller derives ordered document arrays for view-only consumers instead of treating the array as authoritative state.

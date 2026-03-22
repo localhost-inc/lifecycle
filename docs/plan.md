@@ -3,7 +3,7 @@
 This document is the high-level delivery tracker for Lifecycle.
 
 Implementation detail lives in milestone specs (`docs/milestones/*.md`).
-Cross-milestone contracts live in reference skills (`.skills/reference--*/SKILL.md`).
+Cross-milestone contracts live in reference docs (`docs/reference/*.md`).
 
 ## Doc Boundary (Important)
 
@@ -133,7 +133,5 @@ Backlog items are intentionally out of milestone sequencing and should not block
 - [ ] Canonical naming uses `workspace` across all layers
 - [ ] Commands, fact events, streams, hooks, and derived projections stay conceptually distinct across docs and code
 - [ ] Typed error model stays aligned with `/reference--infra`
-- [ ] State transitions stay aligned with `/reference--runtime`
-- [ ] Event foundation and command hooks stay aligned with `/reference--runtime`
 - [x] Provider boundaries stay aligned with `/reference--workspace`
 - [ ] Reliability targets stay aligned with `/reference--infra`

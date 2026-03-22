@@ -10,7 +10,7 @@ use bollard::Docker;
 use futures_util::{StreamExt, TryStreamExt};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::task::JoinHandle;
@@ -19,6 +19,39 @@ struct ManagedProcess {
     child: Child,
     log_handles: Vec<JoinHandle<()>>,
     exit_watcher: Option<JoinHandle<()>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeBindMount {
+    pub source: PathBuf,
+    pub target: PathBuf,
+    pub read_only: bool,
+}
+
+impl RuntimeBindMount {
+    pub fn new(source: PathBuf, target: PathBuf) -> Self {
+        Self {
+            source,
+            target,
+            read_only: false,
+        }
+    }
+
+    pub fn read_only(source: PathBuf, target: PathBuf) -> Self {
+        Self {
+            source,
+            target,
+            read_only: true,
+        }
+    }
+
+    fn as_bind_spec(&self) -> String {
+        let mut bind = format!("{}:{}", self.source.display(), self.target.display());
+        if self.read_only {
+            bind.push_str(":ro");
+        }
+        bind
+    }
 }
 
 pub struct Supervisor {
@@ -36,6 +69,69 @@ impl Supervisor {
             container_log_handles: HashMap::new(),
             docker: None,
         }
+    }
+
+    pub async fn ensure_sandbox_container(
+        &mut self,
+        app: &AppHandle,
+        workspace_id: &str,
+        binds: &[RuntimeBindMount],
+    ) -> Result<String, LifecycleError> {
+        const SANDBOX_KEY: &str = "__sandbox__";
+
+        if let Some(container_ref) = self.containers.get(SANDBOX_KEY) {
+            return Ok(container_ref.clone());
+        }
+
+        let docker = self.ensure_docker().await?.clone();
+        let image_ref = self.resolve_sandbox_image_ref(app).await?;
+        let container_name = format!(
+            "lifecycle-workspace-{}-sandbox",
+            sanitize_docker_name(workspace_id)
+        );
+
+        self.remove_container_if_exists(&container_name).await;
+
+        let config = Config {
+            image: Some(image_ref),
+            cmd: Some(vec!["sleep".to_string(), "infinity".to_string()]),
+            host_config: Some(bollard::service::HostConfig {
+                auto_remove: Some(true),
+                binds: (!binds.is_empty())
+                    .then(|| binds.iter().map(RuntimeBindMount::as_bind_spec).collect()),
+                ..Default::default()
+            }),
+            tty: Some(false),
+            ..Default::default()
+        };
+
+        let create_opts = CreateContainerOptions {
+            name: container_name.clone(),
+            ..Default::default()
+        };
+
+        docker
+            .create_container(Some(create_opts), config)
+            .await
+            .map_err(|error| {
+                LifecycleError::AttachFailed(format!(
+                    "failed to create docker workspace container: {error}"
+                ))
+            })?;
+
+        docker
+            .start_container::<String>(&container_name, None)
+            .await
+            .map_err(|error| {
+                LifecycleError::AttachFailed(format!(
+                    "failed to start docker workspace container: {error}"
+                ))
+            })?;
+
+        self.containers
+            .insert(SANDBOX_KEY.to_string(), container_name.clone());
+
+        Ok(container_name)
     }
 
     async fn ensure_docker(&mut self) -> Result<&Docker, LifecycleError> {
@@ -454,6 +550,57 @@ impl Supervisor {
         Ok(image_ref)
     }
 
+    async fn resolve_sandbox_image_ref(
+        &mut self,
+        app: &AppHandle,
+    ) -> Result<String, LifecycleError> {
+        const SANDBOX_IMAGE: &str = "lifecycle-sandbox:latest";
+
+        let docker = self.ensure_docker().await?.clone();
+        let inspect = docker.inspect_image(SANDBOX_IMAGE).await;
+        if inspect.is_ok() {
+            return Ok(SANDBOX_IMAGE.to_string());
+        }
+
+        let context_path = resolve_sandbox_image_context(app)?;
+        let dockerfile_path = context_path.join("Dockerfile");
+
+        let output = Command::new("docker")
+            .arg("build")
+            .arg("--tag")
+            .arg(SANDBOX_IMAGE)
+            .arg("--file")
+            .arg(&dockerfile_path)
+            .arg(&context_path)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .output()
+            .await
+            .map_err(|error| {
+                LifecycleError::AttachFailed(format!(
+                    "failed to start docker workspace image build: {error}"
+                ))
+            })?;
+
+        if output.status.success() {
+            return Ok(SANDBOX_IMAGE.to_string());
+        }
+
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let detail = if !stderr.is_empty() {
+            stderr
+        } else if !stdout.is_empty() {
+            stdout
+        } else {
+            format!("docker build exited with {}", output.status)
+        };
+
+        Err(LifecycleError::AttachFailed(format!(
+            "failed to build docker workspace image: {detail}"
+        )))
+    }
+
     fn resolve_volume_binds(
         &self,
         name: &str,
@@ -557,6 +704,34 @@ impl Supervisor {
     pub fn container_ref(&self, name: &str) -> Option<String> {
         self.containers.get(name).cloned()
     }
+}
+
+fn resolve_sandbox_image_context(app: &AppHandle) -> Result<PathBuf, LifecycleError> {
+    let source_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/docker/sandbox");
+    if source_path.exists() {
+        return source_path.canonicalize().map_err(|error| {
+            LifecycleError::AttachFailed(format!(
+                "failed to resolve docker workspace image context: {error}"
+            ))
+        });
+    }
+
+    let resource_dir = app
+        .path()
+        .resource_dir()
+        .map_err(|error| LifecycleError::AttachFailed(error.to_string()))?;
+    let bundled_path = resource_dir.join("docker/sandbox");
+    if bundled_path.exists() {
+        return bundled_path.canonicalize().map_err(|error| {
+            LifecycleError::AttachFailed(format!(
+                "failed to resolve bundled docker workspace image context: {error}"
+            ))
+        });
+    }
+
+    Err(LifecycleError::AttachFailed(
+        "docker workspace image context is missing".to_string(),
+    ))
 }
 
 fn resolve_service_env(

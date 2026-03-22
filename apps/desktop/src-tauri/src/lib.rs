@@ -110,16 +110,14 @@ pub fn run() {
                 crate::platform::app_config::resolve_config_path().expect("failed to resolve config path");
             app.manage(AppConfigPath(config_path));
 
-            let desktop_bridge = match capabilities::desktop_bridge::DesktopBridgeState::start(
-                app.handle().clone(),
-            ) {
+            let bridge = match capabilities::bridge::BridgeState::start(app.handle().clone()) {
                 Ok(bridge) => bridge,
                 Err(error) => {
-                    crate::platform::diagnostics::append_error("desktop-bridge", error);
-                    capabilities::desktop_bridge::DesktopBridgeState::disabled()
+                    crate::platform::diagnostics::append_error("bridge", error);
+                    capabilities::bridge::BridgeState::disabled()
                 }
             };
-            app.manage(desktop_bridge);
+            app.manage(bridge);
 
             if let Err(error) = capabilities::workspaces::git_watcher::start_root_git_watchers(
                 &app.handle(),
@@ -234,8 +232,8 @@ pub fn run() {
             capabilities::app::commands::get_app_config,
             capabilities::app::commands::write_app_config,
             capabilities::app::commands::get_auth_session,
-            capabilities::desktop_bridge::desktop_bridge_complete_shell_request,
-            capabilities::desktop_bridge::desktop_bridge_fail_shell_request,
+            capabilities::bridge::bridge_complete_shell_request,
+            capabilities::bridge::bridge_fail_shell_request,
             capabilities::app::commands::set_window_accepts_mouse_moved_events,
             capabilities::app::commands::set_window_pointing_cursor,
             capabilities::app::commands::get_window_mouse_position,

@@ -11,7 +11,7 @@ describe("shortcut registry", () => {
     expect(REGISTERED_SHORTCUTS.map((shortcut) => shortcut.id)).toEqual([
       "app.open-settings",
       "app.open-command-palette",
-      "app.open-file-picker",
+      "app.open-explorer",
       "project.go-back",
       "project.go-forward",
       "workspace.new-tab",

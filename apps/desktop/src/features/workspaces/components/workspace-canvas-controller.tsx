@@ -7,8 +7,8 @@ import {
   SHORTCUT_HANDLER_PRIORITY,
   useShortcutRegistration,
 } from "@/app/shortcuts/shortcut-router";
-import { recordWorkspaceFileUsage } from "@/features/files/lib/workspace-file-usage";
-import { useWorkspaceFileSessions } from "@/features/files/state/workspace-file-sessions";
+import { recordWorkspaceExplorerUsage } from "@/features/explorer/lib/workspace-explorer-usage";
+import { useWorkspaceFileSessions } from "@/features/explorer/state/workspace-file-sessions";
 import {
   createTerminal,
   detachTerminal,
@@ -255,7 +255,7 @@ export function useWorkspaceCanvasController({
     }
 
     if (openDocumentRequest.kind === "file-viewer") {
-      recordWorkspaceFileUsage(workspaceId, openDocumentRequest.filePath);
+      recordWorkspaceExplorerUsage(workspaceId, openDocumentRequest.filePath);
     }
 
     dispatch({
@@ -408,7 +408,7 @@ export function useWorkspaceCanvasController({
   const handleOpenFile = useCallback(
     (filePath: string) => {
       releaseWebviewFocus();
-      recordWorkspaceFileUsage(workspaceId, filePath);
+      recordWorkspaceExplorerUsage(workspaceId, filePath);
       dispatch({
         request: {
           filePath,

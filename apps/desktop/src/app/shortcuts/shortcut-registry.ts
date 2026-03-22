@@ -1,6 +1,6 @@
 export type RegisteredShortcutId =
   | "app.open-command-palette"
-  | "app.open-file-picker"
+  | "app.open-explorer"
   | "app.open-settings"
   | "file.save"
   | "project.go-back"
@@ -43,8 +43,8 @@ export const REGISTERED_SHORTCUTS: readonly RegisteredShortcut[] = [
     windowsLinux: "Ctrl+K",
   },
   {
-    description: "Open file picker",
-    id: "app.open-file-picker",
+    description: "Open explorer",
+    id: "app.open-explorer",
     mac: "Cmd+P",
     scope: "app",
     windowsLinux: "Ctrl+P",

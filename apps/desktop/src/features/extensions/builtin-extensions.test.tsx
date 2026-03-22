@@ -120,7 +120,7 @@ describe("builtin extension slots", () => {
 
     expect(slots.map((slot) => slot.id)).toEqual([
       "git-changes",
-      "files",
+      "explorer",
       "git-history",
       "pull-requests",
       "session-history",
@@ -128,12 +128,12 @@ describe("builtin extension slots", () => {
     ]);
 
     const changesSlot = slots.find((slot) => slot.id === "git-changes");
-    const filesSlot = slots.find((slot) => slot.id === "files");
+    const explorerSlot = slots.find((slot) => slot.id === "explorer");
     const historySlot = slots.find((slot) => slot.id === "git-history");
     const environmentSlot = slots.find((slot) => slot.id === "environment");
 
     expect(changesSlot?.ownedDocumentKinds).toBeUndefined();
-    expect(filesSlot?.ownedDocumentKinds).toBeUndefined();
+    expect(explorerSlot?.ownedDocumentKinds).toBeUndefined();
     expect(historySlot?.ownedDocumentKinds).toEqual(["commit-diff"]);
     expect(environmentSlot?.ownedDocumentKinds).toBeUndefined();
   });

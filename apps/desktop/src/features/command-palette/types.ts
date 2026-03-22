@@ -1,7 +1,7 @@
 import type { ComponentType, SVGProps } from "react";
 
 export type CommandPaletteCategory = "workspace" | "action" | "navigation";
-export type CommandPaletteMode = "commands" | "files";
+export type CommandPaletteMode = "commands" | "explorer";
 
 export interface CommandPaletteCommand {
   id: string;

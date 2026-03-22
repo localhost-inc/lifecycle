@@ -3,7 +3,7 @@ import type {
   GitPullRequestCheckSummary,
   GitPullRequestSummary,
 } from "@lifecycle/contracts";
-import type { FileViewerMode } from "@/features/files/lib/file-view-mode";
+import type { FileViewerMode } from "@/features/explorer/lib/file-view-mode";
 import {
   createWorkspacePane,
   DEFAULT_WORKSPACE_PANE_ID,

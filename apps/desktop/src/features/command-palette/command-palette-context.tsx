@@ -2,7 +2,7 @@ import { createContext, useContext } from "react";
 import type { CommandPaletteMode } from "@/features/command-palette/types";
 
 export interface CommandPaletteContextValue {
-  canOpenFiles: boolean;
+  canOpenExplorer: boolean;
   isOpen: boolean;
   mode: CommandPaletteMode;
   open: (mode?: CommandPaletteMode) => void;

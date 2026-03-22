@@ -40,9 +40,9 @@ const SessionHistoryPanel = lazy(async () => {
   return { default: module.SessionHistoryPanel };
 });
 
-const FilesPanel = lazy(async () => {
-  const module = await import("../files/components/files-panel");
-  return { default: module.FilesPanel };
+const ExplorerPanel = lazy(async () => {
+  const module = await import("../explorer/components/explorer-panel");
+  return { default: module.ExplorerPanel };
 });
 
 const EnvironmentPanel = lazy(async () => {
@@ -133,10 +133,10 @@ export function getBuiltinExtensionSlots({
     },
     {
       icon: FolderOpen,
-      id: "files",
-      label: "Files",
+      id: "explorer",
+      label: "Explorer",
       panel: (
-        <FilesPanel
+        <ExplorerPanel
           onOpenFile={launchActions.openFileViewer}
           workspaceId={workspace.id}
           workspaceTarget={workspace.target}

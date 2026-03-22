@@ -48,12 +48,12 @@ async function withEnvironment<T>(
   }
 }
 
-async function withDesktopBridge<T>(
+async function withBridge<T>(
   handler: (request: unknown) => Promise<unknown> | unknown,
   run: (bridgePath: string) => Promise<T>,
 ): Promise<T> {
   const sandboxDir = await mkdtemp(join(tmpdir(), "lifecycle-cli-bridge-"));
-  const bridgePath = join(sandboxDir, "desktop.sock");
+  const bridgePath = join(sandboxDir, "bridge.sock");
   const server = createServer((socket) => {
     let input = "";
     let responded = false;
@@ -153,7 +153,7 @@ describe("lifecycle cli", () => {
 
   test("parses tab open commands", async () => {
     const sink = createIo();
-    await withDesktopBridge(
+    await withBridge(
       (request) => {
         expect(request).toMatchObject({
           method: "tab.open",
@@ -224,7 +224,7 @@ describe("lifecycle cli", () => {
 
   test("parses service info positional arguments", async () => {
     const sink = createIo();
-    await withDesktopBridge(
+    await withBridge(
       (request) => {
         expect(request).toMatchObject({
           method: "service.info",
@@ -275,9 +275,9 @@ describe("lifecycle cli", () => {
     expect(sink.stderr).toEqual([]);
   });
 
-  test("lists services through the desktop bridge", async () => {
+  test("lists services through the bridge", async () => {
     const sink = createIo();
-    await withDesktopBridge(
+    await withBridge(
       (request) => {
         expect(request).toMatchObject({
           method: "service.list",
@@ -344,7 +344,7 @@ describe("lifecycle cli", () => {
     expect(sink.stderr).toEqual([]);
   });
 
-  test("starts services through the desktop bridge", async () => {
+  test("starts services through the bridge", async () => {
     const sink = createIo();
     const worktreePath = await mkdtemp(join(tmpdir(), "lifecycle-cli-worktree-"));
     let receivedRequest: unknown = null;
@@ -367,7 +367,7 @@ describe("lifecycle cli", () => {
     );
 
     try {
-      await withDesktopBridge(
+      await withBridge(
         (request) => {
           receivedRequest = request;
           return {
@@ -398,7 +398,7 @@ describe("lifecycle cli", () => {
             {
               LIFECYCLE_BRIDGE: bridgePath,
               LIFECYCLE_WORKSPACE_ID: "ws_123",
-              LIFECYCLE_WORKTREE_PATH: worktreePath,
+              LIFECYCLE_WORKSPACE_PATH: worktreePath,
             },
             async () => await main(["service", "start", "api"], sink.io),
           );
@@ -443,7 +443,7 @@ describe("lifecycle cli", () => {
 
   test("prints structured context by default", async () => {
     const sink = createIo();
-    await withDesktopBridge(
+    await withBridge(
       (request) => {
         expect(request).toMatchObject({
           method: "context.read",

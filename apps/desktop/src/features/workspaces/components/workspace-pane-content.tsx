@@ -5,9 +5,9 @@ import type { CreateTerminalRequest, HarnessProvider } from "@/features/terminal
 import { TerminalSurface } from "@/features/terminals/components/terminal-surface";
 import { GitDiffSurface } from "@/features/git/components/git-diff-surface";
 import { PullRequestSurface } from "@/features/git/components/pull-request-surface";
-import { FileSurface } from "@/features/files/components/file-surface";
+import { FileSurface } from "@/features/explorer/components/file-surface";
 import { BrowserSurface } from "@/features/workspaces/components/browser-surface";
-import type { FileViewerSessionState } from "@/features/files/lib/file-session";
+import type { FileViewerSessionState } from "@/features/explorer/lib/file-session";
 import {
   isBrowserDocument,
   isChangesDiffDocument,

@@ -5,7 +5,7 @@ use tauri::{AppHandle, Manager};
 
 use super::super::query::TerminalRecord;
 use super::launch::HarnessLaunchMode;
-use super::persistence::load_terminal_workspace_context;
+use super::persistence::{load_terminal_workspace_context, resolve_harness_worktree_path};
 
 const HARNESS_STATE_DIR: &str = "harness-state";
 const CODEX_STATE_DIR: &str = "codex";
@@ -69,10 +69,9 @@ pub(crate) fn resolve_harness_launch_environment(
         &app.state::<crate::platform::db::DbPath>().0,
         &terminal.workspace_id,
     )?;
-    let desktop_bridge = app.state::<crate::capabilities::desktop_bridge::DesktopBridgeState>();
-    let desktop_bridge_path = desktop_bridge.endpoint_path();
-    let desktop_session_token =
-        desktop_bridge.register_terminal_session(&terminal.workspace_id, &terminal.id);
+    let bridge = app.state::<crate::capabilities::bridge::BridgeState>();
+    let bridge_path = bridge.endpoint_path();
+    let bridge_session_token = bridge.register_terminal_session(&terminal.workspace_id, &terminal.id);
     let lifecycle_cli = app.state::<crate::platform::lifecycle_cli::LifecycleCliState>();
 
     let mut environment = Vec::new();
@@ -89,17 +88,17 @@ pub(crate) fn resolve_harness_launch_environment(
     environment.push(("LIFECYCLE_TERMINAL_ID".to_string(), terminal.id.clone()));
     if !workspace_context.worktree_path.is_empty() {
         environment.push((
-            "LIFECYCLE_WORKTREE_PATH".to_string(),
-            workspace_context.worktree_path,
+            "LIFECYCLE_WORKSPACE_PATH".to_string(),
+            resolve_harness_worktree_path(&workspace_context),
         ));
     }
-    if let Some(desktop_bridge_path) = desktop_bridge_path {
-        environment.push(("LIFECYCLE_BRIDGE".to_string(), desktop_bridge_path));
+    if let Some(bridge_path) = bridge_path {
+        environment.push(("LIFECYCLE_BRIDGE".to_string(), bridge_path));
     }
-    if let Some(desktop_session_token) = desktop_session_token {
+    if let Some(bridge_session_token) = bridge_session_token {
         environment.push((
             "LIFECYCLE_BRIDGE_SESSION_TOKEN".to_string(),
-            desktop_session_token,
+            bridge_session_token,
         ));
     }
 

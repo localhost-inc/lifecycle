@@ -13,30 +13,27 @@ This file defines engineering execution standards for agents working in this rep
 1. `README.md`
 2. `docs/plan.md` — milestone roadmap and status board
 3. `docs/milestones/*.md` — milestone specs (scope, contracts, test scenarios)
-4. `.skills/reference--*/SKILL.md` — canonical cross-milestone contracts (see Reference Skills below)
+4. `docs/reference/*.md` — canonical cross-milestone contracts (see Reference Docs below)
 
-When behavior changes and docs are now wrong, update the corresponding skill or doc in the same change.
+When behavior changes and docs are now wrong, update the corresponding reference doc in the same change.
 
-## Reference Skills
+## Reference Docs
 
-Load project reference docs as agent context using these skills. Each skill contains the full contract content inline — the skills ARE the docs.
+Canonical contract documents for each domain. Read the relevant doc before starting work that touches that domain.
 
-| Skill | Context |
+| Doc | Context |
 |---|---|
-| `/reference--brand` | Brand voice, visual identity, color, typography |
-| `/reference--design` | Component rules, surfaces, buttons, forms, motion |
-| `/reference--vocabulary` | Canonical product terminology |
-| `/reference--vision` | Product vision and strategy |
-| `/reference--testing` | Test job orchestration spec |
-| `/reference--workspace` | Workspace provider, canvas, surface, environment, files contracts |
-| `/reference--runtime` | Runtime domains, state machines, lifecycle.json, events |
-| `/reference--shell` | App shell v2 layout contract |
-| `/reference--native` | Native platform interop, compositor layering, overlay strategy |
-| `/reference--terminal` | Terminal harness, session lifecycle, log streaming, native surface sync |
-| `/reference--preview` | Local preview proxy, service routing, port assignment, URL contract |
-| `/reference--infra` | Convex API, migrations, errors, SLOs, tunnel, cloud terminal |
-
-Invoke the relevant skill before starting work that touches the corresponding domain. Skills live in `.skills/reference--*/SKILL.md` and are symlinked into `.claude/skills/` and `.codex/skills/`.
+| `docs/reference/brand.md` | Brand voice, visual identity, color, typography |
+| `docs/reference/design.md` | Component rules, surfaces, buttons, forms, motion |
+| `docs/reference/vocabulary.md` | Canonical product terminology |
+| `docs/reference/vision.md` | Product vision and strategy |
+| `docs/reference/testing.md` | Test job orchestration spec |
+| `docs/reference/workspace.md` | Workspace provider, canvas, surface, environment, files contracts |
+| `docs/reference/shell.md` | App shell v2 layout contract |
+| `docs/reference/native.md` | Native platform interop, compositor layering, overlay strategy |
+| `docs/reference/terminal.md` | Terminal harness, session lifecycle, log streaming, native surface sync |
+| `docs/reference/preview.md` | Local preview proxy, service routing, port assignment, URL contract |
+| `docs/reference/infra.md` | Convex API, migrations, errors, SLOs, tunnel, cloud terminal |
 
 ## Triage Router
 
@@ -73,25 +70,25 @@ Use this section to route work before implementation.
 
 ### Learning Capture Rules
 
-1. When a learning describes stable current state or a durable contract, fold it into the appropriate reference skill (`.skills/reference--*/SKILL.md`) or create a new one. Do not leave it as a standalone learning.
+1. When a learning describes stable current state or a durable contract, fold it into the appropriate reference doc (`docs/reference/*.md`) or create a new one. Do not leave it as a standalone learning.
 2. When a learning describes a reusable workflow or technique, propose it as a new skill in `.skills/`.
 3. Use `docs/learnings/` only for time-bound investigation notes, evaluation results, and decision records that are not yet ready to become reference docs.
 4. Use dated files named `YYYY-MM-DD-short-title.md` for learnings that do stay in the log.
 5. Periodically review `docs/learnings/` and graduate stable entries into references or archive historical ones.
-6. When graduating a learning, add a one-line header noting the skill it was folded into and the date (e.g. `> Graduated into /reference--native on 2026-03-18`).
+6. When graduating a learning, add a one-line header noting the reference doc it was folded into and the date (e.g. `> Graduated into docs/reference/native.md on 2026-03-18`).
 7. Skills should describe current shipped behavior, not planned or aspirational contracts.
 
-### Reference Skill Maintenance
+### Reference Doc Maintenance
 
-1. **When to update a skill** — when behavior ships that contradicts or extends a contract documented in the skill. Update the skill in the same change that ships the behavior.
-2. **When to create a new skill** — when 3+ learnings converge on a stable domain that has no existing skill. The domain should be non-obvious and actively iterated.
-3. **Graduation workflow** — read the learning, extract the durable contract, fold it into the appropriate skill, add a "graduated" note to the learning header. Keep the learning file for historical context.
-4. **Skill hygiene** — keep skills factual (what IS), not aspirational (what MIGHT BE). Remove milestone-specific follow-ups once the described behavior has shipped. Do not include investigation notes or evaluation details.
+1. **When to update a doc** — when behavior ships that contradicts or extends a contract documented in a reference doc. Update the doc in the same change that ships the behavior.
+2. **When to create a new doc** — when 3+ learnings converge on a stable domain that has no existing reference doc. The domain should be non-obvious and actively iterated.
+3. **Graduation workflow** — read the learning, extract the durable contract, fold it into the appropriate reference doc, add a "graduated" note to the learning header. Keep the learning file for historical context.
+4. **Doc hygiene** — keep reference docs factual (what IS), not aspirational (what MIGHT BE). Remove milestone-specific follow-ups once the described behavior has shipped. Do not include investigation notes or evaluation details.
 
 ## Engineering Invariants
 
 1. Use `workspace` as the canonical noun across code, APIs, and docs.
-2. Use the terms in `.skills/reference--vocabulary/SKILL.md` for shell, project, workspace, pane, and surface concepts; do not invent new synonyms for core concepts without updating that skill.
+2. Use the terms in `docs/reference/vocabulary.md` for shell, project, workspace, pane, and surface concepts; do not invent new synonyms for core concepts without updating that doc.
 3. Do not introduce ad-hoc state values; follow canonical state machines.
 4. Use typed errors/failure reasons; do not introduce untyped string-only failures.
 5. Preserve local-first operation for local workflows (no mandatory auth/network dependency).

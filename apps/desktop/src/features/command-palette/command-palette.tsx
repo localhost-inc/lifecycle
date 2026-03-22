@@ -9,9 +9,9 @@ const MAX_VISIBLE_RESULTS = 200;
 
 interface CommandPaletteProps {
   commands: CommandPaletteCommand[];
-  fileError: unknown;
-  fileItems: CommandPaletteCommand[];
-  fileLoading: boolean;
+  explorerError: unknown;
+  explorerItems: CommandPaletteCommand[];
+  explorerLoading: boolean;
   isOpen: boolean;
   mode: CommandPaletteMode;
   onClose: () => void;
@@ -19,27 +19,27 @@ interface CommandPaletteProps {
 
 export function CommandPalette({
   commands,
-  fileError,
-  fileItems,
-  fileLoading,
+  explorerError,
+  explorerItems,
+  explorerLoading,
   isOpen,
   mode,
   onClose,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
-  const items = mode === "files" ? fileItems : commands;
+  const items = mode === "explorer" ? explorerItems : commands;
   const filtered = filterAndSort(query, items).slice(0, MAX_VISIBLE_RESULTS);
   const grouped = mode === "commands" && query.trim().length === 0;
   const placeholder =
-    mode === "files" ? "Type a file name or path..." : "Type a command or search...";
+    mode === "explorer" ? "Type a file name or path..." : "Type a command or search...";
   const emptyMessage =
-    mode === "files"
-      ? fileLoading
-        ? "Loading workspace files..."
-        : fileError
-          ? `Failed to load workspace files: ${String(fileError)}`
-          : "No matching files found"
+    mode === "explorer"
+      ? explorerLoading
+        ? "Loading explorer..."
+        : explorerError
+          ? `Failed to load explorer: ${String(explorerError)}`
+          : "No matching explorer results found"
       : "No results found";
 
   const reset = useCallback(() => {

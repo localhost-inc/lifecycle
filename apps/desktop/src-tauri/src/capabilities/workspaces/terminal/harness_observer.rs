@@ -170,12 +170,12 @@ impl HarnessCompletionWatchContext {
                 pending_line_fragment.clear();
             }
 
-            let Some(path) = session_log_path.as_ref() else {
+            let Some(path) = session_log_path.clone() else {
                 thread::sleep(HARNESS_COMPLETION_WATCH_POLL_INTERVAL);
                 continue;
             };
 
-            match read_new_harness_log_lines(path, &mut log_offset, &mut pending_line_fragment) {
+            match read_new_harness_log_lines(&path, &mut log_offset, &mut pending_line_fragment) {
                 Ok(lines) => {
                     self.process_log_lines(
                         &lines,
@@ -202,7 +202,7 @@ impl HarnessCompletionWatchContext {
                 if !pending_line_fragment.is_empty() {
                     thread::sleep(Duration::from_millis(100));
                     if let Ok(lines) = read_new_harness_log_lines(
-                        path,
+                        &path,
                         &mut log_offset,
                         &mut pending_line_fragment,
                     ) {
@@ -555,7 +555,12 @@ fn read_new_harness_log_lines(
 
     let mut bytes = Vec::new();
     file.read_to_end(&mut bytes)?;
-    *offset = file_len;
+    // Advance offset by the actual number of bytes read rather than
+    // relying on metadata.len(). The file may have grown between the
+    // metadata() and read_to_end() calls; using the metadata length
+    // would cause the next iteration to re-read overlapping bytes and
+    // corrupt the pending line fragment.
+    *offset += bytes.len() as u64;
 
     if !bytes.is_empty() {
         pending_line_fragment.push_str(&String::from_utf8_lossy(&bytes));

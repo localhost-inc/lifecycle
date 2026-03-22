@@ -50,7 +50,7 @@ describe("readAppHotkeyAction", () => {
     ).toBe("open-command-palette");
   });
 
-  test("reads Command+P as open-file-picker on macOS", () => {
+  test("reads Command+P as open-explorer on macOS", () => {
     expect(
       readAppHotkeyAction(
         {
@@ -63,7 +63,7 @@ describe("readAppHotkeyAction", () => {
         },
         true,
       ),
-    ).toBe("open-file-picker");
+    ).toBe("open-explorer");
   });
 
   test("ignores modified or unrelated keys", () => {
@@ -101,7 +101,7 @@ describe("formatAppHotkeyLabel", () => {
   test("formats command labels with the platform modifier", () => {
     expect(formatAppHotkeyLabel("open-settings", true)).toBe("Cmd+,");
     expect(formatAppHotkeyLabel("open-command-palette", false)).toBe("Ctrl+K");
-    expect(formatAppHotkeyLabel("open-file-picker", true)).toBe("Cmd+P");
+    expect(formatAppHotkeyLabel("open-explorer", true)).toBe("Cmd+P");
   });
 });
 
@@ -124,9 +124,9 @@ describe("shouldHandleDomAppHotkey", () => {
     ).toBe(false);
   });
 
-  test("keeps file picker on the native menu path for tauri macOS", () => {
+  test("keeps explorer on the native menu path for tauri macOS", () => {
     expect(
-      shouldHandleDomAppHotkey("open-file-picker", {
+      shouldHandleDomAppHotkey("open-explorer", {
         isTauriApp: true,
         macPlatform: true,
       }),

@@ -8,9 +8,24 @@ use super::super::query::TerminalRecord;
 use super::super::rename::TitleOrigin;
 use super::launch::HarnessLaunchMode;
 
+pub(crate) const DOCKER_SANDBOX_WORKTREE_PATH: &str = "/workspace";
+
 pub(crate) struct TerminalWorkspaceContext {
     pub(crate) project_path: String,
+    pub(crate) target: String,
     pub(crate) worktree_path: String,
+}
+
+pub(crate) fn resolve_harness_worktree_path(workspace: &TerminalWorkspaceContext) -> String {
+    if workspace.target == "docker" && !workspace.worktree_path.is_empty() {
+        return DOCKER_SANDBOX_WORKTREE_PATH.to_string();
+    }
+
+    if !workspace.worktree_path.is_empty() {
+        return workspace.worktree_path.clone();
+    }
+
+    workspace.project_path.clone()
 }
 
 pub(crate) fn next_terminal_label(
@@ -175,15 +190,15 @@ pub(crate) fn load_terminal_workspace_context(
     workspace_id: &str,
 ) -> Result<TerminalWorkspaceContext, LifecycleError> {
     let conn = open_db(db_path)?;
-    let (project_path, worktree_path): (String, Option<String>) = conn
+    let (project_path, worktree_path, target): (String, Option<String>, String) = conn
         .query_row(
-            "SELECT project.path, workspace.worktree_path
+            "SELECT project.path, workspace.worktree_path, workspace.target
              FROM workspace
              INNER JOIN project ON project.id = workspace.project_id
              WHERE workspace.id = ?1
              LIMIT 1",
             params![workspace_id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
         )
         .map_err(|error| match error {
             rusqlite::Error::QueryReturnedNoRows => {
@@ -194,6 +209,7 @@ pub(crate) fn load_terminal_workspace_context(
 
     Ok(TerminalWorkspaceContext {
         project_path,
+        target,
         worktree_path: worktree_path.unwrap_or_default(),
     })
 }
@@ -272,8 +288,9 @@ mod tests {
 
     use super::super::launch::HarnessLaunchMode;
     use super::{
-        insert_terminal_record, load_terminal_harness_launch_config,
+        insert_terminal_record, load_terminal_harness_launch_config, resolve_harness_worktree_path,
         workspace_has_interactive_terminal_context, TerminalWorkspaceContext,
+        DOCKER_SANDBOX_WORKTREE_PATH,
     };
 
     fn temp_db_path() -> String {
@@ -316,6 +333,7 @@ mod tests {
         assert!(workspace_has_interactive_terminal_context(
             &TerminalWorkspaceContext {
                 project_path: String::new(),
+                target: "local".to_string(),
                 worktree_path: "/tmp/worktree".to_string(),
             }
         ));
@@ -323,9 +341,22 @@ mod tests {
         assert!(!workspace_has_interactive_terminal_context(
             &TerminalWorkspaceContext {
                 project_path: String::new(),
+                target: "cloud".to_string(),
                 worktree_path: String::new(),
             }
         ));
+    }
+
+    #[test]
+    fn resolve_harness_worktree_path_uses_workspace_mount_for_docker() {
+        assert_eq!(
+            resolve_harness_worktree_path(&TerminalWorkspaceContext {
+                project_path: "/tmp/project".to_string(),
+                target: "docker".to_string(),
+                worktree_path: "/tmp/project".to_string(),
+            }),
+            DOCKER_SANDBOX_WORKTREE_PATH,
+        );
     }
 
     #[test]

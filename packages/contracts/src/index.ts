@@ -1,6 +1,6 @@
 export type { ServiceRecord, TerminalRecord, WorkspaceRecord } from "./db";
 export {
-  DESKTOP_BRIDGE_VERSION,
+  BRIDGE_VERSION,
   BridgeErrorSchema,
   BridgeRequestSchema,
   BridgeResponseSchema,
@@ -12,8 +12,8 @@ export {
   LIFECYCLE_BRIDGE_ENV,
   LIFECYCLE_BRIDGE_SESSION_TOKEN_ENV,
   LIFECYCLE_TERMINAL_ID_ENV,
+  LIFECYCLE_WORKSPACE_PATH_ENV,
   LIFECYCLE_WORKSPACE_ID_ENV,
-  LIFECYCLE_WORKTREE_PATH_ENV,
   ServiceInfoRequestSchema,
   ServiceListRequestSchema,
   ServiceStartRequestSchema,

@@ -3,7 +3,7 @@ import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { CommandPaletteContext, type CommandPaletteContextValue } from "@/features/command-palette/command-palette-context";
 import { CommandPalette } from "@/features/command-palette/command-palette";
 import { useCommandPaletteCommands } from "@/features/command-palette/use-command-palette-commands";
-import { useCommandPaletteFiles } from "@/features/command-palette/use-command-palette-files";
+import { useCommandPaletteExplorer } from "@/features/command-palette/use-command-palette-explorer";
 import type { CommandPaletteMode } from "@/features/command-palette/types";
 
 interface CommandPaletteProviderProps {
@@ -23,23 +23,23 @@ export function CommandPaletteProvider({
     isOpen: false,
     mode: "commands",
   });
-  const files = useCommandPaletteFiles();
+  const explorer = useCommandPaletteExplorer();
   const open = useCallback(
     (mode: CommandPaletteMode = "commands") => {
-      if (mode === "files" && !files.isAvailable) {
+      if (mode === "explorer" && !explorer.isAvailable) {
         return;
       }
 
       setState({ isOpen: true, mode });
     },
-    [files.isAvailable],
+    [explorer.isAvailable],
   );
   const close = useCallback(() => {
     setState((current) => ({ ...current, isOpen: false }));
   }, []);
   const toggle = useCallback(
     (mode: CommandPaletteMode = "commands") => {
-      if (mode === "files" && !files.isAvailable) {
+      if (mode === "explorer" && !explorer.isAvailable) {
         return;
       }
 
@@ -49,25 +49,25 @@ export function CommandPaletteProvider({
           : { isOpen: true, mode },
       );
     },
-    [files.isAvailable],
+    [explorer.isAvailable],
   );
   const commands = useCommandPaletteCommands({
     onForkWorkspace,
-    onOpenFiles: files.isAvailable ? () => open("files") : undefined,
+    onOpenExplorer: explorer.isAvailable ? () => open("explorer") : undefined,
     projects,
     workspacesByProjectId,
   });
 
   const value = useMemo<CommandPaletteContextValue>(
     () => ({
-      canOpenFiles: files.isAvailable,
+      canOpenExplorer: explorer.isAvailable,
       isOpen: state.isOpen,
       mode: state.mode,
       open,
       close,
       toggle,
     }),
-    [close, files.isAvailable, open, state.isOpen, state.mode, toggle],
+    [close, explorer.isAvailable, open, state.isOpen, state.mode, toggle],
   );
 
   return (
@@ -75,9 +75,9 @@ export function CommandPaletteProvider({
       {children}
       <CommandPalette
         commands={commands}
-        fileError={files.error}
-        fileItems={files.items}
-        fileLoading={files.isLoading}
+        explorerError={explorer.error}
+        explorerItems={explorer.items}
+        explorerLoading={explorer.isLoading}
         isOpen={state.isOpen}
         mode={state.mode}
         onClose={close}

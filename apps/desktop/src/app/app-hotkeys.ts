@@ -10,7 +10,7 @@ export const APP_HOTKEY_EVENT_NAME = "app:shortcut";
 export type AppHotkeyAction =
   | "open-settings"
   | "open-command-palette"
-  | "open-file-picker"
+  | "open-explorer"
   | "select-project-index";
 
 export interface AppHotkeyEvent {
@@ -30,14 +30,14 @@ export interface AppHotkeyKeyEvent {
 
 const APP_HOTKEY_SHORTCUT_ID_BY_ACTION: Record<AppHotkeyAction, RegisteredShortcutId> = {
   "open-command-palette": "app.open-command-palette",
-  "open-file-picker": "app.open-file-picker",
+  "open-explorer": "app.open-explorer",
   "open-settings": "app.open-settings",
   "select-project-index": "project.select-index",
 };
 
 const TAURI_MAC_MENU_APP_HOTKEYS = new Set<AppHotkeyAction>([
   "open-command-palette",
-  "open-file-picker",
+  "open-explorer",
   "open-settings",
   "select-project-index",
 ]);
@@ -98,7 +98,7 @@ export function readAppHotkeyAction(
   }
 
   if (isP) {
-    return "open-file-picker";
+    return "open-explorer";
   }
 
   return null;

@@ -1,4 +1,4 @@
 pub mod app;
-pub mod desktop_bridge;
+pub mod bridge;
 pub mod projects;
 pub mod workspaces;

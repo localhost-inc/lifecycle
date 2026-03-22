@@ -6,7 +6,7 @@ import type { WorkspaceDocumentKind } from "@/features/workspaces/components/wor
 
 export type WorkspaceExtensionId =
   | "environment"
-  | "files"
+  | "explorer"
   | "git-changes"
   | "git-history"
   | "pull-requests"
