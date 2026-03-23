@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useRef, useSyncExternalStore } from "react";
+import { useMemo, useRef, useSyncExternalStore } from "react";
 import type {
+  AgentMessageWithParts,
   AgentSessionRecord,
   ProjectRecord,
   ServiceRecord,
@@ -8,12 +9,15 @@ import type {
 } from "@lifecycle/contracts";
 import type { WorkspaceRuntime } from "@lifecycle/workspace";
 import {
-  createSqlCollection,
   groupWorkspacesByProject,
-  selectAgentSessionsByWorkspace,
   type Collection,
-  type SqlCollection,
 } from "@lifecycle/store";
+import { useLiveQuery } from "@tanstack/react-db";
+import {
+  getOrCreateAgentSessionCollection,
+  refreshAgentSessionCollection,
+} from "@/store/collections/agent-sessions";
+import { getOrCreateAgentMessageCollection } from "@/store/collections/agent-messages";
 import { useStoreContext } from "@/store/provider";
 
 /**
@@ -78,6 +82,11 @@ export function useProjects(): ProjectRecord[] {
   return useCollectionArray(collections.projects.collection);
 }
 
+export function useProject(projectId: string | null): ProjectRecord | undefined {
+  const { collections } = useStoreContext();
+  return useCollectionItem(collections.projects.collection, projectId);
+}
+
 export function useWorkspaces(): WorkspaceRecord[] {
   const { collections } = useStoreContext();
   return useCollectionArray(collections.workspaces.collection);
@@ -111,25 +120,11 @@ export function useWorkspaceTerminals(workspaceId: string): TerminalRecord[] {
   );
 }
 
-// Agent sessions are loaded per-workspace since the table can grow large.
-// We use a separate SqlCollection per workspace, created on demand.
-const agentSessionCollections = new Map<string, SqlCollection<AgentSessionRecord>>();
-
 export function useAgentSessions(workspaceId: string): AgentSessionRecord[] {
   const { driver } = useStoreContext();
 
   const sqlCollection = useMemo(() => {
-    let existing = agentSessionCollections.get(workspaceId);
-    if (!existing) {
-      existing = createSqlCollection<AgentSessionRecord>({
-        id: `agent-sessions-${workspaceId}`,
-        driver,
-        loadFn: (d) => selectAgentSessionsByWorkspace(d, workspaceId),
-        getKey: (s) => s.id,
-      });
-      agentSessionCollections.set(workspaceId, existing);
-    }
-    return existing;
+    return getOrCreateAgentSessionCollection(driver, workspaceId);
   }, [driver, workspaceId]);
 
   return useCollectionArray(sqlCollection.collection);
@@ -138,12 +133,38 @@ export function useAgentSessions(workspaceId: string): AgentSessionRecord[] {
 export function useAgentSessionRefresh(workspaceId: string): () => void {
   return useMemo(() => {
     return () => {
-      const existing = agentSessionCollections.get(workspaceId);
-      if (existing) {
-        void existing.refresh();
-      }
+      refreshAgentSessionCollection(workspaceId);
     };
   }, [workspaceId]);
+}
+
+export function useAgentMessages(
+  sessionId: string,
+): { data: AgentMessageWithParts[]; error: Error | null } {
+  const { driver } = useStoreContext();
+
+  const sqlCollection = useMemo(() => {
+    return getOrCreateAgentMessageCollection(driver, sessionId);
+  }, [driver, sessionId]);
+  const baseCollection = sqlCollection.collection;
+  const collectionError = useSyncExternalStore(
+    sqlCollection.subscribeState,
+    sqlCollection.getError,
+    sqlCollection.getError,
+  );
+
+  const { data } = useLiveQuery(
+    (q) =>
+      q
+        .from({ msg: baseCollection })
+        .orderBy(({ msg }) => msg.created_at),
+    [baseCollection],
+  );
+
+  return {
+    data: data ?? [],
+    error: collectionError,
+  };
 }
 
 // ── Runtime hook ──

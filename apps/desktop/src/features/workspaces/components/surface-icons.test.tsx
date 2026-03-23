@@ -11,15 +11,14 @@ import {
 import { WorkspaceSurfaceTabLeading } from "@/features/workspaces/components/surface-icons";
 
 describe("WorkspaceSurfaceTabLeading", () => {
-  test("prefers the ready indicator over the spinner for harness tabs", () => {
+  test("prefers the ready indicator over the spinner for shell tabs", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceSurfaceTabLeading, {
         tab: {
-          harnessProvider: "claude",
           key: terminalTabKey("term-1"),
           kind: "terminal",
-          label: "Claude · auth-fix",
-          launchType: "harness",
+          label: "Terminal 1",
+          launchType: "shell",
           running: true,
           responseReady: true,
           status: "active",
@@ -28,20 +27,19 @@ describe("WorkspaceSurfaceTabLeading", () => {
       }),
     );
 
-    expect(markup).toContain('data-surface-tab-icon="claude"');
+    expect(markup).toContain('data-surface-tab-icon="shell"');
     expect(markup).toContain('title="Response ready"');
     expect(markup).not.toContain('title="active"');
   });
 
-  test("replaces the provider icon with a spinner while a harness tab is running", () => {
+  test("replaces the shell icon with a spinner while a terminal tab is running", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceSurfaceTabLeading, {
         tab: {
-          harnessProvider: "codex",
           key: terminalTabKey("term-1"),
           kind: "terminal",
-          label: "Codex · auth-fix",
-          launchType: "harness",
+          label: "Terminal 1",
+          launchType: "shell",
           running: true,
           responseReady: false,
           status: "active",
@@ -52,14 +50,13 @@ describe("WorkspaceSurfaceTabLeading", () => {
 
     expect(markup).toContain('data-slot="spinner"');
     expect(markup).toContain('title="Generating response"');
-    expect(markup).not.toContain('data-surface-tab-icon="codex"');
+    expect(markup).not.toContain('data-surface-tab-icon="shell"');
   });
 
   test("omits the spinner and status dot for inactive terminal tabs", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceSurfaceTabLeading, {
         tab: {
-          harnessProvider: null,
           key: terminalTabKey("term-2"),
           kind: "terminal",
           label: "Shell",

@@ -20,9 +20,6 @@ const ACTIVITY_KINDS: LifecycleEventKind[] = [
   "terminal.created",
   "terminal.updated",
   "terminal.status_changed",
-  "terminal.harness_turn_started",
-  "terminal.harness_turn_completed",
-  "terminal.harness_prompt_submitted",
   "service.status_changed",
 ];
 
@@ -123,9 +120,6 @@ function subscribeToInvalidations(queryClient: QueryClient): () => void {
       case "terminal.created":
       case "terminal.updated":
       case "terminal.status_changed":
-      case "terminal.harness_turn_started":
-      case "terminal.harness_turn_completed":
-      case "terminal.harness_prompt_submitted":
       case "service.status_changed":
         void queryClient.invalidateQueries({
           queryKey: ["workspace-activity"],

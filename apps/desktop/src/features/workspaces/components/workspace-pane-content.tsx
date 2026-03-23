@@ -1,7 +1,6 @@
 import type { TerminalRecord } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
 import { TerminalSquare } from "lucide-react";
-import type { HarnessProvider } from "@/features/terminals/api";
 import { TerminalSurface } from "@/features/terminals/components/terminal-surface";
 import { AgentSurface } from "@/features/agents/components/agent-surface";
 import { GitDiffSurface } from "@/features/git/components/git-diff-surface";
@@ -31,7 +30,7 @@ interface WorkspacePaneContentProps {
   activeTabKey: string | null;
   activeTabViewState: WorkspaceCanvasTabViewState | null;
   activeFileSessionState: FileViewerSessionState | null;
-  creatingSelection: "shell" | HarnessProvider | null;
+  creatingSelection: "shell" | "claude" | "codex" | null;
   documents: WorkspaceCanvasDocument[];
   hasVisibleTabs: boolean;
   onFileSessionStateChange: (tabKey: string, state: FileViewerSessionState | null) => void;

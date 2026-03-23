@@ -1,52 +1,27 @@
-use std::collections::HashSet;
-use std::sync::OnceLock;
-
 use crate::platform::db::DbPath;
 use crate::platform::native_terminal::{
     self, NativeTerminalFrame, NativeTerminalSurfaceFrameSyncRequest,
     NativeTerminalSurfaceSyncRequest,
 };
-use crate::shared::errors::{LifecycleError, TerminalFailureReason, TerminalStatus, TerminalType};
+use crate::shared::errors::{LifecycleError, TerminalStatus, TerminalType};
 use crate::WorkspaceControllerRegistryHandle;
 use tauri::{AppHandle, Manager, State, Webview};
-use tokio::sync::Mutex as TokioMutex;
 
 use super::super::query::TerminalRecord;
 use super::super::rename::TitleOrigin;
 use super::events::{emit_terminal_created, emit_terminal_status};
-use super::harness_binding::{prepare_harness_terminal, resolve_harness_launch_environment};
-use super::harness_observer::maybe_schedule_harness_observers;
 use super::launch::{
     native_terminal_command, resolve_terminal_launch, resolve_terminal_working_directory,
-    HarnessLaunchMode,
 };
 use super::native_surface::{
     parse_native_terminal_color_scheme, write_native_terminal_theme_override,
 };
 use super::persistence::{
-    insert_terminal_record, load_terminal_harness_launch_config, load_terminal_record,
-    load_terminal_workspace_context, next_terminal_label, update_terminal_state,
-    workspace_has_interactive_terminal_context,
+    insert_terminal_record, load_terminal_record, load_terminal_workspace_context,
+    next_terminal_label, update_terminal_state, workspace_has_interactive_terminal_context,
 };
 use super::types::{NativeTerminalSurfaceFrameSyncInput, NativeTerminalSurfaceSyncInput};
 use crate::capabilities::workspaces::controller::ManagedWorkspaceController;
-use crate::capabilities::workspaces::harness::HarnessLaunchConfig;
-
-/// Serializes the initial sync_surface call for harness terminals so that CLI
-/// processes start one at a time instead of racing on shared auth tokens.
-static HARNESS_LAUNCH_GATE: OnceLock<TokioMutex<()>> = OnceLock::new();
-
-/// Tracks which harness terminals have already completed their first sync
-/// (process creation). Subsequent syncs (resize, theme, visibility) skip the gate.
-static LAUNCHED_HARNESS_TERMINALS: OnceLock<std::sync::Mutex<HashSet<String>>> = OnceLock::new();
-
-fn harness_launch_gate() -> &'static TokioMutex<()> {
-    HARNESS_LAUNCH_GATE.get_or_init(|| TokioMutex::new(()))
-}
-
-fn launched_harness_terminals() -> &'static std::sync::Mutex<HashSet<String>> {
-    LAUNCHED_HARNESS_TERMINALS.get_or_init(|| std::sync::Mutex::new(HashSet::new()))
-}
 
 fn terminal_status(record: &TerminalRecord) -> Result<TerminalStatus, LifecycleError> {
     TerminalStatus::from_str(&record.status)
@@ -95,9 +70,6 @@ pub(crate) async fn create_terminal(
     db_path: State<'_, DbPath>,
     workspace_id: String,
     launch_type: String,
-    harness_provider: Option<String>,
-    harness_session_id: Option<String>,
-    harness_launch_config: Option<HarnessLaunchConfig>,
 ) -> Result<TerminalRecord, LifecycleError> {
     let db = db_path.0.clone();
     let workspace_controllers = app.state::<WorkspaceControllerRegistryHandle>();
@@ -106,47 +78,20 @@ pub(crate) async fn create_terminal(
     require_interactive_workspace_context(&db, &workspace_id, "terminal_access")?;
 
     let launch_type = TerminalType::from_str(&launch_type)?;
-    let label = next_terminal_label(
-        &db,
-        &workspace_id,
-        &launch_type,
-        harness_provider.as_deref(),
-    )?;
-    let terminal_id = uuid::Uuid::new_v4().to_string();
-    let prepared_harness_terminal = prepare_harness_terminal(
-        &app,
-        &terminal_id,
-        &launch_type,
-        harness_provider.as_deref(),
-        harness_session_id.as_deref(),
-    )?;
-    let lifecycle_cli = app.state::<crate::platform::lifecycle_cli::LifecycleCliState>();
-    let harness_instructions = matches!(launch_type, TerminalType::Harness)
-        .then(|| lifecycle_cli.render_agent_instructions());
-    resolve_terminal_launch(
-        &launch_type,
-        harness_provider.as_deref(),
-        prepared_harness_terminal.harness_session_id.as_deref(),
-        prepared_harness_terminal.harness_launch_mode,
-        harness_launch_config.as_ref(),
-        harness_instructions.as_deref(),
-    )?;
-
+    resolve_terminal_launch(&launch_type)?;
     if !native_terminal::is_available() {
         return Err(LifecycleError::AttachFailed(
             "native terminal runtime is unavailable".to_string(),
         ));
     }
 
+    let label = next_terminal_label(&db, &workspace_id)?;
+    let terminal_id = uuid::Uuid::new_v4().to_string();
     let terminal = insert_terminal_record(
         &db,
         &terminal_id,
         &workspace_id,
         &launch_type,
-        harness_provider.as_deref(),
-        prepared_harness_terminal.harness_session_id.as_deref(),
-        prepared_harness_terminal.harness_launch_mode,
-        harness_launch_config.as_ref(),
         &label,
         TitleOrigin::Default,
         TerminalStatus::Detached,
@@ -184,41 +129,14 @@ pub(crate) async fn sync_native_terminal_surface(
         lookup_workspace_controller(webview.app_handle(), &terminal.workspace_id).await;
     let _mutation_guard = controller.acquire_mutation_guard().await?;
     let launch_type = TerminalType::from_str(&terminal.launch_type)?;
-    let harness_launch_mode = HarnessLaunchMode::from_str(&terminal.harness_launch_mode)?;
-    let harness_launch_config = load_terminal_harness_launch_config(&db, &terminal.id)?;
-    let lifecycle_cli = webview
-        .app_handle()
-        .state::<crate::platform::lifecycle_cli::LifecycleCliState>();
-    let harness_instructions = matches!(launch_type, TerminalType::Harness)
-        .then(|| lifecycle_cli.render_agent_instructions());
-    let launch = resolve_terminal_launch(
-        &launch_type,
-        terminal.harness_provider.as_deref(),
-        terminal.harness_session_id.as_deref(),
-        harness_launch_mode,
-        harness_launch_config.as_ref(),
-        harness_instructions.as_deref(),
-    )?;
-    let launch_environment = resolve_harness_launch_environment(&webview.app_handle(), &terminal)?;
+    let launch = resolve_terminal_launch(&launch_type)?;
     let theme_override_path =
         write_native_terminal_theme_override(&input.theme, &input.font_family)?;
     let color_scheme = parse_native_terminal_color_scheme(&input.appearance)?;
-    let command_line = native_terminal_command(&launch_type, &launch, &launch_environment);
+    let command_line = native_terminal_command(&launch_type, &launch, &[]);
     let terminal_id_for_surface = input.terminal_id.clone();
     let theme_override_path = theme_override_path.to_string_lossy().to_string();
     let working_directory = resolve_terminal_working_directory(&workspace)?;
-
-    // Gate the first sync for each harness terminal so CLI processes start
-    // sequentially instead of racing on shared auth tokens.
-    let is_initial_harness_sync = matches!(launch_type, TerminalType::Harness) && {
-        let registry = launched_harness_terminals().lock().unwrap();
-        !registry.contains(&input.terminal_id)
-    };
-    let _harness_gate = if is_initial_harness_sync {
-        Some(harness_launch_gate().lock().await)
-    } else {
-        None
-    };
 
     native_terminal::sync_surface(
         &webview,
@@ -243,12 +161,6 @@ pub(crate) async fn sync_native_terminal_surface(
             working_directory: &working_directory,
         },
     )?;
-    maybe_schedule_harness_observers(webview.app_handle(), &db, &terminal, &working_directory);
-
-    if is_initial_harness_sync {
-        let mut registry = launched_harness_terminals().lock().unwrap();
-        registry.insert(input.terminal_id.clone());
-    }
 
     let target_status = if input.visible {
         TerminalStatus::Active
@@ -398,32 +310,11 @@ pub(crate) fn complete_native_terminal_exit(
         return Ok(());
     }
 
-    let launch_type = TerminalType::from_str(&terminal.launch_type)?;
-    let harness_launch_config = load_terminal_harness_launch_config(db_path, terminal_id)?;
-    let launch = resolve_terminal_launch(
-        &launch_type,
-        terminal.harness_provider.as_deref(),
-        terminal.harness_session_id.as_deref(),
-        HarnessLaunchMode::from_str(&terminal.harness_launch_mode)?,
-        harness_launch_config.as_ref(),
-        None,
-    )?;
-    let (status, failure_reason) = if exit_code == 0 {
-        (TerminalStatus::Finished, None)
-    } else if launch.treat_nonzero_as_failure {
-        (
-            TerminalStatus::Failed,
-            Some(TerminalFailureReason::HarnessProcessExitNonzero),
-        )
-    } else {
-        (TerminalStatus::Finished, None)
-    };
-
     let terminal = update_terminal_state(
         db_path,
         terminal_id,
-        status,
-        failure_reason.as_ref(),
+        TerminalStatus::Finished,
+        None,
         Some(exit_code),
         true,
     )?;

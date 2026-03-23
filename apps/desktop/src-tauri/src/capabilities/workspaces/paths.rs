@@ -206,7 +206,7 @@ pub(crate) fn resolve_workspace_file_path(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::platform::db::{open_db, run_migrations};
+    use crate::platform::db::{apply_test_schema, open_db};
     use std::fs;
 
     fn temp_fixture_root() -> PathBuf {
@@ -225,7 +225,7 @@ mod tests {
     }
 
     fn seed_workspace(db_path: &str, workspace_id: &str, worktree_path: &Path, target: &str) {
-        run_migrations(db_path).expect("run migrations");
+        apply_test_schema(db_path);
         let conn = open_db(db_path).expect("open db");
         conn.execute(
             "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",

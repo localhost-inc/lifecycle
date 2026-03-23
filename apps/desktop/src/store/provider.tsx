@@ -6,8 +6,8 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
+import type { AgentOrchestrator } from "@lifecycle/agents";
 import type {
-  AgentSessionRecord,
   LifecycleEvent,
   LifecycleEventKind,
   ProjectRecord,
@@ -23,7 +23,6 @@ import {
   selectAllWorkspaces,
   selectAllServices,
   selectAllTerminals,
-  selectAgentSessionsByWorkspace,
   type RuntimeRegistry,
   type SqlCollection,
   type SqlDriver,
@@ -52,6 +51,7 @@ interface StoreCollections {
 }
 
 interface StoreContextValue {
+  agentOrchestrator: AgentOrchestrator;
   collections: StoreCollections;
   driver: SqlDriver;
   runtimeRegistry: RuntimeRegistry;
@@ -121,10 +121,11 @@ function refreshForEvent(collections: StoreCollections, event: LifecycleEvent): 
 }
 
 export function StoreProvider({
+  agentOrchestrator,
   driver,
   runtime,
   children,
-}: PropsWithChildren<{ driver: SqlDriver; runtime: WorkspaceRuntime }>) {
+}: PropsWithChildren<{ agentOrchestrator: AgentOrchestrator; driver: SqlDriver; runtime: WorkspaceRuntime }>) {
   const [collections] = useState(() => createCollections(driver));
   const [runtimeRegistry] = useState(() => createHostOnlyRegistry(runtime));
 
@@ -149,8 +150,8 @@ export function StoreProvider({
   }, [collections]);
 
   const value = useMemo(
-    () => ({ collections, driver, runtimeRegistry }),
-    [collections, driver, runtimeRegistry],
+    () => ({ agentOrchestrator, collections, driver, runtimeRegistry }),
+    [agentOrchestrator, collections, driver, runtimeRegistry],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
@@ -162,4 +163,8 @@ export function useStoreContext(): StoreContextValue {
     throw new Error("StoreProvider is required");
   }
   return ctx;
+}
+
+export function useAgentOrchestrator(): AgentOrchestrator {
+  return useStoreContext().agentOrchestrator;
 }

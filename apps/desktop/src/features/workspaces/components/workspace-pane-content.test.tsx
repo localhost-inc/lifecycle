@@ -82,8 +82,6 @@ describe("WorkspacePaneContent", () => {
             ended_at: null,
             exit_code: null,
             failure_reason: null,
-            harness_provider: null,
-            harness_session_id: null,
             id: "term-1",
             label: "Shell 1",
             last_active_at: "2026-03-12T00:00:00.000Z",
@@ -199,7 +197,7 @@ describe("WorkspacePaneContent", () => {
     const { WorkspacePaneContent } = await import("./workspace-pane-content");
     const agentTab = createAgentTab({
       agentSessionId: "agent_session_1",
-      backend: "claude",
+      provider: "claude",
       label: "Claude",
     });
 
@@ -262,8 +260,6 @@ describe("WorkspacePaneContent", () => {
             ended_at: null,
             exit_code: null,
             failure_reason: null,
-            harness_provider: null,
-            harness_session_id: null,
             id: "term-1",
             label: "Shell 1",
             last_active_at: "2026-03-12T00:00:00.000Z",

@@ -1,0 +1,146 @@
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { IconButton } from "@lifecycle/ui";
+import {
+  ChevronRight,
+  FolderGit2,
+  GitBranch,
+  Megaphone,
+  PanelRightClose,
+  PanelRightOpen,
+  Settings,
+} from "lucide-react";
+import { useEffect, type MouseEvent, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  SHORTCUT_HANDLER_PRIORITY,
+  useShortcutRegistration,
+} from "@/app/shortcuts/shortcut-router";
+import { NavigationControls } from "@/components/layout/navigation-controls";
+import { getWorkspaceDisplayName } from "@/features/workspaces/lib/workspace-display";
+import { WorkspaceNavToolbar } from "@/features/workspaces/components/workspace-nav-toolbar";
+import { useWorkspaceToolbarSlot } from "@/features/workspaces/state/workspace-toolbar-context";
+import { useWorkspace } from "@/store/hooks";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { bugs } from "../../../../package.json";
+
+interface WorkspaceNavBarProps {
+  activeWorkspaceId: string;
+  projectName: string;
+}
+
+export function WorkspaceNavBar({
+  activeWorkspaceId,
+  projectName,
+}: WorkspaceNavBarProps) {
+  const navigate = useNavigate();
+  const workspace = useWorkspace(activeWorkspaceId) ?? null;
+  const toolbarSlot = useWorkspaceToolbarSlot(activeWorkspaceId);
+
+  useShortcutRegistration({
+    handler: () => {
+      window.history.back();
+    },
+    id: "project.go-back",
+    priority: SHORTCUT_HANDLER_PRIORITY.project,
+  });
+
+  useShortcutRegistration({
+    handler: () => {
+      window.history.forward();
+    },
+    id: "project.go-forward",
+    priority: SHORTCUT_HANDLER_PRIORITY.project,
+  });
+
+  const [extensionPanelCollapsed, setExtensionPanelCollapsed] = useState(false);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      setExtensionPanelCollapsed((event as CustomEvent<{ collapsed: boolean }>).detail.collapsed);
+    };
+
+    window.addEventListener("lifecycle:extension-panel-state", handler);
+    return () => window.removeEventListener("lifecycle:extension-panel-state", handler);
+  }, []);
+
+  const handleMouseDown = (event: MouseEvent<HTMLElement>) => {
+    if (event.button !== 0 || !isTauri()) {
+      return;
+    }
+
+    if (
+      (event.target as Element).closest(
+        "a, button, input, textarea, select, [role='button'], [data-no-drag]",
+      )
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (event.detail >= 2) {
+      void getCurrentWindow().toggleMaximize();
+    } else {
+      void getCurrentWindow()
+        .startDragging()
+        .catch(() => {});
+    }
+  };
+
+  const WorkspaceIcon = workspace?.checkout_type === "root" ? FolderGit2 : GitBranch;
+
+  return (
+    <header
+      className="flex h-10 shrink-0 items-stretch gap-0 bg-[var(--background)] px-0"
+      data-slot="workspace-nav-bar"
+      data-tauri-drag-region
+      onMouseDown={handleMouseDown}
+    >
+      {/* Navigation controls */}
+      <div className="flex shrink-0 items-center">
+        <NavigationControls />
+      </div>
+
+      {/* Breadcrumb: Project > Workspace */}
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 px-2">
+        <span className="truncate text-[13px] font-medium text-[var(--muted-foreground)]">
+          {projectName}
+        </span>
+        {workspace ? (
+          <>
+            <ChevronRight className="size-3.5 shrink-0 text-[var(--muted-foreground)]" strokeWidth={1.5} />
+            <WorkspaceIcon className="size-3.5 shrink-0 text-[var(--foreground)]" strokeWidth={2} />
+            <span className="truncate text-[13px] font-medium text-[var(--foreground)]">
+              {getWorkspaceDisplayName(workspace)}
+            </span>
+          </>
+        ) : null}
+      </div>
+
+      {/* Toolbar actions (run, git) + trailing icons */}
+      {toolbarSlot ? <WorkspaceNavToolbar slot={toolbarSlot} /> : null}
+      <div className="flex shrink-0 items-center gap-1 pl-1 pr-2">
+        <IconButton aria-label="Feedback" onClick={() => void openUrl(bugs.url)} title="Feedback">
+          <Megaphone size={14} strokeWidth={2} />
+        </IconButton>
+        <IconButton aria-label="Settings" onClick={() => void navigate("/settings")} title="Settings">
+          <Settings size={14} strokeWidth={2} />
+        </IconButton>
+        <IconButton
+          aria-label="Toggle extension panel"
+          onClick={() => {
+            window.dispatchEvent(new CustomEvent("lifecycle:toggle-extension-panel"));
+          }}
+          title="Toggle extension panel"
+        >
+          {extensionPanelCollapsed ? (
+            <PanelRightOpen size={16} strokeWidth={2} />
+          ) : (
+            <PanelRightClose size={16} strokeWidth={2} />
+          )}
+        </IconButton>
+      </div>
+    </header>
+  );
+}

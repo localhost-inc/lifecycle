@@ -1,4 +1,3 @@
-use crate::capabilities::workspaces::harness::HarnessLaunchConfig;
 use crate::platform::db::DbPath;
 use crate::shared::errors::LifecycleError;
 use crate::WorkspaceControllerRegistryHandle;
@@ -49,20 +48,8 @@ pub async fn create_terminal(
     db_path: State<'_, DbPath>,
     workspace_id: String,
     launch_type: String,
-    harness_provider: Option<String>,
-    harness_session_id: Option<String>,
-    harness_launch_config: Option<HarnessLaunchConfig>,
 ) -> Result<super::super::query::TerminalRecord, LifecycleError> {
-    super::super::terminal::create_terminal(
-        app,
-        db_path,
-        workspace_id,
-        launch_type,
-        harness_provider,
-        harness_session_id,
-        harness_launch_config,
-    )
-    .await
+    super::super::terminal::create_terminal(app, db_path, workspace_id, launch_type).await
 }
 
 #[tauri::command]

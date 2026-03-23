@@ -39,6 +39,11 @@ function basename(filePath: string): string {
   return segments[segments.length - 1] ?? filePath;
 }
 
+function dirname(filePath: string): string {
+  const lastSlash = filePath.lastIndexOf("/");
+  return lastSlash === -1 ? "" : filePath.slice(0, lastSlash);
+}
+
 function statusCssVar(kind: GitFileChangeKind | null): string {
   switch (kind) {
     case "added":
@@ -194,6 +199,7 @@ function FileRow({
   section: ChangesSectionKind;
 }) {
   const name = basename(file.path);
+  const dir = dirname(file.path);
   const ins = file.stats.insertions;
   const del = file.stats.deletions;
   const Icon = fileIconFor(file.path);
@@ -230,8 +236,11 @@ function FileRow({
         <Icon className="h-4 w-4" />
       </span>
 
-      <span className="min-w-0 truncate text-sm text-[var(--foreground)]" title={file.path}>
-        {name}
+      <span className="flex min-w-0 items-baseline gap-1.5">
+        <span className="shrink-0 text-sm text-[var(--foreground)]">{name}</span>
+        {dir && (
+          <span className="min-w-0 truncate text-xs text-[var(--muted-foreground)]">{dir}</span>
+        )}
       </span>
 
       <div className="ml-auto flex shrink-0 items-center">

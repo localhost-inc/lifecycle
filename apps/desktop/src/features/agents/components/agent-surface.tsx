@@ -1,95 +1,849 @@
-import { EmptyState, themeAppearance } from "@lifecycle/ui";
-import { Bot, CornerDownLeft } from "lucide-react";
+import { EmptyState, Popover, PopoverContent, PopoverTrigger, Shimmer } from "@lifecycle/ui";
+import { Bot, ChevronDown, ChevronRight, Wrench } from "lucide-react";
 import {
-  useCallback,
-  useEffect,
   useMemo,
+  useEffect,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import type {
+  AgentApprovalDecision,
+  AgentApprovalKind,
+  AgentApprovalStatus,
+  AgentArtifactType,
+  AgentMessagePart,
+  AgentToolCallStatus,
+} from "@lifecycle/agents";
 import {
-  useAgentSession,
-  useAgentSessionMessages,
-  useInvalidateAgentSessionMessages,
-} from "@/features/agents/hooks";
-import { sendDesktopAgentTextTurn } from "@/features/agents/runtime/desktop-agent-orchestrator";
-import { useAgentSessionRefresh, useRuntime } from "@/store";
-import { useLifecycleEvent } from "@/features/events";
-import {
-  syncNativeTerminalSurface,
-  type NativeTerminalTheme,
-} from "@/features/terminals/native-surface-api";
-import { useTerminalResponseReady } from "@/features/terminals/state/terminal-response-ready-provider";
-import { DEFAULT_TERMINAL_FONT_SIZE } from "@/features/terminals/terminal-display";
-import { resolveTerminalTheme } from "@/features/terminals/terminal-theme";
+  parseAgentMessagePartData,
+  type AgentMessagePartRecord,
+} from "@lifecycle/contracts";
+import { Streamdown } from "streamdown";
+import { code } from "@streamdown/code";
+import "streamdown/styles.css";
+import { createPatch } from "diff";
+import { PatchDiff } from "@pierre/diffs/react";
+import { diffTheme } from "@lifecycle/ui";
 import { useSettings } from "@/features/settings/state/settings-provider";
-import { getNativeMonospaceFontFamily } from "@/lib/typography";
-import { ClaudeIcon, CodexIcon } from "@/features/workspaces/components/surface-icons";
+import {
+  claudeEffortOptions,
+  claudeModelOptions,
+  codexModelOptions,
+  codexReasoningEffortOptions,
+  type ClaudeEffort,
+  type ClaudeModel,
+  type CodexModel,
+  type CodexReasoningEffort,
+} from "@/features/settings/state/harness-settings";
+import { DiffRenderProvider } from "@/features/git/components/diff-render-provider";
+import { useAgentSession, useAgentSessionMessages } from "@/features/agents/hooks";
+import { useAgentSessionState } from "@/features/agents/state/agent-session-state";
+import { useAgentOrchestrator } from "@/store/provider";
 
-function backendLabel(backend: "claude" | "codex"): string {
-  return backend === "claude" ? "Claude" : "Codex";
+const streamdownPlugins = { code };
+
+// ---------------------------------------------------------------------------
+// Convert DB part records → AgentMessagePart for rendering
+// ---------------------------------------------------------------------------
+
+interface ParsedMessage {
+  id: string;
+  role: string;
+  parts: AgentMessagePart[];
+  text: string;
 }
 
-function MessageIcon({
-  backend,
-  role,
-}: {
-  backend: "claude" | "codex";
-  role: "assistant" | "user";
-}) {
-  if (role === "assistant") {
-    return backend === "claude" ? <ClaudeIcon size={14} /> : <CodexIcon size={14} />;
-  }
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
 
+function partRecordToPart(record: AgentMessagePartRecord): AgentMessagePart {
+  const data = parseAgentMessagePartData(record.part_type, record.data) as Record<string, unknown> | null;
+  const readString = (key: string): string | undefined => {
+    const value = data?.[key];
+    return typeof value === "string" ? value : undefined;
+  };
+
+  switch (record.part_type) {
+    case "text":
+      return { type: "text", text: record.text ?? "" };
+    case "thinking":
+      return { type: "thinking", text: record.text ?? "" };
+    case "status":
+      return { type: "status", text: record.text ?? "" };
+    case "tool_call":
+      return {
+        type: "tool_call",
+        tool_call_id: readString("tool_call_id") ?? "",
+        tool_name: readString("tool_name") ?? "",
+        input_json: readString("input_json"),
+        output_json: readString("output_json"),
+        status: readString("status") as AgentToolCallStatus | undefined,
+        error_text: readString("error_text"),
+      };
+    case "tool_result":
+      return {
+        type: "tool_result",
+        tool_call_id: readString("tool_call_id") ?? "",
+        output_json: readString("output_json"),
+        error_text: readString("error_text"),
+      };
+    case "attachment_ref":
+      return { type: "attachment_ref", attachment_id: readString("attachment_id") ?? "" };
+    case "approval_ref":
+      return {
+        type: "approval_ref",
+        approval_id: readString("approval_id") ?? "",
+        decision: readString("decision") as AgentApprovalDecision | undefined,
+        kind: readString("kind") as AgentApprovalKind | undefined,
+        message: readString("message"),
+        metadata: (data?.metadata as Record<string, unknown> | undefined) ?? undefined,
+        status: readString("status") as AgentApprovalStatus | undefined,
+      };
+    case "artifact_ref":
+      return {
+        type: "artifact_ref",
+        artifact_id: readString("artifact_id") ?? "",
+        artifact_type: readString("artifact_type") as AgentArtifactType | undefined,
+        title: readString("title"),
+        uri: readString("uri"),
+      };
+    default:
+      return { type: "text", text: record.text ?? "" };
+  }
+}
+
+function createTurnId(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `agent-turn-${Date.now()}`;
+}
+
+// ---------------------------------------------------------------------------
+// Part renderers
+// ---------------------------------------------------------------------------
+
+function TextPart({ text, isStreaming }: { text: string; isStreaming?: boolean }) {
   return (
-    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--surface-hover)] text-[10px] font-semibold uppercase text-[var(--muted-foreground)]">
-      U
-    </span>
+    <Streamdown
+      className="agent-streamdown min-w-0 text-[13px] leading-6 text-[var(--foreground)]"
+      mode={isStreaming ? "streaming" : "static"}
+      isAnimating={isStreaming}
+      plugins={streamdownPlugins}
+      lineNumbers={false}
+    >
+      {text}
+    </Streamdown>
   );
 }
 
-function roleLabel(
-  backend: "claude" | "codex",
-  role: "assistant" | "user",
-): { label: string; tone: string } {
-  if (role === "assistant") {
-    return {
-      label: backendLabel(backend).toLowerCase(),
-      tone: "text-[var(--accent-foreground)]",
-    };
-  }
+function ThinkingPart({ text, isStreaming }: { text: string; isStreaming?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const startRef = useRef(Date.now());
+  const [elapsed, setElapsed] = useState(0);
 
-  return {
-    label: "you",
-    tone: "text-[var(--muted-foreground)]",
-  };
+  useEffect(() => {
+    if (isStreaming) {
+      startRef.current = Date.now();
+      const interval = setInterval(() => {
+        setElapsed(Math.round((Date.now() - startRef.current) / 1000));
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+    setElapsed(Math.round((Date.now() - startRef.current) / 1000));
+  }, [isStreaming]);
+
+  const label = isStreaming
+    ? `thinking${elapsed > 0 ? ` ${elapsed}s` : ""}`
+    : `thought for ${Math.max(elapsed, 1)}s`;
+
+  return (
+    <div className="my-1">
+      <button
+        className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+        onClick={() => setOpen(!open)}
+        type="button"
+      >
+        <ChevronRight
+          className={["size-3 transition-transform", open ? "rotate-90" : ""].join(" ")}
+        />
+        <span className={isStreaming ? "agent-cursor-blink" : ""}>{label}</span>
+      </button>
+      {open ? (
+        <pre className="mt-1 whitespace-pre-wrap break-words border-l-2 border-[var(--border)] pl-3 text-[12px] leading-5 text-[var(--muted-foreground)]">
+          {text}
+        </pre>
+      ) : null}
+    </div>
+  );
 }
 
-function readHiddenTerminalTheme(resolvedTheme: ReturnType<typeof useSettings>["resolvedTheme"]): {
-  appearance: "dark" | "light";
-  theme: NativeTerminalTheme;
-} {
-  if (typeof document === "undefined") {
-    return {
-      appearance: "dark",
-      theme: {
-        background: "#111113",
-        cursorColor: "#87b2cf",
-        foreground: "#fafaf9",
-        palette: [],
-        selectionBackground: "#27272a",
-        selectionForeground: "#fafaf9",
-      },
-    };
+function extractToolMeta(toolName: string, inputJson?: string): string | null {
+  if (!inputJson) return null;
+  try {
+    const input = JSON.parse(inputJson) as Record<string, unknown>;
+    switch (toolName) {
+      case "Read":
+      case "Write":
+      case "Edit":
+        return typeof input.file_path === "string" ? input.file_path.replace(/.*\//, "") : null;
+      case "Glob":
+      case "Grep":
+        return typeof input.pattern === "string" ? input.pattern : null;
+      case "Bash":
+        return typeof input.command === "string"
+          ? (input.command.length > 60 ? `${input.command.slice(0, 57)}...` : input.command)
+          : null;
+      case "Agent":
+        return typeof input.subagent_type === "string"
+          ? input.subagent_type
+          : typeof input.description === "string"
+            ? input.description
+            : null;
+      default:
+        return null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+function buildEditPatch(inputJson: string): string | null {
+  try {
+    const input = JSON.parse(inputJson) as Record<string, unknown>;
+    const filePath = typeof input.file_path === "string" ? input.file_path : "file";
+    const oldStr = typeof input.old_string === "string" ? input.old_string : "";
+    const newStr = typeof input.new_string === "string" ? input.new_string : "";
+    if (!oldStr && !newStr) return null;
+    return createPatch(filePath, oldStr, newStr, "", "", { context: 3 });
+  } catch {
+    return null;
+  }
+}
+
+function EditDiffView({ inputJson }: { inputJson: string }) {
+  const patch = buildEditPatch(inputJson);
+  if (!patch) return null;
+
+  return (
+    <div className="mt-1 overflow-hidden rounded border border-[var(--border)] text-[12px]">
+      <PatchDiff patch={patch} />
+    </div>
+  );
+}
+
+function extractAgentPrompt(inputJson?: string): string | null {
+  if (!inputJson) return null;
+  try {
+    const input = JSON.parse(inputJson) as Record<string, unknown>;
+    return typeof input.prompt === "string" ? input.prompt : null;
+  } catch {
+    return null;
+  }
+}
+
+function ToolCallPart({ toolName, inputJson }: { toolName: string; inputJson?: string }) {
+  const meta = extractToolMeta(toolName, inputJson);
+  const [open, setOpen] = useState(false);
+  const hasEditDiff = toolName === "Edit" && inputJson;
+  const agentPrompt = toolName === "Agent" ? extractAgentPrompt(inputJson) : null;
+  const isExpandable = hasEditDiff || agentPrompt;
+
+  return (
+    <div className="my-1">
+      <button
+        className="flex items-center gap-1.5 text-[12px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+        onClick={() => isExpandable && setOpen(!open)}
+        type="button"
+      >
+        <Wrench className="size-3 shrink-0" />
+        <span className="font-semibold">{toolName}</span>
+        {meta ? (
+          <span className="truncate text-[var(--muted-foreground)]/50">{meta}</span>
+        ) : null}
+        {isExpandable ? (
+          <ChevronRight
+            className={["size-3 shrink-0 transition-transform", open ? "rotate-90" : ""].join(" ")}
+          />
+        ) : null}
+      </button>
+      {open && hasEditDiff ? <EditDiffView inputJson={inputJson} /> : null}
+      {open && agentPrompt ? (
+        <pre className="mt-1 whitespace-pre-wrap break-words border-l-2 border-[var(--border)] pl-3 text-[12px] leading-5 text-[var(--muted-foreground)]">
+          {agentPrompt}
+        </pre>
+      ) : null}
+    </div>
+  );
+}
+
+function StatusPart({ text }: { text: string }) {
+  return (
+    <div className="text-[11px] text-[var(--muted-foreground)]/70">
+      {text}
+    </div>
+  );
+}
+
+interface ApprovalQuestionOption {
+  description?: string;
+  label: string;
+  preview?: string;
+}
+
+interface ApprovalQuestionPrompt {
+  header: string;
+  id?: string;
+  multiSelect?: boolean;
+  options: ApprovalQuestionOption[];
+  question: string;
+}
+
+function parseApprovalQuestions(metadata: Record<string, unknown> | null | undefined): ApprovalQuestionPrompt[] {
+  const questions = metadata?.questions;
+  if (!Array.isArray(questions)) {
+    return [];
   }
 
-  const theme = resolveTerminalTheme(document.documentElement, resolvedTheme);
-  return {
-    appearance: themeAppearance(resolvedTheme),
-    theme,
-  };
+  return questions.flatMap((question): ApprovalQuestionPrompt[] => {
+    if (!question || typeof question !== "object" || Array.isArray(question)) {
+      return [];
+    }
+    const questionRecord = question as Record<string, unknown>;
+    const prompt = typeof questionRecord.question === "string" ? questionRecord.question : "";
+    const header = typeof questionRecord.header === "string" ? questionRecord.header : prompt;
+    const options = Array.isArray(questionRecord.options)
+      ? questionRecord.options.flatMap((option): ApprovalQuestionOption[] => {
+          if (!option || typeof option !== "object" || Array.isArray(option)) {
+            return [];
+          }
+          const optionRecord = option as Record<string, unknown>;
+          return typeof optionRecord.label === "string"
+            ? [{
+                label: optionRecord.label,
+                description:
+                  typeof optionRecord.description === "string" ? optionRecord.description : undefined,
+                preview: typeof optionRecord.preview === "string" ? optionRecord.preview : undefined,
+              }]
+            : [];
+        })
+      : [];
+
+    if (!prompt || options.length === 0) {
+      return [];
+    }
+
+    return [{
+      header,
+      id: typeof questionRecord.id === "string" ? questionRecord.id : undefined,
+      multiSelect: questionRecord.multiSelect === true,
+      options,
+      question: prompt,
+    }];
+  });
 }
+
+function ApprovalSummary({ part }: { part: Extract<AgentMessagePart, { type: "approval_ref" }> }) {
+  const statusLabel =
+    part.status === "approved_session"
+      ? "approved for session"
+      : part.status === "approved_once"
+        ? "approved"
+        : part.status === "rejected"
+          ? "rejected"
+          : part.status ?? "pending";
+
+  return (
+    <div className="my-2 rounded border border-[var(--border)] bg-[var(--surface-hover)]/40 px-3 py-2 text-[12px]">
+      <div className="font-medium text-[var(--foreground)]">{part.message ?? "Approval request"}</div>
+      <div className="mt-1 text-[var(--muted-foreground)]">{statusLabel}</div>
+    </div>
+  );
+}
+
+function ApprovalQuestionCard({
+  disabled,
+  onResolve,
+  part,
+}: {
+  disabled: boolean;
+  onResolve: (decision: AgentApprovalDecision, response?: Record<string, unknown> | null) => Promise<void>;
+  part: Extract<AgentMessagePart, { type: "approval_ref" }>;
+}) {
+  const questions = parseApprovalQuestions(part.metadata);
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string[]>>({});
+  const [otherAnswers, setOtherAnswers] = useState<Record<string, string>>({});
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  async function handleSubmit(): Promise<void> {
+    const answers: Record<string, string> = {};
+
+    for (const prompt of questions) {
+      const answerKey = prompt.id ?? prompt.question;
+      const otherAnswer = otherAnswers[prompt.question]?.trim();
+      if (otherAnswer) {
+        answers[answerKey] = otherAnswer;
+        continue;
+      }
+
+      const selected = selectedAnswers[prompt.question] ?? [];
+      if (selected.length === 0) {
+        setLocalError(`Select an answer for "${prompt.header}".`);
+        return;
+      }
+      answers[answerKey] = selected.join(", ");
+    }
+
+    setLocalError(null);
+    await onResolve("approve_once", {
+      answers,
+      questions: questions.map((question) => ({
+        header: question.header,
+        id: question.id,
+        multiSelect: question.multiSelect === true,
+        options: question.options.map((option) => ({
+          description: option.description,
+          label: option.label,
+          ...(option.preview ? { preview: option.preview } : {}),
+        })),
+        question: question.question,
+      })),
+    });
+  }
+
+  return (
+    <div className="my-2 rounded border border-[var(--border)] bg-[var(--surface-hover)]/40 px-3 py-3 text-[12px]">
+      <div className="font-medium text-[var(--foreground)]">{part.message ?? "Claude needs input"}</div>
+      <div className="mt-3 space-y-3">
+        {questions.map((prompt) => {
+          const selected = selectedAnswers[prompt.question] ?? [];
+          return (
+            <div key={prompt.question}>
+              <div className="mb-2 text-[var(--foreground)]">{prompt.question}</div>
+              <div className="space-y-1.5">
+                {prompt.options.map((option) => {
+                  const checked = selected.includes(option.label);
+                  return (
+                    <label
+                      key={option.label}
+                      className="flex cursor-pointer items-start gap-2 rounded border border-[var(--border)] px-2 py-1.5"
+                    >
+                      <input
+                        checked={checked}
+                        disabled={disabled}
+                        onChange={(event) => {
+                          const nextSelected = selected.filter((value) => value !== option.label);
+                          const value = event.target.checked
+                            ? [...nextSelected, option.label]
+                            : nextSelected;
+                          setSelectedAnswers((prev) => ({
+                            ...prev,
+                            [prompt.question]: prompt.multiSelect ? value : value.slice(-1),
+                          }));
+                        }}
+                        type={prompt.multiSelect ? "checkbox" : "radio"}
+                      />
+                      <div>
+                        <div className="text-[var(--foreground)]">{option.label}</div>
+                        {option.description ? (
+                          <div className="text-[var(--muted-foreground)]">{option.description}</div>
+                        ) : null}
+                      </div>
+                    </label>
+                  );
+                })}
+                <input
+                  className="w-full rounded border border-[var(--border)] bg-transparent px-2 py-1.5 text-[12px] text-[var(--foreground)] outline-none"
+                  disabled={disabled}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setOtherAnswers((prev) => ({ ...prev, [prompt.question]: value }));
+                  }}
+                  placeholder="Other"
+                  value={otherAnswers[prompt.question] ?? ""}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {localError ? <div className="mt-2 text-[var(--destructive)]">{localError}</div> : null}
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          className="rounded border border-[var(--border)] px-2 py-1 text-[var(--foreground)] disabled:opacity-50"
+          disabled={disabled}
+          onClick={() => void handleSubmit()}
+          type="button"
+        >
+          Continue
+        </button>
+        <button
+          className="rounded border border-[var(--border)] px-2 py-1 text-[var(--muted-foreground)] disabled:opacity-50"
+          disabled={disabled}
+          onClick={() => void onResolve("reject")}
+          type="button"
+        >
+          Reject
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ApprovalElicitationCard({
+  disabled,
+  onResolve,
+  part,
+}: {
+  disabled: boolean;
+  onResolve: (decision: AgentApprovalDecision, response?: Record<string, unknown> | null) => Promise<void>;
+  part: Extract<AgentMessagePart, { type: "approval_ref" }>;
+}) {
+  const [jsonDraft, setJsonDraft] = useState("{}");
+  const [localError, setLocalError] = useState<string | null>(null);
+  const metadata = part.metadata;
+  const url = typeof metadata?.url === "string" ? metadata.url : null;
+  const requestedSchema = isRecord(metadata?.requested_schema) ? metadata.requested_schema : null;
+
+  async function handleSubmit(): Promise<void> {
+    if (!requestedSchema) {
+      setLocalError(null);
+      await onResolve("approve_once");
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(jsonDraft) as unknown;
+      if (!isRecord(parsed)) {
+        throw new Error("Response must be a JSON object.");
+      }
+      setLocalError(null);
+      await onResolve("approve_once", parsed);
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : "Invalid JSON response.");
+    }
+  }
+
+  return (
+    <div className="my-2 rounded border border-[var(--border)] bg-[var(--surface-hover)]/40 px-3 py-3 text-[12px]">
+      <div className="font-medium text-[var(--foreground)]">{part.message ?? "Input required"}</div>
+      {url ? (
+        <a
+          className="mt-2 inline-block text-[var(--accent)] underline"
+          href={url}
+          rel="noreferrer"
+          target="_blank"
+        >
+          Open requested URL
+        </a>
+      ) : null}
+      {requestedSchema ? (
+        <textarea
+          className="mt-3 min-h-[96px] w-full rounded border border-[var(--border)] bg-transparent px-2 py-1.5 font-[var(--font-mono)] text-[11px] text-[var(--foreground)] outline-none"
+          disabled={disabled}
+          onChange={(event) => setJsonDraft(event.target.value)}
+          value={jsonDraft}
+        />
+      ) : null}
+      {localError ? <div className="mt-2 text-[var(--destructive)]">{localError}</div> : null}
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          className="rounded border border-[var(--border)] px-2 py-1 text-[var(--foreground)] disabled:opacity-50"
+          disabled={disabled}
+          onClick={() => void handleSubmit()}
+          type="button"
+        >
+          Continue
+        </button>
+        <button
+          className="rounded border border-[var(--border)] px-2 py-1 text-[var(--muted-foreground)] disabled:opacity-50"
+          disabled={disabled}
+          onClick={() => void onResolve("reject")}
+          type="button"
+        >
+          Reject
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ApprovalToolCard({
+  disabled,
+  onResolve,
+  part,
+}: {
+  disabled: boolean;
+  onResolve: (decision: AgentApprovalDecision, response?: Record<string, unknown> | null) => Promise<void>;
+  part: Extract<AgentMessagePart, { type: "approval_ref" }>;
+}) {
+  const metadata = part.metadata;
+  const toolName = typeof metadata?.tool_name === "string" ? metadata.tool_name : null;
+  const input = metadata?.input;
+  const command = isRecord(input) && typeof input.command === "string" ? input.command : null;
+  const filePath = isRecord(input) && typeof input.file_path === "string" ? input.file_path : null;
+  const suggestions =
+    Array.isArray(metadata?.suggestions) && metadata.suggestions.length > 0;
+
+  return (
+    <div className="my-2 rounded border border-[var(--border)] bg-[var(--surface-hover)]/40 px-3 py-3 text-[12px]">
+      <div className="font-medium text-[var(--foreground)]">{part.message ?? "Approval required"}</div>
+      {toolName ? <div className="mt-1 text-[var(--muted-foreground)]">Tool: {toolName}</div> : null}
+      {command ? (
+        <pre className="mt-2 whitespace-pre-wrap break-words rounded border border-[var(--border)] px-2 py-1.5 text-[11px] text-[var(--foreground)]">
+          {command}
+        </pre>
+      ) : null}
+      {filePath ? <div className="mt-2 text-[var(--muted-foreground)]">{filePath}</div> : null}
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          className="rounded border border-[var(--border)] px-2 py-1 text-[var(--foreground)] disabled:opacity-50"
+          disabled={disabled}
+          onClick={() => void onResolve("approve_once")}
+          type="button"
+        >
+          Approve once
+        </button>
+        {suggestions ? (
+          <button
+            className="rounded border border-[var(--border)] px-2 py-1 text-[var(--foreground)] disabled:opacity-50"
+            disabled={disabled}
+            onClick={() => void onResolve("approve_session")}
+            type="button"
+          >
+            Approve session
+          </button>
+        ) : null}
+        <button
+          className="rounded border border-[var(--border)] px-2 py-1 text-[var(--muted-foreground)] disabled:opacity-50"
+          disabled={disabled}
+          onClick={() => void onResolve("reject")}
+          type="button"
+        >
+          Reject
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ApprovalRefPart({
+  onResolve,
+  part,
+  resolving,
+}: {
+  onResolve?: (approvalId: string, decision: AgentApprovalDecision, response?: Record<string, unknown> | null) => Promise<void>;
+  part: Extract<AgentMessagePart, { type: "approval_ref" }>;
+  resolving: boolean;
+}) {
+  const isPending = part.status === "pending" && !part.decision;
+  if (!isPending || !onResolve) {
+    return <ApprovalSummary part={part} />;
+  }
+
+  const questions = parseApprovalQuestions(part.metadata);
+  if (part.kind === "question" && questions.length > 0) {
+    return (
+      <ApprovalQuestionCard
+        disabled={resolving}
+        onResolve={(decision, response) => onResolve(part.approval_id, decision, response)}
+        part={part}
+      />
+    );
+  }
+
+  if (part.kind === "question") {
+    return (
+      <ApprovalElicitationCard
+        disabled={resolving}
+        onResolve={(decision, response) => onResolve(part.approval_id, decision, response)}
+        part={part}
+      />
+    );
+  }
+
+  return (
+    <ApprovalToolCard
+      disabled={resolving}
+      onResolve={(decision, response) => onResolve(part.approval_id, decision, response)}
+      part={part}
+    />
+  );
+}
+
+function MessagePartRenderer({
+  onResolveApproval,
+  part,
+  resolvingApprovalIds,
+  isStreaming,
+}: {
+  onResolveApproval?: (approvalId: string, decision: AgentApprovalDecision, response?: Record<string, unknown> | null) => Promise<void>;
+  part: AgentMessagePart;
+  resolvingApprovalIds?: ReadonlySet<string>;
+  isStreaming?: boolean;
+}) {
+  switch (part.type) {
+    case "text":
+      return <TextPart text={part.text} isStreaming={isStreaming} />;
+    case "thinking":
+      return <ThinkingPart text={part.text} isStreaming={isStreaming} />;
+    case "status":
+      return <StatusPart text={part.text} />;
+    case "tool_call":
+      return <ToolCallPart toolName={part.tool_name} inputJson={part.input_json} />;
+    case "tool_result":
+    case "attachment_ref":
+    case "artifact_ref":
+      return null;
+    case "approval_ref":
+      return (
+        <ApprovalRefPart
+          onResolve={onResolveApproval}
+          part={part}
+          resolving={resolvingApprovalIds?.has(part.approval_id) ?? false}
+        />
+      );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Message renderers — single path, reads from DB collection
+// ---------------------------------------------------------------------------
+
+function UserMessage({ message }: { message: ParsedMessage }) {
+  const text = message.parts
+    .filter((p) => p.type === "text")
+    .map((p) => (p as { text: string }).text)
+    .join("");
+
+  return (
+    <div className="-mx-4 my-1 bg-[var(--surface-hover)]/50 px-4 py-3">
+      <div className="flex items-start gap-2">
+        <span className="shrink-0 pt-[3px] text-[13px] text-[var(--accent)]">&#9654;</span>
+        <pre className="min-w-0 whitespace-pre-wrap break-words text-[13px] leading-6 text-[var(--foreground)]">
+          {text}
+        </pre>
+      </div>
+    </div>
+  );
+}
+
+function AssistantMessage({
+  message,
+  isStreaming,
+  onResolveApproval,
+  resolvingApprovalIds,
+}: {
+  message: ParsedMessage;
+  isStreaming?: boolean;
+  onResolveApproval?: (approvalId: string, decision: AgentApprovalDecision, response?: Record<string, unknown> | null) => Promise<void>;
+  resolvingApprovalIds?: ReadonlySet<string>;
+}) {
+  return (
+    <div className="mt-2">
+      <div className="flex items-start gap-2">
+        <span className="shrink-0 pt-[3px] text-[13px] text-[var(--muted-foreground)]/60">&#8226;</span>
+        <div className="min-w-0 flex-1 [&>*:last-child]:mb-0">
+          {message.parts.map((part, i) => (
+            <MessagePartRenderer
+              key={i}
+              part={part}
+              isStreaming={isStreaming}
+              onResolveApproval={onResolveApproval}
+              resolvingApprovalIds={resolvingApprovalIds}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TranscriptMessage({
+  message,
+  isStreaming,
+  onResolveApproval,
+  resolvingApprovalIds,
+}: {
+  message: ParsedMessage;
+  isStreaming?: boolean;
+  onResolveApproval?: (approvalId: string, decision: AgentApprovalDecision, response?: Record<string, unknown> | null) => Promise<void>;
+  resolvingApprovalIds?: ReadonlySet<string>;
+}) {
+  if (message.role === "user") {
+    return <UserMessage message={message} />;
+  }
+  return (
+    <AssistantMessage
+      message={message}
+      isStreaming={isStreaming}
+      onResolveApproval={onResolveApproval}
+      resolvingApprovalIds={resolvingApprovalIds}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inline dropdown
+// ---------------------------------------------------------------------------
+
+function InlineDropdown<T extends string>({
+  options,
+  value,
+  onChange,
+  label,
+}: {
+  options: readonly { id: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  label: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((o) => o.id === value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          className="flex items-center gap-1 text-[11px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+          type="button"
+        >
+          <span className="text-[var(--muted-foreground)]/50">{label}</span>
+          <span className="text-[var(--foreground)]">{selected?.label}</span>
+          <ChevronDown className="size-2.5 text-[var(--muted-foreground)]/40" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-auto min-w-[80px] p-0.5"
+        side="top"
+        sideOffset={4}
+        align="start"
+      >
+        {options.map((option) => (
+          <button
+            key={option.id}
+            className={[
+              "block w-full rounded-sm px-2.5 py-1 text-left text-[11px] transition-colors",
+              option.id === value
+                ? "text-[var(--foreground)]"
+                : "text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-[var(--surface-hover)]",
+            ].join(" ")}
+            onClick={() => {
+              onChange(option.id);
+              setOpen(false);
+            }}
+            type="button"
+          >
+            {option.label}
+          </button>
+        ))}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Surface
+// ---------------------------------------------------------------------------
 
 interface AgentSurfaceProps {
   agentSessionId: string;
@@ -97,142 +851,169 @@ interface AgentSurfaceProps {
 }
 
 export function AgentSurface({ agentSessionId, workspaceId }: AgentSurfaceProps) {
-  const runtime = useRuntime();
+  const agentOrchestrator = useAgentOrchestrator();
   const session = useAgentSession(workspaceId, agentSessionId);
-  const messagesQuery = useAgentSessionMessages(agentSessionId);
-  const invalidateMessages = useInvalidateAgentSessionMessages();
-  const refreshAgentSessions = useAgentSessionRefresh(workspaceId);
-  const messages = messagesQuery.data ?? [];
-  const { isTerminalTurnRunning } = useTerminalResponseReady();
-  const { monospaceFontFamily, resolvedTheme } = useSettings();
+  const dbMessages = useAgentSessionMessages(agentSessionId);
+  const state = useAgentSessionState(agentSessionId);
+  const {
+    harnesses,
+    resolvedTheme,
+    setClaudeHarnessSettings,
+    setCodexHarnessSettings,
+  } = useSettings();
   const [draftPrompt, setDraftPrompt] = useState("");
+  const [resolvingApprovalIds, setResolvingApprovalIds] = useState<Set<string>>(new Set());
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
-  const runtimeStartPromiseRef = useRef<Promise<void> | null>(null);
-  const runtimeTerminalIdRef = useRef<string | null>(null);
-  const transcriptRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const runtimeTerminalId = session?.runtime_session_id?.trim() || null;
-  const canSend = draftPrompt.trim().length > 0 && !isSending;
-  const isRunning =
-    isSending || (runtimeTerminalId ? isTerminalTurnRunning(runtimeTerminalId) : false);
-  const renderedMessages = useMemo(
+  const isRunning = isSending || state.pending_turn_ids.length > 0;
+  const showCursorBlink = !isRunning && draftPrompt.length === 0;
+  const theme = diffTheme(resolvedTheme);
+
+  // Track elapsed time while the agent is working
+  const thinkingStartRef = useRef<number | null>(null);
+  const [thinkingElapsed, setThinkingElapsed] = useState(0);
+
+  useEffect(() => {
+    if (isRunning) {
+      if (thinkingStartRef.current === null) {
+        thinkingStartRef.current = Date.now();
+      }
+      setThinkingElapsed(0);
+      const interval = setInterval(() => {
+        setThinkingElapsed(
+          Math.round((Date.now() - (thinkingStartRef.current ?? Date.now())) / 1000),
+        );
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+    thinkingStartRef.current = null;
+    setThinkingElapsed(0);
+  }, [isRunning]);
+
+  // Escape key to interrupt current turn
+  useEffect(() => {
+    if (!isRunning) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        const activeTurnId = state.pending_turn_ids[0] ?? null;
+        void (async () => {
+          try {
+            const agentSession = await agentOrchestrator.getSession(session?.id ?? "");
+            await agentSession?.cancelTurn({ turn_id: activeTurnId });
+          } catch (err) {
+            console.error("[agent] cancel turn failed:", err);
+          }
+        })();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isRunning, state.pending_turn_ids, agentOrchestrator, session?.id]);
+
+  // Live query returns messages ordered by created_at via IVM.
+  const messages = useMemo<ParsedMessage[]>(
     () =>
-      messages.map((message) => ({
-        id: message.id,
-        role: message.role,
-        text: message.text,
+      (dbMessages.data ?? []).map((record) => ({
+        id: record.id,
+        role: record.role,
+        text: record.text,
+        parts:
+          record.parts.length > 0
+            ? record.parts.map(partRecordToPart)
+            : record.text.length > 0
+              ? [{ type: "text" as const, text: record.text }]
+              : [],
       })),
-    [messages],
+    [dbMessages.data],
   );
 
-  const ensureRuntimeStarted = useCallback(async (): Promise<void> => {
-    if (!runtimeTerminalId) {
-      return;
-    }
-
-    if (runtimeTerminalIdRef.current === runtimeTerminalId && runtimeStartPromiseRef.current) {
-      await runtimeStartPromiseRef.current;
-      return;
-    }
-
-    const { appearance, theme } = readHiddenTerminalTheme(resolvedTheme);
-    const fontFamily = getNativeMonospaceFontFamily(monospaceFontFamily);
-    const startPromise = syncNativeTerminalSurface({
-      appearance,
-      focused: false,
-      fontFamily,
-      fontSize: DEFAULT_TERMINAL_FONT_SIZE,
-      height: 2,
-      opacity: 1,
-      pointerPassthrough: true,
-      scaleFactor: typeof window === "undefined" ? 1 : Math.max(window.devicePixelRatio || 1, 1),
-      terminalId: runtimeTerminalId,
-      theme,
-      visible: false,
-      width: 2,
-      x: -10_000,
-      y: -10_000,
-    });
-
-    runtimeTerminalIdRef.current = runtimeTerminalId;
-    runtimeStartPromiseRef.current = startPromise;
-    await startPromise;
-  }, [monospaceFontFamily, resolvedTheme, runtimeTerminalId]);
-
   useEffect(() => {
-    runtimeStartPromiseRef.current = null;
-    runtimeTerminalIdRef.current = null;
-  }, [runtimeTerminalId]);
-
-  useEffect(() => {
-    const transcript = transcriptRef.current;
-    if (!transcript) {
-      return;
-    }
-
-    transcript.scrollTop = transcript.scrollHeight;
-  }, [isRunning, renderedMessages]);
-
-  useEffect(() => {
-    void ensureRuntimeStarted().catch(() => undefined);
-  }, [ensureRuntimeStarted]);
-
-  useLifecycleEvent(
-    [
-      "terminal.updated",
-      "terminal.status_changed",
-      "terminal.harness_prompt_submitted",
-      "terminal.harness_turn_completed",
-    ],
-    (event) => {
-      if (!runtimeTerminalId) {
-        return;
-      }
-
-      const eventTerminalId = "terminal_id" in event ? event.terminal_id : event.terminal.id;
-      if (eventTerminalId !== runtimeTerminalId) {
-        return;
-      }
-
-      invalidateMessages(agentSessionId);
-      if (event.kind === "terminal.updated") {
-        refreshAgentSessions();
-      }
-    },
-  );
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [isRunning, messages]);
 
   async function handleSend(): Promise<void> {
+    if (!session) return;
     const prompt = draftPrompt.trim();
-    if (prompt.length === 0 || isSending) {
-      return;
-    }
+    if (prompt.length === 0 || isSending) return;
 
     setIsSending(true);
     setSendError(null);
 
     try {
-      await ensureRuntimeStarted();
-      await sendDesktopAgentTextTurn({
-        runtime,
-        prompt,
-        sessionId: agentSessionId,
-        workspaceId,
+      const agentSession = await agentOrchestrator.getSession(session.id);
+      if (!agentSession) {
+        throw new Error(`Agent session ${session.id} was not found.`);
+      }
+
+      await agentSession.sendTurn({
+        turn_id: createTurnId(),
+        input: [{ type: "text", text: prompt }],
       });
       setDraftPrompt("");
-      invalidateMessages(agentSessionId);
     } catch (error) {
       setSendError(error instanceof Error ? error.message : "Failed to send prompt.");
     } finally {
       setIsSending(false);
+      textareaRef.current?.focus();
     }
   }
 
-  function handleComposerKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>): void {
+  async function handleResolveApproval(
+    approvalId: string,
+    decision: AgentApprovalDecision,
+    response?: Record<string, unknown> | null,
+  ): Promise<void> {
+    if (!session) {
+      return;
+    }
+
+    setResolvingApprovalIds((prev) => {
+      const next = new Set(prev);
+      next.add(approvalId);
+      return next;
+    });
+    setSendError(null);
+
+    try {
+      const agentSession = await agentOrchestrator.getSession(session.id);
+      if (!agentSession) {
+        throw new Error(`Agent session ${session.id} was not found.`);
+      }
+
+      await agentSession.resolveApproval({
+        approval_id: approvalId,
+        decision,
+        response: response ?? null,
+      });
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : "Failed to resolve approval.");
+    } finally {
+      setResolvingApprovalIds((prev) => {
+        const next = new Set(prev);
+        next.delete(approvalId);
+        return next;
+      });
+    }
+  }
+
+  function handleKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>): void {
     if (event.key === "Enter" && !event.shiftKey && !event.altKey) {
       event.preventDefault();
       void handleSend();
     }
+  }
+
+  function handleTextareaChange(event: React.ChangeEvent<HTMLTextAreaElement>): void {
+    setDraftPrompt(event.target.value);
+    const el = event.target;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
   }
 
   if (!session) {
@@ -245,126 +1026,209 @@ export function AgentSurface({ agentSessionId, workspaceId }: AgentSurfaceProps)
     );
   }
 
+  if (dbMessages.error) {
+    return (
+      <DiffRenderProvider theme={theme}>
+        <EmptyState
+          description={dbMessages.error.message}
+          icon={<Bot />}
+          title="Agent transcript unavailable"
+        />
+      </DiffRenderProvider>
+    );
+  }
+
+  const providerName = session.provider === "claude" ? "claude" : "codex";
+  const sessionSlug = session.id.slice(0, 8);
+  const visibleError = sendError ?? state.last_error;
+  const isClaude = session.provider === "claude";
+  const modelOptions = (isClaude ? claudeModelOptions : codexModelOptions).map((option) => ({
+    id: option.value,
+    label: option.label,
+  }));
+  const selectedModel = isClaude ? harnesses.claude.model : harnesses.codex.model;
+  const reasoningLabel = isClaude ? "effort" : "reasoning";
+  const reasoningOptions = (
+    isClaude
+      ? selectedModel === "claude-opus-4-6"
+        ? claudeEffortOptions
+        : claudeEffortOptions.filter((option) => option.value !== "max")
+      : codexReasoningEffortOptions
+  ).map((option) => ({
+    id: option.value,
+    label: option.label,
+  }));
+  const selectedReasoning = isClaude ? harnesses.claude.effort : harnesses.codex.reasoningEffort;
+
+  const lastMessage = messages[messages.length - 1];
+  const showThinking = isRunning && lastMessage?.role === "user";
+
+  function handleModelChange(value: ClaudeModel | CodexModel): void {
+    if (isClaude) {
+      const nextModel = value as ClaudeModel;
+      setClaudeHarnessSettings({
+        ...harnesses.claude,
+        effort:
+          nextModel === "claude-opus-4-6" || harnesses.claude.effort !== "max"
+            ? harnesses.claude.effort
+            : "default",
+        model: nextModel,
+      });
+      return;
+    }
+
+    setCodexHarnessSettings({
+      ...harnesses.codex,
+      model: value as CodexModel,
+    });
+  }
+
+  function handleReasoningChange(value: ClaudeEffort | CodexReasoningEffort): void {
+    if (isClaude) {
+      setClaudeHarnessSettings({
+        ...harnesses.claude,
+        effort: value as ClaudeEffort,
+      });
+      return;
+    }
+
+    setCodexHarnessSettings({
+      ...harnesses.codex,
+      reasoningEffort: value as CodexReasoningEffort,
+    });
+  }
+
   return (
-    <section className="flex h-full min-h-0 flex-col bg-[var(--terminal-surface,var(--surface))]">
-      <header className="flex items-center justify-between border-b border-[var(--border)] bg-[var(--surface)]/80 px-4 py-2.5">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 text-[12px] font-medium text-[var(--foreground)]">
-            {session.backend === "claude" ? <ClaudeIcon size={14} /> : <CodexIcon size={14} />}
-            <span className="truncate">{session.title}</span>
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-2 font-[var(--font-family-mono)] text-[11px] uppercase tracking-[0.08em] text-[var(--muted-foreground)]">
-            <span>{backendLabel(session.backend)}</span>
-            <span className="text-[var(--border)]">/</span>
-            <span>{session.runtime_kind}</span>
-            <span className="text-[var(--border)]">/</span>
-            <span>{runtimeTerminalId ? "bound" : "unbound"}</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 font-[var(--font-family-mono)] text-[11px] uppercase tracking-[0.08em]">
+    <DiffRenderProvider theme={theme}>
+    <section className="agent-surface flex h-full min-h-0 flex-col bg-[var(--terminal-surface,var(--surface))]">
+      {/* Status line */}
+      <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-1.5 text-[11px] uppercase tracking-[0.08em]">
+        <div className="flex items-center gap-2">
           <span
             className={[
-              "inline-flex items-center gap-2 border px-2 py-1",
-              isRunning
-                ? "border-[var(--accent)] text-[var(--foreground)]"
-                : "border-[var(--border)] text-[var(--muted-foreground)]",
+              "inline-block h-1.5 w-1.5 rounded-full",
+              isRunning ? "bg-[var(--accent)]" : "bg-[var(--muted-foreground)]/50",
             ].join(" ")}
-          >
-            <span
-              className={[
-                "inline-block h-1.5 w-1.5 rounded-full",
-                isRunning ? "bg-[var(--accent)]" : "bg-[var(--muted-foreground)]/60",
-              ].join(" ")}
-            />
-            {isRunning ? "Running" : "Idle"}
+          />
+          <span className="text-[var(--muted-foreground)]">
+            {providerName}
+            <span className="mx-1.5 text-[var(--border)]">&middot;</span>
+            {state.provider_status ? (
+              <span className="text-[var(--warning,var(--accent))]">{state.provider_status}</span>
+            ) : isRunning ? (
+              <span className="text-[var(--accent)]">running</span>
+            ) : (
+              <span>idle</span>
+            )}
           </span>
         </div>
-      </header>
+        <span className="text-[var(--muted-foreground)]/50">{sessionSlug}</span>
+      </div>
 
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div
-          ref={transcriptRef}
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-[linear-gradient(to_bottom,var(--surface)_0%,transparent_16px)] px-4 py-4 font-[var(--font-family-mono)]"
-        >
-          {renderedMessages.length > 0 ? (
-            renderedMessages.map((message) => (
-              <article
-                key={message.id}
-                className="border-b border-[var(--border)]/70 py-3 last:border-b-0"
-              >
-                <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--muted-foreground)]">
-                  <MessageIcon backend={session.backend} role={message.role} />
-                  <span className={roleLabel(session.backend, message.role).tone}>
-                    {roleLabel(session.backend, message.role).label}
-                  </span>
-                </div>
-                <pre className="whitespace-pre-wrap break-words pl-7 text-[13px] leading-6 text-[var(--foreground)]">
-                  {message.text}
-                </pre>
-              </article>
-            ))
-          ) : (
-            <div className="flex flex-1 items-center justify-center border border-dashed border-[var(--border)] bg-[var(--surface)]/40 px-6 py-8">
-              <div className="max-w-xl space-y-2 font-[var(--font-family-mono)] text-center">
-                <p className="text-[12px] uppercase tracking-[0.12em] text-[var(--muted-foreground)]">
-                  Agent transcript
-                </p>
-                <p className="text-[13px] leading-6 text-[var(--foreground)]">
-                  Type a prompt below to start the session. Replies will stream into this document
-                  from the bound harness runtime.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
+      {/* Transcript + input */}
+      <div
+        ref={scrollRef}
+        className="agent-message-list flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-4 pb-6 pt-3"
+        onClick={() => textareaRef.current?.focus()}
+      >
+        <div className="flex-1" />
 
-        <div className="border-t border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-          <div className="border border-[var(--border)] bg-[var(--background)]">
-            <div className="flex items-center justify-between border-b border-[var(--border)] px-3 py-2 font-[var(--font-family-mono)] text-[11px] uppercase tracking-[0.08em] text-[var(--muted-foreground)]">
-              <span>Prompt buffer</span>
-              <span>{backendLabel(session.backend)}</span>
-            </div>
-            <div className="flex items-start gap-3 px-3 py-3">
-              <span className="pt-1 font-[var(--font-family-mono)] text-[13px] font-semibold text-[var(--accent)]">
-                &gt;
+        {/* Auth status */}
+        {state.auth_status?.mode === "authenticating" ? (
+          <div className="py-1 text-[13px] leading-6 text-[var(--muted-foreground)]">
+            <span className="text-[var(--accent)]">[~]</span> signing in to {providerName}...
+          </div>
+        ) : null}
+        {state.auth_status?.mode === "error" ? (
+          <div className="py-1 text-[13px] leading-6 text-[var(--destructive)]">
+            <span>[!]</span> authentication failed
+          </div>
+        ) : null}
+
+        {/* Messages — single source from DB collection */}
+        {messages.map((message, i) => (
+          <TranscriptMessage
+            key={message.id}
+            message={message}
+            isStreaming={isRunning && i === messages.length - 1 && message.role === "assistant"}
+            onResolveApproval={handleResolveApproval}
+            resolvingApprovalIds={resolvingApprovalIds}
+          />
+        ))}
+
+        {/* Working indicator */}
+        {showThinking ? (
+          <div className="my-1 py-3">
+            <div className="flex items-center gap-1.5 text-[13px]">
+              <span className="agent-cursor-blink text-[var(--muted-foreground)]">&#8226;</span>
+              <Shimmer as="span" duration={2} spread={2} className="text-[13px]">
+                Working
+              </Shimmer>
+              <span className="text-[var(--muted-foreground)]/50">
+                ({thinkingElapsed}s · esc to interrupt)
               </span>
-              <textarea
-                className="min-h-28 w-full resize-none bg-transparent py-0.5 font-[var(--font-family-mono)] text-[13px] leading-6 text-[var(--foreground)] outline-none placeholder:text-[var(--muted-foreground)]"
-                onChange={(event) => setDraftPrompt(event.target.value)}
-                onKeyDown={handleComposerKeyDown}
-                placeholder={`Ask ${backendLabel(session.backend)} to inspect the workspace, explain a file, or make a change.`}
-                value={draftPrompt}
-              />
-            </div>
-            <div className="flex items-center justify-between gap-3 border-t border-[var(--border)] px-3 py-2">
-              <div className="flex items-center gap-2 font-[var(--font-family-mono)] text-[11px] text-[var(--muted-foreground)]">
-                <CornerDownLeft className="size-3" />
-                <span>Enter sends</span>
-                <span className="text-[var(--border)]">/</span>
-                <span>Shift+Enter newline</span>
-              </div>
-              <button
-                className={[
-                  "inline-flex items-center gap-2 border px-3 py-1.5 font-[var(--font-family-mono)] text-[11px] font-semibold uppercase tracking-[0.08em] transition-colors",
-                  canSend
-                    ? "border-[var(--accent)] text-[var(--foreground)] hover:bg-[var(--surface-hover)]"
-                    : "border-[var(--border)] text-[var(--muted-foreground)]",
-                ].join(" ")}
-                disabled={!canSend}
-                onClick={() => void handleSend()}
-                type="button"
-              >
-                <span>{isSending ? "Sending" : "Send"}</span>
-              </button>
             </div>
           </div>
-          {sendError ? (
-            <p className="mt-2 font-[var(--font-family-mono)] text-[12px] text-[var(--destructive)]">
-              {sendError}
-            </p>
-          ) : null}
-        </div>
+        ) : null}
+
       </div>
+
+      {/* Input */}
+      <div className="shrink-0 bg-[var(--surface-hover)]/50">
+        <div className="flex items-start px-4 py-3">
+          <span className="shrink-0 pt-[3px] text-[13px] text-[var(--accent)]">
+            &#9654;&nbsp;
+          </span>
+          <div className="relative min-w-0 flex-1">
+            <textarea
+              ref={textareaRef}
+              autoFocus
+              className="w-full resize-none overflow-hidden bg-transparent font-[var(--font-mono)] text-[13px] leading-6 text-[var(--foreground)] outline-none caret-transparent p-0 m-0"
+              onChange={handleTextareaChange}
+              onKeyDown={handleKeyDown}
+              placeholder=""
+              rows={1}
+              style={{ height: "auto" }}
+              value={draftPrompt}
+            />
+            {showCursorBlink ? (
+              <span className="agent-cursor-blink pointer-events-none absolute left-0 top-[5px] h-[14px] w-[7px] bg-[var(--foreground)]" />
+            ) : null}
+          </div>
+        </div>
+        {visibleError ? (
+          <div className="px-4 pb-1 text-[12px] text-[var(--destructive)]">
+            <span>[!]</span> {visibleError}
+          </div>
+        ) : null}
+      </div>
+
+      {/* Model & Reasoning — on bare surface */}
+      <div className="shrink-0 flex items-center gap-3 px-4 py-1.5">
+        <InlineDropdown
+          options={modelOptions}
+          value={selectedModel}
+          onChange={handleModelChange}
+          label="model"
+        />
+        <InlineDropdown
+          options={reasoningOptions}
+          value={selectedReasoning}
+          onChange={handleReasoningChange}
+          label={reasoningLabel}
+        />
+      </div>
+
+      <style>{`
+        @keyframes agent-cursor-pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.2; }
+        }
+        .agent-cursor-blink {
+          animation: agent-cursor-pulse 1.2s ease-in-out infinite;
+        }
+      `}</style>
     </section>
+    </DiffRenderProvider>
   );
 }

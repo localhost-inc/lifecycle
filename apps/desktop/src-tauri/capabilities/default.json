@@ -28,10 +28,23 @@
     "dialog:default",
     "fs:default",
     "notification:default",
+    "shell:allow-stdin-write",
+    "shell:allow-kill",
     "sql:default",
     "sql:allow-execute",
     "updater:default",
     "process:default",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [
+        {
+          "name": "lifecycle",
+          "cmd": "lifecycle",
+          "args": true,
+          "sidecar": false
+        }
+      ]
+    },
     {
       "identifier": "fs:allow-exists",
       "allow": ["$HOME/**"]

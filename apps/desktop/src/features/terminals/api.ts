@@ -1,23 +1,13 @@
 import { isTauri } from "@tauri-apps/api/core";
 import type { TerminalRecord, TerminalStatus } from "@lifecycle/contracts";
 import type { WorkspaceRuntime } from "@lifecycle/workspace";
-import type { HarnessLaunchConfig } from "@/features/settings/state/harness-settings";
-
-export type HarnessProvider = "claude" | "codex";
 const TERMINAL_ACCESS_UNAVAILABLE_MESSAGE = "Terminal access requires the Tauri desktop shell.";
 
 export function terminalHasLiveSession(status: TerminalStatus): boolean {
   return status !== "failed" && status !== "finished";
 }
 
-export type CreateTerminalRequest =
-  | { launchType: "shell" }
-  | {
-      harnessLaunchConfig?: HarnessLaunchConfig | null;
-      launchType: "harness";
-      harnessProvider: HarnessProvider;
-      harnessSessionId?: string | null;
-    };
+export type CreateTerminalRequest = { launchType: "shell" };
 
 export type CreateTerminalInput = { workspaceId: string } & CreateTerminalRequest;
 
@@ -58,21 +48,9 @@ export async function createTerminal(
 ): Promise<TerminalRecord> {
   requireDesktopTerminalAccess();
 
-  if (input.launchType === "harness") {
-    return runtime.createTerminal({
-      workspaceId: input.workspaceId,
-      launchType: input.launchType,
-      harnessLaunchConfig: input.harnessLaunchConfig ?? null,
-      harnessProvider: input.harnessProvider,
-      harnessSessionId: input.harnessSessionId?.trim() || null,
-    });
-  }
-
   return runtime.createTerminal({
     workspaceId: input.workspaceId,
     launchType: input.launchType,
-    harnessProvider: null,
-    harnessSessionId: null,
   });
 }
 

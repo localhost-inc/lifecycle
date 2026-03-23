@@ -62,13 +62,17 @@ describe("parseSettingsJson", () => {
         harnesses: {
           claude: {
             dangerousSkipPermissions: true,
+            effort: "default",
+            model: "claude-sonnet-4-6",
             permissionMode: "bypassPermissions",
             preset: "trusted_host",
           },
           codex: {
             approvalPolicy: "never",
             dangerousBypass: true,
+            model: "gpt-5-codex",
             preset: "trusted_host",
+            reasoningEffort: "default",
             sandboxMode: "danger-full-access",
           },
         },
@@ -85,13 +89,18 @@ describe("parseSettingsJson", () => {
       harnesses: {
         claude: {
           dangerousSkipPermissions: true,
+          effort: "default",
+          loginMethod: "claudeai",
+          model: "claude-sonnet-4-6",
           permissionMode: "bypassPermissions",
           preset: "trusted_host",
         },
         codex: {
           approvalPolicy: "never",
           dangerousBypass: true,
+          model: "gpt-5-codex",
           preset: "trusted_host",
+          reasoningEffort: "default",
           sandboxMode: "danger-full-access",
         },
       },

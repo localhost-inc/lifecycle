@@ -22,11 +22,10 @@ describe("WorkspacePaneTabBar", () => {
           createElement("span", { "data-slot": "custom-leading" }, `lead:${tab.key}`),
         visibleTabs: [
           {
-            harnessProvider: "claude",
             key: firstTerminalTabKey,
             kind: "terminal",
-            label: "Claude",
-            launchType: "harness",
+            label: "Terminal 1",
+            launchType: "shell",
             responseReady: false,
             status: "active",
             terminalId: "term-1",
@@ -50,7 +49,6 @@ describe("WorkspacePaneTabBar", () => {
         visibleTabs: [
           {
             key: firstTerminalTabKey,
-            harnessProvider: null,
             kind: "terminal",
             label: "Terminal 1",
             launchType: "shell",
@@ -83,7 +81,6 @@ describe("WorkspacePaneTabBar", () => {
         visibleTabs: [
           {
             key: firstTerminalTabKey,
-            harnessProvider: null,
             kind: "terminal",
             label: "Terminal 1",
             launchType: "shell",
@@ -93,7 +90,6 @@ describe("WorkspacePaneTabBar", () => {
           },
           {
             key: secondTerminalTabKey,
-            harnessProvider: null,
             kind: "terminal",
             label: "Terminal 2",
             launchType: "shell",
@@ -127,7 +123,6 @@ describe("WorkspacePaneTabBar", () => {
         visibleTabs: [
           {
             key: firstTerminalTabKey,
-            harnessProvider: null,
             kind: "terminal",
             label: "Terminal 1",
             launchType: "shell",
@@ -137,7 +132,6 @@ describe("WorkspacePaneTabBar", () => {
           },
           {
             key: secondTerminalTabKey,
-            harnessProvider: null,
             kind: "terminal",
             label: "Terminal 2",
             launchType: "shell",
@@ -147,7 +141,6 @@ describe("WorkspacePaneTabBar", () => {
           },
           {
             key: thirdTerminalTabKey,
-            harnessProvider: null,
             kind: "terminal",
             label: "Terminal 3",
             launchType: "shell",
@@ -175,7 +168,6 @@ describe("WorkspacePaneTabBar", () => {
         visibleTabs: [
           {
             key: firstTerminalTabKey,
-            harnessProvider: null,
             kind: "terminal",
             label: "Terminal 1",
             launchType: "shell",
@@ -204,7 +196,6 @@ describe("WorkspacePaneTabBar", () => {
         visibleTabs: [
           {
             key: firstTerminalTabKey,
-            harnessProvider: null,
             kind: "terminal",
             label: "Terminal 1",
             launchType: "shell",
@@ -214,7 +205,6 @@ describe("WorkspacePaneTabBar", () => {
           },
           {
             key: secondTerminalTabKey,
-            harnessProvider: null,
             kind: "terminal",
             label: "Terminal 2",
             launchType: "shell",
@@ -242,7 +232,6 @@ describe("WorkspacePaneTabBar", () => {
         visibleTabs: [
           {
             key: firstTerminalTabKey,
-            harnessProvider: null,
             kind: "terminal",
             label: "Terminal 1",
             launchType: "shell",
@@ -258,7 +247,7 @@ describe("WorkspacePaneTabBar", () => {
     expect(markup).toContain('data-surface-tab-icon="shell"');
   });
 
-  test("replaces the terminal icon with a spinner while a turn is running", () => {
+  test("replaces the shell icon with a spinner while a turn is running", () => {
     const firstTerminalTabKey = terminalTabKey("term-1");
     const markup = renderToStaticMarkup(
       createElement(WorkspacePaneTabBar, {
@@ -269,10 +258,9 @@ describe("WorkspacePaneTabBar", () => {
         visibleTabs: [
           {
             key: firstTerminalTabKey,
-            harnessProvider: "codex",
             kind: "terminal",
-            label: "Codex",
-            launchType: "harness",
+            label: "Terminal 1",
+            launchType: "shell",
             responseReady: false,
             running: true,
             status: "active",
@@ -284,7 +272,7 @@ describe("WorkspacePaneTabBar", () => {
 
     expect(markup).toContain('data-slot="spinner"');
     expect(markup).toContain('title="Generating response"');
-    expect(markup).not.toContain('data-surface-tab-icon="codex"');
+    expect(markup).not.toContain('data-surface-tab-icon="shell"');
   });
 });
 

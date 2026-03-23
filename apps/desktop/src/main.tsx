@@ -9,6 +9,7 @@ import { AuthSessionProvider } from "@/features/auth/state/auth-session-provider
 import { TurnNotificationListener } from "@/features/notifications/turn-notification-listener";
 import { ProjectManifestWatcher } from "@/features/projects/components/project-manifest-watcher";
 import { SettingsProvider } from "@/features/settings/state/settings-provider";
+import { createAgentOrchestrator } from "@/features/agents/orchestrator";
 import { TerminalResponseReadyProvider } from "@/features/terminals/state/terminal-response-ready-provider";
 import { markPerformance, measurePerformance } from "@/lib/performance";
 import { watch } from "@tauri-apps/plugin-fs";
@@ -53,6 +54,7 @@ const hostRuntime = new LocalRuntime({
   invoke: (command, args) => invokeTauri(command, args),
   watchPath: (path, callback, options) => watch(path, callback, options),
 });
+const agentOrchestrator = createAgentOrchestrator(hostRuntime);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -60,7 +62,7 @@ createRoot(document.getElementById("root")!).render(
       <SettingsProvider>
         <BootstrapPerfMarker />
         <ContextMenuBlocker />
-        <StoreProvider driver={tauriSqlDriver} runtime={hostRuntime}>
+        <StoreProvider agentOrchestrator={agentOrchestrator} driver={tauriSqlDriver} runtime={hostRuntime}>
           <ReactQueryProvider>
             <AuthSessionProvider>
               <ProjectManifestWatcher />

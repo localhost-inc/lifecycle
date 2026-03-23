@@ -5,6 +5,7 @@ import {
   getWorkspaceLiveTerminalTabKeys,
   getWorkspacePaneIdsWaitingForSelectedTerminalTab,
   getWorkspaceRenderedPaneActiveTabKeys,
+  getWorkspaceSuppressedSleepingTerminalTabKeys,
   getWorkspaceUnassignedLiveTerminalTabKeys,
 } from "@/features/workspaces/components/workspace-canvas-terminal-state";
 
@@ -21,6 +22,19 @@ describe("canvas terminal tab helpers", () => {
         [terminalTabKey("term-3")],
       ),
     ).toEqual([terminalTabKey("term-2")]);
+  });
+
+  test("suppresses sleeping terminal tabs until the user explicitly restores them", () => {
+    expect(
+      getWorkspaceSuppressedSleepingTerminalTabKeys(
+        [
+          { key: terminalTabKey("term-active"), status: "active" },
+          { key: terminalTabKey("term-sleeping"), status: "sleeping" },
+          { key: terminalTabKey("term-restored"), status: "sleeping" },
+        ],
+        new Set([terminalTabKey("term-restored")]),
+      ),
+    ).toEqual([terminalTabKey("term-sleeping")]);
   });
 
   test("marks panes as waiting only for live terminal tabs that have not rendered yet", () => {

@@ -7,7 +7,6 @@ export interface AppShellOutletContext {
   activeShellContext: ShellContext;
   projectCatalog: ProjectCatalog | undefined;
   projects: ProjectRecord[];
-  sidebarCollapsed: boolean;
   workspacesByProjectId: Record<string, WorkspaceRecord[]>;
   onCreateWorkspace: (projectId: string, mode: WorkspaceCreateMode) => Promise<void>;
   onDestroyWorkspace: (workspace: WorkspaceRecord) => Promise<void>;
@@ -15,5 +14,4 @@ export interface AppShellOutletContext {
   onOpenSettings: () => void;
   onOpenWorkspace: (workspace: WorkspaceRecord) => void;
   onRemoveProject: (projectId: string) => Promise<void>;
-  onToggleSidebar: () => void;
 }

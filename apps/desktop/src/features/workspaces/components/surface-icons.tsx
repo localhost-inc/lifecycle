@@ -10,7 +10,6 @@ import {
   isFileViewerDocument,
   isPullRequestDocument,
 } from "@/features/workspaces/state/workspace-canvas-state";
-import type { HarnessProvider } from "@/features/terminals/api";
 import type { WorkspaceCanvasTab } from "@/features/workspaces/components/workspace-canvas-tabs";
 import { getWorkspaceSessionStatusState } from "@/features/workspaces/components/workspace-session-status";
 
@@ -48,30 +47,12 @@ export function CodexIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-function TerminalProviderIcon({
-  harnessProvider,
-  launchType,
-}: {
-  harnessProvider: HarnessProvider | null;
-  launchType: string;
-}) {
-  if (launchType === "harness" && harnessProvider === "claude") {
-    return <ClaudeIcon />;
-  }
-
-  if (launchType === "harness" && harnessProvider === "codex") {
-    return <CodexIcon />;
-  }
-
+function TerminalProviderIcon() {
   return <ShellIcon />;
 }
 
 function tabIconName(tab: WorkspaceCanvasTab): string {
   if (tab.kind === "terminal") {
-    if (tab.launchType === "harness" && tab.harnessProvider) {
-      return tab.harnessProvider;
-    }
-
     return "shell";
   }
 
@@ -84,7 +65,7 @@ function tabIconName(tab: WorkspaceCanvasTab): string {
   }
 
   if (isAgentTab(tab)) {
-    return tab.backend;
+    return tab.provider;
   }
 
   if (isCommitDiffDocument(tab)) {
@@ -141,7 +122,7 @@ export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceCanvasTab })
         {state === "ready" ? (
           <ResponseReadyDot />
         ) : (
-          <TerminalProviderIcon harnessProvider={tab.harnessProvider} launchType={tab.launchType} />
+          <TerminalProviderIcon />
         )}
       </span>
     );
@@ -170,7 +151,7 @@ export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceCanvasTab })
   if (isAgentTab(tab)) {
     return (
       <SurfaceBubble tab={tab}>
-        {tab.backend === "claude" ? <ClaudeIcon size={14} /> : <CodexIcon size={14} />}
+        {tab.provider === "claude" ? <ClaudeIcon size={14} /> : <CodexIcon size={14} />}
       </SurfaceBubble>
     );
   }

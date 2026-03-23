@@ -1,18 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import type { LifecycleEventOf } from "@lifecycle/contracts";
-import { createTurnCompletionNotificationCopy } from "@/features/notifications/lib/turn-notification-runtime";
+import {
+  createTurnCompletionNotificationCopy,
+  type TurnCompletionLifecycleEvent,
+} from "@/features/notifications/lib/turn-notification-runtime";
 
 function createCompletedTurnEvent(
-  overrides: Partial<LifecycleEventOf<"terminal.harness_turn_completed">> = {},
-): LifecycleEventOf<"terminal.harness_turn_completed"> {
+  overrides: Partial<TurnCompletionLifecycleEvent> = {},
+): TurnCompletionLifecycleEvent {
   return {
-    completion_key: "codex:turn_1",
-    harness_provider: "codex",
-    harness_session_id: "session-12345678",
-    id: "event_1",
-    kind: "terminal.harness_turn_completed",
-    occurred_at: "2026-03-12T00:00:00.000Z",
-    terminal_id: "terminal_1",
+    session_id: "session-12345678",
     turn_id: "turn_1",
     workspace_id: "workspace_1",
     ...overrides,
@@ -24,6 +20,7 @@ describe("createTurnCompletionNotificationCopy", () => {
     expect(
       createTurnCompletionNotificationCopy(createCompletedTurnEvent(), {
         projectName: "lifecycle",
+        providerName: "Codex",
         sessionTitle: "Fix auth callback",
         workspaceName: "auth-callback",
       }),
@@ -36,6 +33,7 @@ describe("createTurnCompletionNotificationCopy", () => {
   test("uses workspace name alone when project name is unavailable", () => {
     expect(
       createTurnCompletionNotificationCopy(createCompletedTurnEvent(), {
+        providerName: "Codex",
         sessionTitle: "Fix auth callback",
         workspaceName: "auth-callback",
       }),
@@ -49,6 +47,7 @@ describe("createTurnCompletionNotificationCopy", () => {
     expect(
       createTurnCompletionNotificationCopy(createCompletedTurnEvent(), {
         projectName: "lifecycle",
+        providerName: "Codex",
       }),
     ).toEqual({
       body: "Codex finished in lifecycle.",
@@ -57,7 +56,9 @@ describe("createTurnCompletionNotificationCopy", () => {
   });
 
   test("falls back to generic body without any location context", () => {
-    expect(createTurnCompletionNotificationCopy(createCompletedTurnEvent())).toEqual({
+    expect(
+      createTurnCompletionNotificationCopy(createCompletedTurnEvent(), { providerName: "Codex" }),
+    ).toEqual({
       body: "Codex has a response ready.",
       title: "Response ready",
     });
@@ -65,14 +66,12 @@ describe("createTurnCompletionNotificationCopy", () => {
 
   test("uses provider label for claude", () => {
     expect(
-      createTurnCompletionNotificationCopy(
-        createCompletedTurnEvent({ harness_provider: "claude" }),
-        {
-          projectName: "lifecycle",
-          sessionTitle: "Notification improvements",
-          workspaceName: "main",
-        },
-      ),
+      createTurnCompletionNotificationCopy(createCompletedTurnEvent(), {
+        projectName: "lifecycle",
+        providerName: "Claude",
+        sessionTitle: "Notification improvements",
+        workspaceName: "main",
+      }),
     ).toEqual({
       body: "Claude finished in lifecycle:main.",
       title: "Notification improvements",
@@ -80,9 +79,7 @@ describe("createTurnCompletionNotificationCopy", () => {
   });
 
   test("falls back to Agent when the provider is unavailable", () => {
-    expect(
-      createTurnCompletionNotificationCopy(createCompletedTurnEvent({ harness_provider: null })),
-    ).toEqual({
+    expect(createTurnCompletionNotificationCopy(createCompletedTurnEvent())).toEqual({
       body: "Agent has a response ready.",
       title: "Response ready",
     });

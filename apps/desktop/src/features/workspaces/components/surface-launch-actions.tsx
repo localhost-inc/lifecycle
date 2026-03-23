@@ -1,15 +1,13 @@
-import type { AgentBackend } from "@lifecycle/contracts";
+import type { AgentSessionProviderId } from "@lifecycle/contracts";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@lifecycle/ui";
 import { AnimatePresence, motion } from "motion/react";
 import { Plus, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import type { HarnessProvider } from "@/features/terminals/api";
 import { ClaudeIcon, CodexIcon, ShellIcon } from "@/features/workspaces/components/surface-icons";
 
 export type SurfaceLaunchRequest =
   | { kind: "terminal"; launchType: "shell" }
-  | { backend: AgentBackend; kind: "agent" }
-  | { kind: "terminal"; launchType: "harness"; harnessProvider: HarnessProvider };
+  | { kind: "agent"; provider: AgentSessionProviderId };
 
 export interface SurfaceLaunchAction {
   key: string;

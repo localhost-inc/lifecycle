@@ -7,6 +7,22 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./providers/claude/auth": {
+      "types": "./src/providers/claude/auth.ts",
+      "default": "./src/providers/claude/auth.ts"
+    },
+    "./providers/claude/worker": {
+      "types": "./src/providers/claude/worker.ts",
+      "default": "./src/providers/claude/worker.ts"
+    },
+    "./providers/codex/auth": {
+      "types": "./src/providers/codex/auth.ts",
+      "default": "./src/providers/codex/auth.ts"
+    },
+    "./providers/codex/worker": {
+      "types": "./src/providers/codex/worker.ts",
+      "default": "./src/providers/codex/worker.ts"
     }
   },
   "scripts": {
@@ -17,6 +33,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@lifecycle/contracts": "workspace:*"
+    "@anthropic-ai/claude-agent-sdk": "^0.2.81",
+    "@lifecycle/contracts": "workspace:*",
+    "@lifecycle/workspace": "workspace:*",
+    "@openai/codex-sdk": "^0.116.0"
   }
 }

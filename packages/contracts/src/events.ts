@@ -84,38 +84,6 @@ export type LifecycleEvent =
   | {
       id: string;
       occurred_at: string;
-      kind: "terminal.harness_prompt_submitted";
-      terminal_id: string;
-      workspace_id: string;
-      prompt_text: string;
-      harness_provider: string | null;
-      harness_session_id: string | null;
-      turn_id: string | null;
-    }
-  | {
-      id: string;
-      occurred_at: string;
-      kind: "terminal.harness_turn_started";
-      terminal_id: string;
-      workspace_id: string;
-      harness_provider: string | null;
-      harness_session_id: string | null;
-      turn_id: string | null;
-    }
-  | {
-      id: string;
-      occurred_at: string;
-      kind: "terminal.harness_turn_completed";
-      terminal_id: string;
-      workspace_id: string;
-      harness_provider: string | null;
-      harness_session_id: string | null;
-      completion_key: string;
-      turn_id: string | null;
-    }
-  | {
-      id: string;
-      occurred_at: string;
       kind: "agent.session.created";
       workspace_id: string;
       session: AgentSessionRecord;
@@ -126,6 +94,14 @@ export type LifecycleEvent =
       kind: "agent.session.updated";
       workspace_id: string;
       session: AgentSessionRecord;
+    }
+  | {
+      id: string;
+      occurred_at: string;
+      kind: "agent.turn.completed";
+      session_id: string;
+      turn_id: string;
+      workspace_id: string;
     }
   | {
       id: string;

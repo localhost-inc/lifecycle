@@ -513,7 +513,7 @@ export function workspaceCanvasReducer(
         const targetPaneId = existingPaneId ?? resolveWorkspaceTargetPaneId(state);
         const nextTab = createAgentTab({
           agentSessionId: request.agentSessionId,
-          backend: request.backend,
+          provider: request.provider,
           label: request.label,
         });
 

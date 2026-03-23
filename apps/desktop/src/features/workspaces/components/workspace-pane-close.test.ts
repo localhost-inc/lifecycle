@@ -35,7 +35,6 @@ describe("closeWorkspacePaneTabs", () => {
       closeWorkspacePaneTabs(
         [
           {
-            harnessProvider: null,
             key: terminalTabKey("term-1"),
             kind: "terminal",
             label: "Shell",

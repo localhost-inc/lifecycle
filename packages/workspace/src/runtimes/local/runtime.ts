@@ -84,11 +84,8 @@ export class LocalRuntime implements WorkspaceRuntime {
 
   async createTerminal(input: CreateTerminalInput): Promise<TerminalRecord> {
     return this.invoke("create_terminal", {
-      harnessLaunchConfig: input.harnessLaunchConfig ?? null,
       workspaceId: input.workspaceId,
       launchType: input.launchType,
-      harnessProvider: input.harnessProvider,
-      harnessSessionId: input.harnessSessionId,
     }) as Promise<TerminalRecord>;
   }
 

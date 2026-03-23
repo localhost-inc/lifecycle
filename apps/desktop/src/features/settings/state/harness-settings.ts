@@ -1,6 +1,8 @@
 import {
   buildClaudeHarnessLaunchConfig,
   buildClaudeHarnessSettingsFromPreset,
+  claudeEffortOptions,
+  claudeModelOptions,
   claudeHarnessSettingsUseCustomValues,
   claudePermissionModeOptions,
   normalizeClaudeHarnessSettings,
@@ -12,6 +14,8 @@ import {
   buildCodexHarnessSettingsFromPreset,
   codexApprovalPolicyOptions,
   codexHarnessSettingsUseCustomValues,
+  codexModelOptions,
+  codexReasoningEffortOptions,
   codexSandboxModeOptions,
   normalizeCodexHarnessSettings,
   type CodexHarnessLaunchConfig,
@@ -20,15 +24,20 @@ import {
 import { harnessPresetOptions, isRecord } from "@/features/settings/state/harnesses/shared";
 
 export type { ClaudePermissionMode } from "@/features/settings/state/harnesses/claude";
-export type { CodexApprovalPolicy, CodexSandboxMode } from "@/features/settings/state/harnesses/codex";
+export type { ClaudeEffort, ClaudeModel } from "@/features/settings/state/harnesses/claude";
+export type { CodexApprovalPolicy, CodexModel, CodexReasoningEffort, CodexSandboxMode } from "@/features/settings/state/harnesses/codex";
 export type { HarnessPreset } from "@/features/settings/state/harnesses/shared";
 export {
   buildClaudeHarnessSettingsFromPreset,
+  claudeEffortOptions,
   claudeHarnessSettingsUseCustomValues,
+  claudeModelOptions,
   claudePermissionModeOptions,
   buildCodexHarnessSettingsFromPreset,
   codexApprovalPolicyOptions,
   codexHarnessSettingsUseCustomValues,
+  codexModelOptions,
+  codexReasoningEffortOptions,
   codexSandboxModeOptions,
   harnessPresetOptions,
   normalizeClaudeHarnessSettings,

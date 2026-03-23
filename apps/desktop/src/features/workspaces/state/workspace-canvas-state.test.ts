@@ -445,7 +445,7 @@ describe("workspace canvas state persistence", () => {
         documents: [
           createAgentTab({
             agentSessionId: "agent_session_1",
-            backend: "claude",
+            provider: "claude",
             label: "Claude",
           }),
         ],
@@ -460,7 +460,7 @@ describe("workspace canvas state persistence", () => {
         documents: [
           createAgentTab({
             agentSessionId: "agent_session_1",
-            backend: "claude",
+            provider: "claude",
             label: "Claude",
           }),
         ],
@@ -473,7 +473,7 @@ describe("workspace canvas state persistence", () => {
         documents: [
           {
             agentSessionId: "agent_session_1",
-            backend: "claude",
+            provider: "claude",
             kind: "agent",
             label: "Claude",
           },

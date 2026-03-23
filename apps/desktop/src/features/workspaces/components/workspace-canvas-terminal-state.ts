@@ -10,6 +10,15 @@ export function getWorkspaceLiveTerminalTabKeys(
   return terminalTabs.map((tab) => tab.key);
 }
 
+export function getWorkspaceSuppressedSleepingTerminalTabKeys(
+  terminalTabs: readonly Pick<TerminalTab, "key" | "status">[],
+  restoredTerminalTabKeys: ReadonlySet<string>,
+): string[] {
+  return terminalTabs.flatMap((tab) =>
+    tab.status === "sleeping" && !restoredTerminalTabKeys.has(tab.key) ? [tab.key] : [],
+  );
+}
+
 export function getWorkspaceRenderedPaneActiveTabKeys(
   paneSnapshots: readonly Pick<WorkspacePaneTabSnapshot, "activeTabKey" | "id">[],
   visibleTabsByPaneId: Record<string, readonly Pick<TerminalTab, "key">[]>,

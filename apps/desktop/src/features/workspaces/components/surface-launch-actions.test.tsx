@@ -21,13 +21,13 @@ const actions: SurfaceLaunchAction[] = [
     key: "claude",
     title: "Claude",
     icon: createElement(ClaudeIcon),
-    request: { kind: "terminal", launchType: "harness", harnessProvider: "claude" },
+    request: { kind: "agent", provider: "claude" },
   },
   {
     key: "codex",
     title: "Codex",
     icon: createElement(CodexIcon),
-    request: { kind: "terminal", launchType: "harness", harnessProvider: "codex" },
+    request: { kind: "agent", provider: "codex" },
   },
 ];
 

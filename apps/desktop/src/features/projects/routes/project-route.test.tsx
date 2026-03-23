@@ -57,10 +57,8 @@ function renderProjectRoute(
     onOpenSettings: () => {},
     onOpenWorkspace: () => {},
     onRemoveProject: async () => {},
-    onToggleSidebar: () => {},
     projectCatalog: undefined,
     projects: [project],
-    sidebarCollapsed: false,
     workspacesByProjectId: {
       [project.id]: [workspace],
     },
@@ -122,10 +120,10 @@ describe("ProjectRoute", () => {
 
     const markup = renderProjectRoute(ProjectRoute);
 
-    expect(markup).toContain('data-slot="project-nav-bar"');
+    expect(markup).toContain('data-slot="workspace-nav-bar"');
     expect(markup).toContain('data-slot="project-shell"');
     expect(markup).toContain('data-slot="index-redirect"');
-    expect(markup.indexOf('data-slot="project-nav-bar"')).toBeLessThan(
+    expect(markup.indexOf('data-slot="workspace-nav-bar"')).toBeLessThan(
       markup.indexOf('data-slot="index-redirect"'),
     );
   });
@@ -151,11 +149,11 @@ describe("ProjectRoute", () => {
       "/projects/project_1/workspaces/workspace_1",
     );
 
-    expect(markup).toContain('data-slot="project-nav-bar"');
+    expect(markup).toContain('data-slot="workspace-nav-bar"');
     expect(markup).toContain('data-slot="workspace-layout"');
     expect(markup).toContain('aria-label="Show run actions"');
 
-    const navBarStart = markup.indexOf('data-slot="project-nav-bar"');
+    const navBarStart = markup.indexOf('data-slot="workspace-nav-bar"');
     const overflowIndex = markup.indexOf('aria-label="Show run actions"');
     const workspaceStart = markup.indexOf('data-slot="workspace-layout"');
     expect(navBarStart).toBeLessThan(overflowIndex);

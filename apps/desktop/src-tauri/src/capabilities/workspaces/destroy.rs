@@ -143,7 +143,7 @@ pub async fn destroy_workspace(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::platform::db::run_migrations;
+    use crate::platform::db::apply_test_schema;
 
     fn temp_db_path() -> String {
         std::env::temp_dir()
@@ -156,7 +156,7 @@ mod tests {
     }
 
     fn seed_workspace(db_path: &str) {
-        run_migrations(db_path).expect("run migrations");
+        apply_test_schema(db_path);
         let conn = open_db(db_path).expect("open db");
         conn.execute(
             "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",

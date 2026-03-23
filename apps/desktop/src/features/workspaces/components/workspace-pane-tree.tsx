@@ -18,7 +18,6 @@ import {
 } from "react";
 import type { TerminalRecord } from "@lifecycle/contracts";
 import { AnimatePresence, motion } from "motion/react";
-import { type HarnessProvider } from "@/features/terminals/api";
 import {
   SurfaceLaunchActions,
   type SurfaceLaunchAction,
@@ -57,7 +56,7 @@ const PANE_RESIZE_STEP_PX = 32;
 
 interface WorkspacePaneTreeProps {
   activePaneId: string;
-  creatingSelection: "shell" | HarnessProvider | null;
+  creatingSelection: "shell" | "claude" | "codex" | null;
   dimInactivePanes?: boolean;
   documents: WorkspaceCanvasDocument[];
   fileSessionsByTabKey: Record<string, FileViewerSessionState>;

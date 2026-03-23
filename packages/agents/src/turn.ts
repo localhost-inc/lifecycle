@@ -31,18 +31,32 @@ export type AgentMessagePart =
       type: "tool_call";
       tool_call_id: string;
       tool_name: string;
+      input_json?: string | undefined;
+      output_json?: string | null | undefined;
+      status?: AgentToolCallStatus | null | undefined;
+      error_text?: string | null | undefined;
     }
   | {
       type: "tool_result";
       tool_call_id: string;
+      output_json?: string | null | undefined;
+      error_text?: string | null | undefined;
     }
   | {
       type: "approval_ref";
       approval_id: string;
+      decision?: AgentApprovalDecision | null | undefined;
+      kind?: AgentApprovalKind | null | undefined;
+      message?: string | null | undefined;
+      metadata?: Record<string, unknown> | null | undefined;
+      status?: AgentApprovalStatus | null | undefined;
     }
   | {
       type: "artifact_ref";
       artifact_id: string;
+      artifact_type?: AgentArtifactType | null | undefined;
+      title?: string | null | undefined;
+      uri?: string | null | undefined;
     };
 
 export interface AgentTurnRequest {
@@ -100,13 +114,14 @@ export interface AgentApprovalRequest {
   scope_key: string;
   status: AgentApprovalStatus;
   message: string;
-  metadata_json?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface AgentApprovalResolution {
   approval_id: string;
   session_id: string;
   decision: AgentApprovalDecision;
+  response?: Record<string, unknown> | null;
 }
 
 export type AgentArtifactType =

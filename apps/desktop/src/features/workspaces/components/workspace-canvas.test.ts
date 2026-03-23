@@ -1113,7 +1113,7 @@ describe("workspace canvas reducer", () => {
   test("opens agent tabs from the workspace launcher", () => {
     const agentTab = createAgentTab({
       agentSessionId: "agent_session_1",
-      backend: "claude",
+      provider: "claude",
       label: "Claude",
     });
 
@@ -1121,7 +1121,7 @@ describe("workspace canvas reducer", () => {
       workspaceCanvasReducer(createDefaultWorkspaceCanvasState(), {
         request: {
           agentSessionId: "agent_session_1",
-          backend: "claude",
+          provider: "claude",
           id: "agent-1",
           kind: "agent",
           label: "Claude",
@@ -1227,8 +1227,6 @@ describe("canvas tab helpers", () => {
           ended_at: null,
           exit_code: null,
           failure_reason: null,
-          harness_provider: null,
-          harness_session_id: null,
           id: "terminal_2",
           label: "Terminal 2",
           last_active_at: "2026-03-08T10:01:00.000Z",
@@ -1242,8 +1240,6 @@ describe("canvas tab helpers", () => {
           ended_at: null,
           exit_code: null,
           failure_reason: null,
-          harness_provider: null,
-          harness_session_id: null,
           id: "terminal_1",
           label: "Terminal 1",
           last_active_at: "2026-03-08T10:00:00.000Z",
@@ -1261,7 +1257,6 @@ describe("canvas tab helpers", () => {
       resolveWorkspaceVisibleTabs(
         [
           {
-            harnessProvider: null,
             key: terminalTabKey("term-1"),
             kind: "terminal",
             label: "Terminal 1",
@@ -1271,7 +1266,6 @@ describe("canvas tab helpers", () => {
             terminalId: "term-1",
           },
           {
-            harnessProvider: null,
             key: terminalTabKey("term-2"),
             kind: "terminal",
             label: "Terminal 2",
@@ -1296,7 +1290,6 @@ describe("canvas tab helpers", () => {
   test("resolves only the tabs assigned to each pane instead of mirroring global tabs", () => {
     const terminalTabs = [
       {
-        harnessProvider: null,
         key: terminalTabKey("term-1"),
         kind: "terminal" as const,
         label: "Terminal 1",
@@ -1306,7 +1299,6 @@ describe("canvas tab helpers", () => {
         terminalId: "term-1",
       },
       {
-        harnessProvider: null,
         key: terminalTabKey("term-2"),
         kind: "terminal" as const,
         label: "Terminal 2",

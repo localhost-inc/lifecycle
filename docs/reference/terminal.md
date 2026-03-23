@@ -1,161 +1,103 @@
-# Terminal Harness & Session Lifecycle
+# Terminal Session Lifecycle
 
-Canonical contracts for terminal sessions, harness integration, and terminal surface behavior in the Lifecycle desktop app.
+Canonical contracts for shell terminals and native terminal surfaces in the Lifecycle desktop app.
 
-## Terminal Session Lifecycle
+## Terminal Model
 
-Terminal sessions follow a strict state machine:
+Terminal sessions are shell sessions attached to a workspace. They are not an agent harness, not a provider boundary, and not a source of truth for agent transcript state.
 
-- `active -> detached | sleeping | finished | failed`
-- `detached -> active | sleeping | finished | failed`
-- `sleeping -> detached | active | failed`
-- `finished` and `failed` are terminal states
+Every persisted terminal row has:
 
-Lifecycle boundaries:
-
-1. Local terminal sessions are **app-owned**, not daemon-owned. If the desktop app disappears, stale `active`/`detached`/`sleeping` rows must be reconciled on next boot.
-2. `create`/`attach` require workspace interactive context (worktree exists, workspace not in create/destroy teardown).
-3. `sleeping` terminals reject input.
-4. Workspace `destroy` hard-terminates non-finished/non-failed terminals.
-5. `detachTerminal` hides the active native surface without terminating the session.
-6. `killTerminal` is the only action that intentionally ends a live session.
-
-Control operations use typed commands (`create`, `detach`, `kill`, native surface sync`). Raw terminal rendering and input stay inside the native host rather than flowing through the generic store event bus.
-All terminal control operations are scoped by `workspace_id`; terminal IDs identify a child session, not an authority boundary.
-
-## Launch Types
-
-Every terminal session has an explicit `launch_type` discriminator:
-
-| Launch Type   | Description                         | Lifecycle                            |
-| ------------- | ----------------------------------- | ------------------------------------ |
-| `shell`       | Interactive user shell              | Standard terminal lifecycle          |
-| `harness`     | Agent session (Claude, Codex, etc.) | Extended with harness metadata       |
-| `service_log` | Service log viewer                  | Read-only, tied to service lifecycle |
+1. `id`
+2. `workspace_id`
+3. `launch_type`
+4. `created_by`
+5. `label`
+6. `label_origin`
+7. `status`
+8. `failure_reason`
+9. `exit_code`
+10. `started_at`
+11. `last_active_at`
+12. `ended_at`
 
 Rules:
 
-- `harness_provider` is only set when `launch_type = harness`.
-- `harness_session_id` is optional harness-owned resume metadata.
-- Provider-specific launch details stay behind adapter resolution — raw command arguments are not persisted on the terminal record.
-- Terminal interactivity keys off interactive workspace context, not `workspace.status === ready`. Services being stopped does not mean the workspace is not programmable.
+1. `launch_type` is currently `shell` for interactive workspace terminals.
+2. Agent session state lives in `agent_session`, `agent_event`, `agent_message`, and `agent_message_part`, not in terminal rows.
+3. Attachment storage is workspace-scoped and lives outside the worktree.
 
-## Harness Contract
+## Session Lifecycle
 
-### Adapter Boundary
+Terminal sessions follow this state machine:
 
-All harness-specific behavior lives behind **one adapter contract** in the desktop backend:
+1. `active -> detached | sleeping | finished | failed`
+2. `detached -> active | sleeping | finished | failed`
+3. `sleeping -> detached | active | failed`
+4. `finished` and `failed` are terminal states
 
-- CLI launch metadata (command, args, env)
-- Session-store lookup and session ID binding
-- Prompt-submission parsing
-- Completion parsing
-- Provider display metadata (default label, icon)
+Rules:
 
-Terminal lifecycle code consumes **normalized harness facts** instead of branching on provider names. Adding a new harness means implementing one adapter entry, not threading conditionals through the terminal stack.
+1. Local terminal sessions are app-owned. On boot, stale live rows must be reconciled back to non-running state.
+2. `create`, `attach`, and input require interactive workspace context.
+3. `detachTerminal` hides the native surface without terminating the shell session.
+4. `killTerminal` is the only intentional hard-stop for a live shell session.
+5. Workspace destroy hard-terminates non-finished terminals.
 
-### Session Binding
+## Surface Sync
 
-Terminal-to-session ownership is a **launch contract**, not a reconciliation problem:
+Native terminal rendering stays inside the desktop host. The web app sends geometry and presentation facts only.
 
-1. Claude launches with an explicit session ID from the start; respawns switch to resume once the session log exists.
-2. Codex runs inside a terminal-owned `CODEX_HOME` so session files live in an exclusive namespace from terminal creation.
-3. A terminal that needs post-launch discovery should only discover inside its own runtime-owned scope. Global session stores are not acceptable when multiple terminals share one workspace.
-4. Frontend cache updates for harness session metadata need an explicit terminal update event — not incidental refetches.
+Rules:
 
-### Session CLI Environment
+1. Geometry, visibility, focus, opacity, theme, and font settings are synchronized into the native host.
+2. Shell terminals use the runtime default shell startup path rather than an injected command string.
+3. Closing a tab detaches the surface; it does not implicitly kill the shell.
 
-Harness terminals inject a small Lifecycle session envelope so agents can drive the local CLI without extra setup:
+## CLI Session Envelope
+
+Shell terminals may still rely on Lifecycle workspace context being discoverable through the local environment, but that context is separate from agent-provider execution.
+
+Relevant environment values:
 
 1. `LIFECYCLE_WORKSPACE_ID`
 2. `LIFECYCLE_TERMINAL_ID`
-3. `LIFECYCLE_WORKSPACE_PATH` when the workspace has a concrete checkout path
-4. `LIFECYCLE_CLI_PATH` when the app has resolved a local `lifecycle` executable
-5. `LIFECYCLE_BRIDGE` for the local bridge socket
-6. `LIFECYCLE_BRIDGE_SESSION_TOKEN` for bridge authorization on shell-driven surface actions
+3. `LIFECYCLE_WORKSPACE_PATH` when a concrete checkout path exists
+4. `LIFECYCLE_CLI_PATH` when the desktop app resolves a local `lifecycle` executable
+5. `LIFECYCLE_BRIDGE`
+6. `LIFECYCLE_BRIDGE_SESSION_TOKEN`
 
 Rules:
 
-- This session envelope is explicit workspace-scoped context, not a substitute for startup-time login-shell hydration.
-- Harness launch env may include both general Lifecycle session vars and provider-specific vars like `CODEX_HOME`.
-- The desktop process should prepend the resolved Lifecycle CLI directory to `PATH` so both harness and plain shell terminals can discover `lifecycle` consistently.
-- Bridge commands must validate the session token against the current terminal/workspace scope instead of trusting the caller blindly.
-- Bridge socket reservation happens during synchronous app setup with standard-library IO; Tokio adoption and request serving happen only inside `tauri::async_runtime::spawn`.
+1. This envelope is workspace-scoped shell context, not agent session transport.
+2. Bridge calls must validate the current session token and workspace scope.
+3. The desktop process should prepend the resolved Lifecycle CLI directory to `PATH` so shell terminals can discover `lifecycle`.
 
-### Docker Workspace Runtime
+## Lifecycle Events
 
-Docker-target terminals keep the same native terminal surface while shifting execution into a long-lived sandbox container:
+Terminal lifecycle events cover shell-session facts only:
 
-1. The desktop backend auto-builds a first-party image tagged `lifecycle-sandbox:latest` from `apps/desktop/src-tauri/resources/docker/sandbox/Dockerfile` when the image is missing.
-2. Each Docker workspace gets one namespaced container named `lifecycle-workspace-<workspace-id>-sandbox`.
-3. Terminal attach uses `docker exec -it` into that container instead of launching the shell or harness directly on the host.
-4. Docker terminals mount the checkout at `/workspace` inside the sandbox and execute with `docker exec --workdir /workspace`.
-5. Harness env for Docker terminals still carries the normal Lifecycle session envelope (`LIFECYCLE_*`) plus provider-specific vars like `CODEX_HOME`, rewritten to sandbox-local paths where needed instead of leaking host `HOME` or `PATH` values.
+1. `terminal.created`
+2. `terminal.updated`
+3. `terminal.status_changed`
+4. `terminal.renamed`
 
-### Prompt Submission
+Rules:
 
-Prompt-boundary facts come from **authoritative session logs**, not renderer input plumbing:
-
-- Claude and Codex session logs record submitted user messages with stable timestamps.
-- The backend emits `terminal.harness_prompt_submitted` from log records.
-- Running-turn UI should use the dedicated `terminal.harness_turn_started` signal; providers that lack a native start record should be normalized onto that fact by the backend instead of inferring "running" in the renderer.
-- Session-log watchers re-read from the start filtered by terminal launch time — they do not blindly seek to EOF on first attach.
-- Codex auto-title triggers use `event_msg.user_message` as the source of truth, not `response_item` records (which may contain AGENTS/context scaffolding).
-
-### Turn Completion
-
-The existing `terminal:status-changed` path covers process exit, but **turn completion** is a distinct signal:
-
-- Interactive harness sessions remain alive after a response — PTY completion and turn completion are different.
-- Provider-owned session stores (structured JSONL records) are the hook point, not PTY output scraping.
-- The backend emits `terminal.harness_turn_completed` carrying `terminal_id`, `workspace_id`, `harness_provider`, `harness_session_id`, and optional `turn_id`.
-- The desktop shell (not terminal rendering code) consumes this event for tab attention, dock badges, and notification policy.
-
-## Terminal Surface Sync
-
-### Frame & Visibility
-
-Terminal surfaces are native host views managed through the terminal feature boundary:
-
-- Geometry, visibility, and focus are synced from the DOM shell into the native host.
-- Inactive runtime tabs may remain mounted in app memory when their host depends on attachment continuity.
-- Closing a runtime tab detaches/hides, does not kill.
-
-### Theme Propagation
-
-Theme sync flows from CSS tokens to the native terminal palette:
-
-1. Every preset needs an explicit shell-depth hierarchy: `--background` (outer shell), `--surface` (primary workspace/terminal plane), `--card` (nested/raised plane).
-2. Terminal ANSI palette must maintain distinguishable semantic lanes (blue vs cyan, green vs cyan).
-3. Preset audits use contract tests asserting shell/surface/card separation and preventing semantic lane collisions.
-
-## Log Streaming
-
-Service logs are a **top-priority feature** — real-time, high quality, never janky:
-
-1. Stream in real-time using async line readers, not batching.
-2. Support ANSI color rendering.
-3. Mark high-frequency log events as non-activity to avoid UI noise in workspace activity feeds.
-4. Log streaming correctness and performance take priority in any code touching log paths.
-
-## Inline Terminal Actions
-
-Terminal-adjacent controls follow this hierarchy:
-
-1. **Inline/header actions** — lightweight controls expand inside pane chrome.
-2. **Route-level dialogs** — modal workspace flows use route-driven dialogs when they need route ownership.
-3. **No floating overlays** — no screenshot-swap, no hosted-overlay compatibility layer.
-
-Because native terminal surfaces sit above the webview, lightweight floating UI should avoid overlapping live terminals. Route-level dialogs still own full-page flows.
+1. Agent turn lifecycle and transcript updates must use normalized `agent.*` events instead of terminal events.
+2. Terminal events are valid inputs for workspace activity and shell-surface cache invalidation only.
 
 ## Persistence
 
-- Terminal records persist in SQLite with launch type, harness metadata, and status.
-- Harness session rows track provider-specific session IDs and completion state.
-- Attachment storage lives outside the worktree.
-- Per-workspace restore state persists split topology, tab order, and active pane — but must not override provider/runtime authority.
+Terminal persistence is baseline-schema SQLite owned by the desktop app.
+
+Rules:
+
+1. Schema changes must go through numbered SQL migrations in `apps/desktop/src-tauri/src/platform/migrations`.
+2. Terminal boot reconciliation runs before the UI trusts persisted runtime state.
+3. The baseline schema must boot a fresh database without follow-on compatibility migrations.
 
 Key files:
 
-- `apps/desktop/src-tauri/src/capabilities/workspaces/terminal/` — all terminal capability files
-- `apps/desktop/src/features/terminals/` — frontend terminal features
+1. `apps/desktop/src-tauri/src/capabilities/workspaces/terminal/`
+2. `apps/desktop/src/features/terminals/`

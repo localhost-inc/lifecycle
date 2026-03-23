@@ -17,6 +17,18 @@ Lifecycle models the workspace as the concrete runnable instance:
 3. `terminal` — per-session interactive surface attached to the workspace
 4. `agent_session` — first-party agent interaction thread attached to the workspace
 
+## Agent Execution Model
+
+Lifecycle agent execution is split into three layers:
+
+1. `AgentOrchestrator` — desktop-side coordinator that creates and binds sessions, owns normalized event fanout, and persists Lifecycle agent state
+2. `AgentSession` — harness-facing live object for one persisted `agent_session` record
+3. `AgentWorker` — deployed execution unit running on the target runtime and wrapping the real Claude or Codex provider session
+
+The harness talks to `AgentSession`. `AgentSession` interfaces with `AgentWorker`. `AgentWorker` runs on the target `WorkspaceRuntime`.
+
+For the local Claude path, `AgentWorker` is a Lifecycle-owned worker process launched as `lifecycle agent worker claude`. The worker reports `provider_session_id` back to `AgentOrchestrator` during startup and then streams normalized `agent.*` facts over stdin/stdout transport. The desktop app must not use `provider_session_id` as the worker transport address.
+
 ## Workspace Checkout Type (Local)
 
 `workspace.checkout_type` captures how a local workspace gets its git context.
@@ -48,7 +60,7 @@ interface WorkspaceClient {
   getActivity(workspace_id) → lifecycle_events[]
   getServiceLogs(workspace_id) → service_logs[]
   getServices(workspace_id) → services[]
-  createTerminal(workspace_id, launch_type, harness_provider?, harness_session_id?) → terminal
+  createTerminal(workspace_id, launch_type) → terminal
   listTerminals(workspace_id) → terminals[]
   renameTerminal(workspace_id, terminal_id, label) → terminal
   saveTerminalAttachment(workspace_id, file_name, base64_data, media_type?) → attachment
@@ -86,15 +98,17 @@ interface WorkspaceClient {
 3. `startServices`, `stopServices`, and reset flows operate on the workspace's runnable services and belong to `WorkspaceClient`.
 4. File, git, terminal, activity, service, and service-log reads are workspace operations.
 5. Agent session create/list/get and future turn or approval operations belong to `AgentClient`, not `WorkspaceClient`.
-6. Desktop file reads, writes, listings, open actions, and file-event subscriptions may route through the local host file client when the workspace has a local `worktree_path`, even if the runtime target is not `local`.
-7. `startServices(service_names?)` may target a single service chain; workspace execution must honor manifest `depends_on` edges.
-8. When `startServices(service_names?)` is called against an already-active workspace, `ready` dependency services should be treated as satisfied boundaries.
-9. Local create/start flows must carry the exact manifest content plus `manifest_fingerprint`.
-10. Backend create owns workspace identity, source-ref derivation, and the returned workspace record. Desktop clients must not synthesize those fields locally.
-11. Desktop query reads should not bypass these seams with transport-local command calls.
-12. Frontend consumers should read concrete workspace-scoped facts through separate queries (`workspace`, `services`, `terminals`, `activity`, `service_logs`, `agent_sessions`) instead of depending on a synthetic snapshot aggregate.
-13. Backend-owned live selectors should stay split by concern as well; do not collapse activity, service logs, and other unrelated facts into a synthetic controller facts bag.
-14. Frontend manifest watchers may invalidate workspace queries when `lifecycle.json` changes, but reconciliation of persisted idle service state must remain backend-owned.
+6. `AgentClient` may create `AgentSession` objects backed by persisted `agent_session` rows and runtime-deployed `AgentWorker` instances.
+7. The agent transcript source of truth is `agent_event` plus its `agent_message` / `agent_message_part` projections; provider-local logs and terminal history are not query sources.
+8. Desktop file reads, writes, listings, open actions, and file-event subscriptions may route through the local host file client when the workspace has a local `worktree_path`, even if the runtime target is not `local`.
+9. `startServices(service_names?)` may target a single service chain; workspace execution must honor manifest `depends_on` edges.
+10. When `startServices(service_names?)` is called against an already-active workspace, `ready` dependency services should be treated as satisfied boundaries.
+11. Local create/start flows must carry the exact manifest content plus `manifest_fingerprint`.
+12. Backend create owns workspace identity, source-ref derivation, and the returned workspace record. Desktop clients must not synthesize those fields locally.
+13. Desktop query reads should not bypass these seams with transport-local command calls.
+14. Frontend consumers should read concrete workspace-scoped facts through separate queries (`workspace`, `services`, `terminals`, `activity`, `service_logs`, `agent_sessions`) instead of depending on a synthetic snapshot aggregate.
+15. Backend-owned live selectors should stay split by concern as well; do not collapse activity, service logs, and other unrelated facts into a synthetic controller facts bag.
+16. Frontend manifest watchers may invalidate workspace queries when `lifecycle.json` changes, but reconciliation of persisted idle service state must remain backend-owned.
 
 ## Execution Model
 
@@ -103,6 +117,7 @@ interface WorkspaceClient {
 1. All workspaces are lifecycle-managed execution instances backed by `WorkspaceClient`.
 2. V1 ships a host-backed workspace implementation.
 3. `docker`, `remote`, and `cloud` are explicit workspace targets. The desktop client currently routes `docker` workspaces through the same host workspace client path as `local` for mounted local-worktree reads/writes, while terminal execution for `docker` runs inside a workspace container; `remote` and `cloud` still fail fast until they have target-native clients.
+4. Agent execution target follows the workspace target. `AgentWorker` is deployed by the target runtime: local host process for `local`, workspace container process for `docker`, target-native agent host for `remote|cloud`.
 
 ## Event Foundation Contract
 
@@ -119,6 +134,7 @@ interface WorkspaceClient {
 3. Desktop-only geometry, visibility, focus, theme, and font synchronization stay outside the workspace client interface.
 4. `detachTerminal(workspace_id, terminal_id)` hides the active surface without terminating the session.
 5. `killTerminal(workspace_id, terminal_id)` is the only action that intentionally ends a live session.
+6. Terminals are shell surfaces only. Agent sessions use `AgentClient` and `agent_*` state instead of terminal rows or terminal lifecycle events.
 
 ## Targets and Aggregation
 

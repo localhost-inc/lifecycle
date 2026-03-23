@@ -1,18 +1,18 @@
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
-import { useEffect, useMemo } from "react";
-import { Outlet, useLocation, useOutletContext, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo } from "react";
+import { Outlet, useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom";
 import type { AppShellOutletContext } from "@/components/layout/app-shell-context";
-import { useTerminalResponseReady } from "@/features/terminals/state/terminal-response-ready-provider";
-import { useWorkspaceToolbarSlot } from "@/features/workspaces/state/workspace-toolbar-context";
-import { WorkspaceNavToolbar } from "@/features/workspaces/components/workspace-nav-toolbar";
-import { ProjectNavBar } from "@/features/projects/components/project-nav-bar";
 import type { WorkspaceCreateMode } from "@/features/workspaces/api";
 import { resolveProjectRepoWorkspace } from "@/features/projects/lib/project-repo-workspace";
 import {
   resolvePersistedProjectSubPath,
   writeLastProjectSubPath,
 } from "@/features/projects/state/project-content-tabs";
+import {
+  SHORTCUT_HANDLER_PRIORITY,
+  useShortcutRegistration,
+} from "@/app/shortcuts/shortcut-router";
 
 export interface ProjectRouteOutletContext {
   onCreateWorkspace: (mode: WorkspaceCreateMode) => Promise<void>;
@@ -30,18 +30,15 @@ export function ProjectRoute() {
     onCreateWorkspace,
     onDestroyWorkspace,
     onForkWorkspace,
-    onOpenSettings,
     onOpenWorkspace,
-    onToggleSidebar,
     projects,
-    sidebarCollapsed,
     workspacesByProjectId,
     onRemoveProject,
   } = useOutletContext<AppShellOutletContext>();
   const { projectId, workspaceId } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const project = projects.find((item) => item.id === projectId) ?? null;
-  const { hasWorkspaceResponseReady, hasWorkspaceRunningTurn } = useTerminalResponseReady();
   const workspaces = useMemo(() => {
     if (!projectId) {
       return [];
@@ -50,11 +47,41 @@ export function ProjectRoute() {
     return workspacesByProjectId[projectId] ?? [];
   }, [projectId, workspacesByProjectId]);
   const repositoryWorkspace = useMemo(() => resolveProjectRepoWorkspace(workspaces), [workspaces]);
-  const activeWorkspace = useMemo(
-    () => (workspaceId ? (workspaces.find((ws) => ws.id === workspaceId) ?? null) : null),
-    [workspaceId, workspaces],
-  );
-  const toolbarSlot = useWorkspaceToolbarSlot(activeWorkspace?.id ?? null);
+
+  // Workspace prev/next shortcuts
+  useShortcutRegistration({
+    handler: useCallback(() => {
+      if (!workspaceId || workspaces.length <= 1) {
+        return true;
+      }
+      const currentIndex = workspaces.findIndex((ws) => ws.id === workspaceId);
+      const prevIndex = (currentIndex - 1 + workspaces.length) % workspaces.length;
+      const target = workspaces[prevIndex];
+      if (target) {
+        void navigate(`/projects/${projectId}/workspaces/${target.id}`);
+      }
+      return true;
+    }, [workspaceId, navigate, projectId, workspaces]),
+    id: "workspace.previous-workspace",
+    priority: SHORTCUT_HANDLER_PRIORITY.project,
+  });
+
+  useShortcutRegistration({
+    handler: useCallback(() => {
+      if (!workspaceId || workspaces.length <= 1) {
+        return true;
+      }
+      const currentIndex = workspaces.findIndex((ws) => ws.id === workspaceId);
+      const nextIndex = (currentIndex + 1) % workspaces.length;
+      const target = workspaces[nextIndex];
+      if (target) {
+        void navigate(`/projects/${projectId}/workspaces/${target.id}`);
+      }
+      return true;
+    }, [workspaceId, navigate, projectId, workspaces]),
+    id: "workspace.next-workspace",
+    priority: SHORTCUT_HANDLER_PRIORITY.project,
+  });
 
   // Persist the current sub-path so sidebar links restore the last view
   useEffect(() => {
@@ -110,30 +137,5 @@ export function ProjectRoute() {
     );
   }
 
-  const actionsOutlet = toolbarSlot ? <WorkspaceNavToolbar slot={toolbarSlot} /> : null;
-
-  return (
-    <div
-      className="flex h-full min-h-0 flex-1 flex-col bg-[var(--background)]"
-      data-slot="project-shell"
-    >
-      <ProjectNavBar
-        actionsOutlet={actionsOutlet}
-        activeWorkspaceId={activeWorkspace?.id ?? null}
-        hasWorkspaceResponseReady={hasWorkspaceResponseReady}
-        hasWorkspaceRunningTurn={hasWorkspaceRunningTurn}
-        onCreateWorkspace={(mode) => void onCreateWorkspace(project.id, mode)}
-        onDestroyWorkspace={onDestroyWorkspace}
-        onForkWorkspace={onForkWorkspace}
-        onOpenSettings={onOpenSettings}
-        onToggleSidebar={onToggleSidebar}
-        projectId={project.id}
-        sidebarCollapsed={sidebarCollapsed}
-        workspaces={workspaces}
-      />
-      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden rounded-tl-lg border-l border-t border-[var(--border)] bg-[var(--surface)]">
-        <Outlet context={projectRouteContext} />
-      </div>
-    </div>
-  );
+  return <Outlet context={projectRouteContext} />;
 }

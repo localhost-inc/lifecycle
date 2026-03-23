@@ -443,7 +443,7 @@ fn emit_terminal_renamed(app: &AppHandle, terminal: &TerminalRecord) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::platform::db::{open_db, run_migrations};
+    use crate::platform::db::{apply_test_schema, open_db};
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::process::Command as StdCommand;
@@ -516,7 +516,7 @@ mod tests {
         name_origin: &str,
         source_ref_origin: &str,
     ) -> (String, String) {
-        run_migrations(db_path).expect("run migrations");
+        apply_test_schema(db_path);
         let repo_path_str = repo_path.to_str().expect("repo path is utf8");
         let base_ref = worktree::get_current_branch(repo_path_str)
             .await
@@ -746,7 +746,7 @@ mod tests {
         let repo_path = temp_repo_path();
         let db_path = temp_db_path();
         init_repo(&repo_path);
-        run_migrations(&db_path).expect("run migrations");
+        apply_test_schema(&db_path);
 
         let repo_path_str = repo_path.to_str().expect("repo path is utf8");
         let source_ref = worktree::get_current_branch(repo_path_str)
@@ -813,7 +813,7 @@ mod tests {
         let repo_path = temp_repo_path();
         let db_path = temp_db_path();
         init_repo(&repo_path);
-        run_migrations(&db_path).expect("run migrations");
+        apply_test_schema(&db_path);
 
         let repo_path_str = repo_path.to_str().expect("repo path is utf8");
         let source_ref = worktree::get_current_branch(repo_path_str)

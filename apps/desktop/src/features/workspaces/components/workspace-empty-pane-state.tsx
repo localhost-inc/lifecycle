@@ -1,12 +1,11 @@
 import { Button, EmptyState } from "@lifecycle/ui";
 import { TerminalSquare } from "lucide-react";
 import type { ReactNode } from "react";
-import type { HarnessProvider } from "@/features/terminals/api";
 import type { SurfaceLaunchRequest } from "@/features/workspaces/components/surface-launch-actions";
 import { ClaudeIcon, CodexIcon, ShellIcon } from "@/features/workspaces/components/surface-icons";
 
 interface WorkspaceEmptyPaneStateProps {
-  creatingSelection: "shell" | HarnessProvider | null;
+  creatingSelection: "shell" | "claude" | "codex" | null;
   onLaunchSurface: (request: SurfaceLaunchRequest) => void;
 }
 
@@ -52,7 +51,7 @@ export function WorkspaceEmptyPaneState({
           <LaunchButton
             active={creatingSelection === "claude"}
             disabled={busy}
-            onClick={() => onLaunchSurface({ backend: "claude", kind: "agent" })}
+            onClick={() => onLaunchSurface({ kind: "agent", provider: "claude" })}
           >
             {creatingSelection === "claude" ? null : <ClaudeIcon />}
             <span>Claude</span>
@@ -60,7 +59,7 @@ export function WorkspaceEmptyPaneState({
           <LaunchButton
             active={creatingSelection === "codex"}
             disabled={busy}
-            onClick={() => onLaunchSurface({ backend: "codex", kind: "agent" })}
+            onClick={() => onLaunchSurface({ kind: "agent", provider: "codex" })}
           >
             {creatingSelection === "codex" ? null : <CodexIcon />}
             <span>Codex</span>

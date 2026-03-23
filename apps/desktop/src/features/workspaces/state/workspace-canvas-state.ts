@@ -1,5 +1,5 @@
 import type {
-  AgentBackend,
+  AgentSessionProviderId,
   GitLogEntry,
   GitPullRequestCheckSummary,
   GitPullRequestSummary,
@@ -62,7 +62,7 @@ export interface BrowserDocument {
 
 export interface AgentTab {
   agentSessionId: string;
-  backend: AgentBackend;
+  provider: AgentSessionProviderId;
   key: string;
   kind: "agent";
   label: string;
@@ -169,7 +169,7 @@ type PersistedBrowserDocument = {
 
 type PersistedAgentTab = {
   agentSessionId?: unknown;
-  backend?: unknown;
+  provider?: unknown;
   kind?: unknown;
   label?: unknown;
 };
@@ -347,12 +347,12 @@ export function createBrowserTab(input: {
 
 export function createAgentTab(input: {
   agentSessionId: string;
-  backend: AgentBackend;
+  provider: AgentSessionProviderId;
   label: string;
 }): AgentTab {
   return {
     agentSessionId: input.agentSessionId,
-    backend: input.backend,
+    provider: input.provider,
     key: agentTabKey(input.agentSessionId),
     kind: "agent",
     label: input.label,
@@ -766,21 +766,21 @@ function parseBrowserDocument(value: Record<string, unknown>): BrowserDocument |
   });
 }
 
-function isValidAgentBackend(value: unknown): value is AgentBackend {
+function isValidAgentSessionProvider(value: unknown): value is AgentSessionProviderId {
   return value === "claude" || value === "codex";
 }
 
 function parseAgentTab(value: Record<string, unknown>): AgentTab | null {
   const agentSessionId = getOptionalString(value, "agentSessionId");
   const label = getOptionalString(value, "label");
-  const backend = value.backend;
-  if (!agentSessionId || !label || !isValidAgentBackend(backend)) {
+  const provider = value.provider;
+  if (!agentSessionId || !label || !isValidAgentSessionProvider(provider)) {
     return null;
   }
 
   return createAgentTab({
     agentSessionId,
-    backend,
+    provider,
     label,
   });
 }
@@ -1144,7 +1144,7 @@ function serializeWorkspaceCanvasDocument(
   if (isAgentTab(document)) {
     return {
       agentSessionId: document.agentSessionId,
-      backend: document.backend,
+      provider: document.provider,
       kind: document.kind,
       label: document.label,
     };

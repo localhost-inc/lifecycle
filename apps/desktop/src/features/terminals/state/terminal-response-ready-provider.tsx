@@ -41,9 +41,6 @@ interface TerminalResponseReadyContextValue {
 
 const TerminalResponseReadyContext = createContext<TerminalResponseReadyContextValue | null>(null);
 const TERMINAL_RESPONSE_READY_EVENT_KINDS = [
-  "terminal.harness_turn_started",
-  "terminal.harness_prompt_submitted",
-  "terminal.harness_turn_completed",
   "terminal.status_changed",
 ] as const satisfies readonly LifecycleEventKind[];
 
@@ -278,28 +275,6 @@ export function TerminalResponseReadyProvider({ children }: { children: ReactNod
 
   useLifecycleEvent(TERMINAL_RESPONSE_READY_EVENT_KINDS, (event) => {
     switch (event.kind) {
-      case "terminal.harness_turn_started":
-        dispatch({
-          terminalId: event.terminal_id,
-          turnId: event.turn_id,
-          kind: "mark-running",
-          workspaceId: event.workspace_id,
-        });
-        break;
-      case "terminal.harness_prompt_submitted":
-        break;
-      case "terminal.harness_turn_completed":
-        dispatch({
-          terminalId: event.terminal_id,
-          kind: "clear-running-terminal",
-        });
-        dispatch({
-          completionKey: event.completion_key,
-          terminalId: event.terminal_id,
-          kind: "mark-ready",
-          workspaceId: event.workspace_id,
-        });
-        break;
       case "terminal.status_changed":
         if (event.status !== "failed" && event.status !== "finished") {
           break;

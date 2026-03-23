@@ -17,7 +17,6 @@ import type {
   WorkspaceRecord,
   WorkspaceTarget,
 } from "@lifecycle/contracts";
-import type { HarnessLaunchConfigInput } from "./harnesses";
 
 export interface StartServicesInput {
   serviceNames?: string[];
@@ -34,10 +33,7 @@ export interface WorkspaceHealthResult {
 
 export interface CreateTerminalInput {
   workspaceId: string;
-  launchType: "shell" | "harness";
-  harnessLaunchConfig?: HarnessLaunchConfigInput | null;
-  harnessProvider?: string | null;
-  harnessSessionId?: string | null;
+  launchType: "shell";
 }
 
 export interface SaveTerminalAttachmentInput {

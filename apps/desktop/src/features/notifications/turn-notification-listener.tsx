@@ -1,11 +1,11 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { useEffect, useRef } from "react";
+import { selectAgentSessionById } from "@lifecycle/store";
 import { useStoreContext } from "@/store/provider";
 import { useProjects } from "@/store";
 import { router } from "@/app/router";
 import { useLifecycleEvent } from "@/features/events";
 import { useSettings } from "@/features/settings/state/settings-provider";
-import { setPendingTerminalFocus } from "@/features/notifications/lib/notification-navigation";
 import { shouldNotifyForTurnCompletion } from "@/features/notifications/lib/notification-settings";
 import {
   listenForNotificationClicks,
@@ -39,22 +39,12 @@ async function focusAppWindow(): Promise<void> {
 }
 
 function handleNotificationNavigation(navigation: NotificationNavigationData): void {
-  const { projectId, terminalId, workspaceId } = navigation;
+  const { projectId, workspaceId } = navigation;
   const targetPath = `/projects/${projectId}/workspaces/${workspaceId}`;
 
-  setPendingTerminalFocus(workspaceId, terminalId);
   void router.navigate(targetPath);
   void focusAppWindow().catch((error) => {
     console.error("Failed to focus app window:", error);
-  });
-
-  // Also dispatch focus-terminal for the case where the workspace is already mounted
-  window.requestAnimationFrame(() => {
-    window.dispatchEvent(
-      new CustomEvent("lifecycle:focus-terminal", {
-        detail: { terminalId, workspaceId },
-      }),
-    );
   });
 }
 
@@ -63,7 +53,7 @@ const recentCompletionKeys = new Set<string>();
 export function TurnNotificationListener() {
   const { turnNotificationSound, turnNotificationsMode } = useSettings();
   const attentionStateRef = useRef(readTurnNotificationAttentionState());
-  const { collections } = useStoreContext();
+  const { collections, driver } = useStoreContext();
   const projects = useProjects();
 
   useEffect(() => {
@@ -107,34 +97,40 @@ export function TurnNotificationListener() {
     };
   }, []);
 
-  useLifecycleEvent("terminal.harness_turn_completed", (event) => {
+  useLifecycleEvent("agent.turn.completed", (event) => {
     if (!shouldNotifyForTurnCompletion(turnNotificationsMode, attentionStateRef.current)) {
       return;
     }
 
-    if (recentCompletionKeys.has(event.completion_key)) {
+    const completionKey = `${event.session_id}:${event.turn_id}`;
+    if (recentCompletionKeys.has(completionKey)) {
       return;
     }
-    recentCompletionKeys.add(event.completion_key);
-    setTimeout(() => recentCompletionKeys.delete(event.completion_key), 5_000);
+    recentCompletionKeys.add(completionKey);
+    setTimeout(() => recentCompletionKeys.delete(completionKey), 5_000);
 
-    const workspace = collections.workspaces.collection.get(event.workspace_id);
-    const allTerminals = collections.terminals.collection.toArray;
-    const terminals = allTerminals.filter((t) => t.workspace_id === event.workspace_id);
-    const terminal = terminals.find((item) => item.id === event.terminal_id);
-    const projectId = workspace?.project_id;
-    const project = projectId ? projects.find((p) => p.id === projectId) : undefined;
+    void (async () => {
+      const workspace = collections.workspaces.collection.get(event.workspace_id);
+      const projectId = workspace?.project_id;
+      const project = projectId ? projects.find((p) => p.id === projectId) : undefined;
+      const session = await selectAgentSessionById(driver, event.session_id);
+      const context = {
+        projectId: projectId ?? null,
+        projectName: project?.name,
+        providerName:
+          session?.provider === "claude"
+            ? "Claude"
+            : session?.provider === "codex"
+              ? "Codex"
+              : "Agent",
+        sessionId: event.session_id,
+        sessionTitle: session?.title ?? null,
+        workspaceId: event.workspace_id,
+        workspaceName: workspace?.name,
+      };
 
-    const context = {
-      projectId: projectId ?? null,
-      projectName: project?.name,
-      sessionTitle: terminal?.label,
-      terminalId: event.terminal_id,
-      workspaceId: event.workspace_id,
-      workspaceName: workspace?.name,
-    };
-
-    void sendTurnCompletionNotification(event, context).catch((error) => {
+      await sendTurnCompletionNotification(event, context);
+    })().catch((error) => {
       console.error("Failed to send turn-complete notification:", error);
     });
 

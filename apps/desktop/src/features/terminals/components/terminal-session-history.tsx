@@ -1,7 +1,7 @@
 import type { TerminalRecord } from "@lifecycle/contracts";
 import { formatCompactRelativeTime } from "@/lib/format";
-import { terminalHasLiveSession, type CreateTerminalRequest, type HarnessProvider } from "@/features/terminals/api";
-import { ClaudeIcon, CodexIcon, ShellIcon } from "@/features/workspaces/components/surface-icons";
+import { terminalHasLiveSession } from "@/features/terminals/api";
+import { ShellIcon } from "@/features/workspaces/components/surface-icons";
 import {
   getWorkspaceSessionStatusState,
   WorkspaceSessionStatus,
@@ -9,21 +9,15 @@ import {
 
 interface TerminalSessionHistoryProps {
   activeTerminalId: string | null;
-  creatingSelection: "shell" | HarnessProvider | null;
+  creatingSelection: "shell" | "claude" | "codex" | null;
   isTerminalResponseReady: (terminalId: string) => boolean;
   isTerminalTurnRunning: (terminalId: string) => boolean;
   onOpenTerminal: (terminalId: string) => void;
-  onResumeTerminal: (input: Extract<CreateTerminalRequest, { launchType: "harness" }>) => void;
   terminals: TerminalRecord[];
 }
 
-function isHarnessProvider(value: string | null): value is HarnessProvider {
-  return value === "claude" || value === "codex";
-}
-
 function providerIcon(terminal: TerminalRecord) {
-  if (terminal.harness_provider === "claude") return <ClaudeIcon size={13} />;
-  if (terminal.harness_provider === "codex") return <CodexIcon size={13} />;
+  void terminal;
   return <ShellIcon size={13} />;
 }
 
@@ -41,7 +35,6 @@ export function TerminalSessionHistory({
   isTerminalResponseReady,
   isTerminalTurnRunning,
   onOpenTerminal,
-  onResumeTerminal,
   terminals,
 }: TerminalSessionHistoryProps) {
   return (
@@ -53,25 +46,13 @@ export function TerminalSessionHistory({
           responseReady: isTerminalResponseReady(terminal.id),
           running: isTerminalTurnRunning(terminal.id),
         });
-        const canResume =
-          !hasLiveSession &&
-          terminal.launch_type === "harness" &&
-          isHarnessProvider(terminal.harness_provider) &&
-          typeof terminal.harness_session_id === "string" &&
-          terminal.harness_session_id.length > 0;
         function handleClick() {
           if (hasLiveSession) {
             onOpenTerminal(terminal.id);
-          } else if (canResume) {
-            onResumeTerminal({
-              harnessProvider: terminal.harness_provider as HarnessProvider,
-              harnessSessionId: terminal.harness_session_id as string,
-              launchType: "harness",
-            });
           }
         }
 
-        const isClickable = (hasLiveSession || canResume) && creatingSelection === null;
+        const isClickable = hasLiveSession && creatingSelection === null;
 
         return (
           <li key={terminal.id}>

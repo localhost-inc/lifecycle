@@ -64,8 +64,6 @@ const TerminalRecordSchema = z.object({
   ended_at: z.string().nullable(),
   exit_code: z.number().int().nullable(),
   failure_reason: z.string().nullable(),
-  harness_provider: z.string().nullable(),
-  harness_session_id: z.string().nullable(),
   id: z.string(),
   label: z.string(),
   last_active_at: z.string(),

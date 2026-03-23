@@ -47,8 +47,6 @@ export interface TerminalRecord {
   id: string;
   workspace_id: string;
   launch_type: TerminalType;
-  harness_provider: string | null;
-  harness_session_id: string | null;
   created_by: string | null;
   label: string;
   status: TerminalStatus;

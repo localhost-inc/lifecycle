@@ -1,4 +1,3 @@
-import type { LifecycleEventOf } from "@lifecycle/contracts";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   isPermissionGranted as isTauriNotificationPermissionGranted,
@@ -11,25 +10,20 @@ import { getTurnNotificationSoundProfile } from "@/features/notifications/lib/tu
 
 let sharedAudioContext: AudioContext | null = null;
 
-function providerLabel(provider: string | null): string {
-  if (provider === "claude") {
-    return "Claude";
-  }
-
-  if (provider === "codex") {
-    return "Codex";
-  }
-
-  return "Agent";
-}
-
 export interface TurnCompletionNotificationContext {
   projectId?: string | null;
   projectName?: string | null;
+  providerName?: string | null;
   sessionTitle?: string | null;
-  terminalId?: string | null;
+  sessionId?: string | null;
   workspaceId?: string | null;
   workspaceName?: string | null;
+}
+
+export interface TurnCompletionLifecycleEvent {
+  session_id: string;
+  turn_id: string;
+  workspace_id: string;
 }
 
 function formatLocation(projectName?: string | null, workspaceName?: string | null): string | null {
@@ -44,13 +38,13 @@ function formatLocation(projectName?: string | null, workspaceName?: string | nu
 }
 
 export function createTurnCompletionNotificationCopy(
-  event: LifecycleEventOf<"terminal.harness_turn_completed">,
+  event: TurnCompletionLifecycleEvent,
   context?: TurnCompletionNotificationContext,
 ): {
   body: string;
   title: string;
 } {
-  const provider = providerLabel(event.harness_provider);
+  const provider = context?.providerName?.trim() || "Agent";
   const sessionTitle = context?.sessionTitle?.trim();
   const location = formatLocation(context?.projectName, context?.workspaceName);
 
@@ -88,7 +82,7 @@ async function ensureTauriNotificationPermission(): Promise<boolean> {
 
 export interface NotificationNavigationData {
   projectId: string;
-  terminalId: string;
+  sessionId?: string;
   workspaceId: string;
 }
 
@@ -97,17 +91,17 @@ function buildNavigationExtra(
 ): NotificationNavigationData | null {
   const projectId = context?.projectId;
   const workspaceId = context?.workspaceId;
-  const terminalId = context?.terminalId;
+  const sessionId = context?.sessionId;
 
-  if (!projectId || !workspaceId || !terminalId) {
+  if (!projectId || !workspaceId) {
     return null;
   }
 
-  return { projectId, terminalId, workspaceId };
+  return sessionId ? { projectId, sessionId, workspaceId } : { projectId, workspaceId };
 }
 
 export async function sendTurnCompletionNotification(
-  event: LifecycleEventOf<"terminal.harness_turn_completed">,
+  event: TurnCompletionLifecycleEvent,
   context?: TurnCompletionNotificationContext,
 ): Promise<void> {
   const notification = createTurnCompletionNotificationCopy(event, context);
@@ -157,10 +151,10 @@ export async function listenForNotificationClicks(
       const extra = notification.extra as Record<string, unknown> | undefined;
       const projectId = typeof extra?.projectId === "string" ? extra.projectId : null;
       const workspaceId = typeof extra?.workspaceId === "string" ? extra.workspaceId : null;
-      const terminalId = typeof extra?.terminalId === "string" ? extra.terminalId : null;
+      const sessionId = typeof extra?.sessionId === "string" ? extra.sessionId : undefined;
 
-      if (projectId && workspaceId && terminalId) {
-        callback({ projectId, terminalId, workspaceId });
+      if (projectId && workspaceId) {
+        callback({ projectId, sessionId, workspaceId });
       }
     });
     cleanups.push(() => listener.unregister());
@@ -169,7 +163,7 @@ export async function listenForNotificationClicks(
   // Also listen for browser-originated navigation events (used by browser Notification onclick)
   const handleCustomEvent = (event: Event) => {
     const detail = (event as CustomEvent<NotificationNavigationData>).detail;
-    if (detail.projectId && detail.workspaceId && detail.terminalId) {
+    if (detail.projectId && detail.workspaceId) {
       callback(detail);
     }
   };

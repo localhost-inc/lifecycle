@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { TerminalSessionHistory } from "@/features/terminals/components/terminal-session-history";
 
 describe("TerminalSessionHistory", () => {
-  test("renders open and resume actions from persisted workspace sessions", () => {
+  test("renders open actions from persisted workspace sessions", () => {
     const markup = renderToStaticMarkup(
       createElement(TerminalSessionHistory, {
         activeTerminalId: "term-active",
@@ -12,15 +12,12 @@ describe("TerminalSessionHistory", () => {
         isTerminalResponseReady: () => false,
         isTerminalTurnRunning: () => false,
         onOpenTerminal: () => {},
-        onResumeTerminal: () => {},
         terminals: [
           {
             created_by: null,
             ended_at: null,
             exit_code: null,
             failure_reason: null,
-            harness_provider: null,
-            harness_session_id: null,
             id: "term-active",
             label: "Terminal 1",
             last_active_at: "2026-03-08T10:02:00.000Z",
@@ -34,12 +31,10 @@ describe("TerminalSessionHistory", () => {
             ended_at: "2026-03-08T10:07:00.000Z",
             exit_code: 0,
             failure_reason: null,
-            harness_provider: "codex",
-            harness_session_id: "abcdefgh12345678",
             id: "term-finished",
-            label: "Codex · Session 2",
+            label: "Terminal 2",
             last_active_at: "2026-03-08T10:06:00.000Z",
-            launch_type: "harness",
+            launch_type: "shell",
             started_at: "2026-03-08T10:01:00.000Z",
             status: "finished",
             workspace_id: "ws_1",
@@ -49,12 +44,10 @@ describe("TerminalSessionHistory", () => {
             ended_at: "2026-03-08T10:08:00.000Z",
             exit_code: 1,
             failure_reason: "unknown",
-            harness_provider: "claude",
-            harness_session_id: null,
             id: "term-failed",
-            label: "Claude · Session 3",
+            label: "Terminal 3",
             last_active_at: "2026-03-08T10:07:00.000Z",
-            launch_type: "harness",
+            launch_type: "shell",
             started_at: "2026-03-08T10:03:00.000Z",
             status: "failed",
             workspace_id: "ws_1",
@@ -64,16 +57,11 @@ describe("TerminalSessionHistory", () => {
     );
 
     expect(markup).toContain("Terminal 1");
-    expect(markup).toContain("Codex · Session 2");
-    expect(markup).toContain("Claude · Session 3");
+    expect(markup).toContain("Terminal 2");
+    expect(markup).toContain("Terminal 3");
     // Active terminal row uses active background
     expect(markup).toContain("bg-[var(--surface-hover)]");
-    // Finished harness with session ID is resumable (button not disabled)
-    // Failed harness without session ID is disabled
-    const codexButton = markup.split("Codex")[0]!.split("<button").pop()!;
-    expect(codexButton).not.toContain('disabled=""');
-    const claudeButton = markup.split("Claude")[0]!.split("<button").pop()!;
-    expect(claudeButton).toContain('disabled=""');
+    expect(markup).toContain('disabled=""');
   });
 
   test("renders running and ready indicators for active session rows", () => {
@@ -84,19 +72,16 @@ describe("TerminalSessionHistory", () => {
         isTerminalResponseReady: (terminalId) => terminalId === "term-ready",
         isTerminalTurnRunning: (terminalId) => terminalId === "term-running",
         onOpenTerminal: () => {},
-        onResumeTerminal: () => {},
         terminals: [
           {
             created_by: null,
             ended_at: null,
             exit_code: null,
             failure_reason: null,
-            harness_provider: "codex",
-            harness_session_id: "running-session",
             id: "term-running",
-            label: "Codex · Running",
+            label: "Terminal · Running",
             last_active_at: "2026-03-08T10:02:00.000Z",
-            launch_type: "harness",
+            launch_type: "shell",
             started_at: "2026-03-08T10:00:00.000Z",
             status: "active",
             workspace_id: "ws_1",
@@ -106,12 +91,10 @@ describe("TerminalSessionHistory", () => {
             ended_at: null,
             exit_code: null,
             failure_reason: null,
-            harness_provider: "claude",
-            harness_session_id: "ready-session",
             id: "term-ready",
-            label: "Claude · Ready",
+            label: "Terminal · Ready",
             last_active_at: "2026-03-08T10:03:00.000Z",
-            launch_type: "harness",
+            launch_type: "shell",
             started_at: "2026-03-08T10:01:00.000Z",
             status: "detached",
             workspace_id: "ws_1",

@@ -16,19 +16,17 @@ describe("terminal contracts", () => {
   });
 
   test("keeps canonical terminal type values", () => {
-    const types: TerminalType[] = ["shell", "harness", "preset", "command"];
-    expect(types).toEqual(["shell", "harness", "preset", "command"]);
+    const types: TerminalType[] = ["shell", "preset", "command"];
+    expect(types).toEqual(["shell", "preset", "command"]);
   });
 
-  test("supports harness provider metadata on a terminal record", () => {
+  test("keeps terminal records focused on shell session state", () => {
     const terminal: TerminalRecord = {
       id: "term_1",
       workspace_id: "ws_1",
-      launch_type: "harness",
-      harness_provider: "codex",
-      harness_session_id: "session_1",
+      launch_type: "shell",
       created_by: null,
-      label: "Codex · auth-fix",
+      label: "Terminal 1",
       failure_reason: null,
       exit_code: null,
       last_active_at: "2026-03-05T08:00:00.000Z",
@@ -37,7 +35,7 @@ describe("terminal contracts", () => {
       ended_at: null,
     };
 
-    expect(terminal.harness_session_id).toBe("session_1");
-    expect(terminal.harness_provider).toBe("codex");
+    expect(terminal.launch_type).toBe("shell");
+    expect(terminal.label).toBe("Terminal 1");
   });
 });

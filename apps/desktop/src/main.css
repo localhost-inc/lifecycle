@@ -25,6 +25,35 @@ body {
   border-color: var(--border);
 }
 
+/* Force mono font everywhere inside agent surfaces */
+.agent-surface,
+.agent-surface * {
+  font-family: var(--font-mono) !important;
+}
+
+/* Strip trailing margin from last element in streamdown blocks */
+.agent-streamdown > *:last-child {
+  margin-bottom: 0 !important;
+}
+
+.agent-message-list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.agent-message-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.agent-message-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.agent-message-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 0;
+}
+
 .terminal-host {
   background-color: var(--terminal-surface-background, var(--background));
   contain: paint;

@@ -110,7 +110,6 @@ impl std::fmt::Display for ServiceStatus {
 #[serde(rename_all = "snake_case")]
 pub enum TerminalType {
     Shell,
-    Harness,
     Preset,
     Command,
 }
@@ -119,7 +118,6 @@ impl TerminalType {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Shell => "shell",
-            Self::Harness => "harness",
             Self::Preset => "preset",
             Self::Command => "command",
         }
@@ -128,7 +126,6 @@ impl TerminalType {
     pub fn from_str(s: &str) -> Result<Self, LifecycleError> {
         match s {
             "shell" => Ok(Self::Shell),
-            "harness" => Ok(Self::Harness),
             "preset" => Ok(Self::Preset),
             "command" => Ok(Self::Command),
             _ => Err(LifecycleError::InvalidStateTransition {
@@ -190,7 +187,6 @@ impl std::fmt::Display for TerminalStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TerminalFailureReason {
-    HarnessProcessExitNonzero,
     AttachFailed,
     WorkspaceDestroyed,
     Unknown,
@@ -199,7 +195,6 @@ pub enum TerminalFailureReason {
 impl TerminalFailureReason {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::HarnessProcessExitNonzero => "harness_process_exit_nonzero",
             Self::AttachFailed => "attach_failed",
             Self::WorkspaceDestroyed => "workspace_destroyed",
             Self::Unknown => "unknown",

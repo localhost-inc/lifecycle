@@ -1,6 +1,5 @@
 import type { DragEvent as ReactDragEvent } from "react";
 import type { TerminalRecord, TerminalStatus } from "@lifecycle/contracts";
-import type { HarnessProvider } from "@/features/terminals/api";
 import {
   isAgentTab,
   getWorkspaceDocument,
@@ -14,7 +13,6 @@ import {
 } from "@/features/workspaces/state/workspace-canvas-state";
 
 export type TerminalTab = {
-  harnessProvider: HarnessProvider | null;
   kind: "terminal";
   key: string;
   label: string;

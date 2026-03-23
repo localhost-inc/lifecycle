@@ -37,6 +37,7 @@ import {
   warmAudioContext,
 } from "@/features/notifications/lib/turn-notification-runtime";
 import { HarnessSettingsPanel } from "@/features/settings/components/harness-settings-panel";
+import { ProviderAccountsPanel } from "@/features/settings/components/provider-accounts-panel";
 import { SettingsFieldRow, SettingsRow, SettingsSection } from "@/features/settings/components/settings-primitives";
 import {
   BASE_FONT_SIZE_OPTIONS,
@@ -725,13 +726,15 @@ export function SettingsShellLayout() {
                 </SettingsSection>
 
                 <SettingsSection
-                  description="Default launch behavior for Claude and Codex sessions."
+                  description="Provider accounts, launch defaults, and permissions for Claude and Codex sessions."
                   id="agents"
                   label="Agents"
                   ref={(node) => {
                     sectionRefs.current.agents = node;
                   }}
                 >
+                  <ProviderAccountsPanel />
+                  <div className="mt-6" />
                   <HarnessSettingsPanel
                     claude={harnesses.claude}
                     codex={harnesses.codex}

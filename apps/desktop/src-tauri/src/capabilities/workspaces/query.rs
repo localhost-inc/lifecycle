@@ -49,11 +49,6 @@ pub struct TerminalRecord {
     pub id: String,
     pub workspace_id: String,
     pub launch_type: String,
-    pub harness_provider: Option<String>,
-    pub harness_session_id: Option<String>,
-    #[allow(dead_code)]
-    #[serde(skip_serializing)]
-    pub harness_launch_mode: String,
     pub created_by: Option<String>,
     pub label: String,
     #[allow(dead_code)]
@@ -72,18 +67,15 @@ fn map_terminal_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<TerminalReco
         id: row.get(0)?,
         workspace_id: row.get(1)?,
         launch_type: row.get(2)?,
-        harness_provider: row.get(3)?,
-        harness_session_id: row.get(4)?,
-        harness_launch_mode: row.get(5)?,
-        created_by: row.get(6)?,
-        label: row.get(7)?,
-        label_origin: row.get(8)?,
-        status: row.get(9)?,
-        failure_reason: row.get(10)?,
-        exit_code: row.get(11)?,
-        started_at: row.get(12)?,
-        last_active_at: row.get(13)?,
-        ended_at: row.get(14)?,
+        created_by: row.get(3)?,
+        label: row.get(4)?,
+        label_origin: row.get(5)?,
+        status: row.get(6)?,
+        failure_reason: row.get(7)?,
+        exit_code: row.get(8)?,
+        started_at: row.get(9)?,
+        last_active_at: row.get(10)?,
+        ended_at: row.get(11)?,
     })
 }
 
@@ -236,7 +228,7 @@ fn list_workspace_terminals_sync(
 ) -> Result<Vec<TerminalRecord>, LifecycleError> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, workspace_id, launch_type, harness_provider, harness_session_id, harness_launch_mode, created_by, label, label_origin, status, failure_reason, exit_code, started_at, last_active_at, ended_at
+            "SELECT id, workspace_id, launch_type, created_by, label, label_origin, status, failure_reason, exit_code, started_at, last_active_at, ended_at
              FROM terminal
              WHERE workspace_id = ?1
              ORDER BY started_at DESC, id DESC",
@@ -269,7 +261,7 @@ pub async fn list_workspace_terminals(
 mod tests {
     use super::*;
     use crate::capabilities::workspaces::manifest::parse_lifecycle_config_with_fingerprint;
-    use crate::platform::db::run_migrations;
+    use crate::platform::db::apply_test_schema;
 
     fn temp_db_path() -> String {
         std::env::temp_dir()
@@ -284,7 +276,7 @@ mod tests {
     #[tokio::test]
     async fn get_workspace_services_reconciles_idle_manifest_from_disk() {
         let db_path = temp_db_path();
-        run_migrations(&db_path).expect("run migrations");
+        apply_test_schema(&db_path);
         let worktree_path =
             std::env::temp_dir().join(format!("lifecycle-query-worktree-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&worktree_path).expect("create worktree dir");
@@ -372,7 +364,7 @@ mod tests {
     #[tokio::test]
     async fn get_workspace_services_fails_when_workspace_is_missing() {
         let db_path = temp_db_path();
-        run_migrations(&db_path).expect("run migrations");
+        apply_test_schema(&db_path);
 
         let error = get_workspace_services(&db_path, "workspace_1".to_string())
             .await

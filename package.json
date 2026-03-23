@@ -1,21 +1,32 @@
 {
   "name": "lifecycle",
   "version": "0.0.0",
-  "description": "Desktop-first workspace runtime for local-first software work.",
-  "license": "SEE LICENSE IN LICENSE",
-  "private": true,
-  "homepage": "https://github.com/localhost-inc/lifecycle",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/localhost-inc/lifecycle.git"
   },
+  "devDependencies": {
+    "@types/bun": "^1.3.3",
+    "@types/node": "^22.13.10",
+    "desktop": "^0.1.0",
+    "github-markdown-css": "^5.9.0",
+    "lefthook": "^2.1.1",
+    "oxfmt": "^0.36.0",
+    "oxlint": "^1.17.0",
+    "turbo": "^2.8.0",
+    "typescript": "^5.9.0"
+  },
   "bugs": {
     "url": "https://github.com/localhost-inc/lifecycle/issues"
   },
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "description": "Desktop-first workspace runtime for local-first software work.",
+  "engines": {
+    "bun": ">=1.3.10"
+  },
+  "homepage": "https://github.com/localhost-inc/lifecycle",
+  "license": "SEE LICENSE IN LICENSE",
+  "packageManager": "bun@1.3.10",
+  "private": true,
   "scripts": {
     "bench:naming": "bun run scripts/benchmark-naming-models.ts",
     "build": "turbo run build",
@@ -32,19 +43,8 @@
     "typecheck": "turbo run typecheck",
     "typecheck:force": "turbo run typecheck --force"
   },
-  "devDependencies": {
-    "@types/bun": "^1.3.3",
-    "@types/node": "^22.13.10",
-    "desktop": "^0.1.0",
-    "github-markdown-css": "^5.9.0",
-    "lefthook": "^2.1.1",
-    "oxfmt": "^0.36.0",
-    "oxlint": "^1.17.0",
-    "turbo": "^2.8.0",
-    "typescript": "^5.9.0"
-  },
-  "engines": {
-    "bun": ">=1.3.10"
-  },
-  "packageManager": "bun@1.3.10"
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
 }

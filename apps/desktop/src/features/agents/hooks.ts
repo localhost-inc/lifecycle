@@ -1,17 +1,11 @@
 import { useMemo } from "react";
-import type { AgentMessageRecord, AgentSessionRecord } from "@lifecycle/contracts";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAgentSessions as useStoreAgentSessions } from "@/store";
-import { listAgentSessionMessages } from "@/features/agents/api";
+import type { AgentMessageWithParts, AgentSessionRecord } from "@lifecycle/contracts";
+import { useAgentMessages, useAgentSessions as useStoreAgentSessions } from "@/store";
 
 export function useAgentSessions(workspaceId: string | null): AgentSessionRecord[] {
   return useStoreAgentSessions(workspaceId ?? "");
 }
 
-/**
- * Find a single agent session from the workspace-scoped collection.
- * Requires the workspaceId because agent sessions are indexed by workspace in the store.
- */
 export function useAgentSession(
   workspaceId: string,
   agentSessionId: string | null,
@@ -25,35 +19,15 @@ export function useAgentSession(
 
 export function useAgentSessionMessages(
   agentSessionId: string | null,
-): { data: AgentMessageRecord[] | undefined; isLoading: boolean } {
-  const query = useQuery({
-    queryKey: ["agents", "messages", agentSessionId],
-    queryFn: () => listAgentSessionMessages(agentSessionId!),
-    enabled: agentSessionId !== null,
-    refetchOnWindowFocus: false,
-  });
+): { data: AgentMessageWithParts[] | undefined; error: Error | null; isLoading: boolean } {
+  const messages = useAgentMessages(agentSessionId ?? "");
 
   return useMemo(
     () => ({
-      data: query.data,
-      isLoading: query.isLoading,
+      data: agentSessionId ? messages.data : undefined,
+      error: agentSessionId ? messages.error : null,
+      isLoading: false,
     }),
-    [query.data, query.isLoading],
-  );
-}
-
-/**
- * Returns a function to invalidate agent session messages in React Query cache.
- * Used when events indicate messages have changed (e.g. turn completed).
- */
-export function useInvalidateAgentSessionMessages(): (agentSessionId: string) => void {
-  const queryClient = useQueryClient();
-  return useMemo(
-    () => (agentSessionId: string) => {
-      void queryClient.invalidateQueries({
-        queryKey: ["agents", "messages", agentSessionId],
-      });
-    },
-    [queryClient],
+    [agentSessionId, messages.data, messages.error],
   );
 }

@@ -11,11 +11,6 @@ use super::persistence::{
 };
 use super::types::SavedTerminalAttachment;
 
-#[cfg(test)]
-const BRACKETED_PASTE_START: &str = "\u{1b}[200~";
-#[cfg(test)]
-const BRACKETED_PASTE_END: &str = "\u{1b}[201~";
-
 pub(crate) fn build_terminal_attachment_file_name(
     file_name: &str,
     media_type: Option<&str>,
@@ -99,44 +94,21 @@ pub(crate) fn format_terminal_attachment_insertion(paths: &[String]) -> String {
 }
 
 #[cfg(test)]
-pub(crate) fn build_terminal_attachment_write_payloads(
-    harness_provider: Option<&str>,
-    paths: &[String],
-) -> Vec<String> {
+pub(crate) fn build_terminal_attachment_write_payloads(paths: &[String]) -> Vec<String> {
     if paths.is_empty() {
         return Vec::new();
-    }
-
-    if matches!(harness_provider, Some("codex")) {
-        return paths
-            .iter()
-            .map(|path| {
-                format!(
-                    "{BRACKETED_PASTE_START}{}{BRACKETED_PASTE_END}",
-                    serde_json::to_string(path).unwrap_or_else(|_| "\"\"".to_string())
-                )
-            })
-            .collect();
     }
 
     vec![format!("{} ", format_terminal_attachment_insertion(paths))]
 }
 
 #[allow(dead_code)]
-pub(crate) fn build_native_terminal_attachment_paste_payload(
-    harness_provider: Option<&str>,
-    paths: &[String],
-) -> String {
+pub(crate) fn build_native_terminal_attachment_paste_payload(paths: &[String]) -> String {
     if paths.is_empty() {
         return String::new();
     }
 
-    let insertion = format_terminal_attachment_insertion(paths);
-    if matches!(harness_provider, Some("codex")) {
-        insertion
-    } else {
-        format!("{insertion} ")
-    }
+    format!("{} ", format_terminal_attachment_insertion(paths))
 }
 
 fn persist_terminal_attachment_bytes(
@@ -228,10 +200,7 @@ pub(crate) fn prepare_native_terminal_attachment_paste(
         media_type,
         bytes,
     )?;
-    Ok(build_native_terminal_attachment_paste_payload(
-        terminal.harness_provider.as_deref(),
-        &[attachment.absolute_path],
-    ))
+    Ok(build_native_terminal_attachment_paste_payload(&[attachment.absolute_path]))
 }
 
 #[cfg(test)]
@@ -274,10 +243,9 @@ mod tests {
     }
 
     #[test]
-    fn build_terminal_attachment_write_payloads_uses_plain_text_for_non_codex() {
+    fn build_terminal_attachment_write_payloads_uses_plain_text_with_trailing_space() {
         assert_eq!(
             build_terminal_attachment_write_payloads(
-                Some("claude"),
                 &[
                     "/tmp/one.png".to_string(),
                     "/tmp/two with spaces.png".to_string(),
@@ -288,43 +256,22 @@ mod tests {
     }
 
     #[test]
-    fn build_terminal_attachment_write_payloads_uses_bracketed_paste_for_codex() {
+    fn build_native_terminal_attachment_paste_payload_uses_trailing_space() {
         assert_eq!(
-            build_terminal_attachment_write_payloads(
-                Some("codex"),
+            build_native_terminal_attachment_paste_payload(
                 &[
                     "/tmp/one.png".to_string(),
                     "/tmp/two with spaces.png".to_string(),
                 ],
             ),
-            vec![
-                "\u{1b}[200~\"/tmp/one.png\"\u{1b}[201~".to_string(),
-                "\u{1b}[200~\"/tmp/two with spaces.png\"\u{1b}[201~".to_string(),
-            ]
+            r#""/tmp/one.png" "/tmp/two with spaces.png" "#
         );
     }
 
     #[test]
-    fn build_native_terminal_attachment_paste_payload_uses_plain_paste_for_codex() {
+    fn build_native_terminal_attachment_paste_payload_keeps_trailing_space() {
         assert_eq!(
-            build_native_terminal_attachment_paste_payload(
-                Some("codex"),
-                &[
-                    "/tmp/one.png".to_string(),
-                    "/tmp/two with spaces.png".to_string(),
-                ],
-            ),
-            r#""/tmp/one.png" "/tmp/two with spaces.png""#
-        );
-    }
-
-    #[test]
-    fn build_native_terminal_attachment_paste_payload_keeps_trailing_space_for_claude() {
-        assert_eq!(
-            build_native_terminal_attachment_paste_payload(
-                Some("claude"),
-                &["/tmp/one.png".to_string()],
-            ),
+            build_native_terminal_attachment_paste_payload(&["/tmp/one.png".to_string()]),
             r#""/tmp/one.png" "#
         );
     }

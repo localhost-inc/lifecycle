@@ -290,8 +290,6 @@ describe("workspace contract", () => {
       id: "term_1",
       workspace_id: "ws_1",
       launch_type: "shell",
-      harness_provider: null,
-      harness_session_id: null,
       created_by: null,
       label: "Terminal 1",
       status: "active",
@@ -483,7 +481,7 @@ describe("workspace contract", () => {
     ]);
   });
 
-  test("host workspace client forwards optional harness session ids", async () => {
+  test("host workspace client creates shell terminals without harness metadata", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
       if (args) {
@@ -494,11 +492,9 @@ describe("workspace contract", () => {
       return {
         id: "term_1",
         workspace_id: "ws_1",
-        launch_type: "harness",
-        harness_provider: "claude",
-        harness_session_id: "session-123",
+        launch_type: "shell",
         created_by: null,
-        label: "Claude · Session 1",
+        label: "Terminal 1",
         status: "detached",
         failure_reason: null,
         exit_code: null,
@@ -511,9 +507,7 @@ describe("workspace contract", () => {
 
     await client.createTerminal({
       workspaceId: "ws_1",
-      launchType: "harness",
-      harnessProvider: "claude",
-      harnessSessionId: "session-123",
+      launchType: "shell",
     });
 
     expect(calls).toEqual([
@@ -521,10 +515,7 @@ describe("workspace contract", () => {
         cmd: "create_terminal",
         args: {
           workspaceId: "ws_1",
-          launchType: "harness",
-          harnessLaunchConfig: null,
-          harnessProvider: "claude",
-          harnessSessionId: "session-123",
+          launchType: "shell",
         },
       },
     ]);

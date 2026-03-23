@@ -4,26 +4,12 @@ use std::time::Instant;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 pub fn migrations() -> Vec<Migration> {
-    vec![
-        Migration {
-            version: 1,
-            description: "baseline",
-            sql: include_str!("migrations/0001_baseline.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 2,
-            description: "workspace_target_rename",
-            sql: include_str!("migrations/0002_workspace_target_rename.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 3,
-            description: "agent_sessions",
-            sql: include_str!("migrations/0003_agent_sessions.sql"),
-            kind: MigrationKind::Up,
-        },
-    ]
+    vec![Migration {
+        version: 1,
+        description: "baseline",
+        sql: include_str!("migrations/0001_baseline.sql"),
+        kind: MigrationKind::Up,
+    }]
 }
 
 /// Holds the resolved path to the SQLite database file.
@@ -84,21 +70,22 @@ where
     result
 }
 
-pub fn run_migrations(db_path: &str) -> Result<(), LifecycleError> {
-    let conn = open_db(db_path)?;
-
-    // Apply all migration SQL directly — DDL is idempotent (IF NOT EXISTS),
-    // data migrations are safe to re-run. The tauri-plugin-sql plugin owns
-    // migration tracking via its _sqlx_migrations table.
+/// Applies all migration SQL directly for test databases. In production,
+/// `tauri-plugin-sql` handles migration execution and tracking.
+#[cfg(test)]
+pub fn apply_test_schema(db_path: &str) {
+    let conn = open_db(db_path).expect("open db for test schema");
     for m in migrations() {
         conn.execute_batch(m.sql)
-            .map_err(|error| database_error(format!("migration {} failed: {error}", m.description)))?;
+            .expect(&format!("apply test migration {}", m.description));
     }
+}
 
-    // Drop the legacy migration tracker — plugin handles this now.
-    conn.execute_batch("DROP TABLE IF EXISTS schema_migration")
-        .map_err(database_error)?;
-
+/// Resets ephemeral workspace/terminal/service state that may be stale after a
+/// previous crash (where `cleanup_for_exit` never ran). Schema migrations are
+/// handled by `tauri-plugin-sql` via `Builder::add_migrations`.
+pub fn reconcile_on_startup(db_path: &str) -> Result<(), LifecycleError> {
+    let conn = open_db(db_path)?;
     reconcile_workspaces(&conn)?;
     reconcile_ephemeral_terminals(&conn)?;
     Ok(())
@@ -210,113 +197,15 @@ mod tests {
     use super::*;
 
     fn temp_db_path() -> String {
-        let path = std::env::temp_dir().join(format!(
-            "lifecycle-db-migrations-{}.db",
-            uuid::Uuid::new_v4()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("lifecycle-db-test-{}.db", uuid::Uuid::new_v4()));
         path.to_string_lossy().into_owned()
     }
 
-    fn column_exists(conn: &rusqlite::Connection, table: &str, column: &str) -> bool {
-        let mut stmt = conn
-            .prepare(&format!("PRAGMA table_info({table})"))
-            .expect("prepare table info");
-        let rows = stmt
-            .query_map([], |row| row.get::<_, String>(1))
-            .expect("query table info");
-
-        let exists = rows.flatten().any(|name| name == column);
-        exists
-    }
-
     #[test]
-    fn run_migrations_is_idempotent() {
+    fn reconcile_on_startup_resets_stale_terminals() {
         let db_path = temp_db_path();
-
-        run_migrations(&db_path).expect("first migration run succeeds");
-        run_migrations(&db_path).expect("second migration run succeeds");
-
-        let conn = open_db(&db_path).expect("open db");
-        assert!(column_exists(&conn, "workspace", "created_by"));
-        assert!(column_exists(&conn, "workspace", "name"));
-        assert!(column_exists(&conn, "terminal", "harness_launch_config"));
-        assert!(column_exists(&conn, "workspace", "name_origin"));
-        assert!(column_exists(&conn, "workspace", "source_ref_origin"));
-        assert!(column_exists(&conn, "workspace", "source_workspace_id"));
-        assert!(column_exists(&conn, "workspace", "checkout_type"));
-        assert!(column_exists(&conn, "workspace", "prepared_at"));
-        assert!(column_exists(&conn, "workspace", "manifest_fingerprint"));
-        assert!(column_exists(&conn, "workspace", "status"));
-        assert!(column_exists(&conn, "workspace", "failure_reason"));
-        assert!(column_exists(&conn, "service", "assigned_port"));
-        assert!(column_exists(&conn, "terminal", "workspace_id"));
-        assert!(column_exists(&conn, "terminal", "launch_type"));
-        assert!(column_exists(&conn, "terminal", "harness_provider"));
-        assert!(column_exists(&conn, "terminal", "harness_launch_mode"));
-        assert!(column_exists(&conn, "terminal", "label_origin"));
-        assert!(column_exists(&conn, "terminal", "status"));
-        assert!(column_exists(&conn, "agent_session", "backend"));
-        assert!(column_exists(&conn, "agent_session", "runtime_session_id"));
-        assert!(!column_exists(&conn, "service", "preview_state"));
-        assert!(!column_exists(&conn, "environment", "status"));
-
-        drop(conn);
-        let _ = std::fs::remove_file(db_path);
-    }
-
-    #[test]
-    fn run_migrations_renames_legacy_workspace_targets() {
-        let db_path = temp_db_path();
-        let conn = open_db(&db_path).expect("open db");
-        conn.execute_batch(include_str!("migrations/0001_baseline.sql"))
-            .expect("apply baseline schema");
-        conn.execute(
-            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
-            rusqlite::params!["project_1", "/tmp/project_1", "Project 1"],
-        )
-        .expect("insert project");
-        conn.execute(
-            "INSERT INTO workspace (id, project_id, checkout_type, source_ref, target)
-             VALUES (?1, ?2, ?3, ?4, ?5), (?6, ?7, ?8, ?9, ?10)",
-            rusqlite::params![
-                "workspace_local",
-                "project_1",
-                "worktree",
-                "lifecycle/local",
-                "host",
-                "workspace_remote",
-                "project_1",
-                "worktree",
-                "lifecycle/remote",
-                "remote_host",
-            ],
-        )
-        .expect("insert legacy workspaces");
-        drop(conn);
-
-        run_migrations(&db_path).expect("migration run succeeds");
-
-        let conn = open_db(&db_path).expect("open migrated db");
-        let targets = {
-            let mut stmt = conn
-                .prepare("SELECT target FROM workspace ORDER BY id")
-                .expect("prepare target select");
-            let rows = stmt
-                .query_map([], |row| row.get::<_, String>(0))
-                .expect("query targets");
-            rows.map(|row| row.expect("target row"))
-                .collect::<Vec<String>>()
-        };
-        assert_eq!(targets, vec!["local".to_string(), "remote".to_string()]);
-
-        drop(conn);
-        let _ = std::fs::remove_file(db_path);
-    }
-
-    #[test]
-    fn run_migrations_reconciles_stale_terminals() {
-        let db_path = temp_db_path();
-        run_migrations(&db_path).expect("migration run succeeds");
+        apply_test_schema(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
         conn.execute(
@@ -356,7 +245,7 @@ mod tests {
         .expect("insert terminals");
         drop(conn);
 
-        run_migrations(&db_path).expect("second migration run succeeds");
+        reconcile_on_startup(&db_path).expect("reconcile succeeds");
 
         let values = {
             let conn = open_db(&db_path).expect("re-open db");
@@ -401,9 +290,9 @@ mod tests {
     }
 
     #[test]
-    fn run_migrations_reconciles_interrupted_workspaces() {
+    fn reconcile_on_startup_resets_interrupted_workspaces() {
         let db_path = temp_db_path();
-        run_migrations(&db_path).expect("migration run succeeds");
+        apply_test_schema(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
         conn.execute(
@@ -462,7 +351,7 @@ mod tests {
         .expect("insert services");
         drop(conn);
 
-        run_migrations(&db_path).expect("second migration run succeeds");
+        reconcile_on_startup(&db_path).expect("reconcile succeeds");
 
         let conn = open_db(&db_path).expect("re-open db");
         let workspace_rows = {
@@ -551,125 +440,10 @@ mod tests {
         let _ = std::fs::remove_file(db_path);
     }
 
-    #[test]
-    fn run_migrations_preserves_existing_workspaces_without_environment_sidecar() {
-        let db_path = temp_db_path();
-        run_migrations(&db_path).expect("migration run succeeds");
-
-        let conn = open_db(&db_path).expect("open db");
-        conn.execute(
-            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
-            rusqlite::params!["project_missing_env", "/tmp/project_missing_env", "Project"],
-        )
-        .expect("insert project");
-        conn.execute(
-            "INSERT INTO workspace (id, project_id, name, source_ref, worktree_path, status)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6), (?7, ?8, ?9, ?10, ?11, ?12)",
-            rusqlite::params![
-                "workspace_with_environment",
-                "project_missing_env",
-                "Workspace 1",
-                "main",
-                "/tmp/project_missing_env/worktree-1",
-                "active",
-                "workspace_missing_environment",
-                "project_missing_env",
-                "Workspace 2",
-                "develop",
-                "/tmp/project_missing_env/worktree-2",
-                "active",
-            ],
-        )
-        .expect("insert workspaces");
-        drop(conn);
-
-        run_migrations(&db_path).expect("second migration run succeeds");
-
-        let rows = {
-            let conn = open_db(&db_path).expect("re-open db");
-            let mut stmt = conn
-                .prepare(
-                    "SELECT id, status
-                     FROM workspace
-                     ORDER BY id",
-                )
-                .expect("prepare workspace query");
-            let rows = stmt
-                .query_map([], |row| {
-                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-                })
-                .expect("query workspaces");
-            rows.map(|row| row.expect("row")).collect::<Vec<_>>()
-        };
-
-        assert_eq!(
-            rows,
-            vec![
-                (
-                    "workspace_missing_environment".to_string(),
-                    "active".to_string()
-                ),
-                (
-                    "workspace_with_environment".to_string(),
-                    "active".to_string()
-                ),
-            ]
-        );
-
-        let _ = std::fs::remove_file(db_path);
-    }
-
-    #[test]
-    fn run_migrations_enforces_single_root_workspace_per_project() {
-        let db_path = temp_db_path();
-        run_migrations(&db_path).expect("migration run succeeds");
-
-        let conn = open_db(&db_path).expect("open db");
-        conn.execute(
-            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
-            rusqlite::params!["project_root", "/tmp/project_root", "Project Root"],
-        )
-        .expect("insert project");
-        conn.execute(
-            "INSERT INTO workspace (id, project_id, checkout_type, source_ref)
-             VALUES (?1, ?2, ?3, ?4)",
-            rusqlite::params!["workspace_root_1", "project_root", "root", "main"],
-        )
-        .expect("insert first root workspace");
-        conn.execute(
-            "INSERT INTO workspace (id, project_id, checkout_type, source_ref)
-             VALUES (?1, ?2, ?3, ?4)",
-            rusqlite::params![
-                "workspace_worktree",
-                "project_root",
-                "worktree",
-                "lifecycle/worktree"
-            ],
-        )
-        .expect("insert worktree workspace");
-
-        let second_root_error = conn
-            .execute(
-                "INSERT INTO workspace (id, project_id, checkout_type, source_ref)
-                 VALUES (?1, ?2, ?3, ?4)",
-                rusqlite::params!["workspace_root_2", "project_root", "root", "develop"],
-            )
-            .expect_err("second root workspace should violate unique index");
-
-        assert!(
-            second_root_error
-                .to_string()
-                .contains("UNIQUE constraint failed: workspace.project_id"),
-            "expected root uniqueness violation, got: {second_root_error}"
-        );
-
-        let _ = std::fs::remove_file(db_path);
-    }
-
     #[tokio::test]
     async fn run_blocking_db_read_uses_opened_connection() {
         let db_path = temp_db_path();
-        run_migrations(&db_path).expect("migration run succeeds");
+        apply_test_schema(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
         conn.execute(
@@ -716,9 +490,168 @@ mod tests {
     }
 
     #[test]
+    fn all_migration_files_are_registered() {
+        let registered = migrations();
+        let migration_dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/platform/migrations");
+        let sql_files: Vec<String> = std::fs::read_dir(&migration_dir)
+            .unwrap_or_else(|e| panic!("read migrations dir {}: {e}", migration_dir.display()))
+            .filter_map(|entry| {
+                let entry = entry.ok()?;
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name.ends_with(".sql") {
+                    Some(name)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        assert_eq!(
+            registered.len(),
+            sql_files.len(),
+            "Migration count mismatch: {} registered in db.rs but {} .sql files in migrations/.\n\
+             Registered: {:?}\n\
+             SQL files: {:?}",
+            registered.len(),
+            sql_files.len(),
+            registered.iter().map(|m| m.description).collect::<Vec<_>>(),
+            {
+                let mut sorted = sql_files.clone();
+                sorted.sort();
+                sorted
+            },
+        );
+
+        // Verify versions are sequential with no gaps.
+        let mut versions: Vec<i64> = registered.iter().map(|m| m.version).collect();
+        versions.sort();
+        for (i, version) in versions.iter().enumerate() {
+            assert_eq!(
+                *version,
+                (i + 1) as i64,
+                "Migration versions must be sequential. Expected version {} at position {}, got {}.",
+                i + 1,
+                i,
+                version,
+            );
+        }
+    }
+
+    #[test]
+    fn apply_test_schema_creates_bootable_agent_schema() {
+        let db_path = temp_db_path();
+        apply_test_schema(&db_path);
+
+        let conn = open_db(&db_path).expect("open db");
+        conn.execute(
+            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
+            rusqlite::params!["project_agent", "/tmp/project-agent", "Project Agent"],
+        )
+        .expect("insert project");
+        conn.execute(
+            "INSERT INTO workspace (id, project_id, source_ref, worktree_path)
+             VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![
+                "workspace_agent",
+                "project_agent",
+                "main",
+                "/tmp/project-agent/worktree"
+            ],
+        )
+        .expect("insert workspace");
+        conn.execute(
+            "INSERT INTO agent_session (
+                id, workspace_id, runtime_kind, runtime_name, provider, provider_session_id,
+                title, status, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'), datetime('now'))",
+            rusqlite::params![
+                "session_agent",
+                "workspace_agent",
+                "native",
+                Option::<String>::None,
+                "codex",
+                "thread_123",
+                "Agent Session",
+                "idle",
+            ],
+        )
+        .expect("insert agent session");
+        conn.execute(
+            "INSERT INTO agent_message (
+                id, session_id, role, text, turn_id, created_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
+            rusqlite::params![
+                "message_agent",
+                "session_agent",
+                "assistant",
+                "",
+                "turn_123",
+            ],
+        )
+        .expect("insert agent message");
+        conn.execute(
+            "INSERT INTO agent_message_part (
+                id, message_id, session_id, part_index, part_type, text, data, created_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, datetime('now'))",
+            rusqlite::params![
+                "part_agent",
+                "message_agent",
+                "session_agent",
+                0,
+                "artifact_ref",
+                Option::<String>::None,
+                "{\"artifact_id\":\"artifact_123\",\"title\":\"Plan\"}",
+            ],
+        )
+        .expect("insert agent message part");
+        conn.execute(
+            "INSERT INTO agent_event (
+                id, session_id, workspace_id, provider, provider_session_id, turn_id,
+                event_index, event_kind, payload, created_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, datetime('now'))",
+            rusqlite::params![
+                "event_agent",
+                "session_agent",
+                "workspace_agent",
+                "codex",
+                "thread_123",
+                "turn_123",
+                1,
+                "agent.artifact.published",
+                "{\"artifact_id\":\"artifact_123\"}",
+            ],
+        )
+        .expect("insert agent event");
+
+        let (part_data, payload): (String, String) = (
+            conn.query_row(
+                "SELECT data FROM agent_message_part WHERE id = 'part_agent'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("query migrated part data"),
+            conn.query_row(
+                "SELECT payload FROM agent_event WHERE id = 'event_agent'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("query migrated event payload"),
+        );
+
+        assert_eq!(
+            part_data,
+            "{\"artifact_id\":\"artifact_123\",\"title\":\"Plan\"}"
+        );
+        assert_eq!(payload, "{\"artifact_id\":\"artifact_123\"}");
+
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    #[test]
     fn cleanup_for_exit_resets_runtime_state() {
         let db_path = temp_db_path();
-        run_migrations(&db_path).expect("migration run succeeds");
+        apply_test_schema(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
         conn.execute(

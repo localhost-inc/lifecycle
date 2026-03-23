@@ -1,21 +1,23 @@
-export type {
-  AgentAttachmentHandle,
-  AgentAdapterRuntime,
-  AgentBackendAdapter,
-  AgentBackendSession,
-  AgentBackendSessionBootstrap,
-  AgentBackendSessionCreateInput,
-  AgentToolResult,
-} from "./adapter";
 export type { AgentEvent, AgentEventKind, AgentEventObserver, AgentEventOf } from "./events";
-export { DefaultAgentOrchestrator } from "./orchestrator";
+export { createAgentOrchestrator } from "./orchestrator";
+export type { ClaudeWorkerInput, ClaudeWorkerPermissionMode } from "./providers/claude/worker";
 export type {
-  AgentAdapterRegistry,
+  CodexApprovalPolicy,
+  CodexReasoningEffort as CodexModelReasoningEffort,
+  CodexSandboxMode,
+  CodexWorkerInput,
+} from "./providers/codex/worker";
+export type {
+  AgentSession,
   AgentOrchestrator,
-  AgentSessionStore,
-  DefaultAgentOrchestratorDependencies,
+  AgentWorker,
+  AgentWorkerLauncher,
+  AgentSessionContext,
+  AgentSessionEvents,
+  AgentStore,
+  CreateAgentOrchestratorDependencies,
+  StartAgentSessionInput,
 } from "./orchestrator";
-export type { AgentRuntimeContext, AgentRuntimeResolver } from "./runtime";
 export type {
   AgentApprovalDecision,
   AgentApprovalKind,
@@ -32,3 +34,33 @@ export type {
   AgentTurnCancelRequest,
   AgentTurnRequest,
 } from "./turn";
+export type {
+  AgentWorkerApprovalRequestPayload,
+  AgentWorkerApprovalResolvedEvent,
+  AgentWorkerApprovalRequestedEvent,
+  AgentWorkerApprovalResolutionPayload,
+  AgentWorkerAuthStatusEvent,
+  AgentWorkerCommand,
+  AgentWorkerEvent,
+  AgentWorkerItem,
+  AgentWorkerItemCompletedEvent,
+  AgentWorkerItemStartedEvent,
+  AgentWorkerItemStatus,
+  AgentWorkerItemUpdatedEvent,
+  AgentWorkerMessageDeltaEvent,
+  AgentWorkerReadyEvent,
+  AgentWorkerResolveApprovalCommand,
+  AgentWorkerSendTurnCommand,
+  AgentWorkerStatusEvent,
+  AgentWorkerToolProgressEvent,
+  AgentWorkerToolUseInputEvent,
+  AgentWorkerTurnCompletedEvent,
+  AgentWorkerTurnFailedEvent,
+} from "./worker-protocol";
+export type {
+  ProviderAuthEvent,
+  ProviderAuthResult,
+  ProviderAuthStatus,
+  ProviderAuthStatusEvent,
+} from "./providers/auth";
+export type { ClaudeLoginMethod } from "./providers/claude/env";

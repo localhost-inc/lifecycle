@@ -15,6 +15,7 @@ This file defines engineering execution standards for agents working in this rep
 3. `docs/milestones/*.md` — active milestone specs (scope, contracts, test scenarios)
 4. `docs/plans/*.md` — tracked execution plans outside the active milestone set
 5. `docs/reference/*.md` — canonical cross-milestone contracts (see Reference Docs below)
+6. `docs/reference/agents/*.md` — provider-specific agent contracts rooted in the current official SDK surfaces
 
 When behavior changes and docs are now wrong, update the corresponding reference doc in the same change.
 
@@ -35,6 +36,8 @@ Canonical contract documents for each domain. Read the relevant doc before start
 | `docs/reference/terminal.md` | Terminal harness, session lifecycle, log streaming, native surface sync |
 | `docs/reference/preview.md` | Local preview proxy, service routing, port assignment, URL contract |
 | `docs/reference/infra.md` | Convex API, migrations, errors, SLOs, tunnel, cloud terminal |
+| `docs/reference/agents/claude.md` | Anthropic Claude Agent SDK TypeScript v2 provider contract |
+| `docs/reference/agents/codex.md` | OpenAI Codex SDK provider contract |
 
 ## Triage Router
 
@@ -52,6 +55,8 @@ Use this section to route work before implementation.
 4. Org/workspace hierarchy, auth, cloud surfaces, activity, previews, and PR actions -> `docs/plans/cloud-workspaces.md`.
 5. Cloud lifecycle hardening (sleep/wake restore, TTL, quotas) -> `docs/plans/cloud-hardening.md`.
 6. First-party harness and `agent_session` work -> `docs/plans/agent-workspace.md`.
+7. Provider-specific Claude integration work -> `docs/reference/agents/claude.md`.
+8. Provider-specific Codex integration work -> `docs/reference/agents/codex.md`.
 
 ### Frontend Organization Rules
 

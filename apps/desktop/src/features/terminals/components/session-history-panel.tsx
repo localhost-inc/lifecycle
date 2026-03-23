@@ -1,9 +1,7 @@
 import { EmptyState } from "@lifecycle/ui";
 import { useWorkspaceTerminals } from "@/features/terminals/hooks";
-import { createTerminal, type CreateTerminalRequest } from "@/features/terminals/api";
 import { TerminalSessionHistory } from "@/features/terminals/components/terminal-session-history";
 import { useTerminalResponseReady } from "@/features/terminals/state/terminal-response-ready-provider";
-import { useRuntime } from "@/store";
 
 interface SessionHistoryPanelProps { 
   onFocusTerminal: (terminalId: string) => void;
@@ -11,16 +9,11 @@ interface SessionHistoryPanelProps {
 }
 
 export function SessionHistoryPanel({ onFocusTerminal, workspaceId }: SessionHistoryPanelProps) {
-  const runtime = useRuntime();
   const terminals = useWorkspaceTerminals(workspaceId);
   const { isTerminalResponseReady, isTerminalTurnRunning } = useTerminalResponseReady();
 
   function handleOpenTerminal(terminalId: string) {
     onFocusTerminal(terminalId); 
-  }
-
-  function handleResumeTerminal(input: Extract<CreateTerminalRequest, { launchType: "harness" }>) {
-    void createTerminal(runtime, { ...input, workspaceId });
   }
 
   return (
@@ -33,7 +26,6 @@ export function SessionHistoryPanel({ onFocusTerminal, workspaceId }: SessionHis
             isTerminalResponseReady={isTerminalResponseReady}
             isTerminalTurnRunning={isTerminalTurnRunning}
             onOpenTerminal={handleOpenTerminal}
-            onResumeTerminal={handleResumeTerminal}
             terminals={terminals}
           />
         ) : (

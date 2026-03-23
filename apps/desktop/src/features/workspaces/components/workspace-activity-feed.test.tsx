@@ -9,20 +9,20 @@ describe("WorkspaceActivityFeed", () => {
       createElement(WorkspaceActivityFeed, {
         items: [
           {
-            detail: "session abcd1234",
+            detail: "Terminal 1",
             id: "activity-1",
-            kind: "terminal.harness_turn_completed",
+            kind: "terminal.created",
             occurredAt: "2026-03-10T10:00:00.000Z",
-            title: "Codex turn completed",
+            title: "Shell session started",
             tone: "success",
           },
         ],
       }),
     );
 
-    expect(markup).toContain("Codex turn completed");
-    expect(markup).toContain("session abcd1234");
-    expect(markup).toContain("terminal.harness_turn_completed");
+    expect(markup).toContain("Shell session started");
+    expect(markup).toContain("Terminal 1");
+    expect(markup).toContain("terminal.created");
   });
 
   test("renders an empty state when no workspace activity exists yet", () => {

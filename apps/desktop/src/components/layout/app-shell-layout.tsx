@@ -58,7 +58,6 @@ import { BridgeListener } from "@/features/workspaces/state/bridge-listener";
 import { WorkspaceOpenRequestsProvider } from "@/features/workspaces/state/workspace-open-requests";
 import { WorkspaceToolbarProvider } from "@/features/workspaces/state/workspace-toolbar-context";
 import {
-  APP_SIDEBAR_COLLAPSED_STORAGE_KEY,
   APP_SIDEBAR_WIDTH_STORAGE_KEY,
   DEFAULT_APP_SIDEBAR_WIDTH,
   MAX_APP_SIDEBAR_WIDTH,
@@ -83,21 +82,6 @@ import {
 
 const SIDEBAR_RESIZE_STEP = 16;
 
-function readPersistedSidebarCollapsed(): boolean {
-  try {
-    return localStorage.getItem(APP_SIDEBAR_COLLAPSED_STORAGE_KEY) === "true";
-  } catch {
-    return false;
-  }
-}
-
-function writePersistedSidebarCollapsed(collapsed: boolean): void {
-  try {
-    localStorage.setItem(APP_SIDEBAR_COLLAPSED_STORAGE_KEY, String(collapsed));
-  } catch {
-    // best-effort persistence
-  }
-}
 
 function safeClearWorkspaceUiState(workspaceId: string): void {
   try {
@@ -119,7 +103,7 @@ export function AppShellLayout() {
   const projectCatalogQuery = useProjectCatalog();
   const workspacesByProject = useWorkspacesByProject();
   const { isLoading: authSessionLoading, session: authSession } = useAuthSession();
-  const { hasWorkspaceResponseReady } = useTerminalResponseReady();
+  const { hasWorkspaceResponseReady, hasWorkspaceRunningTurn } = useTerminalResponseReady();
   const { worktreeRoot } = useSettings();
   const [requestedShellContextId, setRequestedShellContextId] = useState<string | null>(
     readPersistedShellContextId,
@@ -128,7 +112,6 @@ export function AppShellLayout() {
   const [sidebarWidth, setSidebarWidth] = useState(() =>
     readPersistedPanelValue(APP_SIDEBAR_WIDTH_STORAGE_KEY, DEFAULT_APP_SIDEBAR_WIDTH),
   );
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(readPersistedSidebarCollapsed);
   const [activeSidebarResize, setActiveSidebarResize] = useState(false);
   const allProjects = projectCatalogQuery.data?.projects ?? [];
   const shellContexts = useMemo(
@@ -233,10 +216,6 @@ export function AppShellLayout() {
       clampPanelSize(sidebarWidth, sidebarBounds),
     );
   }, [sidebarBounds, sidebarWidth]);
-
-  useEffect(() => {
-    writePersistedSidebarCollapsed(sidebarCollapsed);
-  }, [sidebarCollapsed]);
 
   useEffect(() => {
     if (requestedShellContextId === activeShellContext.id) {
@@ -551,10 +530,6 @@ export function AppShellLayout() {
     void navigate("/settings");
   }, [navigate]);
 
-  const handleToggleSidebar = useCallback(() => {
-    setSidebarCollapsed((current) => !current);
-  }, []);
-
   const handleSidebarResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) {
       return;
@@ -638,10 +613,8 @@ export function AppShellLayout() {
       onOpenSettings: handleOpenSettings,
       onOpenWorkspace: handleOpenWorkspace,
       onRemoveProject: handleRemoveProject,
-      onToggleSidebar: handleToggleSidebar,
       projectCatalog: visibleProjectCatalog,
       projects,
-      sidebarCollapsed,
       workspacesByProjectId,
     }),
     [
@@ -652,10 +625,8 @@ export function AppShellLayout() {
       handleOpenSettings,
       handleOpenWorkspace,
       handleRemoveProject,
-      handleToggleSidebar,
       visibleProjectCatalog,
       projects,
-      sidebarCollapsed,
       workspacesByProjectId,
     ],
   );
@@ -694,32 +665,33 @@ export function AppShellLayout() {
               activeContextName={activeShellContext.name}
               authSession={authSession}
               authSessionLoading={authSessionLoading}
-              collapsed={sidebarCollapsed}
+              hasWorkspaceResponseReady={hasWorkspaceResponseReady}
+              hasWorkspaceRunningTurn={hasWorkspaceRunningTurn}
               onAddProject={handleAddProject}
+              onCreateWorkspace={handleCreateWorkspace}
+              onDestroyWorkspace={handleDestroyWorkspace}
+              onForkWorkspace={handleForkWorkspace}
               onOpenSettings={handleOpenSettings}
               onRemoveProject={handleRemoveProject}
-              onToggleCollapse={handleToggleSidebar}
               projects={projects}
               readyProjectIds={readyProjectIds}
               workspacesByProjectId={workspacesByProjectId}
               width={sidebarWidth}
             />
-            {!sidebarCollapsed ? (
-              <div className="relative shrink-0">
-                <div
-                  aria-label="Resize sidebar"
-                  aria-orientation="vertical"
-                  className="absolute inset-y-0 -left-2 z-10 w-4 cursor-col-resize"
-                  onKeyDown={handleSidebarResizeKeyDown}
-                  onPointerDown={handleSidebarResizePointerDown}
-                  role="separator"
-                  tabIndex={0}
-                />
-              </div>
-            ) : null}
+            <div className="relative shrink-0">
+              <div
+                aria-label="Resize sidebar"
+                aria-orientation="vertical"
+                className="absolute inset-y-0 -left-2 z-10 w-4 cursor-col-resize"
+                onKeyDown={handleSidebarResizeKeyDown}
+                onPointerDown={handleSidebarResizePointerDown}
+                role="separator"
+                tabIndex={0}
+              />
+            </div>
 
             {/* Main area */}
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--surface)]">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--background)]">
               <ShellResizeProvider resizing={activeSidebarResize}>
                 <div className="min-h-0 flex-1">
                   <Outlet context={outletContext} />

@@ -1,4 +1,4 @@
-import type { AgentBackend, AgentSessionRecord } from "@lifecycle/contracts";
+import type { AgentSessionProviderId, AgentSessionRecord } from "@lifecycle/contracts";
 import type {
   AgentApprovalRequest,
   AgentApprovalResolution,
@@ -44,6 +44,7 @@ export type AgentEvent =
       session_id: string;
       message_id: string;
       role: AgentMessageRole;
+      turn_id: string | null;
     }
   | {
       kind: "agent.message.part.delta";
@@ -86,8 +87,17 @@ export type AgentEvent =
       artifact: AgentArtifactDescriptor;
     }
   | {
+      kind: "agent.status.updated";
+      workspace_id: string;
+      session_id: string;
+      status: string;
+      detail?: string | null;
+    }
+  | {
       kind: "agent.auth.updated";
-      backend: AgentBackend;
+      workspace_id: string;
+      session_id: string;
+      provider: AgentSessionProviderId;
       authenticated: boolean;
       mode?: string | null;
     };

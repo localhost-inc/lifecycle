@@ -1,5 +1,7 @@
 # Lifecycle
 
+hi
+
 Lifecycle is a desktop-first workspace runtime for local-first software work. This repository is a Bun + Turborepo monorepo containing the Tauri desktop app, a local API scaffold, the in-flight landing-page app, and shared runtime/contracts/UI packages.
 
 ## Status

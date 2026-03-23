@@ -1,10 +1,26 @@
 export type {
-  AgentBackend,
+  AgentApprovalRefPartData,
+  AgentArtifactRefPartData,
+  AgentAttachmentRefPartData,
+  AgentEventRecord,
+  AgentSessionProviderId,
+  AgentMessagePartData,
+  AgentMessagePartDataByType,
+  AgentMessagePartDataOf,
   AgentMessageRecord,
+  AgentMessagePartRecord,
+  AgentMessagePartType,
+  AgentToolCallPartData,
+  AgentToolResultPartData,
+  AgentMessageWithParts,
   AgentMessageRole,
   AgentRuntimeKind,
   AgentSessionRecord,
   AgentSessionStatus,
+} from "./agent";
+export {
+  parseAgentMessagePartData,
+  stringifyAgentMessagePartData,
 } from "./agent";
 export type { ServiceRecord, TerminalRecord, WorkspaceRecord } from "./db";
 export {

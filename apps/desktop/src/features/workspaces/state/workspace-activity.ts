@@ -18,8 +18,6 @@ export const WORKSPACE_ACTIVITY_EVENT_KINDS = [
   "terminal.created",
   "terminal.status_changed",
   "terminal.renamed",
-  "terminal.harness_prompt_submitted",
-  "terminal.harness_turn_completed",
   "git.status_changed",
   "git.head_changed",
   "git.log_changed",
@@ -49,26 +47,9 @@ function trimActivityText(value: string, limit = 88): string {
   return `${normalized.slice(0, limit - 3).trimEnd()}...`;
 }
 
-function providerLabel(provider: string | null): string {
-  if (provider === "claude") {
-    return "Claude";
-  }
-
-  if (provider === "codex") {
-    return "Codex";
-  }
-
-  return "Harness";
-}
-
 function terminalLaunchLabel(
-  launchType: "command" | "harness" | "preset" | "shell",
-  provider: string | null,
+  launchType: "command" | "preset" | "shell",
 ): string {
-  if (launchType === "harness") {
-    return providerLabel(provider);
-  }
-
   if (launchType === "shell") {
     return "Shell";
   }
@@ -162,10 +143,7 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
         id: event.id,
         kind: event.kind,
         occurredAt: event.occurred_at,
-        title: `${terminalLaunchLabel(
-          event.terminal.launch_type,
-          event.terminal.harness_provider,
-        )} session started`,
+        title: `${terminalLaunchLabel(event.terminal.launch_type)} session started`,
         tone: "success",
       };
     case "service.log_line":
@@ -199,26 +177,6 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
         occurredAt: event.occurred_at,
         title: "Session renamed",
         tone: "neutral",
-      };
-    case "terminal.harness_prompt_submitted":
-      return {
-        detail: trimActivityText(event.prompt_text),
-        id: event.id,
-        kind: event.kind,
-        occurredAt: event.occurred_at,
-        title: `${providerLabel(event.harness_provider)} prompt submitted`,
-        tone: "neutral",
-      };
-    case "terminal.harness_turn_completed":
-      return {
-        detail: shortValue(event.harness_session_id)
-          ? `session ${shortValue(event.harness_session_id)}`
-          : null,
-        id: event.id,
-        kind: event.kind,
-        occurredAt: event.occurred_at,
-        title: `${providerLabel(event.harness_provider)} turn completed`,
-        tone: "success",
       };
     case "git.status_changed":
       return {

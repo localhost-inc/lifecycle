@@ -3,7 +3,7 @@ mod platform;
 mod shared;
 
 use crate::platform::app_config::AppConfigPath;
-use crate::platform::db::{cleanup_for_exit, run_migrations, DbPath};
+use crate::platform::db::{cleanup_for_exit, reconcile_on_startup, DbPath};
 use crate::platform::native_terminal;
 use crate::platform::runtime::supervisor::Supervisor;
 #[cfg(target_os = "macos")]
@@ -68,6 +68,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_shell::init())
         .setup(move |app| {
             let app_data_dir = app
                 .path()
@@ -106,7 +107,14 @@ pub fn run() {
             };
             app.manage(lifecycle_cli);
 
-            run_migrations(&db_path_str).expect("failed to run migrations");
+            // reconcile_on_startup may fail on first launch (fresh DB, no schema yet).
+            // tauri-plugin-sql runs migrations later in the plugin lifecycle.
+            if let Err(error) = reconcile_on_startup(&db_path_str) {
+                crate::platform::diagnostics::append_diagnostic(
+                    "startup-reconcile",
+                    &format!("skipped: {error}"),
+                );
+            }
             crate::platform::preview_proxy::start_preview_proxy(&app_data_dir, db_path_str.clone())
                 .expect("failed to initialize local preview proxy");
             app.manage(DbPath(db_path_str.clone()));
@@ -237,10 +245,6 @@ pub fn run() {
             capabilities::app::commands::get_app_config,
             capabilities::app::commands::write_app_config,
             capabilities::app::commands::get_auth_session,
-            capabilities::agents::commands::create_agent_session,
-            capabilities::agents::commands::list_agent_sessions_for_workspace,
-            capabilities::agents::commands::get_agent_session,
-            capabilities::agents::commands::list_agent_session_messages,
             capabilities::bridge::bridge_complete_shell_request,
             capabilities::bridge::bridge_fail_shell_request,
             capabilities::app::commands::set_window_accepts_mouse_moved_events,

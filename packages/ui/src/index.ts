@@ -83,6 +83,7 @@ export { StatusDot, statusDotVariants, type StatusDotTone } from "./components/s
 export { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/tabs";
 export { ToggleGroup, ToggleGroupItem } from "./components/toggle-group";
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./components/tooltip";
+export { Shimmer, type TextShimmerProps } from "./ai/shimmer";
 export {
   diffTheme,
   themeOptions,

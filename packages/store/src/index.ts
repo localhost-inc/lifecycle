@@ -31,4 +31,17 @@ export {
   selectAgentSessionsByWorkspace,
   selectAgentSessionById,
   insertAgentSession,
+  upsertAgentSession,
 } from "./collections/agent-sessions";
+
+export {
+  insertAgentEvent,
+  selectAgentEventsBySession,
+  selectNextAgentEventIndex,
+} from "./collections/agent-events";
+
+export {
+  selectAgentMessagesBySession,
+  upsertAgentMessage,
+  upsertAgentMessageWithParts,
+} from "./collections/agent-messages";

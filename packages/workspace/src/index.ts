@@ -18,15 +18,6 @@ export type {
   WorkspaceFileTreeEntry,
   WorkspaceHealthResult,
 } from "./workspace";
-export type {
-  ClaudePermissionMode,
-  ClaudeHarnessLaunchConfigInput,
-  CodexApprovalPolicy,
-  CodexHarnessLaunchConfigInput,
-  CodexSandboxMode,
-  HarnessLaunchConfigInput,
-  HarnessPreset,
-} from "./harnesses";
 export { LocalRuntime, type LocalRuntimeDeps } from "./runtimes/local";
 /** @deprecated Use LocalRuntime instead */
 export { LocalRuntime as HostWorkspaceRuntime } from "./runtimes/local";

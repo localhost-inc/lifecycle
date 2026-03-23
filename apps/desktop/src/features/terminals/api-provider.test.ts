@@ -2,10 +2,6 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { TerminalRecord } from "@lifecycle/contracts";
 import type { WorkspaceRuntime } from "@lifecycle/workspace";
 import {
-  buildHarnessLaunchConfig,
-  buildDefaultHarnessSettings,
-} from "@/features/settings/state/harness-settings";
-import {
   createTerminal,
   detachTerminal,
   interruptTerminal,
@@ -20,8 +16,6 @@ const terminal: TerminalRecord = {
   id: "term_1",
   workspace_id: "ws_1",
   launch_type: "shell",
-  harness_provider: null,
-  harness_session_id: null,
   created_by: null,
   label: "Terminal 1",
   status: "active",
@@ -68,14 +62,6 @@ describe("terminal api workspace routing", () => {
   test("routes terminal lifecycle reads and mutations through the runtime", async () => {
     expect(await listWorkspaceTerminals(runtime, "ws_1")).toEqual([terminal]);
     expect(await createTerminal(runtime, { workspaceId: "ws_1", launchType: "shell" })).toEqual(terminal);
-    expect(
-      await createTerminal(runtime, {
-        workspaceId: "ws_1",
-        launchType: "harness",
-        harnessProvider: "codex",
-        harnessLaunchConfig: buildHarnessLaunchConfig("codex", buildDefaultHarnessSettings()),
-      }),
-    ).toEqual(terminal);
     expect(await renameTerminal(runtime, "ws_1", "term_1", "  Codex   Session  ")).toEqual({
       ...terminal,
       label: "Codex Session",
@@ -100,21 +86,6 @@ describe("terminal api workspace routing", () => {
     expect((runtime.createTerminal as ReturnType<typeof mock>)).toHaveBeenCalledWith({
       workspaceId: "ws_1",
       launchType: "shell",
-      harnessProvider: null,
-      harnessSessionId: null,
-    });
-    expect((runtime.createTerminal as ReturnType<typeof mock>)).toHaveBeenCalledWith({
-      workspaceId: "ws_1",
-      launchType: "harness",
-      harnessLaunchConfig: {
-        approvalPolicy: "untrusted",
-        dangerousBypass: false,
-        preset: "guarded",
-        provider: "codex",
-        sandboxMode: "workspace-write",
-      },
-      harnessProvider: "codex",
-      harnessSessionId: null,
     });
     expect((runtime.renameTerminal as ReturnType<typeof mock>)).toHaveBeenCalledWith("ws_1", "term_1", "Codex Session");
     expect((runtime.sendTerminalText as ReturnType<typeof mock>)).toHaveBeenCalledWith("ws_1", "term_1", "status\n");

@@ -13,11 +13,16 @@ describe("harness settings", () => {
     expect(buildCodexHarnessSettingsFromPreset("guarded")).toEqual({
       approvalPolicy: "untrusted",
       dangerousBypass: false,
+      model: "gpt-5-codex",
       preset: "guarded",
+      reasoningEffort: "default",
       sandboxMode: "workspace-write",
     });
     expect(buildClaudeHarnessSettingsFromPreset("guarded")).toEqual({
       dangerousSkipPermissions: false,
+      effort: "default",
+      loginMethod: "claudeai",
+      model: "claude-sonnet-4-6",
       permissionMode: "acceptEdits",
       preset: "guarded",
     });
@@ -41,13 +46,18 @@ describe("harness settings", () => {
     ).toEqual({
       claude: {
         dangerousSkipPermissions: false,
+        effort: "default",
+        loginMethod: "claudeai",
+        model: "claude-sonnet-4-6",
         permissionMode: "acceptEdits",
         preset: "guarded",
       },
       codex: {
         approvalPolicy: "untrusted",
         dangerousBypass: false,
+        model: "gpt-5-codex",
         preset: "guarded",
+        reasoningEffort: "default",
         sandboxMode: "workspace-write",
       },
     });
@@ -68,12 +78,17 @@ describe("harness settings", () => {
     expect(buildHarnessLaunchConfig("codex", { claude, codex })).toEqual({
       approvalPolicy: "never",
       dangerousBypass: false,
+      model: "gpt-5-codex",
       preset: "guarded",
       provider: "codex",
+      reasoningEffort: "default",
       sandboxMode: "workspace-write",
     });
     expect(buildHarnessLaunchConfig("claude", { claude, codex })).toEqual({
       dangerousSkipPermissions: true,
+      effort: "default",
+      loginMethod: "claudeai",
+      model: "claude-sonnet-4-6",
       permissionMode: "acceptEdits",
       preset: "guarded",
       provider: "claude",

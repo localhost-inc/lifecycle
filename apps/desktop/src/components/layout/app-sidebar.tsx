@@ -2,8 +2,8 @@ import { isTauri } from "@tauri-apps/api/core";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
-import { IconButton, Logo, Wordmark } from "@lifecycle/ui";
-import { PanelLeftClose, Plus } from "lucide-react";
+import { IconButton, Logo, Spinner, Wordmark } from "@lifecycle/ui";
+import { FolderGit2, GitBranch, Plus } from "lucide-react";
 import { type MouseEvent, useCallback, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { resolveProjectRepoWorkspace } from "@/features/projects/lib/project-repo-workspace";
@@ -16,18 +16,29 @@ import { ResponseReadyDot } from "@/components/response-ready-dot";
 import type { AuthSession } from "@/features/auth/auth-session";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { version } from "../../../package.json";
-
-const COLLAPSED_WIDTH_REM = 3;
+import type { WorkspaceCreateMode } from "@/features/workspaces/api";
+import {
+  getWorkspaceDisplayName,
+  isRootWorkspace,
+} from "@/features/workspaces/lib/workspace-display";
+import { getWorkspaceSessionStatusState } from "@/features/workspaces/components/workspace-session-status";
+import {
+  showCreateWorkspaceMenu,
+  showWorkspaceContextMenu,
+} from "@/features/workspaces/lib/workspace-menus";
 
 interface AppSidebarProps {
   activeContextName: string;
   authSession: AuthSession;
   authSessionLoading: boolean;
-  collapsed: boolean;
+  hasWorkspaceResponseReady: (workspaceId: string) => boolean;
+  hasWorkspaceRunningTurn: (workspaceId: string) => boolean;
   onAddProject: () => void;
+  onCreateWorkspace: (projectId: string, mode: WorkspaceCreateMode) => Promise<void>;
+  onDestroyWorkspace: (workspace: WorkspaceRecord) => Promise<void>;
+  onForkWorkspace: (workspace: WorkspaceRecord) => Promise<void>;
   onOpenSettings: () => void;
   onRemoveProject: (projectId: string) => void;
-  onToggleCollapse: () => void;
   projects: ProjectRecord[];
   readyProjectIds: ReadonlySet<string>;
   workspacesByProjectId: Record<string, WorkspaceRecord[]>;
@@ -46,21 +57,47 @@ function projectMonogram(name: string): string {
     .join("");
 }
 
+function WorkspaceIcon({
+  checkoutType,
+  responseReady,
+  running,
+}: {
+  checkoutType: WorkspaceRecord["checkout_type"];
+  responseReady: boolean;
+  running: boolean;
+}) {
+  const state = getWorkspaceSessionStatusState({ responseReady, running });
+
+  if (state === "ready") {
+    return <ResponseReadyDot />;
+  }
+
+  if (state === "loading") {
+    return <Spinner className="size-3.5 text-[var(--sidebar-muted-foreground)]" />;
+  }
+
+  const Icon = checkoutType === "root" ? FolderGit2 : GitBranch;
+  return <Icon className="size-3.5 shrink-0" strokeWidth={2} />;
+}
+
 export function AppSidebar({
   activeContextName,
   authSession,
   authSessionLoading,
-  collapsed,
+  hasWorkspaceResponseReady,
+  hasWorkspaceRunningTurn,
   onAddProject,
+  onCreateWorkspace,
+  onDestroyWorkspace,
+  onForkWorkspace,
   onOpenSettings,
   onRemoveProject,
-  onToggleCollapse,
   projects,
   readyProjectIds,
   workspacesByProjectId,
   width,
 }: AppSidebarProps) {
-  const { projectId } = useParams();
+  const { projectId, workspaceId } = useParams();
   const location = useLocation();
   const [logoHovered, setLogoHovered] = useState(false);
 
@@ -116,89 +153,16 @@ export function AppSidebar({
     [onRemoveProject],
   );
 
-  if (collapsed) {
-    return (
-      <aside
-        className="flex h-full min-h-0 shrink-0 flex-col items-center bg-[var(--background)] text-[var(--sidebar-foreground)]"
-        data-slot="app-sidebar"
-        onMouseDown={handleMouseDown}
-        style={{ width: `${COLLAPSED_WIDTH_REM}rem` }}
-      >
-        {/* Spacer to align below nav bar — no border in traffic light zone */}
-        <div className="h-10 w-full shrink-0" />
-
-        <div className="flex min-h-0 w-full flex-1 flex-col items-center">
-          {/* Avatar (org context) */}
-          <div className="flex shrink-0 items-center justify-center py-1 pb-2">
-            <button
-              aria-label={activeContextName}
-              onClick={onOpenSettings}
-              title={activeContextName}
-              type="button"
-            >
-              <UserAvatar loading={authSessionLoading} session={authSession} size={28} />
-            </button>
-          </div>
-
-          {/* Project monograms */}
-          <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-1 pt-1">
-            <div className="flex flex-col gap-1">
-              {projects.map((project) => {
-                const selected = project.id === projectId;
-                const responseReady = readyProjectIds.has(project.id);
-
-                return (
-                  <Link
-                    key={project.id}
-                    aria-label={project.name}
-                    className={[
-                      "relative flex size-8 items-center justify-center rounded-lg text-[11px] font-semibold uppercase transition-colors",
-                      selected
-                        ? "bg-[var(--card)] text-[var(--sidebar-foreground)] shadow-[0_0_0_0.5px_var(--border)]"
-                        : "text-[var(--sidebar-muted-foreground)] hover:text-[var(--sidebar-foreground)]",
-                    ].join(" ")}
-                    onContextMenu={(e) => handleProjectContextMenu(e, project)}
-                    to={projectPaths[project.id] ?? `/projects/${project.id}`}
-                    title={project.name}
-                  >
-                    {projectMonogram(project.name)}
-                    {responseReady ? (
-                      <ResponseReadyDot className="absolute -right-0.5 -top-0.5 scale-75" />
-                    ) : null}
-                  </Link>
-                );
-              })}
-            </div>
-            {/* Add project — below project list */}
-            <button
-              aria-label="Add project"
-              className="mt-1 flex size-8 shrink-0 items-center justify-center rounded-lg text-[var(--sidebar-muted-foreground)] transition-colors hover:bg-[var(--sidebar-hover)] hover:text-[var(--sidebar-foreground)]"
-              onClick={onAddProject}
-              title="Add project"
-              type="button"
-            >
-              <Plus size={16} strokeWidth={2} />
-            </button>
-          </div>
-
-          {/* Logo at bottom */}
-          <button
-            className="flex shrink-0 items-center justify-center pb-3 cursor-pointer"
-            onClick={() => openUrl("https://lifecycle.dev")}
-            onMouseEnter={() => setLogoHovered(true)}
-            onMouseLeave={() => setLogoHovered(false)}
-            type="button"
-          >
-            <Logo
-              animate={logoHovered}
-              size={24}
-              className="text-[var(--sidebar-muted-foreground)]"
-            />
-          </button>
-        </div>
-      </aside>
-    );
-  }
+  const handleWorkspaceContextMenu = useCallback(
+    (event: MouseEvent<HTMLElement>, workspace: WorkspaceRecord) => {
+      event.preventDefault();
+      void showWorkspaceContextMenu(workspace, {
+        onDestroyWorkspace: onDestroyWorkspace,
+        onForkWorkspace: onForkWorkspace,
+      });
+    },
+    [onDestroyWorkspace, onForkWorkspace],
+  );
 
   return (
     <aside
@@ -207,16 +171,8 @@ export function AppSidebar({
       onMouseDown={handleMouseDown}
       style={{ width: `${width / 16}rem` }}
     >
-      {/* Collapse button — inline with traffic lights */}
-      <div className="flex h-10 shrink-0 items-center justify-end px-2">
-        <IconButton
-          aria-label="Collapse sidebar"
-          onClick={onToggleCollapse}
-          title="Collapse sidebar"
-        >
-          <PanelLeftClose size={14} strokeWidth={2} />
-        </IconButton>
-      </div>
+      {/* Traffic light spacer */}
+      <div className="h-10 shrink-0" />
 
       <div className="flex min-h-0 flex-1 flex-col">
         {/* Organization / context switcher */}
@@ -233,7 +189,7 @@ export function AppSidebar({
           </span>
         </button>
 
-        {/* Project list */}
+        {/* Project + workspace list */}
         <div className="flex min-h-0 flex-1 flex-col pt-2">
           <div className="flex items-center justify-between pl-4 pr-2 pb-1">
             <p className="text-xs font-medium text-[var(--muted-foreground)]">Projects</p>
@@ -246,34 +202,84 @@ export function AppSidebar({
               {projects.map((project) => {
                 const selected = project.id === projectId;
                 const responseReady = readyProjectIds.has(project.id);
+                const workspaces = workspacesByProjectId[project.id] ?? [];
 
                 return (
-                  <Link
-                    key={project.id}
-                    aria-label={`Open project ${project.name}`}
-                    className={[
-                      "relative flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors",
-                      selected
-                        ? "bg-[var(--card)] text-[var(--sidebar-foreground)] shadow-[0_0_0_0.5px_var(--border)]"
-                        : "text-[var(--sidebar-muted-foreground)] hover:text-[var(--sidebar-foreground)]",
-                    ].join(" ")}
-                    onContextMenu={(e) => handleProjectContextMenu(e, project)}
-                    to={projectPaths[project.id] ?? `/projects/${project.id}`}
-                    title={project.name}
-                  >
-                    <span
+                  <div key={project.id} className="flex flex-col gap-0.5">
+                    <Link
+                      aria-label={`Open project ${project.name}`}
                       className={[
-                        "inline-flex size-5 shrink-0 items-center justify-center rounded-md text-[10px] font-semibold uppercase",
+                        "relative flex items-center gap-2 rounded-lg px-2 py-1.5 text-[13px] font-medium transition-colors",
                         selected
-                          ? "bg-[var(--muted)] text-[var(--foreground)]"
-                          : "bg-[var(--surface-hover)] text-[var(--foreground)]",
+                          ? "bg-[var(--card)] text-[var(--sidebar-foreground)] shadow-[0_0_0_0.5px_var(--border)]"
+                          : "text-[var(--sidebar-muted-foreground)] hover:text-[var(--sidebar-foreground)]",
                       ].join(" ")}
+                      onContextMenu={(e) => handleProjectContextMenu(e, project)}
+                      to={projectPaths[project.id] ?? `/projects/${project.id}`}
+                      title={project.name}
                     >
-                      {projectMonogram(project.name)}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate">{project.name}</span>
-                    {responseReady ? <ResponseReadyDot className="shrink-0 scale-[0.85]" /> : null}
-                  </Link>
+                      <span
+                        className={[
+                          "inline-flex size-5 shrink-0 items-center justify-center rounded-md text-[10px] font-semibold uppercase",
+                          selected
+                            ? "bg-[var(--muted)] text-[var(--foreground)]"
+                            : "bg-[var(--surface-hover)] text-[var(--foreground)]",
+                        ].join(" ")}
+                      >
+                        {projectMonogram(project.name)}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{project.name}</span>
+                      {responseReady ? <ResponseReadyDot className="shrink-0 scale-[0.85]" /> : null}
+                    </Link>
+
+                    {/* Workspaces — shown under the selected project */}
+                    {selected && workspaces.length > 0 ? (
+                      <div className="flex flex-col gap-0.5 pb-1">
+                        {workspaces.map((workspace) => {
+                          const active = workspace.id === workspaceId;
+                          const wsResponseReady = hasWorkspaceResponseReady(workspace.id);
+                          const wsRunning = hasWorkspaceRunningTurn(workspace.id);
+
+                          return (
+                            <Link
+                              key={workspace.id}
+                              className={[
+                                "flex items-center gap-1.5 rounded-lg py-1 pl-9 pr-2 text-[12px] font-medium transition-colors",
+                                active
+                                  ? "bg-[var(--card)] text-[var(--sidebar-foreground)] shadow-[0_0_0_0.5px_var(--border)]"
+                                  : "text-[var(--sidebar-muted-foreground)] hover:text-[var(--sidebar-foreground)]",
+                              ].join(" ")}
+                              onContextMenu={(e) => handleWorkspaceContextMenu(e, workspace)}
+                              title={getWorkspaceDisplayName(workspace)}
+                              to={`/projects/${project.id}/workspaces/${workspace.id}`}
+                            >
+                              <WorkspaceIcon
+                                checkoutType={workspace.checkout_type}
+                                responseReady={wsResponseReady}
+                                running={wsRunning}
+                              />
+                              <span className="min-w-0 flex-1 truncate">
+                                {getWorkspaceDisplayName(workspace)}
+                              </span>
+                            </Link>
+                          );
+                        })}
+                        <button
+                          className="flex items-center gap-1.5 rounded-lg py-1 pl-9 pr-2 text-[12px] font-medium text-[var(--sidebar-muted-foreground)] transition-colors hover:text-[var(--sidebar-foreground)]"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            void showCreateWorkspaceMenu((mode) =>
+                              void onCreateWorkspace(project.id, mode),
+                            );
+                          }}
+                          type="button"
+                        >
+                          <Plus className="size-3.5 shrink-0" strokeWidth={2} />
+                          <span>New workspace</span>
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                 );
               })}
             </div>

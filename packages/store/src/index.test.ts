@@ -7,6 +7,10 @@ describe("@lifecycle/store", () => {
     expect(typeof store.selectAllWorkspaces).toBe("function");
     expect(typeof store.selectAllServices).toBe("function");
     expect(typeof store.selectAllTerminals).toBe("function");
+    expect(typeof store.selectAgentMessagesBySession).toBe("function");
+    expect(typeof store.upsertAgentMessage).toBe("function");
+    expect(typeof store.upsertAgentMessageWithParts).toBe("function");
+    expect(typeof store.insertAgentEvent).toBe("function");
     expect(typeof store.createSqlCollection).toBe("function");
   });
 });

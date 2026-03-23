@@ -2,10 +2,6 @@
 mod attachments;
 #[path = "terminal/events.rs"]
 mod events;
-#[path = "terminal/harness_binding.rs"]
-mod harness_binding;
-#[path = "terminal/harness_observer.rs"]
-mod harness_observer;
 #[path = "terminal/launch.rs"]
 mod launch;
 #[path = "terminal/native_surface.rs"]
@@ -20,7 +16,6 @@ mod types;
 #[allow(unused_imports)]
 pub(crate) use attachments::{prepare_native_terminal_attachment_paste, save_terminal_attachment};
 pub(crate) use persistence::load_terminal_record;
-pub(crate) use persistence::{load_terminal_workspace_context, resolve_harness_worktree_path};
 #[allow(unused_imports)]
 pub(crate) use runtime::{
     complete_native_terminal_exit, create_terminal, detach_terminal, hide_native_terminal_surface,

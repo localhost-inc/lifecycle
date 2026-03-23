@@ -374,7 +374,7 @@ fn auto_workspace_name(workspace_id: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::platform::db::run_migrations;
+    use crate::platform::db::apply_test_schema;
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::process::Command as StdCommand;
@@ -418,7 +418,7 @@ mod tests {
     #[test]
     fn find_existing_root_workspace_id_returns_only_root_workspace() {
         let db_path = temp_db_path();
-        run_migrations(&db_path).expect("run migrations");
+        apply_test_schema(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
         conn.execute(
@@ -465,7 +465,7 @@ mod tests {
         let db_path = temp_db_path();
         let repo_path = temp_repo_path();
         init_repo(&repo_path);
-        run_migrations(&db_path).expect("run migrations");
+        apply_test_schema(&db_path);
 
         let repo_path_str = repo_path.to_str().expect("repo path is utf8");
         let source_ref = worktree::get_current_branch(repo_path_str)
