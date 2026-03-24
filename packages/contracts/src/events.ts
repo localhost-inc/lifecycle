@@ -8,7 +8,7 @@ import type {
   WorkspaceStatus,
 } from "./workspace";
 
-export type LifecycleEvent =
+export type LifecycleEventWire =
   | {
       id: string;
       occurred_at: string;
@@ -149,11 +149,153 @@ export type LifecycleEvent =
       head_sha: string | null;
     };
 
+export type LifecycleEvent =
+  | {
+      id: string;
+      occurredAt: string;
+      kind: "workspace.status_changed";
+      workspaceId: string;
+      status: WorkspaceStatus;
+      failureReason: WorkspaceFailureReason | null;
+    }
+  | {
+      id: string;
+      occurredAt: string;
+      kind: "workspace.renamed";
+      workspaceId: string;
+      name: string;
+      sourceRef: string;
+      worktreePath: string | null;
+    }
+  | {
+      id: string;
+      occurredAt: string;
+      kind: "workspace.deleted";
+      workspaceId: string;
+    }
+  | {
+      id: string;
+      occurredAt: string;
+      kind: "workspace.file_changed";
+      workspaceId: string;
+      filePath: string;
+    }
+  | {
+      id: string;
+      occurredAt: string;
+      kind: "service.status_changed";
+      workspaceId: string;
+      name: string;
+      status: ServiceStatus;
+      statusReason: ServiceStatusReason | null;
+    }
+  | {
+      id: string;
+      occurredAt: string;
+      kind: "terminal.created";
+      workspaceId: string;
+      terminal: TerminalRecord;
+    }
+  | {
+      id: string;
+      occurredAt: string;
+      kind: "terminal.updated";
+      workspaceId: string;
+      terminal: TerminalRecord;
+    }
+  | {
+      id: string;
+      occurredAt: string;
+      kind: "terminal.status_changed";
+      terminalId: string;
+      workspaceId: string;
+      status: TerminalStatus;
+      failureReason: TerminalFailureReason | null;
+      exitCode: number | null;
+      endedAt: string | null;
+    }
+  | {
+      id: string;
+      occurredAt: string;
+      kind: "terminal.renamed";
+      terminalId: string;
+      workspaceId: string;
+      label: string;
+    }
+  | {
+      id: string;
+      occurredAt: string;
+      kind: "agent.session.created";
+      workspaceId: string;
+      session: AgentSessionRecord;
+    }
+  | {
+      id: string;
+      occurredAt: string;
+      kind: "agent.session.updated";
+      workspaceId: string;
+      session: AgentSessionRecord;
+    }
+  | {
+      id: string;
+      occurredAt: string;
+      kind: "agent.turn.completed";
+      sessionId: string;
+      turnId: string;
+      workspaceId: string;
+    }
+  | {
+      id: string;
+      occurredAt: string;
+      kind: "service.process_exited";
+      workspaceId: string;
+      name: string;
+      exitCode: number | null;
+    }
+  | {
+      id: string;
+      occurredAt: string;
+      kind: "service.log_line";
+      workspaceId: string;
+      name: string;
+      stream: "stdout" | "stderr";
+      line: string;
+    }
+  | {
+      id: string;
+      occurredAt: string;
+      kind: "git.status_changed";
+      workspaceId: string;
+      branch: string | null;
+      headSha: string | null;
+      upstream: string | null;
+    }
+  | {
+      id: string;
+      occurredAt: string;
+      kind: "git.head_changed";
+      workspaceId: string;
+      branch: string | null;
+      headSha: string | null;
+      upstream: string | null;
+      ahead: number | null;
+      behind: number | null;
+    }
+  | {
+      id: string;
+      occurredAt: string;
+      kind: "git.log_changed";
+      workspaceId: string;
+      branch: string | null;
+      headSha: string | null;
+    };
+
 export type LifecycleEventKind = LifecycleEvent["kind"];
-export type LifecycleEventOf<Kind extends LifecycleEventKind> = Extract<
-  LifecycleEvent,
+export type LifecycleEventOf<Kind extends LifecycleEventKind> = Extract<LifecycleEvent, { kind: Kind }>;
+export type LifecycleEventWireOf<Kind extends LifecycleEventKind> = Extract<
+  LifecycleEventWire,
   { kind: Kind }
 >;
 export type LifecycleEventInput = {
-  [Kind in LifecycleEventKind]: Omit<LifecycleEventOf<Kind>, "id" | "occurred_at">;
+  [Kind in LifecycleEventKind]: Omit<LifecycleEventOf<Kind>, "id" | "occurredAt">;
 }[LifecycleEventKind];

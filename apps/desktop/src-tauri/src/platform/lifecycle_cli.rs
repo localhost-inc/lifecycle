@@ -19,73 +19,35 @@ const WIRED_COMMANDS: &[&str] = &[
 #[derive(Clone, Debug)]
 pub(crate) struct LifecycleCliState {
     binary_path: Option<String>,
-    path_value: Option<String>,
 }
 
 impl LifecycleCliState {
     pub(crate) fn initialize(app: &AppHandle) -> Result<Self, LifecycleError> {
         let binary_path = resolve_cli_binary_path(app)?;
-        let path_value = match binary_path.as_deref() {
-            Some(path) => {
-                let binary_path = PathBuf::from(path);
-                let parent = binary_path.parent().ok_or_else(|| {
-                    LifecycleError::AttachFailed(format!(
-                        "lifecycle CLI path has no parent directory: {path}"
-                    ))
-                })?;
-                let current_path = std::env::var("PATH").unwrap_or_default();
-                let path_value = prepend_path_value(&current_path, parent);
-                std::env::set_var("LIFECYCLE_CLI_PATH", path);
-                std::env::set_var("PATH", &path_value);
-                Some(path_value)
-            }
-            None => None,
-        };
+        if let Some(path) = binary_path.as_deref() {
+            let binary_path = PathBuf::from(path);
+            let parent = binary_path.parent().ok_or_else(|| {
+                LifecycleError::AttachFailed(format!(
+                    "lifecycle CLI path has no parent directory: {path}"
+                ))
+            })?;
+            let current_path = std::env::var("PATH").unwrap_or_default();
+            let path_value = prepend_path_value(&current_path, parent);
+            std::env::set_var("LIFECYCLE_CLI_PATH", path);
+            std::env::set_var("PATH", &path_value);
+        }
 
-        Ok(Self {
-            binary_path,
-            path_value,
-        })
+        Ok(Self { binary_path })
     }
 
     pub(crate) fn disabled() -> Self {
         Self {
             binary_path: None,
-            path_value: None,
         }
     }
 
     pub(crate) fn binary_path(&self) -> Option<&str> {
         self.binary_path.as_deref()
-    }
-
-    pub(crate) fn path_value(&self) -> Option<&str> {
-        self.path_value.as_deref()
-    }
-
-    pub(crate) fn render_agent_instructions(&self) -> String {
-        let mut lines = vec![
-            "You are running inside Lifecycle Desktop on behalf of the user.".to_string(),
-            "Run `lifecycle context` first in every new session.".to_string(),
-            "Prefer Lifecycle CLI commands over ad hoc shell flows when Lifecycle already provides the capability.".to_string(),
-            "Use Lifecycle for service readiness and desktop surface control before inventing alternate paths.".to_string(),
-        ];
-
-        if let Some(path) = self.binary_path() {
-            lines.push(format!("Lifecycle CLI path: `{path}`."));
-        } else {
-            lines.push(
-                "Lifecycle CLI is expected to be installed for this session; if `lifecycle` is missing, report that explicitly.".to_string(),
-            );
-        }
-
-        lines.push("Currently wired Lifecycle commands:".to_string());
-        lines.extend(WIRED_COMMANDS.iter().map(|command| format!("- {command}")));
-        lines.push(
-            "Not wired yet: `lifecycle browser reload`, `lifecycle browser snapshot`, and non-browser `lifecycle tab open` surfaces.".to_string(),
-        );
-
-        lines.join("\n")
     }
 }
 

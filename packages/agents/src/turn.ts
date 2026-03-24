@@ -5,7 +5,7 @@ export type AgentInputPart =
     }
   | {
       type: "attachment_ref";
-      attachment_id: string;
+      attachmentId: string;
     };
 
 export type AgentMessageRole = "user" | "assistant" | "system" | "tool";
@@ -25,26 +25,26 @@ export type AgentMessagePart =
     }
   | {
       type: "attachment_ref";
-      attachment_id: string;
+      attachmentId: string;
     }
   | {
       type: "tool_call";
-      tool_call_id: string;
-      tool_name: string;
-      input_json?: string | undefined;
-      output_json?: string | null | undefined;
+      toolCallId: string;
+      toolName: string;
+      inputJson?: string | undefined;
+      outputJson?: string | null | undefined;
       status?: AgentToolCallStatus | null | undefined;
-      error_text?: string | null | undefined;
+      errorText?: string | null | undefined;
     }
   | {
       type: "tool_result";
-      tool_call_id: string;
-      output_json?: string | null | undefined;
-      error_text?: string | null | undefined;
+      toolCallId: string;
+      outputJson?: string | null | undefined;
+      errorText?: string | null | undefined;
     }
   | {
       type: "approval_ref";
-      approval_id: string;
+      approvalId: string;
       decision?: AgentApprovalDecision | null | undefined;
       kind?: AgentApprovalKind | null | undefined;
       message?: string | null | undefined;
@@ -53,22 +53,22 @@ export type AgentMessagePart =
     }
   | {
       type: "artifact_ref";
-      artifact_id: string;
-      artifact_type?: AgentArtifactType | null | undefined;
+      artifactId: string;
+      artifactType?: AgentArtifactType | null | undefined;
       title?: string | null | undefined;
       uri?: string | null | undefined;
     };
 
 export interface AgentTurnRequest {
-  session_id: string;
-  workspace_id: string;
-  turn_id: string;
+  sessionId: string;
+  workspaceId: string;
+  turnId: string;
   input: AgentInputPart[];
 }
 
 export interface AgentTurnCancelRequest {
-  session_id: string;
-  turn_id?: string | null;
+  sessionId: string;
+  turnId?: string | null;
 }
 
 export type AgentToolCallStatus =
@@ -81,12 +81,12 @@ export type AgentToolCallStatus =
 
 export interface AgentToolCallUpdate {
   id: string;
-  session_id: string;
-  tool_name: string;
+  sessionId: string;
+  toolName: string;
   status: AgentToolCallStatus;
-  input_json: Record<string, unknown>;
-  output_json?: Record<string, unknown> | null;
-  error_text?: string | null;
+  inputJson: Record<string, unknown>;
+  outputJson?: Record<string, unknown> | null;
+  errorText?: string | null;
 }
 
 export type AgentApprovalKind =
@@ -109,17 +109,17 @@ export type AgentApprovalDecision = "approve_once" | "approve_session" | "reject
 
 export interface AgentApprovalRequest {
   id: string;
-  session_id: string;
+  sessionId: string;
   kind: AgentApprovalKind;
-  scope_key: string;
+  scopeKey: string;
   status: AgentApprovalStatus;
   message: string;
   metadata?: Record<string, unknown> | null;
 }
 
 export interface AgentApprovalResolution {
-  approval_id: string;
-  session_id: string;
+  approvalId: string;
+  sessionId: string;
   decision: AgentApprovalDecision;
   response?: Record<string, unknown> | null;
 }
@@ -135,9 +135,9 @@ export type AgentArtifactType =
 
 export interface AgentArtifactDescriptor {
   id: string;
-  session_id: string;
-  artifact_type: AgentArtifactType;
+  sessionId: string;
+  artifactType: AgentArtifactType;
   title: string;
   uri: string;
-  metadata_json?: Record<string, unknown> | null;
+  metadataJson?: Record<string, unknown> | null;
 }

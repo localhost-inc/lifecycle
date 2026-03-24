@@ -1,7 +1,7 @@
 import type { AgentApprovalDecision, AgentApprovalRequest, AgentApprovalResolution } from "./turn";
 
-export type AgentWorkerApprovalRequestPayload = Omit<AgentApprovalRequest, "session_id">;
-export type AgentWorkerApprovalResolutionPayload = Omit<AgentApprovalResolution, "session_id">;
+export type AgentWorkerApprovalRequestPayload = Omit<AgentApprovalRequest, "sessionId">;
+export type AgentWorkerApprovalResolutionPayload = Omit<AgentApprovalResolution, "sessionId">;
 
 // ---------------------------------------------------------------------------
 // Worker lifecycle events
@@ -9,12 +9,12 @@ export type AgentWorkerApprovalResolutionPayload = Omit<AgentApprovalResolution,
 
 export interface AgentWorkerReadyEvent {
   kind: "worker.ready";
-  provider_session_id: string;
+  providerSessionId: string;
 }
 
 export interface AgentWorkerAuthStatusEvent {
   kind: "worker.auth_status";
-  is_authenticating: boolean;
+  isAuthenticating: boolean;
   output: string[];
   error?: string;
 }
@@ -26,39 +26,39 @@ export interface AgentWorkerAuthStatusEvent {
 export interface AgentWorkerMessageDeltaEvent {
   kind: "agent.message.delta";
   text: string;
-  turn_id: string;
-  /** Content block index from the SDK stream. Distinct text blocks get distinct indices. */
-  block_index: number;
+  turnId: string;
+  /** Opaque identifier for the content block within a turn. Distinct text blocks get distinct IDs. */
+  blockId: string;
 }
 
 export interface AgentWorkerThinkingDeltaEvent {
   kind: "agent.thinking.delta";
   text: string;
-  turn_id: string;
-  block_index: number;
+  turnId: string;
+  blockId: string;
 }
 
 export interface AgentWorkerToolUseStartEvent {
   kind: "agent.tool_use.start";
-  tool_name: string;
-  tool_use_id: string;
-  turn_id: string;
+  toolName: string;
+  toolUseId: string;
+  turnId: string;
 }
 
 export interface AgentWorkerToolUseInputEvent {
   kind: "agent.tool_use.input";
-  tool_name: string;
-  tool_use_id: string;
-  input_json: string;
-  turn_id: string;
+  toolName: string;
+  toolUseId: string;
+  inputJson: string;
+  turnId: string;
 }
 
 export interface AgentWorkerToolProgressEvent {
   kind: "agent.tool_progress";
-  tool_name: string;
-  tool_use_id: string;
-  elapsed_time_seconds: number;
-  turn_id: string;
+  toolName: string;
+  toolUseId: string;
+  elapsedTimeSeconds: number;
+  turnId: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -76,23 +76,24 @@ export type AgentWorkerItem =
       type: "command_execution";
       command: string;
       output: string;
-      exit_code?: number;
+      exitCode?: number;
       status: AgentWorkerItemStatus;
     }
   | {
       id: string;
       type: "file_change";
-      changes: { path: string; kind: "add" | "delete" | "update" }[];
-      status: "completed" | "failed";
+      changes: { path: string; kind: "add" | "delete" | "update"; diff?: string }[];
+      diff?: string;
+      status: AgentWorkerItemStatus;
     }
   | {
       id: string;
       type: "tool_call";
-      tool_name: string;
-      tool_call_id: string;
-      input_json?: string;
-      output_json?: string;
-      error_text?: string;
+      toolName: string;
+      toolCallId: string;
+      inputJson?: string;
+      outputJson?: string;
+      errorText?: string;
       status: AgentWorkerItemStatus;
     }
   | { id: string; type: "error"; message: string };
@@ -100,19 +101,19 @@ export type AgentWorkerItem =
 export interface AgentWorkerItemStartedEvent {
   kind: "agent.item.started";
   item: AgentWorkerItem;
-  turn_id: string;
+  turnId: string;
 }
 
 export interface AgentWorkerItemUpdatedEvent {
   kind: "agent.item.updated";
   item: AgentWorkerItem;
-  turn_id: string;
+  turnId: string;
 }
 
 export interface AgentWorkerItemCompletedEvent {
   kind: "agent.item.completed";
   item: AgentWorkerItem;
-  turn_id: string;
+  turnId: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -123,7 +124,7 @@ export interface AgentWorkerStatusEvent {
   kind: "agent.status";
   status: string;
   detail?: string | undefined;
-  turn_id: string;
+  turnId: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -133,13 +134,13 @@ export interface AgentWorkerStatusEvent {
 export interface AgentWorkerApprovalRequestedEvent {
   approval: AgentWorkerApprovalRequestPayload;
   kind: "agent.approval.requested";
-  turn_id: string;
+  turnId: string;
 }
 
 export interface AgentWorkerApprovalResolvedEvent {
   kind: "agent.approval.resolved";
   resolution: AgentWorkerApprovalResolutionPayload;
-  turn_id: string;
+  turnId: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -148,19 +149,19 @@ export interface AgentWorkerApprovalResolvedEvent {
 
 export interface AgentWorkerTurnCompletedEvent {
   kind: "agent.turn.completed";
-  turn_id: string;
+  turnId: string;
   usage?: {
-    input_tokens: number;
-    output_tokens: number;
-    cache_read_tokens?: number | undefined;
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadTokens?: number | undefined;
   } | undefined;
-  cost_usd?: number | undefined;
+  costUsd?: number | undefined;
 }
 
 export interface AgentWorkerTurnFailedEvent {
   kind: "agent.turn.failed";
   error: string;
-  turn_id: string;
+  turnId: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -197,16 +198,16 @@ export type AgentWorkerEvent =
 export interface AgentWorkerSendTurnCommand {
   kind: "worker.send_turn";
   input: string;
-  turn_id: string;
+  turnId: string;
 }
 
 export interface AgentWorkerCancelTurnCommand {
   kind: "worker.cancel_turn";
-  turn_id?: string | null;
+  turnId?: string | null;
 }
 
 export interface AgentWorkerResolveApprovalCommand {
-  approval_id: string;
+  approvalId: string;
   decision: AgentApprovalDecision;
   kind: "worker.resolve_approval";
   response?: Record<string, unknown> | null;

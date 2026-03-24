@@ -1,6 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@lifecycle/ui";
 import { type ClaudeHarnessSettings, type CodexHarnessSettings } from "@/features/settings/state/harness-settings";
-import { ClaudeIcon, CodexIcon } from "@/features/workspaces/components/surface-icons";
+import { ClaudeIcon, CodexIcon } from "@/features/workspaces/surfaces/surface-icons";
 import { ClaudeHarnessSettingsContent } from "@/features/settings/components/harnesses/claude-harness-settings-card";
 import { CodexHarnessSettingsContent } from "@/features/settings/components/harnesses/codex-harness-settings-card";
 

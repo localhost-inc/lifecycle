@@ -24,7 +24,7 @@ export default defineCommand({
     dangerousSkipPermissions: z.boolean().default(false),
     effort: ClaudeEffortSchema.optional(),
     loginMethod: ClaudeLoginMethodSchema.default("claudeai"),
-    model: z.string().default("claude-sonnet-4-6"),
+    model: z.string().default("default"),
     permissionMode: ClaudePermissionModeSchema.default("default"),
     providerSessionId: z.string().optional(),
     workspacePath: z.string().min(1),

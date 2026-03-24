@@ -1,12 +1,57 @@
+use crate::platform::lifecycle_cli::LifecycleCliState;
 use crate::platform::app_config::AppConfigPath;
 use crate::shared::errors::LifecycleError;
-use serde::Serialize;
-use tauri::{State, Webview};
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::fs::OpenOptions;
+use std::process::Stdio;
+use tauri::{AppHandle, Manager, State, Webview};
 
 #[derive(Clone, Copy, Serialize)]
 pub struct WindowMousePosition {
     x: f64,
     y: f64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StartDetachedAgentHostRequest {
+    args: Vec<String>,
+    cwd: Option<String>,
+    session_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentHostSessionRequest {
+    session_id: String,
+}
+
+fn agent_host_registration_path(
+    app: &AppHandle,
+    session_id: &str,
+) -> Result<std::path::PathBuf, LifecycleError> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| LifecycleError::AttachFailed(error.to_string()))?;
+    Ok(app_data_dir
+        .join("agent-hosts")
+        .join(format!("{session_id}.json")))
+}
+
+fn agent_host_log_path(
+    app: &AppHandle,
+    session_id: &str,
+) -> Result<std::path::PathBuf, LifecycleError> {
+    let app_data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|error| LifecycleError::AttachFailed(error.to_string()))?;
+    Ok(app_data_dir
+        .join("agent-hosts")
+        .join("logs")
+        .join(format!("{session_id}.log")))
 }
 
 #[tauri::command]
@@ -27,6 +72,75 @@ pub fn write_app_config(
 #[tauri::command]
 pub async fn get_auth_session() -> Result<crate::platform::auth::AuthSession, LifecycleError> {
     crate::platform::auth::read_auth_session().await
+}
+
+#[tauri::command]
+pub fn start_detached_agent_host(
+    app: AppHandle,
+    lifecycle_cli: State<'_, LifecycleCliState>,
+    request: StartDetachedAgentHostRequest,
+) -> Result<(), LifecycleError> {
+    let binary_path = lifecycle_cli
+        .binary_path()
+        .ok_or_else(|| LifecycleError::AttachFailed("Lifecycle CLI is unavailable.".to_string()))?;
+    let registration_path = agent_host_registration_path(&app, &request.session_id)?;
+    let log_path = agent_host_log_path(&app, &request.session_id)?;
+
+    if let Some(parent) = registration_path.parent() {
+        fs::create_dir_all(parent).map_err(|error| LifecycleError::Io(error.to_string()))?;
+    }
+    if let Some(parent) = log_path.parent() {
+        fs::create_dir_all(parent).map_err(|error| LifecycleError::Io(error.to_string()))?;
+    }
+
+    let log_file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .map_err(|error| LifecycleError::Io(error.to_string()))?;
+    let log_file_stderr = log_file
+        .try_clone()
+        .map_err(|error| LifecycleError::Io(error.to_string()))?;
+
+    let mut command = std::process::Command::new(binary_path);
+    command
+        .args(["agent", "host"])
+        .args(&request.args)
+        .arg("--registration-path")
+        .arg(registration_path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(log_file))
+        .stderr(Stdio::from(log_file_stderr));
+
+    if let Some(cwd) = request.cwd {
+        command.current_dir(cwd);
+    }
+
+    command
+        .spawn()
+        .map_err(|error| LifecycleError::AttachFailed(error.to_string()))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn read_agent_host_registration(
+    app: AppHandle,
+    request: AgentHostSessionRequest,
+) -> Result<Option<serde_json::Value>, LifecycleError> {
+    let registration_path = agent_host_registration_path(&app, &request.session_id)?;
+    if !registration_path.exists() {
+        return Ok(None);
+    }
+
+    let raw = fs::read_to_string(&registration_path)
+        .map_err(|error| LifecycleError::Io(error.to_string()))?;
+    let parsed = serde_json::from_str(&raw)
+        .map_err(|error| LifecycleError::InvalidInput {
+            field: "session_id".to_string(),
+            reason: format!("invalid agent host registration: {error}"),
+        })?;
+    Ok(Some(parsed))
 }
 
 #[tauri::command]

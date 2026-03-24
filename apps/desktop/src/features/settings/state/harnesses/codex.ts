@@ -4,7 +4,7 @@ import { isRecord, normalizeBoolean, normalizeHarnessPreset } from "@/features/s
 
 export type CodexSandboxMode = "read-only" | "workspace-write" | "danger-full-access";
 export type CodexApprovalPolicy = "never" | "on-failure" | "on-request" | "untrusted";
-export type CodexModel = "codex-mini-latest" | "gpt-5-codex";
+export type CodexModel = string;
 export type CodexReasoningEffort = "default" | CodexModelReasoningEffort;
 
 export interface CodexHarnessSettings {
@@ -25,19 +25,6 @@ export interface CodexHarnessLaunchConfig {
   reasoningEffort: CodexReasoningEffort;
   sandboxMode: CodexSandboxMode;
 }
-
-export const codexModelOptions = [
-  {
-    description: "Fastest Codex-focused model alias for lower-cost coding turns.",
-    label: "Mini",
-    value: "codex-mini-latest" as const,
-  },
-  {
-    description: "Primary GPT-5 Codex model alias optimized for agentic coding.",
-    label: "GPT-5 Codex",
-    value: "gpt-5-codex" as const,
-  },
-] as const;
 
 export const codexSandboxModeOptions = [
   {
@@ -124,7 +111,6 @@ const validCodexSandboxModes = new Set<string>(
 const validCodexApprovalPolicies = new Set<string>(
   codexApprovalPolicyOptions.map((option) => option.value),
 );
-const validCodexModels = new Set<string>(codexModelOptions.map((option) => option.value));
 const validCodexReasoningEfforts = new Set<string>(
   codexReasoningEffortOptions.map((option) => option.value),
 );
@@ -146,11 +132,11 @@ function normalizeCodexApprovalPolicy(value: unknown): CodexApprovalPolicy {
 }
 
 function normalizeCodexModel(value: unknown): CodexModel {
-  if (typeof value === "string" && validCodexModels.has(value)) {
-    return value as CodexModel;
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value.trim();
   }
 
-  return "gpt-5-codex";
+  return "gpt-5.4";
 }
 
 function normalizeCodexReasoningEffort(value: unknown): CodexReasoningEffort {
@@ -167,7 +153,7 @@ export function buildCodexHarnessSettingsFromPreset(preset: HarnessPreset): Code
       return {
         approvalPolicy: "never",
         dangerousBypass: true,
-        model: "gpt-5-codex",
+        model: "gpt-5.4",
         preset,
         reasoningEffort: "default",
         sandboxMode: "danger-full-access",
@@ -177,7 +163,7 @@ export function buildCodexHarnessSettingsFromPreset(preset: HarnessPreset): Code
       return {
         approvalPolicy: "untrusted",
         dangerousBypass: false,
-        model: "gpt-5-codex",
+        model: "gpt-5.4",
         preset: "guarded",
         reasoningEffort: "default",
         sandboxMode: "workspace-write",

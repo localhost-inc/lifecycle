@@ -2,7 +2,7 @@ import type { GitLogEntry, GitPullRequestSummary, ServiceRecord } from "@lifecyc
 import type { StatusDotTone } from "@lifecycle/ui";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import type { WorkspaceDocumentKind } from "@/features/workspaces/components/workspace-canvas-requests";
+import type { WorkspaceDocumentKind } from "@/features/workspaces/canvas/workspace-canvas-requests";
 
 export type WorkspaceExtensionId =
   | "environment"

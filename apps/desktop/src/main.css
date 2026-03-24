@@ -29,10 +29,139 @@ body {
 .agent-surface,
 .agent-surface * {
   font-family: var(--font-mono) !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Agent streamdown prose ─────────────────────────────────── */
+
+.agent-streamdown p {
+  margin-bottom: 0.75em;
+}
+
+.agent-streamdown h1,
+.agent-streamdown h2,
+.agent-streamdown h3,
+.agent-streamdown h4 {
+  font-weight: 600;
+  margin-top: 1.25em;
+  margin-bottom: 0.5em;
+  color: var(--foreground);
+}
+
+.agent-streamdown h1 {
+  font-size: 1.15em;
+}
+
+.agent-streamdown h2 {
+  font-size: 1.05em;
+}
+
+.agent-streamdown h3,
+.agent-streamdown h4 {
+  font-size: 1em;
+}
+
+.agent-streamdown strong {
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.agent-streamdown em {
+  font-style: italic;
+}
+
+.agent-streamdown a {
+  color: var(--terminal-ansi-blue);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Inline code */
+.agent-streamdown :not(pre) > code {
+  background: var(--muted);
+  padding: 0.15em 0.35em;
+  border-radius: var(--radius-sm);
+  font-size: 0.92em;
+}
+
+/* Code blocks */
+.agent-streamdown pre {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75em 1em;
+  margin: 0.75em 0;
+  overflow-x: auto;
+  font-size: 0.92em;
+  line-height: 1.5;
+}
+
+/* Lists */
+.agent-streamdown ul {
+  list-style: disc;
+  padding-left: 1.5em;
+  margin-bottom: 0.75em;
+}
+
+.agent-streamdown ol {
+  list-style: decimal;
+  padding-left: 1.5em;
+  margin-bottom: 0.75em;
+}
+
+.agent-streamdown li {
+  margin-bottom: 0.25em;
+}
+
+.agent-streamdown li > ul,
+.agent-streamdown li > ol {
+  margin-top: 0.25em;
+  margin-bottom: 0;
+}
+
+/* Blockquotes */
+.agent-streamdown blockquote {
+  border-left: 2px solid var(--muted-foreground);
+  padding-left: 0.75em;
+  color: var(--muted-foreground);
+  margin: 0.75em 0;
+}
+
+/* Horizontal rules */
+.agent-streamdown hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1em 0;
+}
+
+/* Tables */
+.agent-streamdown table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.75em 0;
+  font-size: 0.92em;
+}
+
+.agent-streamdown th,
+.agent-streamdown td {
+  border: 1px solid var(--border);
+  padding: 0.35em 0.65em;
+  text-align: left;
+}
+
+.agent-streamdown th {
+  font-weight: 600;
+  background: var(--muted);
 }
 
 /* Strip trailing margin from last element in streamdown blocks */
 .agent-streamdown > *:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Streamdown renders single bullet items as ul > li > p, so trim the nested paragraph too. */
+.agent-streamdown li > p:last-child {
   margin-bottom: 0 !important;
 }
 

@@ -62,11 +62,40 @@ describe("codex worker session binding", () => {
       }),
     ).toEqual({
       id: "item_1",
-      input_json: "{\"q\":\"build logs\"}",
+      inputJson: "{\"q\":\"build logs\"}",
       status: "in_progress",
-      tool_call_id: "item_1",
-      tool_name: "search/query",
+      toolCallId: "item_1",
+      toolName: "search/query",
       type: "tool_call",
+    });
+  });
+
+  test("maps file changes with unified diffs onto the normalized worker item shape", () => {
+    expect(
+      codexThreadItemToWorkerItem({
+        changes: [
+          {
+            diff: "diff --git a/src/app.ts b/src/app.ts\n--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1 +1 @@\n-old\n+new\n",
+            kind: "update",
+            path: "/tmp/project/src/app.ts",
+          },
+        ],
+        id: "item_2",
+        status: "inProgress",
+        type: "fileChange",
+      }),
+    ).toEqual({
+      changes: [
+        {
+          diff: "diff --git a/src/app.ts b/src/app.ts\n--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1 +1 @@\n-old\n+new\n",
+          kind: "update",
+          path: "/tmp/project/src/app.ts",
+        },
+      ],
+      diff: "diff --git a/src/app.ts b/src/app.ts\n--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1 +1 @@\n-old\n+new\n",
+      id: "item_2",
+      status: "in_progress",
+      type: "file_change",
     });
   });
 

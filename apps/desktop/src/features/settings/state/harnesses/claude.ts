@@ -2,7 +2,7 @@ import type { HarnessPreset } from "@/features/settings/state/harnesses/shared";
 import { isRecord, normalizeBoolean, normalizeHarnessPreset } from "@/features/settings/state/harnesses/shared";
 
 export type ClaudeLoginMethod = "claudeai" | "console";
-export type ClaudeModel = "claude-haiku-4-5" | "claude-opus-4-6" | "claude-sonnet-4-6";
+export type ClaudeModel = string;
 export type ClaudeEffort = "default" | "low" | "medium" | "high" | "max";
 
 export type ClaudePermissionMode =
@@ -31,24 +31,6 @@ export interface ClaudeHarnessLaunchConfig {
   preset: HarnessPreset;
   provider: "claude";
 }
-
-export const claudeModelOptions = [
-  {
-    description: "Fastest Claude coding model in the current public lineup.",
-    label: "Haiku 4.5",
-    value: "claude-haiku-4-5" as const,
-  },
-  {
-    description: "Balanced default Claude coding model.",
-    label: "Sonnet 4.6",
-    value: "claude-sonnet-4-6" as const,
-  },
-  {
-    description: "Highest-capability Claude model for harder tasks.",
-    label: "Opus 4.6",
-    value: "claude-opus-4-6" as const,
-  },
-] as const;
 
 export const claudePermissionModeOptions = [
   {
@@ -105,7 +87,7 @@ export const claudeEffortOptions = [
     value: "high" as const,
   },
   {
-    description: "Maximum effort. Only supported on Opus 4.6.",
+    description: "Maximum effort. Only exposed for models that support it.",
     label: "Max",
     value: "max" as const,
   },
@@ -116,7 +98,6 @@ const validClaudePermissionModes = new Set<string>(
 );
 
 const validClaudeLoginMethods = new Set<string>(["claudeai", "console"]);
-const validClaudeModels = new Set<string>(claudeModelOptions.map((option) => option.value));
 const validClaudeEfforts = new Set<string>(claudeEffortOptions.map((option) => option.value));
 
 function normalizeClaudeLoginMethod(value: unknown): ClaudeLoginMethod {
@@ -136,11 +117,11 @@ function normalizeClaudePermissionMode(value: unknown): ClaudePermissionMode {
 }
 
 function normalizeClaudeModel(value: unknown): ClaudeModel {
-  if (typeof value === "string" && validClaudeModels.has(value)) {
-    return value as ClaudeModel;
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value.trim();
   }
 
-  return "claude-sonnet-4-6";
+  return "default";
 }
 
 function normalizeClaudeEffort(value: unknown): ClaudeEffort {
@@ -158,7 +139,7 @@ export function buildClaudeHarnessSettingsFromPreset(preset: HarnessPreset): Cla
         dangerousSkipPermissions: true,
         effort: "default",
         loginMethod: "claudeai",
-        model: "claude-sonnet-4-6",
+        model: "default",
         permissionMode: "bypassPermissions",
         preset,
       };
@@ -168,7 +149,7 @@ export function buildClaudeHarnessSettingsFromPreset(preset: HarnessPreset): Cla
         dangerousSkipPermissions: false,
         effort: "default",
         loginMethod: "claudeai",
-        model: "claude-sonnet-4-6",
+        model: "default",
         permissionMode: "acceptEdits",
         preset: "guarded",
       };

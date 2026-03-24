@@ -6,7 +6,7 @@ export async function selectTerminalsByWorkspace(
   workspaceId: string,
 ): Promise<TerminalRecord[]> {
   return driver.select<TerminalRecord>(
-    `SELECT id, workspace_id, launch_type, harness_provider, harness_session_id,
+    `SELECT id, workspace_id, launch_type,
             created_by, label, status, failure_reason, exit_code,
             started_at, last_active_at, ended_at
      FROM terminal WHERE workspace_id = $1
@@ -17,7 +17,7 @@ export async function selectTerminalsByWorkspace(
 
 export async function selectAllTerminals(driver: SqlDriver): Promise<TerminalRecord[]> {
   return driver.select<TerminalRecord>(
-    `SELECT id, workspace_id, launch_type, harness_provider, harness_session_id,
+    `SELECT id, workspace_id, launch_type,
             created_by, label, status, failure_reason, exit_code,
             started_at, last_active_at, ended_at
      FROM terminal

@@ -20,7 +20,7 @@ export interface ProviderAuthResult {
 export interface ProviderAuthStatusEvent {
   kind: "auth.status";
   provider: AgentSessionProviderId;
-  is_authenticating: boolean;
+  isAuthenticating: boolean;
   output: string[];
   error?: string;
 }

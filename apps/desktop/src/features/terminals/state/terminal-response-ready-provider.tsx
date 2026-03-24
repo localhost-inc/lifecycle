@@ -281,7 +281,7 @@ export function TerminalResponseReadyProvider({ children }: { children: ReactNod
         }
 
         dispatch({
-          terminalId: event.terminal_id,
+          terminalId: event.terminalId,
           kind: "clear-terminal",
         });
         break;

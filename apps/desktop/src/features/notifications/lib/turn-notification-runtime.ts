@@ -21,9 +21,9 @@ export interface TurnCompletionNotificationContext {
 }
 
 export interface TurnCompletionLifecycleEvent {
-  session_id: string;
-  turn_id: string;
-  workspace_id: string;
+  sessionId: string;
+  turnId: string;
+  workspaceId: string;
 }
 
 function formatLocation(projectName?: string | null, workspaceName?: string | null): string | null {

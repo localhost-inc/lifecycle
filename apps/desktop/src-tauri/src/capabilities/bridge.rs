@@ -160,31 +160,6 @@ impl BridgeState {
         }
     }
 
-    pub(crate) fn endpoint_path(&self) -> Option<String> {
-        self.inner.endpoint_path.clone()
-    }
-
-    pub(crate) fn register_terminal_session(
-        &self,
-        workspace_id: &str,
-        terminal_id: &str,
-    ) -> Option<String> {
-        if self.inner.endpoint_path.is_none() {
-            return None;
-        }
-
-        let token = uuid::Uuid::new_v4().to_string();
-        let mut session_scopes = self.inner.session_scopes.lock().unwrap();
-        session_scopes.insert(
-            token.clone(),
-            BridgeSessionScope {
-                terminal_id: terminal_id.to_string(),
-                workspace_id: workspace_id.to_string(),
-            },
-        );
-        Some(token)
-    }
-
     #[cfg(unix)]
     fn spawn_accept_loop(&self, app: AppHandle, listener: StdUnixListener) {
         let state = self.clone();

@@ -76,7 +76,7 @@ export async function loginClaudeAuth(): Promise<void> {
   emit({
     kind: "auth.status",
     provider: "claude",
-    is_authenticating: true,
+    isAuthenticating: true,
     output: ["Opening browser for Claude authentication..."],
   });
 

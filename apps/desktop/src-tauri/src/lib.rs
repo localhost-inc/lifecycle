@@ -245,6 +245,8 @@ pub fn run() {
             capabilities::app::commands::get_app_config,
             capabilities::app::commands::write_app_config,
             capabilities::app::commands::get_auth_session,
+            capabilities::app::commands::read_agent_host_registration,
+            capabilities::app::commands::start_detached_agent_host,
             capabilities::bridge::bridge_complete_shell_request,
             capabilities::bridge::bridge_fail_shell_request,
             capabilities::app::commands::set_window_accepts_mouse_moved_events,

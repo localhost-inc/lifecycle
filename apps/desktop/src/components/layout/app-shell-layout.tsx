@@ -14,6 +14,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { AppHotkeyListener } from "@/app/app-hotkey-listener";
 import { isMacPlatform, shouldHandleDomAppHotkey } from "@/app/app-hotkeys";
 import { useAuthSession } from "@/features/auth/state/auth-session-provider";
+import { useAgentStatusIndex } from "@/features/agents/state/agent-session-state";
 import { CommandPaletteProvider } from "@/features/command-palette";
 import { getGitStatus } from "@/features/git/api";
 import { getCurrentBranch } from "@/features/projects/api/current-branch";
@@ -103,7 +104,20 @@ export function AppShellLayout() {
   const projectCatalogQuery = useProjectCatalog();
   const workspacesByProject = useWorkspacesByProject();
   const { isLoading: authSessionLoading, session: authSession } = useAuthSession();
-  const { hasWorkspaceResponseReady, hasWorkspaceRunningTurn } = useTerminalResponseReady();
+  const terminalResponseReady = useTerminalResponseReady();
+  const agentStatusIndex = useAgentStatusIndex();
+  const hasWorkspaceResponseReady = useCallback(
+    (workspaceId: string) =>
+      terminalResponseReady.hasWorkspaceResponseReady(workspaceId) ||
+      agentStatusIndex.hasWorkspaceResponseReady(workspaceId),
+    [agentStatusIndex, terminalResponseReady],
+  );
+  const hasWorkspaceRunningTurn = useCallback(
+    (workspaceId: string) =>
+      terminalResponseReady.hasWorkspaceRunningTurn(workspaceId) ||
+      agentStatusIndex.hasWorkspaceRunningTurn(workspaceId),
+    [agentStatusIndex, terminalResponseReady],
+  );
   const { worktreeRoot } = useSettings();
   const [requestedShellContextId, setRequestedShellContextId] = useState<string | null>(
     readPersistedShellContextId,

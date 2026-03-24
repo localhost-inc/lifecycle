@@ -16,7 +16,7 @@ import {
   workspaceFileDirname,
 } from "@/features/workspaces/lib/workspace-file-paths";
 import { useWorkspaceOpenRequests } from "@/features/workspaces/state/workspace-open-requests";
-import { createFileViewerOpenInput } from "@/features/workspaces/components/workspace-canvas-requests";
+import { createFileViewerOpenInput } from "@/features/workspaces/canvas/workspace-canvas-requests";
 import type { CommandPaletteCommand } from "@/features/command-palette/types";
 
 interface UseCommandPaletteExplorerResult {

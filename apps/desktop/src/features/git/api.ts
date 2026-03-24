@@ -62,9 +62,9 @@ function browserCommitResult(message: string): GitCommitResult {
 function emitBrowserGitStatusChanged(workspaceId: string): void {
   publishBrowserLifecycleEvent({
     kind: "git.status_changed",
-    workspace_id: workspaceId,
+    workspaceId,
     branch: null,
-    head_sha: null,
+    headSha: null,
     upstream: null,
   });
 }
@@ -75,9 +75,9 @@ function emitBrowserGitHeadChanged(
 ): void {
   publishBrowserLifecycleEvent({
     kind: "git.head_changed",
-    workspace_id: workspaceId,
+    workspaceId,
     branch: null,
-    head_sha: options?.headSha ?? null,
+    headSha: options?.headSha ?? null,
     upstream: null,
     ahead: options?.ahead ?? 0,
     behind: options?.behind ?? 0,
@@ -87,9 +87,9 @@ function emitBrowserGitHeadChanged(
 function emitBrowserGitLogChanged(workspaceId: string, headSha: string | null): void {
   publishBrowserLifecycleEvent({
     kind: "git.log_changed",
-    workspace_id: workspaceId,
+    workspaceId,
     branch: null,
-    head_sha: headSha,
+    headSha: headSha,
   });
 }
 

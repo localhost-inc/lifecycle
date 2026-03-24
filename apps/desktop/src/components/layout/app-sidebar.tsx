@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { IconButton, Logo, Spinner, Wordmark } from "@lifecycle/ui";
 import { FolderGit2, GitBranch, Plus } from "lucide-react";
+import { NavigationControls } from "@/components/layout/navigation-controls";
 import { type MouseEvent, useCallback, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { resolveProjectRepoWorkspace } from "@/features/projects/lib/project-repo-workspace";
@@ -21,7 +22,7 @@ import {
   getWorkspaceDisplayName,
   isRootWorkspace,
 } from "@/features/workspaces/lib/workspace-display";
-import { getWorkspaceSessionStatusState } from "@/features/workspaces/components/workspace-session-status";
+import { getWorkspaceSessionStatusState } from "@/features/workspaces/surfaces/workspace-session-status";
 import {
   showCreateWorkspaceMenu,
   showWorkspaceContextMenu,
@@ -171,8 +172,10 @@ export function AppSidebar({
       onMouseDown={handleMouseDown}
       style={{ width: `${width / 16}rem` }}
     >
-      {/* Traffic light spacer */}
-      <div className="h-10 shrink-0" />
+      {/* Traffic light spacer + navigation */}
+      <div className="flex h-10 shrink-0 items-center justify-end">
+        <NavigationControls />
+      </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
         {/* Organization / context switcher */}

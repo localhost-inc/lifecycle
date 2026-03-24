@@ -82,11 +82,6 @@ export function useProjects(): ProjectRecord[] {
   return useCollectionArray(collections.projects.collection);
 }
 
-export function useProject(projectId: string | null): ProjectRecord | undefined {
-  const { collections } = useStoreContext();
-  return useCollectionItem(collections.projects.collection, projectId);
-}
-
 export function useWorkspaces(): WorkspaceRecord[] {
   const { collections } = useStoreContext();
   return useCollectionArray(collections.workspaces.collection);

@@ -1,10 +1,7 @@
-import { createRequire } from "node:module";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
-import type {
-  AgentApprovalDecision,
-  AgentApprovalKind,
-} from "../../turn";
+import { resolveCodexCliPath } from "./cli-path";
+import type { AgentApprovalDecision, AgentApprovalKind } from "../../turn";
 import type {
   AgentWorkerApprovalRequestPayload,
   AgentWorkerCommand,
@@ -82,7 +79,10 @@ function readString(record: Record<string, unknown>, key: string): string | unde
   return typeof value === "string" ? value : undefined;
 }
 
-function readOptionalString(record: Record<string, unknown>, key: string): string | null | undefined {
+function readOptionalString(
+  record: Record<string, unknown>,
+  key: string,
+): string | null | undefined {
   const value = record[key];
   if (value === null) {
     return null;
@@ -159,25 +159,37 @@ function mapCodexThreadItemToWorkerItem(item: Record<string, unknown>): AgentWor
         output: readOptionalString(item, "aggregatedOutput") ?? "",
         status: mapCodexStatus(readString(item, "status")),
         type: "command_execution",
-        ...(typeof readNumber(item, "exitCode") === "number" ? { exit_code: readNumber(item, "exitCode") ?? 0 } : {}),
+        ...(typeof readNumber(item, "exitCode") === "number"
+          ? { exitCode: readNumber(item, "exitCode") ?? 0 }
+          : {}),
       };
     case "fileChange":
+      const changes = Array.isArray(item.changes)
+        ? item.changes.flatMap((change) => {
+            if (!isRecord(change)) {
+              return [];
+            }
+            const path = readString(change, "path");
+            const kind = readString(change, "kind");
+            if (!path || (kind !== "add" && kind !== "delete" && kind !== "update")) {
+              return [];
+            }
+            const diff = readString(change, "diff");
+            return [{ ...(diff ? { diff } : {}), kind, path }] as const;
+          })
+        : [];
       return {
-        changes: Array.isArray(item.changes)
-          ? item.changes.flatMap((change) => {
-              if (!isRecord(change)) {
-                return [];
-              }
-              const path = readString(change, "path");
-              const kind = readString(change, "type");
-              if (!path || (kind !== "add" && kind !== "delete" && kind !== "update")) {
-                return [];
-              }
-              return [{ kind, path }] as const;
-            })
-          : [],
+        changes,
+        ...(changes.some((change) => typeof change.diff === "string" && change.diff.length > 0)
+          ? {
+              diff: changes
+                .map((change) => change.diff)
+                .filter((diff): diff is string => typeof diff === "string" && diff.length > 0)
+                .join("\n"),
+            }
+          : {}),
         id: readString(item, "id") ?? "",
-        status: mapCodexStatus(readString(item, "status")) === "completed" ? "completed" : "failed",
+        status: mapCodexStatus(readString(item, "status")),
         type: "file_change",
       };
     case "mcpToolCall": {
@@ -189,12 +201,12 @@ function mapCodexThreadItemToWorkerItem(item: Record<string, unknown>): AgentWor
       return {
         id: readString(item, "id") ?? "",
         status: mapCodexStatus(readString(item, "status")),
-        tool_call_id: readString(item, "id") ?? "",
-        tool_name: `${readString(item, "server") ?? "mcp"}/${readString(item, "tool") ?? "tool"}`,
+        toolCallId: readString(item, "id") ?? "",
+        toolName: `${readString(item, "server") ?? "mcp"}/${readString(item, "tool") ?? "tool"}`,
         type: "tool_call",
-        ...(inputJson !== undefined ? { input_json: inputJson } : {}),
-        ...(outputJson !== undefined ? { output_json: outputJson } : {}),
-        ...(errorText !== undefined ? { error_text: errorText } : {}),
+        ...(inputJson !== undefined ? { inputJson } : {}),
+        ...(outputJson !== undefined ? { outputJson } : {}),
+        ...(errorText !== undefined ? { errorText } : {}),
       };
     }
     case "dynamicToolCall": {
@@ -203,11 +215,11 @@ function mapCodexThreadItemToWorkerItem(item: Record<string, unknown>): AgentWor
       return {
         id: readString(item, "id") ?? "",
         status: mapCodexStatus(readString(item, "status")),
-        tool_call_id: readString(item, "id") ?? "",
-        tool_name: readString(item, "tool") ?? "tool",
+        toolCallId: readString(item, "id") ?? "",
+        toolName: readString(item, "tool") ?? "tool",
         type: "tool_call",
-        ...(inputJson !== undefined ? { input_json: inputJson } : {}),
-        ...(outputJson !== undefined ? { output_json: outputJson } : {}),
+        ...(inputJson !== undefined ? { inputJson } : {}),
+        ...(outputJson !== undefined ? { outputJson } : {}),
       };
     }
     case "webSearch": {
@@ -218,28 +230,28 @@ function mapCodexThreadItemToWorkerItem(item: Record<string, unknown>): AgentWor
       return {
         id: readString(item, "id") ?? "",
         status: "completed",
-        tool_call_id: readString(item, "id") ?? "",
-        tool_name: "web_search",
+        toolCallId: readString(item, "id") ?? "",
+        toolName: "web_search",
         type: "tool_call",
-        ...(inputJson !== undefined ? { input_json: inputJson } : {}),
+        ...(inputJson !== undefined ? { inputJson } : {}),
       };
     }
     case "collabAgentToolCall": {
       const inputJson = toJsonString({
         model: readOptionalString(item, "model"),
         prompt: readOptionalString(item, "prompt"),
-        receiver_thread_ids: item.receiverThreadIds,
-        sender_thread_id: readString(item, "senderThreadId"),
+        receiverThreadIds: item.receiverThreadIds,
+        senderThreadId: readString(item, "senderThreadId"),
       });
       const outputJson = toJsonString(item.agentsStates);
       return {
         id: readString(item, "id") ?? "",
         status: mapCodexStatus(readString(item, "status")),
-        tool_call_id: readString(item, "id") ?? "",
-        tool_name: `collab/${readString(item, "tool") ?? "agent"}`,
+        toolCallId: readString(item, "id") ?? "",
+        toolName: `collab/${readString(item, "tool") ?? "agent"}`,
         type: "tool_call",
-        ...(inputJson !== undefined ? { input_json: inputJson } : {}),
-        ...(outputJson !== undefined ? { output_json: outputJson } : {}),
+        ...(inputJson !== undefined ? { inputJson } : {}),
+        ...(outputJson !== undefined ? { outputJson } : {}),
       };
     }
     default:
@@ -261,7 +273,9 @@ function buildCodexConfig(input: CodexWorkerInput): Record<string, unknown> | nu
   };
 }
 
-export function createCodexThreadBootstrapRequest(input: CodexWorkerInput): CodexThreadBootstrapRequest {
+export function createCodexThreadBootstrapRequest(
+  input: CodexWorkerInput,
+): CodexThreadBootstrapRequest {
   const approvalPolicy = input.dangerousBypass ? "never" : input.approvalPolicy;
   const config = buildCodexConfig(input);
   const sandboxMode = input.dangerousBypass ? "danger-full-access" : input.sandboxMode;
@@ -295,14 +309,20 @@ export function createCodexThreadBootstrapRequest(input: CodexWorkerInput): Code
 }
 
 function buildUserInput(text: string): Array<Record<string, unknown>> {
-  return [{
-    text,
-    text_elements: [],
-    type: "text",
-  }];
+  return [
+    {
+      text,
+      text_elements: [],
+      type: "text",
+    },
+  ];
 }
 
-function buildTurnStartParams(input: CodexWorkerInput, providerThreadId: string, prompt: string): Record<string, unknown> {
+function buildTurnStartParams(
+  input: CodexWorkerInput,
+  providerThreadId: string,
+  prompt: string,
+): Record<string, unknown> {
   return {
     ...(input.modelReasoningEffort ? { effort: input.modelReasoningEffort } : {}),
     input: buildUserInput(prompt),
@@ -311,11 +331,16 @@ function buildTurnStartParams(input: CodexWorkerInput, providerThreadId: string,
 }
 
 function isJsonRpcRequest(message: unknown): message is CodexJsonRpcRequest {
-  return isRecord(message) && ("method" in message) && ("id" in message);
+  return isRecord(message) && "method" in message && "id" in message;
 }
 
 function isJsonRpcResponse(message: unknown): message is CodexJsonRpcResponse {
-  return isRecord(message) && ("id" in message) && ("result" in message || "error" in message) && !("method" in message);
+  return (
+    isRecord(message) &&
+    "id" in message &&
+    ("result" in message || "error" in message) &&
+    !("method" in message)
+  );
 }
 
 function isJsonRpcNotification(message: unknown): message is { method: string; params?: unknown } {
@@ -334,7 +359,11 @@ function resolveLifecycleTurnId(
   return currentLifecycleTurnId;
 }
 
-function createApprovalId(method: string, requestId: number | string, params: Record<string, unknown>): string {
+function createApprovalId(
+  method: string,
+  requestId: number | string,
+  params: Record<string, unknown>,
+): string {
   if (method === "item/commandExecution/requestApproval") {
     const approvalId = readString(params, "approvalId");
     if (approvalId) {
@@ -352,7 +381,7 @@ function inferFileChangeApprovalKind(item: Record<string, unknown> | undefined):
     if (!isRecord(change)) {
       return [];
     }
-    const kind = readString(change, "type");
+    const kind = readString(change, "kind");
     return kind ? [kind] : [];
   });
 
@@ -372,7 +401,9 @@ function inferPermissionsApprovalKind(params: Record<string, unknown>): AgentApp
 }
 
 function buildCommandApprovalMessage(params: Record<string, unknown>): string {
-  const networkContext = isRecord(params.networkApprovalContext) ? params.networkApprovalContext : null;
+  const networkContext = isRecord(params.networkApprovalContext)
+    ? params.networkApprovalContext
+    : null;
   if (networkContext) {
     const host = readString(networkContext, "host");
     const protocol = readString(networkContext, "protocol");
@@ -397,7 +428,10 @@ function buildCommandApprovalMessage(params: Record<string, unknown>): string {
   return "Codex needs approval before running a command.";
 }
 
-function buildFileChangeApprovalMessage(params: Record<string, unknown>, item: Record<string, unknown> | undefined): string {
+function buildFileChangeApprovalMessage(
+  params: Record<string, unknown>,
+  item: Record<string, unknown> | undefined,
+): string {
   const reason = readString(params, "reason");
   if (reason) {
     return reason;
@@ -446,34 +480,39 @@ function buildToolUserInputMetadata(params: Record<string, unknown>): Record<str
         if (!isRecord(question)) {
           return [];
         }
-        return [{
-          header: readString(question, "header") ?? readString(question, "question") ?? "Question",
-          id: readString(question, "id"),
-          isOther: readBoolean(question, "isOther") ?? false,
-          isSecret: readBoolean(question, "isSecret") ?? false,
-          multiSelect: false,
-          options: Array.isArray(question.options)
-            ? question.options.flatMap((option) => {
-                if (!isRecord(option)) {
-                  return [];
-                }
-                const label = readString(option, "label");
-                if (!label) {
-                  return [];
-                }
-                return [{
-                  description: readString(option, "description") ?? "",
-                  label,
-                }];
-              })
-            : [],
-          question: readString(question, "question") ?? "",
-        }];
+        return [
+          {
+            header:
+              readString(question, "header") ?? readString(question, "question") ?? "Question",
+            id: readString(question, "id"),
+            isOther: readBoolean(question, "isOther") ?? false,
+            isSecret: readBoolean(question, "isSecret") ?? false,
+            multiSelect: false,
+            options: Array.isArray(question.options)
+              ? question.options.flatMap((option) => {
+                  if (!isRecord(option)) {
+                    return [];
+                  }
+                  const label = readString(option, "label");
+                  if (!label) {
+                    return [];
+                  }
+                  return [
+                    {
+                      description: readString(option, "description") ?? "",
+                      label,
+                    },
+                  ];
+                })
+              : [],
+            question: readString(question, "question") ?? "",
+          },
+        ];
       })
     : [];
 
   return {
-    item_id: readString(params, "itemId") ?? null,
+    itemId: readString(params, "itemId") ?? null,
     method: "item/tool/requestUserInput",
     questions,
   };
@@ -484,7 +523,7 @@ function buildMcpElicitationMetadata(params: Record<string, unknown>): Record<st
     _meta: params._meta ?? null,
     method: "mcpServer/elicitation/request",
     mode: readString(params, "mode") ?? "form",
-    requested_schema: params.requestedSchema ?? null,
+    requestedSchema: params.requestedSchema ?? null,
     serverName: readString(params, "serverName") ?? null,
     url: readString(params, "url") ?? null,
   };
@@ -504,20 +543,20 @@ function createCodexApprovalRequest(
         kind: isRecord(params.networkApprovalContext) ? "network" : "shell",
         message: buildCommandApprovalMessage(params),
         metadata: {
-          additional_permissions: params.additionalPermissions ?? null,
-          available_decisions: params.availableDecisions ?? null,
+          additionalPermissions: params.additionalPermissions ?? null,
+          availableDecisions: params.availableDecisions ?? null,
           command: readString(params, "command") ?? null,
-          command_actions: params.commandActions ?? null,
+          commandActions: params.commandActions ?? null,
           cwd: readString(params, "cwd") ?? null,
-          item_id: readString(params, "itemId") ?? null,
+          itemId: readString(params, "itemId") ?? null,
           method,
-          network_approval_context: params.networkApprovalContext ?? null,
-          proposed_execpolicy_amendment: params.proposedExecpolicyAmendment ?? null,
-          proposed_network_policy_amendments: params.proposedNetworkPolicyAmendments ?? null,
+          networkApprovalContext: params.networkApprovalContext ?? null,
+          proposedExecpolicyAmendment: params.proposedExecpolicyAmendment ?? null,
+          proposedNetworkPolicyAmendments: params.proposedNetworkPolicyAmendments ?? null,
           reason: readOptionalString(params, "reason") ?? null,
-          skill_metadata: params.skillMetadata ?? null,
+          skillMetadata: params.skillMetadata ?? null,
         },
-        scope_key: `codex:${lifecycleTurnId}:${readString(params, "itemId") ?? String(requestId)}`,
+        scopeKey: `codex:${lifecycleTurnId}:${readString(params, "itemId") ?? String(requestId)}`,
         status: "pending",
       };
     case "item/fileChange/requestApproval":
@@ -527,12 +566,12 @@ function createCodexApprovalRequest(
         message: buildFileChangeApprovalMessage(params, item),
         metadata: {
           changes: item?.changes ?? null,
-          grant_root: readOptionalString(params, "grantRoot") ?? null,
-          item_id: readString(params, "itemId") ?? null,
+          grantRoot: readOptionalString(params, "grantRoot") ?? null,
+          itemId: readString(params, "itemId") ?? null,
           method,
           reason: readOptionalString(params, "reason") ?? null,
         },
-        scope_key: `codex:${lifecycleTurnId}:${readString(params, "itemId") ?? String(requestId)}`,
+        scopeKey: `codex:${lifecycleTurnId}:${readString(params, "itemId") ?? String(requestId)}`,
         status: "pending",
       };
     case "item/permissions/requestApproval":
@@ -541,12 +580,12 @@ function createCodexApprovalRequest(
         kind: inferPermissionsApprovalKind(params),
         message: buildPermissionsApprovalMessage(params),
         metadata: {
-          item_id: readString(params, "itemId") ?? null,
+          itemId: readString(params, "itemId") ?? null,
           method,
           permissions: params.permissions ?? null,
           reason: readOptionalString(params, "reason") ?? null,
         },
-        scope_key: `codex:${lifecycleTurnId}:${readString(params, "itemId") ?? String(requestId)}`,
+        scopeKey: `codex:${lifecycleTurnId}:${readString(params, "itemId") ?? String(requestId)}`,
         status: "pending",
       };
     case "item/tool/requestUserInput":
@@ -555,7 +594,7 @@ function createCodexApprovalRequest(
         kind: "question",
         message: buildQuestionMessage(params),
         metadata: buildToolUserInputMetadata(params),
-        scope_key: `codex:${lifecycleTurnId}:${readString(params, "itemId") ?? String(requestId)}`,
+        scopeKey: `codex:${lifecycleTurnId}:${readString(params, "itemId") ?? String(requestId)}`,
         status: "pending",
       };
     case "mcpServer/elicitation/request":
@@ -564,7 +603,7 @@ function createCodexApprovalRequest(
         kind: "question",
         message: readString(params, "message") ?? "Codex needs more input before it can continue.",
         metadata: buildMcpElicitationMetadata(params),
-        scope_key: `codex:${lifecycleTurnId}:${readString(params, "serverName") ?? String(requestId)}`,
+        scopeKey: `codex:${lifecycleTurnId}:${readString(params, "serverName") ?? String(requestId)}`,
         status: "pending",
       };
     default:
@@ -573,19 +612,17 @@ function createCodexApprovalRequest(
         kind: "tool",
         message: "Codex requested host intervention.",
         metadata: {
-          item_id: readString(params, "itemId") ?? null,
+          itemId: readString(params, "itemId") ?? null,
           method,
           params,
         },
-        scope_key: `codex:${lifecycleTurnId}:${String(requestId)}`,
+        scopeKey: `codex:${lifecycleTurnId}:${String(requestId)}`,
         status: "pending",
       };
   }
 }
 
-function buildCommandExecutionResponse(
-  decision: AgentApprovalDecision,
-): Record<string, unknown> {
+function buildCommandExecutionResponse(decision: AgentApprovalDecision): Record<string, unknown> {
   switch (decision) {
     case "approve_session":
       return { decision: "acceptForSession" };
@@ -597,9 +634,7 @@ function buildCommandExecutionResponse(
   }
 }
 
-function buildFileChangeResponse(
-  decision: AgentApprovalDecision,
-): Record<string, unknown> {
+function buildFileChangeResponse(decision: AgentApprovalDecision): Record<string, unknown> {
   switch (decision) {
     case "approve_session":
       return { decision: "acceptForSession" };
@@ -693,11 +728,6 @@ export function buildCodexApprovalResponse(
   }
 }
 
-function resolveCodexCliPath(): string {
-  const require = createRequire(import.meta.url);
-  return require.resolve("@openai/codex/bin/codex.js");
-}
-
 class CodexAppServerClient {
   private readonly child: ChildProcessWithoutNullStreams;
   private initialized = false;
@@ -708,11 +738,22 @@ class CodexAppServerClient {
     workspacePath: string,
     private readonly onLineMessage: (message: unknown) => void,
   ) {
-    this.child = spawn(process.execPath, [resolveCodexCliPath(), "app-server", "--listen", "stdio://", "--session-source", "lifecycle"], {
-      cwd: workspacePath,
-      env: process.env,
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+    this.child = spawn(
+      process.execPath,
+      [
+        resolveCodexCliPath(),
+        "app-server",
+        "--listen",
+        "stdio://",
+        "--session-source",
+        "lifecycle",
+      ],
+      {
+        cwd: workspacePath,
+        env: process.env,
+        stdio: ["pipe", "pipe", "pipe"],
+      },
+    );
   }
 
   get stdin() {
@@ -759,7 +800,11 @@ class CodexAppServerClient {
       }
       this.pendingRequests.delete(message.id);
       if (message.error) {
-        pending.reject(new Error(message.error.message ?? `Codex app-server request ${String(message.id)} failed.`));
+        pending.reject(
+          new Error(
+            message.error.message ?? `Codex app-server request ${String(message.id)} failed.`,
+          ),
+        );
         return;
       }
       pending.resolve(message.result);
@@ -828,8 +873,10 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
   const providerTurnToLifecycleTurnId = new Map<string, string>();
   const itemById = new Map<string, Record<string, unknown>>();
   const itemStartedAt = new Map<string, number>();
-  const messageBlockIndex = new Map<string, number>();
-  const turnUsage = new Map<string, { cache_read_tokens?: number; input_tokens: number; output_tokens: number }>();
+  const turnUsage = new Map<
+    string,
+    { cacheReadTokens?: number; inputTokens: number; outputTokens: number }
+  >();
   const pendingTurnCompletions = new Map<string, () => void>();
 
   let currentLifecycleTurnId: string | null = null;
@@ -846,20 +893,20 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
     currentProviderThreadId = threadId;
     emitWorkerEvent({
       kind: "worker.ready",
-      provider_session_id: threadId,
+      providerSessionId: threadId,
     });
   }
 
-  function bindProviderTurn(providerTurnId: string | null | undefined, lifecycleTurnId: string | null): void {
+  function bindProviderTurn(
+    providerTurnId: string | null | undefined,
+    lifecycleTurnId: string | null,
+  ): void {
     if (!providerTurnId || !lifecycleTurnId) {
       return;
     }
 
     currentProviderTurnId = providerTurnId;
     providerTurnToLifecycleTurnId.set(providerTurnId, lifecycleTurnId);
-    if (!messageBlockIndex.has(providerTurnId)) {
-      messageBlockIndex.set(providerTurnId, messageBlockIndex.size);
-    }
   }
 
   function completeLifecycleTurn(lifecycleTurnId: string): void {
@@ -879,7 +926,7 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
     emitWorkerEvent({
       error,
       kind: "agent.turn.failed",
-      turn_id: lifecycleTurnId,
+      turnId: lifecycleTurnId,
     });
     completeLifecycleTurn(lifecycleTurnId);
   }
@@ -900,10 +947,10 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
         }
         turnUsage.set(providerTurnId, {
           ...(typeof readNumber(last, "cachedInputTokens") === "number"
-            ? { cache_read_tokens: readNumber(last, "cachedInputTokens") ?? 0 }
+            ? { cacheReadTokens: readNumber(last, "cachedInputTokens") ?? 0 }
             : {}),
-          input_tokens: readNumber(last, "inputTokens") ?? 0,
-          output_tokens: readNumber(last, "outputTokens") ?? 0,
+          inputTokens: readNumber(last, "inputTokens") ?? 0,
+          outputTokens: readNumber(last, "outputTokens") ?? 0,
         });
         return;
       }
@@ -917,25 +964,36 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
     providerTurnId: string | undefined,
     itemId: string | undefined,
     text: string | undefined,
-    blockIndex: number,
+    blockId: string,
   ): void {
-    const lifecycleTurnId = resolveLifecycleTurnId(providerTurnId ?? null, currentLifecycleTurnId, providerTurnToLifecycleTurnId);
+    const lifecycleTurnId = resolveLifecycleTurnId(
+      providerTurnId ?? null,
+      currentLifecycleTurnId,
+      providerTurnToLifecycleTurnId,
+    );
     if (!lifecycleTurnId || !itemId || !text) {
       return;
     }
 
     emitWorkerEvent({
-      block_index: blockIndex,
+      blockId,
       kind,
       text,
-      turn_id: lifecycleTurnId,
+      turnId: lifecycleTurnId,
     });
   }
 
-  function handleItemNotification(kind: "agent.item.completed" | "agent.item.started", params: Record<string, unknown>): void {
+  function handleItemNotification(
+    kind: "agent.item.completed" | "agent.item.started",
+    params: Record<string, unknown>,
+  ): void {
     const item = isRecord(params.item) ? params.item : null;
     const providerTurnId = readString(params, "turnId");
-    const lifecycleTurnId = resolveLifecycleTurnId(providerTurnId ?? null, currentLifecycleTurnId, providerTurnToLifecycleTurnId);
+    const lifecycleTurnId = resolveLifecycleTurnId(
+      providerTurnId ?? null,
+      currentLifecycleTurnId,
+      providerTurnToLifecycleTurnId,
+    );
     if (!item || !lifecycleTurnId) {
       return;
     }
@@ -961,14 +1019,18 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
     emitWorkerEvent({
       item: workerItem,
       kind,
-      turn_id: lifecycleTurnId,
+      turnId: lifecycleTurnId,
     });
   }
 
   function handleTurnCompleted(params: Record<string, unknown>): void {
     const turn = isRecord(params.turn) ? params.turn : null;
     const providerTurnId = turn ? readString(turn, "id") : null;
-    const lifecycleTurnId = resolveLifecycleTurnId(providerTurnId, currentLifecycleTurnId, providerTurnToLifecycleTurnId);
+    const lifecycleTurnId = resolveLifecycleTurnId(
+      providerTurnId,
+      currentLifecycleTurnId,
+      providerTurnToLifecycleTurnId,
+    );
     if (!turn || !providerTurnId || !lifecycleTurnId) {
       return;
     }
@@ -977,7 +1039,7 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
     if (status === "completed") {
       emitWorkerEvent({
         kind: "agent.turn.completed",
-        turn_id: lifecycleTurnId,
+        turnId: lifecycleTurnId,
         ...(turnUsage.has(providerTurnId) ? { usage: turnUsage.get(providerTurnId) } : {}),
       });
       completeLifecycleTurn(lifecycleTurnId);
@@ -985,13 +1047,20 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
     }
 
     const errorRecord = isRecord(turn.error) ? turn.error : null;
-    failLifecycleTurn(lifecycleTurnId, readString(errorRecord ?? {}, "message") ?? `Codex turn ${status ?? "failed"}.`);
+    failLifecycleTurn(
+      lifecycleTurnId,
+      readString(errorRecord ?? {}, "message") ?? `Codex turn ${status ?? "failed"}.`,
+    );
   }
 
   function handleServerRequest(message: CodexJsonRpcRequest): void {
     const params = isRecord(message.params) ? message.params : {};
     const providerTurnId = readString(params, "turnId");
-    const lifecycleTurnId = resolveLifecycleTurnId(providerTurnId ?? null, currentLifecycleTurnId, providerTurnToLifecycleTurnId);
+    const lifecycleTurnId = resolveLifecycleTurnId(
+      providerTurnId ?? null,
+      currentLifecycleTurnId,
+      providerTurnToLifecycleTurnId,
+    );
     if (!lifecycleTurnId) {
       client.respondError(message.id, `No Lifecycle turn is bound for ${message.method}.`);
       return;
@@ -1004,13 +1073,22 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
       message.method !== "item/tool/requestUserInput" &&
       message.method !== "mcpServer/elicitation/request"
     ) {
-      client.respondError(message.id, `Lifecycle does not support Codex server request ${message.method}.`);
+      client.respondError(
+        message.id,
+        `Lifecycle does not support Codex server request ${message.method}.`,
+      );
       return;
     }
 
     const itemId = readString(params, "itemId");
     const item = itemId ? itemById.get(itemId) : undefined;
-    const approval = createCodexApprovalRequest(lifecycleTurnId, message.method, params, item, message.id);
+    const approval = createCodexApprovalRequest(
+      lifecycleTurnId,
+      message.method,
+      params,
+      item,
+      message.id,
+    );
     pendingApprovals.set(approval.id, {
       approval,
       lifecycleTurnId,
@@ -1021,7 +1099,7 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
     emitWorkerEvent({
       approval,
       kind: "agent.approval.requested",
-      turn_id: lifecycleTurnId,
+      turnId: lifecycleTurnId,
     });
   }
 
@@ -1046,10 +1124,12 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
         bindProviderTurn(turn ? readString(turn, "id") : null, currentLifecycleTurnId);
         if (pendingInterrupt && currentProviderTurnId) {
           pendingInterrupt = false;
-          void client.request("turn/interrupt", {
-            threadId: currentProviderThreadId,
-            turnId: currentProviderTurnId,
-          }).catch(() => undefined);
+          void client
+            .request("turn/interrupt", {
+              threadId: currentProviderThreadId,
+              turnId: currentProviderTurnId,
+            })
+            .catch(() => undefined);
         }
         return;
       }
@@ -1062,39 +1142,48 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
       case "item/completed":
         handleItemNotification("agent.item.completed", params);
         return;
-      case "item/agentMessage/delta":
+      case "item/agentMessage/delta": {
+        const itemId = readString(params, "itemId") ?? "";
         emitDeltaEvent(
           "agent.message.delta",
           readString(params, "turnId"),
-          readString(params, "itemId"),
+          itemId || undefined,
           readString(params, "delta"),
-          messageBlockIndex.get(readString(params, "itemId") ?? "") ?? messageBlockIndex.size,
+          `text:${itemId}`,
         );
         return;
-      case "item/reasoning/textDelta":
+      }
+      case "item/reasoning/textDelta": {
+        const itemId = readString(params, "itemId") ?? "";
+        const contentIndex = readNumber(params, "contentIndex") ?? 0;
         emitDeltaEvent(
           "agent.thinking.delta",
           readString(params, "turnId"),
-          readString(params, "itemId"),
+          itemId || undefined,
           readString(params, "delta"),
-          readNumber(params, "contentIndex") ?? 0,
+          `thinking:${itemId}:${contentIndex}`,
         );
         return;
+      }
       case "item/mcpToolCall/progress": {
         const providerTurnId = readString(params, "turnId");
         const itemId = readString(params, "itemId");
-        const lifecycleTurnId = resolveLifecycleTurnId(providerTurnId ?? null, currentLifecycleTurnId, providerTurnToLifecycleTurnId);
+        const lifecycleTurnId = resolveLifecycleTurnId(
+          providerTurnId ?? null,
+          currentLifecycleTurnId,
+          providerTurnToLifecycleTurnId,
+        );
         const item = itemId ? itemById.get(itemId) : null;
         if (!lifecycleTurnId || !itemId || !item) {
           return;
         }
         const startedAt = itemStartedAt.get(itemId) ?? Date.now();
         emitWorkerEvent({
-          elapsed_time_seconds: Math.max(0, Math.round((Date.now() - startedAt) / 1000)),
+          elapsedTimeSeconds: Math.max(0, Math.round((Date.now() - startedAt) / 1000)),
           kind: "agent.tool_progress",
-          tool_name: `${readString(item, "server") ?? "mcp"}/${readString(item, "tool") ?? "tool"}`,
-          tool_use_id: itemId,
-          turn_id: lifecycleTurnId,
+          toolName: `${readString(item, "server") ?? "mcp"}/${readString(item, "tool") ?? "tool"}`,
+          toolUseId: itemId,
+          turnId: lifecycleTurnId,
         });
         return;
       }
@@ -1128,7 +1217,9 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
   });
 
   client.on("error", (error) => {
-    client.failPendingRequests(error instanceof Error ? error.message : "Codex app-server process error.");
+    client.failPendingRequests(
+      error instanceof Error ? error.message : "Codex app-server process error.",
+    );
     if (currentLifecycleTurnId) {
       failLifecycleTurn(
         currentLifecycleTurnId,
@@ -1148,7 +1239,8 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
   await client.initialize();
   const bootstrap = createCodexThreadBootstrapRequest(input);
   const bootstrapResult = await client.request(bootstrap.method, bootstrap.params);
-  const threadRecord = isRecord(bootstrapResult) && isRecord(bootstrapResult.thread) ? bootstrapResult.thread : null;
+  const threadRecord =
+    isRecord(bootstrapResult) && isRecord(bootstrapResult.thread) ? bootstrapResult.thread : null;
   bindProviderThread(threadRecord ? readString(threadRecord, "id") : null);
 
   let turnQueue = Promise.resolve();
@@ -1161,23 +1253,26 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
       emitWorkerEvent({
         error: "Codex app-server did not return a thread id.",
         kind: "agent.turn.failed",
-        turn_id: command.turn_id,
+        turnId: command.turnId,
       });
       return;
     }
 
-    currentLifecycleTurnId = command.turn_id;
+    currentLifecycleTurnId = command.turnId;
     currentProviderTurnId = null;
     pendingInterrupt = false;
 
     const completion = new Promise<void>((resolve) => {
-      pendingTurnCompletions.set(command.turn_id, resolve);
+      pendingTurnCompletions.set(command.turnId, resolve);
     });
 
     try {
-      const response = await client.request("turn/start", buildTurnStartParams(input, threadId, command.input));
+      const response = await client.request(
+        "turn/start",
+        buildTurnStartParams(input, threadId, command.input),
+      );
       const turnRecord = isRecord(response) && isRecord(response.turn) ? response.turn : null;
-      bindProviderTurn(turnRecord ? readString(turnRecord, "id") : null, command.turn_id);
+      bindProviderTurn(turnRecord ? readString(turnRecord, "id") : null, command.turnId);
       if (pendingInterrupt && currentProviderTurnId) {
         pendingInterrupt = false;
         await client.request("turn/interrupt", {
@@ -1188,7 +1283,7 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
       await completion;
     } catch (error) {
       failLifecycleTurn(
-        command.turn_id,
+        command.turnId,
         error instanceof Error ? error.message : "Codex turn failed.",
       );
     }
@@ -1225,31 +1320,36 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
           break;
         case "worker.cancel_turn":
           if (currentProviderThreadId && currentProviderTurnId) {
-            void client.request("turn/interrupt", {
-              threadId: currentProviderThreadId,
-              turnId: currentProviderTurnId,
-            }).catch((error) => {
-              if (currentLifecycleTurnId) {
-                failLifecycleTurn(
-                  currentLifecycleTurnId,
-                  error instanceof Error ? error.message : "Failed to interrupt Codex turn.",
-                );
-              }
-            });
+            void client
+              .request("turn/interrupt", {
+                threadId: currentProviderThreadId,
+                turnId: currentProviderTurnId,
+              })
+              .catch((error) => {
+                if (currentLifecycleTurnId) {
+                  failLifecycleTurn(
+                    currentLifecycleTurnId,
+                    error instanceof Error ? error.message : "Failed to interrupt Codex turn.",
+                  );
+                }
+              });
           } else {
             pendingInterrupt = true;
           }
           break;
         case "worker.resolve_approval": {
-          const pending = pendingApprovals.get(command.approval_id);
+          const pending = pendingApprovals.get(command.approvalId);
           if (!pending) {
             if (currentLifecycleTurnId) {
-              failLifecycleTurn(currentLifecycleTurnId, `Unknown Codex approval ${command.approval_id}.`);
+              failLifecycleTurn(
+                currentLifecycleTurnId,
+                `Unknown Codex approval ${command.approvalId}.`,
+              );
             }
             break;
           }
 
-          pendingApprovals.delete(command.approval_id);
+          pendingApprovals.delete(command.approvalId);
           try {
             client.respond(
               pending.requestId,
@@ -1258,11 +1358,11 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
             emitWorkerEvent({
               kind: "agent.approval.resolved",
               resolution: {
-                approval_id: pending.approval.id,
+                approvalId: pending.approval.id,
                 decision: command.decision,
                 response: command.response ?? null,
               },
-              turn_id: pending.lifecycleTurnId,
+              turnId: pending.lifecycleTurnId,
             });
           } catch (error) {
             failLifecycleTurn(

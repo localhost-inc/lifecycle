@@ -12,6 +12,10 @@
       "types": "./src/providers/claude/auth.ts",
       "default": "./src/providers/claude/auth.ts"
     },
+    "./providers/claude/catalog": {
+      "types": "./src/providers/claude/catalog.ts",
+      "default": "./src/providers/claude/catalog.ts"
+    },
     "./providers/claude/worker": {
       "types": "./src/providers/claude/worker.ts",
       "default": "./src/providers/claude/worker.ts"
@@ -19,6 +23,10 @@
     "./providers/codex/auth": {
       "types": "./src/providers/codex/auth.ts",
       "default": "./src/providers/codex/auth.ts"
+    },
+    "./providers/codex/catalog": {
+      "types": "./src/providers/codex/catalog.ts",
+      "default": "./src/providers/codex/catalog.ts"
     },
     "./providers/codex/worker": {
       "types": "./src/providers/codex/worker.ts",

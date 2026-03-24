@@ -1,7 +1,7 @@
 export type { SqlDriver } from "./driver";
 export { createSqlCollection, type SqlCollection } from "./collection";
 export type { Collection } from "@tanstack/db";
-export { createHostOnlyRegistry, type RuntimeRegistry } from "./runtime";
+export { createLocalOnlyRegistry, type RuntimeRegistry } from "./runtime";
 
 export {
   selectAllProjects,

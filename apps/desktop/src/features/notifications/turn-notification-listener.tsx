@@ -102,7 +102,7 @@ export function TurnNotificationListener() {
       return;
     }
 
-    const completionKey = `${event.session_id}:${event.turn_id}`;
+    const completionKey = `${event.sessionId}:${event.turnId}`;
     if (recentCompletionKeys.has(completionKey)) {
       return;
     }
@@ -110,10 +110,10 @@ export function TurnNotificationListener() {
     setTimeout(() => recentCompletionKeys.delete(completionKey), 5_000);
 
     void (async () => {
-      const workspace = collections.workspaces.collection.get(event.workspace_id);
+      const workspace = collections.workspaces.collection.get(event.workspaceId);
       const projectId = workspace?.project_id;
       const project = projectId ? projects.find((p) => p.id === projectId) : undefined;
-      const session = await selectAgentSessionById(driver, event.session_id);
+      const session = await selectAgentSessionById(driver, event.sessionId);
       const context = {
         projectId: projectId ?? null,
         projectName: project?.name,
@@ -123,9 +123,9 @@ export function TurnNotificationListener() {
             : session?.provider === "codex"
               ? "Codex"
               : "Agent",
-        sessionId: event.session_id,
+        sessionId: event.sessionId,
         sessionTitle: session?.title ?? null,
-        workspaceId: event.workspace_id,
+        workspaceId: event.workspaceId,
         workspaceName: workspace?.name,
       };
 

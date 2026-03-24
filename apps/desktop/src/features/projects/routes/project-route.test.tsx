@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { ThemeProvider } from "@lifecycle/ui";
 import { createElement, type ComponentType } from "react";
@@ -69,13 +69,12 @@ function renderProjectRoute(
     return <Outlet context={context} />;
   }
 
-  // Render an index child route stub so the Outlet inside ProjectRoute can render something
   function IndexStub() {
     return <main data-slot="index-redirect">Index Redirect</main>;
   }
 
   function WorkspaceStub() {
-    return <main data-slot="workspace-layout">Workspace Layout</main>;
+    return <main data-slot="workspace-shell">Workspace Layout</main>;
   }
 
   return renderToStaticMarkup(
@@ -111,36 +110,15 @@ function renderProjectRoute(
 }
 
 describe("ProjectRoute", () => {
-  afterEach(() => {
-    mock.restore();
-  });
-
-  test("renders nav bar and project layout with child route content", async () => {
+  test("renders child route content via outlet", async () => {
     const { ProjectRoute } = await import("./project-route");
 
     const markup = renderProjectRoute(ProjectRoute);
 
-    expect(markup).toContain('data-slot="workspace-nav-bar"');
-    expect(markup).toContain('data-slot="project-shell"');
     expect(markup).toContain('data-slot="index-redirect"');
-    expect(markup.indexOf('data-slot="workspace-nav-bar"')).toBeLessThan(
-      markup.indexOf('data-slot="index-redirect"'),
-    );
   });
 
-  test("renders workspace overflow menu inside the nav bar for workspace routes", async () => {
-    const workspaceToolbarModule = await import("../../workspaces/state/workspace-toolbar-context");
-    spyOn(workspaceToolbarModule, "useWorkspaceToolbarSlot").mockReturnValue({
-      gitAction: null,
-      restartAction: { disabled: false, onClick: () => {} },
-      runAction: {
-        disabled: false,
-        label: "Stop",
-        loading: false,
-        onClick: () => {},
-      },
-    });
-
+  test("renders workspace child route when navigating to a workspace", async () => {
     const { ProjectRoute } = await import("./project-route");
 
     const markup = renderProjectRoute(
@@ -149,72 +127,14 @@ describe("ProjectRoute", () => {
       "/projects/project_1/workspaces/workspace_1",
     );
 
-    expect(markup).toContain('data-slot="workspace-nav-bar"');
-    expect(markup).toContain('data-slot="workspace-layout"');
-    expect(markup).toContain('aria-label="Show run actions"');
-
-    const navBarStart = markup.indexOf('data-slot="workspace-nav-bar"');
-    const overflowIndex = markup.indexOf('aria-label="Show run actions"');
-    const workspaceStart = markup.indexOf('data-slot="workspace-layout"');
-    expect(navBarStart).toBeLessThan(overflowIndex);
-    expect(overflowIndex).toBeLessThan(workspaceStart);
+    expect(markup).toContain('data-slot="workspace-shell"');
   });
 
-  test("does not render a divider after the navigation controls", async () => {
+  test("renders empty state when project is not found", async () => {
     const { ProjectRoute } = await import("./project-route");
 
-    const markup = renderProjectRoute(ProjectRoute);
+    const markup = renderProjectRoute(ProjectRoute, { projects: [] });
 
-    expect(markup).not.toContain(
-      'class="flex shrink-0 items-center border-r border-[var(--border)]"',
-    );
-  });
-
-  test("renders response-ready indicators in the workspace nav link from shared readiness state", async () => {
-    const responseReadyModule =
-      await import("../../terminals/state/terminal-response-ready-provider");
-    spyOn(responseReadyModule, "useTerminalResponseReady").mockReturnValue({
-      clearTerminalResponseReady: () => {},
-      clearTerminalTurnRunning: () => {},
-      clearWorkspaceResponseReady: () => {},
-      hasWorkspaceResponseReady: (workspaceId: string) => workspaceId === "workspace_1",
-      hasWorkspaceRunningTurn: () => false,
-      isTerminalResponseReady: () => false,
-      isTerminalTurnRunning: () => false,
-    });
-
-    const { ProjectRoute } = await import("./project-route");
-
-    const markup = renderProjectRoute(
-      ProjectRoute,
-      {},
-      "/projects/project_1/workspaces/workspace_1",
-    );
-
-    expect(markup.match(/aria-label="Response ready"/g)?.length ?? 0).toBeGreaterThanOrEqual(1);
-  });
-
-  test("renders running indicators in the workspace nav link from shared turn state", async () => {
-    const responseReadyModule =
-      await import("../../terminals/state/terminal-response-ready-provider");
-    spyOn(responseReadyModule, "useTerminalResponseReady").mockReturnValue({
-      clearTerminalResponseReady: () => {},
-      clearTerminalTurnRunning: () => {},
-      clearWorkspaceResponseReady: () => {},
-      hasWorkspaceResponseReady: () => false,
-      hasWorkspaceRunningTurn: (workspaceId: string) => workspaceId === "workspace_1",
-      isTerminalResponseReady: () => false,
-      isTerminalTurnRunning: () => false,
-    });
-
-    const { ProjectRoute } = await import("./project-route");
-
-    const markup = renderProjectRoute(
-      ProjectRoute,
-      {},
-      "/projects/project_1/workspaces/workspace_1",
-    );
-
-    expect(markup.match(/data-slot="spinner"/g)?.length ?? 0).toBeGreaterThanOrEqual(1);
+    expect(markup).toContain("Project not found");
   });
 });

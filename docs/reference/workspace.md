@@ -27,7 +27,15 @@ Lifecycle agent execution is split into three layers:
 
 The harness talks to `AgentSession`. `AgentSession` interfaces with `AgentWorker`. `AgentWorker` runs on the target `WorkspaceRuntime`.
 
-For the local Claude path, `AgentWorker` is a Lifecycle-owned worker process launched as `lifecycle agent worker claude`. The worker reports `provider_session_id` back to `AgentOrchestrator` during startup and then streams normalized `agent.*` facts over stdin/stdout transport. The desktop app must not use `provider_session_id` as the worker transport address.
+For local sessions, the desktop no longer owns the provider worker as a direct child process. It launches a detached Lifecycle-owned host process as `lifecycle agent host --provider <provider> --session-id <agent_session_id> ...`. That detached host owns the real `lifecycle agent worker <provider>` child process, persists a small registration file keyed by `agent_session.id`, and exposes a reconnectable loopback websocket transport back to `AgentOrchestrator`.
+
+Rules:
+
+1. The detached host must survive desktop restarts and rebuilds so local agent sessions are not torn down with the app runtime.
+2. `provider_session_id` is still discovered by the real provider worker and reported back to `AgentOrchestrator`; it is never the transport address.
+3. The detached host registration is keyed by Lifecycle `agent_session.id`, not by terminal id or provider thread id.
+4. Reattachment is app-driven: on startup, `AgentOrchestrator` should reconnect persisted live sessions through the detached host registration before waiting for the next user turn.
+5. The detached host may publish an initial worker-state snapshot on reconnect so the desktop can reconcile session status even if the app was offline.
 
 ## Workspace Checkout Type (Local)
 

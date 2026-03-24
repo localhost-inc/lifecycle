@@ -1,0 +1,427 @@
+import { randomUUID } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
+import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import type {
+  AgentWorkerCommand,
+  AgentWorkerEvent,
+  DetachedAgentHostRegistration,
+  DetachedAgentHostSnapshot,
+} from "@lifecycle/agents";
+import { defineCommand } from "@lifecycle/cmd";
+import { z } from "zod";
+
+const ProviderSchema = z.enum(["claude", "codex"]);
+const CodexSandboxModeSchema = z.enum(["read-only", "workspace-write", "danger-full-access"]);
+const CodexApprovalPolicySchema = z.enum(["untrusted", "on-request", "on-failure", "never"]);
+const CodexModelReasoningEffortSchema = z.enum(["none", "minimal", "low", "medium", "high", "xhigh"]);
+const ClaudePermissionModeSchema = z.enum([
+  "acceptEdits",
+  "bypassPermissions",
+  "default",
+  "dontAsk",
+  "plan",
+]);
+const ClaudeLoginMethodSchema = z.enum(["claudeai", "console"]);
+const ClaudeEffortSchema = z.enum(["low", "medium", "high", "max"]);
+
+const HostInputSchema = z.object({
+  provider: ProviderSchema,
+  sessionId: z.string().min(1),
+  registrationPath: z.string().min(1),
+  workspacePath: z.string().min(1),
+
+  approvalPolicy: CodexApprovalPolicySchema.default("untrusted"),
+  dangerousBypass: z.boolean().default(false),
+  sandboxMode: CodexSandboxModeSchema.default("workspace-write"),
+  modelReasoningEffort: CodexModelReasoningEffortSchema.optional(),
+
+  dangerousSkipPermissions: z.boolean().default(false),
+  effort: ClaudeEffortSchema.optional(),
+  loginMethod: ClaudeLoginMethodSchema.default("claudeai"),
+  permissionMode: ClaudePermissionModeSchema.default("default"),
+
+  model: z.string().optional(),
+  providerSessionId: z.string().optional(),
+});
+
+type HostInput = z.infer<typeof HostInputSchema>;
+
+function hostLog(
+  input: Pick<HostInput, "provider" | "sessionId">,
+  message: string,
+  details?: Record<string, unknown>,
+): void {
+  const timestamp = new Date().toISOString();
+  const suffix = details ? ` ${JSON.stringify(details)}` : "";
+  console.error(`[agent-host][${timestamp}][${input.provider}][${input.sessionId}] ${message}${suffix}`);
+}
+
+function parseWorkerEvent(line: string): AgentWorkerEvent {
+  return JSON.parse(line) as AgentWorkerEvent;
+}
+
+function createLineReader(onLine: (line: string) => void) {
+  let buffer = "";
+
+  return (chunk: string) => {
+    buffer += chunk;
+
+    while (true) {
+      const newlineIndex = buffer.indexOf("\n");
+      if (newlineIndex < 0) {
+        return;
+      }
+
+      const line = buffer.slice(0, newlineIndex).trim();
+      buffer = buffer.slice(newlineIndex + 1);
+      if (line.length > 0) {
+        onLine(line);
+      }
+    }
+  };
+}
+
+function buildWorkerArgs(input: HostInput): string[] {
+  const args = [
+    "agent",
+    "worker",
+    input.provider,
+    "--workspace-path",
+    input.workspacePath,
+  ];
+
+  if (input.model?.trim()) {
+    args.push("--model", input.model.trim());
+  }
+  if (input.providerSessionId?.trim()) {
+    args.push("--provider-session-id", input.providerSessionId.trim());
+  }
+
+  if (input.provider === "claude") {
+    args.push(
+      "--permission-mode",
+      input.permissionMode,
+      "--login-method",
+      input.loginMethod,
+    );
+    if (input.dangerousSkipPermissions) {
+      args.push("--dangerous-skip-permissions");
+    }
+    if (input.effort) {
+      args.push("--effort", input.effort);
+    }
+    return args;
+  }
+
+  args.push(
+    "--approval-policy",
+    input.approvalPolicy,
+    "--sandbox-mode",
+    input.sandboxMode,
+  );
+  if (input.dangerousBypass) {
+    args.push("--dangerous-bypass");
+  }
+  if (input.modelReasoningEffort) {
+    args.push("--model-reasoning-effort", input.modelReasoningEffort);
+  }
+  return args;
+}
+
+function buildSnapshot(input: HostInput): DetachedAgentHostSnapshot {
+  return {
+    kind: "worker.state",
+    provider: input.provider,
+    providerSessionId: input.providerSessionId?.trim() || null,
+    sessionId: input.sessionId,
+    status: "starting",
+    activeTurnId: null,
+    pendingApproval: null,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function toRegistration(
+  snapshot: DetachedAgentHostSnapshot,
+  input: HostInput,
+  port: number,
+  token: string,
+): DetachedAgentHostRegistration {
+  return {
+    provider: input.provider,
+    providerSessionId: snapshot.providerSessionId,
+    sessionId: input.sessionId,
+    pid: process.pid,
+    port,
+    token,
+    status: snapshot.status,
+    activeTurnId: snapshot.activeTurnId,
+    pendingApproval: snapshot.pendingApproval,
+    updatedAt: snapshot.updatedAt,
+  };
+}
+
+function updateSnapshotFromWorkerEvent(
+  snapshot: DetachedAgentHostSnapshot,
+  event: AgentWorkerEvent,
+): DetachedAgentHostSnapshot {
+  const updatedAt = new Date().toISOString();
+
+  switch (event.kind) {
+    case "worker.ready":
+      return {
+        ...snapshot,
+        providerSessionId: event.providerSessionId,
+        updatedAt,
+      };
+    case "agent.approval.requested":
+      return {
+        ...snapshot,
+        status: event.approval.kind === "question" ? "waiting_input" : "waiting_approval",
+        pendingApproval: {
+          id: event.approval.id,
+          kind: event.approval.kind,
+        },
+        updatedAt,
+      };
+    case "agent.approval.resolved":
+      return {
+        ...snapshot,
+        status: "running",
+        pendingApproval: null,
+        updatedAt,
+      };
+    case "agent.turn.completed":
+      return {
+        ...snapshot,
+        status: "idle",
+        activeTurnId: null,
+        pendingApproval: null,
+        updatedAt,
+      };
+    case "agent.turn.failed":
+      return {
+        ...snapshot,
+        status: "failed",
+        activeTurnId: null,
+        pendingApproval: null,
+        updatedAt,
+      };
+    default:
+      return snapshot;
+  }
+}
+
+function updateSnapshotFromCommand(
+  snapshot: DetachedAgentHostSnapshot,
+  command: AgentWorkerCommand,
+): DetachedAgentHostSnapshot {
+  const updatedAt = new Date().toISOString();
+
+  switch (command.kind) {
+    case "worker.send_turn":
+      return {
+        ...snapshot,
+        status: "running",
+        activeTurnId: command.turnId,
+        pendingApproval: null,
+        updatedAt,
+      };
+    case "worker.cancel_turn":
+      return {
+        ...snapshot,
+        status: "failed",
+        activeTurnId: null,
+        pendingApproval: null,
+        updatedAt,
+      };
+    case "worker.resolve_approval":
+      return {
+        ...snapshot,
+        status: "running",
+        pendingApproval: null,
+        updatedAt,
+      };
+  }
+}
+
+async function persistRegistration(
+  input: HostInput,
+  snapshot: DetachedAgentHostSnapshot,
+  port: number,
+  token: string,
+): Promise<void> {
+  await mkdir(dirname(input.registrationPath), { recursive: true });
+  await writeFile(
+    input.registrationPath,
+    `${JSON.stringify(toRegistration(snapshot, input, port, token))}\n`,
+    "utf8",
+  );
+}
+
+function spawnWorkerChild(input: HostInput): ChildProcessWithoutNullStreams {
+  const cliEntry = process.argv[1];
+  if (!cliEntry) {
+    throw new Error("Lifecycle CLI host could not resolve its entrypoint.");
+  }
+
+  return spawn(process.execPath, [cliEntry, ...buildWorkerArgs(input)], {
+    cwd: input.workspacePath,
+    env: process.env,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+}
+
+export default defineCommand({
+  description: "Run a detached reconnectable host for a provider worker.",
+  input: HostInputSchema,
+  async run(rawInput) {
+    const input = rawInput as HostInput;
+    const token = randomUUID();
+
+    hostLog(input, "starting detached host", {
+      hasProviderSessionId: Boolean(input.providerSessionId?.trim()),
+      workspacePath: input.workspacePath,
+    });
+
+    let snapshot = buildSnapshot(input);
+    let currentClient: Bun.ServerWebSocket<{ authenticated: boolean }> | null = null;
+    let boundPort = 0;
+
+    const worker = spawnWorkerChild(input);
+
+    const server = Bun.serve<{ authenticated: boolean }>({
+      idleTimeout: 0,
+      port: 0,
+      fetch(request, serverInstance) {
+        const url = new URL(request.url);
+        if (url.searchParams.get("token") !== token) {
+          hostLog(input, "rejected websocket upgrade with invalid token");
+          return new Response("unauthorized", { status: 401 });
+        }
+        if (currentClient) {
+          hostLog(input, "replacing existing websocket client");
+          currentClient.close(4001, "replaced");
+          currentClient = null;
+        }
+        if (serverInstance.upgrade(request, { data: { authenticated: true } })) {
+          return;
+        }
+        return new Response("upgrade failed", { status: 400 });
+      },
+      websocket: {
+        message(_socket, message) {
+          const text = typeof message === "string" ? message : Buffer.from(message).toString("utf8");
+          const command = JSON.parse(text) as AgentWorkerCommand;
+          hostLog(input, "received desktop command", {
+            activeTurnId: snapshot.activeTurnId,
+            commandKind: command.kind,
+            turnId: "turnId" in command ? command.turnId ?? null : null,
+            approvalId: "approvalId" in command ? command.approvalId : null,
+          });
+          snapshot = updateSnapshotFromCommand(snapshot, command);
+          void persistRegistration(input, snapshot, boundPort, token);
+          worker.stdin.write(`${JSON.stringify(command)}\n`);
+        },
+        open(socket) {
+          currentClient = socket;
+          hostLog(input, "websocket client connected", {
+            port: boundPort,
+            status: snapshot.status,
+          });
+          socket.send(JSON.stringify(snapshot));
+        },
+        close(socket) {
+          if (currentClient === socket) {
+            currentClient = null;
+          }
+          hostLog(input, "websocket client disconnected", {
+            status: snapshot.status,
+          });
+        },
+      },
+    });
+
+    const port = server.port;
+    if (typeof port !== "number") {
+      throw new Error("Detached agent host did not bind a loopback port.");
+    }
+    boundPort = port;
+    hostLog(input, "host listening", {
+      port: boundPort,
+      registrationPath: input.registrationPath,
+    });
+
+    await persistRegistration(input, snapshot, boundPort, token);
+
+    const forwardToClient = (payload: string) => {
+      if (currentClient) {
+        currentClient.send(payload);
+      }
+    };
+
+    const stdoutReader = createLineReader((line) => {
+      try {
+        const event = parseWorkerEvent(line);
+        hostLog(input, "worker event", {
+          activeTurnId: snapshot.activeTurnId,
+          eventKind: event.kind,
+          turnId: "turnId" in event ? event.turnId : null,
+        });
+        snapshot = updateSnapshotFromWorkerEvent(snapshot, event);
+        void persistRegistration(input, snapshot, boundPort, token);
+      } catch (error) {
+        hostLog(input, "failed to parse worker event", {
+          error: error instanceof Error ? error.message : String(error),
+          line,
+        });
+      }
+
+      forwardToClient(line);
+    });
+
+    worker.stdout.on("data", stdoutReader);
+    worker.stderr.on("data", (chunk) => {
+      const line = chunk.toString().trim();
+      if (line.length > 0) {
+        hostLog(input, "worker stderr", { line });
+      }
+    });
+    worker.on("error", (error) => {
+      snapshot = {
+        ...snapshot,
+        status: "failed",
+        activeTurnId: null,
+        pendingApproval: null,
+        updatedAt: new Date().toISOString(),
+      };
+      void persistRegistration(input, snapshot, boundPort, token);
+      currentClient?.send(JSON.stringify(snapshot));
+      hostLog(input, "worker process error", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+    worker.on("close", (code, signal) => {
+      snapshot = {
+        ...snapshot,
+        status: "failed",
+        activeTurnId: null,
+        pendingApproval: null,
+        updatedAt: new Date().toISOString(),
+      };
+      void persistRegistration(input, snapshot, boundPort, token);
+      currentClient?.send(JSON.stringify(snapshot));
+      hostLog(input, "worker exited", {
+        code: code ?? null,
+        signal: signal ?? null,
+      });
+      setTimeout(() => {
+        server.stop(true);
+        process.exit(code ?? 0);
+      }, 50);
+    });
+
+    await new Promise<never>(() => {});
+  },
+});

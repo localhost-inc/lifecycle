@@ -52,11 +52,6 @@ pub enum LifecycleEvent {
         workspace_id: String,
         terminal: TerminalRecord,
     },
-    #[serde(rename = "terminal.updated")]
-    TerminalUpdated {
-        workspace_id: String,
-        terminal: TerminalRecord,
-    },
     #[serde(rename = "terminal.status_changed")]
     TerminalStatusChanged {
         terminal_id: String,
@@ -119,7 +114,6 @@ impl LifecycleEvent {
             | Self::ServiceStatusChanged { workspace_id, .. }
             | Self::ServiceProcessExited { workspace_id, .. }
             | Self::TerminalCreated { workspace_id, .. }
-            | Self::TerminalUpdated { workspace_id, .. }
             | Self::TerminalStatusChanged { workspace_id, .. }
             | Self::TerminalRenamed { workspace_id, .. }
             | Self::ServiceLogLine { workspace_id, .. }
@@ -132,7 +126,6 @@ impl LifecycleEvent {
     pub fn contributes_to_activity(&self) -> bool {
         match self {
             Self::ServiceLogLine { .. } => false,
-            Self::TerminalUpdated { .. } => false,
             Self::WorkspaceFileChanged { .. } => false,
             _ => true,
         }
@@ -219,29 +212,6 @@ fn handle_service_process_exited(app: &AppHandle, workspace_id: &str, name: &str
 #[cfg(test)]
 mod tests {
     use super::LifecycleEvent;
-
-    #[test]
-    fn terminal_updated_events_do_not_contribute_to_activity() {
-        let event = LifecycleEvent::TerminalUpdated {
-            workspace_id: "workspace-1".to_string(),
-            terminal: crate::capabilities::workspaces::query::TerminalRecord {
-                id: "terminal-1".to_string(),
-                workspace_id: "workspace-1".to_string(),
-                launch_type: "shell".to_string(),
-                created_by: None,
-                label: "Terminal 1".to_string(),
-                label_origin: Some("default".to_string()),
-                status: "active".to_string(),
-                failure_reason: None,
-                exit_code: None,
-                started_at: "2026-03-15 10:00:00".to_string(),
-                last_active_at: "2026-03-15 10:00:00".to_string(),
-                ended_at: None,
-            },
-        };
-
-        assert!(!event.contributes_to_activity());
-    }
 
     #[test]
     fn service_log_events_do_not_contribute_to_activity() {

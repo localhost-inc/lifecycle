@@ -1,11 +1,11 @@
 import type { TerminalRecord } from "@lifecycle/contracts";
 import { formatCompactRelativeTime } from "@/lib/format";
 import { terminalHasLiveSession } from "@/features/terminals/api";
-import { ShellIcon } from "@/features/workspaces/components/surface-icons";
+import { ShellIcon } from "@/features/workspaces/surfaces/surface-icons";
 import {
   getWorkspaceSessionStatusState,
   WorkspaceSessionStatus,
-} from "@/features/workspaces/components/workspace-session-status";
+} from "@/features/workspaces/surfaces/workspace-session-status";
 
 interface TerminalSessionHistoryProps {
   activeTerminalId: string | null;

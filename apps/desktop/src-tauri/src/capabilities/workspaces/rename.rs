@@ -12,7 +12,6 @@ use super::terminal::load_terminal_record;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TitleOrigin {
     Default,
-    Generated,
     Manual,
 }
 
@@ -20,7 +19,6 @@ impl TitleOrigin {
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Default => "default",
-            Self::Generated => "generated",
             Self::Manual => "manual",
         }
     }
@@ -82,54 +80,6 @@ pub async fn rename_terminal(
         .acquire_mutation_guard(workspace_id)
         .await?;
     update_terminal_label(app, db_path, terminal_id, label, TitleOrigin::Manual)
-}
-
-pub async fn maybe_apply_generated_workspace_identity(
-    app: AppHandle,
-    db_path: &str,
-    workspace_id: &str,
-    name: &str,
-) -> Result<Option<WorkspaceRecord>, LifecycleError> {
-    let workspace_controllers = app.state::<WorkspaceControllerRegistryHandle>();
-    let _mutation_guard = workspace_controllers
-        .acquire_mutation_guard(workspace_id)
-        .await?;
-    let context = load_workspace_identity_context(db_path, workspace_id)?;
-    if is_root_workspace_checkout_type(&context.checkout_type) {
-        return Ok(None);
-    }
-    if context.name_origin != TitleOrigin::Default.as_str()
-        || context.source_ref_origin != TitleOrigin::Default.as_str()
-    {
-        return Ok(None);
-    }
-
-    drop(context);
-    let workspace =
-        update_workspace_identity(db_path, workspace_id, name, TitleOrigin::Generated).await?;
-    emit_workspace_renamed(&app, &workspace);
-    Ok(Some(workspace))
-}
-
-pub async fn maybe_apply_generated_terminal_label(
-    app: &AppHandle,
-    db_path: &str,
-    terminal_id: &str,
-    label: &str,
-) -> Result<Option<TerminalRecord>, LifecycleError> {
-    let terminal = load_terminal_record(db_path, terminal_id)?
-        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()))?;
-    let workspace_controllers = app.state::<WorkspaceControllerRegistryHandle>();
-    let _mutation_guard = workspace_controllers
-        .acquire_mutation_guard(&terminal.workspace_id)
-        .await?;
-    let context = load_terminal_rename_context(db_path, terminal_id)?;
-    if context.label_origin == TitleOrigin::Manual.as_str() {
-        return Ok(None);
-    }
-
-    drop(context);
-    update_terminal_label(app, db_path, terminal_id, label, TitleOrigin::Generated).map(Some)
 }
 
 async fn update_workspace_identity(
@@ -591,72 +541,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn maybe_apply_generated_workspace_identity_renames_branch_and_worktree_once() {
-        let repo_path = temp_repo_path();
-        let db_path = temp_db_path();
-        let workspace_id = "ws_identity_lock";
-        init_repo(&repo_path);
-        let (initial_source_ref, configured_root) = seed_workspace(
-            &db_path,
-            &repo_path,
-            "amber-atlas",
-            workspace_id,
-            "worktree",
-            "default",
-            "default",
-        )
-        .await;
-
-        let workspace =
-            maybe_update_generated_workspace_identity(&db_path, workspace_id, "Fix Auth Callback")
-                .await
-                .expect("generated identity applies")
-                .expect("workspace identity should update");
-
-        assert_eq!(workspace.name, "Fix Auth Callback");
-        assert_eq!(
-            workspace.source_ref,
-            worktree::workspace_branch_name("Fix Auth Callback", workspace_id)
-        );
-        assert_ne!(workspace.source_ref, initial_source_ref);
-        assert!(workspace
-            .worktree_path
-            .as_deref()
-            .expect("worktree path should exist")
-            .contains("fix-auth-callback"));
-
-        let current_branch = git_output(
-            Path::new(
-                workspace
-                    .worktree_path
-                    .as_deref()
-                    .expect("worktree path should exist"),
-            ),
-            &["rev-parse", "--abbrev-ref", "HEAD"],
-        );
-        assert_eq!(current_branch, workspace.source_ref);
-
-        let skipped =
-            maybe_update_generated_workspace_identity(&db_path, workspace_id, "Another Name")
-                .await
-                .expect("second generated identity attempt succeeds");
-        assert!(skipped.is_none(), "identity should lock after first apply");
-
-        worktree::remove_worktree(
-            repo_path.to_str().expect("repo path is utf8"),
-            workspace
-                .worktree_path
-                .as_deref()
-                .expect("worktree path should exist"),
-        )
-        .await
-        .expect("cleanup worktree");
-        let _ = fs::remove_dir_all(repo_path);
-        let _ = fs::remove_dir_all(configured_root);
-        let _ = fs::remove_file(db_path);
-    }
-
-    #[tokio::test]
     async fn manual_workspace_rename_skips_branch_rename_after_upstream_exists() {
         let repo_path = temp_repo_path();
         let remote_path = temp_repo_path();
@@ -808,81 +692,4 @@ mod tests {
         let _ = fs::remove_file(db_path);
     }
 
-    #[tokio::test]
-    async fn root_workspace_generated_identity_is_skipped() {
-        let repo_path = temp_repo_path();
-        let db_path = temp_db_path();
-        init_repo(&repo_path);
-        apply_test_schema(&db_path);
-
-        let repo_path_str = repo_path.to_str().expect("repo path is utf8");
-        let source_ref = worktree::get_current_branch(repo_path_str)
-            .await
-            .expect("get current branch");
-        let conn = open_db(&db_path).expect("open db");
-        conn.execute(
-            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
-            rusqlite::params!["project_1", repo_path_str, "Project 1"],
-        )
-        .expect("insert project");
-        conn.execute(
-            "INSERT INTO workspace (
-                id, project_id, name, name_origin, checkout_type, source_ref, source_ref_origin, worktree_path, target, status
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-            rusqlite::params![
-                "workspace_root",
-                "project_1",
-                "Root",
-                "default",
-                "root",
-                source_ref,
-                "default",
-                repo_path_str,
-                "local",
-                "active"
-            ],
-        )
-        .expect("insert root workspace");
-        drop(conn);
-
-        let result =
-            maybe_update_generated_workspace_identity(&db_path, "workspace_root", "Auth Flow")
-                .await
-                .expect("generated identity attempt succeeds");
-        assert!(
-            result.is_none(),
-            "root workspace identity should stay fixed"
-        );
-
-        let workspace = query::get_workspace_by_id(&db_path, "workspace_root".to_string())
-            .await
-            .expect("load workspace")
-            .expect("workspace exists");
-        assert_eq!(workspace.name, "Root");
-        assert_eq!(workspace.source_ref, source_ref);
-        assert_eq!(workspace.worktree_path.as_deref(), Some(repo_path_str));
-
-        let _ = fs::remove_dir_all(repo_path);
-        let _ = fs::remove_file(db_path);
-    }
-
-    async fn maybe_update_generated_workspace_identity(
-        db_path: &str,
-        workspace_id: &str,
-        name: &str,
-    ) -> Result<Option<WorkspaceRecord>, LifecycleError> {
-        let context = load_workspace_identity_context(db_path, workspace_id)?;
-        if is_root_workspace_checkout_type(&context.checkout_type) {
-            return Ok(None);
-        }
-        if context.name_origin != TitleOrigin::Default.as_str()
-            || context.source_ref_origin != TitleOrigin::Default.as_str()
-        {
-            return Ok(None);
-        }
-
-        update_workspace_identity(db_path, workspace_id, name, TitleOrigin::Generated)
-            .await
-            .map(Some)
-    }
 }

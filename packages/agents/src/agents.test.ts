@@ -11,17 +11,17 @@ import type {
 import { createAgentOrchestrator } from "./index";
 
 describe("agents package contracts", () => {
-  type WorkerLauncher = CreateAgentOrchestratorDependencies["workerLaunchers"]["claude"];
+  type Worker = CreateAgentOrchestratorDependencies["workers"]["claude"];
 
   test("defines text and attachment turn inputs", () => {
     const input: AgentTurnRequest["input"] = [
       { type: "text", text: "Investigate the failing build." },
-      { type: "attachment_ref", attachment_id: "attachment_1" },
+      { type: "attachment_ref", attachmentId: "attachment_1" },
     ];
 
     expect(input).toEqual([
       { type: "text", text: "Investigate the failing build." },
-      { type: "attachment_ref", attachment_id: "attachment_1" },
+      { type: "attachment_ref", attachmentId: "attachment_1" },
     ]);
   });
 
@@ -44,7 +44,7 @@ describe("agents package contracts", () => {
     };
     const event: AgentEvent = {
       kind: "agent.session.created",
-      workspace_id: "workspace_1",
+      workspaceId: "workspace_1",
       session,
     };
 
@@ -52,16 +52,16 @@ describe("agents package contracts", () => {
     expect(event.session.provider).toBe("codex");
   });
 
-  test("defines provider-backed sessions behind a single provider seam without UI coupling", () => {
+  test("defines provider-backed sessions behind a single provider seam without UI coupling", async () => {
     const runtime = {} as WorkspaceRuntime;
     const input: StartAgentSessionInput = {
-      workspace_id: "workspace_1",
+      workspaceId: "workspace_1",
       provider: "claude",
     };
 
-    const implementation: WorkerLauncher = {
-      async startWorker(session, workspace, boundRuntime) {
-        expect(workspace.workspace_target).toBe("local");
+    const implementation: Worker = {
+      async start(session, workspace, boundRuntime) {
+        expect(workspace.workspaceTarget).toBe("local");
         expect(boundRuntime).toBe(runtime);
         return {
           session: {
@@ -75,9 +75,9 @@ describe("agents package contracts", () => {
           },
         };
       },
-      async connectWorker(session, workspace, boundRuntime) {
+      async connect(session, workspace, boundRuntime) {
         expect(session.provider).toBe("claude");
-        expect(workspace.workspace_target).toBe("local");
+        expect(workspace.workspaceTarget).toBe("local");
         expect(boundRuntime).toBe(runtime);
         return {
           async sendTurn(_input) {},
@@ -93,23 +93,23 @@ describe("agents package contracts", () => {
         sessions.set(session.id, session);
         return session;
       },
-      async getSession(agent_session_id) {
-        return sessions.get(agent_session_id) ?? null;
+      async getSession(agentSessionId) {
+        return sessions.get(agentSessionId) ?? null;
       },
-      async listSessions(workspace_id) {
-        return [...sessions.values()].filter((session) => session.workspace_id === workspace_id);
+      async listSessions(workspaceId) {
+        return [...sessions.values()].filter((session) => session.workspace_id === workspaceId);
       },
-      async getWorkspace(workspace_id) {
+      async getWorkspace(workspaceId) {
         return {
-          workspace_id,
-          workspace_target: "local" satisfies WorkspaceTarget,
-          worktree_path: "/tmp/project",
+          workspaceId,
+          workspaceTarget: "local" satisfies WorkspaceTarget,
+          worktreePath: "/tmp/project",
         };
       },
     };
-    const observed_events: AgentEvent[] = [];
+    const observedEvents: AgentEvent[] = [];
     const orchestrator = createAgentOrchestrator({
-      workerLaunchers: {
+      workers: {
         claude: implementation,
         codex: implementation,
       },
@@ -118,55 +118,52 @@ describe("agents package contracts", () => {
       },
       store,
       now: () => "2026-03-21T00:00:00.000Z",
-      random_id: () => "agent_session_1",
+      randomId: () => "agent_session_1",
     });
     orchestrator.subscribe((event) => {
-      observed_events.push(event);
+      observedEvents.push(event);
     });
 
-    const created_session_promise = orchestrator.startSession({
+    const createdSession = await orchestrator.startSession({
       provider: "claude",
-      workspace_id: input.workspace_id,
+      workspaceId: input.workspaceId,
     });
 
-    return created_session_promise.then(async (agentSession) => {
-      const created_session = agentSession.record;
-      expect(typeof orchestrator.subscribe).toBe("function");
-      expect(created_session.provider_session_id).toBe("claude-session-1");
-      expect(created_session.title).toBe("");
-      expect(observed_events).toHaveLength(1);
-      expect(observed_events[0]?.kind).toBe("agent.session.created");
+    expect(typeof orchestrator.subscribe).toBe("function");
+    expect(createdSession.provider_session_id).toBe("claude-session-1");
+    expect(createdSession.title).toBe("");
+    expect(observedEvents).toHaveLength(1);
+    expect(observedEvents[0]?.kind).toBe("agent.session.created");
 
-      await agentSession.sendTurn({
-        turn_id: "turn_1",
-        input: [{ type: "text", text: "Hello" }],
-      });
+    await orchestrator.sendTurn(createdSession.id, {
+      turnId: "turn_1",
+      input: [{ type: "text", text: "Hello" }],
     });
   });
 
   test("keeps runtime placement separate from provider selection", async () => {
-    const seen_targets: WorkspaceTarget[] = [];
+    const seenTargets: WorkspaceTarget[] = [];
     const sessions = new Map<string, AgentSessionRecord>();
     const store: AgentStore = {
       async saveSession(session) {
         sessions.set(session.id, session);
         return session;
       },
-      async getSession(agent_session_id) {
-        return sessions.get(agent_session_id) ?? null;
+      async getSession(agentSessionId) {
+        return sessions.get(agentSessionId) ?? null;
       },
       async listSessions() {
         return [];
       },
-      async getWorkspace(workspace_id) {
+      async getWorkspace(workspaceId) {
         return {
-          workspace_id,
-          workspace_target: "cloud",
+          workspaceId,
+          workspaceTarget: "cloud",
         };
       },
     };
-    const implementation: WorkerLauncher = {
-      async startWorker(session) {
+    const implementation: Worker = {
+      async start(session) {
         return {
           session: {
             ...session,
@@ -174,15 +171,15 @@ describe("agents package contracts", () => {
           },
           worker: {
             async sendTurn(_input) {
-              seen_targets.push("cloud");
+              seenTargets.push("cloud");
             },
             async cancelTurn() {},
             async resolveApproval() {},
           },
         };
       },
-      async connectWorker(_session, workspace, boundRuntime) {
-        seen_targets.push(workspace.workspace_target);
+      async connect(_session, workspace, boundRuntime) {
+        seenTargets.push(workspace.workspaceTarget);
         expect(boundRuntime).toBe(runtime);
         return {
           async sendTurn() {},
@@ -193,7 +190,7 @@ describe("agents package contracts", () => {
     };
     const runtime = {} as WorkspaceRuntime;
     const orchestrator = createAgentOrchestrator({
-      workerLaunchers: {
+      workers: {
         claude: implementation,
         codex: implementation,
       },
@@ -202,20 +199,20 @@ describe("agents package contracts", () => {
       },
       store,
       now: () => "2026-03-21T00:00:00.000Z",
-      random_id: () => "agent_session_1",
+      randomId: () => "agent_session_1",
     });
 
-    const agentSession = await orchestrator.startSession({
+    const session = await orchestrator.startSession({
       provider: "codex",
-      workspace_id: "workspace_cloud",
+      workspaceId: "workspace_cloud",
     });
 
-    await agentSession.sendTurn({
-      turn_id: "turn_1",
+    await orchestrator.sendTurn(session.id, {
+      turnId: "turn_1",
       input: [{ type: "text", text: "Ship it." }],
     });
 
-    expect(seen_targets).toEqual(["cloud"]);
+    expect(seenTargets).toEqual(["cloud"]);
   });
 
   test("moves sessions into waiting_input or waiting_approval while approvals are pending", async () => {
@@ -225,23 +222,23 @@ describe("agents package contracts", () => {
         sessions.set(session.id, session);
         return session;
       },
-      async getSession(agent_session_id) {
-        return sessions.get(agent_session_id) ?? null;
+      async getSession(agentSessionId) {
+        return sessions.get(agentSessionId) ?? null;
       },
       async listSessions() {
         return [...sessions.values()];
       },
-      async getWorkspace(workspace_id) {
+      async getWorkspace(workspaceId) {
         return {
-          workspace_id,
-          workspace_target: "local",
-          worktree_path: "/tmp/project",
+          workspaceId,
+          workspaceTarget: "local",
+          worktreePath: "/tmp/project",
         };
       },
     };
     const runtime = {} as WorkspaceRuntime;
-    const implementation: WorkerLauncher = {
-      async startWorker(session, _context, _runtime, events) {
+    const implementation: Worker = {
+      async start(session, _context, _runtime, events) {
         return {
           session: { ...session, provider_session_id: "session_1" },
           worker: {
@@ -253,12 +250,12 @@ describe("agents package contracts", () => {
                   kind: "question",
                   message: "Need input",
                   metadata: { questions: [] },
-                  scope_key: "question:1",
-                  session_id: session.id,
+                  scopeKey: "question:1",
+                  sessionId: session.id,
                   status: "pending",
                 },
-                session_id: session.id,
-                workspace_id: session.workspace_id,
+                sessionId: session.id,
+                workspaceId: session.workspace_id,
               });
 
               expect(sessions.get(session.id)?.status).toBe("waiting_input");
@@ -266,13 +263,13 @@ describe("agents package contracts", () => {
               await events.emit({
                 kind: "agent.approval.resolved",
                 resolution: {
-                  approval_id: "approval_question",
+                  approvalId: "approval_question",
                   decision: "approve_once",
                   response: { answers: {} },
-                  session_id: session.id,
+                  sessionId: session.id,
                 },
-                session_id: session.id,
-                workspace_id: session.workspace_id,
+                sessionId: session.id,
+                workspaceId: session.workspace_id,
               });
 
               expect(sessions.get(session.id)?.status).toBe("running");
@@ -282,7 +279,7 @@ describe("agents package contracts", () => {
           },
         };
       },
-      async connectWorker() {
+      async connect() {
         return {
           async sendTurn() {},
           async cancelTurn() {},
@@ -292,7 +289,7 @@ describe("agents package contracts", () => {
     };
     const observedEvents: AgentEvent[] = [];
     const orchestrator = createAgentOrchestrator({
-      workerLaunchers: {
+      workers: {
         claude: implementation,
         codex: implementation,
       },
@@ -301,7 +298,7 @@ describe("agents package contracts", () => {
       },
       store,
       now: () => "2026-03-21T00:00:00.000Z",
-      random_id: () => "agent_session_1",
+      randomId: () => "agent_session_1",
     });
     orchestrator.subscribe((event) => {
       observedEvents.push(event);
@@ -309,11 +306,11 @@ describe("agents package contracts", () => {
 
     const session = await orchestrator.startSession({
       provider: "claude",
-      workspace_id: "workspace_1",
+      workspaceId: "workspace_1",
     });
 
-    await session.sendTurn({
-      turn_id: "turn_approval",
+    await orchestrator.sendTurn(session.id, {
+      turnId: "turn_approval",
       input: [{ type: "text", text: "Need approval" }],
     });
 
@@ -327,8 +324,81 @@ describe("agents package contracts", () => {
       observedEvents.some(
         (event) =>
           event.kind === "agent.approval.resolved" &&
-          event.resolution.approval_id === "approval_question",
+          event.resolution.approvalId === "approval_question",
       ),
     ).toBeTrue();
+  });
+
+  test("reattaches an existing persisted session without sending a new turn", async () => {
+    const sessions = new Map<string, AgentSessionRecord>([
+      [
+        "agent_session_1",
+        {
+          id: "agent_session_1",
+          workspace_id: "workspace_1",
+          runtime_kind: "native",
+          runtime_name: "codex",
+          provider: "codex",
+          provider_session_id: "thread_1",
+          title: "",
+          status: "running",
+          created_by: null,
+          forked_from_session_id: null,
+          last_message_at: null,
+          created_at: "2026-03-21T00:00:00.000Z",
+          updated_at: "2026-03-21T00:00:00.000Z",
+          ended_at: null,
+        },
+      ],
+    ]);
+    const store: AgentStore = {
+      async saveSession(session) {
+        sessions.set(session.id, session);
+        return session;
+      },
+      async getSession(agentSessionId) {
+        return sessions.get(agentSessionId) ?? null;
+      },
+      async listSessions() {
+        return [...sessions.values()];
+      },
+      async getWorkspace(workspaceId) {
+        return {
+          workspaceId,
+          workspaceTarget: "local",
+          worktreePath: "/tmp/project",
+        };
+      },
+    };
+    const runtime = {} as WorkspaceRuntime;
+    let connected = false;
+    const implementation: Worker = {
+      async start() {
+        throw new Error("start should not be called");
+      },
+      async connect(session) {
+        connected = true;
+        expect(session.provider_session_id).toBe("thread_1");
+        return {
+          async sendTurn() {},
+          async cancelTurn() {},
+          async resolveApproval() {},
+        };
+      },
+    };
+    const orchestrator = createAgentOrchestrator({
+      workers: {
+        claude: implementation,
+        codex: implementation,
+      },
+      resolveRuntime() {
+        return runtime;
+      },
+      store,
+    });
+
+    await orchestrator.attachSession("agent_session_1");
+
+    expect(connected).toBeTrue();
   });
 });

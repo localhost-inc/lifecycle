@@ -176,6 +176,7 @@ In progress.
 - [x] Restyle the center panel to a TUI-like transcript and prompt buffer.
 - [x] Route worker/provider activity through `AgentOrchestrator` so normalized `agent.*` facts drive the UI and persistence layers for the real local Claude worker path.
 - [x] Delete the current terminal-coupled harness integration instead of preserving it behind fallback layers.
+- [x] Move local provider workers behind a detached host process so desktop rebuilds do not terminate active local agent sessions.
 - [ ] Update `agent_session.status` and `last_message_at` from normalized agent-provider events instead of leaving sessions mostly idle.
 - [ ] Add a focused end-to-end desktop test that creates an agent tab, sends a prompt, and verifies transcript hydration.
 - [x] Remove `AgentSurface` dependence on terminal lifecycle events and hidden native-terminal bootstrap state.
@@ -189,7 +190,7 @@ In progress.
 4. Nothing in the current terminal-coupled harness path is a compatibility constraint. The target architecture is the provider model above.
 5. `AgentOrchestrator` is app-level and store-backed; `AgentSession` is harness-facing; `AgentWorker` is runtime-bound per `agent_session`.
 6. Rust should not own agent-session orchestration or transcript querying. Local agent execution belongs to the desktop runtime and the TS-side orchestrator/session-provider path.
-7. The first real local Claude worker path is `AgentOrchestrator -> AgentSession -> AgentWorker -> lifecycle agent worker claude -> Claude SDK V2 preview`.
+7. The current local worker path is `AgentOrchestrator -> detached lifecycle agent host -> lifecycle agent worker <provider> -> provider runtime`, with the detached host keeping sessions alive across desktop restarts and re-exposing them over a reconnectable websocket transport.
 
 **Exit gate**
 

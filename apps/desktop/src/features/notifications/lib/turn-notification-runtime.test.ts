@@ -8,9 +8,9 @@ function createCompletedTurnEvent(
   overrides: Partial<TurnCompletionLifecycleEvent> = {},
 ): TurnCompletionLifecycleEvent {
   return {
-    session_id: "session-12345678",
-    turn_id: "turn_1",
-    workspace_id: "workspace_1",
+    sessionId: "session-12345678",
+    turnId: "turn_1",
+    workspaceId: "workspace_1",
     ...overrides,
   };
 }

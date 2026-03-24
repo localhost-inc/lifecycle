@@ -7,10 +7,7 @@ pub mod environment;
 pub mod file;
 pub mod git;
 pub mod git_watcher;
-pub(crate) mod harness;
-mod identity;
 pub mod manifest;
-mod naming;
 pub mod open;
 mod paths;
 mod ports;
@@ -24,4 +21,3 @@ pub mod stop;
 pub mod terminal;
 #[cfg(test)]
 pub(crate) mod test_support;
-pub mod title;

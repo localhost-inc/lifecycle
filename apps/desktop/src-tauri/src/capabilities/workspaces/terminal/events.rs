@@ -26,13 +26,3 @@ pub(crate) fn emit_terminal_status(app: &AppHandle, terminal: &TerminalRecord) {
         },
     );
 }
-
-pub(crate) fn emit_terminal_updated(app: &AppHandle, terminal: &TerminalRecord) {
-    publish_lifecycle_event(
-        app,
-        LifecycleEvent::TerminalUpdated {
-            workspace_id: terminal.workspace_id.clone(),
-            terminal: terminal.clone(),
-        },
-    );
-}

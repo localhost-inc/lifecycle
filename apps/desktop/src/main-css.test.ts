@@ -8,4 +8,12 @@ describe("main.css", () => {
     expect(css).toContain('@import "tailwindcss";');
     expect(css).toContain('@source "../../../packages/ui/src";');
   });
+
+  test("trims trailing streamdown margins for nested list paragraphs", () => {
+    const css = readFileSync(new URL("./main.css", import.meta.url), "utf8");
+
+    expect(css).toContain(".agent-streamdown > *:last-child");
+    expect(css).toContain(".agent-streamdown li > p:last-child");
+    expect(css).toContain("margin-bottom: 0 !important;");
+  });
 });

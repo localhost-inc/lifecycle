@@ -98,11 +98,11 @@ function subscribeToInvalidations(queryClient: QueryClient): () => void {
 
       case "workspace.file_changed":
         void queryClient.invalidateQueries({
-          queryKey: ["workspace-file-tree", event.workspace_id],
+          queryKey: ["workspace-file-tree", event.workspaceId],
           exact: false,
         });
         void queryClient.invalidateQueries({
-          queryKey: ["workspace-file", event.workspace_id],
+          queryKey: ["workspace-file", event.workspaceId],
           exact: false,
         });
         break;

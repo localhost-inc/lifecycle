@@ -26,6 +26,17 @@ Rules:
 4. Resume uses the provider-owned session ID, not a terminal ID and not a local UUID.
 5. Claude session continuity is directory-scoped. Persist the workspace path / `cwd` alongside the provider session binding.
 
+## Authentication
+
+Lifecycle currently authenticates Claude through the installed Claude CLI account state before creating or resuming Agent SDK sessions.
+
+Rules:
+
+1. Lifecycle should check Claude auth status before opening a new Claude agent session.
+2. Lifecycle should block session launch until the CLI OAuth flow completes or fails.
+3. Lifecycle should treat the CLI auth state as a prerequisite for the TypeScript Agent SDK session, not as a separate provider model.
+4. Claude auth failures should surface as explicit provider errors in the UI; do not start a session optimistically and hope the SDK repairs auth later.
+
 Relevant upstream surfaces:
 
 1. `unstable_v2_createSession(options)`
@@ -33,6 +44,23 @@ Relevant upstream surfaces:
 3. `listSessions(options)`
 4. `getSessionInfo(sessionId, options)`
 5. `getSessionMessages(sessionId, options)`
+
+## Model Catalog
+
+Claude's TypeScript SDK exposes a live model catalog and per-model effort metadata.
+
+Relevant upstream surfaces:
+
+1. `session.query.supportedModels()`
+2. `session.query.initializationResult()`
+3. `ModelInfo`
+
+Rules:
+
+1. Lifecycle should drive the Claude model picker from the SDK's live catalog, not a hardcoded snapshot list.
+2. Lifecycle should prefer `supportedModels()` when available and fall back to `initializationResult().models` only when needed.
+3. Effort choices are model-specific. Lifecycle should only expose effort levels returned by the SDK for the selected model, plus the local `default` sentinel that means "omit the override".
+4. Lifecycle's current default Claude setting is the SDK `default` model alias, not a pinned snapshot ID such as `claude-sonnet-4-6`.
 
 ## Runtime Model
 
@@ -112,6 +140,23 @@ Rules:
 2. Permission and model settings should be persisted per Lifecycle `agent_session` when they define session behavior.
 3. Additional directory access is part of the provider contract and should not be silently widened.
 
+## Streaming Content Blocks
+
+Claude's SDK emits `content_block_delta` events with a stable integer `index` per content block within a response. When a response interleaves text, tool calls, and more text, each segment gets a distinct index.
+
+Lifecycle maps these into the worker protocol as an opaque `blockId: string`:
+
+- Text deltas: `blockId = "text:{index}"` (e.g. `"text:0"`, `"text:2"`)
+- Thinking deltas: `blockId = "thinking:{index}"` (e.g. `"thinking:1"`)
+
+The orchestrator uses `blockId` as part of the `part_id` key (`{turnId}:assistant:{blockId}`) to route streaming deltas to the correct accumulated message part. This ensures interstitial text blocks between tool calls render as separate parts in the UI.
+
+Rules:
+
+1. The `blockId` is opaque to the orchestrator — it must not parse or reinterpret the string.
+2. The type prefix (`text:`, `thinking:`) is set by the worker, not the orchestrator.
+3. The Claude SDK's native `event.index` is the source of truth for block identity.
+
 ## Lifecycle Mapping
 
 Claude facts should land in Lifecycle as follows:
@@ -133,3 +178,4 @@ Rules:
 1. Anthropic Agent SDK TypeScript v2 preview: https://platform.claude.com/docs/en/agent-sdk/typescript-v2-preview
 2. Anthropic Agent SDK sessions: https://platform.claude.com/docs/en/agent-sdk/sessions
 3. Anthropic Agent SDK agent loop: https://platform.claude.com/docs/en/agent-sdk/agent-loop
+4. Anthropic models list: https://docs.anthropic.com/en/api/models-list

@@ -66,6 +66,8 @@ export interface AgentTab {
   key: string;
   kind: "agent";
   label: string;
+  responseReady?: boolean;
+  running?: boolean;
 }
 
 export type WorkspaceCanvasDocument =

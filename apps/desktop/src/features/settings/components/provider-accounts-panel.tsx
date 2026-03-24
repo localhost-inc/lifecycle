@@ -2,7 +2,7 @@ import { Button, Spinner } from "@lifecycle/ui";
 import type { AgentSessionProviderId } from "@lifecycle/contracts";
 import { CheckCircle2, AlertCircle, LogIn } from "lucide-react";
 import { useEffect } from "react";
-import { ClaudeIcon, CodexIcon } from "@/features/workspaces/components/surface-icons";
+import { ClaudeIcon, CodexIcon } from "@/features/workspaces/surfaces/surface-icons";
 import {
   checkProviderAuth,
   loginProvider,

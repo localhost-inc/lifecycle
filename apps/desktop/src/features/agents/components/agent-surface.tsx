@@ -1,4 +1,4 @@
-import { EmptyState, Popover, PopoverContent, PopoverTrigger, Shimmer } from "@lifecycle/ui";
+import { EmptyState, Popover, PopoverContent, PopoverTrigger, Shimmer, Spinner } from "@lifecycle/ui";
 import { Bot, ChevronDown, ChevronRight, Wrench } from "lucide-react";
 import {
   useMemo,
@@ -15,10 +15,7 @@ import type {
   AgentMessagePart,
   AgentToolCallStatus,
 } from "@lifecycle/agents";
-import {
-  parseAgentMessagePartData,
-  type AgentMessagePartRecord,
-} from "@lifecycle/contracts";
+import { parseAgentMessagePartData, type AgentMessagePartRecord } from "@lifecycle/contracts";
 import { Streamdown } from "streamdown";
 import { code } from "@streamdown/code";
 import "streamdown/styles.css";
@@ -28,20 +25,23 @@ import { diffTheme } from "@lifecycle/ui";
 import { useSettings } from "@/features/settings/state/settings-provider";
 import {
   claudeEffortOptions,
-  claudeModelOptions,
-  codexModelOptions,
   codexReasoningEffortOptions,
   type ClaudeEffort,
-  type ClaudeModel,
-  type CodexModel,
   type CodexReasoningEffort,
 } from "@/features/settings/state/harness-settings";
 import { DiffRenderProvider } from "@/features/git/components/diff-render-provider";
 import { useAgentSession, useAgentSessionMessages } from "@/features/agents/hooks";
+import { useProviderModelCatalog } from "@/features/agents/state/use-provider-model-catalog";
 import { useAgentSessionState } from "@/features/agents/state/agent-session-state";
+import { ResponseReadyDot } from "@/components/response-ready-dot";
+import { ClaudeIcon, CodexIcon } from "@/features/workspaces/surfaces/surface-icons";
 import { useAgentOrchestrator } from "@/store/provider";
 
 const streamdownPlugins = { code };
+const claudeEffortLabelByValue = new Map(claudeEffortOptions.map((option) => [option.value, option.label]));
+const codexReasoningLabelByValue = new Map(
+  codexReasoningEffortOptions.map((option) => [option.value, option.label]),
+);
 
 // ---------------------------------------------------------------------------
 // Convert DB part records → AgentMessagePart for rendering
@@ -59,7 +59,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function partRecordToPart(record: AgentMessagePartRecord): AgentMessagePart {
-  const data = parseAgentMessagePartData(record.part_type, record.data) as Record<string, unknown> | null;
+  const data = parseAgentMessagePartData(record.part_type, record.data) as Record<
+    string,
+    unknown
+  > | null;
   const readString = (key: string): string | undefined => {
     const value = data?.[key];
     return typeof value === "string" ? value : undefined;
@@ -75,26 +78,26 @@ function partRecordToPart(record: AgentMessagePartRecord): AgentMessagePart {
     case "tool_call":
       return {
         type: "tool_call",
-        tool_call_id: readString("tool_call_id") ?? "",
-        tool_name: readString("tool_name") ?? "",
-        input_json: readString("input_json"),
-        output_json: readString("output_json"),
+        toolCallId: readString("tool_call_id") ?? "",
+        toolName: readString("tool_name") ?? "",
+        inputJson: readString("input_json"),
+        outputJson: readString("output_json"),
         status: readString("status") as AgentToolCallStatus | undefined,
-        error_text: readString("error_text"),
+        errorText: readString("error_text"),
       };
     case "tool_result":
       return {
         type: "tool_result",
-        tool_call_id: readString("tool_call_id") ?? "",
-        output_json: readString("output_json"),
-        error_text: readString("error_text"),
+        toolCallId: readString("tool_call_id") ?? "",
+        outputJson: readString("output_json"),
+        errorText: readString("error_text"),
       };
     case "attachment_ref":
-      return { type: "attachment_ref", attachment_id: readString("attachment_id") ?? "" };
+      return { type: "attachment_ref", attachmentId: readString("attachment_id") ?? "" };
     case "approval_ref":
       return {
         type: "approval_ref",
-        approval_id: readString("approval_id") ?? "",
+        approvalId: readString("approval_id") ?? "",
         decision: readString("decision") as AgentApprovalDecision | undefined,
         kind: readString("kind") as AgentApprovalKind | undefined,
         message: readString("message"),
@@ -104,8 +107,8 @@ function partRecordToPart(record: AgentMessagePartRecord): AgentMessagePart {
     case "artifact_ref":
       return {
         type: "artifact_ref",
-        artifact_id: readString("artifact_id") ?? "",
-        artifact_type: readString("artifact_type") as AgentArtifactType | undefined,
+        artifactId: readString("artifact_id") ?? "",
+        artifactType: readString("artifact_type") as AgentArtifactType | undefined,
         title: readString("title"),
         uri: readString("uri"),
       };
@@ -116,6 +119,33 @@ function partRecordToPart(record: AgentMessagePartRecord): AgentMessagePart {
 
 function createTurnId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `agent-turn-${Date.now()}`;
+}
+
+function ensureSelectedOption<T extends string>(
+  options: readonly { id: T; label: string }[],
+  value: T,
+): { id: T; label: string }[] {
+  if (options.some((option) => option.id === value)) {
+    return [...options];
+  }
+
+  return [{ id: value, label: value }, ...options];
+}
+
+function buildReasoningOptions<T extends string>(
+  provider: "claude" | "codex",
+  reasoningEfforts: string[],
+  selected: T,
+): Array<{ id: T; label: string }> {
+  const labelMap: ReadonlyMap<string, string> =
+    provider === "claude" ? claudeEffortLabelByValue : codexReasoningLabelByValue;
+  const ids = Array.from(new Set(["default", ...reasoningEfforts])) as T[];
+  const options = ids.map((id) => ({
+    id,
+    label: labelMap.get(id) ?? id,
+  }));
+
+  return ensureSelectedOption(options, selected);
 }
 
 // ---------------------------------------------------------------------------
@@ -181,18 +211,56 @@ function extractToolMeta(toolName: string, inputJson?: string): string | null {
   if (!inputJson) return null;
   try {
     const input = JSON.parse(inputJson) as Record<string, unknown>;
+    const fileChangeSummary = (() => {
+      const changes = input.changes;
+      if (!Array.isArray(changes) || changes.length === 0) {
+        return null;
+      }
+
+      const normalized = changes.flatMap((change) => {
+        if (!change || typeof change !== "object" || Array.isArray(change)) {
+          return [];
+        }
+        const record = change as Record<string, unknown>;
+        const path = typeof record.path === "string" ? record.path : null;
+        const kind = typeof record.kind === "string" ? record.kind : null;
+        if (!path || !kind) {
+          return [];
+        }
+        return [{ kind, path }] as const;
+      });
+
+      if (normalized.length === 0) {
+        return null;
+      }
+
+      if (normalized.length === 1) {
+        const change = normalized[0]!;
+        return `${change.kind} ${change.path.replace(/.*\//, "")}`;
+      }
+
+      return `${normalized.length} files`;
+    })();
+
     switch (toolName) {
       case "Read":
       case "Write":
       case "Edit":
+      case "Delete":
+      case "DeleteFile":
         return typeof input.file_path === "string" ? input.file_path.replace(/.*\//, "") : null;
       case "Glob":
       case "Grep":
         return typeof input.pattern === "string" ? input.pattern : null;
       case "Bash":
+      case "command_execution":
         return typeof input.command === "string"
-          ? (input.command.length > 60 ? `${input.command.slice(0, 57)}...` : input.command)
+          ? input.command.length > 60
+            ? `${input.command.slice(0, 57)}...`
+            : input.command
           : null;
+      case "file_change":
+        return fileChangeSummary;
       case "Agent":
         return typeof input.subagent_type === "string"
           ? input.subagent_type
@@ -207,9 +275,26 @@ function extractToolMeta(toolName: string, inputJson?: string): string | null {
   }
 }
 
-function buildEditPatch(inputJson: string): string | null {
+function formatToolName(toolName: string): string {
+  switch (toolName) {
+    case "command_execution":
+      return "Shell";
+    case "file_change":
+      return "File change";
+    case "web_search":
+      return "Web search";
+    default:
+      return toolName.includes("_") ? toolName.replace(/_/g, " ") : toolName;
+  }
+}
+
+function buildToolPatch(inputJson: string): string | null {
   try {
     const input = JSON.parse(inputJson) as Record<string, unknown>;
+    const diff = typeof input.diff === "string" ? input.diff : null;
+    const unifiedDiff = typeof input.unified_diff === "string" ? input.unified_diff : null;
+    if (diff) return diff;
+    if (unifiedDiff) return unifiedDiff;
     const filePath = typeof input.file_path === "string" ? input.file_path : "file";
     const oldStr = typeof input.old_string === "string" ? input.old_string : "";
     const newStr = typeof input.new_string === "string" ? input.new_string : "";
@@ -220,8 +305,8 @@ function buildEditPatch(inputJson: string): string | null {
   }
 }
 
-function EditDiffView({ inputJson }: { inputJson: string }) {
-  const patch = buildEditPatch(inputJson);
+function ToolDiffView({ inputJson }: { inputJson: string }) {
+  const patch = buildToolPatch(inputJson);
   if (!patch) return null;
 
   return (
@@ -243,30 +328,33 @@ function extractAgentPrompt(inputJson?: string): string | null {
 
 function ToolCallPart({ toolName, inputJson }: { toolName: string; inputJson?: string }) {
   const meta = extractToolMeta(toolName, inputJson);
+  const displayName = formatToolName(toolName);
   const [open, setOpen] = useState(false);
-  const hasEditDiff = toolName === "Edit" && inputJson;
+  const diffInputJson = typeof inputJson === "string" ? inputJson : null;
+  const hasToolDiff =
+    (toolName === "Edit" || toolName === "Write" || toolName === "Delete") &&
+    diffInputJson !== null &&
+    buildToolPatch(diffInputJson) !== null;
   const agentPrompt = toolName === "Agent" ? extractAgentPrompt(inputJson) : null;
-  const isExpandable = hasEditDiff || agentPrompt;
+  const isExpandable = hasToolDiff || agentPrompt;
 
   return (
-    <div className="my-1">
+    <div className="my-0.5">
       <button
         className="flex items-center gap-1.5 text-[12px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
         onClick={() => isExpandable && setOpen(!open)}
         type="button"
       >
         <Wrench className="size-3 shrink-0" />
-        <span className="font-semibold">{toolName}</span>
-        {meta ? (
-          <span className="truncate text-[var(--muted-foreground)]/50">{meta}</span>
-        ) : null}
+        <span className="font-semibold">{displayName}</span>
+        {meta ? <span className="truncate text-[var(--muted-foreground)]/50">{meta}</span> : null}
         {isExpandable ? (
           <ChevronRight
             className={["size-3 shrink-0 transition-transform", open ? "rotate-90" : ""].join(" ")}
           />
         ) : null}
       </button>
-      {open && hasEditDiff ? <EditDiffView inputJson={inputJson} /> : null}
+      {open && hasToolDiff && diffInputJson ? <ToolDiffView inputJson={diffInputJson} /> : null}
       {open && agentPrompt ? (
         <pre className="mt-1 whitespace-pre-wrap break-words border-l-2 border-[var(--border)] pl-3 text-[12px] leading-5 text-[var(--muted-foreground)]">
           {agentPrompt}
@@ -277,11 +365,7 @@ function ToolCallPart({ toolName, inputJson }: { toolName: string; inputJson?: s
 }
 
 function StatusPart({ text }: { text: string }) {
-  return (
-    <div className="text-[11px] text-[var(--muted-foreground)]/70">
-      {text}
-    </div>
-  );
+  return <div className="text-[11px] text-[var(--muted-foreground)]/70">{text}</div>;
 }
 
 interface ApprovalQuestionOption {
@@ -298,7 +382,9 @@ interface ApprovalQuestionPrompt {
   question: string;
 }
 
-function parseApprovalQuestions(metadata: Record<string, unknown> | null | undefined): ApprovalQuestionPrompt[] {
+function parseApprovalQuestions(
+  metadata: Record<string, unknown> | null | undefined,
+): ApprovalQuestionPrompt[] {
   const questions = metadata?.questions;
   if (!Array.isArray(questions)) {
     return [];
@@ -318,12 +404,17 @@ function parseApprovalQuestions(metadata: Record<string, unknown> | null | undef
           }
           const optionRecord = option as Record<string, unknown>;
           return typeof optionRecord.label === "string"
-            ? [{
-                label: optionRecord.label,
-                description:
-                  typeof optionRecord.description === "string" ? optionRecord.description : undefined,
-                preview: typeof optionRecord.preview === "string" ? optionRecord.preview : undefined,
-              }]
+            ? [
+                {
+                  label: optionRecord.label,
+                  description:
+                    typeof optionRecord.description === "string"
+                      ? optionRecord.description
+                      : undefined,
+                  preview:
+                    typeof optionRecord.preview === "string" ? optionRecord.preview : undefined,
+                },
+              ]
             : [];
         })
       : [];
@@ -332,13 +423,15 @@ function parseApprovalQuestions(metadata: Record<string, unknown> | null | undef
       return [];
     }
 
-    return [{
-      header,
-      id: typeof questionRecord.id === "string" ? questionRecord.id : undefined,
-      multiSelect: questionRecord.multiSelect === true,
-      options,
-      question: prompt,
-    }];
+    return [
+      {
+        header,
+        id: typeof questionRecord.id === "string" ? questionRecord.id : undefined,
+        multiSelect: questionRecord.multiSelect === true,
+        options,
+        question: prompt,
+      },
+    ];
   });
 }
 
@@ -350,11 +443,13 @@ function ApprovalSummary({ part }: { part: Extract<AgentMessagePart, { type: "ap
         ? "approved"
         : part.status === "rejected"
           ? "rejected"
-          : part.status ?? "pending";
+          : (part.status ?? "pending");
 
   return (
     <div className="my-2 rounded border border-[var(--border)] bg-[var(--surface-hover)]/40 px-3 py-2 text-[12px]">
-      <div className="font-medium text-[var(--foreground)]">{part.message ?? "Approval request"}</div>
+      <div className="font-medium text-[var(--foreground)]">
+        {part.message ?? "Approval request"}
+      </div>
       <div className="mt-1 text-[var(--muted-foreground)]">{statusLabel}</div>
     </div>
   );
@@ -366,7 +461,10 @@ function ApprovalQuestionCard({
   part,
 }: {
   disabled: boolean;
-  onResolve: (decision: AgentApprovalDecision, response?: Record<string, unknown> | null) => Promise<void>;
+  onResolve: (
+    decision: AgentApprovalDecision,
+    response?: Record<string, unknown> | null,
+  ) => Promise<void>;
   part: Extract<AgentMessagePart, { type: "approval_ref" }>;
 }) {
   const questions = parseApprovalQuestions(part.metadata);
@@ -412,7 +510,9 @@ function ApprovalQuestionCard({
 
   return (
     <div className="my-2 rounded border border-[var(--border)] bg-[var(--surface-hover)]/40 px-3 py-3 text-[12px]">
-      <div className="font-medium text-[var(--foreground)]">{part.message ?? "Claude needs input"}</div>
+      <div className="font-medium text-[var(--foreground)]">
+        {part.message ?? "Claude needs input"}
+      </div>
       <div className="mt-3 space-y-3">
         {questions.map((prompt) => {
           const selected = selectedAnswers[prompt.question] ?? [];
@@ -495,14 +595,17 @@ function ApprovalElicitationCard({
   part,
 }: {
   disabled: boolean;
-  onResolve: (decision: AgentApprovalDecision, response?: Record<string, unknown> | null) => Promise<void>;
+  onResolve: (
+    decision: AgentApprovalDecision,
+    response?: Record<string, unknown> | null,
+  ) => Promise<void>;
   part: Extract<AgentMessagePart, { type: "approval_ref" }>;
 }) {
   const [jsonDraft, setJsonDraft] = useState("{}");
   const [localError, setLocalError] = useState<string | null>(null);
   const metadata = part.metadata;
   const url = typeof metadata?.url === "string" ? metadata.url : null;
-  const requestedSchema = isRecord(metadata?.requested_schema) ? metadata.requested_schema : null;
+  const requestedSchema = isRecord(metadata?.requestedSchema) ? metadata.requestedSchema : null;
 
   async function handleSubmit(): Promise<void> {
     if (!requestedSchema) {
@@ -573,21 +676,27 @@ function ApprovalToolCard({
   part,
 }: {
   disabled: boolean;
-  onResolve: (decision: AgentApprovalDecision, response?: Record<string, unknown> | null) => Promise<void>;
+  onResolve: (
+    decision: AgentApprovalDecision,
+    response?: Record<string, unknown> | null,
+  ) => Promise<void>;
   part: Extract<AgentMessagePart, { type: "approval_ref" }>;
 }) {
   const metadata = part.metadata;
-  const toolName = typeof metadata?.tool_name === "string" ? metadata.tool_name : null;
+  const toolName = typeof metadata?.toolName === "string" ? metadata.toolName : null;
   const input = metadata?.input;
   const command = isRecord(input) && typeof input.command === "string" ? input.command : null;
   const filePath = isRecord(input) && typeof input.file_path === "string" ? input.file_path : null;
-  const suggestions =
-    Array.isArray(metadata?.suggestions) && metadata.suggestions.length > 0;
+  const suggestions = Array.isArray(metadata?.suggestions) && metadata.suggestions.length > 0;
 
   return (
     <div className="my-2 rounded border border-[var(--border)] bg-[var(--surface-hover)]/40 px-3 py-3 text-[12px]">
-      <div className="font-medium text-[var(--foreground)]">{part.message ?? "Approval required"}</div>
-      {toolName ? <div className="mt-1 text-[var(--muted-foreground)]">Tool: {toolName}</div> : null}
+      <div className="font-medium text-[var(--foreground)]">
+        {part.message ?? "Approval required"}
+      </div>
+      {toolName ? (
+        <div className="mt-1 text-[var(--muted-foreground)]">Tool: {toolName}</div>
+      ) : null}
       {command ? (
         <pre className="mt-2 whitespace-pre-wrap break-words rounded border border-[var(--border)] px-2 py-1.5 text-[11px] text-[var(--foreground)]">
           {command}
@@ -631,7 +740,11 @@ function ApprovalRefPart({
   part,
   resolving,
 }: {
-  onResolve?: (approvalId: string, decision: AgentApprovalDecision, response?: Record<string, unknown> | null) => Promise<void>;
+  onResolve?: (
+    approvalId: string,
+    decision: AgentApprovalDecision,
+    response?: Record<string, unknown> | null,
+  ) => Promise<void>;
   part: Extract<AgentMessagePart, { type: "approval_ref" }>;
   resolving: boolean;
 }) {
@@ -643,28 +756,28 @@ function ApprovalRefPart({
   const questions = parseApprovalQuestions(part.metadata);
   if (part.kind === "question" && questions.length > 0) {
     return (
-      <ApprovalQuestionCard
-        disabled={resolving}
-        onResolve={(decision, response) => onResolve(part.approval_id, decision, response)}
-        part={part}
-      />
+        <ApprovalQuestionCard
+          disabled={resolving}
+          onResolve={(decision, response) => onResolve(part.approvalId, decision, response)}
+          part={part}
+        />
     );
   }
 
   if (part.kind === "question") {
     return (
-      <ApprovalElicitationCard
-        disabled={resolving}
-        onResolve={(decision, response) => onResolve(part.approval_id, decision, response)}
-        part={part}
-      />
+        <ApprovalElicitationCard
+          disabled={resolving}
+          onResolve={(decision, response) => onResolve(part.approvalId, decision, response)}
+          part={part}
+        />
     );
   }
 
   return (
     <ApprovalToolCard
       disabled={resolving}
-      onResolve={(decision, response) => onResolve(part.approval_id, decision, response)}
+      onResolve={(decision, response) => onResolve(part.approvalId, decision, response)}
       part={part}
     />
   );
@@ -676,7 +789,11 @@ function MessagePartRenderer({
   resolvingApprovalIds,
   isStreaming,
 }: {
-  onResolveApproval?: (approvalId: string, decision: AgentApprovalDecision, response?: Record<string, unknown> | null) => Promise<void>;
+  onResolveApproval?: (
+    approvalId: string,
+    decision: AgentApprovalDecision,
+    response?: Record<string, unknown> | null,
+  ) => Promise<void>;
   part: AgentMessagePart;
   resolvingApprovalIds?: ReadonlySet<string>;
   isStreaming?: boolean;
@@ -689,7 +806,7 @@ function MessagePartRenderer({
     case "status":
       return <StatusPart text={part.text} />;
     case "tool_call":
-      return <ToolCallPart toolName={part.tool_name} inputJson={part.input_json} />;
+      return <ToolCallPart toolName={part.toolName} inputJson={part.inputJson} />;
     case "tool_result":
     case "attachment_ref":
     case "artifact_ref":
@@ -699,7 +816,7 @@ function MessagePartRenderer({
         <ApprovalRefPart
           onResolve={onResolveApproval}
           part={part}
-          resolving={resolvingApprovalIds?.has(part.approval_id) ?? false}
+          resolving={resolvingApprovalIds?.has(part.approvalId) ?? false}
         />
       );
   }
@@ -716,7 +833,7 @@ function UserMessage({ message }: { message: ParsedMessage }) {
     .join("");
 
   return (
-    <div className="-mx-4 my-1 bg-[var(--surface-hover)]/50 px-4 py-3">
+    <div className="bg-[var(--surface-hover)]/50 px-4 py-3">
       <div className="flex items-start gap-2">
         <span className="shrink-0 pt-[3px] text-[13px] text-[var(--accent)]">&#9654;</span>
         <pre className="min-w-0 whitespace-pre-wrap break-words text-[13px] leading-6 text-[var(--foreground)]">
@@ -724,6 +841,17 @@ function UserMessage({ message }: { message: ParsedMessage }) {
         </pre>
       </div>
     </div>
+  );
+}
+
+function isToolOnlyAssistantMessage(message: ParsedMessage): boolean {
+  return message.parts.every(
+    (part) =>
+      part.type === "tool_call" ||
+      part.type === "tool_result" ||
+      part.type === "status" ||
+      part.type === "attachment_ref" ||
+      part.type === "artifact_ref",
   );
 }
 
@@ -735,15 +863,43 @@ function AssistantMessage({
 }: {
   message: ParsedMessage;
   isStreaming?: boolean;
-  onResolveApproval?: (approvalId: string, decision: AgentApprovalDecision, response?: Record<string, unknown> | null) => Promise<void>;
+  onResolveApproval?: (
+    approvalId: string,
+    decision: AgentApprovalDecision,
+    response?: Record<string, unknown> | null,
+  ) => Promise<void>;
   resolvingApprovalIds?: ReadonlySet<string>;
 }) {
+  const toolParts = message.parts.filter((p) => p.type === "tool_call");
+  const contentParts = message.parts.filter((p) => p.type !== "tool_call" && p.type !== "tool_result");
+  const hasContent = contentParts.some(
+    (p) => p.type === "text" || p.type === "thinking" || p.type === "approval_ref",
+  );
+  const isToolOnly = isToolOnlyAssistantMessage(message);
+
   return (
-    <div className="mt-2">
-      <div className="flex items-start gap-2">
-        <span className="shrink-0 pt-[3px] text-[13px] text-[var(--muted-foreground)]/60">&#8226;</span>
-        <div className="min-w-0 flex-1 [&>*:last-child]:mb-0">
-          {message.parts.map((part, i) => (
+    <div className={isToolOnly ? "px-4 py-1.5" : "px-4 py-3"}>
+      {hasContent ? (
+        <div className="flex items-start gap-2">
+          <span className="shrink-0 pt-[3px] text-[13px] text-[var(--muted-foreground)]/60">
+            &#8226;
+          </span>
+          <div className="min-w-0 flex-1 [&>*:last-child]:mb-0">
+            {contentParts.map((part, i) => (
+              <MessagePartRenderer
+                key={i}
+                part={part}
+                isStreaming={isStreaming}
+                onResolveApproval={onResolveApproval}
+                resolvingApprovalIds={resolvingApprovalIds}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {toolParts.length > 0 ? (
+        <div className={hasContent ? "mt-2 pl-5" : ""}>
+          {toolParts.map((part, i) => (
             <MessagePartRenderer
               key={i}
               part={part}
@@ -753,7 +909,7 @@ function AssistantMessage({
             />
           ))}
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
@@ -766,7 +922,11 @@ function TranscriptMessage({
 }: {
   message: ParsedMessage;
   isStreaming?: boolean;
-  onResolveApproval?: (approvalId: string, decision: AgentApprovalDecision, response?: Record<string, unknown> | null) => Promise<void>;
+  onResolveApproval?: (
+    approvalId: string,
+    decision: AgentApprovalDecision,
+    response?: Record<string, unknown> | null,
+  ) => Promise<void>;
   resolvingApprovalIds?: ReadonlySet<string>;
 }) {
   if (message.role === "user") {
@@ -812,12 +972,7 @@ function InlineDropdown<T extends string>({
           <ChevronDown className="size-2.5 text-[var(--muted-foreground)]/40" />
         </button>
       </PopoverTrigger>
-      <PopoverContent
-        className="w-auto min-w-[80px] p-0.5"
-        side="top"
-        sideOffset={4}
-        align="start"
-      >
+      <PopoverContent className="w-auto min-w-[80px] p-0.5" side="top" sideOffset={4} align="start">
         {options.map((option) => (
           <button
             key={option.id}
@@ -855,12 +1010,14 @@ export function AgentSurface({ agentSessionId, workspaceId }: AgentSurfaceProps)
   const session = useAgentSession(workspaceId, agentSessionId);
   const dbMessages = useAgentSessionMessages(agentSessionId);
   const state = useAgentSessionState(agentSessionId);
-  const {
-    harnesses,
-    resolvedTheme,
-    setClaudeHarnessSettings,
-    setCodexHarnessSettings,
-  } = useSettings();
+  const { harnesses, resolvedTheme, setClaudeHarnessSettings, setCodexHarnessSettings } =
+    useSettings();
+  const providerForCatalog = session?.provider === "codex" ? "codex" : "claude";
+  const modelCatalog = useProviderModelCatalog(providerForCatalog, {
+    loginMethod: harnesses.claude.loginMethod,
+    preferredModel:
+      providerForCatalog === "claude" ? harnesses.claude.model : harnesses.codex.model,
+  });
   const [draftPrompt, setDraftPrompt] = useState("");
   const [resolvingApprovalIds, setResolvingApprovalIds] = useState<Set<string>>(new Set());
   const [isSending, setIsSending] = useState(false);
@@ -868,7 +1025,7 @@ export function AgentSurface({ agentSessionId, workspaceId }: AgentSurfaceProps)
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const isRunning = isSending || state.pending_turn_ids.length > 0;
+  const isRunning = isSending || state.pendingTurnIds.length > 0;
   const showCursorBlink = !isRunning && draftPrompt.length === 0;
   const theme = diffTheme(resolvedTheme);
 
@@ -899,11 +1056,13 @@ export function AgentSurface({ agentSessionId, workspaceId }: AgentSurfaceProps)
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.preventDefault();
-        const activeTurnId = state.pending_turn_ids[0] ?? null;
+        const activeTurnId = state.pendingTurnIds[0] ?? null;
         void (async () => {
           try {
-            const agentSession = await agentOrchestrator.getSession(session?.id ?? "");
-            await agentSession?.cancelTurn({ turn_id: activeTurnId });
+            if (!session?.id) {
+              return;
+            }
+            await agentOrchestrator.cancelTurn(session.id, { turnId: activeTurnId });
           } catch (err) {
             console.error("[agent] cancel turn failed:", err);
           }
@@ -912,7 +1071,7 @@ export function AgentSurface({ agentSessionId, workspaceId }: AgentSurfaceProps)
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isRunning, state.pending_turn_ids, agentOrchestrator, session?.id]);
+  }, [isRunning, state.pendingTurnIds, agentOrchestrator, session?.id]);
 
   // Live query returns messages ordered by created_at via IVM.
   const messages = useMemo<ParsedMessage[]>(
@@ -946,13 +1105,8 @@ export function AgentSurface({ agentSessionId, workspaceId }: AgentSurfaceProps)
     setSendError(null);
 
     try {
-      const agentSession = await agentOrchestrator.getSession(session.id);
-      if (!agentSession) {
-        throw new Error(`Agent session ${session.id} was not found.`);
-      }
-
-      await agentSession.sendTurn({
-        turn_id: createTurnId(),
+      await agentOrchestrator.sendTurn(session.id, {
+        turnId: createTurnId(),
         input: [{ type: "text", text: prompt }],
       });
       setDraftPrompt("");
@@ -981,13 +1135,8 @@ export function AgentSurface({ agentSessionId, workspaceId }: AgentSurfaceProps)
     setSendError(null);
 
     try {
-      const agentSession = await agentOrchestrator.getSession(session.id);
-      if (!agentSession) {
-        throw new Error(`Agent session ${session.id} was not found.`);
-      }
-
-      await agentSession.resolveApproval({
-        approval_id: approvalId,
+      await agentOrchestrator.resolveApproval(session.id, {
+        approvalId,
         decision,
         response: response ?? null,
       });
@@ -1040,46 +1189,54 @@ export function AgentSurface({ agentSessionId, workspaceId }: AgentSurfaceProps)
 
   const providerName = session.provider === "claude" ? "claude" : "codex";
   const sessionSlug = session.id.slice(0, 8);
-  const visibleError = sendError ?? state.last_error;
+  const visibleError = sendError ?? state.lastError;
   const isClaude = session.provider === "claude";
-  const modelOptions = (isClaude ? claudeModelOptions : codexModelOptions).map((option) => ({
-    id: option.value,
-    label: option.label,
-  }));
   const selectedModel = isClaude ? harnesses.claude.model : harnesses.codex.model;
+  const selectedCatalogModel =
+    modelCatalog.catalog?.models.find((model) => model.value === selectedModel) ?? null;
+  const modelOptions = ensureSelectedOption(
+    (modelCatalog.catalog?.models ?? []).map((option) => ({
+      id: option.value,
+      label: option.label,
+    })),
+    selectedModel,
+  );
   const reasoningLabel = isClaude ? "effort" : "reasoning";
-  const reasoningOptions = (
-    isClaude
-      ? selectedModel === "claude-opus-4-6"
-        ? claudeEffortOptions
-        : claudeEffortOptions.filter((option) => option.value !== "max")
-      : codexReasoningEffortOptions
-  ).map((option) => ({
-    id: option.value,
-    label: option.label,
-  }));
   const selectedReasoning = isClaude ? harnesses.claude.effort : harnesses.codex.reasoningEffort;
+  const reasoningOptions = buildReasoningOptions(
+    session.provider,
+    selectedCatalogModel?.reasoningEfforts ?? [],
+    selectedReasoning,
+  );
+  const ProviderIcon = isClaude ? ClaudeIcon : CodexIcon;
 
   const lastMessage = messages[messages.length - 1];
   const showThinking = isRunning && lastMessage?.role === "user";
 
-  function handleModelChange(value: ClaudeModel | CodexModel): void {
+  function handleModelChange(value: string): void {
+    const nextCatalogModel =
+      modelCatalog.catalog?.models.find((model) => model.value === value) ?? null;
+    const supportedReasoning = new Set(nextCatalogModel?.reasoningEfforts ?? []);
     if (isClaude) {
-      const nextModel = value as ClaudeModel;
       setClaudeHarnessSettings({
         ...harnesses.claude,
         effort:
-          nextModel === "claude-opus-4-6" || harnesses.claude.effort !== "max"
+          harnesses.claude.effort === "default" || supportedReasoning.has(harnesses.claude.effort)
             ? harnesses.claude.effort
             : "default",
-        model: nextModel,
+        model: value,
       });
       return;
     }
 
     setCodexHarnessSettings({
       ...harnesses.codex,
-      model: value as CodexModel,
+      model: value,
+      reasoningEffort:
+        harnesses.codex.reasoningEffort === "default" ||
+        supportedReasoning.has(harnesses.codex.reasoningEffort)
+          ? harnesses.codex.reasoningEffort
+          : "default",
     });
   }
 
@@ -1100,126 +1257,138 @@ export function AgentSurface({ agentSessionId, workspaceId }: AgentSurfaceProps)
 
   return (
     <DiffRenderProvider theme={theme}>
-    <section className="agent-surface flex h-full min-h-0 flex-col bg-[var(--terminal-surface,var(--surface))]">
-      {/* Status line */}
-      <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-1.5 text-[11px] uppercase tracking-[0.08em]">
-        <div className="flex items-center gap-2">
-          <span
-            className={[
-              "inline-block h-1.5 w-1.5 rounded-full",
-              isRunning ? "bg-[var(--accent)]" : "bg-[var(--muted-foreground)]/50",
-            ].join(" ")}
-          />
-          <span className="text-[var(--muted-foreground)]">
-            {providerName}
-            <span className="mx-1.5 text-[var(--border)]">&middot;</span>
-            {state.provider_status ? (
-              <span className="text-[var(--warning,var(--accent))]">{state.provider_status}</span>
-            ) : isRunning ? (
-              <span className="text-[var(--accent)]">running</span>
-            ) : (
-              <span>idle</span>
-            )}
-          </span>
+      <section className="agent-surface flex h-full min-h-0 flex-col bg-[var(--terminal-surface,var(--surface))]">
+        {/* Transcript + input */}
+        <div
+          ref={scrollRef}
+          className="agent-message-list flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden"
+          onClick={() => textareaRef.current?.focus()}
+        >
+          <div className="flex-1" />
+
+          {/* Auth status */}
+          {state.authStatus?.mode === "authenticating" ? (
+            <div className="px-4 py-3 text-[13px] leading-6 text-[var(--muted-foreground)]">
+              <span className="text-[var(--accent)]">[~]</span> signing in to {providerName}...
+            </div>
+          ) : null}
+          {state.authStatus?.mode === "error" ? (
+            <div className="px-4 py-3 text-[13px] leading-6 text-[var(--destructive)]">
+              <span>[!]</span> authentication failed
+            </div>
+          ) : null}
+
+          {/* Messages — single source from DB collection */}
+          {messages.map((message, i) => (
+            <TranscriptMessage
+              key={message.id}
+              message={message}
+              isStreaming={isRunning && i === messages.length - 1 && message.role === "assistant"}
+              onResolveApproval={handleResolveApproval}
+              resolvingApprovalIds={resolvingApprovalIds}
+            />
+          ))}
+
+          {/* Working indicator */}
+          {showThinking ? (
+            <div className="px-4 py-3">
+              <div className="flex items-center gap-1.5 text-[13px]">
+                <span className="agent-cursor-blink text-[var(--muted-foreground)]">&#8226;</span>
+                <Shimmer as="span" duration={2} spread={2} className="text-[13px]">
+                  Working
+                </Shimmer>
+                <span className="text-[var(--muted-foreground)]/50">
+                  ({thinkingElapsed}s · esc to interrupt)
+                </span>
+              </div>
+            </div>
+          ) : null}
         </div>
-        <span className="text-[var(--muted-foreground)]/50">{sessionSlug}</span>
-      </div>
 
-      {/* Transcript + input */}
-      <div
-        ref={scrollRef}
-        className="agent-message-list flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-4 pb-6 pt-3"
-        onClick={() => textareaRef.current?.focus()}
-      >
-        <div className="flex-1" />
-
-        {/* Auth status */}
-        {state.auth_status?.mode === "authenticating" ? (
-          <div className="py-1 text-[13px] leading-6 text-[var(--muted-foreground)]">
-            <span className="text-[var(--accent)]">[~]</span> signing in to {providerName}...
-          </div>
-        ) : null}
-        {state.auth_status?.mode === "error" ? (
-          <div className="py-1 text-[13px] leading-6 text-[var(--destructive)]">
-            <span>[!]</span> authentication failed
-          </div>
-        ) : null}
-
-        {/* Messages — single source from DB collection */}
-        {messages.map((message, i) => (
-          <TranscriptMessage
-            key={message.id}
-            message={message}
-            isStreaming={isRunning && i === messages.length - 1 && message.role === "assistant"}
-            onResolveApproval={handleResolveApproval}
-            resolvingApprovalIds={resolvingApprovalIds}
-          />
-        ))}
-
-        {/* Working indicator */}
-        {showThinking ? (
-          <div className="my-1 py-3">
-            <div className="flex items-center gap-1.5 text-[13px]">
-              <span className="agent-cursor-blink text-[var(--muted-foreground)]">&#8226;</span>
-              <Shimmer as="span" duration={2} spread={2} className="text-[13px]">
-                Working
-              </Shimmer>
-              <span className="text-[var(--muted-foreground)]/50">
-                ({thinkingElapsed}s · esc to interrupt)
-              </span>
+        {/* Input */}
+        <div className="shrink-0 bg-[var(--surface-hover)]/50">
+          <div className="flex items-start px-4 pt-3 pb-2">
+            <span className="shrink-0 pt-[3px] text-[13px] text-[var(--accent)]">
+              &#9654;&nbsp;
+            </span>
+            <div className="relative min-w-0 flex-1">
+              <textarea
+                ref={textareaRef}
+                autoFocus
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                className={`w-full resize-none overflow-hidden bg-transparent font-[var(--font-mono)] text-[13px] leading-6 text-[var(--foreground)] outline-none p-0 m-0 ${showCursorBlink ? "caret-transparent" : "caret-[var(--foreground)]"}`}
+                onChange={handleTextareaChange}
+                onKeyDown={handleKeyDown}
+                placeholder=""
+                rows={1}
+                style={{ height: "auto" }}
+                value={draftPrompt}
+              />
+              {showCursorBlink ? (
+                <span className="agent-cursor-blink pointer-events-none absolute left-0 top-[5px] h-[14px] w-[7px] bg-[var(--foreground)]" />
+              ) : null}
             </div>
           </div>
-        ) : null}
-
-      </div>
-
-      {/* Input */}
-      <div className="shrink-0 bg-[var(--surface-hover)]/50">
-        <div className="flex items-start px-4 py-3">
-          <span className="shrink-0 pt-[3px] text-[13px] text-[var(--accent)]">
-            &#9654;&nbsp;
-          </span>
-          <div className="relative min-w-0 flex-1">
-            <textarea
-              ref={textareaRef}
-              autoFocus
-              className="w-full resize-none overflow-hidden bg-transparent font-[var(--font-mono)] text-[13px] leading-6 text-[var(--foreground)] outline-none caret-transparent p-0 m-0"
-              onChange={handleTextareaChange}
-              onKeyDown={handleKeyDown}
-              placeholder=""
-              rows={1}
-              style={{ height: "auto" }}
-              value={draftPrompt}
-            />
-            {showCursorBlink ? (
-              <span className="agent-cursor-blink pointer-events-none absolute left-0 top-[5px] h-[14px] w-[7px] bg-[var(--foreground)]" />
-            ) : null}
-          </div>
+          {visibleError ? (
+            <div className="px-4 pb-1 text-[12px] text-[var(--destructive)]">
+              <span>[!]</span> {visibleError}
+            </div>
+          ) : null}
         </div>
-        {visibleError ? (
-          <div className="px-4 pb-1 text-[12px] text-[var(--destructive)]">
-            <span>[!]</span> {visibleError}
+
+        {/* Model & Reasoning — on bare surface */}
+        <div className="shrink-0 flex items-center gap-3 px-4 py-1.5">
+          <div
+            aria-label={`${providerName} provider`}
+            className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] text-[var(--muted-foreground)]"
+            title={providerName}
+          >
+            {isRunning ? (
+              <Spinner className="size-3 text-[var(--muted-foreground)]" />
+            ) : state.responseReady ? (
+              <ResponseReadyDot className="scale-[0.85]" />
+            ) : (
+              <ProviderIcon size={12} />
+            )}
+            <span>{providerName}</span>
           </div>
-        ) : null}
-      </div>
+          <InlineDropdown
+            options={modelOptions}
+            value={selectedModel}
+            onChange={handleModelChange}
+            label="model"
+          />
+          <InlineDropdown
+            options={reasoningOptions}
+            value={selectedReasoning}
+            onChange={handleReasoningChange}
+            label={reasoningLabel}
+          />
+          {modelCatalog.isLoading ? (
+            <span className="text-[11px] text-[var(--muted-foreground)]/60">loading catalog…</span>
+          ) : null}
+          {modelCatalog.error ? (
+            <span
+              className="text-[11px] text-[var(--destructive)]"
+              title={modelCatalog.error.message}
+            >
+              catalog unavailable
+            </span>
+          ) : null}
+          {state.providerStatus ? (
+            <span className="text-[11px] text-[var(--warning,var(--accent))]">
+              {state.providerStatus}
+            </span>
+          ) : null}
+          <span className="ml-auto text-[11px] text-[var(--muted-foreground)]/50">
+            {sessionSlug}
+          </span>
+        </div>
 
-      {/* Model & Reasoning — on bare surface */}
-      <div className="shrink-0 flex items-center gap-3 px-4 py-1.5">
-        <InlineDropdown
-          options={modelOptions}
-          value={selectedModel}
-          onChange={handleModelChange}
-          label="model"
-        />
-        <InlineDropdown
-          options={reasoningOptions}
-          value={selectedReasoning}
-          onChange={handleReasoningChange}
-          label={reasoningLabel}
-        />
-      </div>
-
-      <style>{`
+        <style>{`
         @keyframes agent-cursor-pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.2; }
@@ -1228,7 +1397,7 @@ export function AgentSurface({ agentSessionId, workspaceId }: AgentSurfaceProps)
           animation: agent-cursor-pulse 1.2s ease-in-out infinite;
         }
       `}</style>
-    </section>
+      </section>
     </DiffRenderProvider>
   );
 }

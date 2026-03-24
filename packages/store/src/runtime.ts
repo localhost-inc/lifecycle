@@ -15,10 +15,10 @@ export interface RuntimeRegistry {
  * Simple registry that returns the same host runtime for all targets.
  * Replace with a multi-provider registry when cloud workspaces arrive.
  */
-export function createHostOnlyRegistry(hostRuntime: WorkspaceRuntime): RuntimeRegistry {
+export function createLocalOnlyRegistry(localRuntime: WorkspaceRuntime): RuntimeRegistry {
   return {
     resolve(_target: string): WorkspaceRuntime {
-      return hostRuntime;
+      return localRuntime;
     },
   };
 }

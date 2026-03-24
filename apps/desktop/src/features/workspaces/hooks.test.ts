@@ -5,21 +5,21 @@ describe("buildWorkspaceActivityItems", () => {
   test("summarizes launcher activity from fetched backend events", () => {
     const items = buildWorkspaceActivityItems([
       {
-        failure_reason: null,
+        failureReason: null,
         id: "event-1",
         kind: "workspace.status_changed",
-        occurred_at: "2026-03-10T10:00:00.000Z",
+        occurredAt: "2026-03-10T10:00:00.000Z",
         status: "preparing",
-        workspace_id: "ws_1",
+        workspaceId: "ws_1",
       },
       {
         id: "event-2",
         kind: "service.status_changed",
-        occurred_at: "2026-03-10T10:01:00.000Z",
+        occurredAt: "2026-03-10T10:01:00.000Z",
         name: "web",
         status: "ready",
-        status_reason: null,
-        workspace_id: "ws_1",
+        statusReason: null,
+        workspaceId: "ws_1",
       },
     ]);
 
@@ -49,10 +49,10 @@ describe("buildWorkspaceActivityItems", () => {
         line: "pulling dependencies",
         id: "event-1",
         kind: "service.log_line",
-        occurred_at: "2026-03-10T10:00:05.000Z",
+        occurredAt: "2026-03-10T10:00:05.000Z",
         name: "web",
         stream: "stdout",
-        workspace_id: "ws_1",
+        workspaceId: "ws_1",
       },
     ]);
 

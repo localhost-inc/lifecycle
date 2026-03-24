@@ -12,9 +12,9 @@ import type {
 } from "./turn";
 
 export interface AgentSessionContext {
-  workspace_id: string;
-  workspace_target: WorkspaceTarget;
-  worktree_path?: string | null;
+  workspaceId: string;
+  workspaceTarget: WorkspaceTarget;
+  worktreePath?: string | null;
 }
 
 export interface AgentSessionEvents {
@@ -27,63 +27,60 @@ export interface AgentWorker {
   resolveApproval(input: AgentApprovalResolution): Promise<void>;
 }
 
-export interface AgentWorkerLauncher {
-  startWorker(
-    session: AgentSessionRecord,
-    context: AgentSessionContext,
-    runtime: WorkspaceRuntime,
-    events: AgentSessionEvents,
-  ): Promise<{ session: AgentSessionRecord; worker: AgentWorker }>;
-  connectWorker(
-    session: AgentSessionRecord,
-    context: AgentSessionContext,
-    runtime: WorkspaceRuntime,
-    events: AgentSessionEvents,
-  ): Promise<AgentWorker>;
-}
-
 export interface StartAgentSessionInput {
   provider: AgentSessionProviderId;
-  workspace_id: string;
-  forked_from_session_id?: string | null;
-}
-
-export interface AgentSession {
-  readonly record: AgentSessionRecord;
-  refresh(): Promise<AgentSessionRecord>;
-  sendTurn(
-    input: Omit<AgentTurnRequest, "session_id" | "workspace_id">,
-  ): Promise<void>;
-  cancelTurn(
-    input: Omit<AgentTurnCancelRequest, "session_id" | "workspace_id">,
-  ): Promise<void>;
-  resolveApproval(
-    input: Omit<AgentApprovalResolution, "session_id" | "workspace_id">,
-  ): Promise<void>;
+  workspaceId: string;
+  forkedFromSessionId?: string | null;
 }
 
 export interface AgentOrchestrator {
-  startSession(input: StartAgentSessionInput): Promise<AgentSession>;
-  getSession(agent_session_id: string): Promise<AgentSession | null>;
-  listSessions(workspace_id: string): Promise<AgentSession[]>;
+  startSession(input: StartAgentSessionInput): Promise<AgentSessionRecord>;
+  getSession(agentSessionId: string): Promise<AgentSessionRecord | null>;
+  listSessions(workspaceId: string): Promise<AgentSessionRecord[]>;
+  attachSession(agentSessionId: string): Promise<void>;
+  sendTurn(
+    agentSessionId: string,
+    input: Omit<AgentTurnRequest, "sessionId" | "workspaceId">,
+  ): Promise<void>;
+  cancelTurn(
+    agentSessionId: string,
+    input: Omit<AgentTurnCancelRequest, "sessionId">,
+  ): Promise<void>;
+  resolveApproval(
+    agentSessionId: string,
+    input: Omit<AgentApprovalResolution, "sessionId">,
+  ): Promise<void>;
   subscribe(observer: AgentEventObserver): () => void;
 }
 
 export interface AgentStore {
   saveSession(session: AgentSessionRecord): Promise<AgentSessionRecord>;
-  getSession(agent_session_id: string): Promise<AgentSessionRecord | null>;
-  listSessions(workspace_id: string): Promise<AgentSessionRecord[]>;
-  getWorkspace(workspace_id: string): Promise<AgentSessionContext | null>;
+  getSession(agentSessionId: string): Promise<AgentSessionRecord | null>;
+  listSessions(workspaceId: string): Promise<AgentSessionRecord[]>;
+  getWorkspace(workspaceId: string): Promise<AgentSessionContext | null>;
 }
 
 export interface CreateAgentOrchestratorDependencies {
-  workerLaunchers: Record<AgentSessionProviderId, AgentWorkerLauncher>;
+  workers: Record<AgentSessionProviderId, {
+    start(
+      session: AgentSessionRecord,
+      context: AgentSessionContext,
+      runtime: WorkspaceRuntime,
+      events: AgentSessionEvents,
+    ): Promise<{ session: AgentSessionRecord; worker: AgentWorker }>;
+    connect(
+      session: AgentSessionRecord,
+      context: AgentSessionContext,
+      runtime: WorkspaceRuntime,
+      events: AgentSessionEvents,
+    ): Promise<AgentWorker>;
+  }>;
   resolveRuntime(
     context: AgentSessionContext,
   ): Promise<WorkspaceRuntime> | WorkspaceRuntime;
   store: AgentStore;
   now?: () => string;
-  random_id?: () => string;
+  randomId?: () => string;
   observers?: AgentEventObserver[];
 }
 
@@ -97,33 +94,68 @@ function defaultNow(): string {
 
 class AgentOrchestratorImpl implements AgentOrchestrator {
   private readonly listeners = new Set<AgentEventObserver>();
-  private readonly workers = new Map<string, AgentWorker>();
+  private readonly connections = new Map<string, AgentWorker>();
   private readonly now: () => string;
-  private readonly random_id: () => string;
-  private readonly workerLaunchers: CreateAgentOrchestratorDependencies["workerLaunchers"];
+  private readonly randomId: () => string;
+  private readonly workers: CreateAgentOrchestratorDependencies["workers"];
   private readonly resolveRuntime: CreateAgentOrchestratorDependencies["resolveRuntime"];
   private readonly store: AgentStore;
 
   constructor(dependencies: Omit<CreateAgentOrchestratorDependencies, "observers">) {
     this.now = dependencies.now ?? defaultNow;
-    this.random_id = dependencies.random_id ?? fallbackRandomId;
-    this.workerLaunchers = dependencies.workerLaunchers;
+    this.randomId = dependencies.randomId ?? fallbackRandomId;
+    this.workers = dependencies.workers;
     this.resolveRuntime = dependencies.resolveRuntime;
     this.store = dependencies.store;
   }
 
-  startSession(input: StartAgentSessionInput): Promise<AgentSession> {
+  startSession(input: StartAgentSessionInput): Promise<AgentSessionRecord> {
     return this.startAgentSession(input);
   }
 
-  async getSession(agent_session_id: string): Promise<AgentSession | null> {
-    const session = await this.store.getSession(agent_session_id);
-    return session ? this.bindSession(session) : null;
+  getSession(agentSessionId: string): Promise<AgentSessionRecord | null> {
+    return this.store.getSession(agentSessionId);
   }
 
-  async listSessions(workspace_id: string): Promise<AgentSession[]> {
-    const sessions = await this.store.listSessions(workspace_id);
-    return sessions.map((session) => this.bindSession(session));
+  listSessions(workspaceId: string): Promise<AgentSessionRecord[]> {
+    return this.store.listSessions(workspaceId);
+  }
+
+  async attachSession(agentSessionId: string): Promise<void> {
+    const session = await this.requireSession(agentSessionId);
+    const context = await this.requireSessionContext(session.workspace_id);
+    const runtime = await this.resolveRuntime(context);
+    await this.ensureConnection(session, context, runtime, this.createEvents(context));
+  }
+
+  sendTurn(
+    agentSessionId: string,
+    input: Omit<AgentTurnRequest, "sessionId" | "workspaceId">,
+  ): Promise<void> {
+    return this.sendAgentTurn({
+      ...input,
+      sessionId: agentSessionId,
+    });
+  }
+
+  cancelTurn(
+    agentSessionId: string,
+    input: Omit<AgentTurnCancelRequest, "sessionId">,
+  ): Promise<void> {
+    return this.cancelAgentTurn({
+      ...input,
+      sessionId: agentSessionId,
+    });
+  }
+
+  resolveApproval(
+    agentSessionId: string,
+    input: Omit<AgentApprovalResolution, "sessionId">,
+  ): Promise<void> {
+    return this.resolveAgentApproval({
+      ...input,
+      sessionId: agentSessionId,
+    });
   }
 
   subscribe(observer: AgentEventObserver): () => void {
@@ -133,13 +165,13 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
     };
   }
 
-  private async startAgentSession(input: StartAgentSessionInput): Promise<AgentSession> {
-    const context = await this.requireSessionContext(input.workspace_id);
+  private async startAgentSession(input: StartAgentSessionInput): Promise<AgentSessionRecord> {
+    const context = await this.requireSessionContext(input.workspaceId);
     const runtime = await this.resolveRuntime(context);
     const timestamp = this.now();
-    const draft_session: AgentSessionRecord = {
-      id: this.random_id(),
-      workspace_id: input.workspace_id,
+    const draftSession: AgentSessionRecord = {
+      id: this.randomId(),
+      workspace_id: input.workspaceId,
       runtime_kind: "native",
       runtime_name: input.provider,
       provider: input.provider,
@@ -147,33 +179,35 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
       title: "",
       status: "idle",
       created_by: null,
-      forked_from_session_id: input.forked_from_session_id ?? null,
+      forked_from_session_id: input.forkedFromSessionId ?? null,
       last_message_at: null,
       created_at: timestamp,
       updated_at: timestamp,
       ended_at: null,
     };
-    const workerLauncher = this.workerLaunchers[draft_session.provider];
+    const worker = this.workers[draftSession.provider];
     const events = this.createEvents(context);
-    const result = await workerLauncher.startWorker(draft_session, context, runtime, events);
+    const result = await worker.start(draftSession, context, runtime, events);
     const persisted = await this.store.saveSession(result.session);
-    this.workers.set(persisted.id, result.worker);
+    this.connections.set(persisted.id, result.worker);
 
     await events.emit({
       kind: "agent.session.created",
-      workspace_id: persisted.workspace_id,
+      workspaceId: persisted.workspace_id,
       session: persisted,
     });
 
-    return this.bindSession(persisted);
+    return persisted;
   }
 
-  private async sendAgentTurn(input: AgentTurnRequest): Promise<void> {
-    const session = await this.requireSession(input.session_id);
+  private async sendAgentTurn(
+    input: Omit<AgentTurnRequest, "workspaceId">,
+  ): Promise<void> {
+    const session = await this.requireSession(input.sessionId);
     const context = await this.requireSessionContext(session.workspace_id);
     const runtime = await this.resolveRuntime(context);
     const events = this.createEvents(context);
-    const updated_session = await this.persistSessionUpdate(session, {
+    const updatedSession = await this.persistSessionUpdate(session, {
       last_message_at: this.now(),
       status: "running",
       updated_at: this.now(),
@@ -181,46 +215,49 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
 
     await events.emit({
       kind: "agent.session.updated",
-      workspace_id: updated_session.workspace_id,
-      session: updated_session,
+      workspaceId: updatedSession.workspace_id,
+      session: updatedSession,
     });
     await events.emit({
       kind: "agent.turn.started",
-      workspace_id: updated_session.workspace_id,
-      session_id: updated_session.id,
-      turn_id: input.turn_id,
+      workspaceId: updatedSession.workspace_id,
+      sessionId: updatedSession.id,
+      turnId: input.turnId,
     });
     await events.emit({
       kind: "agent.message.created",
-      workspace_id: updated_session.workspace_id,
-      session_id: updated_session.id,
-      message_id: `${input.turn_id}:user`,
+      workspaceId: updatedSession.workspace_id,
+      sessionId: updatedSession.id,
+      messageId: `${input.turnId}:user`,
       role: "user",
-      turn_id: input.turn_id,
+      turnId: input.turnId,
     });
     for (const [index, part] of input.input.entries()) {
       await events.emit({
         kind: "agent.message.part.completed",
-        workspace_id: updated_session.workspace_id,
-        session_id: updated_session.id,
-        message_id: `${input.turn_id}:user`,
-        part_id: `${input.turn_id}:user:part:${index + 1}`,
+        workspaceId: updatedSession.workspace_id,
+        sessionId: updatedSession.id,
+        messageId: `${input.turnId}:user`,
+        partId: `${input.turnId}:user:part:${index + 1}`,
         part:
           part.type === "text"
             ? { type: "text", text: part.text }
-            : { type: "attachment_ref", attachment_id: part.attachment_id },
+            : { type: "attachment_ref", attachmentId: part.attachmentId },
       });
     }
 
     try {
-      const worker = await this.ensureWorker(updated_session, context, runtime, events);
-      await worker.sendTurn(input);
+      const connection = await this.ensureConnection(updatedSession, context, runtime, events);
+      await connection.sendTurn({
+        ...input,
+        workspaceId: session.workspace_id,
+      });
     } catch (error) {
       await events.emit({
         kind: "agent.turn.failed",
-        workspace_id: updated_session.workspace_id,
-        session_id: updated_session.id,
-        turn_id: input.turn_id,
+        workspaceId: updatedSession.workspace_id,
+        sessionId: updatedSession.id,
+        turnId: input.turnId,
         error: error instanceof Error ? error.message : "Agent turn failed.",
       });
       throw error;
@@ -228,19 +265,19 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
   }
 
   private async cancelAgentTurn(input: AgentTurnCancelRequest): Promise<void> {
-    const session = await this.requireSession(input.session_id);
+    const session = await this.requireSession(input.sessionId);
     const context = await this.requireSessionContext(session.workspace_id);
     const runtime = await this.resolveRuntime(context);
-    const worker = await this.ensureWorker(session, context, runtime, this.createEvents(context));
-    await worker.cancelTurn(input);
+    const connection = await this.ensureConnection(session, context, runtime, this.createEvents(context));
+    await connection.cancelTurn(input);
   }
 
   private async resolveAgentApproval(input: AgentApprovalResolution): Promise<void> {
-    const session = await this.requireSession(input.session_id);
+    const session = await this.requireSession(input.sessionId);
     const context = await this.requireSessionContext(session.workspace_id);
     const runtime = await this.resolveRuntime(context);
-    const worker = await this.ensureWorker(session, context, runtime, this.createEvents(context));
-    await worker.resolveApproval(input);
+    const connection = await this.ensureConnection(session, context, runtime, this.createEvents(context));
+    await connection.resolveApproval(input);
   }
 
   private createEvents(context: AgentSessionContext): AgentSessionEvents {
@@ -256,55 +293,55 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
     event: Parameters<AgentEventObserver>[0],
   ): Promise<void> {
     if (event.kind === "agent.turn.completed") {
-      const session = await this.requireSession(event.session_id);
-      const updated_session = await this.persistSessionUpdate(session, {
+      const session = await this.requireSession(event.sessionId);
+      const updatedSession = await this.persistSessionUpdate(session, {
         last_message_at: this.now(),
         status: "idle",
         updated_at: this.now(),
       });
       await this.broadcast({
         kind: "agent.session.updated",
-        workspace_id: updated_session.workspace_id,
-        session: updated_session,
+        workspaceId: updatedSession.workspace_id,
+        session: updatedSession,
       });
     }
 
     if (event.kind === "agent.turn.failed") {
-      const session = await this.requireSession(event.session_id);
-      const updated_session = await this.persistSessionUpdate(session, {
+      const session = await this.requireSession(event.sessionId);
+      const updatedSession = await this.persistSessionUpdate(session, {
         status: "failed",
         updated_at: this.now(),
       });
       await this.broadcast({
         kind: "agent.session.updated",
-        workspace_id: updated_session.workspace_id,
-        session: updated_session,
+        workspaceId: updatedSession.workspace_id,
+        session: updatedSession,
       });
     }
 
     if (event.kind === "agent.approval.requested") {
-      const session = await this.requireSession(event.session_id);
-      const updated_session = await this.persistSessionUpdate(session, {
+      const session = await this.requireSession(event.sessionId);
+      const updatedSession = await this.persistSessionUpdate(session, {
         status: event.approval.kind === "question" ? "waiting_input" : "waiting_approval",
         updated_at: this.now(),
       });
       await this.broadcast({
         kind: "agent.session.updated",
-        workspace_id: updated_session.workspace_id,
-        session: updated_session,
+        workspaceId: updatedSession.workspace_id,
+        session: updatedSession,
       });
     }
 
     if (event.kind === "agent.approval.resolved") {
-      const session = await this.requireSession(event.session_id);
-      const updated_session = await this.persistSessionUpdate(session, {
+      const session = await this.requireSession(event.sessionId);
+      const updatedSession = await this.persistSessionUpdate(session, {
         status: "running",
         updated_at: this.now(),
       });
       await this.broadcast({
         kind: "agent.session.updated",
-        workspace_id: updated_session.workspace_id,
-        session: updated_session,
+        workspaceId: updatedSession.workspace_id,
+        session: updatedSession,
       });
     }
 
@@ -328,74 +365,45 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
     });
   }
 
-  private async requireSession(agent_session_id: string): Promise<AgentSessionRecord> {
-    const session = await this.store.getSession(agent_session_id);
+  private async requireSession(agentSessionId: string): Promise<AgentSessionRecord> {
+    const session = await this.store.getSession(agentSessionId);
     if (!session) {
-      throw new Error(`Agent session ${agent_session_id} was not found.`);
+      throw new Error(`Agent session ${agentSessionId} was not found.`);
     }
 
     return session;
   }
 
-  private async requireSessionContext(workspace_id: string): Promise<AgentSessionContext> {
-    const context = await this.store.getWorkspace(workspace_id);
+  private async requireSessionContext(workspaceId: string): Promise<AgentSessionContext> {
+    const context = await this.store.getWorkspace(workspaceId);
     if (!context) {
-      throw new Error(`Workspace ${workspace_id} was not found.`);
+      throw new Error(`Workspace ${workspaceId} was not found.`);
     }
 
     return context;
   }
 
-  private async ensureWorker(
+  private async ensureConnection(
     session: AgentSessionRecord,
     context: AgentSessionContext,
     runtime: WorkspaceRuntime,
     events: AgentSessionEvents,
   ): Promise<AgentWorker> {
-    const existing = this.workers.get(session.id);
+    const existing = this.connections.get(session.id);
     if (existing) {
       return existing;
     }
 
-    const worker = await this.workerLaunchers[session.provider].connectWorker(
+    const connection = await this.workers[session.provider].connect(
       session,
       context,
       runtime,
       events,
     );
-    this.workers.set(session.id, worker);
-    return worker;
+    this.connections.set(session.id, connection);
+    return connection;
   }
 
-  private bindSession(session: AgentSessionRecord): AgentSession {
-    let currentRecord = session;
-
-    return {
-      get record() {
-        return currentRecord;
-      },
-      refresh: async () => {
-        currentRecord = await this.requireSession(currentRecord.id);
-        return currentRecord;
-      },
-      sendTurn: (input) =>
-        this.sendAgentTurn({
-          ...input,
-          session_id: currentRecord.id,
-          workspace_id: currentRecord.workspace_id,
-        }),
-      cancelTurn: (input) =>
-        this.cancelAgentTurn({
-          ...input,
-          session_id: currentRecord.id,
-        }),
-      resolveApproval: (input) =>
-        this.resolveAgentApproval({
-          ...input,
-          session_id: currentRecord.id,
-        }),
-    };
-  }
 }
 
 export function createAgentOrchestrator(

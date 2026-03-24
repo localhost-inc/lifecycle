@@ -25,6 +25,27 @@ Rules:
 4. `Thread.id` may be `null` until the first turn starts; the Lifecycle session binding must tolerate that startup window.
 5. Resume uses the provider-owned thread ID.
 
+## Authentication
+
+Codex exposes first-class auth endpoints through the app-server protocol.
+
+Relevant upstream surfaces:
+
+1. `account/read`
+2. `account/login/start`
+3. `account/login/cancel`
+4. `account/logout`
+5. `account/updated`
+6. `account/login/completed`
+
+Rules:
+
+1. Lifecycle should treat `account/read` as the authoritative Codex auth status check.
+2. Lifecycle should drive ChatGPT OAuth through `account/login/start` and wait for `account/login/completed` before treating the provider as ready.
+3. Lifecycle should not infer Codex auth state from terminal output or model failures.
+4. `requiresOpenaiAuth = false` means Codex can run without OpenAI account credentials for that runtime configuration.
+5. Account type matters: `chatgpt` and `apiKey` are both authenticated states, but they should not be collapsed in raw provider storage.
+
 Relevant upstream surfaces:
 
 1. `initialize`
@@ -33,6 +54,17 @@ Relevant upstream surfaces:
 4. `turn/start`
 5. `turn/steer`
 6. `turn/interrupt`
+
+## Model Catalog
+
+Codex app-server exposes a first-class `model/list` RPC.
+
+Rules:
+
+1. Lifecycle should source the Codex model picker from `model/list`, not from a hardcoded local catalog and not from speculative `thread/start` probes.
+2. The provider contract already exposes `displayName`, `description`, `supportedReasoningEfforts`, `defaultReasoningEffort`, and `isDefault`; Lifecycle should map those fields directly into its picker state.
+3. Lifecycle should not present a stale fallback list as if it were authoritative. If `model/list` fails, the UI should surface that failure explicitly.
+4. Codex reasoning selectors should be derived from `supportedReasoningEfforts` for the selected model, plus the local `default` sentinel that means "omit the override".
 
 ## Runtime Model
 
@@ -43,7 +75,7 @@ Rules:
 1. Lifecycle should treat the Codex thread as the provider continuity boundary.
 2. `turn/start` plus server notifications are the preferred path for normalized event fanout because they expose turn lifecycle, item lifecycle, streaming deltas, and server-initiated approval requests.
 3. Terminal sessions are shell sessions only; they are not the Codex transport boundary.
-4. Lifecycle should normalize provider events from the SDK stream, not infer them from terminal logs.
+4. Lifecycle should normalize provider events from the app-server stream, not infer them from terminal logs.
 
 The shipped CLI exposes the app-server as `codex app-server --listen stdio://`, and the protocol begins with `initialize` followed by an `initialized` notification.
 
@@ -54,13 +86,15 @@ The current app-server notification surface includes these core Lifecycle-releva
 1. `thread.started`
 2. `turn.started`
 3. `turn.completed`
-4. `item.started`
-5. `item.completed`
-6. `item/agentMessage/delta`
-7. `item/reasoning/textDelta`
-8. `item/mcpToolCall/progress`
-9. `thread/tokenUsage/updated`
-10. `error`
+4. `turn/diff/updated`
+5. `item.started`
+6. `item.completed`
+7. `item/agentMessage/delta`
+8. `item/reasoning/textDelta`
+9. `item/fileChange/outputDelta`
+10. `item/mcpToolCall/progress`
+11. `thread/tokenUsage/updated`
+12. `error`
 
 The current app-server item surface includes typed items such as:
 
@@ -73,11 +107,32 @@ The current app-server item surface includes typed items such as:
 7. `webSearch`
 8. `plan`
 
+### Streaming Content Blocks
+
+Codex assigns a unique `itemId` to each content block within a turn. When a response interleaves text, tool calls, and more text, each text segment gets a distinct `itemId`. Reasoning blocks additionally carry a `contentIndex` for sub-blocks within a single item.
+
+Lifecycle maps these into the worker protocol as an opaque `blockId: string`:
+
+- Agent message deltas: `blockId = "text:{itemId}"` (uses Codex's native item ID directly)
+- Reasoning deltas: `blockId = "thinking:{itemId}:{contentIndex}"`
+
+The orchestrator uses `blockId` as part of the `part_id` key (`{turnId}:assistant:{blockId}`) to route streaming deltas to the correct accumulated message part. This ensures interstitial text blocks between tool calls render as separate parts in the UI.
+
+Rules:
+
+1. The `blockId` is opaque to the orchestrator — it must not parse or reinterpret the string.
+2. Codex's native `itemId` is the source of truth for block identity. Lifecycle must not synthesize numeric indices or maintain translation maps.
+3. The type prefix (`text:`, `thinking:`) is set by the worker, not the orchestrator.
+
+### General Event Rules
+
 Rules:
 
 1. Lifecycle raw persistence must preserve the exact event type and typed item payload.
 2. Normalized transcript projections may flatten these into `agent_message` and `agent_message_part`, but the raw event log must remain lossless.
 3. Error and failure events are first-class provider facts and must not be collapsed into generic "assistant failed" text.
+4. `fileChange.changes` already carries `{ path, kind, diff }`; Lifecycle should preserve that diff text and render it directly instead of synthesizing fake edit patches.
+5. `turn/diff/updated` is the turn-level aggregate patch stream, while `item/fileChange/outputDelta` is the item-level diff delta stream. Lifecycle should prefer those provider diffs over filesystem guesswork whenever it needs live patch rendering.
 
 ## Configuration Surface
 
@@ -142,4 +197,6 @@ Rules:
 
 1. OpenAI Codex SDK docs: https://developers.openai.com/codex/sdk
 2. OpenAI Codex approvals and security: https://developers.openai.com/codex/agent-approvals-security
-3. Official `openai/codex` repository: https://github.com/openai/codex
+3. Codex app-server protocol and schema generation: https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md
+4. Codex app-server auth endpoints: https://github.com/openai/codex/blob/main/codex-rs/app-server/README.md#auth-endpoints
+5. Official `openai/codex` repository: https://github.com/openai/codex

@@ -1,5 +1,28 @@
 export type { AgentEvent, AgentEventKind, AgentEventObserver, AgentEventOf } from "./events";
+export {
+  clearAgentSessionResponseReady,
+  clearAgentWorkspaceResponseReady,
+  createAgentFleetState,
+  reduceAgentFleetEvent,
+  selectAgentFleetSessionState,
+  selectAgentSessionResponseReady,
+  selectAgentSessionRunning,
+  selectAgentWorkspaceStatus,
+} from "./fleet-state";
+export type {
+  AgentFleetAuthStatus,
+  AgentFleetSessionState,
+  AgentFleetState,
+  AgentWorkspaceStatus,
+} from "./fleet-state";
+export type { ProviderModelCatalog, ProviderModelCatalogEntry } from "./catalog";
 export { createAgentOrchestrator } from "./orchestrator";
+export type {
+  DetachedAgentHostPendingApproval,
+  DetachedAgentHostRegistration,
+  DetachedAgentHostSnapshot,
+  DetachedAgentHostStatus,
+} from "./detached-host";
 export type { ClaudeWorkerInput, ClaudeWorkerPermissionMode } from "./providers/claude/worker";
 export type {
   CodexApprovalPolicy,
@@ -8,10 +31,8 @@ export type {
   CodexWorkerInput,
 } from "./providers/codex/worker";
 export type {
-  AgentSession,
   AgentOrchestrator,
   AgentWorker,
-  AgentWorkerLauncher,
   AgentSessionContext,
   AgentSessionEvents,
   AgentStore,

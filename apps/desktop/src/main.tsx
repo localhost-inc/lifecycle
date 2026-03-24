@@ -50,11 +50,26 @@ function ContextMenuBlocker() {
 
 markPerformance("bootstrap:start");
 
-const hostRuntime = new LocalRuntime({
-  invoke: (command, args) => invokeTauri(command, args),
-  watchPath: (path, callback, options) => watch(path, callback, options),
-});
-const agentOrchestrator = createAgentOrchestrator(hostRuntime);
+// Preserve runtime and orchestrator (which holds live worker Child handles)
+// across Vite HMR so agent sessions survive hot reloads.
+let localRuntime: LocalRuntime;
+let agentOrchestrator: ReturnType<typeof createAgentOrchestrator>;
+
+if (import.meta.hot?.data.localRuntime) {
+  localRuntime = import.meta.hot.data.localRuntime;
+  agentOrchestrator = import.meta.hot.data.agentOrchestrator;
+} else {
+  localRuntime = new LocalRuntime({
+    invoke: (command, args) => invokeTauri(command, args),
+    watchPath: (path, callback, options) => watch(path, callback, options),
+  });
+  agentOrchestrator = createAgentOrchestrator(localRuntime);
+}
+
+if (import.meta.hot) {
+  import.meta.hot.data.localRuntime = localRuntime;
+  import.meta.hot.data.agentOrchestrator = agentOrchestrator;
+}
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -62,7 +77,7 @@ createRoot(document.getElementById("root")!).render(
       <SettingsProvider>
         <BootstrapPerfMarker />
         <ContextMenuBlocker />
-        <StoreProvider agentOrchestrator={agentOrchestrator} driver={tauriSqlDriver} runtime={hostRuntime}>
+        <StoreProvider agentOrchestrator={agentOrchestrator} driver={tauriSqlDriver} runtime={localRuntime}>
           <ReactQueryProvider>
             <AuthSessionProvider>
               <ProjectManifestWatcher />

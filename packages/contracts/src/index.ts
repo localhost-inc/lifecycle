@@ -62,6 +62,8 @@ export type {
   LifecycleEventKind,
   LifecycleEventOf,
   LifecycleEventInput,
+  LifecycleEventWire,
+  LifecycleEventWireOf,
 } from "./events";
 export type {
   GitBranchPullRequestResult,

@@ -482,22 +482,9 @@ mod tests {
         ));
         controller.record_lifecycle_envelope(envelope(
             "event-3",
-            LifecycleEvent::TerminalUpdated {
+            LifecycleEvent::WorkspaceFileChanged {
                 workspace_id: "workspace-1".to_string(),
-                terminal: crate::capabilities::workspaces::query::TerminalRecord {
-                    id: "terminal-1".to_string(),
-                    workspace_id: "workspace-1".to_string(),
-                    launch_type: "shell".to_string(),
-                    created_by: None,
-                    label: "Shell".to_string(),
-                    label_origin: Some("default".to_string()),
-                    status: "active".to_string(),
-                    failure_reason: None,
-                    exit_code: None,
-                    started_at: "2026-03-15 10:00:00".to_string(),
-                    last_active_at: "2026-03-15 10:00:00".to_string(),
-                    ended_at: None,
-                },
+                file_path: "src/app.tsx".to_string(),
             },
         ));
         controller.record_lifecycle_envelope(envelope(

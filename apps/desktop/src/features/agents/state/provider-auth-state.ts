@@ -28,6 +28,32 @@ function setProviderStatus(provider: AgentSessionProviderId, status: ProviderAut
   notify();
 }
 
+function statusFromResultEvent(
+  event: Extract<ProviderAuthEvent, { kind: "auth.result" }>,
+): ProviderAuthStatus {
+  switch (event.state) {
+    case "authenticated":
+      return {
+        state: "authenticated",
+        email: event.email ?? null,
+        organization: event.organization ?? null,
+      };
+    case "unauthenticated":
+      return { state: "unauthenticated" };
+    case "error":
+      return {
+        state: "error",
+        message: event.message ?? "Authentication failed.",
+      };
+    case "not_checked":
+      return NOT_CHECKED;
+    case "checking":
+      return { state: "checking" };
+    case "authenticating":
+      return { state: "authenticating", output: [] };
+  }
+}
+
 function parseAuthEvent(line: string): ProviderAuthEvent | null {
   try {
     const parsed = JSON.parse(line.trim()) as ProviderAuthEvent;
@@ -57,69 +83,97 @@ function createLineReader(onLine: (line: string) => void) {
 async function spawnAuthCommand(
   subcommand: "status" | "login",
   provider: AgentSessionProviderId,
-): Promise<void> {
-  const args = ["agent", "auth", subcommand, "--provider", provider];
-  const command = Command.create("lifecycle", args);
+): Promise<ProviderAuthStatus> {
+  return new Promise((resolve) => {
+    const args = ["agent", "auth", subcommand, "--provider", provider];
+    const command = Command.create("lifecycle", args);
+    let settled = false;
 
-  const lineReader = createLineReader((line) => {
-    const event = parseAuthEvent(line);
-    if (!event) return;
-
-    if (event.kind === "auth.status") {
-      if (event.is_authenticating) {
-        setProviderStatus(provider, { state: "authenticating", output: event.output });
-      } else if (event.error) {
-        setProviderStatus(provider, { state: "error", message: event.error });
+    const settle = (status: ProviderAuthStatus) => {
+      if (settled) {
+        return;
       }
-      return;
-    }
+      settled = true;
+      resolve(status);
+    };
 
-    if (event.kind === "auth.result") {
-      switch (event.state) {
-        case "authenticated":
-          setProviderStatus(provider, {
-            state: "authenticated",
-            email: event.email ?? null,
-            organization: event.organization ?? null,
-          });
-          break;
-        case "unauthenticated":
-          setProviderStatus(provider, { state: "unauthenticated" });
-          break;
-        case "error":
-          setProviderStatus(provider, {
-            state: "error",
-            message: event.message ?? "Authentication failed.",
-          });
-          break;
-        case "not_checked":
-          setProviderStatus(provider, NOT_CHECKED);
-          break;
-        default:
-          break;
+    const lineReader = createLineReader((line) => {
+      const event = parseAuthEvent(line);
+      if (!event) return;
+
+      if (event.kind === "auth.status") {
+        if (event.isAuthenticating) {
+          setProviderStatus(provider, { state: "authenticating", output: event.output });
+        } else if (event.error) {
+          const status = { state: "error", message: event.error } as const;
+          setProviderStatus(provider, status);
+          settle(status);
+        }
+        return;
       }
-    }
-  });
 
-  command.stdout.on("data", lineReader);
-  command.stderr.on("data", (line) => {
-    console.error(`[auth:${provider}]`, line);
-  });
-  command.on("error", (error) => {
-    setProviderStatus(provider, { state: "error", message: error });
-  });
+      const status = statusFromResultEvent(event);
+      setProviderStatus(provider, status);
+      settle(status);
+    });
 
-  await command.spawn();
+    command.stdout.on("data", lineReader);
+    command.stderr.on("data", (line) => {
+      console.error(`[auth:${provider}]`, line);
+    });
+    command.on("error", (error) => {
+      const status = { state: "error", message: error } as const;
+      setProviderStatus(provider, status);
+      settle(status);
+    });
+    command.on("close", ({ code, signal }) => {
+      if (settled) {
+        return;
+      }
+
+      const status = {
+        state: "error",
+        message: `Authentication process exited unexpectedly (code=${code ?? "null"} signal=${signal ?? "null"}).`,
+      } as const;
+      setProviderStatus(provider, status);
+      settle(status);
+    });
+
+    void command.spawn().catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      const status = { state: "error", message } as const;
+      setProviderStatus(provider, status);
+      settle(status);
+    });
+  });
 }
 
-export async function checkProviderAuth(provider: AgentSessionProviderId): Promise<void> {
+export async function ensureProviderAuthenticated(
+  provider: AgentSessionProviderId,
+): Promise<ProviderAuthStatus> {
+  let status = state[provider];
+
+  if (status.state === "not_checked" || status.state === "checking") {
+    status = await checkProviderAuth(provider);
+  }
+
+  if (status.state === "unauthenticated") {
+    status = await loginProvider(provider);
+  }
+
+  return status;
+}
+
+export async function checkProviderAuth(
+  provider: AgentSessionProviderId,
+): Promise<ProviderAuthStatus> {
   setProviderStatus(provider, { state: "checking" });
-  await spawnAuthCommand("status", provider);
+  return await spawnAuthCommand("status", provider);
 }
 
-export async function loginProvider(provider: AgentSessionProviderId): Promise<void> {
+export async function loginProvider(provider: AgentSessionProviderId): Promise<ProviderAuthStatus> {
   setProviderStatus(provider, { state: "authenticating", output: [] });
-  await spawnAuthCommand("login", provider);
+  return await spawnAuthCommand("login", provider);
 }
 
 export function getProviderAuthSnapshot(): ProviderAuthState {

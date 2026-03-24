@@ -3,7 +3,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { createBrowserOpenInput } from "@/features/workspaces/components/workspace-canvas-requests";
+import { createBrowserOpenInput } from "@/features/workspaces/canvas/workspace-canvas-requests";
 import { useWorkspaceOpenRequests } from "@/features/workspaces/state/workspace-open-requests";
 
 const BRIDGE_SHELL_REQUEST_EVENT = "bridge:shell-request";

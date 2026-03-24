@@ -8,7 +8,7 @@ mock.module("@anthropic-ai/claude-agent-sdk", () => ({
   unstable_v2_resumeSession: resumeSession,
 }));
 
-const { createClaudeWorkerSession } = await import("./providers/claude/worker");
+const { buildClaudeToolUseEvents, createClaudeWorkerSession } = await import("./providers/claude/worker");
 
 describe("claude worker session binding", () => {
   test("does not invent a provider session id for new workers", () => {
@@ -74,5 +74,30 @@ describe("claude worker session binding", () => {
         onElicitation,
       }),
     );
+  });
+
+  test("builds normalized tool-use events from Claude permission callbacks", () => {
+    expect(
+      buildClaudeToolUseEvents({
+        toolInput: { command: "bun test" },
+        toolName: "Bash",
+        toolUseId: "tool_123",
+        turnId: "turn_123",
+      }),
+    ).toEqual([
+      {
+        kind: "agent.tool_use.start",
+        toolName: "Bash",
+        toolUseId: "tool_123",
+        turnId: "turn_123",
+      },
+      {
+        inputJson: "{\"command\":\"bun test\"}",
+        kind: "agent.tool_use.input",
+        toolName: "Bash",
+        toolUseId: "tool_123",
+        turnId: "turn_123",
+      },
+    ]);
   });
 });

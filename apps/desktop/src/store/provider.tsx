@@ -18,7 +18,7 @@ import type {
 import type { WorkspaceRuntime } from "@lifecycle/workspace";
 import {
   createSqlCollection,
-  createHostOnlyRegistry,
+  createLocalOnlyRegistry,
   selectAllProjects,
   selectAllWorkspaces,
   selectAllServices,
@@ -127,7 +127,7 @@ export function StoreProvider({
   children,
 }: PropsWithChildren<{ agentOrchestrator: AgentOrchestrator; driver: SqlDriver; runtime: WorkspaceRuntime }>) {
   const [collections] = useState(() => createCollections(driver));
-  const [runtimeRegistry] = useState(() => createHostOnlyRegistry(runtime));
+  const [runtimeRegistry] = useState(() => createLocalOnlyRegistry(runtime));
 
   useEffect(() => {
     let disposed = false;

@@ -1,125 +1,111 @@
 import { useSyncExternalStore } from "react";
-import type { AgentApprovalRequest, AgentEvent } from "@lifecycle/agents";
+import {
+  clearAgentSessionResponseReady as clearSharedAgentSessionResponseReady,
+  clearAgentWorkspaceResponseReady as clearSharedAgentWorkspaceResponseReady,
+  createAgentFleetState,
+  reduceAgentFleetEvent,
+  selectAgentFleetSessionState,
+  selectAgentSessionResponseReady,
+  selectAgentSessionRunning,
+  selectAgentWorkspaceStatus,
+  type AgentEvent,
+  type AgentFleetSessionState,
+} from "@lifecycle/agents";
 
-export interface AgentAuthStatus {
-  mode: "authenticating" | "error" | "ready";
-  provider: string;
-}
+export type AgentSessionState = AgentFleetSessionState;
 
-/**
- * Lightweight session-level state. Messages are NOT stored here —
- * they live in the DB and are read via the TanStack collection.
- */
-export interface AgentSessionState {
-  auth_status: AgentAuthStatus | null;
-  last_error: string | null;
-  pending_approvals: AgentApprovalRequest[];
-  pending_turn_ids: string[];
-  provider_status: string | null;
-}
+let agentFleetState = createAgentFleetState();
 
-const DEFAULT_AGENT_SESSION_STATE: AgentSessionState = {
-  auth_status: null,
-  last_error: null,
-  pending_approvals: [],
-  pending_turn_ids: [],
-  provider_status: null,
-};
-
-const agentSessionStates = new Map<string, AgentSessionState>();
 const agentSessionListeners = new Map<string, Set<() => void>>();
+const agentStoreListeners = new Set<() => void>();
 
-function getAgentSessionStateInternal(sessionId: string): AgentSessionState {
-  return agentSessionStates.get(sessionId) ?? DEFAULT_AGENT_SESSION_STATE;
+function subscribeAgentStore(listener: () => void): () => void {
+  agentStoreListeners.add(listener);
+  return () => {
+    agentStoreListeners.delete(listener);
+  };
 }
 
-function writeAgentSessionState(
-  sessionId: string,
-  updater: (state: AgentSessionState) => AgentSessionState,
-): void {
-  const prev = getAgentSessionStateInternal(sessionId);
-  const nextState = updater({ ...prev });
-  agentSessionStates.set(sessionId, nextState);
+function emitAgentStoreChange(sessionIds: readonly string[]): void {
+  for (const sessionId of sessionIds) {
+    for (const listener of agentSessionListeners.get(sessionId) ?? []) {
+      listener();
+    }
+  }
 
-  for (const listener of agentSessionListeners.get(sessionId) ?? []) {
+  for (const listener of agentStoreListeners) {
     listener();
   }
 }
 
-export function recordAgentEvent(event: AgentEvent): void {
-  if (!("session_id" in event) && event.kind !== "agent.session.created") {
+function writeAgentFleetState(
+  affectedSessionIds: readonly string[],
+  updater: (state: typeof agentFleetState) => typeof agentFleetState,
+): void {
+  const nextState = updater(agentFleetState);
+  if (nextState === agentFleetState) {
     return;
   }
 
-  const sessionId = event.kind === "agent.session.created" ? event.session.id : event.session_id;
+  agentFleetState = nextState;
+  emitAgentStoreChange(affectedSessionIds);
+}
 
-  writeAgentSessionState(sessionId, (state) => {
-    if (event.kind === "agent.auth.updated") {
-      if (event.mode === "authenticating") {
-        return { ...state, auth_status: { mode: "authenticating", provider: event.provider } };
-      }
-      if (event.mode === "error") {
-        return { ...state, auth_status: { mode: "error", provider: event.provider } };
-      }
-      return { ...state, auth_status: null };
-    }
+export function recordAgentEvent(event: AgentEvent): void {
+  const affectedSessionIds =
+    event.kind === "agent.session.created" || event.kind === "agent.session.updated"
+      ? [event.session.id]
+      : "sessionId" in event
+        ? [event.sessionId]
+        : [];
 
-    if (event.kind === "agent.status.updated") {
-      return { ...state, provider_status: event.status };
-    }
+  if (affectedSessionIds.length === 0) {
+    return;
+  }
 
-    if (event.kind === "agent.turn.started") {
-      return {
-        ...state,
-        provider_status: null,
-        pending_turn_ids: [...new Set([...state.pending_turn_ids, event.turn_id])],
-        last_error: null,
-      };
-    }
+  writeAgentFleetState(affectedSessionIds, (state) => reduceAgentFleetEvent(state, event));
+}
 
-    if (event.kind === "agent.turn.completed") {
-      return {
-        ...state,
-        pending_approvals: [],
-        provider_status: null,
-        pending_turn_ids: state.pending_turn_ids.filter((id) => id !== event.turn_id),
-      };
-    }
+export function clearAgentSessionResponseReady(sessionId: string): void {
+  writeAgentFleetState([sessionId], (state) => clearSharedAgentSessionResponseReady(state, sessionId));
+}
 
-    if (event.kind === "agent.turn.failed") {
-      return {
-        ...state,
-        pending_approvals: [],
-        provider_status: null,
-        last_error: event.error,
-        pending_turn_ids: state.pending_turn_ids.filter((id) => id !== event.turn_id),
-      };
-    }
+export function clearWorkspaceAgentResponseReady(workspaceId: string): void {
+  const affectedSessionIds = Object.entries(agentFleetState.sessionsById)
+    .filter(([, sessionState]) => sessionState.workspaceId === workspaceId && sessionState.responseReady)
+    .map(([sessionId]) => sessionId);
 
-    if (event.kind === "agent.approval.requested") {
-      const nextPending = [
-        ...state.pending_approvals.filter((approval) => approval.id !== event.approval.id),
-        event.approval,
-      ];
-      return {
-        ...state,
-        pending_approvals: nextPending,
-        provider_status: null,
-      };
-    }
+  if (affectedSessionIds.length === 0) {
+    return;
+  }
 
-    if (event.kind === "agent.approval.resolved") {
-      return {
-        ...state,
-        pending_approvals: state.pending_approvals.filter(
-          (approval) => approval.id !== event.resolution.approval_id,
-        ),
-        provider_status: null,
-      };
-    }
+  writeAgentFleetState(affectedSessionIds, (state) =>
+    clearSharedAgentWorkspaceResponseReady(state, workspaceId),
+  );
+}
 
-    return state;
-  });
+export function useAgentStatusIndex(): {
+  clearAgentSessionResponseReady: (sessionId: string) => void;
+  clearWorkspaceAgentResponseReady: (workspaceId: string) => void;
+  hasWorkspaceResponseReady: (workspaceId: string) => boolean;
+  hasWorkspaceRunningTurn: (workspaceId: string) => boolean;
+  isAgentSessionResponseReady: (sessionId: string) => boolean;
+  isAgentSessionRunning: (sessionId: string) => boolean;
+} {
+  useSyncExternalStore(subscribeAgentStore, () => agentFleetState, () => agentFleetState);
+
+  return {
+    clearAgentSessionResponseReady,
+    clearWorkspaceAgentResponseReady,
+    hasWorkspaceResponseReady: (workspaceId: string) =>
+      selectAgentWorkspaceStatus(agentFleetState, workspaceId).responseReady,
+    hasWorkspaceRunningTurn: (workspaceId: string) =>
+      selectAgentWorkspaceStatus(agentFleetState, workspaceId).running,
+    isAgentSessionResponseReady: (sessionId: string) =>
+      selectAgentSessionResponseReady(agentFleetState, sessionId),
+    isAgentSessionRunning: (sessionId: string) =>
+      selectAgentSessionRunning(agentFleetState, sessionId),
+  };
 }
 
 export function useAgentSessionState(sessionId: string): AgentSessionState {
@@ -131,19 +117,23 @@ export function useAgentSessionState(sessionId: string): AgentSessionState {
 
       return () => {
         const nextListeners = agentSessionListeners.get(sessionId);
-        if (!nextListeners) return;
+        if (!nextListeners) {
+          return;
+        }
+
         nextListeners.delete(listener);
         if (nextListeners.size === 0) {
           agentSessionListeners.delete(sessionId);
         }
       };
     },
-    () => getAgentSessionStateInternal(sessionId),
-    () => getAgentSessionStateInternal(sessionId),
+    () => selectAgentFleetSessionState(agentFleetState, sessionId),
+    () => selectAgentFleetSessionState(agentFleetState, sessionId),
   );
 }
 
 export function resetAgentSessionStateForTests(): void {
-  agentSessionStates.clear();
+  agentFleetState = createAgentFleetState();
   agentSessionListeners.clear();
+  agentStoreListeners.clear();
 }
