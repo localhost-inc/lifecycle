@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { ProviderModelCatalog } from "@lifecycle/agents";
 import { Command } from "@tauri-apps/plugin-shell";
 import type { ClaudeLoginMethod } from "@/features/settings/state/harnesses/claude";
 
 export interface ProviderModelCatalogOptions {
+  enabled?: boolean;
   loginMethod?: ClaudeLoginMethod;
   preferredModel?: string;
 }
@@ -62,9 +63,7 @@ export async function fetchProviderModelCatalog(
           resolve(JSON.parse(stdout) as ProviderModelCatalog);
         } catch (error) {
           reject(
-            error instanceof Error
-              ? error
-              : new Error("Failed to parse provider model catalog."),
+            error instanceof Error ? error : new Error("Failed to parse provider model catalog."),
           );
         }
       });
@@ -80,17 +79,24 @@ export function useProviderModelCatalog(
   provider: "claude" | "codex",
   options: ProviderModelCatalogOptions,
 ): ProviderModelCatalogState {
-  const requestKey = useMemo(
-    () => JSON.stringify({ ...options, provider }),
-    [options.loginMethod, options.preferredModel, provider],
-  );
+  const requestKey = `${provider}:${options.loginMethod ?? ""}:${options.preferredModel ?? ""}`;
+  const enabled = options.enabled ?? true;
   const [state, setState] = useState<ProviderModelCatalogState>({
     catalog: null,
     error: null,
-    isLoading: true,
+    isLoading: enabled,
   });
 
   useEffect(() => {
+    if (!enabled) {
+      setState((current) => ({
+        catalog: current.catalog,
+        error: null,
+        isLoading: false,
+      }));
+      return;
+    }
+
     let active = true;
 
     setState((current) => ({
@@ -124,7 +130,7 @@ export function useProviderModelCatalog(
     return () => {
       active = false;
     };
-  }, [provider, requestKey]);
+  }, [enabled, provider, requestKey]);
 
   return state;
 }

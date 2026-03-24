@@ -1,0 +1,287 @@
+import { ChevronRight } from "lucide-react";
+import { useEffect, useState } from "react";
+import { createPatch } from "diff";
+import { PatchDiff } from "@pierre/diffs/react";
+import type { AgentToolCallStatus } from "@lifecycle/agents";
+
+export function buildToolPatch(inputJson: string): string | null {
+  try {
+    const input = JSON.parse(inputJson) as Record<string, unknown>;
+    const diff = typeof input.diff === "string" ? input.diff : null;
+    const unifiedDiff = typeof input.unified_diff === "string" ? input.unified_diff : null;
+    if (diff) return diff;
+    if (unifiedDiff) return unifiedDiff;
+    const filePath = typeof input.file_path === "string" ? input.file_path : "file";
+    const oldStr = typeof input.old_string === "string" ? input.old_string : "";
+    const newStr = typeof input.new_string === "string" ? input.new_string : "";
+    if (!oldStr && !newStr) return null;
+    return createPatch(filePath, oldStr, newStr, "", "", { context: 3 });
+  } catch {
+    return null;
+  }
+}
+
+function ToolDiffView({ inputJson }: { inputJson: string }) {
+  const patch = buildToolPatch(inputJson);
+  if (!patch) return null;
+
+  return (
+    <div className="mt-0.5 overflow-hidden text-[12px]">
+      <PatchDiff patch={patch} options={{ diffStyle: "unified", disableFileHeader: true }} />
+    </div>
+  );
+}
+
+function extractToolMeta(toolName: string, inputJson?: string): string | null {
+  if (!inputJson) return null;
+  try {
+    const input = JSON.parse(inputJson) as Record<string, unknown>;
+    const fileChangeSummary = (() => {
+      const changes = input.changes;
+      if (!Array.isArray(changes) || changes.length === 0) {
+        return null;
+      }
+
+      const normalized = changes.flatMap((change) => {
+        if (!change || typeof change !== "object" || Array.isArray(change)) {
+          return [];
+        }
+        const record = change as Record<string, unknown>;
+        const path = typeof record.path === "string" ? record.path : null;
+        const kind = typeof record.kind === "string" ? record.kind : null;
+        if (!path || !kind) {
+          return [];
+        }
+        return [{ kind, path }] as const;
+      });
+
+      if (normalized.length === 0) {
+        return null;
+      }
+
+      if (normalized.length === 1) {
+        const change = normalized[0]!;
+        return `${change.kind} ${change.path.replace(/.*\//, "")}`;
+      }
+
+      return `${normalized.length} files`;
+    })();
+
+    switch (toolName) {
+      case "Read":
+      case "Write":
+      case "Edit":
+      case "Delete":
+      case "DeleteFile":
+        return typeof input.file_path === "string" ? input.file_path.replace(/.*\//, "") : null;
+      case "Glob":
+      case "Grep":
+        return typeof input.pattern === "string" ? input.pattern : null;
+      case "Bash":
+      case "command_execution":
+        return typeof input.command === "string"
+          ? input.command.length > 60
+            ? `${input.command.slice(0, 57)}...`
+            : input.command
+          : null;
+      case "file_change":
+        return fileChangeSummary;
+      case "Agent":
+        return typeof input.subagent_type === "string"
+          ? input.subagent_type
+          : typeof input.description === "string"
+            ? input.description
+            : null;
+      default:
+        return null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+function formatToolName(toolName: string): string {
+  switch (toolName) {
+    case "command_execution":
+      return "Shell";
+    case "file_change":
+      return "File change";
+    case "web_search":
+      return "Web search";
+    default:
+      return toolName.includes("_") ? toolName.replace(/_/g, " ") : toolName;
+  }
+}
+
+function extractAgentPrompt(inputJson?: string): string | null {
+  if (!inputJson) return null;
+  try {
+    const input = JSON.parse(inputJson) as Record<string, unknown>;
+    return typeof input.prompt === "string" ? input.prompt : null;
+  } catch {
+    return null;
+  }
+}
+
+function cleanSearchPattern(pattern: string): string {
+  const cleaned = pattern
+    .replace(/\.\*/g, " ")
+    .replace(/[|]/g, " ")
+    .replace(/[\\^$()[\]{}+?]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned.length > 40) return `${cleaned.slice(0, 37)}…`;
+  return cleaned || pattern.slice(0, 40);
+}
+
+function buildToolCallHeader(toolName: string, inputJson?: string): { verb: string; subject: string | null; filePath: string | null; summary: string | null } {
+  let input: Record<string, unknown> | null = null;
+  try {
+    if (inputJson) input = JSON.parse(inputJson) as Record<string, unknown>;
+  } catch { /* ignore */ }
+
+  const filePath = typeof input?.file_path === "string" ? input.file_path : null;
+  const shortPath = filePath?.replace(/.*\//, "") ?? null;
+
+  switch (toolName) {
+    case "Edit":
+      return { verb: "Update", subject: shortPath, filePath, summary: diffSummary(inputJson) };
+    case "Write":
+      return { verb: "Write", subject: shortPath, filePath, summary: null };
+    case "Read": {
+      const offset = typeof input?.offset === "number" ? input.offset : 0;
+      const limit = typeof input?.limit === "number" ? input.limit : null;
+      const start = Math.max(offset, 1);
+      const range = limit != null ? `:${start}-${start + limit - 1}` : null;
+      return { verb: "Read", subject: shortPath ? `${shortPath}${range ?? ""}` : null, filePath, summary: null };
+    }
+    case "Delete":
+    case "DeleteFile":
+      return { verb: "Delete", subject: shortPath, filePath, summary: null };
+    case "Glob":
+    case "Grep": {
+      const raw = typeof input?.pattern === "string" ? input.pattern : null;
+      return { verb: "Search", subject: raw ? cleanSearchPattern(raw) : null, filePath: null, summary: null };
+    }
+    case "Bash":
+    case "command_execution": {
+      const cmd = typeof input?.command === "string" ? input.command : null;
+      const short = cmd && cmd.length > 60 ? `${cmd.slice(0, 57)}…` : cmd;
+      return { verb: "Shell", subject: short, filePath: null, summary: null };
+    }
+    case "Agent":
+      return {
+        verb: "Agent",
+        subject: typeof input?.description === "string" ? input.description : typeof input?.subagent_type === "string" ? input.subagent_type : null,
+        filePath: null,
+        summary: null,
+      };
+    case "file_change": {
+      const meta = extractToolMeta(toolName, inputJson);
+      return { verb: "File change", subject: meta, filePath: null, summary: null };
+    }
+    default:
+      return { verb: formatToolName(toolName), subject: null, filePath: null, summary: null };
+  }
+}
+
+function diffSummary(inputJson?: string): string | null {
+  if (!inputJson) return null;
+  try {
+    const input = JSON.parse(inputJson) as Record<string, unknown>;
+    const oldStr = typeof input.old_string === "string" ? input.old_string : "";
+    const newStr = typeof input.new_string === "string" ? input.new_string : "";
+    if (!oldStr && !newStr) return null;
+    const oldLines = oldStr.split("\n").length;
+    const newLines = newStr.split("\n").length;
+    const added = newLines - oldLines;
+    const parts: string[] = [];
+    if (added > 0) parts.push(`Added ${added} line${added === 1 ? "" : "s"}`);
+    if (added < 0) parts.push(`Removed ${Math.abs(added)} line${Math.abs(added) === 1 ? "" : "s"}`);
+    if (added === 0) parts.push(`Changed ${oldLines} line${oldLines === 1 ? "" : "s"}`);
+    return parts.join(", ");
+  } catch {
+    return null;
+  }
+}
+
+function hasFailed(status?: AgentToolCallStatus | null, errorText?: string | null): boolean {
+  return status === "failed" || !!errorText;
+}
+
+export function ToolCallPart({ toolName, inputJson, outputJson, status, errorText, isStreaming, onOpenFile }: { toolName: string; inputJson?: string; outputJson?: string | null; status?: AgentToolCallStatus | null; errorText?: string | null; isStreaming?: boolean; onOpenFile?: (filePath: string) => void }) {
+  const { verb, subject, filePath, summary } = buildToolCallHeader(toolName, inputJson);
+  const diffInputJson = typeof inputJson === "string" ? inputJson : null;
+  const hasToolDiff =
+    (toolName === "Edit" || toolName === "Write" || toolName === "Delete") &&
+    diffInputJson !== null &&
+    buildToolPatch(diffInputJson) !== null;
+  const agentPrompt = toolName === "Agent" ? extractAgentPrompt(inputJson) : null;
+  const isExpandable = hasToolDiff || agentPrompt;
+  const [open, setOpen] = useState(hasToolDiff);
+  useEffect(() => {
+    if (hasToolDiff) setOpen(true);
+  }, [hasToolDiff]);
+  const canOpenFile = !!filePath && !!onOpenFile;
+  const isCompleted = status === "completed" || status === "failed" || status === "cancelled";
+
+  return (
+    <div className={["my-0.5 transition-opacity", isCompleted ? "opacity-50" : ""].join(" ")}>
+      <div className="flex items-center gap-1.5 text-[12px] text-[var(--muted-foreground)]">
+        {hasFailed(status, errorText) ? (
+          <span className="flex size-3 shrink-0 items-center justify-center">
+            <span className="size-1.5 rounded-full bg-[var(--terminal-ansi-red)]" />
+          </span>
+        ) : isExpandable ? (
+          <button
+            className="hover:text-[var(--foreground)] transition-colors"
+            onClick={() => setOpen(!open)}
+            type="button"
+          >
+            <ChevronRight
+              className={["size-3 shrink-0 transition-transform", open ? "rotate-90" : ""].join(" ")}
+            />
+          </button>
+        ) : (
+          <span className="size-3 shrink-0" />
+        )}
+        <button
+          className="flex items-center gap-1.5 hover:text-[var(--foreground)] transition-colors"
+          onClick={() => isExpandable && setOpen(!open)}
+          type="button"
+        >
+          <span className="font-medium text-[var(--foreground)]">{verb}</span>
+        </button>
+        {subject ? (
+          canOpenFile ? (
+            <button
+              className="text-[var(--muted-foreground)] hover:text-[var(--accent)] hover:underline transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenFile(filePath);
+              }}
+              title={filePath}
+              type="button"
+            >
+              {subject}
+            </button>
+          ) : (
+            <span className="text-[var(--muted-foreground)]">{subject}</span>
+          )
+        ) : null}
+      </div>
+      {open && hasToolDiff && summary ? (
+        <div className="flex items-center gap-1 pl-[18px] text-[11px] text-[var(--muted-foreground)]/60">
+          <span>└</span>
+          <span>{summary}</span>
+        </div>
+      ) : null}
+      {open && hasToolDiff && diffInputJson ? <ToolDiffView inputJson={diffInputJson} /> : null}
+      {open && agentPrompt ? (
+        <pre className="mt-1 whitespace-pre-wrap break-words border-l-2 border-[var(--border)] pl-3 text-[12px] leading-5 text-[var(--muted-foreground)]">
+          {agentPrompt}
+        </pre>
+      ) : null}
+    </div>
+  );
+}

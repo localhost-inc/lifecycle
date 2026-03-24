@@ -7,52 +7,57 @@ describe("SessionHistoryPanel", () => {
   beforeEach(() => mockStoreContext());
   afterEach(() => mock.restore());
 
-  test("shows running and ready session state from the shared turn-state provider", async () => {
-    const terminalHooksModule = await import("../hooks");
-    const responseReadyModule = await import("../state/terminal-response-ready-provider");
+  test("shows running and ready session state from the agent status index", async () => {
+    const agentHooksModule = await import("../../agents/hooks");
+    const agentStateModule = await import("../../agents/state/agent-session-state");
 
-    spyOn(terminalHooksModule, "useWorkspaceTerminals").mockReturnValue([
+    spyOn(agentHooksModule, "useAgentSessions").mockReturnValue([
       {
-        created_by: null,
-        ended_at: null,
-        exit_code: null,
-        failure_reason: null,
-        id: "term-running",
-        label: "Terminal · Running",
-        last_active_at: "2026-03-08T10:02:00.000Z",
-        launch_type: "shell",
-        started_at: "2026-03-08T10:00:00.000Z",
-        status: "active",
+        id: "agent-running",
         workspace_id: "ws_1",
+        runtime_kind: "native",
+        runtime_name: null,
+        provider: "claude",
+        provider_session_id: null,
+        title: "Running session",
+        status: "running",
+        created_by: null,
+        forked_from_session_id: null,
+        last_message_at: "2026-03-08T10:02:00.000Z",
+        created_at: "2026-03-08T10:00:00.000Z",
+        updated_at: "2026-03-08T10:02:00.000Z",
+        ended_at: null,
       },
       {
-        created_by: null,
-        ended_at: null,
-        exit_code: null,
-        failure_reason: null,
-        id: "term-ready",
-        label: "Terminal · Ready",
-        last_active_at: "2026-03-08T10:03:00.000Z",
-        launch_type: "shell",
-        started_at: "2026-03-08T10:01:00.000Z",
-        status: "detached",
+        id: "agent-ready",
         workspace_id: "ws_1",
+        runtime_kind: "native",
+        runtime_name: null,
+        provider: "codex",
+        provider_session_id: null,
+        title: "Ready session",
+        status: "idle",
+        created_by: null,
+        forked_from_session_id: null,
+        last_message_at: "2026-03-08T10:03:00.000Z",
+        created_at: "2026-03-08T10:01:00.000Z",
+        updated_at: "2026-03-08T10:03:00.000Z",
+        ended_at: null,
       },
     ] as never);
-    spyOn(responseReadyModule, "useTerminalResponseReady").mockReturnValue({
-      clearTerminalResponseReady: () => {},
-      clearTerminalTurnRunning: () => {},
-      clearWorkspaceResponseReady: () => {},
+    spyOn(agentStateModule, "useAgentStatusIndex").mockReturnValue({
+      clearAgentSessionResponseReady: () => {},
+      clearWorkspaceAgentResponseReady: () => {},
       hasWorkspaceResponseReady: () => false,
       hasWorkspaceRunningTurn: () => false,
-      isTerminalResponseReady: (terminalId: string) => terminalId === "term-ready",
-      isTerminalTurnRunning: (terminalId: string) => terminalId === "term-running",
+      isAgentSessionResponseReady: (sessionId: string) => sessionId === "agent-ready",
+      isAgentSessionRunning: (sessionId: string) => sessionId === "agent-running",
     } as never);
 
     const { SessionHistoryPanel } = await import("./session-history-panel");
     const markup = renderToStaticMarkup(
       createElement(SessionHistoryPanel, {
-        onFocusTerminal: () => {},
+        onOpenAgentSession: () => {},
         workspaceId: "ws_1",
       }),
     );

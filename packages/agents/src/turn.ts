@@ -1,7 +1,14 @@
+export type AgentImageMediaType = "image/png" | "image/jpeg" | "image/gif" | "image/webp";
+
 export type AgentInputPart =
   | {
       type: "text";
       text: string;
+    }
+  | {
+      type: "image";
+      mediaType: AgentImageMediaType;
+      base64Data: string;
     }
   | {
       type: "attachment_ref";
@@ -22,6 +29,11 @@ export type AgentMessagePart =
   | {
       type: "status";
       text: string;
+    }
+  | {
+      type: "image";
+      mediaType: AgentImageMediaType;
+      base64Data: string;
     }
   | {
       type: "attachment_ref";

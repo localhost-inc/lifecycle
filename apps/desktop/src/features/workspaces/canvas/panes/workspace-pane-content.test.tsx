@@ -3,10 +3,24 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   createAgentTab,
-  createBrowserTab,
   createChangesDiffTab,
+  createPreviewTab,
   terminalTabKey,
 } from "@/features/workspaces/state/workspace-canvas-state";
+import type { WorkspacePaneActiveSurfaceModel } from "@/features/workspaces/canvas/workspace-pane-models";
+
+function createProps(activeSurface: WorkspacePaneActiveSurfaceModel) {
+  return {
+    activeSurface,
+    onFileSessionStateChange: () => {},
+    onLaunchSurface: () => {},
+    onOpenFile: () => {},
+    onTabViewStateChange: () => {},
+    paneDragInProgress: false,
+    paneFocused: true,
+    surfaceOpacity: 1,
+  };
+}
 
 describe("WorkspacePaneContent", () => {
   afterEach(() => {
@@ -30,22 +44,13 @@ describe("WorkspacePaneContent", () => {
 
     renderToStaticMarkup(
       createElement(WorkspacePaneContent, {
-        activeTabKey: changesTab.key,
-        activeFileSessionState: null,
-        activeTabViewState: null,
-        creatingSelection: null,
-        documents: [changesTab],
-        hasVisibleTabs: true,
-        onFileSessionStateChange: () => {},
-        onLaunchSurface: () => {},
+        ...createProps({
+          document: changesTab,
+          kind: "changes-diff",
+          viewState: null,
+          workspaceId: "workspace-1",
+        }),
         onOpenFile,
-        paneDragInProgress: false,
-        paneFocused: true,
-        onTabViewStateChange: () => {},
-        surfaceOpacity: 1,
-        terminals: [],
-        waitingForSelectedTerminalTab: false,
-        workspaceId: "workspace-1",
       }),
     );
 
@@ -62,22 +67,20 @@ describe("WorkspacePaneContent", () => {
 
     const { WorkspacePaneContent } = await import("./workspace-pane-content");
     const markup = renderToStaticMarkup(
-      createElement(WorkspacePaneContent, {
-        activeTabKey: terminalTabKey("term-1"),
-        activeFileSessionState: null,
-        activeTabViewState: null,
-        creatingSelection: null,
-        documents: [],
-        hasVisibleTabs: true,
-        onFileSessionStateChange: () => {},
-        onLaunchSurface: () => {},
-        onOpenFile: () => {},
-        onTabViewStateChange: () => {},
-        paneDragInProgress: false,
-        paneFocused: true,
-        surfaceOpacity: 1,
-        terminals: [
-          {
+      createElement(
+        WorkspacePaneContent,
+        createProps({
+          kind: "terminal",
+          tab: {
+            key: terminalTabKey("term-1"),
+            kind: "terminal",
+            label: "Shell 1",
+            launchType: "shell",
+            responseReady: false,
+            status: "detached",
+            terminalId: "term-1",
+          },
+          terminal: {
             created_by: null,
             ended_at: null,
             exit_code: null,
@@ -90,10 +93,8 @@ describe("WorkspacePaneContent", () => {
             status: "detached",
             workspace_id: "workspace-1",
           },
-        ],
-        waitingForSelectedTerminalTab: false,
-        workspaceId: "workspace-1",
-      }),
+        }),
+      ),
     );
 
     expect(markup).toContain('role="tabpanel"');
@@ -101,27 +102,16 @@ describe("WorkspacePaneContent", () => {
     expect(markup).toContain('data-slot="terminal-surface"');
   });
 
-  test("renders empty-pane quick actions when no tabs are visible", async () => {
+  test("renders empty-pane quick actions when the surface is a launcher", async () => {
     const { WorkspacePaneContent } = await import("./workspace-pane-content");
     const markup = renderToStaticMarkup(
-      createElement(WorkspacePaneContent, {
-        activeTabKey: null,
-        activeFileSessionState: null,
-        activeTabViewState: null,
-        creatingSelection: null,
-        documents: [],
-        hasVisibleTabs: false,
-        onFileSessionStateChange: () => {},
-        onLaunchSurface: () => {},
-        onOpenFile: () => {},
-        onTabViewStateChange: () => {},
-        paneDragInProgress: false,
-        paneFocused: true,
-        surfaceOpacity: 1,
-        terminals: [],
-        waitingForSelectedTerminalTab: false,
-        workspaceId: "workspace-1",
-      }),
+      createElement(
+        WorkspacePaneContent,
+        createProps({
+          creatingSelection: null,
+          kind: "launcher",
+        }),
+      ),
     );
 
     expect(markup).toContain("No open tabs");
@@ -130,16 +120,16 @@ describe("WorkspacePaneContent", () => {
     expect(markup).toContain("Codex");
   });
 
-  test("renders the browser surface for browser documents", async () => {
-    const browserSurfaceModule = await import("../../surfaces/browser-surface");
+  test("renders the preview surface for preview documents", async () => {
+    const previewSurfaceModule = await import("../../surfaces/preview-surface");
 
-    spyOn(browserSurfaceModule, "BrowserSurface").mockImplementation(((
-      props: Parameters<typeof browserSurfaceModule.BrowserSurface>[0],
+    spyOn(previewSurfaceModule, "PreviewSurface").mockImplementation(((
+      props: Parameters<typeof previewSurfaceModule.PreviewSurface>[0],
     ) =>
       createElement(
         "div",
         {
-          "data-slot": "browser-surface",
+          "data-slot": "preview-surface",
           "data-tab-key": props.tabKey,
           "data-url": props.url,
         },
@@ -147,35 +137,24 @@ describe("WorkspacePaneContent", () => {
       )) as never);
 
     const { WorkspacePaneContent } = await import("./workspace-pane-content");
-    const browserTab = createBrowserTab({
+    const previewTab = createPreviewTab({
       key: "service:web",
       label: "web",
       url: "http://web.sydney.lifecycle.localhost",
     });
 
     const markup = renderToStaticMarkup(
-      createElement(WorkspacePaneContent, {
-        activeTabKey: browserTab.key,
-        activeFileSessionState: null,
-        activeTabViewState: null,
-        creatingSelection: null,
-        documents: [browserTab],
-        hasVisibleTabs: true,
-        onFileSessionStateChange: () => {},
-        onLaunchSurface: () => {},
-        onOpenFile: () => {},
-        onTabViewStateChange: () => {},
-        paneDragInProgress: false,
-        paneFocused: true,
-        surfaceOpacity: 1,
-        terminals: [],
-        waitingForSelectedTerminalTab: false,
-        workspaceId: "workspace-1",
-      }),
+      createElement(
+        WorkspacePaneContent,
+        createProps({
+          document: previewTab,
+          kind: "preview",
+        }),
+      ),
     );
 
-    expect(markup).toContain('data-slot="browser-surface"');
-    expect(markup).toContain('data-tab-key="browser:service:web"');
+    expect(markup).toContain('data-slot="preview-surface"');
+    expect(markup).toContain('data-tab-key="preview:service:web"');
     expect(markup).toContain('data-url="http://web.sydney.lifecycle.localhost"');
   });
 
@@ -202,24 +181,14 @@ describe("WorkspacePaneContent", () => {
     });
 
     const markup = renderToStaticMarkup(
-      createElement(WorkspacePaneContent, {
-        activeTabKey: agentTab.key,
-        activeFileSessionState: null,
-        activeTabViewState: null,
-        creatingSelection: null,
-        documents: [agentTab],
-        hasVisibleTabs: true,
-        onFileSessionStateChange: () => {},
-        onLaunchSurface: () => {},
-        onOpenFile: () => {},
-        onTabViewStateChange: () => {},
-        paneDragInProgress: false,
-        paneFocused: true,
-        surfaceOpacity: 1,
-        terminals: [],
-        waitingForSelectedTerminalTab: false,
-        workspaceId: "workspace-1",
-      }),
+      createElement(
+        WorkspacePaneContent,
+        createProps({
+          document: agentTab,
+          kind: "agent",
+          workspaceId: "workspace-1",
+        }),
+      ),
     );
 
     expect(markup).toContain('data-slot="agent-surface"');
@@ -241,21 +210,18 @@ describe("WorkspacePaneContent", () => {
 
     renderToStaticMarkup(
       createElement(WorkspacePaneContent, {
-        activeTabKey: terminalTabKey("term-1"),
-        activeFileSessionState: null,
-        activeTabViewState: null,
-        creatingSelection: null,
-        documents: [],
-        hasVisibleTabs: true,
-        onFileSessionStateChange: () => {},
-        onLaunchSurface: () => {},
-        onOpenFile: () => {},
-        onTabViewStateChange: () => {},
-        paneDragInProgress: false,
-        paneFocused: false,
-        surfaceOpacity: 0.45,
-        terminals: [
-          {
+        ...createProps({
+          kind: "terminal",
+          tab: {
+            key: terminalTabKey("term-1"),
+            kind: "terminal",
+            label: "Shell 1",
+            launchType: "shell",
+            responseReady: false,
+            status: "detached",
+            terminalId: "term-1",
+          },
+          terminal: {
             created_by: null,
             ended_at: null,
             exit_code: null,
@@ -268,9 +234,9 @@ describe("WorkspacePaneContent", () => {
             status: "detached",
             workspace_id: "workspace-1",
           },
-        ],
-        waitingForSelectedTerminalTab: false,
-        workspaceId: "workspace-1",
+        }),
+        paneFocused: false,
+        surfaceOpacity: 0.45,
       }),
     );
 

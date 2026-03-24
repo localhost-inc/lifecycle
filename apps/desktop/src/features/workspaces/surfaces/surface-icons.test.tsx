@@ -54,6 +54,27 @@ describe("WorkspaceSurfaceTabLeading", () => {
     expect(markup).not.toContain('data-surface-tab-icon="shell"');
   });
 
+  test("renders a spinner while an optimistic shell tab is opening", () => {
+    const markup = renderToStaticMarkup(
+      createElement(WorkspaceSurfaceTabLeading, {
+        tab: {
+          key: "pending-terminal:launch-1",
+          kind: "terminal",
+          label: "Shell",
+          launchType: "shell",
+          optimistic: "pending",
+          responseReady: false,
+          status: "active",
+          terminalId: "pending-terminal:launch-1",
+        },
+      }),
+    );
+
+    expect(markup).toContain('data-slot="spinner"');
+    expect(markup).toContain('title="Opening terminal"');
+    expect(markup).not.toContain('data-surface-tab-icon="shell"');
+  });
+
   test("omits the spinner and status dot for inactive terminal tabs", () => {
     const markup = renderToStaticMarkup(
       createElement(WorkspaceSurfaceTabLeading, {

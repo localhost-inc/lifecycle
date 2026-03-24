@@ -1,4 +1,4 @@
-import type { AgentApprovalDecision, AgentApprovalRequest, AgentApprovalResolution } from "./turn";
+import type { AgentApprovalDecision, AgentApprovalRequest, AgentApprovalResolution, AgentImageMediaType } from "./turn";
 
 export type AgentWorkerApprovalRequestPayload = Omit<AgentApprovalRequest, "sessionId">;
 export type AgentWorkerApprovalResolutionPayload = Omit<AgentApprovalResolution, "sessionId">;
@@ -165,6 +165,15 @@ export interface AgentWorkerTurnFailedEvent {
 }
 
 // ---------------------------------------------------------------------------
+// Session metadata events
+// ---------------------------------------------------------------------------
+
+export interface AgentWorkerTitleGeneratedEvent {
+  kind: "worker.title_generated";
+  title: string;
+}
+
+// ---------------------------------------------------------------------------
 // Aggregate union
 // ---------------------------------------------------------------------------
 
@@ -189,15 +198,21 @@ export type AgentWorkerEvent =
   | AgentWorkerStatusEvent
   // Turn lifecycle
   | AgentWorkerTurnCompletedEvent
-  | AgentWorkerTurnFailedEvent;
+  | AgentWorkerTurnFailedEvent
+  // Session metadata
+  | AgentWorkerTitleGeneratedEvent;
 
 // ---------------------------------------------------------------------------
 // Commands (host → worker)
 // ---------------------------------------------------------------------------
 
+export type AgentWorkerInputPart =
+  | { type: "text"; text: string }
+  | { type: "image"; mediaType: AgentImageMediaType; base64Data: string };
+
 export interface AgentWorkerSendTurnCommand {
   kind: "worker.send_turn";
-  input: string;
+  input: AgentWorkerInputPart[];
   turnId: string;
 }
 

@@ -1,12 +1,43 @@
+import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 
-import { createStubCommand, jsonFlag, workspaceIdFlag } from "../_shared";
+import {
+  createWorkspaceResetRequest,
+  requestBridge,
+  resolveWorkspaceId,
+} from "../../bridge";
+import { failCommand, jsonFlag, printWorkspaceSummary, workspaceIdFlag } from "../_shared";
 
-export default createStubCommand({
-  commandName: "lifecycle workspace reset",
+export default defineCommand({
   description: "Reset the workspace baseline and restart services.",
   input: z.object({
     json: jsonFlag,
     workspaceId: workspaceIdFlag,
   }),
+  run: async (input, context) => {
+    try {
+      const workspaceId = resolveWorkspaceId(input.workspaceId);
+      const response = await requestBridge(
+        createWorkspaceResetRequest({
+          workspaceId,
+        }),
+      );
+
+      if (input.json) {
+        context.stdout(JSON.stringify(response.result, null, 2));
+        return 0;
+      }
+
+      context.stdout("Workspace reset.");
+      context.stdout("");
+      printWorkspaceSummary(response.result.workspace, context.stdout);
+
+      return 0;
+    } catch (error) {
+      return failCommand(error, {
+        json: input.json,
+        stderr: context.stderr,
+      });
+    }
+  },
 });

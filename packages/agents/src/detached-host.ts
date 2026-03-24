@@ -1,7 +1,7 @@
 import type { AgentSessionProviderId, AgentSessionStatus } from "@lifecycle/contracts";
 import type { AgentApprovalKind } from "./turn";
 
-export type DetachedAgentHostStatus = AgentSessionStatus | "starting";
+export type DetachedAgentHostStatus = AgentSessionStatus;
 
 export interface DetachedAgentHostPendingApproval {
   id: string;

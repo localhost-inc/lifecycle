@@ -200,7 +200,7 @@ The canvas is a recursive row/column split tree. Each leaf pane contains a compa
 
 ## Surface Kinds
 
-The canvas may host: terminal session, file surface, local changes review, workspace-local commit detail, browser surface, empty pane
+The canvas may host: terminal session, file surface, local changes review, workspace-local commit detail, preview surface, empty pane
 
 Project-scoped artifacts (pull request detail) should normally open as **page tabs**.
 
@@ -234,7 +234,7 @@ The **current implementation contract** for the mixed live/document tab model.
 ## Tab Classes
 
 1. Live tabs: backed by workspace-owned session entities (`terminal_id`, future `agent_session_id`)
-2. Document tabs: backed by workspace content or canvas-owned browser state (`diff:commit:<sha>`, `file:<path>`, `browser:<key>`)
+2. Document tabs: backed by workspace content or canvas-owned preview state (`diff:commit:<sha>`, `file:<path>`, `preview:<key>`)
 
 ## Ownership Rules
 
@@ -256,17 +256,24 @@ The **current implementation contract** for the mixed live/document tab model.
 2. Switching tabs hides live presentation without destroying the resource.
 3. Closing a live tab detaches/hides, does not kill.
 
+## Render Locality
+
+1. Pane-local UI state must stay pane-local. File draft updates, dirty indicators, launch-menu state, and tab rename state must not invalidate sibling pane content.
+2. Canvas-wide topology changes may rerender the affected branch of the split tree, but non-layout edits must not remount unrelated pane bodies.
+3. Pane headers reserve a fixed trailing controls footprint so opening or closing local controls does not shift the tab strip or resize the active pane body.
+
 ## Git Diff Surfaces
 
 1. Current local edits open as a single route-driven `Changes` dialog over the workspace canvas.
 2. Repeated `Changes` opens update dialog inputs instead of opening new tabs.
 3. History commit diffs remain commit-scoped document tabs keyed by SHA.
 
-## Browser Surfaces
+## Preview Surfaces
 
-1. Browser tabs are document tabs keyed by `browser:<key>`.
-2. Service previews open in the workspace browser surface by default, keyed per service identity so repeated opens focus the existing pane.
-3. Browser tabs are desktop-owned state and may keep embedded webview session state alive across pane switches until the tab is explicitly closed.
+1. Preview tabs are document tabs keyed by `preview:<key>`.
+2. Service previews open in the workspace preview surface by default, keyed per service identity so repeated opens focus the existing pane.
+3. Preview surfaces render as ordinary iframe-backed pane content inside the React tree.
+4. Opening a preview in the system browser is an explicit secondary action from the preview toolbar.
 
 ---
 

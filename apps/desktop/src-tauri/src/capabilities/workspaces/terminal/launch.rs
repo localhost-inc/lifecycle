@@ -138,7 +138,11 @@ mod tests {
     fn native_terminal_command_quotes_non_shell_commands() {
         let launch = TerminalLaunchSpec {
             program: "lifecycle".to_string(),
-            args: vec!["agent".to_string(), "worker".to_string(), "codex worker".to_string()],
+            args: vec![
+                "agent".to_string(),
+                "worker".to_string(),
+                "codex worker".to_string(),
+            ],
             treat_nonzero_as_failure: false,
         };
 
@@ -151,5 +155,4 @@ mod tests {
             "/bin/zsh -l -c 'export LIFECYCLE_WORKSPACE_ID=ws_1; exec lifecycle agent worker '\"'\"'codex worker'\"'\"''"
         );
     }
-
 }

@@ -8,6 +8,10 @@ This file defines engineering execution standards for agents working in this rep
 2. Keep changes small, testable, and contract-aligned.
 3. Treat this repo as a production codebase, not a sandbox.
 
+## Operating Context
+
+You are likely being invoked from within the Lifecycle desktop app itself — the product this repo builds. When the user reports behavioral errors, visual glitches, broken interactions, or "this didn't work", assume they are describing the running Lifecycle app unless they explicitly say otherwise. Investigate the app's own code first before considering external tooling or environment issues.
+
 ## Core References
 
 1. `README.md`

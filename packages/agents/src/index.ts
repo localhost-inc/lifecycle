@@ -13,6 +13,9 @@ export type {
   AgentFleetAuthStatus,
   AgentFleetSessionState,
   AgentFleetState,
+  AgentSessionUsage,
+  AgentTurnActivity,
+  AgentTurnPhase,
   AgentWorkspaceStatus,
 } from "./fleet-state";
 export type { ProviderModelCatalog, ProviderModelCatalogEntry } from "./catalog";
@@ -47,6 +50,7 @@ export type {
   AgentApprovalStatus,
   AgentArtifactDescriptor,
   AgentArtifactType,
+  AgentImageMediaType,
   AgentInputPart,
   AgentMessagePart,
   AgentMessageRole,
@@ -63,6 +67,7 @@ export type {
   AgentWorkerAuthStatusEvent,
   AgentWorkerCommand,
   AgentWorkerEvent,
+  AgentWorkerInputPart,
   AgentWorkerItem,
   AgentWorkerItemCompletedEvent,
   AgentWorkerItemStartedEvent,

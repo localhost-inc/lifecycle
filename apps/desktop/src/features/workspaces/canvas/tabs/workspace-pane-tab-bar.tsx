@@ -6,9 +6,9 @@ import {
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
-  type ReactNode,
 } from "react";
 import { WorkspaceSurfaceTabLeading } from "@/features/workspaces/surfaces/surface-icons";
+import type { WorkspacePaneTabBarModel } from "@/features/workspaces/canvas/workspace-pane-models";
 import {
   getWorkspaceTabDragShiftDirection,
   type WorkspaceCanvasTab,
@@ -60,18 +60,13 @@ export interface WorkspacePaneTabBarDragPreview {
 }
 
 interface WorkspacePaneTabBarProps {
-  activeTabKey: string | null;
-  dirtyTabKeys?: ReadonlySet<string>;
-  dragPreview?: WorkspacePaneTabBarDragPreview | null;
+  model: WorkspacePaneTabBarModel;
   onCloseDocumentTab: (tabKey: string) => void;
   onCloseTerminalTab: (tabKey: string, terminalId: string) => void;
-  onRenameTerminalTab?: (terminalId: string, label: string) => Promise<unknown> | unknown;
+  onRenameTerminalTab: (terminalId: string, label: string) => Promise<unknown> | unknown;
   onSelectTab: (key: string) => void;
-  onTabDrag?: (drag: WorkspacePaneTabDrag | null) => void;
-  onTabDragCommit?: (drag: WorkspacePaneTabDrag) => void;
-  paneId?: string;
-  renderTabLeading?: (tab: WorkspaceCanvasTab) => ReactNode;
-  visibleTabs: WorkspaceCanvasTab[];
+  onTabDrag: (drag: WorkspacePaneTabDrag | null) => void;
+  onTabDragCommit: (drag: WorkspacePaneTabDrag) => void;
 }
 
 interface WorkspaceTabRenameState {
@@ -126,23 +121,20 @@ export function hasStartedWorkspaceTabDrag(
   return Math.hypot(pointerDeltaX, pointerDeltaY) >= thresholdPx;
 }
 
-export function renderWorkspacePaneDefaultTabLeading(tab: WorkspaceCanvasTab) {
+export function renderWorkspacePaneDefaultTabLeading(
+  tab: WorkspacePaneTabBarModel["tabs"][number]["tab"],
+) {
   return <WorkspaceSurfaceTabLeading tab={tab} />;
 }
 
 export function WorkspacePaneTabBar({
-  activeTabKey,
-  dirtyTabKeys,
-  dragPreview = null,
+  model,
   onCloseDocumentTab,
   onCloseTerminalTab,
   onRenameTerminalTab,
   onSelectTab,
   onTabDrag,
   onTabDragCommit,
-  paneId = "pane-root",
-  renderTabLeading,
-  visibleTabs,
 }: WorkspacePaneTabBarProps) {
   const [renameState, setRenameState] = useState<WorkspaceTabRenameState | null>(null);
   const dragSessionRef = useRef<WorkspaceTabPointerSession | null>(null);
@@ -156,9 +148,11 @@ export function WorkspacePaneTabBar({
   const rootUserSelectRef = useRef<string | null>(null);
   const selectionCleanupRef = useRef<(() => void) | null>(null);
   const suppressClickRef = useRef<string | null>(null);
+  const visibleTabs = model.tabs.map((entry) => entry.tab);
+  const tabModelsByKey = new Map(model.tabs.map((entry) => [entry.tab.key, entry]));
   const visibleTabKeys = visibleTabs.map((tab) => tab.key);
   const visibleTabLayoutKey = visibleTabKeys.join("\u0000");
-  const activeTabLabel = visibleTabs.find((tab) => tab.key === activeTabKey)?.label ?? null;
+  const activeTabLabel = visibleTabs.find((tab) => tab.key === model.activeTabKey)?.label ?? null;
 
   useEffect(() => {
     onTabDragRef.current = onTabDrag;
@@ -198,12 +192,12 @@ export function WorkspacePaneTabBar({
   }, [renameKey]);
 
   useEffect(() => {
-    if (!activeTabKey) {
+    if (!model.activeTabKey) {
       return;
     }
 
     const tabList = tabListRef.current;
-    const activeTabElement = tabElementsRef.current.get(activeTabKey);
+    const activeTabElement = tabElementsRef.current.get(model.activeTabKey);
     if (!tabList || !activeTabElement) {
       return;
     }
@@ -220,7 +214,7 @@ export function WorkspacePaneTabBar({
     return () => {
       window.cancelAnimationFrame(frameId);
     };
-  }, [activeTabKey, activeTabLabel, visibleTabLayoutKey]);
+  }, [activeTabLabel, model.activeTabKey, visibleTabLayoutKey]);
 
   const setTabElement = useCallback((key: string, element: HTMLDivElement | null) => {
     if (element) {
@@ -297,7 +291,7 @@ export function WorkspacePaneTabBar({
         draggedWidth: session.draggedWidth,
         grabOffsetX: session.grabOffsetX,
         grabOffsetY: session.grabOffsetY,
-        paneId,
+        paneId: model.paneId,
         pointerDeltaX,
         pointerDeltaY,
         pointerX: event.clientX,
@@ -319,7 +313,7 @@ export function WorkspacePaneTabBar({
           draggedHeight: session.draggedHeight,
           grabOffsetX: session.grabOffsetX,
           grabOffsetY: session.grabOffsetY,
-          paneId,
+          paneId: model.paneId,
           pointerDeltaX: event.clientX - session.initialPointerX,
           pointerDeltaY: event.clientY - session.initialPointerY,
           pointerX: event.clientX,
@@ -343,7 +337,7 @@ export function WorkspacePaneTabBar({
       window.removeEventListener("pointercancel", handlePointerFinish);
       restoreBodySelection();
     };
-  }, [paneId, restoreBodySelection]);
+  }, [model.paneId, restoreBodySelection]);
 
   const handleTabPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>, key: string) => {
@@ -403,7 +397,7 @@ export function WorkspacePaneTabBar({
 
   const startRenamingTab = useCallback(
     (tab: WorkspaceCanvasTab) => {
-      if (tab.kind !== "terminal" || !onRenameTerminalTab) {
+      if (tab.kind !== "terminal") {
         return;
       }
 
@@ -420,7 +414,7 @@ export function WorkspacePaneTabBar({
       });
       onSelectTab(tab.key);
     },
-    [onRenameTerminalTab, onSelectTab, restoreBodySelection],
+    [onSelectTab, restoreBodySelection],
   );
 
   const cancelTabRename = useCallback(() => {
@@ -428,7 +422,7 @@ export function WorkspacePaneTabBar({
   }, []);
 
   const commitTabRename = useCallback(async () => {
-    if (!renameState || !onRenameTerminalTab || renameState.saving) {
+    if (!renameState || renameState.saving) {
       return;
     }
 
@@ -505,28 +499,27 @@ export function WorkspacePaneTabBar({
         style={tabListStyle}
       >
         {visibleTabs.map((tab) => {
-          const active = tab.key === activeTabKey;
+          const active = tab.key === model.activeTabKey;
+          const tabModel = tabModelsByKey.get(tab.key);
           const isTerminal = tab.kind === "terminal";
           const isRenaming = renameState?.key === tab.key;
-          const isDropTarget = dragPreview?.targetKey === tab.key;
-          const isDraggedTab = dragPreview?.draggedKey === tab.key;
-          const leading = renderTabLeading
-            ? renderTabLeading(tab)
-            : renderWorkspacePaneDefaultTabLeading(tab);
+          const isDropTarget = model.dragPreview?.targetKey === tab.key;
+          const isDraggedTab = model.dragPreview?.draggedKey === tab.key;
+          const leading = renderWorkspacePaneDefaultTabLeading(tab);
           const previewShiftDirection =
-            dragPreview?.targetKey && dragPreview.placement
+            model.dragPreview?.targetKey && model.dragPreview.placement
               ? getWorkspaceTabDragShiftDirection(
                   visibleTabKeys,
-                  dragPreview.draggedKey,
-                  dragPreview.targetKey,
-                  dragPreview.placement,
+                  model.dragPreview.draggedKey,
+                  model.dragPreview.targetKey,
+                  model.dragPreview.placement,
                   tab.key,
                 )
               : 0;
           const previewShiftPx =
-            previewShiftDirection === 0 || !dragPreview
+            previewShiftDirection === 0 || !model.dragPreview
               ? 0
-              : previewShiftDirection * (dragPreview.draggedWidth + TAB_DRAG_GAP_PX);
+              : previewShiftDirection * (model.dragPreview.draggedWidth + TAB_DRAG_GAP_PX);
           const style =
             previewShiftPx === 0 ? undefined : { transform: `translateX(${previewShiftPx}px)` };
 
@@ -534,7 +527,7 @@ export function WorkspacePaneTabBar({
             <WorkspacePaneTabItem
               key={tab.key}
               active={active}
-              dirty={dirtyTabKeys?.has(tab.key)}
+              dirty={tabModel?.dirty ?? false}
               isDraggedTab={isDraggedTab}
               isDropTarget={isDropTarget}
               isRenaming={Boolean(isRenaming)}
@@ -549,7 +542,7 @@ export function WorkspacePaneTabBar({
                 onCloseDocumentTab(tab.key);
               }}
               onDoubleClick={(event) => {
-                if (!isTerminal || !onRenameTerminalTab) {
+                if (!isTerminal) {
                   return;
                 }
 

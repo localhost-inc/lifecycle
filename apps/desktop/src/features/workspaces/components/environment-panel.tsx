@@ -11,7 +11,7 @@ interface EnvironmentPanelProps {
   config: LifecycleConfig | null;
   hasManifest: boolean;
   manifestState: "invalid" | "missing" | "valid";
-  onOpenBrowser: (service: Pick<ServiceRecord, "name" | "preview_url">) => void;
+  onOpenPreview: (service: Pick<ServiceRecord, "name" | "preview_url">) => void;
   onRestart: () => Promise<void>;
   onRun: (serviceNames?: string[]) => Promise<void>;
   onStop: () => Promise<void>;
@@ -75,7 +75,7 @@ export function EnvironmentPanel({
   config,
   hasManifest,
   manifestState,
-  onOpenBrowser,
+  onOpenPreview,
   onRestart,
   onRun,
   onStop,
@@ -113,7 +113,6 @@ export function EnvironmentPanel({
     hasManifest && workspaceStatus === "active" && !hasStartingService && !hasReadyService;
   const canStop = workspaceStatus === "active" && (hasStartingService || hasReadyService);
   const canRestart = workspaceStatus === "active" && hasReadyService && hasManifest;
-  const isRunning = workspaceStatus === "active" && hasReadyService;
   const showServiceLogs =
     !isArchived &&
     (hasStartingService ||
@@ -280,7 +279,7 @@ export function EnvironmentPanel({
               expanded={showServiceLogs ? expandedServiceName === service.name : undefined}
               key={service.id}
               logLines={showServiceLogs ? serviceLogsByName.get(service.name) : undefined}
-              onOpenPreview={isPrepareStep ? undefined : onOpenBrowser}
+              onOpenPreview={isPrepareStep ? undefined : onOpenPreview}
               onStartService={
                 isPrepareStep ? undefined : (serviceName) => void handleRunService(serviceName)
               }

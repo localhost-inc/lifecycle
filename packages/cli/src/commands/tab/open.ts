@@ -2,19 +2,18 @@ import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 
 import {
-  createTabOpenBrowserRequest,
+  createTabOpenPreviewRequest,
   formatTabOpenResult,
   requestBridge,
-  requireShellSessionToken,
   resolveWorkspaceId,
 } from "../../bridge";
 import { failCommand, failValidation, jsonFlag, workspaceIdFlag } from "../_shared";
 
 const workspaceSurface = z.enum([
-  "browser",
   "changes-diff",
   "commit-diff",
   "file",
+  "preview",
   "pull-request",
   "terminal",
 ]);
@@ -28,16 +27,16 @@ function validateTabOpenInput(input: {
   surface: z.infer<typeof workspaceSurface>;
   url?: string | undefined;
 }): string | null {
-  if (input.surface === "browser" && !input.url) {
-    return "--surface browser requires --url.";
+  if (input.surface === "preview" && !input.url) {
+    return "--surface preview requires --url.";
   }
 
-  if (input.surface === "browser" && input.pane) {
-    return "--pane is not implemented for browser tab opens yet.";
+  if (input.surface === "preview" && input.pane) {
+    return "--pane is not implemented for preview tab opens yet.";
   }
 
-  if (input.surface === "browser" && input.split) {
-    return "--split is not implemented for browser tab opens yet.";
+  if (input.surface === "preview" && input.split) {
+    return "--split is not implemented for preview tab opens yet.";
   }
 
   if (input.surface === "file" && !input.filePath) {
@@ -52,7 +51,7 @@ function validateTabOpenInput(input: {
     return "--surface pull-request requires --pull-request-number.";
   }
 
-  if (input.surface !== "browser") {
+  if (input.surface !== "preview") {
     return `lifecycle tab open --surface ${input.surface} is not wired yet.`;
   }
 
@@ -81,7 +80,7 @@ export default defineCommand({
     split: z.boolean().default(false).describe("Open in a split pane."),
     surface: workspaceSurface.describe("Surface kind to open."),
     terminalId: z.string().optional().describe("Existing terminal id to focus."),
-    url: z.string().optional().describe("URL to open for browser surfaces."),
+    url: z.string().optional().describe("URL to open for preview surfaces."),
     workspaceId: workspaceIdFlag,
   }),
   run: async (input, context) => {
@@ -94,10 +93,9 @@ export default defineCommand({
     }
 
     try {
-      requireShellSessionToken();
       const workspaceId = resolveWorkspaceId(input.workspaceId);
       const response = await requestBridge(
-        createTabOpenBrowserRequest({
+        createTabOpenPreviewRequest({
           select: input.select,
           split: input.split,
           url: input.url ?? "",

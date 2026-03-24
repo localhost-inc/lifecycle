@@ -3,18 +3,18 @@ import type { GitPullRequestSummary } from "@lifecycle/contracts";
 import type { StorageLike } from "@/features/workspaces/state/workspace-canvas-state";
 import {
   agentTabKey,
-  browserTabKey,
   changesDiffTabKey,
   clearLastWorkspaceId,
   createAgentTab,
-  createBrowserTab,
   commitDiffTabKey,
   createChangesDiffTab,
   createCommitDiffTab,
   createDefaultWorkspaceCanvasState,
   createFileViewerTab,
+  createPreviewTab,
   createPullRequestTab,
   fileViewerTabKey,
+  previewTabKey,
   pullRequestTabKey,
   readLastWorkspaceId,
   readWorkspaceCanvasState,
@@ -378,36 +378,36 @@ describe("workspace canvas state persistence", () => {
     });
   });
 
-  test("persists browser tabs with stable keys and preview URLs", () => {
+  test("persists preview tabs with stable keys and preview URLs", () => {
     const storage = new MemoryStorage();
 
     writeWorkspaceCanvasState(
       "ws-1",
       withDefaultState({
-        activeTabKey: browserTabKey("service:web"),
+        activeTabKey: previewTabKey("service:web"),
         documents: [
-          createBrowserTab({
+          createPreviewTab({
             key: "service:web",
             label: "web",
             url: "http://web.sydney.lifecycle.localhost",
           }),
         ],
-        tabOrderKeys: [browserTabKey("service:web")],
+        tabOrderKeys: [previewTabKey("service:web")],
       }),
       storage,
     );
 
     expect(readWorkspaceCanvasState("ws-1", storage)).toEqual(
       withDefaultState({
-        activeTabKey: browserTabKey("service:web"),
+        activeTabKey: previewTabKey("service:web"),
         documents: [
-          createBrowserTab({
+          createPreviewTab({
             key: "service:web",
             label: "web",
             url: "http://web.sydney.lifecycle.localhost",
           }),
         ],
-        tabOrderKeys: [browserTabKey("service:web")],
+        tabOrderKeys: [previewTabKey("service:web")],
       }),
     );
     expect(JSON.parse(storage.getItem(WORKSPACE_CANVAS_STATE_STORAGE_KEY) ?? "null")).toEqual({
@@ -416,15 +416,15 @@ describe("workspace canvas state persistence", () => {
         documents: [
           {
             key: "service:web",
-            kind: "browser",
+            kind: "preview",
             label: "web",
             url: "http://web.sydney.lifecycle.localhost",
           },
         ],
         paneTabStateById: {
           "pane-root": {
-            activeTabKey: browserTabKey("service:web"),
-            tabOrderKeys: [browserTabKey("service:web")],
+            activeTabKey: previewTabKey("service:web"),
+            tabOrderKeys: [previewTabKey("service:web")],
           },
         },
         rootPane: {
@@ -433,6 +433,51 @@ describe("workspace canvas state persistence", () => {
         },
       },
     });
+  });
+
+  test("reads persisted browser tabs as preview tabs", () => {
+    const storage = new MemoryStorage();
+
+    storage.setItem(
+      WORKSPACE_CANVAS_STATE_STORAGE_KEY,
+      JSON.stringify({
+        "ws-1": {
+          activePaneId: "pane-root",
+          documents: [
+            {
+              key: "service:web",
+              kind: "browser",
+              label: "web",
+              url: "http://web.sydney.lifecycle.localhost",
+            },
+          ],
+          paneTabStateById: {
+            "pane-root": {
+              activeTabKey: "browser:service:web",
+              tabOrderKeys: ["browser:service:web"],
+            },
+          },
+          rootPane: {
+            id: "pane-root",
+            kind: "leaf",
+          },
+        },
+      }),
+    );
+
+    expect(readWorkspaceCanvasState("ws-1", storage)).toEqual(
+      withDefaultState({
+        activeTabKey: previewTabKey("service:web"),
+        documents: [
+          createPreviewTab({
+            key: "service:web",
+            label: "web",
+            url: "http://web.sydney.lifecycle.localhost",
+          }),
+        ],
+        tabOrderKeys: [previewTabKey("service:web")],
+      }),
+    );
   });
 
   test("persists agent tabs with stable session ids", () => {

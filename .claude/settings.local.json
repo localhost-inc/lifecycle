@@ -24,7 +24,15 @@
       "WebFetch(domain:ui.shadcn.com)",
       "Bash(npx tsc:*)",
       "Bash(curl -s \"https://api.github.com/repos/openai/codex/readme\")",
-      "Bash(python3 -c \"import sys,json,base64; d=json.load\\(sys.stdin\\); print\\(base64.b64decode\\(d[''''content'''']\\).decode\\(\\)\\)\")"
+      "Bash(python3 -c \"import sys,json,base64; d=json.load\\(sys.stdin\\); print\\(base64.b64decode\\(d[''''content'''']\\).decode\\(\\)\\)\")",
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
+      "Bash(ls -la /Users/kyle/dev/lifecycle/apps/desktop/src/features/agents/components/*.tsx)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(grep -A 20 'case \"\"worker.cancel_turn\"\"' /Users/kyle/dev/lifecycle/packages/agents/src/providers/claude/worker.ts)",
+      "Bash(find /Users/kyle/dev/lifecycle -path */streamdown* -name *.css -not -path */src/*)",
+      "Bash(find /Users/kyle/dev/lifecycle -path */@streamdown/code* -name *.js -not -path */.bun/*)",
+      "Bash(find /Users/kyle/dev/lifecycle/node_modules/.bun -path *@streamdown/code* -name *.js)",
+      "Bash(find /Users/kyle/dev/lifecycle/node_modules/.bun -path *streamdown@2* -name *.js)"
     ]
   }
 }

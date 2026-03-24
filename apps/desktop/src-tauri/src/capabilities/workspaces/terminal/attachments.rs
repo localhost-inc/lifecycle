@@ -200,7 +200,9 @@ pub(crate) fn prepare_native_terminal_attachment_paste(
         media_type,
         bytes,
     )?;
-    Ok(build_native_terminal_attachment_paste_payload(&[attachment.absolute_path]))
+    Ok(build_native_terminal_attachment_paste_payload(&[
+        attachment.absolute_path,
+    ]))
 }
 
 #[cfg(test)]
@@ -245,12 +247,10 @@ mod tests {
     #[test]
     fn build_terminal_attachment_write_payloads_uses_plain_text_with_trailing_space() {
         assert_eq!(
-            build_terminal_attachment_write_payloads(
-                &[
-                    "/tmp/one.png".to_string(),
-                    "/tmp/two with spaces.png".to_string(),
-                ],
-            ),
+            build_terminal_attachment_write_payloads(&[
+                "/tmp/one.png".to_string(),
+                "/tmp/two with spaces.png".to_string(),
+            ],),
             vec![r#""/tmp/one.png" "/tmp/two with spaces.png" "#.to_string()]
         );
     }
@@ -258,12 +258,10 @@ mod tests {
     #[test]
     fn build_native_terminal_attachment_paste_payload_uses_trailing_space() {
         assert_eq!(
-            build_native_terminal_attachment_paste_payload(
-                &[
-                    "/tmp/one.png".to_string(),
-                    "/tmp/two with spaces.png".to_string(),
-                ],
-            ),
+            build_native_terminal_attachment_paste_payload(&[
+                "/tmp/one.png".to_string(),
+                "/tmp/two with spaces.png".to_string(),
+            ],),
             r#""/tmp/one.png" "/tmp/two with spaces.png" "#
         );
     }

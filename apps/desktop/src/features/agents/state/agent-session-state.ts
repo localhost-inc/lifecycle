@@ -14,10 +14,23 @@ import {
 
 export type AgentSessionState = AgentFleetSessionState;
 
-let agentFleetState = createAgentFleetState();
+// Preserve agent fleet state across Vite HMR so active sessions survive hot reloads.
+let agentFleetState: ReturnType<typeof createAgentFleetState> =
+  import.meta.hot?.data.agentFleetState ?? createAgentFleetState();
 
-const agentSessionListeners = new Map<string, Set<() => void>>();
-const agentStoreListeners = new Set<() => void>();
+const agentSessionListeners: Map<string, Set<() => void>> =
+  import.meta.hot?.data.agentSessionListeners ?? new Map<string, Set<() => void>>();
+const agentStoreListeners: Set<() => void> =
+  import.meta.hot?.data.agentStoreListeners ?? new Set<() => void>();
+
+if (import.meta.hot) {
+  import.meta.hot.accept();
+  import.meta.hot.dispose((data) => {
+    data.agentFleetState = agentFleetState;
+    data.agentSessionListeners = agentSessionListeners;
+    data.agentStoreListeners = agentStoreListeners;
+  });
+}
 
 function subscribeAgentStore(listener: () => void): () => void {
   agentStoreListeners.add(listener);

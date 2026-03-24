@@ -1,6 +1,5 @@
 import type { AgentSessionProviderId } from "@lifecycle/contracts";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@lifecycle/ui";
-import { AnimatePresence, motion } from "motion/react";
 import { Plus, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { ClaudeIcon, CodexIcon, ShellIcon } from "@/features/workspaces/surfaces/surface-icons";
@@ -51,32 +50,11 @@ export function SurfaceLaunchActions({
 
   return (
     <TooltipProvider>
-      <AnimatePresence initial={false} mode="popLayout">
+      <div className="flex min-w-0 items-center justify-end gap-px">
         {open ? (
-          <motion.div
-            key="surface-launch-actions"
-            animate={{
-              opacity: 1,
-              width: "auto",
-              transition: {
-                delayChildren: 0.04,
-                duration: 0.18,
-                ease: "easeInOut",
-                staggerChildren: 0.045,
-              },
-            }}
-            className="flex items-center gap-px overflow-hidden"
-            exit={{ opacity: 0, width: 0, transition: { duration: 0.14, ease: "easeInOut" } }}
-            initial={{ opacity: 0, width: 0 }}
-          >
+          <div className="flex items-center gap-px transition-opacity duration-150 ease-out">
             {actions.map((action) => (
-              <motion.div
-                key={action.key}
-                animate={{ opacity: 1, x: 0, scale: 1 }}
-                exit={{ opacity: 0, x: 6, scale: 0.94 }}
-                initial={{ opacity: 0, x: 6, scale: 0.94 }}
-                transition={{ duration: 0.16, ease: "easeOut" }}
-              >
+              <div key={action.key}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <button
@@ -95,14 +73,9 @@ export function SurfaceLaunchActions({
                   </TooltipTrigger>
                   <TooltipContent align="end">{action.title}</TooltipContent>
                 </Tooltip>
-              </motion.div>
+              </div>
             ))}
-            <motion.div
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 6, scale: 0.94 }}
-              initial={{ opacity: 0, x: 6, scale: 0.94 }}
-              transition={{ duration: 0.16, ease: "easeOut" }}
-            >
+            <div>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -117,15 +90,10 @@ export function SurfaceLaunchActions({
                 </TooltipTrigger>
                 <TooltipContent align="end">Close</TooltipContent>
               </Tooltip>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         ) : (
-          <motion.div
-            key="surface-launch-trigger"
-            animate={{ opacity: 1, width: "auto", x: 0 }}
-            exit={{ opacity: 0, width: 0, x: -8, transition: { duration: 0.12 } }}
-            initial={{ opacity: 0, width: 0, x: -8 }}
-          >
+          <div className="transition-opacity duration-150 ease-out">
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -140,9 +108,9 @@ export function SurfaceLaunchActions({
               </TooltipTrigger>
               <TooltipContent align="end">New tab</TooltipContent>
             </Tooltip>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      </div>
     </TooltipProvider>
   );
 }

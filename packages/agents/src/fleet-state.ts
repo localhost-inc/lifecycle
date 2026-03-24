@@ -6,6 +6,24 @@ export interface AgentFleetAuthStatus {
   provider: string;
 }
 
+export type AgentTurnPhase = "thinking" | "responding" | "tool_use";
+
+export interface AgentTurnActivity {
+  /** What the agent is currently doing within the turn. */
+  phase: AgentTurnPhase;
+  /** Name of the tool currently being invoked, when phase is "tool_use". */
+  toolName: string | null;
+  /** Number of tool calls started so far in this turn. */
+  toolCallCount: number;
+}
+
+export interface AgentSessionUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  costUsd: number;
+}
+
 export interface AgentFleetSessionState {
   authStatus: AgentFleetAuthStatus | null;
   lastError: string | null;
@@ -13,6 +31,8 @@ export interface AgentFleetSessionState {
   pendingTurnIds: string[];
   providerStatus: string | null;
   responseReady: boolean;
+  turnActivity: AgentTurnActivity | null;
+  usage: AgentSessionUsage;
   workspaceId: string | null;
 }
 
@@ -25,6 +45,13 @@ export interface AgentWorkspaceStatus {
   running: boolean;
 }
 
+export const DEFAULT_AGENT_SESSION_USAGE: AgentSessionUsage = {
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheReadTokens: 0,
+  costUsd: 0,
+};
+
 export const DEFAULT_AGENT_FLEET_SESSION_STATE: AgentFleetSessionState = {
   authStatus: null,
   lastError: null,
@@ -32,6 +59,8 @@ export const DEFAULT_AGENT_FLEET_SESSION_STATE: AgentFleetSessionState = {
   pendingTurnIds: [],
   providerStatus: null,
   responseReady: false,
+  turnActivity: null,
+  usage: { ...DEFAULT_AGENT_SESSION_USAGE },
   workspaceId: null,
 };
 
@@ -92,7 +121,10 @@ export function reduceAgentFleetEvent(state: AgentFleetState, event: AgentEvent)
     }
 
     if (event.kind === "agent.status.updated") {
-      return { ...nextSessionState, providerStatus: event.status };
+      return {
+        ...nextSessionState,
+        providerStatus: event.detail?.trim() ? event.detail : event.status,
+      };
     }
 
     if (event.kind === "agent.turn.started") {
@@ -102,16 +134,28 @@ export function reduceAgentFleetEvent(state: AgentFleetState, event: AgentEvent)
         pendingTurnIds: [...new Set([...nextSessionState.pendingTurnIds, event.turnId])],
         providerStatus: null,
         responseReady: false,
+        turnActivity: { phase: "thinking", toolName: null, toolCallCount: 0 },
       };
     }
 
     if (event.kind === "agent.turn.completed") {
+      const prev = nextSessionState.usage;
+      const turnUsage = event.usage;
       return {
         ...nextSessionState,
         pendingApprovals: [],
         pendingTurnIds: nextSessionState.pendingTurnIds.filter((id) => id !== event.turnId),
         providerStatus: null,
         responseReady: true,
+        turnActivity: null,
+        usage: turnUsage
+          ? {
+              inputTokens: prev.inputTokens + turnUsage.inputTokens,
+              outputTokens: prev.outputTokens + turnUsage.outputTokens,
+              cacheReadTokens: prev.cacheReadTokens + (turnUsage.cacheReadTokens ?? 0),
+              costUsd: prev.costUsd + (event.costUsd ?? 0),
+            }
+          : prev,
       };
     }
 
@@ -123,14 +167,52 @@ export function reduceAgentFleetEvent(state: AgentFleetState, event: AgentEvent)
         pendingTurnIds: nextSessionState.pendingTurnIds.filter((id) => id !== event.turnId),
         providerStatus: null,
         responseReady: false,
+        turnActivity: null,
       };
+    }
+
+    if (
+      event.kind === "agent.message.part.delta" ||
+      event.kind === "agent.message.part.completed"
+    ) {
+      const activity = nextSessionState.turnActivity;
+      if (activity) {
+        if (event.part.type === "thinking") {
+          if (activity.phase !== "thinking") {
+            return {
+              ...nextSessionState,
+              turnActivity: { ...activity, phase: "thinking", toolName: null },
+            };
+          }
+        } else if (event.part.type === "text") {
+          if (activity.phase !== "responding") {
+            return {
+              ...nextSessionState,
+              turnActivity: { ...activity, phase: "responding", toolName: null },
+            };
+          }
+        } else if (event.part.type === "tool_call") {
+          const toolName = event.part.toolName ?? activity.toolName;
+          const isNewTool = activity.phase !== "tool_use" || activity.toolName !== toolName;
+          return {
+            ...nextSessionState,
+            turnActivity: {
+              phase: "tool_use",
+              toolName,
+              toolCallCount: isNewTool ? activity.toolCallCount + 1 : activity.toolCallCount,
+            },
+          };
+        }
+      }
     }
 
     if (event.kind === "agent.approval.requested") {
       return {
         ...nextSessionState,
         pendingApprovals: [
-          ...nextSessionState.pendingApprovals.filter((approval) => approval.id !== event.approval.id),
+          ...nextSessionState.pendingApprovals.filter(
+            (approval) => approval.id !== event.approval.id,
+          ),
           event.approval,
         ],
         providerStatus: null,

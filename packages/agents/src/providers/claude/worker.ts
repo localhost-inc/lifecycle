@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
 import {
   unstable_v2_createSession,
+  unstable_v2_prompt,
   unstable_v2_resumeSession,
   type CanUseTool,
   type ElicitationRequest,
@@ -17,8 +18,56 @@ import type {
   AgentWorkerApprovalRequestPayload,
   AgentWorkerCommand,
   AgentWorkerEvent,
+  AgentWorkerInputPart,
 } from "../../worker-protocol";
+import { LIFECYCLE_SYSTEM_PROMPT } from "../../system-prompt";
 import { buildSessionEnv, type ClaudeLoginMethod } from "./env";
+
+// ---------------------------------------------------------------------------
+// Lightweight title generation — spins up a minimal SDK session so it shares
+// the same auth (OAuth / API key) as the main agent session.
+// ---------------------------------------------------------------------------
+
+function truncateTitle(text: string, maxLength = 40): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (clean.length <= maxLength) {
+    return clean;
+  }
+  const truncated = clean.slice(0, maxLength);
+  const lastSpace = truncated.lastIndexOf(" ");
+  return lastSpace > 10 ? truncated.slice(0, lastSpace) : truncated;
+}
+
+function extractTextFromInput(parts: AgentWorkerInputPart[]): string {
+  return parts
+    .filter((p): p is Extract<AgentWorkerInputPart, { type: "text" }> => p.type === "text")
+    .map((p) => p.text)
+    .join(" ")
+    .trim();
+}
+
+async function generateSessionTitle(
+  userText: string,
+  loginMethod: ClaudeLoginMethod,
+): Promise<string | null> {
+  try {
+    const options = {
+      model: "claude-haiku-4-5-20251001",
+      permissionMode: "plan" as const,
+      env: buildSessionEnv(loginMethod),
+      systemPrompt:
+        "Generate a concise 3-5 word title for this conversation. Respond with only the title, no quotes or extra punctuation.",
+    };
+    const result = await unstable_v2_prompt(userText.slice(0, 500), options);
+    if (result.subtype === "success" && typeof result.result === "string") {
+      const title = result.result.trim();
+      return title || truncateTitle(userText);
+    }
+    return truncateTitle(userText);
+  } catch {
+    return truncateTitle(userText);
+  }
+}
 
 export type ClaudeWorkerPermissionMode =
   | "acceptEdits"
@@ -41,7 +90,10 @@ export interface ClaudeWorkerInput {
 
 interface PendingClaudeApproval {
   approval: AgentWorkerApprovalRequestPayload;
-  resolve: (resolution: { decision: "approve_once" | "approve_session" | "reject"; response?: Record<string, unknown> | null }) => void;
+  resolve: (resolution: {
+    decision: "approve_once" | "approve_session" | "reject";
+    response?: Record<string, unknown> | null;
+  }) => void;
   turnId: string;
 }
 
@@ -110,6 +162,48 @@ function serializeToolInput(input: Record<string, unknown>): string | null {
   }
 }
 
+function getClaudeAssistantBlockKey(turnId: string, blockId: string): string {
+  return `${turnId}:${blockId}`;
+}
+
+function buildClaudeTextDeltaEvent(input: {
+  blockId: string;
+  emittedBlockIds: Set<string>;
+  text: string;
+  turnId: string;
+}): AgentWorkerEvent | null {
+  const blockKey = getClaudeAssistantBlockKey(input.turnId, input.blockId);
+  if (input.emittedBlockIds.has(blockKey)) {
+    return null;
+  }
+  input.emittedBlockIds.add(blockKey);
+  return {
+    kind: "agent.message.delta",
+    text: input.text,
+    turnId: input.turnId,
+    blockId: input.blockId,
+  };
+}
+
+function buildClaudeThinkingDeltaEvent(input: {
+  blockId: string;
+  emittedBlockIds: Set<string>;
+  text: string;
+  turnId: string;
+}): AgentWorkerEvent | null {
+  const blockKey = getClaudeAssistantBlockKey(input.turnId, input.blockId);
+  if (input.emittedBlockIds.has(blockKey)) {
+    return null;
+  }
+  input.emittedBlockIds.add(blockKey);
+  return {
+    kind: "agent.thinking.delta",
+    text: input.text,
+    turnId: input.turnId,
+    blockId: input.blockId,
+  };
+}
+
 export function buildClaudeToolUseEvents(input: {
   toolInput: Record<string, unknown>;
   toolName: string;
@@ -134,6 +228,63 @@ export function buildClaudeToolUseEvents(input: {
       turnId: input.turnId,
     });
   }
+  return events;
+}
+
+export function buildClaudeAssistantContentEvents(input: {
+  content: Record<string, unknown>[];
+  emittedBlockIds: Set<string>;
+  emittedToolUseIds: Set<string>;
+  turnId: string;
+}): AgentWorkerEvent[] {
+  const events: AgentWorkerEvent[] = [];
+
+  for (const [index, block] of input.content.entries()) {
+    const blockIdBase = `${index}`;
+
+    if (block.type === "text" && typeof block.text === "string") {
+      const event = buildClaudeTextDeltaEvent({
+        blockId: `text:${blockIdBase}`,
+        emittedBlockIds: input.emittedBlockIds,
+        text: block.text,
+        turnId: input.turnId,
+      });
+      if (event) {
+        events.push(event);
+      }
+      continue;
+    }
+
+    if (block.type === "thinking" && typeof block.thinking === "string") {
+      const event = buildClaudeThinkingDeltaEvent({
+        blockId: `thinking:${blockIdBase}`,
+        emittedBlockIds: input.emittedBlockIds,
+        text: block.thinking,
+        turnId: input.turnId,
+      });
+      if (event) {
+        events.push(event);
+      }
+      continue;
+    }
+
+    if (block.type === "tool_use" && typeof block.name === "string") {
+      const toolUseId = (block.id as string) ?? "";
+      if (input.emittedToolUseIds.has(toolUseId)) {
+        continue;
+      }
+      input.emittedToolUseIds.add(toolUseId);
+      events.push(
+        ...buildClaudeToolUseEvents({
+          toolInput: isRecord(block.input) ? block.input : {},
+          toolName: block.name,
+          toolUseId,
+          turnId: input.turnId,
+        }),
+      );
+    }
+  }
+
   return events;
 }
 
@@ -217,7 +368,10 @@ function createPendingApprovalPromise(
   pendingApprovals: Map<string, PendingClaudeApproval>,
   turnId: string,
   signal?: AbortSignal,
-): Promise<{ decision: "approve_once" | "approve_session" | "reject"; response?: Record<string, unknown> | null }> {
+): Promise<{
+  decision: "approve_once" | "approve_session" | "reject";
+  response?: Record<string, unknown> | null;
+}> {
   emitWorkerEvent({
     kind: "agent.approval.requested",
     approval,
@@ -251,13 +405,27 @@ function createPendingApprovalPromise(
 }
 
 // Track active tool blocks so we can emit their accumulated input on block stop.
-const activeToolBlocks = new Map<number, { toolName: string; toolUseId: string; inputChunks: string[] }>();
+const activeToolBlocks = new Map<
+  number,
+  { toolName: string; toolUseId: string; inputChunks: string[] }
+>();
 
 // Track tool_use IDs that have already been emitted to avoid duplicates.
 // Events can come from both streaming (content_block_start/stop) and assistant message.
 const emittedToolUseIds = new Set<string>();
+const emittedAssistantBlockIds = new Set<string>();
 
-function handleStreamMessage(message: SDKMessage, turnId: string): "result" | "continue" {
+function handleStreamMessage(
+  message: SDKMessage,
+  turnId: string,
+  signal?: AbortSignal,
+): "result" | "continue" {
+  // Skip emitting streaming events after abort — the turn is already cancelled.
+  // Still process "result" messages so the stream loop can terminate cleanly.
+  if (signal?.aborted && message.type !== "result") {
+    return "continue";
+  }
+
   if (message.type === "auth_status") {
     emitWorkerEvent({
       kind: "worker.auth_status",
@@ -292,19 +460,25 @@ function handleStreamMessage(message: SDKMessage, turnId: string): "result" | "c
       const blockIndex = (event.index as number) ?? 0;
       const delta = event.delta as Record<string, unknown> | undefined;
       if (delta?.type === "text_delta" && typeof delta.text === "string") {
-        emitWorkerEvent({
-          kind: "agent.message.delta",
+        const textEvent = buildClaudeTextDeltaEvent({
+          blockId: `text:${blockIndex}`,
+          emittedBlockIds: emittedAssistantBlockIds,
           text: delta.text,
           turnId,
-          blockId: `text:${blockIndex}`,
         });
+        if (textEvent) {
+          emitWorkerEvent(textEvent);
+        }
       } else if (delta?.type === "thinking_delta" && typeof delta.thinking === "string") {
-        emitWorkerEvent({
-          kind: "agent.thinking.delta",
+        const thinkingEvent = buildClaudeThinkingDeltaEvent({
+          blockId: `thinking:${blockIndex}`,
+          emittedBlockIds: emittedAssistantBlockIds,
           text: delta.thinking,
           turnId,
-          blockId: `thinking:${blockIndex}`,
         });
+        if (thinkingEvent) {
+          emitWorkerEvent(thinkingEvent);
+        }
       } else if (delta?.type === "input_json_delta" && typeof delta.partial_json === "string") {
         const toolBlock = activeToolBlocks.get(blockIndex);
         if (toolBlock) {
@@ -359,8 +533,8 @@ function handleStreamMessage(message: SDKMessage, turnId: string): "result" | "c
     }
 
     if (systemMessage.subtype === "task_started") {
-        emitWorkerEvent({
-          kind: "agent.item.started",
+      emitWorkerEvent({
+        kind: "agent.item.started",
         item: {
           id: (systemMessage.task_id as string) ?? randomUUID(),
           type: "agent_message",
@@ -371,8 +545,8 @@ function handleStreamMessage(message: SDKMessage, turnId: string): "result" | "c
     }
 
     if (systemMessage.subtype === "task_progress") {
-        emitWorkerEvent({
-          kind: "agent.item.updated",
+      emitWorkerEvent({
+        kind: "agent.item.updated",
         item: {
           id: (systemMessage.task_id as string) ?? "",
           type: "agent_message",
@@ -383,8 +557,8 @@ function handleStreamMessage(message: SDKMessage, turnId: string): "result" | "c
     }
 
     if (systemMessage.subtype === "task_notification") {
-        emitWorkerEvent({
-          kind: "agent.item.completed",
+      emitWorkerEvent({
+        kind: "agent.item.completed",
         item: {
           id: (systemMessage.task_id as string) ?? "",
           type: "agent_message",
@@ -410,29 +584,19 @@ function handleStreamMessage(message: SDKMessage, turnId: string): "result" | "c
   // Handle completed assistant messages — extract tool_use blocks that may not
   // have been emitted via stream_event (e.g. when permissions are bypassed).
   if (message.type === "assistant") {
-    const betaMessage = (message as Record<string, unknown>).message as Record<string, unknown> | undefined;
-    const content = Array.isArray(betaMessage?.content) ? (betaMessage.content as Record<string, unknown>[]) : [];
-
-    for (const block of content) {
-      if (block.type === "tool_use" && typeof block.name === "string") {
-        const toolUseId = (block.id as string) ?? "";
-
-        // Skip if we already emitted this tool_use via stream_event or canUseTool.
-        // We track emitted IDs to avoid duplicates.
-        if (emittedToolUseIds.has(toolUseId)) {
-          continue;
-        }
-        emittedToolUseIds.add(toolUseId);
-
-        for (const event of buildClaudeToolUseEvents({
-          toolInput: isRecord(block.input) ? block.input : {},
-          toolName: block.name,
-          toolUseId,
-          turnId,
-        })) {
-          emitWorkerEvent(event);
-        }
-      }
+    const betaMessage = (message as Record<string, unknown>).message as
+      | Record<string, unknown>
+      | undefined;
+    const content = Array.isArray(betaMessage?.content)
+      ? (betaMessage.content as Record<string, unknown>[])
+      : [];
+    for (const event of buildClaudeAssistantContentEvents({
+      content,
+      emittedBlockIds: emittedAssistantBlockIds,
+      emittedToolUseIds,
+      turnId,
+    })) {
+      emitWorkerEvent(event);
     }
     return "continue";
   }
@@ -451,10 +615,36 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
   let currentTurnId: string | null = null;
   // eslint-disable-next-line prefer-const -- assigned asynchronously inside processTurn
   let currentTurnAbort = null as AbortController | null;
+  let cancelledTurnId: string | null = null;
   let turnQueue = Promise.resolve();
 
+  // The claude-agent-sdk can throw unhandled rejections for internal tool
+  // errors (e.g. MaxFileReadTokenExceededError) that bypass the stream
+  // iterator. Catch these so the worker process stays alive.
+  process.on("unhandledRejection", (reason) => {
+    const message = reason instanceof Error ? reason.message : String(reason);
+    const turnId = currentTurnId;
+    if (turnId) {
+      emitWorkerEvent({
+        kind: "agent.turn.failed",
+        error: message,
+        turnId,
+      });
+    } else {
+      emitWorkerEvent({
+        kind: "agent.turn.failed",
+        error: message,
+        turnId: "unknown",
+      });
+    }
+  });
+
   const sessionCallbacks = {
-    canUseTool: async (toolName: string, rawInput: unknown, options: Parameters<CanUseTool>[2]): Promise<PermissionResult> => {
+    canUseTool: async (
+      toolName: string,
+      rawInput: unknown,
+      options: Parameters<CanUseTool>[2],
+    ): Promise<PermissionResult> => {
       const inputRecord = isRecord(rawInput) ? rawInput : { value: rawInput };
       const approvalId = options.toolUseID?.trim() || randomUUID();
       const turnId = currentTurnId ?? approvalId;
@@ -567,7 +757,10 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
     },
   };
 
-  let { providerSessionId: initialProviderSessionId, session } = createClaudeWorkerSession(input, sessionCallbacks);
+  let { providerSessionId: initialProviderSessionId, session } = createClaudeWorkerSession(
+    input,
+    sessionCallbacks,
+  );
   let resolvedProviderSessionId = initialProviderSessionId;
 
   if (resolvedProviderSessionId) {
@@ -593,8 +786,12 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
   }
 
   let sessionClosed = false;
+  let firstTurnText: string | null = null;
+  let titleGenerated = false;
 
-  async function processTurn(command: Extract<AgentWorkerCommand, { kind: "worker.send_turn" }>): Promise<void> {
+  async function processTurn(
+    command: Extract<AgentWorkerCommand, { kind: "worker.send_turn" }>,
+  ): Promise<void> {
     // Resume session if it was closed by a previous interrupt.
     if (sessionClosed && resolvedProviderSessionId) {
       const resumed = createClaudeWorkerSession(
@@ -608,13 +805,40 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
     currentTurnId = command.turnId;
     const abort = new AbortController();
     currentTurnAbort = abort;
+
+    // Capture the first turn's text for title generation.
+    if (!titleGenerated && firstTurnText === null) {
+      const text = extractTextFromInput(
+        Array.isArray(command.input)
+          ? command.input
+          : [{ type: "text" as const, text: command.input as string }],
+      );
+      firstTurnText = text.length > 0 ? text : null;
+    }
+
     try {
+      const inputParts = Array.isArray(command.input)
+        ? command.input
+        : [{ type: "text" as const, text: command.input as string }];
+      const content = inputParts.map((part) => {
+        if (part.type === "image") {
+          return {
+            type: "image" as const,
+            source: {
+              type: "base64" as const,
+              media_type: part.mediaType as "image/png" | "image/jpeg" | "image/gif" | "image/webp",
+              data: part.base64Data,
+            },
+          };
+        }
+        return { type: "text" as const, text: part.text };
+      });
       const userMessage: SDKUserMessage = {
         type: "user",
         session_id: "",
         message: {
           role: "user",
-          content: [{ type: "text", text: command.input }],
+          content,
         },
         parent_tool_use_id: null,
       };
@@ -627,7 +851,7 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
           break;
         }
         await emitReadyIfNeeded(message);
-        const action = handleStreamMessage(message, command.turnId);
+        const action = handleStreamMessage(message, command.turnId, abort.signal);
 
         if (action !== "result") {
           continue;
@@ -662,6 +886,16 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
             usage: extractUsage(resultMessage),
             costUsd: extractCost(resultMessage),
           });
+
+          // Fire-and-forget title generation after the first successful turn.
+          if (!titleGenerated && firstTurnText) {
+            titleGenerated = true;
+            void generateSessionTitle(firstTurnText, input.loginMethod).then((title) => {
+              if (title) {
+                emitWorkerEvent({ kind: "worker.title_generated", title });
+              }
+            });
+          }
         }
         break;
       }
@@ -674,11 +908,14 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
             pending.resolve({ decision: "reject", response: { message: "Turn interrupted." } });
           }
         }
-        emitWorkerEvent({
-          kind: "agent.turn.failed",
-          error: "interrupted",
-          turnId: command.turnId,
-        });
+        // Only emit if the cancel handler didn't already fire the event.
+        if (cancelledTurnId !== command.turnId) {
+          emitWorkerEvent({
+            kind: "agent.turn.failed",
+            error: "interrupted",
+            turnId: command.turnId,
+          });
+        }
       } else if (!sawResult) {
         emitWorkerEvent({
           kind: "agent.turn.failed",
@@ -688,11 +925,14 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
       }
     } catch (error) {
       if (abort.signal.aborted) {
-        emitWorkerEvent({
-          kind: "agent.turn.failed",
-          error: "interrupted",
-          turnId: command.turnId,
-        });
+        // Only emit if the cancel handler didn't already fire the event.
+        if (cancelledTurnId !== command.turnId) {
+          emitWorkerEvent({
+            kind: "agent.turn.failed",
+            error: "interrupted",
+            turnId: command.turnId,
+          });
+        }
       } else {
         emitWorkerEvent({
           kind: "agent.turn.failed",
@@ -703,6 +943,9 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
     } finally {
       currentTurnId = null;
       currentTurnAbort = null;
+      if (cancelledTurnId === command.turnId) {
+        cancelledTurnId = null;
+      }
     }
   }
 
@@ -743,10 +986,18 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
       case "worker.cancel_turn": {
         const abort = currentTurnAbort;
         if (abort) {
+          const turnId = currentTurnId ?? command.turnId ?? "cancelled";
           abort.abort();
           // Force-break the stream so we don't wait for the next SDK message.
           session.close();
           sessionClosed = true;
+          // Emit immediately so the UI unblocks — don't wait for the stream to drain.
+          cancelledTurnId = turnId;
+          emitWorkerEvent({
+            kind: "agent.turn.failed",
+            error: "interrupted",
+            turnId,
+          });
         } else {
           emitWorkerEvent({
             kind: "agent.turn.failed",
@@ -786,6 +1037,11 @@ export function createClaudeWorkerSession(
     allowDangerouslySkipPermissions: input.dangerousSkipPermissions,
     includePartialMessages: true,
     env: buildSessionEnv(input.loginMethod),
+    systemPrompt: {
+      type: "preset" as const,
+      preset: "claude_code" as const,
+      append: LIFECYCLE_SYSTEM_PROMPT,
+    },
     ...(callbacks?.canUseTool ? { canUseTool: callbacks.canUseTool } : {}),
     ...(callbacks?.onElicitation ? { onElicitation: callbacks.onElicitation } : {}),
   };

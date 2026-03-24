@@ -11,13 +11,12 @@ import {
 import {
   agentTabKey,
   createAgentTab,
-  browserTabKey,
   changesDiffTabKey,
-  createBrowserTab,
   commitDiffTabKey,
   createChangesDiffTab,
   createCommitDiffTab,
   createFileViewerTab,
+  createPreviewTab,
   createPullRequestTab,
   createDefaultWorkspacePaneTabState,
   fileViewerTabKey,
@@ -27,6 +26,7 @@ import {
   isChangesDiffDocument,
   isTerminalTabKey,
   MAX_CLOSED_TAB_STACK_SIZE,
+  previewTabKey,
   pullRequestTabKey,
   type ClosedTabEntry,
   type WorkspacePaneTabState,
@@ -50,8 +50,10 @@ export type WorkspaceCanvasAction =
   | { kind: "select-pane"; paneId: string }
   | { key: string | null; kind: "select-tab"; paneId: string }
   | { key: string; kind: "close-document" }
+  | { key: string; kind: "discard-terminal-tab" }
   | { key: string; kind: "hide-terminal-tab"; terminalId?: string }
   | { kind: "pop-closed-tab" }
+  | { kind: "replace-terminal-tab-key"; nextKey: string; previousKey: string }
   | { key: string; kind: "show-terminal-tab"; paneId?: string; select: boolean }
   | { keys: string[]; kind: "set-hidden-terminal-tab-keys" }
   | { keys: string[]; kind: "reconcile-pane-visible-tab-order"; paneId: string }
@@ -77,7 +79,8 @@ export type WorkspaceCanvasAction =
   | { kind: "collapse-pane"; paneId: string }
   | { kind: "close-pane"; paneId: string }
   | { kind: "set-split-ratio"; ratio: number; splitId: string }
-  | { kind: "reset-all-split-ratios" };
+  | { kind: "reset-all-split-ratios" }
+  | { kind: "update-document-label"; key: string; label: string };
 
 function appendWorkspaceTabKey(keys: readonly string[], key: string): string[] {
   return [...keys.filter((existingKey) => existingKey !== key), key];
@@ -385,12 +388,12 @@ export function workspaceCanvasReducer(
               changesDiffTabKey(),
             )
           : null;
-      const existingPaneForBrowser =
-        request.kind === "browser"
+      const existingPaneForPreview =
+        request.kind === "preview"
           ? findWorkspacePaneIdContainingTab(
               state.rootPane,
               state.paneTabStateById,
-              browserTabKey(request.browserKey),
+              previewTabKey(request.previewKey),
             )
           : null;
       const existingPaneForAgentTab =
@@ -479,12 +482,12 @@ export function workspaceCanvasReducer(
         };
       }
 
-      if (request.kind === "browser") {
-        const key = browserTabKey(request.browserKey);
-        const existingPaneId = existingPaneForBrowser;
+      if (request.kind === "preview") {
+        const key = previewTabKey(request.previewKey);
+        const existingPaneId = existingPaneForPreview;
         const targetPaneId = existingPaneId ?? resolveWorkspaceTargetPaneId(state);
-        const nextTab = createBrowserTab({
-          key: request.browserKey,
+        const nextTab = createPreviewTab({
+          key: request.previewKey,
           label: request.label,
           url: request.url,
         });
@@ -767,6 +770,90 @@ export function workspaceCanvasReducer(
 
       return closeWorkspacePaneIfEmpty(nextState, paneId);
     }
+    case "discard-terminal-tab": {
+      const paneId = findWorkspacePaneIdContainingTab(
+        state.rootPane,
+        state.paneTabStateById,
+        action.key,
+      );
+      if (!paneId) {
+        return {
+          ...state,
+          tabStateByKey: omitWorkspaceTabState(state.tabStateByKey, action.key),
+        };
+      }
+
+      const paneTabState = getWorkspacePaneTabState(state.paneTabStateById, paneId);
+      const nextActiveKey =
+        paneTabState.activeTabKey === action.key
+          ? getWorkspaceTabKeyAfterClose(paneTabState.tabOrderKeys, action.key)
+          : paneTabState.activeTabKey;
+      const nextState: WorkspaceCanvasState = {
+        ...state,
+        paneTabStateById: updateWorkspacePaneTabState(
+          state.paneTabStateById,
+          paneId,
+          (nextPane) => ({
+            ...nextPane,
+            activeTabKey:
+              paneTabState.activeTabKey === action.key ? nextActiveKey : nextPane.activeTabKey,
+            tabOrderKeys: removeWorkspaceTabKey(nextPane.tabOrderKeys, action.key),
+          }),
+        ),
+        tabStateByKey: omitWorkspaceTabState(state.tabStateByKey, action.key),
+      };
+
+      if (state.activePaneId === paneId && paneTabState.activeTabKey === action.key) {
+        return closeWorkspacePaneIfEmpty(
+          selectWorkspacePaneTab(nextState, paneId, nextActiveKey),
+          paneId,
+        );
+      }
+
+      return closeWorkspacePaneIfEmpty(nextState, paneId);
+    }
+    case "replace-terminal-tab-key": {
+      if (action.previousKey === action.nextKey) {
+        return state;
+      }
+
+      const nextPaneTabStateById = Object.fromEntries(
+        Object.entries(state.paneTabStateById).map(([paneId, paneTabState]) => [
+          paneId,
+          {
+            activeTabKey:
+              paneTabState.activeTabKey === action.previousKey
+                ? action.nextKey
+                : paneTabState.activeTabKey,
+            tabOrderKeys: paneTabState.tabOrderKeys.map((key) =>
+              key === action.previousKey ? action.nextKey : key,
+            ),
+          },
+        ]),
+      );
+
+      const previousTabState = state.tabStateByKey[action.previousKey];
+      let nextTabStateByKey = omitWorkspaceTabState(state.tabStateByKey, action.previousKey);
+      if (previousTabState) {
+        nextTabStateByKey = updateWorkspaceTabState(nextTabStateByKey, action.nextKey, {
+          ...(previousTabState.hidden ? { hidden: true } : {}),
+          ...(previousTabState.viewState ? { viewState: previousTabState.viewState } : {}),
+        });
+      }
+
+      const activePaneTabState = getWorkspacePaneTabState(nextPaneTabStateById, state.activePaneId);
+      const nextActivePaneId = activePaneTabState.activeTabKey
+        ? state.activePaneId
+        : (findWorkspacePaneIdContainingTab(state.rootPane, nextPaneTabStateById, action.nextKey) ??
+          state.activePaneId);
+
+      return {
+        ...state,
+        activePaneId: nextActivePaneId,
+        paneTabStateById: nextPaneTabStateById,
+        tabStateByKey: nextTabStateByKey,
+      };
+    }
     case "show-terminal-tab": {
       const existingPaneId = findWorkspacePaneIdContainingTab(
         state.rootPane,
@@ -1001,6 +1088,25 @@ export function workspaceCanvasReducer(
         ...state,
         rootPane: resetAllWorkspacePaneSplitRatios(state.rootPane),
       };
+    case "update-document-label": {
+      const existingDocument = getWorkspaceDocument(state.documentsByKey, action.key);
+      if (!existingDocument || !("label" in existingDocument)) {
+        return state;
+      }
+      if (existingDocument.label === action.label) {
+        return state;
+      }
+      return {
+        ...state,
+        documentsByKey: {
+          ...state.documentsByKey,
+          [action.key]: {
+            ...existingDocument,
+            label: action.label,
+          } as WorkspaceCanvasDocument,
+        },
+      };
+    }
     default:
       return state;
   }

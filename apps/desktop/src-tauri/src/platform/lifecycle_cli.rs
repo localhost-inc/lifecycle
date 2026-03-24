@@ -13,7 +13,7 @@ const WIRED_COMMANDS: &[&str] = &[
     "lifecycle service list",
     "lifecycle service info <service>",
     "lifecycle service start [service...]",
-    "lifecycle tab open --surface browser --url <url>",
+    "lifecycle tab open --surface preview --url <url>",
 ];
 
 #[derive(Clone, Debug)]
@@ -41,9 +41,7 @@ impl LifecycleCliState {
     }
 
     pub(crate) fn disabled() -> Self {
-        Self {
-            binary_path: None,
-        }
+        Self { binary_path: None }
     }
 
     pub(crate) fn binary_path(&self) -> Option<&str> {
@@ -220,6 +218,6 @@ mod tests {
     fn wired_commands_expose_current_agent_surface() {
         assert!(wired_commands().contains(&"lifecycle context"));
         assert!(wired_commands().contains(&"lifecycle service list"));
-        assert!(wired_commands().contains(&"lifecycle tab open --surface browser --url <url>"));
+        assert!(wired_commands().contains(&"lifecycle tab open --surface preview --url <url>"));
     }
 }

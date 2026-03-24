@@ -144,6 +144,52 @@ export function failCommand(
   return 1;
 }
 
+export function printWorkspaceSummary(
+  workspace: {
+    id: string;
+    name: string;
+    source_ref: string;
+    status: string;
+    worktree_path: string | null;
+  },
+  stdout: (message: string) => void,
+): void {
+  stdout(`${workspace.name}`);
+  stdout(`status: ${workspace.status}`);
+  stdout(`ref: ${workspace.source_ref}`);
+  if (workspace.worktree_path) {
+    stdout(`path: ${workspace.worktree_path}`);
+  }
+  stdout(`id: ${workspace.id}`);
+}
+
+export function printLogLine(
+  line: {
+    service: string;
+    stream: string;
+    text: string;
+    timestamp: string;
+  },
+  stdout: (message: string) => void,
+): void {
+  const ts = line.timestamp.slice(11, 23);
+  const prefix = line.stream === "stderr" ? `${line.service} ERR` : line.service;
+  stdout(`${ts} ${prefix} ${line.text}`);
+}
+
+export function printHealthCheck(
+  check: {
+    healthy: boolean;
+    message: string | null;
+    service: string;
+  },
+  stdout: (message: string) => void,
+): void {
+  const indicator = check.healthy ? "ok" : "FAIL";
+  const suffix = check.message ? ` - ${check.message}` : "";
+  stdout(`${check.service}: ${indicator}${suffix}`);
+}
+
 export function printServiceSummary(
   service: {
     assigned_port: number | null;

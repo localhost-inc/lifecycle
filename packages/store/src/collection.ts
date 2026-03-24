@@ -96,7 +96,10 @@ export function createSqlCollection<T extends object>(opts: {
             if (pendingUpserts.length > 0) {
               controls.begin();
               for (const item of pendingUpserts) {
-                controls.write({ type: "insert", value: item });
+                const key = opts.getKey(item);
+                const type = knownKeys.has(key) ? "update" as const : "insert" as const;
+                knownKeys.add(key);
+                controls.write({ type, value: item, ...(type === "update" ? { key } : {}) });
               }
               controls.commit();
               pendingUpserts.length = 0;

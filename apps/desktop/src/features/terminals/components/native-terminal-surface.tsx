@@ -44,6 +44,7 @@ interface NativeTerminalSurfaceSyncCoordinator {
 }
 
 const nativeTerminalSurfaceLeaseRegistry = createNativeTerminalSurfaceLeaseRegistry();
+const warmedNativeTerminalSurfaceIds = new Set<string>();
 
 export function shouldShowNativeTerminalSurface({
   hasLiveSession,
@@ -504,13 +505,31 @@ export function NativeTerminalSurface({
       return;
     }
 
+    let firstWarmFrameId: number | null = null;
+    let secondWarmFrameId: number | null = null;
+    const scheduleInitialSync = () => {
+      if (warmedNativeTerminalSurfaceIds.has(terminal.id)) {
+        getSyncCoordinator().scheduleSync();
+        return;
+      }
+
+      firstWarmFrameId = window.requestAnimationFrame(() => {
+        firstWarmFrameId = null;
+        secondWarmFrameId = window.requestAnimationFrame(() => {
+          secondWarmFrameId = null;
+          warmedNativeTerminalSurfaceIds.add(terminal.id);
+          getSyncCoordinator().scheduleSync();
+        });
+      });
+    };
+
     claimNativeTerminalSurfaceLease(
       nativeTerminalSurfaceLeaseRegistry,
       terminal.id,
       ownerRef.current,
       window.cancelAnimationFrame,
     );
-    getSyncCoordinator().scheduleSync();
+    scheduleInitialSync();
     resizeObserverRef.current?.disconnect();
     resizeObserverRef.current = new ResizeObserver(() => {
       if (shellResizeInProgressRef.current) {
@@ -534,6 +553,12 @@ export function NativeTerminalSurface({
     document.addEventListener("visibilitychange", handleSyncRequest);
 
     return () => {
+      if (firstWarmFrameId !== null) {
+        window.cancelAnimationFrame(firstWarmFrameId);
+      }
+      if (secondWarmFrameId !== null) {
+        window.cancelAnimationFrame(secondWarmFrameId);
+      }
       getResizeFrameCoordinator().cancelScheduledSync();
       getSyncCoordinator().cancelScheduledSync();
       resizeObserverRef.current?.disconnect();

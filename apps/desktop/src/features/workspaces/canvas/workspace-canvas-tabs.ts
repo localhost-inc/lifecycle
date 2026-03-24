@@ -3,10 +3,10 @@ import type { TerminalRecord, TerminalStatus } from "@lifecycle/contracts";
 import {
   isAgentTab,
   getWorkspaceDocument,
-  isBrowserDocument,
   isChangesDiffDocument,
   isCommitDiffDocument,
   isFileViewerDocument,
+  isPreviewDocument,
   isPullRequestDocument,
   type WorkspaceCanvasDocument,
   type WorkspaceCanvasDocumentsByKey,
@@ -17,6 +17,7 @@ export type TerminalTab = {
   key: string;
   label: string;
   launchType: TerminalRecord["launch_type"];
+  optimistic?: "created" | "pending";
   responseReady: boolean;
   running?: boolean;
   status: TerminalStatus;
@@ -197,7 +198,7 @@ export function tabTitle(tab: WorkspaceCanvasTab): string {
     return tab.filePath;
   }
 
-  if (isBrowserDocument(tab)) {
+  if (isPreviewDocument(tab)) {
     return tab.url;
   }
 

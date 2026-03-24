@@ -231,13 +231,13 @@ It is not a tab strip.
 
 The active surface shown inside a pane.
 
-### Browser surface
+### Preview surface
 
 An embedded workspace-canvas surface that renders a URL inside the app.
 
-Service previews open in a browser surface by default.
+Service previews open in a preview surface by default.
 
-Use `browser` for the canvas document kind and `browser surface` for the rendered pane content.
+Use `preview` for the canvas document kind and `preview surface` for the rendered pane content.
 
 ### Empty pane
 
@@ -289,7 +289,7 @@ Examples: project pages, pull request tabs, project activity
 
 Live execution or local worktree context tied to one workspace.
 
-Examples: terminals, services and browser surfaces, local changes, workspace canvas layout
+Examples: terminals, services and preview surfaces, local changes, workspace canvas layout
 
 ## Current vs Target Terms
 

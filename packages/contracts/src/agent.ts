@@ -4,6 +4,7 @@ export type AgentRuntimeKind = "native" | "adapter";
 export type AgentMessageRole = "user" | "assistant" | "system" | "tool";
 
 export type AgentSessionStatus =
+  | "starting"
   | "idle"
   | "running"
   | "waiting_input"
@@ -53,6 +54,7 @@ export type AgentMessagePartType =
   | "text"
   | "thinking"
   | "status"
+  | "image"
   | "tool_call"
   | "tool_result"
   | "attachment_ref"
@@ -94,12 +96,18 @@ export interface AgentArtifactRefPartData {
   uri?: string | null | undefined;
 }
 
+export interface AgentImagePartData {
+  media_type: string;
+  base64_data: string;
+}
+
 export interface AgentUnknownPartData extends Record<string, unknown> {}
 
 export interface AgentMessagePartDataByType {
   text: null;
   thinking: null;
   status: null;
+  image: AgentImagePartData;
   tool_call: AgentToolCallPartData;
   tool_result: AgentToolResultPartData;
   attachment_ref: AgentAttachmentRefPartData;
@@ -108,7 +116,8 @@ export interface AgentMessagePartDataByType {
 }
 
 export type AgentMessagePartData = AgentMessagePartDataByType[AgentMessagePartType];
-export type AgentMessagePartDataOf<Type extends AgentMessagePartType> = AgentMessagePartDataByType[Type];
+export type AgentMessagePartDataOf<Type extends AgentMessagePartType> =
+  AgentMessagePartDataByType[Type];
 
 export interface AgentMessagePartRecord {
   id: string;

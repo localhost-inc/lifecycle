@@ -132,13 +132,84 @@ describe("agents package contracts", () => {
     expect(typeof orchestrator.subscribe).toBe("function");
     expect(createdSession.provider_session_id).toBe("claude-session-1");
     expect(createdSession.title).toBe("");
-    expect(observedEvents).toHaveLength(1);
+    expect(observedEvents).toHaveLength(2);
     expect(observedEvents[0]?.kind).toBe("agent.session.created");
+    expect(observedEvents[1]?.kind).toBe("agent.session.updated");
 
     await orchestrator.sendTurn(createdSession.id, {
       turnId: "turn_1",
       input: [{ type: "text", text: "Hello" }],
     });
+  });
+
+  test("creates a starting draft session before worker bootstrap", async () => {
+    const runtime = {} as WorkspaceRuntime;
+    const sessions = new Map<string, AgentSessionRecord>();
+    let workerStarted = false;
+    const implementation: Worker = {
+      async start() {
+        workerStarted = true;
+        throw new Error("worker start should not run during draft creation");
+      },
+      async connect() {
+        return {
+          async sendTurn() {},
+          async cancelTurn() {},
+          async resolveApproval() {},
+        };
+      },
+    };
+    const store: AgentStore = {
+      async saveSession(session) {
+        sessions.set(session.id, session);
+        return session;
+      },
+      async getSession(agentSessionId) {
+        return sessions.get(agentSessionId) ?? null;
+      },
+      async listSessions(workspaceId) {
+        return [...sessions.values()].filter((session) => session.workspace_id === workspaceId);
+      },
+      async getWorkspace(workspaceId) {
+        return {
+          workspaceId,
+          workspaceTarget: "local" satisfies WorkspaceTarget,
+          worktreePath: "/tmp/project",
+        };
+      },
+    };
+    const observedEvents: AgentEvent[] = [];
+    const orchestrator = createAgentOrchestrator({
+      workers: {
+        claude: implementation,
+        codex: implementation,
+      },
+      resolveRuntime() {
+        return runtime;
+      },
+      store,
+      now: () => "2026-03-21T00:00:00.000Z",
+      randomId: () => "agent_session_1",
+    });
+    orchestrator.subscribe((event) => {
+      observedEvents.push(event);
+    });
+
+    const draftSession = await orchestrator.createDraftSession({
+      provider: "claude",
+      workspaceId: "workspace_1",
+    });
+
+    expect(workerStarted).toBeFalse();
+    expect(draftSession.status).toBe("starting");
+    expect(sessions.get(draftSession.id)?.status).toBe("starting");
+    expect(observedEvents).toEqual([
+      {
+        kind: "agent.session.created",
+        workspaceId: "workspace_1",
+        session: draftSession,
+      },
+    ]);
   });
 
   test("keeps runtime placement separate from provider selection", async () => {
@@ -327,6 +398,74 @@ describe("agents package contracts", () => {
           event.resolution.approvalId === "approval_question",
       ),
     ).toBeTrue();
+  });
+
+  test("keeps the draft session and marks it failed when bootstrap fails", async () => {
+    const sessions = new Map<string, AgentSessionRecord>();
+    const store: AgentStore = {
+      async saveSession(session) {
+        sessions.set(session.id, session);
+        return session;
+      },
+      async getSession(agentSessionId) {
+        return sessions.get(agentSessionId) ?? null;
+      },
+      async listSessions() {
+        return [...sessions.values()];
+      },
+      async getWorkspace(workspaceId) {
+        return {
+          workspaceId,
+          workspaceTarget: "local",
+          worktreePath: "/tmp/project",
+        };
+      },
+    };
+    const runtime = {} as WorkspaceRuntime;
+    const implementation: Worker = {
+      async start() {
+        throw new Error("Claude login failed.");
+      },
+      async connect() {
+        return {
+          async sendTurn() {},
+          async cancelTurn() {},
+          async resolveApproval() {},
+        };
+      },
+    };
+    const observedEvents: AgentEvent[] = [];
+    const orchestrator = createAgentOrchestrator({
+      workers: {
+        claude: implementation,
+        codex: implementation,
+      },
+      resolveRuntime() {
+        return runtime;
+      },
+      store,
+      now: () => "2026-03-21T00:00:00.000Z",
+      randomId: () => "agent_session_1",
+    });
+    orchestrator.subscribe((event) => {
+      observedEvents.push(event);
+    });
+
+    const draftSession = await orchestrator.createDraftSession({
+      provider: "claude",
+      workspaceId: "workspace_1",
+    });
+
+    await expect(orchestrator.bootstrapSession(draftSession.id)).rejects.toThrow(
+      "Claude login failed.",
+    );
+
+    expect(sessions.get(draftSession.id)?.status).toBe("failed");
+    expect(observedEvents.map((event) => event.kind)).toEqual([
+      "agent.session.created",
+      "agent.session.updated",
+      "agent.status.updated",
+    ]);
   });
 
   test("reattaches an existing persisted session without sending a new turn", async () => {

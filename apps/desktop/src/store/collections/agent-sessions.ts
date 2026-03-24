@@ -1,5 +1,10 @@
 import type { AgentSessionRecord } from "@lifecycle/contracts";
-import { createSqlCollection, selectAgentSessionsByWorkspace, type SqlCollection, type SqlDriver } from "@lifecycle/store";
+import {
+  createSqlCollection,
+  selectAgentSessionsByWorkspace,
+  type SqlCollection,
+  type SqlDriver,
+} from "@lifecycle/store";
 
 const agentSessionCollections = new Map<string, SqlCollection<AgentSessionRecord>>();
 
@@ -26,4 +31,12 @@ export function refreshAgentSessionCollection(workspaceId: string): void {
   if (existing) {
     void existing.refresh();
   }
+}
+
+export function upsertAgentSessionInCollection(
+  driver: SqlDriver,
+  workspaceId: string,
+  session: AgentSessionRecord,
+): void {
+  getOrCreateAgentSessionCollection(driver, workspaceId).upsert(session);
 }

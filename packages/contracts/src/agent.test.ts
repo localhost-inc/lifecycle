@@ -27,6 +27,7 @@ describe("agent contracts", () => {
 
   test("keep canonical agent session status values", () => {
     const statuses: AgentSessionStatus[] = [
+      "starting",
       "idle",
       "running",
       "waiting_input",
@@ -37,6 +38,7 @@ describe("agent contracts", () => {
     ];
 
     expect(statuses).toEqual([
+      "starting",
       "idle",
       "running",
       "waiting_input",
@@ -101,7 +103,7 @@ describe("agent contracts", () => {
       data: stringifyAgentMessagePartData({
         tool_call_id: "tool_1",
         tool_name: "Read",
-        input_json: "{\"file_path\":\"/tmp/file.ts\"}",
+        input_json: '{"file_path":"/tmp/file.ts"}',
       }),
       created_at: "2026-03-22T00:00:00.000Z",
     };
@@ -109,7 +111,7 @@ describe("agent contracts", () => {
     expect(parseAgentMessagePartData(part.part_type, part.data)).toEqual({
       tool_call_id: "tool_1",
       tool_name: "Read",
-      input_json: "{\"file_path\":\"/tmp/file.ts\"}",
+      input_json: '{"file_path":"/tmp/file.ts"}',
     });
   });
 
@@ -123,7 +125,7 @@ describe("agent contracts", () => {
       turn_id: "turn_1",
       event_index: 1,
       event_kind: "agent.message.part.completed",
-      payload: "{\"kind\":\"agent.message.part.completed\"}",
+      payload: '{"kind":"agent.message.part.completed"}',
       created_at: "2026-03-22T00:00:00.000Z",
     };
 

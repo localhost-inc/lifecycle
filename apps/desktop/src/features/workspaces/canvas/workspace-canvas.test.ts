@@ -312,6 +312,47 @@ describe("workspace canvas reducer", () => {
     );
   });
 
+  test("replaces an optimistic terminal placeholder key with the real terminal key", () => {
+    const pendingTerminalKey = "pending-terminal:launch-1";
+    const realTerminalKey = terminalTabKey("term-1");
+
+    expect(
+      workspaceCanvasReducer(
+        withSinglePaneState({
+          activeTabKey: pendingTerminalKey,
+          tabOrderKeys: [pendingTerminalKey],
+        }),
+        {
+          kind: "replace-terminal-tab-key",
+          nextKey: realTerminalKey,
+          previousKey: pendingTerminalKey,
+        },
+      ),
+    ).toEqual(
+      withSinglePaneState({
+        activeTabKey: realTerminalKey,
+        tabOrderKeys: [realTerminalKey],
+      }),
+    );
+  });
+
+  test("discards optimistic terminal placeholders without adding hidden state", () => {
+    const pendingTerminalKey = "pending-terminal:launch-1";
+
+    expect(
+      workspaceCanvasReducer(
+        withSinglePaneState({
+          activeTabKey: pendingTerminalKey,
+          tabOrderKeys: [pendingTerminalKey],
+        }),
+        {
+          key: pendingTerminalKey,
+          kind: "discard-terminal-tab",
+        },
+      ),
+    ).toEqual(createDefaultWorkspaceCanvasState());
+  });
+
   test("splits the active pane into a new empty pane", () => {
     const initialState = withSinglePaneState({
       activeTabKey: CHANGES_DIFF_TAB_KEY,

@@ -1,4 +1,3 @@
-import type { TerminalRecord } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
 import { TerminalSquare } from "lucide-react";
 import { TerminalSurface } from "@/features/terminals/components/terminal-surface";
@@ -6,19 +5,10 @@ import { AgentSurface } from "@/features/agents/components/agent-surface";
 import { GitDiffSurface } from "@/features/git/components/git-diff-surface";
 import { PullRequestSurface } from "@/features/git/components/pull-request-surface";
 import { FileSurface } from "@/features/explorer/components/file-surface";
-import { BrowserSurface } from "@/features/workspaces/surfaces/browser-surface";
+import { PreviewSurface } from "@/features/workspaces/surfaces/preview-surface";
 import type { FileViewerSessionState } from "@/features/explorer/lib/file-session";
-import {
-  isBrowserDocument,
-  isAgentTab,
-  isChangesDiffDocument,
-  isCommitDiffDocument,
-  isFileViewerDocument,
-  isPullRequestDocument,
-  terminalTabKey,
-  type WorkspaceCanvasDocument,
-  type WorkspaceCanvasTabViewState,
-} from "@/features/workspaces/state/workspace-canvas-state";
+import type { WorkspacePaneActiveSurfaceModel } from "@/features/workspaces/canvas/workspace-pane-models";
+import type { WorkspaceCanvasTabViewState } from "@/features/workspaces/state/workspace-canvas-state";
 import { WorkspaceEmptyPaneState } from "@/features/workspaces/canvas/panes/workspace-empty-pane-state";
 import {
   canvasTabDomId,
@@ -27,12 +17,7 @@ import {
 import type { SurfaceLaunchRequest } from "@/features/workspaces/surfaces/surface-launch-actions";
 
 interface WorkspacePaneContentProps {
-  activeTabKey: string | null;
-  activeTabViewState: WorkspaceCanvasTabViewState | null;
-  activeFileSessionState: FileViewerSessionState | null;
-  creatingSelection: "shell" | "claude" | "codex" | null;
-  documents: WorkspaceCanvasDocument[];
-  hasVisibleTabs: boolean;
+  activeSurface: WorkspacePaneActiveSurfaceModel;
   onFileSessionStateChange: (tabKey: string, state: FileViewerSessionState | null) => void;
   onLaunchSurface: (request: SurfaceLaunchRequest) => void;
   onOpenFile: (filePath: string) => void;
@@ -40,18 +25,10 @@ interface WorkspacePaneContentProps {
   paneDragInProgress: boolean;
   paneFocused: boolean;
   surfaceOpacity: number;
-  terminals: TerminalRecord[];
-  waitingForSelectedTerminalTab: boolean;
-  workspaceId: string;
 }
 
 export function WorkspacePaneContent({
-  activeTabKey,
-  activeTabViewState,
-  activeFileSessionState,
-  creatingSelection,
-  documents,
-  hasVisibleTabs,
+  activeSurface,
   onFileSessionStateChange,
   onLaunchSurface,
   onOpenFile,
@@ -59,37 +36,37 @@ export function WorkspacePaneContent({
   paneDragInProgress,
   paneFocused,
   surfaceOpacity,
-  terminals,
-  waitingForSelectedTerminalTab,
-  workspaceId,
 }: WorkspacePaneContentProps) {
-  if (!hasVisibleTabs) {
-    return waitingForSelectedTerminalTab ? (
+  if (activeSurface.kind === "waiting-terminal") {
+    return (
       <EmptyState
         description="Lifecycle is opening your selected terminal tab."
         icon={<TerminalSquare />}
         title="Opening terminal..."
       />
-    ) : (
+    );
+  }
+
+  if (activeSurface.kind === "launcher") {
+    return (
       <WorkspaceEmptyPaneState
-        creatingSelection={creatingSelection}
+        creatingSelection={activeSurface.creatingSelection}
         onLaunchSurface={onLaunchSurface}
       />
     );
   }
 
-  const activeTerminal =
-    activeTabKey === null
-      ? null
-      : (terminals.find((terminal) => terminalTabKey(terminal.id) === activeTabKey) ?? null);
-  const activeDocument =
-    activeTabKey === null
-      ? null
-      : (documents.find((document) => document.key === activeTabKey) ?? null);
-  const activePanelId = activeTabKey ? canvasTabPanelId(activeTabKey) : undefined;
-  const activeTabDomId = activeTabKey ? canvasTabDomId(activeTabKey) : undefined;
+  if (activeSurface.kind === "opening-terminal") {
+    return (
+      <EmptyState
+        description="Lifecycle is opening your terminal."
+        icon={<TerminalSquare />}
+        title="Opening terminal..."
+      />
+    );
+  }
 
-  if (!activeTerminal && !activeDocument) {
+  if (activeSurface.kind === "loading") {
     return (
       <EmptyState
         description="Lifecycle is preparing the selected workspace tab."
@@ -99,6 +76,11 @@ export function WorkspacePaneContent({
     );
   }
 
+  const activeTabKey =
+    activeSurface.kind === "terminal" ? activeSurface.tab.key : activeSurface.document.key;
+  const activePanelId = canvasTabPanelId(activeTabKey);
+  const activeTabDomId = canvasTabDomId(activeTabKey);
+
   return (
     <div
       id={activePanelId}
@@ -106,68 +88,77 @@ export function WorkspacePaneContent({
       className="flex h-full min-h-0 flex-1 flex-col"
       role="tabpanel"
     >
-      {activeTerminal ? (
+      {activeSurface.kind === "terminal" ? (
         <div className="flex min-h-0 flex-1 flex-col bg-[var(--terminal-surface-background)]">
           <TerminalSurface
             focused={paneFocused}
             opacity={surfaceOpacity}
             tabDragInProgress={paneDragInProgress}
-            terminal={activeTerminal}
+            terminal={activeSurface.terminal}
           />
         </div>
-      ) : activeDocument && isChangesDiffDocument(activeDocument) ? (
+      ) : activeSurface.kind === "changes-diff" ? (
         <GitDiffSurface
-          initialScrollTop={activeTabViewState?.scrollTop ?? 0}
+          initialScrollTop={activeSurface.viewState?.scrollTop ?? 0}
           onOpenFile={onOpenFile}
           onScrollTopChange={(scrollTop: number) => {
-            onTabViewStateChange(activeDocument.key, scrollTop > 0 ? { scrollTop } : null);
+            onTabViewStateChange(activeSurface.document.key, scrollTop > 0 ? { scrollTop } : null);
           }}
-          source={{ focusPath: activeDocument.focusPath, mode: "changes" }}
-          workspaceId={workspaceId}
+          source={{ focusPath: activeSurface.document.focusPath, mode: "changes" }}
+          workspaceId={activeSurface.workspaceId}
         />
-      ) : activeDocument && isCommitDiffDocument(activeDocument) ? (
+      ) : activeSurface.kind === "commit-diff" ? (
         <GitDiffSurface
-          initialScrollTop={activeTabViewState?.scrollTop ?? 0}
+          initialScrollTop={activeSurface.viewState?.scrollTop ?? 0}
           onOpenFile={onOpenFile}
           onScrollTopChange={(scrollTop: number) => {
-            onTabViewStateChange(activeDocument.key, scrollTop > 0 ? { scrollTop } : null);
+            onTabViewStateChange(activeSurface.document.key, scrollTop > 0 ? { scrollTop } : null);
           }}
-          source={{ commit: activeDocument, mode: "commit" }}
-          workspaceId={workspaceId}
+          source={{ commit: activeSurface.document, mode: "commit" }}
+          workspaceId={activeSurface.workspaceId}
         />
-      ) : activeDocument && isBrowserDocument(activeDocument) ? (
-        <BrowserSurface
-          tabKey={activeDocument.key}
-          title={activeDocument.label}
-          url={activeDocument.url}
+      ) : activeSurface.kind === "preview" ? (
+        <PreviewSurface
+          tabKey={activeSurface.document.key}
+          title={activeSurface.document.label}
+          url={activeSurface.document.url}
         />
-      ) : activeDocument && isAgentTab(activeDocument) ? (
-        <AgentSurface agentSessionId={activeDocument.agentSessionId} workspaceId={workspaceId} />
-      ) : activeDocument && isPullRequestDocument(activeDocument) ? (
+      ) : activeSurface.kind === "agent" ? (
+        <div
+          className="flex min-h-0 flex-1 flex-col transition-opacity duration-200 ease-in-out"
+          style={{ opacity: surfaceOpacity }}
+        >
+          <AgentSurface
+            agentSessionId={activeSurface.document.agentSessionId}
+            paneFocused={paneFocused}
+            workspaceId={activeSurface.workspaceId}
+          />
+        </div>
+      ) : activeSurface.kind === "pull-request" ? (
         <PullRequestSurface
-          initialScrollTop={activeTabViewState?.scrollTop ?? 0}
+          initialScrollTop={activeSurface.viewState?.scrollTop ?? 0}
           onOpenFile={onOpenFile}
           onScrollTopChange={(scrollTop: number) => {
-            onTabViewStateChange(activeDocument.key, scrollTop > 0 ? { scrollTop } : null);
+            onTabViewStateChange(activeSurface.document.key, scrollTop > 0 ? { scrollTop } : null);
           }}
-          pullRequest={activeDocument}
-          workspaceId={workspaceId}
+          pullRequest={activeSurface.document}
+          workspaceId={activeSurface.workspaceId}
         />
-      ) : activeDocument && isFileViewerDocument(activeDocument) ? (
+      ) : activeSurface.kind === "file-viewer" ? (
         <FileSurface
-          filePath={activeDocument.filePath}
-          initialMode={activeTabViewState?.fileMode}
-          initialScrollTop={activeTabViewState?.scrollTop ?? 0}
+          filePath={activeSurface.document.filePath}
+          initialMode={activeSurface.viewState?.fileMode}
+          initialScrollTop={activeSurface.viewState?.scrollTop ?? 0}
           onSessionStateChange={(nextState) =>
-            onFileSessionStateChange(activeDocument.key, nextState)
+            onFileSessionStateChange(activeSurface.document.key, nextState)
           }
           onScrollTopChange={(scrollTop: number) => {
             onTabViewStateChange(
-              activeDocument.key,
-              scrollTop > 0 || activeTabViewState?.fileMode
+              activeSurface.document.key,
+              scrollTop > 0 || activeSurface.viewState?.fileMode
                 ? {
-                    ...(activeTabViewState?.fileMode
-                      ? { fileMode: activeTabViewState.fileMode }
+                    ...(activeSurface.viewState?.fileMode
+                      ? { fileMode: activeSurface.viewState.fileMode }
                       : {}),
                     ...(scrollTop > 0 ? { scrollTop } : {}),
                   }
@@ -175,15 +166,15 @@ export function WorkspacePaneContent({
             );
           }}
           onModeChange={(fileMode) => {
-            onTabViewStateChange(activeDocument.key, {
-              ...(activeTabViewState?.scrollTop && activeTabViewState.scrollTop > 0
-                ? { scrollTop: activeTabViewState.scrollTop }
+            onTabViewStateChange(activeSurface.document.key, {
+              ...(activeSurface.viewState?.scrollTop && activeSurface.viewState.scrollTop > 0
+                ? { scrollTop: activeSurface.viewState.scrollTop }
                 : {}),
               fileMode,
             });
           }}
-          sessionState={activeFileSessionState}
-          workspaceId={workspaceId}
+          sessionState={activeSurface.sessionState}
+          workspaceId={activeSurface.workspaceId}
         />
       ) : null}
     </div>

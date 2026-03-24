@@ -30,6 +30,12 @@ export type AgentEvent =
       workspaceId: string;
       sessionId: string;
       turnId: string;
+      usage?: {
+        inputTokens: number;
+        outputTokens: number;
+        cacheReadTokens?: number | undefined;
+      } | undefined;
+      costUsd?: number | undefined;
     }
   | {
       kind: "agent.turn.failed";

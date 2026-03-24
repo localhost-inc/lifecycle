@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  DEFAULT_INTERFACE_FONT_FAMILY,
-  DEFAULT_MONOSPACE_FONT_FAMILY,
-} from "@/lib/typography";
+import { DEFAULT_INTERFACE_FONT_FAMILY, DEFAULT_MONOSPACE_FONT_FAMILY } from "@/lib/typography";
 import { buildDefaultHarnessSettings } from "@/features/settings/state/harness-settings";
 
 import {
@@ -10,6 +7,7 @@ import {
   DEFAULT_INACTIVE_PANE_OPACITY,
   applyFontSettings,
   parseSettingsJson,
+  readSettingsProviderHotState,
 } from "@/features/settings/state/settings-provider";
 
 describe("applyFontSettings", () => {
@@ -143,6 +141,34 @@ describe("parseSettingsJson", () => {
       turnNotificationSound: "orbit",
       turnNotificationsMode: "when-unfocused",
       worktreeRoot: "~/.lifecycle/worktrees",
+    });
+  });
+});
+
+describe("readSettingsProviderHotState", () => {
+  test("returns null when hot state is absent", () => {
+    expect(readSettingsProviderHotState(undefined)).toBeNull();
+    expect(readSettingsProviderHotState({})).toBeNull();
+  });
+
+  test("returns the cached settings snapshot when present", () => {
+    const settings = parseSettingsJson({
+      theme: "catppuccin",
+      inactivePaneOpacity: 0.45,
+      turnNotificationSound: "signal",
+      turnNotificationsMode: "always",
+    });
+
+    expect(
+      readSettingsProviderHotState({
+        settingsProviderState: {
+          settings,
+          systemAppearance: "light",
+        },
+      }),
+    ).toEqual({
+      settings,
+      systemAppearance: "light",
     });
   });
 });

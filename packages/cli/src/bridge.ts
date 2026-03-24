@@ -3,6 +3,7 @@ import { access, readFile } from "node:fs/promises";
 import { createConnection } from "node:net";
 import path from "node:path";
 import {
+  type AgentSessionInspectRequest,
   type BridgeError,
   type BridgeRequest,
   type BridgeResponse,
@@ -11,9 +12,19 @@ import {
   type ContextRequest,
   type ServiceInfoRequest,
   type ServiceListRequest,
+  type ServiceLogsRequest,
   type ServiceStartRequest,
+  type ServiceStopRequest,
   type TabOpenRequest,
+  type WorkspaceCreateRequest,
+  type WorkspaceDestroyRequest,
+  type WorkspaceHealthRequest,
+  type WorkspaceLogsRequest,
+  type WorkspaceResetRequest,
+  type WorkspaceRunRequest,
+  type WorkspaceStatusRequest,
   getManifestFingerprint,
+  LIFECYCLE_AGENT_SESSION_ID_ENV,
   LIFECYCLE_BRIDGE_ENV,
   LIFECYCLE_BRIDGE_SESSION_TOKEN_ENV,
   LIFECYCLE_TERMINAL_ID_ENV,
@@ -229,6 +240,89 @@ export async function requestBridge<Method extends BridgeResponse["method"]>(
   return response as BridgeSuccessResponse<Method>;
 }
 
+export async function streamBridge(
+  request: BridgeRequest,
+  onLine: (line: unknown) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const bridgePath = requireBridgePath();
+
+  return new Promise<void>((resolve, reject) => {
+    const socket = createConnection(bridgePath);
+    let settled = false;
+    let buffer = "";
+
+    const finish = (handler: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      handler();
+    };
+
+    const cleanup = () => {
+      socket.destroy();
+    };
+
+    if (signal) {
+      signal.addEventListener("abort", () => {
+        finish(() => {
+          cleanup();
+          resolve();
+        });
+      });
+    }
+
+    socket.once("connect", () => {
+      socket.write(`${JSON.stringify(request)}\n`);
+    });
+
+    socket.on("data", (chunk) => {
+      buffer += chunk.toString("utf8");
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          continue;
+        }
+        try {
+          const parsed = JSON.parse(trimmed) as unknown;
+          onLine(parsed);
+        } catch {
+          // Skip malformed lines
+        }
+      }
+    });
+
+    socket.once("end", () => {
+      if (buffer.trim()) {
+        try {
+          const parsed = JSON.parse(buffer.trim()) as unknown;
+          onLine(parsed);
+        } catch {
+          // Skip malformed trailing data
+        }
+      }
+      finish(() => resolve());
+    });
+
+    socket.once("error", (error) => {
+      finish(() =>
+        reject(
+          new BridgeClientError({
+            code: "bridge_unavailable",
+            message: `Lifecycle could not reach the bridge at ${bridgePath}: ${error.message}`,
+            retryable: true,
+            suggestedAction: "Check that the Lifecycle desktop app is still running, then retry.",
+          }),
+        ),
+      );
+    });
+  });
+}
+
 export function createServiceInfoRequest(input: {
   service: string;
   workspaceId?: string;
@@ -249,9 +343,7 @@ export function createServiceListRequest(input: { workspaceId?: string }): Servi
   return {
     id: randomUUID(),
     method: "service.list",
-    params: {
-      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
-    },
+    params: input.workspaceId ? { workspaceId: input.workspaceId } : {},
     session: buildBridgeSession(),
     version: 1,
   };
@@ -283,20 +375,18 @@ export function createContextRequest(input: { workspaceId?: string }): ContextRe
   return {
     id: randomUUID(),
     method: "context.read",
-    params: {
-      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
-    },
+    params: input.workspaceId ? { workspaceId: input.workspaceId } : {},
     session: buildBridgeSession(),
     version: 1,
   };
 }
 
-function defaultBrowserKey(url: string): string {
+function defaultPreviewKey(url: string): string {
   const digest = createHash("sha256").update(url).digest("hex").slice(0, 16);
   return `url:${digest}`;
 }
 
-function defaultBrowserLabel(url: string): string {
+function defaultPreviewLabel(url: string): string {
   try {
     const parsed = new URL(url);
     return parsed.host || parsed.toString();
@@ -305,7 +395,7 @@ function defaultBrowserLabel(url: string): string {
   }
 }
 
-export function createTabOpenBrowserRequest(input: {
+export function createTabOpenPreviewRequest(input: {
   select: boolean;
   split: boolean;
   url: string;
@@ -315,11 +405,11 @@ export function createTabOpenBrowserRequest(input: {
     id: randomUUID(),
     method: "tab.open",
     params: {
-      browserKey: defaultBrowserKey(input.url),
-      label: defaultBrowserLabel(input.url),
+      label: defaultPreviewLabel(input.url),
+      previewKey: defaultPreviewKey(input.url),
       select: input.select,
       split: input.split,
-      surface: "browser",
+      surface: "preview",
       url: input.url,
       ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
     },
@@ -340,6 +430,187 @@ export function requireShellSessionToken(): string {
   }
 
   return token;
+}
+
+export function createServiceStopRequest(input: {
+  serviceNames?: string[];
+  workspaceId?: string;
+}): ServiceStopRequest {
+  return {
+    id: randomUUID(),
+    method: "service.stop",
+    params: {
+      ...(input.serviceNames && input.serviceNames.length > 0
+        ? { serviceNames: input.serviceNames }
+        : {}),
+      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+    },
+    session: buildBridgeSession(),
+    version: 1,
+  };
+}
+
+export function createServiceLogsRequest(input: {
+  follow?: boolean;
+  grep?: string;
+  service: string;
+  since?: string;
+  tail?: number;
+  workspaceId?: string;
+}): ServiceLogsRequest {
+  return {
+    id: randomUUID(),
+    method: "service.logs",
+    params: {
+      follow: input.follow ?? false,
+      service: input.service,
+      ...(input.grep ? { grep: input.grep } : {}),
+      ...(input.since ? { since: input.since } : {}),
+      ...(input.tail ? { tail: input.tail } : {}),
+      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+    },
+    session: buildBridgeSession(),
+    version: 1,
+  };
+}
+
+export function createWorkspaceCreateRequest(input: {
+  local?: boolean;
+  projectId?: string;
+  ref?: string;
+}): WorkspaceCreateRequest {
+  return {
+    id: randomUUID(),
+    method: "workspace.create",
+    params: {
+      local: input.local ?? true,
+      ...(input.projectId ? { projectId: input.projectId } : {}),
+      ...(input.ref ? { ref: input.ref } : {}),
+    },
+    session: buildBridgeSession(),
+    version: 1,
+  };
+}
+
+export function createWorkspaceDestroyRequest(input: {
+  workspaceId: string;
+}): WorkspaceDestroyRequest {
+  return {
+    id: randomUUID(),
+    method: "workspace.destroy",
+    params: {
+      workspaceId: input.workspaceId,
+    },
+    session: buildBridgeSession(),
+    version: 1,
+  };
+}
+
+export function createWorkspaceRunRequest(input: {
+  serviceNames?: string[];
+  workspaceId?: string;
+}): WorkspaceRunRequest {
+  return {
+    id: randomUUID(),
+    method: "workspace.run",
+    params: {
+      ...(input.serviceNames && input.serviceNames.length > 0
+        ? { serviceNames: input.serviceNames }
+        : {}),
+      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+    },
+    session: buildBridgeSession(),
+    version: 1,
+  };
+}
+
+export function createWorkspaceStatusRequest(input: {
+  workspaceId?: string;
+}): WorkspaceStatusRequest {
+  return {
+    id: randomUUID(),
+    method: "workspace.status",
+    params: input.workspaceId ? { workspaceId: input.workspaceId } : {},
+    session: buildBridgeSession(),
+    version: 1,
+  };
+}
+
+export function createWorkspaceLogsRequest(input: {
+  follow?: boolean;
+  grep?: string;
+  service: string;
+  since?: string;
+  tail?: number;
+  workspaceId?: string;
+}): WorkspaceLogsRequest {
+  return {
+    id: randomUUID(),
+    method: "workspace.logs",
+    params: {
+      follow: input.follow ?? false,
+      service: input.service,
+      ...(input.grep ? { grep: input.grep } : {}),
+      ...(input.since ? { since: input.since } : {}),
+      ...(input.tail ? { tail: input.tail } : {}),
+      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+    },
+    session: buildBridgeSession(),
+    version: 1,
+  };
+}
+
+export function createWorkspaceResetRequest(input: {
+  workspaceId?: string;
+}): WorkspaceResetRequest {
+  return {
+    id: randomUUID(),
+    method: "workspace.reset",
+    params: input.workspaceId ? { workspaceId: input.workspaceId } : {},
+    session: buildBridgeSession(),
+    version: 1,
+  };
+}
+
+export function createWorkspaceHealthRequest(input: {
+  workspaceId?: string;
+}): WorkspaceHealthRequest {
+  return {
+    id: randomUUID(),
+    method: "workspace.health",
+    params: input.workspaceId ? { workspaceId: input.workspaceId } : {},
+    session: buildBridgeSession(),
+    version: 1,
+  };
+}
+
+export function resolveAgentSessionId(explicitSessionId?: string): string {
+  const sessionId = explicitSessionId ?? process.env[LIFECYCLE_AGENT_SESSION_ID_ENV];
+  if (!sessionId) {
+    throw new BridgeClientError({
+      code: "agent_session_unresolved",
+      message: "Lifecycle could not resolve an agent session for this command.",
+      suggestedAction: "Pass --session-id or run the command from a Lifecycle agent session.",
+    });
+  }
+
+  return sessionId;
+}
+
+export function createAgentSessionInspectRequest(input: {
+  sessionId: string;
+  workspaceId?: string;
+}): AgentSessionInspectRequest {
+  return {
+    id: randomUUID(),
+    method: "agent.session.inspect",
+    params: {
+      sessionId: input.sessionId,
+      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+    },
+    session: buildBridgeSession(),
+    version: 1,
+  };
 }
 
 export function formatBridgeError(error: BridgeError): string {

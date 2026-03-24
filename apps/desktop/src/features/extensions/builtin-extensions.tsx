@@ -10,7 +10,7 @@ import {
   GitCommitHorizontal,
   GitPullRequest,
   Layers,
-  TerminalSquare,
+  BotMessageSquare,
 } from "lucide-react";
 import { lazy } from "react";
 import type {
@@ -35,7 +35,7 @@ const GitPullRequestsPanel = lazy(async () => {
   return { default: module.GitPullRequestsPanel };
 });
 
-const SessionHistoryPanel = lazy(async () => {
+const AgentSessionsPanel = lazy(async () => {
   const module = await import("../terminals/components/session-history-panel");
   return { default: module.SessionHistoryPanel };
 });
@@ -89,7 +89,6 @@ interface BuiltinExtensionsOptions {
   hasManifest: boolean;
   launchActions: WorkspaceExtensionLaunchActions;
   manifestState: "invalid" | "missing" | "valid";
-  onFocusTerminal: (terminalId: string) => void;
   onRestart: () => Promise<void>;
   onRun: () => Promise<void>;
   onStop: () => Promise<void>;
@@ -104,7 +103,6 @@ export function getBuiltinExtensionSlots({
   hasManifest,
   launchActions,
   manifestState,
-  onFocusTerminal,
   onRestart,
   onRun,
   onStop,
@@ -172,10 +170,15 @@ export function getBuiltinExtensionSlots({
       ),
     },
     {
-      icon: TerminalSquare,
+      icon: BotMessageSquare,
       id: "session-history",
-      label: "Sessions",
-      panel: <SessionHistoryPanel onFocusTerminal={onFocusTerminal} workspaceId={workspace.id} />,
+      label: "Agents",
+      panel: (
+        <AgentSessionsPanel
+          onOpenAgentSession={launchActions.openAgentSession}
+          workspaceId={workspace.id}
+        />
+      ),
     },
   ];
 
@@ -189,7 +192,7 @@ export function getBuiltinExtensionSlots({
         config={config}
         hasManifest={hasManifest}
         manifestState={manifestState}
-        onOpenBrowser={launchActions.openBrowser}
+        onOpenPreview={launchActions.openPreview}
         onRestart={onRestart}
         onRun={onRun}
         onStop={onStop}

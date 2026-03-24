@@ -2,13 +2,78 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
 import { resolveCodexCliPath } from "./cli-path";
 import type { AgentApprovalDecision, AgentApprovalKind } from "../../turn";
+import { LIFECYCLE_SYSTEM_PROMPT } from "../../system-prompt";
 import type {
   AgentWorkerApprovalRequestPayload,
   AgentWorkerCommand,
   AgentWorkerEvent,
+  AgentWorkerInputPart,
   AgentWorkerItem,
   AgentWorkerItemStatus,
 } from "../../worker-protocol";
+
+// ---------------------------------------------------------------------------
+// Lightweight title generation — uses fetch against OpenAI Chat Completions.
+// ---------------------------------------------------------------------------
+
+function truncateTitle(text: string, maxLength = 40): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (clean.length <= maxLength) {
+    return clean;
+  }
+  const truncated = clean.slice(0, maxLength);
+  const lastSpace = truncated.lastIndexOf(" ");
+  return lastSpace > 10 ? truncated.slice(0, lastSpace) : truncated;
+}
+
+function extractTextFromInput(parts: AgentWorkerInputPart[]): string {
+  return parts
+    .filter((p): p is Extract<AgentWorkerInputPart, { type: "text" }> => p.type === "text")
+    .map((p) => p.text)
+    .join(" ")
+    .trim();
+}
+
+async function generateSessionTitle(userText: string): Promise<string | null> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    return truncateTitle(userText);
+  }
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4.1-nano",
+        max_tokens: 30,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Generate a concise 3-5 word title for this conversation. Respond with only the title, no quotes or extra punctuation.",
+          },
+          { role: "user", content: userText.slice(0, 500) },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      return truncateTitle(userText);
+    }
+
+    const data = (await response.json()) as {
+      choices?: { message?: { content?: string } }[];
+    };
+    const title = data.choices?.[0]?.message?.content?.trim();
+    return title || truncateTitle(userText);
+  } catch {
+    return truncateTitle(userText);
+  }
+}
 
 export type CodexApprovalPolicy = "never" | "on-failure" | "on-request" | "untrusted";
 export type CodexReasoningEffort = "none" | "minimal" | "low" | "medium" | "high" | "xhigh";
@@ -282,6 +347,7 @@ export function createCodexThreadBootstrapRequest(
   const shared: Record<string, unknown> = {
     approvalPolicy,
     cwd: input.workspacePath,
+    developerInstructions: LIFECYCLE_SYSTEM_PROMPT,
     persistExtendedHistory: true,
     sandbox: sandboxMode,
     ...(input.model ? { model: input.model } : {}),
@@ -308,24 +374,30 @@ export function createCodexThreadBootstrapRequest(
   };
 }
 
-function buildUserInput(text: string): Array<Record<string, unknown>> {
-  return [
-    {
-      text,
+function buildUserInput(parts: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+  return parts.map((part) => {
+    if (part.type === "image" && typeof part.base64Data === "string" && typeof part.mediaType === "string") {
+      return {
+        type: "input_image",
+        image_url: `data:${part.mediaType};base64,${part.base64Data}`,
+      };
+    }
+    return {
+      text: typeof part.text === "string" ? part.text : "",
       text_elements: [],
       type: "text",
-    },
-  ];
+    };
+  });
 }
 
 function buildTurnStartParams(
   input: CodexWorkerInput,
   providerThreadId: string,
-  prompt: string,
+  inputParts: Array<Record<string, unknown>>,
 ): Record<string, unknown> {
   return {
     ...(input.modelReasoningEffort ? { effort: input.modelReasoningEffort } : {}),
-    input: buildUserInput(prompt),
+    input: buildUserInput(inputParts),
     threadId: providerThreadId,
   };
 }
@@ -1043,6 +1115,16 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
         ...(turnUsage.has(providerTurnId) ? { usage: turnUsage.get(providerTurnId) } : {}),
       });
       completeLifecycleTurn(lifecycleTurnId);
+
+      // Fire-and-forget title generation after the first successful turn.
+      if (!titleGenerated && firstTurnText) {
+        titleGenerated = true;
+        void generateSessionTitle(firstTurnText).then((title) => {
+          if (title) {
+            emitWorkerEvent({ kind: "worker.title_generated", title });
+          }
+        });
+      }
       return;
     }
 
@@ -1244,6 +1326,8 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
   bindProviderThread(threadRecord ? readString(threadRecord, "id") : null);
 
   let turnQueue = Promise.resolve();
+  let firstTurnText: string | null = null;
+  let titleGenerated = false;
 
   async function processTurn(
     command: Extract<AgentWorkerCommand, { kind: "worker.send_turn" }>,
@@ -1262,6 +1346,16 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
     currentProviderTurnId = null;
     pendingInterrupt = false;
 
+    // Capture the first turn's text for title generation.
+    if (!titleGenerated && firstTurnText === null) {
+      const text = extractTextFromInput(
+        Array.isArray(command.input)
+          ? (command.input as AgentWorkerInputPart[])
+          : [{ type: "text" as const, text: command.input as string }],
+      );
+      firstTurnText = text.length > 0 ? text : null;
+    }
+
     const completion = new Promise<void>((resolve) => {
       pendingTurnCompletions.set(command.turnId, resolve);
     });
@@ -1269,7 +1363,7 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
     try {
       const response = await client.request(
         "turn/start",
-        buildTurnStartParams(input, threadId, command.input),
+        buildTurnStartParams(input, threadId, Array.isArray(command.input) ? command.input as Array<Record<string, unknown>> : [{ type: "text", text: command.input as string }]),
       );
       const turnRecord = isRecord(response) && isRecord(response.turn) ? response.turn : null;
       bindProviderTurn(turnRecord ? readString(turnRecord, "id") : null, command.turnId);

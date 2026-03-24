@@ -89,8 +89,15 @@ struct BridgeContextParams {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct BridgeAgentSessionInspectParams {
+    session_id: String,
+    workspace_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct BridgeTabOpenParams {
-    browser_key: Option<String>,
+    preview_key: Option<String>,
     label: Option<String>,
     #[allow(dead_code)]
     select: Option<bool>,
@@ -103,9 +110,9 @@ struct BridgeTabOpenParams {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct BridgeShellRequest {
-    browser_key: String,
     kind: &'static str,
     label: String,
+    preview_key: String,
     project_id: String,
     request_id: String,
     url: String,
@@ -288,6 +295,12 @@ impl BridgeState {
                 self.handle_tab_open(app, request.id, params, request.session)
                     .await
             }
+            "agent.session.inspect" => {
+                let params: BridgeAgentSessionInspectParams =
+                    deserialize_bridge_params("agent.session.inspect", request.params)?;
+                self.handle_agent_session_inspect(app, params, request.session)
+                    .await
+            }
             method => Err(LifecycleError::InvalidInput {
                 field: "method".to_string(),
                 reason: format!("unsupported bridge method: {method}"),
@@ -414,9 +427,9 @@ impl BridgeState {
                     "stop": false,
                 },
                 "tab": {
-                    "browser": true,
                     "commitDiff": false,
                     "file": false,
+                    "preview": true,
                     "pullRequest": false,
                     "terminal": false,
                 },
@@ -459,7 +472,7 @@ impl BridgeState {
         params: BridgeTabOpenParams,
         session: Option<BridgeSessionEnvelope>,
     ) -> Result<Value, LifecycleError> {
-        if params.surface != "browser" {
+        if params.surface != "preview" {
             return Err(LifecycleError::InvalidInput {
                 field: "surface".to_string(),
                 reason: format!("unsupported tab surface: {}", params.surface),
@@ -468,31 +481,30 @@ impl BridgeState {
         if params.split.unwrap_or(false) {
             return Err(LifecycleError::InvalidInput {
                 field: "split".to_string(),
-                reason: "browser split placement is not implemented yet".to_string(),
+                reason: "preview split placement is not implemented yet".to_string(),
             });
         }
 
-        let workspace_id =
-            self.require_shell_workspace(params.workspace_id.clone(), session.as_ref())?;
+        let workspace_id = self.resolve_workspace_id(params.workspace_id, session.as_ref())?;
         let db_path = app.state::<DbPath>();
         let workspace = query::get_workspace_by_id(&db_path.0, workspace_id.clone())
             .await?
             .ok_or_else(|| LifecycleError::WorkspaceNotFound(workspace_id.clone()))?;
-        let browser_key = params
-            .browser_key
-            .unwrap_or_else(|| default_browser_key(&params.url));
+        let preview_key = params
+            .preview_key
+            .unwrap_or_else(|| default_preview_key(&params.url));
         let label = params
             .label
-            .unwrap_or_else(|| default_browser_label(&params.url));
+            .unwrap_or_else(|| default_preview_label(&params.url));
 
         let result = self
             .dispatch_shell_request(
                 app,
                 request_id.clone(),
                 BridgeShellRequest {
-                    browser_key,
-                    kind: "tab.open.browser",
+                    kind: "tab.open.preview",
                     label,
+                    preview_key,
                     project_id: workspace.project_id.clone(),
                     request_id,
                     url: params.url,
@@ -504,6 +516,146 @@ impl BridgeState {
         Ok(serde_json::to_value(result).map_err(|error| {
             LifecycleError::Io(format!("failed to serialize bridge shell result: {error}"))
         })?)
+    }
+
+    async fn handle_agent_session_inspect(
+        &self,
+        app: &AppHandle,
+        params: BridgeAgentSessionInspectParams,
+        _session: Option<BridgeSessionEnvelope>,
+    ) -> Result<Value, LifecycleError> {
+        let db_path = app.state::<DbPath>();
+        let conn = crate::platform::db::open_db(&db_path.0)?;
+
+        let session: Value = conn
+            .query_row(
+                "SELECT id, workspace_id, runtime_kind, runtime_name, provider,
+                        provider_session_id, title, status, created_by,
+                        forked_from_session_id, last_message_at, created_at,
+                        updated_at, ended_at
+                 FROM agent_session WHERE id = ?1",
+                rusqlite::params![params.session_id],
+                |row| {
+                    Ok(json!({
+                        "id": row.get::<_, String>(0)?,
+                        "workspace_id": row.get::<_, String>(1)?,
+                        "runtime_kind": row.get::<_, String>(2)?,
+                        "runtime_name": row.get::<_, Option<String>>(3)?,
+                        "provider": row.get::<_, String>(4)?,
+                        "provider_session_id": row.get::<_, Option<String>>(5)?,
+                        "title": row.get::<_, String>(6)?,
+                        "status": row.get::<_, String>(7)?,
+                        "created_by": row.get::<_, Option<String>>(8)?,
+                        "forked_from_session_id": row.get::<_, Option<String>>(9)?,
+                        "last_message_at": row.get::<_, Option<String>>(10)?,
+                        "created_at": row.get::<_, String>(11)?,
+                        "updated_at": row.get::<_, String>(12)?,
+                        "ended_at": row.get::<_, Option<String>>(13)?,
+                    }))
+                },
+            )
+            .map_err(|error| match error {
+                rusqlite::Error::QueryReturnedNoRows => LifecycleError::InvalidInput {
+                    field: "sessionId".to_string(),
+                    reason: format!("agent session not found: {}", params.session_id),
+                },
+                other => LifecycleError::Database(other.to_string()),
+            })?;
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT m.id, m.session_id, m.role, m.text, m.turn_id, m.created_at,
+                        p.id, p.part_index, p.part_type, p.text, p.data, p.created_at
+                 FROM agent_message m
+                 LEFT JOIN agent_message_part p ON p.message_id = m.id
+                 WHERE m.session_id = ?1
+                 ORDER BY m.created_at ASC, m.id ASC, p.part_index ASC",
+            )
+            .map_err(|error| LifecycleError::Database(error.to_string()))?;
+
+        let mut messages_map: Vec<(String, Value, Vec<Value>)> = Vec::new();
+
+        let rows = stmt
+            .query_map(rusqlite::params![params.session_id], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, Option<i64>>(7)?,
+                    row.get::<_, Option<String>>(8)?,
+                    row.get::<_, Option<String>>(9)?,
+                    row.get::<_, Option<String>>(10)?,
+                    row.get::<_, Option<String>>(11)?,
+                ))
+            })
+            .map_err(|error| LifecycleError::Database(error.to_string()))?;
+
+        for row in rows {
+            let (
+                msg_id,
+                session_id,
+                role,
+                text,
+                turn_id,
+                created_at,
+                part_id,
+                part_index,
+                part_type,
+                part_text,
+                part_data,
+                part_created_at,
+            ) = row.map_err(|error| LifecycleError::Database(error.to_string()))?;
+
+            let needs_new = messages_map.is_empty() || messages_map.last().unwrap().0 != msg_id;
+
+            if needs_new {
+                messages_map.push((
+                    msg_id.clone(),
+                    json!({
+                        "id": msg_id,
+                        "session_id": session_id,
+                        "role": role,
+                        "text": text,
+                        "turn_id": turn_id,
+                        "created_at": created_at,
+                    }),
+                    Vec::new(),
+                ));
+            }
+
+            if let Some(pid) = part_id {
+                let entry = messages_map.last_mut().unwrap();
+                entry.2.push(json!({
+                    "id": pid,
+                    "message_id": entry.0,
+                    "session_id": params.session_id,
+                    "part_index": part_index.unwrap_or(0),
+                    "part_type": part_type,
+                    "text": part_text,
+                    "data": part_data,
+                    "created_at": part_created_at.unwrap_or_default(),
+                }));
+            }
+        }
+
+        let messages: Vec<Value> = messages_map
+            .into_iter()
+            .map(|(_, mut msg, parts)| {
+                msg.as_object_mut()
+                    .unwrap()
+                    .insert("parts".to_string(), json!(parts));
+                msg
+            })
+            .collect();
+
+        Ok(json!({
+            "session": session,
+            "messages": messages,
+        }))
     }
 
     async fn dispatch_shell_request(
@@ -571,39 +723,6 @@ impl BridgeState {
                 return Err(LifecycleError::InvalidInput {
                     field: "session.terminalId".to_string(),
                     reason: "session terminal does not match the bridge token".to_string(),
-                });
-            }
-        }
-
-        Ok(scope.workspace_id)
-    }
-
-    fn require_shell_workspace(
-        &self,
-        workspace_id: Option<String>,
-        session: Option<&BridgeSessionEnvelope>,
-    ) -> Result<String, LifecycleError> {
-        let token = session
-            .and_then(|session| session.token.as_deref())
-            .ok_or_else(|| LifecycleError::InvalidInput {
-                field: "session.token".to_string(),
-                reason: "desktop shell commands require a session token".to_string(),
-            })?;
-        let scope = self.lookup_session_scope(token)?;
-        if let Some(terminal_id) = session.and_then(|session| session.terminal_id.as_deref()) {
-            if terminal_id != scope.terminal_id {
-                return Err(LifecycleError::InvalidInput {
-                    field: "session.terminalId".to_string(),
-                    reason: "session terminal does not match the bridge token".to_string(),
-                });
-            }
-        }
-
-        if let Some(workspace_id) = workspace_id {
-            if workspace_id != scope.workspace_id {
-                return Err(LifecycleError::InvalidInput {
-                    field: "workspaceId".to_string(),
-                    reason: "workspace id does not match the current session".to_string(),
                 });
             }
         }
@@ -738,7 +857,7 @@ fn serialize_bridge_error(request_id: String, method: String, error: LifecycleEr
     .to_string()
 }
 
-fn default_browser_key(url: &str) -> String {
+fn default_preview_key(url: &str) -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
@@ -747,7 +866,7 @@ fn default_browser_key(url: &str) -> String {
     format!("url:{:016x}", hasher.finish())
 }
 
-fn default_browser_label(url: &str) -> String {
+fn default_preview_label(url: &str) -> String {
     if let Ok(parsed) = reqwest::Url::parse(url) {
         if let Some(host) = parsed.host_str() {
             if let Some(port) = parsed.port() {
@@ -764,7 +883,7 @@ fn default_browser_label(url: &str) -> String {
 mod tests {
     #[cfg(unix)]
     use super::bind_socket_listener;
-    use super::build_socket_path;
+    use super::{build_socket_path, BridgeSessionEnvelope, BridgeSessionScope, BridgeState};
     #[cfg(unix)]
     use std::io::ErrorKind;
 
@@ -792,5 +911,40 @@ mod tests {
         );
 
         std::fs::remove_file(path).expect("remove bridge socket");
+    }
+
+    #[test]
+    fn resolve_workspace_id_accepts_explicit_workspace_without_session_token() {
+        let bridge = BridgeState::disabled();
+
+        let workspace_id = bridge
+            .resolve_workspace_id(Some("ws_123".to_string()), None)
+            .expect("resolve workspace id");
+
+        assert_eq!(workspace_id, "ws_123");
+    }
+
+    #[test]
+    fn resolve_workspace_id_uses_session_scope_when_workspace_id_is_omitted() {
+        let bridge = BridgeState::disabled();
+        bridge.inner.session_scopes.lock().unwrap().insert(
+            "session-token".to_string(),
+            BridgeSessionScope {
+                terminal_id: "term_123".to_string(),
+                workspace_id: "ws_123".to_string(),
+            },
+        );
+
+        let workspace_id = bridge
+            .resolve_workspace_id(
+                None,
+                Some(&BridgeSessionEnvelope {
+                    terminal_id: Some("term_123".to_string()),
+                    token: Some("session-token".to_string()),
+                }),
+            )
+            .expect("resolve workspace id from session");
+
+        assert_eq!(workspace_id, "ws_123");
     }
 }

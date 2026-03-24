@@ -4,10 +4,10 @@ import { FileDiff, FileText, GitBranch, GitCommitHorizontal, Globe, PenTool } fr
 import { ResponseReadyDot } from "@/components/response-ready-dot";
 import {
   isAgentTab,
-  isBrowserDocument,
   isChangesDiffDocument,
   isCommitDiffDocument,
   isFileViewerDocument,
+  isPreviewDocument,
   isPullRequestDocument,
 } from "@/features/workspaces/state/workspace-canvas-state";
 import type { WorkspaceCanvasTab } from "@/features/workspaces/canvas/workspace-canvas-tabs";
@@ -60,8 +60,8 @@ function tabIconName(tab: WorkspaceCanvasTab): string {
     return tab.extension === "pen" ? "file-viewer-pencil" : "file-viewer";
   }
 
-  if (isBrowserDocument(tab)) {
-    return "browser";
+  if (isPreviewDocument(tab)) {
+    return "preview";
   }
 
   if (isAgentTab(tab)) {
@@ -96,6 +96,19 @@ function SurfaceBubble({ children, tab }: { children: ReactNode; tab: WorkspaceC
 
 export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceCanvasTab }) {
   if (tab.kind === "terminal") {
+    if (tab.optimistic === "pending" || tab.optimistic === "created") {
+      return (
+        <span
+          aria-label="Opening terminal"
+          className="flex h-5 w-5 shrink-0 items-center justify-center"
+          role="img"
+          title="Opening terminal"
+        >
+          <Spinner className="size-4 shrink-0 text-[var(--muted-foreground)]" />
+        </span>
+      );
+    }
+
     const state = getWorkspaceSessionStatusState({
       responseReady: tab.responseReady,
       running: Boolean(tab.running),
@@ -119,11 +132,7 @@ export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceCanvasTab })
         className="relative flex h-5 w-5 shrink-0 items-center justify-center text-current"
         data-surface-tab-icon={tabIconName(tab)}
       >
-        {state === "ready" ? (
-          <ResponseReadyDot />
-        ) : (
-          <TerminalProviderIcon />
-        )}
+        {state === "ready" ? <ResponseReadyDot /> : <TerminalProviderIcon />}
       </span>
     );
   }
@@ -140,7 +149,7 @@ export function WorkspaceSurfaceTabLeading({ tab }: { tab: WorkspaceCanvasTab })
     );
   }
 
-  if (isBrowserDocument(tab)) {
+  if (isPreviewDocument(tab)) {
     return (
       <SurfaceBubble tab={tab}>
         <Globe className="h-3.5 w-3.5" strokeWidth={1.8} />

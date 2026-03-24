@@ -53,9 +53,9 @@ export interface FileViewerDocument {
   label: string;
 }
 
-export interface BrowserDocument {
+export interface PreviewDocument {
   key: string;
-  kind: "browser";
+  kind: "preview";
   label: string;
   url: string;
 }
@@ -72,10 +72,10 @@ export interface AgentTab {
 
 export type WorkspaceCanvasDocument =
   | AgentTab
-  | BrowserDocument
   | ChangesDiffDocument
   | CommitDiffDocument
   | FileViewerDocument
+  | PreviewDocument
   | PullRequestDocument;
 
 export type WorkspaceCanvasDocumentsByKey = Record<string, WorkspaceCanvasDocument>;
@@ -162,7 +162,7 @@ type PersistedFileViewerDocument = {
   kind?: unknown;
 };
 
-type PersistedBrowserDocument = {
+type PersistedPreviewDocument = {
   key?: unknown;
   kind?: unknown;
   label?: unknown;
@@ -274,8 +274,12 @@ export function fileViewerTabKey(filePath: string): string {
   return `file:${normalizeWorkspaceFilePath(filePath)}`;
 }
 
-export function browserTabKey(key: string): string {
-  return `browser:${key}`;
+export function previewTabKey(key: string): string {
+  return `preview:${key}`;
+}
+
+function migrateBrowserTabKey(value: string): string {
+  return value.startsWith("browser:") ? `preview:${value.slice("browser:".length)}` : value;
 }
 
 export function agentTabKey(agentSessionId: string): string {
@@ -334,14 +338,14 @@ export function createFileViewerTab(filePath: string): FileViewerDocument {
   };
 }
 
-export function createBrowserTab(input: {
+export function createPreviewTab(input: {
   key: string;
   label: string;
   url: string;
-}): BrowserDocument {
+}): PreviewDocument {
   return {
-    key: browserTabKey(input.key),
-    kind: "browser",
+    key: previewTabKey(input.key),
+    kind: "preview",
     label: input.label,
     url: input.url,
   };
@@ -385,8 +389,8 @@ export function isFileViewerDocument(
   return document.kind === "file-viewer";
 }
 
-export function isBrowserDocument(document: WorkspaceCanvasDocument): document is BrowserDocument {
-  return document.kind === "browser";
+export function isPreviewDocument(document: WorkspaceCanvasDocument): document is PreviewDocument {
+  return document.kind === "preview";
 }
 
 export function isAgentTab(document: WorkspaceCanvasDocument): document is AgentTab {
@@ -753,7 +757,7 @@ function parseFileViewerDocument(value: Record<string, unknown>): FileViewerDocu
   return createFileViewerTab(filePath);
 }
 
-function parseBrowserDocument(value: Record<string, unknown>): BrowserDocument | null {
+function parsePreviewDocument(value: Record<string, unknown>): PreviewDocument | null {
   const key = getOptionalString(value, "key");
   const label = getOptionalString(value, "label");
   const url = getOptionalString(value, "url");
@@ -761,7 +765,7 @@ function parseBrowserDocument(value: Record<string, unknown>): BrowserDocument |
     return null;
   }
 
-  return createBrowserTab({
+  return createPreviewTab({
     key,
     label,
     url,
@@ -937,8 +941,8 @@ function parseWorkspaceCanvasDocument(value: unknown): WorkspaceCanvasDocument |
     return parseFileViewerDocument(value as PersistedFileViewerDocument);
   }
 
-  if (documentKind === "browser") {
-    return parseBrowserDocument(value as PersistedBrowserDocument);
+  if (documentKind === "preview" || documentKind === "browser") {
+    return parsePreviewDocument(value as PersistedPreviewDocument);
   }
 
   if (documentKind === "agent") {
@@ -1007,9 +1011,12 @@ function parseWorkspaceCanvasState(value: unknown): WorkspaceCanvasState {
           }
 
           const paneTabState = createDefaultWorkspacePaneTabState();
-          paneTabState.activeTabKey = getOptionalString(nextValue, "activeTabKey") ?? null;
+          const activeTabKey = getOptionalString(nextValue, "activeTabKey");
+          paneTabState.activeTabKey = activeTabKey ? migrateBrowserTabKey(activeTabKey) : null;
           paneTabState.tabOrderKeys = Array.isArray(nextValue.tabOrderKeys)
-            ? nextValue.tabOrderKeys.filter((key): key is string => typeof key === "string")
+            ? nextValue.tabOrderKeys
+                .filter((key): key is string => typeof key === "string")
+                .map((key) => migrateBrowserTabKey(key))
             : [];
 
           return [[paneId, paneTabState] as const];
@@ -1042,7 +1049,9 @@ function parseWorkspaceCanvasState(value: unknown): WorkspaceCanvasState {
             tabState.viewState = viewState;
           }
 
-          return tabState.hidden || tabState.viewState ? [[key, tabState] as const] : [];
+          return tabState.hidden || tabState.viewState
+            ? [[migrateBrowserTabKey(key), tabState] as const]
+            : [];
         }),
       )
     : {};
@@ -1134,9 +1143,14 @@ function serializeWorkspaceCanvasDocument(
     };
   }
 
-  if (isBrowserDocument(document)) {
+  if (isPreviewDocument(document)) {
+    const persistedKey = document.key.startsWith("preview:")
+      ? document.key.slice("preview:".length)
+      : document.key.startsWith("browser:")
+        ? document.key.slice("browser:".length)
+        : document.key;
     return {
-      key: document.key.slice("browser:".length),
+      key: persistedKey,
       kind: document.kind,
       label: document.label,
       url: document.url,

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { mkdir, rename, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type {
   AgentWorkerCommand,
@@ -246,18 +246,24 @@ function updateSnapshotFromCommand(
   }
 }
 
-async function persistRegistration(
+// Serialized atomic write: write to a temp file then rename, queued so
+// concurrent fire-and-forget calls don't race and produce truncated JSON.
+let registrationWriteChain = Promise.resolve();
+
+function persistRegistration(
   input: HostInput,
   snapshot: DetachedAgentHostSnapshot,
   port: number,
   token: string,
 ): Promise<void> {
-  await mkdir(dirname(input.registrationPath), { recursive: true });
-  await writeFile(
-    input.registrationPath,
-    `${JSON.stringify(toRegistration(snapshot, input, port, token))}\n`,
-    "utf8",
-  );
+  registrationWriteChain = registrationWriteChain.then(async () => {
+    const dir = dirname(input.registrationPath);
+    const tmp = join(dir, `.${input.sessionId}.json.tmp`);
+    await mkdir(dir, { recursive: true });
+    await writeFile(tmp, `${JSON.stringify(toRegistration(snapshot, input, port, token))}\n`, "utf8");
+    await rename(tmp, input.registrationPath);
+  }, () => {/* swallow prior errors so the chain stays live */});
+  return registrationWriteChain;
 }
 
 function spawnWorkerChild(input: HostInput): ChildProcessWithoutNullStreams {
@@ -268,7 +274,7 @@ function spawnWorkerChild(input: HostInput): ChildProcessWithoutNullStreams {
 
   return spawn(process.execPath, [cliEntry, ...buildWorkerArgs(input)], {
     cwd: input.workspacePath,
-    env: process.env,
+    env: { ...process.env, LIFECYCLE_AGENT_SESSION_ID: input.sessionId },
     stdio: ["pipe", "pipe", "pipe"],
   });
 }

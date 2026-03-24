@@ -691,5 +691,4 @@ mod tests {
         let _ = fs::remove_dir_all(repo_path);
         let _ = fs::remove_file(db_path);
     }
-
 }

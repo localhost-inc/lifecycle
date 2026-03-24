@@ -1,5 +1,5 @@
-use crate::platform::lifecycle_cli::LifecycleCliState;
 use crate::platform::app_config::AppConfigPath;
+use crate::platform::lifecycle_cli::LifecycleCliState;
 use crate::shared::errors::LifecycleError;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -135,11 +135,10 @@ pub fn read_agent_host_registration(
 
     let raw = fs::read_to_string(&registration_path)
         .map_err(|error| LifecycleError::Io(error.to_string()))?;
-    let parsed = serde_json::from_str(&raw)
-        .map_err(|error| LifecycleError::InvalidInput {
-            field: "session_id".to_string(),
-            reason: format!("invalid agent host registration: {error}"),
-        })?;
+    let parsed = serde_json::from_str(&raw).map_err(|error| LifecycleError::InvalidInput {
+        field: "session_id".to_string(),
+        reason: format!("invalid agent host registration: {error}"),
+    })?;
     Ok(Some(parsed))
 }
 

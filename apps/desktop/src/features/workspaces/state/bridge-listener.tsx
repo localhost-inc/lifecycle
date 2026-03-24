@@ -3,16 +3,16 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { createBrowserOpenInput } from "@/features/workspaces/canvas/workspace-canvas-requests";
+import { createPreviewOpenInput } from "@/features/workspaces/canvas/workspace-canvas-requests";
 import { useWorkspaceOpenRequests } from "@/features/workspaces/state/workspace-open-requests";
 
 const BRIDGE_SHELL_REQUEST_EVENT = "bridge:shell-request";
 
-function buildBrowserResult(request: Extract<BridgeShellRequest, { kind: "tab.open.browser" }>) {
+function buildPreviewResult(request: Extract<BridgeShellRequest, { kind: "tab.open.preview" }>) {
   return {
     projectId: request.projectId,
-    surface: "browser",
-    tabKey: `browser:${request.browserKey}`,
+    surface: "preview",
+    tabKey: `preview:${request.previewKey}`,
     url: request.url,
     workspaceId: request.workspaceId,
   };
@@ -43,19 +43,19 @@ export function BridgeListener() {
       const request = parsed.data;
 
       try {
-        if (request.kind === "tab.open.browser") {
+        if (request.kind === "tab.open.preview") {
           openDocument(
             request.workspaceId,
-            createBrowserOpenInput({
-              browserKey: request.browserKey,
+            createPreviewOpenInput({
               label: request.label,
+              previewKey: request.previewKey,
               url: request.url,
             }),
           );
           void navigate(`/projects/${request.projectId}/workspaces/${request.workspaceId}`);
           await invoke("bridge_complete_shell_request", {
             requestId: request.requestId,
-            result: buildBrowserResult(request),
+            result: buildPreviewResult(request),
           });
         }
       } catch (error) {

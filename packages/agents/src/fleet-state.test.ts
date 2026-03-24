@@ -40,6 +40,111 @@ describe("agent fleet state", () => {
     });
   });
 
+  test("tracks turn activity phase through thinking, tool_use, and responding", () => {
+    // Turn starts → thinking phase
+    let state = applyEvents([
+      {
+        kind: "agent.turn.started",
+        sessionId: "session-1",
+        turnId: "turn-1",
+        workspaceId: "workspace-1",
+      },
+    ]);
+    expect(selectAgentFleetSessionState(state, "session-1").turnActivity).toEqual({
+      phase: "thinking",
+      toolName: null,
+      toolCallCount: 0,
+    });
+
+    // Thinking delta keeps thinking phase
+    state = reduceAgentFleetEvent(state, {
+      kind: "agent.message.part.delta",
+      sessionId: "session-1",
+      workspaceId: "workspace-1",
+      messageId: "turn-1:assistant",
+      partId: "turn-1:assistant:thinking:0",
+      part: { type: "thinking", text: "Let me analyze..." },
+    });
+    expect(selectAgentFleetSessionState(state, "session-1").turnActivity).toEqual({
+      phase: "thinking",
+      toolName: null,
+      toolCallCount: 0,
+    });
+
+    // Tool call → tool_use phase
+    state = reduceAgentFleetEvent(state, {
+      kind: "agent.message.part.completed",
+      sessionId: "session-1",
+      workspaceId: "workspace-1",
+      messageId: "turn-1:assistant",
+      partId: "turn-1:assistant:tool:1",
+      part: { type: "tool_call", toolCallId: "tc-1", toolName: "Read", inputJson: "{}" },
+    });
+    expect(selectAgentFleetSessionState(state, "session-1").turnActivity).toEqual({
+      phase: "tool_use",
+      toolName: "Read",
+      toolCallCount: 1,
+    });
+
+    // Second tool call increments count
+    state = reduceAgentFleetEvent(state, {
+      kind: "agent.message.part.completed",
+      sessionId: "session-1",
+      workspaceId: "workspace-1",
+      messageId: "turn-1:assistant",
+      partId: "turn-1:assistant:tool:2",
+      part: { type: "tool_call", toolCallId: "tc-2", toolName: "Grep", inputJson: "{}" },
+    });
+    expect(selectAgentFleetSessionState(state, "session-1").turnActivity).toEqual({
+      phase: "tool_use",
+      toolName: "Grep",
+      toolCallCount: 2,
+    });
+
+    // Text delta → responding phase
+    state = reduceAgentFleetEvent(state, {
+      kind: "agent.message.part.delta",
+      sessionId: "session-1",
+      workspaceId: "workspace-1",
+      messageId: "turn-1:assistant",
+      partId: "turn-1:assistant:text:0",
+      part: { type: "text", text: "Here is what I found..." },
+    });
+    expect(selectAgentFleetSessionState(state, "session-1").turnActivity).toEqual({
+      phase: "responding",
+      toolName: null,
+      toolCallCount: 2,
+    });
+
+    // Turn completes → activity cleared
+    state = reduceAgentFleetEvent(state, {
+      kind: "agent.turn.completed",
+      sessionId: "session-1",
+      turnId: "turn-1",
+      workspaceId: "workspace-1",
+    });
+    expect(selectAgentFleetSessionState(state, "session-1").turnActivity).toBeNull();
+  });
+
+  test("clears turn activity on turn failure", () => {
+    const state = applyEvents([
+      {
+        kind: "agent.turn.started",
+        sessionId: "session-1",
+        turnId: "turn-1",
+        workspaceId: "workspace-1",
+      },
+      {
+        kind: "agent.turn.failed",
+        sessionId: "session-1",
+        turnId: "turn-1",
+        workspaceId: "workspace-1",
+        error: "interrupted",
+      },
+    ]);
+    expect(selectAgentFleetSessionState(state, "session-1").turnActivity).toBeNull();
+  });
+
   test("tracks approval and error state on the normalized session model", () => {
     const state = applyEvents([
       {
@@ -75,6 +180,91 @@ describe("agent fleet state", () => {
       pendingApprovals: [],
       responseReady: false,
       workspaceId: "workspace-1",
+    });
+  });
+
+  test("prefers detailed provider status text when present", () => {
+    const state = applyEvents([
+      {
+        detail: "Codex login failed.",
+        kind: "agent.status.updated",
+        sessionId: "session-1",
+        status: "startup failed",
+        workspaceId: "workspace-1",
+      },
+    ]);
+
+    expect(selectAgentFleetSessionState(state, "session-1")).toMatchObject({
+      providerStatus: "Codex login failed.",
+      workspaceId: "workspace-1",
+    });
+  });
+
+  test("accumulates token usage and cost across turns", () => {
+    const state = applyEvents([
+      {
+        kind: "agent.turn.started",
+        sessionId: "session-1",
+        turnId: "turn-1",
+        workspaceId: "workspace-1",
+      },
+      {
+        kind: "agent.turn.completed",
+        sessionId: "session-1",
+        turnId: "turn-1",
+        workspaceId: "workspace-1",
+        usage: { inputTokens: 1000, outputTokens: 200, cacheReadTokens: 500 },
+        costUsd: 0.05,
+      },
+      {
+        kind: "agent.turn.started",
+        sessionId: "session-1",
+        turnId: "turn-2",
+        workspaceId: "workspace-1",
+      },
+      {
+        kind: "agent.turn.completed",
+        sessionId: "session-1",
+        turnId: "turn-2",
+        workspaceId: "workspace-1",
+        usage: { inputTokens: 2000, outputTokens: 400 },
+        costUsd: 0.08,
+      },
+    ]);
+
+    const sessionState = selectAgentFleetSessionState(state, "session-1");
+    expect(sessionState.usage).toEqual({
+      inputTokens: 3000,
+      outputTokens: 600,
+      cacheReadTokens: 500,
+      costUsd: 0.13,
+    });
+  });
+
+  test("preserves usage when turn completes without usage data", () => {
+    const state = applyEvents([
+      {
+        kind: "agent.turn.completed",
+        sessionId: "session-1",
+        turnId: "turn-1",
+        workspaceId: "workspace-1",
+        usage: { inputTokens: 1000, outputTokens: 200 },
+        costUsd: 0.05,
+      },
+      {
+        kind: "agent.turn.completed",
+        sessionId: "session-1",
+        turnId: "turn-2",
+        workspaceId: "workspace-1",
+      },
+    ]);
+
+    const sessionState = selectAgentFleetSessionState(state, "session-1");
+    expect(sessionState.usage).toEqual({
+      inputTokens: 1000,
+      outputTokens: 200,
+      cacheReadTokens: 0,
+      costUsd: 0.05,
     });
   });
 

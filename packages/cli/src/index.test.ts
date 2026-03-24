@@ -158,7 +158,7 @@ describe("lifecycle cli", () => {
         expect(request).toMatchObject({
           method: "tab.open",
           params: {
-            surface: "browser",
+            surface: "preview",
             url: "http://localhost:3000",
             workspaceId: "ws_123",
           },
@@ -174,8 +174,8 @@ describe("lifecycle cli", () => {
           ok: true,
           result: {
             projectId: "project_123",
-            surface: "browser",
-            tabKey: "browser:url:1234",
+            surface: "preview",
+            tabKey: "preview:url:1234",
             url: "http://localhost:3000",
             workspaceId: "ws_123",
           },
@@ -195,7 +195,7 @@ describe("lifecycle cli", () => {
                 "tab",
                 "open",
                 "--surface",
-                "browser",
+                "preview",
                 "--url",
                 "http://localhost:3000",
                 "--workspace-id",
@@ -209,17 +209,80 @@ describe("lifecycle cli", () => {
       },
     );
 
-    expect(sink.stdout).toEqual(["Opened browser tab browser:url:1234 for http://localhost:3000."]);
+    expect(sink.stdout).toEqual(["Opened preview tab preview:url:1234 for http://localhost:3000."]);
+    expect(sink.stderr).toEqual([]);
+  });
+
+  test("opens preview tabs with an explicit workspace id and no shell session token", async () => {
+    const sink = createIo();
+    await withBridge(
+      (request) => {
+        const typedRequest = request as {
+          id: string;
+          session?: unknown;
+        };
+
+        expect(typedRequest).toMatchObject({
+          method: "tab.open",
+          params: {
+            surface: "preview",
+            url: "http://127.0.0.1:45558",
+            workspaceId: "ws_123",
+          },
+        });
+        expect(typedRequest.session).toBeUndefined();
+
+        return {
+          id: typedRequest.id,
+          method: "tab.open",
+          ok: true,
+          result: {
+            projectId: "project_123",
+            surface: "preview",
+            tabKey: "preview:url:5678",
+            url: "http://127.0.0.1:45558",
+            workspaceId: "ws_123",
+          },
+        };
+      },
+      async (bridgePath) => {
+        const code = await withEnvironment(
+          {
+            LIFECYCLE_BRIDGE: bridgePath,
+          },
+          async () =>
+            await main(
+              [
+                "tab",
+                "open",
+                "--surface",
+                "preview",
+                "--url",
+                "http://127.0.0.1:45558",
+                "--workspace-id",
+                "ws_123",
+              ],
+              sink.io,
+            ),
+        );
+
+        expect(code).toBe(0);
+      },
+    );
+
+    expect(sink.stdout).toEqual([
+      "Opened preview tab preview:url:5678 for http://127.0.0.1:45558.",
+    ]);
     expect(sink.stderr).toEqual([]);
   });
 
   test("validates surface-specific tab open flags", async () => {
     const sink = createIo();
 
-    const code = await main(["tab", "open", "--surface", "browser"], sink.io);
+    const code = await main(["tab", "open", "--surface", "preview"], sink.io);
 
     expect(code).toBe(1);
-    expect(sink.stderr).toEqual(["--surface browser requires --url."]);
+    expect(sink.stderr).toEqual(["--surface preview requires --url."]);
   });
 
   test("parses service info positional arguments", async () => {
@@ -478,9 +541,9 @@ describe("lifecycle cli", () => {
                 stop: false,
               },
               tab: {
-                browser: true,
                 commitDiff: false,
                 file: false,
+                preview: true,
                 pullRequest: false,
                 terminal: false,
               },
@@ -493,7 +556,7 @@ describe("lifecycle cli", () => {
               "lifecycle service list",
               "lifecycle service info <service>",
               "lifecycle service start [service...]",
-              "lifecycle tab open --surface browser --url <url>",
+              "lifecycle tab open --surface preview --url <url>",
             ],
             bridge: {
               available: true,

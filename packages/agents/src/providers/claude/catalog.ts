@@ -15,11 +15,17 @@ interface ClaudeCatalogSession extends SDKSession {
   query?: ClaudeQuerySurface;
 }
 
+function cleanDisplayName(name: string): string {
+  return name
+    .replace(/\s*\((?:with\s+)?\d+[A-Za-z]+ context\)/g, "")
+    .replace(/\s*\(recommended\)/gi, "");
+}
+
 function mapClaudeModel(model: ModelInfo): ProviderModelCatalogEntry {
   return {
     defaultReasoningEffort: null,
     description: model.description ?? null,
-    label: model.displayName,
+    label: cleanDisplayName(model.displayName),
     reasoningEfforts:
       model.supportsEffort && Array.isArray(model.supportedEffortLevels)
         ? [...model.supportedEffortLevels]

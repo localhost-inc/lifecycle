@@ -4,12 +4,20 @@ use std::time::Instant;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 pub fn migrations() -> Vec<Migration> {
-    vec![Migration {
-        version: 1,
-        description: "baseline",
-        sql: include_str!("migrations/0001_baseline.sql"),
-        kind: MigrationKind::Up,
-    }]
+    vec![
+        Migration {
+            version: 1,
+            description: "baseline",
+            sql: include_str!("migrations/0001_baseline.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: 2,
+            description: "agent session starting status",
+            sql: include_str!("migrations/0002_agent-session-starting.sql"),
+            kind: MigrationKind::Up,
+        },
+    ]
 }
 
 /// Holds the resolved path to the SQLite database file.

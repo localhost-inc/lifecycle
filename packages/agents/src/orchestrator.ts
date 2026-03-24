@@ -5,11 +5,7 @@ import type {
 } from "@lifecycle/contracts";
 import type { WorkspaceRuntime } from "@lifecycle/workspace";
 import type { AgentEventObserver } from "./events";
-import type {
-  AgentApprovalResolution,
-  AgentTurnCancelRequest,
-  AgentTurnRequest,
-} from "./turn";
+import type { AgentApprovalResolution, AgentTurnCancelRequest, AgentTurnRequest } from "./turn";
 
 export interface AgentSessionContext {
   workspaceId: string;
@@ -34,6 +30,8 @@ export interface StartAgentSessionInput {
 }
 
 export interface AgentOrchestrator {
+  createDraftSession(input: StartAgentSessionInput): Promise<AgentSessionRecord>;
+  bootstrapSession(agentSessionId: string): Promise<AgentSessionRecord>;
   startSession(input: StartAgentSessionInput): Promise<AgentSessionRecord>;
   getSession(agentSessionId: string): Promise<AgentSessionRecord | null>;
   listSessions(workspaceId: string): Promise<AgentSessionRecord[]>;
@@ -61,23 +59,24 @@ export interface AgentStore {
 }
 
 export interface CreateAgentOrchestratorDependencies {
-  workers: Record<AgentSessionProviderId, {
-    start(
-      session: AgentSessionRecord,
-      context: AgentSessionContext,
-      runtime: WorkspaceRuntime,
-      events: AgentSessionEvents,
-    ): Promise<{ session: AgentSessionRecord; worker: AgentWorker }>;
-    connect(
-      session: AgentSessionRecord,
-      context: AgentSessionContext,
-      runtime: WorkspaceRuntime,
-      events: AgentSessionEvents,
-    ): Promise<AgentWorker>;
-  }>;
-  resolveRuntime(
-    context: AgentSessionContext,
-  ): Promise<WorkspaceRuntime> | WorkspaceRuntime;
+  workers: Record<
+    AgentSessionProviderId,
+    {
+      start(
+        session: AgentSessionRecord,
+        context: AgentSessionContext,
+        runtime: WorkspaceRuntime,
+        events: AgentSessionEvents,
+      ): Promise<{ session: AgentSessionRecord; worker: AgentWorker }>;
+      connect(
+        session: AgentSessionRecord,
+        context: AgentSessionContext,
+        runtime: WorkspaceRuntime,
+        events: AgentSessionEvents,
+      ): Promise<AgentWorker>;
+    }
+  >;
+  resolveRuntime(context: AgentSessionContext): Promise<WorkspaceRuntime> | WorkspaceRuntime;
   store: AgentStore;
   now?: () => string;
   randomId?: () => string;
@@ -111,6 +110,14 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
 
   startSession(input: StartAgentSessionInput): Promise<AgentSessionRecord> {
     return this.startAgentSession(input);
+  }
+
+  createDraftSession(input: StartAgentSessionInput): Promise<AgentSessionRecord> {
+    return this.createDraftAgentSession(input);
+  }
+
+  bootstrapSession(agentSessionId: string): Promise<AgentSessionRecord> {
+    return this.bootstrapAgentSession(agentSessionId);
   }
 
   getSession(agentSessionId: string): Promise<AgentSessionRecord | null> {
@@ -166,8 +173,13 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
   }
 
   private async startAgentSession(input: StartAgentSessionInput): Promise<AgentSessionRecord> {
-    const context = await this.requireSessionContext(input.workspaceId);
-    const runtime = await this.resolveRuntime(context);
+    const draftSession = await this.createDraftAgentSession(input);
+    return this.bootstrapAgentSession(draftSession.id);
+  }
+
+  private async createDraftAgentSession(
+    input: StartAgentSessionInput,
+  ): Promise<AgentSessionRecord> {
     const timestamp = this.now();
     const draftSession: AgentSessionRecord = {
       id: this.randomId(),
@@ -177,7 +189,7 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
       provider: input.provider,
       provider_session_id: null,
       title: "",
-      status: "idle",
+      status: "starting",
       created_by: null,
       forked_from_session_id: input.forkedFromSessionId ?? null,
       last_message_at: null,
@@ -185,13 +197,9 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
       updated_at: timestamp,
       ended_at: null,
     };
-    const worker = this.workers[draftSession.provider];
-    const events = this.createEvents(context);
-    const result = await worker.start(draftSession, context, runtime, events);
-    const persisted = await this.store.saveSession(result.session);
-    this.connections.set(persisted.id, result.worker);
+    const persisted = await this.store.saveSession(draftSession);
 
-    await events.emit({
+    await this.broadcast({
       kind: "agent.session.created",
       workspaceId: persisted.workspace_id,
       session: persisted,
@@ -200,9 +208,56 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
     return persisted;
   }
 
-  private async sendAgentTurn(
-    input: Omit<AgentTurnRequest, "workspaceId">,
-  ): Promise<void> {
+  private async bootstrapAgentSession(agentSessionId: string): Promise<AgentSessionRecord> {
+    const session = await this.requireSession(agentSessionId);
+    if (this.connections.has(session.id)) {
+      return session;
+    }
+
+    const context = await this.requireSessionContext(session.workspace_id);
+    const runtime = await this.resolveRuntime(context);
+    const events = this.createEvents(context);
+
+    try {
+      const result = await this.workers[session.provider].start(session, context, runtime, events);
+      const bootstrappedSession: AgentSessionRecord =
+        result.session.status === "starting"
+          ? { ...result.session, status: "idle", updated_at: this.now() }
+          : result.session;
+      const persisted = await this.store.saveSession(bootstrappedSession);
+      this.connections.set(persisted.id, result.worker);
+
+      if (!this.sessionsEqualForBootstrap(session, persisted)) {
+        await this.broadcast({
+          kind: "agent.session.updated",
+          workspaceId: persisted.workspace_id,
+          session: persisted,
+        });
+      }
+
+      return persisted;
+    } catch (error) {
+      const failedSession = await this.persistSessionUpdate(session, {
+        status: "failed",
+        updated_at: this.now(),
+      });
+      await this.broadcast({
+        kind: "agent.session.updated",
+        workspaceId: failedSession.workspace_id,
+        session: failedSession,
+      });
+      await this.broadcast({
+        kind: "agent.status.updated",
+        workspaceId: failedSession.workspace_id,
+        sessionId: failedSession.id,
+        status: "startup failed",
+        detail: error instanceof Error ? error.message : "Agent startup failed.",
+      });
+      throw error;
+    }
+  }
+
+  private async sendAgentTurn(input: Omit<AgentTurnRequest, "workspaceId">): Promise<void> {
     const session = await this.requireSession(input.sessionId);
     const context = await this.requireSessionContext(session.workspace_id);
     const runtime = await this.resolveRuntime(context);
@@ -242,7 +297,9 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
         part:
           part.type === "text"
             ? { type: "text", text: part.text }
-            : { type: "attachment_ref", attachmentId: part.attachmentId },
+            : part.type === "image"
+              ? { type: "image", mediaType: part.mediaType, base64Data: part.base64Data }
+              : { type: "attachment_ref", attachmentId: part.attachmentId },
       });
     }
 
@@ -268,7 +325,12 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
     const session = await this.requireSession(input.sessionId);
     const context = await this.requireSessionContext(session.workspace_id);
     const runtime = await this.resolveRuntime(context);
-    const connection = await this.ensureConnection(session, context, runtime, this.createEvents(context));
+    const connection = await this.ensureConnection(
+      session,
+      context,
+      runtime,
+      this.createEvents(context),
+    );
     await connection.cancelTurn(input);
   }
 
@@ -276,7 +338,12 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
     const session = await this.requireSession(input.sessionId);
     const context = await this.requireSessionContext(session.workspace_id);
     const runtime = await this.resolveRuntime(context);
-    const connection = await this.ensureConnection(session, context, runtime, this.createEvents(context));
+    const connection = await this.ensureConnection(
+      session,
+      context,
+      runtime,
+      this.createEvents(context),
+    );
     await connection.resolveApproval(input);
   }
 
@@ -404,6 +471,27 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
     return connection;
   }
 
+  private sessionsEqualForBootstrap(
+    previous: AgentSessionRecord,
+    next: AgentSessionRecord,
+  ): boolean {
+    return (
+      previous.id === next.id &&
+      previous.workspace_id === next.workspace_id &&
+      previous.runtime_kind === next.runtime_kind &&
+      previous.runtime_name === next.runtime_name &&
+      previous.provider === next.provider &&
+      previous.provider_session_id === next.provider_session_id &&
+      previous.title === next.title &&
+      previous.status === next.status &&
+      previous.created_by === next.created_by &&
+      previous.forked_from_session_id === next.forked_from_session_id &&
+      previous.last_message_at === next.last_message_at &&
+      previous.created_at === next.created_at &&
+      previous.updated_at === next.updated_at &&
+      previous.ended_at === next.ended_at
+    );
+  }
 }
 
 export function createAgentOrchestrator(

@@ -7,6 +7,7 @@ import {
 import { notifyShellResizeListeners } from "@/components/layout/shell-resize-provider";
 import {
   Fragment,
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -16,13 +17,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
-import type { TerminalRecord } from "@lifecycle/contracts";
-import { AnimatePresence, motion } from "motion/react";
-import {
-  SurfaceLaunchActions,
-  type SurfaceLaunchAction,
-  type SurfaceLaunchRequest,
-} from "@/features/workspaces/surfaces/surface-launch-actions";
+import { SurfaceLaunchActions } from "@/features/workspaces/surfaces/surface-launch-actions";
 import { WorkspacePaneContent } from "@/features/workspaces/canvas/panes/workspace-pane-content";
 import {
   WorkspacePaneDropOverlay,
@@ -36,65 +31,25 @@ import {
   type WorkspacePaneTabBarDragPreview,
   type WorkspacePaneTabDrag,
 } from "@/features/workspaces/canvas/tabs/workspace-pane-tab-bar";
-import {
-  isFileViewerDirty,
-  type FileViewerSessionState,
-} from "@/features/explorer/lib/file-session";
 import type {
-  WorkspacePaneNode,
-  WorkspaceCanvasDocument,
-  WorkspaceCanvasTabViewState,
-} from "@/features/workspaces/state/workspace-canvas-state";
+  WorkspacePaneActiveSurfaceModel,
+  WorkspacePaneModel,
+  WorkspacePaneTabBarModel,
+  WorkspacePaneTreeActions,
+  WorkspacePaneTreeModel,
+} from "@/features/workspaces/canvas/workspace-pane-models";
+import type { WorkspacePaneNode } from "@/features/workspaces/state/workspace-canvas-state";
 import {
   reorderWorkspaceTabKeys,
   type WorkspaceCanvasTab,
-  type WorkspaceTabPlacement,
 } from "@/features/workspaces/canvas/workspace-canvas-tabs";
 
 const MIN_WORKSPACE_PANE_SIZE = 240;
 const PANE_RESIZE_STEP_PX = 32;
 
 interface WorkspacePaneTreeProps {
-  activePaneId: string;
-  creatingSelection: "shell" | "claude" | "codex" | null;
-  dimInactivePanes?: boolean;
-  documents: WorkspaceCanvasDocument[];
-  fileSessionsByTabKey: Record<string, FileViewerSessionState>;
-  inactivePaneOpacity?: number;
-  onCloseDocumentTab: (tabKey: string) => void;
-  onCloseTerminalTab: (tabKey: string, terminalId: string) => Promise<void>;
-  onFileSessionStateChange: (tabKey: string, state: FileViewerSessionState | null) => void;
-  onLaunchSurface: (paneId: string, request: SurfaceLaunchRequest) => void;
-  onMoveTabToPane: (
-    key: string,
-    sourcePaneId: string,
-    targetPaneId: string,
-    targetKey?: string,
-    placement?: WorkspaceTabPlacement,
-    splitDirection?: "column" | "row",
-    splitPlacement?: "after" | "before",
-    splitRatio?: number,
-  ) => void;
-  onOpenFile: (filePath: string) => void;
-  onRenameTerminalTab: (terminalId: string, label: string) => Promise<unknown> | unknown;
-  onSelectPane: (paneId: string) => void;
-  onSelectTab: (paneId: string, key: string) => void;
-  onReconcilePaneVisibleTabOrder: (paneId: string, keys: string[]) => void;
-  onResetAllSplitRatios: () => void;
-  onSetSplitRatio: (splitId: string, ratio: number) => void;
-  onSplitPane: (paneId: string, direction: "column" | "row") => void;
-  onTabViewStateChange: (tabKey: string, viewState: WorkspaceCanvasTabViewState | null) => void;
-  onToggleZoom: () => void;
-  paneCount: number;
-  renderedActiveTabKeyByPaneId: Record<string, string | null>;
-  rootPane: WorkspacePaneNode;
-  surfaceActions: SurfaceLaunchAction[];
-  terminals: TerminalRecord[];
-  visibleTabsByPaneId: Record<string, WorkspaceCanvasTab[]>;
-  viewStateByTabKey: Record<string, WorkspaceCanvasTabViewState>;
-  paneIdsWaitingForSelectedTerminalTab: ReadonlySet<string>;
-  workspaceId: string;
-  zoomedTabKey: string | null;
+  actions: WorkspacePaneTreeActions;
+  model: WorkspacePaneTreeModel;
 }
 
 function PaneControlButton({
@@ -518,66 +473,330 @@ export function shouldAutoSelectWorkspacePaneFromPointerTarget(
   );
 }
 
-export function WorkspacePaneTree({
-  activePaneId,
-  creatingSelection,
-  dimInactivePanes = false,
-  documents,
-  fileSessionsByTabKey,
-  inactivePaneOpacity = 1,
-  onCloseDocumentTab,
-  onCloseTerminalTab,
-  onFileSessionStateChange,
-  onLaunchSurface,
-  onMoveTabToPane,
-  onOpenFile,
-  onRenameTerminalTab,
-  onSelectPane,
-  onSelectTab,
-  onReconcilePaneVisibleTabOrder,
-  onResetAllSplitRatios,
-  onSetSplitRatio,
-  onSplitPane,
-  onTabViewStateChange,
-  onToggleZoom,
+function areWorkspacePaneTabModelsEqual(
+  previous: WorkspacePaneTabBarModel["tabs"],
+  next: WorkspacePaneTabBarModel["tabs"],
+): boolean {
+  if (previous === next) {
+    return true;
+  }
+
+  if (previous.length !== next.length) {
+    return false;
+  }
+
+  for (let index = 0; index < previous.length; index += 1) {
+    if (
+      previous[index]?.dirty !== next[index]?.dirty ||
+      previous[index]?.tab !== next[index]?.tab
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areWorkspacePaneTabBarModelsEqual(
+  previous: WorkspacePaneTabBarModel,
+  next: WorkspacePaneTabBarModel,
+): boolean {
+  return (
+    previous.activeTabKey === next.activeTabKey &&
+    previous.paneId === next.paneId &&
+    areWorkspacePaneTabBarDragPreviewsEqual(previous.dragPreview, next.dragPreview) &&
+    areWorkspacePaneTabModelsEqual(previous.tabs, next.tabs)
+  );
+}
+
+function areFileViewerSessionStatesEqual(
+  previous: Extract<WorkspacePaneActiveSurfaceModel, { kind: "file-viewer" }>["sessionState"],
+  next: Extract<WorkspacePaneActiveSurfaceModel, { kind: "file-viewer" }>["sessionState"],
+): boolean {
+  if (previous === next) {
+    return true;
+  }
+
+  return (
+    previous?.conflictDiskContent === next?.conflictDiskContent &&
+    previous?.draftContent === next?.draftContent &&
+    previous?.savedContent === next?.savedContent
+  );
+}
+
+function areWorkspaceCanvasViewStatesEqual(
+  previous:
+    | Extract<
+        WorkspacePaneActiveSurfaceModel,
+        { kind: "changes-diff" | "commit-diff" | "file-viewer" | "pull-request" }
+      >["viewState"]
+    | null,
+  next:
+    | Extract<
+        WorkspacePaneActiveSurfaceModel,
+        { kind: "changes-diff" | "commit-diff" | "file-viewer" | "pull-request" }
+      >["viewState"]
+    | null,
+): boolean {
+  if (previous === next) {
+    return true;
+  }
+
+  return previous?.fileMode === next?.fileMode && previous?.scrollTop === next?.scrollTop;
+}
+
+function areWorkspacePaneTabBarDragPreviewsEqual(
+  previous: WorkspacePaneTabBarDragPreview | null,
+  next: WorkspacePaneTabBarDragPreview | null,
+): boolean {
+  if (previous === next) {
+    return true;
+  }
+
+  return (
+    previous?.draggedKey === next?.draggedKey &&
+    previous?.draggedWidth === next?.draggedWidth &&
+    previous?.placement === next?.placement &&
+    previous?.targetKey === next?.targetKey
+  );
+}
+
+function areWorkspacePaneActiveSurfacesEqual(
+  previous: WorkspacePaneActiveSurfaceModel,
+  next: WorkspacePaneActiveSurfaceModel,
+): boolean {
+  if (previous.kind !== next.kind) {
+    return false;
+  }
+
+  switch (previous.kind) {
+    case "launcher": {
+      const nextLauncher = next as Extract<WorkspacePaneActiveSurfaceModel, { kind: "launcher" }>;
+      return previous.creatingSelection === nextLauncher.creatingSelection;
+    }
+    case "waiting-terminal":
+    case "opening-terminal":
+    case "loading":
+      return true;
+    case "terminal": {
+      const nextTerminal = next as Extract<WorkspacePaneActiveSurfaceModel, { kind: "terminal" }>;
+      return previous.tab === nextTerminal.tab && previous.terminal === nextTerminal.terminal;
+    }
+    case "changes-diff":
+    case "commit-diff":
+    case "pull-request": {
+      const nextDocumentSurface = next as Extract<
+        WorkspacePaneActiveSurfaceModel,
+        { kind: "changes-diff" | "commit-diff" | "pull-request" }
+      >;
+      return (
+        previous.document === nextDocumentSurface.document &&
+        previous.workspaceId === nextDocumentSurface.workspaceId &&
+        areWorkspaceCanvasViewStatesEqual(previous.viewState, nextDocumentSurface.viewState)
+      );
+    }
+    case "preview": {
+      const nextPreview = next as Extract<WorkspacePaneActiveSurfaceModel, { kind: "preview" }>;
+      return previous.document === nextPreview.document;
+    }
+    case "agent": {
+      const nextAgent = next as Extract<WorkspacePaneActiveSurfaceModel, { kind: "agent" }>;
+      return (
+        previous.document === nextAgent.document && previous.workspaceId === nextAgent.workspaceId
+      );
+    }
+    case "file-viewer": {
+      const nextFileViewer = next as Extract<
+        WorkspacePaneActiveSurfaceModel,
+        { kind: "file-viewer" }
+      >;
+      return (
+        previous.document === nextFileViewer.document &&
+        previous.workspaceId === nextFileViewer.workspaceId &&
+        areWorkspaceCanvasViewStatesEqual(previous.viewState, nextFileViewer.viewState) &&
+        areFileViewerSessionStatesEqual(previous.sessionState, nextFileViewer.sessionState)
+      );
+    }
+  }
+}
+
+function areWorkspacePaneModelsEqual(
+  previous: WorkspacePaneModel,
+  next: WorkspacePaneModel,
+): boolean {
+  return (
+    previous.id === next.id &&
+    previous.isActive === next.isActive &&
+    areWorkspacePaneTabBarModelsEqual(previous.tabBar, next.tabBar) &&
+    areWorkspacePaneActiveSurfacesEqual(previous.activeSurface, next.activeSurface)
+  );
+}
+
+interface WorkspacePaneLeafProps {
+  actions: WorkspacePaneTreeActions;
+  dimInactivePanes: boolean;
+  inactivePaneOpacity: number;
+  isBodyDropTarget: boolean;
+  isZoomedView: boolean;
+  onTabDrag: (drag: WorkspacePaneTabDrag | null) => void;
+  onTabDragCommit: (drag: WorkspacePaneTabDrag) => void;
+  pane: WorkspacePaneModel;
+  paneCount: number;
+  paneTabDragInProgress: boolean;
+  setPaneElement: (paneId: string, element: HTMLElement | null) => void;
+  surfaceActions: WorkspacePaneTreeModel["surfaceActions"];
+}
+
+export function areWorkspacePaneLeafPropsEqual(
+  previous: WorkspacePaneLeafProps,
+  next: WorkspacePaneLeafProps,
+): boolean {
+  return (
+    previous.actions === next.actions &&
+    previous.dimInactivePanes === next.dimInactivePanes &&
+    previous.inactivePaneOpacity === next.inactivePaneOpacity &&
+    previous.isBodyDropTarget === next.isBodyDropTarget &&
+    previous.isZoomedView === next.isZoomedView &&
+    previous.onTabDrag === next.onTabDrag &&
+    previous.onTabDragCommit === next.onTabDragCommit &&
+    previous.paneCount === next.paneCount &&
+    previous.paneTabDragInProgress === next.paneTabDragInProgress &&
+    previous.setPaneElement === next.setPaneElement &&
+    previous.surfaceActions === next.surfaceActions &&
+    areWorkspacePaneModelsEqual(previous.pane, next.pane)
+  );
+}
+
+const WorkspacePaneLeaf = memo(function WorkspacePaneLeaf({
+  actions,
+  dimInactivePanes,
+  inactivePaneOpacity,
+  isBodyDropTarget,
+  isZoomedView,
+  onTabDrag,
+  onTabDragCommit,
+  pane,
   paneCount,
-  renderedActiveTabKeyByPaneId,
-  rootPane,
+  paneTabDragInProgress,
+  setPaneElement,
   surfaceActions,
-  terminals,
-  visibleTabsByPaneId,
-  viewStateByTabKey,
-  paneIdsWaitingForSelectedTerminalTab,
-  workspaceId,
-  zoomedTabKey,
-}: WorkspacePaneTreeProps) {
+}: WorkspacePaneLeafProps) {
+  const [hovered, setHovered] = useState(false);
+  const [surfaceLaunchOpen, setSurfaceLaunchOpen] = useState(false);
+  const paneOpacity = resolveWorkspacePaneOpacity({
+    dimInactivePanes,
+    inactivePaneOpacity,
+    isActivePane: pane.isActive,
+    isHoveredPane: hovered,
+  });
+
+  return (
+    <section
+      ref={(element) => setPaneElement(pane.id, element)}
+      className={`relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--surface)] transition-opacity duration-200 ease-in-out will-change-[opacity] ${isBodyDropTarget ? "ring-1 ring-[var(--ring)] shadow-[0_0_0_2px_var(--ring)]/50" : ""}`}
+      data-workspace-pane-id={pane.id}
+      onPointerEnter={() => {
+        setHovered(true);
+      }}
+      onPointerLeave={() => {
+        setHovered(false);
+      }}
+      onPointerDownCapture={(event) => {
+        if (!pane.isActive && shouldAutoSelectWorkspacePaneFromPointerTarget(event.target)) {
+          actions.selectPane(pane.id);
+        }
+      }}
+    >
+      <div
+        className="flex h-9 items-stretch gap-1 bg-[var(--background)] shadow-[inset_0_-1px_0_var(--border)]"
+        data-workspace-pane-header
+        style={{ opacity: paneOpacity }}
+      >
+        <WorkspacePaneTabBar
+          model={pane.tabBar}
+          onCloseDocumentTab={actions.closeDocumentTab}
+          onCloseTerminalTab={actions.closeTerminalTab}
+          onRenameTerminalTab={actions.renameTerminalTab}
+          onSelectTab={(key) => actions.selectTab(pane.id, key)}
+          onTabDrag={onTabDrag}
+          onTabDragCommit={onTabDragCommit}
+        />
+        <div className="flex w-[8rem] shrink-0 items-center justify-end gap-px pr-1">
+          <SurfaceLaunchActions
+            actions={surfaceActions}
+            onOpenChange={setSurfaceLaunchOpen}
+            open={surfaceLaunchOpen}
+            onLaunch={(request) => actions.launchSurface(pane.id, request)}
+          />
+          {!surfaceLaunchOpen ? (
+            <div className="flex items-center gap-px">
+              {paneCount > 1 && (
+                <PaneControlButton
+                  label={isZoomedView ? "Unzoom" : "Zoom"}
+                  onClick={actions.toggleZoom}
+                >
+                  {isZoomedView ? <ZoomOutIcon /> : <ZoomInIcon />}
+                </PaneControlButton>
+              )}
+              <PaneControlButton
+                label="Split Right"
+                onClick={() => actions.splitPane(pane.id, "row")}
+              >
+                <SplitRightIcon />
+              </PaneControlButton>
+              <PaneControlButton
+                label="Split Down"
+                onClick={() => actions.splitPane(pane.id, "column")}
+              >
+                <SplitDownIcon />
+              </PaneControlButton>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="relative flex min-h-0 flex-1 flex-col" data-workspace-pane-body>
+        <WorkspacePaneContent
+          activeSurface={pane.activeSurface}
+          onFileSessionStateChange={actions.fileSessionStateChange}
+          onLaunchSurface={(request) => actions.launchSurface(pane.id, request)}
+          onOpenFile={actions.openFile}
+          onTabViewStateChange={actions.tabViewStateChange}
+          paneDragInProgress={paneTabDragInProgress}
+          paneFocused={pane.isActive}
+          surfaceOpacity={paneOpacity}
+        />
+      </div>
+    </section>
+  );
+}, areWorkspacePaneLeafPropsEqual);
+
+export function WorkspacePaneTree({ actions, model }: WorkspacePaneTreeProps) {
   const zoomedPaneId = useMemo(() => {
-    if (!zoomedTabKey) {
+    if (!model.zoomedTabKey) {
       return null;
     }
-    for (const [paneId, tabs] of Object.entries(visibleTabsByPaneId)) {
-      if (tabs.some((tab) => tab.key === zoomedTabKey)) {
+    for (const [paneId, pane] of Object.entries(model.panesById)) {
+      if (pane.tabBar.tabs.some((entry) => entry.tab.key === model.zoomedTabKey)) {
         return paneId;
       }
     }
     return null;
-  }, [visibleTabsByPaneId, zoomedTabKey]);
-
-  const dirtyTabKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const [key, session] of Object.entries(fileSessionsByTabKey)) {
-      if (isFileViewerDirty(session)) {
-        keys.add(key);
-      }
-    }
-    return keys;
-  }, [fileSessionsByTabKey]);
+  }, [model.panesById, model.zoomedTabKey]);
 
   const [activeTabDrag, setActiveTabDrag] = useState<WorkspacePaneActiveTabDropState | null>(null);
-  const [hoveredPaneId, setHoveredPaneId] = useState<string | null>(null);
-  const [surfaceLaunchOpenPaneId, setSurfaceLaunchOpenPaneId] = useState<string | null>(null);
   const activeTabDragRef = useRef<WorkspacePaneActiveTabDropState | null>(null);
   const paneElementsRef = useRef(new Map<string, HTMLElement>());
+  const visibleTabsByPaneId = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(model.panesById).map(([paneId, pane]) => [
+          paneId,
+          pane.tabBar.tabs.map((entry) => entry.tab),
+        ]),
+      ),
+    [model.panesById],
+  );
   const draggedTab =
     activeTabDrag === null
       ? null
@@ -709,14 +928,14 @@ export function WorkspacePaneTree({
 
       if (intent.kind === "reorder") {
         const visibleTabKeys = (visibleTabsByPaneId[intent.paneId] ?? []).map((tab) => tab.key);
-        onReconcilePaneVisibleTabOrder(
+        actions.reconcilePaneVisibleTabOrder(
           intent.paneId,
           reorderWorkspaceTabKeys(visibleTabKeys, drag.tabKey, intent.targetKey, intent.placement),
         );
         return;
       }
 
-      onMoveTabToPane(
+      actions.moveTabToPane(
         drag.tabKey,
         drag.paneId,
         intent.paneId,
@@ -727,7 +946,7 @@ export function WorkspacePaneTree({
         intent.kind === "split" ? intent.splitRatio : undefined,
       );
     },
-    [onMoveTabToPane, onReconcilePaneVisibleTabOrder, resolveDropIntent, visibleTabsByPaneId],
+    [actions, resolveDropIntent, visibleTabsByPaneId],
   );
 
   const renderNode = useCallback(
@@ -737,8 +956,8 @@ export function WorkspacePaneTree({
           <WorkspacePaneSplitNode
             key={node.id}
             direction={node.direction}
-            onResetAllSplitRatios={onResetAllSplitRatios}
-            onSetSplitRatio={onSetSplitRatio}
+            onResetAllSplitRatios={actions.resetAllSplitRatios}
+            onSetSplitRatio={actions.setSplitRatio}
             ratio={node.ratio}
             splitId={node.id}
           >
@@ -750,167 +969,51 @@ export function WorkspacePaneTree({
         );
       }
 
-      const visibleTabs = visibleTabsByPaneId[node.id] ?? [];
-      const activeTabKey = renderedActiveTabKeyByPaneId[node.id] ?? null;
-      const activeTabViewState = activeTabKey ? (viewStateByTabKey[activeTabKey] ?? null) : null;
-      const activeFileSessionState =
-        activeTabKey && activeTabKey in fileSessionsByTabKey
-          ? (fileSessionsByTabKey[activeTabKey] ?? null)
-          : null;
-      const isActivePane = node.id === activePaneId;
-      const isHoveredPane = hoveredPaneId === node.id;
-      const paneOpacity = resolveWorkspacePaneOpacity({
-        dimInactivePanes,
-        inactivePaneOpacity,
-        isActivePane,
-        isHoveredPane,
-      });
-      const paneDropIntent =
-        activeTabDrag?.intent?.paneId === node.id ? activeTabDrag.intent : null;
+      const pane = model.panesById[node.id];
+      if (!pane) {
+        return null;
+      }
+
       const tabBarDragPreview = getWorkspacePaneTabBarDragPreview(activeTabDrag, node.id);
       const isDropTargetPane =
-        paneDropIntent?.kind === "insert" && paneDropIntent.surface === "body";
-      const paneLaunchActionsOpen = surfaceLaunchOpenPaneId === node.id;
+        activeTabDrag?.intent?.paneId === node.id &&
+        activeTabDrag.intent.kind === "insert" &&
+        activeTabDrag.intent.surface === "body";
 
       return (
-        <section
+        <WorkspacePaneLeaf
           key={node.id}
-          ref={(element) => setPaneElement(node.id, element)}
-          className={`relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[var(--surface)] transition-opacity duration-200 ease-in-out will-change-[opacity] ${isDropTargetPane ? "ring-1 ring-[var(--ring)] shadow-[0_0_0_2px_var(--ring)]/50" : ""}`}
-          data-workspace-pane-id={node.id}
-          onPointerEnter={() => {
-            setHoveredPaneId(node.id);
+          actions={actions}
+          dimInactivePanes={model.dimInactivePanes}
+          inactivePaneOpacity={model.inactivePaneOpacity}
+          isBodyDropTarget={isDropTargetPane}
+          isZoomedView={zoomedPaneId !== null}
+          onTabDrag={handleTabDrag}
+          onTabDragCommit={handleTabDragCommit}
+          pane={{
+            ...pane,
+            tabBar: {
+              ...pane.tabBar,
+              dragPreview: tabBarDragPreview,
+            },
           }}
-          onPointerLeave={() => {
-            setHoveredPaneId((current) => (current === node.id ? null : current));
-          }}
-          onPointerDownCapture={(event) => {
-            if (!isActivePane && shouldAutoSelectWorkspacePaneFromPointerTarget(event.target)) {
-              onSelectPane(node.id);
-            }
-          }}
-        >
-          <div
-            className="flex h-9 items-stretch gap-1 shadow-[inset_0_-1px_0_var(--border)] bg-[var(--background)]"
-            data-workspace-pane-header
-            style={{ opacity: paneOpacity }}
-          >
-            <WorkspacePaneTabBar
-              activeTabKey={activeTabKey}
-              dirtyTabKeys={dirtyTabKeys}
-              dragPreview={tabBarDragPreview}
-              onCloseDocumentTab={onCloseDocumentTab}
-              onCloseTerminalTab={onCloseTerminalTab}
-              onRenameTerminalTab={onRenameTerminalTab}
-              onSelectTab={(key) => onSelectTab(node.id, key)}
-              onTabDrag={handleTabDrag}
-              onTabDragCommit={handleTabDragCommit}
-              paneId={node.id}
-              visibleTabs={visibleTabs}
-            />
-            <div className="flex shrink-0 items-center gap-px">
-              <SurfaceLaunchActions
-                actions={surfaceActions}
-                onOpenChange={(nextOpen) => {
-                  setSurfaceLaunchOpenPaneId(nextOpen ? node.id : null);
-                }}
-                open={paneLaunchActionsOpen}
-                onLaunch={(request) => onLaunchSurface(node.id, request)}
-              />
-              <AnimatePresence initial={false}>
-                {paneLaunchActionsOpen ? null : (
-                  <motion.div
-                    key={`${node.id}:pane-controls`}
-                    animate={{ opacity: 1, width: "auto", x: 0 }}
-                    className="flex items-center gap-px overflow-hidden"
-                    exit={{ opacity: 0, width: 0, x: 8 }}
-                    initial={{ opacity: 0, width: 0, x: 8 }}
-                    transition={{ duration: 0.16, ease: "easeInOut" }}
-                  >
-                    {paneCount > 1 && (
-                      <PaneControlButton
-                        label={zoomedPaneId ? "Unzoom" : "Zoom"}
-                        onClick={onToggleZoom}
-                      >
-                        {zoomedPaneId ? <ZoomOutIcon /> : <ZoomInIcon />}
-                      </PaneControlButton>
-                    )}
-                    <PaneControlButton
-                      label="Split Right"
-                      onClick={() => onSplitPane(node.id, "row")}
-                    >
-                      <SplitRightIcon />
-                    </PaneControlButton>
-                    <PaneControlButton
-                      label="Split Down"
-                      onClick={() => onSplitPane(node.id, "column")}
-                    >
-                      <SplitDownIcon />
-                    </PaneControlButton>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-
-          <div className="relative flex min-h-0 flex-1 flex-col" data-workspace-pane-body>
-            <WorkspacePaneContent
-              activeFileSessionState={activeFileSessionState}
-              activeTabKey={activeTabKey}
-              activeTabViewState={activeTabViewState}
-              creatingSelection={creatingSelection}
-              documents={documents}
-              hasVisibleTabs={visibleTabs.length > 0}
-              onFileSessionStateChange={onFileSessionStateChange}
-              onLaunchSurface={(request) => onLaunchSurface(node.id, request)}
-              onOpenFile={onOpenFile}
-              onTabViewStateChange={onTabViewStateChange}
-              paneDragInProgress={activeTabDrag !== null}
-              paneFocused={isActivePane}
-              surfaceOpacity={paneOpacity}
-              terminals={terminals}
-              waitingForSelectedTerminalTab={paneIdsWaitingForSelectedTerminalTab.has(node.id)}
-              workspaceId={workspaceId}
-            />
-          </div>
-        </section>
+          paneCount={model.paneCount}
+          paneTabDragInProgress={activeTabDrag !== null}
+          setPaneElement={setPaneElement}
+          surfaceActions={model.surfaceActions}
+        />
       );
     },
     [
-      activePaneId,
       activeTabDrag,
-      creatingSelection,
-      dimInactivePanes,
-      documents,
-      fileSessionsByTabKey,
-      hoveredPaneId,
-      inactivePaneOpacity,
-      onCloseDocumentTab,
-      onCloseTerminalTab,
-      onFileSessionStateChange,
-      onLaunchSurface,
-      onMoveTabToPane,
-      onOpenFile,
-      onRenameTerminalTab,
-      onSelectPane,
-      onSelectTab,
-      onReconcilePaneVisibleTabOrder,
-      onResetAllSplitRatios,
-      onSetSplitRatio,
-      onSplitPane,
-      onTabViewStateChange,
-      onToggleZoom,
-      paneCount,
-      renderedActiveTabKeyByPaneId,
+      actions,
+      model.dimInactivePanes,
+      model.inactivePaneOpacity,
+      model.paneCount,
+      model.panesById,
+      model.surfaceActions,
       zoomedPaneId,
       setPaneElement,
-      surfaceLaunchOpenPaneId,
-      surfaceActions,
-      terminals,
-      visibleTabsByPaneId,
-      viewStateByTabKey,
-      paneIdsWaitingForSelectedTerminalTab,
-      workspaceId,
       handleTabDragCommit,
       handleTabDrag,
     ],
@@ -918,7 +1021,7 @@ export function WorkspacePaneTree({
 
   const renderedTree = zoomedPaneId
     ? renderNode({ kind: "leaf", id: zoomedPaneId })
-    : renderNode(rootPane);
+    : renderNode(model.rootPane);
 
   return (
     <>

@@ -158,6 +158,11 @@ interface SettingsContextValue extends AppSettings {
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
+interface SettingsProviderHotState {
+  settings: AppSettings;
+  systemAppearance: "light" | "dark";
+}
+
 interface FontSettingsRoot {
   setProperty: (name: string, value: string) => void;
 }
@@ -197,6 +202,20 @@ function buildDefaultSettings(): AppSettings {
     turnNotificationsMode: DEFAULT_TURN_NOTIFICATION_MODE,
     turnNotificationSound: DEFAULT_TURN_NOTIFICATION_SOUND,
     worktreeRoot: DEFAULT_WORKTREE_ROOT,
+  };
+}
+
+export function readSettingsProviderHotState(
+  hotData: { settingsProviderState?: SettingsProviderHotState } | undefined,
+): SettingsProviderHotState | null {
+  const state = hotData?.settingsProviderState;
+  if (!state) {
+    return null;
+  }
+
+  return {
+    settings: state.settings,
+    systemAppearance: state.systemAppearance,
   };
 }
 
@@ -245,9 +264,12 @@ function syncNativeWindowTheme(appearance: "light" | "dark"): void {
 }
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettingsState] = useState<AppSettings>(buildDefaultSettings);
-  const [systemAppearance, setSystemAppearance] = useState<"light" | "dark">(() =>
-    getSystemThemeAppearance(),
+  const hotState = readSettingsProviderHotState(import.meta.hot?.data);
+  const [settings, setSettingsState] = useState<AppSettings>(
+    () => hotState?.settings ?? buildDefaultSettings(),
+  );
+  const [systemAppearance, setSystemAppearance] = useState<"light" | "dark">(
+    () => hotState?.systemAppearance ?? getSystemThemeAppearance(),
   );
 
   const resolvedTheme = resolveTheme(settings.theme, systemAppearance);
@@ -291,6 +313,17 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     applyFontSettings(settings);
   }, [settings.baseFontSize, settings.interfaceFontFamily, settings.monospaceFontFamily]);
+
+  useEffect(() => {
+    if (!import.meta.hot) {
+      return;
+    }
+
+    import.meta.hot.data.settingsProviderState = {
+      settings,
+      systemAppearance,
+    } satisfies SettingsProviderHotState;
+  }, [settings, systemAppearance]);
 
   const persistSettings = useCallback((next: AppSettings) => {
     writeAppSettings(settingsToJson(next));

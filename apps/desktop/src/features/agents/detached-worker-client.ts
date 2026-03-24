@@ -5,6 +5,7 @@ import type {
   AgentWorker,
   AgentWorkerCommand,
   AgentWorkerEvent,
+  AgentWorkerInputPart,
   DetachedAgentHostRegistration,
   DetachedAgentHostSnapshot,
 } from "@lifecycle/agents";
@@ -126,17 +127,24 @@ class DetachedWorkerClient implements AgentWorker {
   }
 
   async sendTurn(turn: AgentTurnRequest): Promise<void> {
-    const prompt = turn.input
-      .flatMap((part) => (part.type === "text" ? [part.text.trim()] : []))
-      .filter((part) => part.length > 0)
-      .join("\n\n");
-    if (prompt.length === 0) {
+    const parts: AgentWorkerInputPart[] = [];
+    for (const part of turn.input) {
+      if (part.type === "text") {
+        const trimmed = part.text.trim();
+        if (trimmed.length > 0) {
+          parts.push({ type: "text", text: trimmed });
+        }
+      } else if (part.type === "image") {
+        parts.push({ type: "image", mediaType: part.mediaType, base64Data: part.base64Data });
+      }
+    }
+    if (parts.length === 0) {
       throw new Error("Agent prompt cannot be empty.");
     }
 
     await this.sendCommand({
       kind: "worker.send_turn",
-      input: prompt,
+      input: parts,
       turnId: turn.turnId,
     });
   }

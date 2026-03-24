@@ -7,57 +7,54 @@ import {
   hasStartedWorkspaceTabDrag,
   WorkspacePaneTabBar,
 } from "@/features/workspaces/canvas/tabs/workspace-pane-tab-bar";
+import type { TerminalTab } from "@/features/workspaces/canvas/workspace-canvas-tabs";
+
+function createTerminalTab(id: string, overrides: Partial<TerminalTab> = {}) {
+  return {
+    key: terminalTabKey(id),
+    kind: "terminal" as const,
+    label: `Terminal ${id}`,
+    launchType: "shell" as const,
+    responseReady: false,
+    status: "active" as const,
+    terminalId: id,
+    ...overrides,
+  };
+}
+
+function createTabBarProps(
+  tabs: Array<{
+    dirty: boolean;
+    tab: ReturnType<typeof createTerminalTab>;
+  }>,
+  activeTabKey: string | null = tabs[0]?.tab.key ?? null,
+) {
+  return {
+    model: {
+      activeTabKey,
+      dragPreview: null,
+      paneId: "pane-root",
+      tabs,
+    },
+    onCloseDocumentTab: () => {},
+    onCloseTerminalTab: async () => {},
+    onRenameTerminalTab: async () => {},
+    onSelectTab: () => {},
+    onTabDrag: () => {},
+    onTabDragCommit: () => {},
+  };
+}
 
 describe("WorkspacePaneTabBar", () => {
-  test("renders caller-provided leading content for surface tabs", () => {
-    const firstTerminalTabKey = terminalTabKey("term-1");
-    const markup = renderToStaticMarkup(
-      createElement(WorkspacePaneTabBar, {
-        activeTabKey: firstTerminalTabKey,
-        onCloseDocumentTab: () => {},
-        onCloseTerminalTab: async () => {},
-
-        onSelectTab: () => {},
-        renderTabLeading: (tab) =>
-          createElement("span", { "data-slot": "custom-leading" }, `lead:${tab.key}`),
-        visibleTabs: [
-          {
-            key: firstTerminalTabKey,
-            kind: "terminal",
-            label: "Terminal 1",
-            launchType: "shell",
-            responseReady: false,
-            status: "active",
-            terminalId: "term-1",
-          },
-        ],
-      }),
-    );
-
-    expect(markup).toContain('data-slot="custom-leading"');
-    expect(markup).toContain(`lead:${firstTerminalTabKey}`);
-  });
-
   test("renders workspace tab items with the current workspace chip styling", () => {
-    const firstTerminalTabKey = terminalTabKey("term-1");
     const markup = renderToStaticMarkup(
-      createElement(WorkspacePaneTabBar, {
-        activeTabKey: firstTerminalTabKey,
-        onCloseDocumentTab: () => {},
-        onCloseTerminalTab: async () => {},
-        onSelectTab: () => {},
-        visibleTabs: [
-          {
-            key: firstTerminalTabKey,
-            kind: "terminal",
-            label: "Terminal 1",
-            launchType: "shell",
-            responseReady: false,
-            status: "active",
-            terminalId: "term-1",
-          },
-        ],
-      }),
+      createElement(
+        WorkspacePaneTabBar,
+        createTabBarProps(
+          [{ dirty: false, tab: createTerminalTab("term-1") }],
+          terminalTabKey("term-1"),
+        ),
+      ),
     );
 
     expect(markup).toContain(
@@ -70,35 +67,17 @@ describe("WorkspacePaneTabBar", () => {
   });
 
   test("hides the horizontal scrollbar, reserves the fade gutter, and insets tabs from the pane edge", () => {
-    const firstTerminalTabKey = terminalTabKey("term-1");
-    const secondTerminalTabKey = terminalTabKey("term-2");
     const markup = renderToStaticMarkup(
-      createElement(WorkspacePaneTabBar, {
-        activeTabKey: firstTerminalTabKey,
-        onCloseDocumentTab: () => {},
-        onCloseTerminalTab: async () => {},
-        onSelectTab: () => {},
-        visibleTabs: [
-          {
-            key: firstTerminalTabKey,
-            kind: "terminal",
-            label: "Terminal 1",
-            launchType: "shell",
-            responseReady: false,
-            status: "active",
-            terminalId: "term-1",
-          },
-          {
-            key: secondTerminalTabKey,
-            kind: "terminal",
-            label: "Terminal 2",
-            launchType: "shell",
-            responseReady: false,
-            status: "active",
-            terminalId: "term-2",
-          },
-        ],
-      }),
+      createElement(
+        WorkspacePaneTabBar,
+        createTabBarProps(
+          [
+            { dirty: false, tab: createTerminalTab("term-1") },
+            { dirty: false, tab: createTerminalTab("term-2") },
+          ],
+          terminalTabKey("term-1"),
+        ),
+      ),
     );
 
     expect(markup).toContain("padding-right:24px");
@@ -111,45 +90,18 @@ describe("WorkspacePaneTabBar", () => {
   });
 
   test("uses standalone shells instead of legacy tab separators", () => {
-    const firstTerminalTabKey = terminalTabKey("term-1");
-    const secondTerminalTabKey = terminalTabKey("term-2");
-    const thirdTerminalTabKey = terminalTabKey("term-3");
     const markup = renderToStaticMarkup(
-      createElement(WorkspacePaneTabBar, {
-        activeTabKey: thirdTerminalTabKey,
-        onCloseDocumentTab: () => {},
-        onCloseTerminalTab: async () => {},
-        onSelectTab: () => {},
-        visibleTabs: [
-          {
-            key: firstTerminalTabKey,
-            kind: "terminal",
-            label: "Terminal 1",
-            launchType: "shell",
-            responseReady: false,
-            status: "active",
-            terminalId: "term-1",
-          },
-          {
-            key: secondTerminalTabKey,
-            kind: "terminal",
-            label: "Terminal 2",
-            launchType: "shell",
-            responseReady: false,
-            status: "active",
-            terminalId: "term-2",
-          },
-          {
-            key: thirdTerminalTabKey,
-            kind: "terminal",
-            label: "Terminal 3",
-            launchType: "shell",
-            responseReady: false,
-            status: "active",
-            terminalId: "term-3",
-          },
-        ],
-      }),
+      createElement(
+        WorkspacePaneTabBar,
+        createTabBarProps(
+          [
+            { dirty: false, tab: createTerminalTab("term-1") },
+            { dirty: false, tab: createTerminalTab("term-2") },
+            { dirty: false, tab: createTerminalTab("term-3") },
+          ],
+          terminalTabKey("term-3"),
+        ),
+      ),
     );
 
     expect(markup).not.toContain('data-slot="workspace-tab-separator"');
@@ -157,26 +109,14 @@ describe("WorkspacePaneTabBar", () => {
   });
 
   test("does not render a status dot for a plain terminal tab", () => {
-    const firstTerminalTabKey = terminalTabKey("term-1");
     const markup = renderToStaticMarkup(
-      createElement(WorkspacePaneTabBar, {
-        activeTabKey: firstTerminalTabKey,
-        onCloseDocumentTab: () => {},
-        onCloseTerminalTab: async () => {},
-
-        onSelectTab: () => {},
-        visibleTabs: [
-          {
-            key: firstTerminalTabKey,
-            kind: "terminal",
-            label: "Terminal 1",
-            launchType: "shell",
-            responseReady: false,
-            status: "detached",
-            terminalId: "term-1",
-          },
-        ],
-      }),
+      createElement(
+        WorkspacePaneTabBar,
+        createTabBarProps(
+          [{ dirty: false, tab: createTerminalTab("term-1", { status: "detached" }) }],
+          terminalTabKey("term-1"),
+        ),
+      ),
     );
 
     expect(markup).not.toContain('title="detached"');
@@ -184,36 +124,20 @@ describe("WorkspacePaneTabBar", () => {
   });
 
   test("renders inline ready indicator for a ready terminal tab", () => {
-    const firstTerminalTabKey = terminalTabKey("term-1");
-    const secondTerminalTabKey = terminalTabKey("term-2");
     const markup = renderToStaticMarkup(
-      createElement(WorkspacePaneTabBar, {
-        activeTabKey: secondTerminalTabKey,
-        onCloseDocumentTab: () => {},
-        onCloseTerminalTab: async () => {},
-
-        onSelectTab: () => {},
-        visibleTabs: [
-          {
-            key: firstTerminalTabKey,
-            kind: "terminal",
-            label: "Terminal 1",
-            launchType: "shell",
-            responseReady: true,
-            status: "detached",
-            terminalId: "term-1",
-          },
-          {
-            key: secondTerminalTabKey,
-            kind: "terminal",
-            label: "Terminal 2",
-            launchType: "shell",
-            responseReady: false,
-            status: "detached",
-            terminalId: "term-2",
-          },
-        ],
-      }),
+      createElement(
+        WorkspacePaneTabBar,
+        createTabBarProps(
+          [
+            {
+              dirty: false,
+              tab: createTerminalTab("term-1", { responseReady: true, status: "detached" }),
+            },
+            { dirty: false, tab: createTerminalTab("term-2", { status: "detached" }) },
+          ],
+          terminalTabKey("term-2"),
+        ),
+      ),
     );
 
     expect(markup).toContain('aria-label="Response ready"');
@@ -221,26 +145,14 @@ describe("WorkspacePaneTabBar", () => {
   });
 
   test("renders shell icon for non-ready terminal tab", () => {
-    const firstTerminalTabKey = terminalTabKey("term-1");
     const markup = renderToStaticMarkup(
-      createElement(WorkspacePaneTabBar, {
-        activeTabKey: firstTerminalTabKey,
-        onCloseDocumentTab: () => {},
-        onCloseTerminalTab: async () => {},
-
-        onSelectTab: () => {},
-        visibleTabs: [
-          {
-            key: firstTerminalTabKey,
-            kind: "terminal",
-            label: "Terminal 1",
-            launchType: "shell",
-            responseReady: false,
-            status: "detached",
-            terminalId: "term-1",
-          },
-        ],
-      }),
+      createElement(
+        WorkspacePaneTabBar,
+        createTabBarProps(
+          [{ dirty: false, tab: createTerminalTab("term-1", { status: "detached" }) }],
+          terminalTabKey("term-1"),
+        ),
+      ),
     );
 
     expect(markup).not.toContain('aria-label="Response ready"');
@@ -248,26 +160,14 @@ describe("WorkspacePaneTabBar", () => {
   });
 
   test("replaces the shell icon with a spinner while a turn is running", () => {
-    const firstTerminalTabKey = terminalTabKey("term-1");
     const markup = renderToStaticMarkup(
-      createElement(WorkspacePaneTabBar, {
-        activeTabKey: firstTerminalTabKey,
-        onCloseDocumentTab: () => {},
-        onCloseTerminalTab: async () => {},
-        onSelectTab: () => {},
-        visibleTabs: [
-          {
-            key: firstTerminalTabKey,
-            kind: "terminal",
-            label: "Terminal 1",
-            launchType: "shell",
-            responseReady: false,
-            running: true,
-            status: "active",
-            terminalId: "term-1",
-          },
-        ],
-      }),
+      createElement(
+        WorkspacePaneTabBar,
+        createTabBarProps(
+          [{ dirty: false, tab: createTerminalTab("term-1", { running: true }) }],
+          terminalTabKey("term-1"),
+        ),
+      ),
     );
 
     expect(markup).toContain('data-slot="spinner"');

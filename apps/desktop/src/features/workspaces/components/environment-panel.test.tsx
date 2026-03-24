@@ -49,7 +49,6 @@ const services: ServiceRecord[] = [
   },
 ];
 
-
 interface RenderEnvironmentPanelOptions {
   config?: LifecycleConfig | null;
   hasManifest?: boolean;
@@ -72,7 +71,7 @@ async function renderEnvironmentPanel(options: RenderEnvironmentPanelOptions = {
         config: options.config ?? null,
         hasManifest: options.hasManifest ?? true,
         manifestState: options.manifestState ?? "valid",
-        onOpenBrowser: () => {},
+        onOpenPreview: () => {},
         onRestart: async () => {},
         onRun: async () => {},
         onStop: async () => {},
@@ -114,7 +113,6 @@ describe("EnvironmentPanel", () => {
     expect(markup).toContain("worker");
     expect(markup).toContain("ready");
   });
-
 
   test("shows idle guidance when no lifecycle.json is present", async () => {
     const { markup } = await renderEnvironmentPanel({

@@ -1,12 +1,41 @@
+import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 
-import { createStubCommand, jsonFlag, workspaceIdFlag } from "../_shared";
+import {
+  createWorkspaceDestroyRequest,
+  requestBridge,
+  resolveWorkspaceId,
+} from "../../bridge";
+import { failCommand, jsonFlag, workspaceIdFlag } from "../_shared";
 
-export default createStubCommand({
-  commandName: "lifecycle workspace destroy",
+export default defineCommand({
   description: "Destroy a workspace.",
   input: z.object({
     json: jsonFlag,
     workspaceId: workspaceIdFlag,
   }),
+  run: async (input, context) => {
+    try {
+      const workspaceId = resolveWorkspaceId(input.workspaceId);
+      const response = await requestBridge(
+        createWorkspaceDestroyRequest({
+          workspaceId,
+        }),
+      );
+
+      if (input.json) {
+        context.stdout(JSON.stringify(response.result, null, 2));
+        return 0;
+      }
+
+      context.stdout(`Workspace ${response.result.workspaceId} destroyed.`);
+
+      return 0;
+    } catch (error) {
+      return failCommand(error, {
+        json: input.json,
+        stderr: context.stderr,
+      });
+    }
+  },
 });

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  areWorkspacePaneLeafPropsEqual,
   resolveWorkspacePaneOpacity,
   shouldAutoSelectWorkspacePaneFromPointerTarget,
 } from "@/features/workspaces/canvas/panes/workspace-pane-tree";
@@ -89,5 +90,112 @@ describe("resolveWorkspacePaneOpacity", () => {
         isHoveredPane: false,
       }),
     ).toBe(1);
+  });
+});
+
+describe("areWorkspacePaneLeafPropsEqual", () => {
+  function createLeafProps() {
+    const actions = {
+      closeDocumentTab: () => {},
+      closeTerminalTab: async () => {},
+      fileSessionStateChange: () => {},
+      launchSurface: () => {},
+      moveTabToPane: () => {},
+      openFile: () => {},
+      reconcilePaneVisibleTabOrder: () => {},
+      renameTerminalTab: async () => {},
+      resetAllSplitRatios: () => {},
+      selectPane: () => {},
+      selectTab: () => {},
+      setSplitRatio: () => {},
+      splitPane: () => {},
+      tabViewStateChange: () => {},
+      toggleZoom: () => {},
+    };
+
+    return {
+      actions,
+      dimInactivePanes: false,
+      inactivePaneOpacity: 0.65,
+      isBodyDropTarget: false,
+      isZoomedView: false,
+      onTabDrag: () => {},
+      onTabDragCommit: () => {},
+      pane: {
+        activeSurface: {
+          document: {
+            extension: "tsx",
+            filePath: "src/app.tsx",
+            key: "file:src/app.tsx",
+            kind: "file-viewer" as const,
+            label: "app.tsx",
+          },
+          kind: "file-viewer" as const,
+          sessionState: null,
+          viewState: { scrollTop: 24 },
+          workspaceId: "workspace-1",
+        },
+        id: "pane-left",
+        isActive: true,
+        tabBar: {
+          activeTabKey: "file:src/app.tsx",
+          dragPreview: null,
+          paneId: "pane-left",
+          tabs: [
+            {
+              dirty: true,
+              tab: {
+                extension: "tsx",
+                filePath: "src/app.tsx",
+                key: "file:src/app.tsx",
+                kind: "file-viewer" as const,
+                label: "app.tsx",
+              },
+            },
+          ],
+        },
+      },
+      paneCount: 2,
+      paneTabDragInProgress: false,
+      setPaneElement: () => {},
+      surfaceActions: [],
+    };
+  }
+
+  test("treats unrelated pane-model object churn as equal when pane state is unchanged", () => {
+    const previous = createLeafProps();
+    const next = {
+      ...previous,
+      pane: {
+        ...previous.pane,
+        tabBar: {
+          ...previous.pane.tabBar,
+          tabs: [...previous.pane.tabBar.tabs],
+        },
+      },
+    };
+
+    expect(areWorkspacePaneLeafPropsEqual(previous, next)).toBe(true);
+  });
+
+  test("detects changes to the active pane session state", () => {
+    const previous = createLeafProps();
+    const next = {
+      ...previous,
+      pane: {
+        ...previous.pane,
+        activeSurface: {
+          ...previous.pane.activeSurface,
+          kind: "file-viewer" as const,
+          sessionState: {
+            conflictDiskContent: null,
+            draftContent: "next draft",
+            savedContent: "saved",
+          },
+        },
+      },
+    };
+
+    expect(areWorkspacePaneLeafPropsEqual(previous, next)).toBe(false);
   });
 });

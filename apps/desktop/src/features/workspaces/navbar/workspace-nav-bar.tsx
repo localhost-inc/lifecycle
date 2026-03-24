@@ -5,13 +5,10 @@ import {
   ChevronRight,
   FolderGit2,
   GitBranch,
-  Megaphone,
   PanelRightClose,
   PanelRightOpen,
-  Settings,
 } from "lucide-react";
 import { useEffect, type MouseEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   SHORTCUT_HANDLER_PRIORITY,
   useShortcutRegistration,
@@ -20,8 +17,6 @@ import { getWorkspaceDisplayName } from "@/features/workspaces/lib/workspace-dis
 import { WorkspaceNavToolbar } from "@/features/workspaces/navbar/workspace-nav-toolbar";
 import { useWorkspaceToolbarSlot } from "@/features/workspaces/state/workspace-toolbar-context";
 import { useWorkspace } from "@/store/hooks";
-import { openUrl } from "@tauri-apps/plugin-opener";
-import { bugs } from "../../../../package.json";
 
 interface WorkspaceNavBarProps {
   activeWorkspaceId: string;
@@ -32,7 +27,6 @@ export function WorkspaceNavBar({
   activeWorkspaceId,
   projectName,
 }: WorkspaceNavBarProps) {
-  const navigate = useNavigate();
   const workspace = useWorkspace(activeWorkspaceId) ?? null;
   const toolbarSlot = useWorkspaceToolbarSlot(activeWorkspaceId);
 
@@ -115,12 +109,6 @@ export function WorkspaceNavBar({
       {/* Toolbar actions (run, git) + trailing icons */}
       {toolbarSlot ? <WorkspaceNavToolbar slot={toolbarSlot} /> : null}
       <div className="flex shrink-0 items-center gap-1 pl-1 pr-2">
-        <IconButton aria-label="Feedback" onClick={() => void openUrl(bugs.url)} title="Feedback">
-          <Megaphone size={14} strokeWidth={2} />
-        </IconButton>
-        <IconButton aria-label="Settings" onClick={() => void navigate("/settings")} title="Settings">
-          <Settings size={14} strokeWidth={2} />
-        </IconButton>
         <IconButton
           aria-label="Toggle extension panel"
           onClick={() => {

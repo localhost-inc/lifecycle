@@ -1,4 +1,9 @@
-import type { GitLogEntry, GitPullRequestSummary, ServiceRecord } from "@lifecycle/contracts";
+import type {
+  AgentSessionProviderId,
+  GitLogEntry,
+  GitPullRequestSummary,
+  ServiceRecord,
+} from "@lifecycle/contracts";
 import type { StatusDotTone } from "@lifecycle/ui";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
@@ -18,10 +23,15 @@ export interface ExtensionBadge {
 }
 
 export interface WorkspaceExtensionLaunchActions {
-  openBrowser: (service: Pick<ServiceRecord, "name" | "preview_url">) => void;
+  openAgentSession: (session: {
+    id: string;
+    provider: AgentSessionProviderId;
+    title: string;
+  }) => void;
   openChangesDiff: (focusPath: string | null) => void;
   openCommitDiff: (entry: GitLogEntry) => void;
   openFileViewer: (filePath: string) => void;
+  openPreview: (service: Pick<ServiceRecord, "name" | "preview_url">) => void;
   openPullRequest: (pullRequest: GitPullRequestSummary) => void;
 }
 

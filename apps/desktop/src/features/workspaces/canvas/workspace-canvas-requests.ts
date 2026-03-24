@@ -1,4 +1,8 @@
-import type { AgentSessionProviderId, GitLogEntry, GitPullRequestSummary } from "@lifecycle/contracts";
+import type {
+  AgentSessionProviderId,
+  GitLogEntry,
+  GitPullRequestSummary,
+} from "@lifecycle/contracts";
 
 export interface ChangesDiffOpenInput {
   focusPath: string | null;
@@ -36,14 +40,14 @@ export interface FileViewerOpenRequest extends FileViewerOpenInput {
   id: string;
 }
 
-export interface BrowserOpenInput {
-  browserKey: string;
-  kind: "browser";
+export interface PreviewOpenInput {
+  kind: "preview";
   label: string;
+  previewKey: string;
   url: string;
 }
 
-export interface BrowserOpenRequest extends BrowserOpenInput {
+export interface PreviewOpenRequest extends PreviewOpenInput {
   id: string;
 }
 
@@ -60,10 +64,10 @@ export interface AgentOpenRequest extends AgentOpenInput {
 
 export type OpenDocumentInput =
   | AgentOpenInput
-  | BrowserOpenInput
   | ChangesDiffOpenInput
   | CommitDiffOpenInput
   | FileViewerOpenInput
+  | PreviewOpenInput
   | PullRequestOpenInput;
 
 export type WorkspaceDocumentKind = OpenDocumentInput["kind"];
@@ -105,15 +109,15 @@ export function createFileViewerOpenInput(filePath: string): FileViewerOpenInput
   };
 }
 
-export function createBrowserOpenInput(input: {
-  browserKey: string;
+export function createPreviewOpenInput(input: {
   label: string;
+  previewKey: string;
   url: string;
-}): BrowserOpenInput {
+}): PreviewOpenInput {
   return {
-    browserKey: input.browserKey,
-    kind: "browser",
+    kind: "preview",
     label: input.label,
+    previewKey: input.previewKey,
     url: input.url,
   };
 }
@@ -133,8 +137,8 @@ export function createAgentOpenInput(input: {
 
 export type OpenDocumentRequest =
   | AgentOpenRequest
-  | BrowserOpenRequest
   | ChangesDiffOpenRequest
   | CommitDiffOpenRequest
   | FileViewerOpenRequest
+  | PreviewOpenRequest
   | PullRequestOpenRequest;

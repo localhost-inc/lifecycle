@@ -149,6 +149,8 @@ Lifecycle maps these into the worker protocol as an opaque `blockId: string`:
 - Text deltas: `blockId = "text:{index}"` (e.g. `"text:0"`, `"text:2"`)
 - Thinking deltas: `blockId = "thinking:{index}"` (e.g. `"thinking:1"`)
 
+When Claude only exposes a block in the completed `assistant.message.content` payload instead of a live partial event, Lifecycle backfills the same worker events from the final content array using the same block index mapping. Duplicate blocks that already streamed are suppressed.
+
 The orchestrator uses `blockId` as part of the `part_id` key (`{turnId}:assistant:{blockId}`) to route streaming deltas to the correct accumulated message part. This ensures interstitial text blocks between tool calls render as separate parts in the UI.
 
 Rules:

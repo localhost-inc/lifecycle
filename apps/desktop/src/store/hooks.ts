@@ -1,6 +1,5 @@
 import { useMemo, useRef, useSyncExternalStore } from "react";
 import type {
-  AgentMessageWithParts,
   AgentSessionRecord,
   ProjectRecord,
   ServiceRecord,
@@ -8,16 +7,11 @@ import type {
   WorkspaceRecord,
 } from "@lifecycle/contracts";
 import type { WorkspaceRuntime } from "@lifecycle/workspace";
-import {
-  groupWorkspacesByProject,
-  type Collection,
-} from "@lifecycle/store";
-import { useLiveQuery } from "@tanstack/react-db";
+import { groupWorkspacesByProject, type Collection } from "@lifecycle/store";
 import {
   getOrCreateAgentSessionCollection,
   refreshAgentSessionCollection,
 } from "@/store/collections/agent-sessions";
-import { getOrCreateAgentMessageCollection } from "@/store/collections/agent-messages";
 import { useStoreContext } from "@/store/provider";
 
 /**
@@ -131,35 +125,6 @@ export function useAgentSessionRefresh(workspaceId: string): () => void {
       refreshAgentSessionCollection(workspaceId);
     };
   }, [workspaceId]);
-}
-
-export function useAgentMessages(
-  sessionId: string,
-): { data: AgentMessageWithParts[]; error: Error | null } {
-  const { driver } = useStoreContext();
-
-  const sqlCollection = useMemo(() => {
-    return getOrCreateAgentMessageCollection(driver, sessionId);
-  }, [driver, sessionId]);
-  const baseCollection = sqlCollection.collection;
-  const collectionError = useSyncExternalStore(
-    sqlCollection.subscribeState,
-    sqlCollection.getError,
-    sqlCollection.getError,
-  );
-
-  const { data } = useLiveQuery(
-    (q) =>
-      q
-        .from({ msg: baseCollection })
-        .orderBy(({ msg }) => msg.created_at),
-    [baseCollection],
-  );
-
-  return {
-    data: data ?? [],
-    error: collectionError,
-  };
 }
 
 // ── Runtime hook ──

@@ -2,10 +2,10 @@ import { isTauri } from "@tauri-apps/api/core";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
-import { IconButton, Logo, Spinner, Wordmark } from "@lifecycle/ui";
-import { FolderGit2, GitBranch, Plus } from "lucide-react";
+import { IconButton, Spinner, Wordmark } from "@lifecycle/ui";
+import { FolderGit2, GitBranch, Megaphone, Plus, Settings } from "lucide-react";
 import { NavigationControls } from "@/components/layout/navigation-controls";
-import { type MouseEvent, useCallback, useMemo, useState } from "react";
+import { type MouseEvent, useCallback, useMemo } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { resolveProjectRepoWorkspace } from "@/features/projects/lib/project-repo-workspace";
 import {
@@ -16,7 +16,7 @@ import { UserAvatar } from "@/features/user/components/user-avatar";
 import { ResponseReadyDot } from "@/components/response-ready-dot";
 import type { AuthSession } from "@/features/auth/auth-session";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { version } from "../../../package.json";
+import { bugs, version } from "../../../package.json";
 import type { WorkspaceCreateMode } from "@/features/workspaces/api";
 import {
   getWorkspaceDisplayName,
@@ -100,8 +100,6 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const { projectId, workspaceId } = useParams();
   const location = useLocation();
-  const [logoHovered, setLogoHovered] = useState(false);
-
   const projectPaths = useMemo(() => {
     const storedPaths = readProjectPaths();
     const paths: Record<string, string> = {};
@@ -289,15 +287,25 @@ export function AppSidebar({
           </div>
         </div>
 
-        {/* Wordmark + version at bottom */}
-        <div className="flex shrink-0 items-center px-4 pb-3 pt-1">
-          <Wordmark
-            className="h-3 cursor-pointer text-[var(--sidebar-muted-foreground)]"
-            onClick={() => openUrl("https://lifecycle.dev")}
-          />
-          <span className="ml-auto font-mono text-[11px] text-[var(--sidebar-muted-foreground)]">
-            v{version}
-          </span>
+        {/* Bottom actions + wordmark */}
+        <div className="flex shrink-0 items-center gap-1 px-4 pb-3 pt-1">
+          <div className="flex flex-col">
+            <Wordmark
+              className="h-3 cursor-pointer text-[var(--sidebar-muted-foreground)]"
+              onClick={() => openUrl("https://lifecycle.dev")}
+            />
+            <span className="font-mono text-[10px] text-[var(--sidebar-muted-foreground)]">
+              v{version}
+            </span>
+          </div>
+          <div className="ml-auto flex items-center gap-0.5">
+            <IconButton aria-label="Feedback" onClick={() => void openUrl(bugs.url)} title="Feedback">
+              <Megaphone size={14} strokeWidth={2} />
+            </IconButton>
+            <IconButton aria-label="Settings" onClick={onOpenSettings} title="Settings">
+              <Settings size={14} strokeWidth={2} />
+            </IconButton>
+          </div>
         </div>
       </div>
     </aside>

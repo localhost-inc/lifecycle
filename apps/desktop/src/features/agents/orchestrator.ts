@@ -32,7 +32,7 @@ import { parseSettingsJson } from "@/features/settings/state/settings-provider";
 import { readAppSettings } from "@/lib/config";
 import { tauriSqlDriver } from "@/lib/sql-driver";
 import { upsertAgentMessageInCollection } from "@/store/collections/agent-messages";
-import { refreshAgentSessionCollection } from "@/store/collections/agent-sessions";
+import { upsertAgentSessionInCollection } from "@/store/collections/agent-sessions";
 
 // ---------------------------------------------------------------------------
 // Message parts accumulator — write-through to DB, no React state.
@@ -64,11 +64,7 @@ const observedSessionMetadata = new Map<string, ObservedSessionMetadata>();
 const observedSessionQueues = new Map<string, Promise<void>>();
 const observedEventIndices = new Map<string, number>();
 
-function agentLog(
-  sessionId: string,
-  message: string,
-  details?: Record<string, unknown>,
-): void {
+function agentLog(sessionId: string, message: string, details?: Record<string, unknown>): void {
   const timestamp = new Date().toISOString();
   const suffix = details ? ` ${JSON.stringify(details)}` : "";
   console.info(`[agent][${timestamp}][${sessionId}] ${message}${suffix}`);
@@ -105,17 +101,21 @@ function getOrCreateMessage(
   return msg;
 }
 
-function appendPart(msg: AccumulatedMessage, partId: string, part: AgentMessagePart, isDelta: boolean): void {
+function appendPart(
+  msg: AccumulatedMessage,
+  partId: string,
+  part: AgentMessagePart,
+  isDelta: boolean,
+): void {
   const idx = msg.parts.findIndex((p) => p.id === partId);
   const existing = idx >= 0 ? msg.parts[idx]!.part : undefined;
-  const isTextualPart = (value: AgentMessagePart): value is Extract<AgentMessagePart, { text: string }> =>
+  const isTextualPart = (
+    value: AgentMessagePart,
+  ): value is Extract<AgentMessagePart, { text: string }> =>
     value.type === "text" || value.type === "thinking" || value.type === "status";
 
   if (idx >= 0 && existing && isDelta) {
-    if (
-      isTextualPart(existing) &&
-      isTextualPart(part)
-    ) {
+    if (isTextualPart(existing) && isTextualPart(part)) {
       msg.parts[idx] = { id: partId, part: { ...existing, text: existing.text + part.text } };
     } else {
       msg.parts[idx] = { id: partId, part };
@@ -172,7 +172,7 @@ function partDataFromPart(part: AgentMessagePart): string | null {
         decision: part.decision,
         kind: part.kind,
         message: part.message,
-        metadata: "metadata" in part ? part.metadata ?? null : null,
+        metadata: "metadata" in part ? (part.metadata ?? null) : null,
         status: part.status,
       });
     case "artifact_ref":
@@ -182,12 +182,21 @@ function partDataFromPart(part: AgentMessagePart): string | null {
         title: part.title,
         uri: part.uri,
       });
+    case "image":
+      return stringifyAgentMessagePartData({
+        media_type: part.mediaType,
+        base64_data: part.base64Data,
+      });
     default:
       return null;
   }
 }
 
-function toPartRecord(msg: AccumulatedMessage, entry: PartEntry, index: number): AgentMessagePartRecord {
+function toPartRecord(
+  msg: AccumulatedMessage,
+  entry: PartEntry,
+  index: number,
+): AgentMessagePartRecord {
   const p = entry.part;
   return {
     id: entry.id,
@@ -280,7 +289,12 @@ function inferMessageRole(messageId: string): AgentMessageRole {
   const segments = messageId.split(":");
   const candidate = segments[1];
 
-  if (candidate === "user" || candidate === "assistant" || candidate === "system" || candidate === "tool") {
+  if (
+    candidate === "user" ||
+    candidate === "assistant" ||
+    candidate === "system" ||
+    candidate === "tool"
+  ) {
     return candidate;
   }
 
@@ -412,7 +426,10 @@ async function observeAgentEvent(event: Parameters<typeof recordAgentEvent>[0]) 
         await flushMessage(msg);
       }
 
-      if (event.kind === "agent.message.part.delta" || event.kind === "agent.message.part.completed") {
+      if (
+        event.kind === "agent.message.part.delta" ||
+        event.kind === "agent.message.part.completed"
+      ) {
         const msg = getOrCreateMessage(
           event.messageId,
           event.sessionId,
@@ -515,13 +532,32 @@ async function observeAgentEvent(event: Parameters<typeof recordAgentEvent>[0]) 
       }
 
       if (event.kind === "agent.session.created" || event.kind === "agent.session.updated") {
-        refreshAgentSessionCollection(event.workspaceId);
+        upsertAgentSessionInCollection(tauriSqlDriver, event.workspaceId, event.session);
         publishBrowserLifecycleEvent({
           kind: event.kind,
           workspaceId: event.workspaceId,
           session: event.session,
         });
       } else if (event.kind === "agent.turn.completed") {
+        // If the model produced no assistant content for this turn, create a
+        // minimal assistant message so the transcript isn't silently empty.
+        const assistantMsgId = `${event.turnId}:assistant`;
+        if (!accumulatedMessages.has(assistantMsgId)) {
+          const msg = getOrCreateMessage(
+            assistantMsgId,
+            event.sessionId,
+            "assistant",
+            event.turnId,
+          );
+          appendPart(
+            msg,
+            `${assistantMsgId}:empty`,
+            { type: "text", text: "_No response._" },
+            false,
+          );
+          await flushMessage(msg);
+        }
+
         publishBrowserLifecycleEvent({
           kind: "agent.turn.completed",
           sessionId: event.sessionId,
@@ -592,7 +628,12 @@ async function emitWorkerEvent(
       await emit({
         kind: "agent.message.part.completed",
         messageId: `${event.turnId}:assistant`,
-        part: { type: "tool_call", toolCallId: event.toolUseId, toolName: event.toolName, inputJson: event.inputJson },
+        part: {
+          type: "tool_call",
+          toolCallId: event.toolUseId,
+          toolName: event.toolName,
+          inputJson: event.inputJson,
+        },
         partId: `${event.turnId}:assistant:tool:${event.toolUseId}`,
         sessionId,
         workspaceId,
@@ -602,7 +643,10 @@ async function emitWorkerEvent(
       await emit({
         kind: "agent.message.part.delta",
         messageId: `${event.turnId}:assistant`,
-        part: { type: "status", text: `${event.toolName} (${Math.round(event.elapsedTimeSeconds)}s)` },
+        part: {
+          type: "status",
+          text: `${event.toolName} (${Math.round(event.elapsedTimeSeconds)}s)`,
+        },
         partId: `${event.turnId}:assistant:tool:${event.toolUseId}:progress`,
         sessionId,
         workspaceId,
@@ -652,59 +696,61 @@ async function emitWorkerEvent(
           return;
         case "tool_call":
           await emit({
-            kind: "agent.tool_call.updated",
-            sessionId,
-            toolCall: {
-              errorText: event.item.errorText,
-              id: event.item.toolCallId,
-              inputJson: parseWorkerJsonRecord(event.item.inputJson),
-              outputJson: event.item.outputJson ? parseWorkerJsonRecord(event.item.outputJson) : null,
-              sessionId,
-              status: mapWorkerItemStatus(event.item.status),
+            kind: "agent.message.part.completed",
+            messageId: `${event.turnId}:assistant`,
+            part: {
+              type: "tool_call",
+              toolCallId: event.item.toolCallId,
               toolName: event.item.toolName,
+              inputJson: event.item.inputJson,
+              outputJson: event.item.outputJson,
+              status: mapWorkerItemStatus(event.item.status),
+              errorText: event.item.errorText,
             },
+            partId: `${event.turnId}:assistant:tool:${event.item.toolCallId}`,
+            sessionId,
             workspaceId,
           });
           return;
         case "command_execution":
           await emit({
-            kind: "agent.tool_call.updated",
-            sessionId,
-            toolCall: {
-              errorText: event.item.status === "failed" ? event.item.output : null,
-              id: event.item.id,
-              inputJson: { command: event.item.command },
-              outputJson: {
+            kind: "agent.message.part.completed",
+            messageId: `${event.turnId}:assistant`,
+            part: {
+              type: "tool_call",
+              toolCallId: event.item.id,
+              toolName: "command_execution",
+              inputJson: JSON.stringify({ command: event.item.command }),
+              outputJson: JSON.stringify({
                 command: event.item.command,
                 exitCode: event.item.exitCode ?? null,
                 output: event.item.output,
-              },
-              sessionId,
+              }),
               status: mapWorkerItemStatus(event.item.status),
-              toolName: "command_execution",
+              errorText: event.item.status === "failed" ? event.item.output : undefined,
             },
+            partId: `${event.turnId}:assistant:tool:${event.item.id}`,
+            sessionId,
             workspaceId,
           });
           return;
         case "file_change":
           if (event.item.changes.length === 0) {
             await emit({
-              kind: "agent.tool_call.updated",
-              sessionId,
-              toolCall: {
-                id: event.item.id,
-                inputJson: {
-                  changes: event.item.changes,
-                  diff: event.item.diff ?? null,
-                },
-                outputJson: {
-                  changes: event.item.changes,
-                  diff: event.item.diff ?? null,
-                },
-                sessionId,
-                status: mapWorkerItemStatus(event.item.status),
+              kind: "agent.message.part.completed",
+              messageId: `${event.turnId}:assistant`,
+              part: {
+                type: "tool_call",
+                toolCallId: event.item.id,
                 toolName: "file_change",
+                inputJson: JSON.stringify({
+                  changes: event.item.changes,
+                  diff: event.item.diff ?? null,
+                }),
+                status: mapWorkerItemStatus(event.item.status),
               },
+              partId: `${event.turnId}:assistant:tool:${event.item.id}`,
+              sessionId,
               workspaceId,
             });
             return;
@@ -712,30 +758,23 @@ async function emitWorkerEvent(
 
           for (const [index, change] of event.item.changes.entries()) {
             const toolName =
-              change.kind === "delete"
-                ? "Delete"
-                : change.kind === "add"
-                  ? "Write"
-                  : "Edit";
+              change.kind === "delete" ? "Delete" : change.kind === "add" ? "Write" : "Edit";
             await emit({
-              kind: "agent.tool_call.updated",
-              sessionId,
-              toolCall: {
-                id: `${event.item.id}:${index}`,
-                inputJson: {
-                  changeKind: change.kind,
-                  diff: change.diff ?? null,
-                  filePath: change.path,
-                },
-                outputJson: {
-                  changeKind: change.kind,
-                  diff: change.diff ?? null,
-                  filePath: change.path,
-                },
-                sessionId,
-                status: mapWorkerItemStatus(event.item.status),
+              kind: "agent.message.part.completed",
+              messageId: `${event.turnId}:assistant`,
+              part: {
+                type: "tool_call",
+                toolCallId: `${event.item.id}:${index}`,
                 toolName,
+                inputJson: JSON.stringify({
+                  changeKind: change.kind,
+                  diff: change.diff ?? null,
+                  filePath: change.path,
+                }),
+                status: mapWorkerItemStatus(event.item.status),
               },
+              partId: `${event.turnId}:assistant:tool:${event.item.id}:${index}`,
+              sessionId,
               workspaceId,
             });
           }
@@ -799,6 +838,8 @@ async function emitWorkerEvent(
         sessionId,
         turnId: event.turnId,
         workspaceId,
+        usage: event.usage,
+        costUsd: event.costUsd,
       });
       return;
     case "agent.turn.failed":
@@ -824,6 +865,26 @@ async function emitWorkerEvent(
       return;
     case "worker.ready":
       return;
+
+    // --- Session metadata ---
+    case "worker.title_generated": {
+      const session = await selectAgentSessionById(tauriSqlDriver, sessionId);
+      if (session && !session.title?.trim()) {
+        const updatedSession: AgentSessionRecord = {
+          ...session,
+          title: event.title,
+          updated_at: new Date().toISOString(),
+        };
+        await upsertAgentSession(tauriSqlDriver, updatedSession);
+        cacheSessionMetadata(updatedSession);
+        await emit({
+          kind: "agent.session.updated",
+          session: updatedSession,
+          workspaceId,
+        });
+      }
+      return;
+    }
     default:
       return;
   }
@@ -846,6 +907,7 @@ async function updateSessionProviderBinding(
     runtime_name: runtimeName,
   };
   await upsertAgentSession(tauriSqlDriver, nextSession);
+  upsertAgentSessionInCollection(tauriSqlDriver, nextSession.workspace_id, nextSession);
   cacheSessionMetadata(nextSession);
   await emit({
     kind: "agent.session.updated",
@@ -891,6 +953,7 @@ async function applyWorkerStateSnapshot(
   }
 
   await upsertAgentSession(tauriSqlDriver, nextSession);
+  upsertAgentSessionInCollection(tauriSqlDriver, nextSession.workspace_id, nextSession);
   cacheSessionMetadata(nextSession);
   await emit({
     kind: "agent.session.updated",
@@ -905,7 +968,7 @@ async function launchDetachedProviderWorker(options: {
   launchArgs: string[];
   session: AgentSessionRecord;
   worktreePath: string;
-  }): Promise<{ session: AgentSessionRecord; worker: AgentWorker }> {
+}): Promise<{ session: AgentSessionRecord; worker: AgentWorker }> {
   let observedSession = options.session;
   agentLog(observedSession.id, "launching detached provider worker", {
     provider: observedSession.provider,
@@ -915,7 +978,10 @@ async function launchDetachedProviderWorker(options: {
     cwd: options.worktreePath,
     launchArgs: options.launchArgs,
     onState: async (snapshot) => {
-      if (snapshot.sessionId !== observedSession.id || snapshot.provider !== observedSession.provider) {
+      if (
+        snapshot.sessionId !== observedSession.id ||
+        snapshot.provider !== observedSession.provider
+      ) {
         agentLog(observedSession.id, "ignoring mismatched worker snapshot", {
           snapshotProvider: snapshot.provider,
           snapshotSessionId: snapshot.sessionId,
@@ -939,12 +1005,7 @@ async function launchDetachedProviderWorker(options: {
         return;
       }
 
-      await emitWorkerEvent(
-        event,
-        observedSession.id,
-        observedSession.workspace_id,
-        options.emit,
-      );
+      await emitWorkerEvent(event, observedSession.id, observedSession.workspace_id, options.emit);
     },
     sessionId: options.session.id,
   });
@@ -1137,6 +1198,7 @@ export function createAgentOrchestrator(localRuntime: WorkspaceRuntime) {
     store: {
       async saveSession(session) {
         await upsertAgentSession(tauriSqlDriver, session);
+        upsertAgentSessionInCollection(tauriSqlDriver, session.workspace_id, session);
         return session;
       },
       async getSession(agentSessionId) {

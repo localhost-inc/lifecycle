@@ -35,14 +35,16 @@ import type { WorkspaceExtensionLaunchActions } from "@/features/extensions/exte
 import { ExtensionBar } from "@/features/extensions/extension-bar";
 import { getBuiltinExtensionSlots } from "@/features/extensions/builtin-extensions";
 import { ExtensionPanel } from "@/features/extensions/extension-panel";
-import { useGitStatus } from "@/features/git/hooks";
+import { useCurrentGitPullRequest, useGitStatus } from "@/features/git/hooks";
+import { buildWorkspaceGitActionState } from "@/features/git/lib/workspace-git-action-state";
 import type { ManifestStatus } from "@/features/projects/api/projects";
 import { WorkspaceCanvas } from "@/features/workspaces/canvas/workspace-canvas";
 import {
-  createBrowserOpenInput,
+  createAgentOpenInput,
   createChangesDiffOpenInput,
   createCommitDiffOpenInput,
   createFileViewerOpenInput,
+  createPreviewOpenInput,
   createPullRequestOpenInput,
 } from "@/features/workspaces/canvas/workspace-canvas-requests";
 import { startServices, stopServices } from "@/features/workspaces/api";
@@ -50,6 +52,7 @@ import { useWorkspaceServices } from "@/features/workspaces/hooks";
 import { useRuntime } from "@/store";
 import { workspaceSupportsFilesystemInteraction } from "@/features/workspaces/lib/workspace-capabilities";
 import { useWorkspaceOpenRequests } from "@/features/workspaces/state/workspace-open-requests";
+import { useWorkspaceToolbar } from "@/features/workspaces/state/workspace-toolbar-context";
 
 const SIDEBAR_RESIZE_STEP = 16;
 
@@ -85,9 +88,11 @@ export function WorkspaceShell({
   const manifestState = manifestStatus?.state ?? "missing";
   const supportsTerminalInteraction = workspaceSupportsFilesystemInteraction(workspace);
   const services = useWorkspaceServices(workspace.id);
-  const gitStatusQuery = useGitStatus(
+  const gitStatusQuery = useGitStatus(supportsTerminalInteraction ? workspace.id : null);
+  const branchPullRequestQuery = useCurrentGitPullRequest(
     supportsTerminalInteraction ? workspace.id : null,
   );
+  const { registerToolbarSlot, unregisterToolbarSlot } = useWorkspaceToolbar();
 
   const handleRun = useCallback(
     async (serviceNames?: string[]) => {
@@ -138,18 +143,132 @@ export function WorkspaceShell({
     }
   }, [runtime, workspace.id]);
 
+  // ---------------------------------------------------------------------------
+  // Toolbar slot — surfaces run + git actions in the workspace nav bar
+  // ---------------------------------------------------------------------------
+
+  const [runActionBusy, setRunActionBusy] = useState(false);
+
+  const toolbarRunAction = useMemo(() => {
+    if (!hasManifest) return null;
+    const workspaceStatus = workspace.status;
+    const hasStartingService = services?.some((s) => s.status === "starting") ?? false;
+    const hasReadyService = services?.some((s) => s.status === "ready") ?? false;
+    const canRun = workspaceStatus === "active" && !hasStartingService && !hasReadyService;
+    const canStop = workspaceStatus === "active" && (hasStartingService || hasReadyService);
+    const isPreparing = workspaceStatus === "preparing";
+    const isArchiving = workspaceStatus === "archiving";
+    const disabled = runActionBusy || isPreparing || isArchiving || (!canRun && !canStop);
+    const label = isPreparing
+      ? "Preparing..."
+      : isArchiving
+        ? "Archiving..."
+        : runActionBusy && canStop
+          ? "Stopping..."
+          : canStop
+            ? "Stop"
+            : runActionBusy
+              ? "Starting..."
+              : "Start";
+
+    return {
+      label,
+      disabled,
+      loading: runActionBusy,
+      onClick: () => {
+        if (runActionBusy) return;
+        setRunActionBusy(true);
+        (canStop ? handleStop() : canRun ? handleRun() : Promise.resolve())
+          .catch((err) => console.error("Run action failed:", err))
+          .finally(() => setRunActionBusy(false));
+      },
+    };
+  }, [handleRun, handleStop, hasManifest, runActionBusy, services, workspace.status]);
+
+  const toolbarRestartAction = useMemo(() => {
+    const hasReadyService = services?.some((s) => s.status === "ready") ?? false;
+    if (!hasManifest || !hasReadyService) return null;
+    return {
+      disabled: runActionBusy,
+      onClick: () => {
+        if (runActionBusy) return;
+        setRunActionBusy(true);
+        handleRestart()
+          .catch((err) => console.error("Restart failed:", err))
+          .finally(() => setRunActionBusy(false));
+      },
+    };
+  }, [handleRestart, hasManifest, runActionBusy, services]);
+
+  const gitActionState = useMemo(
+    () =>
+      supportsTerminalInteraction
+        ? buildWorkspaceGitActionState(
+            gitStatusQuery.data ?? null,
+            branchPullRequestQuery.data ?? null,
+            { isLoading: gitStatusQuery.isLoading || branchPullRequestQuery.isLoading },
+          )
+        : null,
+    [
+      branchPullRequestQuery.data,
+      branchPullRequestQuery.isLoading,
+      gitStatusQuery.data,
+      gitStatusQuery.isLoading,
+      supportsTerminalInteraction,
+    ],
+  );
+
+  const toolbarGitAction = useMemo(() => {
+    if (!gitActionState) return null;
+    return {
+      label: gitActionState.primaryAction.label,
+      disabled: gitActionState.primaryAction.kind === "disabled",
+      loading: gitActionState.kind === "loading",
+      onClick: () => {
+        setActiveExtensionId("git-changes");
+        setPanelCollapsed(false);
+      },
+    };
+  }, [gitActionState]);
+
+  useEffect(() => {
+    registerToolbarSlot(workspace.id, {
+      runAction: toolbarRunAction,
+      restartAction: toolbarRestartAction,
+      gitAction: toolbarGitAction,
+    });
+    return () => unregisterToolbarSlot(workspace.id);
+  }, [
+    registerToolbarSlot,
+    toolbarGitAction,
+    toolbarRestartAction,
+    toolbarRunAction,
+    unregisterToolbarSlot,
+    workspace.id,
+  ]);
+
   const launchActions = useMemo<WorkspaceExtensionLaunchActions>(
     () => ({
-      openBrowser: (service) => {
+      openAgentSession: (session) => {
+        openDocument(
+          workspace.id,
+          createAgentOpenInput({
+            agentSessionId: session.id,
+            provider: session.provider,
+            label: session.title,
+          }),
+        );
+      },
+      openPreview: (service) => {
         if (!service.preview_url) {
           return;
         }
 
         openDocument(
           workspace.id,
-          createBrowserOpenInput({
-            browserKey: `service:${service.name}`,
+          createPreviewOpenInput({
             label: service.name,
+            previewKey: `service:${service.name}`,
             url: service.preview_url,
           }),
         );
@@ -316,17 +435,6 @@ export function WorkspaceShell({
     [panelBounds],
   );
 
-  const handleFocusTerminal = useCallback(
-    (terminalId: string) => {
-      window.dispatchEvent(
-        new CustomEvent("lifecycle:focus-terminal", {
-          detail: { workspaceId: workspace.id, terminalId },
-        }),
-      );
-    },
-    [workspace.id],
-  );
-
   const extensionSlots = useMemo(
     () =>
       services
@@ -336,7 +444,6 @@ export function WorkspaceShell({
             hasManifest,
             launchActions,
             manifestState,
-            onFocusTerminal: handleFocusTerminal,
             onRestart: handleRestart,
             onRun: handleRun,
             onStop: handleStop,
@@ -348,7 +455,6 @@ export function WorkspaceShell({
     [
       config,
       gitStatusQuery.data,
-      handleFocusTerminal,
       handleRestart,
       handleRun,
       handleStop,
