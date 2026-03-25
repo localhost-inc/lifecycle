@@ -8,6 +8,7 @@ This directory contains tracked execution plans that are real enough to keep on 
 2. [Local CLI](./local-cli.md) — local CLI control, observability, and desktop-shell bridge boundaries
 3. [Cloud Workspaces](./cloud-workspaces.md) — auth, org/repository/activity records, fork-to-cloud, previews, PRs, and shared cloud terminals
 4. [Cloud Hardening](./cloud-hardening.md) — sleep/wake restore, TTL enforcement, quotas, and cloud lifecycle SLOs
+5. [Pane Tree Performance](./pane-tree-performance.md) — workspace pane/tab render locality, tab-switch latency, and drag-path performance
 
 ## Promotion Rule
 

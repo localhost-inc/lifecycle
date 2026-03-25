@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import {
+  query as createQuery,
   unstable_v2_createSession,
   unstable_v2_prompt,
   unstable_v2_resumeSession,
@@ -999,7 +1000,9 @@ function ensureProjectMcpSettings(
   mcpServers: NonNullable<ClaudeWorkerInput["mcpServers"]>,
 ): void {
   const claudeDir = join(workspacePath, ".claude");
-  const settingsPath = join(claudeDir, "settings.json");
+  // Use settings.local.json — project MCP servers in settings.json require
+  // user trust approval which blocks automated setup.
+  const settingsPath = join(claudeDir, "settings.local.json");
 
   let settings: Record<string, unknown> = {};
   if (existsSync(settingsPath)) {
@@ -1027,14 +1030,17 @@ export function createClaudeWorkerSession(
   providerSessionId: string | null;
   session: SDKSession;
 } {
-  // Write MCP server config into the workspace's .claude/settings.json so the
-  // SDK picks it up via settingSources: ["project"].
-  if (input.mcpServers && Object.keys(input.mcpServers).length > 0) {
-    ensureProjectMcpSettings(input.workspacePath, input.mcpServers);
+  const hasMcpServers = input.mcpServers && Object.keys(input.mcpServers).length > 0;
+
+  // When MCP servers are configured, use the V1 query() API which supports
+  // mcpServers directly. The V2 session API hardcodes mcpServers to {}.
+  if (hasMcpServers) {
+    return createClaudeWorkerSessionV1(input, callbacks);
   }
 
   const sessionOptions = {
     ...(input.effort ? { effort: input.effort } : {}),
+    cwd: input.workspacePath,
     model: input.model,
     permissionMode: input.permissionMode,
     allowDangerouslySkipPermissions: input.dangerousSkipPermissions,
@@ -1061,5 +1067,161 @@ export function createClaudeWorkerSession(
   return {
     providerSessionId: null,
     session: unstable_v2_createSession(sessionOptions),
+  };
+}
+
+/**
+ * Creates a session using the V1 query() API, which supports mcpServers.
+ * Returns an SDKSession-compatible wrapper around the Query object.
+ */
+function createClaudeWorkerSessionV1(
+  input: ClaudeWorkerInput,
+  callbacks?: {
+    canUseTool?: CanUseTool;
+    onElicitation?: OnElicitation;
+  },
+): {
+  providerSessionId: string | null;
+  session: SDKSession;
+} {
+  const queryOptions = {
+    ...(input.effort ? { effort: input.effort } : {}),
+    cwd: input.workspacePath,
+    model: input.model,
+    permissionMode: input.permissionMode,
+    allowDangerouslySkipPermissions: input.dangerousSkipPermissions,
+    env: buildSessionEnv(input.loginMethod),
+    settingSources: ["project" as const],
+    systemPrompt: {
+      type: "preset" as const,
+      preset: "claude_code" as const,
+      append: LIFECYCLE_SYSTEM_PROMPT,
+    },
+    mcpServers: input.mcpServers as Record<string, { type?: "stdio"; command: string; args?: string[]; env?: Record<string, string> }>,
+    ...(callbacks?.canUseTool ? { canUseTool: callbacks.canUseTool } : {}),
+    ...(callbacks?.onElicitation ? { onElicitation: callbacks.onElicitation } : {}),
+    ...(input.providerSessionId?.trim() ? { resume: input.providerSessionId.trim() } : {}),
+  };
+
+  // Create an async channel for multi-turn input.
+  let pushMessage: ((msg: SDKUserMessage) => void) | null = null;
+  let endInput: (() => void) | null = null;
+
+  const inputStream: AsyncIterable<SDKUserMessage> = {
+    [Symbol.asyncIterator]() {
+      const queue: SDKUserMessage[] = [];
+      let resolve: ((result: IteratorResult<SDKUserMessage>) => void) | null = null;
+      let done = false;
+
+      pushMessage = (msg) => {
+        if (resolve) {
+          const r = resolve;
+          resolve = null;
+          r({ done: false, value: msg });
+        } else {
+          queue.push(msg);
+        }
+      };
+
+      endInput = () => {
+        done = true;
+        if (resolve) {
+          const r = resolve;
+          resolve = null;
+          r({ done: true, value: undefined });
+        }
+      };
+
+      return {
+        next() {
+          if (queue.length > 0) {
+            return Promise.resolve({ done: false as const, value: queue.shift()! });
+          }
+          if (done) {
+            return Promise.resolve({ done: true as const, value: undefined });
+          }
+          return new Promise<IteratorResult<SDKUserMessage>>((r) => { resolve = r; });
+        },
+      };
+    },
+  };
+
+  const q = createQuery({ prompt: inputStream, options: queryOptions });
+
+  let resolvedSessionId: string | null = null;
+
+  // Buffer messages from the query so stream() can be called multiple times
+  // (once per turn). Messages are buffered until consumed.
+  const messageBuffer: SDKMessage[] = [];
+  let bufferResolve: ((msg: SDKMessage | null) => void) | null = null;
+  let queryDone = false;
+
+  function deliverToBuffer(msg: SDKMessage | null): void {
+    const cb = bufferResolve;
+    if (cb) {
+      bufferResolve = null;
+      cb(msg);
+    } else if (msg) {
+      messageBuffer.push(msg);
+    }
+  }
+
+  // Start consuming the query in the background.
+  void (async () => {
+    try {
+      for await (const message of q) {
+        if (message.type === "system" && "session_id" in message) {
+          resolvedSessionId = (message as { session_id?: string }).session_id ?? null;
+        }
+        deliverToBuffer(message);
+      }
+    } finally {
+      queryDone = true;
+      deliverToBuffer(null);
+    }
+  })();
+
+  function nextBufferedMessage(): Promise<SDKMessage | null> {
+    if (messageBuffer.length > 0) {
+      return Promise.resolve(messageBuffer.shift()!);
+    }
+    if (queryDone) {
+      return Promise.resolve(null);
+    }
+    return new Promise((r) => { bufferResolve = r; });
+  }
+
+  const session: SDKSession = {
+    get sessionId(): string {
+      if (!resolvedSessionId) throw new Error("Session ID not yet available");
+      return resolvedSessionId;
+    },
+    async send(message: string | SDKUserMessage): Promise<void> {
+      const msg: SDKUserMessage = typeof message === "string"
+        ? { type: "user", session_id: "", message: { role: "user", content: [{ type: "text", text: message }] }, parent_tool_use_id: null }
+        : message;
+      pushMessage?.(msg);
+    },
+    async *stream(): AsyncGenerator<SDKMessage, void> {
+      while (true) {
+        const message = await nextBufferedMessage();
+        if (message === null) return;
+        yield message;
+        // Pause after yielding a result so the caller can process the turn.
+        if (message.type === "result") return;
+      }
+    },
+    close(): void {
+      endInput?.();
+      q.return(undefined);
+    },
+    async [Symbol.asyncDispose](): Promise<void> {
+      this.close();
+    },
+  };
+
+  return {
+    providerSessionId: input.providerSessionId?.trim() ?? null,
+    session,
   };
 }

@@ -2,7 +2,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { watch } from "@tauri-apps/plugin-fs";
 import { LocalClient } from "@lifecycle/workspace";
 import { App } from "./app";
-import { createAgentOrchestrator } from "@/features/agents/orchestrator";
+import { createAgentOrchestrator } from "@/features/agents/agent-orchestrator";
 import { invokeTauri } from "@/lib/tauri-error";
 import { markPerformance } from "@/lib/performance";
 import "@/main.css";

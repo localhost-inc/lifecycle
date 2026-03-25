@@ -73,6 +73,7 @@ export function GitActionPopover({
   const [commitMessage, setCommitMessage] = useState("");
   const [commitFlow, setCommitFlow] = useState<CommitFlow>("commit_and_push");
   const [includeUnstaged, setIncludeUnstaged] = useState(false);
+  const [isStaging, setIsStaging] = useState(false);
 
   const gitActions = useGitActions({
     onCommitComplete: () => {
@@ -98,6 +99,7 @@ export function GitActionPopover({
   );
 
   const isBusy =
+    isStaging ||
     gitActions.isCommitting ||
     gitActions.isCreatingPullRequest ||
     gitActions.isMergingPullRequest ||
@@ -116,12 +118,17 @@ export function GitActionPopover({
     const files = gitActions.gitStatusQuery.data?.files ?? [];
     const unstaged = files.filter((f) => f.unstaged);
     if (unstaged.length > 0) {
-      await stageGitFiles(
-        client,
-        workspaceId,
-        unstaged.map((f) => f.path),
-      );
-      await gitActions.gitStatusQuery.refetch();
+      setIsStaging(true);
+      try {
+        await stageGitFiles(
+          client,
+          workspaceId,
+          unstaged.map((f) => f.path),
+        );
+        await gitActions.gitStatusQuery.refetch();
+      } finally {
+        setIsStaging(false);
+      }
     }
   }, [gitActions.gitStatusQuery.data, gitActions.gitStatusQuery.refetch, client, workspaceId]);
 
@@ -173,7 +180,7 @@ export function GitActionPopover({
   const continueDisabled = isBusy || (actionState.kind === "needs_commit" && !hasCommitMessage);
 
   function continueLabel(): string {
-    if (gitActions.isCommitting || gitActions.isPushingBranch) return "Working...";
+    if (isStaging || gitActions.isCommitting || gitActions.isPushingBranch) return "Working...";
     if (gitActions.isCreatingPullRequest) return "Creating...";
     if (gitActions.isMergingPullRequest) return "Merging...";
     return "Continue";

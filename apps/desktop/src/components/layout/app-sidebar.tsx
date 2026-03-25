@@ -197,9 +197,9 @@ export function AppSidebar({
                       <Link
                         aria-label={`Open project ${project.name}`}
                         className={[
-                          "flex min-w-0 flex-1 items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors",
+                          "flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-1 text-[13px] font-medium transition-colors",
                           selected
-                            ? "bg-[var(--muted)] text-[var(--foreground)]"
+                            ? "text-[var(--sidebar-foreground)]"
                             : "text-[var(--sidebar-muted-foreground)] hover:text-[var(--sidebar-foreground)]",
                         ].join(" ")}
                         onContextMenu={(e) => handleProjectContextMenu(e, project)}
@@ -238,9 +238,9 @@ export function AppSidebar({
                             <Link
                               key={workspace.id}
                               className={[
-                                "group/workspace flex items-center gap-1.5 rounded-lg py-1 pl-4 pr-1 text-[12px] font-medium transition-colors",
+                                "group/workspace flex items-center gap-1.5 rounded-xl py-1.5 pl-4 pr-1 text-xs font-semibold transition-colors",
                                 active
-                                  ? "bg-[var(--card)] text-[var(--sidebar-foreground)] shadow-[0_0_0_0.5px_var(--border)]"
+                                  ? "bg-[var(--muted)] text-[var(--foreground)]"
                                   : "text-[var(--sidebar-muted-foreground)] hover:text-[var(--sidebar-foreground)]",
                               ].join(" ")}
                               onContextMenu={(e) => handleWorkspaceContextMenu(e, workspace)}

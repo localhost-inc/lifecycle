@@ -145,15 +145,10 @@ export async function upsertAgentMessageWithParts(
   }
 
   await driver.execute(
-    `INSERT INTO agent_message_part (
+    `INSERT OR REPLACE INTO agent_message_part (
        id, message_id, session_id, part_index, part_type, text, data, created_at
      )
-     VALUES ${placeholders.join(", ")}
-     ON CONFLICT(id) DO UPDATE SET
-       part_index = excluded.part_index,
-       part_type = excluded.part_type,
-       text = excluded.text,
-       data = excluded.data`,
+     VALUES ${placeholders.join(", ")}`,
     params,
   );
 }

@@ -26,7 +26,7 @@ import {
 } from "@lifecycle/contracts";
 import type { WorkspaceClient } from "@lifecycle/workspace";
 import { publishBrowserLifecycleEvent } from "@/features/events";
-import { createDetachedWorkerClient } from "@/features/agents/detached-worker-client";
+import { createDetachedWorkerClient } from "@/features/agents/agent-worker";
 import { recordAgentSessionEvent } from "@lifecycle/agents/react";
 import { parseSettingsJson } from "@/features/settings/state/settings-state";
 import { readAppSettings } from "@/lib/config";

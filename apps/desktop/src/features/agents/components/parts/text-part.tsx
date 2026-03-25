@@ -1,6 +1,7 @@
 import { Streamdown } from "streamdown";
 import { code } from "@streamdown/code";
 import "streamdown/styles.css";
+import "./streamdown.css";
 
 const streamdownPlugins = { code };
 
