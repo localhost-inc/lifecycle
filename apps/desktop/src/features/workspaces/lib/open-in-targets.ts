@@ -14,7 +14,6 @@ const OPEN_IN_TARGETS: readonly OpenInTarget[] = [
   { id: "cursor", label: "Cursor" },
   { id: "windsurf", label: "Windsurf" },
   { id: "finder", label: "Finder", macOnly: true },
-  { id: "terminal", label: "Terminal", macOnly: true },
   { id: "iterm", label: "iTerm2", macOnly: true },
   { id: "ghostty", label: "Ghostty", macOnly: true },
   { id: "warp", label: "Warp", macOnly: true },
@@ -27,7 +26,6 @@ export function isSupportedOpenInAppId(value: string | null): value is OpenInApp
     value === "finder" ||
     value === "ghostty" ||
     value === "iterm" ||
-    value === "terminal" ||
     value === "vscode" ||
     value === "warp" ||
     value === "windsurf" ||

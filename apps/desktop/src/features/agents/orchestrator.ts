@@ -24,13 +24,14 @@ import {
   type AgentMessageWithParts,
   type AgentSessionRecord,
 } from "@lifecycle/contracts";
-import type { WorkspaceRuntime } from "@lifecycle/workspace";
+import type { WorkspaceClient } from "@lifecycle/workspace";
 import { publishBrowserLifecycleEvent } from "@/features/events";
 import { createDetachedWorkerClient } from "@/features/agents/detached-worker-client";
-import { recordAgentEvent } from "@/features/agents/state/agent-session-state";
-import { parseSettingsJson } from "@/features/settings/state/settings-provider";
+import { recordAgentSessionEvent } from "@lifecycle/agents/react";
+import { parseSettingsJson } from "@/features/settings/state/settings-state";
 import { readAppSettings } from "@/lib/config";
 import { tauriSqlDriver } from "@/lib/sql-driver";
+import { invokeTauri } from "@/lib/tauri-error";
 import { upsertAgentMessageInCollection } from "@/store/collections/agent-messages";
 import { upsertAgentSessionInCollection } from "@/store/collections/agent-sessions";
 
@@ -58,11 +59,40 @@ interface ObservedSessionMetadata {
   workspaceId: AgentSessionRecord["workspace_id"];
 }
 
-const accumulatedMessages = new Map<string, AccumulatedMessage>();
-const messageSequence = new Map<string, number>();
-const observedSessionMetadata = new Map<string, ObservedSessionMetadata>();
-const observedSessionQueues = new Map<string, Promise<void>>();
-const observedEventIndices = new Map<string, number>();
+// ---------------------------------------------------------------------------
+// HMR preservation — keep in-flight message state across hot reloads
+// ---------------------------------------------------------------------------
+interface OrchestratorHotState {
+  accumulatedMessages: Map<string, AccumulatedMessage>;
+  messageSequence: Map<string, number>;
+  observedSessionMetadata: Map<string, ObservedSessionMetadata>;
+  observedSessionQueues: Map<string, Promise<void>>;
+  observedEventIndices: Map<string, number>;
+}
+
+const hotState = import.meta.hot?.data as Partial<OrchestratorHotState> | undefined;
+
+const accumulatedMessages: Map<string, AccumulatedMessage> =
+  hotState?.accumulatedMessages ?? new Map();
+const messageSequence: Map<string, number> =
+  hotState?.messageSequence ?? new Map();
+const observedSessionMetadata: Map<string, ObservedSessionMetadata> =
+  hotState?.observedSessionMetadata ?? new Map();
+const observedSessionQueues: Map<string, Promise<void>> =
+  hotState?.observedSessionQueues ?? new Map();
+const observedEventIndices: Map<string, number> =
+  hotState?.observedEventIndices ?? new Map();
+
+if (import.meta.hot) {
+  import.meta.hot.accept();
+  import.meta.hot.dispose((data) => {
+    data.accumulatedMessages = accumulatedMessages;
+    data.messageSequence = messageSequence;
+    data.observedSessionMetadata = observedSessionMetadata;
+    data.observedSessionQueues = observedSessionQueues;
+    data.observedEventIndices = observedEventIndices;
+  });
+}
 
 function agentLog(sessionId: string, message: string, details?: Record<string, unknown>): void {
   const timestamp = new Date().toISOString();
@@ -96,6 +126,7 @@ function getOrCreateMessage(
     accumulatedMessages.set(messageId, msg);
   } else {
     msg.role = role;
+    msg.sessionId = sessionId;
     msg.turnId = msg.turnId ?? turnId;
   }
   return msg;
@@ -351,6 +382,14 @@ async function nextObservedEventIndex(sessionId: string): Promise<number> {
   return next;
 }
 
+// High-frequency events that don't need durable event-sourcing. The message
+// accumulator + flush already persists the final state for these.
+const SKIP_PERSIST_EVENT_KINDS = new Set([
+  "agent.message.part.delta",
+  "agent.message.part.completed",
+  "agent.status.updated",
+]);
+
 async function persistObservedEvent(event: AgentEvent): Promise<void> {
   const sessionId = eventSessionId(event);
   if (!sessionId) {
@@ -359,6 +398,12 @@ async function persistObservedEvent(event: AgentEvent): Promise<void> {
 
   if (event.kind === "agent.session.created" || event.kind === "agent.session.updated") {
     cacheSessionMetadata(event.session);
+  }
+
+  // Skip persisting high-frequency streaming events to avoid unbounded
+  // agent_event table growth and unnecessary SQL write pressure.
+  if (SKIP_PERSIST_EVENT_KINDS.has(event.kind)) {
+    return;
   }
 
   const metadata = await getObservedSessionMetadata(sessionId);
@@ -383,7 +428,11 @@ async function persistObservedEvent(event: AgentEvent): Promise<void> {
 
 function enqueueObservedEvent(sessionId: string, task: () => Promise<void>): Promise<void> {
   const previous = observedSessionQueues.get(sessionId) ?? Promise.resolve();
-  const next = previous.catch(() => undefined).then(task);
+  const next = previous
+    .catch((err) => {
+      console.error("[agent] previous queued event failed for session", sessionId, err);
+    })
+    .then(task);
   observedSessionQueues.set(sessionId, next);
   return next.finally(() => {
     if (observedSessionQueues.get(sessionId) === next) {
@@ -414,11 +463,14 @@ async function flushSyntheticMessagePart(input: {
 // Event observer — routes events to session state + message DB.
 // ---------------------------------------------------------------------------
 
-async function observeAgentEvent(event: Parameters<typeof recordAgentEvent>[0]) {
+async function observeAgentEvent(event: Parameters<typeof recordAgentSessionEvent>[0]) {
   const sessionId = eventSessionId(event);
   const handle = async () => {
     try {
-      recordAgentEvent(event);
+      // Update React state immediately so the UI reflects changes without
+      // waiting for the SQL write. Persistence follows — if it fails the
+      // error is logged but the UI stays responsive.
+      recordAgentSessionEvent(event);
       await persistObservedEvent(event);
 
       if (event.kind === "agent.message.created") {
@@ -532,7 +584,7 @@ async function observeAgentEvent(event: Parameters<typeof recordAgentEvent>[0]) 
       }
 
       if (event.kind === "agent.session.created" || event.kind === "agent.session.updated") {
-        upsertAgentSessionInCollection(tauriSqlDriver, event.workspaceId, event.session);
+        await upsertAgentSessionInCollection(tauriSqlDriver, event.workspaceId, event.session);
         publishBrowserLifecycleEvent({
           kind: event.kind,
           workspaceId: event.workspaceId,
@@ -541,8 +593,19 @@ async function observeAgentEvent(event: Parameters<typeof recordAgentEvent>[0]) 
       } else if (event.kind === "agent.turn.completed") {
         // If the model produced no assistant content for this turn, create a
         // minimal assistant message so the transcript isn't silently empty.
+        // Check both the in-memory accumulator AND the DB — after an app
+        // reload or WebSocket reconnect the in-memory map is empty even
+        // though messages were already persisted by a previous connection.
         const assistantMsgId = `${event.turnId}:assistant`;
-        if (!accumulatedMessages.has(assistantMsgId)) {
+        let hasAssistantContent = accumulatedMessages.has(assistantMsgId);
+        if (!hasAssistantContent) {
+          const [row] = await tauriSqlDriver.select<{ cnt: number }>(
+            "SELECT COUNT(*) AS cnt FROM agent_message_part WHERE message_id = $1",
+            [assistantMsgId],
+          );
+          hasAssistantContent = (row?.cnt ?? 0) > 0;
+        }
+        if (!hasAssistantContent) {
           const msg = getOrCreateMessage(
             assistantMsgId,
             event.sessionId,
@@ -558,12 +621,41 @@ async function observeAgentEvent(event: Parameters<typeof recordAgentEvent>[0]) 
           await flushMessage(msg);
         }
 
+        // Evict accumulated messages for this turn — they are fully persisted
+        // to SQL by now, so keeping them wastes memory and risks stale
+        // sessionId routing if IDs are ever reused across sessions.
+        for (const [key, entry] of accumulatedMessages) {
+          if (entry.turnId === event.turnId) {
+            accumulatedMessages.delete(key);
+          }
+        }
+
         publishBrowserLifecycleEvent({
           kind: "agent.turn.completed",
           sessionId: event.sessionId,
           turnId: event.turnId,
           workspaceId: event.workspaceId,
         });
+      } else if (event.kind === "agent.turn.failed") {
+        // Evict accumulated messages for the failed turn as well.
+        for (const [key, entry] of accumulatedMessages) {
+          if (entry.turnId === event.turnId) {
+            accumulatedMessages.delete(key);
+          }
+        }
+      }
+
+      // Clean up accumulated messages when a session reaches a terminal state.
+      if (event.kind === "agent.session.updated") {
+        const status = event.session.status;
+        if (status === "completed" || status === "failed" || status === "cancelled") {
+          for (const [key, entry] of accumulatedMessages) {
+            if (entry.sessionId === event.session.id) {
+              accumulatedMessages.delete(key);
+            }
+          }
+          observedSessionMetadata.delete(event.session.id);
+        }
       }
     } catch (error) {
       console.error("[agent] observeAgentEvent failed:", event.kind, error);
@@ -659,40 +751,11 @@ async function emitWorkerEvent(
     case "agent.item.updated":
       switch (event.item.type) {
         case "agent_message":
-          await emit({
-            kind: "agent.message.created",
-            messageId: `${event.turnId}:assistant:item:${event.item.id}`,
-            role: "assistant",
-            sessionId,
-            turnId: event.turnId,
-            workspaceId,
-          });
-          await emit({
-            kind: "agent.message.part.completed",
-            messageId: `${event.turnId}:assistant:item:${event.item.id}`,
-            part: { type: "text", text: event.item.text },
-            partId: `${event.turnId}:assistant:item:${event.item.id}:text`,
-            sessionId,
-            workspaceId,
-          });
-          return;
         case "reasoning":
-          await emit({
-            kind: "agent.message.created",
-            messageId: `${event.turnId}:assistant:reasoning:${event.item.id}`,
-            role: "assistant",
-            sessionId,
-            turnId: event.turnId,
-            workspaceId,
-          });
-          await emit({
-            kind: "agent.message.part.completed",
-            messageId: `${event.turnId}:assistant:reasoning:${event.item.id}`,
-            part: { type: "thinking", text: event.item.text },
-            partId: `${event.turnId}:assistant:reasoning:${event.item.id}:thinking`,
-            sessionId,
-            workspaceId,
-          });
+          // Text and reasoning content arrives via streaming deltas
+          // (`agent.message.delta` / `agent.thinking.delta`).
+          // Item events for these types are lifecycle signals only —
+          // creating messages here would duplicate streamed content.
           return;
         case "tool_call":
           await emit({
@@ -893,18 +956,15 @@ async function emitWorkerEvent(
 async function updateSessionProviderBinding(
   session: AgentSessionRecord,
   providerSessionId: string,
-  runtimeName: string,
   emit: AgentEventObserver,
 ): Promise<AgentSessionRecord> {
   agentLog(session.id, "updating provider binding", {
     nextProviderSessionId: providerSessionId,
     previousProviderSessionId: session.provider_session_id,
-    runtimeName,
   });
   const nextSession: AgentSessionRecord = {
     ...session,
     provider_session_id: providerSessionId,
-    runtime_name: runtimeName,
   };
   await upsertAgentSession(tauriSqlDriver, nextSession);
   upsertAgentSessionInCollection(tauriSqlDriver, nextSession.workspace_id, nextSession);
@@ -940,13 +1000,11 @@ async function applyWorkerStateSnapshot(
   const nextSession: AgentSessionRecord = {
     ...session,
     provider_session_id: providerSessionId,
-    runtime_name: session.provider,
     status: nextStatus,
   };
 
   if (
     nextSession.provider_session_id === session.provider_session_id &&
-    nextSession.runtime_name === session.runtime_name &&
     nextSession.status === session.status
   ) {
     return session;
@@ -963,6 +1021,29 @@ async function applyWorkerStateSnapshot(
   return nextSession;
 }
 
+async function createBridgeEnv(
+  workspaceId: string,
+  worktreePath: string,
+): Promise<Record<string, string>> {
+  try {
+    const result = await invokeTauri<{ socketPath: string; sessionToken: string }>(
+      "bridge_create_agent_session",
+      { request: { workspaceId } },
+    );
+    return {
+      LIFECYCLE_BRIDGE_SOCKET: result.socketPath,
+      LIFECYCLE_BRIDGE_SESSION_TOKEN: result.sessionToken,
+      LIFECYCLE_WORKSPACE_ID: workspaceId,
+      LIFECYCLE_WORKSPACE_PATH: worktreePath,
+    };
+  } catch (error) {
+    agentLog(workspaceId, "failed to create bridge session for agent", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return {};
+  }
+}
+
 async function launchDetachedProviderWorker(options: {
   emit: AgentEventObserver;
   launchArgs: string[];
@@ -974,8 +1055,10 @@ async function launchDetachedProviderWorker(options: {
     provider: observedSession.provider,
     worktreePath: options.worktreePath,
   });
+  const env = await createBridgeEnv(observedSession.workspace_id, options.worktreePath);
   const worker = await createDetachedWorkerClient({
     cwd: options.worktreePath,
+    env,
     launchArgs: options.launchArgs,
     onState: async (snapshot) => {
       if (
@@ -999,7 +1082,6 @@ async function launchDetachedProviderWorker(options: {
         observedSession = await updateSessionProviderBinding(
           observedSession,
           event.providerSessionId,
-          observedSession.provider,
           options.emit,
         );
         return;
@@ -1088,7 +1170,7 @@ const ClaudeAgentWorker = {
   async start(
     session: AgentSessionRecord,
     context: AgentSessionContext,
-    _runtime: WorkspaceRuntime,
+    _client: WorkspaceClient,
     events: AgentSessionEvents,
   ): Promise<{ session: AgentSessionRecord; worker: AgentWorker }> {
     if (!context.worktreePath) {
@@ -1098,7 +1180,7 @@ const ClaudeAgentWorker = {
     return await launchDetachedProviderWorker({
       emit: events.emit,
       launchArgs: await buildClaudeHostArgs(session, context.worktreePath),
-      session: { ...session, runtime_name: "claude" },
+      session,
       worktreePath: context.worktreePath,
     });
   },
@@ -1106,7 +1188,7 @@ const ClaudeAgentWorker = {
   async connect(
     session: AgentSessionRecord,
     context: AgentSessionContext,
-    _runtime: WorkspaceRuntime,
+    _client: WorkspaceClient,
     events: AgentSessionEvents,
   ): Promise<AgentWorker> {
     if (!context.worktreePath) {
@@ -1127,7 +1209,7 @@ const CodexAgentWorker = {
   async start(
     session: AgentSessionRecord,
     context: AgentSessionContext,
-    _runtime: WorkspaceRuntime,
+    _client: WorkspaceClient,
     events: AgentSessionEvents,
   ): Promise<{ session: AgentSessionRecord; worker: AgentWorker }> {
     if (!context.worktreePath) {
@@ -1137,7 +1219,7 @@ const CodexAgentWorker = {
     return await launchDetachedProviderWorker({
       emit: events.emit,
       launchArgs: await buildCodexHostArgs(session, context.worktreePath),
-      session: { ...session, runtime_name: "codex" },
+      session,
       worktreePath: context.worktreePath,
     });
   },
@@ -1145,7 +1227,7 @@ const CodexAgentWorker = {
   async connect(
     session: AgentSessionRecord,
     context: AgentSessionContext,
-    _runtime: WorkspaceRuntime,
+    _client: WorkspaceClient,
     events: AgentSessionEvents,
   ): Promise<AgentWorker> {
     if (!context.worktreePath) {
@@ -1166,7 +1248,7 @@ async function reattachPersistedAgentSessions(
   orchestrator: ReturnType<typeof createLifecycleAgentOrchestrator>,
 ): Promise<void> {
   const sessions = await tauriSqlDriver.select<{ id: string }>(
-    "SELECT id FROM agent_session WHERE ended_at IS NULL",
+    "SELECT id FROM agent_session WHERE status NOT IN ('completed', 'failed', 'cancelled')",
   );
 
   console.info(
@@ -1177,6 +1259,9 @@ async function reattachPersistedAgentSessions(
     sessions.map(async ({ id }) => {
       try {
         agentLog(id, "reattach requested");
+        // Clear cached event index so the next persist queries the DB for the
+        // true max — avoids stale indices after app restart or HMR.
+        observedEventIndices.delete(id);
         await orchestrator.attachSession(id);
         agentLog(id, "reattach completed");
       } catch (error) {
@@ -1186,14 +1271,14 @@ async function reattachPersistedAgentSessions(
   );
 }
 
-export function createAgentOrchestrator(localRuntime: WorkspaceRuntime) {
+export function createAgentOrchestrator(localClient: WorkspaceClient) {
   const orchestrator = createLifecycleAgentOrchestrator({
     workers: {
       claude: ClaudeAgentWorker,
       codex: CodexAgentWorker,
     },
-    resolveRuntime() {
-      return localRuntime;
+    resolveClient() {
+      return localClient;
     },
     store: {
       async saveSession(session) {

@@ -2,22 +2,24 @@ export type { AgentEvent, AgentEventKind, AgentEventObserver, AgentEventOf } fro
 export {
   clearAgentSessionResponseReady,
   clearAgentWorkspaceResponseReady,
-  createAgentFleetState,
-  reduceAgentFleetEvent,
-  selectAgentFleetSessionState,
+  createAgentSessionStore,
+  reduceAgentSessionEvent,
+  deriveAgentDisplayStatus,
+  selectAgentSessionState,
   selectAgentSessionResponseReady,
   selectAgentSessionRunning,
   selectAgentWorkspaceStatus,
-} from "./fleet-state";
+} from "./agent-session-store";
 export type {
-  AgentFleetAuthStatus,
-  AgentFleetSessionState,
-  AgentFleetState,
+  AgentSessionAuthStatus,
+  AgentSessionDisplayStatus,
+  AgentSessionState,
+  AgentSessionStore,
   AgentSessionUsage,
   AgentTurnActivity,
   AgentTurnPhase,
   AgentWorkspaceStatus,
-} from "./fleet-state";
+} from "./agent-session-store";
 export type { ProviderModelCatalog, ProviderModelCatalogEntry } from "./catalog";
 export { createAgentOrchestrator } from "./orchestrator";
 export type {
@@ -90,3 +92,13 @@ export type {
   ProviderAuthStatusEvent,
 } from "./providers/auth";
 export type { ClaudeLoginMethod } from "./providers/claude/env";
+export { retry, type RetryOptions } from "./retry";
+export {
+  MessagePipeline,
+  appendPart,
+  inferRole,
+  inferTurnId,
+  renderText,
+  toMessageWithParts,
+} from "./message-pipeline";
+export type { AccumulatedMessage, MessageFlushCallback, MessagePipelineResult } from "./message-pipeline";

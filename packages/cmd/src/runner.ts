@@ -14,6 +14,8 @@ export type RunCliOptions = {
   argv?: string[];
   commandExtensions?: string[];
   io?: CliIo;
+  /** Enable `<name> mcp` subcommand that starts an MCP stdio server. */
+  mcp?: { version: string };
 };
 
 export type CliIo = CommandIo;
@@ -233,7 +235,22 @@ function resolveNamespaceDepth(segments: string[], index: Set<string>): number {
 export async function runCli(options: RunCliOptions) {
   const argv = options.argv ?? Bun.argv.slice(2);
   const io = options.io ?? defaultIo;
+
   const { segments, flagArgs } = splitArgs(argv);
+
+  // When mcp is enabled, `<name> mcp` starts an MCP stdio server that
+  // exposes all discovered commands as tools.
+  if (options.mcp && segments.length === 1 && segments[0] === "mcp") {
+    const { runMcp } = await import("./mcp.js");
+    await runMcp({
+      name: options.name,
+      version: options.mcp.version,
+      baseDir: options.baseDir,
+      ...(options.commandExtensions ? { commandExtensions: options.commandExtensions } : {}),
+    });
+    await new Promise(() => {});
+    return 0;
+  }
   const commandExtensions = options.commandExtensions ?? ["ts", "js"];
   const index = await getCommandIndex(options.baseDir, commandExtensions);
 

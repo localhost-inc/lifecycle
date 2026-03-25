@@ -1,6 +1,5 @@
 export type AgentSessionProviderId = "claude" | "codex";
 
-export type AgentRuntimeKind = "native" | "adapter";
 export type AgentMessageRole = "user" | "assistant" | "system" | "tool";
 
 export type AgentSessionStatus =
@@ -16,18 +15,13 @@ export type AgentSessionStatus =
 export interface AgentSessionRecord {
   id: string;
   workspace_id: string;
-  runtime_kind: AgentRuntimeKind;
-  runtime_name: string | null;
   provider: AgentSessionProviderId;
   provider_session_id: string | null;
   title: string;
   status: AgentSessionStatus;
-  created_by: string | null;
-  forked_from_session_id: string | null;
   last_message_at: string | null;
   created_at: string;
   updated_at: string;
-  ended_at: string | null;
 }
 
 export interface AgentMessageRecord {

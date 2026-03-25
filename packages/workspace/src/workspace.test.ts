@@ -1,29 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import type {
   ServiceRecord,
-  TerminalRecord,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
-import type { WorkspaceRuntime } from "./workspace";
-import { LocalRuntime } from "./runtimes/local";
+import type { WorkspaceClient } from "./workspace";
+import { LocalClient } from "./clients/local";
 
 describe("workspace contract", () => {
   test("defines the expected workspace method names", () => {
-    const requiredMethods: Array<keyof WorkspaceRuntime> = [
+    const requiredMethods: Array<keyof WorkspaceClient> = [
       "startServices",
       "healthCheck",
       "stopServices",
       "getActivity",
       "getServiceLogs",
       "getServices",
-      "createTerminal",
-      "listTerminals",
-      "sendTerminalText",
-      "renameTerminal",
-      "saveTerminalAttachment",
-      "detachTerminal",
-      "killTerminal",
-      "interruptTerminal",
       "readFile",
       "writeFile",
       "subscribeFileEvents",
@@ -49,18 +40,18 @@ describe("workspace contract", () => {
       "mergeGitPullRequest",
       "createWorkspace",
       "renameWorkspace",
-      "destroyWorkspace",
+      "archiveWorkspace",
       "readManifestText",
       "getCurrentBranch",
       "cleanupProject",
     ];
 
-    expect(requiredMethods).toHaveLength(43);
+    expect(requiredMethods).toHaveLength(35);
   });
 
   test("host workspace client exposes the full contract surface", () => {
     const invoke = async () => "";
-    const client = new LocalRuntime({ invoke });
+    const client = new LocalClient({ invoke });
 
     expect(typeof client.startServices).toBe("function");
     expect(typeof client.healthCheck).toBe("function");
@@ -68,14 +59,6 @@ describe("workspace contract", () => {
     expect(typeof client.getActivity).toBe("function");
     expect(typeof client.getServiceLogs).toBe("function");
     expect(typeof client.getServices).toBe("function");
-    expect(typeof client.createTerminal).toBe("function");
-    expect(typeof client.listTerminals).toBe("function");
-    expect(typeof client.sendTerminalText).toBe("function");
-    expect(typeof client.renameTerminal).toBe("function");
-    expect(typeof client.saveTerminalAttachment).toBe("function");
-    expect(typeof client.detachTerminal).toBe("function");
-    expect(typeof client.killTerminal).toBe("function");
-    expect(typeof client.interruptTerminal).toBe("function");
     expect(typeof client.readFile).toBe("function");
     expect(typeof client.writeFile).toBe("function");
     expect(typeof client.subscribeFileEvents).toBe("function");
@@ -103,7 +86,7 @@ describe("workspace contract", () => {
 
   test("local runtime sets up file watching via watchPath", async () => {
     let watchedPath = "";
-    const client = new LocalRuntime({
+    const client = new LocalClient({
       invoke: async () => "",
       watchPath: async (path, _callback, _options) => {
         watchedPath = path;
@@ -123,77 +106,16 @@ describe("workspace contract", () => {
     expect(typeof cleanup).toBe("function");
   });
 
-  test("host workspace client forwards manifest fingerprint when starting services", async () => {
+  test("startServices uses graph-driven orchestration through environment target", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
       calls.push(args ? { cmd, args } : { cmd });
+      if (cmd === "get_workspace_prepared") return false;
+      if (cmd === "get_workspace_ready_services") return [];
+      if (cmd === "get_workspace_services") return [];
       return undefined;
     };
-    const client = new LocalRuntime({ invoke });
-    const workspace: WorkspaceRecord = {
-      id: "ws_1",
-      project_id: "project_1",
-      name: "Workspace 1",
-      checkout_type: "worktree",
-      source_ref: "lifecycle/workspace-1",
-      git_sha: null,
-      worktree_path: "/tmp/project_1/.worktrees/ws_1",
-      target: "local",
-      manifest_fingerprint: "manifest_1",
-      created_by: null,
-      source_workspace_id: null,
-      created_at: "2026-03-12T00:00:00.000Z",
-      updated_at: "2026-03-12T00:00:00.000Z",
-      last_active_at: "2026-03-12T00:00:00.000Z",
-      expires_at: null,
-      status: "active",
-      failure_reason: null,
-      failed_at: null,
-    };
-    const services: ServiceRecord[] = [
-      {
-        id: "svc_1",
-        workspace_id: "ws_1",
-        name: "web",
-        status: "stopped",
-        status_reason: null,
-        assigned_port: 1420,
-        preview_url: "http://127.0.0.1:1420",
-        created_at: "2026-03-12T00:00:00.000Z",
-        updated_at: "2026-03-12T00:00:00.000Z",
-      },
-    ];
-
-    const result = await client.startServices({
-      workspace,
-      services,
-      manifestJson:
-        '{"workspace":{"prepare":[],"teardown":[]},"environment":{"web":{"kind":"service","runtime":"process","command":"bun run dev"}}}',
-      manifestFingerprint: "manifest_1",
-    });
-
-    expect(result).toEqual(services);
-    expect(calls).toEqual([
-      {
-        cmd: "start_workspace_services",
-        args: {
-          workspaceId: "ws_1",
-          manifestJson:
-            '{"workspace":{"prepare":[],"teardown":[]},"environment":{"web":{"kind":"service","runtime":"process","command":"bun run dev"}}}',
-          manifestFingerprint: "manifest_1",
-          serviceNames: undefined,
-        },
-      },
-    ]);
-  });
-
-  test("host workspace client startServices reuses the service start contract", async () => {
-    const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
-    const invoke = async (cmd: string, args?: Record<string, unknown>) => {
-      calls.push(args ? { cmd, args } : { cmd });
-      return undefined;
-    };
-    const client = new LocalRuntime({ invoke });
+    const client = new LocalClient({ invoke });
 
     await client.startServices({
       workspace: {
@@ -206,44 +128,38 @@ describe("workspace contract", () => {
         worktree_path: "/tmp/project_1/.worktrees/ws_1",
         target: "local",
         manifest_fingerprint: "manifest_1",
-        created_by: null,
-        source_workspace_id: null,
         created_at: "2026-03-12T00:00:00.000Z",
         updated_at: "2026-03-12T00:00:00.000Z",
         last_active_at: "2026-03-12T00:00:00.000Z",
-        expires_at: null,
         status: "active",
         failure_reason: null,
         failed_at: null,
       },
       services: [],
-      manifestJson: '{"workspace":{"prepare":[],"teardown":[]},"environment":{}}',
+      manifestJson:
+        '{"workspace":{"prepare":[]},"environment":{"web":{"kind":"service","runtime":"process","command":"bun run dev"}}}',
       manifestFingerprint: "manifest_1",
     });
 
-    expect(calls).toEqual([
-      {
-        cmd: "start_workspace_services",
-        args: {
-          workspaceId: "ws_1",
-          manifestJson: '{"workspace":{"prepare":[],"teardown":[]},"environment":{}}',
-          manifestFingerprint: "manifest_1",
-          serviceNames: undefined,
-        },
-      },
-    ]);
+    const commandNames = calls.map((c) => c.cmd);
+    expect(commandNames).toContain("get_workspace_prepared");
+    expect(commandNames).toContain("get_workspace_ready_services");
+    expect(commandNames).toContain("prepare_environment_start");
+    expect(commandNames).toContain("start_environment_service");
   });
 
-  test("host workspace client forwards targeted service starts", async () => {
+  test("startServices invokes start_environment_service for each service in dependency order", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
       calls.push(args ? { cmd, args } : { cmd });
+      if (cmd === "get_workspace_prepared") return false;
+      if (cmd === "get_workspace_ready_services") return [];
+      if (cmd === "get_workspace_services") return [];
       return undefined;
     };
-    const client = new LocalRuntime({ invoke });
+    const client = new LocalClient({ invoke });
 
     await client.startServices({
-      serviceNames: ["www"],
       workspace: {
         id: "ws_1",
         project_id: "project_1",
@@ -254,51 +170,27 @@ describe("workspace contract", () => {
         worktree_path: "/tmp/project_1/.worktrees/ws_1",
         target: "local",
         manifest_fingerprint: "manifest_1",
-        created_by: null,
-        source_workspace_id: null,
         created_at: "2026-03-12T00:00:00.000Z",
         updated_at: "2026-03-12T00:00:00.000Z",
         last_active_at: "2026-03-12T00:00:00.000Z",
-        expires_at: null,
         status: "active",
         failure_reason: null,
         failed_at: null,
       },
       services: [],
       manifestJson:
-        '{"environment":{"www":{"kind":"service","runtime":"process","command":"bun run dev"}}}',
+        '{"workspace":{"prepare":[]},"environment":{"api":{"kind":"service","runtime":"process","command":"bun run api"},"www":{"kind":"service","runtime":"process","command":"bun run www","depends_on":["api"]}}}',
       manifestFingerprint: "manifest_1",
     });
 
-    expect(calls).toEqual([
-      {
-        cmd: "start_workspace_services",
-        args: {
-          workspaceId: "ws_1",
-          manifestJson:
-            '{"environment":{"www":{"kind":"service","runtime":"process","command":"bun run dev"}}}',
-          manifestFingerprint: "manifest_1",
-          serviceNames: ["www"],
-        },
-      },
-    ]);
+    const startCalls = calls
+      .filter((c) => c.cmd === "start_environment_service")
+      .map((c) => c.args?.serviceName);
+    expect(startCalls).toEqual(["api", "www"]);
   });
 
-  test("host workspace client forwards workspace reads, files, terminals, and health checks", async () => {
+  test("host workspace client forwards workspace reads, files, and health checks", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
-    const terminal: TerminalRecord = {
-      id: "term_1",
-      workspace_id: "ws_1",
-      launch_type: "shell",
-      created_by: null,
-      label: "Terminal 1",
-      status: "active",
-      failure_reason: null,
-      exit_code: null,
-      started_at: "2026-03-12T00:00:00.000Z",
-      last_active_at: "2026-03-12T00:00:00.000Z",
-      ended_at: null,
-    };
     const services: ServiceRecord[] = [
       {
         id: "svc_1",
@@ -321,11 +213,6 @@ describe("workspace contract", () => {
       is_binary: false,
       is_too_large: false,
     } as const;
-    const terminalAttachment = {
-      absolutePath: "/tmp/project_1/.worktrees/ws_1/.lifecycle/attachments/screenshot.png",
-      fileName: "screenshot.png",
-      relativePath: ".lifecycle/attachments/screenshot.png",
-    } as const;
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
       calls.push(args ? { cmd, args } : { cmd });
 
@@ -340,40 +227,21 @@ describe("workspace contract", () => {
           return fileResult;
         case "list_workspace_files":
           return [{ extension: "md", file_path: "README.md" }];
-        case "rename_terminal":
-          return {
-            ...terminal,
-            label: String(args?.label ?? terminal.label),
-          };
-        case "save_terminal_attachment":
-          return terminalAttachment;
-        case "list_workspace_terminals":
-          return [terminal];
         default:
           return undefined;
       }
     };
-    const client = new LocalRuntime({ invoke });
+    const client = new LocalClient({ invoke });
 
     await client.healthCheck("ws_1");
     await client.getActivity("ws_1");
     await client.getServiceLogs("ws_1");
     await client.getServices("ws_1");
-    await client.listTerminals("ws_1");
-    await client.renameTerminal("ws_1", "term_1", "Codex Session");
-    await client.saveTerminalAttachment({
-      base64Data: "ZmFrZQ==",
-      fileName: "screenshot.png",
-      workspaceId: "ws_1",
-    });
     await client.readFile("ws_1", "README.md");
     await client.writeFile("ws_1", "README.md", "welcome");
     await client.listFiles("ws_1");
     await client.openFile("ws_1", "README.md");
     await client.stopServices("ws_1");
-    await client.detachTerminal("ws_1", "term_1");
-    await client.killTerminal("ws_1", "term_1");
-    await client.interruptTerminal("ws_1", "term_1");
 
     expect(calls).toEqual([
       {
@@ -397,29 +265,6 @@ describe("workspace contract", () => {
       {
         cmd: "get_workspace_services",
         args: {
-          workspaceId: "ws_1",
-        },
-      },
-      {
-        cmd: "list_workspace_terminals",
-        args: {
-          workspaceId: "ws_1",
-        },
-      },
-      {
-        cmd: "rename_terminal",
-        args: {
-          workspaceId: "ws_1",
-          terminalId: "term_1",
-          label: "Codex Session",
-        },
-      },
-      {
-        cmd: "save_terminal_attachment",
-        args: {
-          base64Data: "ZmFrZQ==",
-          fileName: "screenshot.png",
-          mediaType: null,
           workspaceId: "ws_1",
         },
       },
@@ -455,67 +300,6 @@ describe("workspace contract", () => {
         cmd: "stop_workspace_services",
         args: {
           workspaceId: "ws_1",
-        },
-      },
-      {
-        cmd: "detach_terminal",
-        args: {
-          workspaceId: "ws_1",
-          terminalId: "term_1",
-        },
-      },
-      {
-        cmd: "kill_terminal",
-        args: {
-          workspaceId: "ws_1",
-          terminalId: "term_1",
-        },
-      },
-      {
-        cmd: "interrupt_terminal",
-        args: {
-          workspaceId: "ws_1",
-          terminalId: "term_1",
-        },
-      },
-    ]);
-  });
-
-  test("host workspace client creates shell terminals without harness metadata", async () => {
-    const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
-    const invoke = async (cmd: string, args?: Record<string, unknown>) => {
-      if (args) {
-        calls.push({ cmd, args });
-      } else {
-        calls.push({ cmd });
-      }
-      return {
-        id: "term_1",
-        workspace_id: "ws_1",
-        launch_type: "shell",
-        created_by: null,
-        label: "Terminal 1",
-        status: "detached",
-        failure_reason: null,
-        exit_code: null,
-        started_at: "2026-03-05T08:00:00.000Z",
-        last_active_at: "2026-03-05T08:00:00.000Z",
-        ended_at: null,
-      };
-    };
-    const client = new LocalRuntime({ invoke });
-
-    await client.createTerminal({
-      workspaceId: "ws_1",
-      launchType: "shell",
-    });
-
-    expect(calls).toEqual([
-      {
-        cmd: "create_terminal",
-        args: {
-          workspaceId: "ws_1",
-          launchType: "shell",
         },
       },
     ]);
@@ -649,7 +433,7 @@ describe("workspace contract", () => {
           return undefined;
       }
     };
-    const client = new LocalRuntime({ invoke });
+    const client = new LocalClient({ invoke });
 
     await client.getGitStatus("ws_1");
     await client.getGitScopePatch("ws_1", "working");

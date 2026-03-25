@@ -6,19 +6,16 @@ use rusqlite::params;
 use tauri::{AppHandle, Manager};
 
 use super::checkout_type::is_root_workspace_checkout_type;
-use super::query::{self, TerminalRecord, WorkspaceRecord};
-use super::terminal::load_terminal_record;
+use super::query::{self, WorkspaceRecord};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TitleOrigin {
-    Default,
     Manual,
 }
 
 impl TitleOrigin {
     pub(crate) fn as_str(self) -> &'static str {
         match self {
-            Self::Default => "default",
             Self::Manual => "manual",
         }
     }
@@ -33,12 +30,6 @@ struct WorkspaceIdentityContext {
     source_ref_origin: String,
     project_path: String,
     worktree_path: Option<String>,
-}
-
-#[derive(Debug)]
-struct TerminalRenameContext {
-    current_label: String,
-    label_origin: String,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -61,25 +52,6 @@ pub async fn rename_workspace(
         update_workspace_identity(db_path, workspace_id, name, TitleOrigin::Manual).await?;
     emit_workspace_renamed(&app, &workspace);
     Ok(workspace)
-}
-
-pub async fn rename_terminal(
-    app: &AppHandle,
-    db_path: &str,
-    workspace_id: &str,
-    terminal_id: &str,
-    label: &str,
-) -> Result<TerminalRecord, LifecycleError> {
-    let terminal = load_terminal_record(db_path, terminal_id)?
-        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()))?;
-    if terminal.workspace_id != workspace_id {
-        return Err(LifecycleError::WorkspaceNotFound(terminal_id.to_string()));
-    }
-    let workspace_controllers = app.state::<WorkspaceControllerRegistryHandle>();
-    let _mutation_guard = workspace_controllers
-        .acquire_mutation_guard(workspace_id)
-        .await?;
-    update_terminal_label(app, db_path, terminal_id, label, TitleOrigin::Manual)
 }
 
 async fn update_workspace_identity(
@@ -258,37 +230,6 @@ fn next_source_ref_origin(context: &WorkspaceIdentityContext, origin: TitleOrigi
     }
 }
 
-fn update_terminal_label(
-    app: &AppHandle,
-    db_path: &str,
-    terminal_id: &str,
-    label: &str,
-    origin: TitleOrigin,
-) -> Result<TerminalRecord, LifecycleError> {
-    let next_label = normalize_title_input("session title", label)?;
-    let context = load_terminal_rename_context(db_path, terminal_id)?;
-
-    if context.current_label == next_label && context.label_origin == origin.as_str() {
-        return load_terminal_record(db_path, terminal_id)?
-            .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()));
-    }
-
-    let conn = open_db(db_path)?;
-    conn.execute(
-        "UPDATE terminal
-         SET label = ?1,
-             label_origin = ?2
-         WHERE id = ?3",
-        params![next_label, origin.as_str(), terminal_id],
-    )
-    .map_err(|error| LifecycleError::Database(error.to_string()))?;
-
-    let terminal = load_terminal_record(db_path, terminal_id)?
-        .ok_or_else(|| LifecycleError::WorkspaceNotFound(terminal_id.to_string()))?;
-    emit_terminal_renamed(app, &terminal);
-    Ok(terminal)
-}
-
 fn load_workspace_identity_context(
     db_path: &str,
     workspace_id: &str,
@@ -316,32 +257,6 @@ fn load_workspace_identity_context(
     .map_err(|error| match error {
         rusqlite::Error::QueryReturnedNoRows => {
             LifecycleError::WorkspaceNotFound(workspace_id.to_string())
-        }
-        _ => LifecycleError::Database(error.to_string()),
-    })
-}
-
-fn load_terminal_rename_context(
-    db_path: &str,
-    terminal_id: &str,
-) -> Result<TerminalRenameContext, LifecycleError> {
-    let conn = open_db(db_path)?;
-    conn.query_row(
-        "SELECT label, label_origin
-         FROM terminal
-         WHERE id = ?1
-         LIMIT 1",
-        params![terminal_id],
-        |row| {
-            Ok(TerminalRenameContext {
-                current_label: row.get(0)?,
-                label_origin: row.get(1)?,
-            })
-        },
-    )
-    .map_err(|error| match error {
-        rusqlite::Error::QueryReturnedNoRows => {
-            LifecycleError::WorkspaceNotFound(terminal_id.to_string())
         }
         _ => LifecycleError::Database(error.to_string()),
     })
@@ -375,17 +290,6 @@ fn emit_workspace_renamed(app: &AppHandle, workspace: &WorkspaceRecord) {
             name: workspace.name.clone(),
             source_ref: workspace.source_ref.clone(),
             worktree_path: workspace.worktree_path.clone(),
-        },
-    );
-}
-
-fn emit_terminal_renamed(app: &AppHandle, terminal: &TerminalRecord) {
-    publish_lifecycle_event(
-        app,
-        LifecycleEvent::TerminalRenamed {
-            terminal_id: terminal.id.clone(),
-            workspace_id: terminal.workspace_id.clone(),
-            label: terminal.label.clone(),
         },
     );
 }
@@ -497,7 +401,7 @@ mod tests {
         conn.execute(
             "INSERT INTO workspace (
                 id, project_id, name, name_origin, checkout_type, source_ref, source_ref_origin, worktree_path, target, status
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'host', 'active')",
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'local', 'active')",
             rusqlite::params![
                 workspace_id,
                 "project_1",

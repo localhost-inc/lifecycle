@@ -1,4 +1,5 @@
 import { ChevronRight } from "lucide-react";
+import { useState } from "react";
 import type { AgentApprovalDecision, AgentMessagePart } from "@lifecycle/agents";
 import type {
   ParsedMessage,
@@ -154,7 +155,22 @@ function buildAssistantSegments(parts: ParsedMessagePartEntry[]): AssistantSegme
 
     if (part.part.type === "tool_call") {
       flushContent();
-      activeToolParts.push(part);
+      // Diff-producing tools (Edit/Write/Delete) render individually — don't collapse them
+      const name = part.part.toolName;
+      if (name === "Edit" || name === "Write" || name === "Delete" || name === "DeleteFile") {
+        flushTools();
+        segments.push({ kind: "tool_call", parts: [part] });
+      } else {
+        activeToolParts.push(part);
+      }
+      continue;
+    }
+
+    // Thinking parts break out of content segments — they render standalone
+    if (part.part.type === "thinking") {
+      flushTools();
+      flushContent();
+      segments.push({ kind: "content", parts: [part] });
       continue;
     }
 
@@ -174,7 +190,80 @@ function getAssistantSegmentKey(segment: AssistantSegment): string {
   return `${segment.kind}:${firstId}:${lastId}`;
 }
 
-function ToolCallList({
+interface ToolTally {
+  searched: number;
+  read: number;
+  edited: number;
+  wrote: number;
+  deleted: number;
+  ran: number;
+  delegated: number;
+  other: number;
+}
+
+function tallyToolCalls(parts: ParsedMessagePartEntry[]): ToolTally {
+  const tally: ToolTally = { searched: 0, read: 0, edited: 0, wrote: 0, deleted: 0, ran: 0, delegated: 0, other: 0 };
+  for (const { part } of parts) {
+    if (part.type !== "tool_call") continue;
+    switch (part.toolName) {
+      case "Grep":
+      case "Glob":
+      case "ToolSearch":
+      case "WebSearch":
+        tally.searched++;
+        break;
+      case "Read":
+        tally.read++;
+        break;
+      case "Edit":
+        tally.edited++;
+        break;
+      case "Write":
+        tally.wrote++;
+        break;
+      case "Delete":
+      case "DeleteFile":
+        tally.deleted++;
+        break;
+      case "Bash":
+      case "command_execution":
+        tally.ran++;
+        break;
+      case "WebFetch":
+        tally.read++;
+        break;
+      case "Agent":
+        tally.delegated++;
+        break;
+      default:
+        tally.other++;
+    }
+  }
+  return tally;
+}
+
+function pluralize(n: number, singular: string, plural?: string): string {
+  return n === 1 ? `${n} ${singular}` : `${n} ${plural ?? `${singular}s`}`;
+}
+
+function buildToolSummary(tally: ToolTally, isStreaming?: boolean): string {
+  const parts: string[] = [];
+  const verb = isStreaming;
+  if (tally.searched > 0) parts.push(`${verb ? "searching" : "searched"} ${pluralize(tally.searched, "pattern")}`);
+  if (tally.read > 0) parts.push(`${verb ? "reading" : "read"} ${pluralize(tally.read, "file")}`);
+  if (tally.edited > 0) parts.push(`${verb ? "editing" : "edited"} ${pluralize(tally.edited, "file")}`);
+  if (tally.wrote > 0) parts.push(`${verb ? "writing" : "wrote"} ${pluralize(tally.wrote, "file")}`);
+  if (tally.deleted > 0) parts.push(`${verb ? "deleting" : "deleted"} ${pluralize(tally.deleted, "file")}`);
+  if (tally.ran > 0) parts.push(`${verb ? "running" : "ran"} ${pluralize(tally.ran, "command")}`);
+  if (tally.delegated > 0) parts.push(`${verb ? "delegating" : "delegated"} ${pluralize(tally.delegated, "agent")}`);
+  if (tally.other > 0) parts.push(`${verb ? "running" : "ran"} ${pluralize(tally.other, "tool")}`);
+  if (parts.length === 0) return isStreaming ? "working…" : "done";
+  // Capitalize first part
+  const summary = parts.join(", ");
+  return summary.charAt(0).toUpperCase() + summary.slice(1);
+}
+
+function ToolCallGroup({
   toolParts,
   isStreaming,
   spacedFromPrevious,
@@ -193,18 +282,54 @@ function ToolCallList({
   onOpenFile?: (filePath: string) => void;
   resolvingApprovalIds?: ReadonlySet<string>;
 }) {
+  const [open, setOpen] = useState(false);
+  const tally = tallyToolCalls(toolParts);
+  const summary = buildToolSummary(tally, isStreaming);
+
+  // For a single tool call, just render it directly (no summary needed)
+  if (toolParts.length === 1) {
+    return (
+      <div className={spacedFromPrevious ? "mt-2" : ""}>
+        {toolParts.map(({ id, part }) => (
+          <MessagePartRenderer
+            key={id}
+            part={part}
+            isStreaming={isStreaming}
+            onResolveApproval={onResolveApproval}
+            onOpenFile={onOpenFile}
+            resolvingApprovalIds={resolvingApprovalIds}
+          />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className={spacedFromPrevious ? "mt-2" : ""}>
-      {toolParts.map(({ id, part }) => (
-        <MessagePartRenderer
-          key={id}
-          part={part}
-          isStreaming={isStreaming}
-          onResolveApproval={onResolveApproval}
-          onOpenFile={onOpenFile}
-          resolvingApprovalIds={resolvingApprovalIds}
+      <button
+        className="flex items-center gap-1.5 text-[12px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+        onClick={() => setOpen(!open)}
+        type="button"
+      >
+        <ChevronRight
+          className={["size-3 shrink-0 transition-transform", open ? "rotate-90" : ""].join(" ")}
         />
-      ))}
+        <span>{summary}</span>
+      </button>
+      {open ? (
+        <div className="mt-0.5 ml-[1.125rem]">
+          {toolParts.map(({ id, part }) => (
+            <MessagePartRenderer
+              key={id}
+              part={part}
+              isStreaming={isStreaming}
+              onResolveApproval={onResolveApproval}
+              onOpenFile={onOpenFile}
+              resolvingApprovalIds={resolvingApprovalIds}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -311,7 +436,7 @@ function AssistantMessage({
       {segments.map((segment, index) => {
         const isLastSegment = isStreaming && index === segments.length - 1;
         return segment.kind === "tool_call" ? (
-          <ToolCallList
+          <ToolCallGroup
             key={getAssistantSegmentKey(segment)}
             toolParts={segment.parts}
             isStreaming={isLastSegment}

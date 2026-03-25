@@ -2,6 +2,7 @@ use crate::platform::app_config::AppConfigPath;
 use crate::platform::lifecycle_cli::LifecycleCliState;
 use crate::shared::errors::LifecycleError;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::fs::OpenOptions;
 use std::process::Stdio;
@@ -18,6 +19,8 @@ pub struct WindowMousePosition {
 pub struct StartDetachedAgentHostRequest {
     args: Vec<String>,
     cwd: Option<String>,
+    #[serde(default)]
+    env: HashMap<String, String>,
     session_id: String,
 }
 
@@ -111,6 +114,10 @@ pub fn start_detached_agent_host(
         .stdin(Stdio::null())
         .stdout(Stdio::from(log_file))
         .stderr(Stdio::from(log_file_stderr));
+
+    if !request.env.is_empty() {
+        command.envs(&request.env);
+    }
 
     if let Some(cwd) = request.cwd {
         command.current_dir(cwd);

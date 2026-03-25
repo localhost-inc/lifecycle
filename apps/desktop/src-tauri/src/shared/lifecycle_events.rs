@@ -1,4 +1,3 @@
-use crate::capabilities::workspaces::query::TerminalRecord;
 use crate::platform::db::DbPath;
 use crate::WorkspaceControllerRegistryHandle;
 use rusqlite::params;
@@ -20,7 +19,7 @@ pub struct LifecycleEnvelope {
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind")]
 pub enum LifecycleEvent {
-    #[serde(rename = "workspace.status_changed")]
+    #[serde(rename = "workspace.status.changed")]
     WorkspaceStatusChanged {
         workspace_id: String,
         status: String,
@@ -33,61 +32,41 @@ pub enum LifecycleEvent {
         source_ref: String,
         worktree_path: Option<String>,
     },
-    #[serde(rename = "workspace.deleted")]
-    WorkspaceDeleted { workspace_id: String },
-    #[serde(rename = "workspace.file_changed")]
+    #[serde(rename = "workspace.archived")]
+    WorkspaceArchived { workspace_id: String },
+    #[serde(rename = "workspace.file.changed")]
     WorkspaceFileChanged {
         workspace_id: String,
         file_path: String,
     },
-    #[serde(rename = "service.status_changed")]
+    #[serde(rename = "service.status.changed")]
     ServiceStatusChanged {
         workspace_id: String,
         name: String,
         status: String,
         status_reason: Option<String>,
     },
-    #[serde(rename = "terminal.created")]
-    TerminalCreated {
-        workspace_id: String,
-        terminal: TerminalRecord,
-    },
-    #[serde(rename = "terminal.status_changed")]
-    TerminalStatusChanged {
-        terminal_id: String,
-        workspace_id: String,
-        status: String,
-        failure_reason: Option<String>,
-        exit_code: Option<i64>,
-        ended_at: Option<String>,
-    },
-    #[serde(rename = "terminal.renamed")]
-    TerminalRenamed {
-        terminal_id: String,
-        workspace_id: String,
-        label: String,
-    },
-    #[serde(rename = "service.process_exited")]
+    #[serde(rename = "service.process.exited")]
     ServiceProcessExited {
         workspace_id: String,
         name: String,
         exit_code: Option<i32>,
     },
-    #[serde(rename = "service.log_line")]
+    #[serde(rename = "service.log.line")]
     ServiceLogLine {
         workspace_id: String,
         name: String,
         stream: String,
         line: String,
     },
-    #[serde(rename = "git.status_changed")]
+    #[serde(rename = "git.status.changed")]
     GitStatusChanged {
         workspace_id: String,
         branch: Option<String>,
         head_sha: Option<String>,
         upstream: Option<String>,
     },
-    #[serde(rename = "git.head_changed")]
+    #[serde(rename = "git.head.changed")]
     GitHeadChanged {
         workspace_id: String,
         branch: Option<String>,
@@ -96,12 +75,14 @@ pub enum LifecycleEvent {
         ahead: Option<u64>,
         behind: Option<u64>,
     },
-    #[serde(rename = "git.log_changed")]
+    #[serde(rename = "git.log.changed")]
     GitLogChanged {
         workspace_id: String,
         branch: Option<String>,
         head_sha: Option<String>,
     },
+    #[serde(rename = "plan.changed")]
+    PlanChanged { project_id: String },
 }
 
 impl LifecycleEvent {
@@ -109,17 +90,15 @@ impl LifecycleEvent {
         match self {
             Self::WorkspaceStatusChanged { workspace_id, .. }
             | Self::WorkspaceRenamed { workspace_id, .. }
-            | Self::WorkspaceDeleted { workspace_id }
+            | Self::WorkspaceArchived { workspace_id }
             | Self::WorkspaceFileChanged { workspace_id, .. }
             | Self::ServiceStatusChanged { workspace_id, .. }
             | Self::ServiceProcessExited { workspace_id, .. }
-            | Self::TerminalCreated { workspace_id, .. }
-            | Self::TerminalStatusChanged { workspace_id, .. }
-            | Self::TerminalRenamed { workspace_id, .. }
             | Self::ServiceLogLine { workspace_id, .. }
             | Self::GitStatusChanged { workspace_id, .. }
             | Self::GitHeadChanged { workspace_id, .. }
             | Self::GitLogChanged { workspace_id, .. } => workspace_id,
+            Self::PlanChanged { .. } => "",
         }
     }
 
@@ -127,6 +106,7 @@ impl LifecycleEvent {
         match self {
             Self::ServiceLogLine { .. } => false,
             Self::WorkspaceFileChanged { .. } => false,
+            Self::PlanChanged { .. } => false,
             _ => true,
         }
     }

@@ -14,7 +14,7 @@ import {
   getGitStatus,
 } from "@/features/git/api";
 import { gitKeys } from "@/features/git/state/git-query-keys";
-import { useRuntime } from "@/store";
+import { useClient } from "@/store";
 
 interface GitQueryOptions {
   enabled?: boolean;
@@ -25,13 +25,13 @@ export function useGitStatus(
   workspaceId: string | null,
   options?: GitQueryOptions,
 ): UseQueryResult<GitStatusResult> {
-  const runtime = useRuntime();
+  const client = useClient();
   const enabled = (options?.enabled ?? true) && workspaceId !== null;
   const polling = options?.polling ?? true;
 
   return useQuery({
     queryKey: workspaceId ? gitKeys.status(workspaceId) : ["workspace-git-status", "disabled"],
-    queryFn: () => getGitStatus(runtime, workspaceId!),
+    queryFn: () => getGitStatus(client, workspaceId!),
     enabled,
     refetchInterval: enabled && polling ? 3000 : false,
   });
@@ -42,7 +42,7 @@ export function useGitLog(
   limit = 50,
   options?: GitQueryOptions,
 ): UseQueryResult<GitLogEntry[]> {
-  const runtime = useRuntime();
+  const client = useClient();
   const enabled = (options?.enabled ?? true) && workspaceId !== null;
   const polling = options?.polling ?? true;
 
@@ -50,7 +50,7 @@ export function useGitLog(
     queryKey: workspaceId
       ? gitKeys.log(workspaceId, limit)
       : ["workspace-git-log", "disabled"],
-    queryFn: () => getGitLog(runtime, workspaceId!, limit),
+    queryFn: () => getGitLog(client, workspaceId!, limit),
     enabled,
     refetchInterval: enabled && polling ? 10000 : false,
   });
@@ -60,7 +60,7 @@ export function useGitPullRequests(
   workspaceId: string | null,
   options?: GitQueryOptions,
 ): UseQueryResult<GitPullRequestListResult> {
-  const runtime = useRuntime();
+  const client = useClient();
   const enabled = (options?.enabled ?? true) && workspaceId !== null;
   const polling = options?.polling ?? true;
 
@@ -68,7 +68,7 @@ export function useGitPullRequests(
     queryKey: workspaceId
       ? gitKeys.pullRequests(workspaceId)
       : ["workspace-git-pull-requests", "disabled"],
-    queryFn: () => getGitPullRequests(runtime, workspaceId!),
+    queryFn: () => getGitPullRequests(client, workspaceId!),
     enabled,
     refetchInterval: enabled && polling ? 15000 : false,
   });
@@ -79,7 +79,7 @@ export function useGitPullRequest(
   pullRequestNumber: number | null,
   options?: GitQueryOptions,
 ): UseQueryResult<GitPullRequestDetailResult> {
-  const runtime = useRuntime();
+  const client = useClient();
   const enabled =
     (options?.enabled ?? true) && workspaceId !== null && pullRequestNumber !== null;
   const polling = options?.polling ?? true;
@@ -89,7 +89,7 @@ export function useGitPullRequest(
       workspaceId && pullRequestNumber !== null
         ? gitKeys.pullRequest(workspaceId, pullRequestNumber!)
         : ["workspace-git-pull-request", "disabled"],
-    queryFn: () => getGitPullRequest(runtime, workspaceId!, pullRequestNumber!),
+    queryFn: () => getGitPullRequest(client, workspaceId!, pullRequestNumber!),
     enabled,
     refetchInterval: enabled && polling ? 10000 : false,
   });
@@ -99,7 +99,7 @@ export function useCurrentGitPullRequest(
   workspaceId: string | null,
   options?: GitQueryOptions,
 ): UseQueryResult<GitBranchPullRequestResult> {
-  const runtime = useRuntime();
+  const client = useClient();
   const enabled = (options?.enabled ?? true) && workspaceId !== null;
   const polling = options?.polling ?? true;
 
@@ -107,7 +107,7 @@ export function useCurrentGitPullRequest(
     queryKey: workspaceId
       ? gitKeys.currentPullRequest(workspaceId)
       : ["workspace-git-current-pull-request", "disabled"],
-    queryFn: () => getCurrentGitPullRequest(runtime, workspaceId!),
+    queryFn: () => getCurrentGitPullRequest(client, workspaceId!),
     enabled,
     refetchInterval: enabled && polling ? 8000 : false,
   });

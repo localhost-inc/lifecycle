@@ -130,7 +130,7 @@ function readFocusPaneMatch(
     return null;
   }
 
-  return { direction, id: "workspace.focus-pane" };
+  return { direction, id: "canvas.pane.focus" };
 }
 
 function readToggleZoomMatch(
@@ -147,7 +147,7 @@ function readToggleZoomMatch(
   }
 
   if (event.key === "Enter") {
-    return { id: "workspace.toggle-zoom" };
+    return { id: "canvas.pane.tab.zoom.toggle" };
   }
 
   return null;
@@ -178,29 +178,30 @@ export function readRegisteredShortcutMatch(
       return readProjectRouteShortcutMatch(shortcutId, event, macPlatform);
     case "project.select-index":
       return readProjectSelectIndexMatch(event, macPlatform);
-    case "workspace.new-tab":
-      return readWorkspaceTabHotkeyAction(event, macPlatform)?.kind === "new-tab"
+    case "canvas.pane.tab.open":
+      return readWorkspaceTabHotkeyAction(event, macPlatform)?.id === "canvas.pane.tab.open"
         ? { id: shortcutId }
         : null;
-    case "workspace.close-active-tab":
-      return readWorkspaceTabHotkeyAction(event, macPlatform)?.kind === "close-active-tab"
+    case "canvas.pane.tab.close":
+      return readWorkspaceTabHotkeyAction(event, macPlatform)?.id === "canvas.pane.tab.close"
         ? { id: shortcutId }
         : null;
-    case "workspace.previous-tab":
-      return readWorkspaceTabHotkeyAction(event, macPlatform)?.kind === "previous-tab"
+    case "canvas.pane.tab.select.previous":
+      return readWorkspaceTabHotkeyAction(event, macPlatform)?.id ===
+        "canvas.pane.tab.select.previous"
         ? { id: shortcutId }
         : null;
-    case "workspace.next-tab":
-      return readWorkspaceTabHotkeyAction(event, macPlatform)?.kind === "next-tab"
+    case "canvas.pane.tab.select.next":
+      return readWorkspaceTabHotkeyAction(event, macPlatform)?.id === "canvas.pane.tab.select.next"
         ? { id: shortcutId }
         : null;
-    case "workspace.reopen-closed-tab":
-      return readWorkspaceTabHotkeyAction(event, macPlatform)?.kind === "reopen-closed-tab"
+    case "canvas.tab.reopen":
+      return readWorkspaceTabHotkeyAction(event, macPlatform)?.id === "canvas.tab.reopen"
         ? { id: shortcutId }
         : null;
-    case "workspace.focus-pane":
+    case "canvas.pane.focus":
       return readFocusPaneMatch(event, macPlatform);
-    case "workspace.toggle-zoom":
+    case "canvas.pane.tab.zoom.toggle":
       return readToggleZoomMatch(event, macPlatform);
     case "file.save":
       return readFileSaveHotkey(event, macPlatform) ? { id: shortcutId } : null;

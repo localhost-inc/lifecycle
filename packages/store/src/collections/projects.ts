@@ -7,8 +7,6 @@ interface ProjectRow {
   name: string;
   manifest_path: string;
   manifest_valid: number;
-  organization_id: string | null;
-  repository_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -20,8 +18,6 @@ function rowToRecord(row: ProjectRow): ProjectRecord {
     name: row.name,
     manifestPath: row.manifest_path,
     manifestValid: row.manifest_valid === 1,
-    ...(row.organization_id != null ? { organizationId: row.organization_id } : {}),
-    ...(row.repository_id != null ? { repositoryId: row.repository_id } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -29,7 +25,7 @@ function rowToRecord(row: ProjectRow): ProjectRecord {
 
 export async function selectAllProjects(driver: SqlDriver): Promise<ProjectRecord[]> {
   const rows = await driver.select<ProjectRow>(
-    "SELECT id, path, name, manifest_path, manifest_valid, organization_id, repository_id, created_at, updated_at FROM project ORDER BY name COLLATE NOCASE",
+    "SELECT id, path, name, manifest_path, manifest_valid, created_at, updated_at FROM project ORDER BY name COLLATE NOCASE",
   );
   return rows.map(rowToRecord);
 }

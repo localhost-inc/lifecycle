@@ -16,12 +16,9 @@ const baseWorkspace: WorkspaceRecord = {
   worktree_path: "/tmp/workspace",
   target: "local",
   manifest_fingerprint: null,
-  created_by: null,
-  source_workspace_id: null,
   created_at: "2026-03-14T10:00:00.000Z",
   updated_at: "2026-03-14T10:00:00.000Z",
   last_active_at: "2026-03-14T10:00:00.000Z",
-  expires_at: null,
   status: "active",
   failure_reason: null,
   failed_at: null,
@@ -74,7 +71,7 @@ describe("builtin extension badges", () => {
 
     expect(
       getEnvironmentExtensionBadge({
-        workspace: { ...baseWorkspace, status: "preparing" },
+        workspace: { ...baseWorkspace, status: "provisioning" },
         services: [{ ...readyService, status: "starting" }],
       }),
     ).toEqual({ kind: "dot", tone: "warning" });
@@ -110,9 +107,7 @@ describe("builtin extension slots", () => {
         openPullRequest: () => {},
       },
       manifestState: "missing",
-      onRestart: async () => {},
       onRun: async () => {},
-      onStop: async () => {},
       onSwitchToExtension: () => {},
       services: [],
       workspace: baseWorkspace,
@@ -132,9 +127,9 @@ describe("builtin extension slots", () => {
     const historySlot = slots.find((slot) => slot.id === "git-history");
     const environmentSlot = slots.find((slot) => slot.id === "environment");
 
-    expect(changesSlot?.ownedDocumentKinds).toBeUndefined();
-    expect(explorerSlot?.ownedDocumentKinds).toBeUndefined();
-    expect(historySlot?.ownedDocumentKinds).toEqual(["commit-diff"]);
-    expect(environmentSlot?.ownedDocumentKinds).toBeUndefined();
+    expect(changesSlot?.ownedSurfaceKinds).toBeUndefined();
+    expect(explorerSlot?.ownedSurfaceKinds).toBeUndefined();
+    expect(historySlot?.ownedSurfaceKinds).toEqual(["commit-diff"]);
+    expect(environmentSlot?.ownedSurfaceKinds).toBeUndefined();
   });
 });

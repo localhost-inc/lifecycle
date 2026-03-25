@@ -20,9 +20,8 @@ These are set automatically in your session:
 
 - \`LIFECYCLE_WORKSPACE_ID\` — The active workspace identifier.
 - \`LIFECYCLE_WORKSPACE_PATH\` — Root path of the workspace checkout.
-- \`LIFECYCLE_BRIDGE\` — Socket path for the bridge (used by the CLI internally).
+- \`LIFECYCLE_BRIDGE_SOCKET\` — Socket path for the bridge (used by the CLI internally).
 - \`LIFECYCLE_BRIDGE_SESSION_TOKEN\` — Auth token for bridge requests.
-- \`LIFECYCLE_TERMINAL_ID\` — Identifier for this terminal session.
 - \`LIFECYCLE_AGENT_SESSION_ID\` — Identifier for this agent session (only set when running as an agent).
 
 ### CLI commands
@@ -30,7 +29,7 @@ These are set automatically in your session:
 All commands accept \`--json\` for machine-readable output.
 
 **Workspace context:**
-- \`lifecycle context\` — Emit full workspace context: workspace metadata, services, terminals, git status, capabilities. Start here when you need to understand the current state.
+- \`lifecycle context\` — Emit full workspace context: workspace metadata, services, git status, capabilities. Start here when you need to understand the current state.
 
 **Service management:**
 - \`lifecycle service list\` — List all services and their statuses.
@@ -40,12 +39,12 @@ All commands accept \`--json\` for machine-readable output.
 - \`lifecycle service logs <name> [-f] [--tail N] [--since DURATION] [--grep PATTERN]\` — View or follow service logs.
 
 **Workspace lifecycle:**
-- \`lifecycle workspace status\` — Show workspace metadata, services, and terminals.
+- \`lifecycle workspace status\` — Show workspace metadata and services.
 - \`lifecycle workspace run [-s name]\` — Start or restart workspace services.
 - \`lifecycle workspace health\` — Run health checks across all services. Exit code 1 if any fail.
 - \`lifecycle workspace reset\` — Reset workspace baseline and restart services.
 - \`lifecycle workspace create [--project-id ID] [--ref REF]\` — Create a new workspace.
-- \`lifecycle workspace destroy\` — Destroy the current workspace.
+- \`lifecycle workspace archive\` — Archive the current workspace.
 - \`lifecycle workspace logs --service <name> [-f] [--tail N] [--since DURATION] [--grep PATTERN]\` — Tail workspace service logs.
 
 **Agent session:**
@@ -59,7 +58,7 @@ All commands accept \`--json\` for machine-readable output.
 The workspace is configured by a \`lifecycle.json\` manifest at the workspace root. It defines:
 
 - **workspace.prepare** — Steps to run when the workspace is first created (install dependencies, run migrations, seed data).
-- **workspace.teardown** — Cleanup steps when the workspace is destroyed.
+- **workspace.teardown** — Cleanup steps when the workspace is archived.
 - **environment** — Named services and tasks that make up the runtime environment. Services have a \`kind\` (task or service), a \`runtime\` (process or image), health checks, dependencies, and environment variables.
 
 ### Service statuses

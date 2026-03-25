@@ -10,17 +10,14 @@ export interface WorkspaceActivityItem {
 }
 
 export const WORKSPACE_ACTIVITY_EVENT_KINDS = [
-  "workspace.status_changed",
+  "workspace.status.changed",
   "workspace.renamed",
-  "workspace.deleted",
-  "service.log_line",
-  "service.status_changed",
-  "terminal.created",
-  "terminal.status_changed",
-  "terminal.renamed",
-  "git.status_changed",
-  "git.head_changed",
-  "git.log_changed",
+  "workspace.archived",
+  "service.log.line",
+  "service.status.changed",
+  "git.status.changed",
+  "git.head.changed",
+  "git.log.changed",
 ] as const satisfies readonly LifecycleEventKind[];
 
 function capitalizeWord(value: string): string {
@@ -36,25 +33,6 @@ function humanizeToken(value: string): string {
     .split("_")
     .map((part) => capitalizeWord(part))
     .join(" ");
-}
-
-function trimActivityText(value: string, limit = 88): string {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  if (normalized.length <= limit) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, limit - 3).trimEnd()}...`;
-}
-
-function terminalLaunchLabel(
-  launchType: "command" | "preset" | "shell",
-): string {
-  if (launchType === "shell") {
-    return "Shell";
-  }
-
-  return capitalizeWord(launchType);
 }
 
 function shortValue(value: string | null, length = 8): string | null {
@@ -87,7 +65,7 @@ function gitRefDetail(
 
 function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityItem | null {
   switch (event.kind) {
-    case "workspace.status_changed":
+    case "workspace.status.changed":
       return {
         detail: event.failureReason ? humanizeToken(event.failureReason) : null,
         id: event.id,
@@ -99,7 +77,7 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
             ? "danger"
             : event.status === "active"
               ? "success"
-              : event.status === "preparing" || event.status === "archiving"
+              : event.status === "archiving"
                 ? "warning"
                 : "neutral",
       };
@@ -112,7 +90,7 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
         title: "Workspace renamed",
         tone: "neutral",
       };
-    case "workspace.deleted":
+    case "workspace.archived":
       return {
         detail: null,
         id: event.id,
@@ -121,7 +99,7 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
         title: "Workspace archived",
         tone: "warning",
       };
-    case "service.status_changed":
+    case "service.status.changed":
       return {
         detail: event.statusReason ? humanizeToken(event.statusReason) : null,
         id: event.id,
@@ -137,48 +115,9 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
                 ? "warning"
                 : "neutral",
       };
-    case "terminal.created":
-      return {
-        detail: event.terminal.label,
-        id: event.id,
-        kind: event.kind,
-        occurredAt: event.occurredAt,
-        title: `${terminalLaunchLabel(event.terminal.launch_type)} session started`,
-        tone: "success",
-      };
-    case "service.log_line":
+    case "service.log.line":
       return null;
-    case "terminal.updated":
-      return null;
-    case "terminal.status_changed":
-      return {
-        detail: joinActivityDetail([
-          event.failureReason ? humanizeToken(event.failureReason) : null,
-          typeof event.exitCode === "number" ? `exit ${event.exitCode}` : null,
-        ]),
-        id: event.id,
-        kind: event.kind,
-        occurredAt: event.occurredAt,
-        title: `Session ${humanizeToken(event.status).toLowerCase()}`,
-        tone:
-          event.status === "failed"
-            ? "danger"
-            : event.status === "finished"
-              ? "warning"
-              : event.status === "active"
-                ? "success"
-                : "neutral",
-      };
-    case "terminal.renamed":
-      return {
-        detail: event.label,
-        id: event.id,
-        kind: event.kind,
-        occurredAt: event.occurredAt,
-        title: "Session renamed",
-        tone: "neutral",
-      };
-    case "git.status_changed":
+    case "git.status.changed":
       return {
         detail: gitRefDetail(event.branch, event.headSha, event.upstream),
         id: event.id,
@@ -187,12 +126,12 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
         title: "Git status refreshed",
         tone: "neutral",
       };
-    case "git.head_changed":
+    case "git.head.changed":
       return {
         detail: joinActivityDetail([
           gitRefDetail(event.branch, event.headSha, event.upstream),
           event.ahead !== null || event.behind !== null
-          ? `ahead ${event.ahead ?? 0} / behind ${event.behind ?? 0}`
+            ? `ahead ${event.ahead ?? 0} / behind ${event.behind ?? 0}`
             : null,
         ]),
         id: event.id,
@@ -201,7 +140,7 @@ function summarizeWorkspaceActivity(event: LifecycleEvent): WorkspaceActivityIte
         title: "Git head updated",
         tone: "neutral",
       };
-    case "git.log_changed":
+    case "git.log.changed":
       return {
         detail: gitRefDetail(event.branch, event.headSha, null),
         id: event.id,
@@ -221,8 +160,8 @@ export function shouldRefreshWorkspaceActivity(
 ): boolean {
   return (
     event.workspaceId === workspaceId &&
-    event.kind !== "service.log_line" &&
-    event.kind !== "workspace.file_changed"
+    event.kind !== "service.log.line" &&
+    event.kind !== "workspace.file.changed"
   );
 }
 

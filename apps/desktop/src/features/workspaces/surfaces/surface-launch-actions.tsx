@@ -1,12 +1,8 @@
-import type { AgentSessionProviderId } from "@lifecycle/contracts";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@lifecycle/ui";
 import { Plus, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { ClaudeIcon, CodexIcon, ShellIcon } from "@/features/workspaces/surfaces/surface-icons";
-
-export type SurfaceLaunchRequest =
-  | { kind: "terminal"; launchType: "shell" }
-  | { kind: "agent"; provider: AgentSessionProviderId };
+import type { SurfaceLaunchRequest } from "@/features/workspaces/canvas/workspace-canvas-requests";
+import { ClaudeIcon, CodexIcon } from "@/features/workspaces/surfaces/surface-icons";
 
 export interface SurfaceLaunchAction {
   key: string;
@@ -115,4 +111,4 @@ export function SurfaceLaunchActions({
   );
 }
 
-export { ClaudeIcon, CodexIcon, ShellIcon };
+export { ClaudeIcon, CodexIcon };

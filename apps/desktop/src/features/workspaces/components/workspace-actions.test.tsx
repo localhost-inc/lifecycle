@@ -14,12 +14,9 @@ const interactiveWorkspace: WorkspaceRecord = {
   git_sha: "abcdef1234567890",
   worktree_path: "/tmp/workspace_1",
   target: "local",
-  created_by: null,
-  source_workspace_id: null,
   created_at: "2026-03-08T10:00:00.000Z",
   updated_at: "2026-03-08T10:00:00.000Z",
   last_active_at: "2026-03-08T10:00:00.000Z",
-  expires_at: null,
   status: "active",
   failure_reason: null,
   failed_at: null,
@@ -68,23 +65,20 @@ describe("WorkspaceActions", () => {
     }
   });
 
-  test("renders a destroy icon button with the standard workspace header treatment", () => {
+  test("renders a archive icon button with the standard workspace header treatment", () => {
     const markup = renderToStaticMarkup(
       createElement(ThemeProvider, {
         children: createElement(WorkspaceActions, {
-          onFork: () => {},
-          onDestroy: () => {},
+          onArchive: () => {},
           workspace: interactiveWorkspace,
         }),
         storageKey: "lifecycle.desktop.theme.test",
       }),
     );
 
-    expect(markup).toContain('aria-label="Fork workspace"');
-    expect(markup).toContain('aria-label="Destroy workspace"');
+    expect(markup).toContain('aria-label="Archive workspace"');
     expect(markup).toContain("h-8 w-8 p-0");
     expect(markup).toContain("bg-[var(--muted)] text-[var(--foreground)]");
     expect(markup).not.toContain("text-[var(--destructive)]");
-    expect(markup).not.toContain(">Fork<");
   });
 });

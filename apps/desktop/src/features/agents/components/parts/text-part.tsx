@@ -12,6 +12,7 @@ export function TextPart({ text, isStreaming }: { text: string; isStreaming?: bo
       isAnimating={isStreaming}
       plugins={streamdownPlugins}
       lineNumbers={false}
+      linkSafety={{ enabled: false }}
     >
       {text}
     </Streamdown>

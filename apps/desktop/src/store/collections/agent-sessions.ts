@@ -6,7 +6,16 @@ import {
   type SqlDriver,
 } from "@lifecycle/store";
 
-const agentSessionCollections = new Map<string, SqlCollection<AgentSessionRecord>>();
+const agentSessionCollections: Map<string, SqlCollection<AgentSessionRecord>> =
+  (import.meta.hot?.data.agentSessionCollections as typeof agentSessionCollections) ??
+  new Map<string, SqlCollection<AgentSessionRecord>>();
+
+if (import.meta.hot) {
+  import.meta.hot.accept();
+  import.meta.hot.dispose((data) => {
+    data.agentSessionCollections = agentSessionCollections;
+  });
+}
 
 export function getOrCreateAgentSessionCollection(
   driver: SqlDriver,

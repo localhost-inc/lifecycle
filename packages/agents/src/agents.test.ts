@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AgentSessionRecord, WorkspaceTarget } from "@lifecycle/contracts";
-import type { WorkspaceRuntime } from "@lifecycle/workspace";
+import type { WorkspaceClient } from "@lifecycle/workspace";
 import type {
   AgentEvent,
   CreateAgentOrchestratorDependencies,
@@ -29,18 +29,13 @@ describe("agents package contracts", () => {
     const session: AgentSessionRecord = {
       id: "agent_session_1",
       workspace_id: "workspace_1",
-      runtime_kind: "native",
-      runtime_name: "codex",
       provider: "codex",
       provider_session_id: "thread_1",
       title: "Codex Session",
       status: "running",
-      created_by: null,
-      forked_from_session_id: null,
       last_message_at: null,
       created_at: "2026-03-21T00:00:00.000Z",
       updated_at: "2026-03-21T00:00:00.000Z",
-      ended_at: null,
     };
     const event: AgentEvent = {
       kind: "agent.session.created",
@@ -53,7 +48,7 @@ describe("agents package contracts", () => {
   });
 
   test("defines provider-backed sessions behind a single provider seam without UI coupling", async () => {
-    const runtime = {} as WorkspaceRuntime;
+    const runtime = {} as WorkspaceClient;
     const input: StartAgentSessionInput = {
       workspaceId: "workspace_1",
       provider: "claude",
@@ -113,7 +108,7 @@ describe("agents package contracts", () => {
         claude: implementation,
         codex: implementation,
       },
-      resolveRuntime() {
+      resolveClient() {
         return runtime;
       },
       store,
@@ -143,7 +138,7 @@ describe("agents package contracts", () => {
   });
 
   test("creates a starting draft session before worker bootstrap", async () => {
-    const runtime = {} as WorkspaceRuntime;
+    const runtime = {} as WorkspaceClient;
     const sessions = new Map<string, AgentSessionRecord>();
     let workerStarted = false;
     const implementation: Worker = {
@@ -184,7 +179,7 @@ describe("agents package contracts", () => {
         claude: implementation,
         codex: implementation,
       },
-      resolveRuntime() {
+      resolveClient() {
         return runtime;
       },
       store,
@@ -259,13 +254,13 @@ describe("agents package contracts", () => {
         };
       },
     };
-    const runtime = {} as WorkspaceRuntime;
+    const runtime = {} as WorkspaceClient;
     const orchestrator = createAgentOrchestrator({
       workers: {
         claude: implementation,
         codex: implementation,
       },
-      resolveRuntime() {
+      resolveClient() {
         return runtime;
       },
       store,
@@ -307,7 +302,7 @@ describe("agents package contracts", () => {
         };
       },
     };
-    const runtime = {} as WorkspaceRuntime;
+    const runtime = {} as WorkspaceClient;
     const implementation: Worker = {
       async start(session, _context, _runtime, events) {
         return {
@@ -364,7 +359,7 @@ describe("agents package contracts", () => {
         claude: implementation,
         codex: implementation,
       },
-      resolveRuntime() {
+      resolveClient() {
         return runtime;
       },
       store,
@@ -421,7 +416,7 @@ describe("agents package contracts", () => {
         };
       },
     };
-    const runtime = {} as WorkspaceRuntime;
+    const runtime = {} as WorkspaceClient;
     const implementation: Worker = {
       async start() {
         throw new Error("Claude login failed.");
@@ -440,7 +435,7 @@ describe("agents package contracts", () => {
         claude: implementation,
         codex: implementation,
       },
-      resolveRuntime() {
+      resolveClient() {
         return runtime;
       },
       store,
@@ -475,18 +470,13 @@ describe("agents package contracts", () => {
         {
           id: "agent_session_1",
           workspace_id: "workspace_1",
-          runtime_kind: "native",
-          runtime_name: "codex",
           provider: "codex",
           provider_session_id: "thread_1",
           title: "",
           status: "running",
-          created_by: null,
-          forked_from_session_id: null,
           last_message_at: null,
           created_at: "2026-03-21T00:00:00.000Z",
           updated_at: "2026-03-21T00:00:00.000Z",
-          ended_at: null,
         },
       ],
     ]);
@@ -509,7 +499,7 @@ describe("agents package contracts", () => {
         };
       },
     };
-    const runtime = {} as WorkspaceRuntime;
+    const runtime = {} as WorkspaceClient;
     let connected = false;
     const implementation: Worker = {
       async start() {
@@ -530,7 +520,7 @@ describe("agents package contracts", () => {
         claude: implementation,
         codex: implementation,
       },
-      resolveRuntime() {
+      resolveClient() {
         return runtime;
       },
       store,
@@ -539,5 +529,112 @@ describe("agents package contracts", () => {
     await orchestrator.attachSession("agent_session_1");
 
     expect(connected).toBeTrue();
+  });
+
+  test("reconnects and retries when a cached worker handle goes stale", async () => {
+    const sessions = new Map<string, AgentSessionRecord>();
+    const store: AgentStore = {
+      async saveSession(session) {
+        sessions.set(session.id, session);
+        return session;
+      },
+      async getSession(agentSessionId) {
+        return sessions.get(agentSessionId) ?? null;
+      },
+      async listSessions(workspaceId) {
+        return [...sessions.values()].filter((session) => session.workspace_id === workspaceId);
+      },
+      async getWorkspace(workspaceId) {
+        return {
+          workspaceId,
+          workspaceTarget: "local",
+          worktreePath: "/tmp/project",
+        };
+      },
+    };
+
+    const runtime = {} as WorkspaceClient;
+    let connectCount = 0;
+    let sendCount = 0;
+    const implementation: Worker = {
+      async start(session) {
+        return {
+          session: {
+            ...session,
+            provider_session_id: "claude-session-1",
+          },
+          worker: {
+            async sendTurn() {
+              sendCount += 1;
+              if (sendCount === 1) {
+                throw new Error("stale connection");
+              }
+            },
+            async cancelTurn() {},
+            async resolveApproval() {},
+          },
+        };
+      },
+      async connect() {
+        connectCount += 1;
+        return {
+          async sendTurn() {
+            sendCount += 1;
+            if (sendCount === 1) {
+              throw new Error("stale connection");
+            }
+          },
+          async cancelTurn() {},
+          async resolveApproval() {},
+        };
+      },
+    };
+
+    const observedEvents: AgentEvent[] = [];
+    const orchestrator = createAgentOrchestrator({
+      workers: {
+        claude: implementation,
+        codex: implementation,
+      },
+      resolveClient() {
+        return runtime;
+      },
+      store,
+      now: () => "2026-03-21T00:00:00.000Z",
+      randomId: () => "agent_session_1",
+    });
+    orchestrator.subscribe((event) => {
+      observedEvents.push(event);
+    });
+
+    const session = await orchestrator.startSession({
+      provider: "claude",
+      workspaceId: "workspace_1",
+    });
+
+    await orchestrator.sendTurn(session.id, {
+      turnId: "turn_retry",
+      input: [{ type: "text", text: "Retry after reconnect" }],
+    });
+
+    expect(connectCount).toBe(1);
+    expect(sendCount).toBe(2);
+    expect(
+      observedEvents
+        .filter((event) => event.kind === "agent.status.updated")
+        .map((event) => ({
+          detail: event.detail ?? null,
+          status: event.status,
+        })),
+    ).toEqual([
+      {
+        detail: "Reconnecting to agent host...",
+        status: "reconnecting",
+      },
+      {
+        detail: null,
+        status: "",
+      },
+    ]);
   });
 });

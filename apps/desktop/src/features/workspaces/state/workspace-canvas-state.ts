@@ -1,9 +1,3 @@
-import type {
-  AgentSessionProviderId,
-  GitLogEntry,
-  GitPullRequestCheckSummary,
-  GitPullRequestSummary,
-} from "@lifecycle/contracts";
 import type { FileViewerMode } from "@/features/explorer/lib/file-view-mode";
 import {
   createWorkspacePane,
@@ -12,10 +6,22 @@ import {
   isWorkspacePaneLeaf,
 } from "@/features/workspaces/lib/workspace-pane-layout";
 import {
-  normalizeWorkspaceFilePath,
-  workspaceFileBasename,
-  workspaceFileExtension,
-} from "@/features/workspaces/lib/workspace-file-paths";
+  parseWorkspaceSurfaceTab,
+  serializeWorkspaceSurfaceTab,
+} from "@/features/workspaces/surfaces/workspace-surface-registry";
+import {
+  getOptionalString,
+  isRecord,
+} from "@/features/workspaces/surfaces/workspace-surface-persistence-utils";
+import type {
+  AgentTab,
+  ChangesDiffTab,
+  CommitDiffTab,
+  FileViewerTab,
+  PreviewTab,
+  PullRequestTab,
+  WorkspaceCanvasTab,
+} from "@/features/workspaces/surfaces/workspace-surface-tab-records";
 
 const LAST_WORKSPACE_ID_STORAGE_KEY = "lifecycle.desktop.last-workspace-id";
 const WORKSPACE_CANVAS_STATE_STORAGE_KEY = "lifecycle.desktop.workspace-canvas";
@@ -25,64 +31,42 @@ export interface StorageLike {
   removeItem(key: string): void;
   setItem(key: string, value: string): void;
 }
+export type {
+  AgentTab,
+  ChangesDiffTab,
+  CommitDiffTab,
+  FileViewerTab,
+  PreviewTab,
+  PullRequestTab,
+  WorkspaceCanvasTab,
+} from "@/features/workspaces/surfaces/workspace-surface-tab-records";
+export {
+  agentTabKey,
+  changesDiffTabKey,
+  commitDiffTabKey,
+  createAgentTab,
+  createChangesDiffTab,
+  createCommitDiffTab,
+  createFileViewerTab,
+  createPreviewTab,
+  createPullRequestTab,
+  fileViewerTabKey,
+  isAgentTab,
+  isChangesDiffTab,
+  isCommitDiffTab,
+  isFileViewerTab,
+  isPreviewTab,
+  isPullRequestTab,
+  previewTabKey,
+  pullRequestTabKey,
+} from "@/features/workspaces/surfaces/workspace-surface-tab-records";
 
-export interface ChangesDiffDocument {
-  focusPath: string | null;
-  key: string;
-  kind: "changes-diff";
-  label: "Workspace Diff";
-}
-
-export interface CommitDiffDocument extends GitLogEntry {
-  key: string;
-  kind: "commit-diff";
-  label: string;
-}
-
-export interface PullRequestDocument extends GitPullRequestSummary {
-  key: string;
-  kind: "pull-request";
-  label: string;
-}
-
-export interface FileViewerDocument {
-  extension: string | null;
-  filePath: string;
-  key: string;
-  kind: "file-viewer";
-  label: string;
-}
-
-export interface PreviewDocument {
-  key: string;
-  kind: "preview";
-  label: string;
-  url: string;
-}
-
-export interface AgentTab {
-  agentSessionId: string;
-  provider: AgentSessionProviderId;
-  key: string;
-  kind: "agent";
-  label: string;
-  responseReady?: boolean;
-  running?: boolean;
-}
-
-export type WorkspaceCanvasDocument =
-  | AgentTab
-  | ChangesDiffDocument
-  | CommitDiffDocument
-  | FileViewerDocument
-  | PreviewDocument
-  | PullRequestDocument;
-
-export type WorkspaceCanvasDocumentsByKey = Record<string, WorkspaceCanvasDocument>;
+export type WorkspaceCanvasTabsByKey = Record<string, WorkspaceCanvasTab>;
 
 export interface WorkspaceCanvasTabViewState {
   fileMode?: FileViewerMode;
   scrollTop?: number;
+  stickToBottom?: boolean;
 }
 
 export interface WorkspaceCanvasTabState {
@@ -92,18 +76,10 @@ export interface WorkspaceCanvasTabState {
 
 export type WorkspaceCanvasTabStateByKey = Record<string, WorkspaceCanvasTabState>;
 
-export interface ClosedDocumentTabEntry {
-  document: WorkspaceCanvasDocument;
-  kind: "document";
+export interface ClosedTabEntry {
+  tab: WorkspaceCanvasTab;
   viewState: WorkspaceCanvasTabViewState | null;
 }
-
-export interface ClosedTerminalTabEntry {
-  kind: "terminal";
-  terminalId: string;
-}
-
-export type ClosedTabEntry = ClosedDocumentTabEntry | ClosedTerminalTabEntry;
 
 export const MAX_CLOSED_TAB_STACK_SIZE = 20;
 
@@ -136,84 +112,24 @@ export interface WorkspacePaneTabSnapshot extends WorkspacePaneTabState {
 export interface WorkspaceCanvasState {
   activePaneId: string;
   closedTabStack: ClosedTabEntry[];
-  documentsByKey: WorkspaceCanvasDocumentsByKey;
+  tabsByKey: WorkspaceCanvasTabsByKey;
   paneTabStateById: WorkspacePaneTabStateById;
   rootPane: WorkspacePaneNode;
   tabStateByKey: WorkspaceCanvasTabStateByKey;
 }
 
-type PersistedChangesDiffDocument = {
-  focusPath?: unknown;
-  kind?: unknown;
-};
-
-type PersistedCommitDiffDocument = {
-  author?: unknown;
-  email?: unknown;
-  kind?: unknown;
-  message?: unknown;
-  sha?: unknown;
-  shortSha?: unknown;
-  timestamp?: unknown;
-};
-
-type PersistedFileViewerDocument = {
-  filePath?: unknown;
-  kind?: unknown;
-};
-
-type PersistedPreviewDocument = {
-  key?: unknown;
-  kind?: unknown;
-  label?: unknown;
-  url?: unknown;
-};
-
-type PersistedAgentTab = {
-  agentSessionId?: unknown;
-  provider?: unknown;
-  kind?: unknown;
-  label?: unknown;
-};
-
-type PersistedPullRequestDocument = {
-  author?: unknown;
-  baseRefName?: unknown;
-  checks?: unknown;
-  createdAt?: unknown;
-  headRefName?: unknown;
-  isDraft?: unknown;
-  mergeStateStatus?: unknown;
-  mergeable?: unknown;
-  number?: unknown;
-  reviewDecision?: unknown;
-  state?: unknown;
-  title?: unknown;
-  kind?: unknown;
-  updatedAt?: unknown;
-  url?: unknown;
-};
+const MAX_PERSISTED_CLOSED_TAB_STACK_SIZE = 10;
 
 type PersistedWorkspaceState = {
   activePaneId?: unknown;
-  documents?: unknown;
+  closedTabStack?: unknown;
   paneTabStateById?: unknown;
   rootPane?: unknown;
   tabStateByKey?: unknown;
+  tabs?: unknown;
 };
 
 type PersistedWorkspaceStateMap = Record<string, PersistedWorkspaceState>;
-
-type CommitDiffInput =
-  | GitLogEntry
-  | {
-      author?: string;
-      email?: string;
-      message?: string;
-      sha: string;
-      shortSha?: string;
-      timestamp?: string;
-    };
 
 function getStorage(storage?: StorageLike): StorageLike | null {
   if (storage) {
@@ -227,181 +143,11 @@ function getStorage(storage?: StorageLike): StorageLike | null {
   return window.localStorage;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function getOptionalString(value: Record<string, unknown>, key: string): string | undefined {
-  const field = value[key];
-  return typeof field === "string" ? field : undefined;
-}
-
-function defaultCommitMessage(shortSha: string): string {
-  return `Commit ${shortSha}`;
-}
-
-const TERMINAL_TAB_KEY_PREFIX = "terminal:";
-
-export function isTerminalTabKey(value: string): boolean {
-  return value.startsWith(TERMINAL_TAB_KEY_PREFIX);
-}
-
-export function terminalTabKey(terminalId: string): string {
-  return `${TERMINAL_TAB_KEY_PREFIX}${terminalId}`;
-}
-
-export function terminalIdFromTabKey(value: string): string | null {
-  return isTerminalTabKey(value) ? value.slice(TERMINAL_TAB_KEY_PREFIX.length) : null;
-}
-
-function shortShaFromSha(sha: string): string {
-  return sha.slice(0, 8);
-}
-
-export function changesDiffTabKey(): string {
-  return "diff:changes";
-}
-
-export function commitDiffTabKey(sha: string): string {
-  return `diff:commit:${sha}`;
-}
-
-export function pullRequestTabKey(pullRequestNumber: number): string {
-  return `pull-request:${pullRequestNumber}`;
-}
-
-export function fileViewerTabKey(filePath: string): string {
-  return `file:${normalizeWorkspaceFilePath(filePath)}`;
-}
-
-export function previewTabKey(key: string): string {
-  return `preview:${key}`;
-}
-
-function migrateBrowserTabKey(value: string): string {
-  return value.startsWith("browser:") ? `preview:${value.slice("browser:".length)}` : value;
-}
-
-export function agentTabKey(agentSessionId: string): string {
-  return `agent:${agentSessionId}`;
-}
-
-export function createChangesDiffTab(focusPath: string | null = null): ChangesDiffDocument {
-  return {
-    focusPath,
-    key: changesDiffTabKey(),
-    kind: "changes-diff",
-    label: "Workspace Diff",
-  };
-}
-
-export function createCommitDiffTab(input: CommitDiffInput | string): CommitDiffDocument {
-  const sha = typeof input === "string" ? input : input.sha;
-  const shortSha =
-    typeof input === "string" ? shortShaFromSha(sha) : (input.shortSha ?? shortShaFromSha(sha));
-  const message =
-    typeof input === "string"
-      ? defaultCommitMessage(shortSha)
-      : (input.message ?? defaultCommitMessage(shortSha));
-
-  return {
-    author: typeof input === "string" ? "" : (input.author ?? ""),
-    email: typeof input === "string" ? "" : (input.email ?? ""),
-    key: commitDiffTabKey(sha),
-    kind: "commit-diff",
-    label: shortSha,
-    message,
-    sha,
-    shortSha,
-    timestamp: typeof input === "string" ? "" : (input.timestamp ?? ""),
-  };
-}
-
-export function createPullRequestTab(input: GitPullRequestSummary): PullRequestDocument {
-  return {
-    ...input,
-    key: pullRequestTabKey(input.number),
-    kind: "pull-request",
-    label: `PR #${input.number}`,
-  };
-}
-
-export function createFileViewerTab(filePath: string): FileViewerDocument {
-  const normalizedFilePath = normalizeWorkspaceFilePath(filePath);
-
-  return {
-    extension: workspaceFileExtension(normalizedFilePath),
-    filePath: normalizedFilePath,
-    key: fileViewerTabKey(normalizedFilePath),
-    kind: "file-viewer",
-    label: workspaceFileBasename(normalizedFilePath),
-  };
-}
-
-export function createPreviewTab(input: {
-  key: string;
-  label: string;
-  url: string;
-}): PreviewDocument {
-  return {
-    key: previewTabKey(input.key),
-    kind: "preview",
-    label: input.label,
-    url: input.url,
-  };
-}
-
-export function createAgentTab(input: {
-  agentSessionId: string;
-  provider: AgentSessionProviderId;
-  label: string;
-}): AgentTab {
-  return {
-    agentSessionId: input.agentSessionId,
-    provider: input.provider,
-    key: agentTabKey(input.agentSessionId),
-    kind: "agent",
-    label: input.label,
-  };
-}
-
-export function isChangesDiffDocument(
-  document: WorkspaceCanvasDocument,
-): document is ChangesDiffDocument {
-  return document.kind === "changes-diff";
-}
-
-export function isCommitDiffDocument(
-  document: WorkspaceCanvasDocument,
-): document is CommitDiffDocument {
-  return document.kind === "commit-diff";
-}
-
-export function isPullRequestDocument(
-  document: WorkspaceCanvasDocument,
-): document is PullRequestDocument {
-  return document.kind === "pull-request";
-}
-
-export function isFileViewerDocument(
-  document: WorkspaceCanvasDocument,
-): document is FileViewerDocument {
-  return document.kind === "file-viewer";
-}
-
-export function isPreviewDocument(document: WorkspaceCanvasDocument): document is PreviewDocument {
-  return document.kind === "preview";
-}
-
-export function isAgentTab(document: WorkspaceCanvasDocument): document is AgentTab {
-  return document.kind === "agent";
-}
-
 export function createDefaultWorkspaceCanvasState(): WorkspaceCanvasState {
   return {
     activePaneId: DEFAULT_WORKSPACE_PANE_ID,
     closedTabStack: [],
-    documentsByKey: {},
+    tabsByKey: {},
     paneTabStateById: {
       [DEFAULT_WORKSPACE_PANE_ID]: createDefaultWorkspacePaneTabState(),
     },
@@ -417,46 +163,40 @@ export function createDefaultWorkspacePaneTabState(): WorkspacePaneTabState {
   };
 }
 
-function indexWorkspaceDocuments(
-  documents: readonly WorkspaceCanvasDocument[],
-): WorkspaceCanvasDocumentsByKey {
-  const documentsByKey: WorkspaceCanvasDocumentsByKey = {};
+function indexWorkspaceTabs(tabs: readonly WorkspaceCanvasTab[]): WorkspaceCanvasTabsByKey {
+  const tabsByKey: WorkspaceCanvasTabsByKey = {};
 
-  for (const document of documents) {
-    documentsByKey[document.key] = document;
+  for (const tab of tabs) {
+    tabsByKey[tab.key] = tab;
   }
 
-  return documentsByKey;
+  return tabsByKey;
 }
 
-function normalizeDocumentsByKey(
-  documentsByKey: WorkspaceCanvasDocumentsByKey,
-): WorkspaceCanvasDocumentsByKey {
-  const normalized: WorkspaceCanvasDocumentsByKey = {};
+function normalizeTabsByKey(tabsByKey: WorkspaceCanvasTabsByKey): WorkspaceCanvasTabsByKey {
+  const normalized: WorkspaceCanvasTabsByKey = {};
 
-  for (const [key, document] of Object.entries(documentsByKey)) {
-    if (key !== document.key) {
-      normalized[document.key] = document;
+  for (const [key, tab] of Object.entries(tabsByKey)) {
+    if (key !== tab.key) {
+      normalized[tab.key] = tab;
       continue;
     }
 
-    normalized[key] = document;
+    normalized[key] = tab;
   }
 
   return normalized;
 }
 
-export function listWorkspaceDocuments(
-  documentsByKey: WorkspaceCanvasDocumentsByKey,
-): WorkspaceCanvasDocument[] {
-  return Object.values(documentsByKey);
+export function listWorkspaceTabs(tabsByKey: WorkspaceCanvasTabsByKey): WorkspaceCanvasTab[] {
+  return Object.values(tabsByKey);
 }
 
-export function getWorkspaceDocument(
-  documentsByKey: WorkspaceCanvasDocumentsByKey,
+export function getWorkspaceTab(
+  tabsByKey: WorkspaceCanvasTabsByKey,
   key: string,
-): WorkspaceCanvasDocument | null {
-  return documentsByKey[key] ?? null;
+): WorkspaceCanvasTab | null {
+  return tabsByKey[key] ?? null;
 }
 
 export function getWorkspaceTabState(
@@ -500,14 +240,6 @@ export function getWorkspaceTabViewState(
   key: string,
 ): WorkspaceCanvasTabViewState | null {
   return tabStateByKey[key]?.viewState ?? null;
-}
-
-export function listWorkspaceHiddenTerminalTabKeys(
-  tabStateByKey: WorkspaceCanvasTabStateByKey,
-): string[] {
-  return Object.entries(tabStateByKey).flatMap(([key, tabState]) =>
-    tabState.hidden && isTerminalTabKey(key) ? [key] : [],
-  );
 }
 
 export function listWorkspaceTabViewStateByKey(
@@ -579,8 +311,7 @@ function normalizeWorkspacePaneNode(
 function normalizeWorkspacePaneTabStateById(
   paneTabStateById: WorkspacePaneTabStateById,
   paneIds: readonly string[],
-  knownDocumentKeys: ReadonlySet<string>,
-  hiddenTerminalTabKeySet: ReadonlySet<string>,
+  knownTabKeys: ReadonlySet<string>,
 ): WorkspacePaneTabStateById {
   const normalized: WorkspacePaneTabStateById = {};
   const seenTabKeys = new Set<string>();
@@ -590,11 +321,7 @@ function normalizeWorkspacePaneTabStateById(
     const tabOrderKeys: string[] = [];
 
     for (const key of normalizeTabKeyList(paneTabState.tabOrderKeys)) {
-      if (
-        hiddenTerminalTabKeySet.has(key) ||
-        seenTabKeys.has(key) ||
-        (!isTerminalTabKey(key) && !knownDocumentKeys.has(key))
-      ) {
+      if (seenTabKeys.has(key) || !knownTabKeys.has(key)) {
         continue;
       }
 
@@ -605,9 +332,7 @@ function normalizeWorkspacePaneTabStateById(
     const requestedActiveTabKey =
       typeof paneTabState.activeTabKey === "string" &&
       paneTabState.activeTabKey.length > 0 &&
-      !hiddenTerminalTabKeySet.has(paneTabState.activeTabKey) &&
-      (isTerminalTabKey(paneTabState.activeTabKey) ||
-        knownDocumentKeys.has(paneTabState.activeTabKey))
+      knownTabKeys.has(paneTabState.activeTabKey)
         ? paneTabState.activeTabKey
         : null;
     let activeTabKey =
@@ -647,20 +372,25 @@ function normalizeWorkspaceCanvasTabStateByKey(
       nextViewState.fileMode = tabState.viewState.fileMode;
     }
 
-    if (
-      Number.isFinite(tabState.viewState?.scrollTop) &&
-      (tabState.viewState?.scrollTop ?? 0) > 0
-    ) {
+    if (Number.isFinite(tabState.viewState?.scrollTop)) {
       nextViewState.scrollTop = tabState.viewState?.scrollTop;
+    }
+
+    if (tabState.viewState?.stickToBottom === true) {
+      nextViewState.stickToBottom = true;
+    }
+
+    if (nextViewState.stickToBottom === true) {
+      delete nextViewState.scrollTop;
     }
 
     const nextTabState: WorkspaceCanvasTabState = {};
 
-    if (tabState.hidden && isTerminalTabKey(key)) {
-      nextTabState.hidden = true;
-    }
-
-    if (nextViewState.fileMode || typeof nextViewState.scrollTop === "number") {
+    if (
+      nextViewState.fileMode ||
+      typeof nextViewState.scrollTop === "number" ||
+      nextViewState.stickToBottom
+    ) {
       nextTabState.viewState = nextViewState;
     }
 
@@ -673,24 +403,21 @@ function normalizeWorkspaceCanvasTabStateByKey(
 }
 
 function normalizeWorkspaceCanvasState(state: WorkspaceCanvasState): WorkspaceCanvasState {
-  const documentsByKey = normalizeDocumentsByKey(state.documentsByKey);
-  const knownDocumentKeys = new Set(Object.keys(documentsByKey));
-  const hiddenTerminalTabKeySet = new Set(listWorkspaceHiddenTerminalTabKeys(state.tabStateByKey));
+  const tabsByKey = normalizeTabsByKey(state.tabsByKey);
+  const persistedTabKeys = new Set(Object.keys(tabsByKey));
   const rootPane = normalizeWorkspacePaneNode(state.rootPane, new Set<string>(), "root");
   const layout = inspectWorkspacePaneLayout(rootPane);
   const paneTabStateById = normalizeWorkspacePaneTabStateById(
     state.paneTabStateById,
     layout.paneIds,
-    knownDocumentKeys,
-    hiddenTerminalTabKeySet,
+    persistedTabKeys,
   );
   const activePaneId =
     state.activePaneId && layout.paneIds.includes(state.activePaneId)
       ? state.activePaneId
       : layout.firstPane.id;
   const knownTabKeys = new Set([
-    ...Object.keys(documentsByKey),
-    ...hiddenTerminalTabKeySet,
+    ...Object.keys(tabsByKey),
     ...Object.values(paneTabStateById).flatMap((paneTabState) => paneTabState.tabOrderKeys),
     ...Object.values(paneTabStateById).flatMap((paneTabState) =>
       paneTabState.activeTabKey ? [paneTabState.activeTabKey] : [],
@@ -701,7 +428,7 @@ function normalizeWorkspaceCanvasState(state: WorkspaceCanvasState): WorkspaceCa
   return {
     activePaneId,
     closedTabStack: state.closedTabStack ?? [],
-    documentsByKey,
+    tabsByKey,
     paneTabStateById,
     rootPane,
     tabStateByKey,
@@ -721,239 +448,8 @@ function parseJsonObject<T extends Record<string, unknown>>(value: string | null
   }
 }
 
-function parseChangesDiffDocument(value: Record<string, unknown>): ChangesDiffDocument {
-  const focusPath = getOptionalString(value, "focusPath") ?? null;
-  return createChangesDiffTab(focusPath);
-}
-
-function parseCommitDiffDocument(value: Record<string, unknown>): CommitDiffDocument | null {
-  const sha = getOptionalString(value, "sha");
-  if (!sha) {
-    return null;
-  }
-
-  for (const field of ["author", "email", "message", "shortSha", "timestamp"] as const) {
-    if (field in value && value[field] !== undefined && typeof value[field] !== "string") {
-      return null;
-    }
-  }
-
-  return createCommitDiffTab({
-    author: getOptionalString(value, "author"),
-    email: getOptionalString(value, "email"),
-    message: getOptionalString(value, "message"),
-    sha,
-    shortSha: getOptionalString(value, "shortSha"),
-    timestamp: getOptionalString(value, "timestamp"),
-  });
-}
-
-function parseFileViewerDocument(value: Record<string, unknown>): FileViewerDocument | null {
-  const filePath = getOptionalString(value, "filePath");
-  if (!filePath) {
-    return null;
-  }
-
-  return createFileViewerTab(filePath);
-}
-
-function parsePreviewDocument(value: Record<string, unknown>): PreviewDocument | null {
-  const key = getOptionalString(value, "key");
-  const label = getOptionalString(value, "label");
-  const url = getOptionalString(value, "url");
-  if (!key || !label || !url) {
-    return null;
-  }
-
-  return createPreviewTab({
-    key,
-    label,
-    url,
-  });
-}
-
-function isValidAgentSessionProvider(value: unknown): value is AgentSessionProviderId {
-  return value === "claude" || value === "codex";
-}
-
-function parseAgentTab(value: Record<string, unknown>): AgentTab | null {
-  const agentSessionId = getOptionalString(value, "agentSessionId");
-  const label = getOptionalString(value, "label");
-  const provider = value.provider;
-  if (!agentSessionId || !label || !isValidAgentSessionProvider(provider)) {
-    return null;
-  }
-
-  return createAgentTab({
-    agentSessionId,
-    provider,
-    label,
-  });
-}
-
-function isValidPullRequestState(value: unknown): value is PullRequestDocument["state"] {
-  return value === "open" || value === "closed" || value === "merged";
-}
-
-function isValidPullRequestMergeable(value: unknown): value is PullRequestDocument["mergeable"] {
-  return value === "mergeable" || value === "conflicting" || value === "unknown";
-}
-
-function isValidPullRequestReviewDecision(
-  value: unknown,
-): value is Exclude<PullRequestDocument["reviewDecision"], null> {
-  return value === "approved" || value === "changes_requested" || value === "review_required";
-}
-
-function isValidPullRequestCheckStatus(
-  value: unknown,
-): value is GitPullRequestCheckSummary["status"] {
-  return value === "pending" || value === "success" || value === "failed" || value === "neutral";
-}
-
-function parsePullRequestChecks(value: unknown): GitPullRequestCheckSummary[] | null | undefined {
-  if (value === undefined) {
-    return null;
-  }
-
-  if (value === null) {
-    return null;
-  }
-
-  if (!Array.isArray(value)) {
-    return undefined;
-  }
-
-  const checks: GitPullRequestCheckSummary[] = [];
-
-  for (const item of value) {
-    if (!isRecord(item)) {
-      return undefined;
-    }
-
-    const name = getOptionalString(item, "name");
-    const status = item.status;
-    if (!name || !isValidPullRequestCheckStatus(status)) {
-      return undefined;
-    }
-
-    const workflowName =
-      item.workflowName === null ? null : (getOptionalString(item, "workflowName") ?? undefined);
-    const detailsUrl =
-      item.detailsUrl === null ? null : (getOptionalString(item, "detailsUrl") ?? undefined);
-    if (workflowName === undefined || detailsUrl === undefined) {
-      return undefined;
-    }
-
-    checks.push({
-      detailsUrl,
-      name,
-      status,
-      workflowName,
-    });
-  }
-
-  return checks;
-}
-
-function parsePullRequestDocument(value: Record<string, unknown>): PullRequestDocument | null {
-  const number = value.number;
-  const title = getOptionalString(value, "title");
-  const url = getOptionalString(value, "url");
-  const state = value.state;
-  const isDraft = value.isDraft;
-  const author = getOptionalString(value, "author");
-  const headRefName = getOptionalString(value, "headRefName");
-  const baseRefName = getOptionalString(value, "baseRefName");
-  const createdAt = getOptionalString(value, "createdAt");
-  const updatedAt = getOptionalString(value, "updatedAt");
-  const mergeable = value.mergeable;
-  const reviewDecision = value.reviewDecision ?? null;
-  const checks = parsePullRequestChecks(value.checks);
-
-  if (
-    typeof number !== "number" ||
-    !Number.isInteger(number) ||
-    !title ||
-    !url ||
-    !isValidPullRequestState(state) ||
-    typeof isDraft !== "boolean" ||
-    !author ||
-    !headRefName ||
-    !baseRefName ||
-    !createdAt ||
-    !updatedAt ||
-    !isValidPullRequestMergeable(mergeable) ||
-    checks === undefined
-  ) {
-    return null;
-  }
-
-  if (reviewDecision !== null && !isValidPullRequestReviewDecision(reviewDecision)) {
-    return null;
-  }
-
-  const mergeStateStatus =
-    value.mergeStateStatus === null || value.mergeStateStatus === undefined
-      ? null
-      : (getOptionalString(value, "mergeStateStatus") ?? undefined);
-  if (mergeStateStatus === undefined) {
-    return null;
-  }
-
-  return createPullRequestTab({
-    author,
-    baseRefName,
-    checks,
-    createdAt,
-    headRefName,
-    isDraft,
-    mergeStateStatus,
-    mergeable,
-    number,
-    reviewDecision,
-    state,
-    title,
-    updatedAt,
-    url,
-  });
-}
-
-function parseWorkspaceCanvasDocument(value: unknown): WorkspaceCanvasDocument | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const documentKind = getOptionalString(value, "kind");
-  if (!documentKind) {
-    return null;
-  }
-
-  if (documentKind === "changes-diff") {
-    return parseChangesDiffDocument(value as PersistedChangesDiffDocument);
-  }
-
-  if (documentKind === "commit-diff") {
-    return parseCommitDiffDocument(value as PersistedCommitDiffDocument);
-  }
-
-  if (documentKind === "file-viewer") {
-    return parseFileViewerDocument(value as PersistedFileViewerDocument);
-  }
-
-  if (documentKind === "preview" || documentKind === "browser") {
-    return parsePreviewDocument(value as PersistedPreviewDocument);
-  }
-
-  if (documentKind === "agent") {
-    return parseAgentTab(value as PersistedAgentTab);
-  }
-
-  if (documentKind === "pull-request") {
-    return parsePullRequestDocument(value as PersistedPullRequestDocument);
-  }
-
-  return null;
+function parseWorkspaceCanvasTab(value: unknown): WorkspaceCanvasTab | null {
+  return parseWorkspaceSurfaceTab(value);
 }
 
 function parseWorkspacePaneNode(value: unknown, fallbackPath: string): WorkspacePaneNode | null {
@@ -994,13 +490,12 @@ function parseWorkspaceCanvasState(value: unknown): WorkspaceCanvasState {
     return createDefaultWorkspaceCanvasState();
   }
 
-  const documentsByKey = Array.isArray(value.documents)
-    ? indexWorkspaceDocuments(
-        value.documents
-          .map((document) => parseWorkspaceCanvasDocument(document))
-          .filter((document): document is WorkspaceCanvasDocument => document !== null),
-      )
-    : {};
+  const persistedTabs = Array.isArray(value.tabs) ? value.tabs : [];
+  const tabsByKey = indexWorkspaceTabs(
+    persistedTabs
+      .map((tab) => parseWorkspaceCanvasTab(tab))
+      .filter((tab): tab is WorkspaceCanvasTab => tab !== null),
+  );
 
   const rootPane = parseWorkspacePaneNode(value.rootPane, "root") ?? createWorkspacePane();
   const paneTabStateById = isRecord(value.paneTabStateById)
@@ -1012,11 +507,9 @@ function parseWorkspaceCanvasState(value: unknown): WorkspaceCanvasState {
 
           const paneTabState = createDefaultWorkspacePaneTabState();
           const activeTabKey = getOptionalString(nextValue, "activeTabKey");
-          paneTabState.activeTabKey = activeTabKey ? migrateBrowserTabKey(activeTabKey) : null;
+          paneTabState.activeTabKey = activeTabKey ?? null;
           paneTabState.tabOrderKeys = Array.isArray(nextValue.tabOrderKeys)
-            ? nextValue.tabOrderKeys
-                .filter((key): key is string => typeof key === "string")
-                .map((key) => migrateBrowserTabKey(key))
+            ? nextValue.tabOrderKeys.filter((key): key is string => typeof key === "string")
             : [];
 
           return [[paneId, paneTabState] as const];
@@ -1041,26 +534,69 @@ function parseWorkspaceCanvasState(value: unknown): WorkspaceCanvasState {
             viewState.scrollTop = nextValue.scrollTop;
           }
 
+          if (nextValue.stickToBottom === true) {
+            viewState.stickToBottom = true;
+          }
+
           if (nextValue.fileMode === "view" || nextValue.fileMode === "edit") {
             viewState.fileMode = nextValue.fileMode;
+          }
+
+          if (viewState.stickToBottom === true) {
+            delete viewState.scrollTop;
           }
 
           if (Object.keys(viewState).length > 0) {
             tabState.viewState = viewState;
           }
 
-          return tabState.hidden || tabState.viewState
-            ? [[migrateBrowserTabKey(key), tabState] as const]
-            : [];
+          return tabState.hidden || tabState.viewState ? [[key, tabState] as const] : [];
         }),
       )
     : {};
 
+  const closedTabStack: ClosedTabEntry[] = [];
+  if (Array.isArray(value.closedTabStack)) {
+    for (const entry of value.closedTabStack) {
+      if (!isRecord(entry)) {
+        continue;
+      }
+
+      const tab = parseWorkspaceCanvasTab(entry.tab);
+      if (!tab) {
+        continue;
+      }
+
+      const viewState: WorkspaceCanvasTabViewState = {};
+      if (isRecord(entry.viewState)) {
+        if (typeof entry.viewState.scrollTop === "number") {
+          viewState.scrollTop = entry.viewState.scrollTop;
+        }
+        if (entry.viewState.stickToBottom === true) {
+          viewState.stickToBottom = true;
+          delete viewState.scrollTop;
+        }
+        if (entry.viewState.fileMode === "view" || entry.viewState.fileMode === "edit") {
+          viewState.fileMode = entry.viewState.fileMode;
+        }
+      }
+
+      closedTabStack.push({
+        tab,
+        viewState: Object.keys(viewState).length > 0 ? viewState : null,
+      });
+
+      if (closedTabStack.length >= MAX_PERSISTED_CLOSED_TAB_STACK_SIZE) {
+        break;
+      }
+    }
+  }
+
   return normalizeWorkspaceCanvasState({
     activePaneId:
       typeof value.activePaneId === "string" ? value.activePaneId : DEFAULT_WORKSPACE_PANE_ID,
-    closedTabStack: [],
-    documentsByKey,
+    closedTabStack,
+    tabsByKey,
     paneTabStateById,
     rootPane,
     tabStateByKey,
@@ -1078,99 +614,8 @@ function readPersistedWorkspaceCanvasStateMap(
   return parseJsonObject<PersistedWorkspaceStateMap>(storage.getItem(key));
 }
 
-function serializeCommitDiffDocument(document: CommitDiffDocument): Record<string, unknown> {
-  const serialized: Record<string, unknown> = {
-    kind: "commit-diff",
-    sha: document.sha,
-    shortSha: document.shortSha,
-  };
-
-  if (document.message !== defaultCommitMessage(document.shortSha)) {
-    serialized.message = document.message;
-  }
-
-  if (document.author) {
-    serialized.author = document.author;
-  }
-
-  if (document.email) {
-    serialized.email = document.email;
-  }
-
-  if (document.timestamp) {
-    serialized.timestamp = document.timestamp;
-  }
-
-  return serialized;
-}
-
-function serializePullRequestDocument(document: PullRequestDocument): Record<string, unknown> {
-  return {
-    author: document.author,
-    baseRefName: document.baseRefName,
-    checks: document.checks,
-    createdAt: document.createdAt,
-    headRefName: document.headRefName,
-    isDraft: document.isDraft,
-    mergeStateStatus: document.mergeStateStatus,
-    mergeable: document.mergeable,
-    number: document.number,
-    reviewDecision: document.reviewDecision,
-    state: document.state,
-    title: document.title,
-    kind: document.kind,
-    updatedAt: document.updatedAt,
-    url: document.url,
-  };
-}
-
-function serializeWorkspaceCanvasDocument(
-  document: WorkspaceCanvasDocument,
-): Record<string, unknown> {
-  if (isChangesDiffDocument(document)) {
-    return document.focusPath === null
-      ? { kind: document.kind }
-      : {
-          focusPath: document.focusPath,
-          kind: document.kind,
-        };
-  }
-
-  if (isFileViewerDocument(document)) {
-    return {
-      filePath: document.filePath,
-      kind: document.kind,
-    };
-  }
-
-  if (isPreviewDocument(document)) {
-    const persistedKey = document.key.startsWith("preview:")
-      ? document.key.slice("preview:".length)
-      : document.key.startsWith("browser:")
-        ? document.key.slice("browser:".length)
-        : document.key;
-    return {
-      key: persistedKey,
-      kind: document.kind,
-      label: document.label,
-      url: document.url,
-    };
-  }
-
-  if (isAgentTab(document)) {
-    return {
-      agentSessionId: document.agentSessionId,
-      provider: document.provider,
-      kind: document.kind,
-      label: document.label,
-    };
-  }
-
-  if (isPullRequestDocument(document)) {
-    return serializePullRequestDocument(document);
-  }
-
-  return serializeCommitDiffDocument(document);
+function serializeWorkspaceCanvasTab(tab: WorkspaceCanvasTab): Record<string, unknown> {
+  return serializeWorkspaceSurfaceTab(tab);
 }
 
 function serializeWorkspacePaneNode(node: WorkspacePaneNode): Record<string, unknown> {
@@ -1196,8 +641,8 @@ function serializeWorkspaceCanvasState(state: WorkspaceCanvasState): PersistedWo
 
   const serializedState: PersistedWorkspaceState = {
     activePaneId: normalizedState.activePaneId,
-    documents: listWorkspaceDocuments(normalizedState.documentsByKey).map((document) =>
-      serializeWorkspaceCanvasDocument(document),
+    tabs: listWorkspaceTabs(normalizedState.tabsByKey).map((tab) =>
+      serializeWorkspaceCanvasTab(tab),
     ),
     paneTabStateById: Object.fromEntries(
       Object.entries(normalizedState.paneTabStateById).map(([paneId, paneTabState]) => [
@@ -1221,6 +666,15 @@ function serializeWorkspaceCanvasState(state: WorkspaceCanvasState): PersistedWo
         },
       ]),
     );
+  }
+
+  if (normalizedState.closedTabStack.length > 0) {
+    serializedState.closedTabStack = normalizedState.closedTabStack
+      .slice(0, MAX_PERSISTED_CLOSED_TAB_STACK_SIZE)
+      .map((entry) => ({
+        tab: serializeWorkspaceCanvasTab(entry.tab),
+        viewState: entry.viewState ?? null,
+      }));
   }
 
   return serializedState;
@@ -1270,7 +724,7 @@ export function writeWorkspaceCanvasState(
     layout.paneCount === 1;
 
   if (
-    Object.keys(normalizedState.documentsByKey).length === 0 &&
+    Object.keys(normalizedState.tabsByKey).length === 0 &&
     panesAreEmpty &&
     usesDefaultSinglePaneLayout &&
     Object.keys(normalizedState.tabStateByKey).length === 0
@@ -1280,10 +734,17 @@ export function writeWorkspaceCanvasState(
     nextMap[workspaceId] = serializeWorkspaceCanvasState(normalizedState);
   }
 
-  if (Object.keys(nextMap).length === 0) {
-    resolvedStorage.removeItem(WORKSPACE_CANVAS_STATE_STORAGE_KEY);
-  } else {
-    resolvedStorage.setItem(WORKSPACE_CANVAS_STATE_STORAGE_KEY, JSON.stringify(nextMap));
+  try {
+    if (Object.keys(nextMap).length === 0) {
+      resolvedStorage.removeItem(WORKSPACE_CANVAS_STATE_STORAGE_KEY);
+    } else {
+      resolvedStorage.setItem(WORKSPACE_CANVAS_STATE_STORAGE_KEY, JSON.stringify(nextMap));
+    }
+  } catch (error) {
+    // QuotaExceededError — localStorage is full. Log and continue so the
+    // current in-memory state isn't lost. A future toast system should
+    // surface this to the user.
+    console.error("[workspace-canvas] failed to persist canvas state:", error);
   }
 }
 

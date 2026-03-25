@@ -7,6 +7,7 @@ export async function main(argv: string[] = Bun.argv.slice(2), io?: CliIo): Prom
     name: "lifecycle",
     baseDir: import.meta.dir,
     argv,
+    mcp: { version: "0.1.0" },
     ...(io ? { io } : {}),
   });
 }

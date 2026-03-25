@@ -20,7 +20,7 @@ function buildPreviewResult(request: Extract<BridgeShellRequest, { kind: "tab.op
 
 export function BridgeListener() {
   const navigate = useNavigate();
-  const { openDocument } = useWorkspaceOpenRequests();
+  const { openTab } = useWorkspaceOpenRequests();
 
   useEffect(() => {
     if (!isTauri()) {
@@ -44,7 +44,7 @@ export function BridgeListener() {
 
       try {
         if (request.kind === "tab.open.preview") {
-          openDocument(
+          openTab(
             request.workspaceId,
             createPreviewOpenInput({
               label: request.label,
@@ -75,7 +75,7 @@ export function BridgeListener() {
       cancelled = true;
       dispose?.();
     };
-  }, [navigate, openDocument]);
+  }, [navigate, openTab]);
 
   return null;
 }

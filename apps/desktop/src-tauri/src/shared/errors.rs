@@ -4,28 +4,31 @@ use serde_json::{json, Map, Value};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum WorkspaceStatus {
-    Preparing,
+    Provisioning,
     Active,
     Archiving,
     Archived,
+    Failed,
 }
 
 impl WorkspaceStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Preparing => "preparing",
+            Self::Provisioning => "provisioning",
             Self::Active => "active",
             Self::Archiving => "archiving",
             Self::Archived => "archived",
+            Self::Failed => "failed",
         }
     }
 
     pub fn from_str(s: &str) -> Result<Self, LifecycleError> {
         match s {
-            "preparing" => Ok(Self::Preparing),
+            "provisioning" => Ok(Self::Provisioning),
             "active" => Ok(Self::Active),
             "archiving" => Ok(Self::Archiving),
             "archived" => Ok(Self::Archived),
+            "failed" => Ok(Self::Failed),
             _ => Err(LifecycleError::InvalidStateTransition {
                 from: s.to_string(),
                 to: "unknown".to_string(),
@@ -106,108 +109,12 @@ impl std::fmt::Display for ServiceStatus {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum TerminalType {
-    Shell,
-    Preset,
-    Command,
-}
-
-impl TerminalType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Shell => "shell",
-            Self::Preset => "preset",
-            Self::Command => "command",
-        }
-    }
-
-    pub fn from_str(s: &str) -> Result<Self, LifecycleError> {
-        match s {
-            "shell" => Ok(Self::Shell),
-            "preset" => Ok(Self::Preset),
-            "command" => Ok(Self::Command),
-            _ => Err(LifecycleError::InvalidStateTransition {
-                from: s.to_string(),
-                to: "unknown".to_string(),
-            }),
-        }
-    }
-}
-
-impl std::fmt::Display for TerminalType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum TerminalStatus {
-    Active,
-    Detached,
-    Sleeping,
-    Finished,
-    Failed,
-}
-
-impl TerminalStatus {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Active => "active",
-            Self::Detached => "detached",
-            Self::Sleeping => "sleeping",
-            Self::Finished => "finished",
-            Self::Failed => "failed",
-        }
-    }
-
-    pub fn from_str(s: &str) -> Result<Self, LifecycleError> {
-        match s {
-            "active" => Ok(Self::Active),
-            "detached" => Ok(Self::Detached),
-            "sleeping" => Ok(Self::Sleeping),
-            "finished" => Ok(Self::Finished),
-            "failed" => Ok(Self::Failed),
-            _ => Err(LifecycleError::InvalidStateTransition {
-                from: s.to_string(),
-                to: "unknown".to_string(),
-            }),
-        }
-    }
-}
-
-impl std::fmt::Display for TerminalStatus {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum TerminalFailureReason {
-    AttachFailed,
-    WorkspaceDestroyed,
-    Unknown,
-}
-
-impl TerminalFailureReason {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::AttachFailed => "attach_failed",
-            Self::WorkspaceDestroyed => "workspace_destroyed",
-            Self::Unknown => "unknown",
-        }
-    }
-}
-
 #[derive(Debug, thiserror::Error)]
 pub enum LifecycleError {
     #[error("Invalid state transition from '{from}' to '{to}'")]
     InvalidStateTransition { from: String, to: String },
 
-    #[error("Workspace mutation locked while workspace status is '{status}'")]
+    #[error("Workspace mutation locked while lifecycle status is '{status}'")]
     WorkspaceMutationLocked { status: String },
 
     #[error("Workspace not found: {0}")]
@@ -243,7 +150,7 @@ pub enum LifecycleError {
     #[error("Database error: {0}")]
     Database(String),
 
-    #[error("Terminal attach failed: {0}")]
+    #[error("Attach failed: {0}")]
     AttachFailed(String),
 
     #[error("Attachment persistence failed: {0}")]
@@ -398,7 +305,7 @@ impl LifecycleError {
                     "reason".to_string(),
                     Value::String(reason.clone()),
                 )])),
-                Some("Retry the terminal action. If it keeps failing, recreate the session.".to_string()),
+                Some("Retry the action. If it keeps failing, restart the application.".to_string()),
                 true,
             ),
             Self::AttachmentPersistenceFailed(reason) => (
@@ -478,10 +385,11 @@ mod tests {
     #[test]
     fn workspace_status_roundtrip() {
         let statuses = vec![
-            WorkspaceStatus::Preparing,
+            WorkspaceStatus::Provisioning,
             WorkspaceStatus::Active,
             WorkspaceStatus::Archiving,
             WorkspaceStatus::Archived,
+            WorkspaceStatus::Failed,
         ];
         for status in statuses {
             let s = status.as_str();
@@ -499,22 +407,6 @@ mod tests {
     }
 
     #[test]
-    fn terminal_status_roundtrip() {
-        let statuses = vec![
-            TerminalStatus::Active,
-            TerminalStatus::Detached,
-            TerminalStatus::Sleeping,
-            TerminalStatus::Finished,
-            TerminalStatus::Failed,
-        ];
-        for status in statuses {
-            let s = status.as_str();
-            let parsed = TerminalStatus::from_str(s).unwrap();
-            assert_eq!(status, parsed);
-        }
-    }
-
-    #[test]
     fn lifecycle_errors_serialize_to_typed_envelopes() {
         let value = serde_json::to_value(LifecycleError::WorkspaceMutationLocked {
             status: "archiving".to_string(),
@@ -528,7 +420,7 @@ mod tests {
         assert_eq!(
             value.get("message"),
             Some(&Value::String(
-                "Workspace mutation locked while workspace status is 'archiving'".into()
+                "Workspace mutation locked while lifecycle status is 'archiving'".into()
             ))
         );
         assert_eq!(

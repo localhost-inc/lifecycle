@@ -14,7 +14,7 @@ const browserListeners = new Set<(event: LifecycleEvent) => void>();
 
 function normalizeLifecycleEvent(event: LifecycleEventWire): LifecycleEvent {
   switch (event.kind) {
-    case "workspace.status_changed":
+    case "workspace.status.changed":
       return {
         failureReason: event.failure_reason,
         id: event.id,
@@ -33,14 +33,14 @@ function normalizeLifecycleEvent(event: LifecycleEventWire): LifecycleEvent {
         workspaceId: event.workspace_id,
         worktreePath: event.worktree_path,
       };
-    case "workspace.deleted":
+    case "workspace.archived":
       return {
         id: event.id,
         kind: event.kind,
         occurredAt: event.occurred_at,
         workspaceId: event.workspace_id,
       };
-    case "workspace.file_changed":
+    case "workspace.file.changed":
       return {
         filePath: event.file_path,
         id: event.id,
@@ -48,7 +48,7 @@ function normalizeLifecycleEvent(event: LifecycleEventWire): LifecycleEvent {
         occurredAt: event.occurred_at,
         workspaceId: event.workspace_id,
       };
-    case "service.status_changed":
+    case "service.status.changed":
       return {
         id: event.id,
         kind: event.kind,
@@ -56,36 +56,6 @@ function normalizeLifecycleEvent(event: LifecycleEventWire): LifecycleEvent {
         occurredAt: event.occurred_at,
         status: event.status,
         statusReason: event.status_reason,
-        workspaceId: event.workspace_id,
-      };
-    case "terminal.created":
-    case "terminal.updated":
-      return {
-        id: event.id,
-        kind: event.kind,
-        occurredAt: event.occurred_at,
-        terminal: event.terminal,
-        workspaceId: event.workspace_id,
-      };
-    case "terminal.status_changed":
-      return {
-        endedAt: event.ended_at,
-        exitCode: event.exit_code,
-        failureReason: event.failure_reason,
-        id: event.id,
-        kind: event.kind,
-        occurredAt: event.occurred_at,
-        status: event.status,
-        terminalId: event.terminal_id,
-        workspaceId: event.workspace_id,
-      };
-    case "terminal.renamed":
-      return {
-        id: event.id,
-        kind: event.kind,
-        label: event.label,
-        occurredAt: event.occurred_at,
-        terminalId: event.terminal_id,
         workspaceId: event.workspace_id,
       };
     case "agent.session.created":
@@ -106,7 +76,7 @@ function normalizeLifecycleEvent(event: LifecycleEventWire): LifecycleEvent {
         turnId: event.turn_id,
         workspaceId: event.workspace_id,
       };
-    case "service.process_exited":
+    case "service.process.exited":
       return {
         exitCode: event.exit_code,
         id: event.id,
@@ -115,7 +85,7 @@ function normalizeLifecycleEvent(event: LifecycleEventWire): LifecycleEvent {
         occurredAt: event.occurred_at,
         workspaceId: event.workspace_id,
       };
-    case "service.log_line":
+    case "service.log.line":
       return {
         id: event.id,
         kind: event.kind,
@@ -125,7 +95,7 @@ function normalizeLifecycleEvent(event: LifecycleEventWire): LifecycleEvent {
         stream: event.stream,
         workspaceId: event.workspace_id,
       };
-    case "git.status_changed":
+    case "git.status.changed":
       return {
         branch: event.branch,
         headSha: event.head_sha,
@@ -135,7 +105,7 @@ function normalizeLifecycleEvent(event: LifecycleEventWire): LifecycleEvent {
         upstream: event.upstream,
         workspaceId: event.workspace_id,
       };
-    case "git.head_changed":
+    case "git.head.changed":
       return {
         ahead: event.ahead,
         behind: event.behind,
@@ -147,7 +117,7 @@ function normalizeLifecycleEvent(event: LifecycleEventWire): LifecycleEvent {
         upstream: event.upstream,
         workspaceId: event.workspace_id,
       };
-    case "git.log_changed":
+    case "git.log.changed":
       return {
         branch: event.branch,
         headSha: event.head_sha,

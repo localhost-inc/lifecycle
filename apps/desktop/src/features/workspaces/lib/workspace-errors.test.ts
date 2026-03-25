@@ -7,7 +7,7 @@ describe("formatWorkspaceError", () => {
       formatWorkspaceError(
         {
           code: "workspace_mutation_locked",
-          message: "Workspace mutation locked while environment status is 'stopping'",
+          message: "Workspace mutation locked while lifecycle status is 'stopping'",
           requestId: "request-1",
           retryable: true,
           suggestedAction:

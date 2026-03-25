@@ -5,8 +5,8 @@ mod graph;
 #[path = "environment/lifecycle.rs"]
 mod lifecycle;
 #[path = "environment/port_assignment.rs"]
-mod port_assignment;
+pub(crate) mod port_assignment;
 #[path = "environment/runtime_env.rs"]
-mod runtime_env;
+pub(crate) mod runtime_env;
 
 pub use lifecycle::{start_workspace_services, sync_workspace_manifest_from_disk_if_idle};

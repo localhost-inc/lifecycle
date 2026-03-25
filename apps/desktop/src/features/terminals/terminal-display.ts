@@ -1,1 +1,0 @@
-export const DEFAULT_TERMINAL_FONT_SIZE = 14;

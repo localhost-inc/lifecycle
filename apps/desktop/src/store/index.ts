@@ -6,8 +6,8 @@ export {
   useWorkspace,
   useWorkspacesByProject,
   useWorkspaceServices,
-  useWorkspaceTerminals,
   useAgentSessions,
+  useAgentMessages,
   useAgentSessionRefresh,
-  useRuntime,
+  useClient,
 } from "@/store/hooks";

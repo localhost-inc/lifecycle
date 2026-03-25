@@ -4,141 +4,106 @@ import type {
   GitPullRequestSummary,
 } from "@lifecycle/contracts";
 
-export interface ChangesDiffOpenInput {
+export interface ChangesDiffSurfaceOptions {
   focusPath: string | null;
-  kind: "changes-diff";
 }
 
-export interface ChangesDiffOpenRequest extends ChangesDiffOpenInput {
-  id: string;
-}
-
-export interface CommitDiffOpenInput {
+export interface CommitDiffSurfaceOptions {
   commit: GitLogEntry;
-  kind: "commit-diff";
 }
 
-export interface CommitDiffOpenRequest extends CommitDiffOpenInput {
-  id: string;
-}
-
-export interface PullRequestOpenInput {
-  kind: "pull-request";
+export interface PullRequestSurfaceOptions {
   pullRequest: GitPullRequestSummary;
 }
 
-export interface PullRequestOpenRequest extends PullRequestOpenInput {
-  id: string;
-}
-
-export interface FileViewerOpenInput {
+export interface FileSurfaceOptions {
   filePath: string;
-  kind: "file-viewer";
 }
 
-export interface FileViewerOpenRequest extends FileViewerOpenInput {
-  id: string;
-}
-
-export interface PreviewOpenInput {
-  kind: "preview";
+export interface PreviewSurfaceOptions {
   label: string;
   previewKey: string;
   url: string;
 }
 
-export interface PreviewOpenRequest extends PreviewOpenInput {
-  id: string;
-}
-
-export interface AgentOpenInput {
+export interface AgentSurfaceOptions {
   agentSessionId: string;
-  provider: AgentSessionProviderId;
-  kind: "agent";
   label: string;
+  provider: AgentSessionProviderId;
 }
 
-export interface AgentOpenRequest extends AgentOpenInput {
-  id: string;
+export interface AgentSurfaceLaunchOptions {
+  provider: AgentSessionProviderId;
 }
 
-export type OpenDocumentInput =
-  | AgentOpenInput
-  | ChangesDiffOpenInput
-  | CommitDiffOpenInput
-  | FileViewerOpenInput
-  | PreviewOpenInput
-  | PullRequestOpenInput;
+export type OpenSurfaceInput =
+  | { options: AgentSurfaceOptions; surface: "agent" }
+  | { options: ChangesDiffSurfaceOptions; surface: "changes-diff" }
+  | { options: CommitDiffSurfaceOptions; surface: "commit-diff" }
+  | { options: FileSurfaceOptions; surface: "file-viewer" }
+  | { options: PreviewSurfaceOptions; surface: "preview" }
+  | { options: PullRequestSurfaceOptions; surface: "pull-request" };
 
-export type WorkspaceDocumentKind = OpenDocumentInput["kind"];
+export type WorkspaceSurfaceKind = OpenSurfaceInput["surface"];
 
-export function createOpenDocumentRequest(input: OpenDocumentInput): OpenDocumentRequest {
+export type OpenSurfaceRequest = OpenSurfaceInput & { id: string };
+
+export type SurfaceLaunchRequest = { options: AgentSurfaceLaunchOptions; surface: "agent" };
+
+export function createAgentSurfaceLaunchRequest(
+  provider: AgentSessionProviderId,
+): SurfaceLaunchRequest {
+  return {
+    options: { provider },
+    surface: "agent",
+  };
+}
+
+export function createOpenSurfaceRequest(input: OpenSurfaceInput): OpenSurfaceRequest {
   return {
     ...input,
     id: crypto.randomUUID(),
   };
 }
 
-export function createChangesDiffOpenInput(focusPath: string | null): ChangesDiffOpenInput {
+export function createChangesDiffOpenInput(focusPath: string | null): OpenSurfaceInput {
   return {
-    focusPath,
-    kind: "changes-diff",
+    options: { focusPath },
+    surface: "changes-diff",
   };
 }
 
-export function createCommitDiffOpenInput(commit: GitLogEntry): CommitDiffOpenInput {
+export function createCommitDiffOpenInput(commit: GitLogEntry): OpenSurfaceInput {
   return {
-    commit,
-    kind: "commit-diff",
+    options: { commit },
+    surface: "commit-diff",
   };
 }
 
-export function createPullRequestOpenInput(
-  pullRequest: GitPullRequestSummary,
-): PullRequestOpenInput {
+export function createPullRequestOpenInput(pullRequest: GitPullRequestSummary): OpenSurfaceInput {
   return {
-    kind: "pull-request",
-    pullRequest,
+    options: { pullRequest },
+    surface: "pull-request",
   };
 }
 
-export function createFileViewerOpenInput(filePath: string): FileViewerOpenInput {
+export function createFileViewerOpenInput(filePath: string): OpenSurfaceInput {
   return {
-    filePath,
-    kind: "file-viewer",
+    options: { filePath },
+    surface: "file-viewer",
   };
 }
 
-export function createPreviewOpenInput(input: {
-  label: string;
-  previewKey: string;
-  url: string;
-}): PreviewOpenInput {
+export function createPreviewOpenInput(input: PreviewSurfaceOptions): OpenSurfaceInput {
   return {
-    kind: "preview",
-    label: input.label,
-    previewKey: input.previewKey,
-    url: input.url,
+    options: input,
+    surface: "preview",
   };
 }
 
-export function createAgentOpenInput(input: {
-  agentSessionId: string;
-  provider: AgentSessionProviderId;
-  label: string;
-}): AgentOpenInput {
+export function createAgentOpenInput(input: AgentSurfaceOptions): OpenSurfaceInput {
   return {
-    agentSessionId: input.agentSessionId,
-    provider: input.provider,
-    kind: "agent",
-    label: input.label,
+    options: input,
+    surface: "agent",
   };
 }
-
-export type OpenDocumentRequest =
-  | AgentOpenRequest
-  | ChangesDiffOpenRequest
-  | CommitDiffOpenRequest
-  | FileViewerOpenRequest
-  | PreviewOpenRequest
-  | PullRequestOpenRequest;

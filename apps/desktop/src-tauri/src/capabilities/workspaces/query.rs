@@ -19,12 +19,9 @@ pub struct WorkspaceRecord {
     pub worktree_path: Option<String>,
     pub target: String,
     pub manifest_fingerprint: Option<String>,
-    pub created_by: Option<String>,
-    pub source_workspace_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
     pub last_active_at: String,
-    pub expires_at: Option<String>,
     pub prepared_at: Option<String>,
     pub status: String,
     pub failure_reason: Option<String>,
@@ -44,41 +41,6 @@ pub struct ServiceRecord {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TerminalRecord {
-    pub id: String,
-    pub workspace_id: String,
-    pub launch_type: String,
-    pub created_by: Option<String>,
-    pub label: String,
-    #[allow(dead_code)]
-    #[serde(skip_serializing)]
-    pub label_origin: Option<String>,
-    pub status: String,
-    pub failure_reason: Option<String>,
-    pub exit_code: Option<i64>,
-    pub started_at: String,
-    pub last_active_at: String,
-    pub ended_at: Option<String>,
-}
-
-fn map_terminal_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<TerminalRecord> {
-    Ok(TerminalRecord {
-        id: row.get(0)?,
-        workspace_id: row.get(1)?,
-        launch_type: row.get(2)?,
-        created_by: row.get(3)?,
-        label: row.get(4)?,
-        label_origin: row.get(5)?,
-        status: row.get(6)?,
-        failure_reason: row.get(7)?,
-        exit_code: row.get(8)?,
-        started_at: row.get(9)?,
-        last_active_at: row.get(10)?,
-        ended_at: row.get(11)?,
-    })
-}
-
 fn map_workspace_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRecord> {
     Ok(WorkspaceRecord {
         id: row.get(0)?,
@@ -90,16 +52,13 @@ fn map_workspace_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRe
         worktree_path: row.get(6)?,
         target: row.get(7)?,
         manifest_fingerprint: row.get(8)?,
-        created_by: row.get(9)?,
-        source_workspace_id: row.get(10)?,
-        created_at: row.get(11)?,
-        updated_at: row.get(12)?,
-        last_active_at: row.get(13)?,
-        expires_at: row.get(14)?,
-        prepared_at: row.get(15)?,
-        status: row.get(16)?,
-        failure_reason: row.get(17)?,
-        failed_at: row.get(18)?,
+        created_at: row.get(9)?,
+        updated_at: row.get(10)?,
+        last_active_at: row.get(11)?,
+        prepared_at: row.get(12)?,
+        status: row.get(13)?,
+        failure_reason: row.get(14)?,
+        failed_at: row.get(15)?,
     })
 }
 
@@ -108,7 +67,7 @@ fn get_workspace_by_id_sync(
     workspace_id: String,
 ) -> Result<Option<WorkspaceRecord>, LifecycleError> {
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, name, checkout_type, source_ref, git_sha, worktree_path, target, manifest_fingerprint, created_by, source_workspace_id, created_at, updated_at, last_active_at, expires_at, prepared_at, status, failure_reason, failed_at
+        "SELECT id, project_id, name, checkout_type, source_ref, git_sha, worktree_path, target, manifest_fingerprint, created_at, updated_at, last_active_at, prepared_at, status, failure_reason, failed_at
          FROM workspace
          WHERE id = ?1
          LIMIT 1"
@@ -220,41 +179,6 @@ pub async fn get_workspace_services(
 
 pub async fn get_current_branch(project_path: String) -> Result<String, LifecycleError> {
     worktree::get_current_branch(&project_path).await
-}
-
-fn list_workspace_terminals_sync(
-    conn: &rusqlite::Connection,
-    workspace_id: String,
-) -> Result<Vec<TerminalRecord>, LifecycleError> {
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, workspace_id, launch_type, created_by, label, label_origin, status, failure_reason, exit_code, started_at, last_active_at, ended_at
-             FROM terminal
-             WHERE workspace_id = ?1
-             ORDER BY started_at DESC, id DESC",
-        )
-        .map_err(|e| LifecycleError::Database(e.to_string()))?;
-
-    let rows = stmt
-        .query_map(params![workspace_id], map_terminal_record)
-        .map_err(|e| LifecycleError::Database(e.to_string()))?;
-
-    let mut result = Vec::new();
-    for row in rows {
-        result.push(row.map_err(|e| LifecycleError::Database(e.to_string()))?);
-    }
-
-    Ok(result)
-}
-
-pub async fn list_workspace_terminals(
-    db_path: &str,
-    workspace_id: String,
-) -> Result<Vec<TerminalRecord>, LifecycleError> {
-    run_blocking_db_read(db_path.to_string(), "workspace.terminals", move |conn| {
-        list_workspace_terminals_sync(conn, workspace_id)
-    })
-    .await
 }
 
 #[cfg(test)]

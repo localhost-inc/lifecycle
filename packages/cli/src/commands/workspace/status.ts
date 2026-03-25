@@ -1,17 +1,8 @@
 import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 
-import {
-  createWorkspaceStatusRequest,
-  requestBridge,
-  resolveWorkspaceId,
-} from "../../bridge";
-import {
-  failCommand,
-  jsonFlag,
-  printWorkspaceSummary,
-  workspaceIdFlag,
-} from "../_shared";
+import { createWorkspaceStatusRequest, requestBridge, resolveWorkspaceId } from "../../bridge";
+import { failCommand, jsonFlag, printWorkspaceSummary, workspaceIdFlag } from "../_shared";
 
 export default defineCommand({
   description: "Show workspace metadata, environment state, and services.",
@@ -40,14 +31,6 @@ export default defineCommand({
         context.stdout("Services:");
         response.result.services.forEach((service) => {
           context.stdout(`  ${service.name}: ${service.status}`);
-        });
-      }
-
-      if (response.result.terminals.length > 0) {
-        context.stdout("");
-        context.stdout("Terminals:");
-        response.result.terminals.forEach((terminal) => {
-          context.stdout(`  ${terminal.label}: ${terminal.status}`);
         });
       }
 

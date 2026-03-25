@@ -8,7 +8,7 @@ import {
   stageGitFiles,
 } from "@/features/git/api";
 import { useCurrentGitPullRequest, useGitLog, useGitStatus } from "@/features/git/hooks";
-import { useRuntime } from "@/store";
+import { useClient } from "@/store";
 
 export interface UseGitActionsOptions {
   onCommitComplete: () => void;
@@ -42,7 +42,7 @@ export function useGitActions({
   workspaceTarget,
   worktreePath,
 }: UseGitActionsOptions): UseGitActionsResult {
-  const runtime = useRuntime();
+  const client = useClient();
   const [actionError, setActionError] = useState<string | null>(null);
   const [isCommitting, setIsCommitting] = useState(false);
   const [isCreatingPullRequest, setIsCreatingPullRequest] = useState(false);
@@ -90,14 +90,14 @@ export function useGitActions({
     setActionError(null);
     setIsPushingBranch(true);
     try {
-      await pushGit(runtime, workspaceId);
+      await pushGit(client, workspaceId);
       await refreshPullRequestState();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error));
     } finally {
       setIsPushingBranch(false);
     }
-  }, [refreshPullRequestState, runtime, workspaceId]);
+  }, [refreshPullRequestState, client, workspaceId]);
 
   const handleCommit = useCallback(
     async (message: string, pushAfterCommit: boolean): Promise<void> => {
@@ -106,13 +106,13 @@ export function useGitActions({
       setIsCommitting(true);
 
       try {
-        await commitGit(runtime, workspaceId, message);
+        await commitGit(client, workspaceId, message);
         committed = true;
 
         if (pushAfterCommit) {
           setIsPushingBranch(true);
           try {
-            await pushGit(runtime, workspaceId);
+            await pushGit(client, workspaceId);
           } finally {
             setIsPushingBranch(false);
           }
@@ -129,14 +129,14 @@ export function useGitActions({
         setIsCommitting(false);
       }
     },
-    [onCommitComplete, refreshPullRequestState, runtime, workspaceId],
+    [onCommitComplete, refreshPullRequestState, client, workspaceId],
   );
 
   const handleCreatePullRequest = useCallback(async (): Promise<void> => {
     setActionError(null);
     setIsCreatingPullRequest(true);
     try {
-      const pullRequest = await createGitPullRequest(runtime, workspaceId);
+      const pullRequest = await createGitPullRequest(client, workspaceId);
       await refreshPullRequestState();
       onOpenPullRequest(pullRequest);
     } catch (error) {
@@ -144,14 +144,14 @@ export function useGitActions({
     } finally {
       setIsCreatingPullRequest(false);
     }
-  }, [onOpenPullRequest, refreshPullRequestState, runtime, workspaceId]);
+  }, [onOpenPullRequest, refreshPullRequestState, client, workspaceId]);
 
   const handleMergePullRequest = useCallback(
     async (pullRequestNumber: number): Promise<void> => {
       setActionError(null);
       setIsMergingPullRequest(true);
       try {
-        const pullRequest = await mergeGitPullRequest(runtime, workspaceId, pullRequestNumber);
+        const pullRequest = await mergeGitPullRequest(client, workspaceId, pullRequestNumber);
         await refreshPullRequestState();
         onOpenPullRequest(pullRequest);
       } catch (error) {
@@ -160,20 +160,20 @@ export function useGitActions({
         setIsMergingPullRequest(false);
       }
     },
-    [onOpenPullRequest, refreshPullRequestState, runtime, workspaceId],
+    [onOpenPullRequest, refreshPullRequestState, client, workspaceId],
   );
 
   const handleShowChanges = useCallback(async (): Promise<void> => {
     const unstaged = (gitStatus?.files ?? []).filter((f) => f.unstaged);
     if (unstaged.length > 0) {
       await stageGitFiles(
-        runtime,
+        client,
         workspaceId,
         unstaged.map((f) => f.path),
       );
       await refreshGitStatus();
     }
-  }, [gitStatus?.files, refreshGitStatus, runtime, workspaceId]);
+  }, [gitStatus?.files, refreshGitStatus, client, workspaceId]);
 
   return useMemo(
     () => ({

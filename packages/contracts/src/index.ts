@@ -14,15 +14,26 @@ export type {
   AgentToolResultPartData,
   AgentMessageWithParts,
   AgentMessageRole,
-  AgentRuntimeKind,
   AgentSessionRecord,
   AgentSessionStatus,
 } from "./agent";
+export { parseAgentMessagePartData, stringifyAgentMessagePartData } from "./agent";
+export type {
+  PlanRecord,
+  ServiceRecord,
+  TaskDependencyRecord,
+  TaskRecord,
+  WorkspaceRecord,
+} from "./db";
+export type { PlanStatus, TaskPriority, TaskStatus } from "./planning";
 export {
-  parseAgentMessagePartData,
-  stringifyAgentMessagePartData,
-} from "./agent";
-export type { ServiceRecord, TerminalRecord, WorkspaceRecord } from "./db";
+  TASK_PRIORITY_LOW,
+  TASK_PRIORITY_NORMAL,
+  TASK_PRIORITY_HIGH,
+  TASK_PRIORITY_URGENT,
+  TASK_PRIORITY_LABELS,
+  parseTaskPriority,
+} from "./planning";
 export {
   BRIDGE_VERSION,
   BridgeErrorSchema,
@@ -38,7 +49,6 @@ export {
   LIFECYCLE_CLI_PATH_ENV,
   LIFECYCLE_BRIDGE_ENV,
   LIFECYCLE_BRIDGE_SESSION_TOKEN_ENV,
-  LIFECYCLE_TERMINAL_ID_ENV,
   LIFECYCLE_WORKSPACE_PATH_ENV,
   LIFECYCLE_WORKSPACE_ID_ENV,
   LogLineSchema,
@@ -49,12 +59,22 @@ export {
   ServiceStopRequestSchema,
   TabOpenRequestSchema,
   WorkspaceCreateRequestSchema,
-  WorkspaceDestroyRequestSchema,
+  WorkspaceArchiveRequestSchema,
   WorkspaceHealthRequestSchema,
   WorkspaceLogsRequestSchema,
   WorkspaceResetRequestSchema,
   WorkspaceRunRequestSchema,
   WorkspaceStatusRequestSchema,
+  PlanListRequestSchema,
+  PlanCreateRequestSchema,
+  PlanUpdateRequestSchema,
+  PlanDeleteRequestSchema,
+  TaskListRequestSchema,
+  TaskCreateRequestSchema,
+  TaskUpdateRequestSchema,
+  TaskDeleteRequestSchema,
+  TaskDependencyAddRequestSchema,
+  TaskDependencyRemoveRequestSchema,
 } from "./desktop/bridge";
 export type {
   AgentSessionInspectRequest,
@@ -74,12 +94,22 @@ export type {
   ServiceStopRequest,
   TabOpenRequest,
   WorkspaceCreateRequest,
-  WorkspaceDestroyRequest,
+  WorkspaceArchiveRequest,
   WorkspaceHealthRequest,
   WorkspaceLogsRequest,
   WorkspaceResetRequest,
   WorkspaceRunRequest,
   WorkspaceStatusRequest,
+  PlanListRequest,
+  PlanCreateRequest,
+  PlanUpdateRequest,
+  PlanDeleteRequest,
+  TaskListRequest,
+  TaskCreateRequest,
+  TaskUpdateRequest,
+  TaskDeleteRequest,
+  TaskDependencyAddRequest,
+  TaskDependencyRemoveRequest,
 } from "./desktop/bridge";
 export type { ErrorEnvelope } from "./errors";
 export type {
@@ -117,7 +147,6 @@ export type {
 export type { FieldError, LifecycleConfig, ManifestParseResult } from "./manifest";
 export { getManifestFingerprint, LifecycleConfigSchema, parseManifest } from "./manifest";
 export type { ProjectRecord } from "./project";
-export type { TerminalFailureReason, TerminalStatus, TerminalType } from "./terminal";
 export type {
   ServiceStatus,
   ServiceStatusReason,

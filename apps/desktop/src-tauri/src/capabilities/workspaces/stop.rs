@@ -29,7 +29,7 @@ pub async fn stop_workspace_services(
         names
     };
 
-    let current_status = {
+    let current_workspace_status = {
         let conn = open_db(&db)?;
         let status: String = conn
             .query_row(
@@ -41,16 +41,19 @@ pub async fn stop_workspace_services(
         WorkspaceStatus::from_str(&status)?
     };
     if matches!(
-        current_status,
-        WorkspaceStatus::Preparing | WorkspaceStatus::Archiving
+        current_workspace_status,
+        WorkspaceStatus::Provisioning | WorkspaceStatus::Archiving
     ) {
         return Err(LifecycleError::WorkspaceMutationLocked {
-            status: current_status.as_str().to_string(),
+            status: current_workspace_status.as_str().to_string(),
         });
     }
-    if current_status == WorkspaceStatus::Archived {
+    if matches!(
+        current_workspace_status,
+        WorkspaceStatus::Archived | WorkspaceStatus::Failed
+    ) {
         return Err(LifecycleError::InvalidStateTransition {
-            from: current_status.as_str().to_string(),
+            from: current_workspace_status.as_str().to_string(),
             to: "service_stop".to_string(),
         });
     }

@@ -7,7 +7,7 @@ import type {
 import type { StatusDotTone } from "@lifecycle/ui";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
-import type { WorkspaceDocumentKind } from "@/features/workspaces/canvas/workspace-canvas-requests";
+import type { WorkspaceSurfaceKind } from "@/features/workspaces/canvas/workspace-canvas-requests";
 
 export type WorkspaceExtensionId =
   | "environment"
@@ -40,6 +40,6 @@ export interface ExtensionSlot {
   icon: LucideIcon;
   id: WorkspaceExtensionId;
   label: string;
-  ownedDocumentKinds?: readonly WorkspaceDocumentKind[];
+  ownedSurfaceKinds?: readonly WorkspaceSurfaceKind[];
   panel: ReactNode;
 }

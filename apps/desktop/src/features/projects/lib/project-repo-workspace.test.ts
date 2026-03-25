@@ -9,9 +9,7 @@ function createWorkspaceRecord(
   }> = {},
 ) {
   return {
-    created_by: null,
     created_at: "2026-03-14T00:00:00.000Z",
-    expires_at: null,
     failure_reason: null,
     failed_at: null,
     git_sha: null,
@@ -22,7 +20,6 @@ function createWorkspaceRecord(
     name: id,
     project_id: "project_1",
     source_ref: id,
-    source_workspace_id: null,
     status: "active" as const,
     updated_at: "2026-03-14T12:00:00.000Z",
     worktree_path: "/tmp/lifecycle",

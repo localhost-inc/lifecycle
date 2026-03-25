@@ -1,8 +1,6 @@
 use crate::capabilities::workspaces::manifest::LifecycleConfig;
 use crate::platform::db::open_db;
-use crate::shared::errors::{
-    LifecycleError, ServiceStatus, WorkspaceFailureReason, WorkspaceStatus,
-};
+use crate::shared::errors::{LifecycleError, ServiceStatus, WorkspaceFailureReason, WorkspaceStatus};
 use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
 use rusqlite::params;
 use tauri::AppHandle;
@@ -115,7 +113,7 @@ pub(super) fn update_service_status_db(
     Ok(())
 }
 
-pub(super) fn reconcile_workspace_services_db(
+pub(crate) fn reconcile_workspace_services_db(
     db_path: &str,
     workspace_id: &str,
     config: Option<&LifecycleConfig>,
@@ -508,7 +506,7 @@ mod tests {
     }
 
     #[test]
-    fn transition_workspace_to_preparing_updates_status_and_clears_failure_fields() {
+    fn transition_workspace_to_provisioning_updates_status_and_clears_failure_fields() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
 
@@ -516,13 +514,13 @@ mod tests {
         seed_worktree_workspace(
             &conn,
             "ws_1",
-            "active",
+            "failed",
             Some("service_start_failed"),
             Some("2026-03-04T00:00:00Z"),
         );
         drop(conn);
 
-        transition_workspace_to(&db_path, "ws_1", &WorkspaceStatus::Preparing)
+        transition_workspace_to(&db_path, "ws_1", &WorkspaceStatus::Provisioning)
             .expect("transition succeeds");
 
         let conn = open_db(&db_path).expect("re-open db");
@@ -535,7 +533,7 @@ mod tests {
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
             )
             .expect("workspace exists");
-        assert_eq!(status, "preparing");
+        assert_eq!(status, "provisioning");
         assert!(failure_reason.is_none());
         assert!(failed_at.is_none());
 
@@ -544,15 +542,21 @@ mod tests {
     }
 
     #[test]
-    fn transition_workspace_to_preparing_allows_prepare_from_active() {
+    fn transition_workspace_to_provisioning_restarts_failed_workspace_setup() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
-        seed_worktree_workspace(&conn, "ws_started", "active", None, None);
+        seed_worktree_workspace(
+            &conn,
+            "ws_started",
+            "failed",
+            Some("repo_clone_failed"),
+            Some("2026-03-04T00:00:00Z"),
+        );
         drop(conn);
 
-        transition_workspace_to(&db_path, "ws_started", &WorkspaceStatus::Preparing)
+        transition_workspace_to(&db_path, "ws_started", &WorkspaceStatus::Provisioning)
             .expect("transition succeeds");
 
         let conn = open_db(&db_path).expect("re-open db");
@@ -565,27 +569,27 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("query state");
-        assert_eq!(status, "preparing");
+        assert_eq!(status, "provisioning");
 
         drop(conn);
         let _ = std::fs::remove_file(db_path);
     }
 
     #[test]
-    fn transition_workspace_to_preparing_rejects_invalid_transition() {
+    fn transition_workspace_to_provisioning_rejects_invalid_transition() {
         let db_path = temp_db_path();
         init_workspace_tables(&db_path);
 
         let conn = open_db(&db_path).expect("open db");
-        seed_worktree_workspace(&conn, "ws_2", "preparing", None, None);
+        seed_worktree_workspace(&conn, "ws_2", "provisioning", None, None);
         drop(conn);
 
-        let err = transition_workspace_to(&db_path, "ws_2", &WorkspaceStatus::Preparing)
+        let err = transition_workspace_to(&db_path, "ws_2", &WorkspaceStatus::Provisioning)
             .expect_err("must fail");
         match err {
             LifecycleError::InvalidStateTransition { from, to } => {
-                assert_eq!(from, "preparing");
-                assert_eq!(to, "preparing");
+                assert_eq!(from, "provisioning");
+                assert_eq!(to, "provisioning");
             }
             other => panic!("unexpected error: {other}"),
         }

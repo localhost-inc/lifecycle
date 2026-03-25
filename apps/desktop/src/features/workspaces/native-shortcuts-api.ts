@@ -2,20 +2,20 @@ import { isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export type WorkspaceShortcutAction =
-  | "close-active-tab"
-  | "go-back"
-  | "go-forward"
-  | "new-tab"
-  | "next-tab"
-  | "previous-tab"
-  | "reopen-closed-tab"
-  | "toggle-zoom";
+  | "workspace.go-back"
+  | "workspace.go-forward"
+  | "canvas.pane.tab.close"
+  | "canvas.pane.tab.open"
+  | "canvas.pane.tab.select.next"
+  | "canvas.pane.tab.select.previous"
+  | "canvas.pane.tab.zoom.toggle"
+  | "canvas.tab.reopen";
 
 export interface WorkspaceShortcutEvent {
   action: WorkspaceShortcutAction;
   index: number | null;
   source_surface_id: string | null;
-  source_surface_kind: "native-terminal" | null;
+  source_surface_kind: null;
 }
 
 export async function subscribeToNativeWorkspaceShortcutEvents(

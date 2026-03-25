@@ -8,8 +8,9 @@ import {
   SplitButtonSecondary,
   Spinner,
 } from "@lifecycle/ui";
-import { ChevronDown, GitCommitHorizontal, Play, RotateCcw, Square } from "lucide-react";
+import { ChevronDown, Play, RotateCcw, Square } from "lucide-react";
 import { useState } from "react";
+import { GitActionButton } from "@/features/git/components/git-action-button";
 import type { WorkspaceToolbarSlot } from "@/features/workspaces/state/workspace-toolbar-context";
 
 interface WorkspaceNavToolbarProps {
@@ -38,7 +39,7 @@ export function WorkspaceNavToolbar({ slot }: WorkspaceNavToolbarProps) {
                 <RunIcon label={slot.runAction.label} loading={slot.runAction.loading} />
               }
               onClick={slot.runAction.onClick}
-              variant="outline"
+              variant="glass"
             >
               {slot.runAction.label}
             </SplitButtonPrimary>
@@ -47,7 +48,7 @@ export function WorkspaceNavToolbar({ slot }: WorkspaceNavToolbarProps) {
                 <SplitButtonSecondary
                   aria-label="Show run actions"
                   disabled={slot.restartAction.disabled}
-                  variant="outline"
+                  variant="glass"
                 >
                   <ChevronDown className="size-3.5" strokeWidth={2.4} />
                 </SplitButtonSecondary>
@@ -78,28 +79,20 @@ export function WorkspaceNavToolbar({ slot }: WorkspaceNavToolbarProps) {
             disabled={slot.runAction.disabled}
             onClick={slot.runAction.onClick}
             size="sm"
-            variant="outline"
+            variant="glass"
           >
             <RunIcon label={slot.runAction.label} loading={slot.runAction.loading} />
             <span>{slot.runAction.label}</span>
           </Button>
         ))}
 
-      {/* Git action */}
+      {/* Git action — self-contained button + popover */}
       {slot.gitAction && (
-        <Button
-          disabled={slot.gitAction.disabled}
-          onClick={slot.gitAction.onClick}
-          size="sm"
-          variant="outline"
-        >
-          {slot.gitAction.loading ? (
-            <Spinner className="size-3.5" />
-          ) : (
-            <GitCommitHorizontal className="size-3.5" strokeWidth={2.2} />
-          )}
-          <span>{slot.gitAction.label}</span>
-        </Button>
+        <GitActionButton
+          onOpenPullRequest={slot.gitAction.onOpenPullRequest}
+          workspaceId={slot.gitAction.workspaceId}
+          worktreePath={slot.gitAction.worktreePath}
+        />
       )}
     </div>
   );

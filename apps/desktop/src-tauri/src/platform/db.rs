@@ -4,20 +4,12 @@ use std::time::Instant;
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 pub fn migrations() -> Vec<Migration> {
-    vec![
-        Migration {
-            version: 1,
-            description: "baseline",
-            sql: include_str!("migrations/0001_baseline.sql"),
-            kind: MigrationKind::Up,
-        },
-        Migration {
-            version: 2,
-            description: "agent session starting status",
-            sql: include_str!("migrations/0002_agent-session-starting.sql"),
-            kind: MigrationKind::Up,
-        },
-    ]
+    vec![Migration {
+        version: 1,
+        description: "init",
+        sql: include_str!("migrations/0001_init.sql"),
+        kind: MigrationKind::Up,
+    }]
 }
 
 /// Holds the resolved path to the SQLite database file.
@@ -89,14 +81,36 @@ pub fn apply_test_schema(db_path: &str) {
     }
 }
 
-/// Resets ephemeral workspace/terminal/service state that may be stale after a
-/// previous crash (where `cleanup_for_exit` never ran). Schema migrations are
-/// handled by `tauri-plugin-sql` via `Builder::add_migrations`.
-pub fn reconcile_on_startup(db_path: &str) -> Result<(), LifecycleError> {
+pub fn persist_service_pid(
+    db_path: &str,
+    workspace_id: &str,
+    name: &str,
+    pid: i64,
+) -> Result<(), LifecycleError> {
     let conn = open_db(db_path)?;
-    reconcile_workspaces(&conn)?;
-    reconcile_ephemeral_terminals(&conn)?;
+    conn.execute(
+        "UPDATE service SET pid = ?1, updated_at = datetime('now')
+         WHERE workspace_id = ?2 AND name = ?3",
+        rusqlite::params![pid, workspace_id, name],
+    )
+    .map_err(database_error)?;
     Ok(())
+}
+
+/// A service whose process survived an app restart.
+pub struct SurvivingService {
+    pub workspace_id: String,
+    pub service_name: String,
+    pub pid: i64,
+}
+
+/// Resets ephemeral workspace/service state that may be stale after a previous
+/// crash (where `cleanup_for_exit` never ran). Returns any services whose
+/// processes are still alive so the app can re-adopt them.
+pub fn reconcile_on_startup(db_path: &str) -> Result<Vec<SurvivingService>, LifecycleError> {
+    let conn = open_db(db_path)?;
+    let survivors = reconcile_workspaces(&conn)?;
+    Ok(survivors)
 }
 
 /// Resets ephemeral execution state in the database before the application exits.
@@ -109,63 +123,112 @@ pub fn cleanup_for_exit(db_path: &str) -> Result<(), LifecycleError> {
          SET status = 'stopped',
              status_reason = NULL,
              assigned_port = NULL,
+             pid = NULL,
              updated_at = datetime('now')
          WHERE status NOT IN ('stopped', 'failed')",
         [],
     )
     .map_err(database_error)?;
 
-    conn.execute(
-        "UPDATE terminal
-         SET status = 'sleeping',
-             failure_reason = NULL,
-             exit_code = NULL,
-             ended_at = NULL,
-             last_active_at = datetime('now')
-         WHERE status IN ('active', 'detached')",
-        [],
-    )
-    .map_err(database_error)?;
-
     Ok(())
 }
 
-fn reconcile_ephemeral_terminals(conn: &rusqlite::Connection) -> Result<(), LifecycleError> {
-    conn.execute(
-        "UPDATE terminal
-         SET status = 'sleeping',
-             failure_reason = NULL,
-             exit_code = NULL,
-             ended_at = NULL
-        WHERE status IN ('active', 'detached', 'sleeping')",
-        [],
-    )
-    .map_err(database_error)?;
+fn reconcile_workspaces(
+    conn: &rusqlite::Connection,
+) -> Result<Vec<SurvivingService>, LifecycleError> {
+    // Check which services with persisted PIDs are still alive.
+    let mut survivors = Vec::new();
+    let mut alive_workspace_ids = std::collections::HashSet::new();
 
-    Ok(())
-}
+    {
+        let mut stmt = conn
+            .prepare(
+                "SELECT workspace_id, name, pid
+                 FROM service
+                 WHERE status IN ('starting', 'ready') AND pid IS NOT NULL",
+            )
+            .map_err(database_error)?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            })
+            .map_err(database_error)?;
 
-fn reconcile_workspaces(conn: &rusqlite::Connection) -> Result<(), LifecycleError> {
-    mark_interrupted_workspaces(conn)?;
-    conn.execute(
-        "UPDATE service
-         SET status = 'stopped',
-             status_reason = NULL,
-             assigned_port = NULL,
-             updated_at = datetime('now')
-         WHERE status != 'stopped'",
-        [],
-    )
-    .map_err(database_error)?;
-    Ok(())
+        for row in rows {
+            let (workspace_id, service_name, pid) = row.map_err(database_error)?;
+            let alive = unsafe { libc::kill(pid as i32, 0) == 0 };
+            if alive {
+                alive_workspace_ids.insert(workspace_id.clone());
+                survivors.push(SurvivingService {
+                    workspace_id,
+                    service_name,
+                    pid,
+                });
+            }
+        }
+    }
+
+    // Mark workspaces as interrupted — but skip workspaces with surviving services.
+    mark_interrupted_workspaces_except(conn, &alive_workspace_ids)?;
+
+    // Reset dead services to stopped. Leave surviving services untouched.
+    let survivor_set: std::collections::HashSet<(String, String)> = survivors
+        .iter()
+        .map(|s| (s.workspace_id.clone(), s.service_name.clone()))
+        .collect();
+
+    {
+        let mut stmt = conn
+            .prepare(
+                "SELECT workspace_id, name
+                 FROM service
+                 WHERE status != 'stopped'",
+            )
+            .map_err(database_error)?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })
+            .map_err(database_error)?;
+
+        for row in rows {
+            let (ws_id, svc_name) = row.map_err(database_error)?;
+            if !survivor_set.contains(&(ws_id.clone(), svc_name.clone())) {
+                conn.execute(
+                    "UPDATE service
+                     SET status = 'stopped',
+                         status_reason = NULL,
+                         assigned_port = NULL,
+                         pid = NULL,
+                         updated_at = datetime('now')
+                     WHERE workspace_id = ?1 AND name = ?2",
+                    rusqlite::params![ws_id, svc_name],
+                )
+                .map_err(database_error)?;
+            }
+        }
+    }
+
+    Ok(survivors)
 }
 
 fn mark_interrupted_workspaces(conn: &rusqlite::Connection) -> Result<(), LifecycleError> {
+    mark_interrupted_workspaces_except(conn, &std::collections::HashSet::new())
+}
+
+fn mark_interrupted_workspaces_except(
+    conn: &rusqlite::Connection,
+    skip_workspace_ids: &std::collections::HashSet<String>,
+) -> Result<(), LifecycleError> {
     let mut stmt = conn
         .prepare(
             "SELECT workspace.id
              FROM workspace
-             WHERE workspace.status = 'preparing'
+             WHERE workspace.status = 'provisioning'
                 OR EXISTS (
                     SELECT 1
                     FROM service
@@ -180,14 +243,20 @@ fn mark_interrupted_workspaces(conn: &rusqlite::Connection) -> Result<(), Lifecy
 
     let mut reconciled = Vec::new();
     for row in rows {
-        reconciled.push(row.map_err(database_error)?);
+        let ws_id = row.map_err(database_error)?;
+        if !skip_workspace_ids.contains(&ws_id) {
+            reconciled.push(ws_id);
+        }
     }
     drop(stmt);
 
     for workspace_id in reconciled {
         conn.execute(
             "UPDATE workspace
-             SET status = 'active',
+             SET status = CASE
+                    WHEN status = 'provisioning' THEN 'failed'
+                    ELSE 'active'
+                 END,
                  failure_reason = 'local_app_not_running',
                  failed_at = datetime('now'),
                  updated_at = datetime('now')
@@ -208,93 +277,6 @@ mod tests {
         let path =
             std::env::temp_dir().join(format!("lifecycle-db-test-{}.db", uuid::Uuid::new_v4()));
         path.to_string_lossy().into_owned()
-    }
-
-    #[test]
-    fn reconcile_on_startup_resets_stale_terminals() {
-        let db_path = temp_db_path();
-        apply_test_schema(&db_path);
-
-        let conn = open_db(&db_path).expect("open db");
-        conn.execute(
-            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
-            rusqlite::params!["project_1", "/tmp/project_1", "Project 1"],
-        )
-        .expect("insert project");
-        conn.execute(
-            "INSERT INTO workspace (id, project_id, source_ref, worktree_path)
-             VALUES (?1, ?2, ?3, ?4)",
-            rusqlite::params![
-                "workspace_1",
-                "project_1",
-                "main",
-                "/tmp/project_1/worktree"
-            ],
-        )
-        .expect("insert workspace");
-        conn.execute(
-            "INSERT INTO terminal (id, workspace_id, label, status)
-             VALUES (?1, ?2, ?3, ?4), (?5, ?6, ?7, ?8), (?9, ?10, ?11, ?12)",
-            rusqlite::params![
-                "terminal_active",
-                "workspace_1",
-                "Terminal 1",
-                "active",
-                "terminal_detached",
-                "workspace_1",
-                "Terminal 2",
-                "detached",
-                "terminal_finished",
-                "workspace_1",
-                "Terminal 3",
-                "finished"
-            ],
-        )
-        .expect("insert terminals");
-        drop(conn);
-
-        reconcile_on_startup(&db_path).expect("reconcile succeeds");
-
-        let values = {
-            let conn = open_db(&db_path).expect("re-open db");
-            let mut stmt = conn
-                .prepare(
-                    "SELECT id, status, failure_reason, ended_at
-                     FROM terminal
-                     ORDER BY id",
-                )
-                .expect("prepare select");
-            let rows = stmt
-                .query_map([], |row| {
-                    Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, String>(1)?,
-                        row.get::<_, Option<String>>(2)?,
-                        row.get::<_, Option<String>>(3)?,
-                    ))
-                })
-                .expect("query terminals");
-
-            rows.map(|row| row.expect("row"))
-                .collect::<Vec<(String, String, Option<String>, Option<String>)>>()
-        };
-
-        assert_eq!(values.len(), 3);
-        assert_eq!(values[0].0, "terminal_active");
-        assert_eq!(values[0].1, "sleeping");
-        assert!(values[0].2.is_none());
-        assert!(values[0].3.is_none());
-
-        assert_eq!(values[1].0, "terminal_detached");
-        assert_eq!(values[1].1, "sleeping");
-        assert!(values[1].2.is_none());
-        assert!(values[1].3.is_none());
-
-        assert_eq!(values[2].0, "terminal_finished");
-        assert_eq!(values[2].1, "finished");
-        assert!(values[2].2.is_none());
-        assert!(values[2].3.is_none());
-        let _ = std::fs::remove_file(db_path);
     }
 
     #[test]
@@ -531,17 +513,16 @@ mod tests {
             },
         );
 
-        // Verify versions are sequential with no gaps.
+        // Verify versions are monotonically increasing (gaps are allowed since
+        // version numbers are immutable once applied to user databases).
         let mut versions: Vec<i64> = registered.iter().map(|m| m.version).collect();
         versions.sort();
-        for (i, version) in versions.iter().enumerate() {
-            assert_eq!(
-                *version,
-                (i + 1) as i64,
-                "Migration versions must be sequential. Expected version {} at position {}, got {}.",
-                i + 1,
-                i,
-                version,
+        for window in versions.windows(2) {
+            assert!(
+                window[1] > window[0],
+                "Migration versions must be strictly increasing. Found {} followed by {}.",
+                window[0],
+                window[1],
             );
         }
     }
@@ -570,14 +551,12 @@ mod tests {
         .expect("insert workspace");
         conn.execute(
             "INSERT INTO agent_session (
-                id, workspace_id, runtime_kind, runtime_name, provider, provider_session_id,
+                id, workspace_id, provider, provider_session_id,
                 title, status, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, datetime('now'), datetime('now'))",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'), datetime('now'))",
             rusqlite::params![
                 "session_agent",
                 "workspace_agent",
-                "native",
-                Option::<String>::None,
                 "codex",
                 "thread_123",
                 "Agent Session",
@@ -687,21 +666,6 @@ mod tests {
             rusqlite::params!["service_1", "workspace_1", "web", "ready", Some(3000_i64),],
         )
         .expect("insert service");
-        conn.execute(
-            "INSERT INTO terminal (id, workspace_id, label, status)
-             VALUES (?1, ?2, ?3, ?4), (?5, ?6, ?7, ?8)",
-            rusqlite::params![
-                "terminal_active",
-                "workspace_1",
-                "Terminal 1",
-                "active",
-                "terminal_finished",
-                "workspace_1",
-                "Terminal 2",
-                "finished"
-            ],
-        )
-        .expect("insert terminals");
         drop(conn);
 
         cleanup_for_exit(&db_path).expect("cleanup succeeds");
@@ -729,25 +693,6 @@ mod tests {
             .expect("query service");
         assert_eq!(service_status, "stopped");
         assert!(assigned_port.is_none());
-
-        let terminal_statuses: Vec<(String, String)> = {
-            let mut stmt = conn
-                .prepare("SELECT id, status FROM terminal ORDER BY id")
-                .expect("prepare");
-            stmt.query_map([], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-            })
-            .expect("query")
-            .map(|r| r.expect("row"))
-            .collect()
-        };
-        assert_eq!(
-            terminal_statuses,
-            vec![
-                ("terminal_active".to_string(), "sleeping".to_string()),
-                ("terminal_finished".to_string(), "finished".to_string()),
-            ]
-        );
 
         let _ = std::fs::remove_file(db_path);
     }

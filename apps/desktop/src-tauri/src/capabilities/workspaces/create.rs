@@ -107,7 +107,7 @@ pub async fn create_workspace(
         map_database_result(conn.execute(
             "INSERT INTO workspace (
                 id, project_id, name, name_origin, source_ref, source_ref_origin, checkout_type, target, status
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'active')",
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'provisioning')",
             params![
                 workspace_id,
                 request.project_id,
@@ -121,7 +121,7 @@ pub async fn create_workspace(
         ))?;
     }
 
-    emit_workspace_status(&app, &workspace_id, "active", None);
+    emit_workspace_status(&app, &workspace_id, "provisioning", None);
 
     let provision_started_at = Instant::now();
     if workspace_checkout_type == ROOT_WORKSPACE_CHECKOUT_TYPE {
@@ -171,6 +171,8 @@ pub async fn create_workspace(
         &format!("workspace {workspace_id} manifest reconcile"),
         reconcile_started_at,
     );
+    update_workspace_status_db(&db, &workspace_id, &WorkspaceStatus::Active, None)?;
+    emit_workspace_status(&app, &workspace_id, "active", None);
     diagnostics::append_timing(
         "workspace-create",
         &format!("workspace {workspace_id} total"),
@@ -241,13 +243,13 @@ async fn run_worktree_workspace_creation(
             update_workspace_status_db(
                 request.db_path,
                 request.workspace_id,
-                &WorkspaceStatus::Active,
+                &WorkspaceStatus::Failed,
                 Some(&WorkspaceFailureReason::RepoCloneFailed),
             )?;
             emit_workspace_status(
                 request.app,
                 request.workspace_id,
-                "active",
+                "failed",
                 Some("repo_clone_failed"),
             );
             return Err(error);
@@ -271,13 +273,13 @@ async fn run_worktree_workspace_creation(
             update_workspace_status_db(
                 request.db_path,
                 request.workspace_id,
-                &WorkspaceStatus::Active,
+                &WorkspaceStatus::Failed,
                 Some(&WorkspaceFailureReason::RepoCloneFailed),
             )?;
             emit_workspace_status(
                 request.app,
                 request.workspace_id,
-                "active",
+                "failed",
                 Some("repo_clone_failed"),
             );
             return Err(e);
@@ -294,13 +296,13 @@ async fn run_worktree_workspace_creation(
         update_workspace_status_db(
             request.db_path,
             request.workspace_id,
-            &WorkspaceStatus::Active,
+            &WorkspaceStatus::Failed,
             Some(&WorkspaceFailureReason::RepoCloneFailed),
         )?;
         emit_workspace_status(
             request.app,
             request.workspace_id,
-            "active",
+            "failed",
             Some("repo_clone_failed"),
         );
         return Err(e);

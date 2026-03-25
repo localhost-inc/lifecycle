@@ -6,7 +6,6 @@ describe("@lifecycle/store", () => {
     expect(typeof store.selectAllProjects).toBe("function");
     expect(typeof store.selectAllWorkspaces).toBe("function");
     expect(typeof store.selectAllServices).toBe("function");
-    expect(typeof store.selectAllTerminals).toBe("function");
     expect(typeof store.selectAgentMessagesBySession).toBe("function");
     expect(typeof store.upsertAgentMessage).toBe("function");
     expect(typeof store.upsertAgentMessageWithParts).toBe("function");

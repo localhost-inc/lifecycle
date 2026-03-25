@@ -1,5 +1,5 @@
 import type { LifecycleConfig, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
-import { Alert, AlertDescription, Button } from "@lifecycle/ui";
+import { Alert, AlertDescription } from "@lifecycle/ui";
 import { AlertTriangle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ServiceLogSnapshot } from "@/features/workspaces/api";
@@ -12,9 +12,7 @@ interface EnvironmentPanelProps {
   hasManifest: boolean;
   manifestState: "invalid" | "missing" | "valid";
   onOpenPreview: (service: Pick<ServiceRecord, "name" | "preview_url">) => void;
-  onRestart: () => Promise<void>;
   onRun: (serviceNames?: string[]) => Promise<void>;
-  onStop: () => Promise<void>;
   services: ServiceRecord[];
   workspace: WorkspaceRecord;
 }
@@ -40,13 +38,65 @@ function getServiceRuntimeByName(
   );
 }
 
+/** Sort services in topological (dependency) order using config's depends_on. */
+function sortByDependencyOrder<T extends { name: string }>(
+  items: T[],
+  environment: LifecycleConfig["environment"] | undefined,
+): T[] {
+  if (!environment || items.length <= 1) return items;
+
+  const inDegree = new Map<string, number>();
+  const dependents = new Map<string, string[]>();
+  const itemNames = new Set(items.map((s) => s.name));
+
+  for (const name of itemNames) {
+    inDegree.set(name, 0);
+    dependents.set(name, []);
+  }
+
+  for (const name of itemNames) {
+    const node = environment[name];
+    if (!node?.depends_on) continue;
+    for (const dep of node.depends_on) {
+      if (!itemNames.has(dep)) continue;
+      dependents.get(dep)!.push(name);
+      inDegree.set(name, (inDegree.get(name) ?? 0) + 1);
+    }
+  }
+
+  // Kahn's algorithm — stable within each layer (preserves input order)
+  const queue: string[] = [];
+  for (const item of items) {
+    if (inDegree.get(item.name) === 0) queue.push(item.name);
+  }
+
+  const sorted: string[] = [];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    sorted.push(current);
+    for (const dep of dependents.get(current) ?? []) {
+      const remaining = inDegree.get(dep)! - 1;
+      inDegree.set(dep, remaining);
+      if (remaining === 0) queue.push(dep);
+    }
+  }
+
+  // Append any items not reached (cycle or missing from config)
+  for (const item of items) {
+    if (!sorted.includes(item.name)) sorted.push(item.name);
+  }
+
+  const order = new Map(sorted.map((name, i) => [name, i]));
+  return [...items].sort((a, b) => (order.get(a.name) ?? 0) - (order.get(b.name) ?? 0));
+}
+
 function getInitialExpandedServiceName(
   workspace: Pick<WorkspaceRecord, "status" | "failure_reason">,
   services: ServiceRecord[],
   serviceLogs: ServiceLogSnapshot[],
 ): string | null {
   if (
-    workspace.status === "preparing" ||
+    workspace.status === "provisioning" ||
     services.some((service) => service.status === "starting")
   ) {
     return (
@@ -76,9 +126,7 @@ export function EnvironmentPanel({
   hasManifest,
   manifestState,
   onOpenPreview,
-  onRestart,
   onRun,
-  onStop,
   services,
   workspace,
 }: EnvironmentPanelProps) {
@@ -104,15 +152,9 @@ export function EnvironmentPanel({
   const hasStartingService = services.some((service) => service.status === "starting");
   const hasReadyService = services.some((service) => service.status === "ready");
   const hasFailedService = services.some((service) => service.status === "failed");
-  const isPreparing = workspaceStatus === "preparing";
   const isArchiving = workspaceStatus === "archiving";
   const isArchived = workspaceStatus === "archived";
   const canStartService = hasManifest && workspaceStatus === "active" && !isArchiving;
-  const [runActionBusy, setRunActionBusy] = useState(false);
-  const canRun =
-    hasManifest && workspaceStatus === "active" && !hasStartingService && !hasReadyService;
-  const canStop = workspaceStatus === "active" && (hasStartingService || hasReadyService);
-  const canRestart = workspaceStatus === "active" && hasReadyService && hasManifest;
   const showServiceLogs =
     !isArchived &&
     (hasStartingService ||
@@ -122,39 +164,6 @@ export function EnvironmentPanel({
       serviceLogs.length > 0);
   const hasServiceContent = services.length > 0 || serviceLogs.length > 0;
   const serviceNameSet = useMemo(() => new Set(services.map((s) => s.name)), [services]);
-  const showRunActions = canStop || hasManifest;
-
-  const handleRunAction = useCallback(async () => {
-    if (runActionBusy) {
-      return;
-    }
-    setRunActionBusy(true);
-    try {
-      if (canStop) {
-        await onStop();
-      } else if (canRun) {
-        await onRun();
-      }
-    } catch (error) {
-      console.error("Run action failed:", error);
-    } finally {
-      setRunActionBusy(false);
-    }
-  }, [canRun, canStop, onRun, onStop, runActionBusy]);
-
-  const handleRestartAction = useCallback(async () => {
-    if (runActionBusy || !canRestart) {
-      return;
-    }
-    setRunActionBusy(true);
-    try {
-      await onRestart();
-    } catch (error) {
-      console.error("Restart failed:", error);
-    } finally {
-      setRunActionBusy(false);
-    }
-  }, [canRestart, onRestart, runActionBusy]);
 
   const handleOpenServiceLogs = useCallback((serviceName: string) => {
     setExpandedServiceName((current) => (current === serviceName ? null : serviceName));
@@ -204,20 +213,6 @@ export function EnvironmentPanel({
     }
   }, [hasReadyService, hasStartingService, serviceLogs, services, workspace, workspaceStatus]);
 
-  const runButtonLabel = isPreparing
-    ? "Preparing..."
-    : isArchiving
-      ? "Archiving..."
-      : runActionBusy && canStop
-        ? "Stopping..."
-        : canStop
-          ? "Stop"
-          : runActionBusy
-            ? "Starting..."
-            : "Start";
-
-  const runButtonDisabled = runActionBusy || isPreparing || isArchiving || (!canRun && !canStop);
-
   const configPrepareSteps = config?.workspace?.prepare ?? [];
 
   function renderServiceList() {
@@ -255,9 +250,11 @@ export function EnvironmentPanel({
         })),
     ];
 
+    const sortedServices = sortByDependencyOrder(services, config?.environment);
+
     const renderedServices =
-      services.length > 0 || prepareStepEntries.length > 0
-        ? [...prepareStepEntries, ...services]
+      sortedServices.length > 0 || prepareStepEntries.length > 0
+        ? [...prepareStepEntries, ...sortedServices]
         : serviceLogs.map((log, index) => ({
             id: `service-log:${log.name}:${index}`,
             workspace_id: workspace.id,
@@ -357,31 +354,6 @@ export function EnvironmentPanel({
         {renderServiceList() ?? renderEmptyState()}
       </div>
 
-      {showRunActions && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-2.5 pb-2.5">
-          <div className="pointer-events-auto flex items-center gap-2">
-            <Button
-              className="px-8"
-              disabled={runButtonDisabled}
-              onClick={() => void handleRunAction()}
-              size="lg"
-              variant="glass"
-            >
-              {runButtonLabel}
-            </Button>
-            {canRestart && (
-              <Button
-                disabled={runActionBusy}
-                onClick={() => void handleRestartAction()}
-                size="lg"
-                variant="glass"
-              >
-                Restart
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
     </section>
   );
 }

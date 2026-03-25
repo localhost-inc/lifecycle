@@ -18,6 +18,7 @@ import {
   type ReactNode,
 } from "react";
 import { SurfaceLaunchActions } from "@/features/workspaces/surfaces/surface-launch-actions";
+import { areWorkspacePaneActiveSurfacesEqual } from "@/features/workspaces/surfaces/workspace-surface-registry";
 import { WorkspacePaneContent } from "@/features/workspaces/canvas/panes/workspace-pane-content";
 import {
   WorkspacePaneDropOverlay,
@@ -27,22 +28,17 @@ import {
 } from "@/features/workspaces/canvas/panes/workspace-pane-drop-zones";
 import {
   WorkspacePaneTabBar,
-  renderWorkspacePaneDefaultTabLeading,
   type WorkspacePaneTabBarDragPreview,
   type WorkspacePaneTabDrag,
 } from "@/features/workspaces/canvas/tabs/workspace-pane-tab-bar";
 import type {
-  WorkspacePaneActiveSurfaceModel,
   WorkspacePaneModel,
   WorkspacePaneTabBarModel,
   WorkspacePaneTreeActions,
   WorkspacePaneTreeModel,
 } from "@/features/workspaces/canvas/workspace-pane-models";
 import type { WorkspacePaneNode } from "@/features/workspaces/state/workspace-canvas-state";
-import {
-  reorderWorkspaceTabKeys,
-  type WorkspaceCanvasTab,
-} from "@/features/workspaces/canvas/workspace-canvas-tabs";
+import { reorderWorkspaceTabKeys } from "@/features/workspaces/canvas/workspace-canvas-tabs";
 
 const MIN_WORKSPACE_PANE_SIZE = 240;
 const PANE_RESIZE_STEP_PX = 32;
@@ -417,10 +413,8 @@ function WorkspacePaneTabDragGhost({
   tab,
 }: {
   drag: WorkspacePaneTabDrag;
-  tab: WorkspaceCanvasTab;
+  tab: WorkspacePaneModel["tabBar"]["tabs"][number];
 }) {
-  const leading = renderWorkspacePaneDefaultTabLeading(tab);
-
   return (
     <div
       className="pointer-events-none fixed left-0 top-0 z-[90]"
@@ -435,7 +429,7 @@ function WorkspacePaneTabDragGhost({
           width: drag.draggedWidth,
         }}
       >
-        {leading}
+        {tab.leading}
         <span className="min-w-0 flex-1 truncate">{tab.label}</span>
       </div>
     </div>
@@ -487,7 +481,12 @@ function areWorkspacePaneTabModelsEqual(
 
   for (let index = 0; index < previous.length; index += 1) {
     if (
-      previous[index]?.dirty !== next[index]?.dirty ||
+      previous[index]?.isDirty !== next[index]?.isDirty ||
+      previous[index]?.isRunning !== next[index]?.isRunning ||
+      previous[index]?.needsAttention !== next[index]?.needsAttention ||
+      previous[index]?.label !== next[index]?.label ||
+      previous[index]?.title !== next[index]?.title ||
+      previous[index]?.leading !== next[index]?.leading ||
       previous[index]?.tab !== next[index]?.tab
     ) {
       return false;
@@ -509,42 +508,6 @@ function areWorkspacePaneTabBarModelsEqual(
   );
 }
 
-function areFileViewerSessionStatesEqual(
-  previous: Extract<WorkspacePaneActiveSurfaceModel, { kind: "file-viewer" }>["sessionState"],
-  next: Extract<WorkspacePaneActiveSurfaceModel, { kind: "file-viewer" }>["sessionState"],
-): boolean {
-  if (previous === next) {
-    return true;
-  }
-
-  return (
-    previous?.conflictDiskContent === next?.conflictDiskContent &&
-    previous?.draftContent === next?.draftContent &&
-    previous?.savedContent === next?.savedContent
-  );
-}
-
-function areWorkspaceCanvasViewStatesEqual(
-  previous:
-    | Extract<
-        WorkspacePaneActiveSurfaceModel,
-        { kind: "changes-diff" | "commit-diff" | "file-viewer" | "pull-request" }
-      >["viewState"]
-    | null,
-  next:
-    | Extract<
-        WorkspacePaneActiveSurfaceModel,
-        { kind: "changes-diff" | "commit-diff" | "file-viewer" | "pull-request" }
-      >["viewState"]
-    | null,
-): boolean {
-  if (previous === next) {
-    return true;
-  }
-
-  return previous?.fileMode === next?.fileMode && previous?.scrollTop === next?.scrollTop;
-}
-
 function areWorkspacePaneTabBarDragPreviewsEqual(
   previous: WorkspacePaneTabBarDragPreview | null,
   next: WorkspacePaneTabBarDragPreview | null,
@@ -561,63 +524,21 @@ function areWorkspacePaneTabBarDragPreviewsEqual(
   );
 }
 
-function areWorkspacePaneActiveSurfacesEqual(
-  previous: WorkspacePaneActiveSurfaceModel,
-  next: WorkspacePaneActiveSurfaceModel,
+function areWorkspacePaneTabSurfacesEqual(
+  previous: WorkspacePaneModel["tabSurfaces"],
+  next: WorkspacePaneModel["tabSurfaces"],
 ): boolean {
-  if (previous.kind !== next.kind) {
-    return false;
-  }
-
-  switch (previous.kind) {
-    case "launcher": {
-      const nextLauncher = next as Extract<WorkspacePaneActiveSurfaceModel, { kind: "launcher" }>;
-      return previous.creatingSelection === nextLauncher.creatingSelection;
-    }
-    case "waiting-terminal":
-    case "opening-terminal":
-    case "loading":
-      return true;
-    case "terminal": {
-      const nextTerminal = next as Extract<WorkspacePaneActiveSurfaceModel, { kind: "terminal" }>;
-      return previous.tab === nextTerminal.tab && previous.terminal === nextTerminal.terminal;
-    }
-    case "changes-diff":
-    case "commit-diff":
-    case "pull-request": {
-      const nextDocumentSurface = next as Extract<
-        WorkspacePaneActiveSurfaceModel,
-        { kind: "changes-diff" | "commit-diff" | "pull-request" }
-      >;
-      return (
-        previous.document === nextDocumentSurface.document &&
-        previous.workspaceId === nextDocumentSurface.workspaceId &&
-        areWorkspaceCanvasViewStatesEqual(previous.viewState, nextDocumentSurface.viewState)
-      );
-    }
-    case "preview": {
-      const nextPreview = next as Extract<WorkspacePaneActiveSurfaceModel, { kind: "preview" }>;
-      return previous.document === nextPreview.document;
-    }
-    case "agent": {
-      const nextAgent = next as Extract<WorkspacePaneActiveSurfaceModel, { kind: "agent" }>;
-      return (
-        previous.document === nextAgent.document && previous.workspaceId === nextAgent.workspaceId
-      );
-    }
-    case "file-viewer": {
-      const nextFileViewer = next as Extract<
-        WorkspacePaneActiveSurfaceModel,
-        { kind: "file-viewer" }
-      >;
-      return (
-        previous.document === nextFileViewer.document &&
-        previous.workspaceId === nextFileViewer.workspaceId &&
-        areWorkspaceCanvasViewStatesEqual(previous.viewState, nextFileViewer.viewState) &&
-        areFileViewerSessionStatesEqual(previous.sessionState, nextFileViewer.sessionState)
-      );
+  if (previous === next) return true;
+  if (previous.length !== next.length) return false;
+  for (let i = 0; i < previous.length; i += 1) {
+    if (
+      previous[i]?.key !== next[i]?.key ||
+      !areWorkspacePaneActiveSurfacesEqual(previous[i]!.surface, next[i]!.surface)
+    ) {
+      return false;
     }
   }
+  return true;
 }
 
 function areWorkspacePaneModelsEqual(
@@ -628,7 +549,8 @@ function areWorkspacePaneModelsEqual(
     previous.id === next.id &&
     previous.isActive === next.isActive &&
     areWorkspacePaneTabBarModelsEqual(previous.tabBar, next.tabBar) &&
-    areWorkspacePaneActiveSurfacesEqual(previous.activeSurface, next.activeSurface)
+    areWorkspacePaneActiveSurfacesEqual(previous.activeSurface, next.activeSurface) &&
+    areWorkspacePaneTabSurfacesEqual(previous.tabSurfaces, next.tabSurfaces)
   );
 }
 
@@ -714,9 +636,7 @@ const WorkspacePaneLeaf = memo(function WorkspacePaneLeaf({
       >
         <WorkspacePaneTabBar
           model={pane.tabBar}
-          onCloseDocumentTab={actions.closeDocumentTab}
-          onCloseTerminalTab={actions.closeTerminalTab}
-          onRenameTerminalTab={actions.renameTerminalTab}
+          onCloseTab={actions.closeTab}
           onSelectTab={(key) => actions.selectTab(pane.id, key)}
           onTabDrag={onTabDrag}
           onTabDragCommit={onTabDragCommit}
@@ -757,14 +677,17 @@ const WorkspacePaneLeaf = memo(function WorkspacePaneLeaf({
 
       <div className="relative flex min-h-0 flex-1 flex-col" data-workspace-pane-body>
         <WorkspacePaneContent
-          activeSurface={pane.activeSurface}
+          activeTabKey={pane.tabBar.activeTabKey}
+          launchActions={surfaceActions}
           onFileSessionStateChange={actions.fileSessionStateChange}
           onLaunchSurface={(request) => actions.launchSurface(pane.id, request)}
           onOpenFile={actions.openFile}
           onTabViewStateChange={actions.tabViewStateChange}
           paneDragInProgress={paneTabDragInProgress}
           paneFocused={pane.isActive}
+          pendingLaunchActionKey={pane.activeSurface.kind === "launcher" ? pane.activeSurface.pendingLaunchActionKey : null}
           surfaceOpacity={paneOpacity}
+          tabSurfaces={pane.tabSurfaces}
         />
       </div>
     </section>
@@ -790,10 +713,7 @@ export function WorkspacePaneTree({ actions, model }: WorkspacePaneTreeProps) {
   const visibleTabsByPaneId = useMemo(
     () =>
       Object.fromEntries(
-        Object.entries(model.panesById).map(([paneId, pane]) => [
-          paneId,
-          pane.tabBar.tabs.map((entry) => entry.tab),
-        ]),
+        Object.entries(model.panesById).map(([paneId, pane]) => [paneId, pane.tabBar.tabs]),
       ),
     [model.panesById],
   );

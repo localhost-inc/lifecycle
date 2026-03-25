@@ -1,6 +1,4 @@
 import type { AgentSessionRecord } from "./agent";
-import type { TerminalRecord } from "./db";
-import type { TerminalFailureReason, TerminalStatus } from "./terminal";
 import type {
   ServiceStatus,
   ServiceStatusReason,
@@ -12,7 +10,7 @@ export type LifecycleEventWire =
   | {
       id: string;
       occurred_at: string;
-      kind: "workspace.status_changed";
+      kind: "workspace.status.changed";
       workspace_id: string;
       status: WorkspaceStatus;
       failure_reason: WorkspaceFailureReason | null;
@@ -29,57 +27,24 @@ export type LifecycleEventWire =
   | {
       id: string;
       occurred_at: string;
-      kind: "workspace.deleted";
+      kind: "workspace.archived";
       workspace_id: string;
     }
   | {
       id: string;
       occurred_at: string;
-      kind: "workspace.file_changed";
+      kind: "workspace.file.changed";
       workspace_id: string;
       file_path: string;
     }
   | {
       id: string;
       occurred_at: string;
-      kind: "service.status_changed";
+      kind: "service.status.changed";
       workspace_id: string;
       name: string;
       status: ServiceStatus;
       status_reason: ServiceStatusReason | null;
-    }
-  | {
-      id: string;
-      occurred_at: string;
-      kind: "terminal.created";
-      workspace_id: string;
-      terminal: TerminalRecord;
-    }
-  | {
-      id: string;
-      occurred_at: string;
-      kind: "terminal.updated";
-      workspace_id: string;
-      terminal: TerminalRecord;
-    }
-  | {
-      id: string;
-      occurred_at: string;
-      kind: "terminal.status_changed";
-      terminal_id: string;
-      workspace_id: string;
-      status: TerminalStatus;
-      failure_reason: TerminalFailureReason | null;
-      exit_code: number | null;
-      ended_at: string | null;
-    }
-  | {
-      id: string;
-      occurred_at: string;
-      kind: "terminal.renamed";
-      terminal_id: string;
-      workspace_id: string;
-      label: string;
     }
   | {
       id: string;
@@ -106,7 +71,7 @@ export type LifecycleEventWire =
   | {
       id: string;
       occurred_at: string;
-      kind: "service.process_exited";
+      kind: "service.process.exited";
       workspace_id: string;
       name: string;
       exit_code: number | null;
@@ -114,7 +79,7 @@ export type LifecycleEventWire =
   | {
       id: string;
       occurred_at: string;
-      kind: "service.log_line";
+      kind: "service.log.line";
       workspace_id: string;
       name: string;
       stream: "stdout" | "stderr";
@@ -123,7 +88,7 @@ export type LifecycleEventWire =
   | {
       id: string;
       occurred_at: string;
-      kind: "git.status_changed";
+      kind: "git.status.changed";
       workspace_id: string;
       branch: string | null;
       head_sha: string | null;
@@ -132,7 +97,7 @@ export type LifecycleEventWire =
   | {
       id: string;
       occurred_at: string;
-      kind: "git.head_changed";
+      kind: "git.head.changed";
       workspace_id: string;
       branch: string | null;
       head_sha: string | null;
@@ -143,7 +108,7 @@ export type LifecycleEventWire =
   | {
       id: string;
       occurred_at: string;
-      kind: "git.log_changed";
+      kind: "git.log.changed";
       workspace_id: string;
       branch: string | null;
       head_sha: string | null;
@@ -153,7 +118,7 @@ export type LifecycleEvent =
   | {
       id: string;
       occurredAt: string;
-      kind: "workspace.status_changed";
+      kind: "workspace.status.changed";
       workspaceId: string;
       status: WorkspaceStatus;
       failureReason: WorkspaceFailureReason | null;
@@ -170,57 +135,24 @@ export type LifecycleEvent =
   | {
       id: string;
       occurredAt: string;
-      kind: "workspace.deleted";
+      kind: "workspace.archived";
       workspaceId: string;
     }
   | {
       id: string;
       occurredAt: string;
-      kind: "workspace.file_changed";
+      kind: "workspace.file.changed";
       workspaceId: string;
       filePath: string;
     }
   | {
       id: string;
       occurredAt: string;
-      kind: "service.status_changed";
+      kind: "service.status.changed";
       workspaceId: string;
       name: string;
       status: ServiceStatus;
       statusReason: ServiceStatusReason | null;
-    }
-  | {
-      id: string;
-      occurredAt: string;
-      kind: "terminal.created";
-      workspaceId: string;
-      terminal: TerminalRecord;
-    }
-  | {
-      id: string;
-      occurredAt: string;
-      kind: "terminal.updated";
-      workspaceId: string;
-      terminal: TerminalRecord;
-    }
-  | {
-      id: string;
-      occurredAt: string;
-      kind: "terminal.status_changed";
-      terminalId: string;
-      workspaceId: string;
-      status: TerminalStatus;
-      failureReason: TerminalFailureReason | null;
-      exitCode: number | null;
-      endedAt: string | null;
-    }
-  | {
-      id: string;
-      occurredAt: string;
-      kind: "terminal.renamed";
-      terminalId: string;
-      workspaceId: string;
-      label: string;
     }
   | {
       id: string;
@@ -247,7 +179,7 @@ export type LifecycleEvent =
   | {
       id: string;
       occurredAt: string;
-      kind: "service.process_exited";
+      kind: "service.process.exited";
       workspaceId: string;
       name: string;
       exitCode: number | null;
@@ -255,7 +187,7 @@ export type LifecycleEvent =
   | {
       id: string;
       occurredAt: string;
-      kind: "service.log_line";
+      kind: "service.log.line";
       workspaceId: string;
       name: string;
       stream: "stdout" | "stderr";
@@ -264,7 +196,7 @@ export type LifecycleEvent =
   | {
       id: string;
       occurredAt: string;
-      kind: "git.status_changed";
+      kind: "git.status.changed";
       workspaceId: string;
       branch: string | null;
       headSha: string | null;
@@ -273,7 +205,7 @@ export type LifecycleEvent =
   | {
       id: string;
       occurredAt: string;
-      kind: "git.head_changed";
+      kind: "git.head.changed";
       workspaceId: string;
       branch: string | null;
       headSha: string | null;
@@ -284,14 +216,17 @@ export type LifecycleEvent =
   | {
       id: string;
       occurredAt: string;
-      kind: "git.log_changed";
+      kind: "git.log.changed";
       workspaceId: string;
       branch: string | null;
       headSha: string | null;
     };
 
 export type LifecycleEventKind = LifecycleEvent["kind"];
-export type LifecycleEventOf<Kind extends LifecycleEventKind> = Extract<LifecycleEvent, { kind: Kind }>;
+export type LifecycleEventOf<Kind extends LifecycleEventKind> = Extract<
+  LifecycleEvent,
+  { kind: Kind }
+>;
 export type LifecycleEventWireOf<Kind extends LifecycleEventKind> = Extract<
   LifecycleEventWire,
   { kind: Kind }

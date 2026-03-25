@@ -14,10 +14,7 @@ use rusqlite::params;
 use tauri::{AppHandle, State};
 
 use super::super::controller::ManagedWorkspaceController;
-use super::super::shared::{
-    emit_service_status, emit_workspace_status, mark_services_failed,
-    reconcile_workspace_services_db, update_workspace_status_db,
-};
+use super::super::shared::{emit_service_status, mark_services_failed, reconcile_workspace_services_db};
 use super::execution::{
     abort_start_if_needed, record_service_graph_failure, record_start_failure,
     WorkspaceStartContext,
@@ -98,17 +95,6 @@ fn mark_prepared(db_path: &str, workspace_id: &str) -> Result<(), LifecycleError
         params![workspace_id],
     )
     .map_err(|error| LifecycleError::Database(error.to_string()))?;
-    Ok(())
-}
-
-fn set_workspace_status(
-    app: &AppHandle,
-    db_path: &str,
-    workspace_id: &str,
-    status: &WorkspaceStatus,
-) -> Result<(), LifecycleError> {
-    update_workspace_status_db(db_path, workspace_id, status, None)?;
-    emit_workspace_status(app, workspace_id, status.as_str(), None);
     Ok(())
 }
 
@@ -203,7 +189,6 @@ async fn start_workspace_services_lifecycle(
         Some(&satisfied_service_names),
     )?;
     if lowered_graph.workspace_prepare.is_empty() && lowered_graph.environment_nodes.is_empty() {
-        update_workspace_status_db(db_path, workspace_id, &WorkspaceStatus::Active, None)?;
         controller.finish_start(&start_token).await;
         diagnostics::append_timing(
             "workspace-start",
@@ -236,7 +221,6 @@ async fn start_workspace_services_lifecycle(
     let prepare_work_ran = !lowered_graph.workspace_prepare.is_empty();
 
     if !lowered_graph.workspace_prepare.is_empty() {
-        set_workspace_status(app, db_path, workspace_id, &WorkspaceStatus::Preparing)?;
         let prepare_started_at = Instant::now();
         match prepare::run_steps(
             app,
@@ -271,8 +255,6 @@ async fn start_workspace_services_lifecycle(
         if ctx.abort_if_needed().await? {
             return Ok(());
         }
-
-        set_workspace_status(app, db_path, workspace_id, &WorkspaceStatus::Active)?;
     }
 
     ctx.execute_environment_graph(&lowered_graph.environment_nodes, &sorted_nodes)
@@ -286,7 +268,6 @@ async fn start_workspace_services_lifecycle(
         return Ok(());
     }
 
-    update_workspace_status_db(db_path, workspace_id, &WorkspaceStatus::Active, None)?;
     controller.finish_start(&start_token).await;
     diagnostics::append_timing(
         "workspace-start",
@@ -313,7 +294,7 @@ pub async fn start_workspace_services(
         .await?;
     let current_workspace_status = load_workspace_status(&db_path.0, &workspace_id)?;
     let start_mode = match current_workspace_status {
-        WorkspaceStatus::Preparing | WorkspaceStatus::Archiving => {
+        WorkspaceStatus::Provisioning | WorkspaceStatus::Archiving => {
             return Err(LifecycleError::WorkspaceMutationLocked {
                 status: current_workspace_status.as_str().to_string(),
             });
@@ -321,7 +302,13 @@ pub async fn start_workspace_services(
         WorkspaceStatus::Archived => {
             return Err(LifecycleError::InvalidStateTransition {
                 from: WorkspaceStatus::Archived.as_str().to_string(),
-                to: WorkspaceStatus::Preparing.as_str().to_string(),
+                to: "starting".to_string(),
+            });
+        }
+        WorkspaceStatus::Failed => {
+            return Err(LifecycleError::InvalidStateTransition {
+                from: WorkspaceStatus::Failed.as_str().to_string(),
+                to: "starting".to_string(),
             });
         }
         WorkspaceStatus::Active => {
@@ -403,7 +390,7 @@ fn sync_workspace_manifest_if_idle(
     manifest_fingerprint: Option<&str>,
 ) -> Result<bool, LifecycleError> {
     let conn = open_db(db_path)?;
-    let status: String = conn
+    let workspace_status: String = conn
         .query_row(
             "SELECT status FROM workspace WHERE id = ?1",
             params![workspace_id],
@@ -417,8 +404,23 @@ fn sync_workspace_manifest_if_idle(
         })?;
     drop(conn);
 
-    let workspace_status = WorkspaceStatus::from_str(&status)?;
+    let workspace_status = WorkspaceStatus::from_str(&workspace_status)?;
     if workspace_status != WorkspaceStatus::Active {
+        return Ok(false);
+    }
+
+    // Skip reconciliation if any services are currently running/starting
+    let conn = open_db(db_path)?;
+    let active_service_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM service WHERE workspace_id = ?1 AND status IN ('starting', 'ready')",
+            params![workspace_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| LifecycleError::Database(e.to_string()))?;
+    drop(conn);
+
+    if active_service_count > 0 {
         return Ok(false);
     }
 

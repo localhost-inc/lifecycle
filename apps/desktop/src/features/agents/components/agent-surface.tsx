@@ -1,20 +1,24 @@
-import { EmptyState, Shimmer } from "@lifecycle/ui";
-import { Bot } from "lucide-react";
+import { EmptyState } from "@lifecycle/ui";
+import { ArrowDown, Bot } from "lucide-react";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { useStickToBottom } from "use-stick-to-bottom";
 import type {
   AgentApprovalDecision,
   AgentImageMediaType,
   AgentInputPart,
-  AgentTurnActivity,
 } from "@lifecycle/agents";
 import { diffTheme } from "@lifecycle/ui";
-import { useSettings } from "@/features/settings/state/settings-provider";
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { readFile } from "@tauri-apps/plugin-fs";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { useSettings } from "@/features/settings/state/settings-context";
 import type { ClaudePermissionMode } from "@/features/settings/state/harnesses/claude";
 import { claudePermissionModeOptions } from "@/features/settings/state/harnesses/claude";
 import type { CodexSandboxMode } from "@/features/settings/state/harnesses/codex";
@@ -22,7 +26,8 @@ import { codexSandboxModeOptions } from "@/features/settings/state/harnesses/cod
 import { DiffRenderProvider } from "@/features/git/components/diff-render-provider";
 import { useAgentSession, useAgentSessionMessages } from "@/features/agents/hooks";
 import { useProviderModelCatalog } from "@/features/agents/state/use-provider-model-catalog";
-import { useAgentSessionState } from "@/features/agents/state/agent-session-state";
+import { deriveAgentDisplayStatus } from "@lifecycle/agents";
+import { useAgentSessionState } from "@lifecycle/agents/react";
 import { ClaudeIcon, CodexIcon } from "@/features/workspaces/surfaces/surface-icons";
 import { useAgentOrchestrator } from "@/store/provider";
 import { useWorkspace } from "@/store/hooks";
@@ -34,32 +39,29 @@ import {
   buildReasoningOptions,
 } from "@/features/agents/components/agent-message-parsing";
 import { TranscriptMessage } from "@/features/agents/components/agent-transcript";
-import { AgentStatusBar } from "@/features/agents/components/agent-status-bar";
+import { AgentActivityBar } from "@/features/agents/components/agent-activity-bar";
+import { AgentToolbar } from "@/features/agents/components/agent-toolbar";
 import type { AgentMessageWithParts } from "@lifecycle/contracts";
 import { useWorkspaceOpenRequests } from "@/features/workspaces/state/workspace-open-requests";
 import { createFileViewerOpenInput } from "@/features/workspaces/canvas/workspace-canvas-requests";
+import { useCommandPaletteExplorer } from "@/features/command-palette/use-command-palette-explorer";
+import { AgentPromptInput, type AgentPromptInputHandle } from "./agent-prompt-input";
+import { useAgentCommands } from "./use-agent-commands";
+
+// ---------------------------------------------------------------------------
+// Image file extensions → media types for Tauri native drag-drop (no MIME available)
+// ---------------------------------------------------------------------------
+const IMAGE_EXT_TO_MEDIA_TYPE: Record<string, AgentImageMediaType> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+};
 
 // ---------------------------------------------------------------------------
 // Turn activity display
 // ---------------------------------------------------------------------------
-
-function formatTurnActivity(activity: AgentTurnActivity | null): string {
-  if (!activity) {
-    return "Working";
-  }
-
-  switch (activity.phase) {
-    case "thinking":
-      return "Thinking";
-    case "responding":
-      return "Writing";
-    case "tool_use":
-      if (activity.toolName) {
-        return activity.toolName;
-      }
-      return "Running tools";
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Surface
@@ -107,7 +109,11 @@ function buildParsedMessages(records: AgentMessageWithParts[] | undefined): Pars
   return merged;
 }
 
-export function AgentSurface({ agentSessionId, paneFocused, workspaceId }: AgentSurfaceProps) {
+export function AgentSurface({
+  agentSessionId,
+  paneFocused,
+  workspaceId,
+}: AgentSurfaceProps) {
   const agentOrchestrator = useAgentOrchestrator();
   const workspace = useWorkspace(workspaceId);
   const session = useAgentSession(workspaceId, agentSessionId);
@@ -123,7 +129,7 @@ export function AgentSurface({ agentSessionId, paneFocused, workspaceId }: Agent
     preferredModel:
       providerForCatalog === "claude" ? harnesses.claude.model : harnesses.codex.model,
   });
-  const { openDocument } = useWorkspaceOpenRequests();
+  const { openTab } = useWorkspaceOpenRequests();
   const draftKey = `agent-draft:${agentSessionId}`;
   const [draftPrompt, setDraftPromptRaw] = useState(() => sessionStorage.getItem(draftKey) ?? "");
 
@@ -144,8 +150,13 @@ export function AgentSurface({ agentSessionId, paneFocused, workspaceId }: Agent
   const [pendingImages, setPendingImages] = useState<
     Array<{ mediaType: AgentImageMediaType; base64Data: string }>
   >([]);
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  // Tabs stay mounted across switches so the DOM preserves scroll position.
+  // useStickToBottom handles auto-scroll during streaming only.
+  const { scrollRef, contentRef, scrollToBottom, isAtBottom } = useStickToBottom({
+    initial: "instant",
+    resize: "smooth",
+  });
+  const promptInputRef = useRef<AgentPromptInputHandle>(null);
 
   const isClaude = session?.provider === "claude";
   const planMode = isClaude
@@ -154,9 +165,38 @@ export function AgentSurface({ agentSessionId, paneFocused, workspaceId }: Agent
   const prePlanPermissionsRef = useRef<string | null>(null);
 
   const isRunning = isSending || state.pendingTurnIds.length > 0;
-  const [inputFocused, setInputFocused] = useState(false);
-  const showCursorBlink = inputFocused && !isRunning && draftPrompt.length === 0;
   const theme = diffTheme(resolvedTheme);
+
+  // Trigger menu data sources
+  const explorer = useCommandPaletteExplorer();
+  const agentCommands = useAgentCommands({
+    onTogglePlanMode: () => {
+      // Simulate Shift+Tab toggle
+      if (!planMode) {
+        if (isClaude) {
+          prePlanPermissionsRef.current = harnesses.claude.permissionMode;
+          setClaudeHarnessSettings({ ...harnesses.claude, permissionMode: "plan" });
+        } else {
+          prePlanPermissionsRef.current = harnesses.codex.sandboxMode;
+          setCodexHarnessSettings({ ...harnesses.codex, sandboxMode: "read-only" });
+        }
+      } else {
+        const prev = prePlanPermissionsRef.current;
+        if (isClaude) {
+          setClaudeHarnessSettings({
+            ...harnesses.claude,
+            permissionMode: (prev as ClaudePermissionMode) ?? "auto-approve",
+          });
+        } else {
+          setCodexHarnessSettings({
+            ...harnesses.codex,
+            sandboxMode: (prev as CodexSandboxMode) ?? "full-auto",
+          });
+        }
+        prePlanPermissionsRef.current = null;
+      }
+    },
+  });
 
   // Track elapsed time while the agent is working
   const thinkingStartRef = useRef<number | null>(null);
@@ -245,7 +285,7 @@ export function AgentSurface({ agentSessionId, paneFocused, workspaceId }: Agent
   // Focus input when pane gains focus or this tab becomes active
   useEffect(() => {
     if (paneFocused) {
-      textareaRef.current?.focus();
+      promptInputRef.current?.focus();
     }
   }, [paneFocused, agentSessionId]);
 
@@ -264,25 +304,17 @@ export function AgentSurface({ agentSessionId, paneFocused, workspaceId }: Agent
   // render as one visual block (the SDK often splits them into separate rows).
   const messages = useMemo(() => buildParsedMessages(dbMessages.data), [dbMessages.data]);
 
-  // Scroll to bottom only on initial mount
-  const hasScrolledRef = useRef(false);
-  useEffect(() => {
-    if (hasScrolledRef.current) return;
-    const el = scrollRef.current;
-    if (!el) return;
-    hasScrolledRef.current = true;
-    el.scrollTop = el.scrollHeight;
-  }, [messages]);
 
   function handleOpenFile(filePath: string): void {
     // Agent tools report absolute paths — strip the worktree root so the
     // backend receives a repo-relative path.
-    let repoRelative = filePath;
     const root = workspace?.worktree_path;
-    if (root && filePath.startsWith(root)) {
-      repoRelative = filePath.slice(root.length).replace(/^\//, "");
+    if (!root || !filePath.startsWith(root)) {
+      // File is outside the workspace worktree — cannot open in file viewer.
+      return;
     }
-    openDocument(workspaceId, createFileViewerOpenInput(repoRelative));
+    const repoRelative = filePath.slice(root.length).replace(/^\//, "");
+    openTab(workspaceId, createFileViewerOpenInput(repoRelative));
   }
 
   function addImagesFromFiles(files: FileList | File[]): void {
@@ -309,6 +341,48 @@ export function AgentSurface({ agentSessionId, paneFocused, workspaceId }: Agent
     }
   }
 
+  const addImagesFromPaths = useCallback(async (paths: string[]) => {
+    for (const filePath of paths) {
+      const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
+      const mediaType = IMAGE_EXT_TO_MEDIA_TYPE[ext];
+      if (!mediaType) continue;
+      try {
+        const bytes = await readFile(filePath);
+        const binary = Array.from(bytes, (b) => String.fromCharCode(b)).join("");
+        const base64Data = btoa(binary);
+        setPendingImages((prev) => [...prev, { mediaType, base64Data }]);
+      } catch {
+        // skip unreadable files
+      }
+    }
+  }, []);
+
+  // Tauri native drag-drop: the webview intercepts file drops and provides
+  // file system paths instead of HTML5 drag events.
+  const [isDragOver, setIsDragOver] = useState(false);
+  useEffect(() => {
+    if (!isTauri()) return;
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    (async () => {
+      if (cancelled) return;
+      unlisten = await getCurrentWebview().onDragDropEvent((event) => {
+        if (event.payload.type === "enter" || event.payload.type === "over") {
+          setIsDragOver(true);
+        } else if (event.payload.type === "drop") {
+          setIsDragOver(false);
+          addImagesFromPaths(event.payload.paths);
+        } else {
+          setIsDragOver(false);
+        }
+      });
+    })();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [addImagesFromPaths]);
+
   async function handleSend(): Promise<void> {
     if (!session) return;
     const prompt = draftPrompt.trim();
@@ -332,19 +406,17 @@ export function AgentSurface({ agentSessionId, paneFocused, workspaceId }: Agent
       });
       setDraftPrompt("");
       setPendingImages([]);
-      if (textareaRef.current) {
-        textareaRef.current.style.height = "auto";
-      }
-      // Scroll transcript to the bottom after sending
-      requestAnimationFrame(() => {
-        const el = scrollRef.current;
-        if (el) el.scrollTop = el.scrollHeight;
-      });
+      scrollToBottom();
     } catch (error) {
-      setSendError(error instanceof Error ? error.message : "Failed to send prompt.");
+      const message = error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : "Failed to send prompt.";
+      console.error("[agent] send turn failed:", error);
+      setSendError(message);
     } finally {
       setIsSending(false);
-      textareaRef.current?.focus();
     }
   }
 
@@ -381,19 +453,7 @@ export function AgentSurface({ agentSessionId, paneFocused, workspaceId }: Agent
     }
   }
 
-  function handleKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>): void {
-    if (event.key === "Enter" && !event.shiftKey && !event.altKey) {
-      event.preventDefault();
-      void handleSend();
-    }
-  }
 
-  function handleTextareaChange(event: React.ChangeEvent<HTMLTextAreaElement>): void {
-    setDraftPrompt(event.target.value);
-    const el = event.target;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }
 
   if (!session) {
     return (
@@ -527,162 +587,135 @@ export function AgentSurface({ agentSessionId, paneFocused, workspaceId }: Agent
   return (
     <DiffRenderProvider theme={theme}>
       <section
-        className="agent-surface flex h-full min-h-0 flex-col bg-[var(--terminal-surface,var(--surface))]"
+        className="agent-surface relative flex h-full min-h-0 flex-col bg-[var(--terminal-surface,var(--surface))]"
         onClick={(e) => {
           // Focus textarea when clicking unhandled areas of the surface
           if (e.target === e.currentTarget) {
-            textareaRef.current?.focus();
+            promptInputRef.current?.focus();
           }
         }}
       >
-        {/* Transcript + input */}
+        {/* Transcript */}
         <div
           ref={scrollRef}
-          className="agent-message-list flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden"
-          onClick={() => textareaRef.current?.focus()}
-        >
-          <div className="flex-1" />
-
-          {/* Auth status */}
-          {session.status === "starting" ? (
-            <div className="px-4 py-3 text-[13px] leading-6 text-[var(--muted-foreground)]">
-              <span className="text-[var(--accent)]">[~]</span> starting {provider.name}...
-            </div>
-          ) : null}
-          {state.authStatus?.mode === "authenticating" ? (
-            <div className="px-4 py-3 text-[13px] leading-6 text-[var(--muted-foreground)]">
-              <span className="text-[var(--accent)]">[~]</span> signing in to {provider.name}...
-            </div>
-          ) : null}
-          {state.authStatus?.mode === "error" ? (
-            <div className="px-4 py-3 text-[13px] leading-6 text-[var(--destructive)]">
-              <span>[!]</span> authentication failed
-            </div>
-          ) : null}
-          {session.status === "failed" && state.authStatus?.mode !== "error" && !visibleError ? (
-            <div className="px-4 py-3 text-[13px] leading-6 text-[var(--destructive)]">
-              <span>[!]</span> failed to start {provider.name}
-            </div>
-          ) : null}
-
-          {/* Messages — single source from DB collection */}
-          {messages.map((message, i) => (
-            <TranscriptMessage
-              key={message.id}
-              message={message}
-              isStreaming={isRunning && i === messages.length - 1 && message.role === "assistant"}
-              onResolveApproval={handleResolveApproval}
-              onOpenFile={handleOpenFile}
-              resolvingApprovalIds={resolvingApprovalIds}
-            />
-          ))}
-
-          {/* Working indicator */}
-          {showThinking ? (
-            <div className="px-4 py-3">
-              <div className="flex items-center gap-1.5 text-[13px]">
-                <span className="agent-cursor-blink text-[var(--muted-foreground)]">&#8226;</span>
-                <Shimmer as="span" duration={2} spread={2} className="text-[13px]">
-                  {formatTurnActivity(state.turnActivity)}
-                </Shimmer>
-                <span className="text-[var(--muted-foreground)]/50">
-                  ({thinkingElapsed}s · esc to interrupt)
-                </span>
-              </div>
-            </div>
-          ) : null}
-        </div>
-
-        {/* Input */}
-        <div
-          className="shrink-0 bg-[var(--surface-hover)]/50"
-          onDragOver={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-          }}
-          onDrop={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (e.dataTransfer.files.length > 0) {
-              addImagesFromFiles(e.dataTransfer.files);
+          className="agent-message-list relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+          onClick={(e) => {
+            const anchor = (e.target as HTMLElement).closest("a[href]");
+            if (anchor) {
+              const href = anchor.getAttribute("href");
+              if (href && /^https?:\/\//.test(href)) {
+                e.preventDefault();
+                e.stopPropagation();
+                void openUrl(href);
+                return;
+              }
+            }
+            const selection = window.getSelection();
+            if (!selection || selection.isCollapsed) {
+              promptInputRef.current?.focus();
             }
           }}
         >
-          {pendingImages.length > 0 ? (
-            <div className="flex flex-wrap gap-2 px-4 pt-2">
-              {pendingImages.map((img, i) => (
-                <div key={i} className="group relative">
-                  <img
-                    src={`data:${img.mediaType};base64,${img.base64Data}`}
-                    alt={`Attached image ${i + 1}`}
-                    className="h-16 w-16 rounded border border-[var(--border)] object-cover"
-                  />
-                  <button
-                    className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-[var(--destructive)] text-[10px] text-white opacity-0 transition-opacity group-hover:opacity-100"
-                    onClick={() => setPendingImages((prev) => prev.filter((_, j) => j !== i))}
-                    type="button"
-                  >
-                    &times;
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : null}
-          <div className="flex items-start px-4 pt-3 pb-2">
-            <span className="shrink-0 pt-[3px] text-[13px] text-[var(--accent)]">
-              &#9654;&nbsp;
-            </span>
-            <div className="relative min-w-0 flex-1">
-              <textarea
-                ref={textareaRef}
-                autoFocus
-                autoComplete="off"
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                className={`w-full resize-none overflow-hidden bg-transparent font-[var(--font-mono)] text-[13px] leading-6 text-[var(--foreground)] outline-none p-0 m-0 ${showCursorBlink ? "caret-transparent" : "caret-[var(--foreground)]"}`}
-                onBlur={() => setInputFocused(false)}
-                onChange={handleTextareaChange}
-                onFocus={() => setInputFocused(true)}
-                onKeyDown={handleKeyDown}
-                onPaste={(e) => {
-                  const files = e.clipboardData?.files;
-                  if (files && files.length > 0) {
-                    const hasImages = Array.from(files).some((f) => f.type.startsWith("image/"));
-                    if (hasImages) {
-                      e.preventDefault();
-                      addImagesFromFiles(files);
-                    }
-                  }
-                }}
-                placeholder={planMode ? "plan mode — shift+tab to exit" : ""}
-                rows={1}
-                style={{ height: "auto" }}
-                value={draftPrompt}
+          <div ref={contentRef} className="flex min-h-full flex-col">
+            <div className="flex-1 pt-4" />
+
+            {/* Auth status */}
+            {session.status === "starting" ? (
+              <div className="px-4 py-3 text-[13px] leading-6 text-[var(--muted-foreground)]">
+                <span className="text-[var(--accent)]">[~]</span> starting {provider.name}...
+              </div>
+            ) : null}
+            {state.authStatus?.mode === "authenticating" ? (
+              <div className="px-4 py-3 text-[13px] leading-6 text-[var(--muted-foreground)]">
+                <span className="text-[var(--accent)]">[~]</span> signing in to {provider.name}...
+              </div>
+            ) : null}
+            {state.authStatus?.mode === "error" ? (
+              <div className="px-4 py-3 text-[13px] leading-6 text-[var(--destructive)]">
+                <span>[!]</span> authentication failed
+              </div>
+            ) : null}
+            {session.status === "failed" && state.authStatus?.mode !== "error" && !visibleError ? (
+              <div className="px-4 py-3 text-[13px] leading-6 text-[var(--destructive)]">
+                <span>[!]</span> failed to start {provider.name}
+              </div>
+            ) : null}
+
+            {/* Messages — single source from DB collection */}
+            {messages.map((message, i) => (
+              <TranscriptMessage
+                key={message.id}
+                message={message}
+                isStreaming={isRunning && i === messages.length - 1 && message.role === "assistant"}
+                onResolveApproval={handleResolveApproval}
+                onOpenFile={handleOpenFile}
+                resolvingApprovalIds={resolvingApprovalIds}
               />
-              {showCursorBlink ? (
-                <span className="agent-cursor-blink pointer-events-none absolute left-0 top-[5px] h-[14px] w-[7px] bg-[var(--foreground)]" />
-              ) : null}
-            </div>
+            ))}
+
           </div>
-          {visibleError ? (
-            <div className="px-4 pb-1 text-[12px] text-[var(--destructive)]">
-              <span>[!]</span> {visibleError}
-            </div>
-          ) : null}
+
+          {/* Scroll-to-bottom button */}
+          {!isAtBottom && (
+            <button
+              className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-[var(--border)] bg-[var(--surface)] p-1.5 text-[var(--muted-foreground)] shadow-sm transition-colors hover:text-[var(--foreground)]"
+              onClick={() => scrollToBottom()}
+              type="button"
+            >
+              <ArrowDown className="size-3.5" />
+            </button>
+          )}
         </div>
 
-        <AgentStatusBar
+        {/* Drop overlay */}
+        {isDragOver ? (
+          <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-[var(--surface)]/80 backdrop-blur-sm">
+            <div className="rounded-lg border-2 border-dashed border-[var(--accent)] px-6 py-4 text-[13px] text-[var(--accent)]">
+              Drop images to attach
+            </div>
+          </div>
+        ) : null}
+
+        {showThinking ? (
+          <AgentActivityBar
+            turnActivity={state.turnActivity}
+            providerStatus={state.providerStatus}
+            elapsedSeconds={thinkingElapsed}
+          />
+        ) : null}
+
+        <AgentPromptInput
+          ref={promptInputRef}
+          agentSessionId={agentSessionId}
+          draftPrompt={draftPrompt}
+          error={visibleError ?? null}
+          fileItems={explorer.items}
+          commandItems={agentCommands}
+          isRunning={isRunning}
+          pendingImages={pendingImages}
+          planMode={planMode}
+          onAddImagesFromFiles={addImagesFromFiles}
+          onRemovePendingImage={(i) => setPendingImages((prev) => prev.filter((_, j) => j !== i))}
+          onDraftPromptChange={(value) => setDraftPrompt(value)}
+          onSend={() => void handleSend()}
+        />
+
+        <AgentToolbar
+          displayStatus={deriveAgentDisplayStatus(state)}
           providerName={provider.name}
           ProviderIcon={provider.Icon}
           responseReady={state.responseReady}
-          providerStatus={state.providerStatus}
           permissions={provider.permissions}
           model={provider.model}
           reasoning={provider.reasoning}
           catalogLoading={modelCatalog.isLoading}
           catalogError={modelCatalog.error}
           usage={state.usage}
+          debug={{
+            session,
+            sessionState: state,
+            messages: dbMessages.data ?? [],
+          }}
         />
 
         <style>{`

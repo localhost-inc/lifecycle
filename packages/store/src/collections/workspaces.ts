@@ -4,8 +4,8 @@ import type { SqlDriver } from "../driver";
 export async function selectAllWorkspaces(driver: SqlDriver): Promise<WorkspaceRecord[]> {
   return driver.select<WorkspaceRecord>(
     `SELECT id, project_id, name, checkout_type, source_ref, git_sha, worktree_path,
-            target, manifest_fingerprint, created_by, source_workspace_id,
-            created_at, updated_at, last_active_at, expires_at, prepared_at,
+            target, manifest_fingerprint,
+            created_at, updated_at, last_active_at, prepared_at,
             status, failure_reason, failed_at
      FROM workspace
      ORDER BY last_active_at DESC`,
@@ -18,8 +18,8 @@ export async function selectWorkspaceById(
 ): Promise<WorkspaceRecord | undefined> {
   const rows = await driver.select<WorkspaceRecord>(
     `SELECT id, project_id, name, checkout_type, source_ref, git_sha, worktree_path,
-            target, manifest_fingerprint, created_by, source_workspace_id,
-            created_at, updated_at, last_active_at, expires_at, prepared_at,
+            target, manifest_fingerprint,
+            created_at, updated_at, last_active_at, prepared_at,
             status, failure_reason, failed_at
      FROM workspace WHERE id = $1`,
     [workspaceId],

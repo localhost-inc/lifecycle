@@ -1,13 +1,12 @@
 import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Circle, File, GitFork, Home, Settings } from "lucide-react";
+import { Circle, File, Home, Settings } from "lucide-react";
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { getWorkspaceDisplayName } from "@/features/workspaces/lib/workspace-display";
 import { formatAppHotkeyLabel, isMacPlatform } from "@/app/app-hotkeys";
 import type { CommandPaletteCommand } from "@/features/command-palette/types";
 
 interface UseCommandPaletteCommandsOptions {
-  onForkWorkspace?: () => void;
   onOpenExplorer?: () => void;
   projects: ProjectRecord[];
   workspacesByProjectId: Record<string, WorkspaceRecord[]>;
@@ -16,7 +15,7 @@ interface UseCommandPaletteCommandsOptions {
 export function useCommandPaletteCommands(
   options: UseCommandPaletteCommandsOptions,
 ): CommandPaletteCommand[] {
-  const { onForkWorkspace, onOpenExplorer, projects, workspacesByProjectId } = options;
+  const { onOpenExplorer, projects, workspacesByProjectId } = options;
   const navigate = useNavigate();
   const { workspaceId } = useParams();
   const mac = isMacPlatform();
@@ -59,18 +58,6 @@ export function useCommandPaletteCommands(
                 } satisfies CommandPaletteCommand,
               ]
             : []),
-          ...(onForkWorkspace
-            ? [
-                {
-                  id: "action:fork",
-                  category: "action",
-                  label: "Fork Workspace",
-                  keywords: ["branch", "copy", "duplicate"],
-                  icon: GitFork,
-                  onExecute: onForkWorkspace,
-                } satisfies CommandPaletteCommand,
-              ]
-            : []),
         ]
       : [];
 
@@ -95,5 +82,5 @@ export function useCommandPaletteCommands(
       ...workspaceCommands,
       ...actionCommands,
     ];
-  }, [mac, navigate, onForkWorkspace, onOpenExplorer, projects, workspaceId, workspacesByProjectId]);
+  }, [mac, navigate, onOpenExplorer, projects, workspaceId, workspacesByProjectId]);
 }

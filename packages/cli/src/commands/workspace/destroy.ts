@@ -2,14 +2,14 @@ import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 
 import {
-  createWorkspaceDestroyRequest,
+  createWorkspaceArchiveRequest,
   requestBridge,
   resolveWorkspaceId,
 } from "../../bridge";
 import { failCommand, jsonFlag, workspaceIdFlag } from "../_shared";
 
 export default defineCommand({
-  description: "Destroy a workspace.",
+  description: "Archive a workspace.",
   input: z.object({
     json: jsonFlag,
     workspaceId: workspaceIdFlag,
@@ -18,7 +18,7 @@ export default defineCommand({
     try {
       const workspaceId = resolveWorkspaceId(input.workspaceId);
       const response = await requestBridge(
-        createWorkspaceDestroyRequest({
+        createWorkspaceArchiveRequest({
           workspaceId,
         }),
       );
@@ -28,7 +28,7 @@ export default defineCommand({
         return 0;
       }
 
-      context.stdout(`Workspace ${response.result.workspaceId} destroyed.`);
+      context.stdout(`Workspace ${response.result.workspaceId} archived.`);
 
       return 0;
     } catch (error) {

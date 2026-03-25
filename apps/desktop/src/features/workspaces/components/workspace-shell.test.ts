@@ -1,8 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
-import {
-  type ServiceRecord,
-  type WorkspaceRecord,
-} from "@lifecycle/contracts";
+import { type ServiceRecord, type WorkspaceRecord } from "@lifecycle/contracts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
@@ -37,7 +34,7 @@ async function mockWorkspaceLayoutGitQueries() {
 }
 
 describe("workspaceSupportsFilesystemInteraction", () => {
-  test("allows terminals once a worktree exists outside create and destroy", () => {
+  test("allows filesystem interaction once a worktree exists outside create and archive", () => {
     expect(
       workspaceSupportsFilesystemInteraction({
         target: "local",
@@ -89,12 +86,9 @@ describe("WorkspaceShell", () => {
       worktree_path: "/tmp/frost-beacon",
       target: "local",
       manifest_fingerprint: "manifest_1",
-      created_by: null,
-      source_workspace_id: null,
       created_at: "2026-03-10T10:00:00.000Z",
       updated_at: "2026-03-10T10:00:00.000Z",
       last_active_at: "2026-03-10T10:00:00.000Z",
-      expires_at: null,
       status: "active",
       failure_reason: null,
       failed_at: null,
@@ -155,12 +149,9 @@ describe("WorkspaceShell", () => {
       worktree_path: "/tmp/frost-beacon",
       target: "local",
       manifest_fingerprint: "manifest_1",
-      created_by: null,
-      source_workspace_id: null,
       created_at: "2026-03-10T10:00:00.000Z",
       updated_at: "2026-03-10T10:00:00.000Z",
       last_active_at: "2026-03-10T10:00:00.000Z",
-      expires_at: null,
       status: "active",
       failure_reason: null,
       failed_at: null,
@@ -222,13 +213,10 @@ describe("WorkspaceShell", () => {
       worktree_path: "/tmp/frost-beacon",
       target: "local",
       manifest_fingerprint: "manifest_1",
-      created_by: null,
-      source_workspace_id: null,
       created_at: "2026-03-10T10:00:00.000Z",
       updated_at: "2026-03-10T10:00:00.000Z",
       last_active_at: "2026-03-10T10:00:00.000Z",
-      expires_at: null,
-      status: "preparing",
+      status: "provisioning",
       failure_reason: null,
       failed_at: null,
     };
@@ -287,12 +275,9 @@ describe("WorkspaceShell", () => {
       worktree_path: null,
       target: "docker",
       manifest_fingerprint: null,
-      created_by: null,
-      source_workspace_id: null,
       created_at: "2026-03-10T10:00:00.000Z",
       updated_at: "2026-03-10T10:00:00.000Z",
       last_active_at: "2026-03-10T10:00:00.000Z",
-      expires_at: null,
       status: "active",
       failure_reason: null,
       failed_at: null,

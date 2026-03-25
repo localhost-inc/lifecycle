@@ -6,9 +6,9 @@ import {
   type SqlDriver,
 } from "@lifecycle/store";
 
-// Preserve message collections across Vite HMR so transcript streams survive hot reloads.
 const agentMessageCollections: Map<string, SqlCollection<AgentMessageWithParts>> =
-  import.meta.hot?.data.agentMessageCollections ?? new Map<string, SqlCollection<AgentMessageWithParts>>();
+  (import.meta.hot?.data.agentMessageCollections as typeof agentMessageCollections) ??
+  new Map<string, SqlCollection<AgentMessageWithParts>>();
 
 if (import.meta.hot) {
   import.meta.hot.accept();

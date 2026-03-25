@@ -6,11 +6,11 @@ pub fn validate_workspace_transition(
 ) -> Result<(), LifecycleError> {
     let allowed = matches!(
         (from, to),
-        (WorkspaceStatus::Active, WorkspaceStatus::Preparing)
-            | (WorkspaceStatus::Preparing, WorkspaceStatus::Active)
+        (WorkspaceStatus::Provisioning, WorkspaceStatus::Active)
+            | (WorkspaceStatus::Provisioning, WorkspaceStatus::Archiving)
             | (WorkspaceStatus::Active, WorkspaceStatus::Archiving)
-            | (WorkspaceStatus::Preparing, WorkspaceStatus::Archiving)
             | (WorkspaceStatus::Archiving, WorkspaceStatus::Archived)
+            | (WorkspaceStatus::Failed, WorkspaceStatus::Provisioning)
     );
 
     if allowed {
@@ -30,11 +30,11 @@ mod tests {
     #[test]
     fn valid_transitions() {
         let cases = vec![
-            (WorkspaceStatus::Active, WorkspaceStatus::Preparing),
-            (WorkspaceStatus::Preparing, WorkspaceStatus::Active),
+            (WorkspaceStatus::Provisioning, WorkspaceStatus::Active),
+            (WorkspaceStatus::Provisioning, WorkspaceStatus::Archiving),
             (WorkspaceStatus::Active, WorkspaceStatus::Archiving),
-            (WorkspaceStatus::Preparing, WorkspaceStatus::Archiving),
             (WorkspaceStatus::Archiving, WorkspaceStatus::Archived),
+            (WorkspaceStatus::Failed, WorkspaceStatus::Provisioning),
         ];
 
         for (from, to) in cases {
@@ -48,12 +48,14 @@ mod tests {
     #[test]
     fn invalid_transitions() {
         let cases = vec![
+            (WorkspaceStatus::Provisioning, WorkspaceStatus::Provisioning),
+            (WorkspaceStatus::Provisioning, WorkspaceStatus::Failed),
             (WorkspaceStatus::Active, WorkspaceStatus::Archived),
-            (WorkspaceStatus::Preparing, WorkspaceStatus::Preparing),
-            (WorkspaceStatus::Archived, WorkspaceStatus::Preparing),
+            (WorkspaceStatus::Active, WorkspaceStatus::Provisioning),
+            (WorkspaceStatus::Archived, WorkspaceStatus::Provisioning),
             (WorkspaceStatus::Archived, WorkspaceStatus::Active),
             (WorkspaceStatus::Archiving, WorkspaceStatus::Active),
-            (WorkspaceStatus::Archiving, WorkspaceStatus::Preparing),
+            (WorkspaceStatus::Archiving, WorkspaceStatus::Provisioning),
         ];
 
         for (from, to) in cases {

@@ -3,7 +3,7 @@ import type { ProjectRecord } from "@lifecycle/contracts";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import type { ManifestStatus } from "@/features/projects/api/projects";
 import { readManifest } from "@/features/projects/api/projects";
-import { useProjects, useRuntime } from "@/store";
+import { useProjects, useClient } from "@/store";
 
 export interface ProjectCatalog {
   manifestsByProjectId: Record<string, ManifestStatus>;
@@ -24,7 +24,7 @@ export function useProjectCatalog(): {
   isLoading: boolean;
   error: unknown;
 } {
-  const runtime = useRuntime();
+  const client = useClient();
   const projects = useProjects();
 
   const manifestsQuery = useQuery({
@@ -32,7 +32,7 @@ export function useProjectCatalog(): {
     queryFn: async () => {
       const manifestEntries = await Promise.all(
         projects.map(
-          async (project) => [project.id, await readManifest(runtime, project.path)] as const,
+          async (project) => [project.id, await readManifest(client, project.path)] as const,
         ),
       );
       return Object.fromEntries(manifestEntries) as Record<string, ManifestStatus>;
@@ -59,7 +59,7 @@ export function useProjectCatalog(): {
 export function useProjectManifest(
   projectId: string | null,
 ): UseQueryResult<ManifestStatus | null> {
-  const runtime = useRuntime();
+  const client = useClient();
   const enabled = projectId !== null;
   const projects = useProjects();
 
@@ -72,7 +72,7 @@ export function useProjectManifest(
       if (!project) {
         return null;
       }
-      return readManifest(runtime, project.path);
+      return readManifest(client, project.path);
     },
     enabled,
   });

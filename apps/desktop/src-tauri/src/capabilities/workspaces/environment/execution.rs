@@ -10,7 +10,8 @@ use super::super::manifest::{HealthCheck, ServiceConfig};
 use super::super::shared::{
     emit_service_status, emit_workspace_status, mark_nonfailed_services_stopped,
     mark_services_failed, service_name_for_start_error, service_status_reason_for_start_error,
-    update_service_status_db, update_workspace_status_db, workspace_failure_reason_for_start_error,
+    update_service_status_db, update_workspace_status_db,
+    workspace_failure_reason_for_start_error,
 };
 use super::graph::{EnvironmentNode, EnvironmentNodeKind};
 use super::lifecycle::WorkspaceStartMode;
@@ -78,6 +79,13 @@ impl WorkspaceStartContext<'_> {
         let service_start_started_at = Instant::now();
         let start_result = match service {
             ServiceConfig::Process(process_svc) => {
+                let log_dir = self.storage_root.join("logs");
+                std::fs::create_dir_all(&log_dir).map_err(|e| {
+                    LifecycleError::ServiceStartFailed {
+                        service: name.to_string(),
+                        reason: format!("failed to create log directory: {e}"),
+                    }
+                })?;
                 let supervisor = self.controller.supervisor();
                 let mut managed = supervisor.lock().await;
                 managed
@@ -88,6 +96,7 @@ impl WorkspaceStartContext<'_> {
                         self.runtime_env,
                         self.app.clone(),
                         self.workspace_id,
+                        &log_dir,
                     )
                     .await
             }
@@ -107,6 +116,22 @@ impl WorkspaceStartContext<'_> {
                     .await
             }
         };
+
+        // Persist the PID so the process can be re-adopted after an app restart.
+        if start_result.is_ok() {
+            if let ServiceConfig::Process(_) = service {
+                let supervisor = self.controller.supervisor();
+                let managed = supervisor.lock().await;
+                if let Some(pid) = managed.get_process_pid(name) {
+                    let _ = crate::platform::db::persist_service_pid(
+                        self.db_path,
+                        self.workspace_id,
+                        name,
+                        pid as i64,
+                    );
+                }
+            }
+        }
 
         if let Err(error) = start_result {
             if self.abort_if_needed().await? {

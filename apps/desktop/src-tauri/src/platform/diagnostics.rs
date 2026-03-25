@@ -80,10 +80,6 @@ pub fn append_diagnostic(context: &str, message: &str) {
     }
 }
 
-pub fn diagnostic_log_path() -> Option<&'static Path> {
-    DIAGNOSTIC_LOG_PATH.get().map(PathBuf::as_path)
-}
-
 pub fn performance_diagnostics_enabled() -> bool {
     cfg!(debug_assertions)
 }

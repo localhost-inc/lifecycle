@@ -133,7 +133,7 @@ The desktop app exposes one local request/response bridge for CLI access.
 2. Serialization: versioned JSON request/response envelope
 3. Scope: one bridge per running desktop app instance
 4. Discovery:
-   - Lifecycle-launched sessions use `LIFECYCLE_BRIDGE`
+   - Lifecycle-launched sessions use `LIFECYCLE_BRIDGE_SOCKET`
    - external-shell descriptor discovery is still deferred
 
 The bridge exists to let the CLI talk to the running app process. It is not a second user-facing API surface.
@@ -365,13 +365,13 @@ Required environment variables:
 3. `LIFECYCLE_TERMINAL_ID`
 4. `LIFECYCLE_WORKSPACE_PATH`
 5. `LIFECYCLE_CLI_PATH`
-6. `LIFECYCLE_BRIDGE`
+6. `LIFECYCLE_BRIDGE_SOCKET`
 7. `LIFECYCLE_BRIDGE_SESSION_TOKEN`
 
 Rules:
 
 1. `cwd` should still be the workspace worktree so commands continue to work when env injection is incomplete.
-2. `LIFECYCLE_BRIDGE` identifies the local bridge endpoint the CLI uses to reach the running desktop app.
+2. `LIFECYCLE_BRIDGE_SOCKET` identifies the local bridge endpoint the CLI uses to reach the running desktop app.
 3. `LIFECYCLE_CLI_PATH` points at the resolved local `lifecycle` executable, and the app should also prepend its parent directory to `PATH`.
 4. `LIFECYCLE_BRIDGE_SESSION_TOKEN` is a short-lived capability token for bridge-driven shell operations initiated from the session.
 5. CLI commands must not require the caller to pass `--workspace` or `--terminal` when this context is present.

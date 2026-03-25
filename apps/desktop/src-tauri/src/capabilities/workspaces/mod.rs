@@ -18,6 +18,5 @@ mod shared;
 #[cfg(test)]
 pub mod state_machine;
 pub mod stop;
-pub mod terminal;
 #[cfg(test)]
 pub(crate) mod test_support;

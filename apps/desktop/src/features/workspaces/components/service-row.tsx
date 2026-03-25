@@ -1,7 +1,7 @@
 import type { ServiceRecord } from "@lifecycle/contracts";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { IconButton, Spinner } from "@lifecycle/ui";
-import { Globe, Layers, Play, TerminalSquare } from "lucide-react";
+import { Globe, Layers, Play } from "lucide-react";
 import {
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
@@ -213,7 +213,7 @@ export function ServiceRow({
     runtime === "image" ? (
       <Layers className="size-3 text-[var(--muted-foreground)]/70" strokeWidth={2.2} />
     ) : runtime === "process" ? (
-      <TerminalSquare className="size-3 text-[var(--muted-foreground)]/70" strokeWidth={2.2} />
+      <Play className="size-3 text-[var(--muted-foreground)]/70" strokeWidth={2.2} />
     ) : null;
 
   function handleOpenPreview(): void {

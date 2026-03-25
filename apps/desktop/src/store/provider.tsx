@@ -12,33 +12,27 @@ import type {
   LifecycleEventKind,
   ProjectRecord,
   ServiceRecord,
-  TerminalRecord,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
-import type { WorkspaceRuntime } from "@lifecycle/workspace";
+import type { WorkspaceClient } from "@lifecycle/workspace";
 import {
   createSqlCollection,
   createLocalOnlyRegistry,
   selectAllProjects,
   selectAllWorkspaces,
   selectAllServices,
-  selectAllTerminals,
-  type RuntimeRegistry,
+  type ClientRegistry,
   type SqlCollection,
   type SqlDriver,
 } from "@lifecycle/store";
 import { subscribeToLifecycleEvents } from "@/features/events";
 
 const ENTITY_EVENT_KINDS: LifecycleEventKind[] = [
-  "workspace.status_changed",
+  "workspace.status.changed",
   "workspace.renamed",
-  "workspace.deleted",
-  "service.status_changed",
-  "service.process_exited",
-  "terminal.created",
-  "terminal.updated",
-  "terminal.status_changed",
-  "terminal.renamed",
+  "workspace.archived",
+  "service.status.changed",
+  "service.process.exited",
   "agent.session.created",
   "agent.session.updated",
 ];
@@ -47,14 +41,18 @@ interface StoreCollections {
   projects: SqlCollection<ProjectRecord>;
   workspaces: SqlCollection<WorkspaceRecord>;
   services: SqlCollection<ServiceRecord>;
-  terminals: SqlCollection<TerminalRecord>;
 }
 
 interface StoreContextValue {
   agentOrchestrator: AgentOrchestrator;
   collections: StoreCollections;
   driver: SqlDriver;
-  runtimeRegistry: RuntimeRegistry;
+  clientRegistry: ClientRegistry;
+}
+
+interface StoreProviderHotState {
+  collections: StoreCollections;
+  clientRegistry: ClientRegistry;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
@@ -79,37 +77,23 @@ function createCollections(driver: SqlDriver): StoreCollections {
       loadFn: selectAllServices,
       getKey: (s) => s.id,
     }),
-    terminals: createSqlCollection<TerminalRecord>({
-      id: "terminals",
-      driver,
-      loadFn: selectAllTerminals,
-      getKey: (t) => t.id,
-    }),
   };
 }
 
 function refreshForEvent(collections: StoreCollections, event: LifecycleEvent): void {
   switch (event.kind) {
-    case "workspace.status_changed":
+    case "workspace.status.changed":
     case "workspace.renamed":
-    case "workspace.deleted":
+    case "workspace.archived":
       void collections.workspaces.refresh();
-      if (event.kind === "workspace.deleted") {
+      if (event.kind === "workspace.archived") {
         void collections.services.refresh();
-        void collections.terminals.refresh();
       }
       break;
 
-    case "service.status_changed":
-    case "service.process_exited":
+    case "service.status.changed":
+    case "service.process.exited":
       void collections.services.refresh();
-      break;
-
-    case "terminal.created":
-    case "terminal.updated":
-    case "terminal.status_changed":
-    case "terminal.renamed":
-      void collections.terminals.refresh();
       break;
 
     case "agent.session.created":
@@ -123,11 +107,23 @@ function refreshForEvent(collections: StoreCollections, event: LifecycleEvent): 
 export function StoreProvider({
   agentOrchestrator,
   driver,
-  runtime,
+  client,
   children,
-}: PropsWithChildren<{ agentOrchestrator: AgentOrchestrator; driver: SqlDriver; runtime: WorkspaceRuntime }>) {
-  const [collections] = useState(() => createCollections(driver));
-  const [runtimeRegistry] = useState(() => createLocalOnlyRegistry(runtime));
+}: PropsWithChildren<{
+  agentOrchestrator: AgentOrchestrator;
+  driver: SqlDriver;
+  client: WorkspaceClient;
+}>) {
+  const hotState = import.meta.hot?.data as StoreProviderHotState | undefined;
+  const [collections] = useState(() => hotState?.collections ?? createCollections(driver));
+  const [clientRegistry] = useState(
+    () => hotState?.clientRegistry ?? createLocalOnlyRegistry(client),
+  );
+
+  if (import.meta.hot) {
+    import.meta.hot.data.collections = collections;
+    import.meta.hot.data.clientRegistry = clientRegistry;
+  }
 
   useEffect(() => {
     let disposed = false;
@@ -150,8 +146,8 @@ export function StoreProvider({
   }, [collections]);
 
   const value = useMemo(
-    () => ({ agentOrchestrator, collections, driver, runtimeRegistry }),
-    [agentOrchestrator, collections, driver, runtimeRegistry],
+    () => ({ agentOrchestrator, collections, driver, clientRegistry }),
+    [agentOrchestrator, collections, driver, clientRegistry],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

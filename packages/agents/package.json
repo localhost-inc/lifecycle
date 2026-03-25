@@ -8,6 +8,10 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./react": {
+      "types": "./src/react.ts",
+      "default": "./src/react.ts"
+    },
     "./providers/claude/auth": {
       "types": "./src/providers/claude/auth.ts",
       "default": "./src/providers/claude/auth.ts"
@@ -45,5 +49,12 @@
     "@lifecycle/contracts": "workspace:*",
     "@lifecycle/workspace": "workspace:*",
     "@openai/codex-sdk": "^0.116.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.8",
+    "react": "^19.2.4"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
   }
 }

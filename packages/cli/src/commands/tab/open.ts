@@ -9,14 +9,7 @@ import {
 } from "../../bridge";
 import { failCommand, failValidation, jsonFlag, workspaceIdFlag } from "../_shared";
 
-const workspaceSurface = z.enum([
-  "changes-diff",
-  "commit-diff",
-  "file",
-  "preview",
-  "pull-request",
-  "terminal",
-]);
+const workspaceSurface = z.enum(["changes-diff", "commit-diff", "file", "preview", "pull-request"]);
 
 function validateTabOpenInput(input: {
   commitSha?: string | undefined;
@@ -64,10 +57,6 @@ export default defineCommand({
     commitSha: z.string().optional().describe("Commit sha for commit diff surfaces."),
     filePath: z.string().optional().describe("Workspace-relative file path."),
     focusPath: z.string().optional().describe("File path to focus inside a diff surface."),
-    harness: z
-      .enum(["claude", "codex", "shell"])
-      .optional()
-      .describe("Harness or terminal type when opening a terminal surface."),
     json: jsonFlag,
     pane: z.string().optional().describe("Target pane id or selector."),
     pullRequestNumber: z.coerce
@@ -79,7 +68,6 @@ export default defineCommand({
     select: z.boolean().default(true).describe("Select the opened surface."),
     split: z.boolean().default(false).describe("Open in a split pane."),
     surface: workspaceSurface.describe("Surface kind to open."),
-    terminalId: z.string().optional().describe("Existing terminal id to focus."),
     url: z.string().optional().describe("URL to open for preview surfaces."),
     workspaceId: workspaceIdFlag,
   }),

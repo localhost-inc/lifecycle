@@ -2,11 +2,10 @@ import { z } from "zod";
 
 export const BRIDGE_VERSION = 1;
 
-export const LIFECYCLE_BRIDGE_ENV = "LIFECYCLE_BRIDGE";
+export const LIFECYCLE_BRIDGE_ENV = "LIFECYCLE_BRIDGE_SOCKET";
 export const LIFECYCLE_BRIDGE_SESSION_TOKEN_ENV = "LIFECYCLE_BRIDGE_SESSION_TOKEN";
 export const LIFECYCLE_CLI_PATH_ENV = "LIFECYCLE_CLI_PATH";
 export const LIFECYCLE_AGENT_SESSION_ID_ENV = "LIFECYCLE_AGENT_SESSION_ID";
-export const LIFECYCLE_TERMINAL_ID_ENV = "LIFECYCLE_TERMINAL_ID";
 export const LIFECYCLE_WORKSPACE_ID_ENV = "LIFECYCLE_WORKSPACE_ID";
 export const LIFECYCLE_WORKSPACE_PATH_ENV = "LIFECYCLE_WORKSPACE_PATH";
 
@@ -21,8 +20,6 @@ export const BridgeErrorSchema = z.object({
 const WorkspaceRecordSchema = z.object({
   checkout_type: z.string(),
   created_at: z.string(),
-  created_by: z.string().nullable(),
-  expires_at: z.string().nullable(),
   failed_at: z.string().nullable(),
   failure_reason: z.string().nullable(),
   git_sha: z.string().nullable(),
@@ -33,7 +30,6 @@ const WorkspaceRecordSchema = z.object({
   prepared_at: z.string().nullable(),
   project_id: z.string(),
   source_ref: z.string(),
-  source_workspace_id: z.string().nullable(),
   status: z.string(),
   target: z.string(),
   updated_at: z.string(),
@@ -57,20 +53,6 @@ const ServiceRecordSchema = z.object({
     ])
     .nullable(),
   updated_at: z.string(),
-  workspace_id: z.string(),
-});
-
-const TerminalRecordSchema = z.object({
-  created_by: z.string().nullable(),
-  ended_at: z.string().nullable(),
-  exit_code: z.number().int().nullable(),
-  failure_reason: z.string().nullable(),
-  id: z.string(),
-  label: z.string(),
-  last_active_at: z.string(),
-  launch_type: z.string(),
-  started_at: z.string(),
-  status: z.string(),
   workspace_id: z.string(),
 });
 
@@ -113,7 +95,6 @@ const GitStatusSchema = z.object({
 
 export const BridgeSessionSchema = z
   .object({
-    terminalId: z.string().optional(),
     token: z.string().optional(),
   })
   .optional();
@@ -216,9 +197,9 @@ export const WorkspaceCreateRequestSchema = z.object({
   version: z.literal(BRIDGE_VERSION),
 });
 
-export const WorkspaceDestroyRequestSchema = z.object({
+export const WorkspaceArchiveRequestSchema = z.object({
   id: z.string(),
-  method: z.literal("workspace.destroy"),
+  method: z.literal("workspace.archive"),
   params: z.object({
     workspaceId: z.string(),
   }),
@@ -285,18 +266,13 @@ export const WorkspaceHealthRequestSchema = z.object({
 const AgentSessionRecordSchema = z.object({
   id: z.string(),
   workspace_id: z.string(),
-  runtime_kind: z.string(),
-  runtime_name: z.string().nullable(),
   provider: z.string(),
   provider_session_id: z.string().nullable(),
   title: z.string(),
   status: z.string(),
-  created_by: z.string().nullable(),
-  forked_from_session_id: z.string().nullable(),
   last_message_at: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string(),
-  ended_at: z.string().nullable(),
 });
 
 const AgentMessagePartRecordSchema = z.object({
@@ -331,6 +307,159 @@ export const AgentSessionInspectRequestSchema = z.object({
   version: z.literal(BRIDGE_VERSION),
 });
 
+// ── Plan + Task bridge schemas ──
+
+const PlanRecordSchema = z.object({
+  id: z.string(),
+  project_id: z.string(),
+  workspace_id: z.string().nullable(),
+  name: z.string(),
+  description: z.string(),
+  body: z.string(),
+  status: z.string(),
+  position: z.number().int(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+const TaskRecordSchema = z.object({
+  id: z.string(),
+  plan_id: z.string(),
+  project_id: z.string(),
+  workspace_id: z.string().nullable(),
+  agent_session_id: z.string().nullable(),
+  name: z.string(),
+  description: z.string(),
+  status: z.string(),
+  priority: z.number().int(),
+  position: z.number().int(),
+  completed_at: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const PlanListRequestSchema = z.object({
+  id: z.string(),
+  method: z.literal("plan.list"),
+  params: z.object({ projectId: z.string() }),
+  session: BridgeSessionSchema,
+  version: z.literal(BRIDGE_VERSION),
+});
+
+export const PlanCreateRequestSchema = z.object({
+  id: z.string(),
+  method: z.literal("plan.create"),
+  params: z.object({
+    projectId: z.string(),
+    workspaceId: z.string().optional(),
+    name: z.string(),
+    description: z.string().optional(),
+    body: z.string().optional(),
+    status: z.string().optional(),
+  }),
+  session: BridgeSessionSchema,
+  version: z.literal(BRIDGE_VERSION),
+});
+
+export const PlanUpdateRequestSchema = z.object({
+  id: z.string(),
+  method: z.literal("plan.update"),
+  params: z.object({
+    planId: z.string(),
+    name: z.string().optional(),
+    description: z.string().optional(),
+    body: z.string().optional(),
+    status: z.string().optional(),
+  }),
+  session: BridgeSessionSchema,
+  version: z.literal(BRIDGE_VERSION),
+});
+
+export const PlanDeleteRequestSchema = z.object({
+  id: z.string(),
+  method: z.literal("plan.delete"),
+  params: z.object({
+    planId: z.string(),
+    projectId: z.string(),
+  }),
+  session: BridgeSessionSchema,
+  version: z.literal(BRIDGE_VERSION),
+});
+
+export const TaskListRequestSchema = z.object({
+  id: z.string(),
+  method: z.literal("task.list"),
+  params: z.object({ projectId: z.string() }),
+  session: BridgeSessionSchema,
+  version: z.literal(BRIDGE_VERSION),
+});
+
+export const TaskCreateRequestSchema = z.object({
+  id: z.string(),
+  method: z.literal("task.create"),
+  params: z.object({
+    planId: z.string(),
+    projectId: z.string(),
+    workspaceId: z.string().optional(),
+    agentSessionId: z.string().optional(),
+    name: z.string(),
+    description: z.string().optional(),
+    status: z.string().optional(),
+    priority: z.number().int().optional(),
+  }),
+  session: BridgeSessionSchema,
+  version: z.literal(BRIDGE_VERSION),
+});
+
+export const TaskUpdateRequestSchema = z.object({
+  id: z.string(),
+  method: z.literal("task.update"),
+  params: z.object({
+    taskId: z.string(),
+    name: z.string().optional(),
+    description: z.string().optional(),
+    status: z.string().optional(),
+    priority: z.number().int().optional(),
+  }),
+  session: BridgeSessionSchema,
+  version: z.literal(BRIDGE_VERSION),
+});
+
+export const TaskDeleteRequestSchema = z.object({
+  id: z.string(),
+  method: z.literal("task.delete"),
+  params: z.object({
+    taskId: z.string(),
+    projectId: z.string(),
+  }),
+  session: BridgeSessionSchema,
+  version: z.literal(BRIDGE_VERSION),
+});
+
+export const TaskDependencyAddRequestSchema = z.object({
+  id: z.string(),
+  method: z.literal("task.dependency.add"),
+  params: z.object({
+    taskId: z.string(),
+    dependsOnTaskId: z.string(),
+    projectId: z.string(),
+  }),
+  session: BridgeSessionSchema,
+  version: z.literal(BRIDGE_VERSION),
+});
+
+export const TaskDependencyRemoveRequestSchema = z.object({
+  id: z.string(),
+  method: z.literal("task.dependency.remove"),
+  params: z.object({
+    taskId: z.string(),
+    dependsOnTaskId: z.string(),
+    projectId: z.string(),
+  }),
+  session: BridgeSessionSchema,
+  version: z.literal(BRIDGE_VERSION),
+});
+
 export const BridgeRequestSchema = z.discriminatedUnion("method", [
   ServiceInfoRequestSchema,
   ServiceListRequestSchema,
@@ -340,13 +469,23 @@ export const BridgeRequestSchema = z.discriminatedUnion("method", [
   ContextRequestSchema,
   TabOpenRequestSchema,
   WorkspaceCreateRequestSchema,
-  WorkspaceDestroyRequestSchema,
+  WorkspaceArchiveRequestSchema,
   WorkspaceRunRequestSchema,
   WorkspaceStatusRequestSchema,
   WorkspaceLogsRequestSchema,
   WorkspaceResetRequestSchema,
   WorkspaceHealthRequestSchema,
   AgentSessionInspectRequestSchema,
+  PlanListRequestSchema,
+  PlanCreateRequestSchema,
+  PlanUpdateRequestSchema,
+  PlanDeleteRequestSchema,
+  TaskListRequestSchema,
+  TaskCreateRequestSchema,
+  TaskUpdateRequestSchema,
+  TaskDeleteRequestSchema,
+  TaskDependencyAddRequestSchema,
+  TaskDependencyRemoveRequestSchema,
 ]);
 
 const ServiceInfoResultSchema = z.object({
@@ -385,7 +524,6 @@ const ContextResultSchema = z.object({
       file: z.boolean(),
       preview: z.boolean(),
       pullRequest: z.boolean(),
-      terminal: z.boolean(),
     }),
   }),
   cli: z.object({
@@ -407,7 +545,6 @@ const ContextResultSchema = z.object({
     status: GitStatusSchema.nullable(),
   }),
   session: z.object({
-    terminalId: z.string().nullable(),
     workspaceId: z.string(),
   }),
   provider: z.object({
@@ -415,7 +552,6 @@ const ContextResultSchema = z.object({
     shellBridge: z.boolean(),
   }),
   services: z.array(ServiceRecordSchema),
-  terminals: z.array(TerminalRecordSchema),
   workspace: WorkspaceRecordSchema,
 });
 
@@ -440,7 +576,7 @@ const WorkspaceCreateResultSchema = z.object({
   workspace: WorkspaceRecordSchema,
 });
 
-const WorkspaceDestroyResultSchema = z.object({
+const WorkspaceArchiveResultSchema = z.object({
   workspaceId: z.string(),
 });
 
@@ -452,7 +588,6 @@ const WorkspaceRunResultSchema = z.object({
 
 const WorkspaceStatusResultSchema = z.object({
   services: z.array(ServiceRecordSchema),
-  terminals: z.array(TerminalRecordSchema),
   workspace: WorkspaceRecordSchema,
 });
 
@@ -530,11 +665,11 @@ const WorkspaceCreateSuccessSchema = z.object({
   result: WorkspaceCreateResultSchema,
 });
 
-const WorkspaceDestroySuccessSchema = z.object({
+const WorkspaceArchiveSuccessSchema = z.object({
   id: z.string(),
-  method: z.literal("workspace.destroy"),
+  method: z.literal("workspace.archive"),
   ok: z.literal(true),
-  result: WorkspaceDestroyResultSchema,
+  result: WorkspaceArchiveResultSchema,
 });
 
 const WorkspaceRunSuccessSchema = z.object({
@@ -635,10 +770,10 @@ const WorkspaceCreateFailureSchema = z.object({
   ok: z.literal(false),
 });
 
-const WorkspaceDestroyFailureSchema = z.object({
+const WorkspaceArchiveFailureSchema = z.object({
   error: BridgeErrorSchema,
   id: z.string(),
-  method: z.literal("workspace.destroy"),
+  method: z.literal("workspace.archive"),
   ok: z.literal(false),
 });
 
@@ -684,6 +819,80 @@ const AgentSessionInspectFailureSchema = z.object({
   ok: z.literal(false),
 });
 
+// ── Plan + Task response schemas ──
+
+const PlanListSuccessSchema = z.object({
+  id: z.string(),
+  method: z.literal("plan.list"),
+  ok: z.literal(true),
+  result: z.object({ plans: z.array(PlanRecordSchema) }),
+});
+const PlanCreateSuccessSchema = z.object({
+  id: z.string(),
+  method: z.literal("plan.create"),
+  ok: z.literal(true),
+  result: z.object({ plan: PlanRecordSchema }),
+});
+const PlanUpdateSuccessSchema = z.object({
+  id: z.string(),
+  method: z.literal("plan.update"),
+  ok: z.literal(true),
+  result: z.object({ plan: PlanRecordSchema }),
+});
+const PlanDeleteSuccessSchema = z.object({
+  id: z.string(),
+  method: z.literal("plan.delete"),
+  ok: z.literal(true),
+  result: z.object({}),
+});
+const TaskListSuccessSchema = z.object({
+  id: z.string(),
+  method: z.literal("task.list"),
+  ok: z.literal(true),
+  result: z.object({ tasks: z.array(TaskRecordSchema) }),
+});
+const TaskCreateSuccessSchema = z.object({
+  id: z.string(),
+  method: z.literal("task.create"),
+  ok: z.literal(true),
+  result: z.object({ task: TaskRecordSchema }),
+});
+const TaskUpdateSuccessSchema = z.object({
+  id: z.string(),
+  method: z.literal("task.update"),
+  ok: z.literal(true),
+  result: z.object({ task: TaskRecordSchema }),
+});
+const TaskDeleteSuccessSchema = z.object({
+  id: z.string(),
+  method: z.literal("task.delete"),
+  ok: z.literal(true),
+  result: z.object({}),
+});
+const TaskDependencyAddSuccessSchema = z.object({
+  id: z.string(),
+  method: z.literal("task.dependency.add"),
+  ok: z.literal(true),
+  result: z.object({}),
+});
+const TaskDependencyRemoveSuccessSchema = z.object({
+  id: z.string(),
+  method: z.literal("task.dependency.remove"),
+  ok: z.literal(true),
+  result: z.object({}),
+});
+
+const PlanListFailureSchema = z.object({ error: BridgeErrorSchema, id: z.string(), method: z.literal("plan.list"), ok: z.literal(false) });
+const PlanCreateFailureSchema = z.object({ error: BridgeErrorSchema, id: z.string(), method: z.literal("plan.create"), ok: z.literal(false) });
+const PlanUpdateFailureSchema = z.object({ error: BridgeErrorSchema, id: z.string(), method: z.literal("plan.update"), ok: z.literal(false) });
+const PlanDeleteFailureSchema = z.object({ error: BridgeErrorSchema, id: z.string(), method: z.literal("plan.delete"), ok: z.literal(false) });
+const TaskListFailureSchema = z.object({ error: BridgeErrorSchema, id: z.string(), method: z.literal("task.list"), ok: z.literal(false) });
+const TaskCreateFailureSchema = z.object({ error: BridgeErrorSchema, id: z.string(), method: z.literal("task.create"), ok: z.literal(false) });
+const TaskUpdateFailureSchema = z.object({ error: BridgeErrorSchema, id: z.string(), method: z.literal("task.update"), ok: z.literal(false) });
+const TaskDeleteFailureSchema = z.object({ error: BridgeErrorSchema, id: z.string(), method: z.literal("task.delete"), ok: z.literal(false) });
+const TaskDependencyAddFailureSchema = z.object({ error: BridgeErrorSchema, id: z.string(), method: z.literal("task.dependency.add"), ok: z.literal(false) });
+const TaskDependencyRemoveFailureSchema = z.object({ error: BridgeErrorSchema, id: z.string(), method: z.literal("task.dependency.remove"), ok: z.literal(false) });
+
 export const BridgeResponseSchema = z.union([
   ServiceInfoSuccessSchema,
   ServiceListSuccessSchema,
@@ -693,13 +902,23 @@ export const BridgeResponseSchema = z.union([
   ContextSuccessSchema,
   TabOpenSuccessSchema,
   WorkspaceCreateSuccessSchema,
-  WorkspaceDestroySuccessSchema,
+  WorkspaceArchiveSuccessSchema,
   WorkspaceRunSuccessSchema,
   WorkspaceStatusSuccessSchema,
   WorkspaceLogsSuccessSchema,
   WorkspaceResetSuccessSchema,
   WorkspaceHealthSuccessSchema,
   AgentSessionInspectSuccessSchema,
+  PlanListSuccessSchema,
+  PlanCreateSuccessSchema,
+  PlanUpdateSuccessSchema,
+  PlanDeleteSuccessSchema,
+  TaskListSuccessSchema,
+  TaskCreateSuccessSchema,
+  TaskUpdateSuccessSchema,
+  TaskDeleteSuccessSchema,
+  TaskDependencyAddSuccessSchema,
+  TaskDependencyRemoveSuccessSchema,
   ServiceInfoFailureSchema,
   ServiceListFailureSchema,
   ServiceStartFailureSchema,
@@ -708,13 +927,23 @@ export const BridgeResponseSchema = z.union([
   ContextFailureSchema,
   TabOpenFailureSchema,
   WorkspaceCreateFailureSchema,
-  WorkspaceDestroyFailureSchema,
+  WorkspaceArchiveFailureSchema,
   WorkspaceRunFailureSchema,
   WorkspaceStatusFailureSchema,
   WorkspaceLogsFailureSchema,
   WorkspaceResetFailureSchema,
   WorkspaceHealthFailureSchema,
   AgentSessionInspectFailureSchema,
+  PlanListFailureSchema,
+  PlanCreateFailureSchema,
+  PlanUpdateFailureSchema,
+  PlanDeleteFailureSchema,
+  TaskListFailureSchema,
+  TaskCreateFailureSchema,
+  TaskUpdateFailureSchema,
+  TaskDeleteFailureSchema,
+  TaskDependencyAddFailureSchema,
+  TaskDependencyRemoveFailureSchema,
 ]);
 
 export const BridgeShellRequestSchema = z.discriminatedUnion("kind", [
@@ -753,10 +982,20 @@ export type ServiceStartRequest = z.infer<typeof ServiceStartRequestSchema>;
 export type ServiceStopRequest = z.infer<typeof ServiceStopRequestSchema>;
 export type TabOpenRequest = z.infer<typeof TabOpenRequestSchema>;
 export type WorkspaceCreateRequest = z.infer<typeof WorkspaceCreateRequestSchema>;
-export type WorkspaceDestroyRequest = z.infer<typeof WorkspaceDestroyRequestSchema>;
+export type WorkspaceArchiveRequest = z.infer<typeof WorkspaceArchiveRequestSchema>;
 export type WorkspaceHealthRequest = z.infer<typeof WorkspaceHealthRequestSchema>;
 export type WorkspaceLogsRequest = z.infer<typeof WorkspaceLogsRequestSchema>;
 export type WorkspaceResetRequest = z.infer<typeof WorkspaceResetRequestSchema>;
 export type WorkspaceRunRequest = z.infer<typeof WorkspaceRunRequestSchema>;
 export type AgentSessionInspectRequest = z.infer<typeof AgentSessionInspectRequestSchema>;
 export type WorkspaceStatusRequest = z.infer<typeof WorkspaceStatusRequestSchema>;
+export type PlanListRequest = z.infer<typeof PlanListRequestSchema>;
+export type PlanCreateRequest = z.infer<typeof PlanCreateRequestSchema>;
+export type PlanUpdateRequest = z.infer<typeof PlanUpdateRequestSchema>;
+export type PlanDeleteRequest = z.infer<typeof PlanDeleteRequestSchema>;
+export type TaskListRequest = z.infer<typeof TaskListRequestSchema>;
+export type TaskCreateRequest = z.infer<typeof TaskCreateRequestSchema>;
+export type TaskUpdateRequest = z.infer<typeof TaskUpdateRequestSchema>;
+export type TaskDeleteRequest = z.infer<typeof TaskDeleteRequestSchema>;
+export type TaskDependencyAddRequest = z.infer<typeof TaskDependencyAddRequestSchema>;
+export type TaskDependencyRemoveRequest = z.infer<typeof TaskDependencyRemoveRequestSchema>;

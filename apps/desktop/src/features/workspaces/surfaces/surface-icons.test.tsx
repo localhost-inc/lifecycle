@@ -1,180 +1,56 @@
 import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import {
-  createAgentTab,
-  createChangesDiffTab,
-  createCommitDiffTab,
-  createFileViewerTab,
-  createPullRequestTab,
-  terminalTabKey,
-} from "@/features/workspaces/state/workspace-canvas-state";
-import { WorkspaceSurfaceTabLeading } from "@/features/workspaces/surfaces/surface-icons";
+import { buildWorkspaceSurfaceTabPresentation } from "@/features/workspaces/surfaces/workspace-surface-registry";
 
-describe("WorkspaceSurfaceTabLeading", () => {
-  test("prefers the ready indicator over the spinner for shell tabs", () => {
-    const markup = renderToStaticMarkup(
-      createElement(WorkspaceSurfaceTabLeading, {
-        tab: {
-          key: terminalTabKey("term-1"),
-          kind: "terminal",
-          label: "Terminal 1",
-          launchType: "shell",
-          running: true,
-          responseReady: true,
-          status: "active",
-          terminalId: "term-1",
-        },
-      }),
-    );
+describe("buildWorkspaceSurfaceTabPresentation", () => {
+  test("renders the codex icon by default for agent tabs", () => {
+    const presentation = buildWorkspaceSurfaceTabPresentation({
+      agentSessionId: "session-1",
+      key: "agent:codex:session-1",
+      kind: "agent",
+      label: "Codex",
+      provider: "codex",
+    });
 
-    expect(markup).toContain('data-surface-tab-icon="shell"');
-    expect(markup).toContain('title="Response ready"');
-    expect(markup).not.toContain('title="active"');
+    const markup = renderToStaticMarkup(createElement("div", null, presentation.leading));
+
+    expect(markup).toContain('data-surface-tab-icon="codex"');
+    expect(markup).not.toContain("Generating response");
   });
 
-  test("replaces the shell icon with a spinner while a terminal tab is running", () => {
-    const markup = renderToStaticMarkup(
-      createElement(WorkspaceSurfaceTabLeading, {
-        tab: {
-          key: terminalTabKey("term-1"),
-          kind: "terminal",
-          label: "Terminal 1",
-          launchType: "shell",
-          running: true,
-          responseReady: false,
-          status: "active",
-          terminalId: "term-1",
-        },
-      }),
+  test("renders a spinner when the agent tab is running", () => {
+    const presentation = buildWorkspaceSurfaceTabPresentation(
+      {
+        agentSessionId: "session-1",
+        key: "agent:codex:session-1",
+        kind: "agent",
+        label: "Codex",
+        provider: "codex",
+      },
+      { isRunning: true, needsAttention: false },
     );
 
-    expect(markup).toContain('data-slot="spinner"');
-    expect(markup).toContain('title="Generating response"');
-    expect(markup).not.toContain('data-surface-tab-icon="shell"');
+    const markup = renderToStaticMarkup(createElement("div", null, presentation.leading));
+
+    expect(markup).toContain("Generating response");
   });
 
-  test("renders a spinner while an optimistic shell tab is opening", () => {
-    const markup = renderToStaticMarkup(
-      createElement(WorkspaceSurfaceTabLeading, {
-        tab: {
-          key: "pending-terminal:launch-1",
-          kind: "terminal",
-          label: "Shell",
-          launchType: "shell",
-          optimistic: "pending",
-          responseReady: false,
-          status: "active",
-          terminalId: "pending-terminal:launch-1",
-        },
-      }),
+  test("renders the response-ready indicator when the agent needs attention", () => {
+    const presentation = buildWorkspaceSurfaceTabPresentation(
+      {
+        agentSessionId: "session-1",
+        key: "agent:codex:session-1",
+        kind: "agent",
+        label: "Codex",
+        provider: "codex",
+      },
+      { isRunning: true, needsAttention: true },
     );
 
-    expect(markup).toContain('data-slot="spinner"');
-    expect(markup).toContain('title="Opening terminal"');
-    expect(markup).not.toContain('data-surface-tab-icon="shell"');
-  });
+    const markup = renderToStaticMarkup(createElement("div", null, presentation.leading));
 
-  test("omits the spinner and status dot for inactive terminal tabs", () => {
-    const markup = renderToStaticMarkup(
-      createElement(WorkspaceSurfaceTabLeading, {
-        tab: {
-          key: terminalTabKey("term-2"),
-          kind: "terminal",
-          label: "Shell",
-          launchType: "shell",
-          running: false,
-          responseReady: false,
-          status: "detached",
-          terminalId: "term-2",
-        },
-      }),
-    );
-
-    expect(markup).not.toContain('data-slot="spinner"');
-    expect(markup).not.toContain('title="detached"');
-  });
-
-  test("replaces the provider icon with a spinner while an agent tab is running", () => {
-    const markup = renderToStaticMarkup(
-      createElement(WorkspaceSurfaceTabLeading, {
-        tab: {
-          ...createAgentTab({
-            agentSessionId: "agent-session-1",
-            label: "Codex",
-            provider: "codex",
-          }),
-          running: true,
-        },
-      }),
-    );
-
-    expect(markup).toContain('data-slot="spinner"');
-    expect(markup).toContain('title="Generating response"');
-    expect(markup).not.toContain('data-surface-tab-icon="codex"');
-  });
-
-  test("shows the shared ready dot for ready agent tabs", () => {
-    const markup = renderToStaticMarkup(
-      createElement(WorkspaceSurfaceTabLeading, {
-        tab: {
-          ...createAgentTab({
-            agentSessionId: "agent-session-1",
-            label: "Claude",
-            provider: "claude",
-          }),
-          responseReady: true,
-          running: false,
-        },
-      }),
-    );
-
-    expect(markup).toContain('data-surface-tab-icon="claude"');
-    expect(markup).toContain('title="Response ready"');
-  });
-
-  test("renders distinct visuals for document surface types", () => {
-    const markup = renderToStaticMarkup(
-      createElement(
-        "div",
-        null,
-        createElement(WorkspaceSurfaceTabLeading, {
-          tab: createChangesDiffTab("src/app.tsx"),
-        }),
-        createElement(WorkspaceSurfaceTabLeading, {
-          tab: createCommitDiffTab("abc12345"),
-        }),
-        createElement(WorkspaceSurfaceTabLeading, {
-          tab: createFileViewerTab("docs/readme.md"),
-        }),
-        createElement(WorkspaceSurfaceTabLeading, {
-          tab: createFileViewerTab("design/mock.pen"),
-        }),
-        createElement(WorkspaceSurfaceTabLeading, {
-          tab: createPullRequestTab({
-            author: "kyle",
-            baseRefName: "main",
-            checks: null,
-            createdAt: "2026-03-10T10:00:00.000Z",
-            headRefName: "feature/pull-request-surface",
-            isDraft: false,
-            mergeStateStatus: "CLEAN",
-            mergeable: "mergeable",
-            number: 42,
-            reviewDecision: "approved",
-            state: "open",
-            title: "feat: add pull request surface",
-            updatedAt: "2026-03-10T11:00:00.000Z",
-            url: "https://github.com/example/repo/pull/42",
-          }),
-        }),
-      ),
-    );
-
-    expect(markup).toContain('data-surface-tab-icon="changes-diff"');
-    expect(markup).toContain('data-surface-tab-icon="commit-diff"');
-    expect(markup).toContain('data-surface-tab-icon="file-viewer"');
-    expect(markup).toContain('data-surface-tab-icon="file-viewer-pencil"');
-    expect(markup).toContain('data-surface-tab-icon="pull-request"');
+    expect(markup).toContain('aria-label="Response ready"');
+    expect(markup).not.toContain("Generating response");
   });
 });

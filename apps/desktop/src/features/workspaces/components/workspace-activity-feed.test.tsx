@@ -9,20 +9,20 @@ describe("WorkspaceActivityFeed", () => {
       createElement(WorkspaceActivityFeed, {
         items: [
           {
-            detail: "Terminal 1",
+            detail: "api",
             id: "activity-1",
-            kind: "terminal.created",
+            kind: "service.status.changed",
             occurredAt: "2026-03-10T10:00:00.000Z",
-            title: "Shell session started",
+            title: "Service api ready",
             tone: "success",
           },
         ],
       }),
     );
 
-    expect(markup).toContain("Shell session started");
-    expect(markup).toContain("Terminal 1");
-    expect(markup).toContain("terminal.created");
+    expect(markup).toContain("Service api ready");
+    expect(markup).toContain("api");
+    expect(markup).toContain("service.status.changed");
   });
 
   test("renders an empty state when no workspace activity exists yet", () => {

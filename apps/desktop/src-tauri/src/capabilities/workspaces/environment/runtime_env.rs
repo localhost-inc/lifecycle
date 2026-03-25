@@ -40,7 +40,7 @@ pub(super) fn slugify_workspace_value(value: &str) -> String {
     slug.trim_matches('-').to_string()
 }
 
-pub(super) fn build_runtime_env(
+pub(crate) fn build_runtime_env(
     db_path: &str,
     workspace_id: &str,
     worktree_path: &str,
@@ -122,7 +122,22 @@ pub(super) fn build_runtime_env(
     Ok(env)
 }
 
-pub(super) fn workspace_volume_root(
+pub(crate) fn workspace_log_dir(
+    db_path: &str,
+    workspace_id: &str,
+) -> Result<PathBuf, LifecycleError> {
+    let root = workspace_volume_root(db_path, workspace_id)?;
+    let log_dir = root.join("logs");
+    std::fs::create_dir_all(&log_dir).map_err(|error| {
+        LifecycleError::Io(format!(
+            "failed to create workspace log dir '{}': {error}",
+            log_dir.display()
+        ))
+    })?;
+    Ok(log_dir)
+}
+
+pub(crate) fn workspace_volume_root(
     db_path: &str,
     workspace_id: &str,
 ) -> Result<PathBuf, LifecycleError> {

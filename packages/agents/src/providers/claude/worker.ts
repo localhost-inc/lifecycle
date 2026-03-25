@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { createInterface } from "node:readline";
 import {
   unstable_v2_createSession,
@@ -56,9 +58,10 @@ async function generateSessionTitle(
       permissionMode: "plan" as const,
       env: buildSessionEnv(loginMethod),
       systemPrompt:
-        "Generate a concise 3-5 word title for this conversation. Respond with only the title, no quotes or extra punctuation.",
+        "You are a title generator. You ONLY output a short 3-5 word title. No sentences, no answers, no quotes, no punctuation. Just a title.",
     };
-    const result = await unstable_v2_prompt(userText.slice(0, 500), options);
+    const prompt = `Generate a 3-5 word title summarizing this user message. Output ONLY the title, nothing else.\n\n---\n${userText.slice(0, 500)}\n---`;
+    const result = await unstable_v2_prompt(prompt, options);
     if (result.subtype === "success" && typeof result.result === "string") {
       const title = result.result.trim();
       return title || truncateTitle(userText);
@@ -82,6 +85,7 @@ export interface ClaudeWorkerInput {
   dangerousSkipPermissions: boolean;
   effort?: "low" | "medium" | "high" | "max";
   loginMethod: ClaudeLoginMethod;
+  mcpServers?: Record<string, { type?: "stdio"; command: string; args?: string[]; env?: Record<string, string> }>;
   model: string;
   permissionMode: ClaudeWorkerPermissionMode;
   providerSessionId?: string;
@@ -103,13 +107,6 @@ function emitWorkerEvent(event: AgentWorkerEvent): void {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-function extractResultText(message: SDKResultMessage): string {
-  if (message.subtype !== "success") {
-    return "";
-  }
-  return typeof message.result === "string" ? message.result.trim() : "";
 }
 
 function extractFailure(message: SDKResultMessage): string | null {
@@ -235,16 +232,18 @@ export function buildClaudeAssistantContentEvents(input: {
   content: Record<string, unknown>[];
   emittedBlockIds: Set<string>;
   emittedToolUseIds: Set<string>;
+  round?: number;
   turnId: string;
 }): AgentWorkerEvent[] {
   const events: AgentWorkerEvent[] = [];
+  const roundPrefix = input.round != null ? `${input.round}:` : "";
 
   for (const [index, block] of input.content.entries()) {
     const blockIdBase = `${index}`;
 
     if (block.type === "text" && typeof block.text === "string") {
       const event = buildClaudeTextDeltaEvent({
-        blockId: `text:${blockIdBase}`,
+        blockId: `text:${roundPrefix}${blockIdBase}`,
         emittedBlockIds: input.emittedBlockIds,
         text: block.text,
         turnId: input.turnId,
@@ -257,7 +256,7 @@ export function buildClaudeAssistantContentEvents(input: {
 
     if (block.type === "thinking" && typeof block.thinking === "string") {
       const event = buildClaudeThinkingDeltaEvent({
-        blockId: `thinking:${blockIdBase}`,
+        blockId: `thinking:${roundPrefix}${blockIdBase}`,
         emittedBlockIds: input.emittedBlockIds,
         text: block.thinking,
         turnId: input.turnId,
@@ -414,6 +413,10 @@ const activeToolBlocks = new Map<
 // Events can come from both streaming (content_block_start/stop) and assistant message.
 const emittedToolUseIds = new Set<string>();
 const emittedAssistantBlockIds = new Set<string>();
+// Track which API round we're in within a turn. The SDK reuses block indices
+// (0, 1, ...) for each round, so without a round counter the dedup set
+// silently drops text/thinking blocks from rounds after the first.
+let assistantRound = 0;
 
 function handleStreamMessage(
   message: SDKMessage,
@@ -460,25 +463,25 @@ function handleStreamMessage(
       const blockIndex = (event.index as number) ?? 0;
       const delta = event.delta as Record<string, unknown> | undefined;
       if (delta?.type === "text_delta" && typeof delta.text === "string") {
-        const textEvent = buildClaudeTextDeltaEvent({
-          blockId: `text:${blockIndex}`,
-          emittedBlockIds: emittedAssistantBlockIds,
+        // Mark this block as emitted so the assistant-message catchup path
+        // (`buildClaudeAssistantContentEvents`) won't re-emit the full text.
+        const blockId = `text:${assistantRound}:${blockIndex}`;
+        emittedAssistantBlockIds.add(getClaudeAssistantBlockKey(turnId, blockId));
+        emitWorkerEvent({
+          kind: "agent.message.delta",
           text: delta.text,
           turnId,
+          blockId,
         });
-        if (textEvent) {
-          emitWorkerEvent(textEvent);
-        }
       } else if (delta?.type === "thinking_delta" && typeof delta.thinking === "string") {
-        const thinkingEvent = buildClaudeThinkingDeltaEvent({
-          blockId: `thinking:${blockIndex}`,
-          emittedBlockIds: emittedAssistantBlockIds,
+        const blockId = `thinking:${assistantRound}:${blockIndex}`;
+        emittedAssistantBlockIds.add(getClaudeAssistantBlockKey(turnId, blockId));
+        emitWorkerEvent({
+          kind: "agent.thinking.delta",
           text: delta.thinking,
           turnId,
+          blockId,
         });
-        if (thinkingEvent) {
-          emitWorkerEvent(thinkingEvent);
-        }
       } else if (delta?.type === "input_json_delta" && typeof delta.partial_json === "string") {
         const toolBlock = activeToolBlocks.get(blockIndex);
         if (toolBlock) {
@@ -532,40 +535,20 @@ function handleStreamMessage(
       }
     }
 
-    if (systemMessage.subtype === "task_started") {
-      emitWorkerEvent({
-        kind: "agent.item.started",
-        item: {
-          id: (systemMessage.task_id as string) ?? randomUUID(),
-          type: "agent_message",
-          text: (systemMessage.description as string) ?? "",
-        },
-        turnId,
-      });
-    }
-
-    if (systemMessage.subtype === "task_progress") {
-      emitWorkerEvent({
-        kind: "agent.item.updated",
-        item: {
-          id: (systemMessage.task_id as string) ?? "",
-          type: "agent_message",
-          text: (systemMessage.summary as string) ?? (systemMessage.description as string) ?? "",
-        },
-        turnId,
-      });
-    }
-
-    if (systemMessage.subtype === "task_notification") {
-      emitWorkerEvent({
-        kind: "agent.item.completed",
-        item: {
-          id: (systemMessage.task_id as string) ?? "",
-          type: "agent_message",
-          text: (systemMessage.summary as string) ?? "",
-        },
-        turnId,
-      });
+    if (
+      systemMessage.subtype === "task_started" ||
+      systemMessage.subtype === "task_progress" ||
+      systemMessage.subtype === "task_notification"
+    ) {
+      const text =
+        (systemMessage.summary as string) ?? (systemMessage.description as string) ?? "";
+      if (text) {
+        emitWorkerEvent({
+          kind: "agent.status",
+          status: text,
+          turnId,
+        });
+      }
     }
   }
 
@@ -594,10 +577,14 @@ function handleStreamMessage(
       content,
       emittedBlockIds: emittedAssistantBlockIds,
       emittedToolUseIds,
+      round: assistantRound,
       turnId,
     })) {
       emitWorkerEvent(event);
     }
+    // Bump the round so the next API response (after tool execution)
+    // gets unique block IDs and isn't silently deduped.
+    assistantRound++;
     return "continue";
   }
 
@@ -803,10 +790,11 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
     }
 
     currentTurnId = command.turnId;
+    assistantRound = 0;
     const abort = new AbortController();
     currentTurnAbort = abort;
 
-    // Capture the first turn's text for title generation.
+    // Fire-and-forget title generation as soon as the first message arrives.
     if (!titleGenerated && firstTurnText === null) {
       const text = extractTextFromInput(
         Array.isArray(command.input)
@@ -814,6 +802,14 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
           : [{ type: "text" as const, text: command.input as string }],
       );
       firstTurnText = text.length > 0 ? text : null;
+      if (firstTurnText) {
+        titleGenerated = true;
+        void generateSessionTitle(firstTurnText, input.loginMethod).then((title) => {
+          if (title) {
+            emitWorkerEvent({ kind: "worker.title_generated", title });
+          }
+        });
+      }
     }
 
     try {
@@ -867,19 +863,6 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
             turnId: command.turnId,
           });
         } else {
-          const text = extractResultText(resultMessage);
-          if (text.length > 0) {
-            emitWorkerEvent({
-              kind: "agent.item.completed",
-              item: {
-                id: `${command.turnId}:assistant`,
-                type: "agent_message",
-                text,
-              },
-              turnId: command.turnId,
-            });
-          }
-
           emitWorkerEvent({
             kind: "agent.turn.completed",
             turnId: command.turnId,
@@ -887,15 +870,6 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
             costUsd: extractCost(resultMessage),
           });
 
-          // Fire-and-forget title generation after the first successful turn.
-          if (!titleGenerated && firstTurnText) {
-            titleGenerated = true;
-            void generateSessionTitle(firstTurnText, input.loginMethod).then((title) => {
-              if (title) {
-                emitWorkerEvent({ kind: "worker.title_generated", title });
-              }
-            });
-          }
         }
         break;
       }
@@ -1020,6 +994,29 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
   return 0;
 }
 
+function ensureProjectMcpSettings(
+  workspacePath: string,
+  mcpServers: NonNullable<ClaudeWorkerInput["mcpServers"]>,
+): void {
+  const claudeDir = join(workspacePath, ".claude");
+  const settingsPath = join(claudeDir, "settings.json");
+
+  let settings: Record<string, unknown> = {};
+  if (existsSync(settingsPath)) {
+    try {
+      settings = JSON.parse(readFileSync(settingsPath, "utf8")) as Record<string, unknown>;
+    } catch {
+      // Start fresh if settings are corrupt.
+    }
+  }
+
+  const existing = (settings.mcpServers ?? {}) as Record<string, unknown>;
+  settings.mcpServers = { ...existing, ...mcpServers };
+
+  mkdirSync(claudeDir, { recursive: true });
+  writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
+}
+
 export function createClaudeWorkerSession(
   input: ClaudeWorkerInput,
   callbacks?: {
@@ -1030,6 +1027,12 @@ export function createClaudeWorkerSession(
   providerSessionId: string | null;
   session: SDKSession;
 } {
+  // Write MCP server config into the workspace's .claude/settings.json so the
+  // SDK picks it up via settingSources: ["project"].
+  if (input.mcpServers && Object.keys(input.mcpServers).length > 0) {
+    ensureProjectMcpSettings(input.workspacePath, input.mcpServers);
+  }
+
   const sessionOptions = {
     ...(input.effort ? { effort: input.effort } : {}),
     model: input.model,
@@ -1037,6 +1040,7 @@ export function createClaudeWorkerSession(
     allowDangerouslySkipPermissions: input.dangerousSkipPermissions,
     includePartialMessages: true,
     env: buildSessionEnv(input.loginMethod),
+    settingSources: ["project" as const],
     systemPrompt: {
       type: "preset" as const,
       preset: "claude_code" as const,

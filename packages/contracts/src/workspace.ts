@@ -1,12 +1,8 @@
-export type WorkspaceTarget =
-  | "local"
-  | "docker"
-  | "remote"
-  | "cloud";
+export type WorkspaceTarget = "local" | "docker" | "remote" | "cloud";
 
 export type WorkspaceCheckoutType = "root" | "worktree";
 
-export type WorkspaceStatus = "preparing" | "active" | "archiving" | "archived";
+export type WorkspaceStatus = "provisioning" | "active" | "archiving" | "archived" | "failed";
 
 export type WorkspaceFailureReason =
   | "capacity_unavailable"

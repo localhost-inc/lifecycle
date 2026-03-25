@@ -17,19 +17,17 @@ describe("ProjectRecord", () => {
     expect(project.manifestValid).toBe(true);
   });
 
-  test("accepts optional organization and repository ids", () => {
+  test("does not require optional fields beyond the core record shape", () => {
     const project: ProjectRecord = {
       id: "proj_002",
       path: "/Users/dev/another",
       name: "another",
       manifestPath: "lifecycle.json",
       manifestValid: false,
-      organizationId: "org_001",
-      repositoryId: "repo_001",
       createdAt: "2026-01-01T00:00:00Z",
       updatedAt: "2026-01-01T00:00:00Z",
     };
-    expect(project.organizationId).toBe("org_001");
-    expect(project.repositoryId).toBe("repo_001");
+    expect(project.id).toBe("proj_002");
+    expect(project.manifestValid).toBe(false);
   });
 });

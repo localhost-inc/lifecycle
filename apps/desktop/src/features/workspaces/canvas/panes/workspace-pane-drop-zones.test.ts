@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { terminalTabKey } from "@/features/workspaces/state/workspace-canvas-state";
 import {
   resolveWorkspacePaneDropIntent,
   resolveWorkspacePaneDropIntentFromGeometry,
@@ -7,7 +6,7 @@ import {
   resolveWorkspacePaneTabStripDropTarget,
 } from "@/features/workspaces/canvas/panes/workspace-pane-drop-zones";
 
-const DRAGGED_TERMINAL_TAB_KEY = terminalTabKey("one");
+const DRAGGED_TAB_KEY = "agent:one";
 
 const PANE_RECT = {
   bottom: 600,
@@ -20,7 +19,7 @@ const PANE_RECT = {
 
 const TAB_RECTS = [
   {
-    key: DRAGGED_TERMINAL_TAB_KEY,
+    key: DRAGGED_TAB_KEY,
     left: 180,
     width: 140,
   },
@@ -40,7 +39,7 @@ describe("resolveWorkspacePaneTabStripDropTarget", () => {
   test("places a drag before the hovered tab midpoint", () => {
     expect(
       resolveWorkspacePaneTabStripDropTarget({
-        draggedKey: DRAGGED_TERMINAL_TAB_KEY,
+        draggedKey: DRAGGED_TAB_KEY,
         pointerX: 360,
         tabRects: TAB_RECTS,
       }),
@@ -53,7 +52,7 @@ describe("resolveWorkspacePaneTabStripDropTarget", () => {
   test("places a drag after the trailing tab when released in strip whitespace", () => {
     expect(
       resolveWorkspacePaneTabStripDropTarget({
-        draggedKey: DRAGGED_TERMINAL_TAB_KEY,
+        draggedKey: DRAGGED_TAB_KEY,
         pointerX: 880,
         tabRects: TAB_RECTS,
       }),
@@ -70,7 +69,7 @@ describe("resolveWorkspacePaneDropIntent", () => {
       resolveWorkspacePaneDropIntent({
         bodyRect: PANE_RECT,
         candidatePaneId: "pane-root",
-        draggedKey: DRAGGED_TERMINAL_TAB_KEY,
+        draggedKey: DRAGGED_TAB_KEY,
         paneId: "pane-root",
         pointerOverTabBar: true,
         pointerX: 360,
@@ -90,7 +89,7 @@ describe("resolveWorkspacePaneDropIntent", () => {
       resolveWorkspacePaneDropIntent({
         bodyRect: PANE_RECT,
         candidatePaneId: "pane-root",
-        draggedKey: DRAGGED_TERMINAL_TAB_KEY,
+        draggedKey: DRAGGED_TAB_KEY,
         paneId: "pane-root",
         pointerOverTabBar: false,
         pointerX: 420,
@@ -110,7 +109,7 @@ describe("resolveWorkspacePaneDropIntent", () => {
       resolveWorkspacePaneDropIntent({
         bodyRect: PANE_RECT,
         candidatePaneId: "pane-root",
-        draggedKey: DRAGGED_TERMINAL_TAB_KEY,
+        draggedKey: DRAGGED_TAB_KEY,
         paneId: "pane-root",
         pointerOverTabBar: false,
         pointerX: 500,
@@ -124,7 +123,7 @@ describe("resolveWorkspacePaneDropIntent", () => {
       resolveWorkspacePaneDropIntent({
         bodyRect: PANE_RECT,
         candidatePaneId: "pane-root",
-        draggedKey: DRAGGED_TERMINAL_TAB_KEY,
+        draggedKey: DRAGGED_TAB_KEY,
         paneId: "pane-root",
         pointerOverTabBar: false,
         pointerX: 220,
@@ -144,7 +143,7 @@ describe("resolveWorkspacePaneDropIntent", () => {
       resolveWorkspacePaneDropIntent({
         bodyRect: PANE_RECT,
         candidatePaneId: "pane-root",
-        draggedKey: DRAGGED_TERMINAL_TAB_KEY,
+        draggedKey: DRAGGED_TAB_KEY,
         paneId: "pane-root",
         pointerOverTabBar: false,
         pointerX: 500,
@@ -164,7 +163,7 @@ describe("resolveWorkspacePaneDropIntent", () => {
       resolveWorkspacePaneDropIntent({
         bodyRect: PANE_RECT,
         candidatePaneId: "pane-2",
-        draggedKey: DRAGGED_TERMINAL_TAB_KEY,
+        draggedKey: DRAGGED_TAB_KEY,
         paneId: "pane-root",
         pointerOverTabBar: true,
         pointerX: 238,
@@ -191,7 +190,7 @@ describe("resolveWorkspacePaneDropIntent", () => {
       resolveWorkspacePaneDropIntent({
         bodyRect: PANE_RECT,
         candidatePaneId: "pane-2",
-        draggedKey: DRAGGED_TERMINAL_TAB_KEY,
+        draggedKey: DRAGGED_TAB_KEY,
         paneId: "pane-root",
         pointerOverTabBar: false,
         pointerX: 500,
@@ -211,7 +210,7 @@ describe("resolveWorkspacePaneDropIntent", () => {
       resolveWorkspacePaneDropIntent({
         bodyRect: PANE_RECT,
         candidatePaneId: "pane-2",
-        draggedKey: DRAGGED_TERMINAL_TAB_KEY,
+        draggedKey: DRAGGED_TAB_KEY,
         paneId: "pane-root",
         pointerOverTabBar: false,
         pointerX: 500,
@@ -229,7 +228,7 @@ describe("resolveWorkspacePaneDropIntent", () => {
   test("resolves drop intent from measured pane geometry instead of the live DOM hit target", () => {
     expect(
       resolveWorkspacePaneDropIntentFromGeometry({
-        draggedKey: DRAGGED_TERMINAL_TAB_KEY,
+        draggedKey: DRAGGED_TAB_KEY,
         paneGeometries: [
           {
             paneId: "pane-root",
@@ -278,7 +277,7 @@ describe("resolveWorkspacePaneDropIntent", () => {
   test("does not treat pane header controls as body drop space", () => {
     expect(
       resolveWorkspacePaneDropStateFromGeometry({
-        draggedKey: DRAGGED_TERMINAL_TAB_KEY,
+        draggedKey: DRAGGED_TAB_KEY,
         paneGeometries: [
           {
             bodyRect: {
@@ -314,7 +313,7 @@ describe("resolveWorkspacePaneDropIntent", () => {
   test("keeps the hovered pane visible for same-pane body center drags without resolving a drop", () => {
     expect(
       resolveWorkspacePaneDropStateFromGeometry({
-        draggedKey: DRAGGED_TERMINAL_TAB_KEY,
+        draggedKey: DRAGGED_TAB_KEY,
         paneGeometries: [
           {
             bodyRect: {
@@ -357,7 +356,7 @@ describe("resolveWorkspacePaneDropIntent", () => {
 
     expect(
       resolveWorkspacePaneDropStateFromGeometry({
-        draggedKey: DRAGGED_TERMINAL_TAB_KEY,
+        draggedKey: DRAGGED_TAB_KEY,
         paneGeometries,
         paneId: "pane-root",
         pointerX: 500,
@@ -370,7 +369,7 @@ describe("resolveWorkspacePaneDropIntent", () => {
 
     expect(
       resolveWorkspacePaneDropIntentFromGeometry({
-        draggedKey: DRAGGED_TERMINAL_TAB_KEY,
+        draggedKey: DRAGGED_TAB_KEY,
         paneGeometries,
         paneId: "pane-root",
         pointerX: 500,

@@ -6,7 +6,6 @@ export type OpenInAppId =
   | "finder"
   | "ghostty"
   | "iterm"
-  | "terminal"
   | "vscode"
   | "warp"
   | "windsurf"

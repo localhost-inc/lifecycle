@@ -17,6 +17,12 @@ Lifecycle models the workspace as the concrete runnable instance:
 3. `terminal` — per-session interactive surface attached to the workspace
 4. `agent_session` — first-party agent interaction thread attached to the workspace
 
+State contracts:
+
+1. `workspace.status` uses `provisioning | active | archiving | archived | failed`.
+2. `workspace.environment_status` uses `idle | starting | running | stopping | failed`.
+3. Environment start/stop flows transition `environment_status`; `workspace.status` is reserved for top-level workspace lifecycle.
+
 ## Agent Execution Model
 
 Lifecycle agent execution is split into three layers:
@@ -25,7 +31,7 @@ Lifecycle agent execution is split into three layers:
 2. `AgentSession` — harness-facing live object for one persisted `agent_session` record
 3. `AgentWorker` — deployed execution unit running on the target runtime and wrapping the real Claude or Codex provider session
 
-The harness talks to `AgentSession`. `AgentSession` interfaces with `AgentWorker`. `AgentWorker` runs on the target `WorkspaceRuntime`.
+The harness talks to `AgentSession`. `AgentSession` interfaces with `AgentWorker`. `AgentWorker` runs on the target `WorkspaceClient`.
 
 For local sessions, the desktop no longer owns the provider worker as a direct child process. It launches a detached Lifecycle-owned host process as `lifecycle agent host --provider <provider> --session-id <agent_session_id> ...`. That detached host owns the real `lifecycle agent worker <provider>` child process, persists a small registration file keyed by `agent_session.id`, and exposes a reconnectable loopback websocket transport back to `AgentOrchestrator`.
 
@@ -183,6 +189,7 @@ The **target inner workspace model** for Lifecycle once a workspace becomes one 
 The workspace canvas is the **split-only center pane surface** inside a workspace. It is optimized for live execution and local work, not for durable project navigation.
 
 Key rules:
+
 1. one workspace tab
 2. one split tree
 3. one surface per pane
@@ -193,6 +200,8 @@ Key rules:
 Owns: split layout, active pane, pane headers, workspace-local surface placement, canvas restore state
 
 Does **not** own: project-level navigation, top-level page-tab state, workspace header, workspace extension strip/panel state
+
+Surface definitions own typed `surface + options` contracts, singleton/reopen identity, and tab presentation details such as title, leading icon, and live status indicators (`isRunning`, `needsAttention`, `isDirty`). The canvas only owns placement, selection, reopen, zoom, and focus state for those surfaces.
 
 ## Pane Model
 
@@ -229,18 +238,18 @@ Per workspace. Persist: split topology, split ratios, pane contents by identifie
 
 # Workspace Surface Contract
 
-The **current implementation contract** for the mixed live/document tab model.
+The **current implementation contract** for the workspace canvas tab model.
 
 ## Tab Classes
 
-1. Live tabs: backed by workspace-owned session entities (`terminal_id`, future `agent_session_id`)
-2. Document tabs: backed by workspace content or canvas-owned preview state (`diff:commit:<sha>`, `file:<path>`, `preview:<key>`)
+1. Session-backed tabs: backed by workspace-owned session entities such as `agent_session_id`.
+2. Canvas-backed tabs: backed by desktop-owned surface state such as `diff:commit:<sha>`, `file:<path>`, `preview:<key>`, and `pull-request:<number>`.
 
 ## Ownership Rules
 
-1. Live session lifecycle remains workspace-client-authoritative.
-2. Document tabs are desktop-owned UI state.
-3. Desktop-owned surface layout includes `activePaneId`, split tree, per-pane `tabOrderKeys`, `hiddenTerminalTabKeys`.
+1. Session lifecycle remains workspace-client-authoritative.
+2. Canvas-backed tabs are desktop-owned UI state.
+3. Desktop-owned surface layout includes `activePaneId`, split tree, and per-pane `tabOrderKeys`.
 
 ## Pane Tree Model
 
@@ -266,11 +275,11 @@ The **current implementation contract** for the mixed live/document tab model.
 
 1. Current local edits open as a single route-driven `Changes` dialog over the workspace canvas.
 2. Repeated `Changes` opens update dialog inputs instead of opening new tabs.
-3. History commit diffs remain commit-scoped document tabs keyed by SHA.
+3. History commit diffs remain commit-scoped tabs keyed by SHA.
 
 ## Preview Surfaces
 
-1. Preview tabs are document tabs keyed by `preview:<key>`.
+1. Preview tabs are keyed by `preview:<key>`.
 2. Service previews open in the workspace preview surface by default, keyed per service identity so repeated opens focus the existing pane.
 3. Preview surfaces render as ordinary iframe-backed pane content inside the React tree.
 4. Opening a preview in the system browser is an explicit secondary action from the preview toolbar.
@@ -329,7 +338,7 @@ File tabs inside the workspace surface.
 
 ## Ownership
 
-1. File tabs are document tabs keyed by `file:<path>`.
+1. File tabs are keyed by `file:<path>`.
 2. `features/workspaces` owns tab orchestration; `features/explorer` owns renderer selection, editor config, draft/conflict handling.
 3. File reads/writes go through the workspace/provider boundary.
 

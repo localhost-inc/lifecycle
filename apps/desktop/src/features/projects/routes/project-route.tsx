@@ -16,8 +16,7 @@ import {
 
 export interface ProjectRouteOutletContext {
   onCreateWorkspace: (mode: WorkspaceCreateMode) => Promise<void>;
-  onDestroyWorkspace: (workspace: WorkspaceRecord) => Promise<void>;
-  onForkWorkspace: (workspace: WorkspaceRecord) => Promise<void>;
+  onArchiveWorkspace: (workspace: WorkspaceRecord) => Promise<void>;
   onOpenWorkspace: (workspace: WorkspaceRecord) => void;
   onRemoveProject: () => Promise<void>;
   project: ProjectRecord;
@@ -28,8 +27,7 @@ export interface ProjectRouteOutletContext {
 export function ProjectRoute() {
   const {
     onCreateWorkspace,
-    onDestroyWorkspace,
-    onForkWorkspace,
+    onArchiveWorkspace,
     onOpenWorkspace,
     projects,
     workspacesByProjectId,
@@ -107,8 +105,7 @@ export function ProjectRoute() {
 
     return {
       onCreateWorkspace: (mode) => onCreateWorkspace(project.id, mode),
-      onDestroyWorkspace,
-      onForkWorkspace,
+      onArchiveWorkspace,
       onOpenWorkspace,
       onRemoveProject: () => onRemoveProject(project.id),
       project,
@@ -117,8 +114,7 @@ export function ProjectRoute() {
     };
   }, [
     onCreateWorkspace,
-    onDestroyWorkspace,
-    onForkWorkspace,
+    onArchiveWorkspace,
     onOpenWorkspace,
     onRemoveProject,
     project,

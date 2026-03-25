@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import type { ProjectRecord } from "@lifecycle/contracts";
-import type { WorkspaceRuntime } from "@lifecycle/workspace";
+import type { WorkspaceClient } from "@lifecycle/workspace";
 import { readManifest } from "./projects";
 
-const runtime = {
+const client = {
   readManifestText: mock(
     async (): Promise<string | null> =>
       `{"workspace":{"prepare":[{"name":"install","command":"bun install","timeout_seconds":300}]},"environment":{"api":{"kind":"service","runtime":"process","command":"bun run dev"}}}`,
   ),
-} as unknown as WorkspaceRuntime;
+} as unknown as WorkspaceClient;
 
 describe("projects api", () => {
   beforeEach(() => {
@@ -17,7 +17,7 @@ describe("projects api", () => {
       value: true,
       writable: true,
     });
-    (runtime.readManifestText as ReturnType<typeof mock>).mockClear();
+    (client.readManifestText as ReturnType<typeof mock>).mockClear();
   });
 
   afterEach(() => {
@@ -25,15 +25,15 @@ describe("projects api", () => {
   });
 
   test("routes manifest reads through the runtime before parsing", async () => {
-    const result = await readManifest(runtime, "/tmp/project_1");
+    const result = await readManifest(client, "/tmp/project_1");
 
     expect(result.state).toBe("valid");
-    expect((runtime.readManifestText as ReturnType<typeof mock>)).toHaveBeenCalledWith("/tmp/project_1");
+    expect((client.readManifestText as ReturnType<typeof mock>)).toHaveBeenCalledWith("/tmp/project_1");
   });
 
   test("treats missing runtime manifest text as a missing manifest", async () => {
-    (runtime.readManifestText as ReturnType<typeof mock>).mockResolvedValueOnce(null);
+    (client.readManifestText as ReturnType<typeof mock>).mockResolvedValueOnce(null);
 
-    await expect(readManifest(runtime, "/tmp/project_1")).resolves.toEqual({ state: "missing" });
+    await expect(readManifest(client, "/tmp/project_1")).resolves.toEqual({ state: "missing" });
   });
 });

@@ -1,5 +1,5 @@
 import type { AgentSessionRecord } from "./agent";
-import type { TerminalFailureReason, TerminalStatus, TerminalType } from "./terminal";
+import type { PlanStatus, TaskPriority, TaskStatus } from "./planning";
 import type {
   ServiceStatus,
   ServiceStatusReason,
@@ -19,12 +19,9 @@ export interface WorkspaceRecord {
   worktree_path: string | null;
   target: WorkspaceTarget;
   manifest_fingerprint?: string | null;
-  created_by: string | null;
-  source_workspace_id: string | null;
   created_at: string;
   updated_at: string;
   last_active_at: string;
-  expires_at: string | null;
   prepared_at?: string | null;
   status: WorkspaceStatus;
   failure_reason: WorkspaceFailureReason | null;
@@ -43,18 +40,38 @@ export interface ServiceRecord {
   updated_at: string;
 }
 
-export interface TerminalRecord {
+export type { AgentSessionRecord };
+
+export interface PlanRecord {
   id: string;
-  workspace_id: string;
-  launch_type: TerminalType;
-  created_by: string | null;
-  label: string;
-  status: TerminalStatus;
-  failure_reason: TerminalFailureReason | null;
-  exit_code: number | null;
-  started_at: string;
-  last_active_at: string;
-  ended_at: string | null;
+  project_id: string;
+  workspace_id: string | null;
+  name: string;
+  description: string;
+  body: string;
+  status: PlanStatus;
+  position: number;
+  created_at: string;
+  updated_at: string;
 }
 
-export type { AgentSessionRecord };
+export interface TaskRecord {
+  id: string;
+  plan_id: string;
+  project_id: string;
+  workspace_id: string | null;
+  agent_session_id: string | null;
+  name: string;
+  description: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  position: number;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskDependencyRecord {
+  task_id: string;
+  depends_on_task_id: string;
+}

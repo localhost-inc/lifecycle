@@ -1,6 +1,6 @@
 import type { FileDiffMetadata } from "@pierre/diffs/react";
 import { diffTheme } from "@lifecycle/ui";
-import { useSettings } from "@/features/settings/state/settings-provider";
+import { useSettings } from "@/features/settings/state/settings-context";
 import type { GitDiffStyle } from "@/features/git/lib/diff-style";
 import { DiffRenderProvider } from "@/features/git/components/diff-render-provider";
 import { MultiFileDiffLayout } from "@/features/git/components/multi-file-diff-layout";

@@ -2,7 +2,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { parseManifest } from "@lifecycle/contracts";
 import type { ManifestParseResult, ProjectRecord } from "@lifecycle/contracts";
-import type { WorkspaceRuntime } from "@lifecycle/workspace";
+import type { WorkspaceClient } from "@lifecycle/workspace";
 import { insertProject, deleteProject, updateProjectManifestStatus } from "@lifecycle/store";
 import { tauriSqlDriver } from "@/lib/sql-driver";
 
@@ -17,8 +17,6 @@ interface ProjectRow {
   name: string;
   manifest_path: string;
   manifest_valid: boolean;
-  organization_id: string | null;
-  repository_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -30,8 +28,6 @@ function rowToRecord(row: ProjectRow): ProjectRecord {
     name: row.name,
     manifestPath: row.manifest_path,
     manifestValid: row.manifest_valid,
-    organizationId: row.organization_id ?? undefined,
-    repositoryId: row.repository_id ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -87,14 +83,14 @@ export async function readManifestFromFs(
 }
 
 export async function readManifest(
-  runtime: WorkspaceRuntime,
+  client: WorkspaceClient,
   dirPath: string,
 ): Promise<ManifestStatus> {
   if (!isTauri()) {
     return { state: "missing" };
   }
 
-  const text = await runtime.readManifestText(dirPath);
+  const text = await client.readManifestText(dirPath);
   if (text === null) {
     return { state: "missing" };
   }
@@ -131,13 +127,13 @@ export async function addProjectFromDirectory(): Promise<ProjectRecord | null> {
   };
 }
 
-export async function removeProject(runtime: WorkspaceRuntime, id: string): Promise<void> {
+export async function removeProject(client: WorkspaceClient, id: string): Promise<void> {
   if (!isTauri()) {
     return;
   }
 
   // Rust side-effects: stop git watchers, clean up controllers
-  await runtime.cleanupProject(id);
+  await client.cleanupProject(id);
   // Delete from SQLite via TypeScript
   await deleteProject(tauriSqlDriver, id);
 }

@@ -2,15 +2,14 @@ import { isTauri } from "@tauri-apps/api/core";
 import { StrictMode, useEffect } from "react";
 import { RouterProvider } from "react-router-dom";
 import type { AgentOrchestrator } from "@lifecycle/agents";
-import type { WorkspaceRuntime } from "@lifecycle/workspace";
+import type { WorkspaceClient } from "@lifecycle/workspace";
 import { RootErrorBoundary } from "@/app/root-error-boundary";
 import { router } from "@/app/router";
 import { ShortcutRouterProvider } from "@/app/shortcuts/shortcut-router";
 import { AuthSessionProvider } from "@/features/auth/state/auth-session-provider";
-import { TurnNotificationListener } from "@/features/notifications/turn-notification-listener";
+import { AppNotifier } from "@/features/notifications/app-notifier";
 import { ProjectManifestWatcher } from "@/features/projects/components/project-manifest-watcher";
 import { SettingsProvider } from "@/features/settings/state/settings-provider";
-import { TerminalResponseReadyProvider } from "@/features/terminals/state/terminal-response-ready-provider";
 import { markPerformance, measurePerformance } from "@/lib/performance";
 import { ReactQueryProvider } from "@/store/react-query-provider";
 import { StoreProvider } from "@/store/provider";
@@ -46,10 +45,10 @@ function ContextMenuBlocker() {
 
 interface AppProps {
   agentOrchestrator: AgentOrchestrator;
-  runtime: WorkspaceRuntime;
+  client: WorkspaceClient;
 }
 
-export function App({ agentOrchestrator, runtime }: AppProps) {
+export function App({ agentOrchestrator, client }: AppProps) {
   return (
     <StrictMode>
       <RootErrorBoundary>
@@ -59,17 +58,15 @@ export function App({ agentOrchestrator, runtime }: AppProps) {
           <StoreProvider
             agentOrchestrator={agentOrchestrator}
             driver={tauriSqlDriver}
-            runtime={runtime}
+            client={client}
           >
             <ReactQueryProvider>
               <AuthSessionProvider>
                 <ProjectManifestWatcher />
-                <TurnNotificationListener />
-                <TerminalResponseReadyProvider>
-                  <ShortcutRouterProvider>
-                    <RouterProvider router={router} />
-                  </ShortcutRouterProvider>
-                </TerminalResponseReadyProvider>
+                <AppNotifier />
+                <ShortcutRouterProvider>
+                  <RouterProvider router={router} />
+                </ShortcutRouterProvider>
               </AuthSessionProvider>
             </ReactQueryProvider>
           </StoreProvider>

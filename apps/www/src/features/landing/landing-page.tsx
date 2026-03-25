@@ -91,9 +91,9 @@ export function LandingPage() {
       {/* Hero */}
       <section>
         <h1 className="text-4xl font-semibold leading-[1.1] tracking-[-0.04em] text-[var(--foreground)] sm:text-5xl">
-          Where teams and agents
+          From idea to prod
           <br />
-          <span className="text-[var(--muted-foreground)]">collaborate on code.</span>
+          <span className="text-[var(--muted-foreground)]">and back.</span>
         </h1>
 
         <p className="mt-6 max-w-md text-base leading-relaxed text-[var(--muted-foreground)]">

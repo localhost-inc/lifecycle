@@ -1,7 +1,7 @@
 export type { SqlDriver } from "./driver";
 export { createSqlCollection, type SqlCollection } from "./collection";
 export type { Collection } from "@tanstack/db";
-export { createLocalOnlyRegistry, type RuntimeRegistry } from "./runtime";
+export { createLocalOnlyRegistry, type ClientRegistry } from "./client-registry";
 
 export {
   selectAllProjects,
@@ -16,16 +16,7 @@ export {
   groupWorkspacesByProject,
 } from "./collections/workspaces";
 
-export {
-  selectServicesByWorkspace,
-  selectAllServices,
-} from "./collections/services";
-
-export {
-  selectTerminalsByWorkspace,
-  selectAllTerminals,
-  updateTerminalLabel,
-} from "./collections/terminals";
+export { selectServicesByWorkspace, selectAllServices } from "./collections/services";
 
 export {
   selectAgentSessionsByWorkspace,
@@ -45,3 +36,12 @@ export {
   upsertAgentMessage,
   upsertAgentMessageWithParts,
 } from "./collections/agent-messages";
+
+export { selectPlansByProject, selectPlanById } from "./collections/plans";
+
+export {
+  selectTasksByProject,
+  selectTasksByPlan,
+  selectTaskDependencies,
+  selectReadyTasks,
+} from "./collections/tasks";

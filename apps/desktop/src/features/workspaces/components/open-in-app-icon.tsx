@@ -96,22 +96,6 @@ export function OpenInAppIcon({
           </svg>
         </AppIconTile>
       );
-    case "terminal":
-      return (
-        <AppIconTile className="bg-[linear-gradient(180deg,#2f2f32,#101012)]" sizeClass={sizeClass}>
-          <svg aria-hidden className="size-[18px]" viewBox="0 0 24 24">
-            <path
-              d="m6 8 4 4-4 4"
-              fill="none"
-              stroke="#f4f4f5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2.2"
-            />
-            <path d="M12.8 16h5.2" stroke="#f4f4f5" strokeLinecap="round" strokeWidth="2" />
-          </svg>
-        </AppIconTile>
-      );
     case "iterm":
       return (
         <AppIconTile

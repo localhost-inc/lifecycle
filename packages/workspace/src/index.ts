@@ -1,16 +1,13 @@
 export type {
-  CreateTerminalInput,
   StartServicesInput,
   GitDiffInput,
-  WorkspaceRuntime,
+  WorkspaceClient,
   WorkspaceCreateContext,
   WorkspaceCreateInput,
   WorkspaceCreateResult,
-  SavedTerminalAttachment,
   SubscribeWorkspaceFileEventsInput,
   ServiceLogLine,
   ServiceLogSnapshot,
-  SaveTerminalAttachmentInput,
   WorkspaceFileEvent,
   WorkspaceFileEventListener,
   WorkspaceFileEventSubscription,
@@ -18,8 +15,24 @@ export type {
   WorkspaceFileTreeEntry,
   WorkspaceHealthResult,
 } from "./workspace";
-export { LocalRuntime, type LocalRuntimeDeps } from "./runtimes/local";
-/** @deprecated Use LocalRuntime instead */
-export { LocalRuntime as HostWorkspaceRuntime } from "./runtimes/local";
-/** @deprecated Use LocalRuntime instead */
-export { LocalRuntime as HostWorkspaceClient } from "./runtimes/local";
+export type {
+  EnvironmentNode,
+  EnvironmentNodeKind,
+  LoweredGraph,
+  LowerOptions,
+} from "./environment/graph";
+export {
+  declaredServiceNames,
+  GraphError,
+  lowerEnvironmentGraph,
+  resolveStartOrder,
+  topologicalSort,
+} from "./environment/graph";
+export {
+  EnvironmentOrchestrator,
+  type StartEnvironmentInput,
+  type PrepareStartInput,
+  type PrepareStartResult,
+  type StepInput,
+} from "./environment/orchestrator";
+export { LocalClient, type LocalClientDeps } from "./clients/local";

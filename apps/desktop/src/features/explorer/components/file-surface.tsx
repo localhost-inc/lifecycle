@@ -10,10 +10,13 @@ import {
 import { workspaceFileBasename } from "@/features/workspaces/lib/workspace-file-paths";
 import { writeWorkspaceFile } from "@/features/workspaces/api";
 import { useWorkspaceFile } from "@/features/workspaces/hooks";
-import { useRuntime } from "@/store";
+import { useClient } from "@/store";
 import { resolveFileEditorConfig } from "@/features/explorer/lib/file-editor-config";
 import type { FileViewerMode } from "@/features/explorer/lib/file-view-mode";
-import { isFileViewerDirty, type FileViewerSessionState } from "@/features/explorer/lib/file-session";
+import {
+  isFileViewerDirty,
+  type FileViewerSessionState,
+} from "@/features/explorer/lib/file-session";
 import {
   getFileViewerScrollRestoreKey,
   resolveFileViewerRenderer,
@@ -44,7 +47,7 @@ export function FileSurface({
   sessionState,
   workspaceId,
 }: FileSurfaceProps) {
-  const runtime = useRuntime();
+  const client = useClient();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [mode, setMode] = useState<FileViewerMode>(() =>
     resolveInitialFileViewerMode(filePath, initialMode),
@@ -206,7 +209,7 @@ export function FileSurface({
     setSaveError(null);
 
     try {
-      const result = await writeWorkspaceFile(runtime, workspaceId, displayPath, draftContent);
+      const result = await writeWorkspaceFile(client, workspaceId, displayPath, draftContent);
       const nextContent = result.content ?? draftContent;
       onSessionStateChange?.({
         conflictDiskContent: null,
@@ -223,7 +226,7 @@ export function FileSurface({
     draftContent,
     fileQuery,
     onSessionStateChange,
-    runtime,
+    client,
     textContent,
     workspaceId,
   ]);
@@ -251,8 +254,8 @@ export function FileSurface({
     });
   };
 
-  // Stable ref-based callback so CodeMirror doesn't reconfigure (and steal
-  // focus from native terminal surfaces) every time FileSurface re-renders.
+  // Stable ref-based callback so CodeMirror doesn't reconfigure and steal
+  // focus every time FileSurface re-renders.
   const editorChangeRef = useRef((_value: string) => {});
   editorChangeRef.current = (value: string) => {
     onSessionStateChange?.({

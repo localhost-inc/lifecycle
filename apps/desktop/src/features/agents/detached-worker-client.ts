@@ -1,3 +1,4 @@
+import { retry } from "@lifecycle/agents";
 import type {
   AgentApprovalResolution,
   AgentTurnCancelRequest,
@@ -14,11 +15,13 @@ import { invokeTauri } from "@/lib/tauri-error";
 interface StartDetachedAgentHostInput {
   args: string[];
   cwd?: string;
+  env?: Record<string, string>;
   sessionId: string;
 }
 
 interface DetachedWorkerClientOptions {
   cwd: string;
+  env?: Record<string, string>;
   launchArgs: string[];
   onState: (state: DetachedAgentHostSnapshot) => void | Promise<void>;
   onWorkerEvent: (event: AgentWorkerEvent) => void | Promise<void>;
@@ -68,6 +71,7 @@ async function startDetachedAgentHost(input: StartDetachedAgentHostInput): Promi
     request: {
       args: input.args,
       cwd: input.cwd ?? null,
+      env: input.env ?? {},
       sessionId: input.sessionId,
     },
   });
@@ -93,19 +97,20 @@ export async function readDetachedAgentHostRegistration(
 async function waitForDetachedAgentHostRegistration(
   sessionId: string,
 ): Promise<DetachedAgentHostRegistration> {
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    const registration = await readDetachedAgentHostRegistration(sessionId);
-    if (registration) {
-      clientLog(sessionId, "registration became available", {
-        attempt: attempt + 1,
-        port: registration.port,
-      });
+  return retry(
+    async () => {
+      const registration = await readDetachedAgentHostRegistration(sessionId);
+      if (!registration) {
+        throw new Error(`Detached agent host ${sessionId} has not registered yet.`);
+      }
+      clientLog(sessionId, "registration became available", { port: registration.port });
       return registration;
-    }
-    await sleep(100);
-  }
-
-  throw new Error(`Detached agent host ${sessionId} did not publish registration in time.`);
+    },
+    {
+      attempts: 40,
+      onRetry: () => sleep(100),
+    },
+  );
 }
 
 class DetachedWorkerClient implements AgentWorker {
@@ -118,6 +123,10 @@ class DetachedWorkerClient implements AgentWorker {
   async connect(): Promise<void> {
     clientLog(this.options.sessionId, "connect requested");
     await this.ensureSocket(true);
+  }
+
+  isHealthy(): boolean {
+    return this.socket?.readyState === WebSocket.OPEN;
   }
 
   async waitForInitialSnapshot(): Promise<void> {
@@ -171,12 +180,28 @@ class DetachedWorkerClient implements AgentWorker {
       turnId: "turnId" in command ? command.turnId ?? null : null,
       approvalId: "approvalId" in command ? command.approvalId : null,
     });
-    const socket = await this.ensureSocket(false);
-    if (socket.readyState !== WebSocket.OPEN) {
-      throw new Error("Detached agent host connection is not open.");
-    }
 
-    socket.send(JSON.stringify(command));
+    const payload = JSON.stringify(command);
+    let forceReconnect = false;
+
+    await retry(
+      async () => {
+        const socket = await this.ensureSocket(forceReconnect);
+        if (socket.readyState !== WebSocket.OPEN) {
+          throw new Error("Detached agent host connection is not open.");
+        }
+        socket.send(payload);
+      },
+      {
+        attempts: 2,
+        onRetry: (error) => {
+          forceReconnect = true;
+          clientLog(this.options.sessionId, "send failed, retrying with fresh connection", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        },
+      },
+    );
   }
 
   private async ensureSocket(forceStart: boolean): Promise<WebSocket> {
@@ -228,6 +253,7 @@ class DetachedWorkerClient implements AgentWorker {
     await startDetachedAgentHost({
       args: this.options.launchArgs,
       cwd: this.options.cwd,
+      env: this.options.env,
       sessionId: this.options.sessionId,
     });
     return await this.connectToRegistration(
@@ -307,14 +333,23 @@ class DetachedWorkerClient implements AgentWorker {
             pendingApprovalId: parsed.pendingApproval?.id ?? null,
           });
           this.initialSnapshotReceived = true;
-          void this.options.onState(parsed);
+          void Promise.resolve(this.options.onState(parsed)).catch((error) => {
+            clientLog(this.options.sessionId, "onState handler failed", {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          });
           return;
         }
         clientLog(this.options.sessionId, "received worker event", {
           eventKind: parsed.kind,
           turnId: "turnId" in parsed ? parsed.turnId : null,
         });
-        void this.options.onWorkerEvent(parsed);
+        void Promise.resolve(this.options.onWorkerEvent(parsed)).catch((error) => {
+          clientLog(this.options.sessionId, "onWorkerEvent handler failed", {
+            eventKind: parsed.kind,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
       };
     });
   }

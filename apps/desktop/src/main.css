@@ -103,26 +103,37 @@ body {
 }
 
 /* Lists */
+/* Override streamdown's inline Tailwind list classes */
+.agent-streamdown ul,
+.agent-streamdown ol {
+  list-style-position: inside !important;
+  padding-left: 0 !important;
+  margin-bottom: 0.5em;
+}
+
 .agent-streamdown ul {
-  list-style: disc;
-  padding-left: 1.5em;
-  margin-bottom: 0.75em;
+  list-style-type: disc !important;
 }
 
 .agent-streamdown ol {
-  list-style: decimal;
-  padding-left: 1.5em;
-  margin-bottom: 0.75em;
+  list-style-type: decimal !important;
 }
 
 .agent-streamdown li {
-  margin-bottom: 0.25em;
+  padding: 0.1em 0 !important;
+  padding-left: 0 !important;
+}
+
+.agent-streamdown li > p {
+  display: inline;
+  margin-bottom: 0;
 }
 
 .agent-streamdown li > ul,
 .agent-streamdown li > ol {
-  margin-top: 0.25em;
+  margin-top: 0.15em;
   margin-bottom: 0;
+  padding-left: 1.5em !important;
 }
 
 /* Blockquotes */
@@ -186,22 +197,4 @@ body {
 .agent-message-list::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 0;
-}
-
-.terminal-host {
-  background-color: var(--terminal-surface-background, var(--background));
-  contain: paint;
-  isolation: isolate;
-  overflow: hidden;
-  position: relative;
-}
-
-.terminal-host canvas {
-  background-color: var(--terminal-surface-background, var(--background));
-  display: block;
-}
-
-.terminal-host[data-terminal-renderer="canvas"] canvas {
-  -webkit-font-smoothing: antialiased;
-  backface-visibility: hidden;
 }

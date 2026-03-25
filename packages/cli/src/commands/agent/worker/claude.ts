@@ -4,6 +4,7 @@ import {
   type ClaudeLoginMethod as ClaudeWorkerLoginMethod,
   type ClaudeWorkerPermissionMode,
 } from "@lifecycle/agents/providers/claude/worker";
+import { LIFECYCLE_CLI_PATH_ENV } from "@lifecycle/contracts";
 import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 
@@ -18,6 +19,19 @@ const ClaudePermissionModeSchema = z.enum([
 const ClaudeLoginMethodSchema = z.enum(["claudeai", "console"]);
 const ClaudeEffortSchema = z.enum(["low", "medium", "high", "max"]);
 
+function buildMcpServers(): ClaudeWorkerInput["mcpServers"] {
+  const cliPath = process.env[LIFECYCLE_CLI_PATH_ENV];
+  if (!cliPath) return undefined;
+
+  return {
+    lifecycle: {
+      type: "stdio",
+      command: cliPath,
+      args: ["mcp"],
+    },
+  };
+}
+
 export default defineCommand({
   description: "Run a Claude-backed agent worker over stdin/stdout NDJSON.",
   input: z.object({
@@ -30,7 +44,10 @@ export default defineCommand({
     workspacePath: z.string().min(1),
   }),
   async run(input) {
-    return runClaudeWorker(input as ClaudeWorkerInput & {
+    return runClaudeWorker({
+      ...input,
+      mcpServers: buildMcpServers(),
+    } as ClaudeWorkerInput & {
       loginMethod: ClaudeWorkerLoginMethod;
       permissionMode: ClaudeWorkerPermissionMode;
     });

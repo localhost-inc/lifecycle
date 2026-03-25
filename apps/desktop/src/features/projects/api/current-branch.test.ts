@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import type { WorkspaceRuntime } from "@lifecycle/workspace";
+import type { WorkspaceClient } from "@lifecycle/workspace";
 import { getCurrentBranch } from "./current-branch";
 
-const runtime = {
+const client = {
   getCurrentBranch: mock(async () => "feature/provider-boundary"),
-} as unknown as WorkspaceRuntime;
+} as unknown as WorkspaceClient;
 
 describe("project current branch api", () => {
   beforeEach(() => {
@@ -13,7 +13,7 @@ describe("project current branch api", () => {
       value: true,
       writable: true,
     });
-    (runtime.getCurrentBranch as ReturnType<typeof mock>).mockClear();
+    (client.getCurrentBranch as ReturnType<typeof mock>).mockClear();
   });
 
   afterEach(() => {
@@ -21,7 +21,7 @@ describe("project current branch api", () => {
   });
 
   test("routes branch lookup through the runtime", async () => {
-    expect(await getCurrentBranch(runtime, "/tmp/project_1")).toBe("feature/provider-boundary");
-    expect((runtime.getCurrentBranch as ReturnType<typeof mock>)).toHaveBeenCalledWith("/tmp/project_1");
+    expect(await getCurrentBranch(client, "/tmp/project_1")).toBe("feature/provider-boundary");
+    expect((client.getCurrentBranch as ReturnType<typeof mock>)).toHaveBeenCalledWith("/tmp/project_1");
   });
 });

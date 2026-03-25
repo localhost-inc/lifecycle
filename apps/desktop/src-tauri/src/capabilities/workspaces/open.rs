@@ -114,7 +114,6 @@ fn resolve_workspace_app_opener(app_id: &str) -> Result<WorkspaceAppOpener, Life
         "xcode" => WorkspaceAppOpener::Program("Xcode"),
         "zed" => WorkspaceAppOpener::Program("Zed"),
         "finder" => WorkspaceAppOpener::Default,
-        "terminal" => WorkspaceAppOpener::Program("Terminal"),
         _ => {
             return Err(workspace_open_failure(
                 "open workspace in app",
@@ -147,7 +146,6 @@ fn workspace_open_in_menu_targets() -> &'static [(&'static str, &'static str)] {
         ("cursor", "Cursor"),
         ("windsurf", "Windsurf"),
         ("finder", "Finder"),
-        ("terminal", "Terminal"),
         ("iterm", "iTerm2"),
         ("ghostty", "Ghostty"),
         ("warp", "Warp"),
@@ -162,7 +160,6 @@ fn workspace_open_in_menu_icon_application_name(app_id: &str) -> Option<&'static
         "cursor" => Some("Cursor"),
         "windsurf" => Some("Windsurf"),
         "finder" => Some("Finder"),
-        "terminal" => Some("Terminal"),
         "iterm" => Some("iTerm"),
         "ghostty" => Some("Ghostty"),
         "warp" => Some("Warp"),

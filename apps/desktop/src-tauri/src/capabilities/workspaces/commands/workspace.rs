@@ -121,14 +121,14 @@ pub async fn stop_workspace_services(
 }
 
 #[tauri::command]
-pub async fn destroy_workspace(
+pub async fn archive_workspace(
     app: AppHandle,
     db_path: State<'_, DbPath>,
     root_git_watchers: State<'_, RootGitWatcherMap>,
     workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
     workspace_id: String,
 ) -> Result<(), LifecycleError> {
-    super::super::destroy::destroy_workspace(
+    super::super::destroy::archive_workspace(
         app,
         db_path,
         root_git_watchers,

@@ -4,7 +4,6 @@ mod shared;
 
 use crate::platform::app_config::AppConfigPath;
 use crate::platform::db::{cleanup_for_exit, reconcile_on_startup, DbPath};
-use crate::platform::native_terminal;
 use crate::platform::runtime::supervisor::Supervisor;
 #[cfg(target_os = "macos")]
 use serde::Serialize;
@@ -55,6 +54,7 @@ pub fn run() {
         Arc::new(capabilities::workspaces::controller::WorkspaceControllerRegistry::new());
     let root_git_watchers: RootGitWatcherMap = Arc::new(StdMutex::new(HashMap::new()));
     let root_git_watchers_for_setup = root_git_watchers.clone();
+    let workspace_controllers_for_setup = workspace_controllers.clone();
 
     let run_result = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -109,11 +109,32 @@ pub fn run() {
 
             // reconcile_on_startup may fail on first launch (fresh DB, no schema yet).
             // tauri-plugin-sql runs migrations later in the plugin lifecycle.
-            if let Err(error) = reconcile_on_startup(&db_path_str) {
-                crate::platform::diagnostics::append_diagnostic(
-                    "startup-reconcile",
-                    &format!("skipped: {error}"),
-                );
+            let survivors = match reconcile_on_startup(&db_path_str) {
+                Ok(survivors) => survivors,
+                Err(error) => {
+                    crate::platform::diagnostics::append_diagnostic(
+                        "startup-reconcile",
+                        &format!("skipped: {error}"),
+                    );
+                    vec![]
+                }
+            };
+
+            // Re-adopt services whose processes survived an app restart (e.g. Rust
+            // dev recompile). This resumes log tailing and exit watching.
+            if !survivors.is_empty() {
+                let controllers_for_adopt = workspace_controllers_for_setup.clone();
+                let app_handle_for_adopt = app.handle().clone();
+                let db_for_adopt = db_path_str.clone();
+                tauri::async_runtime::spawn(async move {
+                    adopt_surviving_services(
+                        &app_handle_for_adopt,
+                        &controllers_for_adopt,
+                        &db_for_adopt,
+                        &survivors,
+                    )
+                    .await;
+                });
             }
             crate::platform::preview_proxy::start_preview_proxy(&app_data_dir, db_path_str.clone())
                 .expect("failed to initialize local preview proxy");
@@ -154,11 +175,6 @@ pub fn run() {
 
             if let Err(error) = expand_main_window_for_dev(&app.handle()) {
                 crate::platform::diagnostics::append_error("main-window-dev-size", error);
-            }
-
-            if native_terminal::is_available() {
-                native_terminal::initialize(app.handle().clone(), db_path_str.clone())
-                    .expect("failed to initialize native terminal runtime");
             }
 
             #[cfg(target_os = "macos")]
@@ -247,6 +263,7 @@ pub fn run() {
             capabilities::app::commands::get_auth_session,
             capabilities::app::commands::read_agent_host_registration,
             capabilities::app::commands::start_detached_agent_host,
+            capabilities::bridge::bridge_create_agent_session,
             capabilities::bridge::bridge_complete_shell_request,
             capabilities::bridge::bridge_fail_shell_request,
             capabilities::app::commands::set_window_accepts_mouse_moved_events,
@@ -258,22 +275,11 @@ pub fn run() {
             capabilities::workspaces::commands::rename_workspace,
             capabilities::workspaces::commands::start_workspace_services,
             capabilities::workspaces::commands::stop_workspace_services,
-            capabilities::workspaces::commands::destroy_workspace,
+            capabilities::workspaces::commands::archive_workspace,
             capabilities::workspaces::commands::get_workspace_activity,
             capabilities::workspaces::commands::get_workspace_service_logs,
             capabilities::workspaces::commands::get_workspace_services,
             capabilities::workspaces::commands::get_current_branch,
-            capabilities::workspaces::commands::list_workspace_terminals,
-            capabilities::workspaces::commands::rename_terminal,
-            capabilities::workspaces::commands::create_terminal,
-            capabilities::workspaces::commands::send_terminal_text,
-            capabilities::workspaces::commands::save_terminal_attachment,
-            capabilities::workspaces::commands::sync_native_terminal_surface,
-            capabilities::workspaces::commands::sync_native_terminal_surface_frame,
-            capabilities::workspaces::commands::hide_native_terminal_surface,
-            capabilities::workspaces::commands::detach_terminal,
-            capabilities::workspaces::commands::kill_terminal,
-            capabilities::workspaces::commands::interrupt_terminal,
             capabilities::workspaces::commands::get_workspace_git_status,
             capabilities::workspaces::commands::get_workspace_git_diff,
             capabilities::workspaces::commands::get_workspace_git_scope_patch,
@@ -298,7 +304,24 @@ pub fn run() {
             capabilities::workspaces::commands::push_workspace_git,
             capabilities::workspaces::commands::create_workspace_git_pull_request,
             capabilities::workspaces::commands::merge_workspace_git_pull_request,
+            capabilities::workspaces::commands::prepare_environment_start,
+            capabilities::workspaces::commands::run_environment_step,
+            capabilities::workspaces::commands::start_environment_service,
+            capabilities::workspaces::commands::stop_environment_service,
+            capabilities::workspaces::commands::mark_workspace_prepared,
+            capabilities::workspaces::commands::get_workspace_prepared,
+            capabilities::workspaces::commands::get_workspace_ready_services,
             capabilities::app::commands::sync_project_menu,
+            capabilities::plan::commands::list_plans,
+            capabilities::plan::commands::create_plan,
+            capabilities::plan::commands::update_plan,
+            capabilities::plan::commands::delete_plan,
+            capabilities::plan::commands::list_tasks,
+            capabilities::plan::commands::create_task,
+            capabilities::plan::commands::update_task,
+            capabilities::plan::commands::delete_task,
+            capabilities::plan::commands::add_task_dependency,
+            capabilities::plan::commands::remove_task_dependency,
         ])
         .build(tauri::generate_context!());
 
@@ -317,6 +340,77 @@ pub fn run() {
                 format!("error while running tauri application: {error}"),
             );
             panic!("error while running tauri application: {error}");
+        }
+    }
+}
+
+async fn adopt_surviving_services(
+    app: &tauri::AppHandle,
+    controllers: &WorkspaceControllerRegistryHandle,
+    db_path: &str,
+    survivors: &[crate::platform::db::SurvivingService],
+) {
+    use std::collections::HashMap;
+
+    // Group survivors by workspace.
+    let mut by_workspace: HashMap<&str, Vec<&crate::platform::db::SurvivingService>> =
+        HashMap::new();
+    for survivor in survivors {
+        by_workspace
+            .entry(&survivor.workspace_id)
+            .or_default()
+            .push(survivor);
+    }
+
+    for (workspace_id, services) in by_workspace {
+        let log_dir =
+            match crate::capabilities::workspaces::environment::runtime_env::workspace_log_dir(
+                db_path,
+                workspace_id,
+            ) {
+                Ok(dir) => dir,
+                Err(error) => {
+                    crate::platform::diagnostics::append_error(
+                        "adopt-services",
+                        format!("failed to resolve log dir for {workspace_id}: {error}"),
+                    );
+                    continue;
+                }
+            };
+
+        let controller = controllers.get_or_create(workspace_id).await;
+        let supervisor = controller.supervisor();
+        let mut managed = supervisor.lock().await;
+
+        for svc in &services {
+            if let Err(error) = managed.adopt_process(
+                &svc.service_name,
+                svc.pid as u32,
+                &log_dir,
+                app.clone(),
+                workspace_id,
+            ) {
+                crate::platform::diagnostics::append_diagnostic(
+                    "adopt-services",
+                    &format!(
+                        "could not adopt {} in {workspace_id}: {error}",
+                        svc.service_name,
+                    ),
+                );
+            }
+        }
+
+        // Emit status events so the frontend knows these services are running.
+        for svc in &services {
+            crate::shared::lifecycle_events::publish_lifecycle_event(
+                app,
+                crate::shared::lifecycle_events::LifecycleEvent::ServiceStatusChanged {
+                    workspace_id: workspace_id.to_string(),
+                    name: svc.service_name.clone(),
+                    status: "ready".to_string(),
+                    status_reason: None,
+                },
+            );
         }
     }
 }
@@ -348,14 +442,7 @@ async fn confirm_and_exit(app: tauri::AppHandle) {
                     |row| row.get(0),
                 )
                 .unwrap_or(0);
-            let terminal_count: i64 = conn
-                .query_row(
-                    "SELECT COUNT(*) FROM terminal WHERE status IN ('active', 'detached')",
-                    [],
-                    |row| row.get(0),
-                )
-                .unwrap_or(0);
-            workspace_count > 0 || terminal_count > 0
+            workspace_count > 0
         }
     })
     .await
@@ -470,11 +557,8 @@ fn disable_main_webview_context_menu(_app: &tauri::AppHandle) -> Result<(), Life
 /// Override `cancelOperation:` on the main NSWindow to suppress the macOS
 /// system beep when Escape is pressed. Without this, NSResponder's default
 /// implementation calls NSBeep() when no view in the responder chain handles
-/// the selector. Placing the override on the window means it acts as a single
-/// catch-all: views that handle Escape themselves (e.g. native terminal
-/// surfaces) still do, while everything else falls through here silently. The
-/// DOM keydown event still reaches JavaScript so Escape can be handled in the
-/// web layer.
+/// the selector. The DOM keydown event still reaches JavaScript so Escape can
+/// be handled in the web layer.
 #[cfg(target_os = "macos")]
 fn suppress_escape_beep(app: &tauri::AppHandle) -> Result<(), LifecycleError> {
     use objc2_app_kit::{NSView, NSWindow};

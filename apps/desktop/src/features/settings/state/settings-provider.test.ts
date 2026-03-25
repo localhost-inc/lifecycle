@@ -8,7 +8,7 @@ import {
   applyFontSettings,
   parseSettingsJson,
   readSettingsProviderHotState,
-} from "@/features/settings/state/settings-provider";
+} from "@/features/settings/state/settings-state";
 
 describe("applyFontSettings", () => {
   test("writes interface and monospace font tokens to the root style", () => {
@@ -40,7 +40,7 @@ describe("parseSettingsJson", () => {
     expect(parseSettingsJson(null)).toEqual({
       baseFontSize: DEFAULT_BASE_FONT_SIZE,
       theme: "dark",
-      defaultNewTabLaunch: "shell",
+      defaultNewTabLaunch: "codex",
       dimInactivePanes: false,
       harnesses: buildDefaultHarnessSettings(),
       interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,
@@ -82,7 +82,7 @@ describe("parseSettingsJson", () => {
     ).toEqual({
       baseFontSize: DEFAULT_BASE_FONT_SIZE,
       theme: "catppuccin",
-      defaultNewTabLaunch: "shell",
+      defaultNewTabLaunch: "codex",
       dimInactivePanes: true,
       harnesses: {
         claude: {
@@ -132,7 +132,7 @@ describe("parseSettingsJson", () => {
     ).toEqual({
       baseFontSize: DEFAULT_BASE_FONT_SIZE,
       theme: "dark",
-      defaultNewTabLaunch: "shell",
+      defaultNewTabLaunch: "codex",
       dimInactivePanes: false,
       harnesses: buildDefaultHarnessSettings(),
       interfaceFontFamily: DEFAULT_INTERFACE_FONT_FAMILY,

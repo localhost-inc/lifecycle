@@ -5,7 +5,6 @@ import { createElement, type ComponentType } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, Outlet, Route, Routes } from "react-router-dom";
 import type { AppShellOutletContext } from "@/components/layout/app-shell-context";
-import { TerminalResponseReadyProvider } from "@/features/terminals/state/terminal-response-ready-provider";
 import { WorkspaceToolbarProvider } from "@/features/workspaces/state/workspace-toolbar-context";
 
 const project: ProjectRecord = {
@@ -28,12 +27,9 @@ const workspace: WorkspaceRecord = {
   worktree_path: "/tmp/lifecycle-setup",
   target: "local",
   manifest_fingerprint: "manifest_1",
-  created_by: null,
-  source_workspace_id: null,
   created_at: "2026-03-14T10:00:00.000Z",
   updated_at: "2026-03-14T10:00:00.000Z",
   last_active_at: "2026-03-14T10:00:00.000Z",
-  expires_at: null,
   status: "active",
   failure_reason: null,
   failed_at: null,
@@ -52,8 +48,7 @@ function renderProjectRoute(
       persisted: false,
     },
     onCreateWorkspace: async () => {},
-    onDestroyWorkspace: async () => {},
-    onForkWorkspace: async () => {},
+    onArchiveWorkspace: async () => {},
     onOpenSettings: () => {},
     onOpenWorkspace: () => {},
     onRemoveProject: async () => {},
@@ -80,28 +75,26 @@ function renderProjectRoute(
   return renderToStaticMarkup(
     createElement(ThemeProvider, {
       storageKey: "test.theme",
-      children: createElement(TerminalResponseReadyProvider, {
-        children: createElement(WorkspaceToolbarProvider, {
-          children: createElement(MemoryRouter, {
-            initialEntries: [entry],
-            children: createElement(Routes, {
-              children: createElement(
+      children: createElement(WorkspaceToolbarProvider, {
+        children: createElement(MemoryRouter, {
+          initialEntries: [entry],
+          children: createElement(Routes, {
+            children: createElement(
+              Route,
+              { element: createElement(OutletContextBoundary) },
+              createElement(
                 Route,
-                { element: createElement(OutletContextBoundary) },
-                createElement(
-                  Route,
-                  {
-                    element: createElement(ProjectRoute),
-                    path: "/projects/:projectId",
-                  },
-                  createElement(Route, { index: true, element: createElement(IndexStub) }),
-                  createElement(Route, {
-                    path: "workspaces/:workspaceId",
-                    element: createElement(WorkspaceStub),
-                  }),
-                ),
+                {
+                  element: createElement(ProjectRoute),
+                  path: "/projects/:projectId",
+                },
+                createElement(Route, { index: true, element: createElement(IndexStub) }),
+                createElement(Route, {
+                  path: "workspaces/:workspaceId",
+                  element: createElement(WorkspaceStub),
+                }),
               ),
-            }),
+            ),
           }),
         }),
       }),

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import type { WorkspaceRuntime } from "@lifecycle/workspace";
+import type { WorkspaceClient } from "@lifecycle/workspace";
 import {
   getGitBaseRef,
   getGitChangesPatch,
@@ -12,7 +12,7 @@ import {
   getGitStatus,
 } from "@/features/git/api";
 
-const runtime = {
+const client = {
   getGitStatus: mock(async () => ({
     branch: "feature/runtime-boundary",
     headSha: "abcdef1234567890",
@@ -113,7 +113,7 @@ const runtime = {
     updatedAt: "2026-03-13T00:00:00.000Z",
     url: "https://github.com/example/repo/pull/42",
   })),
-} as unknown as WorkspaceRuntime;
+} as unknown as WorkspaceClient;
 
 describe("git api workspace routing", () => {
   beforeEach(() => {
@@ -122,7 +122,7 @@ describe("git api workspace routing", () => {
       value: true,
       writable: true,
     });
-    for (const method of Object.values(runtime)) {
+    for (const method of Object.values(client)) {
       if (typeof method === "function" && "mockClear" in method) {
         (method as ReturnType<typeof mock>).mockClear();
       }
@@ -134,7 +134,7 @@ describe("git api workspace routing", () => {
   });
 
   test("routes advanced workspace-scoped git reads through the runtime", async () => {
-    expect(await getGitStatus(runtime, "ws_1")).toEqual({
+    expect(await getGitStatus(client, "ws_1")).toEqual({
       branch: "feature/runtime-boundary",
       headSha: "abcdef1234567890",
       upstream: "origin/feature/runtime-boundary",
@@ -142,15 +142,15 @@ describe("git api workspace routing", () => {
       behind: 0,
       files: [],
     });
-    expect(await getGitScopePatch(runtime, "ws_1", "working")).toBe("scope patch");
-    expect(await getGitChangesPatch(runtime, "ws_1")).toBe("changes patch");
-    expect(await getGitDiff(runtime, "ws_1", "src/app.ts", "working")).toEqual({
+    expect(await getGitScopePatch(client, "ws_1", "working")).toBe("scope patch");
+    expect(await getGitChangesPatch(client, "ws_1")).toBe("changes patch");
+    expect(await getGitDiff(client, "ws_1", "src/app.ts", "working")).toEqual({
       scope: "working",
       filePath: "src/app.ts",
       patch: "diff patch",
       isBinary: false,
     });
-    expect(await getGitPullRequest(runtime, "ws_1", 42)).toEqual({
+    expect(await getGitPullRequest(client, "ws_1", 42)).toEqual({
       support: {
         available: true,
         message: null,
@@ -159,16 +159,16 @@ describe("git api workspace routing", () => {
       },
       pullRequest: null,
     });
-    expect(await getGitBaseRef(runtime, "ws_1")).toBe("main");
-    expect(await getGitRefDiffPatch(runtime, "ws_1", "main", "HEAD")).toBe("ref diff patch");
-    expect(await getGitPullRequestPatch(runtime, "ws_1", 42)).toBe("pr patch");
-    expect(await getGitCommitPatch(runtime, "ws_1", "abcdef1234567890")).toEqual({
+    expect(await getGitBaseRef(client, "ws_1")).toBe("main");
+    expect(await getGitRefDiffPatch(client, "ws_1", "main", "HEAD")).toBe("ref diff patch");
+    expect(await getGitPullRequestPatch(client, "ws_1", 42)).toBe("pr patch");
+    expect(await getGitCommitPatch(client, "ws_1", "abcdef1234567890")).toEqual({
       sha: "abcdef1234567890",
       patch: "commit patch",
     });
 
     expect(
-      (runtime.getGitStatus as ReturnType<typeof mock>).mock.calls.length,
+      (client.getGitStatus as ReturnType<typeof mock>).mock.calls.length,
     ).toBeGreaterThanOrEqual(1);
   });
 });

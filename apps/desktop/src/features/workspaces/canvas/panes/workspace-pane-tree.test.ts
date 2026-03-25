@@ -96,14 +96,12 @@ describe("resolveWorkspacePaneOpacity", () => {
 describe("areWorkspacePaneLeafPropsEqual", () => {
   function createLeafProps() {
     const actions = {
-      closeDocumentTab: () => {},
-      closeTerminalTab: async () => {},
+      closeTab: () => {},
       fileSessionStateChange: () => {},
       launchSurface: () => {},
       moveTabToPane: () => {},
       openFile: () => {},
       reconcilePaneVisibleTabOrder: () => {},
-      renameTerminalTab: async () => {},
       resetAllSplitRatios: () => {},
       selectPane: () => {},
       selectTab: () => {},
@@ -123,7 +121,7 @@ describe("areWorkspacePaneLeafPropsEqual", () => {
       onTabDragCommit: () => {},
       pane: {
         activeSurface: {
-          document: {
+          tab: {
             extension: "tsx",
             filePath: "src/app.tsx",
             key: "file:src/app.tsx",
@@ -143,7 +141,12 @@ describe("areWorkspacePaneLeafPropsEqual", () => {
           paneId: "pane-left",
           tabs: [
             {
-              dirty: true,
+              isDirty: true,
+              isRunning: false,
+              key: "file:src/app.tsx",
+              label: "app.tsx",
+              leading: null,
+              needsAttention: false,
               tab: {
                 extension: "tsx",
                 filePath: "src/app.tsx",
@@ -151,9 +154,28 @@ describe("areWorkspacePaneLeafPropsEqual", () => {
                 kind: "file-viewer" as const,
                 label: "app.tsx",
               },
+              title: "src/app.tsx",
             },
           ],
         },
+        tabSurfaces: [
+          {
+            key: "file:src/app.tsx",
+            surface: {
+              tab: {
+                extension: "tsx",
+                filePath: "src/app.tsx",
+                key: "file:src/app.tsx",
+                kind: "file-viewer" as const,
+                label: "app.tsx",
+              },
+              kind: "file-viewer" as const,
+              sessionState: null,
+              viewState: { scrollTop: 24 },
+              workspaceId: "workspace-1",
+            },
+          },
+        ],
       },
       paneCount: 2,
       paneTabDragInProgress: false,

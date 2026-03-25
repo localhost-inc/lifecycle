@@ -1,30 +1,12 @@
 import type { DragEvent as ReactDragEvent } from "react";
-import type { TerminalRecord, TerminalStatus } from "@lifecycle/contracts";
 import {
-  isAgentTab,
-  getWorkspaceDocument,
-  isChangesDiffDocument,
-  isCommitDiffDocument,
-  isFileViewerDocument,
-  isPreviewDocument,
-  isPullRequestDocument,
-  type WorkspaceCanvasDocument,
-  type WorkspaceCanvasDocumentsByKey,
+  getWorkspaceTab,
+  type WorkspaceCanvasTab,
+  type WorkspaceCanvasTabsByKey,
 } from "@/features/workspaces/state/workspace-canvas-state";
+import { buildWorkspaceSurfaceTabPresentation } from "@/features/workspaces/surfaces/workspace-surface-registry";
 
-export type TerminalTab = {
-  kind: "terminal";
-  key: string;
-  label: string;
-  launchType: TerminalRecord["launch_type"];
-  optimistic?: "created" | "pending";
-  responseReady: boolean;
-  running?: boolean;
-  status: TerminalStatus;
-  terminalId: string;
-};
-
-export type WorkspaceCanvasTab = TerminalTab | WorkspaceCanvasDocument;
+export type { WorkspaceCanvasTab } from "@/features/workspaces/state/workspace-canvas-state";
 
 export type WorkspaceTabPlacement = "after" | "before";
 
@@ -38,52 +20,18 @@ export function areStringArraysEqual(left: readonly string[], right: readonly st
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
-export function orderWorkspaceTerminals(terminals: readonly TerminalRecord[]): TerminalRecord[] {
-  return [...terminals].sort(
-    (left, right) =>
-      left.started_at.localeCompare(right.started_at) || left.id.localeCompare(right.id),
-  );
-}
-
 export function resolveWorkspaceVisibleTabs(
-  terminalTabs: readonly TerminalTab[],
-  documentsByKey: WorkspaceCanvasDocumentsByKey,
+  tabsByKey: WorkspaceCanvasTabsByKey,
   tabOrderKeys: readonly string[],
-  hiddenTerminalTabKeys: readonly string[],
 ): WorkspaceCanvasTab[] {
-  const hiddenTerminalTabKeySet = new Set(hiddenTerminalTabKeys);
-  const terminalTabsByKey = new Map(terminalTabs.map((tab) => [tab.key, tab]));
-
   return tabOrderKeys.reduce<WorkspaceCanvasTab[]>((visibleTabs, key) => {
-    if (hiddenTerminalTabKeySet.has(key)) {
-      return visibleTabs;
-    }
-
-    const terminalTab = terminalTabsByKey.get(key);
-    if (terminalTab) {
-      visibleTabs.push(terminalTab);
-      return visibleTabs;
-    }
-
-    const document = getWorkspaceDocument(documentsByKey, key);
-    if (document) {
-      visibleTabs.push(document);
+    const tab = getWorkspaceTab(tabsByKey, key);
+    if (tab) {
+      visibleTabs.push(tab);
     }
 
     return visibleTabs;
   }, []);
-}
-
-export function reconcileHiddenTerminalTabKeys(
-  hiddenTerminalTabKeys: readonly string[],
-  knownTerminalTabKeys: readonly string[],
-  terminalsReady: boolean,
-): string[] {
-  if (!terminalsReady) {
-    return [...hiddenTerminalTabKeys];
-  }
-
-  return hiddenTerminalTabKeys.filter((key) => knownTerminalTabKeys.includes(key));
 }
 
 export function getRightmostWorkspaceTabKey(
@@ -190,35 +138,7 @@ export function getWorkspaceTabDragShiftDirection(
 }
 
 export function tabTitle(tab: WorkspaceCanvasTab): string {
-  if (tab.kind === "terminal") {
-    return tab.label;
-  }
-
-  if (isFileViewerDocument(tab)) {
-    return tab.filePath;
-  }
-
-  if (isPreviewDocument(tab)) {
-    return tab.url;
-  }
-
-  if (isAgentTab(tab)) {
-    return tab.label;
-  }
-
-  if (isChangesDiffDocument(tab)) {
-    return tab.label;
-  }
-
-  if (isCommitDiffDocument(tab)) {
-    return `${tab.shortSha} ${tab.message}`;
-  }
-
-  if (isPullRequestDocument(tab)) {
-    return `PR #${tab.number} ${tab.title}`;
-  }
-
-  return "";
+  return buildWorkspaceSurfaceTabPresentation(tab).title;
 }
 
 export function getTabDragPlacement(

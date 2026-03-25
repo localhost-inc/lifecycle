@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { createPatch } from "diff";
 import { PatchDiff } from "@pierre/diffs/react";
 import type { AgentToolCallStatus } from "@lifecycle/agents";
+import { withCopyableGitDiffOptions } from "@/features/git/components/git-diff-rendering";
 
 export function buildToolPatch(inputJson: string): string | null {
   try {
@@ -27,7 +28,7 @@ function ToolDiffView({ inputJson }: { inputJson: string }) {
 
   return (
     <div className="mt-0.5 overflow-hidden text-[12px]">
-      <PatchDiff patch={patch} options={{ diffStyle: "unified", disableFileHeader: true }} />
+      <PatchDiff patch={patch} options={withCopyableGitDiffOptions({ diffStyle: "unified" as const, disableFileHeader: true })} />
     </div>
   );
 }
@@ -77,6 +78,15 @@ function extractToolMeta(toolName: string, inputJson?: string): string | null {
       case "Glob":
       case "Grep":
         return typeof input.pattern === "string" ? input.pattern : null;
+      case "ToolSearch":
+      case "WebSearch":
+        return typeof input.query === "string"
+          ? input.query.length > 60
+            ? `${input.query.slice(0, 57)}...`
+            : input.query
+          : null;
+      case "WebFetch":
+        return typeof input.url === "string" ? input.url.replace(/^https?:\/\//, "").slice(0, 60) : null;
       case "Bash":
       case "command_execution":
         return typeof input.command === "string"
@@ -163,6 +173,15 @@ function buildToolCallHeader(toolName: string, inputJson?: string): { verb: stri
       const raw = typeof input?.pattern === "string" ? input.pattern : null;
       return { verb: "Search", subject: raw ? cleanSearchPattern(raw) : null, filePath: null, summary: null };
     }
+    case "ToolSearch":
+    case "WebSearch": {
+      const query = typeof input?.query === "string" ? input.query : null;
+      return { verb: "Search", subject: query && query.length > 60 ? `${query.slice(0, 57)}…` : query, filePath: null, summary: null };
+    }
+    case "WebFetch": {
+      const url = typeof input?.url === "string" ? input.url.replace(/^https?:\/\//, "").slice(0, 60) : null;
+      return { verb: "Fetch", subject: url, filePath: null, summary: null };
+    }
     case "Bash":
     case "command_execution": {
       const cmd = typeof input?.command === "string" ? input.command : null;
@@ -245,40 +264,46 @@ export function ToolCallPart({ toolName, inputJson, outputJson, status, errorTex
         ) : (
           <span className="size-3 shrink-0" />
         )}
-        <button
-          className="flex items-center gap-1.5 hover:text-[var(--foreground)] transition-colors"
-          onClick={() => isExpandable && setOpen(!open)}
-          type="button"
-        >
-          <span className="font-medium text-[var(--foreground)]">{verb}</span>
-        </button>
-        {subject ? (
-          canOpenFile ? (
-            <button
-              className="text-[var(--muted-foreground)] hover:text-[var(--accent)] hover:underline transition-colors"
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenFile(filePath);
-              }}
-              title={filePath}
-              type="button"
-            >
-              {subject}
-            </button>
-          ) : (
-            <span className="text-[var(--muted-foreground)]">{subject}</span>
-          )
-        ) : null}
+        <span className="inline-flex items-center">
+          <button
+            className="hover:text-[var(--foreground)] transition-colors"
+            onClick={() => isExpandable && setOpen(!open)}
+            type="button"
+          >
+            <span className="font-medium text-[var(--foreground)]">{verb}</span>
+          </button>
+          {subject ? (
+            <>
+              <span className="text-[var(--muted-foreground)]/60">(</span>
+              {canOpenFile ? (
+                <button
+                  className="text-[var(--muted-foreground)] hover:text-[var(--accent)] hover:underline transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenFile(filePath);
+                  }}
+                  title={filePath}
+                  type="button"
+                >
+                  {subject}
+                </button>
+              ) : (
+                <span className="text-[var(--muted-foreground)]">{subject}</span>
+              )}
+              <span className="text-[var(--muted-foreground)]/60">)</span>
+            </>
+          ) : null}
+        </span>
       </div>
       {open && hasToolDiff && summary ? (
-        <div className="flex items-center gap-1 pl-[18px] text-[11px] text-[var(--muted-foreground)]/60">
+        <div className="flex items-center gap-1 pl-[1.125rem] text-[11px] text-[var(--muted-foreground)]/60">
           <span>└</span>
           <span>{summary}</span>
         </div>
       ) : null}
       {open && hasToolDiff && diffInputJson ? <ToolDiffView inputJson={diffInputJson} /> : null}
       {open && agentPrompt ? (
-        <pre className="mt-1 whitespace-pre-wrap break-words border-l-2 border-[var(--border)] pl-3 text-[12px] leading-5 text-[var(--muted-foreground)]">
+        <pre className="mt-1 ml-[1.125rem] whitespace-pre-wrap break-words border-l-2 border-[var(--border)] pl-3 text-[12px] leading-5 text-[var(--muted-foreground)]">
           {agentPrompt}
         </pre>
       ) : null}

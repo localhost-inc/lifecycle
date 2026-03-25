@@ -22,7 +22,7 @@ const buttonVariants = cva(
           "border border-[var(--destructive)]/35 bg-transparent text-[var(--destructive)] hover:border-[var(--destructive)]/45 hover:bg-[var(--destructive)]/10",
         white: "bg-white text-black hover:bg-white/90",
         glass:
-          "rounded-full bg-[var(--muted)] text-[var(--foreground)] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.04),0_0_0_1px_rgba(255,255,255,0.03)] hover:bg-[var(--card)] hover:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06),0_0_0_1px_rgba(255,255,255,0.05)]",
+          "rounded-xl bg-[var(--glass)] text-[var(--foreground)] hover:bg-[var(--glass-hover)]",
       },
       size: {
         default: "h-8 px-3",

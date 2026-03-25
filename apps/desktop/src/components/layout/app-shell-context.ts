@@ -9,8 +9,7 @@ export interface AppShellOutletContext {
   projects: ProjectRecord[];
   workspacesByProjectId: Record<string, WorkspaceRecord[]>;
   onCreateWorkspace: (projectId: string, mode: WorkspaceCreateMode) => Promise<void>;
-  onDestroyWorkspace: (workspace: WorkspaceRecord) => Promise<void>;
-  onForkWorkspace: (workspace: WorkspaceRecord) => Promise<void>;
+  onArchiveWorkspace: (workspace: WorkspaceRecord) => Promise<void>;
   onOpenSettings: () => void;
   onOpenWorkspace: (workspace: WorkspaceRecord) => void;
   onRemoveProject: (projectId: string) => Promise<void>;

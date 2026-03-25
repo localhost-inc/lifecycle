@@ -13,7 +13,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@lifecycle/ui";
-import { ChevronDown, GitFork, Trash2 } from "lucide-react";
+import { ChevronDown, Trash2 } from "lucide-react";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { isMacPlatform } from "@/app/app-hotkeys";
 import {
@@ -32,8 +32,7 @@ import {
 
 interface WorkspaceActionsProps {
   workspace: WorkspaceRecord;
-  onFork?: () => void;
-  onDestroy?: () => Promise<void> | void;
+  onArchive?: () => Promise<void> | void;
 }
 
 function describeOpenInError(error: unknown): string {
@@ -58,18 +57,18 @@ function describeOpenInError(error: unknown): string {
   return "Unable to open this workspace in the selected app.";
 }
 
-export function WorkspaceActions({ workspace, onDestroy, onFork }: WorkspaceActionsProps) {
+export function WorkspaceActions({ workspace, onArchive }: WorkspaceActionsProps) {
   const [baseAvailableTargets] = useState(() => listAvailableOpenInTargets(isMacPlatform()));
   const [availableTargets, setAvailableTargets] =
     useState<readonly OpenInTarget[]>(baseAvailableTargets);
   const [openInOpen, setOpenInOpen] = useState(false);
   const [openInKeyboardMode, setOpenInKeyboardMode] = useState(false);
-  const [destroying, setDestroying] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   const [launchingTarget, setLaunchingTarget] = useState<OpenInAppId | null>(null);
   const [launchError, setLaunchError] = useState<string | null>(null);
 
   const defaultTarget = resolveDefaultOpenTarget(availableTargets);
-  const interactionLocked = launchingTarget !== null || destroying;
+  const interactionLocked = launchingTarget !== null || archiving;
 
   function mergeInstalledTargets(
     installedApps: readonly WorkspaceOpenInAppInfo[],
@@ -149,16 +148,16 @@ export function WorkspaceActions({ workspace, onDestroy, onFork }: WorkspaceActi
     }
   }
 
-  async function handleDestroy(): Promise<void> {
-    if (!onDestroy || destroying) {
+  async function handleArchive(): Promise<void> {
+    if (!onArchive || archiving) {
       return;
     }
 
-    setDestroying(true);
+    setArchiving(true);
     try {
-      await onDestroy();
+      await onArchive();
     } finally {
-      setDestroying(false);
+      setArchiving(false);
     }
   }
 
@@ -225,35 +224,20 @@ export function WorkspaceActions({ workspace, onDestroy, onFork }: WorkspaceActi
           </PopoverContent>
         </Popover>
       </SplitButton>
-      {onFork && (
+      {onArchive && (
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              aria-label="Fork workspace"
+              aria-label={archiving ? "Archiving workspace" : "Archive workspace"}
               disabled={interactionLocked}
-              onClick={onFork}
-              size="icon"
-            >
-              <GitFork size={14} strokeWidth={2.2} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Fork workspace</TooltipContent>
-        </Tooltip>
-      )}
-      {onDestroy && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              aria-label={destroying ? "Destroying workspace" : "Destroy workspace"}
-              disabled={interactionLocked}
-              onClick={() => void handleDestroy()}
+              onClick={() => void handleArchive()}
               size="icon"
             >
               <Trash2 size={14} strokeWidth={2.2} />
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            {destroying ? "Destroying workspace" : "Destroy workspace"}
+            {archiving ? "Archiving workspace" : "Archive workspace"}
           </TooltipContent>
         </Tooltip>
       )}

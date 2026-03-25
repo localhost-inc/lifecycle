@@ -1,6 +1,5 @@
 import { Navigate, useOutletContext } from "react-router-dom";
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
-import { LAST_PATH_STORAGE_KEY } from "@/components/layout/app-shell-layout";
 import { readLastProjectId } from "@/features/projects/state/project-content-tabs";
 import { readLastWorkspaceId } from "@/features/workspaces/state/workspace-canvas-state";
 import type { AppShellOutletContext } from "@/components/layout/app-shell-context";
@@ -23,7 +22,7 @@ function safeReadLastWorkspaceId(): string | null {
 
 function safeReadLastPath(): string | null {
   try {
-    return localStorage.getItem(LAST_PATH_STORAGE_KEY);
+    return localStorage.getItem("lifecycle.desktop.last-path");
   } catch {
     return null;
   }

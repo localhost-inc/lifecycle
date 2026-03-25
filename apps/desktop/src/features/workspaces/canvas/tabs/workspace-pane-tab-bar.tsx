@@ -2,19 +2,15 @@ import {
   useCallback,
   useEffect,
   useRef,
-  useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
-import { WorkspaceSurfaceTabLeading } from "@/features/workspaces/surfaces/surface-icons";
 import type { WorkspacePaneTabBarModel } from "@/features/workspaces/canvas/workspace-pane-models";
 import {
   getWorkspaceTabDragShiftDirection,
-  type WorkspaceCanvasTab,
   type WorkspaceTabPlacement,
 } from "@/features/workspaces/canvas/workspace-canvas-tabs";
-import { formatWorkspaceError } from "@/features/workspaces/lib/workspace-errors";
 import { WorkspacePaneTabItem } from "@/features/workspaces/canvas/tabs/workspace-pane-tab-item";
 
 const TAB_DRAG_GAP_PX = 0;
@@ -61,20 +57,10 @@ export interface WorkspacePaneTabBarDragPreview {
 
 interface WorkspacePaneTabBarProps {
   model: WorkspacePaneTabBarModel;
-  onCloseDocumentTab: (tabKey: string) => void;
-  onCloseTerminalTab: (tabKey: string, terminalId: string) => void;
-  onRenameTerminalTab: (terminalId: string, label: string) => Promise<unknown> | unknown;
+  onCloseTab: (tabKey: string) => void;
   onSelectTab: (key: string) => void;
   onTabDrag: (drag: WorkspacePaneTabDrag | null) => void;
   onTabDragCommit: (drag: WorkspacePaneTabDrag) => void;
-}
-
-interface WorkspaceTabRenameState {
-  error: string | null;
-  key: string;
-  saving: boolean;
-  terminalId: string;
-  value: string;
 }
 
 interface WorkspaceTabListScrollMetrics {
@@ -121,25 +107,14 @@ export function hasStartedWorkspaceTabDrag(
   return Math.hypot(pointerDeltaX, pointerDeltaY) >= thresholdPx;
 }
 
-export function renderWorkspacePaneDefaultTabLeading(
-  tab: WorkspacePaneTabBarModel["tabs"][number]["tab"],
-) {
-  return <WorkspaceSurfaceTabLeading tab={tab} />;
-}
-
 export function WorkspacePaneTabBar({
   model,
-  onCloseDocumentTab,
-  onCloseTerminalTab,
-  onRenameTerminalTab,
+  onCloseTab,
   onSelectTab,
   onTabDrag,
   onTabDragCommit,
 }: WorkspacePaneTabBarProps) {
-  const [renameState, setRenameState] = useState<WorkspaceTabRenameState | null>(null);
   const dragSessionRef = useRef<WorkspaceTabPointerSession | null>(null);
-  const renameInputRef = useRef<HTMLInputElement | null>(null);
-  const skipRenameBlurRef = useRef(false);
   const tabListRef = useRef<HTMLDivElement | null>(null);
   const tabElementsRef = useRef(new Map<string, HTMLDivElement>());
   const onTabDragRef = useRef(onTabDrag);
@@ -148,8 +123,7 @@ export function WorkspacePaneTabBar({
   const rootUserSelectRef = useRef<string | null>(null);
   const selectionCleanupRef = useRef<(() => void) | null>(null);
   const suppressClickRef = useRef<string | null>(null);
-  const visibleTabs = model.tabs.map((entry) => entry.tab);
-  const tabModelsByKey = new Map(model.tabs.map((entry) => [entry.tab.key, entry]));
+  const visibleTabs = model.tabs;
   const visibleTabKeys = visibleTabs.map((tab) => tab.key);
   const visibleTabLayoutKey = visibleTabKeys.join("\u0000");
   const activeTabLabel = visibleTabs.find((tab) => tab.key === model.activeTabKey)?.label ?? null;
@@ -161,35 +135,6 @@ export function WorkspacePaneTabBar({
   useEffect(() => {
     onTabDragCommitRef.current = onTabDragCommit;
   }, [onTabDragCommit]);
-
-  useEffect(() => {
-    if (!renameState) {
-      return;
-    }
-
-    const activeTab = visibleTabs.find(
-      (tab) => tab.key === renameState.key && tab.kind === "terminal",
-    );
-    if (!activeTab) {
-      setRenameState(null);
-    }
-  }, [renameState, visibleTabs]);
-
-  const renameKey = renameState?.key ?? null;
-  useEffect(() => {
-    if (!renameKey) {
-      return;
-    }
-
-    const timeoutId = setTimeout(() => {
-      renameInputRef.current?.focus();
-      renameInputRef.current?.select();
-    }, 0);
-
-    return () => {
-      clearTimeout(timeoutId);
-    };
-  }, [renameKey]);
 
   useEffect(() => {
     if (!model.activeTabKey) {
@@ -341,7 +286,7 @@ export function WorkspacePaneTabBar({
 
   const handleTabPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>, key: string) => {
-      if (renameState?.key === key || event.button !== 0) {
+      if (event.button !== 0) {
         return;
       }
 
@@ -360,15 +305,11 @@ export function WorkspacePaneTabBar({
         started: false,
       };
     },
-    [disableBodySelection, renameState],
+    [disableBodySelection],
   );
 
   const handleTabClick = useCallback(
     (key: string) => {
-      if (renameState?.key === key) {
-        return;
-      }
-
       if (suppressClickRef.current === key) {
         suppressClickRef.current = null;
         return;
@@ -376,15 +317,11 @@ export function WorkspacePaneTabBar({
 
       onSelectTab(key);
     },
-    [onSelectTab, renameState],
+    [onSelectTab],
   );
 
   const handleTabKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLDivElement>, key: string) => {
-      if (renameState?.key === key) {
-        return;
-      }
-
       if (event.key !== "Enter" && event.key !== " ") {
         return;
       }
@@ -392,96 +329,8 @@ export function WorkspacePaneTabBar({
       event.preventDefault();
       onSelectTab(key);
     },
-    [onSelectTab, renameState],
+    [onSelectTab],
   );
-
-  const startRenamingTab = useCallback(
-    (tab: WorkspaceCanvasTab) => {
-      if (tab.kind !== "terminal") {
-        return;
-      }
-
-      dragSessionRef.current = null;
-      restoreBodySelection();
-      onTabDragRef.current?.(null);
-      skipRenameBlurRef.current = false;
-      setRenameState({
-        error: null,
-        key: tab.key,
-        saving: false,
-        terminalId: tab.terminalId,
-        value: tab.label,
-      });
-      onSelectTab(tab.key);
-    },
-    [onSelectTab, restoreBodySelection],
-  );
-
-  const cancelTabRename = useCallback(() => {
-    setRenameState(null);
-  }, []);
-
-  const commitTabRename = useCallback(async () => {
-    if (!renameState || renameState.saving) {
-      return;
-    }
-
-    const normalizedLabel = renameState.value.trim().replace(/\s+/g, " ");
-    if (normalizedLabel.length === 0) {
-      setRenameState((current) =>
-        current
-          ? {
-              ...current,
-              error: "Session title cannot be empty.",
-            }
-          : current,
-      );
-      renameInputRef.current?.focus();
-      renameInputRef.current?.select();
-      return;
-    }
-
-    const currentTab = visibleTabs.find(
-      (tab): tab is Extract<WorkspaceCanvasTab, { kind: "terminal" }> =>
-        tab.key === renameState.key && tab.kind === "terminal",
-    );
-    if (!currentTab) {
-      setRenameState(null);
-      return;
-    }
-
-    if (normalizedLabel === currentTab.label) {
-      setRenameState(null);
-      return;
-    }
-
-    setRenameState((current) =>
-      current
-        ? {
-            ...current,
-            error: null,
-            saving: true,
-          }
-        : current,
-    );
-
-    try {
-      await onRenameTerminalTab(renameState.terminalId, normalizedLabel);
-      setRenameState(null);
-    } catch (error) {
-      setRenameState((current) =>
-        current
-          ? {
-              ...current,
-              error: formatWorkspaceError(error, "Session rename failed."),
-              saving: false,
-            }
-          : current,
-      );
-      renameInputRef.current?.focus();
-      renameInputRef.current?.select();
-    }
-  }, [onRenameTerminalTab, renameState, visibleTabs]);
 
   return (
     <div className="relative min-w-0 flex-1">
@@ -500,12 +349,8 @@ export function WorkspacePaneTabBar({
       >
         {visibleTabs.map((tab) => {
           const active = tab.key === model.activeTabKey;
-          const tabModel = tabModelsByKey.get(tab.key);
-          const isTerminal = tab.kind === "terminal";
-          const isRenaming = renameState?.key === tab.key;
           const isDropTarget = model.dragPreview?.targetKey === tab.key;
           const isDraggedTab = model.dragPreview?.draggedKey === tab.key;
-          const leading = renderWorkspacePaneDefaultTabLeading(tab);
           const previewShiftDirection =
             model.dragPreview?.targetKey && model.dragPreview.placement
               ? getWorkspaceTabDragShiftDirection(
@@ -527,78 +372,20 @@ export function WorkspacePaneTabBar({
             <WorkspacePaneTabItem
               key={tab.key}
               active={active}
-              dirty={tabModel?.dirty ?? false}
+              isDirty={tab.isDirty}
               isDraggedTab={isDraggedTab}
               isDropTarget={isDropTarget}
-              isRenaming={Boolean(isRenaming)}
-              leading={leading}
+              label={tab.label}
+              leading={tab.leading}
               onClick={() => handleTabClick(tab.key)}
-              onClose={() => {
-                if (isTerminal) {
-                  void onCloseTerminalTab(tab.key, tab.terminalId);
-                  return;
-                }
-
-                onCloseDocumentTab(tab.key);
-              }}
-              onDoubleClick={(event) => {
-                if (!isTerminal) {
-                  return;
-                }
-
-                if (
-                  event.target instanceof Element &&
-                  event.target.closest("[data-tab-action='close']")
-                ) {
-                  return;
-                }
-
-                event.preventDefault();
-                event.stopPropagation();
-                startRenamingTab(tab);
-              }}
+              onClose={() => onCloseTab(tab.key)}
               onKeyDown={(event) => handleTabKeyDown(event, tab.key)}
               onPointerDown={(event) => handleTabPointerDown(event, tab.key)}
               refCallback={(element) => setTabElement(tab.key, element)}
-              renameError={renameState?.error ?? null}
-              renameInputRef={renameInputRef}
-              renameSaving={renameState?.saving ?? false}
-              renameValue={renameState?.value ?? tab.label}
               style={style}
-              tab={tab}
-              tabIndex={isRenaming ? -1 : active ? 0 : -1}
-              onRenameBlur={() => {
-                if (skipRenameBlurRef.current) {
-                  skipRenameBlurRef.current = false;
-                  return;
-                }
-                void commitTabRename();
-              }}
-              onRenameChange={(value) => {
-                setRenameState((current) =>
-                  current
-                    ? {
-                        ...current,
-                        error: null,
-                        value,
-                      }
-                    : current,
-                );
-              }}
-              onRenameKeyDown={(event) => {
-                event.stopPropagation();
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  void commitTabRename();
-                  return;
-                }
-
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  skipRenameBlurRef.current = true;
-                  cancelTabRename();
-                }
-              }}
+              tabKey={tab.key}
+              tabIndex={active ? 0 : -1}
+              title={tab.title}
             />
           );
         })}

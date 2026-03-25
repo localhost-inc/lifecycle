@@ -11,3 +11,6 @@
 
 # Generated bundled Lifecycle CLI binary
 /resources/lifecycle*
+
+# Editor atomic-save temp files (triggers spurious Tauri rebuilds)
+*.tmp.*

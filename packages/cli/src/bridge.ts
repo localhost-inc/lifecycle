@@ -17,17 +17,26 @@ import {
   type ServiceStopRequest,
   type TabOpenRequest,
   type WorkspaceCreateRequest,
-  type WorkspaceDestroyRequest,
+  type WorkspaceArchiveRequest,
   type WorkspaceHealthRequest,
   type WorkspaceLogsRequest,
   type WorkspaceResetRequest,
   type WorkspaceRunRequest,
   type WorkspaceStatusRequest,
+  type PlanListRequest,
+  type PlanCreateRequest,
+  type PlanUpdateRequest,
+  type PlanDeleteRequest,
+  type TaskListRequest,
+  type TaskCreateRequest,
+  type TaskUpdateRequest,
+  type TaskDeleteRequest,
+  type TaskDependencyAddRequest,
+  type TaskDependencyRemoveRequest,
   getManifestFingerprint,
   LIFECYCLE_AGENT_SESSION_ID_ENV,
   LIFECYCLE_BRIDGE_ENV,
   LIFECYCLE_BRIDGE_SESSION_TOKEN_ENV,
-  LIFECYCLE_TERMINAL_ID_ENV,
   LIFECYCLE_WORKSPACE_PATH_ENV,
   LIFECYCLE_WORKSPACE_ID_ENV,
   parseManifest,
@@ -65,16 +74,14 @@ type BridgeSuccessResponse<Method extends BridgeResponse["method"]> = Extract<
 >;
 
 function buildBridgeSession() {
-  const terminalId = process.env[LIFECYCLE_TERMINAL_ID_ENV];
   const token = process.env[LIFECYCLE_BRIDGE_SESSION_TOKEN_ENV];
 
-  if (!terminalId && !token) {
+  if (!token) {
     return undefined;
   }
 
   return {
-    ...(terminalId ? { terminalId } : {}),
-    ...(token ? { token } : {}),
+    token,
   };
 }
 
@@ -425,7 +432,7 @@ export function requireShellSessionToken(): string {
       code: "bridge_session_unavailable",
       message: "Bridge shell commands require a Lifecycle session token.",
       suggestedAction:
-        "Run the command from a Lifecycle-launched harness terminal or use the desktop UI directly.",
+        "Run the command from a Lifecycle-launched workspace session or use the desktop UI directly.",
     });
   }
 
@@ -492,12 +499,12 @@ export function createWorkspaceCreateRequest(input: {
   };
 }
 
-export function createWorkspaceDestroyRequest(input: {
+export function createWorkspaceArchiveRequest(input: {
   workspaceId: string;
-}): WorkspaceDestroyRequest {
+}): WorkspaceArchiveRequest {
   return {
     id: randomUUID(),
-    method: "workspace.destroy",
+    method: "workspace.archive",
     params: {
       workspaceId: input.workspaceId,
     },
@@ -623,4 +630,184 @@ export function formatBridgeError(error: BridgeError): string {
 
 export function formatTabOpenResult(result: BridgeShellResult): string {
   return `Opened ${result.surface} tab ${result.tabKey} for ${result.url}.`;
+}
+
+// ── Plan + Task request creators ──
+
+export function createPlanListRequest(input: { projectId: string }): PlanListRequest {
+  return {
+    id: randomUUID(),
+    method: "plan.list",
+    params: { projectId: input.projectId },
+    session: buildBridgeSession(),
+    version: 1,
+  };
+}
+
+export function createPlanCreateRequest(input: {
+  projectId: string;
+  workspaceId?: string;
+  name: string;
+  description?: string;
+  body?: string;
+  status?: string;
+}): PlanCreateRequest {
+  return {
+    id: randomUUID(),
+    method: "plan.create",
+    params: {
+      projectId: input.projectId,
+      name: input.name,
+      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+      ...(input.description ? { description: input.description } : {}),
+      ...(input.body ? { body: input.body } : {}),
+      ...(input.status ? { status: input.status } : {}),
+    },
+    session: buildBridgeSession(),
+    version: 1,
+  };
+}
+
+export function createPlanUpdateRequest(input: {
+  planId: string;
+  name?: string;
+  description?: string;
+  body?: string;
+  status?: string;
+}): PlanUpdateRequest {
+  return {
+    id: randomUUID(),
+    method: "plan.update",
+    params: {
+      planId: input.planId,
+      ...(input.name ? { name: input.name } : {}),
+      ...(input.description ? { description: input.description } : {}),
+      ...(input.body ? { body: input.body } : {}),
+      ...(input.status ? { status: input.status } : {}),
+    },
+    session: buildBridgeSession(),
+    version: 1,
+  };
+}
+
+export function createPlanDeleteRequest(input: {
+  planId: string;
+  projectId: string;
+}): PlanDeleteRequest {
+  return {
+    id: randomUUID(),
+    method: "plan.delete",
+    params: { planId: input.planId, projectId: input.projectId },
+    session: buildBridgeSession(),
+    version: 1,
+  };
+}
+
+export function createTaskListRequest(input: { projectId: string }): TaskListRequest {
+  return {
+    id: randomUUID(),
+    method: "task.list",
+    params: { projectId: input.projectId },
+    session: buildBridgeSession(),
+    version: 1,
+  };
+}
+
+export function createTaskCreateRequest(input: {
+  planId: string;
+  projectId: string;
+  workspaceId?: string;
+  agentSessionId?: string;
+  name: string;
+  description?: string;
+  status?: string;
+  priority?: number;
+}): TaskCreateRequest {
+  return {
+    id: randomUUID(),
+    method: "task.create",
+    params: {
+      planId: input.planId,
+      projectId: input.projectId,
+      name: input.name,
+      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+      ...(input.agentSessionId ? { agentSessionId: input.agentSessionId } : {}),
+      ...(input.description ? { description: input.description } : {}),
+      ...(input.status ? { status: input.status } : {}),
+      ...(input.priority ? { priority: input.priority } : {}),
+    },
+    session: buildBridgeSession(),
+    version: 1,
+  };
+}
+
+export function createTaskUpdateRequest(input: {
+  taskId: string;
+  name?: string;
+  description?: string;
+  status?: string;
+  priority?: number;
+}): TaskUpdateRequest {
+  return {
+    id: randomUUID(),
+    method: "task.update",
+    params: {
+      taskId: input.taskId,
+      ...(input.name ? { name: input.name } : {}),
+      ...(input.description ? { description: input.description } : {}),
+      ...(input.status ? { status: input.status } : {}),
+      ...(input.priority ? { priority: input.priority } : {}),
+    },
+    session: buildBridgeSession(),
+    version: 1,
+  };
+}
+
+export function createTaskDeleteRequest(input: {
+  taskId: string;
+  projectId: string;
+}): TaskDeleteRequest {
+  return {
+    id: randomUUID(),
+    method: "task.delete",
+    params: { taskId: input.taskId, projectId: input.projectId },
+    session: buildBridgeSession(),
+    version: 1,
+  };
+}
+
+export function createTaskDependencyAddRequest(input: {
+  taskId: string;
+  dependsOnTaskId: string;
+  projectId: string;
+}): TaskDependencyAddRequest {
+  return {
+    id: randomUUID(),
+    method: "task.dependency.add",
+    params: {
+      taskId: input.taskId,
+      dependsOnTaskId: input.dependsOnTaskId,
+      projectId: input.projectId,
+    },
+    session: buildBridgeSession(),
+    version: 1,
+  };
+}
+
+export function createTaskDependencyRemoveRequest(input: {
+  taskId: string;
+  dependsOnTaskId: string;
+  projectId: string;
+}): TaskDependencyRemoveRequest {
+  return {
+    id: randomUUID(),
+    method: "task.dependency.remove",
+    params: {
+      taskId: input.taskId,
+      dependsOnTaskId: input.dependsOnTaskId,
+      projectId: input.projectId,
+    },
+    session: buildBridgeSession(),
+    version: 1,
+  };
 }

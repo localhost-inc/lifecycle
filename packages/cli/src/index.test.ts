@@ -163,7 +163,6 @@ describe("lifecycle cli", () => {
             workspaceId: "ws_123",
           },
           session: {
-            terminalId: "term_123",
             token: "session-token",
           },
         });
@@ -184,9 +183,8 @@ describe("lifecycle cli", () => {
       async (bridgePath) => {
         const code = await withEnvironment(
           {
-            LIFECYCLE_BRIDGE: bridgePath,
+            LIFECYCLE_BRIDGE_SOCKET: bridgePath,
             LIFECYCLE_BRIDGE_SESSION_TOKEN: "session-token",
-            LIFECYCLE_TERMINAL_ID: "term_123",
             LIFECYCLE_WORKSPACE_ID: "ws_123",
           },
           async () =>
@@ -248,7 +246,8 @@ describe("lifecycle cli", () => {
       async (bridgePath) => {
         const code = await withEnvironment(
           {
-            LIFECYCLE_BRIDGE: bridgePath,
+            LIFECYCLE_BRIDGE_SOCKET: bridgePath,
+            LIFECYCLE_BRIDGE_SESSION_TOKEN: undefined,
           },
           async () =>
             await main(
@@ -319,7 +318,7 @@ describe("lifecycle cli", () => {
       async (bridgePath) => {
         const code = await withEnvironment(
           {
-            LIFECYCLE_BRIDGE: bridgePath,
+            LIFECYCLE_BRIDGE_SOCKET: bridgePath,
             LIFECYCLE_WORKSPACE_ID: "ws_123",
           },
           async () => await main(["service", "info", "api"], sink.io),
@@ -384,7 +383,7 @@ describe("lifecycle cli", () => {
       async (bridgePath) => {
         const code = await withEnvironment(
           {
-            LIFECYCLE_BRIDGE: bridgePath,
+            LIFECYCLE_BRIDGE_SOCKET: bridgePath,
             LIFECYCLE_WORKSPACE_ID: "ws_123",
           },
           async () => await main(["service", "list"], sink.io),
@@ -459,7 +458,7 @@ describe("lifecycle cli", () => {
         async (bridgePath) => {
           const code = await withEnvironment(
             {
-              LIFECYCLE_BRIDGE: bridgePath,
+              LIFECYCLE_BRIDGE_SOCKET: bridgePath,
               LIFECYCLE_WORKSPACE_ID: "ws_123",
               LIFECYCLE_WORKSPACE_PATH: worktreePath,
             },
@@ -514,7 +513,6 @@ describe("lifecycle cli", () => {
             workspaceId: "ws_123",
           },
           session: {
-            terminalId: "term_123",
             token: "session-token",
           },
         });
@@ -545,7 +543,6 @@ describe("lifecycle cli", () => {
                 file: false,
                 preview: true,
                 pullRequest: false,
-                terminal: false,
               },
             },
             cli: {
@@ -583,7 +580,6 @@ describe("lifecycle cli", () => {
               shellBridge: true,
             },
             session: {
-              terminalId: "term_123",
               workspaceId: "ws_123",
             },
             services: [
@@ -599,28 +595,9 @@ describe("lifecycle cli", () => {
                 workspace_id: "ws_123",
               },
             ],
-            terminals: [
-              {
-                created_by: null,
-                ended_at: null,
-                exit_code: null,
-                failure_reason: null,
-                harness_provider: "codex",
-                harness_session_id: "codex-session-1",
-                id: "term_123",
-                label: "Codex 1",
-                last_active_at: "2026-03-21T00:00:00.000Z",
-                launch_type: "harness",
-                started_at: "2026-03-21T00:00:00.000Z",
-                status: "active",
-                workspace_id: "ws_123",
-              },
-            ],
             workspace: {
               checkout_type: "worktree",
               created_at: "2026-03-21T00:00:00.000Z",
-              created_by: null,
-              expires_at: null,
               failed_at: null,
               failure_reason: null,
               git_sha: "abc123",
@@ -631,7 +608,6 @@ describe("lifecycle cli", () => {
               prepared_at: "2026-03-21T00:00:00.000Z",
               project_id: "project_123",
               source_ref: "feat/cli",
-              source_workspace_id: null,
               status: "active",
               target: "local",
               updated_at: "2026-03-21T00:00:00.000Z",
@@ -643,9 +619,8 @@ describe("lifecycle cli", () => {
       async (bridgePath) => {
         const code = await withEnvironment(
           {
-            LIFECYCLE_BRIDGE: bridgePath,
+            LIFECYCLE_BRIDGE_SOCKET: bridgePath,
             LIFECYCLE_BRIDGE_SESSION_TOKEN: "session-token",
-            LIFECYCLE_TERMINAL_ID: "term_123",
             LIFECYCLE_WORKSPACE_ID: "ws_123",
           },
           async () => await main(["context"], sink.io),
@@ -673,7 +648,6 @@ describe("lifecycle cli", () => {
         totalServiceCount: 1,
       },
       session: {
-        terminalId: "term_123",
         workspaceId: "ws_123",
       },
       provider: {
@@ -683,6 +657,88 @@ describe("lifecycle cli", () => {
       workspace: {
         id: "ws_123",
         project_id: "project_123",
+      },
+    });
+    expect(sink.stderr).toEqual([]);
+  });
+
+  test("prints workspace status as json", async () => {
+    const sink = createIo();
+    await withBridge(
+      (request) => {
+        expect(request).toMatchObject({
+          method: "workspace.status",
+          params: {
+            workspaceId: "ws_123",
+          },
+          session: {
+            token: "session-token",
+          },
+        });
+
+        return {
+          id: (request as { id: string }).id,
+          method: "workspace.status",
+          ok: true,
+          result: {
+            services: [
+              {
+                assigned_port: null,
+                created_at: "2026-03-21T00:00:00.000Z",
+                id: "svc_123",
+                name: "api",
+                preview_url: null,
+                status: "stopped",
+                status_reason: null,
+                updated_at: "2026-03-21T00:00:00.000Z",
+                workspace_id: "ws_123",
+              },
+            ],
+            workspace: {
+              checkout_type: "worktree",
+              created_at: "2026-03-21T00:00:00.000Z",
+              failed_at: null,
+              failure_reason: null,
+              git_sha: "abc123",
+              id: "ws_123",
+              last_active_at: "2026-03-21T00:00:00.000Z",
+              manifest_fingerprint: "manifest_123",
+              name: "Feature Workspace",
+              prepared_at: "2026-03-21T00:00:00.000Z",
+              project_id: "project_123",
+              source_ref: "feat/cli",
+              status: "idle",
+              target: "local",
+              updated_at: "2026-03-21T00:00:00.000Z",
+              worktree_path: "/repo/.worktrees/ws_123",
+            },
+          },
+        };
+      },
+      async (bridgePath) => {
+        const code = await withEnvironment(
+          {
+            LIFECYCLE_BRIDGE_SOCKET: bridgePath,
+            LIFECYCLE_BRIDGE_SESSION_TOKEN: "session-token",
+            LIFECYCLE_WORKSPACE_ID: "ws_123",
+          },
+          async () => await main(["workspace", "status", "--json"], sink.io),
+        );
+
+        expect(code).toBe(0);
+      },
+    );
+
+    expect(JSON.parse(sink.stdout[0] ?? "null")).toMatchObject({
+      services: [
+        {
+          name: "api",
+          status: "stopped",
+        },
+      ],
+      workspace: {
+        id: "ws_123",
+        status: "idle",
       },
     });
     expect(sink.stderr).toEqual([]);
@@ -706,5 +762,239 @@ describe("lifecycle cli", () => {
 
     expect(code).toBe(1);
     expect(sink.stderr).toEqual(["Unknown command: lifecycle service missing"]);
+  });
+
+  test("creates a plan through the bridge", async () => {
+    const sink = createIo();
+    let receivedRequest: unknown = null;
+
+    await withBridge(
+      (request) => {
+        receivedRequest = request;
+        return {
+          id: (request as { id: string }).id,
+          method: "plan.create",
+          ok: true,
+          result: {
+            plan: {
+              id: "plan_001",
+              project_id: "project_123",
+              workspace_id: null,
+              name: "Auth Overhaul",
+              description: "",
+              body: "",
+              status: "draft",
+              position: 0,
+              created_at: "2026-03-24T00:00:00.000Z",
+              updated_at: "2026-03-24T00:00:00.000Z",
+            },
+          },
+        };
+      },
+      async (bridgePath) => {
+        const code = await withEnvironment(
+          {
+            LIFECYCLE_BRIDGE_SOCKET: bridgePath,
+            LIFECYCLE_WORKSPACE_ID: "ws_123",
+          },
+          async () =>
+            await main(
+              ["plan", "create", "--name", "Auth Overhaul", "--project-id", "project_123"],
+              sink.io,
+            ),
+        );
+
+        expect(code).toBe(0);
+      },
+    );
+
+    expect(receivedRequest).toMatchObject({
+      method: "plan.create",
+      params: {
+        name: "Auth Overhaul",
+        projectId: "project_123",
+      },
+    });
+    expect(sink.stdout).toEqual(['Plan "Auth Overhaul" created (plan_001).']);
+    expect(sink.stderr).toEqual([]);
+  });
+
+  test("creates a plan with json output", async () => {
+    const sink = createIo();
+
+    await withBridge(
+      (request) => {
+        return {
+          id: (request as { id: string }).id,
+          method: "plan.create",
+          ok: true,
+          result: {
+            plan: {
+              id: "plan_002",
+              project_id: "project_123",
+              workspace_id: null,
+              name: "Data Pipeline",
+              description: "Rebuild the pipeline",
+              body: "",
+              status: "draft",
+              position: 0,
+              created_at: "2026-03-24T00:00:00.000Z",
+              updated_at: "2026-03-24T00:00:00.000Z",
+            },
+          },
+        };
+      },
+      async (bridgePath) => {
+        const code = await withEnvironment(
+          {
+            LIFECYCLE_BRIDGE_SOCKET: bridgePath,
+          },
+          async () =>
+            await main(
+              [
+                "plan",
+                "create",
+                "--name",
+                "Data Pipeline",
+                "--project-id",
+                "project_123",
+                "--description",
+                "Rebuild the pipeline",
+                "--json",
+              ],
+              sink.io,
+            ),
+        );
+
+        expect(code).toBe(0);
+      },
+    );
+
+    const output = JSON.parse(sink.stdout[0] ?? "null");
+    expect(output.plan.id).toBe("plan_002");
+    expect(output.plan.name).toBe("Data Pipeline");
+    expect(sink.stderr).toEqual([]);
+  });
+
+  test("creates a task through the bridge", async () => {
+    const sink = createIo();
+    let receivedRequest: unknown = null;
+
+    await withBridge(
+      (request) => {
+        receivedRequest = request;
+        return {
+          id: (request as { id: string }).id,
+          method: "task.create",
+          ok: true,
+          result: {
+            task: {
+              id: "task_001",
+              plan_id: "plan_001",
+              project_id: "project_123",
+              workspace_id: null,
+              agent_session_id: null,
+              name: "Write migration",
+              description: "",
+              status: "pending",
+              priority: 3,
+              position: 0,
+              completed_at: null,
+              created_at: "2026-03-24T00:00:00.000Z",
+              updated_at: "2026-03-24T00:00:00.000Z",
+            },
+          },
+        };
+      },
+      async (bridgePath) => {
+        const code = await withEnvironment(
+          {
+            LIFECYCLE_BRIDGE_SOCKET: bridgePath,
+          },
+          async () =>
+            await main(
+              [
+                "task",
+                "create",
+                "--plan-id",
+                "plan_001",
+                "--project-id",
+                "project_123",
+                "--name",
+                "Write migration",
+                "--priority",
+                "high",
+              ],
+              sink.io,
+            ),
+        );
+
+        expect(code).toBe(0);
+      },
+    );
+
+    expect(receivedRequest).toMatchObject({
+      method: "task.create",
+      params: {
+        planId: "plan_001",
+        projectId: "project_123",
+        name: "Write migration",
+        priority: 3,
+      },
+    });
+    expect(sink.stdout).toEqual(['Task "Write migration" created (task_001).']);
+    expect(sink.stderr).toEqual([]);
+  });
+
+  test("adds a task dependency through the bridge", async () => {
+    const sink = createIo();
+    let receivedRequest: unknown = null;
+
+    await withBridge(
+      (request) => {
+        receivedRequest = request;
+        return {
+          id: (request as { id: string }).id,
+          method: "task.dependency.add",
+          ok: true,
+          result: {},
+        };
+      },
+      async (bridgePath) => {
+        const code = await withEnvironment(
+          {
+            LIFECYCLE_BRIDGE_SOCKET: bridgePath,
+          },
+          async () =>
+            await main(
+              [
+                "task",
+                "dependency",
+                "add",
+                "--task-id",
+                "task_002",
+                "--depends-on",
+                "task_001",
+                "--project-id",
+                "project_123",
+              ],
+              sink.io,
+            ),
+        );
+
+        expect(code).toBe(0);
+      },
+    );
+
+    expect(receivedRequest).toMatchObject({
+      method: "task.dependency.add",
+      params: {
+        taskId: "task_002",
+        dependsOnTaskId: "task_001",
+        projectId: "project_123",
+      },
+    });
+    expect(sink.stdout).toEqual(["Dependency added: task_002 depends on task_001."]);
+    expect(sink.stderr).toEqual([]);
   });
 });

@@ -1,25 +1,16 @@
 import { Alert, AlertDescription, AlertTitle, Loading } from "@lifecycle/ui";
-import { Suspense, lazy, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { markPerformance, measurePerformance } from "@/lib/performance";
 import { toErrorEnvelope } from "@/lib/tauri-error";
 import { useWorkspace, useWorkspaceManifest } from "@/features/workspaces/hooks";
-
-const WorkspaceShell = lazy(async () => {
-  const module = await import("./workspace-shell");
-  return {
-    default: module.WorkspaceShell,
-  };
-});
+import { WorkspaceShell } from "./workspace-shell";
 
 interface WorkspaceLoaderProps {
-  onCloseWorkspaceTab?: () => void;
+  onCloseTab?: () => void;
   workspaceId: string;
 }
 
-export function WorkspaceLoader({
-  onCloseWorkspaceTab,
-  workspaceId,
-}: WorkspaceLoaderProps) {
+export function WorkspaceLoader({ onCloseTab, workspaceId }: WorkspaceLoaderProps) {
   const workspace = useWorkspace(workspaceId) ?? null;
   const readyMeasuredRef = useRef(false);
   const manifestQuery = useWorkspaceManifest(
@@ -66,12 +57,10 @@ export function WorkspaceLoader({
   }
 
   return (
-    <Suspense fallback={<Loading message="Loading workspace..." />}>
-      <WorkspaceShell
-        manifestStatus={manifestQuery.data ?? null}
-        onCloseWorkspaceTab={onCloseWorkspaceTab}
-        workspace={workspace}
-      />
-    </Suspense>
+    <WorkspaceShell
+      manifestStatus={manifestQuery.data ?? null}
+      onCloseTab={onCloseTab}
+      workspace={workspace}
+    />
   );
 }

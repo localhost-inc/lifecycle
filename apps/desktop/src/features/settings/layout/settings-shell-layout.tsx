@@ -38,14 +38,18 @@ import {
 } from "@/features/notifications/lib/turn-notification-runtime";
 import { HarnessSettingsPanel } from "@/features/settings/components/harness-settings-panel";
 import { ProviderAccountsPanel } from "@/features/settings/components/provider-accounts-panel";
-import { SettingsFieldRow, SettingsRow, SettingsSection } from "@/features/settings/components/settings-primitives";
+import {
+  SettingsFieldRow,
+  SettingsRow,
+  SettingsSection,
+} from "@/features/settings/components/settings-primitives";
 import {
   BASE_FONT_SIZE_OPTIONS,
-  INACTIVE_PANE_OPACITY_OPTIONS,
   DEFAULT_WORKTREE_ROOT,
-  useSettings,
+  INACTIVE_PANE_OPACITY_OPTIONS,
   type DefaultNewTabLaunch,
-} from "@/features/settings/state/settings-provider";
+} from "@/features/settings/state/settings-state";
+import { useSettings } from "@/features/settings/state/settings-context";
 import {
   readSettingsSectionHash,
   settingsSections,
@@ -131,7 +135,6 @@ export function SettingsShellLayout() {
   );
   const defaultNewTabLaunchItems = useMemo(
     () => [
-      { label: "Shell", value: "shell" as const },
       { label: "Claude", value: "claude" as const },
       { label: "Codex", value: "codex" as const },
     ],

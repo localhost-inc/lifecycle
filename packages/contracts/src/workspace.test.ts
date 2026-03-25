@@ -8,12 +8,7 @@ import type {
 
 describe("workspace contracts", () => {
   test("keeps canonical workspace targets", () => {
-    const targets: WorkspaceTarget[] = [
-      "local",
-      "docker",
-      "remote",
-      "cloud",
-    ];
+    const targets: WorkspaceTarget[] = ["local", "docker", "remote", "cloud"];
     expect(targets).toEqual(["local", "docker", "remote", "cloud"]);
   });
 
@@ -22,8 +17,13 @@ describe("workspace contracts", () => {
     expect(checkoutTypes).toEqual(["root", "worktree"]);
   });
 
-  test("contains active status", () => {
-    const status: WorkspaceStatus = "active";
-    expect(status).toBe("active");
+  test("contains canonical workspace statuses", () => {
+    const provisioningStatus: WorkspaceStatus = "provisioning";
+    const activeStatus: WorkspaceStatus = "active";
+    const archivedStatus: WorkspaceStatus = "archived";
+    expect(provisioningStatus).toBe("provisioning");
+    expect(activeStatus).toBe("active");
+    expect(archivedStatus).toBe("archived");
   });
+
 });

@@ -13,12 +13,9 @@ const baseWorkspace: WorkspaceRecord = {
   git_sha: "abcdef1234567890",
   worktree_path: "/tmp/workspace_1",
   target: "local",
-  created_by: null,
-  source_workspace_id: null,
   created_at: "2026-03-09T10:00:00.000Z",
   updated_at: "2026-03-09T10:00:00.000Z",
   last_active_at: "2026-03-09T10:00:00.000Z",
-  expires_at: null,
   status: "active",
   failure_reason: null,
   failed_at: null,
@@ -72,9 +69,7 @@ async function renderEnvironmentPanel(options: RenderEnvironmentPanelOptions = {
         hasManifest: options.hasManifest ?? true,
         manifestState: options.manifestState ?? "valid",
         onOpenPreview: () => {},
-        onRestart: async () => {},
         onRun: async () => {},
-        onStop: async () => {},
         services: options.services ?? services,
         workspace: options.workspace ?? baseWorkspace,
       }),
@@ -93,9 +88,8 @@ describe("EnvironmentPanel", () => {
       serviceLogs: [],
     });
 
-    expect(markup).toContain("Stop");
-    expect(markup).toContain("Restart");
     expect(markup).toContain("web");
+    expect(markup).toContain("api");
     expect(serviceLogsSpy).toHaveBeenCalledWith("workspace_1");
   });
 

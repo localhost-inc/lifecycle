@@ -1,24 +1,25 @@
-import type { TerminalRecord } from "@lifecycle/contracts";
+import type { ReactNode } from "react";
 import type { FileViewerSessionState } from "@/features/explorer/lib/file-session";
+import type { SurfaceLaunchRequest } from "@/features/workspaces/canvas/workspace-canvas-requests";
 import type { WorkspacePaneTabBarDragPreview } from "@/features/workspaces/canvas/tabs/workspace-pane-tab-bar";
 import type {
-  PreviewDocument,
-  ChangesDiffDocument,
-  CommitDiffDocument,
-  FileViewerDocument,
-  PullRequestDocument,
   WorkspacePaneNode,
   WorkspaceCanvasTabViewState,
-  AgentTab,
 } from "@/features/workspaces/state/workspace-canvas-state";
 import type { SurfaceLaunchAction } from "@/features/workspaces/surfaces/surface-launch-actions";
-import type {
-  TerminalTab,
-  WorkspaceCanvasTab,
-} from "@/features/workspaces/canvas/workspace-canvas-tabs";
+import type { WorkspacePaneActiveSurfaceModel } from "@/features/workspaces/surfaces/workspace-surface-registry";
+import type { WorkspaceCanvasTab } from "@/features/workspaces/canvas/workspace-canvas-tabs";
+
+export type { WorkspacePaneActiveSurfaceModel } from "@/features/workspaces/surfaces/workspace-surface-registry";
 
 export interface WorkspacePaneTabModel {
-  dirty: boolean;
+  isDirty: boolean;
+  isRunning: boolean;
+  key: string;
+  label: string;
+  leading: ReactNode;
+  needsAttention: boolean;
+  title: string;
   tab: WorkspaceCanvasTab;
 }
 
@@ -29,77 +30,23 @@ export interface WorkspacePaneTabBarModel {
   tabs: WorkspacePaneTabModel[];
 }
 
-export type WorkspacePaneActiveSurfaceModel =
-  | {
-      creatingSelection: "shell" | "claude" | "codex" | null;
-      kind: "launcher";
-    }
-  | {
-      kind: "waiting-terminal";
-    }
-  | {
-      kind: "opening-terminal";
-    }
-  | {
-      kind: "loading";
-    }
-  | {
-      kind: "terminal";
-      tab: TerminalTab;
-      terminal: TerminalRecord;
-    }
-  | {
-      document: ChangesDiffDocument;
-      kind: "changes-diff";
-      viewState: WorkspaceCanvasTabViewState | null;
-      workspaceId: string;
-    }
-  | {
-      document: CommitDiffDocument;
-      kind: "commit-diff";
-      viewState: WorkspaceCanvasTabViewState | null;
-      workspaceId: string;
-    }
-  | {
-      document: PreviewDocument;
-      kind: "preview";
-    }
-  | {
-      document: AgentTab;
-      kind: "agent";
-      workspaceId: string;
-    }
-  | {
-      document: PullRequestDocument;
-      kind: "pull-request";
-      viewState: WorkspaceCanvasTabViewState | null;
-      workspaceId: string;
-    }
-  | {
-      document: FileViewerDocument;
-      kind: "file-viewer";
-      sessionState: FileViewerSessionState | null;
-      viewState: WorkspaceCanvasTabViewState | null;
-      workspaceId: string;
-    };
+export interface WorkspacePaneTabSurfaceModel {
+  key: string;
+  surface: WorkspacePaneActiveSurfaceModel;
+}
 
 export interface WorkspacePaneModel {
   activeSurface: WorkspacePaneActiveSurfaceModel;
   id: string;
   isActive: boolean;
   tabBar: WorkspacePaneTabBarModel;
+  tabSurfaces: WorkspacePaneTabSurfaceModel[];
 }
 
 export interface WorkspacePaneTreeActions {
-  closeDocumentTab: (tabKey: string) => void;
-  closeTerminalTab: (tabKey: string, terminalId: string) => Promise<void>;
+  closeTab: (tabKey: string) => void;
   fileSessionStateChange: (tabKey: string, state: FileViewerSessionState | null) => void;
-  launchSurface: (
-    paneId: string,
-    request:
-      | { kind: "terminal"; launchType: "shell" }
-      | { kind: "agent"; provider: "claude" | "codex" },
-  ) => void;
+  launchSurface: (paneId: string, request: SurfaceLaunchRequest) => void;
   moveTabToPane: (
     key: string,
     sourcePaneId: string,
@@ -112,7 +59,6 @@ export interface WorkspacePaneTreeActions {
   ) => void;
   openFile: (filePath: string) => void;
   reconcilePaneVisibleTabOrder: (paneId: string, keys: string[]) => void;
-  renameTerminalTab: (terminalId: string, label: string) => Promise<unknown> | unknown;
   resetAllSplitRatios: () => void;
   selectPane: (paneId: string) => void;
   selectTab: (paneId: string, key: string) => void;

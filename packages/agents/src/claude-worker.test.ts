@@ -5,6 +5,10 @@ const createSession = mock(() => ({
   send: async () => {},
   stream: async function* () {},
 }));
+const prompt = mock(async () => ({
+  result: "Test title",
+  subtype: "success",
+}));
 const resumeSession = mock(() => ({
   close() {},
   send: async () => {},
@@ -14,6 +18,7 @@ const resumeSession = mock(() => ({
 
 mock.module("@anthropic-ai/claude-agent-sdk", () => ({
   unstable_v2_createSession: createSession,
+  unstable_v2_prompt: prompt,
   unstable_v2_resumeSession: resumeSession,
 }));
 

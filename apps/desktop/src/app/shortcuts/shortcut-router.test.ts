@@ -107,7 +107,7 @@ describe("shortcut router matching", () => {
   test("reads focus-pane shortcuts from the central router matcher", () => {
     expect(
       readRegisteredShortcutMatch(
-        "workspace.focus-pane",
+        "canvas.pane.focus",
         createShortcutEvent({
           ctrlKey: true,
           key: "ArrowRight",
@@ -117,12 +117,12 @@ describe("shortcut router matching", () => {
       ),
     ).toEqual({
       direction: "right",
-      id: "workspace.focus-pane",
+      id: "canvas.pane.focus",
     });
 
     expect(
       readRegisteredShortcutMatch(
-        "workspace.focus-pane",
+        "canvas.pane.focus",
         createShortcutEvent({
           altKey: true,
           ctrlKey: true,
@@ -132,7 +132,7 @@ describe("shortcut router matching", () => {
       ),
     ).toEqual({
       direction: "left",
-      id: "workspace.focus-pane",
+      id: "canvas.pane.focus",
     });
   });
 
@@ -170,20 +170,20 @@ describe("shortcut router dispatch", () => {
         registrations: [
           createRegistration({
             handler: projectClose,
-            id: "workspace.close-active-tab",
+            id: "canvas.pane.tab.close",
             order: 0,
             priority: SHORTCUT_HANDLER_PRIORITY.project,
           }),
           createRegistration({
             handler: workspaceClose,
-            id: "workspace.close-active-tab",
+            id: "canvas.pane.tab.close",
             order: 1,
             priority: SHORTCUT_HANDLER_PRIORITY.workspace,
           }),
         ],
       }),
     ).toEqual({
-      id: "workspace.close-active-tab",
+      id: "canvas.pane.tab.close",
     });
 
     expect(workspaceClose).toHaveBeenCalledTimes(1);
@@ -207,20 +207,20 @@ describe("shortcut router dispatch", () => {
         registrations: [
           createRegistration({
             handler: projectClose,
-            id: "workspace.close-active-tab",
+            id: "canvas.pane.tab.close",
             order: 0,
             priority: SHORTCUT_HANDLER_PRIORITY.project,
           }),
           createRegistration({
             handler: workspaceClose,
-            id: "workspace.close-active-tab",
+            id: "canvas.pane.tab.close",
             order: 1,
             priority: SHORTCUT_HANDLER_PRIORITY.workspace,
           }),
         ],
       }),
     ).toEqual({
-      id: "workspace.close-active-tab",
+      id: "canvas.pane.tab.close",
     });
 
     expect(workspaceClose).toHaveBeenCalledTimes(1);

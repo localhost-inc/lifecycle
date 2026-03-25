@@ -9,6 +9,12 @@ export const COPYABLE_GIT_DIFF_CSS = `
   -webkit-user-select: text;
   user-select: text;
 }
+[data-separator] {
+  display: none;
+}
+[data-diffs] {
+  --diffs-font-size: 12px;
+}
 `;
 
 type CopyableDiffOptions = Record<string, unknown> & {

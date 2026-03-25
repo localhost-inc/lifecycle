@@ -1,3 +1,4 @@
+import type { GitPullRequestSummary } from "@lifecycle/contracts";
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
 export interface WorkspaceToolbarRunAction {
@@ -8,10 +9,9 @@ export interface WorkspaceToolbarRunAction {
 }
 
 export interface WorkspaceToolbarGitAction {
-  label: string;
-  disabled: boolean;
-  loading: boolean;
-  onClick: () => void;
+  workspaceId: string;
+  worktreePath: string | null;
+  onOpenPullRequest: (pullRequest: GitPullRequestSummary) => void;
 }
 
 export interface WorkspaceToolbarSlot {

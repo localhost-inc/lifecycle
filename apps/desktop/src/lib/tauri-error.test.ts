@@ -9,7 +9,7 @@ import {
 
 const envelope = {
   code: "workspace_mutation_locked",
-  message: "Workspace mutation locked while environment status is 'stopping'",
+  message: "Workspace mutation locked while lifecycle status is 'stopping'",
   details: { status: "stopping" },
   requestId: "request-123",
   retryable: true,

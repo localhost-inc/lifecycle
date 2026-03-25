@@ -22,6 +22,8 @@
   --ring: #1f6feb;
   --surface-hover: #282e33;
   --surface-selected: #30363d;
+  --glass: #30363d;
+  --glass-hover: #3a414a;
   --tab-shadow: inset 0 1px 0 rgba(230, 237, 243, 0.04), 0 14px 34px rgba(1, 4, 9, 0.34);
   --tab-shadow-drag: 0 20px 40px rgba(1, 4, 9, 0.4);
   --terminal-cursor-color: #2f81f7;

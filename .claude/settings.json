@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "lifecycle": {
+      "type": "stdio",
+      "command": "/Users/kyle/Library/Application Support/dev.lifecycle.desktop/bin/lifecycle",
+      "args": [
+        "mcp"
+      ]
+    }
+  }
+}

@@ -36,7 +36,7 @@ const GitPullRequestsPanel = lazy(async () => {
 });
 
 const AgentSessionsPanel = lazy(async () => {
-  const module = await import("../terminals/components/session-history-panel");
+  const module = await import("../agents/components/session-history-panel");
   return { default: module.SessionHistoryPanel };
 });
 
@@ -72,7 +72,7 @@ export function getEnvironmentExtensionBadge({
   const tone =
     hasFailedEnvironment || hasFailedService
       ? "danger"
-      : workspace.status === "preparing" ||
+      : workspace.status === "provisioning" ||
           workspace.status === "archiving" ||
           hasTransitionalService
         ? "warning"
@@ -89,9 +89,7 @@ interface BuiltinExtensionsOptions {
   hasManifest: boolean;
   launchActions: WorkspaceExtensionLaunchActions;
   manifestState: "invalid" | "missing" | "valid";
-  onRestart: () => Promise<void>;
   onRun: () => Promise<void>;
-  onStop: () => Promise<void>;
   onSwitchToExtension: (id: WorkspaceExtensionId) => void;
   services: ServiceRecord[];
   workspace: WorkspaceRecord;
@@ -103,9 +101,7 @@ export function getBuiltinExtensionSlots({
   hasManifest,
   launchActions,
   manifestState,
-  onRestart,
   onRun,
-  onStop,
   onSwitchToExtension,
   services,
   workspace,
@@ -146,7 +142,7 @@ export function getBuiltinExtensionSlots({
       icon: GitCommitHorizontal,
       id: "git-history",
       label: "History",
-      ownedDocumentKinds: ["commit-diff"],
+      ownedSurfaceKinds: ["commit-diff"],
       panel: (
         <GitHistoryPanel
           onOpenCommitDiff={launchActions.openCommitDiff}
@@ -193,9 +189,7 @@ export function getBuiltinExtensionSlots({
         hasManifest={hasManifest}
         manifestState={manifestState}
         onOpenPreview={launchActions.openPreview}
-        onRestart={onRestart}
         onRun={onRun}
-        onStop={onStop}
         services={services}
         workspace={workspace}
       />

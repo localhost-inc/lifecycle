@@ -1,11 +1,11 @@
 import { Button, EmptyState } from "@lifecycle/ui";
-import { TerminalSquare } from "lucide-react";
+import { PanelsTopLeft } from "lucide-react";
 import type { ReactNode } from "react";
-import type { SurfaceLaunchRequest } from "@/features/workspaces/surfaces/surface-launch-actions";
-import { ClaudeIcon, CodexIcon, ShellIcon } from "@/features/workspaces/surfaces/surface-icons";
+import type { SurfaceLaunchRequest } from "@/features/workspaces/canvas/workspace-canvas-requests";
+import type { SurfaceLaunchAction } from "@/features/workspaces/surfaces/surface-launch-actions";
 
 interface WorkspaceEmptyPaneStateProps {
-  creatingSelection: "shell" | "claude" | "codex" | null;
+  actions: SurfaceLaunchAction[];
   onLaunchSurface: (request: SurfaceLaunchRequest) => void;
 }
 
@@ -31,43 +31,30 @@ function LaunchButton({
 }
 
 export function WorkspaceEmptyPaneState({
-  creatingSelection,
+  actions,
   onLaunchSurface,
 }: WorkspaceEmptyPaneStateProps) {
-  const busy = creatingSelection !== null;
+  const busy = actions.some((action) => action.loading);
 
   return (
     <EmptyState
       action={
         <div className="flex flex-wrap items-center justify-center gap-2">
-          <LaunchButton
-            active={creatingSelection === "shell"}
-            disabled={busy}
-            onClick={() => onLaunchSurface({ kind: "terminal", launchType: "shell" })}
-          >
-            {creatingSelection === "shell" ? null : <ShellIcon />}
-            <span>Shell</span>
-          </LaunchButton>
-          <LaunchButton
-            active={creatingSelection === "claude"}
-            disabled={busy}
-            onClick={() => onLaunchSurface({ kind: "agent", provider: "claude" })}
-          >
-            {creatingSelection === "claude" ? null : <ClaudeIcon />}
-            <span>Claude</span>
-          </LaunchButton>
-          <LaunchButton
-            active={creatingSelection === "codex"}
-            disabled={busy}
-            onClick={() => onLaunchSurface({ kind: "agent", provider: "codex" })}
-          >
-            {creatingSelection === "codex" ? null : <CodexIcon />}
-            <span>Codex</span>
-          </LaunchButton>
+          {actions.map((action) => (
+            <LaunchButton
+              key={action.key}
+              active={Boolean(action.loading)}
+              disabled={busy || Boolean(action.disabled)}
+              onClick={() => onLaunchSurface(action.request)}
+            >
+              {action.loading ? null : action.icon}
+              <span>{action.title}</span>
+            </LaunchButton>
+          ))}
         </div>
       }
-      description="Launch a shell or agent to get started."
-      icon={<TerminalSquare />}
+      description="Launch an agent to get started."
+      icon={<PanelsTopLeft />}
       title="No open tabs"
     />
   );

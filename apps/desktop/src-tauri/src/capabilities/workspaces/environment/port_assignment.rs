@@ -21,7 +21,7 @@ fn apply_assigned_port(service: &mut ServiceConfig, port: u16) {
     }
 }
 
-pub(super) fn config_with_assigned_ports(
+pub(crate) fn config_with_assigned_ports(
     db_path: &str,
     workspace_id: &str,
     config: &LifecycleConfig,
@@ -57,7 +57,7 @@ pub(super) fn config_with_assigned_ports(
     Ok(next)
 }
 
-pub(super) fn assign_ports_for_start(
+pub(crate) fn assign_ports_for_start(
     db_path: &str,
     workspace_id: &str,
     config: &LifecycleConfig,

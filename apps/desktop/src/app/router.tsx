@@ -3,7 +3,6 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { Loading } from "@lifecycle/ui";
 import { AppShellLayout } from "@/components/layout/app-shell-layout";
 import { RouteErrorPage } from "@/app/route-error-page";
-
 const HomeRoute = lazy(async () => {
   const module = await import("../features/projects/routes/home-route");
   return {
@@ -122,16 +121,16 @@ function createRouter() {
     },
   ]);
 }
-
-// Preserve router instance across HMR updates
+// Preserve the router instance across HMR to prevent full-tree remounts.
+// Without this, any change to a file imported by a route component causes
+// router.tsx to re-execute, creating a new router and unmounting everything.
 let router: ReturnType<typeof createBrowserRouter>;
-if (import.meta.hot?.data.router) {
-  router = import.meta.hot.data.router;
+if (import.meta.hot?.data?.router) {
+  router = import.meta.hot.data.router as typeof router;
 } else {
   router = createRouter();
 }
 if (import.meta.hot) {
   import.meta.hot.data.router = router;
 }
-
 export { router };

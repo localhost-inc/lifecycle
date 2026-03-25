@@ -15,8 +15,13 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::task::JoinHandle;
 
+enum ProcessHandle {
+    Owned(Child),
+    Adopted { pid: u32 },
+}
+
 struct ManagedProcess {
-    child: Child,
+    handle: ProcessHandle,
     log_handles: Vec<JoinHandle<()>>,
     exit_watcher: Option<JoinHandle<()>>,
 }
@@ -62,6 +67,7 @@ impl Supervisor {
         runtime_env: &HashMap<String, String>,
         app: AppHandle,
         workspace_id: &str,
+        log_dir: &Path,
     ) -> Result<(), LifecycleError> {
         let cwd = if let Some(ref svc_cwd) = service.cwd {
             format!("{}/{}", worktree_path, svc_cwd)
@@ -80,11 +86,11 @@ impl Supervisor {
             cmd.env(key, value);
         }
 
-        // Force color output even though stdout/stderr are piped, not a TTY.
+        // Force color output even though stdout/stderr write to files, not a TTY.
         cmd.env("FORCE_COLOR", "1");
         cmd.env("CLICOLOR_FORCE", "1");
 
-        // Create new process group
+        // Create new process group so the service survives parent exit.
         #[cfg(unix)]
         {
             unsafe {
@@ -95,93 +101,106 @@ impl Supervisor {
             }
         }
 
-        cmd.stdout(std::process::Stdio::piped());
-        cmd.stderr(std::process::Stdio::piped());
+        // Redirect stdout/stderr to log files instead of pipes. This prevents
+        // SIGPIPE from killing the service when the Tauri app restarts.
+        let stdout_path = log_dir.join(format!("{name}.stdout.log"));
+        let stderr_path = log_dir.join(format!("{name}.stderr.log"));
 
-        let mut child = cmd
+        let stdout_file = std::fs::File::create(&stdout_path).map_err(|e| {
+            LifecycleError::ServiceStartFailed {
+                service: name.to_string(),
+                reason: format!("failed to create stdout log: {e}"),
+            }
+        })?;
+        let stderr_file = std::fs::File::create(&stderr_path).map_err(|e| {
+            LifecycleError::ServiceStartFailed {
+                service: name.to_string(),
+                reason: format!("failed to create stderr log: {e}"),
+            }
+        })?;
+
+        cmd.stdout(std::process::Stdio::from(stdout_file));
+        cmd.stderr(std::process::Stdio::from(stderr_file));
+
+        let child = cmd
             .spawn()
             .map_err(|e| LifecycleError::ServiceStartFailed {
                 service: name.to_string(),
                 reason: e.to_string(),
             })?;
 
-        let mut log_handles = Vec::new();
+        let pid = child.id();
 
-        if let Some(stdout) = child.stdout.take() {
-            let app_clone = app.clone();
-            let ws_id = workspace_id.to_string();
-            let svc_name = name.to_string();
-            log_handles.push(tokio::spawn(async move {
-                let reader = BufReader::new(stdout);
-                let mut lines = reader.lines();
-                while let Ok(Some(line)) = lines.next_line().await {
-                    publish_lifecycle_event(
-                        &app_clone,
-                        LifecycleEvent::ServiceLogLine {
-                            workspace_id: ws_id.clone(),
-                            name: svc_name.clone(),
-                            stream: "stdout".to_string(),
-                            line,
-                        },
-                    );
-                }
-            }));
-        }
+        // Tail log files to stream lines as lifecycle events.
+        let log_handles = vec![
+            spawn_log_tailer(stdout_path, app.clone(), workspace_id, name, "stdout", 0),
+            spawn_log_tailer(stderr_path, app.clone(), workspace_id, name, "stderr", 0),
+        ];
 
-        if let Some(stderr) = child.stderr.take() {
-            let app_clone = app.clone();
-            let ws_id = workspace_id.to_string();
-            let svc_name = name.to_string();
-            log_handles.push(tokio::spawn(async move {
-                let reader = BufReader::new(stderr);
-                let mut lines = reader.lines();
-                while let Ok(Some(line)) = lines.next_line().await {
-                    publish_lifecycle_event(
-                        &app_clone,
-                        LifecycleEvent::ServiceLogLine {
-                            workspace_id: ws_id.clone(),
-                            name: svc_name.clone(),
-                            stream: "stderr".to_string(),
-                            line,
-                        },
-                    );
-                }
-            }));
-        }
-
-        // Spawn exit watcher: polls the PID to detect unexpected process exits
-        let exit_watcher = child.id().map(|pid| {
-            let app_clone = app.clone();
-            let ws_id = workspace_id.to_string();
-            let svc_name = name.to_string();
-            tokio::spawn(async move {
-                loop {
-                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                    let alive = unsafe { libc::kill(pid as i32, 0) == 0 };
-                    if !alive {
-                        publish_lifecycle_event(
-                            &app_clone,
-                            LifecycleEvent::ServiceProcessExited {
-                                workspace_id: ws_id,
-                                name: svc_name,
-                                exit_code: None,
-                            },
-                        );
-                        break;
-                    }
-                }
-            })
+        let exit_watcher = pid.map(|pid| {
+            spawn_exit_watcher(app, workspace_id, name, pid)
         });
 
         self.processes.insert(
             name.to_string(),
             ManagedProcess {
-                child,
+                handle: ProcessHandle::Owned(child),
                 log_handles,
                 exit_watcher,
             },
         );
         Ok(())
+    }
+
+    /// Re-attach to a process that survived an app restart. Resumes log tailing
+    /// and exit watching without owning the `Child` handle.
+    pub fn adopt_process(
+        &mut self,
+        name: &str,
+        pid: u32,
+        log_dir: &Path,
+        app: AppHandle,
+        workspace_id: &str,
+    ) -> Result<(), LifecycleError> {
+        // Verify the process is still alive.
+        let alive = unsafe { libc::kill(pid as i32, 0) == 0 };
+        if !alive {
+            return Err(LifecycleError::ServiceStartFailed {
+                service: name.to_string(),
+                reason: format!("adopted process {pid} is no longer running"),
+            });
+        }
+
+        let stdout_path = log_dir.join(format!("{name}.stdout.log"));
+        let stderr_path = log_dir.join(format!("{name}.stderr.log"));
+
+        // Tail from current end of file — only stream new lines.
+        let stdout_offset = std::fs::metadata(&stdout_path).map(|m| m.len()).unwrap_or(0);
+        let stderr_offset = std::fs::metadata(&stderr_path).map(|m| m.len()).unwrap_or(0);
+
+        let log_handles = vec![
+            spawn_log_tailer(stdout_path, app.clone(), workspace_id, name, "stdout", stdout_offset),
+            spawn_log_tailer(stderr_path, app.clone(), workspace_id, name, "stderr", stderr_offset),
+        ];
+
+        let exit_watcher = Some(spawn_exit_watcher(app, workspace_id, name, pid));
+
+        self.processes.insert(
+            name.to_string(),
+            ManagedProcess {
+                handle: ProcessHandle::Adopted { pid },
+                log_handles,
+                exit_watcher,
+            },
+        );
+        Ok(())
+    }
+
+    pub fn get_process_pid(&self, name: &str) -> Option<u32> {
+        self.processes.get(name).and_then(|managed| match &managed.handle {
+            ProcessHandle::Owned(child) => child.id(),
+            ProcessHandle::Adopted { pid } => Some(*pid),
+        })
     }
 
     pub async fn start_container(
@@ -496,21 +515,46 @@ impl Supervisor {
     }
 
     pub async fn stop_all(&mut self) {
-        // Stop processes with SIGTERM, then SIGKILL after grace period
+        // Stop processes with SIGTERM, then SIGKILL after grace period.
         for (_, mut managed) in self.processes.drain() {
-            #[cfg(unix)]
-            {
-                if let Some(pid) = managed.child.id() {
-                    unsafe {
-                        libc::kill(-(pid as i32), libc::SIGTERM);
+            match &mut managed.handle {
+                ProcessHandle::Owned(child) => {
+                    #[cfg(unix)]
+                    if let Some(pid) = child.id() {
+                        unsafe { libc::kill(-(pid as i32), libc::SIGTERM); }
+                    }
+
+                    let _ = tokio::time::timeout(
+                        std::time::Duration::from_secs(5),
+                        child.wait(),
+                    )
+                    .await;
+
+                    let _ = child.kill().await;
+                }
+                ProcessHandle::Adopted { pid } => {
+                    #[cfg(unix)]
+                    {
+                        let pgid = -(*pid as i32);
+                        unsafe { libc::kill(pgid, libc::SIGTERM); }
+
+                        // Wait up to 5 seconds for the process to exit.
+                        let deadline = tokio::time::Instant::now()
+                            + std::time::Duration::from_secs(5);
+                        while tokio::time::Instant::now() < deadline {
+                            if unsafe { libc::kill(*pid as i32, 0) } != 0 {
+                                break;
+                            }
+                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        }
+
+                        // Force kill if still alive.
+                        if unsafe { libc::kill(*pid as i32, 0) } == 0 {
+                            unsafe { libc::kill(pgid, libc::SIGKILL); }
+                        }
                     }
                 }
             }
-
-            let _ =
-                tokio::time::timeout(std::time::Duration::from_secs(5), managed.child.wait()).await;
-
-            let _ = managed.child.kill().await;
 
             if let Some(watcher) = managed.exit_watcher {
                 watcher.abort();
@@ -545,9 +589,9 @@ impl Supervisor {
 
     pub fn is_process_running(&mut self, name: &str) -> bool {
         if let Some(managed) = self.processes.get_mut(name) {
-            match managed.child.try_wait() {
-                Ok(None) => true,
-                _ => false,
+            match &mut managed.handle {
+                ProcessHandle::Owned(child) => matches!(child.try_wait(), Ok(None)),
+                ProcessHandle::Adopted { pid } => unsafe { libc::kill(*pid as i32, 0) == 0 },
             }
         } else {
             false
@@ -557,6 +601,85 @@ impl Supervisor {
     pub fn container_ref(&self, name: &str) -> Option<String> {
         self.containers.get(name).cloned()
     }
+}
+
+fn spawn_log_tailer(
+    log_path: PathBuf,
+    app: AppHandle,
+    workspace_id: &str,
+    service_name: &str,
+    stream: &str,
+    start_offset: u64,
+) -> JoinHandle<()> {
+    let ws_id = workspace_id.to_string();
+    let svc_name = service_name.to_string();
+    let stream_name = stream.to_string();
+    tokio::spawn(async move {
+        // Wait briefly for the file to be created (relevant when tailing from offset 0).
+        let file = loop {
+            match tokio::fs::File::open(&log_path).await {
+                Ok(f) => break f,
+                Err(_) => tokio::time::sleep(std::time::Duration::from_millis(50)).await,
+            }
+        };
+        let mut reader = BufReader::new(file);
+        if start_offset > 0 {
+            use tokio::io::AsyncSeekExt;
+            let _ = reader.seek(std::io::SeekFrom::Start(start_offset)).await;
+        }
+        let mut line = String::new();
+        loop {
+            line.clear();
+            match reader.read_line(&mut line).await {
+                Ok(0) => {
+                    // No new data — poll again shortly.
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+                Ok(_) => {
+                    let text = line.trim_end_matches('\n').trim_end_matches('\r');
+                    if !text.is_empty() {
+                        publish_lifecycle_event(
+                            &app,
+                            LifecycleEvent::ServiceLogLine {
+                                workspace_id: ws_id.clone(),
+                                name: svc_name.clone(),
+                                stream: stream_name.clone(),
+                                line: text.to_string(),
+                            },
+                        );
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+    })
+}
+
+fn spawn_exit_watcher(
+    app: AppHandle,
+    workspace_id: &str,
+    service_name: &str,
+    pid: u32,
+) -> JoinHandle<()> {
+    let ws_id = workspace_id.to_string();
+    let svc_name = service_name.to_string();
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            let alive = unsafe { libc::kill(pid as i32, 0) == 0 };
+            if !alive {
+                publish_lifecycle_event(
+                    &app,
+                    LifecycleEvent::ServiceProcessExited {
+                        workspace_id: ws_id,
+                        name: svc_name,
+                        exit_code: None,
+                    },
+                );
+                break;
+            }
+        }
+    })
 }
 
 fn resolve_service_env(

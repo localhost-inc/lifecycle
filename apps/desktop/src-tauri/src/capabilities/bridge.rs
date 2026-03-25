@@ -37,7 +37,6 @@ struct BridgeStateInner {
 
 #[derive(Clone)]
 struct BridgeSessionScope {
-    terminal_id: String,
     workspace_id: String,
 }
 
@@ -55,7 +54,6 @@ struct BridgeRequestEnvelope {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct BridgeSessionEnvelope {
-    terminal_id: Option<String>,
     token: Option<String>,
 }
 
@@ -89,9 +87,15 @@ struct BridgeContextParams {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct BridgeWorkspaceStatusParams {
+    workspace_id: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct BridgeAgentSessionInspectParams {
     session_id: String,
-    workspace_id: Option<String>,
+    _workspace_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -107,7 +111,87 @@ struct BridgeTabOpenParams {
     workspace_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+// ── Plan + Task bridge params ──
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BridgePlanListParams {
+    project_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BridgePlanCreateParams {
+    project_id: String,
+    workspace_id: Option<String>,
+    name: String,
+    description: Option<String>,
+    body: Option<String>,
+    status: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BridgePlanUpdateParams {
+    plan_id: String,
+    name: Option<String>,
+    description: Option<String>,
+    body: Option<String>,
+    status: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BridgePlanDeleteParams {
+    plan_id: String,
+    project_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BridgeTaskListParams {
+    project_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BridgeTaskCreateParams {
+    plan_id: String,
+    project_id: String,
+    workspace_id: Option<String>,
+    agent_session_id: Option<String>,
+    name: String,
+    description: Option<String>,
+    status: Option<String>,
+    priority: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BridgeTaskUpdateParams {
+    task_id: String,
+    name: Option<String>,
+    description: Option<String>,
+    status: Option<String>,
+    priority: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BridgeTaskDeleteParams {
+    task_id: String,
+    project_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BridgeTaskDependencyParams {
+    task_id: String,
+    depends_on_task_id: String,
+    project_id: String,
+}
+
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct BridgeShellRequest {
     kind: &'static str,
@@ -289,6 +373,12 @@ impl BridgeState {
                     deserialize_bridge_params("context.read", request.params)?;
                 self.handle_context(app, params, request.session).await
             }
+            "workspace.status" => {
+                let params: BridgeWorkspaceStatusParams =
+                    deserialize_bridge_params("workspace.status", request.params)?;
+                self.handle_workspace_status(app, params, request.session)
+                    .await
+            }
             "tab.open" => {
                 let params: BridgeTabOpenParams =
                     deserialize_bridge_params("tab.open", request.params)?;
@@ -300,6 +390,178 @@ impl BridgeState {
                     deserialize_bridge_params("agent.session.inspect", request.params)?;
                 self.handle_agent_session_inspect(app, params, request.session)
                     .await
+            }
+            "plan.list" => {
+                let params: BridgePlanListParams =
+                    deserialize_bridge_params("plan.list", request.params)?;
+                let db_path = app.state::<DbPath>();
+                let plans =
+                    crate::capabilities::plan::query::list_plans(&db_path.0, params.project_id)
+                        .await?;
+                Ok(json!({ "plans": plans }))
+            }
+            "plan.create" => {
+                let params: BridgePlanCreateParams =
+                    deserialize_bridge_params("plan.create", request.params)?;
+                let db_path = app.state::<DbPath>();
+                let conn = crate::platform::db::open_db(&db_path.0)?;
+                let id = uuid::Uuid::new_v4().to_string();
+                let record = crate::capabilities::plan::query::create_plan_sync(
+                    &conn,
+                    &id,
+                    &params.project_id,
+                    params.workspace_id.as_deref(),
+                    &params.name,
+                    params.description.as_deref().unwrap_or(""),
+                    params.body.as_deref().unwrap_or(""),
+                    params.status.as_deref().unwrap_or("draft"),
+                )?;
+                crate::shared::lifecycle_events::publish_lifecycle_event(
+                    app,
+                    crate::shared::lifecycle_events::LifecycleEvent::PlanChanged {
+                        project_id: params.project_id,
+                    },
+                );
+                Ok(json!({ "plan": record }))
+            }
+            "plan.update" => {
+                let params: BridgePlanUpdateParams =
+                    deserialize_bridge_params("plan.update", request.params)?;
+                let db_path = app.state::<DbPath>();
+                let conn = crate::platform::db::open_db(&db_path.0)?;
+                let record = crate::capabilities::plan::query::update_plan_sync(
+                    &conn,
+                    &params.plan_id,
+                    params.name.as_deref(),
+                    params.description.as_deref(),
+                    params.body.as_deref(),
+                    params.status.as_deref(),
+                )?;
+                let project_id = record.project_id.clone();
+                crate::shared::lifecycle_events::publish_lifecycle_event(
+                    app,
+                    crate::shared::lifecycle_events::LifecycleEvent::PlanChanged { project_id },
+                );
+                Ok(json!({ "plan": record }))
+            }
+            "plan.delete" => {
+                let params: BridgePlanDeleteParams =
+                    deserialize_bridge_params("plan.delete", request.params)?;
+                let db_path = app.state::<DbPath>();
+                let conn = crate::platform::db::open_db(&db_path.0)?;
+                crate::capabilities::plan::query::delete_plan_sync(&conn, &params.plan_id)?;
+                crate::shared::lifecycle_events::publish_lifecycle_event(
+                    app,
+                    crate::shared::lifecycle_events::LifecycleEvent::PlanChanged {
+                        project_id: params.project_id,
+                    },
+                );
+                Ok(json!({}))
+            }
+            "task.list" => {
+                let params: BridgeTaskListParams =
+                    deserialize_bridge_params("task.list", request.params)?;
+                let db_path = app.state::<DbPath>();
+                let tasks =
+                    crate::capabilities::plan::query::list_tasks(&db_path.0, params.project_id)
+                        .await?;
+                Ok(json!({ "tasks": tasks }))
+            }
+            "task.create" => {
+                let params: BridgeTaskCreateParams =
+                    deserialize_bridge_params("task.create", request.params)?;
+                let db_path = app.state::<DbPath>();
+                let conn = crate::platform::db::open_db(&db_path.0)?;
+                let id = uuid::Uuid::new_v4().to_string();
+                let record = crate::capabilities::plan::query::create_task_sync(
+                    &conn,
+                    &id,
+                    &params.plan_id,
+                    &params.project_id,
+                    params.workspace_id.as_deref(),
+                    params.agent_session_id.as_deref(),
+                    &params.name,
+                    params.description.as_deref().unwrap_or(""),
+                    params.status.as_deref().unwrap_or("pending"),
+                    params.priority.unwrap_or(2),
+                )?;
+                crate::shared::lifecycle_events::publish_lifecycle_event(
+                    app,
+                    crate::shared::lifecycle_events::LifecycleEvent::PlanChanged {
+                        project_id: params.project_id,
+                    },
+                );
+                Ok(json!({ "task": record }))
+            }
+            "task.update" => {
+                let params: BridgeTaskUpdateParams =
+                    deserialize_bridge_params("task.update", request.params)?;
+                let db_path = app.state::<DbPath>();
+                let conn = crate::platform::db::open_db(&db_path.0)?;
+                let record = crate::capabilities::plan::query::update_task_sync(
+                    &conn,
+                    &params.task_id,
+                    params.name.as_deref(),
+                    params.description.as_deref(),
+                    params.status.as_deref(),
+                    params.priority,
+                )?;
+                let project_id = record.project_id.clone();
+                crate::shared::lifecycle_events::publish_lifecycle_event(
+                    app,
+                    crate::shared::lifecycle_events::LifecycleEvent::PlanChanged { project_id },
+                );
+                Ok(json!({ "task": record }))
+            }
+            "task.delete" => {
+                let params: BridgeTaskDeleteParams =
+                    deserialize_bridge_params("task.delete", request.params)?;
+                let db_path = app.state::<DbPath>();
+                let conn = crate::platform::db::open_db(&db_path.0)?;
+                crate::capabilities::plan::query::delete_task_sync(&conn, &params.task_id)?;
+                crate::shared::lifecycle_events::publish_lifecycle_event(
+                    app,
+                    crate::shared::lifecycle_events::LifecycleEvent::PlanChanged {
+                        project_id: params.project_id,
+                    },
+                );
+                Ok(json!({}))
+            }
+            "task.dependency.add" => {
+                let params: BridgeTaskDependencyParams =
+                    deserialize_bridge_params("task.dependency.add", request.params)?;
+                let db_path = app.state::<DbPath>();
+                let conn = crate::platform::db::open_db(&db_path.0)?;
+                crate::capabilities::plan::query::add_task_dependency_sync(
+                    &conn,
+                    &params.task_id,
+                    &params.depends_on_task_id,
+                )?;
+                crate::shared::lifecycle_events::publish_lifecycle_event(
+                    app,
+                    crate::shared::lifecycle_events::LifecycleEvent::PlanChanged {
+                        project_id: params.project_id,
+                    },
+                );
+                Ok(json!({}))
+            }
+            "task.dependency.remove" => {
+                let params: BridgeTaskDependencyParams =
+                    deserialize_bridge_params("task.dependency.remove", request.params)?;
+                let db_path = app.state::<DbPath>();
+                let conn = crate::platform::db::open_db(&db_path.0)?;
+                crate::capabilities::plan::query::remove_task_dependency_sync(
+                    &conn,
+                    &params.task_id,
+                    &params.depends_on_task_id,
+                )?;
+                crate::shared::lifecycle_events::publish_lifecycle_event(
+                    app,
+                    crate::shared::lifecycle_events::LifecycleEvent::PlanChanged {
+                        project_id: params.project_id,
+                    },
+                );
+                Ok(json!({}))
             }
             method => Err(LifecycleError::InvalidInput {
                 field: "method".to_string(),
@@ -391,7 +653,6 @@ impl BridgeState {
             .await?
             .ok_or_else(|| LifecycleError::WorkspaceNotFound(workspace_id.clone()))?;
         let services = query::get_workspace_services(&db_path.0, workspace_id.clone()).await?;
-        let terminals = query::list_workspace_terminals(&db_path.0, workspace_id.clone()).await?;
 
         let ready_service_count = services
             .iter()
@@ -431,7 +692,6 @@ impl BridgeState {
                     "file": false,
                     "preview": true,
                     "pullRequest": false,
-                    "terminal": false,
                 },
             },
             "cli": {
@@ -456,11 +716,28 @@ impl BridgeState {
                 "shellBridge": self.inner.endpoint_path.is_some(),
             },
             "session": {
-                "terminalId": session.and_then(|value| value.terminal_id),
                 "workspaceId": workspace_id,
             },
             "services": services,
-            "terminals": terminals,
+            "workspace": workspace,
+        }))
+    }
+
+    async fn handle_workspace_status(
+        &self,
+        app: &AppHandle,
+        params: BridgeWorkspaceStatusParams,
+        session: Option<BridgeSessionEnvelope>,
+    ) -> Result<Value, LifecycleError> {
+        let workspace_id = self.resolve_workspace_id(params.workspace_id, session.as_ref())?;
+        let db_path = app.state::<DbPath>();
+        let workspace = query::get_workspace_by_id(&db_path.0, workspace_id.clone())
+            .await?
+            .ok_or_else(|| LifecycleError::WorkspaceNotFound(workspace_id.clone()))?;
+        let services = query::get_workspace_services(&db_path.0, workspace_id).await?;
+
+        Ok(json!({
+            "services": services,
             "workspace": workspace,
         }))
     }
@@ -529,28 +806,22 @@ impl BridgeState {
 
         let session: Value = conn
             .query_row(
-                "SELECT id, workspace_id, runtime_kind, runtime_name, provider,
-                        provider_session_id, title, status, created_by,
-                        forked_from_session_id, last_message_at, created_at,
-                        updated_at, ended_at
+                "SELECT id, workspace_id, provider,
+                        provider_session_id, title, status,
+                        last_message_at, created_at, updated_at
                  FROM agent_session WHERE id = ?1",
                 rusqlite::params![params.session_id],
                 |row| {
                     Ok(json!({
                         "id": row.get::<_, String>(0)?,
                         "workspace_id": row.get::<_, String>(1)?,
-                        "runtime_kind": row.get::<_, String>(2)?,
-                        "runtime_name": row.get::<_, Option<String>>(3)?,
-                        "provider": row.get::<_, String>(4)?,
-                        "provider_session_id": row.get::<_, Option<String>>(5)?,
-                        "title": row.get::<_, String>(6)?,
-                        "status": row.get::<_, String>(7)?,
-                        "created_by": row.get::<_, Option<String>>(8)?,
-                        "forked_from_session_id": row.get::<_, Option<String>>(9)?,
-                        "last_message_at": row.get::<_, Option<String>>(10)?,
-                        "created_at": row.get::<_, String>(11)?,
-                        "updated_at": row.get::<_, String>(12)?,
-                        "ended_at": row.get::<_, Option<String>>(13)?,
+                        "provider": row.get::<_, String>(2)?,
+                        "provider_session_id": row.get::<_, Option<String>>(3)?,
+                        "title": row.get::<_, String>(4)?,
+                        "status": row.get::<_, String>(5)?,
+                        "last_message_at": row.get::<_, Option<String>>(6)?,
+                        "created_at": row.get::<_, String>(7)?,
+                        "updated_at": row.get::<_, String>(8)?,
                     }))
                 },
             )
@@ -717,17 +988,7 @@ impl BridgeState {
                 reason: "workspace id is required when no session token is available".to_string(),
             })?;
 
-        let scope = self.lookup_session_scope(token)?;
-        if let Some(terminal_id) = session.and_then(|session| session.terminal_id.as_deref()) {
-            if terminal_id != scope.terminal_id {
-                return Err(LifecycleError::InvalidInput {
-                    field: "session.terminalId".to_string(),
-                    reason: "session terminal does not match the bridge token".to_string(),
-                });
-            }
-        }
-
-        Ok(scope.workspace_id)
+        Ok(self.lookup_session_scope(token)?.workspace_id)
     }
 
     fn lookup_session_scope(&self, token: &str) -> Result<BridgeSessionScope, LifecycleError> {
@@ -765,6 +1026,45 @@ impl BridgeState {
             ))
         })
     }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeCreateAgentSessionRequest {
+    workspace_id: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BridgeAgentSession {
+    socket_path: String,
+    session_token: String,
+}
+
+#[tauri::command]
+pub fn bridge_create_agent_session(
+    bridge: State<'_, BridgeState>,
+    request: BridgeCreateAgentSessionRequest,
+) -> Result<BridgeAgentSession, LifecycleError> {
+    let endpoint_path = bridge
+        .inner
+        .endpoint_path
+        .as_ref()
+        .ok_or_else(|| LifecycleError::AttachFailed("Bridge is not available.".to_string()))?
+        .clone();
+
+    let token = uuid::Uuid::new_v4().to_string();
+    bridge.inner.session_scopes.lock().unwrap().insert(
+        token.clone(),
+        BridgeSessionScope {
+            workspace_id: request.workspace_id,
+        },
+    );
+
+    Ok(BridgeAgentSession {
+        socket_path: endpoint_path,
+        session_token: token,
+    })
 }
 
 #[tauri::command]
@@ -930,7 +1230,6 @@ mod tests {
         bridge.inner.session_scopes.lock().unwrap().insert(
             "session-token".to_string(),
             BridgeSessionScope {
-                terminal_id: "term_123".to_string(),
                 workspace_id: "ws_123".to_string(),
             },
         );
@@ -939,7 +1238,6 @@ mod tests {
             .resolve_workspace_id(
                 None,
                 Some(&BridgeSessionEnvelope {
-                    terminal_id: Some("term_123".to_string()),
                     token: Some("session-token".to_string()),
                 }),
             )

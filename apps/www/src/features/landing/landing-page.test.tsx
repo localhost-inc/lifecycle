@@ -7,8 +7,7 @@ describe("LandingPage", () => {
   test("renders core messaging", () => {
     const markup = renderToStaticMarkup(createElement(LandingPage));
 
-    expect(markup).toContain("Where teams and agents");
-    expect(markup).toContain("collaborate on code.");
+    expect(markup).toContain("From idea to prod");
     expect(markup).toContain("One manifest in your repo.");
     expect(markup).toContain("lifecycle.json");
     expect(markup).toContain("Features");

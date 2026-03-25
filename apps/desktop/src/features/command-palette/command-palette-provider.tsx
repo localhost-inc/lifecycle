@@ -8,14 +8,12 @@ import type { CommandPaletteMode } from "@/features/command-palette/types";
 
 interface CommandPaletteProviderProps {
   children: ReactNode;
-  onForkWorkspace?: () => void;
   projects: ProjectRecord[];
   workspacesByProjectId: Record<string, WorkspaceRecord[]>;
 }
 
 export function CommandPaletteProvider({
   children,
-  onForkWorkspace,
   projects,
   workspacesByProjectId,
 }: CommandPaletteProviderProps) {
@@ -52,7 +50,6 @@ export function CommandPaletteProvider({
     [explorer.isAvailable],
   );
   const commands = useCommandPaletteCommands({
-    onForkWorkspace,
     onOpenExplorer: explorer.isAvailable ? () => open("explorer") : undefined,
     projects,
     workspacesByProjectId,

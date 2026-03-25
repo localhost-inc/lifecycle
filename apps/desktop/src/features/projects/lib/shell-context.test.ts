@@ -24,12 +24,11 @@ function createProjectRecord(
 }
 
 describe("shell context helpers", () => {
-  test("buildShellContexts always includes Personal and unique organization contexts", () => {
+  test("buildShellContexts always includes Personal context", () => {
     const contexts = buildShellContexts(
       [
         createProjectRecord({ id: "project_1", name: "Lifecycle" }),
-        createProjectRecord({ id: "project_2", name: "Kin API", organizationId: "org_2" }),
-        createProjectRecord({ id: "project_3", name: "Ops", organizationId: "org_1" }),
+        createProjectRecord({ id: "project_2", name: "Kin API" }),
       ],
       {
         personalContextPersisted: true,
@@ -41,20 +40,6 @@ describe("shell context helpers", () => {
         id: "personal",
         kind: "personal",
         name: "Personal",
-        persisted: true,
-      },
-      {
-        id: "organization:org_1",
-        kind: "organization",
-        name: "Organization 1",
-        organizationId: "org_1",
-        persisted: true,
-      },
-      {
-        id: "organization:org_2",
-        kind: "organization",
-        name: "Organization 2",
-        organizationId: "org_2",
         persisted: true,
       },
     ]);
@@ -76,51 +61,34 @@ describe("shell context helpers", () => {
     expect(contexts[0]?.name).toBe("Personal");
   });
 
-  test("resolveProjectShellContextId maps null organization ids into Personal", () => {
+  test("resolveProjectShellContextId always returns personal", () => {
     expect(
       resolveProjectShellContextId(createProjectRecord({ id: "project_1", name: "Lifecycle" })),
     ).toBe("personal");
-    expect(
-      resolveProjectShellContextId(
-        createProjectRecord({ id: "project_2", name: "Kin API", organizationId: "org_1" }),
-      ),
-    ).toBe("organization:org_1");
   });
 
-  test("filterProjectsForShellContext keeps only the projects for the chosen context", () => {
-    const personalProject = createProjectRecord({ id: "project_1", name: "Lifecycle" });
-    const organizationProject = createProjectRecord({
-      id: "project_2",
-      name: "Kin API",
-      organizationId: "org_1",
-    });
-    const contexts = buildShellContexts([personalProject, organizationProject]);
+  test("filterProjectsForShellContext returns all projects for the personal context", () => {
+    const project1 = createProjectRecord({ id: "project_1", name: "Lifecycle" });
+    const project2 = createProjectRecord({ id: "project_2", name: "Kin API" });
+    const contexts = buildShellContexts([project1, project2]);
     const personalContext = contexts[0];
-    const organizationContext = contexts[1];
 
-    if (!personalContext || !organizationContext) {
-      throw new Error("Expected Personal and organization contexts to exist.");
+    if (!personalContext) {
+      throw new Error("Expected Personal context to exist.");
     }
 
-    expect(
-      filterProjectsForShellContext([personalProject, organizationProject], personalContext),
-    ).toEqual([personalProject]);
-    expect(
-      filterProjectsForShellContext([personalProject, organizationProject], organizationContext),
-    ).toEqual([organizationProject]);
+    expect(filterProjectsForShellContext([project1, project2], personalContext)).toEqual([
+      project1,
+      project2,
+    ]);
   });
 
-  test("resolveActiveShellContext prefers the route project context over the stored context", () => {
+  test("resolveActiveShellContext returns the personal context", () => {
     const projects = [
       createProjectRecord({ id: "project_1", name: "Lifecycle" }),
-      createProjectRecord({ id: "project_2", name: "Kin API", organizationId: "org_1" }),
+      createProjectRecord({ id: "project_2", name: "Kin API" }),
     ];
     const contexts = buildShellContexts(projects);
-    const organizationContext = contexts[1];
-
-    if (!organizationContext) {
-      throw new Error("Expected an organization context to exist.");
-    }
 
     expect(
       resolveActiveShellContext({
@@ -129,27 +97,6 @@ describe("shell context helpers", () => {
         requestedContextId: "personal",
         routeProjectId: "project_2",
       }),
-    ).toEqual(organizationContext);
-  });
-
-  test("resolveActiveShellContext falls back to the first non-empty context when Personal is empty", () => {
-    const projects = [
-      createProjectRecord({ id: "project_2", name: "Kin API", organizationId: "org_1" }),
-    ];
-    const contexts = buildShellContexts(projects);
-    const organizationContext = contexts[1];
-
-    if (!organizationContext) {
-      throw new Error("Expected an organization context to exist.");
-    }
-
-    expect(
-      resolveActiveShellContext({
-        contexts,
-        projects,
-        requestedContextId: "personal",
-        routeProjectId: undefined,
-      }),
-    ).toEqual(organizationContext);
+    ).toEqual(contexts[0]!);
   });
 });

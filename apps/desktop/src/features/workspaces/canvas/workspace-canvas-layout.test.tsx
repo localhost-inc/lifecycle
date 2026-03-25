@@ -12,14 +12,12 @@ function withConfig(element: ReturnType<typeof createElement>) {
 function createTreeProps(input: any) {
   return {
     actions: {
-      closeDocumentTab: () => {},
-      closeTerminalTab: async () => {},
+      closeTab: () => {},
       fileSessionStateChange: () => {},
       launchSurface: () => {},
       moveTabToPane: () => {},
       openFile: () => {},
       reconcilePaneVisibleTabOrder: () => {},
-      renameTerminalTab: async () => {},
       resetAllSplitRatios: () => {},
       selectPane: () => {},
       selectTab: () => {},
@@ -45,22 +43,11 @@ describe("WorkspaceCanvas layout", () => {
   afterEach(() => mock.restore());
 
   test("renders pane headers with a dedicated tab strip region beside the right-side controls", async () => {
-    const terminalHooksModule = await import("../../terminals/hooks");
-    const responseReadyModule =
-      await import("../../terminals/state/terminal-response-ready-provider");
     const storeModule = await import("@/store");
     const panelsModule = await import("./panes/workspace-pane-content");
     const tabBarModule = await import("./tabs/workspace-pane-tab-bar");
 
-    spyOn(terminalHooksModule, "useWorkspaceTerminals").mockReturnValue([] as never);
     spyOn(storeModule, "useAgentSessions").mockReturnValue([] as never);
-    spyOn(storeModule, "useAgentSessionRefresh").mockReturnValue((() => {}) as never);
-    spyOn(responseReadyModule, "useTerminalResponseReady").mockReturnValue({
-      clearTerminalResponseReady: () => {},
-      clearTerminalTurnRunning: () => {},
-      isTerminalResponseReady: () => false,
-      isTerminalTurnRunning: () => false,
-    } as never);
     spyOn(tabBarModule, "WorkspacePaneTabBar").mockImplementation((() =>
       createElement("div", { "data-slot": "workspace-tab-bar" }, "Tabs")) as never);
     spyOn(panelsModule, "WorkspacePaneContent").mockImplementation((() =>
@@ -71,7 +58,7 @@ describe("WorkspaceCanvas layout", () => {
       withConfig(
         createElement(ReactQueryProvider, {
           children: createElement(WorkspaceCanvas, {
-            openDocumentRequest: null,
+            openTabRequest: null,
             workspaceId: "workspace-1",
           }),
         }),
@@ -104,13 +91,13 @@ describe("WorkspaceCanvas layout", () => {
             paneCount: 2,
             panesById: {
               "pane-2": {
-                activeSurface: { creatingSelection: null, kind: "launcher" },
+                activeSurface: { kind: "launcher", pendingLaunchActionKey: null },
                 id: "pane-2",
                 isActive: false,
                 tabBar: { activeTabKey: null, dragPreview: null, paneId: "pane-2", tabs: [] },
               },
               "pane-root": {
-                activeSurface: { creatingSelection: null, kind: "launcher" },
+                activeSurface: { kind: "launcher", pendingLaunchActionKey: null },
                 id: "pane-root",
                 isActive: true,
                 tabBar: {
@@ -168,19 +155,19 @@ describe("WorkspaceCanvas layout", () => {
             paneCount: 3,
             panesById: {
               "pane-1": {
-                activeSurface: { creatingSelection: null, kind: "launcher" },
+                activeSurface: { kind: "launcher", pendingLaunchActionKey: null },
                 id: "pane-1",
                 isActive: true,
                 tabBar: { activeTabKey: null, dragPreview: null, paneId: "pane-1", tabs: [] },
               },
               "pane-2": {
-                activeSurface: { creatingSelection: null, kind: "launcher" },
+                activeSurface: { kind: "launcher", pendingLaunchActionKey: null },
                 id: "pane-2",
                 isActive: false,
                 tabBar: { activeTabKey: null, dragPreview: null, paneId: "pane-2", tabs: [] },
               },
               "pane-3": {
-                activeSurface: { creatingSelection: null, kind: "launcher" },
+                activeSurface: { kind: "launcher", pendingLaunchActionKey: null },
                 id: "pane-3",
                 isActive: false,
                 tabBar: { activeTabKey: null, dragPreview: null, paneId: "pane-3", tabs: [] },
@@ -239,13 +226,13 @@ describe("WorkspaceCanvas layout", () => {
             paneCount: 2,
             panesById: {
               "pane-2": {
-                activeSurface: { creatingSelection: null, kind: "launcher" },
+                activeSurface: { kind: "launcher", pendingLaunchActionKey: null },
                 id: "pane-2",
                 isActive: false,
                 tabBar: { activeTabKey: null, dragPreview: null, paneId: "pane-2", tabs: [] },
               },
               "pane-root": {
-                activeSurface: { creatingSelection: null, kind: "launcher" },
+                activeSurface: { kind: "launcher", pendingLaunchActionKey: null },
                 id: "pane-root",
                 isActive: true,
                 tabBar: {

@@ -13,8 +13,7 @@ import type { WorkspaceCreateMode } from "@/features/workspaces/api";
 export async function showWorkspaceContextMenu(
   workspace: WorkspaceRecord,
   callbacks: {
-    onDestroyWorkspace: (workspace: WorkspaceRecord) => void;
-    onForkWorkspace: (workspace: WorkspaceRecord) => void;
+    onArchiveWorkspace: (workspace: WorkspaceRecord) => void;
   },
 ): Promise<void> {
   const openInEditorItem = await MenuItem.new({
@@ -26,22 +25,16 @@ export async function showWorkspaceContextMenu(
     },
   });
 
-  const forkItem = await MenuItem.new({
-    id: "fork-workspace",
-    text: "Fork Workspace",
-    action: () => callbacks.onForkWorkspace(workspace),
-  });
-
-  const items: (MenuItem | PredefinedMenuItem)[] = [openInEditorItem, forkItem];
+  const items: (MenuItem | PredefinedMenuItem)[] = [openInEditorItem];
 
   if (!isRootWorkspace(workspace)) {
     const separator = await PredefinedMenuItem.new({ item: "Separator" });
-    const destroyItem = await MenuItem.new({
-      id: "destroy-workspace",
-      text: "Destroy Workspace",
-      action: () => callbacks.onDestroyWorkspace(workspace),
+    const archiveItem = await MenuItem.new({
+      id: "archive-workspace",
+      text: "Archive Workspace",
+      action: () => callbacks.onArchiveWorkspace(workspace),
     });
-    items.push(separator, destroyItem);
+    items.push(separator, archiveItem);
   }
 
   const menu = await Menu.new({ items });

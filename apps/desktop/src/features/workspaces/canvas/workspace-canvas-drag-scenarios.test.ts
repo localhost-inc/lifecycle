@@ -4,7 +4,7 @@ import {
   createFileViewerTab,
   createDefaultWorkspaceCanvasState,
   getWorkspacePaneTabState,
-  type WorkspaceCanvasDocument,
+  type WorkspaceCanvasTab,
   type WorkspaceCanvasState,
 } from "@/features/workspaces/state/workspace-canvas-state";
 import {
@@ -30,10 +30,8 @@ type TestWorkspacePaneNode =
       second: TestWorkspacePaneNode;
     };
 
-function indexDocuments(
-  documents: readonly WorkspaceCanvasDocument[],
-): WorkspaceCanvasState["documentsByKey"] {
-  return Object.fromEntries(documents.map((document) => [document.key, document]));
+function indexTabs(tabs: readonly WorkspaceCanvasTab[]): WorkspaceCanvasState["tabsByKey"] {
+  return Object.fromEntries(tabs.map((tab) => [tab.key, tab]));
 }
 
 function buildPaneTreeState(
@@ -74,11 +72,11 @@ function buildPaneTreeState(
 
 function withWorkspaceState({
   activePaneId,
-  documents = [],
+  tabs = [],
   rootPane,
 }: {
   activePaneId?: string;
-  documents?: WorkspaceCanvasDocument[];
+  tabs?: WorkspaceCanvasTab[];
   rootPane: TestWorkspacePaneNode;
 }): WorkspaceCanvasState {
   const base = createDefaultWorkspaceCanvasState();
@@ -91,7 +89,7 @@ function withWorkspaceState({
       (rootPane.kind === "leaf"
         ? rootPane.id
         : inspectWorkspacePaneLayout(paneTreeState.rootPane).firstPane.id),
-    documentsByKey: indexDocuments(documents),
+    tabsByKey: indexTabs(tabs),
     paneTabStateById: paneTreeState.paneTabStateById,
     rootPane: paneTreeState.rootPane,
   };
@@ -228,7 +226,7 @@ describe("canvas drag scenarios", () => {
 
     let state = withWorkspaceState({
       activePaneId: "pane-root",
-      documents: [readmeTab, planTab],
+      tabs: [readmeTab, planTab],
       rootPane: {
         activeTabKey: planTab.key,
         id: "pane-root",
@@ -324,7 +322,7 @@ describe("canvas drag scenarios", () => {
 
     let state = withWorkspaceState({
       activePaneId: "pane-root",
-      documents: [readmeTab, planTab, appTab],
+      tabs: [readmeTab, planTab, appTab],
       rootPane: {
         activeTabKey: appTab.key,
         id: "pane-root",
@@ -439,7 +437,7 @@ describe("canvas drag scenarios", () => {
 
     state = workspaceCanvasReducer(state, {
       key: planTab.key,
-      kind: "close-document",
+      kind: "close-tab",
     });
 
     expect(state.rootPane).toEqual({
@@ -470,7 +468,7 @@ describe("canvas drag scenarios", () => {
       tabOrderKeys: [appTab.key],
     });
     expect(state.paneTabStateById["pane-right"]).toBeUndefined();
-    expect(state.documentsByKey[planTab.key]).toBeUndefined();
+    expect(state.tabsByKey[planTab.key]).toBeUndefined();
   });
 
   test("same-pane center drags are stable no-ops across repeated attempts", () => {
@@ -478,7 +476,7 @@ describe("canvas drag scenarios", () => {
     const planTab = createFileViewerTab("docs/plans/agent-workspace.md");
     const state = withWorkspaceState({
       activePaneId: "pane-root",
-      documents: [readmeTab, planTab],
+      tabs: [readmeTab, planTab],
       rootPane: {
         activeTabKey: planTab.key,
         id: "pane-root",

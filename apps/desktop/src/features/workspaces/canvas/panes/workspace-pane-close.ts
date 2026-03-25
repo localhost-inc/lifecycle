@@ -2,8 +2,7 @@ import type { WorkspaceCanvasTab } from "@/features/workspaces/canvas/workspace-
 
 export interface CloseWorkspacePaneOperations {
   collapseEmptyPane: () => void;
-  closeDocumentTab: (tabKey: string) => boolean;
-  closeTerminalTab: (tabKey: string, terminalId: string) => Promise<boolean>;
+  closeTab: (tabKey: string) => boolean;
 }
 
 export async function closeWorkspacePaneTabs(
@@ -15,10 +14,7 @@ export async function closeWorkspacePaneTabs(
   }
 
   for (const tab of paneTabs) {
-    const didClose =
-      tab.kind === "terminal"
-        ? await operations.closeTerminalTab(tab.key, tab.terminalId)
-        : operations.closeDocumentTab(tab.key);
+    const didClose = operations.closeTab(tab.key);
     if (!didClose) {
       return false;
     }

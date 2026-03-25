@@ -1,4 +1,11 @@
 export type RegisteredShortcutId =
+  | "canvas.pane.focus"
+  | "canvas.pane.tab.close"
+  | "canvas.pane.tab.open"
+  | "canvas.pane.tab.select.next"
+  | "canvas.pane.tab.select.previous"
+  | "canvas.pane.tab.zoom.toggle"
+  | "canvas.tab.reopen"
   | "app.open-command-palette"
   | "app.open-explorer"
   | "app.open-settings"
@@ -6,15 +13,8 @@ export type RegisteredShortcutId =
   | "project.go-back"
   | "project.go-forward"
   | "project.select-index"
-  | "workspace.close-active-tab"
-  | "workspace.focus-pane"
-  | "workspace.new-tab"
-  | "workspace.next-tab"
   | "workspace.next-workspace"
-  | "workspace.previous-tab"
-  | "workspace.previous-workspace"
-  | "workspace.reopen-closed-tab"
-  | "workspace.toggle-zoom";
+  | "workspace.previous-workspace";
 
 export type RegisteredShortcutScope = "app" | "file-surface" | "project-route" | "workspace-canvas";
 
@@ -64,18 +64,17 @@ export const REGISTERED_SHORTCUTS: readonly RegisteredShortcut[] = [
     windowsLinux: "Ctrl+]",
   },
   {
-    description: "Create a new workspace terminal tab",
-    id: "workspace.new-tab",
+    description: "Create a new workspace tab",
+    id: "canvas.pane.tab.open",
     mac: "Cmd+T",
     scope: "workspace-canvas",
     windowsLinux: "Ctrl+T",
   },
   {
     description: "Close the active workspace pane or project tab, depending on layout",
-    id: "workspace.close-active-tab",
+    id: "canvas.pane.tab.close",
     mac: "Cmd+W",
-    notes:
-      "Also forwarded from the native terminal surface and intercepted from window-close on Tauri.",
+    notes: "Also intercepted from window-close on Tauri.",
     scope: "workspace-canvas",
     windowsLinux: "Ctrl+W",
   },
@@ -102,35 +101,35 @@ export const REGISTERED_SHORTCUTS: readonly RegisteredShortcut[] = [
   },
   {
     description: "Select the previous pane tab",
-    id: "workspace.previous-tab",
+    id: "canvas.pane.tab.select.previous",
     mac: "Ctrl+Shift+Tab",
     scope: "workspace-canvas",
     windowsLinux: "Ctrl+Shift+Tab",
   },
   {
     description: "Select the next pane tab",
-    id: "workspace.next-tab",
+    id: "canvas.pane.tab.select.next",
     mac: "Ctrl+Tab",
     scope: "workspace-canvas",
     windowsLinux: "Ctrl+Tab",
   },
   {
     description: "Move focus to an adjacent pane",
-    id: "workspace.focus-pane",
+    id: "canvas.pane.focus",
     mac: "Cmd+Ctrl+Arrows",
     scope: "workspace-canvas",
     windowsLinux: "Ctrl+Alt+Arrows",
   },
   {
-    description: "Reopen the last closed document tab",
-    id: "workspace.reopen-closed-tab",
+    description: "Reopen the last closed tab",
+    id: "canvas.tab.reopen",
     mac: "Cmd+Shift+T",
     scope: "workspace-canvas",
     windowsLinux: "Ctrl+Shift+T",
   },
   {
     description: "Toggle zoom on the active pane tab",
-    id: "workspace.toggle-zoom",
+    id: "canvas.pane.tab.zoom.toggle",
     mac: "Cmd+Shift+Enter",
     scope: "workspace-canvas",
     windowsLinux: "Ctrl+Shift+Enter",

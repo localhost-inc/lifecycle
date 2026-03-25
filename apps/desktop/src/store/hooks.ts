@@ -1,17 +1,19 @@
 import { useMemo, useRef, useSyncExternalStore } from "react";
 import type {
+  AgentMessageWithParts,
   AgentSessionRecord,
   ProjectRecord,
   ServiceRecord,
-  TerminalRecord,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
-import type { WorkspaceRuntime } from "@lifecycle/workspace";
+import type { WorkspaceClient } from "@lifecycle/workspace";
 import { groupWorkspacesByProject, type Collection } from "@lifecycle/store";
+import { useLiveQuery } from "@tanstack/react-db";
 import {
   getOrCreateAgentSessionCollection,
   refreshAgentSessionCollection,
 } from "@/store/collections/agent-sessions";
+import { getOrCreateAgentMessageCollection } from "@/store/collections/agent-messages";
 import { useStoreContext } from "@/store/provider";
 
 /**
@@ -76,6 +78,11 @@ export function useProjects(): ProjectRecord[] {
   return useCollectionArray(collections.projects.collection);
 }
 
+export function useProject(projectId: string | null): ProjectRecord | undefined {
+  const { collections } = useStoreContext();
+  return useCollectionItem(collections.projects.collection, projectId);
+}
+
 export function useWorkspaces(): WorkspaceRecord[] {
   const { collections } = useStoreContext();
   return useCollectionArray(collections.workspaces.collection);
@@ -100,15 +107,6 @@ export function useWorkspaceServices(workspaceId: string): ServiceRecord[] {
   );
 }
 
-export function useWorkspaceTerminals(workspaceId: string): TerminalRecord[] {
-  const { collections } = useStoreContext();
-  const allTerminals = useCollectionArray(collections.terminals.collection);
-  return useMemo(
-    () => allTerminals.filter((t) => t.workspace_id === workspaceId),
-    [allTerminals, workspaceId],
-  );
-}
-
 export function useAgentSessions(workspaceId: string): AgentSessionRecord[] {
   const { driver } = useStoreContext();
 
@@ -116,7 +114,17 @@ export function useAgentSessions(workspaceId: string): AgentSessionRecord[] {
     return getOrCreateAgentSessionCollection(driver, workspaceId);
   }, [driver, workspaceId]);
 
-  return useCollectionArray(sqlCollection.collection);
+  const baseCollection = sqlCollection.collection;
+
+  const { data } = useLiveQuery(
+    (q) =>
+      q
+        .from({ s: baseCollection })
+        .orderBy(({ s }) => s.created_at, "desc"),
+    [baseCollection],
+  );
+
+  return data ?? [];
 }
 
 export function useAgentSessionRefresh(workspaceId: string): () => void {
@@ -127,17 +135,44 @@ export function useAgentSessionRefresh(workspaceId: string): () => void {
   }, [workspaceId]);
 }
 
-// ── Runtime hook ──
+export function useAgentMessages(sessionId: string): {
+  data: AgentMessageWithParts[];
+  error: Error | null;
+} {
+  const { driver } = useStoreContext();
+
+  const sqlCollection = useMemo(() => {
+    return getOrCreateAgentMessageCollection(driver, sessionId);
+  }, [driver, sessionId]);
+  const baseCollection = sqlCollection.collection;
+  const collectionError = useSyncExternalStore(
+    sqlCollection.subscribeState,
+    sqlCollection.getError,
+    sqlCollection.getError,
+  );
+
+  const { data } = useLiveQuery(
+    (q) => q.from({ msg: baseCollection }).orderBy(({ msg }) => msg.created_at),
+    [baseCollection],
+  );
+
+  return {
+    data: data ?? [],
+    error: collectionError,
+  };
+}
+
+// ── Client hook ──
 
 /**
- * Returns the WorkspaceRuntime for the current target.
- * Currently always returns the host runtime; when cloud workspaces arrive,
+ * Returns the WorkspaceClient for the current target.
+ * Currently always returns the local client; when cloud workspaces arrive,
  * this will look up the workspace target from the collection and select
- * the appropriate runtime provider.
+ * the appropriate client provider.
  */
-export function useRuntime(): WorkspaceRuntime {
-  const { runtimeRegistry } = useStoreContext();
-  // For now, all workspaces use the host runtime.
+export function useClient(): WorkspaceClient {
+  const { clientRegistry } = useStoreContext();
+  // For now, all workspaces use the local client.
   // When cloud mode arrives, this will resolve per-workspace target.
-  return runtimeRegistry.resolve("local");
+  return clientRegistry.resolve("local");
 }

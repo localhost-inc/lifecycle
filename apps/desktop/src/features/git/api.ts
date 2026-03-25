@@ -11,7 +11,7 @@ import type {
   GitPushResult,
   GitStatusResult,
 } from "@lifecycle/contracts";
-import type { WorkspaceRuntime } from "@lifecycle/workspace";
+import type { WorkspaceClient } from "@lifecycle/workspace";
 import { isTauri } from "@tauri-apps/api/core";
 import { publishBrowserLifecycleEvent } from "@/features/events/api";
 
@@ -61,7 +61,7 @@ function browserCommitResult(message: string): GitCommitResult {
 
 function emitBrowserGitStatusChanged(workspaceId: string): void {
   publishBrowserLifecycleEvent({
-    kind: "git.status_changed",
+    kind: "git.status.changed",
     workspaceId,
     branch: null,
     headSha: null,
@@ -74,7 +74,7 @@ function emitBrowserGitHeadChanged(
   options?: { ahead?: number | null; behind?: number | null; headSha?: string | null },
 ): void {
   publishBrowserLifecycleEvent({
-    kind: "git.head_changed",
+    kind: "git.head.changed",
     workspaceId,
     branch: null,
     headSha: options?.headSha ?? null,
@@ -86,7 +86,7 @@ function emitBrowserGitHeadChanged(
 
 function emitBrowserGitLogChanged(workspaceId: string, headSha: string | null): void {
   publishBrowserLifecycleEvent({
-    kind: "git.log_changed",
+    kind: "git.log.changed",
     workspaceId,
     branch: null,
     headSha: headSha,
@@ -94,18 +94,18 @@ function emitBrowserGitLogChanged(workspaceId: string, headSha: string | null): 
 }
 
 export async function getGitStatus(
-  runtime: WorkspaceRuntime,
+  client: WorkspaceClient,
   workspaceId: string,
 ): Promise<GitStatusResult> {
   if (!isTauri()) {
     return EMPTY_STATUS;
   }
 
-  return runtime.getGitStatus(workspaceId);
+  return client.getGitStatus(workspaceId);
 }
 
 export async function getGitDiff(
-  runtime: WorkspaceRuntime,
+  client: WorkspaceClient,
   workspaceId: string,
   filePath: string,
   scope: GitDiffScope,
@@ -119,7 +119,7 @@ export async function getGitDiff(
     };
   }
 
-  return runtime.getGitDiff({
+  return client.getGitDiff({
     workspaceId,
     filePath,
     scope,
@@ -127,7 +127,7 @@ export async function getGitDiff(
 }
 
 export async function getGitScopePatch(
-  runtime: WorkspaceRuntime,
+  client: WorkspaceClient,
   workspaceId: string,
   scope: GitDiffScope,
 ): Promise<string> {
@@ -135,22 +135,22 @@ export async function getGitScopePatch(
     return "";
   }
 
-  return runtime.getGitScopePatch(workspaceId, scope);
+  return client.getGitScopePatch(workspaceId, scope);
 }
 
 export async function getGitChangesPatch(
-  runtime: WorkspaceRuntime,
+  client: WorkspaceClient,
   workspaceId: string,
 ): Promise<string> {
   if (!isTauri()) {
     return "";
   }
 
-  return runtime.getGitChangesPatch(workspaceId);
+  return client.getGitChangesPatch(workspaceId);
 }
 
 export async function getGitLog(
-  runtime: WorkspaceRuntime,
+  client: WorkspaceClient,
   workspaceId: string,
   limit: number,
 ): Promise<GitLogEntry[]> {
@@ -158,33 +158,33 @@ export async function getGitLog(
     return [];
   }
 
-  return runtime.listGitLog(workspaceId, limit);
+  return client.listGitLog(workspaceId, limit);
 }
 
 export async function getGitPullRequests(
-  runtime: WorkspaceRuntime,
+  client: WorkspaceClient,
   workspaceId: string,
 ): Promise<GitPullRequestListResult> {
   if (!isTauri()) {
     return EMPTY_PULL_REQUEST_LIST_RESULT;
   }
 
-  return runtime.listGitPullRequests(workspaceId);
+  return client.listGitPullRequests(workspaceId);
 }
 
 export async function getCurrentGitPullRequest(
-  runtime: WorkspaceRuntime,
+  client: WorkspaceClient,
   workspaceId: string,
 ): Promise<GitBranchPullRequestResult> {
   if (!isTauri()) {
     return EMPTY_BRANCH_PULL_REQUEST_RESULT;
   }
 
-  return runtime.getCurrentGitPullRequest(workspaceId);
+  return client.getCurrentGitPullRequest(workspaceId);
 }
 
 export async function getGitPullRequest(
-  runtime: WorkspaceRuntime,
+  client: WorkspaceClient,
   workspaceId: string,
   pullRequestNumber: number,
 ): Promise<GitPullRequestDetailResult> {
@@ -192,32 +192,32 @@ export async function getGitPullRequest(
     return EMPTY_PULL_REQUEST_DETAIL_RESULT;
   }
 
-  return runtime.getGitPullRequest(workspaceId, pullRequestNumber);
+  return client.getGitPullRequest(workspaceId, pullRequestNumber);
 }
 
 export async function getGitBaseRef(
-  runtime: WorkspaceRuntime,
+  client: WorkspaceClient,
   workspaceId: string,
 ): Promise<string | null> {
   if (!isTauri()) {
     return null;
   }
 
-  return runtime.getGitBaseRef(workspaceId);
+  return client.getGitBaseRef(workspaceId);
 }
 
 export async function getGitRefDiffPatch(
-  runtime: WorkspaceRuntime,
+  client: WorkspaceClient,
   workspaceId: string,
   baseRef: string,
   headRef: string,
 ): Promise<string> {
   if (!isTauri()) return "";
-  return runtime.getGitRefDiffPatch(workspaceId, baseRef, headRef);
+  return client.getGitRefDiffPatch(workspaceId, baseRef, headRef);
 }
 
 export async function getGitPullRequestPatch(
-  runtime: WorkspaceRuntime,
+  client: WorkspaceClient,
   workspaceId: string,
   pullRequestNumber: number,
 ): Promise<string> {
@@ -225,11 +225,11 @@ export async function getGitPullRequestPatch(
     return "";
   }
 
-  return runtime.getGitPullRequestPatch(workspaceId, pullRequestNumber);
+  return client.getGitPullRequestPatch(workspaceId, pullRequestNumber);
 }
 
 export async function getGitCommitPatch(
-  runtime: WorkspaceRuntime,
+  client: WorkspaceClient,
   workspaceId: string,
   sha: string,
 ): Promise<GitCommitDiffResult> {
@@ -240,11 +240,11 @@ export async function getGitCommitPatch(
     };
   }
 
-  return runtime.getGitCommitPatch(workspaceId, sha);
+  return client.getGitCommitPatch(workspaceId, sha);
 }
 
 export async function stageGitFiles(
-  runtime: WorkspaceRuntime,
+  client: WorkspaceClient,
   workspaceId: string,
   filePaths: string[],
 ): Promise<void> {
@@ -257,11 +257,11 @@ export async function stageGitFiles(
     return;
   }
 
-  await runtime.stageGitFiles(workspaceId, filePaths);
+  await client.stageGitFiles(workspaceId, filePaths);
 }
 
 export async function unstageGitFiles(
-  runtime: WorkspaceRuntime,
+  client: WorkspaceClient,
   workspaceId: string,
   filePaths: string[],
 ): Promise<void> {
@@ -274,11 +274,11 @@ export async function unstageGitFiles(
     return;
   }
 
-  await runtime.unstageGitFiles(workspaceId, filePaths);
+  await client.unstageGitFiles(workspaceId, filePaths);
 }
 
 export async function commitGit(
-  runtime: WorkspaceRuntime,
+  client: WorkspaceClient,
   workspaceId: string,
   message: string,
 ): Promise<GitCommitResult> {
@@ -290,11 +290,11 @@ export async function commitGit(
     return result;
   }
 
-  return runtime.commitGit(workspaceId, message);
+  return client.commitGit(workspaceId, message);
 }
 
 export async function pushGit(
-  runtime: WorkspaceRuntime,
+  client: WorkspaceClient,
   workspaceId: string,
 ): Promise<GitPushResult> {
   if (!isTauri()) {
@@ -309,22 +309,22 @@ export async function pushGit(
     return result;
   }
 
-  return runtime.pushGit(workspaceId);
+  return client.pushGit(workspaceId);
 }
 
 export async function createGitPullRequest(
-  runtime: WorkspaceRuntime,
+  client: WorkspaceClient,
   workspaceId: string,
 ): Promise<GitPullRequestSummary> {
   if (!isTauri()) {
     throw new Error("Pull request creation is only available in the desktop app.");
   }
 
-  return runtime.createGitPullRequest(workspaceId);
+  return client.createGitPullRequest(workspaceId);
 }
 
 export async function mergeGitPullRequest(
-  runtime: WorkspaceRuntime,
+  client: WorkspaceClient,
   workspaceId: string,
   pullRequestNumber: number,
 ): Promise<GitPullRequestSummary> {
@@ -332,5 +332,5 @@ export async function mergeGitPullRequest(
     throw new Error("Pull request merge is only available in the desktop app.");
   }
 
-  return runtime.mergeGitPullRequest(workspaceId, pullRequestNumber);
+  return client.mergeGitPullRequest(workspaceId, pullRequestNumber);
 }

@@ -6,7 +6,6 @@ import type {
   AgentMessageRecord,
   AgentMessagePartRecord,
   AgentMessageRole,
-  AgentRuntimeKind,
   AgentSessionRecord,
   AgentSessionStatus,
 } from "./agent";
@@ -17,12 +16,6 @@ describe("agent contracts", () => {
     const providers: AgentSessionProviderId[] = ["claude", "codex"];
 
     expect(providers).toEqual(["claude", "codex"]);
-  });
-
-  test("keep canonical agent runtime kind values", () => {
-    const runtimeKinds: AgentRuntimeKind[] = ["native", "adapter"];
-
-    expect(runtimeKinds).toEqual(["native", "adapter"]);
   });
 
   test("keep canonical agent session status values", () => {
@@ -59,21 +52,15 @@ describe("agent contracts", () => {
     const session: AgentSessionRecord = {
       id: "agent_session_1",
       workspace_id: "workspace_1",
-      runtime_kind: "adapter",
-      runtime_name: "claude",
       provider: "claude",
       provider_session_id: "claude-session-1",
       title: "Claude Session",
       status: "idle",
-      created_by: null,
-      forked_from_session_id: null,
       last_message_at: null,
       created_at: "2026-03-21T00:00:00.000Z",
       updated_at: "2026-03-21T00:00:00.000Z",
-      ended_at: null,
     };
 
-    expect(session.runtime_kind).toBe("adapter");
     expect(session.provider).toBe("claude");
     expect(session.provider_session_id).toBe("claude-session-1");
   });

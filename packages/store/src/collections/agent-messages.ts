@@ -117,34 +117,43 @@ export async function upsertAgentMessageWithParts(
     created_at: message.created_at,
   });
 
-  for (const part of message.parts) {
-    await driver.execute(
-      `INSERT INTO agent_message_part (
-         id,
-         message_id,
-         session_id,
-         part_index,
-         part_type,
-         text,
-         data,
-         created_at
-       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       ON CONFLICT(id) DO UPDATE SET
-         part_index = excluded.part_index,
-         part_type = excluded.part_type,
-         text = excluded.text,
-         data = excluded.data`,
-      [
-        part.id,
-        part.message_id,
-        part.session_id,
-        part.part_index,
-        part.part_type,
-        part.text,
-        part.data,
-        part.created_at,
-      ],
+  if (message.parts.length === 0) {
+    return;
+  }
+
+  // Batch all parts into a single multi-row INSERT to avoid N sequential
+  // IPC round-trips during streaming (one per part per delta).
+  const COLS_PER_ROW = 8;
+  const placeholders: string[] = [];
+  const params: unknown[] = [];
+  for (let i = 0; i < message.parts.length; i++) {
+    const part = message.parts[i]!;
+    const offset = i * COLS_PER_ROW;
+    placeholders.push(
+      `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8})`,
+    );
+    params.push(
+      part.id,
+      part.message_id,
+      part.session_id,
+      part.part_index,
+      part.part_type,
+      part.text,
+      part.data,
+      part.created_at,
     );
   }
+
+  await driver.execute(
+    `INSERT INTO agent_message_part (
+       id, message_id, session_id, part_index, part_type, text, data, created_at
+     )
+     VALUES ${placeholders.join(", ")}
+     ON CONFLICT(id) DO UPDATE SET
+       part_index = excluded.part_index,
+       part_type = excluded.part_type,
+       text = excluded.text,
+       data = excluded.data`,
+    params,
+  );
 }

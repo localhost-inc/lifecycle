@@ -28,7 +28,7 @@ interface UseCommandPaletteExplorerResult {
 
 export function useCommandPaletteExplorer(): UseCommandPaletteExplorerResult {
   const { workspaceId } = useParams();
-  const { openDocument } = useWorkspaceOpenRequests();
+  const { openTab } = useWorkspaceOpenRequests();
   const workspacesByProject = useWorkspacesByProject();
   const currentWorkspace = useMemo(
     () =>
@@ -70,11 +70,11 @@ export function useCommandPaletteExplorer(): UseCommandPaletteExplorerResult {
         icon: File,
         keywords: [filePath, label, dirname, entry.extension ?? ""].filter(Boolean),
         label,
-        onExecute: () => openDocument(currentWorkspace.id, createFileViewerOpenInput(filePath)),
+        onExecute: () => openTab(currentWorkspace.id, createFileViewerOpenInput(filePath)),
         priority: scoreWorkspaceExplorerUsage(usageByPath[filePath]),
       } satisfies CommandPaletteCommand;
     });
-  }, [currentWorkspace, explorerTreeQuery.data, openDocument, usageByPath]);
+  }, [currentWorkspace, explorerTreeQuery.data, openTab, usageByPath]);
 
   return {
     error: explorerTreeQuery.error,

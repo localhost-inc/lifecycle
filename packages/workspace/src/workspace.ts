@@ -12,7 +12,6 @@ import type {
   GitStatusResult,
   LifecycleEvent,
   ServiceRecord,
-  TerminalRecord,
   WorkspaceCheckoutType,
   WorkspaceRecord,
   WorkspaceTarget,
@@ -29,18 +28,6 @@ export interface StartServicesInput {
 export interface WorkspaceHealthResult {
   healthy: boolean;
   services: ServiceRecord[];
-}
-
-export interface CreateTerminalInput {
-  workspaceId: string;
-  launchType: "shell";
-}
-
-export interface SaveTerminalAttachmentInput {
-  base64Data: string;
-  fileName: string;
-  mediaType?: string | null;
-  workspaceId: string;
 }
 
 export interface GitDiffInput {
@@ -87,27 +74,13 @@ export interface SubscribeWorkspaceFileEventsInput {
   worktreePath?: string | null;
 }
 
-export interface SavedTerminalAttachment {
-  absolutePath: string;
-  fileName: string;
-  relativePath: string;
-}
-
-export interface WorkspaceRuntime {
+export interface WorkspaceClient {
   startServices(input: StartServicesInput): Promise<ServiceRecord[]>;
   healthCheck(workspaceId: string): Promise<WorkspaceHealthResult>;
   stopServices(workspaceId: string): Promise<void>;
   getActivity(workspaceId: string): Promise<LifecycleEvent[]>;
   getServiceLogs(workspaceId: string): Promise<ServiceLogSnapshot[]>;
   getServices(workspaceId: string): Promise<ServiceRecord[]>;
-  createTerminal(input: CreateTerminalInput): Promise<TerminalRecord>;
-  listTerminals(workspaceId: string): Promise<TerminalRecord[]>;
-  sendTerminalText(workspaceId: string, terminalId: string, text: string): Promise<void>;
-  renameTerminal(workspaceId: string, terminalId: string, label: string): Promise<TerminalRecord>;
-  saveTerminalAttachment(input: SaveTerminalAttachmentInput): Promise<SavedTerminalAttachment>;
-  detachTerminal(workspaceId: string, terminalId: string): Promise<void>;
-  killTerminal(workspaceId: string, terminalId: string): Promise<void>;
-  interruptTerminal(workspaceId: string, terminalId: string): Promise<void>;
   readFile(workspaceId: string, filePath: string): Promise<WorkspaceFileReadResult>;
   writeFile(
     workspaceId: string,
@@ -148,7 +121,7 @@ export interface WorkspaceRuntime {
   // Workspace lifecycle
   createWorkspace(input: WorkspaceCreateInput): Promise<WorkspaceCreateResult>;
   renameWorkspace(workspaceId: string, name: string): Promise<WorkspaceRecord>;
-  destroyWorkspace(workspaceId: string): Promise<void>;
+  archiveWorkspace(workspaceId: string): Promise<void>;
   readManifestText(dirPath: string): Promise<string | null>;
   getCurrentBranch(projectPath: string): Promise<string>;
   cleanupProject(projectId: string): Promise<void>;

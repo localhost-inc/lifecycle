@@ -1,5 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
+import { Codex } from "@openai/codex-sdk";
 import { resolveCodexCliPath } from "./cli-path";
 import type { AgentApprovalDecision, AgentApprovalKind } from "../../turn";
 import { LIFECYCLE_SYSTEM_PROMPT } from "../../system-prompt";
@@ -13,7 +14,8 @@ import type {
 } from "../../worker-protocol";
 
 // ---------------------------------------------------------------------------
-// Lightweight title generation — uses fetch against OpenAI Chat Completions.
+// Lightweight title generation — uses the already-running app-server so it
+// shares the same auth (ChatGPT OAuth / API key) as the main agent session.
 // ---------------------------------------------------------------------------
 
 function truncateTitle(text: string, maxLength = 40): string {
@@ -35,41 +37,19 @@ function extractTextFromInput(parts: AgentWorkerInputPart[]): string {
 }
 
 async function generateSessionTitle(userText: string): Promise<string | null> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    return truncateTitle(userText);
-  }
-
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: "gpt-4.1-nano",
-        max_tokens: 30,
-        messages: [
-          {
-            role: "system",
-            content:
-              "Generate a concise 3-5 word title for this conversation. Respond with only the title, no quotes or extra punctuation.",
-          },
-          { role: "user", content: userText.slice(0, 500) },
-        ],
-      }),
+    const codex = new Codex();
+    const thread = codex.startThread({
+      approvalPolicy: "never",
+      sandboxMode: "danger-full-access",
     });
-
-    if (!response.ok) {
-      return truncateTitle(userText);
-    }
-
-    const data = (await response.json()) as {
-      choices?: { message?: { content?: string } }[];
-    };
-    const title = data.choices?.[0]?.message?.content?.trim();
-    return title || truncateTitle(userText);
+    const prompt =
+      "Generate a concise 3-5 word title for the following conversation prompt. " +
+      "Respond with only the title, no quotes or extra punctuation.\n\n" +
+      userText.slice(0, 500);
+    const turn = await thread.run(prompt);
+    const title = turn.finalResponse.trim();
+    return title.length > 0 ? title : truncateTitle(userText);
   } catch {
     return truncateTitle(userText);
   }

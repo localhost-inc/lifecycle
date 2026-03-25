@@ -1,25 +1,25 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import {
-  createOpenDocumentRequest,
-  type OpenDocumentInput,
-  type OpenDocumentRequest,
+  createOpenSurfaceRequest,
+  type OpenSurfaceInput,
+  type OpenSurfaceRequest,
 } from "@/features/workspaces/canvas/workspace-canvas-requests";
 
 interface WorkspaceOpenRequestsContextValue {
-  clearDocumentRequest: (workspaceId: string, requestId: string) => void;
-  openDocument: (workspaceId: string, request: OpenDocumentInput) => void;
-  requestsByWorkspaceId: Record<string, OpenDocumentRequest | null>;
+  clearTabRequest: (workspaceId: string, requestId: string) => void;
+  openTab: (workspaceId: string, request: OpenSurfaceInput) => void;
+  requestsByWorkspaceId: Record<string, OpenSurfaceRequest | null>;
 }
 
 const WorkspaceOpenRequestsContext = createContext<WorkspaceOpenRequestsContextValue | null>(null);
 
 export function WorkspaceOpenRequestsProvider({ children }: { children: ReactNode }) {
   const [requestsByWorkspaceId, setRequestsByWorkspaceId] = useState<
-    Record<string, OpenDocumentRequest | null>
+    Record<string, OpenSurfaceRequest | null>
   >({});
 
-  const openDocument = useCallback((workspaceId: string, request: OpenDocumentInput) => {
-    const nextRequest = createOpenDocumentRequest(request);
+  const openTab = useCallback((workspaceId: string, request: OpenSurfaceInput) => {
+    const nextRequest = createOpenSurfaceRequest(request);
 
     setRequestsByWorkspaceId((current) => {
       return {
@@ -29,7 +29,7 @@ export function WorkspaceOpenRequestsProvider({ children }: { children: ReactNod
     });
   }, []);
 
-  const clearDocumentRequest = useCallback((workspaceId: string, requestId: string) => {
+  const clearTabRequest = useCallback((workspaceId: string, requestId: string) => {
     setRequestsByWorkspaceId((current) => {
       if (current[workspaceId]?.id !== requestId) {
         return current;
@@ -43,11 +43,11 @@ export function WorkspaceOpenRequestsProvider({ children }: { children: ReactNod
 
   const value = useMemo<WorkspaceOpenRequestsContextValue>(
     () => ({
-      clearDocumentRequest,
-      openDocument,
+      clearTabRequest,
+      openTab,
       requestsByWorkspaceId,
     }),
-    [clearDocumentRequest, openDocument, requestsByWorkspaceId],
+    [clearTabRequest, openTab, requestsByWorkspaceId],
   );
 
   return (

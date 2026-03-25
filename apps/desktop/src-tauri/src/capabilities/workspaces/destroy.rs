@@ -10,18 +10,17 @@ use tauri::{AppHandle, State};
 
 use super::checkout_type::is_root_workspace_checkout_type;
 
-struct DestroyWorkspaceContext {
+struct ArchiveWorkspaceContext {
     checkout_type: String,
     target: String,
     project_path: String,
-    terminal_ids: Vec<String>,
     worktree_path: Option<String>,
 }
 
-fn load_destroy_workspace_context(
+fn load_archive_workspace_context(
     db_path: &str,
     workspace_id: &str,
-) -> Result<DestroyWorkspaceContext, LifecycleError> {
+) -> Result<ArchiveWorkspaceContext, LifecycleError> {
     let conn = open_db(db_path)?;
     let (checkout_type, target, project_path, worktree_path) = conn
         .query_row(
@@ -46,22 +45,10 @@ fn load_destroy_workspace_context(
             }
             _ => LifecycleError::Database(error.to_string()),
         })?;
-    let mut stmt = conn
-        .prepare("SELECT id FROM terminal WHERE workspace_id = ?1")
-        .map_err(|error| LifecycleError::Database(error.to_string()))?;
-    let rows = stmt
-        .query_map(params![workspace_id], |row| row.get::<_, String>(0))
-        .map_err(|error| LifecycleError::Database(error.to_string()))?;
-    let mut terminal_ids = Vec::new();
-    for row in rows {
-        terminal_ids.push(row.map_err(|error| LifecycleError::Database(error.to_string()))?);
-    }
-
-    Ok(DestroyWorkspaceContext {
+    Ok(ArchiveWorkspaceContext {
         checkout_type,
         target,
         project_path,
-        terminal_ids,
         worktree_path,
     })
 }
@@ -73,16 +60,6 @@ fn delete_workspace_record(db_path: &str, workspace_id: &str) -> Result<(), Life
     Ok(())
 }
 
-fn destroy_native_terminal_surfaces(app: &AppHandle, terminal_ids: &[String]) {
-    if !crate::platform::native_terminal::is_available() {
-        return;
-    }
-
-    for terminal_id in terminal_ids {
-        let _ = crate::platform::native_terminal::destroy_surface(app, terminal_id);
-    }
-}
-
 fn remove_workspace_attachments(workspace_id: &str) {
     let Ok(lifecycle_root) = resolve_lifecycle_root() else {
         return;
@@ -91,16 +68,16 @@ fn remove_workspace_attachments(workspace_id: &str) {
     let _ = std::fs::remove_dir_all(lifecycle_root.join("attachments").join(workspace_id));
 }
 
-fn emit_workspace_deleted(app: &AppHandle, workspace_id: &str) {
+fn emit_workspace_archived(app: &AppHandle, workspace_id: &str) {
     publish_lifecycle_event(
         app,
-        LifecycleEvent::WorkspaceDeleted {
+        LifecycleEvent::WorkspaceArchived {
             workspace_id: workspace_id.to_string(),
         },
     );
 }
 
-pub async fn destroy_workspace(
+pub async fn archive_workspace(
     app: AppHandle,
     db_path: State<'_, DbPath>,
     root_git_watchers: State<'_, RootGitWatcherMap>,
@@ -108,8 +85,8 @@ pub async fn destroy_workspace(
     workspace_id: String,
 ) -> Result<(), LifecycleError> {
     let controller = workspace_controllers.get_or_create(&workspace_id).await;
-    controller.request_destroy().await;
-    let context = match load_destroy_workspace_context(&db_path.0, &workspace_id) {
+    controller.request_archive().await;
+    let context = match load_archive_workspace_context(&db_path.0, &workspace_id) {
         Ok(context) => context,
         Err(error) => {
             let _ = workspace_controllers.remove(&workspace_id).await;
@@ -123,8 +100,6 @@ pub async fn destroy_workspace(
 
     controller.stop_runtime().await;
 
-    destroy_native_terminal_surfaces(&app, &context.terminal_ids);
-
     if matches!(context.target.as_str(), "local" | "docker")
         && !is_root_workspace_checkout_type(&context.checkout_type)
     {
@@ -136,7 +111,7 @@ pub async fn destroy_workspace(
     delete_workspace_record(&db_path.0, &workspace_id)?;
     let _ = workspace_controllers.remove(&workspace_id).await;
     remove_workspace_attachments(&workspace_id);
-    emit_workspace_deleted(&app, &workspace_id);
+    emit_workspace_archived(&app, &workspace_id);
     Ok(())
 }
 
@@ -148,7 +123,7 @@ mod tests {
     fn temp_db_path() -> String {
         std::env::temp_dir()
             .join(format!(
-                "lifecycle-destroy-workspace-{}.db",
+                "lifecycle-archive-workspace-{}.db",
                 uuid::Uuid::new_v4()
             ))
             .to_string_lossy()
@@ -185,21 +160,15 @@ mod tests {
             params!["service_1", "workspace_1", "web"],
         )
         .expect("insert service");
-        conn.execute(
-            "INSERT INTO terminal (id, workspace_id, label, status)
-             VALUES (?1, ?2, ?3, ?4)",
-            params!["terminal_1", "workspace_1", "Terminal 1", "detached"],
-        )
-        .expect("insert terminal");
     }
 
     #[test]
-    fn load_destroy_workspace_context_reads_project_and_terminal_state() {
+    fn load_archive_workspace_context_reads_project_state() {
         let db_path = temp_db_path();
         seed_workspace(&db_path);
 
         let context =
-            load_destroy_workspace_context(&db_path, "workspace_1").expect("load destroy context");
+            load_archive_workspace_context(&db_path, "workspace_1").expect("load archive context");
 
         assert_eq!(context.checkout_type, "worktree");
         assert_eq!(context.target, "local");
@@ -208,13 +177,11 @@ mod tests {
             context.worktree_path.as_deref(),
             Some("/tmp/project_1/.worktrees/workspace_1")
         );
-        assert_eq!(context.terminal_ids, vec!["terminal_1".to_string()]);
-
         let _ = std::fs::remove_file(db_path);
     }
 
     #[test]
-    fn delete_workspace_record_cascades_services_and_terminals() {
+    fn delete_workspace_record_cascades_services() {
         let db_path = temp_db_path();
         seed_workspace(&db_path);
 
@@ -235,17 +202,9 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("count services");
-        let terminal_count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM terminal WHERE workspace_id = ?1",
-                params!["workspace_1"],
-                |row| row.get(0),
-            )
-            .expect("count terminals");
 
         assert_eq!(workspace_count, 0);
         assert_eq!(service_count, 0);
-        assert_eq!(terminal_count, 0);
 
         let _ = std::fs::remove_file(db_path);
     }

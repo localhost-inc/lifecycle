@@ -4,23 +4,20 @@ import type { LifecycleEventKind } from "@lifecycle/contracts";
 import { subscribeToLifecycleEvents } from "@/features/events";
 
 const GIT_INVALIDATION_KINDS: LifecycleEventKind[] = [
-  "git.status_changed",
-  "git.head_changed",
-  "git.log_changed",
+  "git.status.changed",
+  "git.head.changed",
+  "git.log.changed",
 ];
 
-const FILE_INVALIDATION_KINDS: LifecycleEventKind[] = ["workspace.file_changed"];
+const FILE_INVALIDATION_KINDS: LifecycleEventKind[] = ["workspace.file.changed"];
 
-const SERVICE_LOG_KINDS: LifecycleEventKind[] = ["service.log_line"];
+const SERVICE_LOG_KINDS: LifecycleEventKind[] = ["service.log.line"];
 
 const ACTIVITY_KINDS: LifecycleEventKind[] = [
-  "workspace.status_changed",
+  "workspace.status.changed",
   "workspace.renamed",
-  "workspace.deleted",
-  "terminal.created",
-  "terminal.updated",
-  "terminal.status_changed",
-  "service.status_changed",
+  "workspace.archived",
+  "service.status.changed",
 ];
 
 const ALL_INVALIDATION_KINDS: LifecycleEventKind[] = [
@@ -32,6 +29,10 @@ const ALL_INVALIDATION_KINDS: LifecycleEventKind[] = [
 
 // De-duplicate in case of overlap
 const UNIQUE_KINDS = [...new Set(ALL_INVALIDATION_KINDS)];
+
+interface ReactQueryProviderHotState {
+  queryClient: QueryClient;
+}
 
 function createQueryClient(): QueryClient {
   return new QueryClient({
@@ -51,7 +52,7 @@ function subscribeToInvalidations(queryClient: QueryClient): () => void {
 
   void subscribeToLifecycleEvents(UNIQUE_KINDS, (event) => {
     switch (event.kind) {
-      case "git.status_changed":
+      case "git.status.changed":
         void queryClient.invalidateQueries({
           queryKey: ["workspace-git-status"],
           exact: false,
@@ -66,7 +67,7 @@ function subscribeToInvalidations(queryClient: QueryClient): () => void {
         });
         break;
 
-      case "git.head_changed":
+      case "git.head.changed":
         void queryClient.invalidateQueries({
           queryKey: ["workspace-git-status"],
           exact: false,
@@ -89,14 +90,14 @@ function subscribeToInvalidations(queryClient: QueryClient): () => void {
         });
         break;
 
-      case "git.log_changed":
+      case "git.log.changed":
         void queryClient.invalidateQueries({
           queryKey: ["workspace-git-log"],
           exact: false,
         });
         break;
 
-      case "workspace.file_changed":
+      case "workspace.file.changed":
         void queryClient.invalidateQueries({
           queryKey: ["workspace-file-tree", event.workspaceId],
           exact: false,
@@ -107,20 +108,17 @@ function subscribeToInvalidations(queryClient: QueryClient): () => void {
         });
         break;
 
-      case "service.log_line":
+      case "service.log.line":
         void queryClient.invalidateQueries({
           queryKey: ["workspace-service-logs"],
           exact: false,
         });
         break;
 
-      case "workspace.status_changed":
+      case "workspace.status.changed":
       case "workspace.renamed":
-      case "workspace.deleted":
-      case "terminal.created":
-      case "terminal.updated":
-      case "terminal.status_changed":
-      case "service.status_changed":
+      case "workspace.archived":
+      case "service.status.changed":
         void queryClient.invalidateQueries({
           queryKey: ["workspace-activity"],
           exact: false,
@@ -142,7 +140,12 @@ function subscribeToInvalidations(queryClient: QueryClient): () => void {
 }
 
 export function ReactQueryProvider({ children }: PropsWithChildren) {
-  const [queryClient] = useState(createQueryClient);
+  const hotState = import.meta.hot?.data as ReactQueryProviderHotState | undefined;
+  const [queryClient] = useState(() => hotState?.queryClient ?? createQueryClient());
+
+  if (import.meta.hot) {
+    import.meta.hot.data.queryClient = queryClient;
+  }
 
   useEffect(() => {
     return subscribeToInvalidations(queryClient);

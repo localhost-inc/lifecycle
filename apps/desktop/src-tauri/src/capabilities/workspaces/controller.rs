@@ -12,7 +12,7 @@ const WORKSPACE_ACTIVITY_LIMIT: usize = 32;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum WorkspaceControllerOperation {
-    DestroyRequested,
+    ArchiveRequested,
     Idle,
     Starting,
     StopRequested,
@@ -139,9 +139,9 @@ impl WorkspaceController {
         }
     }
 
-    pub(crate) async fn request_destroy(&self) {
+    pub(crate) async fn request_archive(&self) {
         let _ = self
-            .bump_generation(WorkspaceControllerOperation::DestroyRequested, false)
+            .bump_generation(WorkspaceControllerOperation::ArchiveRequested, false)
             .await;
         self.wait_for_mutations().await;
     }
@@ -190,10 +190,10 @@ impl WorkspaceController {
         let state = self.state.lock().await;
         if matches!(
             state.operation,
-            WorkspaceControllerOperation::DestroyRequested
+            WorkspaceControllerOperation::ArchiveRequested
         ) {
             return Err(LifecycleError::WorkspaceMutationLocked {
-                status: "destroying".to_string(),
+                status: "archiving".to_string(),
             });
         }
         self.active_mutations.fetch_add(1, Ordering::AcqRel);
@@ -204,17 +204,17 @@ impl WorkspaceController {
     async fn bump_generation(
         &self,
         operation: WorkspaceControllerOperation,
-        reject_if_destroying: bool,
+        reject_if_archiving: bool,
     ) -> Result<WorkspaceControllerToken, LifecycleError> {
         let mut state = self.state.lock().await;
-        if reject_if_destroying
+        if reject_if_archiving
             && matches!(
                 state.operation,
-                WorkspaceControllerOperation::DestroyRequested
+                WorkspaceControllerOperation::ArchiveRequested
             )
         {
             return Err(LifecycleError::WorkspaceMutationLocked {
-                status: "destroying".to_string(),
+                status: "archiving".to_string(),
             });
         }
         state.generation += 1;
@@ -324,9 +324,6 @@ impl WorkspaceActivityStore {
 impl WorkspaceServiceLogStore {
     fn record(&mut self, envelope: &LifecycleEnvelope) {
         match &envelope.event {
-            LifecycleEvent::WorkspaceStatusChanged { status, .. } if status == "preparing" => {
-                self.logs.clear();
-            }
             LifecycleEvent::ServiceLogLine {
                 name, stream, line, ..
             } => {
@@ -419,21 +416,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn destroy_request_rejects_mutations() {
+    async fn archive_request_rejects_mutations() {
         let registry = WorkspaceControllerRegistry::new();
         let controller = registry.get_or_create("workspace-1").await;
 
-        controller.request_destroy().await;
+        controller.request_archive().await;
 
         assert!(matches!(
             controller.acquire_mutation_guard().await,
             Err(crate::shared::errors::LifecycleError::WorkspaceMutationLocked { status })
-                if status == "destroying"
+                if status == "archiving"
         ));
     }
 
     #[tokio::test]
-    async fn destroy_request_waits_for_inflight_mutation_guards() {
+    async fn archive_request_waits_for_inflight_mutation_guards() {
         let registry = WorkspaceControllerRegistry::new();
         let controller = registry.get_or_create("workspace-1").await;
         let mutation_guard = controller
@@ -441,20 +438,20 @@ mod tests {
             .await
             .expect("mutation guard");
 
-        let destroy_controller = controller.clone();
-        let destroy_task = tokio::spawn(async move {
-            destroy_controller.request_destroy().await;
+        let archive_controller = controller.clone();
+        let archive_task = tokio::spawn(async move {
+            archive_controller.request_archive().await;
         });
 
         tokio::task::yield_now().await;
-        assert!(!destroy_task.is_finished());
+        assert!(!archive_task.is_finished());
 
         drop(mutation_guard);
-        destroy_task.await.expect("destroy task");
+        archive_task.await.expect("archive task");
         assert!(matches!(
             controller.begin_start().await,
             Err(crate::shared::errors::LifecycleError::WorkspaceMutationLocked { status })
-                if status == "destroying"
+                if status == "archiving"
         ));
     }
 
@@ -467,7 +464,7 @@ mod tests {
             "event-1",
             LifecycleEvent::WorkspaceStatusChanged {
                 workspace_id: "workspace-1".to_string(),
-                status: "preparing".to_string(),
+                status: "active".to_string(),
                 failure_reason: None,
             },
         ));
