@@ -37,13 +37,13 @@ describe("workspaceSupportsFilesystemInteraction", () => {
   test("allows filesystem interaction once a worktree exists outside create and archive", () => {
     expect(
       workspaceSupportsFilesystemInteraction({
-        target: "local",
+        host: "local",
         worktree_path: "/tmp/worktree",
       }),
     ).toBeTrue();
     expect(
       workspaceSupportsFilesystemInteraction({
-        target: "docker",
+        host: "docker",
         worktree_path: "/tmp/worktree",
       }),
     ).toBeTrue();
@@ -52,19 +52,19 @@ describe("workspaceSupportsFilesystemInteraction", () => {
   test("rejects workspaces without an interactive filesystem context", () => {
     expect(
       workspaceSupportsFilesystemInteraction({
-        target: "local",
+        host: "local",
         worktree_path: "/tmp/worktree",
       }),
     ).toBeTrue();
     expect(
       workspaceSupportsFilesystemInteraction({
-        target: "local",
+        host: "local",
         worktree_path: null,
       }),
     ).toBeFalse();
     expect(
       workspaceSupportsFilesystemInteraction({
-        target: "docker",
+        host: "docker",
         worktree_path: null,
       }),
     ).toBeFalse();
@@ -84,7 +84,7 @@ describe("WorkspaceShell", () => {
       source_ref: "lifecycle/frost-beacon",
       git_sha: "1dd55398",
       worktree_path: "/tmp/frost-beacon",
-      target: "local",
+      host: "local",
       manifest_fingerprint: "manifest_1",
       created_at: "2026-03-10T10:00:00.000Z",
       updated_at: "2026-03-10T10:00:00.000Z",
@@ -147,7 +147,7 @@ describe("WorkspaceShell", () => {
       source_ref: "lifecycle/frost-beacon",
       git_sha: "1dd55398",
       worktree_path: "/tmp/frost-beacon",
-      target: "local",
+      host: "local",
       manifest_fingerprint: "manifest_1",
       created_at: "2026-03-10T10:00:00.000Z",
       updated_at: "2026-03-10T10:00:00.000Z",
@@ -211,7 +211,7 @@ describe("WorkspaceShell", () => {
       source_ref: "lifecycle/frost-beacon",
       git_sha: "1dd55398",
       worktree_path: "/tmp/frost-beacon",
-      target: "local",
+      host: "local",
       manifest_fingerprint: "manifest_1",
       created_at: "2026-03-10T10:00:00.000Z",
       updated_at: "2026-03-10T10:00:00.000Z",
@@ -273,7 +273,7 @@ describe("WorkspaceShell", () => {
       source_ref: "lifecycle/frost-beacon",
       git_sha: "1dd55398",
       worktree_path: null,
-      target: "docker",
+      host: "docker",
       manifest_fingerprint: null,
       created_at: "2026-03-10T10:00:00.000Z",
       updated_at: "2026-03-10T10:00:00.000Z",

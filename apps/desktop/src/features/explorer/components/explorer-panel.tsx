@@ -1,4 +1,4 @@
-import type { WorkspaceTarget } from "@lifecycle/contracts";
+import type { WorkspaceHost } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
 import { FolderOpen } from "lucide-react";
 import { useEffect, useRef } from "react";
@@ -9,7 +9,7 @@ import { useClient } from "@/store";
 interface ExplorerPanelProps {
   onOpenFile: (filePath: string) => void;
   workspaceId: string;
-  workspaceTarget: WorkspaceTarget;
+  workspaceHost: WorkspaceHost;
   worktreePath: string | null;
 }
 

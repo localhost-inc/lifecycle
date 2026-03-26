@@ -202,7 +202,7 @@ function appendWorkspaceTabKeys(keys: readonly string[], nextKeys: readonly stri
   return nextKeys.reduce((current, key) => appendWorkspaceTabKey(current, key), [...keys]);
 }
 
-function resolveWorkspaceTargetPaneId(state: WorkspaceCanvasState, paneId?: string): string {
+function resolveWorkspaceHostPaneId(state: WorkspaceCanvasState, paneId?: string): string {
   const layout = inspectWorkspacePaneLayout(state.rootPane);
 
   if (paneId) {
@@ -310,7 +310,7 @@ export function workspaceCanvasReducer(
         state.paneTabStateById,
         key,
       );
-      const targetPaneId = existingPaneId ?? resolveWorkspaceTargetPaneId(state);
+      const targetPaneId = existingPaneId ?? resolveWorkspaceHostPaneId(state);
       const existingTab = getWorkspaceTab(state.tabsByKey, key);
       const nextTab = createWorkspaceSurfaceTab(request, existingTab);
 
@@ -414,7 +414,7 @@ export function workspaceCanvasReducer(
         return state;
       }
 
-      const targetPaneId = resolveWorkspaceTargetPaneId(state);
+      const targetPaneId = resolveWorkspaceHostPaneId(state);
       return {
         ...state,
         closedTabStack: stack,

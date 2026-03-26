@@ -253,7 +253,7 @@ mod tests {
         )
         .expect("insert project");
         conn.execute(
-            "INSERT INTO workspace (id, project_id, name, source_ref, worktree_path, target, status)
+            "INSERT INTO workspace (id, project_id, name, source_ref, worktree_path, host, status)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             rusqlite::params![
                 workspace_id,

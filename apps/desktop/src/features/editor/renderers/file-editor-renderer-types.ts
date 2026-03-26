@@ -1,7 +1,7 @@
 import type { ComponentType, LazyExoticComponent } from "react";
-import type { FileRendererEditorConfig } from "@/features/explorer/lib/file-editor-types";
+import type { FileRendererEditorConfig } from "@/features/editor/lib/file-editor-types";
 
-export type FileViewerRendererKind = "markdown" | "pencil" | "text";
+export type FileEditorRendererKind = "markdown" | "pencil" | "text";
 
 export interface FileRendererViewProps {
   content: string;
@@ -16,7 +16,7 @@ export interface FileRendererDefinition {
   editor?: FileRendererEditorConfig;
   editNotice?: string;
   extensions: string[];
-  kind: FileViewerRendererKind;
+  kind: FileEditorRendererKind;
   label: string;
   supportsViewMode: boolean;
   viewFallbackLabel?: string;

@@ -1,7 +1,7 @@
 import { Alert, AlertDescription } from "@lifecycle/ui";
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { FileRendererDefinition } from "@/features/explorer/renderers/file-renderer-types";
+import type { FileRendererDefinition } from "@/features/editor/renderers/file-editor-renderer-types";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */

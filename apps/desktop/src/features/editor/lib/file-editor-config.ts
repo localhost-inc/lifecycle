@@ -9,7 +9,7 @@ import { EditorView } from "@codemirror/view";
 import { xml } from "@codemirror/lang-xml";
 import { tags as t } from "@lezer/highlight";
 import { workspaceFileExtension } from "@/features/workspaces/lib/workspace-file-paths";
-import type { FileRendererEditorConfig, FileEditorConfig } from "@/features/explorer/lib/file-editor-types";
+import type { FileRendererEditorConfig, FileEditorConfig } from "@/features/editor/lib/file-editor-types";
 
 function createBaseFileCodeEditorTheme() {
   return EditorView.theme({

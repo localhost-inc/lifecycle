@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { inspectWorkspacePaneLayout } from "@/features/workspaces/lib/workspace-pane-layout";
 import {
-  createFileViewerTab,
+  createFileEditorTab,
   createDefaultWorkspaceCanvasState,
   getWorkspacePaneTabState,
   type WorkspaceCanvasTab,
@@ -221,8 +221,8 @@ function applyWorkspaceTabDragStep(
 
 describe("canvas drag scenarios", () => {
   test("splitting a tab downward and then moving the remaining tab into that pane collapses the empty source pane", () => {
-    const readmeTab = createFileViewerTab("README.md");
-    const planTab = createFileViewerTab("docs/plans/agent-workspace.md");
+    const readmeTab = createFileEditorTab("README.md");
+    const planTab = createFileEditorTab("docs/plans/agent-workspace.md");
 
     let state = withWorkspaceState({
       activePaneId: "pane-root",
@@ -316,9 +316,9 @@ describe("canvas drag scenarios", () => {
   });
 
   test("nested split drag, resize, and close sequences keep pane topology coherent", () => {
-    const readmeTab = createFileViewerTab("README.md");
-    const planTab = createFileViewerTab("docs/plans/agent-workspace.md");
-    const appTab = createFileViewerTab("src/app.tsx");
+    const readmeTab = createFileEditorTab("README.md");
+    const planTab = createFileEditorTab("docs/plans/agent-workspace.md");
+    const appTab = createFileEditorTab("src/app.tsx");
 
     let state = withWorkspaceState({
       activePaneId: "pane-root",
@@ -472,8 +472,8 @@ describe("canvas drag scenarios", () => {
   });
 
   test("same-pane center drags are stable no-ops across repeated attempts", () => {
-    const readmeTab = createFileViewerTab("README.md");
-    const planTab = createFileViewerTab("docs/plans/agent-workspace.md");
+    const readmeTab = createFileEditorTab("README.md");
+    const planTab = createFileEditorTab("docs/plans/agent-workspace.md");
     const state = withWorkspaceState({
       activePaneId: "pane-root",
       tabs: [readmeTab, planTab],

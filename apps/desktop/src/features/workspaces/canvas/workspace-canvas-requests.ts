@@ -16,7 +16,7 @@ export interface PullRequestSurfaceOptions {
   pullRequest: GitPullRequestSummary;
 }
 
-export interface FileSurfaceOptions {
+export interface FileEditorSurfaceOptions {
   filePath: string;
 }
 
@@ -40,7 +40,7 @@ export type OpenSurfaceInput =
   | { options: AgentSurfaceOptions; surface: "agent" }
   | { options: ChangesDiffSurfaceOptions; surface: "changes-diff" }
   | { options: CommitDiffSurfaceOptions; surface: "commit-diff" }
-  | { options: FileSurfaceOptions; surface: "file-viewer" }
+  | { options: FileEditorSurfaceOptions; surface: "file-editor" }
   | { options: PreviewSurfaceOptions; surface: "preview" }
   | { options: PullRequestSurfaceOptions; surface: "pull-request" };
 
@@ -87,10 +87,10 @@ export function createPullRequestOpenInput(pullRequest: GitPullRequestSummary): 
   };
 }
 
-export function createFileViewerOpenInput(filePath: string): OpenSurfaceInput {
+export function createFileEditorOpenInput(filePath: string): OpenSurfaceInput {
   return {
     options: { filePath },
-    surface: "file-viewer",
+    surface: "file-editor",
   };
 }
 

@@ -3,12 +3,12 @@ import { describe, expect, test } from "bun:test";
 import type {
   WorkspaceCheckoutType,
   WorkspaceStatus,
-  WorkspaceTarget,
+  WorkspaceHost,
 } from "./workspace";
 
 describe("workspace contracts", () => {
   test("keeps canonical workspace targets", () => {
-    const targets: WorkspaceTarget[] = ["local", "docker", "remote", "cloud"];
+    const targets: WorkspaceHost[] = ["local", "docker", "remote", "cloud"];
     expect(targets).toEqual(["local", "docker", "remote", "cloud"]);
   });
 

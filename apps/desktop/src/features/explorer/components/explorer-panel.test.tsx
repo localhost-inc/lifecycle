@@ -16,11 +16,11 @@ function readyQueryResult<T>(data: T) {
 
 async function renderExplorerPanel({
   entries,
-  workspaceTarget = "local",
+  workspaceHost = "local",
   worktreePath = "/tmp/workspace",
 }: {
   entries?: WorkspaceFileTreeEntry[];
-  workspaceTarget?: "cloud" | "docker" | "local" | "remote";
+  workspaceHost?: "cloud" | "docker" | "local" | "remote";
   worktreePath?: string | null;
 } = {}) {
   const hooksModule = await import("../../workspaces/hooks");
@@ -35,7 +35,7 @@ async function renderExplorerPanel({
       createElement(ExplorerPanel, {
         onOpenFile: () => {},
         workspaceId: "workspace_1",
-        workspaceTarget,
+        workspaceHost,
         worktreePath,
       }),
     ),
@@ -67,7 +67,7 @@ describe("ExplorerPanel", () => {
         { extension: "md", file_path: "README.md" },
         { extension: "tsx", file_path: "src/app.tsx" },
       ],
-      workspaceTarget: "docker",
+      workspaceHost: "docker",
     });
 
     expect(explorerTreeSpy).toHaveBeenCalledWith("workspace_1");
@@ -77,7 +77,7 @@ describe("ExplorerPanel", () => {
 
   test("shows an unavailable state when no local worktree is available", async () => {
     const { explorerTreeSpy, markup } = await renderExplorerPanel({
-      workspaceTarget: "cloud",
+      workspaceHost: "cloud",
       worktreePath: null,
     });
 

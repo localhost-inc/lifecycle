@@ -10,8 +10,8 @@ fn workspace_path_failure(operation: &str, reason: impl Into<String>) -> Lifecyc
     }
 }
 
-pub(crate) fn target_supports_local_worktree_access(target: &str) -> bool {
-    matches!(target, "local" | "docker")
+pub(crate) fn host_supports_local_worktree_access(host: &str) -> bool {
+    matches!(host, "local" | "docker")
 }
 
 fn resolve_workspace_target_and_worktree_path(
@@ -20,7 +20,7 @@ fn resolve_workspace_target_and_worktree_path(
 ) -> Result<(String, Option<String>), LifecycleError> {
     let conn = open_db(db_path)?;
     conn.query_row(
-        "SELECT target, worktree_path FROM workspace WHERE id = ?1 LIMIT 1",
+        "SELECT host, worktree_path FROM workspace WHERE id = ?1 LIMIT 1",
         params![workspace_id],
         |row| Ok((row.get(0)?, row.get(1)?)),
     )
@@ -44,13 +44,13 @@ pub(crate) fn require_local_worktree(
     workspace_id: &str,
     operation: &str,
 ) -> Result<String, LifecycleError> {
-    let (target, worktree_path) =
+    let (host, worktree_path) =
         resolve_workspace_target_and_worktree_path(db_path, workspace_id)?;
 
-    if !target_supports_local_worktree_access(&target) {
+    if !host_supports_local_worktree_access(&host) {
         return Err(workspace_path_failure(
             operation,
-            format!("workspace {workspace_id} uses unsupported target '{target}'"),
+            format!("workspace {workspace_id} uses unsupported host '{host}'"),
         ));
     }
 
@@ -224,7 +224,7 @@ mod tests {
         path.to_string_lossy().into_owned()
     }
 
-    fn seed_workspace(db_path: &str, workspace_id: &str, worktree_path: &Path, target: &str) {
+    fn seed_workspace(db_path: &str, workspace_id: &str, worktree_path: &Path, host: &str) {
         apply_test_schema(db_path);
         let conn = open_db(db_path).expect("open db");
         conn.execute(
@@ -233,7 +233,7 @@ mod tests {
         )
         .expect("insert project");
         conn.execute(
-            "INSERT INTO workspace (id, project_id, name, source_ref, worktree_path, target, status)
+            "INSERT INTO workspace (id, project_id, name, source_ref, worktree_path, host, status)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             rusqlite::params![
                 workspace_id,
@@ -241,7 +241,7 @@ mod tests {
                 "Workspace 1",
                 "lifecycle/test",
                 worktree_path.to_str().expect("worktree path is utf8"),
-                target,
+                host,
                 "active"
             ],
         )

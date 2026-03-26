@@ -400,7 +400,7 @@ mod tests {
         .expect("insert project");
         conn.execute(
             "INSERT INTO workspace (
-                id, project_id, name, name_origin, checkout_type, source_ref, source_ref_origin, worktree_path, target, status
+                id, project_id, name, name_origin, checkout_type, source_ref, source_ref_origin, worktree_path, host, status
              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'local', 'active')",
             rusqlite::params![
                 workspace_id,
@@ -548,7 +548,7 @@ mod tests {
         .expect("insert project");
         conn.execute(
             "INSERT INTO workspace (
-                id, project_id, name, name_origin, checkout_type, source_ref, source_ref_origin, worktree_path, target, status
+                id, project_id, name, name_origin, checkout_type, source_ref, source_ref_origin, worktree_path, host, status
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             rusqlite::params![
                 "workspace_root",

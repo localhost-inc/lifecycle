@@ -153,5 +153,5 @@ export type {
   WorkspaceCheckoutType,
   WorkspaceFailureReason,
   WorkspaceStatus,
-  WorkspaceTarget,
+  WorkspaceHost,
 } from "./workspace";

@@ -28,11 +28,11 @@ export interface PullRequestTab extends GitPullRequestSummary {
   label: string;
 }
 
-export interface FileViewerTab {
+export interface FileEditorTab {
   extension: string | null;
   filePath: string;
   key: string;
-  kind: "file-viewer";
+  kind: "file-editor";
   label: string;
 }
 
@@ -57,7 +57,7 @@ export type WorkspaceCanvasTab =
   | AgentTab
   | ChangesDiffTab
   | CommitDiffTab
-  | FileViewerTab
+  | FileEditorTab
   | PreviewTab
   | PullRequestTab;
 
@@ -92,7 +92,7 @@ export function pullRequestTabKey(pullRequestNumber: number): string {
   return `pull-request:${pullRequestNumber}`;
 }
 
-export function fileViewerTabKey(filePath: string): string {
+export function fileEditorTabKey(filePath: string): string {
   return `file:${normalizeWorkspaceFilePath(filePath)}`;
 }
 
@@ -144,14 +144,14 @@ export function createPullRequestTab(input: GitPullRequestSummary): PullRequestT
   };
 }
 
-export function createFileViewerTab(filePath: string): FileViewerTab {
+export function createFileEditorTab(filePath: string): FileEditorTab {
   const normalizedFilePath = normalizeWorkspaceFilePath(filePath);
 
   return {
     extension: workspaceFileExtension(normalizedFilePath),
     filePath: normalizedFilePath,
-    key: fileViewerTabKey(normalizedFilePath),
-    kind: "file-viewer",
+    key: fileEditorTabKey(normalizedFilePath),
+    kind: "file-editor",
     label: workspaceFileBasename(normalizedFilePath),
   };
 }
@@ -191,8 +191,8 @@ export function isPullRequestTab(tab: WorkspaceCanvasTab): tab is PullRequestTab
   return tab.kind === "pull-request";
 }
 
-export function isFileViewerTab(tab: WorkspaceCanvasTab): tab is FileViewerTab {
-  return tab.kind === "file-viewer";
+export function isFileEditorTab(tab: WorkspaceCanvasTab): tab is FileEditorTab {
+  return tab.kind === "file-editor";
 }
 
 export function isPreviewTab(tab: WorkspaceCanvasTab): tab is PreviewTab {

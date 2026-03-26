@@ -3,18 +3,18 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ThemeProvider } from "@lifecycle/ui";
 import { mockStoreContext } from "@/test/store-mock";
-import { buildFileCodeEditorExtensions, resolveFileEditorConfig } from "@/features/explorer/lib/file-editor-config";
-import type { FileEditorConfig } from "@/features/explorer/lib/file-editor-types";
+import { buildFileCodeEditorExtensions, resolveFileEditorConfig } from "@/features/editor/lib/file-editor-config";
+import type { FileEditorConfig } from "@/features/editor/lib/file-editor-types";
 import {
-  getFileViewerScrollRestoreKey,
+  getFileEditorScrollRestoreKey,
   readFileSaveHotkey,
-  resolveFileViewerRenderer,
-  resolveInitialFileViewerMode,
-} from "@/features/explorer/lib/file-renderers";
-import { hasFileViewerConflict, isFileViewerDirty } from "@/features/explorer/lib/file-session";
-import { resolveFileRendererDefinition } from "@/features/explorer/renderers/registry";
-import { MarkdownFileRendererView } from "@/features/explorer/renderers/markdown-file-renderer-view";
-import { summarizePencilDocument } from "@/features/explorer/renderers/pencil-file-renderer";
+  resolveFileEditorRenderer,
+  resolveInitialFileEditorMode,
+} from "@/features/editor/lib/file-editor-renderers";
+import { hasFileEditorConflict, isFileEditorDirty } from "@/features/editor/lib/file-editor-session";
+import { resolveFileRendererDefinition } from "@/features/editor/renderers/registry";
+import { MarkdownFileRendererView } from "@/features/editor/renderers/markdown-file-renderer-view";
+import { summarizePencilDocument } from "@/features/editor/renderers/pencil-file-renderer";
 import type { WorkspaceFileReadResult } from "@/features/workspaces/api";
 
 function readyQueryResult<T>(data: T) {
@@ -27,15 +27,15 @@ function readyQueryResult<T>(data: T) {
   };
 }
 
-async function renderFileSurface(filePath: string, file: WorkspaceFileReadResult) {
+async function renderFileEditorSurface(filePath: string, file: WorkspaceFileReadResult) {
   const hooksModule = await import("../../workspaces/hooks");
   spyOn(hooksModule, "useWorkspaceFile").mockReturnValue(readyQueryResult(file) as never);
 
-  const { FileSurface } = await import("./file-surface");
+  const { FileEditorSurface } = await import("./file-editor-surface");
 
   return renderToStaticMarkup(
     createElement(ThemeProvider, {
-      children: createElement(FileSurface, {
+      children: createElement(FileEditorSurface, {
         filePath,
         workspaceId: "workspace-1",
       }),
@@ -44,11 +44,11 @@ async function renderFileSurface(filePath: string, file: WorkspaceFileReadResult
   );
 }
 
-describe("FileSurface helpers", () => {
+describe("FileEditorSurface helpers", () => {
   test("maps supported extensions to custom renderer kinds", () => {
-    expect(resolveFileViewerRenderer("README.md")).toBe("markdown");
-    expect(resolveFileViewerRenderer("design/mock.pen")).toBe("pencil");
-    expect(resolveFileViewerRenderer("src/index.ts")).toBe("text");
+    expect(resolveFileEditorRenderer("README.md")).toBe("markdown");
+    expect(resolveFileEditorRenderer("design/mock.pen")).toBe("pencil");
+    expect(resolveFileEditorRenderer("src/index.ts")).toBe("text");
   });
 
   test("resolves renderer metadata through the shared registry", () => {
@@ -97,9 +97,9 @@ describe("FileSurface helpers", () => {
     });
   });
 
-  test("only restores file viewer scroll after loading a specific renderer/file pair", () => {
+  test("only restores file editor scroll after loading a specific renderer/file pair", () => {
     expect(
-      getFileViewerScrollRestoreKey({
+      getFileEditorScrollRestoreKey({
         filePath: "docs/privacy-notice.md",
         isLoading: true,
         mode: "view",
@@ -108,7 +108,7 @@ describe("FileSurface helpers", () => {
     ).toBeNull();
 
     expect(
-      getFileViewerScrollRestoreKey({
+      getFileEditorScrollRestoreKey({
         filePath: "docs/privacy-notice.md",
         isLoading: false,
         mode: "view",
@@ -117,7 +117,7 @@ describe("FileSurface helpers", () => {
     ).toBe("view:markdown:docs/privacy-notice.md");
 
     expect(
-      getFileViewerScrollRestoreKey({
+      getFileEditorScrollRestoreKey({
         filePath: "design/mock.pen",
         isLoading: false,
         mode: "view",
@@ -127,22 +127,22 @@ describe("FileSurface helpers", () => {
   });
 
   test("defaults specialized viewers to view mode and text files to edit mode", () => {
-    expect(resolveInitialFileViewerMode("README.md")).toBe("view");
-    expect(resolveInitialFileViewerMode("design/mock.pen")).toBe("view");
-    expect(resolveInitialFileViewerMode("src/index.ts")).toBe("edit");
+    expect(resolveInitialFileEditorMode("README.md")).toBe("view");
+    expect(resolveInitialFileEditorMode("design/mock.pen")).toBe("view");
+    expect(resolveInitialFileEditorMode("src/index.ts")).toBe("edit");
   });
 
   test("detects dirty sessions and disk conflicts", () => {
-    expect(isFileViewerDirty(null)).toBe(false);
+    expect(isFileEditorDirty(null)).toBe(false);
     expect(
-      isFileViewerDirty({
+      isFileEditorDirty({
         conflictDiskContent: null,
         draftContent: "draft",
         savedContent: "saved",
       }),
     ).toBe(true);
     expect(
-      hasFileViewerConflict({
+      hasFileEditorConflict({
         conflictDiskContent: "disk",
         draftContent: "draft",
         savedContent: "saved",
@@ -197,12 +197,12 @@ describe("FileSurface helpers", () => {
   });
 });
 
-describe("FileSurface", () => {
+describe("FileEditorSurface", () => {
   beforeEach(() => mockStoreContext());
   afterEach(() => mock.restore());
 
   test("renders markdown files with the markdown renderer", async () => {
-    const markup = await renderFileSurface("README.md", {
+    const markup = await renderFileEditorSurface("README.md", {
       absolute_path: "/tmp/workspace/README.md",
       byte_len: 31,
       content: "# Hello\n\n- first\n- second\n",
@@ -216,7 +216,7 @@ describe("FileSurface", () => {
   });
 
   test("renders .pen files with the pencil canvas view", async () => {
-    const markup = await renderFileSurface("design/mock.pen", {
+    const markup = await renderFileEditorSurface("design/mock.pen", {
       absolute_path: "/tmp/workspace/design/mock.pen",
       byte_len: 320,
       content: JSON.stringify(

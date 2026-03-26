@@ -22,12 +22,6 @@ export type {
 } from "./agent-session-store";
 export type { ProviderModelCatalog, ProviderModelCatalogEntry } from "./catalog";
 export { createAgentOrchestrator } from "./orchestrator";
-export type {
-  DetachedAgentHostPendingApproval,
-  DetachedAgentHostRegistration,
-  DetachedAgentHostSnapshot,
-  DetachedAgentHostStatus,
-} from "./detached-host";
 export type { ClaudeWorkerInput, ClaudeWorkerPermissionMode } from "./providers/claude/worker";
 export type {
   CodexApprovalPolicy,
@@ -84,6 +78,10 @@ export type {
   AgentWorkerToolUseInputEvent,
   AgentWorkerTurnCompletedEvent,
   AgentWorkerTurnFailedEvent,
+  AgentWorkerPendingApproval,
+  AgentWorkerRegistration,
+  AgentWorkerSnapshot,
+  AgentWorkerStatus,
 } from "./worker-protocol";
 export type {
   ProviderAuthEvent,

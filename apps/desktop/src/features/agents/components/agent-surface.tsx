@@ -1,6 +1,7 @@
 import { EmptyState } from "@lifecycle/ui";
 import { ArrowDown, Bot } from "lucide-react";
 import {
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -43,7 +44,8 @@ import { AgentActivityBar } from "@/features/agents/components/agent-activity-ba
 import { AgentToolbar } from "@/features/agents/components/agent-toolbar";
 import type { AgentMessageWithParts } from "@lifecycle/contracts";
 import { useWorkspaceOpenRequests } from "@/features/workspaces/state/workspace-open-requests";
-import { createFileViewerOpenInput } from "@/features/workspaces/canvas/workspace-canvas-requests";
+import { createFileEditorOpenInput } from "@/features/workspaces/canvas/workspace-canvas-requests";
+import { useWorkspacePaneRenderCount } from "@/features/workspaces/canvas/workspace-pane-performance";
 import { useCommandPaletteExplorer } from "@/features/command-palette/use-command-palette-explorer";
 import { AgentPromptInput, type AgentPromptInputHandle } from "./agent-prompt-input";
 import { useAgentCommands } from "./use-agent-commands";
@@ -109,11 +111,12 @@ function buildParsedMessages(records: AgentMessageWithParts[] | undefined): Pars
   return merged;
 }
 
-export function AgentSurface({
+export const AgentSurface = memo(function AgentSurface({
   agentSessionId,
   paneFocused,
   workspaceId,
 }: AgentSurfaceProps) {
+  useWorkspacePaneRenderCount("AgentSurface", agentSessionId);
   const agentOrchestrator = useAgentOrchestrator();
   const workspace = useWorkspace(workspaceId);
   const session = useAgentSession(workspaceId, agentSessionId);
@@ -310,11 +313,11 @@ export function AgentSurface({
     // backend receives a repo-relative path.
     const root = workspace?.worktree_path;
     if (!root || !filePath.startsWith(root)) {
-      // File is outside the workspace worktree — cannot open in file viewer.
+      // File is outside the workspace worktree — cannot open in the file editor.
       return;
     }
     const repoRelative = filePath.slice(root.length).replace(/^\//, "");
-    openTab(workspaceId, createFileViewerOpenInput(repoRelative));
+    openTab(workspaceId, createFileEditorOpenInput(repoRelative));
   }
 
   function addImagesFromFiles(files: FileList | File[]): void {
@@ -730,4 +733,4 @@ export function AgentSurface({
       </section>
     </DiffRenderProvider>
   );
-}
+});

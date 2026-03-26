@@ -12,7 +12,7 @@ use super::checkout_type::is_root_workspace_checkout_type;
 
 struct ArchiveWorkspaceContext {
     checkout_type: String,
-    target: String,
+    host: String,
     project_path: String,
     worktree_path: Option<String>,
 }
@@ -22,9 +22,9 @@ fn load_archive_workspace_context(
     workspace_id: &str,
 ) -> Result<ArchiveWorkspaceContext, LifecycleError> {
     let conn = open_db(db_path)?;
-    let (checkout_type, target, project_path, worktree_path) = conn
+    let (checkout_type, host, project_path, worktree_path) = conn
         .query_row(
-            "SELECT workspace.checkout_type, workspace.target, project.path, workspace.worktree_path
+            "SELECT workspace.checkout_type, workspace.host, project.path, workspace.worktree_path
              FROM workspace
              INNER JOIN project ON project.id = workspace.project_id
              WHERE workspace.id = ?1
@@ -47,7 +47,7 @@ fn load_archive_workspace_context(
         })?;
     Ok(ArchiveWorkspaceContext {
         checkout_type,
-        target,
+        host,
         project_path,
         worktree_path,
     })
@@ -100,7 +100,7 @@ pub async fn archive_workspace(
 
     controller.stop_runtime().await;
 
-    if matches!(context.target.as_str(), "local" | "docker")
+    if matches!(context.host.as_str(), "local" | "docker")
         && !is_root_workspace_checkout_type(&context.checkout_type)
     {
         if let Some(worktree_path) = context.worktree_path.as_deref() {
@@ -140,7 +140,7 @@ mod tests {
         .expect("insert project");
         conn.execute(
             "INSERT INTO workspace (
-                id, project_id, name, checkout_type, source_ref, worktree_path, target, status
+                id, project_id, name, checkout_type, source_ref, worktree_path, host, status
              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 "workspace_1",
@@ -171,7 +171,7 @@ mod tests {
             load_archive_workspace_context(&db_path, "workspace_1").expect("load archive context");
 
         assert_eq!(context.checkout_type, "worktree");
-        assert_eq!(context.target, "local");
+        assert_eq!(context.host, "local");
         assert_eq!(context.project_path, "/tmp/project_1");
         assert_eq!(
             context.worktree_path.as_deref(),

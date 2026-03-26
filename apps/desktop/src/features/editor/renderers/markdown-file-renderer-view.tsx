@@ -1,4 +1,4 @@
-import "@/features/explorer/renderers/markdown-file-renderer-view.css";
+import "@/features/editor/renderers/markdown-file-renderer-view.css";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 

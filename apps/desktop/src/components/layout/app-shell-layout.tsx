@@ -420,7 +420,7 @@ export function AppShellLayout() {
     async (workspace: WorkspaceRecord) => {
       try {
         if (
-          (workspace.target === "local" || workspace.target === "docker") &&
+          (workspace.host === "local" || workspace.host === "docker") &&
           workspace.worktree_path
         ) {
           const gitStatus = await getGitStatus(client, workspace.id);

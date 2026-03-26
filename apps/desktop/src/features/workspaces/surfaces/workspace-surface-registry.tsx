@@ -6,11 +6,11 @@ import type {
   SurfaceLaunchRequest,
   WorkspaceSurfaceKind,
 } from "@/features/workspaces/canvas/workspace-canvas-requests";
-import type { FileViewerSessionState } from "@/features/explorer/lib/file-session";
+import type { FileEditorSessionState } from "@/features/editor/lib/file-editor-session";
+import { fileEditorSurfaceDefinition } from "@/features/editor/surfaces/file-editor-surface-definition";
 import { agentSurfaceDefinition } from "@/features/workspaces/surfaces/agent-surface-definition";
 import { changesDiffSurfaceDefinition } from "@/features/workspaces/surfaces/changes-diff-surface-definition";
 import { commitDiffSurfaceDefinition } from "@/features/workspaces/surfaces/commit-diff-surface-definition";
-import { fileViewerSurfaceDefinition } from "@/features/workspaces/surfaces/file-viewer-surface-definition";
 import { previewSurfaceDefinition } from "@/features/workspaces/surfaces/preview-surface-definition";
 import { pullRequestSurfaceDefinition } from "@/features/workspaces/surfaces/pull-request-surface-definition";
 import {
@@ -39,7 +39,7 @@ const workspaceSurfaceRegistry: WorkspaceSurfaceRegistry = {
   agent: agentSurfaceDefinition,
   "changes-diff": changesDiffSurfaceDefinition,
   "commit-diff": commitDiffSurfaceDefinition,
-  "file-viewer": fileViewerSurfaceDefinition,
+  "file-editor": fileEditorSurfaceDefinition,
   preview: previewSurfaceDefinition,
   "pull-request": pullRequestSurfaceDefinition,
 };
@@ -135,7 +135,7 @@ export function resolveWorkspaceSurfaceModelForTab(
 
 export function resolveWorkspacePaneActiveSurfaceModel(input: {
   activeTabKey: string | null;
-  fileSessionsByTabKey: Record<string, FileViewerSessionState>;
+  fileEditorSessionsByTabKey: Record<string, FileEditorSessionState>;
   pendingLaunchActionKey: string | null;
   viewStateByTabKey: Record<string, WorkspaceCanvasTabViewState>;
   visibleTabs: readonly WorkspaceCanvasTab[];
@@ -155,7 +155,7 @@ export function resolveWorkspacePaneActiveSurfaceModel(input: {
   }
 
   const context: WorkspaceSurfaceActiveModelContext = {
-    fileSessionsByTabKey: input.fileSessionsByTabKey as never,
+    fileEditorSessionsByTabKey: input.fileEditorSessionsByTabKey as never,
     viewStateByTabKey: input.viewStateByTabKey,
     workspaceId: input.workspaceId,
   };

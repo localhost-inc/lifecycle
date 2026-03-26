@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useAgentStatusIndex } from "@lifecycle/agents/react";
-import type { FileViewerSessionState } from "@/features/explorer/lib/file-session";
+import type { FileEditorSessionState } from "@/features/editor/lib/file-editor-session";
 import { recordWorkspaceExplorerUsage } from "@/features/explorer/lib/workspace-explorer-usage";
-import { useWorkspaceFileSessions } from "@/features/explorer/state/workspace-file-sessions";
+import { useFileEditorSessions } from "@/features/editor/state/file-editor-sessions";
 import {
   inspectWorkspacePaneLayout,
   requireWorkspacePane,
@@ -21,12 +21,16 @@ import type {
 import { closeWorkspacePaneTabs } from "@/features/workspaces/canvas/panes/workspace-pane-close";
 import {
   createAgentSurfaceLaunchRequest,
-  createFileViewerOpenInput,
+  createFileEditorOpenInput,
   type OpenSurfaceRequest,
   type SurfaceLaunchRequest,
 } from "@/features/workspaces/canvas/workspace-canvas-requests";
 import { workspaceCanvasReducer } from "@/features/workspaces/canvas/workspace-canvas-reducer";
 import { releaseWebviewFocus } from "@/features/workspaces/canvas/workspace-canvas-shortcuts";
+import {
+  beginWorkspacePaneTabSwitchTrace,
+  measureActiveWorkspacePaneComputation,
+} from "@/features/workspaces/canvas/workspace-pane-performance";
 import {
   resolveWorkspaceVisibleTabs,
   type WorkspaceCanvasTab,
@@ -68,14 +72,14 @@ export function shouldAutoCreateDefaultWorkspaceTab(input: { tabCount: number })
 }
 
 function createWorkspacePaneTabModels(input: {
-  fileSessionsByTabKey: Record<string, FileViewerSessionState>;
+  fileEditorSessionsByTabKey: Record<string, FileEditorSessionState>;
   isAgentSessionResponseReady: (sessionId: string) => boolean;
   isAgentSessionRunning: (sessionId: string) => boolean;
   visibleTabs: readonly WorkspaceCanvasTab[];
 }): WorkspacePaneTabModel[] {
   return input.visibleTabs.map((tab) => {
     const status = resolveWorkspaceSurfaceTabStatus(tab, {
-      fileSessionsByTabKey: input.fileSessionsByTabKey,
+      fileEditorSessionsByTabKey: input.fileEditorSessionsByTabKey,
       isAgentSessionResponseReady: input.isAgentSessionResponseReady,
       isAgentSessionRunning: input.isAgentSessionRunning,
     });
@@ -189,61 +193,63 @@ export function useWorkspaceCanvasController({
     return activeTab && isAgentTab(activeTab) ? activeTab.agentSessionId : null;
   }, [activeTabKey, tabsByKey]);
   const openFileTabKeys = useMemo(
-    () => tabs.filter((tab) => tab.kind === "file-viewer").map((tab) => tab.key),
+    () => tabs.filter((tab) => tab.kind === "file-editor").map((tab) => tab.key),
     [tabs],
   );
   const {
-    clearFileSession,
-    confirmCloseFileSession,
-    fileSessionsByTabKey,
-    handleFileSessionStateChange,
-  } = useWorkspaceFileSessions(openFileTabKeys);
+    clearFileEditorSession,
+    confirmCloseFileEditorSession,
+    fileEditorSessionsByTabKey,
+    handleFileEditorSessionStateChange,
+  } = useFileEditorSessions(openFileTabKeys);
   const panesById = useMemo<Record<string, WorkspacePaneModel>>(
     () =>
-      Object.fromEntries(
-        paneSnapshots.map((pane) => {
-          const visibleTabs = visibleTabsByPaneId[pane.id] ?? [];
-          const paneActiveTabKey = renderedActiveTabKeyByPaneId[pane.id] ?? null;
-          const surfaceContext = {
-            fileSessionsByTabKey,
-            viewStateByTabKey,
-            workspaceId,
-          };
+      measureActiveWorkspacePaneComputation("controller-derive", () =>
+        Object.fromEntries(
+          paneSnapshots.map((pane) => {
+            const visibleTabs = visibleTabsByPaneId[pane.id] ?? [];
+            const paneActiveTabKey = renderedActiveTabKeyByPaneId[pane.id] ?? null;
+            const surfaceContext = {
+              fileEditorSessionsByTabKey,
+              viewStateByTabKey,
+              workspaceId,
+            };
 
-          return [
-            pane.id,
-            {
-              activeSurface: resolveWorkspacePaneActiveSurfaceModel({
-                activeTabKey: paneActiveTabKey,
-                fileSessionsByTabKey,
-                pendingLaunchActionKey,
-                viewStateByTabKey,
-                visibleTabs,
-                workspaceId,
-              }),
-              id: pane.id,
-              isActive: pane.id === state.activePaneId,
-              tabBar: {
-                activeTabKey: paneActiveTabKey,
-                dragPreview: null,
-                paneId: pane.id,
-                tabs: createWorkspacePaneTabModels({
-                  fileSessionsByTabKey,
-                  isAgentSessionResponseReady,
-                  isAgentSessionRunning,
+            return [
+              pane.id,
+              {
+                activeSurface: resolveWorkspacePaneActiveSurfaceModel({
+                  activeTabKey: paneActiveTabKey,
+                  fileEditorSessionsByTabKey,
+                  pendingLaunchActionKey,
+                  viewStateByTabKey,
                   visibleTabs,
+                  workspaceId,
                 }),
-              },
-              tabSurfaces: visibleTabs.map((tab) => ({
-                key: tab.key,
-                surface: resolveWorkspaceSurfaceModelForTab(tab, surfaceContext),
-              })),
-            } satisfies WorkspacePaneModel,
-          ];
-        }),
+                id: pane.id,
+                isActive: pane.id === state.activePaneId,
+                tabBar: {
+                  activeTabKey: paneActiveTabKey,
+                  dragPreview: null,
+                  paneId: pane.id,
+                  tabs: createWorkspacePaneTabModels({
+                    fileEditorSessionsByTabKey,
+                    isAgentSessionResponseReady,
+                    isAgentSessionRunning,
+                    visibleTabs,
+                  }),
+                },
+                tabSurfaces: visibleTabs.map((tab) => ({
+                  key: tab.key,
+                  surface: resolveWorkspaceSurfaceModelForTab(tab, surfaceContext),
+                })),
+              } satisfies WorkspacePaneModel,
+            ];
+          }),
+        ),
       ),
     [
-      fileSessionsByTabKey,
+      fileEditorSessionsByTabKey,
       isAgentSessionResponseReady,
       isAgentSessionRunning,
       paneSnapshots,
@@ -263,7 +269,7 @@ export function useWorkspaceCanvasController({
       return;
     }
 
-    if (openTabRequest.surface === "file-viewer") {
+    if (openTabRequest.surface === "file-editor") {
       recordWorkspaceExplorerUsage(workspaceId, openTabRequest.options.filePath);
     }
 
@@ -313,12 +319,17 @@ export function useWorkspaceCanvasController({
     (paneId: string, key: string) => {
       releaseWebviewFocus();
       const tab = getWorkspaceTab(tabsByKey, key);
+      const nextIsSameSelection =
+        state.activePaneId === paneId && (renderedActiveTabKeyByPaneId[paneId] ?? null) === key;
+      if (!nextIsSameSelection) {
+        beginWorkspacePaneTabSwitchTrace({ paneId, tabKey: key });
+      }
       if (tab && isAgentTab(tab)) {
         clearAgentSessionResponseReady(tab.agentSessionId);
       }
       dispatch({ key, kind: "select-tab", paneId });
     },
-    [clearAgentSessionResponseReady, tabsByKey],
+    [clearAgentSessionResponseReady, renderedActiveTabKeyByPaneId, state.activePaneId, tabsByKey],
   );
 
   const handleActiveTabViewStateChange = useCallback(
@@ -334,7 +345,7 @@ export function useWorkspaceCanvasController({
       recordWorkspaceExplorerUsage(workspaceId, filePath);
       dispatch({
         kind: "open-tab",
-        request: { ...createFileViewerOpenInput(filePath), id: createWorkspaceCanvasId() },
+        request: { ...createFileEditorOpenInput(filePath), id: createWorkspaceCanvasId() },
       });
     },
     [workspaceId],
@@ -392,8 +403,8 @@ export function useWorkspaceCanvasController({
     (tabKey: string): boolean => {
       const closingTab = getWorkspaceTab(tabsByKey, tabKey);
       if (
-        closingTab?.kind === "file-viewer" &&
-        !confirmCloseFileSession(closingTab.key, closingTab.label)
+        closingTab?.kind === "file-editor" &&
+        !confirmCloseFileEditorSession(closingTab.key, closingTab.label)
       ) {
         return false;
       }
@@ -408,10 +419,10 @@ export function useWorkspaceCanvasController({
       }
 
       dispatch({ key: tabKey, kind: "close-tab" });
-      clearFileSession(tabKey);
+      clearFileEditorSession(tabKey);
       return true;
     },
-    [clearFileSession, confirmCloseFileSession, isAgentSessionRunning, tabsByKey],
+    [clearFileEditorSession, confirmCloseFileEditorSession, isAgentSessionRunning, tabsByKey],
   );
 
   const collapseWorkspacePane = useCallback((paneId: string) => {
@@ -537,7 +548,7 @@ export function useWorkspaceCanvasController({
       closeTab: (tabKey: string) => {
         closeTab(tabKey);
       },
-      fileSessionStateChange: handleFileSessionStateChange,
+      fileEditorSessionStateChange: handleFileEditorSessionStateChange,
       launchSurface: handleLaunchSurface,
       moveTabToPane: handleMoveTabToPane,
       openFile: handleOpenFile,
@@ -553,7 +564,7 @@ export function useWorkspaceCanvasController({
     [
       closeTab,
       handleActiveTabViewStateChange,
-      handleFileSessionStateChange,
+      handleFileEditorSessionStateChange,
       handleLaunchSurface,
       handleMoveTabToPane,
       handleOpenFile,

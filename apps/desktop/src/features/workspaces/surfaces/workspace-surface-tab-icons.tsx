@@ -3,15 +3,15 @@ import {
   isAgentTab,
   isChangesDiffTab,
   isCommitDiffTab,
-  isFileViewerTab,
+  isFileEditorTab,
   isPreviewTab,
   isPullRequestTab,
   type WorkspaceCanvasTab,
 } from "@/features/workspaces/surfaces/workspace-surface-tab-records";
 
 export function workspaceSurfaceTabIconName(tab: WorkspaceCanvasTab): string {
-  if (isFileViewerTab(tab)) {
-    return tab.extension === "pen" ? "file-viewer-pencil" : "file-viewer";
+  if (isFileEditorTab(tab)) {
+    return tab.extension === "pen" ? "file-editor-pencil" : "file-editor";
   }
 
   if (isPreviewTab(tab)) {

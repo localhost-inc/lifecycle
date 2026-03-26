@@ -22,7 +22,7 @@ const workspace: WorkspaceRecord = {
   source_ref: "lifecycle/workspace-1",
   git_sha: null,
   worktree_path: "/tmp/project_1/.worktrees/ws_1",
-  target: "local",
+  host: "local",
   manifest_fingerprint: "manifest_1",
   created_at: "2026-03-13T00:00:00.000Z",
   updated_at: "2026-03-13T00:00:00.000Z",
@@ -148,7 +148,7 @@ describe("workspace api boundary routing", () => {
       manifestJson: null,
       manifestFingerprint: null,
       context: {
-        target: "local",
+        host: "local",
         checkoutType: "worktree",
         projectId: "project_1",
         projectPath: "/tmp/project_1",

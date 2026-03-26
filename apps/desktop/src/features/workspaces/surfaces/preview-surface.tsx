@@ -2,7 +2,8 @@ import { isTauri } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Button } from "@lifecycle/ui";
 import { ExternalLink, Globe, RefreshCw } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
+import { useWorkspacePaneRenderCount } from "@/features/workspaces/canvas/workspace-pane-performance";
 
 interface PreviewSurfaceProps {
   tabKey: string;
@@ -10,7 +11,8 @@ interface PreviewSurfaceProps {
   url: string;
 }
 
-export function PreviewSurface({ tabKey, title, url }: PreviewSurfaceProps) {
+export const PreviewSurface = memo(function PreviewSurface({ tabKey, title, url }: PreviewSurfaceProps) {
+  useWorkspacePaneRenderCount("PreviewSurface", tabKey);
   const [reloadNonce, setReloadNonce] = useState(0);
   const iframeKey = useMemo(() => `${tabKey}:${reloadNonce}`, [reloadNonce, tabKey]);
 
@@ -61,4 +63,4 @@ export function PreviewSurface({ tabKey, title, url }: PreviewSurfaceProps) {
       </div>
     </div>
   );
-}
+});

@@ -16,7 +16,7 @@ export type RegisteredShortcutId =
   | "workspace.next-workspace"
   | "workspace.previous-workspace";
 
-export type RegisteredShortcutScope = "app" | "file-surface" | "project-route" | "workspace-canvas";
+export type RegisteredShortcutScope = "app" | "file-editor-surface" | "project-route" | "workspace-canvas";
 
 export interface RegisteredShortcut {
   description: string;
@@ -138,7 +138,7 @@ export const REGISTERED_SHORTCUTS: readonly RegisteredShortcut[] = [
     description: "Save the current file",
     id: "file.save",
     mac: "Cmd+S",
-    scope: "file-surface",
+    scope: "file-editor-surface",
     windowsLinux: "Ctrl+S",
   },
 ] as const;

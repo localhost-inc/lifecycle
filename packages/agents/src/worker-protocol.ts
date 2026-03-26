@@ -1,4 +1,5 @@
-import type { AgentApprovalDecision, AgentApprovalRequest, AgentApprovalResolution, AgentImageMediaType } from "./turn";
+import type { AgentSessionProviderId, AgentSessionStatus } from "@lifecycle/contracts";
+import type { AgentApprovalDecision, AgentApprovalKind, AgentApprovalRequest, AgentApprovalResolution, AgentImageMediaType } from "./turn";
 
 export type AgentWorkerApprovalRequestPayload = Omit<AgentApprovalRequest, "sessionId">;
 export type AgentWorkerApprovalResolutionPayload = Omit<AgentApprovalResolution, "sessionId">;
@@ -203,7 +204,7 @@ export type AgentWorkerEvent =
   | AgentWorkerTitleGeneratedEvent;
 
 // ---------------------------------------------------------------------------
-// Commands (host → worker)
+// Commands (orchestrator → worker)
 // ---------------------------------------------------------------------------
 
 export type AgentWorkerInputPart =
@@ -232,3 +233,38 @@ export type AgentWorkerCommand =
   | AgentWorkerSendTurnCommand
   | AgentWorkerCancelTurnCommand
   | AgentWorkerResolveApprovalCommand;
+
+// ---------------------------------------------------------------------------
+// Worker state — snapshot and registration for reconnectable workers
+// ---------------------------------------------------------------------------
+
+export type AgentWorkerStatus = AgentSessionStatus;
+
+export interface AgentWorkerPendingApproval {
+  id: string;
+  kind: AgentApprovalKind;
+}
+
+export interface AgentWorkerSnapshot {
+  kind: "worker.state";
+  provider: AgentSessionProviderId;
+  providerSessionId: string | null;
+  sessionId: string;
+  status: AgentWorkerStatus;
+  activeTurnId: string | null;
+  pendingApproval: AgentWorkerPendingApproval | null;
+  updatedAt: string;
+}
+
+export interface AgentWorkerRegistration {
+  provider: AgentSessionProviderId;
+  providerSessionId: string | null;
+  sessionId: string;
+  pid: number;
+  port: number;
+  token: string;
+  status: AgentWorkerStatus;
+  activeTurnId: string | null;
+  pendingApproval: AgentWorkerPendingApproval | null;
+  updatedAt: string;
+}

@@ -203,7 +203,7 @@ describe("agent session store", () => {
   test("clears provider status when an empty update is emitted", () => {
     const state = applyEvents([
       {
-        detail: "Reconnecting to agent host...",
+        detail: "Reconnecting to agent worker...",
         kind: "agent.status.updated",
         sessionId: "session-1",
         status: "reconnecting",

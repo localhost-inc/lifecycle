@@ -7,6 +7,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import type { WorkspacePaneTabBarModel } from "@/features/workspaces/canvas/workspace-pane-models";
+import { useWorkspacePaneRenderCount } from "@/features/workspaces/canvas/workspace-pane-performance";
 import {
   getWorkspaceTabDragShiftDirection,
   type WorkspaceTabPlacement,
@@ -114,6 +115,7 @@ export function WorkspacePaneTabBar({
   onTabDrag,
   onTabDragCommit,
 }: WorkspacePaneTabBarProps) {
+  useWorkspacePaneRenderCount("WorkspacePaneTabBar", model.paneId);
   const dragSessionRef = useRef<WorkspaceTabPointerSession | null>(null);
   const tabListRef = useRef<HTMLDivElement | null>(null);
   const tabElementsRef = useRef(new Map<string, HTMLDivElement>());

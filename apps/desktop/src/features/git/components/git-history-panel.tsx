@@ -1,4 +1,4 @@
-import type { GitLogEntry, WorkspaceTarget } from "@lifecycle/contracts";
+import type { GitLogEntry, WorkspaceHost } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
 import { useEffect, useState } from "react";
 import { useGitLog } from "@/features/git/hooks";
@@ -10,21 +10,21 @@ export const GIT_HISTORY_PANEL_EMPTY_STATE_CLASS_NAME = "px-2.5 py-4";
 interface GitHistoryPanelProps {
   onOpenCommitDiff: (entry: GitLogEntry) => void;
   workspaceId: string;
-  workspaceTarget: WorkspaceTarget;
+  workspaceHost: WorkspaceHost;
   worktreePath: string | null;
 }
 
 export function GitHistoryPanel({
   onOpenCommitDiff,
   workspaceId,
-  workspaceTarget,
+  workspaceHost,
   worktreePath,
 }: GitHistoryPanelProps) {
   const [documentVisible, setDocumentVisible] = useState(() =>
     typeof document === "undefined" ? true : document.visibilityState === "visible",
   );
   const supportsHistory =
-    (workspaceTarget === "local" || workspaceTarget === "docker") && worktreePath !== null;
+    (workspaceHost === "local" || workspaceHost === "docker") && worktreePath !== null;
 
   useEffect(() => {
     if (typeof document === "undefined") {

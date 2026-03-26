@@ -5,8 +5,8 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type {
   AgentWorkerCommand,
   AgentWorkerEvent,
-  DetachedAgentHostRegistration,
-  DetachedAgentHostSnapshot,
+  AgentWorkerRegistration,
+  AgentWorkerSnapshot,
 } from "@lifecycle/agents";
 import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
@@ -25,10 +25,10 @@ const ClaudePermissionModeSchema = z.enum([
 const ClaudeLoginMethodSchema = z.enum(["claudeai", "console"]);
 const ClaudeEffortSchema = z.enum(["low", "medium", "high", "max"]);
 
-const HostInputSchema = z.object({
+const SessionInputSchema = z.object({
   provider: ProviderSchema,
   sessionId: z.string().min(1),
-  registrationPath: z.string().min(1),
+  registrationPath: z.string().optional(),
   workspacePath: z.string().min(1),
 
   approvalPolicy: CodexApprovalPolicySchema.default("untrusted"),
@@ -45,16 +45,16 @@ const HostInputSchema = z.object({
   providerSessionId: z.string().optional(),
 });
 
-type HostInput = z.infer<typeof HostInputSchema>;
+type SessionInput = z.infer<typeof SessionInputSchema>;
 
-function hostLog(
-  input: Pick<HostInput, "provider" | "sessionId">,
+function sessionLog(
+  input: Pick<SessionInput, "provider" | "sessionId">,
   message: string,
   details?: Record<string, unknown>,
 ): void {
   const timestamp = new Date().toISOString();
   const suffix = details ? ` ${JSON.stringify(details)}` : "";
-  console.error(`[agent-host][${timestamp}][${input.provider}][${input.sessionId}] ${message}${suffix}`);
+  console.error(`[agent-session][${timestamp}][${input.provider}][${input.sessionId}] ${message}${suffix}`);
 }
 
 function parseWorkerEvent(line: string): AgentWorkerEvent {
@@ -82,7 +82,7 @@ function createLineReader(onLine: (line: string) => void) {
   };
 }
 
-function buildWorkerArgs(input: HostInput): string[] {
+function buildWorkerArgs(input: SessionInput): string[] {
   const args = [
     "agent",
     "worker",
@@ -129,7 +129,7 @@ function buildWorkerArgs(input: HostInput): string[] {
   return args;
 }
 
-function buildSnapshot(input: HostInput): DetachedAgentHostSnapshot {
+function buildSnapshot(input: SessionInput): AgentWorkerSnapshot {
   return {
     kind: "worker.state",
     provider: input.provider,
@@ -143,11 +143,11 @@ function buildSnapshot(input: HostInput): DetachedAgentHostSnapshot {
 }
 
 function toRegistration(
-  snapshot: DetachedAgentHostSnapshot,
-  input: HostInput,
+  snapshot: AgentWorkerSnapshot,
+  input: SessionInput,
   port: number,
   token: string,
-): DetachedAgentHostRegistration {
+): AgentWorkerRegistration {
   return {
     provider: input.provider,
     providerSessionId: snapshot.providerSessionId,
@@ -163,9 +163,9 @@ function toRegistration(
 }
 
 function updateSnapshotFromWorkerEvent(
-  snapshot: DetachedAgentHostSnapshot,
+  snapshot: AgentWorkerSnapshot,
   event: AgentWorkerEvent,
-): DetachedAgentHostSnapshot {
+): AgentWorkerSnapshot {
   const updatedAt = new Date().toISOString();
 
   switch (event.kind) {
@@ -214,9 +214,9 @@ function updateSnapshotFromWorkerEvent(
 }
 
 function updateSnapshotFromCommand(
-  snapshot: DetachedAgentHostSnapshot,
+  snapshot: AgentWorkerSnapshot,
   command: AgentWorkerCommand,
-): DetachedAgentHostSnapshot {
+): AgentWorkerSnapshot {
   const updatedAt = new Date().toISOString();
 
   switch (command.kind) {
@@ -251,25 +251,29 @@ function updateSnapshotFromCommand(
 let registrationWriteChain = Promise.resolve();
 
 function persistRegistration(
-  input: HostInput,
-  snapshot: DetachedAgentHostSnapshot,
+  input: SessionInput,
+  snapshot: AgentWorkerSnapshot,
   port: number,
   token: string,
 ): Promise<void> {
+  if (!input.registrationPath) {
+    return Promise.resolve();
+  }
+  const registrationPath = input.registrationPath;
   registrationWriteChain = registrationWriteChain.then(async () => {
-    const dir = dirname(input.registrationPath);
+    const dir = dirname(registrationPath);
     const tmp = join(dir, `.${input.sessionId}.json.tmp`);
     await mkdir(dir, { recursive: true });
     await writeFile(tmp, `${JSON.stringify(toRegistration(snapshot, input, port, token))}\n`, "utf8");
-    await rename(tmp, input.registrationPath);
+    await rename(tmp, registrationPath);
   }, () => {/* swallow prior errors so the chain stays live */});
   return registrationWriteChain;
 }
 
-function spawnWorkerChild(input: HostInput): ChildProcessWithoutNullStreams {
+function spawnWorkerChild(input: SessionInput): ChildProcessWithoutNullStreams {
   const cliEntry = process.argv[1];
   if (!cliEntry) {
-    throw new Error("Lifecycle CLI host could not resolve its entrypoint.");
+    throw new Error("Lifecycle CLI could not resolve its entrypoint.");
   }
 
   return spawn(process.execPath, [cliEntry, ...buildWorkerArgs(input)], {
@@ -280,13 +284,13 @@ function spawnWorkerChild(input: HostInput): ChildProcessWithoutNullStreams {
 }
 
 export default defineCommand({
-  description: "Run a detached reconnectable host for a provider worker.",
-  input: HostInputSchema,
+  description: "Run a reconnectable agent worker session.",
+  input: SessionInputSchema,
   async run(rawInput) {
-    const input = rawInput as HostInput;
+    const input = rawInput as SessionInput;
     const token = randomUUID();
 
-    hostLog(input, "starting detached host", {
+    sessionLog(input, "starting worker session", {
       hasProviderSessionId: Boolean(input.providerSessionId?.trim()),
       workspacePath: input.workspacePath,
     });
@@ -303,11 +307,11 @@ export default defineCommand({
       fetch(request, serverInstance) {
         const url = new URL(request.url);
         if (url.searchParams.get("token") !== token) {
-          hostLog(input, "rejected websocket upgrade with invalid token");
+          sessionLog(input, "rejected websocket upgrade with invalid token");
           return new Response("unauthorized", { status: 401 });
         }
         if (currentClient) {
-          hostLog(input, "replacing existing websocket client");
+          sessionLog(input, "replacing existing websocket client");
           currentClient.close(4001, "replaced");
           currentClient = null;
         }
@@ -320,7 +324,7 @@ export default defineCommand({
         message(_socket, message) {
           const text = typeof message === "string" ? message : Buffer.from(message).toString("utf8");
           const command = JSON.parse(text) as AgentWorkerCommand;
-          hostLog(input, "received desktop command", {
+          sessionLog(input, "received desktop command", {
             activeTurnId: snapshot.activeTurnId,
             commandKind: command.kind,
             turnId: "turnId" in command ? command.turnId ?? null : null,
@@ -332,7 +336,7 @@ export default defineCommand({
         },
         open(socket) {
           currentClient = socket;
-          hostLog(input, "websocket client connected", {
+          sessionLog(input, "websocket client connected", {
             port: boundPort,
             status: snapshot.status,
           });
@@ -342,7 +346,7 @@ export default defineCommand({
           if (currentClient === socket) {
             currentClient = null;
           }
-          hostLog(input, "websocket client disconnected", {
+          sessionLog(input, "websocket client disconnected", {
             status: snapshot.status,
           });
         },
@@ -351,12 +355,11 @@ export default defineCommand({
 
     const port = server.port;
     if (typeof port !== "number") {
-      throw new Error("Detached agent host did not bind a loopback port.");
+      throw new Error("Agent worker session did not bind a loopback port.");
     }
     boundPort = port;
-    hostLog(input, "host listening", {
+    sessionLog(input, "listening", {
       port: boundPort,
-      registrationPath: input.registrationPath,
     });
 
     await persistRegistration(input, snapshot, boundPort, token);
@@ -370,7 +373,7 @@ export default defineCommand({
     const stdoutReader = createLineReader((line) => {
       try {
         const event = parseWorkerEvent(line);
-        hostLog(input, "worker event", {
+        sessionLog(input, "worker event", {
           activeTurnId: snapshot.activeTurnId,
           eventKind: event.kind,
           turnId: "turnId" in event ? event.turnId : null,
@@ -378,7 +381,7 @@ export default defineCommand({
         snapshot = updateSnapshotFromWorkerEvent(snapshot, event);
         void persistRegistration(input, snapshot, boundPort, token);
       } catch (error) {
-        hostLog(input, "failed to parse worker event", {
+        sessionLog(input, "failed to parse worker event", {
           error: error instanceof Error ? error.message : String(error),
           line,
         });
@@ -391,7 +394,7 @@ export default defineCommand({
     worker.stderr.on("data", (chunk) => {
       const line = chunk.toString().trim();
       if (line.length > 0) {
-        hostLog(input, "worker stderr", { line });
+        sessionLog(input, "worker stderr", { line });
       }
     });
     worker.on("error", (error) => {
@@ -404,7 +407,7 @@ export default defineCommand({
       };
       void persistRegistration(input, snapshot, boundPort, token);
       currentClient?.send(JSON.stringify(snapshot));
-      hostLog(input, "worker process error", {
+      sessionLog(input, "worker process error", {
         error: error instanceof Error ? error.message : String(error),
       });
     });
@@ -418,7 +421,7 @@ export default defineCommand({
       };
       void persistRegistration(input, snapshot, boundPort, token);
       currentClient?.send(JSON.stringify(snapshot));
-      hostLog(input, "worker exited", {
+      sessionLog(input, "worker exited", {
         code: code ?? null,
         signal: signal ?? null,
       });

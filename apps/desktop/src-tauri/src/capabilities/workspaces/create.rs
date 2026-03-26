@@ -14,7 +14,7 @@ use super::shared::{
 
 #[derive(Debug, Clone)]
 pub(crate) struct CreateWorkspaceRequest {
-    pub(crate) target: String,
+    pub(crate) host: String,
     pub(crate) project_id: String,
     pub(crate) project_path: String,
     pub(crate) workspace_name: Option<String>,
@@ -43,12 +43,12 @@ struct WorktreeWorkspaceCreation<'a> {
     worktree_root: Option<&'a str>,
 }
 
-fn normalize_workspace_target(target: &str) -> Result<&str, LifecycleError> {
-    match target {
-        "local" | "docker" | "remote" | "cloud" => Ok(target),
+fn normalize_workspace_host(host: &str) -> Result<&str, LifecycleError> {
+    match host {
+        "local" | "docker" | "remote" | "cloud" => Ok(host),
         _ => Err(LifecycleError::InvalidInput {
-            field: "target".to_string(),
-            reason: format!("unsupported workspace target '{target}'"),
+            field: "host".to_string(),
+            reason: format!("unsupported workspace host '{host}'"),
         }),
     }
 }
@@ -59,7 +59,7 @@ pub async fn create_workspace(
     request: CreateWorkspaceRequest,
 ) -> Result<String, LifecycleError> {
     let total_started_at = Instant::now();
-    let workspace_target = normalize_workspace_target(&request.target)?;
+    let workspace_host = normalize_workspace_host(&request.host)?;
     let workspace_checkout_type =
         normalize_workspace_checkout_type(request.checkout_type.as_deref());
     if workspace_checkout_type == ROOT_WORKSPACE_CHECKOUT_TYPE {
@@ -106,7 +106,7 @@ pub async fn create_workspace(
         let conn = open_db(&db)?;
         map_database_result(conn.execute(
             "INSERT INTO workspace (
-                id, project_id, name, name_origin, source_ref, source_ref_origin, checkout_type, target, status
+                id, project_id, name, name_origin, source_ref, source_ref_origin, checkout_type, host, status
              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'provisioning')",
             params![
                 workspace_id,
@@ -116,7 +116,7 @@ pub async fn create_workspace(
                 source_ref,
                 source_ref_origin,
                 workspace_checkout_type,
-                workspace_target,
+                workspace_host,
             ],
         ))?;
     }
@@ -429,7 +429,7 @@ mod tests {
         )
         .expect("insert project");
         conn.execute(
-            "INSERT INTO workspace (id, project_id, name, checkout_type, source_ref, target, status)
+            "INSERT INTO workspace (id, project_id, name, checkout_type, source_ref, host, status)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7), (?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             rusqlite::params![
                 "workspace_worktree",
@@ -485,7 +485,7 @@ mod tests {
         .expect("insert project");
         conn.execute(
             "INSERT INTO workspace (
-                id, project_id, name, name_origin, checkout_type, source_ref, source_ref_origin, target, status
+                id, project_id, name, name_origin, checkout_type, source_ref, source_ref_origin, host, status
              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             rusqlite::params![
                 "workspace_root",
@@ -530,32 +530,32 @@ mod tests {
     }
 
     #[test]
-    fn normalize_workspace_target_accepts_canonical_targets() {
+    fn normalize_workspace_host_accepts_canonical_targets() {
         assert_eq!(
-            normalize_workspace_target("local").expect("local target"),
+            normalize_workspace_host("local").expect("local target"),
             "local"
         );
         assert_eq!(
-            normalize_workspace_target("docker").expect("docker target"),
+            normalize_workspace_host("docker").expect("docker target"),
             "docker"
         );
         assert_eq!(
-            normalize_workspace_target("remote").expect("remote target"),
+            normalize_workspace_host("remote").expect("remote target"),
             "remote"
         );
         assert_eq!(
-            normalize_workspace_target("cloud").expect("cloud target"),
+            normalize_workspace_host("cloud").expect("cloud target"),
             "cloud"
         );
     }
 
     #[test]
-    fn normalize_workspace_target_rejects_unknown_targets() {
-        let error = normalize_workspace_target("host").expect_err("legacy target should fail");
+    fn normalize_workspace_host_rejects_unknown_targets() {
+        let error = normalize_workspace_host("host").expect_err("legacy target should fail");
         match error {
             LifecycleError::InvalidInput { field, reason } => {
-                assert_eq!(field, "target");
-                assert_eq!(reason, "unsupported workspace target 'host'");
+                assert_eq!(field, "host");
+                assert_eq!(reason, "unsupported workspace host 'host'");
             }
             other => panic!("expected invalid input, got {other:?}"),
         }

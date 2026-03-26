@@ -6,7 +6,7 @@ import type {
   WorkspaceCheckoutType,
   WorkspaceFailureReason,
   WorkspaceStatus,
-  WorkspaceTarget,
+  WorkspaceHost,
 } from "./workspace";
 
 export interface WorkspaceRecord {
@@ -17,7 +17,7 @@ export interface WorkspaceRecord {
   source_ref: string;
   git_sha: string | null;
   worktree_path: string | null;
-  target: WorkspaceTarget;
+  host: WorkspaceHost;
   manifest_fingerprint?: string | null;
   created_at: string;
   updated_at: string;

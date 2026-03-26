@@ -3,7 +3,7 @@ import {
   type AgentEvent,
   type AgentWorkerEvent,
   type AgentWorker,
-  type DetachedAgentHostSnapshot,
+  type AgentWorkerSnapshot,
   type AgentSessionContext,
   type AgentSessionEvents,
 } from "@lifecycle/agents";
@@ -26,12 +26,9 @@ import {
 } from "@lifecycle/contracts";
 import type { WorkspaceClient } from "@lifecycle/workspace";
 import { publishBrowserLifecycleEvent } from "@/features/events";
-import { createDetachedWorkerClient } from "@/features/agents/agent-worker";
+import { createWorker } from "@/features/agents/workers";
 import { recordAgentSessionEvent } from "@lifecycle/agents/react";
-import { parseSettingsJson } from "@/features/settings/state/settings-state";
-import { readAppSettings } from "@/lib/config";
 import { tauriSqlDriver } from "@/lib/sql-driver";
-import { invokeTauri } from "@/lib/tauri-error";
 import { upsertAgentMessageInCollection } from "@/store/collections/agent-messages";
 import { upsertAgentSessionInCollection } from "@/store/collections/agent-sessions";
 
@@ -670,14 +667,6 @@ async function observeAgentEvent(event: Parameters<typeof recordAgentSessionEven
   await enqueueObservedEvent(sessionId, handle);
 }
 
-function normalizeClaudePermissionMode(permissionMode: string): string {
-  if (permissionMode === "auto") {
-    return "default";
-  }
-
-  return permissionMode;
-}
-
 async function emitWorkerEvent(
   event: AgentWorkerEvent,
   sessionId: string,
@@ -980,7 +969,7 @@ async function updateSessionProviderBinding(
 
 async function applyWorkerStateSnapshot(
   session: AgentSessionRecord,
-  snapshot: DetachedAgentHostSnapshot,
+  snapshot: AgentWorkerSnapshot,
   emit: AgentEventObserver,
 ): Promise<AgentSessionRecord> {
   agentLog(session.id, "applying worker state snapshot", {
@@ -1021,45 +1010,20 @@ async function applyWorkerStateSnapshot(
   return nextSession;
 }
 
-async function createBridgeEnv(
-  workspaceId: string,
-  worktreePath: string,
-): Promise<Record<string, string>> {
-  try {
-    const result = await invokeTauri<{ socketPath: string; sessionToken: string }>(
-      "bridge_create_agent_session",
-      { request: { workspaceId } },
-    );
-    return {
-      LIFECYCLE_BRIDGE_SOCKET: result.socketPath,
-      LIFECYCLE_BRIDGE_SESSION_TOKEN: result.sessionToken,
-      LIFECYCLE_WORKSPACE_ID: workspaceId,
-      LIFECYCLE_WORKSPACE_PATH: worktreePath,
-    };
-  } catch (error) {
-    agentLog(workspaceId, "failed to create bridge session for agent", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return {};
-  }
-}
+// ---------------------------------------------------------------------------
+// Worker factory bridge — connects createWorker to the orchestrator's event system
+// ---------------------------------------------------------------------------
 
-async function launchDetachedProviderWorker(options: {
-  emit: AgentEventObserver;
-  launchArgs: string[];
-  session: AgentSessionRecord;
-  worktreePath: string;
-}): Promise<{ session: AgentSessionRecord; worker: AgentWorker }> {
-  let observedSession = options.session;
-  agentLog(observedSession.id, "launching detached provider worker", {
-    provider: observedSession.provider,
-    worktreePath: options.worktreePath,
-  });
-  const env = await createBridgeEnv(observedSession.workspace_id, options.worktreePath);
-  const worker = await createDetachedWorkerClient({
-    cwd: options.worktreePath,
-    env,
-    launchArgs: options.launchArgs,
+async function startWorker(
+  session: AgentSessionRecord,
+  context: AgentSessionContext,
+  events: AgentSessionEvents,
+): Promise<{ session: AgentSessionRecord; worker: AgentWorker }> {
+  let observedSession = session;
+
+  const result = await createWorker({
+    session,
+    context,
     onState: async (snapshot) => {
       if (
         snapshot.sessionId !== observedSession.id ||
@@ -1071,7 +1035,7 @@ async function launchDetachedProviderWorker(options: {
         });
         return;
       }
-      observedSession = await applyWorkerStateSnapshot(observedSession, snapshot, options.emit);
+      observedSession = await applyWorkerStateSnapshot(observedSession, snapshot, events.emit);
     },
     onWorkerEvent: async (event) => {
       agentLog(observedSession.id, "processing worker event", {
@@ -1082,167 +1046,18 @@ async function launchDetachedProviderWorker(options: {
         observedSession = await updateSessionProviderBinding(
           observedSession,
           event.providerSessionId,
-          options.emit,
+          events.emit,
         );
         return;
       }
 
-      await emitWorkerEvent(event, observedSession.id, observedSession.workspace_id, options.emit);
+      await emitWorkerEvent(event, observedSession.id, observedSession.workspace_id, events.emit);
     },
-    sessionId: options.session.id,
   });
 
-  return {
-    session: observedSession,
-    worker,
-  };
+  observedSession = result.session;
+  return { session: observedSession, worker: result.worker };
 }
-
-async function buildClaudeHostArgs(
-  session: AgentSessionRecord,
-  worktreePath: string,
-): Promise<string[]> {
-  const settings = parseSettingsJson(await readAppSettings());
-  const claudeSettings = settings.harnesses.claude;
-  const args = [
-    "--provider",
-    "claude",
-    "--session-id",
-    session.id,
-    "--workspace-path",
-    worktreePath,
-    "--model",
-    claudeSettings.model,
-    "--permission-mode",
-    normalizeClaudePermissionMode(claudeSettings.permissionMode),
-    "--login-method",
-    claudeSettings.loginMethod ?? "claudeai",
-  ];
-
-  if (claudeSettings.dangerousSkipPermissions) {
-    args.push("--dangerous-skip-permissions");
-  }
-  if (claudeSettings.effort !== "default") {
-    args.push("--effort", claudeSettings.effort);
-  }
-  if (session.provider_session_id?.trim()) {
-    args.push("--provider-session-id", session.provider_session_id.trim());
-  }
-
-  return args;
-}
-
-async function buildCodexHostArgs(
-  session: AgentSessionRecord,
-  worktreePath: string,
-): Promise<string[]> {
-  const settings = parseSettingsJson(await readAppSettings());
-  const codexSettings = settings.harnesses.codex;
-  const args = [
-    "--provider",
-    "codex",
-    "--session-id",
-    session.id,
-    "--workspace-path",
-    worktreePath,
-    "--model",
-    codexSettings.model,
-    "--approval-policy",
-    codexSettings.approvalPolicy,
-    "--sandbox-mode",
-    codexSettings.sandboxMode,
-  ];
-
-  if (codexSettings.dangerousBypass) {
-    args.push("--dangerous-bypass");
-  }
-  if (codexSettings.reasoningEffort !== "default") {
-    args.push("--model-reasoning-effort", codexSettings.reasoningEffort);
-  }
-  if (session.provider_session_id?.trim()) {
-    args.push("--provider-session-id", session.provider_session_id.trim());
-  }
-
-  return args;
-}
-
-const ClaudeAgentWorker = {
-  async start(
-    session: AgentSessionRecord,
-    context: AgentSessionContext,
-    _client: WorkspaceClient,
-    events: AgentSessionEvents,
-  ): Promise<{ session: AgentSessionRecord; worker: AgentWorker }> {
-    if (!context.worktreePath) {
-      throw new Error(`Workspace ${session.workspace_id} has no worktree path for Claude.`);
-    }
-
-    return await launchDetachedProviderWorker({
-      emit: events.emit,
-      launchArgs: await buildClaudeHostArgs(session, context.worktreePath),
-      session,
-      worktreePath: context.worktreePath,
-    });
-  },
-
-  async connect(
-    session: AgentSessionRecord,
-    context: AgentSessionContext,
-    _client: WorkspaceClient,
-    events: AgentSessionEvents,
-  ): Promise<AgentWorker> {
-    if (!context.worktreePath) {
-      throw new Error(`Workspace ${session.workspace_id} has no worktree path for Claude.`);
-    }
-
-    const result = await launchDetachedProviderWorker({
-      emit: events.emit,
-      launchArgs: await buildClaudeHostArgs(session, context.worktreePath),
-      session,
-      worktreePath: context.worktreePath,
-    });
-    return result.worker;
-  },
-};
-
-const CodexAgentWorker = {
-  async start(
-    session: AgentSessionRecord,
-    context: AgentSessionContext,
-    _client: WorkspaceClient,
-    events: AgentSessionEvents,
-  ): Promise<{ session: AgentSessionRecord; worker: AgentWorker }> {
-    if (!context.worktreePath) {
-      throw new Error(`Workspace ${session.workspace_id} has no worktree path for Codex.`);
-    }
-
-    return await launchDetachedProviderWorker({
-      emit: events.emit,
-      launchArgs: await buildCodexHostArgs(session, context.worktreePath),
-      session,
-      worktreePath: context.worktreePath,
-    });
-  },
-
-  async connect(
-    session: AgentSessionRecord,
-    context: AgentSessionContext,
-    _client: WorkspaceClient,
-    events: AgentSessionEvents,
-  ): Promise<AgentWorker> {
-    if (!context.worktreePath) {
-      throw new Error(`Workspace ${session.workspace_id} has no worktree path for Codex.`);
-    }
-
-    const result = await launchDetachedProviderWorker({
-      emit: events.emit,
-      launchArgs: await buildCodexHostArgs(session, context.worktreePath),
-      session,
-      worktreePath: context.worktreePath,
-    });
-    return result.worker;
-  },
-};
 
 async function reattachPersistedAgentSessions(
   orchestrator: ReturnType<typeof createLifecycleAgentOrchestrator>,
@@ -1273,9 +1088,10 @@ async function reattachPersistedAgentSessions(
 
 export function createAgentOrchestrator(localClient: WorkspaceClient) {
   const orchestrator = createLifecycleAgentOrchestrator({
-    workers: {
-      claude: ClaudeAgentWorker,
-      codex: CodexAgentWorker,
+    worker: {
+      start: (session, context, _client, events) => startWorker(session, context, events),
+      connect: async (session, context, _client, events) =>
+        (await startWorker(session, context, events)).worker,
     },
     resolveClient() {
       return localClient;
@@ -1300,7 +1116,7 @@ export function createAgentOrchestrator(localClient: WorkspaceClient) {
 
         return {
           workspaceId,
-          workspaceTarget: workspaceRecord.target,
+          workspaceHost: workspaceRecord.host,
           worktreePath: workspaceRecord.worktree_path,
         };
       },

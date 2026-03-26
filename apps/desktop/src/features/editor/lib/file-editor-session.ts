@@ -1,11 +1,11 @@
-export interface FileViewerSessionState {
+export interface FileEditorSessionState {
   conflictDiskContent: string | null;
   draftContent: string | null;
   savedContent: string | null;
 }
 
-export function isFileViewerDirty(
-  sessionState: FileViewerSessionState | null | undefined,
+export function isFileEditorDirty(
+  sessionState: FileEditorSessionState | null | undefined,
 ): boolean {
   if (!sessionState) {
     return false;
@@ -18,8 +18,8 @@ export function isFileViewerDirty(
   );
 }
 
-export function hasFileViewerConflict(
-  sessionState: FileViewerSessionState | null | undefined,
+export function hasFileEditorConflict(
+  sessionState: FileEditorSessionState | null | undefined,
 ): boolean {
   return typeof sessionState?.conflictDiskContent === "string";
 }

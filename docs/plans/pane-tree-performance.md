@@ -59,7 +59,7 @@ References:
 References:
 1. [workspace-pane-content.tsx](/Users/kyle/dev/lifecycle/apps/desktop/src/features/workspaces/canvas/panes/workspace-pane-content.tsx#L27)
 2. [agent-surface-definition.tsx](/Users/kyle/dev/lifecycle/apps/desktop/src/features/workspaces/surfaces/agent-surface-definition.tsx#L143)
-3. [file-viewer-surface-definition.tsx](/Users/kyle/dev/lifecycle/apps/desktop/src/features/workspaces/surfaces/file-viewer-surface-definition.tsx#L36)
+3. [file-editor-surface-definition.tsx](/Users/kyle/dev/lifecycle/apps/desktop/src/features/explorer/surfaces/file-editor-surface-definition.tsx#L36)
 4. [preview-surface-definition.tsx](/Users/kyle/dev/lifecycle/apps/desktop/src/features/workspaces/surfaces/preview-surface-definition.tsx#L29)
 
 ### D. Drag path still performs full DOM geometry reads
@@ -99,7 +99,7 @@ Before implementation starts, add a small opt-in dev instrumentation layer for t
 
 Measure all of these in a reproducible fixture workspace:
 
-1. One pane, five tabs: `agent`, `file-viewer`, `preview`, `file-viewer`, `agent`
+1. One pane, five tabs: `agent`, `file-editor`, `preview`, `file-editor`, `agent`
 2. Two panes, three tabs each, switching only inside the active pane
 3. Four panes with mixed agents/files/previews
 4. Same-pane switching while one hidden agent tab is actively streaming
@@ -113,13 +113,13 @@ Measure all of these in a reproducible fixture workspace:
 3. `tab-switch:pane-tree-render`
 4. `tab-switch:active-pane-content-render`
 5. `tab-drag:pointermove->preview`
-6. React render counts for `WorkspacePaneTree`, `WorkspacePaneLeaf`, `WorkspacePaneTabBar`, `WorkspacePaneContent`, `AgentSurface`, `FileSurface`, and `PreviewSurface`
+6. React render counts for `WorkspacePaneTree`, `WorkspacePaneLeaf`, `WorkspacePaneTabBar`, `WorkspacePaneContent`, `AgentSurface`, `FileEditorSurface`, and `PreviewSurface`
 
 ### Initial target gates
 
 1. Same-pane tab switch: under 16ms median and under 50ms p95 in the representative fixture on a warm desktop session
 2. Switching one pane tab: zero sibling `WorkspacePaneContent` renders
-3. Switching one pane tab: zero hidden `AgentSurface` or `FileSurface` renders unless their own subscribed data changed
+3. Switching one pane tab: zero hidden `AgentSurface` or `FileEditorSurface` renders unless their own subscribed data changed
 4. Tab drag pointer path: no layout reads beyond the active drag geometry cache refresh cadence we explicitly choose
 
 If the first baseline shows these targets are unrealistic or too loose, update this plan with measured numbers before broad code changes continue.
@@ -144,7 +144,7 @@ We can measure pane-tree latency precisely and compare before/after changes on t
 **Tasks**
 
 - [ ] Add user-timing marks around tab selection dispatch, controller derivation, pane-tree render completion, and first post-switch paint.
-- [ ] Add an opt-in dev render counter helper for the pane tree and mounted surface components.
+- [x] Add an opt-in dev render counter helper for the pane tree and mounted surface components.
 - [ ] Build a deterministic test fixture or debug route that opens a representative mix of panes and tabs without manual setup.
 - [ ] Capture baseline traces for all representative scenarios and record them in this plan or a linked dated learning.
 - [ ] Add one targeted automated test that asserts sibling panes do not re-render on same-pane tab switches once the instrumentation exists.
@@ -180,8 +180,9 @@ Hidden surfaces stay mounted for continuity but do not meaningfully re-render du
 **Tasks**
 
 - [ ] Introduce a stable mounted-surface wrapper that memoizes per-surface props and isolates inactive surfaces from parent re-renders.
-- [ ] Memoize or otherwise isolate `AgentSurface`, `FileSurface`, and `PreviewSurface` at the mounted-surface boundary.
-- [ ] Stop recreating pane-content render context objects unless one of their semantic fields changes.
+- [x] Introduce a stable mounted-surface wrapper that memoizes per-surface props and isolates inactive surfaces from parent re-renders.
+- [x] Memoize or otherwise isolate `AgentSurface`, `FileEditorSurface`, and `PreviewSurface` at the mounted-surface boundary.
+- [x] Stop recreating pane-content render context objects unless one of their semantic fields changes.
 - [ ] Separate visibility toggling from content re-rendering so an active-tab flip can update container visibility without reconstructing every child subtree.
 - [ ] Verify that hidden live tabs still preserve DOM continuity, scroll position, and session attachment.
 
@@ -236,4 +237,3 @@ Follow-on work should start from the same measurement primitives and focus on:
 4. markdown/diff/render hotspot profiling inside `AgentSurface`
 
 The transcript pass should become its own plan or be appended here only after P0 through P2 are complete.
-

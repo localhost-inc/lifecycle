@@ -16,7 +16,7 @@ import {
   workspaceFileDirname,
 } from "@/features/workspaces/lib/workspace-file-paths";
 import { useWorkspaceOpenRequests } from "@/features/workspaces/state/workspace-open-requests";
-import { createFileViewerOpenInput } from "@/features/workspaces/canvas/workspace-canvas-requests";
+import { createFileEditorOpenInput } from "@/features/workspaces/canvas/workspace-canvas-requests";
 import type { CommandPaletteCommand } from "@/features/command-palette/types";
 
 interface UseCommandPaletteExplorerResult {
@@ -70,7 +70,7 @@ export function useCommandPaletteExplorer(): UseCommandPaletteExplorerResult {
         icon: File,
         keywords: [filePath, label, dirname, entry.extension ?? ""].filter(Boolean),
         label,
-        onExecute: () => openTab(currentWorkspace.id, createFileViewerOpenInput(filePath)),
+        onExecute: () => openTab(currentWorkspace.id, createFileEditorOpenInput(filePath)),
         priority: scoreWorkspaceExplorerUsage(usageByPath[filePath]),
       } satisfies CommandPaletteCommand;
     });

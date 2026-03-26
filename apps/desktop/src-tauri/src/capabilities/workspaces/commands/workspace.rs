@@ -8,7 +8,7 @@ use tauri::{AppHandle, State};
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateWorkspaceCommandInput {
-    target: String,
+    host: String,
     project_id: String,
     project_path: String,
     workspace_name: Option<String>,
@@ -38,7 +38,7 @@ pub async fn create_workspace(
         app.clone(),
         db_path,
         super::super::create::CreateWorkspaceRequest {
-            target: input.target,
+            host: input.host,
             project_id: input.project_id,
             project_path: input.project_path,
             workspace_name: input.workspace_name,
@@ -106,7 +106,8 @@ pub async fn start_workspace_services(
         manifest_fingerprint,
         service_names,
     )
-    .await
+    .await?;
+    Ok(())
 }
 
 #[tauri::command]

@@ -2,42 +2,43 @@ import { Alert, AlertAction, AlertDescription, EmptyState, FloatingToggle } from
 import { isTauri } from "@tauri-apps/api/core";
 import { watch } from "@tauri-apps/plugin-fs";
 import { FileText } from "lucide-react";
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { memo, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import {
   SHORTCUT_HANDLER_PRIORITY,
   useShortcutRegistration,
 } from "@/app/shortcuts/shortcut-router";
+import { useWorkspacePaneRenderCount } from "@/features/workspaces/canvas/workspace-pane-performance";
 import { workspaceFileBasename } from "@/features/workspaces/lib/workspace-file-paths";
 import { writeWorkspaceFile } from "@/features/workspaces/api";
 import { useWorkspaceFile } from "@/features/workspaces/hooks";
 import { useClient } from "@/store";
-import { resolveFileEditorConfig } from "@/features/explorer/lib/file-editor-config";
-import type { FileViewerMode } from "@/features/explorer/lib/file-view-mode";
+import { resolveFileEditorConfig } from "@/features/editor/lib/file-editor-config";
+import type { FileEditorMode } from "@/features/editor/lib/file-editor-mode";
 import {
-  isFileViewerDirty,
-  type FileViewerSessionState,
-} from "@/features/explorer/lib/file-session";
+  isFileEditorDirty,
+  type FileEditorSessionState,
+} from "@/features/editor/lib/file-editor-session";
 import {
-  getFileViewerScrollRestoreKey,
-  resolveFileViewerRenderer,
-  resolveInitialFileViewerMode,
-  supportsFileViewerViewMode,
-} from "@/features/explorer/lib/file-renderers";
-import { resolveFileRendererDefinition } from "@/features/explorer/renderers/registry";
-import { FileCodeEditor } from "@/features/explorer/components/file-code-editor";
+  getFileEditorScrollRestoreKey,
+  resolveFileEditorRenderer,
+  resolveInitialFileEditorMode,
+  supportsFileEditorViewMode,
+} from "@/features/editor/lib/file-editor-renderers";
+import { resolveFileRendererDefinition } from "@/features/editor/renderers/registry";
+import { FileCodeEditor } from "@/features/editor/components/file-code-editor";
 
-interface FileSurfaceProps {
+interface FileEditorSurfaceProps {
   filePath: string;
-  initialMode?: FileViewerMode;
+  initialMode?: FileEditorMode;
   initialScrollTop?: number;
-  onModeChange?: (mode: FileViewerMode) => void;
+  onModeChange?: (mode: FileEditorMode) => void;
   onScrollTopChange?: (scrollTop: number) => void;
-  onSessionStateChange?: (state: FileViewerSessionState | null) => void;
-  sessionState?: FileViewerSessionState | null;
+  onSessionStateChange?: (state: FileEditorSessionState | null) => void;
+  sessionState?: FileEditorSessionState | null;
   workspaceId: string;
 }
 
-export function FileSurface({
+export const FileEditorSurface = memo(function FileEditorSurface({
   filePath,
   initialMode,
   initialScrollTop = 0,
@@ -46,11 +47,12 @@ export function FileSurface({
   onSessionStateChange,
   sessionState,
   workspaceId,
-}: FileSurfaceProps) {
+}: FileEditorSurfaceProps) {
+  useWorkspacePaneRenderCount("FileEditorSurface", filePath);
   const client = useClient();
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [mode, setMode] = useState<FileViewerMode>(() =>
-    resolveInitialFileViewerMode(filePath, initialMode),
+  const [mode, setMode] = useState<FileEditorMode>(() =>
+    resolveInitialFileEditorMode(filePath, initialMode),
   );
   const restoredScrollKeyRef = useRef<string | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -59,9 +61,9 @@ export function FileSurface({
   const fileQuery = useWorkspaceFile(workspaceId, filePath);
 
   const displayPath = fileQuery.data?.file_path ?? filePath;
-  const renderer = resolveFileViewerRenderer(displayPath);
+  const renderer = resolveFileEditorRenderer(displayPath);
   const rendererDefinition = resolveFileRendererDefinition(displayPath);
-  const supportsViewMode = supportsFileViewerViewMode(renderer);
+  const supportsViewMode = supportsFileEditorViewMode(renderer);
   const effectiveMode = supportsViewMode ? mode : "edit";
   const editorConfig = resolveFileEditorConfig(displayPath, rendererDefinition.editor);
   const textContent =
@@ -70,7 +72,7 @@ export function FileSurface({
       : null;
   const draftContent = sessionState?.draftContent ?? "";
   const conflictDiskContent = sessionState?.conflictDiskContent ?? null;
-  const isDirty = isFileViewerDirty(sessionState);
+  const isDirty = isFileEditorDirty(sessionState);
 
   useEffect(() => {
     const nextSeed = `${filePath}:${initialMode ?? ""}`;
@@ -79,7 +81,7 @@ export function FileSurface({
     }
 
     modeSeedRef.current = nextSeed;
-    setMode(resolveInitialFileViewerMode(filePath, initialMode));
+    setMode(resolveInitialFileEditorMode(filePath, initialMode));
   }, [filePath, initialMode]);
 
   useEffect(() => {
@@ -178,7 +180,7 @@ export function FileSurface({
 
   useEffect(() => {
     const viewport = viewportRef.current;
-    const restoreKey = getFileViewerScrollRestoreKey({
+    const restoreKey = getFileEditorScrollRestoreKey({
       filePath: displayPath,
       isLoading: fileQuery.isLoading,
       mode: effectiveMode,
@@ -255,7 +257,7 @@ export function FileSurface({
   };
 
   // Stable ref-based callback so CodeMirror doesn't reconfigure and steal
-  // focus every time FileSurface re-renders.
+  // focus every time FileEditorSurface re-renders.
   const editorChangeRef = useRef((_value: string) => {});
   editorChangeRef.current = (value: string) => {
     onSessionStateChange?.({
@@ -268,7 +270,7 @@ export function FileSurface({
     editorChangeRef.current(value);
   }, []);
 
-  const handleModeChange = (nextMode: FileViewerMode) => {
+  const handleModeChange = (nextMode: FileEditorMode) => {
     const resolvedNextMode = supportsViewMode ? nextMode : "edit";
     setMode(resolvedNextMode);
     onModeChange?.(resolvedNextMode);
@@ -402,4 +404,4 @@ export function FileSurface({
       ) : null}
     </div>
   );
-}
+});

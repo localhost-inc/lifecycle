@@ -1,28 +1,28 @@
 import { FileText, PenTool } from "lucide-react";
-import { FileSurface } from "@/features/explorer/components/file-surface";
-import { isFileViewerDirty } from "@/features/explorer/lib/file-session";
+import { FileEditorSurface } from "@/features/editor/components/file-editor-surface";
+import { isFileEditorDirty } from "@/features/editor/lib/file-editor-session";
 import { WorkspaceSurfaceBubble } from "@/features/workspaces/surfaces/workspace-surface-tab-icons";
 import {
   getOptionalString,
   isRecord,
 } from "@/features/workspaces/surfaces/workspace-surface-persistence-utils";
 import {
-  areFileViewerSessionStatesEqual,
+  areFileEditorSessionStatesEqual,
   areWorkspaceCanvasViewStatesEqual,
   type WorkspaceSurfaceDefinition,
 } from "@/features/workspaces/surfaces/workspace-surface-types";
 import {
-  createFileViewerTab,
-  fileViewerTabKey,
-  type FileViewerTab,
+  createFileEditorTab,
+  fileEditorTabKey,
+  type FileEditorTab,
 } from "@/features/workspaces/surfaces/workspace-surface-tab-records";
 
-export const fileViewerSurfaceDefinition: WorkspaceSurfaceDefinition<"file-viewer"> = {
+export const fileEditorSurfaceDefinition: WorkspaceSurfaceDefinition<"file-editor"> = {
   areActiveSurfacesEqual: (previous, next) =>
     previous.tab === next.tab &&
     previous.workspaceId === next.workspaceId &&
     areWorkspaceCanvasViewStatesEqual(previous.viewState, next.viewState) &&
-    areFileViewerSessionStatesEqual(previous.sessionState, next.sessionState),
+    areFileEditorSessionStatesEqual(previous.sessionState, next.sessionState),
   buildTabPresentation: (tab) => ({
     leading: (
       <WorkspaceSurfaceBubble tab={tab}>
@@ -35,11 +35,11 @@ export const fileViewerSurfaceDefinition: WorkspaceSurfaceDefinition<"file-viewe
     ),
     title: tab.filePath,
   }),
-  createTab: (options) => createFileViewerTab(options.filePath),
-  getTabKey: (options) => fileViewerTabKey(options.filePath),
-  parsePersistedTab: parsePersistedFileViewerTab,
+  createTab: (options) => createFileEditorTab(options.filePath),
+  getTabKey: (options) => fileEditorTabKey(options.filePath),
+  parsePersistedTab: parsePersistedFileEditorTab,
   renderActiveSurface: (activeSurface, context) => (
-    <FileSurface
+    <FileEditorSurface
       filePath={activeSurface.tab.filePath}
       initialMode={activeSurface.viewState?.fileMode}
       initialScrollTop={activeSurface.viewState?.scrollTop ?? 0}
@@ -65,37 +65,37 @@ export const fileViewerSurfaceDefinition: WorkspaceSurfaceDefinition<"file-viewe
         );
       }}
       onSessionStateChange={(nextState) =>
-        context.onFileSessionStateChange(activeSurface.tab.key, nextState)
+        context.onFileEditorSessionStateChange(activeSurface.tab.key, nextState)
       }
       sessionState={activeSurface.sessionState}
       workspaceId={activeSurface.workspaceId}
     />
   ),
   resolveActiveSurface: (tab, context) => ({
-    kind: "file-viewer",
-    sessionState: context.fileSessionsByTabKey[tab.key] ?? null,
+    kind: "file-editor",
+    sessionState: context.fileEditorSessionsByTabKey[tab.key] ?? null,
     tab,
     viewState: context.viewStateByTabKey[tab.key] ?? null,
     workspaceId: context.workspaceId,
   }),
   resolveTabStatus: (tab, context) => ({
-    isDirty: isFileViewerDirty(context.fileSessionsByTabKey[tab.key] ?? null),
+    isDirty: isFileEditorDirty(context.fileEditorSessionsByTabKey[tab.key] ?? null),
     isRunning: false,
     needsAttention: false,
   }),
-  serializeTab: serializeFileViewerTab,
+  serializeTab: serializeFileEditorTab,
 };
 
-export function parsePersistedFileViewerTab(value: unknown): FileViewerTab | null {
+export function parsePersistedFileEditorTab(value: unknown): FileEditorTab | null {
   if (!isRecord(value)) {
     return null;
   }
 
   const filePath = getOptionalString(value, "filePath");
-  return filePath ? createFileViewerTab(filePath) : null;
+  return filePath ? createFileEditorTab(filePath) : null;
 }
 
-export function serializeFileViewerTab(tab: FileViewerTab): Record<string, unknown> {
+export function serializeFileEditorTab(tab: FileEditorTab): Record<string, unknown> {
   return {
     filePath: tab.filePath,
     kind: tab.kind,

@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import type { DetachedAgentHostRegistration, DetachedAgentHostSnapshot } from "./detached-host";
+import type { AgentWorkerRegistration, AgentWorkerSnapshot } from "./worker-protocol";
 
-describe("detached agent host contracts", () => {
+describe("agent worker protocol", () => {
   test("defines a durable registration payload for reconnecting desktop sessions", () => {
-    const registration: DetachedAgentHostRegistration = {
+    const registration: AgentWorkerRegistration = {
       provider: "codex",
       providerSessionId: "thread_1",
       sessionId: "agent_session_1",
@@ -21,7 +21,7 @@ describe("detached agent host contracts", () => {
   });
 
   test("defines a websocket snapshot payload for reconnect reconciliation", () => {
-    const snapshot: DetachedAgentHostSnapshot = {
+    const snapshot: AgentWorkerSnapshot = {
       kind: "worker.state",
       provider: "claude",
       providerSessionId: "session_1",

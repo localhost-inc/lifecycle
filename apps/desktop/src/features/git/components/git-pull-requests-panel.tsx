@@ -1,4 +1,4 @@
-import type { GitPullRequestSummary, WorkspaceTarget } from "@lifecycle/contracts";
+import type { GitPullRequestSummary, WorkspaceHost } from "@lifecycle/contracts";
 import { useEffect, useState } from "react";
 import { useCurrentGitPullRequest, useGitPullRequests } from "@/features/git/hooks";
 import { PullRequestsTab } from "@/features/git/components/pull-requests-tab";
@@ -6,18 +6,18 @@ import { PullRequestsTab } from "@/features/git/components/pull-requests-tab";
 interface GitPullRequestsPanelProps {
   onOpenPullRequest: (pullRequest: GitPullRequestSummary) => void;
   workspaceId: string;
-  workspaceTarget: WorkspaceTarget;
+  workspaceHost: WorkspaceHost;
   worktreePath: string | null;
 }
 
 export function GitPullRequestsPanel({
   onOpenPullRequest,
   workspaceId,
-  workspaceTarget,
+  workspaceHost,
   worktreePath,
 }: GitPullRequestsPanelProps) {
   const supportsGit =
-    (workspaceTarget === "local" || workspaceTarget === "docker") && worktreePath !== null;
+    (workspaceHost === "local" || workspaceHost === "docker") && worktreePath !== null;
   const [documentVisible, setDocumentVisible] = useState(() =>
     typeof document === "undefined" ? true : document.visibilityState === "visible",
   );

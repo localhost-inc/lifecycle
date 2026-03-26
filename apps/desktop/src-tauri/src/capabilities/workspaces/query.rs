@@ -17,7 +17,7 @@ pub struct WorkspaceRecord {
     pub source_ref: String,
     pub git_sha: Option<String>,
     pub worktree_path: Option<String>,
-    pub target: String,
+    pub host: String,
     pub manifest_fingerprint: Option<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -50,7 +50,7 @@ fn map_workspace_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<WorkspaceRe
         source_ref: row.get(4)?,
         git_sha: row.get(5)?,
         worktree_path: row.get(6)?,
-        target: row.get(7)?,
+        host: row.get(7)?,
         manifest_fingerprint: row.get(8)?,
         created_at: row.get(9)?,
         updated_at: row.get(10)?,
@@ -67,7 +67,7 @@ fn get_workspace_by_id_sync(
     workspace_id: String,
 ) -> Result<Option<WorkspaceRecord>, LifecycleError> {
     let mut stmt = conn.prepare(
-        "SELECT id, project_id, name, checkout_type, source_ref, git_sha, worktree_path, target, manifest_fingerprint, created_at, updated_at, last_active_at, prepared_at, status, failure_reason, failed_at
+        "SELECT id, project_id, name, checkout_type, source_ref, git_sha, worktree_path, host, manifest_fingerprint, created_at, updated_at, last_active_at, prepared_at, status, failure_reason, failed_at
          FROM workspace
          WHERE id = ?1
          LIMIT 1"
@@ -227,7 +227,7 @@ mod tests {
         .expect("insert project");
         conn.execute(
             "INSERT INTO workspace (
-                id, project_id, name, checkout_type, source_ref, worktree_path, target, status, manifest_fingerprint,
+                id, project_id, name, checkout_type, source_ref, worktree_path, host, status, manifest_fingerprint,
                 created_at, updated_at, last_active_at
             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?10, ?10)",
             rusqlite::params![

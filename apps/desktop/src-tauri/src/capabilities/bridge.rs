@@ -619,7 +619,7 @@ impl BridgeState {
         let workspace_id = self.resolve_workspace_id(params.workspace_id, session.as_ref())?;
         let started_services = params.service_names.clone().unwrap_or_default();
 
-        environment::start_workspace_services(
+        let handle = environment::start_workspace_services(
             app.clone(),
             app.state::<DbPath>(),
             app.state::<WorkspaceControllerRegistryHandle>(),
@@ -629,6 +629,12 @@ impl BridgeState {
             params.service_names,
         )
         .await?;
+
+        // Wait for all services to reach a terminal state (ready/failed)
+        // before responding, so the caller gets an accurate snapshot.
+        if let Some(handle) = handle {
+            let _ = handle.await;
+        }
 
         let db_path = app.state::<DbPath>();
         let services = query::get_workspace_services(&db_path.0, workspace_id.clone()).await?;

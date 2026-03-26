@@ -31,7 +31,7 @@ const WorkspaceRecordSchema = z.object({
   project_id: z.string(),
   source_ref: z.string(),
   status: z.string(),
-  target: z.string(),
+  host: z.string(),
   updated_at: z.string(),
   worktree_path: z.string().nullable(),
 });

@@ -1,4 +1,4 @@
-import type { GitPullRequestSummary, WorkspaceTarget } from "@lifecycle/contracts";
+import type { GitPullRequestSummary, WorkspaceHost } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
 import { useCallback } from "react";
 import { stageGitFiles } from "@/features/git/api";
@@ -16,7 +16,7 @@ interface GitChangesPanelProps {
   onOpenPullRequest: (pullRequest: GitPullRequestSummary) => void;
   onShowChanges: () => void;
   workspaceId: string;
-  workspaceTarget: WorkspaceTarget;
+  workspaceHost: WorkspaceHost;
   worktreePath: string | null;
 }
 
@@ -27,17 +27,17 @@ export function GitChangesPanel({
   onOpenPullRequest,
   onShowChanges: _onShowChanges,
   workspaceId,
-  workspaceTarget,
+  workspaceHost,
   worktreePath,
 }: GitChangesPanelProps) {
   const client = useClient();
   const supportsChanges =
-    (workspaceTarget === "local" || workspaceTarget === "docker") && worktreePath !== null;
+    (workspaceHost === "local" || workspaceHost === "docker") && worktreePath !== null;
   const gitActions = useGitActions({
     onCommitComplete,
     onOpenPullRequest,
     workspaceId,
-    workspaceTarget,
+    workspaceHost,
     worktreePath,
   });
 

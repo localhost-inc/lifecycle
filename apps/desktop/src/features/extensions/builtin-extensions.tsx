@@ -116,11 +116,11 @@ export function getBuiltinExtensionSlots({
         <GitChangesPanel
           onCommitComplete={() => onSwitchToExtension("git-history")}
           onOpenDiff={launchActions.openChangesDiff}
-          onOpenFile={launchActions.openFileViewer}
+          onOpenFile={launchActions.openFileEditor}
           onOpenPullRequest={launchActions.openPullRequest}
           onShowChanges={() => onSwitchToExtension("git-changes")}
           workspaceId={workspace.id}
-          workspaceTarget={workspace.target}
+          workspaceHost={workspace.host}
           worktreePath={workspace.worktree_path}
         />
       ),
@@ -131,9 +131,9 @@ export function getBuiltinExtensionSlots({
       label: "Explorer",
       panel: (
         <ExplorerPanel
-          onOpenFile={launchActions.openFileViewer}
+          onOpenFile={launchActions.openFileEditor}
           workspaceId={workspace.id}
-          workspaceTarget={workspace.target}
+          workspaceHost={workspace.host}
           worktreePath={workspace.worktree_path}
         />
       ),
@@ -147,7 +147,7 @@ export function getBuiltinExtensionSlots({
         <GitHistoryPanel
           onOpenCommitDiff={launchActions.openCommitDiff}
           workspaceId={workspace.id}
-          workspaceTarget={workspace.target}
+          workspaceHost={workspace.host}
           worktreePath={workspace.worktree_path}
         />
       ),
@@ -160,7 +160,7 @@ export function getBuiltinExtensionSlots({
         <GitPullRequestsPanel
           onOpenPullRequest={launchActions.openPullRequest}
           workspaceId={workspace.id}
-          workspaceTarget={workspace.target}
+          workspaceHost={workspace.host}
           worktreePath={workspace.worktree_path}
         />
       ),

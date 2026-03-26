@@ -240,7 +240,7 @@ export function AppSidebar({
                               className={[
                                 "group/workspace flex items-center gap-1.5 rounded-xl py-1.5 pl-4 pr-1 text-xs font-semibold transition-colors",
                                 active
-                                  ? "bg-[var(--muted)] text-[var(--foreground)]"
+                                  ? "bg-[var(--glass)] text-[var(--foreground)]"
                                   : "text-[var(--sidebar-muted-foreground)] hover:text-[var(--sidebar-foreground)]",
                               ].join(" ")}
                               onContextMenu={(e) => handleWorkspaceContextMenu(e, workspace)}

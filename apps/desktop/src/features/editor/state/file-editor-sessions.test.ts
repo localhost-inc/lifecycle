@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
-  buildCloseWorkspaceFileSessionPrompt,
-  pruneWorkspaceFileSessions,
-  updateWorkspaceFileSession,
-  type WorkspaceFileSessionsState,
-} from "@/features/explorer/state/workspace-file-sessions";
+  buildCloseFileEditorSessionPrompt,
+  pruneFileEditorSessions,
+  updateFileEditorSession,
+  type FileEditorSessionsState,
+} from "@/features/editor/state/file-editor-sessions";
 
-describe("workspace file sessions", () => {
+describe("file editor sessions", () => {
   test("prunes sessions for tabs that are no longer open", () => {
     const fileASession = {
       conflictDiskContent: null,
@@ -18,15 +18,15 @@ describe("workspace file sessions", () => {
       draftContent: "draft b",
       savedContent: "saved b",
     };
-    const current: WorkspaceFileSessionsState = {
+    const current: FileEditorSessionsState = {
       "file:a": fileASession,
       "file:b": fileBSession,
     };
 
-    expect(pruneWorkspaceFileSessions(current, ["file:b"])).toEqual({
+    expect(pruneFileEditorSessions(current, ["file:b"])).toEqual({
       "file:b": fileBSession,
     });
-    expect(pruneWorkspaceFileSessions(current, ["file:a", "file:b"])).toBe(current);
+    expect(pruneFileEditorSessions(current, ["file:a", "file:b"])).toBe(current);
   });
 
   test("updates and clears session entries without rewriting identical state", () => {
@@ -35,14 +35,14 @@ describe("workspace file sessions", () => {
       draftContent: "draft",
       savedContent: "saved",
     };
-    const current: WorkspaceFileSessionsState = {
+    const current: FileEditorSessionsState = {
       "file:a": initialSession,
     };
 
-    const identical = updateWorkspaceFileSession(current, "file:a", initialSession);
+    const identical = updateFileEditorSession(current, "file:a", initialSession);
     expect(identical).toBe(current);
 
-    const updated = updateWorkspaceFileSession(current, "file:a", {
+    const updated = updateFileEditorSession(current, "file:a", {
       conflictDiskContent: "disk",
       draftContent: "draft",
       savedContent: "saved",
@@ -55,13 +55,13 @@ describe("workspace file sessions", () => {
       },
     });
 
-    expect(updateWorkspaceFileSession(updated, "file:a", null)).toEqual({});
-    expect(updateWorkspaceFileSession({}, "file:missing", null)).toEqual({});
+    expect(updateFileEditorSession(updated, "file:a", null)).toEqual({});
+    expect(updateFileEditorSession({}, "file:missing", null)).toEqual({});
   });
 
   test("builds close prompts only for dirty sessions", () => {
     expect(
-      buildCloseWorkspaceFileSessionPrompt(
+      buildCloseFileEditorSessionPrompt(
         {
           conflictDiskContent: null,
           draftContent: "same",
@@ -72,7 +72,7 @@ describe("workspace file sessions", () => {
     ).toBeNull();
 
     expect(
-      buildCloseWorkspaceFileSessionPrompt(
+      buildCloseFileEditorSessionPrompt(
         {
           conflictDiskContent: null,
           draftContent: "draft",
@@ -83,7 +83,7 @@ describe("workspace file sessions", () => {
     ).toBe('"README.md" has unsaved edits. Close the tab and discard them?');
 
     expect(
-      buildCloseWorkspaceFileSessionPrompt(
+      buildCloseFileEditorSessionPrompt(
         {
           conflictDiskContent: "disk",
           draftContent: "draft",

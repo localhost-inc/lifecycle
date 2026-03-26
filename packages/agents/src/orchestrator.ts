@@ -1,7 +1,7 @@
 import type {
   AgentSessionProviderId,
   AgentSessionRecord,
-  WorkspaceTarget,
+  WorkspaceHost,
 } from "@lifecycle/contracts";
 import type { WorkspaceClient } from "@lifecycle/workspace";
 import type { AgentEventObserver } from "./events";
@@ -9,7 +9,7 @@ import type { AgentApprovalResolution, AgentTurnCancelRequest, AgentTurnRequest 
 
 export interface AgentSessionContext {
   workspaceId: string;
-  workspaceTarget: WorkspaceTarget;
+  workspaceHost: WorkspaceHost;
   worktreePath?: string | null;
 }
 
@@ -60,23 +60,20 @@ export interface AgentStore {
 }
 
 export interface CreateAgentOrchestratorDependencies {
-  workers: Record<
-    AgentSessionProviderId,
-    {
-      start(
-        session: AgentSessionRecord,
-        context: AgentSessionContext,
-        client: WorkspaceClient,
-        events: AgentSessionEvents,
-      ): Promise<{ session: AgentSessionRecord; worker: AgentWorker }>;
-      connect(
-        session: AgentSessionRecord,
-        context: AgentSessionContext,
-        client: WorkspaceClient,
-        events: AgentSessionEvents,
-      ): Promise<AgentWorker>;
-    }
-  >;
+  worker: {
+    start(
+      session: AgentSessionRecord,
+      context: AgentSessionContext,
+      client: WorkspaceClient,
+      events: AgentSessionEvents,
+    ): Promise<{ session: AgentSessionRecord; worker: AgentWorker }>;
+    connect(
+      session: AgentSessionRecord,
+      context: AgentSessionContext,
+      client: WorkspaceClient,
+      events: AgentSessionEvents,
+    ): Promise<AgentWorker>;
+  };
   resolveClient(context: AgentSessionContext): Promise<WorkspaceClient> | WorkspaceClient;
   store: AgentStore;
   now?: () => string;
@@ -99,7 +96,7 @@ function isRecoverableConnectionError(error: unknown): error is Error {
 
   const message = error.message.toLowerCase();
   return (
-    message.includes("detached agent host") ||
+    message.includes("agent worker") ||
     message.includes("connection is not open") ||
     message.includes("closed before connecting") ||
     message.includes("failed to connect") ||
@@ -112,7 +109,7 @@ function formatConnectionFailureStatus(error: unknown): string {
     return error.message;
   }
 
-  return "Agent host unavailable.";
+  return "Agent worker unavailable.";
 }
 
 class AgentOrchestratorImpl implements AgentOrchestrator {
@@ -122,14 +119,14 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
   private subscriberConnected = false;
   private readonly now: () => string;
   private readonly randomId: () => string;
-  private readonly workers: CreateAgentOrchestratorDependencies["workers"];
+  private readonly worker: CreateAgentOrchestratorDependencies["worker"];
   private readonly resolveClient: CreateAgentOrchestratorDependencies["resolveClient"];
   private readonly store: AgentStore;
 
   constructor(dependencies: Omit<CreateAgentOrchestratorDependencies, "observers">) {
     this.now = dependencies.now ?? defaultNow;
     this.randomId = dependencies.randomId ?? fallbackRandomId;
-    this.workers = dependencies.workers;
+    this.worker = dependencies.worker;
     this.resolveClient = dependencies.resolveClient;
     this.store = dependencies.store;
   }
@@ -255,7 +252,7 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
     const events = this.createEvents(context);
 
     try {
-      const result = await this.workers[session.provider].start(session, context, client, events);
+      const result = await this.worker.start(session, context, client, events);
       const bootstrappedSession: AgentSessionRecord =
         result.session.status === "starting"
           ? { ...result.session, status: "idle", updated_at: this.now() }
@@ -516,7 +513,7 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
       this.connections.delete(session.id);
     }
 
-    const connection = await this.workers[session.provider].connect(
+    const connection = await this.worker.connect(
       session,
       context,
       client,
@@ -552,7 +549,7 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
       connection = await this.ensureActiveConnection(session, context, client, events);
     } catch (error) {
       if (isRecoverableConnectionError(error)) {
-        await emitProviderStatus("agent host unavailable", formatConnectionFailureStatus(error));
+        await emitProviderStatus("agent worker unavailable", formatConnectionFailureStatus(error));
       }
       throw error;
     }
@@ -565,7 +562,7 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
         throw error;
       }
 
-      await emitProviderStatus("reconnecting", "Reconnecting to agent host...");
+      await emitProviderStatus("reconnecting", "Reconnecting to agent worker...");
       this.invalidateConnection(session.id);
 
       try {
@@ -579,7 +576,7 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
         await emitProviderStatus("", null);
       } catch (retryError) {
         await emitProviderStatus(
-          "agent host unavailable",
+          "agent worker unavailable",
           formatConnectionFailureStatus(retryError),
         );
         throw retryError;

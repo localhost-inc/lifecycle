@@ -1,27 +1,27 @@
 import {
   getFileRendererDefinitionByKind,
   resolveFileRendererDefinition,
-} from "@/features/explorer/renderers/registry";
-import type { FileViewerMode } from "@/features/explorer/lib/file-view-mode";
-import type { FileViewerRendererKind } from "@/features/explorer/renderers/file-renderer-types";
+} from "@/features/editor/renderers/registry";
+import type { FileEditorMode } from "@/features/editor/lib/file-editor-mode";
+import type { FileEditorRendererKind } from "@/features/editor/renderers/file-editor-renderer-types";
 
 type FileSaveHotkeyEvent = Pick<
   KeyboardEvent,
   "altKey" | "code" | "ctrlKey" | "defaultPrevented" | "key" | "metaKey" | "shiftKey"
 >;
 
-export function resolveFileViewerRenderer(filePath: string): FileViewerRendererKind {
+export function resolveFileEditorRenderer(filePath: string): FileEditorRendererKind {
   return resolveFileRendererDefinition(filePath).kind;
 }
 
-export function supportsFileViewerViewMode(renderer: FileViewerRendererKind): boolean {
+export function supportsFileEditorViewMode(renderer: FileEditorRendererKind): boolean {
   return getFileRendererDefinitionByKind(renderer).supportsViewMode;
 }
 
-export function resolveInitialFileViewerMode(
+export function resolveInitialFileEditorMode(
   filePath: string,
-  requestedMode?: FileViewerMode,
-): FileViewerMode {
+  requestedMode?: FileEditorMode,
+): FileEditorMode {
   if (resolveFileRendererDefinition(filePath).supportsViewMode) {
     return requestedMode === "edit" ? "edit" : "view";
   }
@@ -29,7 +29,7 @@ export function resolveInitialFileViewerMode(
   return "edit";
 }
 
-export function getFileViewerScrollRestoreKey({
+export function getFileEditorScrollRestoreKey({
   filePath,
   isLoading,
   mode,
@@ -37,8 +37,8 @@ export function getFileViewerScrollRestoreKey({
 }: {
   filePath: string;
   isLoading: boolean;
-  mode: FileViewerMode;
-  renderer: FileViewerRendererKind;
+  mode: FileEditorMode;
+  renderer: FileEditorRendererKind;
 }): string | null {
   return isLoading || mode === "edit" ? null : `${mode}:${renderer}:${filePath}`;
 }

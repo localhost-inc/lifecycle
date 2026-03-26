@@ -31,6 +31,10 @@ import {
   type WorkspacePaneTabBarDragPreview,
   type WorkspacePaneTabDrag,
 } from "@/features/workspaces/canvas/tabs/workspace-pane-tab-bar";
+import {
+  completeWorkspacePaneTabSwitchStage,
+  useWorkspacePaneRenderCount,
+} from "@/features/workspaces/canvas/workspace-pane-performance";
 import type {
   WorkspacePaneModel,
   WorkspacePaneTabBarModel,
@@ -603,6 +607,7 @@ const WorkspacePaneLeaf = memo(function WorkspacePaneLeaf({
   setPaneElement,
   surfaceActions,
 }: WorkspacePaneLeafProps) {
+  useWorkspacePaneRenderCount("WorkspacePaneLeaf", pane.id);
   const [hovered, setHovered] = useState(false);
   const [surfaceLaunchOpen, setSurfaceLaunchOpen] = useState(false);
   const paneOpacity = resolveWorkspacePaneOpacity({
@@ -679,10 +684,11 @@ const WorkspacePaneLeaf = memo(function WorkspacePaneLeaf({
         <WorkspacePaneContent
           activeTabKey={pane.tabBar.activeTabKey}
           launchActions={surfaceActions}
-          onFileSessionStateChange={actions.fileSessionStateChange}
+          onFileEditorSessionStateChange={actions.fileEditorSessionStateChange}
           onLaunchSurface={(request) => actions.launchSurface(pane.id, request)}
           onOpenFile={actions.openFile}
           onTabViewStateChange={actions.tabViewStateChange}
+          paneId={pane.id}
           paneDragInProgress={paneTabDragInProgress}
           paneFocused={pane.isActive}
           pendingLaunchActionKey={pane.activeSurface.kind === "launcher" ? pane.activeSurface.pendingLaunchActionKey : null}
@@ -695,6 +701,7 @@ const WorkspacePaneLeaf = memo(function WorkspacePaneLeaf({
 }, areWorkspacePaneLeafPropsEqual);
 
 export function WorkspacePaneTree({ actions, model }: WorkspacePaneTreeProps) {
+  useWorkspacePaneRenderCount("WorkspacePaneTree", "root");
   const zoomedPaneId = useMemo(() => {
     if (!model.zoomedTabKey) {
       return null;
@@ -942,6 +949,10 @@ export function WorkspacePaneTree({ actions, model }: WorkspacePaneTreeProps) {
   const renderedTree = zoomedPaneId
     ? renderNode({ kind: "leaf", id: zoomedPaneId })
     : renderNode(model.rootPane);
+
+  useEffect(() => {
+    completeWorkspacePaneTabSwitchStage("pane-tree-render");
+  }, [model.panesById, model.rootPane, model.zoomedTabKey]);
 
   return (
     <>

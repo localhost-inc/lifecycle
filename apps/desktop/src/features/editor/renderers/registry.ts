@@ -1,8 +1,8 @@
 import { workspaceFileExtension } from "@/features/workspaces/lib/workspace-file-paths";
-import { markdownFileRenderer } from "@/features/explorer/renderers/markdown-file-renderer";
-import { pencilFileRenderer } from "@/features/explorer/renderers/pencil-file-renderer";
-import { textFileRenderer } from "@/features/explorer/renderers/text-file-renderer";
-import type { FileRendererDefinition, FileViewerRendererKind } from "@/features/explorer/renderers/file-renderer-types";
+import { markdownFileRenderer } from "@/features/editor/renderers/markdown-file-renderer";
+import { pencilFileRenderer } from "@/features/editor/renderers/pencil-file-renderer";
+import { textFileRenderer } from "@/features/editor/renderers/text-file-renderer";
+import type { FileRendererDefinition, FileEditorRendererKind } from "@/features/editor/renderers/file-editor-renderer-types";
 
 const fileRendererRegistry: FileRendererDefinition[] = [
   markdownFileRenderer,
@@ -27,7 +27,7 @@ export function resolveFileRendererDefinition(filePath: string): FileRendererDef
 }
 
 export function getFileRendererDefinitionByKind(
-  kind: FileViewerRendererKind,
+  kind: FileEditorRendererKind,
 ): FileRendererDefinition {
   return fileRendererRegistry.find((renderer) => renderer.kind === kind) ?? textFileRenderer;
 }

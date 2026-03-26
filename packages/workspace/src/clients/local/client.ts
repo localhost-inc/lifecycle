@@ -284,7 +284,7 @@ export class LocalClient implements WorkspaceClient {
     const context = input.context;
     return this.invoke("create_workspace", {
       input: {
-        target: context.target,
+        host: context.host,
         checkoutType: context.checkoutType ?? "worktree",
         projectId: context.projectId,
         projectPath: context.projectPath,

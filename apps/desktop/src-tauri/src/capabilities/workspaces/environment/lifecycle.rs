@@ -286,7 +286,7 @@ pub async fn start_workspace_services(
     manifest_json: String,
     manifest_fingerprint: String,
     service_names: Option<Vec<String>>,
-) -> Result<(), LifecycleError> {
+) -> Result<Option<tokio::task::JoinHandle<()>>, LifecycleError> {
     let config = parse_lifecycle_config(&manifest_json)?;
     let service_names = service_names.filter(|names| !names.is_empty());
     let _mutation_guard = workspace_controllers
@@ -352,7 +352,7 @@ pub async fn start_workspace_services(
         && lowered_graph.workspace_prepare.is_empty()
         && lowered_graph.environment_nodes.is_empty()
     {
-        return Ok(());
+        return Ok(None);
     }
 
     let db = db_path.0.clone();
@@ -361,7 +361,7 @@ pub async fn start_workspace_services(
     let ws_id = workspace_id.clone();
     let requested_service_names = service_names.clone();
 
-    tokio::spawn(async move {
+    let handle = tokio::spawn(async move {
         if let Err(e) = start_workspace_services_lifecycle(
             &app,
             &controller,
@@ -380,7 +380,7 @@ pub async fn start_workspace_services(
         }
     });
 
-    Ok(())
+    Ok(Some(handle))
 }
 
 fn sync_workspace_manifest_if_idle(

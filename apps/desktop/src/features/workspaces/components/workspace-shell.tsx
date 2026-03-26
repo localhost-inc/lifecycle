@@ -42,7 +42,7 @@ import {
   createAgentOpenInput,
   createChangesDiffOpenInput,
   createCommitDiffOpenInput,
-  createFileViewerOpenInput,
+  createFileEditorOpenInput,
   createPreviewOpenInput,
   createPullRequestOpenInput,
 } from "@/features/workspaces/canvas/workspace-canvas-requests";
@@ -224,8 +224,8 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
       openCommitDiff: (entry) => {
         openTab(workspace.id, createCommitDiffOpenInput(entry));
       },
-      openFileViewer: (filePath) => {
-        openTab(workspace.id, createFileViewerOpenInput(filePath));
+      openFileEditor: (filePath) => {
+        openTab(workspace.id, createFileEditorOpenInput(filePath));
       },
       openPullRequest: (pullRequest: GitPullRequestSummary) => {
         if (supportsTerminalInteraction) {

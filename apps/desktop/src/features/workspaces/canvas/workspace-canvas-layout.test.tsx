@@ -13,7 +13,7 @@ function createTreeProps(input: any) {
   return {
     actions: {
       closeTab: () => {},
-      fileSessionStateChange: () => {},
+      fileEditorSessionStateChange: () => {},
       launchSurface: () => {},
       moveTabToPane: () => {},
       openFile: () => {},

@@ -14,7 +14,7 @@ import type {
   ServiceRecord,
   WorkspaceCheckoutType,
   WorkspaceRecord,
-  WorkspaceTarget,
+  WorkspaceHost,
 } from "@lifecycle/contracts";
 
 export interface StartServicesInput {
@@ -128,7 +128,7 @@ export interface WorkspaceClient {
 }
 
 export interface WorkspaceCreateContext {
-  target: WorkspaceTarget;
+  host: WorkspaceHost;
   checkoutType?: WorkspaceCheckoutType;
   projectId: string;
   projectPath?: string;

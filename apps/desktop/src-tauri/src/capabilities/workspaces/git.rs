@@ -1,5 +1,5 @@
 use super::paths::{
-    require_local_worktree, resolve_workspace_git_context, target_supports_local_worktree_access,
+    require_local_worktree, resolve_workspace_git_context, host_supports_local_worktree_access,
 };
 use crate::platform::db::open_db;
 use crate::platform::git::pull_request::{
@@ -143,8 +143,8 @@ pub async fn list_workspace_git_pull_requests(
     db_path: &str,
     workspace_id: String,
 ) -> Result<GitPullRequestListResult, LifecycleError> {
-    let (target, worktree_path) = resolve_workspace_git_context(db_path, &workspace_id)?;
-    if !target_supports_local_worktree_access(&target) {
+    let (host, worktree_path) = resolve_workspace_git_context(db_path, &workspace_id)?;
+    if !host_supports_local_worktree_access(&host) {
         return Ok(GitPullRequestListResult {
             support: pull_request::mode_not_supported(
                 "Pull requests are only available for local workspaces right now.",
@@ -165,8 +165,8 @@ pub async fn get_workspace_current_git_pull_request(
     db_path: &str,
     workspace_id: String,
 ) -> Result<GitBranchPullRequestResult, LifecycleError> {
-    let (target, worktree_path) = resolve_workspace_git_context(db_path, &workspace_id)?;
-    if !target_supports_local_worktree_access(&target) {
+    let (host, worktree_path) = resolve_workspace_git_context(db_path, &workspace_id)?;
+    if !host_supports_local_worktree_access(&host) {
         return Ok(GitBranchPullRequestResult {
             support: pull_request::mode_not_supported(
                 "Pull requests are only available for local workspaces right now.",
@@ -192,8 +192,8 @@ pub async fn get_workspace_git_pull_request(
     workspace_id: String,
     pull_request_number: u64,
 ) -> Result<GitPullRequestDetailResult, LifecycleError> {
-    let (target, worktree_path) = resolve_workspace_git_context(db_path, &workspace_id)?;
-    if !target_supports_local_worktree_access(&target) {
+    let (host, worktree_path) = resolve_workspace_git_context(db_path, &workspace_id)?;
+    if !host_supports_local_worktree_access(&host) {
         return Ok(GitPullRequestDetailResult {
             support: pull_request::mode_not_supported(
                 "Pull requests are only available for local workspaces right now.",
@@ -235,8 +235,8 @@ pub async fn get_workspace_git_pull_request_patch(
     workspace_id: String,
     pull_request_number: u64,
 ) -> Result<String, LifecycleError> {
-    let (target, worktree_path) = resolve_workspace_git_context(db_path, &workspace_id)?;
-    if !target_supports_local_worktree_access(&target) {
+    let (host, worktree_path) = resolve_workspace_git_context(db_path, &workspace_id)?;
+    if !host_supports_local_worktree_access(&host) {
         return Err(LifecycleError::GitOperationFailed {
             operation: "read GitHub pull request diff patch".to_string(),
             reason: "Pull request diff patches are only available for local workspaces right now."

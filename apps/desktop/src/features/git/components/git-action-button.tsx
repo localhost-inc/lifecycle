@@ -84,7 +84,7 @@ export function GitActionPopover({
       onOpenPullRequest(pr);
     },
     workspaceId,
-    workspaceTarget: "local",
+    workspaceHost: "local",
     worktreePath,
   });
 

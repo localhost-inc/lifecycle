@@ -1,4 +1,4 @@
-import type { FileViewerMode } from "@/features/explorer/lib/file-view-mode";
+import type { FileEditorMode } from "@/features/editor/lib/file-editor-mode";
 import {
   createWorkspacePane,
   DEFAULT_WORKSPACE_PANE_ID,
@@ -17,7 +17,7 @@ import type {
   AgentTab,
   ChangesDiffTab,
   CommitDiffTab,
-  FileViewerTab,
+  FileEditorTab,
   PreviewTab,
   PullRequestTab,
   WorkspaceCanvasTab,
@@ -35,7 +35,7 @@ export type {
   AgentTab,
   ChangesDiffTab,
   CommitDiffTab,
-  FileViewerTab,
+  FileEditorTab,
   PreviewTab,
   PullRequestTab,
   WorkspaceCanvasTab,
@@ -47,14 +47,14 @@ export {
   createAgentTab,
   createChangesDiffTab,
   createCommitDiffTab,
-  createFileViewerTab,
+  createFileEditorTab,
   createPreviewTab,
   createPullRequestTab,
-  fileViewerTabKey,
+  fileEditorTabKey,
   isAgentTab,
   isChangesDiffTab,
   isCommitDiffTab,
-  isFileViewerTab,
+  isFileEditorTab,
   isPreviewTab,
   isPullRequestTab,
   previewTabKey,
@@ -64,7 +64,7 @@ export {
 export type WorkspaceCanvasTabsByKey = Record<string, WorkspaceCanvasTab>;
 
 export interface WorkspaceCanvasTabViewState {
-  fileMode?: FileViewerMode;
+  fileMode?: FileEditorMode;
   scrollTop?: number;
   stickToBottom?: boolean;
 }

@@ -4,20 +4,20 @@ import type {
   AgentSurfaceOptions,
   ChangesDiffSurfaceOptions,
   CommitDiffSurfaceOptions,
-  FileSurfaceOptions,
+  FileEditorSurfaceOptions,
   OpenSurfaceInput,
   PreviewSurfaceOptions,
   PullRequestSurfaceOptions,
   SurfaceLaunchRequest,
   WorkspaceSurfaceKind,
 } from "@/features/workspaces/canvas/workspace-canvas-requests";
-import type { FileViewerSessionState } from "@/features/explorer/lib/file-session";
+import type { FileEditorSessionState } from "@/features/editor/lib/file-editor-session";
 import type { SurfaceLaunchAction } from "@/features/workspaces/surfaces/surface-launch-actions";
 import type {
   AgentTab,
   ChangesDiffTab,
   CommitDiffTab,
-  FileViewerTab,
+  FileEditorTab,
   PreviewTab,
   PullRequestTab,
   WorkspaceCanvasTab,
@@ -35,7 +35,7 @@ export interface WorkspaceSurfaceTabNormalizationContext {
 }
 
 export interface WorkspaceSurfaceTabStatusContext {
-  fileSessionsByTabKey: Record<string, FileViewerSessionState>;
+  fileEditorSessionsByTabKey: Record<string, FileEditorSessionState>;
   isAgentSessionResponseReady: (sessionId: string) => boolean;
   isAgentSessionRunning: (sessionId: string) => boolean;
 }
@@ -49,7 +49,7 @@ export interface WorkspaceSurfaceOptionsByKind {
   agent: AgentSurfaceOptions;
   "changes-diff": ChangesDiffSurfaceOptions;
   "commit-diff": CommitDiffSurfaceOptions;
-  "file-viewer": FileSurfaceOptions;
+  "file-editor": FileEditorSurfaceOptions;
   preview: PreviewSurfaceOptions;
   "pull-request": PullRequestSurfaceOptions;
 }
@@ -58,7 +58,7 @@ export interface WorkspaceSurfaceTabByKind {
   agent: AgentTab;
   "changes-diff": ChangesDiffTab;
   "commit-diff": CommitDiffTab;
-  "file-viewer": FileViewerTab;
+  "file-editor": FileEditorTab;
   preview: PreviewTab;
   "pull-request": PullRequestTab;
 }
@@ -100,9 +100,9 @@ export type WorkspacePaneActiveSurfaceModel =
       workspaceId: string;
     }
   | {
-      kind: "file-viewer";
-      sessionState: FileViewerSessionState | null;
-      tab: FileViewerTab;
+      kind: "file-editor";
+      sessionState: FileEditorSessionState | null;
+      tab: FileEditorTab;
       viewState: WorkspaceCanvasTabViewState | null;
       workspaceId: string;
     };
@@ -113,7 +113,7 @@ export type WorkspaceSurfaceActiveModelByKind = {
 
 export interface WorkspacePaneSurfaceRenderContext {
   launchActions: SurfaceLaunchAction[];
-  onFileSessionStateChange: (tabKey: string, state: FileViewerSessionState | null) => void;
+  onFileEditorSessionStateChange: (tabKey: string, state: FileEditorSessionState | null) => void;
   onLaunchSurface: (request: SurfaceLaunchRequest) => void;
   onOpenFile: (filePath: string) => void;
   onTabViewStateChange: (tabKey: string, viewState: WorkspaceCanvasTabViewState | null) => void;
@@ -134,7 +134,7 @@ export interface WorkspaceSurfaceLaunchExecutionContext {
 }
 
 export interface WorkspaceSurfaceActiveModelContext {
-  fileSessionsByTabKey: Record<string, FileViewerSessionState>;
+  fileEditorSessionsByTabKey: Record<string, FileEditorSessionState>;
   viewStateByTabKey: Record<string, WorkspaceCanvasTabViewState>;
   workspaceId: string;
 }
@@ -197,9 +197,9 @@ export function areWorkspaceCanvasViewStatesEqual(
   );
 }
 
-export function areFileViewerSessionStatesEqual(
-  previous: FileViewerSessionState | null | undefined,
-  next: FileViewerSessionState | null | undefined,
+export function areFileEditorSessionStatesEqual(
+  previous: FileEditorSessionState | null | undefined,
+  next: FileEditorSessionState | null | undefined,
 ): boolean {
   if (previous === next) {
     return true;

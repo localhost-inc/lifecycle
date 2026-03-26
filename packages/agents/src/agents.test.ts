@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { AgentSessionRecord, WorkspaceTarget } from "@lifecycle/contracts";
+import type { AgentSessionRecord, WorkspaceHost } from "@lifecycle/contracts";
 import type { WorkspaceClient } from "@lifecycle/workspace";
 import type {
   AgentEvent,
@@ -11,7 +11,7 @@ import type {
 import { createAgentOrchestrator } from "./index";
 
 describe("agents package contracts", () => {
-  type Worker = CreateAgentOrchestratorDependencies["workers"]["claude"];
+  type Worker = CreateAgentOrchestratorDependencies["worker"];
 
   test("defines text and attachment turn inputs", () => {
     const input: AgentTurnRequest["input"] = [
@@ -56,7 +56,7 @@ describe("agents package contracts", () => {
 
     const implementation: Worker = {
       async start(session, workspace, boundRuntime) {
-        expect(workspace.workspaceTarget).toBe("local");
+        expect(workspace.workspaceHost).toBe("local");
         expect(boundRuntime).toBe(runtime);
         return {
           session: {
@@ -72,7 +72,7 @@ describe("agents package contracts", () => {
       },
       async connect(session, workspace, boundRuntime) {
         expect(session.provider).toBe("claude");
-        expect(workspace.workspaceTarget).toBe("local");
+        expect(workspace.workspaceHost).toBe("local");
         expect(boundRuntime).toBe(runtime);
         return {
           async sendTurn(_input) {},
@@ -97,17 +97,14 @@ describe("agents package contracts", () => {
       async getWorkspace(workspaceId) {
         return {
           workspaceId,
-          workspaceTarget: "local" satisfies WorkspaceTarget,
+          workspaceHost: "local" satisfies WorkspaceHost,
           worktreePath: "/tmp/project",
         };
       },
     };
     const observedEvents: AgentEvent[] = [];
     const orchestrator = createAgentOrchestrator({
-      workers: {
-        claude: implementation,
-        codex: implementation,
-      },
+      worker: implementation,
       resolveClient() {
         return runtime;
       },
@@ -168,17 +165,14 @@ describe("agents package contracts", () => {
       async getWorkspace(workspaceId) {
         return {
           workspaceId,
-          workspaceTarget: "local" satisfies WorkspaceTarget,
+          workspaceHost: "local" satisfies WorkspaceHost,
           worktreePath: "/tmp/project",
         };
       },
     };
     const observedEvents: AgentEvent[] = [];
     const orchestrator = createAgentOrchestrator({
-      workers: {
-        claude: implementation,
-        codex: implementation,
-      },
+      worker: implementation,
       resolveClient() {
         return runtime;
       },
@@ -208,7 +202,7 @@ describe("agents package contracts", () => {
   });
 
   test("keeps runtime placement separate from provider selection", async () => {
-    const seenTargets: WorkspaceTarget[] = [];
+    const seenTargets: WorkspaceHost[] = [];
     const sessions = new Map<string, AgentSessionRecord>();
     const store: AgentStore = {
       async saveSession(session) {
@@ -224,7 +218,7 @@ describe("agents package contracts", () => {
       async getWorkspace(workspaceId) {
         return {
           workspaceId,
-          workspaceTarget: "cloud",
+          workspaceHost: "cloud",
         };
       },
     };
@@ -245,7 +239,7 @@ describe("agents package contracts", () => {
         };
       },
       async connect(_session, workspace, boundRuntime) {
-        seenTargets.push(workspace.workspaceTarget);
+        seenTargets.push(workspace.workspaceHost);
         expect(boundRuntime).toBe(runtime);
         return {
           async sendTurn() {},
@@ -256,10 +250,7 @@ describe("agents package contracts", () => {
     };
     const runtime = {} as WorkspaceClient;
     const orchestrator = createAgentOrchestrator({
-      workers: {
-        claude: implementation,
-        codex: implementation,
-      },
+      worker: implementation,
       resolveClient() {
         return runtime;
       },
@@ -297,7 +288,7 @@ describe("agents package contracts", () => {
       async getWorkspace(workspaceId) {
         return {
           workspaceId,
-          workspaceTarget: "local",
+          workspaceHost: "local",
           worktreePath: "/tmp/project",
         };
       },
@@ -355,10 +346,7 @@ describe("agents package contracts", () => {
     };
     const observedEvents: AgentEvent[] = [];
     const orchestrator = createAgentOrchestrator({
-      workers: {
-        claude: implementation,
-        codex: implementation,
-      },
+      worker: implementation,
       resolveClient() {
         return runtime;
       },
@@ -411,7 +399,7 @@ describe("agents package contracts", () => {
       async getWorkspace(workspaceId) {
         return {
           workspaceId,
-          workspaceTarget: "local",
+          workspaceHost: "local",
           worktreePath: "/tmp/project",
         };
       },
@@ -431,10 +419,7 @@ describe("agents package contracts", () => {
     };
     const observedEvents: AgentEvent[] = [];
     const orchestrator = createAgentOrchestrator({
-      workers: {
-        claude: implementation,
-        codex: implementation,
-      },
+      worker: implementation,
       resolveClient() {
         return runtime;
       },
@@ -494,7 +479,7 @@ describe("agents package contracts", () => {
       async getWorkspace(workspaceId) {
         return {
           workspaceId,
-          workspaceTarget: "local",
+          workspaceHost: "local",
           worktreePath: "/tmp/project",
         };
       },
@@ -516,10 +501,7 @@ describe("agents package contracts", () => {
       },
     };
     const orchestrator = createAgentOrchestrator({
-      workers: {
-        claude: implementation,
-        codex: implementation,
-      },
+      worker: implementation,
       resolveClient() {
         return runtime;
       },
@@ -547,7 +529,7 @@ describe("agents package contracts", () => {
       async getWorkspace(workspaceId) {
         return {
           workspaceId,
-          workspaceTarget: "local",
+          workspaceHost: "local",
           worktreePath: "/tmp/project",
         };
       },
@@ -592,10 +574,7 @@ describe("agents package contracts", () => {
 
     const observedEvents: AgentEvent[] = [];
     const orchestrator = createAgentOrchestrator({
-      workers: {
-        claude: implementation,
-        codex: implementation,
-      },
+      worker: implementation,
       resolveClient() {
         return runtime;
       },
@@ -628,7 +607,7 @@ describe("agents package contracts", () => {
         })),
     ).toEqual([
       {
-        detail: "Reconnecting to agent host...",
+        detail: "Reconnecting to agent worker...",
         status: "reconnecting",
       },
       {

@@ -30,7 +30,7 @@ export interface WorkspaceExtensionLaunchActions {
   }) => void;
   openChangesDiff: (focusPath: string | null) => void;
   openCommitDiff: (entry: GitLogEntry) => void;
-  openFileViewer: (filePath: string) => void;
+  openFileEditor: (filePath: string) => void;
   openPreview: (service: Pick<ServiceRecord, "name" | "preview_url">) => void;
   openPullRequest: (pullRequest: GitPullRequestSummary) => void;
 }

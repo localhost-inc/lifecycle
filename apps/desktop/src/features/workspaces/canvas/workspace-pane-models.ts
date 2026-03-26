@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { FileViewerSessionState } from "@/features/explorer/lib/file-session";
+import type { FileEditorSessionState } from "@/features/editor/lib/file-editor-session";
 import type { SurfaceLaunchRequest } from "@/features/workspaces/canvas/workspace-canvas-requests";
 import type { WorkspacePaneTabBarDragPreview } from "@/features/workspaces/canvas/tabs/workspace-pane-tab-bar";
 import type {
@@ -45,7 +45,7 @@ export interface WorkspacePaneModel {
 
 export interface WorkspacePaneTreeActions {
   closeTab: (tabKey: string) => void;
-  fileSessionStateChange: (tabKey: string, state: FileViewerSessionState | null) => void;
+  fileEditorSessionStateChange: (tabKey: string, state: FileEditorSessionState | null) => void;
   launchSurface: (paneId: string, request: SurfaceLaunchRequest) => void;
   moveTabToPane: (
     key: string,

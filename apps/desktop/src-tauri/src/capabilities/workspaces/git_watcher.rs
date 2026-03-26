@@ -35,7 +35,7 @@ struct PersistedWorkspaceGitSnapshot {
 
 #[derive(Debug)]
 struct RootWorkspaceWatchContext {
-    target: String,
+    host: String,
     checkout_type: String,
     repo_path: String,
 }
@@ -133,7 +133,7 @@ pub(crate) fn ensure_root_git_watcher(
     };
 
     if !is_root_workspace_checkout_type(&context.checkout_type)
-        || !matches!(context.target.as_str(), "local" | "docker")
+        || !matches!(context.host.as_str(), "local" | "docker")
     {
         return Ok(());
     }
@@ -214,7 +214,7 @@ fn list_root_workspace_ids(db_path: &str) -> Result<Vec<String>, LifecycleError>
         .prepare(
             "SELECT id
              FROM workspace
-             WHERE checkout_type = 'root' AND target IN ('local', 'docker')
+             WHERE checkout_type = 'root' AND host IN ('local', 'docker')
              ORDER BY created_at ASC",
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
@@ -237,7 +237,7 @@ fn list_root_workspace_ids_by_project(
         .prepare(
             "SELECT id
              FROM workspace
-             WHERE project_id = ?1 AND checkout_type = 'root' AND target IN ('local', 'docker')
+             WHERE project_id = ?1 AND checkout_type = 'root' AND host IN ('local', 'docker')
              ORDER BY created_at ASC",
         )
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
@@ -257,7 +257,7 @@ fn load_root_workspace_watch_context(
 ) -> Result<Option<RootWorkspaceWatchContext>, LifecycleError> {
     let conn = open_db(db_path)?;
     let result = conn.query_row(
-        "SELECT workspace.checkout_type, workspace.target, project.path
+        "SELECT workspace.checkout_type, workspace.host, project.path
          FROM workspace
          INNER JOIN project ON project.id = workspace.project_id
          WHERE workspace.id = ?1
@@ -266,7 +266,7 @@ fn load_root_workspace_watch_context(
         |row| {
             Ok(RootWorkspaceWatchContext {
                 checkout_type: row.get(0)?,
-                target: row.get(1)?,
+                host: row.get(1)?,
                 repo_path: row.get(2)?,
             })
         },
@@ -620,7 +620,7 @@ mod tests {
         )
         .expect("insert project");
         conn.execute(
-            "INSERT INTO workspace (id, project_id, name, checkout_type, source_ref, target, status)
+            "INSERT INTO workspace (id, project_id, name, checkout_type, source_ref, host, status)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 "workspace_root",

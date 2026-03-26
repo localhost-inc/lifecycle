@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
-import { readFileSaveHotkey } from "@/features/explorer/lib/file-renderers";
+import { readFileSaveHotkey } from "@/features/editor/lib/file-editor-renderers";
 import { readWorkspaceTabHotkeyAction } from "@/features/workspaces/canvas/workspace-canvas-shortcuts";
 import { isEditableTarget, isMacPlatform, readAppHotkeyAction } from "@/app/app-hotkeys";
 import type { RegisteredShortcutId } from "@/app/shortcuts/shortcut-registry";

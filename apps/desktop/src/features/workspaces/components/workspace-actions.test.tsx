@@ -13,7 +13,7 @@ const interactiveWorkspace: WorkspaceRecord = {
   source_ref: "lifecycle/fix-landing-hero",
   git_sha: "abcdef1234567890",
   worktree_path: "/tmp/workspace_1",
-  target: "local",
+  host: "local",
   created_at: "2026-03-08T10:00:00.000Z",
   updated_at: "2026-03-08T10:00:00.000Z",
   last_active_at: "2026-03-08T10:00:00.000Z",

@@ -97,7 +97,7 @@ describe("areWorkspacePaneLeafPropsEqual", () => {
   function createLeafProps() {
     const actions = {
       closeTab: () => {},
-      fileSessionStateChange: () => {},
+      fileEditorSessionStateChange: () => {},
       launchSurface: () => {},
       moveTabToPane: () => {},
       openFile: () => {},
@@ -125,10 +125,10 @@ describe("areWorkspacePaneLeafPropsEqual", () => {
             extension: "tsx",
             filePath: "src/app.tsx",
             key: "file:src/app.tsx",
-            kind: "file-viewer" as const,
+            kind: "file-editor" as const,
             label: "app.tsx",
           },
-          kind: "file-viewer" as const,
+          kind: "file-editor" as const,
           sessionState: null,
           viewState: { scrollTop: 24 },
           workspaceId: "workspace-1",
@@ -151,7 +151,7 @@ describe("areWorkspacePaneLeafPropsEqual", () => {
                 extension: "tsx",
                 filePath: "src/app.tsx",
                 key: "file:src/app.tsx",
-                kind: "file-viewer" as const,
+                kind: "file-editor" as const,
                 label: "app.tsx",
               },
               title: "src/app.tsx",
@@ -166,10 +166,10 @@ describe("areWorkspacePaneLeafPropsEqual", () => {
                 extension: "tsx",
                 filePath: "src/app.tsx",
                 key: "file:src/app.tsx",
-                kind: "file-viewer" as const,
+                kind: "file-editor" as const,
                 label: "app.tsx",
               },
-              kind: "file-viewer" as const,
+              kind: "file-editor" as const,
               sessionState: null,
               viewState: { scrollTop: 24 },
               workspaceId: "workspace-1",
@@ -208,7 +208,7 @@ describe("areWorkspacePaneLeafPropsEqual", () => {
         ...previous.pane,
         activeSurface: {
           ...previous.pane.activeSurface,
-          kind: "file-viewer" as const,
+          kind: "file-editor" as const,
           sessionState: {
             conflictDiskContent: null,
             draftContent: "next draft",
@@ -219,5 +219,22 @@ describe("areWorkspacePaneLeafPropsEqual", () => {
     };
 
     expect(areWorkspacePaneLeafPropsEqual(previous, next)).toBe(false);
+  });
+
+  test("keeps sibling pane props equal when another pane switches tabs", () => {
+    const siblingPane = createLeafProps();
+    const nextSiblingPane = {
+      ...siblingPane,
+      pane: {
+        ...siblingPane.pane,
+        tabBar: {
+          ...siblingPane.pane.tabBar,
+          tabs: [...siblingPane.pane.tabBar.tabs],
+        },
+        tabSurfaces: [...siblingPane.pane.tabSurfaces],
+      },
+    };
+
+    expect(areWorkspacePaneLeafPropsEqual(siblingPane, nextSiblingPane)).toBe(true);
   });
 });

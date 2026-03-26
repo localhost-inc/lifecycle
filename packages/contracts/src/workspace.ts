@@ -1,4 +1,4 @@
-export type WorkspaceTarget = "local" | "docker" | "remote" | "cloud";
+export type WorkspaceHost = "local" | "docker" | "remote" | "cloud";
 
 export type WorkspaceCheckoutType = "root" | "worktree";
 
