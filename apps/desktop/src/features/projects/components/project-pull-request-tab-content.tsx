@@ -11,10 +11,11 @@ export function ProjectPullRequestTabContent() {
   const pullRequestNumber = Number(prNumberParam);
   const projectName = project.name;
   const workspaceId = repositoryWorkspace?.id ?? null;
-  const listQuery = useGitPullRequests(workspaceId, {
+  const workspaceHost = repositoryWorkspace?.host ?? null;
+  const listQuery = useGitPullRequests(workspaceId, workspaceHost, {
     enabled: workspaceId !== null,
   });
-  const detailQuery = useGitPullRequest(workspaceId, pullRequestNumber, {
+  const detailQuery = useGitPullRequest(workspaceId, workspaceHost, pullRequestNumber, {
     enabled: workspaceId !== null && Number.isInteger(pullRequestNumber) && pullRequestNumber > 0,
   });
   const pullRequest = useMemo(

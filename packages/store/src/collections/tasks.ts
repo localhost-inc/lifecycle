@@ -14,10 +14,7 @@ export async function selectTasksByProject(
   );
 }
 
-export async function selectTasksByPlan(
-  driver: SqlDriver,
-  planId: string,
-): Promise<TaskRecord[]> {
+export async function selectTasksByPlan(driver: SqlDriver, planId: string): Promise<TaskRecord[]> {
   return driver.select<TaskRecord>(
     `SELECT id, plan_id, project_id, workspace_id, agent_session_id,
             name, description, status, priority, position,

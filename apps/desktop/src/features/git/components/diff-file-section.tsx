@@ -1,7 +1,10 @@
 import { memo, useCallback, useEffect, useRef } from "react";
 import { FileDiff, type FileDiffMetadata } from "@pierre/diffs/react";
 import { GitFileHeader } from "@/features/git/components/git-file-header";
-import { getOpenableDiffFilePath, withCopyableGitDiffOptions } from "@/features/git/components/git-diff-rendering";
+import {
+  getOpenableDiffFilePath,
+  withCopyableGitDiffOptions,
+} from "@/features/git/components/git-diff-rendering";
 import type { GitDiffStyle } from "@/features/git/lib/diff-style";
 import { estimateDiffBodyHeight } from "@/features/git/lib/diff-virtualization";
 

@@ -46,9 +46,8 @@ import {
   createPreviewOpenInput,
   createPullRequestOpenInput,
 } from "@/features/workspaces/canvas/workspace-canvas-requests";
-import { startServices, stopServices } from "@/features/workspaces/api";
 import { useWorkspaceServices } from "@/features/workspaces/hooks";
-import { useClient } from "@/store";
+import { useWorkspaceHostClient } from "@lifecycle/workspace/client/react";
 import { workspaceSupportsFilesystemInteraction } from "@/features/workspaces/lib/workspace-capabilities";
 import { useWorkspaceOpenRequests } from "@/features/workspaces/state/workspace-open-requests";
 import { useWorkspaceToolbar } from "@/features/workspaces/state/workspace-toolbar-context";
@@ -62,7 +61,7 @@ interface WorkspaceShellProps {
 }
 
 export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: WorkspaceShellProps) {
-  const client = useClient();
+  const client = useWorkspaceHostClient(workspace.host);
   const workspaceLayoutRef = useRef<HTMLDivElement | null>(null);
   const [workspaceLayoutWidth, setWorkspaceLayoutWidth] = useState(0);
   const [panelWidth, setPanelWidth] = useState(() =>
@@ -82,8 +81,11 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
   const config = hasManifest ? manifestStatus.result.config : null;
   const manifestState = manifestStatus?.state ?? "missing";
   const supportsTerminalInteraction = workspaceSupportsFilesystemInteraction(workspace);
-  const services = useWorkspaceServices(workspace.id);
-  const gitStatusQuery = useGitStatus(supportsTerminalInteraction ? workspace.id : null);
+  const services = useWorkspaceServices(workspace.id, workspace.host);
+  const gitStatusQuery = useGitStatus(
+    supportsTerminalInteraction ? workspace.id : null,
+    supportsTerminalInteraction ? workspace.host : null,
+  );
   const { registerToolbarSlot, unregisterToolbarSlot } = useWorkspaceToolbar();
 
   const handleRun = useCallback(
@@ -91,7 +93,7 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
       if (!config || !services) return;
       try {
         const manifestJson = JSON.stringify(config);
-        await startServices(client, {
+        await client.startServices({
           serviceNames,
           workspace,
           services,
@@ -113,8 +115,8 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
 
     try {
       const manifestJson = JSON.stringify(config);
-      await stopServices(client, workspace.id);
-      await startServices(client, {
+      await client.stopServices(workspace.id);
+      await client.startServices({
         workspace,
         services,
         manifestJson,
@@ -128,7 +130,7 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
 
   const handleStop = useCallback(async () => {
     try {
-      await stopServices(client, workspace.id);
+      await client.stopServices(workspace.id);
     } catch (err) {
       console.error("Failed to stop workspace:", err);
       throw err;

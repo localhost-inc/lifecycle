@@ -28,8 +28,7 @@ mock.module("../../lib/tauri-error", () => ({
           value.details !== null && typeof value.details === "object"
             ? (value.details as Record<string, unknown>)
             : undefined,
-        message:
-          typeof value.message === "string" ? value.message : "Unexpected desktop error.",
+        message: typeof value.message === "string" ? value.message : "Unexpected desktop error.",
         requestId: typeof value.requestId === "string" ? value.requestId : "test-request",
         retryable: typeof value.retryable === "boolean" ? value.retryable : false,
         suggestedAction:

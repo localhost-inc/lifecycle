@@ -92,9 +92,10 @@ The current app-server notification surface includes these core Lifecycle-releva
 7. `item/agentMessage/delta`
 8. `item/reasoning/textDelta`
 9. `item/fileChange/outputDelta`
-10. `item/mcpToolCall/progress`
-11. `thread/tokenUsage/updated`
-12. `error`
+10. `item/commandExecution/outputDelta`
+11. `item/mcpToolCall/progress`
+12. `thread/tokenUsage/updated`
+13. `error`
 
 The current app-server item surface includes typed items such as:
 
@@ -133,6 +134,7 @@ Rules:
 3. Error and failure events are first-class provider facts and must not be collapsed into generic "assistant failed" text.
 4. `fileChange.changes` already carries `{ path, kind, diff }`; Lifecycle should preserve that diff text and render it directly instead of synthesizing fake edit patches.
 5. `turn/diff/updated` is the turn-level aggregate patch stream, while `item/fileChange/outputDelta` is the item-level diff delta stream. Lifecycle should prefer those provider diffs over filesystem guesswork whenever it needs live patch rendering.
+6. `item/commandExecution/outputDelta` streams command stdout/stderr incrementally. Lifecycle should append those deltas in order and keep the corresponding `commandExecution.aggregatedOutput` projection live in the UI instead of waiting for the final `item.completed`.
 
 ## Configuration Surface
 

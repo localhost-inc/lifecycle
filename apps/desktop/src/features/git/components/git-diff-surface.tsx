@@ -5,7 +5,8 @@ import { measureAsyncPerformance } from "@/lib/performance";
 import { GithubAvatar } from "@/features/git/components/github-avatar";
 import { getGitChangesPatch, getGitCommitPatch } from "@/features/git/api";
 import { useGitStatus } from "@/features/git/hooks";
-import { useClient } from "@/store";
+import { useWorkspace } from "@/store";
+import { useOptionalWorkspaceHostClient } from "@lifecycle/workspace/client/react";
 import { useParsedGitPatchFiles } from "@/features/git/lib/parsed-patch-files";
 import { GitPatchViewer } from "@/features/git/components/git-patch-viewer";
 
@@ -81,15 +82,20 @@ export function GitDiffSurface({
   source,
   workspaceId,
 }: GitDiffSurfaceProps) {
-  const client = useClient();
+  const workspace = useWorkspace(workspaceId);
+  const client = useOptionalWorkspaceHostClient(workspace?.host);
   const [patch, setPatch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const commitSha = source.mode === "commit" ? source.commit.sha : null;
   const focusPath = source.mode === "changes" ? source.focusPath : null;
-  const changesStatusQuery = useGitStatus(source.mode === "changes" ? workspaceId : null, {
-    polling: false,
-  });
+  const changesStatusQuery = useGitStatus(
+    source.mode === "changes" ? workspaceId : null,
+    source.mode === "changes" ? (workspace?.host ?? null) : null,
+    {
+      polling: false,
+    },
+  );
   const changesPatchReloadKey = useMemo(
     () =>
       source.mode === "changes"
@@ -119,13 +125,21 @@ export function GitDiffSurface({
     setError(null);
     setIsLoading(true);
 
+    if (!client) {
+      setPatch("");
+      setIsLoading(false);
+      return;
+    }
+
     frameId = window.requestAnimationFrame(() => {
       const patchRequest = measureAsyncPerformance(
         `git-diff-surface.patch:${surfaceIdentity}`,
         () =>
           source.mode === "changes"
             ? getGitChangesPatch(client, workspaceId)
-            : getGitCommitPatch(client, workspaceId, commitSha ?? "").then((result) => result.patch),
+            : getGitCommitPatch(client, workspaceId, commitSha ?? "").then(
+                (result) => result.patch,
+              ),
       );
 
       void patchRequest
@@ -153,7 +167,7 @@ export function GitDiffSurface({
       cancelled = true;
       window.cancelAnimationFrame(frameId);
     };
-  }, [changesPatchReloadKey, commitSha, client, source.mode, surfaceIdentity, workspaceId]);
+  }, [changesPatchReloadKey, client, commitSha, source.mode, surfaceIdentity, workspaceId]);
   const parsedFiles = useParsedGitPatchFiles(diffCacheKeyPrefix, patch);
 
   return (

@@ -6,9 +6,9 @@ import {
   type SqlDriver,
 } from "@lifecycle/store";
 
-const agentMessageCollections: Map<string, SqlCollection<AgentMessageWithParts>> =
-  (import.meta.hot?.data.agentMessageCollections as typeof agentMessageCollections) ??
-  new Map<string, SqlCollection<AgentMessageWithParts>>();
+const agentMessageCollections: Map<string, SqlCollection<AgentMessageWithParts>> = (import.meta.hot
+  ?.data.agentMessageCollections as typeof agentMessageCollections) ??
+new Map<string, SqlCollection<AgentMessageWithParts>>();
 
 if (import.meta.hot) {
   import.meta.hot.accept();
@@ -41,5 +41,5 @@ export function upsertAgentMessageInCollection(
   sessionId: string,
   message: AgentMessageWithParts,
 ): void {
-  getOrCreateAgentMessageCollection(driver, sessionId).upsert(message);
+  getOrCreateAgentMessageCollection(driver, sessionId).utils.upsert(message);
 }

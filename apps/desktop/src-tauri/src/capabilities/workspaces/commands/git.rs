@@ -204,3 +204,11 @@ pub async fn merge_workspace_git_pull_request(
     )
     .await
 }
+
+#[tauri::command]
+pub async fn git_branch_has_upstream(
+    worktree_path: String,
+    branch_name: String,
+) -> Result<bool, LifecycleError> {
+    crate::platform::git::worktree::branch_has_upstream(&worktree_path, &branch_name).await
+}

@@ -68,26 +68,19 @@ export function useFileEditorSessions(openFileTabKeys: readonly string[]) {
     useState<FileEditorSessionsState>({});
 
   useEffect(() => {
-    setFileEditorSessionsByTabKey((current) =>
-      pruneFileEditorSessions(current, openFileTabKeys),
-    );
+    setFileEditorSessionsByTabKey((current) => pruneFileEditorSessions(current, openFileTabKeys));
   }, [openFileTabKeys]);
 
   const confirmCloseFileEditorSession = useCallback(
     (tabKey: string, label: string) => {
-      const message = buildCloseFileEditorSessionPrompt(
-        fileEditorSessionsByTabKey[tabKey],
-        label,
-      );
+      const message = buildCloseFileEditorSessionPrompt(fileEditorSessionsByTabKey[tabKey], label);
       return message ? window.confirm(message) : true;
     },
     [fileEditorSessionsByTabKey],
   );
 
   const clearFileEditorSession = useCallback((tabKey: string) => {
-    setFileEditorSessionsByTabKey((current) =>
-      updateFileEditorSession(current, tabKey, null),
-    );
+    setFileEditorSessionsByTabKey((current) => updateFileEditorSession(current, tabKey, null));
   }, []);
 
   const handleFileEditorSessionStateChange = useCallback(

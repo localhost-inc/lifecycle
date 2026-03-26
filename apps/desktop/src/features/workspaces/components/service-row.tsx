@@ -14,7 +14,7 @@ import {
   useState,
 } from "react";
 import { hasAnsiCodes, renderAnsiLine } from "@/lib/ansi";
-import type { ServiceLogLine } from "@/features/workspaces/api";
+import type { ServiceLogLine } from "@lifecycle/workspace/client";
 
 type ServiceRuntime = "image" | "process";
 

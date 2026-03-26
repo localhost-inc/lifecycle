@@ -8,7 +8,10 @@ import {
   subscribeToAppHotkeyEvents,
   type AppHotkeyEvent,
 } from "@/app/app-hotkeys";
-import { SHORTCUT_HANDLER_PRIORITY, useShortcutRegistration } from "@/app/shortcuts/shortcut-router";
+import {
+  SHORTCUT_HANDLER_PRIORITY,
+  useShortcutRegistration,
+} from "@/app/shortcuts/shortcut-router";
 
 interface AppHotkeyListenerProps {
   onSelectProjectIndex?: (index: number) => void;

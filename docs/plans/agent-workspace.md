@@ -32,7 +32,7 @@ Use this file for:
 6. Provider-native events must enter the desktop through a Lifecycle-owned `AgentOrchestrator` layer that emits normalized `agent.*` facts for the UI and persistence layers.
 7. The app owns one `AgentOrchestrator` initialized with the Lifecycle store.
 8. `AgentOrchestrator` creates `AgentSession` objects backed by persisted `agent_session` records.
-9. Each `AgentSession` interfaces with an `AgentWorker` deployed on the target `WorkspaceClient`.
+9. Each `AgentSession` interfaces with an `AgentWorker` deployed on the target `WorkspaceHostClient`.
 10. The harness UI should talk to `AgentSession`, not terminal APIs or provider-specific transport details.
 
 ## Architectural Reset
@@ -45,7 +45,7 @@ Harness UI
     -> AgentSession
       -> AgentWorker
         -> ClaudeAgentSessionProvider | CodexAgentSessionProvider
-          -> WorkspaceClient
+          -> WorkspaceHostClient
             -> local | docker | remote | cloud execution
 ```
 
@@ -55,7 +55,7 @@ Rules:
 2. `AgentOrchestrator.startSession(...)` creates an `AgentSession` backed by a persisted `agent_session` record through one shared API.
 3. `AgentSession` is the harness-facing live object for one persisted `agent_session`.
 4. `AgentWorker` is the deployed execution unit for an `AgentSession` on `local`, `docker`, `remote`, or `cloud`.
-5. `WorkspaceClient` is the deployment boundary for `AgentWorker`, not an app-level owner of agent state.
+5. `WorkspaceHostClient` is the deployment boundary for `AgentWorker`, not an app-level owner of agent state.
 6. On `local`, the first real worker path should be a Lifecycle-owned process launched as `lifecycle agent worker <provider>`, with stdin/stdout as the control stream and `provider_session_id` reported back by the worker.
 4. `terminal` becomes a dumb shell/filesystem surface and must not carry harness state, transcript state, or approval state.
 5. Existing harness-terminal glue should be deleted rather than migrated behind compatibility shims.
@@ -80,7 +80,7 @@ Rules:
 3. `AgentSession` is backed by a live `AgentWorker` bound to that persisted row.
 4. Providers must emit normalized `agent.*` events for message creation, message streaming, turn lifecycle, approvals, tools, and artifacts.
 5. The harness UI reads Lifecycle state only. It must not branch on Claude-specific or Codex-specific transcript semantics.
-6. `WorkspaceClient` is a per-session execution dependency used to deploy the `AgentWorker` in the correct workspace environment.
+6. `WorkspaceHostClient` is a per-session execution dependency used to deploy the `AgentWorker` in the correct workspace environment.
 7. `provider_session_id` is discovered by the worker and reported back during worker startup; it is not the transport address the desktop app uses to command the worker.
 
 Required normalized provider outputs:
@@ -166,7 +166,7 @@ In progress.
 
 - [x] Create `AgentTab` / `AgentSurface` naming across the workspace canvas.
 - [x] Define `AgentOrchestrator` as the first-class session factory and lifecycle coordinator.
-- [x] Move `AgentOrchestrator` ownership to the app/store layer instead of `WorkspaceClient`.
+- [x] Move `AgentOrchestrator` ownership to the app/store layer instead of `WorkspaceHostClient`.
 - [x] Implement `ClaudeAgentSessionProvider` and `CodexAgentSessionProvider` against the shared contract.
 - [x] Bind each `agent_session` to a provider-owned local runtime session.
 - [x] Persist the bound provider session identifier on `agent_session.provider_session_id`.

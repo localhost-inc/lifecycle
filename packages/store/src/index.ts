@@ -1,16 +1,15 @@
 export type { SqlDriver } from "./driver";
-export { createSqlCollection, type SqlCollection } from "./collection";
+export { createSqlCollection, type SqlCollection, type SqlCollectionUtils } from "./collection";
 export type { Collection } from "@tanstack/db";
-export { createLocalOnlyRegistry, type ClientRegistry } from "./client-registry";
 
 export {
+  createProjectCollection,
   selectAllProjects,
-  insertProject,
-  deleteProject,
-  updateProjectManifestStatus,
+  selectProjectById,
 } from "./collections/projects";
 
 export {
+  createWorkspaceCollection,
   selectAllWorkspaces,
   selectWorkspaceById,
   groupWorkspacesByProject,

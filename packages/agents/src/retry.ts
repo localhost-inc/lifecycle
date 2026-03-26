@@ -5,10 +5,7 @@ export interface RetryOptions {
   onRetry?: (error: unknown, attempt: number) => void | Promise<void>;
 }
 
-export async function retry<T>(
-  fn: () => Promise<T>,
-  options?: RetryOptions,
-): Promise<T> {
+export async function retry<T>(fn: () => Promise<T>, options?: RetryOptions): Promise<T> {
   const maxAttempts = options?.attempts ?? 3;
   let lastError: unknown;
 

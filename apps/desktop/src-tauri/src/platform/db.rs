@@ -31,16 +31,6 @@ pub fn map_database_result<T>(result: rusqlite::Result<T>) -> Result<T, Lifecycl
     result.map_err(database_error)
 }
 
-pub fn optional_database_result<T>(
-    result: rusqlite::Result<T>,
-) -> Result<Option<T>, LifecycleError> {
-    match result {
-        Ok(value) => Ok(Some(value)),
-        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(error) => Err(database_error(error)),
-    }
-}
-
 pub fn open_db(db_path: &str) -> Result<rusqlite::Connection, LifecycleError> {
     let conn = map_database_result(rusqlite::Connection::open(db_path))?;
     map_database_result(conn.pragma_update(None, "journal_mode", "WAL"))?;

@@ -1,7 +1,8 @@
-export { StoreProvider, useAgentOrchestrator, useStoreContext } from "@/store/provider";
+export { StoreProvider, useStoreContext } from "@/store/provider";
 export { ReactQueryProvider } from "@/store/react-query-provider";
 export {
   useProjects,
+  useProject,
   useWorkspaces,
   useWorkspace,
   useWorkspacesByProject,
@@ -9,5 +10,4 @@ export {
   useAgentSessions,
   useAgentMessages,
   useAgentSessionRefresh,
-  useClient,
 } from "@/store/hooks";

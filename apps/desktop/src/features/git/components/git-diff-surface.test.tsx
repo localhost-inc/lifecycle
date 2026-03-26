@@ -5,7 +5,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { mockStoreContext } from "@/test/store-mock";
 import { ReactQueryProvider } from "@/store/react-query-provider";
-import { buildChangesPatchReloadKey, GitDiffSurface } from "@/features/git/components/git-diff-surface";
+import {
+  buildChangesPatchReloadKey,
+  GitDiffSurface,
+} from "@/features/git/components/git-diff-surface";
 
 function renderSurface(node: ReturnType<typeof createElement>) {
   return renderToStaticMarkup(

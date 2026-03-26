@@ -4,7 +4,10 @@ import { readFileSync } from "node:fs";
 describe("agent-surface transcript layout", () => {
   test("lets transcript rows own their padding instead of the scroll container", () => {
     const surfaceSource = readFileSync(new URL("./agent-surface.tsx", import.meta.url), "utf8");
-    const transcriptSource = readFileSync(new URL("./agent-transcript.tsx", import.meta.url), "utf8");
+    const transcriptSource = readFileSync(
+      new URL("./agent-transcript.tsx", import.meta.url),
+      "utf8",
+    );
 
     expect(transcriptSource).toContain('className="bg-[var(--surface-hover)]/50 px-4 py-3"');
     expect(surfaceSource).toContain('className="px-4 py-3 text-[13px]');
@@ -19,8 +22,23 @@ describe("agent-surface transcript layout", () => {
   test("keeps the input row tighter on the bottom edge", () => {
     const source = readFileSync(new URL("./agent-prompt-input.tsx", import.meta.url), "utf8");
 
-    expect(source).toContain('className="flex cursor-text items-start px-4 pt-3 pb-2"');
+    expect(source).toContain('? "flex cursor-text items-start px-5 pt-4 pb-3"');
+    expect(source).toContain(': "flex cursor-text items-start px-4 pt-3 pb-2"');
     expect(source).not.toContain('className="flex items-start px-4 py-3"');
+  });
+
+  test("centers the composer before the first message lands", () => {
+    const surfaceSource = readFileSync(new URL("./agent-surface.tsx", import.meta.url), "utf8");
+    const composerSource = readFileSync(new URL("./agent-composer.tsx", import.meta.url), "utf8");
+
+    expect(surfaceSource).toContain("const showCenteredComposer =");
+    expect(surfaceSource).toContain(
+      'className="flex min-h-0 flex-1 items-center justify-center px-6 py-10"',
+    );
+    expect(surfaceSource).toContain("<AgentComposer\n                ref={promptComposerRef}");
+    expect(surfaceSource).toContain('toolbarClassName="mt-2"');
+    expect(composerSource).toContain("<AgentPromptInput");
+    expect(composerSource).toContain("<AgentToolbar");
   });
 
   test("tabs stay mounted — no scroll save/restore needed", () => {
@@ -34,11 +52,16 @@ describe("agent-surface transcript layout", () => {
   });
 
   test("renders tool-only assistant rows as a compact log", () => {
-    const transcriptSource = readFileSync(new URL("./agent-transcript.tsx", import.meta.url), "utf8");
+    const transcriptSource = readFileSync(
+      new URL("./agent-transcript.tsx", import.meta.url),
+      "utf8",
+    );
     const partSource = readFileSync(new URL("./parts/tool-call-part.tsx", import.meta.url), "utf8");
 
     expect(transcriptSource).toContain("function isToolOnlyAssistantMessage");
     expect(transcriptSource).toContain('className={isToolOnly ? "px-4 py-1.5" : "px-4 py-3"}');
-    expect(partSource).toContain('className={["my-0.5 transition-opacity", isCompleted ? "opacity-50" : ""].join(" ")}');
+    expect(partSource).toContain(
+      'className={["my-0.5 transition-opacity", isCompleted ? "opacity-50" : ""].join(" ")}',
+    );
   });
 });

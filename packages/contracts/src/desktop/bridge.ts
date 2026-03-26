@@ -882,16 +882,66 @@ const TaskDependencyRemoveSuccessSchema = z.object({
   result: z.object({}),
 });
 
-const PlanListFailureSchema = z.object({ error: BridgeErrorSchema, id: z.string(), method: z.literal("plan.list"), ok: z.literal(false) });
-const PlanCreateFailureSchema = z.object({ error: BridgeErrorSchema, id: z.string(), method: z.literal("plan.create"), ok: z.literal(false) });
-const PlanUpdateFailureSchema = z.object({ error: BridgeErrorSchema, id: z.string(), method: z.literal("plan.update"), ok: z.literal(false) });
-const PlanDeleteFailureSchema = z.object({ error: BridgeErrorSchema, id: z.string(), method: z.literal("plan.delete"), ok: z.literal(false) });
-const TaskListFailureSchema = z.object({ error: BridgeErrorSchema, id: z.string(), method: z.literal("task.list"), ok: z.literal(false) });
-const TaskCreateFailureSchema = z.object({ error: BridgeErrorSchema, id: z.string(), method: z.literal("task.create"), ok: z.literal(false) });
-const TaskUpdateFailureSchema = z.object({ error: BridgeErrorSchema, id: z.string(), method: z.literal("task.update"), ok: z.literal(false) });
-const TaskDeleteFailureSchema = z.object({ error: BridgeErrorSchema, id: z.string(), method: z.literal("task.delete"), ok: z.literal(false) });
-const TaskDependencyAddFailureSchema = z.object({ error: BridgeErrorSchema, id: z.string(), method: z.literal("task.dependency.add"), ok: z.literal(false) });
-const TaskDependencyRemoveFailureSchema = z.object({ error: BridgeErrorSchema, id: z.string(), method: z.literal("task.dependency.remove"), ok: z.literal(false) });
+const PlanListFailureSchema = z.object({
+  error: BridgeErrorSchema,
+  id: z.string(),
+  method: z.literal("plan.list"),
+  ok: z.literal(false),
+});
+const PlanCreateFailureSchema = z.object({
+  error: BridgeErrorSchema,
+  id: z.string(),
+  method: z.literal("plan.create"),
+  ok: z.literal(false),
+});
+const PlanUpdateFailureSchema = z.object({
+  error: BridgeErrorSchema,
+  id: z.string(),
+  method: z.literal("plan.update"),
+  ok: z.literal(false),
+});
+const PlanDeleteFailureSchema = z.object({
+  error: BridgeErrorSchema,
+  id: z.string(),
+  method: z.literal("plan.delete"),
+  ok: z.literal(false),
+});
+const TaskListFailureSchema = z.object({
+  error: BridgeErrorSchema,
+  id: z.string(),
+  method: z.literal("task.list"),
+  ok: z.literal(false),
+});
+const TaskCreateFailureSchema = z.object({
+  error: BridgeErrorSchema,
+  id: z.string(),
+  method: z.literal("task.create"),
+  ok: z.literal(false),
+});
+const TaskUpdateFailureSchema = z.object({
+  error: BridgeErrorSchema,
+  id: z.string(),
+  method: z.literal("task.update"),
+  ok: z.literal(false),
+});
+const TaskDeleteFailureSchema = z.object({
+  error: BridgeErrorSchema,
+  id: z.string(),
+  method: z.literal("task.delete"),
+  ok: z.literal(false),
+});
+const TaskDependencyAddFailureSchema = z.object({
+  error: BridgeErrorSchema,
+  id: z.string(),
+  method: z.literal("task.dependency.add"),
+  ok: z.literal(false),
+});
+const TaskDependencyRemoveFailureSchema = z.object({
+  error: BridgeErrorSchema,
+  id: z.string(),
+  method: z.literal("task.dependency.remove"),
+  ok: z.literal(false),
+});
 
 export const BridgeResponseSchema = z.union([
   ServiceInfoSuccessSchema,

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { mockStoreContext } from "@/test/store-mock";
-import type { WorkspaceFileTreeEntry } from "@/features/workspaces/api";
+import type { WorkspaceFileTreeEntry } from "@lifecycle/workspace/client";
 
 function readyQueryResult<T>(data: T) {
   return {
@@ -54,7 +54,7 @@ describe("ExplorerPanel", () => {
       ],
     });
 
-    expect(explorerTreeSpy).toHaveBeenCalledWith("workspace_1");
+    expect(explorerTreeSpy).toHaveBeenCalledWith("workspace_1", "local");
     expect(markup).toContain("README.md");
     expect(markup).toContain(">src</span>");
     expect(markup).toContain('title="src"');
@@ -70,7 +70,7 @@ describe("ExplorerPanel", () => {
       workspaceHost: "docker",
     });
 
-    expect(explorerTreeSpy).toHaveBeenCalledWith("workspace_1");
+    expect(explorerTreeSpy).toHaveBeenCalledWith("workspace_1", "docker");
     expect(markup).toContain("README.md");
     expect(markup).toContain(">src</span>");
   });
@@ -81,7 +81,7 @@ describe("ExplorerPanel", () => {
       worktreePath: null,
     });
 
-    expect(explorerTreeSpy).toHaveBeenCalledWith(null);
+    expect(explorerTreeSpy).toHaveBeenCalledWith(null, null);
     expect(markup).toContain("Explorer unavailable");
     expect(markup).toContain("local worktree");
   });

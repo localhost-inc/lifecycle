@@ -1,10 +1,7 @@
 import type { GitPullRequestSummary, WorkspaceHost } from "@lifecycle/contracts";
 import { EmptyState } from "@lifecycle/ui";
-import { useCallback } from "react";
-import { stageGitFiles } from "@/features/git/api";
 import { useGitActions } from "@/features/git/hooks/use-git-actions";
 import { ChangesTab } from "@/features/git/components/changes-tab";
-import { useClient } from "@/store";
 
 export const GIT_CHANGES_PANEL_BODY_CLASS_NAME = "px-2.5 pb-4";
 export const GIT_CHANGES_PANEL_EMPTY_STATE_CLASS_NAME = "px-2.5 py-4";
@@ -30,7 +27,6 @@ export function GitChangesPanel({
   workspaceHost,
   worktreePath,
 }: GitChangesPanelProps) {
-  const client = useClient();
   const supportsChanges =
     (workspaceHost === "local" || workspaceHost === "docker") && worktreePath !== null;
   const gitActions = useGitActions({
@@ -40,19 +36,6 @@ export function GitChangesPanel({
     workspaceHost,
     worktreePath,
   });
-
-  const handleStageAll = useCallback(async () => {
-    const files = gitActions.gitStatusQuery.data?.files ?? [];
-    const unstaged = files.filter((f) => f.unstaged);
-    if (unstaged.length > 0) {
-      await stageGitFiles(
-        client,
-        workspaceId,
-        unstaged.map((f) => f.path),
-      );
-      await gitActions.gitStatusQuery.refetch();
-    }
-  }, [gitActions.gitStatusQuery.data, gitActions.gitStatusQuery.refetch, client, workspaceId]);
 
   return (
     <section className="relative flex min-h-0 h-full flex-col">
@@ -65,7 +48,10 @@ export function GitChangesPanel({
               isLoading={gitActions.gitStatusQuery.isLoading}
               onOpenDiff={onOpenDiff}
               onOpenFile={onOpenFile}
-              onRefresh={async () => { await gitActions.gitStatusQuery.refetch(); }}
+              onRefresh={async () => {
+                await gitActions.gitStatusQuery.refetch();
+              }}
+              workspaceHost={workspaceHost}
               workspaceId={workspaceId}
             />
           ) : (

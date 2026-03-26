@@ -1,9 +1,6 @@
 import { retry } from "@lifecycle/agents";
 import type {
   AgentApprovalResolution,
-  AgentEventObserver,
-  AgentSessionContext,
-  AgentSessionEvents,
   AgentTurnCancelRequest,
   AgentTurnRequest,
   AgentWorker as IAgentWorker,
@@ -109,14 +106,7 @@ async function startAgentWorker(input: StartAgentWorkerInput): Promise<void> {
 
   await invokeTauri("spawn_cli_process", {
     request: {
-      args: [
-        "agent",
-        "worker",
-        "start",
-        ...input.args,
-        "--registration-path",
-        registrationPath,
-      ],
+      args: ["agent", "worker", "start", ...input.args, "--registration-path", registrationPath],
       cwd: input.cwd ?? null,
       env: input.env ?? {},
       logPath,
@@ -140,9 +130,7 @@ export async function readAgentWorkerRegistration(
   return registration;
 }
 
-async function waitForAgentWorkerRegistration(
-  sessionId: string,
-): Promise<AgentWorkerRegistration> {
+async function waitForAgentWorkerRegistration(sessionId: string): Promise<AgentWorkerRegistration> {
   return retry(
     async () => {
       const registration = await readAgentWorkerRegistration(sessionId);
@@ -223,7 +211,7 @@ class AgentWorker implements IAgentWorker {
   private async sendCommand(command: AgentWorkerCommand): Promise<void> {
     workerLog(this.options.sessionId, "sending command", {
       commandKind: command.kind,
-      turnId: "turnId" in command ? command.turnId ?? null : null,
+      turnId: "turnId" in command ? (command.turnId ?? null) : null,
       approvalId: "approvalId" in command ? command.approvalId : null,
     });
 
@@ -307,9 +295,7 @@ class AgentWorker implements IAgentWorker {
     );
   }
 
-  private async connectToRegistration(
-    registration: AgentWorkerRegistration,
-  ): Promise<WebSocket> {
+  private async connectToRegistration(registration: AgentWorkerRegistration): Promise<WebSocket> {
     return await new Promise<WebSocket>((resolve, reject) => {
       workerLog(this.options.sessionId, "opening websocket", {
         pid: registration.pid,
@@ -341,7 +327,9 @@ class AgentWorker implements IAgentWorker {
           pid: registration.pid,
           port: registration.port,
         });
-        settle(() => reject(new Error(`Failed to connect to agent worker ${registration.sessionId}.`)));
+        settle(() =>
+          reject(new Error(`Failed to connect to agent worker ${registration.sessionId}.`)),
+        );
       };
       socket.onclose = () => {
         workerLog(this.options.sessionId, "websocket closed", {
@@ -401,9 +389,7 @@ class AgentWorker implements IAgentWorker {
   }
 }
 
-async function connectAgentWorker(
-  options: AgentWorkerOptions,
-): Promise<IAgentWorker> {
+async function connectAgentWorker(options: AgentWorkerOptions): Promise<IAgentWorker> {
   const worker = new AgentWorker(options);
   await worker.connect();
   await worker.waitForInitialSnapshot();
@@ -524,9 +510,7 @@ async function buildWorkerArgs(
   }
 }
 
-export async function createLocalWorker(
-  options: CreateWorkerOptions,
-): Promise<CreateWorkerResult> {
+export async function createLocalWorker(options: CreateWorkerOptions): Promise<CreateWorkerResult> {
   const { session, context, onState, onWorkerEvent } = options;
 
   if (!context.worktreePath) {

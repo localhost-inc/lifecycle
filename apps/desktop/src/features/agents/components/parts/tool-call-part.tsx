@@ -28,7 +28,13 @@ function ToolDiffView({ inputJson }: { inputJson: string }) {
 
   return (
     <div className="mt-0.5 overflow-hidden text-[12px]">
-      <PatchDiff patch={patch} options={withCopyableGitDiffOptions({ diffStyle: "unified" as const, disableFileHeader: true })} />
+      <PatchDiff
+        patch={patch}
+        options={withCopyableGitDiffOptions({
+          diffStyle: "unified" as const,
+          disableFileHeader: true,
+        })}
+      />
     </div>
   );
 }
@@ -86,7 +92,9 @@ function extractToolMeta(toolName: string, inputJson?: string): string | null {
             : input.query
           : null;
       case "WebFetch":
-        return typeof input.url === "string" ? input.url.replace(/^https?:\/\//, "").slice(0, 60) : null;
+        return typeof input.url === "string"
+          ? input.url.replace(/^https?:\/\//, "").slice(0, 60)
+          : null;
       case "Bash":
       case "command_execution":
         return typeof input.command === "string"
@@ -144,11 +152,16 @@ function cleanSearchPattern(pattern: string): string {
   return cleaned || pattern.slice(0, 40);
 }
 
-function buildToolCallHeader(toolName: string, inputJson?: string): { verb: string; subject: string | null; filePath: string | null; summary: string | null } {
+function buildToolCallHeader(
+  toolName: string,
+  inputJson?: string,
+): { verb: string; subject: string | null; filePath: string | null; summary: string | null } {
   let input: Record<string, unknown> | null = null;
   try {
     if (inputJson) input = JSON.parse(inputJson) as Record<string, unknown>;
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   const filePath = typeof input?.file_path === "string" ? input.file_path : null;
   const shortPath = filePath?.replace(/.*\//, "") ?? null;
@@ -163,7 +176,12 @@ function buildToolCallHeader(toolName: string, inputJson?: string): { verb: stri
       const limit = typeof input?.limit === "number" ? input.limit : null;
       const start = Math.max(offset, 1);
       const range = limit != null ? `:${start}-${start + limit - 1}` : null;
-      return { verb: "Read", subject: shortPath ? `${shortPath}${range ?? ""}` : null, filePath, summary: null };
+      return {
+        verb: "Read",
+        subject: shortPath ? `${shortPath}${range ?? ""}` : null,
+        filePath,
+        summary: null,
+      };
     }
     case "Delete":
     case "DeleteFile":
@@ -171,15 +189,26 @@ function buildToolCallHeader(toolName: string, inputJson?: string): { verb: stri
     case "Glob":
     case "Grep": {
       const raw = typeof input?.pattern === "string" ? input.pattern : null;
-      return { verb: "Search", subject: raw ? cleanSearchPattern(raw) : null, filePath: null, summary: null };
+      return {
+        verb: "Search",
+        subject: raw ? cleanSearchPattern(raw) : null,
+        filePath: null,
+        summary: null,
+      };
     }
     case "ToolSearch":
     case "WebSearch": {
       const query = typeof input?.query === "string" ? input.query : null;
-      return { verb: "Search", subject: query && query.length > 60 ? `${query.slice(0, 57)}…` : query, filePath: null, summary: null };
+      return {
+        verb: "Search",
+        subject: query && query.length > 60 ? `${query.slice(0, 57)}…` : query,
+        filePath: null,
+        summary: null,
+      };
     }
     case "WebFetch": {
-      const url = typeof input?.url === "string" ? input.url.replace(/^https?:\/\//, "").slice(0, 60) : null;
+      const url =
+        typeof input?.url === "string" ? input.url.replace(/^https?:\/\//, "").slice(0, 60) : null;
       return { verb: "Fetch", subject: url, filePath: null, summary: null };
     }
     case "Bash":
@@ -191,7 +220,12 @@ function buildToolCallHeader(toolName: string, inputJson?: string): { verb: stri
     case "Agent":
       return {
         verb: "Agent",
-        subject: typeof input?.description === "string" ? input.description : typeof input?.subagent_type === "string" ? input.subagent_type : null,
+        subject:
+          typeof input?.description === "string"
+            ? input.description
+            : typeof input?.subagent_type === "string"
+              ? input.subagent_type
+              : null,
         filePath: null,
         summary: null,
       };
@@ -224,11 +258,51 @@ function diffSummary(inputJson?: string): string | null {
   }
 }
 
+function parseCommandExecutionOutput(
+  outputJson?: string | null,
+): { exitCode: number | null; output: string | null } | null {
+  if (!outputJson) {
+    return null;
+  }
+
+  try {
+    const output = JSON.parse(outputJson) as Record<string, unknown>;
+    const stdout = typeof output.stdout === "string" ? output.stdout : "";
+    const stderr = typeof output.stderr === "string" ? output.stderr : "";
+    const mergedOutput =
+      typeof output.output === "string"
+        ? output.output
+        : `${stdout}${stdout && stderr ? "\n" : ""}${stderr}`;
+    return {
+      exitCode: typeof output.exitCode === "number" ? output.exitCode : null,
+      output: mergedOutput.length > 0 ? mergedOutput : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function hasFailed(status?: AgentToolCallStatus | null, errorText?: string | null): boolean {
   return status === "failed" || !!errorText;
 }
 
-export function ToolCallPart({ toolName, inputJson, outputJson, status, errorText, isStreaming, onOpenFile }: { toolName: string; inputJson?: string; outputJson?: string | null; status?: AgentToolCallStatus | null; errorText?: string | null; isStreaming?: boolean; onOpenFile?: (filePath: string) => void }) {
+export function ToolCallPart({
+  toolName,
+  inputJson,
+  outputJson,
+  status,
+  errorText,
+  isStreaming: _isStreaming,
+  onOpenFile,
+}: {
+  toolName: string;
+  inputJson?: string;
+  outputJson?: string | null;
+  status?: AgentToolCallStatus | null;
+  errorText?: string | null;
+  isStreaming?: boolean;
+  onOpenFile?: (filePath: string) => void;
+}) {
   const { verb, subject, filePath, summary } = buildToolCallHeader(toolName, inputJson);
   const diffInputJson = typeof inputJson === "string" ? inputJson : null;
   const hasToolDiff =
@@ -236,11 +310,21 @@ export function ToolCallPart({ toolName, inputJson, outputJson, status, errorTex
     diffInputJson !== null &&
     buildToolPatch(diffInputJson) !== null;
   const agentPrompt = toolName === "Agent" ? extractAgentPrompt(inputJson) : null;
-  const isExpandable = hasToolDiff || agentPrompt;
-  const [open, setOpen] = useState(hasToolDiff);
+  const commandExecution =
+    toolName === "command_execution" ? parseCommandExecutionOutput(outputJson) : null;
+  const commandOutput = commandExecution?.output ?? null;
+  const commandExitCode = commandExecution?.exitCode ?? null;
+  const hasCommandOutput = commandOutput !== null;
+  const isExpandable = hasToolDiff || agentPrompt || hasCommandOutput;
+  const [open, setOpen] = useState(hasToolDiff || hasCommandOutput);
   useEffect(() => {
     if (hasToolDiff) setOpen(true);
   }, [hasToolDiff]);
+  useEffect(() => {
+    if (hasCommandOutput) {
+      setOpen(true);
+    }
+  }, [hasCommandOutput]);
   const canOpenFile = !!filePath && !!onOpenFile;
   const isCompleted = status === "completed" || status === "failed" || status === "cancelled";
 
@@ -258,7 +342,9 @@ export function ToolCallPart({ toolName, inputJson, outputJson, status, errorTex
             type="button"
           >
             <ChevronRight
-              className={["size-3 shrink-0 transition-transform", open ? "rotate-90" : ""].join(" ")}
+              className={["size-3 shrink-0 transition-transform", open ? "rotate-90" : ""].join(
+                " ",
+              )}
             />
           </button>
         ) : (
@@ -306,6 +392,17 @@ export function ToolCallPart({ toolName, inputJson, outputJson, status, errorTex
         <pre className="mt-1 ml-[1.125rem] whitespace-pre-wrap break-words border-l-2 border-[var(--border)] pl-3 text-[12px] leading-5 text-[var(--muted-foreground)]">
           {agentPrompt}
         </pre>
+      ) : null}
+      {open && hasCommandOutput ? (
+        <div className="mt-1 ml-[1.125rem] overflow-hidden rounded border border-[var(--border)] bg-[var(--surface-hover)]/40">
+          <div className="flex items-center justify-between px-3 py-1.5 text-[11px] text-[var(--muted-foreground)]">
+            <span>Output</span>
+            {commandExitCode !== null ? <span>exit {commandExitCode}</span> : null}
+          </div>
+          <pre className="max-h-72 overflow-auto border-t border-[var(--border)] px-3 py-2 whitespace-pre-wrap break-words font-[var(--font-mono)] text-[12px] leading-5 text-[var(--foreground)]">
+            {commandOutput}
+          </pre>
+        </div>
       ) : null}
     </div>
   );

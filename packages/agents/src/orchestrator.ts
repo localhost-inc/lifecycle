@@ -3,7 +3,7 @@ import type {
   AgentSessionRecord,
   WorkspaceHost,
 } from "@lifecycle/contracts";
-import type { WorkspaceClient } from "@lifecycle/workspace";
+import type { WorkspaceHostClient } from "@lifecycle/workspace/client";
 import type { AgentEventObserver } from "./events";
 import type { AgentApprovalResolution, AgentTurnCancelRequest, AgentTurnRequest } from "./turn";
 
@@ -64,17 +64,17 @@ export interface CreateAgentOrchestratorDependencies {
     start(
       session: AgentSessionRecord,
       context: AgentSessionContext,
-      client: WorkspaceClient,
+      client: WorkspaceHostClient,
       events: AgentSessionEvents,
     ): Promise<{ session: AgentSessionRecord; worker: AgentWorker }>;
     connect(
       session: AgentSessionRecord,
       context: AgentSessionContext,
-      client: WorkspaceClient,
+      client: WorkspaceHostClient,
       events: AgentSessionEvents,
     ): Promise<AgentWorker>;
   };
-  resolveClient(context: AgentSessionContext): Promise<WorkspaceClient> | WorkspaceClient;
+  resolveClient(context: AgentSessionContext): Promise<WorkspaceHostClient> | WorkspaceHostClient;
   store: AgentStore;
   now?: () => string;
   randomId?: () => string;
@@ -501,7 +501,7 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
   private async ensureActiveConnection(
     session: AgentSessionRecord,
     context: AgentSessionContext,
-    client: WorkspaceClient,
+    client: WorkspaceHostClient,
     events: AgentSessionEvents,
   ): Promise<AgentWorker> {
     const existing = this.connections.get(session.id);
@@ -513,12 +513,7 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
       this.connections.delete(session.id);
     }
 
-    const connection = await this.worker.connect(
-      session,
-      context,
-      client,
-      events,
-    );
+    const connection = await this.worker.connect(session, context, client, events);
     this.connections.set(session.id, connection);
     return connection;
   }
@@ -530,7 +525,7 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
   private async withConnectionRetry(
     session: AgentSessionRecord,
     context: AgentSessionContext,
-    client: WorkspaceClient,
+    client: WorkspaceHostClient,
     events: AgentSessionEvents,
     execute: (connection: AgentWorker) => Promise<void>,
   ): Promise<void> {
@@ -566,12 +561,7 @@ class AgentOrchestratorImpl implements AgentOrchestrator {
       this.invalidateConnection(session.id);
 
       try {
-        const retryConnection = await this.ensureActiveConnection(
-          session,
-          context,
-          client,
-          events,
-        );
+        const retryConnection = await this.ensureActiveConnection(session, context, client, events);
         await execute(retryConnection);
         await emitProviderStatus("", null);
       } catch (retryError) {

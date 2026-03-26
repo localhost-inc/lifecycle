@@ -21,9 +21,7 @@ function createPersonalShellContext(persisted: boolean, displayName?: string | n
   };
 }
 
-export function resolveProjectShellContextId(
-  _project: Pick<ProjectRecord, "id">,
-): string {
+export function resolveProjectShellContextId(_project: Pick<ProjectRecord, "id">): string {
   return PERSONAL_SHELL_CONTEXT_ID;
 }
 

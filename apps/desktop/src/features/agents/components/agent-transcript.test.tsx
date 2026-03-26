@@ -72,4 +72,35 @@ describe("TranscriptMessage", () => {
     expect(source.includes("key={id}")).toBeTrue();
     expect(source.includes("key={getAssistantSegmentKey(segment)}")).toBeTrue();
   });
+
+  test("renders command execution output when present", () => {
+    const markup = renderTranscriptMessage({
+      id: "message_2",
+      role: "assistant",
+      text: "",
+      turnId: "turn_2",
+      parts: [
+        {
+          id: "turn_2:assistant:tool:tool_1",
+          part: {
+            type: "tool_call",
+            toolCallId: "tool_1",
+            toolName: "command_execution",
+            inputJson: JSON.stringify({ command: "bun run sync" }),
+            outputJson: JSON.stringify({
+              command: "bun run sync",
+              exitCode: 0,
+              output: "Prepared import inputs\nProcessed 500000 rows\n",
+            }),
+            status: "running",
+          },
+        },
+      ],
+    });
+
+    expect(markup).toContain("bun run sync");
+    expect(markup).toContain("Output");
+    expect(markup).toContain("Processed 500000 rows");
+    expect(markup).toContain("exit 0");
+  });
 });

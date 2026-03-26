@@ -691,7 +691,11 @@ const WorkspacePaneLeaf = memo(function WorkspacePaneLeaf({
           paneId={pane.id}
           paneDragInProgress={paneTabDragInProgress}
           paneFocused={pane.isActive}
-          pendingLaunchActionKey={pane.activeSurface.kind === "launcher" ? pane.activeSurface.pendingLaunchActionKey : null}
+          pendingLaunchActionKey={
+            pane.activeSurface.kind === "launcher"
+              ? pane.activeSurface.pendingLaunchActionKey
+              : null
+          }
           surfaceOpacity={paneOpacity}
           tabSurfaces={pane.tabSurfaces}
         />

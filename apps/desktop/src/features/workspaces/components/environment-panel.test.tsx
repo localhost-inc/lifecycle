@@ -2,7 +2,7 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import type { LifecycleConfig, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { ServiceLogSnapshot } from "@/features/workspaces/api";
+import type { ServiceLogSnapshot } from "@lifecycle/workspace/client";
 
 const baseWorkspace: WorkspaceRecord = {
   id: "workspace_1",
@@ -90,7 +90,7 @@ describe("EnvironmentPanel", () => {
 
     expect(markup).toContain("web");
     expect(markup).toContain("api");
-    expect(serviceLogsSpy).toHaveBeenCalledWith("workspace_1");
+    expect(serviceLogsSpy).toHaveBeenCalledWith("workspace_1", "local");
   });
 
   test("renders service log-only rows when runtime logs exist before service records", async () => {

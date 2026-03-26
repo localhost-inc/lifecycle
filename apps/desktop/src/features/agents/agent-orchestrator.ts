@@ -24,9 +24,9 @@ import {
   type AgentMessageWithParts,
   type AgentSessionRecord,
 } from "@lifecycle/contracts";
-import type { WorkspaceClient } from "@lifecycle/workspace";
+import type { WorkspaceHostClientRegistry } from "@lifecycle/workspace/client";
 import { publishBrowserLifecycleEvent } from "@/features/events";
-import { createWorker } from "@/features/agents/workers";
+import type { AgentWorkerProviderRegistry } from "@/features/agents/workers";
 import { recordAgentSessionEvent } from "@lifecycle/agents/react";
 import { tauriSqlDriver } from "@/lib/sql-driver";
 import { upsertAgentMessageInCollection } from "@/store/collections/agent-messages";
@@ -71,14 +71,12 @@ const hotState = import.meta.hot?.data as Partial<OrchestratorHotState> | undefi
 
 const accumulatedMessages: Map<string, AccumulatedMessage> =
   hotState?.accumulatedMessages ?? new Map();
-const messageSequence: Map<string, number> =
-  hotState?.messageSequence ?? new Map();
+const messageSequence: Map<string, number> = hotState?.messageSequence ?? new Map();
 const observedSessionMetadata: Map<string, ObservedSessionMetadata> =
   hotState?.observedSessionMetadata ?? new Map();
-const observedSessionQueues: Map<string, Promise<void>> =
-  hotState?.observedSessionQueues ?? new Map();
-const observedEventIndices: Map<string, number> =
-  hotState?.observedEventIndices ?? new Map();
+const observedSessionQueues: Map<string, Promise<void>> = hotState?.observedSessionQueues ??
+new Map();
+const observedEventIndices: Map<string, number> = hotState?.observedEventIndices ?? new Map();
 
 if (import.meta.hot) {
   import.meta.hot.accept();
@@ -347,22 +345,6 @@ function mapWorkerItemStatus(status: "in_progress" | "completed" | "failed"): Ag
     case "completed":
     default:
       return "completed";
-  }
-}
-
-function parseWorkerJsonRecord(value: string | undefined): Record<string, unknown> {
-  if (!value) {
-    return {};
-  }
-
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
-    }
-    return { value: parsed };
-  } catch {
-    return { value };
   }
 }
 
@@ -1018,10 +1000,11 @@ async function startWorker(
   session: AgentSessionRecord,
   context: AgentSessionContext,
   events: AgentSessionEvents,
+  agentWorkerProviderRegistry: AgentWorkerProviderRegistry,
 ): Promise<{ session: AgentSessionRecord; worker: AgentWorker }> {
   let observedSession = session;
 
-  const result = await createWorker({
+  const result = await agentWorkerProviderRegistry.resolve(context.workspaceHost)({
     session,
     context,
     onState: async (snapshot) => {
@@ -1086,15 +1069,24 @@ async function reattachPersistedAgentSessions(
   );
 }
 
-export function createAgentOrchestrator(localClient: WorkspaceClient) {
+export interface CreateDesktopAgentOrchestratorInput {
+  agentWorkerProviderRegistry: AgentWorkerProviderRegistry;
+  workspaceHostClientRegistry: WorkspaceHostClientRegistry;
+}
+
+export function createAgentOrchestrator({
+  agentWorkerProviderRegistry,
+  workspaceHostClientRegistry,
+}: CreateDesktopAgentOrchestratorInput) {
   const orchestrator = createLifecycleAgentOrchestrator({
     worker: {
-      start: (session, context, _client, events) => startWorker(session, context, events),
+      start: (session, context, _client, events) =>
+        startWorker(session, context, events, agentWorkerProviderRegistry),
       connect: async (session, context, _client, events) =>
-        (await startWorker(session, context, events)).worker,
+        (await startWorker(session, context, events, agentWorkerProviderRegistry)).worker,
     },
-    resolveClient() {
-      return localClient;
+    resolveClient(context) {
+      return workspaceHostClientRegistry.resolve(context.workspaceHost);
     },
     store: {
       async saveSession(session) {

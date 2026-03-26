@@ -28,10 +28,7 @@ export async function selectNextAgentEventIndex(
   return rows[0]?.next_index ?? 1;
 }
 
-export async function insertAgentEvent(
-  driver: SqlDriver,
-  event: AgentEventRecord,
-): Promise<void> {
+export async function insertAgentEvent(driver: SqlDriver, event: AgentEventRecord): Promise<void> {
   await driver.execute(
     `INSERT INTO agent_event (
        id,

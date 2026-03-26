@@ -11,7 +11,7 @@ import type {
   GitPushResult,
   GitStatusResult,
 } from "@lifecycle/contracts";
-import type { WorkspaceClient } from "@lifecycle/workspace";
+import type { WorkspaceHostClient } from "@lifecycle/workspace/client";
 import { isTauri } from "@tauri-apps/api/core";
 import { publishBrowserLifecycleEvent } from "@/features/events/api";
 
@@ -94,7 +94,7 @@ function emitBrowserGitLogChanged(workspaceId: string, headSha: string | null): 
 }
 
 export async function getGitStatus(
-  client: WorkspaceClient,
+  client: WorkspaceHostClient,
   workspaceId: string,
 ): Promise<GitStatusResult> {
   if (!isTauri()) {
@@ -105,7 +105,7 @@ export async function getGitStatus(
 }
 
 export async function getGitDiff(
-  client: WorkspaceClient,
+  client: WorkspaceHostClient,
   workspaceId: string,
   filePath: string,
   scope: GitDiffScope,
@@ -127,7 +127,7 @@ export async function getGitDiff(
 }
 
 export async function getGitScopePatch(
-  client: WorkspaceClient,
+  client: WorkspaceHostClient,
   workspaceId: string,
   scope: GitDiffScope,
 ): Promise<string> {
@@ -139,7 +139,7 @@ export async function getGitScopePatch(
 }
 
 export async function getGitChangesPatch(
-  client: WorkspaceClient,
+  client: WorkspaceHostClient,
   workspaceId: string,
 ): Promise<string> {
   if (!isTauri()) {
@@ -150,7 +150,7 @@ export async function getGitChangesPatch(
 }
 
 export async function getGitLog(
-  client: WorkspaceClient,
+  client: WorkspaceHostClient,
   workspaceId: string,
   limit: number,
 ): Promise<GitLogEntry[]> {
@@ -162,7 +162,7 @@ export async function getGitLog(
 }
 
 export async function getGitPullRequests(
-  client: WorkspaceClient,
+  client: WorkspaceHostClient,
   workspaceId: string,
 ): Promise<GitPullRequestListResult> {
   if (!isTauri()) {
@@ -173,7 +173,7 @@ export async function getGitPullRequests(
 }
 
 export async function getCurrentGitPullRequest(
-  client: WorkspaceClient,
+  client: WorkspaceHostClient,
   workspaceId: string,
 ): Promise<GitBranchPullRequestResult> {
   if (!isTauri()) {
@@ -184,7 +184,7 @@ export async function getCurrentGitPullRequest(
 }
 
 export async function getGitPullRequest(
-  client: WorkspaceClient,
+  client: WorkspaceHostClient,
   workspaceId: string,
   pullRequestNumber: number,
 ): Promise<GitPullRequestDetailResult> {
@@ -196,7 +196,7 @@ export async function getGitPullRequest(
 }
 
 export async function getGitBaseRef(
-  client: WorkspaceClient,
+  client: WorkspaceHostClient,
   workspaceId: string,
 ): Promise<string | null> {
   if (!isTauri()) {
@@ -207,7 +207,7 @@ export async function getGitBaseRef(
 }
 
 export async function getGitRefDiffPatch(
-  client: WorkspaceClient,
+  client: WorkspaceHostClient,
   workspaceId: string,
   baseRef: string,
   headRef: string,
@@ -217,7 +217,7 @@ export async function getGitRefDiffPatch(
 }
 
 export async function getGitPullRequestPatch(
-  client: WorkspaceClient,
+  client: WorkspaceHostClient,
   workspaceId: string,
   pullRequestNumber: number,
 ): Promise<string> {
@@ -229,7 +229,7 @@ export async function getGitPullRequestPatch(
 }
 
 export async function getGitCommitPatch(
-  client: WorkspaceClient,
+  client: WorkspaceHostClient,
   workspaceId: string,
   sha: string,
 ): Promise<GitCommitDiffResult> {
@@ -244,7 +244,7 @@ export async function getGitCommitPatch(
 }
 
 export async function stageGitFiles(
-  client: WorkspaceClient,
+  client: WorkspaceHostClient,
   workspaceId: string,
   filePaths: string[],
 ): Promise<void> {
@@ -261,7 +261,7 @@ export async function stageGitFiles(
 }
 
 export async function unstageGitFiles(
-  client: WorkspaceClient,
+  client: WorkspaceHostClient,
   workspaceId: string,
   filePaths: string[],
 ): Promise<void> {
@@ -278,7 +278,7 @@ export async function unstageGitFiles(
 }
 
 export async function commitGit(
-  client: WorkspaceClient,
+  client: WorkspaceHostClient,
   workspaceId: string,
   message: string,
 ): Promise<GitCommitResult> {
@@ -294,7 +294,7 @@ export async function commitGit(
 }
 
 export async function pushGit(
-  client: WorkspaceClient,
+  client: WorkspaceHostClient,
   workspaceId: string,
 ): Promise<GitPushResult> {
   if (!isTauri()) {
@@ -313,7 +313,7 @@ export async function pushGit(
 }
 
 export async function createGitPullRequest(
-  client: WorkspaceClient,
+  client: WorkspaceHostClient,
   workspaceId: string,
 ): Promise<GitPullRequestSummary> {
   if (!isTauri()) {
@@ -324,7 +324,7 @@ export async function createGitPullRequest(
 }
 
 export async function mergeGitPullRequest(
-  client: WorkspaceClient,
+  client: WorkspaceHostClient,
   workspaceId: string,
   pullRequestNumber: number,
 ): Promise<GitPullRequestSummary> {

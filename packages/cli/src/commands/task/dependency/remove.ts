@@ -27,7 +27,9 @@ export default defineCommand({
         return 0;
       }
 
-      context.stdout(`Dependency removed: ${input.taskId} no longer depends on ${input.dependsOn}.`);
+      context.stdout(
+        `Dependency removed: ${input.taskId} no longer depends on ${input.dependsOn}.`,
+      );
       return 0;
     } catch (error) {
       return failCommand(error, { json: input.json, stderr: context.stderr });

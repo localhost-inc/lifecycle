@@ -70,9 +70,7 @@ function ProviderStatusText({ status }: { status: ReturnType<typeof useProviderA
         </span>
       );
     case "unauthenticated":
-      return (
-        <span className="text-xs text-[var(--muted-foreground)]">Not connected</span>
-      );
+      return <span className="text-xs text-[var(--muted-foreground)]">Not connected</span>;
     case "error":
       return (
         <span className="flex items-center gap-1.5 text-xs text-[var(--destructive)]">

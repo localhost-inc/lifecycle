@@ -110,7 +110,7 @@ export function AppNotifier() {
     setTimeout(() => recentCompletionKeys.delete(completionKey), 5_000);
 
     void (async () => {
-      const workspace = collections.workspaces.collection.get(event.workspaceId);
+      const workspace = collections.workspaces.get(event.workspaceId);
       const projectId = workspace?.project_id;
       const project = projectId ? projects.find((p) => p.id === projectId) : undefined;
       const session = await selectAgentSessionById(driver, event.sessionId);

@@ -2,8 +2,8 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
+import * as ClaudeAgentSdk from "@anthropic-ai/claude-agent-sdk";
 import {
-  query as createQuery,
   unstable_v2_createSession,
   unstable_v2_prompt,
   unstable_v2_resumeSession,
@@ -25,6 +25,8 @@ import type {
 } from "../../worker-protocol";
 import { LIFECYCLE_SYSTEM_PROMPT } from "../../system-prompt";
 import { buildSessionEnv, type ClaudeLoginMethod } from "./env";
+
+const createQuery = "query" in ClaudeAgentSdk ? ClaudeAgentSdk.query : null;
 
 // ---------------------------------------------------------------------------
 // Lightweight title generation — spins up a minimal SDK session so it shares
@@ -86,7 +88,10 @@ export interface ClaudeWorkerInput {
   dangerousSkipPermissions: boolean;
   effort?: "low" | "medium" | "high" | "max";
   loginMethod: ClaudeLoginMethod;
-  mcpServers?: Record<string, { type?: "stdio"; command: string; args?: string[]; env?: Record<string, string> }>;
+  mcpServers?: Record<
+    string,
+    { type?: "stdio"; command: string; args?: string[]; env?: Record<string, string> }
+  >;
   model: string;
   permissionMode: ClaudeWorkerPermissionMode;
   providerSessionId?: string;
@@ -541,8 +546,7 @@ function handleStreamMessage(
       systemMessage.subtype === "task_progress" ||
       systemMessage.subtype === "task_notification"
     ) {
-      const text =
-        (systemMessage.summary as string) ?? (systemMessage.description as string) ?? "";
+      const text = (systemMessage.summary as string) ?? (systemMessage.description as string) ?? "";
       if (text) {
         emitWorkerEvent({
           kind: "agent.status",
@@ -870,7 +874,6 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
             usage: extractUsage(resultMessage),
             costUsd: extractCost(resultMessage),
           });
-
         }
         break;
       }
@@ -1084,6 +1087,12 @@ function createClaudeWorkerSessionV1(
   providerSessionId: string | null;
   session: SDKSession;
 } {
+  if (!createQuery) {
+    throw new Error(
+      "Installed Claude SDK does not expose query(); MCP-backed sessions unavailable.",
+    );
+  }
+
   const queryOptions = {
     ...(input.effort ? { effort: input.effort } : {}),
     cwd: input.workspacePath,
@@ -1097,7 +1106,10 @@ function createClaudeWorkerSessionV1(
       preset: "claude_code" as const,
       append: LIFECYCLE_SYSTEM_PROMPT,
     },
-    mcpServers: input.mcpServers as Record<string, { type?: "stdio"; command: string; args?: string[]; env?: Record<string, string> }>,
+    mcpServers: input.mcpServers as Record<
+      string,
+      { type?: "stdio"; command: string; args?: string[]; env?: Record<string, string> }
+    >,
     ...(callbacks?.canUseTool ? { canUseTool: callbacks.canUseTool } : {}),
     ...(callbacks?.onElicitation ? { onElicitation: callbacks.onElicitation } : {}),
     ...(input.providerSessionId?.trim() ? { resume: input.providerSessionId.trim() } : {}),
@@ -1140,7 +1152,9 @@ function createClaudeWorkerSessionV1(
           if (done) {
             return Promise.resolve({ done: true as const, value: undefined });
           }
-          return new Promise<IteratorResult<SDKUserMessage>>((r) => { resolve = r; });
+          return new Promise<IteratorResult<SDKUserMessage>>((r) => {
+            resolve = r;
+          });
         },
       };
     },
@@ -1188,7 +1202,9 @@ function createClaudeWorkerSessionV1(
     if (queryDone) {
       return Promise.resolve(null);
     }
-    return new Promise((r) => { bufferResolve = r; });
+    return new Promise((r) => {
+      bufferResolve = r;
+    });
   }
 
   const session: SDKSession = {
@@ -1197,9 +1213,15 @@ function createClaudeWorkerSessionV1(
       return resolvedSessionId;
     },
     async send(message: string | SDKUserMessage): Promise<void> {
-      const msg: SDKUserMessage = typeof message === "string"
-        ? { type: "user", session_id: "", message: { role: "user", content: [{ type: "text", text: message }] }, parent_tool_use_id: null }
-        : message;
+      const msg: SDKUserMessage =
+        typeof message === "string"
+          ? {
+              type: "user",
+              session_id: "",
+              message: { role: "user", content: [{ type: "text", text: message }] },
+              parent_tool_use_id: null,
+            }
+          : message;
       pushMessage?.(msg);
     },
     async *stream(): AsyncGenerator<SDKMessage, void> {

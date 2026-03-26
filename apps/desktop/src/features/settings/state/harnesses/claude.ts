@@ -1,5 +1,9 @@
 import type { HarnessPreset } from "@/features/settings/state/harnesses/shared";
-import { isRecord, normalizeBoolean, normalizeHarnessPreset } from "@/features/settings/state/harnesses/shared";
+import {
+  isRecord,
+  normalizeBoolean,
+  normalizeHarnessPreset,
+} from "@/features/settings/state/harnesses/shared";
 
 export type ClaudeLoginMethod = "claudeai" | "console";
 export type ClaudeModel = string;

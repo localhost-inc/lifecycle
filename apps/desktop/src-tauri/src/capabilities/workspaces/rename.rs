@@ -1,104 +1,57 @@
 use crate::platform::{db::open_db, git::worktree};
 use crate::shared::errors::LifecycleError;
 use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
-use crate::WorkspaceControllerRegistryHandle;
 use rusqlite::params;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
-use super::checkout_type::is_root_workspace_checkout_type;
 use super::query::{self, WorkspaceRecord};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum TitleOrigin {
-    Manual,
+/// All policy decisions (name normalization, branch rename disposition,
+/// worktree move decision) are pre-computed by TypeScript. Rust only
+/// executes the infrastructure operations instructed by the flags.
+#[derive(Debug, Clone)]
+pub(crate) struct RenameWorkspaceRequest {
+    pub(crate) workspace_id: String,
+    pub(crate) name: String,
+    pub(crate) source_ref: String,
+    pub(crate) name_origin: String,
+    pub(crate) source_ref_origin: String,
+    pub(crate) rename_branch: bool,
+    pub(crate) move_worktree: bool,
 }
 
-impl TitleOrigin {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::Manual => "manual",
-        }
-    }
-}
-
-#[derive(Debug)]
-struct WorkspaceIdentityContext {
+struct WorkspaceRenameContext {
     current_name: String,
-    name_origin: String,
-    checkout_type: String,
     current_source_ref: String,
-    source_ref_origin: String,
     project_path: String,
     worktree_path: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug)]
-enum WorkspaceBranchRenameDisposition {
-    Rename,
-    Skip(&'static str),
-}
-
 pub async fn rename_workspace(
-    app: AppHandle,
+    app: &AppHandle,
     db_path: &str,
-    workspace_id: &str,
-    name: &str,
+    request: RenameWorkspaceRequest,
 ) -> Result<WorkspaceRecord, LifecycleError> {
-    let workspace_controllers = app.state::<WorkspaceControllerRegistryHandle>();
-    let _mutation_guard = workspace_controllers
-        .acquire_mutation_guard(workspace_id)
-        .await?;
-    let workspace =
-        update_workspace_identity(db_path, workspace_id, name, TitleOrigin::Manual).await?;
-    emit_workspace_renamed(&app, &workspace);
-    Ok(workspace)
-}
+    let context = load_workspace_rename_context(db_path, &request.workspace_id)?;
 
-async fn update_workspace_identity(
-    db_path: &str,
-    workspace_id: &str,
-    name: &str,
-    origin: TitleOrigin,
-) -> Result<WorkspaceRecord, LifecycleError> {
-    let next_name = normalize_title_input("workspace name", name)?;
-    let context = load_workspace_identity_context(db_path, workspace_id)?;
-    let next_source_ref = worktree::workspace_branch_name(&next_name, workspace_id);
-    let branch_disposition =
-        determine_workspace_branch_rename_disposition(&context, workspace_id, &next_source_ref)
-            .await?;
-    let expected_source_ref = match branch_disposition {
-        WorkspaceBranchRenameDisposition::Rename => next_source_ref.as_str(),
-        WorkspaceBranchRenameDisposition::Skip(_) => context.current_source_ref.as_str(),
-    };
-
-    if context.current_name == next_name
-        && context.name_origin == origin.as_str()
-        && context.current_source_ref == expected_source_ref
-        && next_source_ref_origin(&context, origin) == context.source_ref_origin
-    {
-        return query::get_workspace_by_id(db_path, workspace_id.to_string())
-            .await?
-            .ok_or_else(|| LifecycleError::WorkspaceNotFound(workspace_id.to_string()));
-    }
-
+    // Move worktree directory if instructed
     let mut next_worktree_path = context.worktree_path.clone();
-    if !is_root_workspace_checkout_type(&context.checkout_type) && context.current_name != next_name
-    {
+    if request.move_worktree {
         if let Some(current_worktree_path) = context.worktree_path.as_deref() {
             next_worktree_path = Some(
                 worktree::move_worktree(
                     &context.project_path,
                     current_worktree_path,
-                    &next_name,
-                    workspace_id,
+                    &request.name,
+                    &request.workspace_id,
                 )
                 .await?,
             );
         }
     }
 
-    let mut persisted_source_ref = context.current_source_ref.clone();
-    if let WorkspaceBranchRenameDisposition::Rename = branch_disposition {
+    // Rename git branch if instructed
+    if request.rename_branch {
         let active_worktree_path =
             next_worktree_path
                 .as_deref()
@@ -110,10 +63,11 @@ async fn update_workspace_identity(
         if let Err(error) = worktree::rename_workspace_branch(
             active_worktree_path,
             &context.current_source_ref,
-            &next_source_ref,
+            &request.source_ref,
         )
         .await
         {
+            // Roll back worktree move on branch rename failure
             if let (Some(original_worktree_path), Some(moved_worktree_path)) = (
                 context.worktree_path.as_deref(),
                 next_worktree_path.as_deref(),
@@ -123,7 +77,7 @@ async fn update_workspace_identity(
                         &context.project_path,
                         moved_worktree_path,
                         &context.current_name,
-                        workspace_id,
+                        &request.workspace_id,
                     )
                     .await
                     {
@@ -139,18 +93,9 @@ async fn update_workspace_identity(
 
             return Err(error);
         }
-
-        persisted_source_ref = next_source_ref;
-    } else if let WorkspaceBranchRenameDisposition::Skip(reason) = branch_disposition {
-        tracing::info!(
-            workspace_id,
-            current_source_ref = %context.current_source_ref,
-            next_source_ref = %next_source_ref,
-            reason,
-            "skipping workspace branch rename"
-        );
     }
 
+    // Persist to DB
     let conn = open_db(db_path)?;
     conn.execute(
         "UPDATE workspace
@@ -162,95 +107,42 @@ async fn update_workspace_identity(
              updated_at = datetime('now')
          WHERE id = ?6",
         params![
-            next_name,
-            origin.as_str(),
-            persisted_source_ref,
-            next_source_ref_origin(&context, origin),
+            request.name,
+            request.name_origin,
+            request.source_ref,
+            request.source_ref_origin,
             next_worktree_path,
-            workspace_id
+            request.workspace_id
         ],
     )
     .map_err(|error| LifecycleError::Database(error.to_string()))?;
 
-    query::get_workspace_by_id(db_path, workspace_id.to_string())
+    let workspace = query::get_workspace_by_id(db_path, request.workspace_id.clone())
         .await?
-        .ok_or_else(|| LifecycleError::WorkspaceNotFound(workspace_id.to_string()))
+        .ok_or_else(|| LifecycleError::WorkspaceNotFound(request.workspace_id))?;
+
+    emit_workspace_renamed(app, &workspace);
+    Ok(workspace)
 }
 
-async fn determine_workspace_branch_rename_disposition(
-    context: &WorkspaceIdentityContext,
-    workspace_id: &str,
-    next_source_ref: &str,
-) -> Result<WorkspaceBranchRenameDisposition, LifecycleError> {
-    if is_root_workspace_checkout_type(&context.checkout_type) {
-        return Ok(WorkspaceBranchRenameDisposition::Skip(
-            "root workspaces do not rename the project branch",
-        ));
-    }
-
-    if context.current_source_ref == next_source_ref {
-        return Ok(WorkspaceBranchRenameDisposition::Skip(
-            "branch already matches identity",
-        ));
-    }
-
-    let Some(worktree_path) = context.worktree_path.as_deref() else {
-        return Ok(WorkspaceBranchRenameDisposition::Skip(
-            "workspace has no worktree path",
-        ));
-    };
-
-    if !worktree::is_lifecycle_worktree_branch(&context.current_source_ref, workspace_id) {
-        return Ok(WorkspaceBranchRenameDisposition::Skip(
-            "current branch is not a lifecycle worktree branch",
-        ));
-    }
-
-    let current_branch = worktree::get_current_branch(worktree_path).await?;
-    if current_branch != context.current_source_ref {
-        return Ok(WorkspaceBranchRenameDisposition::Skip(
-            "current worktree branch no longer matches workspace source_ref",
-        ));
-    }
-
-    if worktree::branch_has_upstream(worktree_path, &context.current_source_ref).await? {
-        return Ok(WorkspaceBranchRenameDisposition::Skip(
-            "current branch already has an upstream",
-        ));
-    }
-
-    Ok(WorkspaceBranchRenameDisposition::Rename)
-}
-
-fn next_source_ref_origin(context: &WorkspaceIdentityContext, origin: TitleOrigin) -> String {
-    if is_root_workspace_checkout_type(&context.checkout_type) {
-        context.source_ref_origin.clone()
-    } else {
-        origin.as_str().to_string()
-    }
-}
-
-fn load_workspace_identity_context(
+fn load_workspace_rename_context(
     db_path: &str,
     workspace_id: &str,
-) -> Result<WorkspaceIdentityContext, LifecycleError> {
+) -> Result<WorkspaceRenameContext, LifecycleError> {
     let conn = open_db(db_path)?;
     conn.query_row(
-        "SELECT workspace.name, workspace.name_origin, workspace.checkout_type, workspace.source_ref, workspace.source_ref_origin, workspace.worktree_path, project.path
+        "SELECT workspace.name, workspace.source_ref, workspace.worktree_path, project.path
          FROM workspace
          INNER JOIN project ON project.id = workspace.project_id
          WHERE workspace.id = ?1
          LIMIT 1",
         params![workspace_id],
         |row| {
-            Ok(WorkspaceIdentityContext {
+            Ok(WorkspaceRenameContext {
                 current_name: row.get(0)?,
-                name_origin: row.get(1)?,
-                checkout_type: row.get(2)?,
-                current_source_ref: row.get(3)?,
-                source_ref_origin: row.get(4)?,
-                worktree_path: row.get(5)?,
-                project_path: row.get(6)?,
+                current_source_ref: row.get(1)?,
+                worktree_path: row.get(2)?,
+                project_path: row.get(3)?,
             })
         },
     )
@@ -260,26 +152,6 @@ fn load_workspace_identity_context(
         }
         _ => LifecycleError::Database(error.to_string()),
     })
-}
-
-fn normalize_title_input(field: &str, value: &str) -> Result<String, LifecycleError> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return Err(LifecycleError::InvalidInput {
-            field: field.to_string(),
-            reason: "value cannot be empty".to_string(),
-        });
-    }
-
-    let normalized = trimmed.split_whitespace().collect::<Vec<_>>().join(" ");
-    if normalized.is_empty() {
-        return Err(LifecycleError::InvalidInput {
-            field: field.to_string(),
-            reason: "value cannot be empty".to_string(),
-        });
-    }
-
-    Ok(normalized.chars().take(64).collect())
 }
 
 fn emit_workspace_renamed(app: &AppHandle, workspace: &WorkspaceRecord) {
@@ -294,305 +166,5 @@ fn emit_workspace_renamed(app: &AppHandle, workspace: &WorkspaceRecord) {
     );
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::platform::db::{apply_test_schema, open_db};
-    use std::fs;
-    use std::path::{Path, PathBuf};
-    use std::process::Command as StdCommand;
-
-    fn temp_repo_path() -> PathBuf {
-        std::env::temp_dir().join(format!("lifecycle-rename-{}", uuid::Uuid::new_v4()))
-    }
-
-    fn temp_db_path() -> String {
-        let path =
-            std::env::temp_dir().join(format!("lifecycle-rename-{}.db", uuid::Uuid::new_v4()));
-        path.to_string_lossy().into_owned()
-    }
-
-    fn run_git(repo_path: &Path, args: &[&str]) {
-        let output = StdCommand::new("git")
-            .args(args)
-            .current_dir(repo_path)
-            .output()
-            .expect("git command should run");
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            panic!("git {:?} failed: {stderr}", args);
-        }
-    }
-
-    fn git_output(repo_path: &Path, args: &[&str]) -> String {
-        let output = StdCommand::new("git")
-            .args(args)
-            .current_dir(repo_path)
-            .output()
-            .expect("git command should run");
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            panic!("git {:?} failed: {stderr}", args);
-        }
-
-        String::from_utf8_lossy(&output.stdout).trim().to_string()
-    }
-
-    fn init_repo(repo_path: &Path) {
-        fs::create_dir_all(repo_path).expect("create temp repo path");
-        run_git(repo_path, &["init"]);
-        run_git(repo_path, &["config", "user.email", "test@example.com"]);
-        run_git(repo_path, &["config", "user.name", "Lifecycle Test"]);
-        fs::write(repo_path.join("README.md"), "seed\n").expect("write seed file");
-        run_git(repo_path, &["add", "README.md"]);
-        run_git(repo_path, &["commit", "-m", "init"]);
-    }
-
-    fn init_remote(remote_path: &Path) {
-        fs::create_dir_all(remote_path).expect("create remote root");
-        let output = StdCommand::new("git")
-            .args(["init", "--bare"])
-            .current_dir(remote_path)
-            .output()
-            .expect("git init --bare should run");
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            panic!("git init --bare failed: {stderr}");
-        }
-    }
-
-    async fn seed_workspace(
-        db_path: &str,
-        repo_path: &Path,
-        workspace_name: &str,
-        workspace_id: &str,
-        checkout_type: &str,
-        name_origin: &str,
-        source_ref_origin: &str,
-    ) -> (String, String) {
-        apply_test_schema(db_path);
-        let repo_path_str = repo_path.to_str().expect("repo path is utf8");
-        let base_ref = worktree::get_current_branch(repo_path_str)
-            .await
-            .expect("get current branch");
-        let configured_root =
-            std::env::temp_dir().join(format!("lifecycle-rename-root-{}", uuid::Uuid::new_v4()));
-        let configured_root_str = configured_root
-            .to_str()
-            .expect("configured root path is utf8");
-        let source_ref = worktree::workspace_branch_name(workspace_name, workspace_id);
-        let worktree_path = worktree::create_worktree(
-            repo_path_str,
-            &base_ref,
-            &source_ref,
-            workspace_name,
-            workspace_id,
-            Some(configured_root_str),
-        )
-        .await
-        .expect("create worktree");
-
-        let conn = open_db(db_path).expect("open db");
-        conn.execute(
-            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
-            rusqlite::params!["project_1", repo_path_str, "Project 1"],
-        )
-        .expect("insert project");
-        conn.execute(
-            "INSERT INTO workspace (
-                id, project_id, name, name_origin, checkout_type, source_ref, source_ref_origin, worktree_path, host, status
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'local', 'active')",
-            rusqlite::params![
-                workspace_id,
-                "project_1",
-                workspace_name,
-                name_origin,
-                checkout_type,
-                source_ref,
-                source_ref_origin,
-                worktree_path
-            ],
-        )
-        .expect("insert workspace");
-
-        (source_ref, configured_root.to_string_lossy().to_string())
-    }
-
-    #[test]
-    fn normalize_title_input_rejects_blank_values() {
-        let error = normalize_title_input("workspace name", "   ").expect_err("blank name fails");
-        match error {
-            LifecycleError::InvalidInput { field, reason } => {
-                assert_eq!(field, "workspace name");
-                assert_eq!(reason, "value cannot be empty");
-            }
-            other => panic!("unexpected error: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn normalize_title_input_collapses_whitespace_and_limits_length() {
-        assert_eq!(
-            normalize_title_input("session title", "  Fix   terminal\tlabels  ")
-                .expect("normalization succeeds"),
-            "Fix terminal labels"
-        );
-
-        let long_value = "x".repeat(96);
-        let normalized =
-            normalize_title_input("session title", &long_value).expect("long title truncates");
-        assert_eq!(normalized.len(), 64);
-    }
-
-    #[tokio::test]
-    async fn manual_workspace_rename_skips_branch_rename_after_upstream_exists() {
-        let repo_path = temp_repo_path();
-        let remote_path = temp_repo_path();
-        let db_path = temp_db_path();
-        let workspace_id = "ws_manual_lock";
-        init_repo(&repo_path);
-        init_remote(&remote_path);
-        run_git(
-            &repo_path,
-            &[
-                "remote",
-                "add",
-                "origin",
-                remote_path.to_str().expect("utf8"),
-            ],
-        );
-
-        let (initial_source_ref, configured_root) = seed_workspace(
-            &db_path,
-            &repo_path,
-            "amber-atlas",
-            workspace_id,
-            "worktree",
-            "manual",
-            "manual",
-        )
-        .await;
-
-        let initial_worktree_path = {
-            let workspace = query::get_workspace_by_id(&db_path, workspace_id.to_string())
-                .await
-                .expect("load workspace")
-                .expect("workspace exists");
-            workspace.worktree_path.expect("worktree path exists")
-        };
-
-        run_git(
-            Path::new(&initial_worktree_path),
-            &["push", "--set-upstream", "origin", &initial_source_ref],
-        );
-
-        let workspace = update_workspace_identity(
-            &db_path,
-            workspace_id,
-            "Investigate Session Naming",
-            TitleOrigin::Manual,
-        )
-        .await
-        .expect("manual rename succeeds");
-
-        assert_eq!(workspace.name, "Investigate Session Naming");
-        assert_eq!(workspace.source_ref, initial_source_ref);
-        assert!(workspace
-            .worktree_path
-            .as_deref()
-            .expect("worktree path should exist")
-            .contains("investigate-session-naming"));
-
-        let current_branch = git_output(
-            Path::new(
-                workspace
-                    .worktree_path
-                    .as_deref()
-                    .expect("worktree path should exist"),
-            ),
-            &["rev-parse", "--abbrev-ref", "HEAD"],
-        );
-        assert_eq!(current_branch, initial_source_ref);
-
-        worktree::remove_worktree(
-            repo_path.to_str().expect("repo path is utf8"),
-            workspace
-                .worktree_path
-                .as_deref()
-                .expect("worktree path should exist"),
-        )
-        .await
-        .expect("cleanup worktree");
-        let _ = fs::remove_dir_all(repo_path);
-        let _ = fs::remove_dir_all(remote_path);
-        let _ = fs::remove_dir_all(configured_root);
-        let _ = fs::remove_file(db_path);
-    }
-
-    #[tokio::test]
-    async fn root_workspace_rename_preserves_source_ref_and_worktree_path() {
-        let repo_path = temp_repo_path();
-        let db_path = temp_db_path();
-        init_repo(&repo_path);
-        apply_test_schema(&db_path);
-
-        let repo_path_str = repo_path.to_str().expect("repo path is utf8");
-        let source_ref = worktree::get_current_branch(repo_path_str)
-            .await
-            .expect("get current branch");
-        let conn = open_db(&db_path).expect("open db");
-        conn.execute(
-            "INSERT INTO project (id, path, name) VALUES (?1, ?2, ?3)",
-            rusqlite::params!["project_1", repo_path_str, "Project 1"],
-        )
-        .expect("insert project");
-        conn.execute(
-            "INSERT INTO workspace (
-                id, project_id, name, name_origin, checkout_type, source_ref, source_ref_origin, worktree_path, host, status
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-            rusqlite::params![
-                "workspace_root",
-                "project_1",
-                "Root",
-                "manual",
-                "root",
-                source_ref,
-                "manual",
-                repo_path_str,
-                "local",
-                "active"
-            ],
-        )
-        .expect("insert root workspace");
-        drop(conn);
-
-        let workspace = update_workspace_identity(
-            &db_path,
-            "workspace_root",
-            "Repo Control",
-            TitleOrigin::Manual,
-        )
-        .await
-        .expect("rename root workspace");
-
-        assert_eq!(workspace.name, "Repo Control");
-        assert_eq!(workspace.source_ref, source_ref);
-        assert_eq!(workspace.worktree_path.as_deref(), Some(repo_path_str));
-
-        let conn = open_db(&db_path).expect("re-open db");
-        let origins: (String, String) = conn
-            .query_row(
-                "SELECT name_origin, source_ref_origin
-                 FROM workspace
-                 WHERE id = ?1",
-                rusqlite::params!["workspace_root"],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .expect("load origins");
-        assert_eq!(origins.0, "manual");
-        assert_eq!(origins.1, "manual");
-
-        let _ = fs::remove_dir_all(repo_path);
-        let _ = fs::remove_file(db_path);
-    }
-}
+// Policy tests (name normalization, branch rename disposition) now live in TypeScript.
+// Infrastructure tests for the git operations remain in the worktree module.

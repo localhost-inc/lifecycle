@@ -2,11 +2,12 @@ import { isTauri } from "@tauri-apps/api/core";
 import { StrictMode, useEffect } from "react";
 import { RouterProvider } from "react-router-dom";
 import type { AgentOrchestrator } from "@lifecycle/agents";
-import type { WorkspaceClient } from "@lifecycle/workspace";
+import type { WorkspaceHostClientRegistry } from "@lifecycle/workspace/client";
 import { RootErrorBoundary } from "@/app/root-error-boundary";
 import { router } from "@/app/router";
 import { ShortcutRouterProvider } from "@/app/shortcuts/shortcut-router";
 import { AuthSessionProvider } from "@/features/auth/state/auth-session-provider";
+import { AgentOrchestratorProvider } from "@/features/agents/provider";
 import { AppNotifier } from "@/features/notifications/app-notifier";
 import { ProjectManifestWatcher } from "@/features/projects/components/project-manifest-watcher";
 import { SettingsProvider } from "@/features/settings/state/settings-provider";
@@ -14,6 +15,7 @@ import { markPerformance, measurePerformance } from "@/lib/performance";
 import { ReactQueryProvider } from "@/store/react-query-provider";
 import { StoreProvider } from "@/store/provider";
 import { tauriSqlDriver } from "@/lib/sql-driver";
+import { WorkspaceHostClientProvider } from "@lifecycle/workspace/client/react";
 
 function BootstrapPerfMarker() {
   useEffect(() => {
@@ -45,31 +47,31 @@ function ContextMenuBlocker() {
 
 interface AppProps {
   agentOrchestrator: AgentOrchestrator;
-  client: WorkspaceClient;
+  workspaceHostClientRegistry: WorkspaceHostClientRegistry;
 }
 
-export function App({ agentOrchestrator, client }: AppProps) {
+export function App({ agentOrchestrator, workspaceHostClientRegistry }: AppProps) {
   return (
     <StrictMode>
       <RootErrorBoundary>
         <SettingsProvider>
           <BootstrapPerfMarker />
           <ContextMenuBlocker />
-          <StoreProvider
-            agentOrchestrator={agentOrchestrator}
-            driver={tauriSqlDriver}
-            client={client}
-          >
-            <ReactQueryProvider>
-              <AuthSessionProvider>
-                <ProjectManifestWatcher />
-                <AppNotifier />
-                <ShortcutRouterProvider>
-                  <RouterProvider router={router} />
-                </ShortcutRouterProvider>
-              </AuthSessionProvider>
-            </ReactQueryProvider>
-          </StoreProvider>
+          <WorkspaceHostClientProvider workspaceHostClientRegistry={workspaceHostClientRegistry}>
+            <AgentOrchestratorProvider agentOrchestrator={agentOrchestrator}>
+              <StoreProvider driver={tauriSqlDriver}>
+                <ReactQueryProvider>
+                  <AuthSessionProvider>
+                    <ProjectManifestWatcher />
+                    <AppNotifier />
+                    <ShortcutRouterProvider>
+                      <RouterProvider router={router} />
+                    </ShortcutRouterProvider>
+                  </AuthSessionProvider>
+                </ReactQueryProvider>
+              </StoreProvider>
+            </AgentOrchestratorProvider>
+          </WorkspaceHostClientProvider>
         </SettingsProvider>
       </RootErrorBoundary>
     </StrictMode>

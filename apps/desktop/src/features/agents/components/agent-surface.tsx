@@ -1,19 +1,8 @@
 import { EmptyState } from "@lifecycle/ui";
 import { ArrowDown, Bot } from "lucide-react";
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStickToBottom } from "use-stick-to-bottom";
-import type {
-  AgentApprovalDecision,
-  AgentImageMediaType,
-  AgentInputPart,
-} from "@lifecycle/agents";
+import type { AgentApprovalDecision, AgentImageMediaType, AgentInputPart } from "@lifecycle/agents";
 import { diffTheme } from "@lifecycle/ui";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -27,10 +16,19 @@ import { codexSandboxModeOptions } from "@/features/settings/state/harnesses/cod
 import { DiffRenderProvider } from "@/features/git/components/diff-render-provider";
 import { useAgentSession, useAgentSessionMessages } from "@/features/agents/hooks";
 import { useProviderModelCatalog } from "@/features/agents/state/use-provider-model-catalog";
-import { deriveAgentDisplayStatus } from "@lifecycle/agents";
-import { useAgentSessionState } from "@lifecycle/agents/react";
+import { deriveAgentDisplayStatus, resolveAgentPromptDispatchDecision } from "@lifecycle/agents";
+import {
+  beginAgentPromptDispatch,
+  completeAgentPromptDispatch,
+  dismissAgentPrompt,
+  failAgentPromptDispatch,
+  queueAgentPrompt,
+  retryAgentPrompt,
+  useAgentPromptQueueState,
+  useAgentSessionState,
+} from "@lifecycle/agents/react";
 import { ClaudeIcon, CodexIcon } from "@/features/workspaces/surfaces/surface-icons";
-import { useAgentOrchestrator } from "@/store/provider";
+import { useAgentOrchestrator } from "@/features/agents/provider";
 import { useWorkspace } from "@/store/hooks";
 import {
   type ParsedMessage,
@@ -41,13 +39,13 @@ import {
 } from "@/features/agents/components/agent-message-parsing";
 import { TranscriptMessage } from "@/features/agents/components/agent-transcript";
 import { AgentActivityBar } from "@/features/agents/components/agent-activity-bar";
-import { AgentToolbar } from "@/features/agents/components/agent-toolbar";
 import type { AgentMessageWithParts } from "@lifecycle/contracts";
 import { useWorkspaceOpenRequests } from "@/features/workspaces/state/workspace-open-requests";
 import { createFileEditorOpenInput } from "@/features/workspaces/canvas/workspace-canvas-requests";
 import { useWorkspacePaneRenderCount } from "@/features/workspaces/canvas/workspace-pane-performance";
 import { useCommandPaletteExplorer } from "@/features/command-palette/use-command-palette-explorer";
-import { AgentPromptInput, type AgentPromptInputHandle } from "./agent-prompt-input";
+import { AgentComposer } from "./agent-composer";
+import { type AgentPromptInputHandle } from "./agent-prompt-input";
 import { useAgentCommands } from "./use-agent-commands";
 
 // ---------------------------------------------------------------------------
@@ -122,6 +120,7 @@ export const AgentSurface = memo(function AgentSurface({
   const session = useAgentSession(workspaceId, agentSessionId);
   const dbMessages = useAgentSessionMessages(agentSessionId);
   const state = useAgentSessionState(agentSessionId);
+  const promptQueue = useAgentPromptQueueState(agentSessionId);
   const { harnesses, resolvedTheme, setClaudeHarnessSettings, setCodexHarnessSettings } =
     useSettings();
   const providerForCatalog = session?.provider === "codex" ? "codex" : "claude";
@@ -148,7 +147,6 @@ export const AgentSurface = memo(function AgentSurface({
     });
   }
   const [resolvingApprovalIds, setResolvingApprovalIds] = useState<Set<string>>(new Set());
-  const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [pendingImages, setPendingImages] = useState<
     Array<{ mediaType: AgentImageMediaType; base64Data: string }>
@@ -159,7 +157,7 @@ export const AgentSurface = memo(function AgentSurface({
     initial: "instant",
     resize: "smooth",
   });
-  const promptInputRef = useRef<AgentPromptInputHandle>(null);
+  const promptComposerRef = useRef<AgentPromptInputHandle>(null);
 
   const isClaude = session?.provider === "claude";
   const planMode = isClaude
@@ -167,7 +165,7 @@ export const AgentSurface = memo(function AgentSurface({
     : harnesses.codex.sandboxMode === "read-only";
   const prePlanPermissionsRef = useRef<string | null>(null);
 
-  const isRunning = isSending || state.pendingTurnIds.length > 0;
+  const isRunning = promptQueue.dispatchingPromptId !== null || state.pendingTurnIds.length > 0;
   const theme = diffTheme(resolvedTheme);
 
   // Trigger menu data sources
@@ -288,7 +286,7 @@ export const AgentSurface = memo(function AgentSurface({
   // Focus input when pane gains focus or this tab becomes active
   useEffect(() => {
     if (paneFocused) {
-      promptInputRef.current?.focus();
+      promptComposerRef.current?.focus();
     }
   }, [paneFocused, agentSessionId]);
 
@@ -306,7 +304,6 @@ export const AgentSurface = memo(function AgentSurface({
   // Merge consecutive assistant messages that share a turn_id so tools + text
   // render as one visual block (the SDK often splits them into separate rows).
   const messages = useMemo(() => buildParsedMessages(dbMessages.data), [dbMessages.data]);
-
 
   function handleOpenFile(filePath: string): void {
     // Agent tools report absolute paths — strip the worktree root so the
@@ -386,41 +383,89 @@ export const AgentSurface = memo(function AgentSurface({
     };
   }, [addImagesFromPaths]);
 
-  async function handleSend(): Promise<void> {
-    if (!session) return;
+  const activeTurnId = state.pendingTurnIds[0] ?? null;
+
+  useEffect(() => {
+    const head = promptQueue.prompts[0];
+    if (!session || !head || promptQueue.dispatchingPromptId !== null || head.error) {
+      return;
+    }
+    const activeSession = session;
+
+    const decision = resolveAgentPromptDispatchDecision({
+      activeTurnId,
+      hasPendingApprovals: state.pendingApprovals.length > 0,
+      provider: activeSession.provider,
+    });
+    if (decision.type !== "dispatch_turn") {
+      return;
+    }
+
+    const claimedPrompt = beginAgentPromptDispatch(agentSessionId, head.id);
+    if (!claimedPrompt) {
+      return;
+    }
+    const queuedPrompt = claimedPrompt;
+
+    async function dispatchQueuedPrompt(): Promise<void> {
+      setSendError(null);
+
+      try {
+        await agentOrchestrator.sendTurn(activeSession.id, {
+          turnId: createTurnId(),
+          input: queuedPrompt.input,
+        });
+        completeAgentPromptDispatch(agentSessionId, queuedPrompt.id);
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : typeof error === "string"
+              ? error
+              : "Failed to send prompt.";
+        console.error("[agent] dispatch queued prompt failed:", error);
+        setSendError(message);
+        failAgentPromptDispatch(agentSessionId, queuedPrompt.id, message);
+      }
+    }
+
+    void dispatchQueuedPrompt();
+  }, [
+    agentSessionId,
+    activeTurnId,
+    agentOrchestrator,
+    promptQueue.dispatchingPromptId,
+    promptQueue.prompts,
+    session,
+    state.pendingApprovals.length,
+  ]);
+
+  function queueMessage(): void {
     const prompt = draftPrompt.trim();
     if (prompt.length === 0 && pendingImages.length === 0) return;
-    if (isSending) return;
-
-    setIsSending(true);
-    setSendError(null);
-
-    try {
-      const input: AgentInputPart[] = [];
-      if (prompt.length > 0) {
-        input.push({ type: "text", text: prompt });
-      }
-      for (const img of pendingImages) {
-        input.push({ type: "image", mediaType: img.mediaType, base64Data: img.base64Data });
-      }
-      await agentOrchestrator.sendTurn(session.id, {
-        turnId: createTurnId(),
-        input,
-      });
-      setDraftPrompt("");
-      setPendingImages([]);
-      scrollToBottom();
-    } catch (error) {
-      const message = error instanceof Error
-        ? error.message
-        : typeof error === "string"
-          ? error
-          : "Failed to send prompt.";
-      console.error("[agent] send turn failed:", error);
-      setSendError(message);
-    } finally {
-      setIsSending(false);
+    const input: AgentInputPart[] = [];
+    if (prompt.length > 0) {
+      input.push({ type: "text", text: prompt });
     }
+    for (const img of pendingImages) {
+      input.push({ type: "image", mediaType: img.mediaType, base64Data: img.base64Data });
+    }
+
+    queueAgentPrompt(agentSessionId, input);
+    setSendError(null);
+    setDraftPrompt("");
+    setPendingImages([]);
+    scrollToBottom();
+  }
+
+  function handleRetryQueuedPrompt(promptId: string): void {
+    retryAgentPrompt(agentSessionId, promptId);
+    setSendError(null);
+  }
+
+  function handleDismissQueuedPrompt(promptId: string): void {
+    dismissAgentPrompt(agentSessionId, promptId);
+    setSendError(null);
   }
 
   async function handleResolveApproval(
@@ -456,8 +501,6 @@ export const AgentSurface = memo(function AgentSurface({
     }
   }
 
-
-
   if (!session) {
     return (
       <EmptyState
@@ -482,6 +525,19 @@ export const AgentSurface = memo(function AgentSurface({
 
   const visibleError = sendError ?? state.lastError;
   const showThinking = isRunning && state.pendingApprovals.length === 0;
+  const queuedMessageCount = Math.max(
+    0,
+    promptQueue.prompts.length - (promptQueue.dispatchingPromptId !== null ? 1 : 0),
+  );
+  const showCenteredComposer =
+    session.status === "idle" &&
+    messages.length === 0 &&
+    promptQueue.prompts.length === 0 &&
+    state.pendingTurnIds.length === 0 &&
+    state.pendingApprovals.length === 0 &&
+    visibleError === null &&
+    state.authStatus?.mode !== "authenticating" &&
+    state.authStatus?.mode !== "error";
 
   // --- Provider adapter: single place that maps provider-specific settings
   // into a uniform shape consumed by the status bar. Adding a new provider
@@ -586,6 +642,46 @@ export const AgentSurface = memo(function AgentSurface({
       },
     };
   })();
+  const composerQueuedPrompts = promptQueue.prompts.map((entry) => ({
+    attachmentSummary: entry.preview.attachmentSummary,
+    error: entry.error,
+    id: entry.id,
+    text: entry.preview.text,
+  }));
+  const composerPromptProps = {
+    agentSessionId,
+    commandItems: agentCommands,
+    draftPrompt,
+    error: visibleError ?? null,
+    fileItems: explorer.items,
+    isRunning,
+    onAddImagesFromFiles: addImagesFromFiles,
+    onDismissQueuedPrompt: handleDismissQueuedPrompt,
+    onDraftPromptChange: (value: string) => setDraftPrompt(value),
+    onRemovePendingImage: (i: number) => setPendingImages((prev) => prev.filter((_, j) => j !== i)),
+    onRetryQueuedPrompt: handleRetryQueuedPrompt,
+    onSend: queueMessage,
+    pendingImages,
+    planMode,
+    queuedPrompts: composerQueuedPrompts,
+  };
+  const composerToolbarProps = {
+    catalogError: modelCatalog.error,
+    catalogLoading: modelCatalog.isLoading,
+    debug: {
+      messages: dbMessages.data ?? [],
+      session,
+      sessionState: state,
+    },
+    displayStatus: deriveAgentDisplayStatus(state),
+    model: provider.model,
+    permissions: provider.permissions,
+    providerName: provider.name,
+    ProviderIcon: provider.Icon,
+    reasoning: provider.reasoning,
+    responseReady: state.responseReady,
+    usage: state.usage,
+  };
 
   return (
     <DiffRenderProvider theme={theme}>
@@ -594,81 +690,117 @@ export const AgentSurface = memo(function AgentSurface({
         onClick={(e) => {
           // Focus textarea when clicking unhandled areas of the surface
           if (e.target === e.currentTarget) {
-            promptInputRef.current?.focus();
+            promptComposerRef.current?.focus();
           }
         }}
       >
-        {/* Transcript */}
-        <div
-          ref={scrollRef}
-          className="agent-message-list relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
-          onClick={(e) => {
-            const anchor = (e.target as HTMLElement).closest("a[href]");
-            if (anchor) {
-              const href = anchor.getAttribute("href");
-              if (href && /^https?:\/\//.test(href)) {
-                e.preventDefault();
-                e.stopPropagation();
-                void openUrl(href);
-                return;
-              }
-            }
-            const selection = window.getSelection();
-            if (!selection || selection.isCollapsed) {
-              promptInputRef.current?.focus();
-            }
-          }}
-        >
-          <div ref={contentRef} className="flex min-h-full flex-col">
-            <div className="flex-1 pt-4" />
-
-            {/* Auth status */}
-            {session.status === "starting" ? (
-              <div className="px-4 py-3 text-[13px] leading-6 text-[var(--muted-foreground)]">
-                <span className="text-[var(--accent)]">[~]</span> starting {provider.name}...
-              </div>
-            ) : null}
-            {state.authStatus?.mode === "authenticating" ? (
-              <div className="px-4 py-3 text-[13px] leading-6 text-[var(--muted-foreground)]">
-                <span className="text-[var(--accent)]">[~]</span> signing in to {provider.name}...
-              </div>
-            ) : null}
-            {state.authStatus?.mode === "error" ? (
-              <div className="px-4 py-3 text-[13px] leading-6 text-[var(--destructive)]">
-                <span>[!]</span> authentication failed
-              </div>
-            ) : null}
-            {session.status === "failed" && state.authStatus?.mode !== "error" && !visibleError ? (
-              <div className="px-4 py-3 text-[13px] leading-6 text-[var(--destructive)]">
-                <span>[!]</span> failed to start {provider.name}
-              </div>
-            ) : null}
-
-            {/* Messages — single source from DB collection */}
-            {messages.map((message, i) => (
-              <TranscriptMessage
-                key={message.id}
-                message={message}
-                isStreaming={isRunning && i === messages.length - 1 && message.role === "assistant"}
-                onResolveApproval={handleResolveApproval}
-                onOpenFile={handleOpenFile}
-                resolvingApprovalIds={resolvingApprovalIds}
+        {showCenteredComposer ? (
+          <div className="flex min-h-0 flex-1 items-center justify-center px-6 py-10">
+            <div className="w-full max-w-3xl">
+              <AgentComposer
+                ref={promptComposerRef}
+                layout="centered"
+                prompt={composerPromptProps}
+                toolbar={composerToolbarProps}
+                toolbarClassName="mt-2"
               />
-            ))}
-
+            </div>
           </div>
-
-          {/* Scroll-to-bottom button */}
-          {!isAtBottom && (
-            <button
-              className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-[var(--border)] bg-[var(--surface)] p-1.5 text-[var(--muted-foreground)] shadow-sm transition-colors hover:text-[var(--foreground)]"
-              onClick={() => scrollToBottom()}
-              type="button"
+        ) : (
+          <>
+            {/* Transcript */}
+            <div
+              ref={scrollRef}
+              className="agent-message-list relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+              onClick={(e) => {
+                const anchor = (e.target as HTMLElement).closest("a[href]");
+                if (anchor) {
+                  const href = anchor.getAttribute("href");
+                  if (href && /^https?:\/\//.test(href)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    void openUrl(href);
+                    return;
+                  }
+                }
+                const selection = window.getSelection();
+                if (!selection || selection.isCollapsed) {
+                  promptComposerRef.current?.focus();
+                }
+              }}
             >
-              <ArrowDown className="size-3.5" />
-            </button>
-          )}
-        </div>
+              <div ref={contentRef} className="flex min-h-full flex-col">
+                <div className="flex-1 pt-4" />
+
+                {/* Auth status */}
+                {session.status === "starting" ? (
+                  <div className="px-4 py-3 text-[13px] leading-6 text-[var(--muted-foreground)]">
+                    <span className="text-[var(--accent)]">[~]</span> starting {provider.name}...
+                  </div>
+                ) : null}
+                {state.authStatus?.mode === "authenticating" ? (
+                  <div className="px-4 py-3 text-[13px] leading-6 text-[var(--muted-foreground)]">
+                    <span className="text-[var(--accent)]">[~]</span> signing in to {provider.name}
+                    ...
+                  </div>
+                ) : null}
+                {state.authStatus?.mode === "error" ? (
+                  <div className="px-4 py-3 text-[13px] leading-6 text-[var(--destructive)]">
+                    <span>[!]</span> authentication failed
+                  </div>
+                ) : null}
+                {session.status === "failed" &&
+                state.authStatus?.mode !== "error" &&
+                !visibleError ? (
+                  <div className="px-4 py-3 text-[13px] leading-6 text-[var(--destructive)]">
+                    <span>[!]</span> failed to start {provider.name}
+                  </div>
+                ) : null}
+
+                {/* Messages — single source from DB collection */}
+                {messages.map((message, i) => (
+                  <TranscriptMessage
+                    key={message.id}
+                    message={message}
+                    isStreaming={
+                      isRunning && i === messages.length - 1 && message.role === "assistant"
+                    }
+                    onResolveApproval={handleResolveApproval}
+                    onOpenFile={handleOpenFile}
+                    resolvingApprovalIds={resolvingApprovalIds}
+                  />
+                ))}
+              </div>
+
+              {/* Scroll-to-bottom button */}
+              {!isAtBottom && (
+                <button
+                  className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-[var(--border)] bg-[var(--surface)] p-1.5 text-[var(--muted-foreground)] shadow-sm transition-colors hover:text-[var(--foreground)]"
+                  onClick={() => scrollToBottom()}
+                  type="button"
+                >
+                  <ArrowDown className="size-3.5" />
+                </button>
+              )}
+            </div>
+
+            {showThinking ? (
+              <AgentActivityBar
+                turnActivity={state.turnActivity}
+                providerStatus={state.providerStatus}
+                elapsedSeconds={thinkingElapsed}
+                queuedMessageCount={queuedMessageCount}
+              />
+            ) : null}
+
+            <AgentComposer
+              ref={promptComposerRef}
+              layout="docked"
+              prompt={composerPromptProps}
+              toolbar={composerToolbarProps}
+            />
+          </>
+        )}
 
         {/* Drop overlay */}
         {isDragOver ? (
@@ -678,48 +810,6 @@ export const AgentSurface = memo(function AgentSurface({
             </div>
           </div>
         ) : null}
-
-        {showThinking ? (
-          <AgentActivityBar
-            turnActivity={state.turnActivity}
-            providerStatus={state.providerStatus}
-            elapsedSeconds={thinkingElapsed}
-          />
-        ) : null}
-
-        <AgentPromptInput
-          ref={promptInputRef}
-          agentSessionId={agentSessionId}
-          draftPrompt={draftPrompt}
-          error={visibleError ?? null}
-          fileItems={explorer.items}
-          commandItems={agentCommands}
-          isRunning={isRunning}
-          pendingImages={pendingImages}
-          planMode={planMode}
-          onAddImagesFromFiles={addImagesFromFiles}
-          onRemovePendingImage={(i) => setPendingImages((prev) => prev.filter((_, j) => j !== i))}
-          onDraftPromptChange={(value) => setDraftPrompt(value)}
-          onSend={() => void handleSend()}
-        />
-
-        <AgentToolbar
-          displayStatus={deriveAgentDisplayStatus(state)}
-          providerName={provider.name}
-          ProviderIcon={provider.Icon}
-          responseReady={state.responseReady}
-          permissions={provider.permissions}
-          model={provider.model}
-          reasoning={provider.reasoning}
-          catalogLoading={modelCatalog.isLoading}
-          catalogError={modelCatalog.error}
-          usage={state.usage}
-          debug={{
-            session,
-            sessionState: state,
-            messages: dbMessages.data ?? [],
-          }}
-        />
 
         <style>{`
         @keyframes agent-cursor-pulse {

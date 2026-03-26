@@ -6,7 +6,6 @@ import {
   useState,
   type PropsWithChildren,
 } from "react";
-import type { AgentOrchestrator } from "@lifecycle/agents";
 import type {
   LifecycleEvent,
   LifecycleEventKind,
@@ -14,14 +13,11 @@ import type {
   ServiceRecord,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
-import type { WorkspaceClient } from "@lifecycle/workspace";
 import {
+  createProjectCollection,
   createSqlCollection,
-  createLocalOnlyRegistry,
-  selectAllProjects,
-  selectAllWorkspaces,
+  createWorkspaceCollection,
   selectAllServices,
-  type ClientRegistry,
   type SqlCollection,
   type SqlDriver,
 } from "@lifecycle/store";
@@ -44,33 +40,20 @@ interface StoreCollections {
 }
 
 interface StoreContextValue {
-  agentOrchestrator: AgentOrchestrator;
   collections: StoreCollections;
   driver: SqlDriver;
-  clientRegistry: ClientRegistry;
 }
 
 interface StoreProviderHotState {
   collections: StoreCollections;
-  clientRegistry: ClientRegistry;
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null);
 
 function createCollections(driver: SqlDriver): StoreCollections {
   return {
-    projects: createSqlCollection<ProjectRecord>({
-      id: "projects",
-      driver,
-      loadFn: selectAllProjects,
-      getKey: (p) => p.id,
-    }),
-    workspaces: createSqlCollection<WorkspaceRecord>({
-      id: "workspaces",
-      driver,
-      loadFn: selectAllWorkspaces,
-      getKey: (w) => w.id,
-    }),
+    projects: createProjectCollection(driver),
+    workspaces: createWorkspaceCollection(driver),
     services: createSqlCollection<ServiceRecord>({
       id: "services",
       driver,
@@ -85,15 +68,15 @@ function refreshForEvent(collections: StoreCollections, event: LifecycleEvent): 
     case "workspace.status.changed":
     case "workspace.renamed":
     case "workspace.archived":
-      void collections.workspaces.refresh();
+      void collections.workspaces.utils.refresh();
       if (event.kind === "workspace.archived") {
-        void collections.services.refresh();
+        void collections.services.utils.refresh();
       }
       break;
 
     case "service.status.changed":
     case "service.process.exited":
-      void collections.services.refresh();
+      void collections.services.utils.refresh();
       break;
 
     case "agent.session.created":
@@ -105,24 +88,16 @@ function refreshForEvent(collections: StoreCollections, event: LifecycleEvent): 
 }
 
 export function StoreProvider({
-  agentOrchestrator,
   driver,
-  client,
   children,
 }: PropsWithChildren<{
-  agentOrchestrator: AgentOrchestrator;
   driver: SqlDriver;
-  client: WorkspaceClient;
 }>) {
   const hotState = import.meta.hot?.data as StoreProviderHotState | undefined;
   const [collections] = useState(() => hotState?.collections ?? createCollections(driver));
-  const [clientRegistry] = useState(
-    () => hotState?.clientRegistry ?? createLocalOnlyRegistry(client),
-  );
 
   if (import.meta.hot) {
     import.meta.hot.data.collections = collections;
-    import.meta.hot.data.clientRegistry = clientRegistry;
   }
 
   useEffect(() => {
@@ -146,8 +121,11 @@ export function StoreProvider({
   }, [collections]);
 
   const value = useMemo(
-    () => ({ agentOrchestrator, collections, driver, clientRegistry }),
-    [agentOrchestrator, collections, driver, clientRegistry],
+    () => ({
+      collections,
+      driver,
+    }),
+    [collections, driver],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
@@ -159,8 +137,4 @@ export function useStoreContext(): StoreContextValue {
     throw new Error("StoreProvider is required");
   }
   return ctx;
-}
-
-export function useAgentOrchestrator(): AgentOrchestrator {
-  return useStoreContext().agentOrchestrator;
 }

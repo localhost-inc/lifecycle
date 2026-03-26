@@ -6,7 +6,10 @@ import type {
 } from "react";
 import { TabChip } from "@/components/tab-chip";
 import { TypedTitle } from "@/components/typed-title";
-import { canvasTabDomId, canvasTabPanelId } from "@/features/workspaces/canvas/workspace-canvas-ids";
+import {
+  canvasTabDomId,
+  canvasTabPanelId,
+} from "@/features/workspaces/canvas/workspace-canvas-ids";
 
 interface WorkspacePaneTabItemProps {
   active: boolean;

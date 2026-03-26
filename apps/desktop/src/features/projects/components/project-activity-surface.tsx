@@ -16,7 +16,7 @@ function ProjectActivityWorkspaceSection({
   workspace: WorkspaceRecord;
   onOpenWorkspace: (workspace: WorkspaceRecord) => void;
 }) {
-  const activityQuery = useWorkspaceActivity(workspace.id);
+  const activityQuery = useWorkspaceActivity(workspace.id, workspace.host);
   const items = useMemo(
     () => buildWorkspaceActivityItems(activityQuery.data ?? []),
     [activityQuery.data],

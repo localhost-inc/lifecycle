@@ -1,11 +1,7 @@
 import { defineCommand, defineFlag } from "@lifecycle/cmd";
 import { z } from "zod";
 
-import {
-  createWorkspaceRunRequest,
-  requestBridge,
-  resolveWorkspaceId,
-} from "../../bridge";
+import { createWorkspaceRunRequest, requestBridge, resolveWorkspaceId } from "../../bridge";
 import { failCommand, jsonFlag, printServiceSummary, workspaceIdFlag } from "../_shared";
 
 export default defineCommand({

@@ -2,7 +2,7 @@ import type { LifecycleConfig, ServiceRecord, WorkspaceRecord } from "@lifecycle
 import { Alert, AlertDescription } from "@lifecycle/ui";
 import { AlertTriangle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ServiceLogSnapshot } from "@/features/workspaces/api";
+import type { ServiceLogSnapshot } from "@lifecycle/workspace/client";
 import { useWorkspaceServiceLogs } from "@/features/workspaces/hooks";
 import { formatWorkspaceError } from "@/features/workspaces/lib/workspace-errors";
 import { ServiceRow } from "@/features/workspaces/components/service-row";
@@ -132,7 +132,7 @@ export function EnvironmentPanel({
 }: EnvironmentPanelProps) {
   const [activeServiceStartName, setActiveServiceStartName] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const serviceLogsQuery = useWorkspaceServiceLogs(workspace.id);
+  const serviceLogsQuery = useWorkspaceServiceLogs(workspace.id, workspace.host);
   const serviceLogs = serviceLogsQuery.data ?? [];
   const [expandedServiceName, setExpandedServiceName] = useState<string | null>(() =>
     getInitialExpandedServiceName(workspace, services, serviceLogs),
@@ -353,7 +353,6 @@ export function EnvironmentPanel({
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {renderServiceList() ?? renderEmptyState()}
       </div>
-
     </section>
   );
 }

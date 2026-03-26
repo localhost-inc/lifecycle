@@ -1,8 +1,8 @@
+pub mod archive;
 mod checkout_type;
 pub mod commands;
 pub mod controller;
-pub mod create;
-pub mod destroy;
+pub mod ensure;
 pub mod environment;
 pub mod file;
 pub mod git;

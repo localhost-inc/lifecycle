@@ -1,10 +1,6 @@
 import { spawn } from "node:child_process";
 import type { ProviderAuthEvent, ProviderAuthStatus } from "../auth";
-import {
-  CodexAppServerClient,
-  type CodexAccountReadResult,
-  isRecord,
-} from "./app-server";
+import { CodexAppServerClient, type CodexAccountReadResult, isRecord } from "./app-server";
 
 function emit(event: ProviderAuthEvent): void {
   process.stdout.write(`${JSON.stringify(event)}\n`);

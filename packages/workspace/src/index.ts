@@ -1,10 +1,9 @@
 export type {
+  EnsureWorkspaceInput,
   StartServicesInput,
   GitDiffInput,
-  WorkspaceClient,
-  WorkspaceCreateContext,
-  WorkspaceCreateInput,
-  WorkspaceCreateResult,
+  WorkspaceHostClient,
+  WorkspaceArchiveDisposition,
   SubscribeWorkspaceFileEventsInput,
   ServiceLogLine,
   ServiceLogSnapshot,
@@ -14,7 +13,10 @@ export type {
   WorkspaceFileReadResult,
   WorkspaceFileTreeEntry,
   WorkspaceHealthResult,
-} from "./workspace";
+  WorkspaceHostClientRegistry,
+  WorkspaceHostClientRegistryProviders,
+} from "./client";
+export { createWorkspaceHostClientRegistry } from "./client";
 export type {
   EnvironmentNode,
   EnvironmentNodeKind,

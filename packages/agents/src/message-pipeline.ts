@@ -93,22 +93,36 @@ export class MessagePipeline {
       case "agent.tool_call.updated": {
         const msgId = `tool:${event.toolCall.id}`;
         const msg = this.getOrCreate(msgId, event.sessionId, "tool", null);
-        appendPart(msg, `tool:${event.toolCall.id}:call`, {
-          type: "tool_call",
-          toolCallId: event.toolCall.id,
-          toolName: event.toolCall.toolName,
-          inputJson: JSON.stringify(event.toolCall.inputJson),
-          outputJson: event.toolCall.outputJson ? JSON.stringify(event.toolCall.outputJson) : undefined,
-          status: event.toolCall.status,
-          errorText: event.toolCall.errorText ?? undefined,
-        }, false);
-        if (event.toolCall.outputJson || event.toolCall.errorText) {
-          appendPart(msg, `tool:${event.toolCall.id}:result`, {
-            type: "tool_result",
+        appendPart(
+          msg,
+          `tool:${event.toolCall.id}:call`,
+          {
+            type: "tool_call",
             toolCallId: event.toolCall.id,
-            outputJson: event.toolCall.outputJson ? JSON.stringify(event.toolCall.outputJson) : undefined,
+            toolName: event.toolCall.toolName,
+            inputJson: JSON.stringify(event.toolCall.inputJson),
+            outputJson: event.toolCall.outputJson
+              ? JSON.stringify(event.toolCall.outputJson)
+              : undefined,
+            status: event.toolCall.status,
             errorText: event.toolCall.errorText ?? undefined,
-          }, false);
+          },
+          false,
+        );
+        if (event.toolCall.outputJson || event.toolCall.errorText) {
+          appendPart(
+            msg,
+            `tool:${event.toolCall.id}:result`,
+            {
+              type: "tool_result",
+              toolCallId: event.toolCall.id,
+              outputJson: event.toolCall.outputJson
+                ? JSON.stringify(event.toolCall.outputJson)
+                : undefined,
+              errorText: event.toolCall.errorText ?? undefined,
+            },
+            false,
+          );
         }
         return this.flush(msg);
       }
@@ -116,44 +130,59 @@ export class MessagePipeline {
       case "agent.approval.requested": {
         const msgId = `approval:${event.approval.id}`;
         const msg = this.getOrCreate(msgId, event.sessionId, "system", null);
-        appendPart(msg, `approval:${event.approval.id}:ref`, {
-          type: "approval_ref",
-          approvalId: event.approval.id,
-          kind: event.approval.kind,
-          message: event.approval.message,
-          metadata: event.approval.metadata ?? undefined,
-          status: event.approval.status,
-        }, false);
+        appendPart(
+          msg,
+          `approval:${event.approval.id}:ref`,
+          {
+            type: "approval_ref",
+            approvalId: event.approval.id,
+            kind: event.approval.kind,
+            message: event.approval.message,
+            metadata: event.approval.metadata ?? undefined,
+            status: event.approval.status,
+          },
+          false,
+        );
         return this.flush(msg);
       }
 
       case "agent.approval.resolved": {
         const msgId = `approval:${event.resolution.approvalId}`;
         const msg = this.getOrCreate(msgId, event.sessionId, "system", null);
-        appendPart(msg, `approval:${event.resolution.approvalId}:ref`, {
-          type: "approval_ref",
-          approvalId: event.resolution.approvalId,
-          decision: event.resolution.decision,
-          status:
-            event.resolution.decision === "reject"
-              ? "rejected"
-              : event.resolution.decision === "approve_session"
-                ? "approved_session"
-                : "approved_once",
-        }, false);
+        appendPart(
+          msg,
+          `approval:${event.resolution.approvalId}:ref`,
+          {
+            type: "approval_ref",
+            approvalId: event.resolution.approvalId,
+            decision: event.resolution.decision,
+            status:
+              event.resolution.decision === "reject"
+                ? "rejected"
+                : event.resolution.decision === "approve_session"
+                  ? "approved_session"
+                  : "approved_once",
+          },
+          false,
+        );
         return this.flush(msg);
       }
 
       case "agent.artifact.published": {
         const msgId = `artifact:${event.artifact.id}`;
         const msg = this.getOrCreate(msgId, event.sessionId, "system", null);
-        appendPart(msg, `artifact:${event.artifact.id}:ref`, {
-          type: "artifact_ref",
-          artifactId: event.artifact.id,
-          artifactType: event.artifact.artifactType,
-          title: event.artifact.title,
-          uri: event.artifact.uri,
-        }, false);
+        appendPart(
+          msg,
+          `artifact:${event.artifact.id}:ref`,
+          {
+            type: "artifact_ref",
+            artifactId: event.artifact.id,
+            artifactType: event.artifact.artifactType,
+            title: event.artifact.title,
+            uri: event.artifact.uri,
+          },
+          false,
+        );
         return this.flush(msg);
       }
 
@@ -165,7 +194,12 @@ export class MessagePipeline {
         }
         if (!hasContent) {
           const msg = this.getOrCreate(assistantMsgId, event.sessionId, "assistant", event.turnId);
-          appendPart(msg, `${assistantMsgId}:empty`, { type: "text", text: "_No response._" }, false);
+          appendPart(
+            msg,
+            `${assistantMsgId}:empty`,
+            { type: "text", text: "_No response._" },
+            false,
+          );
           this.flush(msg);
         }
         // Evict accumulated messages for this turn
@@ -268,7 +302,12 @@ export class MessagePipeline {
 export function inferRole(messageId: string): AgentMessageRole {
   const segments = messageId.split(":");
   const candidate = segments[1];
-  if (candidate === "user" || candidate === "assistant" || candidate === "system" || candidate === "tool") {
+  if (
+    candidate === "user" ||
+    candidate === "assistant" ||
+    candidate === "system" ||
+    candidate === "tool"
+  ) {
     return candidate;
   }
   return "assistant";
@@ -287,9 +326,7 @@ export function appendPart(
 ): void {
   const idx = msg.parts.findIndex((p) => p.id === partId);
   const existing = idx >= 0 ? msg.parts[idx]!.part : undefined;
-  const isTextual = (
-    v: AgentMessagePart,
-  ): v is Extract<AgentMessagePart, { text: string }> =>
+  const isTextual = (v: AgentMessagePart): v is Extract<AgentMessagePart, { text: string }> =>
     v.type === "text" || v.type === "thinking" || v.type === "status";
 
   if (idx >= 0 && existing && isDelta) {

@@ -10,7 +10,11 @@ import {
 } from "@lifecycle/ui";
 import { Brain, Bug, ChevronDown, Shield, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { AgentSessionDisplayStatus, AgentSessionState, AgentSessionUsage } from "@lifecycle/agents";
+import type {
+  AgentSessionDisplayStatus,
+  AgentSessionState,
+  AgentSessionUsage,
+} from "@lifecycle/agents";
 import type { AgentMessageWithParts, AgentSessionRecord } from "@lifecycle/contracts";
 import { AlertCircle, Loader2, MessageSquare, Pause } from "lucide-react";
 import { ResponseReadyDot } from "@/components/response-ready-dot";
@@ -279,11 +283,15 @@ function AgentStatus({ displayStatus, usage, debug }: AgentStatusProps) {
 // AgentToolbar — composes AgentConfig + AgentStatus in one row
 // ---------------------------------------------------------------------------
 
-export interface AgentToolbarProps extends AgentConfigProps, AgentStatusProps {}
+export interface AgentToolbarProps extends AgentConfigProps, AgentStatusProps {
+  className?: string;
+}
 
 export function AgentToolbar(props: AgentToolbarProps) {
   return (
-    <div className="shrink-0 flex items-center gap-3 px-4 py-1.5">
+    <div
+      className={["shrink-0 flex items-center gap-3 px-4 py-1.5", props.className ?? ""].join(" ")}
+    >
       <AgentConfig
         providerName={props.providerName}
         ProviderIcon={props.ProviderIcon}
@@ -294,11 +302,7 @@ export function AgentToolbar(props: AgentToolbarProps) {
         catalogLoading={props.catalogLoading}
         catalogError={props.catalogError}
       />
-      <AgentStatus
-        displayStatus={props.displayStatus}
-        usage={props.usage}
-        debug={props.debug}
-      />
+      <AgentStatus displayStatus={props.displayStatus} usage={props.usage} debug={props.debug} />
     </div>
   );
 }

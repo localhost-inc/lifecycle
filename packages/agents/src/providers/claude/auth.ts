@@ -5,13 +5,16 @@ function emit(event: ProviderAuthEvent): void {
   process.stdout.write(`${JSON.stringify(event)}\n`);
 }
 
-function run(command: string, args: string[]): Promise<{ stdout: string; stderr: string; code: number }> {
+function run(
+  command: string,
+  args: string[],
+): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve) => {
     execFile(command, args, { timeout: 10_000 }, (error, stdout, stderr) => {
       resolve({
         stdout: stdout?.toString() ?? "",
         stderr: stderr?.toString() ?? "",
-        code: error ? (error as { code?: number }).code ?? 1 : 0,
+        code: error ? ((error as { code?: number }).code ?? 1) : 0,
       });
     });
   });

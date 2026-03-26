@@ -3,7 +3,7 @@ import { EmptyState } from "@lifecycle/ui";
 import { useCallback, useEffect, useMemo } from "react";
 import { Outlet, useLocation, useNavigate, useOutletContext, useParams } from "react-router-dom";
 import type { AppShellOutletContext } from "@/components/layout/app-shell-context";
-import type { WorkspaceCreateMode } from "@/features/workspaces/api";
+import type { WorkspaceCreateMode } from "@/features/workspaces/types";
 import { resolveProjectRepoWorkspace } from "@/features/projects/lib/project-repo-workspace";
 import {
   resolvePersistedProjectSubPath,

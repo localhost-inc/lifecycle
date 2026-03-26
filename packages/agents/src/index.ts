@@ -20,6 +20,28 @@ export type {
   AgentTurnPhase,
   AgentWorkspaceStatus,
 } from "./agent-session-store";
+export {
+  beginAgentPromptDispatch,
+  buildAgentPromptPreview,
+  clearAgentPromptQueue,
+  completeAgentPromptDispatch,
+  createAgentPromptQueueStore,
+  createAgentQueuedPrompt,
+  dismissAgentPrompt,
+  enqueueAgentPrompt,
+  failAgentPromptDispatch,
+  resolveAgentPromptDispatchDecision,
+  retryAgentPrompt,
+  selectAgentPromptQueueState,
+  selectQueuedAgentPromptCount,
+} from "./prompt-queue-store";
+export type {
+  AgentPromptDispatchDecision,
+  AgentPromptPreview,
+  AgentPromptQueueSessionState,
+  AgentPromptQueueStore,
+  AgentQueuedPrompt,
+} from "./prompt-queue-store";
 export type { ProviderModelCatalog, ProviderModelCatalogEntry } from "./catalog";
 export { createAgentOrchestrator } from "./orchestrator";
 export type { ClaudeWorkerInput, ClaudeWorkerPermissionMode } from "./providers/claude/worker";
@@ -99,4 +121,8 @@ export {
   renderText,
   toMessageWithParts,
 } from "./message-pipeline";
-export type { AccumulatedMessage, MessageFlushCallback, MessagePipelineResult } from "./message-pipeline";
+export type {
+  AccumulatedMessage,
+  MessageFlushCallback,
+  MessagePipelineResult,
+} from "./message-pipeline";

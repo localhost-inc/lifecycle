@@ -86,7 +86,10 @@ function readWorkspaceExplorerUsageMap(storage?: StorageLike): WorkspaceExplorer
   }
 }
 
-function writeWorkspaceExplorerUsageMap(map: WorkspaceExplorerUsageMap, storage?: StorageLike): void {
+function writeWorkspaceExplorerUsageMap(
+  map: WorkspaceExplorerUsageMap,
+  storage?: StorageLike,
+): void {
   const target = getStorage(storage);
   if (!target) {
     return;

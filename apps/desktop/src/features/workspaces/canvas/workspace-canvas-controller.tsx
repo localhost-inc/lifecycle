@@ -58,7 +58,8 @@ import {
   type WorkspaceCanvasTabsByKey,
   type WorkspaceCanvasTabViewState,
 } from "@/features/workspaces/state/workspace-canvas-state";
-import { useAgentOrchestrator, useAgentSessions } from "@/store";
+import { useAgentOrchestrator } from "@/features/agents/provider";
+import { useAgentSessions } from "@/store";
 
 export interface WorkspaceCanvasControllerInput {
   openTabRequest: OpenSurfaceRequest | null;

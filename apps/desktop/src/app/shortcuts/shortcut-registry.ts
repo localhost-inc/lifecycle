@@ -16,7 +16,11 @@ export type RegisteredShortcutId =
   | "workspace.next-workspace"
   | "workspace.previous-workspace";
 
-export type RegisteredShortcutScope = "app" | "file-editor-surface" | "project-route" | "workspace-canvas";
+export type RegisteredShortcutScope =
+  | "app"
+  | "file-editor-surface"
+  | "project-route"
+  | "workspace-canvas";
 
 export interface RegisteredShortcut {
   description: string;

@@ -11,7 +11,11 @@ interface PreviewSurfaceProps {
   url: string;
 }
 
-export const PreviewSurface = memo(function PreviewSurface({ tabKey, title, url }: PreviewSurfaceProps) {
+export const PreviewSurface = memo(function PreviewSurface({
+  tabKey,
+  title,
+  url,
+}: PreviewSurfaceProps) {
   useWorkspacePaneRenderCount("PreviewSurface", tabKey);
   const [reloadNonce, setReloadNonce] = useState(0);
   const iframeKey = useMemo(() => `${tabKey}:${reloadNonce}`, [reloadNonce, tabKey]);

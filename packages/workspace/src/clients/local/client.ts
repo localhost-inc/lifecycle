@@ -16,12 +16,12 @@ import {
   type WorkspaceRecord,
 } from "@lifecycle/contracts";
 import type {
+  EnsureWorkspaceInput,
   StartServicesInput,
   GitDiffInput,
   SubscribeWorkspaceFileEventsInput,
-  WorkspaceClient,
-  WorkspaceCreateInput,
-  WorkspaceCreateResult,
+  WorkspaceHostClient,
+  WorkspaceArchiveDisposition,
   ServiceLogSnapshot,
   WorkspaceFileEventListener,
   WorkspaceFileEventSubscription,
@@ -29,6 +29,8 @@ import type {
   WorkspaceFileTreeEntry,
   WorkspaceHealthResult,
 } from "../../workspace";
+import { computeArchiveInput } from "../../policy/workspace-archive";
+import { computeRenameInput } from "../../policy/workspace-rename";
 import { LocalEnvironmentOrchestrator } from "./environment-client";
 
 export interface LocalClientDeps {
@@ -40,7 +42,7 @@ export interface LocalClientDeps {
   ) => Promise<() => void>;
 }
 
-export class LocalClient implements WorkspaceClient {
+export class LocalClient implements WorkspaceHostClient {
   private invoke: LocalClientDeps["invoke"];
   private watchPath: LocalClientDeps["watchPath"];
   private environment: LocalEnvironmentOrchestrator;
@@ -51,12 +53,67 @@ export class LocalClient implements WorkspaceClient {
     this.environment = new LocalEnvironmentOrchestrator(deps.invoke);
   }
 
+  async ensureWorkspace(input: EnsureWorkspaceInput): Promise<WorkspaceRecord> {
+    return this.invoke("ensure_workspace", {
+      input: {
+        workspaceId: input.workspace.id,
+        projectPath: input.projectPath,
+        name: input.workspace.name,
+        sourceRef: input.workspace.source_ref,
+        checkoutType: input.workspace.checkout_type,
+        baseRef: input.baseRef,
+        worktreeRoot: input.worktreeRoot,
+        manifestJson: input.manifestJson,
+        manifestFingerprint: input.manifestFingerprint,
+      },
+    }) as Promise<WorkspaceRecord>;
+  }
+
+  async renameWorkspace(workspace: WorkspaceRecord, name: string): Promise<WorkspaceRecord> {
+    let branchHasUpstream = false;
+    let currentWorktreeBranch: string | null = null;
+    if (workspace.worktree_path) {
+      try {
+        [currentWorktreeBranch, branchHasUpstream] = await Promise.all([
+          this.readCurrentBranch(workspace.worktree_path),
+          this.invoke("git_branch_has_upstream", {
+            worktreePath: workspace.worktree_path,
+            branchName: workspace.source_ref,
+          }) as Promise<boolean>,
+        ]);
+      } catch {
+        // If we can't check, skip branch rename (safe default)
+      }
+    }
+
+    const input = computeRenameInput(workspace, name, branchHasUpstream, currentWorktreeBranch);
+    return this.invoke("rename_workspace", { input }) as Promise<WorkspaceRecord>;
+  }
+
+  async inspectArchive(workspace: WorkspaceRecord): Promise<WorkspaceArchiveDisposition> {
+    if (
+      (workspace.host !== "local" && workspace.host !== "docker") ||
+      workspace.worktree_path === null
+    ) {
+      return { hasUncommittedChanges: false };
+    }
+
+    const gitStatus = await this.getGitStatus(workspace.id);
+    return {
+      hasUncommittedChanges: gitStatus.files.length > 0,
+    };
+  }
+
+  async archiveWorkspace(workspace: WorkspaceRecord): Promise<void> {
+    const lifecycleRoot = (await this.invoke("resolve_lifecycle_root_path")) as string;
+    const input = computeArchiveInput(workspace, lifecycleRoot);
+    await this.invoke("archive_workspace", { input });
+  }
+
   async startServices(input: StartServicesInput): Promise<ServiceRecord[]> {
     const result = parseManifest(input.manifestJson);
     if (!result.valid) {
-      throw new Error(
-        `Invalid manifest: ${result.errors.map((e) => e.message).join(", ")}`,
-      );
+      throw new Error(`Invalid manifest: ${result.errors.map((e) => e.message).join(", ")}`);
     }
 
     this.environment.activeManifestJson = input.manifestJson;
@@ -140,7 +197,9 @@ export class LocalClient implements WorkspaceClient {
     try {
       unwatch = await this.watchPath(
         input.worktreePath,
-        () => { if (!disposed) emitChanged(); },
+        () => {
+          if (!disposed) emitChanged();
+        },
         { recursive: true, delayMs: 150 },
       );
     } catch (error) {
@@ -280,41 +339,7 @@ export class LocalClient implements WorkspaceClient {
     }) as Promise<GitPullRequestSummary>;
   }
 
-  async createWorkspace(input: WorkspaceCreateInput): Promise<WorkspaceCreateResult> {
-    const context = input.context;
-    return this.invoke("create_workspace", {
-      input: {
-        host: context.host,
-        checkoutType: context.checkoutType ?? "worktree",
-        projectId: context.projectId,
-        projectPath: context.projectPath,
-        workspaceName: context.workspaceName,
-        baseRef: context.baseRef,
-        worktreeRoot: context.worktreeRoot,
-        manifestJson: input.manifestJson,
-        manifestFingerprint: input.manifestFingerprint,
-      },
-    }) as Promise<WorkspaceCreateResult>;
-  }
-
-  async renameWorkspace(workspaceId: string, name: string): Promise<WorkspaceRecord> {
-    return this.invoke("rename_workspace", { workspaceId, name }) as Promise<WorkspaceRecord>;
-  }
-
-  async archiveWorkspace(workspaceId: string): Promise<void> {
-    await this.invoke("archive_workspace", { workspaceId });
-  }
-
-  async readManifestText(dirPath: string): Promise<string | null> {
-    return this.invoke("read_manifest_text", { dirPath }) as Promise<string | null>;
-  }
-
-  async getCurrentBranch(projectPath: string): Promise<string> {
+  private async readCurrentBranch(projectPath: string): Promise<string> {
     return this.invoke("get_current_branch", { projectPath }) as Promise<string>;
   }
-
-  async cleanupProject(projectId: string): Promise<void> {
-    await this.invoke("cleanup_project", { id: projectId });
-  }
-
 }

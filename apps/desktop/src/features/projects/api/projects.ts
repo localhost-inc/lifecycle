@@ -1,46 +1,13 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { parseManifest } from "@lifecycle/contracts";
-import type { ManifestParseResult, ProjectRecord } from "@lifecycle/contracts";
-import type { WorkspaceClient } from "@lifecycle/workspace";
-import { insertProject, deleteProject, updateProjectManifestStatus } from "@lifecycle/store";
-import { tauriSqlDriver } from "@/lib/sql-driver";
+import type { ManifestParseResult } from "@lifecycle/contracts";
+import { invokeTauri } from "@/lib/tauri-error";
 
 export type ManifestStatus =
   | { state: "valid"; result: ManifestParseResult & { valid: true } }
   | { state: "invalid"; result: ManifestParseResult & { valid: false } }
   | { state: "missing" };
-
-interface ProjectRow {
-  id: string;
-  path: string;
-  name: string;
-  manifest_path: string;
-  manifest_valid: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-function rowToRecord(row: ProjectRow): ProjectRecord {
-  return {
-    id: row.id,
-    path: row.path,
-    name: row.name,
-    manifestPath: row.manifest_path,
-    manifestValid: row.manifest_valid,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
-}
-
-function generateId(): string {
-  return crypto.randomUUID();
-}
-
-function nameFromPath(dirPath: string): string {
-  const segments = dirPath.replace(/\/+$/, "").split("/");
-  return segments[segments.length - 1] ?? "unknown";
-}
 
 interface ManifestFileReader {
   exists: (path: string) => Promise<boolean>;
@@ -82,15 +49,12 @@ export async function readManifestFromFs(
   }
 }
 
-export async function readManifest(
-  client: WorkspaceClient,
-  dirPath: string,
-): Promise<ManifestStatus> {
+export async function readManifest(dirPath: string): Promise<ManifestStatus> {
   if (!isTauri()) {
     return { state: "missing" };
   }
 
-  const text = await client.readManifestText(dirPath);
+  const text = await invokeTauri<string | null>("read_manifest_text", { dirPath });
   if (text === null) {
     return { state: "missing" };
   }
@@ -103,41 +67,18 @@ export async function readManifest(
   return { state: "invalid", result };
 }
 
-export async function addProjectFromDirectory(): Promise<ProjectRecord | null> {
+export async function chooseProjectDirectory(): Promise<string | null> {
   if (!isTauri()) {
     throw new Error("Project import requires the Tauri desktop shell.");
   }
 
-  const dirPath = await open({ directory: true, multiple: false });
-  if (!dirPath) return null;
-
-  const name = nameFromPath(dirPath);
-  const id = generateId();
-
-  await insertProject(tauriSqlDriver, { id, path: dirPath, name });
-
-  return {
-    id,
-    path: dirPath,
-    name,
-    manifestPath: "lifecycle.json",
-    manifestValid: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
+  return open({ directory: true, multiple: false });
 }
 
-export async function removeProject(client: WorkspaceClient, id: string): Promise<void> {
+export async function cleanupProject(projectId: string): Promise<void> {
   if (!isTauri()) {
     return;
   }
 
-  // Rust side-effects: stop git watchers, clean up controllers
-  await client.cleanupProject(id);
-  // Delete from SQLite via TypeScript
-  await deleteProject(tauriSqlDriver, id);
-}
-
-export async function setProjectManifestValid(id: string, valid: boolean): Promise<void> {
-  await updateProjectManifestStatus(tauriSqlDriver, id, valid);
+  await invokeTauri<void>("cleanup_project", { id: projectId });
 }

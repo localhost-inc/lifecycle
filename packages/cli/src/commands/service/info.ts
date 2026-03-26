@@ -1,11 +1,7 @@
 import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 
-import {
-  createServiceInfoRequest,
-  requestBridge,
-  resolveWorkspaceId,
-} from "../../bridge";
+import { createServiceInfoRequest, requestBridge, resolveWorkspaceId } from "../../bridge";
 import {
   failCommand,
   failValidation,

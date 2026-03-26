@@ -41,7 +41,10 @@ export function useCommandPaletteExplorer(): UseCommandPaletteExplorerResult {
   );
   const isAvailable =
     currentWorkspace !== null && workspaceSupportsFilesystemInteraction(currentWorkspace);
-  const explorerTreeQuery = useWorkspaceFileTree(isAvailable ? currentWorkspace.id : null);
+  const explorerTreeQuery = useWorkspaceFileTree(
+    isAvailable ? currentWorkspace.id : null,
+    isAvailable ? currentWorkspace.host : null,
+  );
   const workspaceIdForFiles = currentWorkspace?.id ?? null;
   const usageVersion = useSyncExternalStore(
     subscribeWorkspaceExplorerUsage,

@@ -9,8 +9,7 @@ import {
 
 function parse(json: string): LifecycleConfig {
   const result = parseManifest(json);
-  if (!result.valid)
-    throw new Error(result.errors.map((e) => e.message).join(", "));
+  if (!result.valid) throw new Error(result.errors.map((e) => e.message).join(", "));
   return result.config;
 }
 
@@ -19,10 +18,10 @@ interface CallLog {
   args: unknown[];
 }
 
-function createMockOrchestrator(options?: {
-  prepared?: boolean;
-  readyServices?: string[];
-}): { orchestrator: EnvironmentOrchestrator; calls: CallLog[] } {
+function createMockOrchestrator(options?: { prepared?: boolean; readyServices?: string[] }): {
+  orchestrator: EnvironmentOrchestrator;
+  calls: CallLog[];
+} {
   const calls: CallLog[] = [];
   const prepared = options?.prepared ?? false;
   const readyServices = new Set(options?.readyServices ?? []);
@@ -77,9 +76,7 @@ describe("EnvironmentOrchestrator", () => {
     const { orchestrator, calls } = createMockOrchestrator();
     await orchestrator.start(config, { ...BASE_INPUT, manifestJson: "" });
 
-    const startCalls = calls
-      .filter((c) => c.method === "startService")
-      .map((c) => c.args[1]);
+    const startCalls = calls.filter((c) => c.method === "startService").map((c) => c.args[1]);
 
     expect(startCalls).toEqual(["api", "www"]);
   });
@@ -138,11 +135,7 @@ describe("EnvironmentOrchestrator", () => {
           : `step:${(c.args[1] as StepInput).name}`,
       );
 
-    expect(ordered).toEqual([
-      "start:postgres",
-      "step:migrate",
-      "start:api",
-    ]);
+    expect(ordered).toEqual(["start:postgres", "step:migrate", "start:api"]);
   });
 
   test("calls prepareStart with service names before execution", async () => {
@@ -219,9 +212,7 @@ describe("EnvironmentOrchestrator", () => {
       serviceNames: ["www"],
     });
 
-    const startCalls = calls
-      .filter((c) => c.method === "startService")
-      .map((c) => c.args[1]);
+    const startCalls = calls.filter((c) => c.method === "startService").map((c) => c.args[1]);
 
     expect(startCalls).toEqual(["www"]);
   });

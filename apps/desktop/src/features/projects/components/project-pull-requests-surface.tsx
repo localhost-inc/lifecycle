@@ -17,10 +17,11 @@ export function ProjectPullRequestsSurface() {
     [navigate, project.id],
   );
   const workspaceId = repositoryWorkspace?.id ?? null;
-  const pullRequestsQuery = useGitPullRequests(workspaceId, {
+  const workspaceHost = repositoryWorkspace?.host ?? null;
+  const pullRequestsQuery = useGitPullRequests(workspaceId, workspaceHost, {
     enabled: workspaceId !== null,
   });
-  const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId, {
+  const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId, workspaceHost, {
     enabled: workspaceId !== null,
   });
 

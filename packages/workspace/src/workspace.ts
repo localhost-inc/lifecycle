@@ -12,9 +12,7 @@ import type {
   GitStatusResult,
   LifecycleEvent,
   ServiceRecord,
-  WorkspaceCheckoutType,
   WorkspaceRecord,
-  WorkspaceHost,
 } from "@lifecycle/contracts";
 
 export interface StartServicesInput {
@@ -74,7 +72,24 @@ export interface SubscribeWorkspaceFileEventsInput {
   worktreePath?: string | null;
 }
 
-export interface WorkspaceClient {
+export interface EnsureWorkspaceInput {
+  workspace: WorkspaceRecord;
+  projectPath: string;
+  baseRef?: string | null;
+  worktreeRoot?: string | null;
+  manifestJson?: string | null;
+  manifestFingerprint?: string | null;
+}
+
+export interface WorkspaceArchiveDisposition {
+  hasUncommittedChanges: boolean;
+}
+
+export interface WorkspaceHostClient {
+  ensureWorkspace(input: EnsureWorkspaceInput): Promise<WorkspaceRecord>;
+  renameWorkspace(workspace: WorkspaceRecord, name: string): Promise<WorkspaceRecord>;
+  inspectArchive(workspace: WorkspaceRecord): Promise<WorkspaceArchiveDisposition>;
+  archiveWorkspace(workspace: WorkspaceRecord): Promise<void>;
   startServices(input: StartServicesInput): Promise<ServiceRecord[]>;
   healthCheck(workspaceId: string): Promise<WorkspaceHealthResult>;
   stopServices(workspaceId: string): Promise<void>;
@@ -117,33 +132,4 @@ export interface WorkspaceClient {
     workspaceId: string,
     pullRequestNumber: number,
   ): Promise<GitPullRequestSummary>;
-
-  // Workspace lifecycle
-  createWorkspace(input: WorkspaceCreateInput): Promise<WorkspaceCreateResult>;
-  renameWorkspace(workspaceId: string, name: string): Promise<WorkspaceRecord>;
-  archiveWorkspace(workspaceId: string): Promise<void>;
-  readManifestText(dirPath: string): Promise<string | null>;
-  getCurrentBranch(projectPath: string): Promise<string>;
-  cleanupProject(projectId: string): Promise<void>;
-}
-
-export interface WorkspaceCreateContext {
-  host: WorkspaceHost;
-  checkoutType?: WorkspaceCheckoutType;
-  projectId: string;
-  projectPath?: string;
-  workspaceName?: string;
-  baseRef?: string;
-  worktreeRoot?: string;
-}
-
-export interface WorkspaceCreateInput {
-  manifestJson?: string | null;
-  manifestFingerprint?: string | null;
-  context: WorkspaceCreateContext;
-}
-
-export interface WorkspaceCreateResult {
-  workspace: WorkspaceRecord;
-  worktreePath: string;
 }

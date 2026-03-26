@@ -249,11 +249,7 @@ export function selectAgentSessionState(
   return state.sessionsById[sessionId] ?? DEFAULT_AGENT_SESSION_STATE;
 }
 
-export type AgentSessionDisplayStatus =
-  | "idle"
-  | "working"
-  | "waiting"
-  | "failed";
+export type AgentSessionDisplayStatus = "idle" | "working" | "waiting" | "failed";
 
 /**
  * Single derived status for an agent session. Every UI indicator should read
@@ -269,9 +265,7 @@ export type AgentSessionDisplayStatus =
  * - waiting: needs user action (approval or question)
  * - failed:  last turn failed (can retry with a new turn)
  */
-export function deriveAgentDisplayStatus(
-  session: AgentSessionState,
-): AgentSessionDisplayStatus {
+export function deriveAgentDisplayStatus(session: AgentSessionState): AgentSessionDisplayStatus {
   if (session.pendingApprovals.length > 0) {
     return "waiting";
   }

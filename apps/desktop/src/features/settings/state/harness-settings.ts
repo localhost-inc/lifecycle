@@ -23,7 +23,12 @@ import { harnessPresetOptions, isRecord } from "@/features/settings/state/harnes
 
 export type { ClaudePermissionMode } from "@/features/settings/state/harnesses/claude";
 export type { ClaudeEffort, ClaudeModel } from "@/features/settings/state/harnesses/claude";
-export type { CodexApprovalPolicy, CodexModel, CodexReasoningEffort, CodexSandboxMode } from "@/features/settings/state/harnesses/codex";
+export type {
+  CodexApprovalPolicy,
+  CodexModel,
+  CodexReasoningEffort,
+  CodexSandboxMode,
+} from "@/features/settings/state/harnesses/codex";
 export type { HarnessPreset } from "@/features/settings/state/harnesses/shared";
 export {
   buildClaudeHarnessSettingsFromPreset,

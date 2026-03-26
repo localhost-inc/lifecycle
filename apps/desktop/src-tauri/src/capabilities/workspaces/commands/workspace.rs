@@ -2,49 +2,42 @@ use crate::platform::db::DbPath;
 use crate::shared::errors::LifecycleError;
 use crate::RootGitWatcherMap;
 use crate::WorkspaceControllerRegistryHandle;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tauri::{AppHandle, State};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CreateWorkspaceCommandInput {
-    host: String,
-    project_id: String,
+pub struct EnsureWorkspaceCommandInput {
+    workspace_id: String,
     project_path: String,
-    workspace_name: Option<String>,
+    name: String,
+    source_ref: String,
+    checkout_type: String,
     base_ref: Option<String>,
     worktree_root: Option<String>,
-    checkout_type: Option<String>,
     manifest_json: Option<String>,
     manifest_fingerprint: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateWorkspaceCommandResult {
-    workspace: super::super::query::WorkspaceRecord,
-    worktree_path: String,
-}
-
 #[tauri::command]
-pub async fn create_workspace(
+pub async fn ensure_workspace(
     app: AppHandle,
     db_path: State<'_, DbPath>,
     root_git_watchers: State<'_, RootGitWatcherMap>,
-    input: CreateWorkspaceCommandInput,
-) -> Result<CreateWorkspaceCommandResult, LifecycleError> {
+    input: EnsureWorkspaceCommandInput,
+) -> Result<super::super::query::WorkspaceRecord, LifecycleError> {
     let db_path_value = db_path.0.clone();
-    let workspace_id = super::super::create::create_workspace(
+    let workspace_id = super::super::ensure::ensure_workspace(
         app.clone(),
         db_path,
-        super::super::create::CreateWorkspaceRequest {
-            host: input.host,
-            project_id: input.project_id,
+        super::super::ensure::EnsureWorkspaceRequest {
+            workspace_id: input.workspace_id,
             project_path: input.project_path,
-            workspace_name: input.workspace_name,
+            name: input.name,
+            source_ref: input.source_ref,
+            checkout_type: input.checkout_type,
             base_ref: input.base_ref,
             worktree_root: input.worktree_root,
-            checkout_type: input.checkout_type,
             manifest_json: input.manifest_json,
             manifest_fingerprint: input.manifest_fingerprint,
         },
@@ -64,10 +57,19 @@ pub async fn create_workspace(
         .await?
         .ok_or(LifecycleError::WorkspaceNotFound(workspace_id))?;
 
-    Ok(CreateWorkspaceCommandResult {
-        worktree_path: workspace.worktree_path.clone().unwrap_or_default(),
-        workspace,
-    })
+    Ok(workspace)
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameWorkspaceCommandInput {
+    workspace_id: String,
+    name: String,
+    source_ref: String,
+    name_origin: String,
+    source_ref_origin: String,
+    rename_branch: bool,
+    move_worktree: bool,
 }
 
 #[tauri::command]
@@ -75,13 +77,25 @@ pub async fn rename_workspace(
     app: AppHandle,
     db_path: State<'_, DbPath>,
     workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
-    workspace_id: String,
-    name: String,
+    input: RenameWorkspaceCommandInput,
 ) -> Result<super::super::query::WorkspaceRecord, LifecycleError> {
     let _mutation_guard = workspace_controllers
-        .acquire_mutation_guard(&workspace_id)
+        .acquire_mutation_guard(&input.workspace_id)
         .await?;
-    super::super::rename::rename_workspace(app, &db_path.0, &workspace_id, &name).await
+    super::super::rename::rename_workspace(
+        &app,
+        &db_path.0,
+        super::super::rename::RenameWorkspaceRequest {
+            workspace_id: input.workspace_id,
+            name: input.name,
+            source_ref: input.source_ref,
+            name_origin: input.name_origin,
+            source_ref_origin: input.source_ref_origin,
+            rename_branch: input.rename_branch,
+            move_worktree: input.move_worktree,
+        },
+    )
+    .await
 }
 
 #[tauri::command]
@@ -127,14 +141,14 @@ pub async fn archive_workspace(
     db_path: State<'_, DbPath>,
     root_git_watchers: State<'_, RootGitWatcherMap>,
     workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
-    workspace_id: String,
+    input: super::super::archive::ArchiveWorkspaceRequest,
 ) -> Result<(), LifecycleError> {
-    super::super::destroy::archive_workspace(
+    super::super::archive::archive_workspace(
         app,
         db_path,
         root_git_watchers,
         workspace_controllers,
-        workspace_id,
+        input,
     )
     .await
 }

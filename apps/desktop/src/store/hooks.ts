@@ -6,7 +6,6 @@ import type {
   ServiceRecord,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
-import type { WorkspaceClient } from "@lifecycle/workspace";
 import { groupWorkspacesByProject, type Collection } from "@lifecycle/store";
 import { useLiveQuery } from "@tanstack/react-db";
 import {
@@ -75,22 +74,22 @@ function useCollectionItem<T extends object>(
 
 export function useProjects(): ProjectRecord[] {
   const { collections } = useStoreContext();
-  return useCollectionArray(collections.projects.collection);
+  return useCollectionArray(collections.projects);
 }
 
 export function useProject(projectId: string | null): ProjectRecord | undefined {
   const { collections } = useStoreContext();
-  return useCollectionItem(collections.projects.collection, projectId);
+  return useCollectionItem(collections.projects, projectId);
 }
 
 export function useWorkspaces(): WorkspaceRecord[] {
   const { collections } = useStoreContext();
-  return useCollectionArray(collections.workspaces.collection);
+  return useCollectionArray(collections.workspaces);
 }
 
 export function useWorkspace(workspaceId: string | null): WorkspaceRecord | undefined {
   const { collections } = useStoreContext();
-  return useCollectionItem(collections.workspaces.collection, workspaceId);
+  return useCollectionItem(collections.workspaces, workspaceId);
 }
 
 export function useWorkspacesByProject(): Record<string, WorkspaceRecord[]> {
@@ -100,7 +99,7 @@ export function useWorkspacesByProject(): Record<string, WorkspaceRecord[]> {
 
 export function useWorkspaceServices(workspaceId: string): ServiceRecord[] {
   const { collections } = useStoreContext();
-  const allServices = useCollectionArray(collections.services.collection);
+  const allServices = useCollectionArray(collections.services);
   return useMemo(
     () => allServices.filter((s) => s.workspace_id === workspaceId),
     [allServices, workspaceId],
@@ -114,14 +113,9 @@ export function useAgentSessions(workspaceId: string): AgentSessionRecord[] {
     return getOrCreateAgentSessionCollection(driver, workspaceId);
   }, [driver, workspaceId]);
 
-  const baseCollection = sqlCollection.collection;
-
   const { data } = useLiveQuery(
-    (q) =>
-      q
-        .from({ s: baseCollection })
-        .orderBy(({ s }) => s.created_at, "desc"),
-    [baseCollection],
+    (q) => q.from({ s: sqlCollection }).orderBy(({ s }) => s.created_at, "desc"),
+    [sqlCollection],
   );
 
   return data ?? [];
@@ -144,35 +138,19 @@ export function useAgentMessages(sessionId: string): {
   const sqlCollection = useMemo(() => {
     return getOrCreateAgentMessageCollection(driver, sessionId);
   }, [driver, sessionId]);
-  const baseCollection = sqlCollection.collection;
   const collectionError = useSyncExternalStore(
-    sqlCollection.subscribeState,
-    sqlCollection.getError,
-    sqlCollection.getError,
+    sqlCollection.utils.subscribeState,
+    sqlCollection.utils.getError,
+    sqlCollection.utils.getError,
   );
 
   const { data } = useLiveQuery(
-    (q) => q.from({ msg: baseCollection }).orderBy(({ msg }) => msg.created_at),
-    [baseCollection],
+    (q) => q.from({ msg: sqlCollection }).orderBy(({ msg }) => msg.created_at),
+    [sqlCollection],
   );
 
   return {
     data: data ?? [],
     error: collectionError,
   };
-}
-
-// ── Client hook ──
-
-/**
- * Returns the WorkspaceClient for the current target.
- * Currently always returns the local client; when cloud workspaces arrive,
- * this will look up the workspace target from the collection and select
- * the appropriate client provider.
- */
-export function useClient(): WorkspaceClient {
-  const { clientRegistry } = useStoreContext();
-  // For now, all workspaces use the local client.
-  // When cloud mode arrives, this will resolve per-workspace target.
-  return clientRegistry.resolve("local");
 }

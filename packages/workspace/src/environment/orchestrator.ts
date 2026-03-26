@@ -48,10 +48,7 @@ export interface StepInput {
 export abstract class EnvironmentOrchestrator {
   // -- Shared orchestration --------------------------------------------------
 
-  async start(
-    config: LifecycleConfig,
-    input: StartEnvironmentInput,
-  ): Promise<void> {
+  async start(config: LifecycleConfig, input: StartEnvironmentInput): Promise<void> {
     const { workspaceId } = input;
 
     const prepared = await this.isPrepared(workspaceId);
@@ -63,9 +60,7 @@ export abstract class EnvironmentOrchestrator {
       satisfiedServices,
     });
 
-    const serviceNames = sorted
-      .filter((n) => n.kind === "service")
-      .map((n) => n.name);
+    const serviceNames = sorted.filter((n) => n.kind === "service").map((n) => n.name);
 
     if (prepareSteps.length === 0 && serviceNames.length === 0) {
       return;
@@ -84,10 +79,7 @@ export abstract class EnvironmentOrchestrator {
 
     for (const node of sorted) {
       if (node.kind === "task") {
-        await this.runStep(
-          workspaceId,
-          taskNodeToInput(node, config),
-        );
+        await this.runStep(workspaceId, taskNodeToInput(node, config));
       } else {
         await this.startService(workspaceId, node.name);
       }
@@ -118,17 +110,11 @@ export abstract class EnvironmentOrchestrator {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function prepareStepToInput(step: {
-  name: string;
-  runOn?: "create" | "start";
-}): StepInput {
+function prepareStepToInput(step: { name: string; runOn?: "create" | "start" }): StepInput {
   return { name: step.name, timeoutSeconds: 0 };
 }
 
-function taskNodeToInput(
-  node: { name: string },
-  config: LifecycleConfig,
-): StepInput {
+function taskNodeToInput(node: { name: string }, config: LifecycleConfig): StepInput {
   const taskConfig = config.environment[node.name];
   if (!taskConfig || taskConfig.kind !== "task") {
     return { name: node.name, timeoutSeconds: 60 };

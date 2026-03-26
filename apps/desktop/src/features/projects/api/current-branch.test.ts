@@ -1,10 +1,8 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import type { WorkspaceClient } from "@lifecycle/workspace";
+import * as tauriError from "@/lib/tauri-error";
 import { getCurrentBranch } from "./current-branch";
 
-const client = {
-  getCurrentBranch: mock(async () => "feature/provider-boundary"),
-} as unknown as WorkspaceClient;
+const invokeTauriMock = mock(async () => "feature/provider-boundary");
 
 describe("project current branch api", () => {
   beforeEach(() => {
@@ -13,7 +11,11 @@ describe("project current branch api", () => {
       value: true,
       writable: true,
     });
-    (client.getCurrentBranch as ReturnType<typeof mock>).mockClear();
+    invokeTauriMock.mockClear();
+    mock.module("@/lib/tauri-error", () => ({
+      ...tauriError,
+      invokeTauri: invokeTauriMock,
+    }));
   });
 
   afterEach(() => {
@@ -21,7 +23,9 @@ describe("project current branch api", () => {
   });
 
   test("routes branch lookup through the runtime", async () => {
-    expect(await getCurrentBranch(client, "/tmp/project_1")).toBe("feature/provider-boundary");
-    expect((client.getCurrentBranch as ReturnType<typeof mock>)).toHaveBeenCalledWith("/tmp/project_1");
+    expect(await getCurrentBranch("/tmp/project_1")).toBe("feature/provider-boundary");
+    expect(invokeTauriMock).toHaveBeenCalledWith("get_current_branch", {
+      projectPath: "/tmp/project_1",
+    });
   });
 });

@@ -1,4 +1,7 @@
-import type { CommandPaletteCommand, CommandPaletteCategory } from "@/features/command-palette/types";
+import type {
+  CommandPaletteCommand,
+  CommandPaletteCategory,
+} from "@/features/command-palette/types";
 
 const CATEGORY_LABELS: Record<CommandPaletteCategory, string> = {
   navigation: "Navigation",

@@ -1,6 +1,8 @@
 export type ClaudeLoginMethod = "claudeai" | "console";
 
-export function buildSessionEnv(loginMethod: ClaudeLoginMethod): Record<string, string | undefined> {
+export function buildSessionEnv(
+  loginMethod: ClaudeLoginMethod,
+): Record<string, string | undefined> {
   const env = { ...process.env };
 
   if (loginMethod === "claudeai") {

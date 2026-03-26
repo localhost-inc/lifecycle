@@ -1,14 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import type {
-  ServiceRecord,
-  WorkspaceRecord,
-} from "@lifecycle/contracts";
-import type { WorkspaceClient } from "./workspace";
+import type { ServiceRecord } from "@lifecycle/contracts";
+import { createWorkspaceHostClientRegistry, type WorkspaceHostClient } from "./client";
 import { LocalClient } from "./clients/local";
 
 describe("workspace contract", () => {
   test("defines the expected workspace method names", () => {
-    const requiredMethods: Array<keyof WorkspaceClient> = [
+    const requiredMethods: Array<keyof WorkspaceHostClient> = [
+      "ensureWorkspace",
+      "renameWorkspace",
+      "inspectArchive",
+      "archiveWorkspace",
       "startServices",
       "healthCheck",
       "stopServices",
@@ -38,21 +39,19 @@ describe("workspace contract", () => {
       "pushGit",
       "createGitPullRequest",
       "mergeGitPullRequest",
-      "createWorkspace",
-      "renameWorkspace",
-      "archiveWorkspace",
-      "readManifestText",
-      "getCurrentBranch",
-      "cleanupProject",
     ];
 
-    expect(requiredMethods).toHaveLength(35);
+    expect(requiredMethods).toHaveLength(33);
   });
 
-  test("host workspace client exposes the full contract surface", () => {
+  test("host client exposes the full contract surface", () => {
     const invoke = async () => "";
     const client = new LocalClient({ invoke });
 
+    expect(typeof client.ensureWorkspace).toBe("function");
+    expect(typeof client.renameWorkspace).toBe("function");
+    expect(typeof client.inspectArchive).toBe("function");
+    expect(typeof client.archiveWorkspace).toBe("function");
     expect(typeof client.startServices).toBe("function");
     expect(typeof client.healthCheck).toBe("function");
     expect(typeof client.stopServices).toBe("function");
@@ -104,6 +103,22 @@ describe("workspace contract", () => {
 
     expect(watchedPath).toBe("/tmp/project_1/.worktrees/ws_1");
     expect(typeof cleanup).toBe("function");
+  });
+
+  test("resolves host clients by host", () => {
+    const localClient = { name: "local" } as never;
+    const remoteClient = { name: "remote" } as never;
+    const registry = createWorkspaceHostClientRegistry({
+      local: localClient,
+      remote: remoteClient,
+    });
+
+    expect(registry.resolve("local")).toBe(localClient);
+    expect(registry.resolve("docker")).toBe(localClient);
+    expect(registry.resolve("remote")).toBe(remoteClient);
+    expect(() => registry.resolve("cloud")).toThrow(
+      'No WorkspaceHostClient provider is registered for workspace host "cloud".',
+    );
   });
 
   test("startServices uses graph-driven orchestration through environment target", async () => {
@@ -189,7 +204,7 @@ describe("workspace contract", () => {
     expect(startCalls).toEqual(["api", "www"]);
   });
 
-  test("host workspace client forwards workspace reads, files, and health checks", async () => {
+  test("host client forwards workspace reads, files, and health checks", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const services: ServiceRecord[] = [
       {
@@ -305,7 +320,7 @@ describe("workspace contract", () => {
     ]);
   });
 
-  test("host workspace client forwards git operations by workspace id", async () => {
+  test("host client forwards git operations by workspace id", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
       if (args) {

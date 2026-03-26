@@ -1,5 +1,12 @@
 import type { WorkspaceRecord } from "@lifecycle/contracts";
+import { createSqlCollection, type SqlCollection } from "../collection";
 import type { SqlDriver } from "../driver";
+import { createWorkspace, deleteWorkspace, updateWorkspace } from "../workspaces/mutations";
+
+interface WorkspaceInsertMetadata {
+  nameOrigin?: "manual" | "default";
+  sourceRefOrigin?: "manual" | "default";
+}
 
 export async function selectAllWorkspaces(driver: SqlDriver): Promise<WorkspaceRecord[]> {
   return driver.select<WorkspaceRecord>(
@@ -42,4 +49,34 @@ export function groupWorkspacesByProject(
     });
   }
   return groups;
+}
+
+export function createWorkspaceCollection(driver: SqlDriver): SqlCollection<WorkspaceRecord> {
+  return createSqlCollection<WorkspaceRecord>({
+    id: "workspaces",
+    driver,
+    loadFn: selectAllWorkspaces,
+    getKey: (workspace) => workspace.id,
+    onInsert: async ({ transaction }) => {
+      await Promise.all(
+        transaction.mutations.map((mutation) =>
+          createWorkspace(
+            driver,
+            mutation.modified,
+            (mutation.metadata ?? undefined) as WorkspaceInsertMetadata | undefined,
+          ),
+        ),
+      );
+    },
+    onUpdate: async ({ transaction }) => {
+      await Promise.all(
+        transaction.mutations.map((mutation) => updateWorkspace(driver, mutation.modified)),
+      );
+    },
+    onDelete: async ({ transaction }) => {
+      await Promise.all(
+        transaction.mutations.map((mutation) => deleteWorkspace(driver, String(mutation.key))),
+      );
+    },
+  });
 }

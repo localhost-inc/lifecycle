@@ -4,7 +4,6 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { IconButton, Spinner, Wordmark } from "@lifecycle/ui";
 import { Archive, FolderGit2, GitBranch, Megaphone, Plus, Settings } from "lucide-react";
-import { NavigationControls } from "@/components/layout/navigation-controls";
 import { type MouseEvent, useCallback, useMemo } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { resolveProjectRepoWorkspace } from "@/features/projects/lib/project-repo-workspace";
@@ -17,7 +16,7 @@ import { ResponseReadyDot } from "@/components/response-ready-dot";
 import type { AuthSession } from "@/features/auth/auth-session";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { bugs, version } from "../../../package.json";
-import type { WorkspaceCreateMode } from "@/features/workspaces/api";
+import type { WorkspaceCreateMode } from "@/features/workspaces/types";
 import {
   getWorkspaceDisplayName,
   isRootWorkspace,
@@ -150,17 +149,12 @@ export function AppSidebar({
 
   return (
     <aside
-      className="flex h-full min-h-0 shrink-0 flex-col bg-[var(--background)] text-[var(--sidebar-foreground)]"
+      className="flex h-full min-h-0 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)] text-[var(--sidebar-foreground)]"
       data-slot="app-sidebar"
       onMouseDown={handleMouseDown}
       style={{ width: `${width / 16}rem` }}
     >
-      {/* Traffic light spacer + navigation */}
-      <div className="flex h-10 shrink-0 items-center justify-end">
-        <NavigationControls />
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col pt-2">
         {/* Organization / context switcher */}
         <button
           aria-label={`Open ${activeContextName} context`}
@@ -207,7 +201,9 @@ export function AppSidebar({
                         title={project.name}
                       >
                         <span className="min-w-0 flex-1 truncate">{project.name}</span>
-                        {responseReady ? <ResponseReadyDot className="shrink-0 scale-[0.85]" /> : null}
+                        {responseReady ? (
+                          <ResponseReadyDot className="shrink-0 scale-[0.85]" />
+                        ) : null}
                       </Link>
                       {selected ? (
                         <button
@@ -215,8 +211,8 @@ export function AppSidebar({
                           className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md p-1 text-[var(--sidebar-muted-foreground)] opacity-0 transition-all hover:bg-[var(--surface-hover)] hover:text-[var(--sidebar-foreground)] group-hover/project:opacity-100"
                           onClick={(e) => {
                             e.preventDefault();
-                            void showCreateWorkspaceMenu((mode) =>
-                              void onCreateWorkspace(project.id, mode),
+                            void showCreateWorkspaceMenu(
+                              (mode) => void onCreateWorkspace(project.id, mode),
                             );
                           }}
                           type="button"
@@ -293,7 +289,11 @@ export function AppSidebar({
             </span>
           </div>
           <div className="ml-auto flex items-center gap-0.5">
-            <IconButton aria-label="Feedback" onClick={() => void openUrl(bugs.url)} title="Feedback">
+            <IconButton
+              aria-label="Feedback"
+              onClick={() => void openUrl(bugs.url)}
+              title="Feedback"
+            >
               <Megaphone size={14} strokeWidth={2} />
             </IconButton>
             <IconButton aria-label="Settings" onClick={onOpenSettings} title="Settings">

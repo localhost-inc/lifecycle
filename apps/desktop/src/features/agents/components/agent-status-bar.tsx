@@ -10,7 +10,11 @@ import {
 } from "@lifecycle/ui";
 import { Brain, Bug, ChevronDown, Shield, X } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import type { AgentSessionDisplayStatus, AgentSessionState, AgentSessionUsage } from "@lifecycle/agents";
+import type {
+  AgentSessionDisplayStatus,
+  AgentSessionState,
+  AgentSessionUsage,
+} from "@lifecycle/agents";
 import type { AgentMessageWithParts, AgentSessionRecord } from "@lifecycle/contracts";
 import { AlertCircle, Loader2, MessageSquare, Pause, Plug } from "lucide-react";
 import { ResponseReadyDot } from "@/components/response-ready-dot";
@@ -519,7 +523,9 @@ export function AgentStatusBar({
       {mcpServers && mcpServers.length > 0 ? (
         <span
           className="flex items-center gap-1 text-[11px] text-[var(--muted-foreground)]/60"
-          title={mcpServers.map((s) => `${s.name}: ${s.connected ? "connected" : "disconnected"}`).join("\n")}
+          title={mcpServers
+            .map((s) => `${s.name}: ${s.connected ? "connected" : "disconnected"}`)
+            .join("\n")}
         >
           <Plug className="size-3" />
           <span>

@@ -8,13 +8,13 @@ import {
   stageGitFiles,
 } from "@/features/git/api";
 import { useCurrentGitPullRequest, useGitLog, useGitStatus } from "@/features/git/hooks";
-import { useClient } from "@/store";
+import { useOptionalWorkspaceHostClient } from "@lifecycle/workspace/client/react";
 
 export interface UseGitActionsOptions {
   onCommitComplete: () => void;
   onOpenPullRequest: (pullRequest: GitPullRequestSummary) => void;
   workspaceId: string;
-  workspaceHost: WorkspaceHost;
+  workspaceHost: WorkspaceHost | null;
   worktreePath: string | null;
 }
 
@@ -42,7 +42,7 @@ export function useGitActions({
   workspaceHost,
   worktreePath,
 }: UseGitActionsOptions): UseGitActionsResult {
-  const client = useClient();
+  const client = useOptionalWorkspaceHostClient(workspaceHost);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isCommitting, setIsCommitting] = useState(false);
   const [isCreatingPullRequest, setIsCreatingPullRequest] = useState(false);
@@ -52,7 +52,9 @@ export function useGitActions({
     typeof document === "undefined" ? true : document.visibilityState === "visible",
   );
   const supportsChanges =
-    (workspaceHost === "local" || workspaceHost === "docker") && worktreePath !== null;
+    client !== null &&
+    (workspaceHost === "local" || workspaceHost === "docker") &&
+    worktreePath !== null;
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -69,11 +71,13 @@ export function useGitActions({
     };
   }, []);
 
-  const gitStatusQuery = useGitStatus(supportsChanges ? workspaceId : null, {
+  const gitStatusQuery = useGitStatus(supportsChanges ? workspaceId : null, workspaceHost, {
     polling: documentVisible,
   });
-  const gitLogQuery = useGitLog(null, 50, { polling: false });
-  const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId, {
+  const gitLogQuery = useGitLog(supportsChanges ? workspaceId : null, workspaceHost, 50, {
+    polling: false,
+  });
+  const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId, workspaceHost, {
     polling: documentVisible,
   });
   const gitStatus = gitStatusQuery.data;
@@ -90,6 +94,9 @@ export function useGitActions({
     setActionError(null);
     setIsPushingBranch(true);
     try {
+      if (!client) {
+        throw new Error("Workspace host client is unavailable.");
+      }
       await pushGit(client, workspaceId);
       await refreshPullRequestState();
     } catch (error) {
@@ -106,6 +113,9 @@ export function useGitActions({
       setIsCommitting(true);
 
       try {
+        if (!client) {
+          throw new Error("Workspace host client is unavailable.");
+        }
         await commitGit(client, workspaceId, message);
         committed = true;
 
@@ -136,6 +146,9 @@ export function useGitActions({
     setActionError(null);
     setIsCreatingPullRequest(true);
     try {
+      if (!client) {
+        throw new Error("Workspace host client is unavailable.");
+      }
       const pullRequest = await createGitPullRequest(client, workspaceId);
       await refreshPullRequestState();
       onOpenPullRequest(pullRequest);
@@ -151,6 +164,9 @@ export function useGitActions({
       setActionError(null);
       setIsMergingPullRequest(true);
       try {
+        if (!client) {
+          throw new Error("Workspace host client is unavailable.");
+        }
         const pullRequest = await mergeGitPullRequest(client, workspaceId, pullRequestNumber);
         await refreshPullRequestState();
         onOpenPullRequest(pullRequest);
@@ -164,6 +180,9 @@ export function useGitActions({
   );
 
   const handleShowChanges = useCallback(async (): Promise<void> => {
+    if (!client) {
+      return;
+    }
     const unstaged = (gitStatus?.files ?? []).filter((f) => f.unstaged);
     if (unstaged.length > 0) {
       await stageGitFiles(

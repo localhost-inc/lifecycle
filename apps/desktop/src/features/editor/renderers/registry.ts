@@ -2,7 +2,10 @@ import { workspaceFileExtension } from "@/features/workspaces/lib/workspace-file
 import { markdownFileRenderer } from "@/features/editor/renderers/markdown-file-renderer";
 import { pencilFileRenderer } from "@/features/editor/renderers/pencil-file-renderer";
 import { textFileRenderer } from "@/features/editor/renderers/text-file-renderer";
-import type { FileRendererDefinition, FileEditorRendererKind } from "@/features/editor/renderers/file-editor-renderer-types";
+import type {
+  FileRendererDefinition,
+  FileEditorRendererKind,
+} from "@/features/editor/renderers/file-editor-renderer-types";
 
 const fileRendererRegistry: FileRendererDefinition[] = [
   markdownFileRenderer,

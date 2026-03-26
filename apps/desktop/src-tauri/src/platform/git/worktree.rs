@@ -322,12 +322,14 @@ pub fn short_workspace_id(workspace_id: &str) -> String {
     }
 }
 
+#[allow(dead_code)] // Used by tests; policy logic moved to TypeScript.
 pub fn workspace_branch_name(workspace_name: &str, workspace_id: &str) -> String {
     let name_slug = slugify_workspace_name(workspace_name);
     let short_id = short_workspace_id(workspace_id);
     format!("lifecycle/{}-{}", name_slug, short_id)
 }
 
+#[allow(dead_code)] // Used by tests; policy logic moved to TypeScript.
 pub fn is_lifecycle_worktree_branch(source_ref: &str, workspace_id: &str) -> bool {
     let Some(slug) = source_ref.strip_prefix("lifecycle/") else {
         return false;

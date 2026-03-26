@@ -236,9 +236,7 @@ export function WorkspaceActions({ workspace, onArchive }: WorkspaceActionsProps
               <Trash2 size={14} strokeWidth={2.2} />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>
-            {archiving ? "Archiving workspace" : "Archive workspace"}
-          </TooltipContent>
+          <TooltipContent>{archiving ? "Archiving workspace" : "Archive workspace"}</TooltipContent>
         </Tooltip>
       )}
     </TooltipProvider>

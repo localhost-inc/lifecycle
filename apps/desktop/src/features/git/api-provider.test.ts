@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import type { WorkspaceClient } from "@lifecycle/workspace";
+import type { WorkspaceHostClient } from "@lifecycle/workspace/client";
 import {
   getGitBaseRef,
   getGitChangesPatch,
@@ -113,7 +113,7 @@ const client = {
     updatedAt: "2026-03-13T00:00:00.000Z",
     url: "https://github.com/example/repo/pull/42",
   })),
-} as unknown as WorkspaceClient;
+} as unknown as WorkspaceHostClient;
 
 describe("git api workspace routing", () => {
   beforeEach(() => {

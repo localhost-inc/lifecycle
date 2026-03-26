@@ -70,8 +70,7 @@ export function useWorkspaceCanvasKeyboard(input: WorkspaceCanvasKeyboardInput):
             return true;
           }
 
-          const isLastTabInPane =
-            input.activePaneVisibleTabCount === 1 && input.paneCount > 1;
+          const isLastTabInPane = input.activePaneVisibleTabCount === 1 && input.paneCount > 1;
           closeShortcutHandledAtRef.current = Date.now();
 
           if (isLastTabInPane) {
@@ -157,11 +156,7 @@ export function useWorkspaceCanvasKeyboard(input: WorkspaceCanvasKeyboardInput):
         return false;
       }
 
-      const adjacentId = getAdjacentPaneId(
-        input.rootPane,
-        input.activePaneId,
-        match.direction,
-      );
+      const adjacentId = getAdjacentPaneId(input.rootPane, input.activePaneId, match.direction);
       if (adjacentId) {
         input.handleSelectPane(adjacentId);
       }

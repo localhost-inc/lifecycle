@@ -4,7 +4,14 @@ import { z } from "zod";
 
 const CodexSandboxModeSchema = z.enum(["read-only", "workspace-write", "danger-full-access"]);
 const CodexApprovalPolicySchema = z.enum(["untrusted", "on-request", "on-failure", "never"]);
-const CodexModelReasoningEffortSchema = z.enum(["none", "minimal", "low", "medium", "high", "xhigh"]);
+const CodexModelReasoningEffortSchema = z.enum([
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+]);
 
 export default defineCommand({
   description: "Run a Codex-backed agent worker over stdin/stdout NDJSON.",

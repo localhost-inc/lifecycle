@@ -1,13 +1,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { IconButton } from "@lifecycle/ui";
-import {
-  ChevronRight,
-  FolderGit2,
-  GitBranch,
-  PanelRightClose,
-  PanelRightOpen,
-} from "lucide-react";
+import { ChevronRight, FolderGit2, GitBranch, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useEffect, type MouseEvent, useState } from "react";
 import {
   SHORTCUT_HANDLER_PRIORITY,
@@ -23,10 +17,7 @@ interface WorkspaceNavBarProps {
   projectName: string;
 }
 
-export function WorkspaceNavBar({
-  activeWorkspaceId,
-  projectName,
-}: WorkspaceNavBarProps) {
+export function WorkspaceNavBar({ activeWorkspaceId, projectName }: WorkspaceNavBarProps) {
   const workspace = useWorkspace(activeWorkspaceId) ?? null;
   const toolbarSlot = useWorkspaceToolbarSlot(activeWorkspaceId);
 
@@ -85,7 +76,7 @@ export function WorkspaceNavBar({
 
   return (
     <header
-      className="flex h-10 shrink-0 items-stretch gap-0 bg-[var(--background)] px-0"
+      className="flex h-10 min-w-0 flex-1 items-stretch gap-0 px-0"
       data-slot="workspace-nav-bar"
       data-tauri-drag-region
       onMouseDown={handleMouseDown}
@@ -97,7 +88,10 @@ export function WorkspaceNavBar({
         </span>
         {workspace ? (
           <>
-            <ChevronRight className="size-3.5 shrink-0 text-[var(--muted-foreground)]" strokeWidth={1.5} />
+            <ChevronRight
+              className="size-3.5 shrink-0 text-[var(--muted-foreground)]"
+              strokeWidth={1.5}
+            />
             <WorkspaceIcon className="size-3.5 shrink-0 text-[var(--foreground)]" strokeWidth={2} />
             <span className="truncate text-[13px] font-medium text-[var(--foreground)]">
               {getWorkspaceDisplayName(workspace)}

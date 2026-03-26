@@ -1,6 +1,5 @@
 use crate::platform::db::{open_db, DbPath};
 use crate::platform::git::worktree;
-use crate::platform::lifecycle_root::resolve_lifecycle_root;
 use crate::shared::errors::LifecycleError;
 use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
 use crate::RootGitWatcherMap;
@@ -10,9 +9,18 @@ use tauri::{AppHandle, State};
 
 use super::checkout_type::is_root_workspace_checkout_type;
 
+/// All policy decisions (remove_worktree, attachment_path) are pre-computed
+/// by TypeScript. Rust only executes the infrastructure operations.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ArchiveWorkspaceRequest {
+    pub(crate) workspace_id: String,
+    pub(crate) remove_worktree: bool,
+    pub(crate) attachment_path: Option<String>,
+}
+
 struct ArchiveWorkspaceContext {
     checkout_type: String,
-    host: String,
     project_path: String,
     worktree_path: Option<String>,
 }
@@ -22,9 +30,9 @@ fn load_archive_workspace_context(
     workspace_id: &str,
 ) -> Result<ArchiveWorkspaceContext, LifecycleError> {
     let conn = open_db(db_path)?;
-    let (checkout_type, host, project_path, worktree_path) = conn
+    let (checkout_type, project_path, worktree_path) = conn
         .query_row(
-            "SELECT workspace.checkout_type, workspace.host, project.path, workspace.worktree_path
+            "SELECT workspace.checkout_type, project.path, workspace.worktree_path
              FROM workspace
              INNER JOIN project ON project.id = workspace.project_id
              WHERE workspace.id = ?1
@@ -34,8 +42,7 @@ fn load_archive_workspace_context(
                 Ok((
                     row.get::<_, String>(0)?,
                     row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<String>>(2)?,
                 ))
             },
         )
@@ -47,7 +54,6 @@ fn load_archive_workspace_context(
         })?;
     Ok(ArchiveWorkspaceContext {
         checkout_type,
-        host,
         project_path,
         worktree_path,
     })
@@ -58,14 +64,6 @@ fn delete_workspace_record(db_path: &str, workspace_id: &str) -> Result<(), Life
     conn.execute("DELETE FROM workspace WHERE id = ?1", params![workspace_id])
         .map_err(|error| LifecycleError::Database(error.to_string()))?;
     Ok(())
-}
-
-fn remove_workspace_attachments(workspace_id: &str) {
-    let Ok(lifecycle_root) = resolve_lifecycle_root() else {
-        return;
-    };
-
-    let _ = std::fs::remove_dir_all(lifecycle_root.join("attachments").join(workspace_id));
 }
 
 fn emit_workspace_archived(app: &AppHandle, workspace_id: &str) {
@@ -82,36 +80,39 @@ pub async fn archive_workspace(
     db_path: State<'_, DbPath>,
     root_git_watchers: State<'_, RootGitWatcherMap>,
     workspace_controllers: State<'_, WorkspaceControllerRegistryHandle>,
-    workspace_id: String,
+    request: ArchiveWorkspaceRequest,
 ) -> Result<(), LifecycleError> {
-    let controller = workspace_controllers.get_or_create(&workspace_id).await;
+    let workspace_id = &request.workspace_id;
+    let controller = workspace_controllers.get_or_create(workspace_id).await;
     controller.request_archive().await;
-    let context = match load_archive_workspace_context(&db_path.0, &workspace_id) {
+    let context = match load_archive_workspace_context(&db_path.0, workspace_id) {
         Ok(context) => context,
         Err(error) => {
-            let _ = workspace_controllers.remove(&workspace_id).await;
+            let _ = workspace_controllers.remove(workspace_id).await;
             return Err(error);
         }
     };
 
     if is_root_workspace_checkout_type(&context.checkout_type) {
-        super::git_watcher::stop_root_git_watcher(&root_git_watchers, &workspace_id);
+        super::git_watcher::stop_root_git_watcher(&root_git_watchers, workspace_id);
     }
 
     controller.stop_runtime().await;
 
-    if matches!(context.host.as_str(), "local" | "docker")
-        && !is_root_workspace_checkout_type(&context.checkout_type)
-    {
+    if request.remove_worktree {
         if let Some(worktree_path) = context.worktree_path.as_deref() {
             worktree::remove_worktree(&context.project_path, worktree_path).await?;
         }
     }
 
-    delete_workspace_record(&db_path.0, &workspace_id)?;
-    let _ = workspace_controllers.remove(&workspace_id).await;
-    remove_workspace_attachments(&workspace_id);
-    emit_workspace_archived(&app, &workspace_id);
+    delete_workspace_record(&db_path.0, workspace_id)?;
+    let _ = workspace_controllers.remove(workspace_id).await;
+
+    if let Some(ref attachment_path) = request.attachment_path {
+        let _ = std::fs::remove_dir_all(attachment_path);
+    }
+
+    emit_workspace_archived(&app, workspace_id);
     Ok(())
 }
 
@@ -171,7 +172,6 @@ mod tests {
             load_archive_workspace_context(&db_path, "workspace_1").expect("load archive context");
 
         assert_eq!(context.checkout_type, "worktree");
-        assert_eq!(context.host, "local");
         assert_eq!(context.project_path, "/tmp/project_1");
         assert_eq!(
             context.worktree_path.as_deref(),

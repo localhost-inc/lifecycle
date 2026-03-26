@@ -7,6 +7,18 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./client": {
+      "types": "./src/client/index.ts",
+      "default": "./src/client/index.ts"
+    },
+    "./client/react": {
+      "types": "./src/client/react.ts",
+      "default": "./src/client/react.ts"
+    },
+    "./policy": {
+      "types": "./src/policy/index.ts",
+      "default": "./src/policy/index.ts"
     }
   },
   "scripts": {
@@ -18,5 +30,12 @@
   },
   "dependencies": {
     "@lifecycle/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "react": "^19.1.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
   }
 }

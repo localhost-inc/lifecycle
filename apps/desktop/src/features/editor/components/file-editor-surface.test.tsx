@@ -3,7 +3,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ThemeProvider } from "@lifecycle/ui";
 import { mockStoreContext } from "@/test/store-mock";
-import { buildFileCodeEditorExtensions, resolveFileEditorConfig } from "@/features/editor/lib/file-editor-config";
+import {
+  buildFileCodeEditorExtensions,
+  resolveFileEditorConfig,
+} from "@/features/editor/lib/file-editor-config";
 import type { FileEditorConfig } from "@/features/editor/lib/file-editor-types";
 import {
   getFileEditorScrollRestoreKey,
@@ -11,11 +14,14 @@ import {
   resolveFileEditorRenderer,
   resolveInitialFileEditorMode,
 } from "@/features/editor/lib/file-editor-renderers";
-import { hasFileEditorConflict, isFileEditorDirty } from "@/features/editor/lib/file-editor-session";
+import {
+  hasFileEditorConflict,
+  isFileEditorDirty,
+} from "@/features/editor/lib/file-editor-session";
 import { resolveFileRendererDefinition } from "@/features/editor/renderers/registry";
 import { MarkdownFileRendererView } from "@/features/editor/renderers/markdown-file-renderer-view";
 import { summarizePencilDocument } from "@/features/editor/renderers/pencil-file-renderer";
-import type { WorkspaceFileReadResult } from "@/features/workspaces/api";
+import type { WorkspaceFileReadResult } from "@lifecycle/workspace/client";
 
 function readyQueryResult<T>(data: T) {
   return {

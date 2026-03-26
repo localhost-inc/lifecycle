@@ -166,12 +166,7 @@ export function WorkspacePaneContent({
   }, [activeTabKey, paneFocused, paneId, tabSurfaces]);
 
   if (tabSurfaces.length === 0) {
-    return (
-      <WorkspaceEmptyPaneState
-        actions={launchActions}
-        onLaunchSurface={onLaunchSurface}
-      />
-    );
+    return <WorkspaceEmptyPaneState actions={launchActions} onLaunchSurface={onLaunchSurface} />;
   }
 
   // Use absolute positioning so every tab gets real dimensions (preserving

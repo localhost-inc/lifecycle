@@ -12,7 +12,10 @@ export default defineCommand({
     id: z.string().describe("Task id"),
     name: z.string().optional().describe("New name"),
     description: z.string().optional().describe("New description"),
-    status: z.string().optional().describe("New status (pending, in_progress, completed, cancelled)"),
+    status: z
+      .string()
+      .optional()
+      .describe("New status (pending, in_progress, completed, cancelled)"),
     priority: z.string().optional().describe("New priority (low, normal, high, urgent)"),
   }),
   run: async (input, context) => {

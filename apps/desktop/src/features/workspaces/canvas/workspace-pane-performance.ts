@@ -24,13 +24,11 @@ interface WorkspacePanePerformanceStore {
 interface WorkspacePanePerformanceSnapshot {
   enabled: boolean;
   measures: WorkspacePanePerformanceMeasure[];
-  pendingTabSwitch:
-    | {
-        paneId: string;
-        startedAtMs: number;
-        tabKey: string;
-      }
-    | null;
+  pendingTabSwitch: {
+    paneId: string;
+    startedAtMs: number;
+    tabKey: string;
+  } | null;
   renderCounts: Record<string, number>;
 }
 
@@ -158,7 +156,11 @@ export function completeWorkspacePaneTabSwitchStage(
 
   pendingTabSwitch.recordedMeasureNames[measureName] = true;
   const durationMs = nowMs() - pendingTabSwitch.startedAtMs;
-  pushWorkspacePanePerformanceMeasure(measureName, durationMs, buildSwitchMetadata(pendingTabSwitch));
+  pushWorkspacePanePerformanceMeasure(
+    measureName,
+    durationMs,
+    buildSwitchMetadata(pendingTabSwitch),
+  );
 
   if (input.clearPending) {
     store.pendingTabSwitch = null;

@@ -1,6 +1,9 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
-import { CommandPaletteContext, type CommandPaletteContextValue } from "@/features/command-palette/command-palette-context";
+import {
+  CommandPaletteContext,
+  type CommandPaletteContextValue,
+} from "@/features/command-palette/command-palette-context";
 import { CommandPalette } from "@/features/command-palette/command-palette";
 import { useCommandPaletteCommands } from "@/features/command-palette/use-command-palette-commands";
 import { useCommandPaletteExplorer } from "@/features/command-palette/use-command-palette-explorer";

@@ -31,9 +31,7 @@ async function discoverCommands(
     const glob = new Bun.Glob(`commands/**/*.${ext}`);
     for await (const file of glob.scan({ cwd: baseDir })) {
       const normalized = file.replace(/\\/g, "/");
-      const name = normalized
-        .replace(/^commands\//, "")
-        .replace(/\.(ts|js)$/, "");
+      const name = normalized.replace(/^commands\//, "").replace(/\.(ts|js)$/, "");
 
       // Skip private modules.
       if (name.split("/").some((segment) => segment.startsWith("_"))) {
@@ -56,16 +54,12 @@ function commandPathToToolName(prefix: string, commandPath: string): string {
   return `${prefix}.${commandPath.replace(/\//g, ".")}`;
 }
 
-function extractInputSchema(
-  command: AnyCommand,
-): Record<string, z.ZodTypeAny> | null {
+function extractInputSchema(command: AnyCommand): Record<string, z.ZodTypeAny> | null {
   const shape = getSchemaShape(command.input);
   const keys = Object.keys(shape);
 
   // Skip commands with no meaningful input (only json flag, etc.).
-  const meaningfulKeys = keys.filter(
-    (k) => k !== "json" && k !== "args",
-  );
+  const meaningfulKeys = keys.filter((k) => k !== "json" && k !== "args");
 
   if (meaningfulKeys.length === 0 && keys.length <= 1) {
     return {};
@@ -99,53 +93,52 @@ export async function runMcp(options: RunMcpOptions): Promise<void> {
     const inputSchema = extractInputSchema(command);
     if (inputSchema === null) continue;
 
-    server.tool(
-      toolName,
-      description,
-      inputSchema,
-      async (params) => {
-        const output: string[] = [];
-        const errors: string[] = [];
+    server.tool(toolName, description, inputSchema, async (params) => {
+      const output: string[] = [];
+      const errors: string[] = [];
 
-        // Force JSON mode when available so we get structured output.
-        const input = { ...params, json: true };
-        const parsed = command.input.safeParse(input);
-        if (!parsed.success) {
-          return {
-            isError: true,
-            content: [{
+      // Force JSON mode when available so we get structured output.
+      const input = { ...params, json: true };
+      const parsed = command.input.safeParse(input);
+      if (!parsed.success) {
+        return {
+          isError: true,
+          content: [
+            {
               type: "text" as const,
               text: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("\n"),
-            }],
-          };
+            },
+          ],
+        };
+      }
+
+      try {
+        const code = await command.run(parsed.data, {
+          argv: [],
+          cliName: options.name,
+          commandPath,
+          positionals: [],
+          stderr: (msg) => errors.push(msg),
+          stdout: (msg) => output.push(msg),
+        });
+
+        const text = output.join("\n") || errors.join("\n") || "(no output)";
+        if (code !== 0 && code !== undefined) {
+          return { isError: true, content: [{ type: "text" as const, text }] };
         }
-
-        try {
-          const code = await command.run(parsed.data, {
-            argv: [],
-            cliName: options.name,
-            commandPath,
-            positionals: [],
-            stderr: (msg) => errors.push(msg),
-            stdout: (msg) => output.push(msg),
-          });
-
-          const text = output.join("\n") || errors.join("\n") || "(no output)";
-          if (code !== 0 && code !== undefined) {
-            return { isError: true, content: [{ type: "text" as const, text }] };
-          }
-          return { content: [{ type: "text" as const, text }] };
-        } catch (error) {
-          return {
-            isError: true,
-            content: [{
+        return { content: [{ type: "text" as const, text }] };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [
+            {
               type: "text" as const,
               text: error instanceof Error ? error.message : String(error),
-            }],
-          };
-        }
-      },
-    );
+            },
+          ],
+        };
+      }
+    });
   }
 
   const transport = new StdioServerTransport();

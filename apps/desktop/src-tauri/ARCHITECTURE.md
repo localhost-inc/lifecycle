@@ -15,18 +15,17 @@ This backend follows a capability + platform layout.
   - App bootstrap, dependency wiring, Tauri command registration.
 - `src/capabilities/`
   - `projects/commands.rs`: project CRUD commands.
-  - `workspaces/create.rs`: workspace creation flow.
-  - `workspaces/start.rs`: start/run flow and service orchestration.
+  - `workspaces/ensure.rs`: workspace provisioning for an already-persisted workspace row.
+  - `workspaces/environment.rs`: service start/orchestration and environment helpers.
   - `workspaces/stop.rs`: stop/sleep flow.
   - `workspaces/query.rs`: read models and lookup commands.
-  - `workspaces/shared.rs`: workspace command internals reused across create/start/stop.
+  - `workspaces/shared.rs`: workspace command internals reused across ensure/environment/stop.
   - `workspaces/manifest.rs`: workspace manifest model/serde contracts.
   - `workspaces/state_machine.rs`: allowed workspace transitions.
-  - `workspaces/terminal.rs`: terminal command surface and lifecycle orchestration.
-    - `workspaces/terminal/persistence.rs`: terminal/workspace lookup and mutation helpers.
-    - `workspaces/terminal/native_surface.rs`: native Ghostty theme + main-thread/webview bridge helpers.
-    - `workspaces/terminal/attachments.rs`: attachment naming and extension inference.
-  - `workspaces/title.rs`: harness-log-driven auto-title generation and provider-specific prompt extraction.
+  - `workspaces/commands/workspace.rs`: workspace mutation command adapters.
+  - `workspaces/commands/environment.rs`: environment command adapters.
+  - `workspaces/commands/git.rs`: git command adapters.
+  - `workspaces/commands/files.rs`: file command adapters.
 - `src/platform/`
   - `db.rs`: SQLite open + FK policy + `tauri-plugin-sql` migrations (SQL files under `platform/migrations`).
   - `git/worktree.rs`: git worktree/branch/SHA adapters.
@@ -50,8 +49,8 @@ This backend follows a capability + platform layout.
 
 Workspace commands are split by use-case, not by transport:
 
-1. `create_workspace` -> `workspaces/create.rs`
-2. `start_services` -> `workspaces/start.rs`
+1. `ensure_workspace` -> `workspaces/ensure.rs`
+2. `start_workspace_services` -> `workspaces/environment.rs`
 3. `stop_workspace` -> `workspaces/stop.rs`
 4. `get_workspace`, `get_workspace_services`, `get_current_branch` -> `workspaces/query.rs`
 

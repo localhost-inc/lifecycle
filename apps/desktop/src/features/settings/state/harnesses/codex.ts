@@ -1,6 +1,10 @@
 import type { CodexModelReasoningEffort } from "@lifecycle/agents";
 import type { HarnessPreset } from "@/features/settings/state/harnesses/shared";
-import { isRecord, normalizeBoolean, normalizeHarnessPreset } from "@/features/settings/state/harnesses/shared";
+import {
+  isRecord,
+  normalizeBoolean,
+  normalizeHarnessPreset,
+} from "@/features/settings/state/harnesses/shared";
 
 export type CodexSandboxMode = "read-only" | "workspace-write" | "danger-full-access";
 export type CodexApprovalPolicy = "never" | "on-failure" | "on-request" | "untrusted";

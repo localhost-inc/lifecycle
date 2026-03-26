@@ -32,13 +32,23 @@ export function parseTrigger(text: string, cursorPos: number): TriggerState {
       if (i > 0 && text[i - 1] !== " " && text[i - 1] !== "\t" && text[i - 1] !== "\n") {
         return NO_TRIGGER;
       }
-      return { trigger: "@", query: text.slice(i + 1, cursorPos), startIndex: i, endIndex: cursorPos };
+      return {
+        trigger: "@",
+        query: text.slice(i + 1, cursorPos),
+        startIndex: i,
+        endIndex: cursorPos,
+      };
     }
 
     if (ch === "/") {
       // Must be at the start of a line.
       if (i > 0 && text[i - 1] !== "\n") return NO_TRIGGER;
-      return { trigger: "/", query: text.slice(i + 1, cursorPos), startIndex: i, endIndex: cursorPos };
+      return {
+        trigger: "/",
+        query: text.slice(i + 1, cursorPos),
+        startIndex: i,
+        endIndex: cursorPos,
+      };
     }
   }
 

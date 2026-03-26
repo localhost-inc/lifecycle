@@ -1,5 +1,11 @@
 import type { AgentSessionProviderId, AgentSessionStatus } from "@lifecycle/contracts";
-import type { AgentApprovalDecision, AgentApprovalKind, AgentApprovalRequest, AgentApprovalResolution, AgentImageMediaType } from "./turn";
+import type {
+  AgentApprovalDecision,
+  AgentApprovalKind,
+  AgentApprovalRequest,
+  AgentApprovalResolution,
+  AgentImageMediaType,
+} from "./turn";
 
 export type AgentWorkerApprovalRequestPayload = Omit<AgentApprovalRequest, "sessionId">;
 export type AgentWorkerApprovalResolutionPayload = Omit<AgentApprovalResolution, "sessionId">;
@@ -151,11 +157,13 @@ export interface AgentWorkerApprovalResolvedEvent {
 export interface AgentWorkerTurnCompletedEvent {
   kind: "agent.turn.completed";
   turnId: string;
-  usage?: {
-    inputTokens: number;
-    outputTokens: number;
-    cacheReadTokens?: number | undefined;
-  } | undefined;
+  usage?:
+    | {
+        inputTokens: number;
+        outputTokens: number;
+        cacheReadTokens?: number | undefined;
+      }
+    | undefined;
   costUsd?: number | undefined;
 }
 

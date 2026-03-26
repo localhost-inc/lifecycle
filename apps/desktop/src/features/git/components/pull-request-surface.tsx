@@ -11,8 +11,13 @@ import { useEffect, useMemo, useState } from "react";
 import { formatRelativeTime } from "@/lib/format";
 import { measureAsyncPerformance } from "@/lib/performance";
 import { getGitPullRequestPatch } from "@/features/git/api";
-import { useCurrentGitPullRequest, useGitPullRequest, useGitPullRequests } from "@/features/git/hooks";
-import { useClient } from "@/store";
+import {
+  useCurrentGitPullRequest,
+  useGitPullRequest,
+  useGitPullRequests,
+} from "@/features/git/hooks";
+import { useWorkspace } from "@/store";
+import { useOptionalWorkspaceHostClient } from "@lifecycle/workspace/client/react";
 import { useParsedGitPatchFiles } from "@/features/git/lib/parsed-patch-files";
 import { GitPatchViewer } from "@/features/git/components/git-patch-viewer";
 import { GithubAvatar } from "@/features/git/components/github-avatar";
@@ -194,19 +199,25 @@ export function PullRequestSurface({
   pullRequest: snapshot,
   workspaceId,
 }: PullRequestSurfaceProps) {
-  const client = useClient();
+  const workspace = useWorkspace(workspaceId);
+  const client = useOptionalWorkspaceHostClient(workspace?.host);
   const [documentVisible, setDocumentVisible] = useState(() =>
     typeof document === "undefined" ? true : document.visibilityState === "visible",
   );
-  const pullRequestsQuery = useGitPullRequests(workspaceId, {
+  const pullRequestsQuery = useGitPullRequests(workspaceId, workspace?.host ?? null, {
     polling: documentVisible,
   });
-  const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId, {
+  const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId, workspace?.host ?? null, {
     polling: documentVisible,
   });
-  const detailPullRequestQuery = useGitPullRequest(workspaceId, snapshot.number, {
-    polling: documentVisible,
-  });
+  const detailPullRequestQuery = useGitPullRequest(
+    workspaceId,
+    workspace?.host ?? null,
+    snapshot.number,
+    {
+      polling: documentVisible,
+    },
+  );
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -288,6 +299,11 @@ export function PullRequestSurface({
     setPatch("");
     setDiffError(null);
     setIsDiffLoading(true);
+
+    if (!client) {
+      setIsDiffLoading(false);
+      return;
+    }
 
     void measureAsyncPerformance(
       `pull-request-surface.patch:${workspaceId}:${pullRequest.number}`,

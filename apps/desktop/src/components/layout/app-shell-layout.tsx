@@ -1,4 +1,4 @@
-import { getManifestFingerprint, type WorkspaceRecord } from "@lifecycle/contracts";
+import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { Loading } from "@lifecycle/ui";
 import {
   useCallback,
@@ -16,14 +16,8 @@ import { isMacPlatform, shouldHandleDomAppHotkey } from "@/app/app-hotkeys";
 import { useAuthSession } from "@/features/auth/state/auth-session-provider";
 import { useAgentStatusIndex } from "@lifecycle/agents/react";
 import { CommandPaletteProvider } from "@/features/command-palette";
-import { getGitStatus } from "@/features/git/api";
-import { getCurrentBranch } from "@/features/projects/api/current-branch";
-import {
-  addProjectFromDirectory,
-  readManifest,
-  removeProject,
-} from "@/features/projects/api/projects";
 import { useProjectCatalog } from "@/features/projects/hooks";
+import { useProjectMutations } from "@/features/projects/mutations";
 import {
   buildShellContexts,
   filterProjectsForShellContext,
@@ -31,13 +25,8 @@ import {
   resolveActiveShellContext,
   writePersistedShellContextId,
 } from "@/features/projects/lib/shell-context";
-import { useSettings } from "@/features/settings/state/settings-context";
 import { WelcomeScreen } from "@/features/welcome/components/welcome-screen";
-import {
-  createWorkspace,
-  archiveWorkspace,
-  type WorkspaceCreateMode,
-} from "@/features/workspaces/api";
+import type { WorkspaceCreateMode } from "@/features/workspaces/types";
 import { useWorkspacesByProject } from "@/features/workspaces/hooks";
 import { getWorkspaceDisplayName } from "@/features/workspaces/lib/workspace-display";
 import { formatWorkspaceError } from "@/features/workspaces/lib/workspace-errors";
@@ -57,6 +46,7 @@ import {
 import { BridgeListener } from "@/features/workspaces/state/bridge-listener";
 import { WorkspaceOpenRequestsProvider } from "@/features/workspaces/state/workspace-open-requests";
 import { WorkspaceToolbarProvider } from "@/features/workspaces/state/workspace-toolbar-context";
+import { useWorkspaceMutations } from "@/features/workspaces/mutations";
 import {
   APP_SIDEBAR_WIDTH_STORAGE_KEY,
   DEFAULT_APP_SIDEBAR_WIDTH,
@@ -68,17 +58,18 @@ import {
   readPersistedPanelValue,
   writePersistedPanelValue,
 } from "@/lib/panel-layout";
-import { useClient, useStoreContext } from "@/store";
 import {
   SHORTCUT_HANDLER_PRIORITY,
   useShortcutRegistration,
 } from "@/app/shortcuts/shortcut-router";
 import { type AppShellOutletContext } from "@/components/layout/app-shell-context";
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { NavigationControls } from "@/components/layout/navigation-controls";
 import {
   notifyShellResizeListeners,
   ShellResizeProvider,
 } from "@/components/layout/shell-resize-provider";
+import { WorkspaceNavBar } from "@/features/workspaces/navbar/workspace-nav-bar";
 
 const SIDEBAR_RESIZE_STEP = 16;
 
@@ -93,13 +84,13 @@ function safeClearWorkspaceUiState(workspaceId: string): void {
 const LAST_PATH_STORAGE_KEY = "lifecycle.desktop.last-path";
 
 export function AppShellLayout() {
-  const { collections } = useStoreContext();
-  const client = useClient();
   const navigate = useNavigate();
   const location = useLocation();
-  const { projectId } = useParams();
+  const { projectId, workspaceId } = useParams();
   const shellViewportRef = useRef<HTMLDivElement | null>(null);
   const projectCatalogQuery = useProjectCatalog();
+  const { createProjectFromDirectory, removeProject } = useProjectMutations();
+  const { archiveWorkspace, createWorkspaceForProject, inspectArchive } = useWorkspaceMutations();
   const workspacesByProject = useWorkspacesByProject();
   const { isLoading: authSessionLoading, session: authSession } = useAuthSession();
   const agentStatusIndex = useAgentStatusIndex();
@@ -111,7 +102,6 @@ export function AppShellLayout() {
     (workspaceId: string) => agentStatusIndex.hasWorkspaceRunningTurn(workspaceId),
     [agentStatusIndex],
   );
-  const { worktreeRoot } = useSettings();
   const [requestedShellContextId, setRequestedShellContextId] = useState<string | null>(
     readPersistedShellContextId,
   );
@@ -303,13 +293,6 @@ export function AppShellLayout() {
     };
   }, [activeSidebarResize]);
 
-  const refreshWorkspaceList = useCallback(
-    async (_context: string) => {
-      await collections.workspaces.refresh();
-    },
-    [collections],
-  );
-
   const handleOpenWorkspace = useCallback(
     (workspace: WorkspaceRecord) => {
       writeLastWorkspaceId(workspace.id);
@@ -322,31 +305,18 @@ export function AppShellLayout() {
     let importedProjectId: string | null = null;
 
     try {
-      const project = await addProjectFromDirectory();
+      const project = await createProjectFromDirectory();
       if (!project) {
         return;
       }
 
       importedProjectId = project.id;
-      void collections.projects.refresh();
-      const manifestStatus = await readManifest(client, project.path);
-      const manifestJson =
-        manifestStatus.state === "valid" ? JSON.stringify(manifestStatus.result.config) : undefined;
-      const manifestFingerprint =
-        manifestStatus.state === "valid"
-          ? getManifestFingerprint(manifestStatus.result.config)
-          : null;
-      const branch = await getCurrentBranch(client, project.path);
-      const workspaceId = await createWorkspace(client, {
-        baseRef: branch,
+      const workspaceId = await createWorkspaceForProject({
         checkoutType: "root",
-        manifestFingerprint,
-        manifestJson,
+        host: "local",
         projectId: project.id,
-        projectPath: project.path,
       });
 
-      await refreshWorkspaceList("creating root workspace");
       writeLastWorkspaceId(workspaceId);
       void navigate(`/projects/${project.id}/workspaces/${workspaceId}`);
     } catch (error) {
@@ -359,10 +329,10 @@ export function AppShellLayout() {
 
       alert(`Failed to add project: ${error}`);
     }
-  }, [collections, navigate, refreshWorkspaceList, client]);
+  }, [createProjectFromDirectory, createWorkspaceForProject, navigate]);
 
   const handleCreateWorkspace = useCallback(
-    async (nextProjectId: string, target: WorkspaceCreateMode) => {
+    async (nextProjectId: string, host: WorkspaceCreateMode) => {
       const project = allProjects.find((item) => item.id === nextProjectId);
       if (!project) {
         return;
@@ -374,30 +344,13 @@ export function AppShellLayout() {
       )
         ? "worktree"
         : "root";
-      const manifestStatus = projectCatalogQuery.data?.manifestsByProjectId[project.id];
-      const manifestJson =
-        manifestStatus?.state === "valid"
-          ? JSON.stringify(manifestStatus.result.config)
-          : undefined;
-      const manifestFingerprint =
-        manifestStatus?.state === "valid"
-          ? getManifestFingerprint(manifestStatus.result.config)
-          : null;
-
       try {
-        const branch = await getCurrentBranch(client, project.path);
-        const workspaceId = await createWorkspace(client, {
-          baseRef: branch,
+        const workspaceId = await createWorkspaceForProject({
           checkoutType,
-          manifestFingerprint,
-          manifestJson,
+          host,
           projectId: project.id,
-          projectPath: project.path,
-          target,
-          worktreeRoot,
         });
 
-        await refreshWorkspaceList("creating workspace");
         writeLastWorkspaceId(workspaceId);
         void navigate(`/projects/${project.id}/workspaces/${workspaceId}`);
       } catch (error) {
@@ -405,15 +358,7 @@ export function AppShellLayout() {
         alert(`Failed to create workspace: ${error}`);
       }
     },
-    [
-      allProjects,
-      navigate,
-      projectCatalogQuery.data,
-      refreshWorkspaceList,
-      client,
-      workspacesByProjectId,
-      worktreeRoot,
-    ],
+    [allProjects, createWorkspaceForProject, navigate, workspacesByProjectId],
   );
 
   const handleArchiveWorkspace = useCallback(
@@ -423,8 +368,8 @@ export function AppShellLayout() {
           (workspace.host === "local" || workspace.host === "docker") &&
           workspace.worktree_path
         ) {
-          const gitStatus = await getGitStatus(client, workspace.id);
-          if (gitStatus.files.length > 0) {
+          const archiveDisposition = await inspectArchive(workspace);
+          if (archiveDisposition.hasUncommittedChanges) {
             const workspaceLabel = getWorkspaceDisplayName(workspace);
             const shouldProceed = window.confirm(
               `"${workspaceLabel}" has uncommitted work. Archive the workspace anyway?`,
@@ -435,9 +380,7 @@ export function AppShellLayout() {
           }
         }
 
-        await archiveWorkspace(client, workspace.id);
-        void collections.workspaces.refresh();
-        void collections.services.refresh();
+        await archiveWorkspace(workspace);
         safeClearWorkspaceUiState(workspace.id);
 
         if (readLastWorkspaceId() === workspace.id) {
@@ -457,14 +400,13 @@ export function AppShellLayout() {
         alert(formatWorkspaceError(error, "Failed to archive workspace."));
       }
     },
-    [collections, navigate, client],
+    [archiveWorkspace, inspectArchive, navigate],
   );
 
   const handleRemoveProject = useCallback(
     async (nextProjectId: string) => {
       try {
-        await removeProject(client, nextProjectId);
-        void collections.projects.refresh();
+        await removeProject(nextProjectId);
 
         if (readLastProjectId() === nextProjectId) {
           clearLastProjectId();
@@ -486,7 +428,7 @@ export function AppShellLayout() {
         alert(`Failed to remove project: ${error}`);
       }
     },
-    [collections, navigate, projectId, projects, client],
+    [navigate, projectId, projects, removeProject],
   );
 
   const handleOpenSettings = useCallback(() => {
@@ -616,47 +558,71 @@ export function AppShellLayout() {
       <WorkspaceToolbarProvider>
         <CommandPaletteProvider projects={projects} workspacesByProjectId={workspacesByProjectId}>
           <div
-            ref={shellViewportRef}
-            className="flex h-full w-full flex-row bg-[var(--background)] text-[var(--foreground)]"
+            className="flex h-full w-full flex-col bg-[var(--background)] px-2 pb-2 text-[var(--foreground)]"
+            data-tauri-drag-region
           >
             <AppHotkeyListener onSelectProjectIndex={handleSelectProjectIndex} />
 
-            {/* App sidebar */}
-            <AppSidebar
-              activeContextName={activeShellContext.name}
-              authSession={authSession}
-              authSessionLoading={authSessionLoading}
-              hasWorkspaceResponseReady={hasWorkspaceResponseReady}
-              hasWorkspaceRunningTurn={hasWorkspaceRunningTurn}
-              onAddProject={handleAddProject}
-              onCreateWorkspace={handleCreateWorkspace}
-              onArchiveWorkspace={handleArchiveWorkspace}
-              onOpenSettings={handleOpenSettings}
-              onRemoveProject={handleRemoveProject}
-              projects={projects}
-              readyProjectIds={readyProjectIds}
-              workspacesByProjectId={workspacesByProjectId}
-              width={sidebarWidth}
-            />
-            <div className="relative shrink-0">
+            {/* Shell header — traffic lights + workspace nav, on shell background */}
+            <div className="flex h-10 shrink-0 items-stretch">
               <div
-                aria-label="Resize sidebar"
-                aria-orientation="vertical"
-                className="absolute inset-y-0 -left-2 z-10 w-4 cursor-col-resize"
-                onKeyDown={handleSidebarResizeKeyDown}
-                onPointerDown={handleSidebarResizePointerDown}
-                role="separator"
-                tabIndex={0}
-              />
+                className="flex shrink-0 items-center justify-end"
+                style={{ width: `${sidebarWidth / 16}rem` }}
+              >
+                <NavigationControls />
+              </div>
+              {workspaceId && projectId ? (
+                <WorkspaceNavBar
+                  activeWorkspaceId={workspaceId}
+                  projectName={projects.find((p) => p.id === projectId)?.name ?? ""}
+                />
+              ) : (
+                <div className="flex-1" />
+              )}
             </div>
 
-            {/* Main area */}
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--background)]">
-              <ShellResizeProvider resizing={activeSidebarResize}>
-                <div className="flex min-h-0 flex-1 flex-col">
-                  <Outlet context={outletContext} />
-                </div>
-              </ShellResizeProvider>
+            {/* Shell card */}
+            <div
+              ref={shellViewportRef}
+              className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden rounded-[var(--project-shell-radius)] border border-[var(--border)] bg-[var(--surface)]"
+            >
+              {/* App sidebar */}
+              <AppSidebar
+                activeContextName={activeShellContext.name}
+                authSession={authSession}
+                authSessionLoading={authSessionLoading}
+                hasWorkspaceResponseReady={hasWorkspaceResponseReady}
+                hasWorkspaceRunningTurn={hasWorkspaceRunningTurn}
+                onAddProject={handleAddProject}
+                onCreateWorkspace={handleCreateWorkspace}
+                onArchiveWorkspace={handleArchiveWorkspace}
+                onOpenSettings={handleOpenSettings}
+                onRemoveProject={handleRemoveProject}
+                projects={projects}
+                readyProjectIds={readyProjectIds}
+                workspacesByProjectId={workspacesByProjectId}
+                width={sidebarWidth}
+              />
+              <div className="relative shrink-0">
+                <div
+                  aria-label="Resize sidebar"
+                  aria-orientation="vertical"
+                  className="absolute inset-y-0 -left-2 z-10 w-4 cursor-col-resize"
+                  onKeyDown={handleSidebarResizeKeyDown}
+                  onPointerDown={handleSidebarResizePointerDown}
+                  role="separator"
+                  tabIndex={0}
+                />
+              </div>
+
+              {/* Main area */}
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                <ShellResizeProvider resizing={activeSidebarResize}>
+                  <div className="flex min-h-0 flex-1 flex-col">
+                    <Outlet context={outletContext} />
+                  </div>
+                </ShellResizeProvider>
+              </div>
             </div>
           </div>
         </CommandPaletteProvider>

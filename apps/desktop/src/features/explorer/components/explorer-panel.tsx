@@ -4,7 +4,7 @@ import { FolderOpen } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { ExplorerTree } from "@/features/explorer/components/explorer-tree";
 import { useWorkspaceFileTree } from "@/features/workspaces/hooks";
-import { useClient } from "@/store";
+import { useWorkspaceHostClient } from "@lifecycle/workspace/client/react";
 
 interface ExplorerPanelProps {
   onOpenFile: (filePath: string) => void;
@@ -16,11 +16,15 @@ interface ExplorerPanelProps {
 export function ExplorerPanel({
   onOpenFile,
   workspaceId,
+  workspaceHost,
   worktreePath,
 }: ExplorerPanelProps) {
-  const client = useClient();
+  const client = useWorkspaceHostClient(workspaceHost);
   const supportsFiles = worktreePath !== null;
-  const explorerTreeQuery = useWorkspaceFileTree(supportsFiles ? workspaceId : null);
+  const explorerTreeQuery = useWorkspaceFileTree(
+    supportsFiles ? workspaceId : null,
+    supportsFiles ? workspaceHost : null,
+  );
   const refreshExplorerTreeRef = useRef(explorerTreeQuery.refetch);
   refreshExplorerTreeRef.current = explorerTreeQuery.refetch;
 

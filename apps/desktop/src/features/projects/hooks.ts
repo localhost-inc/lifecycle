@@ -3,7 +3,7 @@ import type { ProjectRecord } from "@lifecycle/contracts";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import type { ManifestStatus } from "@/features/projects/api/projects";
 import { readManifest } from "@/features/projects/api/projects";
-import { useProjects, useClient } from "@/store";
+import { useProjects } from "@/store";
 
 export interface ProjectCatalog {
   manifestsByProjectId: Record<string, ManifestStatus>;
@@ -24,16 +24,13 @@ export function useProjectCatalog(): {
   isLoading: boolean;
   error: unknown;
 } {
-  const client = useClient();
   const projects = useProjects();
 
   const manifestsQuery = useQuery({
     queryKey: projectKeys.catalog(),
     queryFn: async () => {
       const manifestEntries = await Promise.all(
-        projects.map(
-          async (project) => [project.id, await readManifest(client, project.path)] as const,
-        ),
+        projects.map(async (project) => [project.id, await readManifest(project.path)] as const),
       );
       return Object.fromEntries(manifestEntries) as Record<string, ManifestStatus>;
     },
@@ -59,20 +56,17 @@ export function useProjectCatalog(): {
 export function useProjectManifest(
   projectId: string | null,
 ): UseQueryResult<ManifestStatus | null> {
-  const client = useClient();
   const enabled = projectId !== null;
   const projects = useProjects();
 
   return useQuery({
-    queryKey: projectId
-      ? projectKeys.manifest(projectId)
-      : ["project-manifest", "disabled"],
+    queryKey: projectId ? projectKeys.manifest(projectId) : ["project-manifest", "disabled"],
     queryFn: async () => {
       const project = projects.find((item) => item.id === projectId);
       if (!project) {
         return null;
       }
-      return readManifest(client, project.path);
+      return readManifest(project.path);
     },
     enabled,
   });

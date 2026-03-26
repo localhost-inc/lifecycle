@@ -1,7 +1,7 @@
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import type { ProjectCatalog } from "@/features/projects/hooks";
 import type { ShellContext } from "@/features/projects/lib/shell-context";
-import type { WorkspaceCreateMode } from "@/features/workspaces/api";
+import type { WorkspaceCreateMode } from "@/features/workspaces/types";
 
 export interface AppShellOutletContext {
   activeShellContext: ShellContext;

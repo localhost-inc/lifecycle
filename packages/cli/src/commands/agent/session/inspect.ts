@@ -22,9 +22,7 @@ export default defineCommand({
   run: async (input, context) => {
     try {
       const sessionId = resolveAgentSessionId(input.sessionId);
-      const response = await requestBridge(
-        createAgentSessionInspectRequest({ sessionId }),
-      );
+      const response = await requestBridge(createAgentSessionInspectRequest({ sessionId }));
 
       if (input.json) {
         context.stdout(JSON.stringify(response.result, null, 2));
@@ -72,9 +70,7 @@ export default defineCommand({
 
         if (message.parts.length === 0 && message.text) {
           const preview =
-            message.text.length > 120
-              ? `${message.text.slice(0, 120)}...`
-              : message.text;
+            message.text.length > 120 ? `${message.text.slice(0, 120)}...` : message.text;
           context.stdout(`    ${preview}`);
         }
       }

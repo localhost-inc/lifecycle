@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 const {
+  appendCodexCommandExecutionOutputDelta,
   buildCodexApprovalResponse,
   codexThreadItemToWorkerItem,
   createCodexThreadBootstrapRequest,
@@ -62,7 +63,7 @@ describe("codex worker session binding", () => {
       }),
     ).toEqual({
       id: "item_1",
-      inputJson: "{\"q\":\"build logs\"}",
+      inputJson: '{"q":"build logs"}',
       status: "in_progress",
       toolCallId: "item_1",
       toolName: "search/query",
@@ -96,6 +97,47 @@ describe("codex worker session binding", () => {
       id: "item_2",
       status: "in_progress",
       type: "file_change",
+    });
+  });
+
+  test("appends command execution deltas into aggregated output", () => {
+    expect(
+      appendCodexCommandExecutionOutputDelta(
+        {
+          aggregatedOutput: "Preparing import\n",
+          command: "bun run sync",
+          id: "item_cmd_1",
+          status: "inProgress",
+          type: "commandExecution",
+        },
+        "Processed 500000 rows\n",
+      ),
+    ).toEqual({
+      aggregatedOutput: "Preparing import\nProcessed 500000 rows\n",
+      command: "bun run sync",
+      id: "item_cmd_1",
+      status: "inProgress",
+      type: "commandExecution",
+    });
+  });
+
+  test("maps command execution items onto the normalized worker item shape", () => {
+    expect(
+      codexThreadItemToWorkerItem({
+        aggregatedOutput: "Preparing import\nProcessed 500000 rows\n",
+        command: "bun run sync",
+        exitCode: 0,
+        id: "item_cmd_1",
+        status: "inProgress",
+        type: "commandExecution",
+      }),
+    ).toEqual({
+      command: "bun run sync",
+      exitCode: 0,
+      id: "item_cmd_1",
+      output: "Preparing import\nProcessed 500000 rows\n",
+      status: "in_progress",
+      type: "command_execution",
     });
   });
 

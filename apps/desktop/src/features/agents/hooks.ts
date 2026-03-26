@@ -17,9 +17,11 @@ export function useAgentSession(
   );
 }
 
-export function useAgentSessionMessages(
-  agentSessionId: string | null,
-): { data: AgentMessageWithParts[] | undefined; error: Error | null; isLoading: boolean } {
+export function useAgentSessionMessages(agentSessionId: string | null): {
+  data: AgentMessageWithParts[] | undefined;
+  error: Error | null;
+  isLoading: boolean;
+} {
   const messages = useAgentMessages(agentSessionId ?? "");
 
   return useMemo(

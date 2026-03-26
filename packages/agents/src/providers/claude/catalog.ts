@@ -71,7 +71,8 @@ export async function getClaudeModelCatalog(input?: {
   try {
     const { models, source } = await readClaudeModels(session);
     return {
-      defaultModel: models.find((model) => model.value === "default")?.value ?? models[0]?.value ?? null,
+      defaultModel:
+        models.find((model) => model.value === "default")?.value ?? models[0]?.value ?? null,
       fetchedAt: new Date().toISOString(),
       models: models.map(mapClaudeModel),
       provider: "claude",

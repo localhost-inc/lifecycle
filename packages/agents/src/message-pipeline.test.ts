@@ -16,7 +16,10 @@ function event<K extends AgentEvent["kind"]>(
   return { kind, workspaceId: W, sessionId: S, ...data } as Extract<AgentEvent, { kind: K }>;
 }
 
-async function run(events: AgentEvent[], options?: ConstructorParameters<typeof MessagePipeline>[0]) {
+async function run(
+  events: AgentEvent[],
+  options?: ConstructorParameters<typeof MessagePipeline>[0],
+) {
   const pipeline = new MessagePipeline(options);
   for (const e of events) {
     await pipeline.processEvent(e);
@@ -286,9 +289,7 @@ describe("multi-round turn (text → tools → final text)", () => {
 
   test("many streaming chunks for final text all concatenate", async () => {
     const chunks = "The quick brown fox jumps over the lazy dog".split(" ");
-    const events: AgentEvent[] = [
-      event("agent.turn.started", { turnId: "t1" }),
-    ];
+    const events: AgentEvent[] = [event("agent.turn.started", { turnId: "t1" })];
     for (const [i, word] of chunks.entries()) {
       events.push(
         event("agent.message.part.delta", {
@@ -455,20 +456,24 @@ describe("multi-turn conversation", () => {
 
     // Turn 1 completes
     await pipeline.processEvent(event("agent.turn.started", { turnId: "t1" }));
-    await pipeline.processEvent(event("agent.message.part.delta", {
-      messageId: "t1:assistant",
-      partId: "t1:assistant:text:0",
-      part: { type: "text", text: "Reply 1" },
-    }));
+    await pipeline.processEvent(
+      event("agent.message.part.delta", {
+        messageId: "t1:assistant",
+        partId: "t1:assistant:text:0",
+        part: { type: "text", text: "Reply 1" },
+      }),
+    );
     await pipeline.processEvent(event("agent.turn.completed", { turnId: "t1" }));
 
     // Turn 2 starts — t1 messages should be evicted from memory
     await pipeline.processEvent(event("agent.turn.started", { turnId: "t2" }));
-    await pipeline.processEvent(event("agent.message.part.delta", {
-      messageId: "t2:assistant",
-      partId: "t2:assistant:text:0",
-      part: { type: "text", text: "Reply 2" },
-    }));
+    await pipeline.processEvent(
+      event("agent.message.part.delta", {
+        messageId: "t2:assistant",
+        partId: "t2:assistant:text:0",
+        part: { type: "text", text: "Reply 2" },
+      }),
+    );
 
     // t1 evicted, t2 still in memory
     const snap = pipeline.snapshot();
@@ -859,7 +864,8 @@ describe("Claude-like full conversation", () => {
           type: "tool_call",
           toolCallId: "edit-1",
           toolName: "Edit",
-          inputJson: '{"file_path":"src/auth.ts","old_string":"getToken()","new_string":"getToken(true)"}',
+          inputJson:
+            '{"file_path":"src/auth.ts","old_string":"getToken()","new_string":"getToken(true)"}',
           status: "completed",
         },
       }),

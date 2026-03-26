@@ -47,10 +47,7 @@ export function RootErrorFallback({ error }: { error: unknown }) {
   );
 }
 
-export class RootErrorBoundary extends Component<
-  RootErrorBoundaryProps,
-  RootErrorBoundaryState
-> {
+export class RootErrorBoundary extends Component<RootErrorBoundaryProps, RootErrorBoundaryState> {
   state: RootErrorBoundaryState = {
     error: null,
   };

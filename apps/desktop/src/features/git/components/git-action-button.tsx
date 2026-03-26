@@ -18,7 +18,8 @@ import {
   type WorkspaceGitActionStateKind,
 } from "@/features/git/lib/workspace-git-action-state";
 import { useCurrentGitPullRequest, useGitStatus } from "@/features/git/hooks";
-import { useClient } from "@/store";
+import { useWorkspace } from "@/store";
+import { useOptionalWorkspaceHostClient } from "@lifecycle/workspace/client/react";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -40,7 +41,14 @@ const HIDDEN: ReadonlySet<WorkspaceGitActionStateKind> = new Set([
   "provider_unavailable",
 ]);
 
-function stagedSummary(gitStatus: { files: Array<{ staged: boolean; stats: { insertions: number | null; deletions: number | null } }> } | null) {
+function stagedSummary(
+  gitStatus: {
+    files: Array<{
+      staged: boolean;
+      stats: { insertions: number | null; deletions: number | null };
+    }>;
+  } | null,
+) {
   const files = gitStatus?.files ?? [];
   const staged = files.filter((f) => f.staged);
   let insertions = 0;
@@ -69,7 +77,8 @@ export function GitActionPopover({
   workspaceId,
   worktreePath,
 }: GitActionPopoverProps) {
-  const client = useClient();
+  const workspace = useWorkspace(workspaceId);
+  const client = useOptionalWorkspaceHostClient(workspace?.host);
   const [commitMessage, setCommitMessage] = useState("");
   const [commitFlow, setCommitFlow] = useState<CommitFlow>("commit_and_push");
   const [includeUnstaged, setIncludeUnstaged] = useState(false);
@@ -84,7 +93,7 @@ export function GitActionPopover({
       onOpenPullRequest(pr);
     },
     workspaceId,
-    workspaceHost: "local",
+    workspaceHost: workspace?.host ?? null,
     worktreePath,
   });
 
@@ -115,6 +124,9 @@ export function GitActionPopover({
   }, [actionState.kind]);
 
   const handleStageAll = useCallback(async () => {
+    if (!client) {
+      return;
+    }
     const files = gitActions.gitStatusQuery.data?.files ?? [];
     const unstaged = files.filter((f) => f.unstaged);
     if (unstaged.length > 0) {
@@ -176,7 +188,8 @@ export function GitActionPopover({
   const canPushAfterCommit = actionState.primaryAction.kind === "commit_and_push";
   const hasCommitMessage = commitMessage.trim().length > 0;
   const branch = gitActions.gitStatus?.branch ?? null;
-  const summary = actionState.kind === "needs_commit" ? stagedSummary(gitActions.gitStatus ?? null) : null;
+  const summary =
+    actionState.kind === "needs_commit" ? stagedSummary(gitActions.gitStatus ?? null) : null;
   const continueDisabled = isBusy || (actionState.kind === "needs_commit" && !hasCommitMessage);
 
   function continueLabel(): string {
@@ -194,9 +207,7 @@ export function GitActionPopover({
       sideOffset={8}
     >
       <div className="space-y-3">
-        <p className="text-[13px] font-semibold text-[var(--foreground)]">
-          {actionState.title}
-        </p>
+        <p className="text-[13px] font-semibold text-[var(--foreground)]">{actionState.title}</p>
 
         {gitActions.actionError && (
           <div
@@ -249,20 +260,13 @@ export function GitActionPopover({
             )}
 
             <div className="space-y-1.5">
-              <p className="text-[12px] font-medium text-[var(--foreground)]">
-                Commit message
-              </p>
+              <p className="text-[12px] font-medium text-[var(--foreground)]">Commit message</p>
               <textarea
                 autoFocus
                 className="flex min-h-[72px] w-full resize-none rounded-lg border border-[var(--border)] bg-[var(--card)] px-3 py-2 text-sm text-[var(--foreground)] outline-none transition-colors placeholder:text-[var(--muted-foreground)] focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
                 onChange={(event) => setCommitMessage(event.target.value)}
                 onKeyDown={(event) => {
-                  if (
-                    event.key === "Enter" &&
-                    !event.shiftKey &&
-                    hasCommitMessage &&
-                    !isBusy
-                  ) {
+                  if (event.key === "Enter" && !event.shiftKey && hasCommitMessage && !isBusy) {
                     event.preventDefault();
                     void handleContinue();
                   }
@@ -287,19 +291,14 @@ export function GitActionPopover({
             {actionState.hasUnstagedChanges && (
               <label className="flex items-center justify-between gap-2">
                 <span className="text-[12px] text-[var(--foreground)]">Include unstaged</span>
-                <Switch
-                  checked={includeUnstaged}
-                  onCheckedChange={setIncludeUnstaged}
-                />
+                <Switch checked={includeUnstaged} onCheckedChange={setIncludeUnstaged} />
               </label>
             )}
           </>
         )}
 
         {actionState.kind !== "needs_commit" && (
-          <p className="text-[12px] text-[var(--muted-foreground)]">
-            {actionState.description}
-          </p>
+          <p className="text-[12px] text-[var(--muted-foreground)]">{actionState.description}</p>
         )}
 
         {actionState.kind === "ready_to_merge" && actionState.pullRequest && (
@@ -354,9 +353,12 @@ export function GitActionButton({
   worktreePath,
 }: GitActionButtonProps) {
   const [open, setOpen] = useState(false);
-  const gitStatusQuery = useGitStatus(worktreePath ? workspaceId : null);
+  const workspace = useWorkspace(workspaceId);
+  const workspaceHost = workspace?.host ?? null;
+  const gitStatusQuery = useGitStatus(worktreePath ? workspaceId : null, workspaceHost);
   const branchPullRequestQuery = useCurrentGitPullRequest(
     worktreePath ? workspaceId : null,
+    workspaceHost,
   );
 
   const actionState = useMemo(
@@ -379,11 +381,7 @@ export function GitActionButton({
   return (
     <Popover onOpenChange={setOpen} open={open}>
       <PopoverTrigger asChild>
-        <Button
-          disabled={actionState.primaryAction.kind === "disabled"}
-          size="sm"
-          variant="glass"
-        >
+        <Button disabled={actionState.primaryAction.kind === "disabled"} size="sm" variant="glass">
           {actionState.kind === "loading" ? (
             <Spinner className="size-3.5" />
           ) : (

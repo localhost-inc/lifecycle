@@ -105,9 +105,7 @@ export interface DropdownOption<T extends string = string> {
   description?: string;
 }
 
-const claudeEffortByValue = new Map(
-  claudeEffortOptions.map((o) => [o.value, o] as const),
-);
+const claudeEffortByValue = new Map(claudeEffortOptions.map((o) => [o.value, o] as const));
 const codexReasoningByValue = new Map(
   codexReasoningEffortOptions.map((o) => [o.value, o] as const),
 );
@@ -131,7 +129,9 @@ export function buildReasoningOptions<T extends string>(
   const sourceMap = provider === "claude" ? claudeEffortByValue : codexReasoningByValue;
   const ids = Array.from(new Set(["default", ...reasoningEfforts])) as T[];
   const options: DropdownOption<T>[] = ids.map((id) => {
-    const source = (sourceMap as ReadonlyMap<string, { label: string; description: string }>).get(id);
+    const source = (sourceMap as ReadonlyMap<string, { label: string; description: string }>).get(
+      id,
+    );
     return {
       id,
       label: source?.label ?? id,

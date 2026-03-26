@@ -393,21 +393,21 @@ export function ApprovalRefPart({
   const questions = parseApprovalQuestions(part.metadata);
   if (part.kind === "question" && questions.length > 0) {
     return (
-        <ApprovalQuestionCard
-          disabled={resolving}
-          onResolve={(decision, response) => onResolve(part.approvalId, decision, response)}
-          part={part}
-        />
+      <ApprovalQuestionCard
+        disabled={resolving}
+        onResolve={(decision, response) => onResolve(part.approvalId, decision, response)}
+        part={part}
+      />
     );
   }
 
   if (part.kind === "question") {
     return (
-        <ApprovalElicitationCard
-          disabled={resolving}
-          onResolve={(decision, response) => onResolve(part.approvalId, decision, response)}
-          part={part}
-        />
+      <ApprovalElicitationCard
+        disabled={resolving}
+        onResolve={(decision, response) => onResolve(part.approvalId, decision, response)}
+        part={part}
+      />
     );
   }
 

@@ -33,7 +33,9 @@ export function ThinkingPart({ text, isStreaming }: { text: string; isStreaming?
           className={["size-3 transition-transform", open ? "rotate-90" : ""].join(" ")}
         />
         {isStreaming ? (
-          <Shimmer as="span" className="text-[11px] uppercase tracking-[0.08em]" duration={1.5}>{label}</Shimmer>
+          <Shimmer as="span" className="text-[11px] uppercase tracking-[0.08em]" duration={1.5}>
+            {label}
+          </Shimmer>
         ) : (
           <span>{label}</span>
         )}

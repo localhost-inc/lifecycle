@@ -1,14 +1,11 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import type { ProjectRecord } from "@lifecycle/contracts";
-import type { WorkspaceClient } from "@lifecycle/workspace";
+import * as tauriError from "@/lib/tauri-error";
 import { readManifest } from "./projects";
 
-const client = {
-  readManifestText: mock(
-    async (): Promise<string | null> =>
-      `{"workspace":{"prepare":[{"name":"install","command":"bun install","timeout_seconds":300}]},"environment":{"api":{"kind":"service","runtime":"process","command":"bun run dev"}}}`,
-  ),
-} as unknown as WorkspaceClient;
+const invokeTauriMock = mock(
+  async (): Promise<string | null> =>
+    `{"workspace":{"prepare":[{"name":"install","command":"bun install","timeout_seconds":300}]},"environment":{"api":{"kind":"service","runtime":"process","command":"bun run dev"}}}`,
+);
 
 describe("projects api", () => {
   beforeEach(() => {
@@ -17,7 +14,11 @@ describe("projects api", () => {
       value: true,
       writable: true,
     });
-    (client.readManifestText as ReturnType<typeof mock>).mockClear();
+    invokeTauriMock.mockClear();
+    mock.module("@/lib/tauri-error", () => ({
+      ...tauriError,
+      invokeTauri: invokeTauriMock,
+    }));
   });
 
   afterEach(() => {
@@ -25,15 +26,17 @@ describe("projects api", () => {
   });
 
   test("routes manifest reads through the runtime before parsing", async () => {
-    const result = await readManifest(client, "/tmp/project_1");
+    const result = await readManifest("/tmp/project_1");
 
     expect(result.state).toBe("valid");
-    expect((client.readManifestText as ReturnType<typeof mock>)).toHaveBeenCalledWith("/tmp/project_1");
+    expect(invokeTauriMock).toHaveBeenCalledWith("read_manifest_text", {
+      dirPath: "/tmp/project_1",
+    });
   });
 
   test("treats missing runtime manifest text as a missing manifest", async () => {
-    (client.readManifestText as ReturnType<typeof mock>).mockResolvedValueOnce(null);
+    invokeTauriMock.mockResolvedValueOnce(null);
 
-    await expect(readManifest(client, "/tmp/project_1")).resolves.toEqual({ state: "missing" });
+    await expect(readManifest("/tmp/project_1")).resolves.toEqual({ state: "missing" });
   });
 });

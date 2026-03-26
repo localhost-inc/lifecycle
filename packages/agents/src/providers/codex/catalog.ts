@@ -74,9 +74,10 @@ async function listModels(client: CodexAppServerClient): Promise<CodexModelListE
       models.push(...response.data);
     }
 
-    cursor = typeof response.nextCursor === "string" && response.nextCursor.length > 0
-      ? response.nextCursor
-      : null;
+    cursor =
+      typeof response.nextCursor === "string" && response.nextCursor.length > 0
+        ? response.nextCursor
+        : null;
   } while (cursor);
 
   return models;
@@ -87,12 +88,16 @@ export async function getCodexModelCatalog(): Promise<ProviderModelCatalog> {
 
   try {
     await client.initialize();
-    const [account, discoveredModels] = await Promise.all([readAccount(client), listModels(client)]);
+    const [account, discoveredModels] = await Promise.all([
+      readAccount(client),
+      listModels(client),
+    ]);
     const models = discoveredModels
       .map(normalizeModel)
       .filter((entry): entry is ProviderModelCatalogEntry => entry !== null);
     const defaultModel =
-      discoveredModels.find((entry) => entry.isDefault === true && typeof entry.model === "string")?.model ??
+      discoveredModels.find((entry) => entry.isDefault === true && typeof entry.model === "string")
+        ?.model ??
       models[0]?.value ??
       null;
 

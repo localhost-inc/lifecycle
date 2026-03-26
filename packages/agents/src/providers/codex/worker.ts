@@ -308,6 +308,16 @@ export function codexThreadItemToWorkerItem(item: Record<string, unknown>): Agen
   return mapCodexThreadItemToWorkerItem(item);
 }
 
+export function appendCodexCommandExecutionOutputDelta(
+  item: Record<string, unknown>,
+  delta: string,
+): Record<string, unknown> {
+  return {
+    ...item,
+    aggregatedOutput: `${readOptionalString(item, "aggregatedOutput") ?? ""}${delta}`,
+  };
+}
+
 function buildCodexConfig(input: CodexWorkerInput): Record<string, unknown> | null {
   if (!input.modelReasoningEffort) {
     return null;
@@ -356,7 +366,11 @@ export function createCodexThreadBootstrapRequest(
 
 function buildUserInput(parts: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
   return parts.map((part) => {
-    if (part.type === "image" && typeof part.base64Data === "string" && typeof part.mediaType === "string") {
+    if (
+      part.type === "image" &&
+      typeof part.base64Data === "string" &&
+      typeof part.mediaType === "string"
+    ) {
       return {
         type: "input_image",
         image_url: `data:${part.mediaType};base64,${part.base64Data}`,
@@ -1075,6 +1089,39 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
     });
   }
 
+  function handleCommandExecutionOutputDelta(params: Record<string, unknown>): void {
+    const providerTurnId = readString(params, "turnId");
+    const itemId = readString(params, "itemId");
+    const lifecycleTurnId = resolveLifecycleTurnId(
+      providerTurnId ?? null,
+      currentLifecycleTurnId,
+      providerTurnToLifecycleTurnId,
+    );
+    const delta = readString(params, "delta");
+    if (!lifecycleTurnId || !itemId || !delta) {
+      return;
+    }
+
+    const item = itemById.get(itemId);
+    if (!item || readString(item, "type") !== "commandExecution") {
+      return;
+    }
+
+    const nextItem = appendCodexCommandExecutionOutputDelta(item, delta);
+    itemById.set(itemId, nextItem);
+
+    const workerItem = mapCodexThreadItemToWorkerItem(nextItem);
+    if (!workerItem || workerItem.type !== "command_execution") {
+      return;
+    }
+
+    emitWorkerEvent({
+      item: workerItem,
+      kind: "agent.item.updated",
+      turnId: lifecycleTurnId,
+    });
+  }
+
   function handleTurnCompleted(params: Record<string, unknown>): void {
     const turn = isRecord(params.turn) ? params.turn : null;
     const providerTurnId = turn ? readString(turn, "id") : null;
@@ -1203,6 +1250,9 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
         return;
       case "item/completed":
         handleItemNotification("agent.item.completed", params);
+        return;
+      case "item/commandExecution/outputDelta":
+        handleCommandExecutionOutputDelta(params);
         return;
       case "item/agentMessage/delta": {
         const itemId = readString(params, "itemId") ?? "";
@@ -1343,7 +1393,13 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
     try {
       const response = await client.request(
         "turn/start",
-        buildTurnStartParams(input, threadId, Array.isArray(command.input) ? command.input as Array<Record<string, unknown>> : [{ type: "text", text: command.input as string }]),
+        buildTurnStartParams(
+          input,
+          threadId,
+          Array.isArray(command.input)
+            ? (command.input as Array<Record<string, unknown>>)
+            : [{ type: "text", text: command.input as string }],
+        ),
       );
       const turnRecord = isRecord(response) && isRecord(response.turn) ? response.turn : null;
       bindProviderTurn(turnRecord ? readString(turnRecord, "id") : null, command.turnId);

@@ -8,7 +8,7 @@ import {
   resolveDefaultOpenTarget,
 } from "@/features/workspaces/lib/open-in-targets";
 import { openWorkspaceInApp } from "@/features/workspaces/open-in-api";
-import type { WorkspaceCreateMode } from "@/features/workspaces/api";
+import type { WorkspaceCreateMode } from "@/features/workspaces/types";
 
 export async function showWorkspaceContextMenu(
   workspace: WorkspaceRecord,

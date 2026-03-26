@@ -11,8 +11,7 @@ const splitButtonPrimaryVariants = cva(
         active: "bg-[var(--muted)] text-[var(--foreground)]",
         outline:
           "border border-r-0 border-[var(--border)] bg-transparent text-[var(--foreground)] hover:bg-[var(--surface-hover)]",
-        glass:
-          "bg-[var(--glass)] text-[var(--foreground)] hover:bg-[var(--glass-hover)]",
+        glass: "bg-[var(--glass)] text-[var(--foreground)] hover:bg-[var(--glass-hover)]",
       },
       withIcon: {
         true: "",
@@ -46,8 +45,7 @@ const splitButtonSecondaryVariants = cva(
           "bg-[var(--muted)] text-[var(--muted-foreground)] hover:bg-[var(--surface-selected)]",
         outline:
           "border border-[var(--border)] bg-transparent text-[var(--foreground)] hover:bg-[var(--surface-hover)]",
-        glass:
-          "bg-[var(--glass)] text-[var(--foreground)] hover:bg-[var(--glass-hover)]",
+        glass: "bg-[var(--glass)] text-[var(--foreground)] hover:bg-[var(--glass-hover)]",
       },
       size: {
         default: "h-8 w-8 rounded-r-xl",

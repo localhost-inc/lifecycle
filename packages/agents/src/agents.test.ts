@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AgentSessionRecord, WorkspaceHost } from "@lifecycle/contracts";
-import type { WorkspaceClient } from "@lifecycle/workspace";
+import type { WorkspaceHostClient } from "@lifecycle/workspace/client";
 import type {
   AgentEvent,
   CreateAgentOrchestratorDependencies,
@@ -48,7 +48,7 @@ describe("agents package contracts", () => {
   });
 
   test("defines provider-backed sessions behind a single provider seam without UI coupling", async () => {
-    const runtime = {} as WorkspaceClient;
+    const runtime = {} as WorkspaceHostClient;
     const input: StartAgentSessionInput = {
       workspaceId: "workspace_1",
       provider: "claude",
@@ -135,7 +135,7 @@ describe("agents package contracts", () => {
   });
 
   test("creates a starting draft session before worker bootstrap", async () => {
-    const runtime = {} as WorkspaceClient;
+    const runtime = {} as WorkspaceHostClient;
     const sessions = new Map<string, AgentSessionRecord>();
     let workerStarted = false;
     const implementation: Worker = {
@@ -248,7 +248,7 @@ describe("agents package contracts", () => {
         };
       },
     };
-    const runtime = {} as WorkspaceClient;
+    const runtime = {} as WorkspaceHostClient;
     const orchestrator = createAgentOrchestrator({
       worker: implementation,
       resolveClient() {
@@ -293,7 +293,7 @@ describe("agents package contracts", () => {
         };
       },
     };
-    const runtime = {} as WorkspaceClient;
+    const runtime = {} as WorkspaceHostClient;
     const implementation: Worker = {
       async start(session, _context, _runtime, events) {
         return {
@@ -404,7 +404,7 @@ describe("agents package contracts", () => {
         };
       },
     };
-    const runtime = {} as WorkspaceClient;
+    const runtime = {} as WorkspaceHostClient;
     const implementation: Worker = {
       async start() {
         throw new Error("Claude login failed.");
@@ -484,7 +484,7 @@ describe("agents package contracts", () => {
         };
       },
     };
-    const runtime = {} as WorkspaceClient;
+    const runtime = {} as WorkspaceHostClient;
     let connected = false;
     const implementation: Worker = {
       async start() {
@@ -535,7 +535,7 @@ describe("agents package contracts", () => {
       },
     };
 
-    const runtime = {} as WorkspaceClient;
+    const runtime = {} as WorkspaceHostClient;
     let connectCount = 0;
     let sendCount = 0;
     const implementation: Worker = {

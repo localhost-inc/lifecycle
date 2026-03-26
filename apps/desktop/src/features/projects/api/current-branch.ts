@@ -1,13 +1,10 @@
 import { isTauri } from "@tauri-apps/api/core";
-import type { WorkspaceClient } from "@lifecycle/workspace";
+import { invokeTauri } from "@/lib/tauri-error";
 
-export async function getCurrentBranch(
-  client: WorkspaceClient,
-  projectPath: string,
-): Promise<string> {
+export async function getCurrentBranch(projectPath: string): Promise<string> {
   if (!isTauri()) {
     return "main";
   }
 
-  return client.getCurrentBranch(projectPath);
+  return invokeTauri("get_current_branch", { projectPath });
 }

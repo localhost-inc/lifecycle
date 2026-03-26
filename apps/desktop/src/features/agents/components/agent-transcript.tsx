@@ -51,7 +51,15 @@ function MessagePartRenderer({
       return <StatusPart text={part.text} />;
     case "tool_call":
       return (
-        <ToolCallPart toolName={part.toolName} inputJson={part.inputJson} outputJson={part.outputJson} status={part.status} errorText={part.errorText} isStreaming={isStreaming} onOpenFile={onOpenFile} />
+        <ToolCallPart
+          toolName={part.toolName}
+          inputJson={part.inputJson}
+          outputJson={part.outputJson}
+          status={part.status}
+          errorText={part.errorText}
+          isStreaming={isStreaming}
+          onOpenFile={onOpenFile}
+        />
       );
     case "tool_result":
     case "attachment_ref":
@@ -202,7 +210,16 @@ interface ToolTally {
 }
 
 function tallyToolCalls(parts: ParsedMessagePartEntry[]): ToolTally {
-  const tally: ToolTally = { searched: 0, read: 0, edited: 0, wrote: 0, deleted: 0, ran: 0, delegated: 0, other: 0 };
+  const tally: ToolTally = {
+    searched: 0,
+    read: 0,
+    edited: 0,
+    wrote: 0,
+    deleted: 0,
+    ran: 0,
+    delegated: 0,
+    other: 0,
+  };
   for (const { part } of parts) {
     if (part.type !== "tool_call") continue;
     switch (part.toolName) {
@@ -249,13 +266,18 @@ function pluralize(n: number, singular: string, plural?: string): string {
 function buildToolSummary(tally: ToolTally, isStreaming?: boolean): string {
   const parts: string[] = [];
   const verb = isStreaming;
-  if (tally.searched > 0) parts.push(`${verb ? "searching" : "searched"} ${pluralize(tally.searched, "pattern")}`);
+  if (tally.searched > 0)
+    parts.push(`${verb ? "searching" : "searched"} ${pluralize(tally.searched, "pattern")}`);
   if (tally.read > 0) parts.push(`${verb ? "reading" : "read"} ${pluralize(tally.read, "file")}`);
-  if (tally.edited > 0) parts.push(`${verb ? "editing" : "edited"} ${pluralize(tally.edited, "file")}`);
-  if (tally.wrote > 0) parts.push(`${verb ? "writing" : "wrote"} ${pluralize(tally.wrote, "file")}`);
-  if (tally.deleted > 0) parts.push(`${verb ? "deleting" : "deleted"} ${pluralize(tally.deleted, "file")}`);
+  if (tally.edited > 0)
+    parts.push(`${verb ? "editing" : "edited"} ${pluralize(tally.edited, "file")}`);
+  if (tally.wrote > 0)
+    parts.push(`${verb ? "writing" : "wrote"} ${pluralize(tally.wrote, "file")}`);
+  if (tally.deleted > 0)
+    parts.push(`${verb ? "deleting" : "deleted"} ${pluralize(tally.deleted, "file")}`);
   if (tally.ran > 0) parts.push(`${verb ? "running" : "ran"} ${pluralize(tally.ran, "command")}`);
-  if (tally.delegated > 0) parts.push(`${verb ? "delegating" : "delegated"} ${pluralize(tally.delegated, "agent")}`);
+  if (tally.delegated > 0)
+    parts.push(`${verb ? "delegating" : "delegated"} ${pluralize(tally.delegated, "agent")}`);
   if (tally.other > 0) parts.push(`${verb ? "running" : "ran"} ${pluralize(tally.other, "tool")}`);
   if (parts.length === 0) return isStreaming ? "working…" : "done";
   // Capitalize first part

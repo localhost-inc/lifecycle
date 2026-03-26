@@ -6,9 +6,9 @@ import {
   type SqlDriver,
 } from "@lifecycle/store";
 
-const agentSessionCollections: Map<string, SqlCollection<AgentSessionRecord>> =
-  (import.meta.hot?.data.agentSessionCollections as typeof agentSessionCollections) ??
-  new Map<string, SqlCollection<AgentSessionRecord>>();
+const agentSessionCollections: Map<string, SqlCollection<AgentSessionRecord>> = (import.meta.hot
+  ?.data.agentSessionCollections as typeof agentSessionCollections) ??
+new Map<string, SqlCollection<AgentSessionRecord>>();
 
 if (import.meta.hot) {
   import.meta.hot.accept();
@@ -38,7 +38,7 @@ export function getOrCreateAgentSessionCollection(
 export function refreshAgentSessionCollection(workspaceId: string): void {
   const existing = agentSessionCollections.get(workspaceId);
   if (existing) {
-    void existing.refresh();
+    void existing.utils.refresh();
   }
 }
 
@@ -47,5 +47,5 @@ export function upsertAgentSessionInCollection(
   workspaceId: string,
   session: AgentSessionRecord,
 ): void {
-  getOrCreateAgentSessionCollection(driver, workspaceId).upsert(session);
+  getOrCreateAgentSessionCollection(driver, workspaceId).utils.upsert(session);
 }

@@ -1,5 +1,7 @@
 import type { ProjectRecord } from "@lifecycle/contracts";
+import { createSqlCollection, type SqlCollection } from "../collection";
 import type { SqlDriver } from "../driver";
+import { createProject, deleteProject, updateProject } from "../projects/mutations";
 
 interface ProjectRow {
   id: string;
@@ -30,27 +32,37 @@ export async function selectAllProjects(driver: SqlDriver): Promise<ProjectRecor
   return rows.map(rowToRecord);
 }
 
-export async function insertProject(
-  driver: SqlDriver,
-  project: { id: string; path: string; name: string; manifestPath?: string },
-): Promise<void> {
-  await driver.execute(
-    "INSERT INTO project (id, path, name, manifest_path) VALUES ($1, $2, $3, $4)",
-    [project.id, project.path, project.name, project.manifestPath ?? "lifecycle.json"],
-  );
-}
-
-export async function deleteProject(driver: SqlDriver, projectId: string): Promise<void> {
-  await driver.execute("DELETE FROM project WHERE id = $1", [projectId]);
-}
-
-export async function updateProjectManifestStatus(
+export async function selectProjectById(
   driver: SqlDriver,
   projectId: string,
-  valid: boolean,
-): Promise<void> {
-  await driver.execute(
-    "UPDATE project SET manifest_valid = $1, updated_at = datetime('now') WHERE id = $2",
-    [valid ? 1 : 0, projectId],
+): Promise<ProjectRecord | undefined> {
+  const rows = await driver.select<ProjectRow>(
+    "SELECT id, path, name, manifest_path, manifest_valid, created_at, updated_at FROM project WHERE id = $1 LIMIT 1",
+    [projectId],
   );
+  return rows[0] ? rowToRecord(rows[0]) : undefined;
+}
+
+export function createProjectCollection(driver: SqlDriver): SqlCollection<ProjectRecord> {
+  return createSqlCollection<ProjectRecord>({
+    id: "projects",
+    driver,
+    loadFn: selectAllProjects,
+    getKey: (project) => project.id,
+    onInsert: async ({ transaction }) => {
+      await Promise.all(
+        transaction.mutations.map((mutation) => createProject(driver, mutation.modified)),
+      );
+    },
+    onUpdate: async ({ transaction }) => {
+      await Promise.all(
+        transaction.mutations.map((mutation) => updateProject(driver, mutation.modified)),
+      );
+    },
+    onDelete: async ({ transaction }) => {
+      await Promise.all(
+        transaction.mutations.map((mutation) => deleteProject(driver, String(mutation.key))),
+      );
+    },
+  });
 }

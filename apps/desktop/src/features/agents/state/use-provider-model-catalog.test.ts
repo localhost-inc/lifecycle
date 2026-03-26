@@ -134,12 +134,7 @@ describe("provider model catalog state", () => {
       preferredModel: "gpt-5-codex",
     });
 
-    expect(createdCommands[0]?.args).toEqual([
-      "agent",
-      "catalog",
-      "--provider",
-      "codex",
-    ]);
+    expect(createdCommands[0]?.args).toEqual(["agent", "catalog", "--provider", "codex"]);
     expect(catalog.provider).toBe("codex");
   });
 

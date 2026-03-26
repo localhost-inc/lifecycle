@@ -23,7 +23,9 @@ describe("workspace pane performance", () => {
 
     expect(value).toBe(42);
     expect(repeated).toBe(24);
-    expect(snapshot.measures.filter((entry) => entry.name === "tab-switch:controller-derive")).toHaveLength(1);
+    expect(
+      snapshot.measures.filter((entry) => entry.name === "tab-switch:controller-derive"),
+    ).toHaveLength(1);
     expect(snapshot.measures[0]?.metadata).toEqual({
       paneId: "pane-1",
       tabKey: "file:README.md",

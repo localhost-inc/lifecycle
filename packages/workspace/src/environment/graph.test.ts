@@ -147,9 +147,9 @@ describe("lowerEnvironmentGraph", () => {
       }
     }`);
 
-    expect(() =>
-      lowerEnvironmentGraph(config, { prepared: false }),
-    ).toThrow(/depends on missing node/);
+    expect(() => lowerEnvironmentGraph(config, { prepared: false })).toThrow(
+      /depends on missing node/,
+    );
   });
 
   test("skips already-running services for targeted starts", () => {

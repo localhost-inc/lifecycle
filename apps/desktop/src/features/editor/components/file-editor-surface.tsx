@@ -9,9 +9,9 @@ import {
 } from "@/app/shortcuts/shortcut-router";
 import { useWorkspacePaneRenderCount } from "@/features/workspaces/canvas/workspace-pane-performance";
 import { workspaceFileBasename } from "@/features/workspaces/lib/workspace-file-paths";
-import { writeWorkspaceFile } from "@/features/workspaces/api";
 import { useWorkspaceFile } from "@/features/workspaces/hooks";
-import { useClient } from "@/store";
+import { useWorkspace } from "@/store";
+import { useOptionalWorkspaceHostClient } from "@lifecycle/workspace/client/react";
 import { resolveFileEditorConfig } from "@/features/editor/lib/file-editor-config";
 import type { FileEditorMode } from "@/features/editor/lib/file-editor-mode";
 import {
@@ -49,7 +49,8 @@ export const FileEditorSurface = memo(function FileEditorSurface({
   workspaceId,
 }: FileEditorSurfaceProps) {
   useWorkspacePaneRenderCount("FileEditorSurface", filePath);
-  const client = useClient();
+  const workspace = useWorkspace(workspaceId);
+  const client = useOptionalWorkspaceHostClient(workspace?.host);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [mode, setMode] = useState<FileEditorMode>(() =>
     resolveInitialFileEditorMode(filePath, initialMode),
@@ -58,7 +59,7 @@ export const FileEditorSurface = memo(function FileEditorSurface({
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const modeSeedRef = useRef(`${filePath}:${initialMode ?? ""}`);
 
-  const fileQuery = useWorkspaceFile(workspaceId, filePath);
+  const fileQuery = useWorkspaceFile(workspaceId, workspace?.host ?? null, filePath);
 
   const displayPath = fileQuery.data?.file_path ?? filePath;
   const renderer = resolveFileEditorRenderer(displayPath);
@@ -195,7 +196,7 @@ export const FileEditorSurface = memo(function FileEditorSurface({
   }, [displayPath, effectiveMode, fileQuery.isLoading, initialScrollTop, renderer]);
 
   const handleSave = useCallback(async () => {
-    if (textContent === null) {
+    if (textContent === null || !client) {
       return;
     }
 
@@ -211,7 +212,7 @@ export const FileEditorSurface = memo(function FileEditorSurface({
     setSaveError(null);
 
     try {
-      const result = await writeWorkspaceFile(client, workspaceId, displayPath, draftContent);
+      const result = await client.writeFile(workspaceId, displayPath, draftContent);
       const nextContent = result.content ?? draftContent;
       onSessionStateChange?.({
         conflictDiskContent: null,

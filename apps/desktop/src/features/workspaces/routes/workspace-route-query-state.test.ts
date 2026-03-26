@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { hasBlockingQueryError, hasBlockingQueryLoad } from "@/features/workspaces/routes/workspace-route-query-state";
+import {
+  hasBlockingQueryError,
+  hasBlockingQueryLoad,
+} from "@/features/workspaces/routes/workspace-route-query-state";
 
 describe("workspace route query helpers", () => {
   test("hasBlockingQueryLoad is true when loading with no data", () => {

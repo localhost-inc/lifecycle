@@ -42,15 +42,11 @@ export class GraphError extends Error {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function nodeKind(
-  node: LifecycleConfig["environment"][string],
-): EnvironmentNodeKind {
+function nodeKind(node: LifecycleConfig["environment"][string]): EnvironmentNodeKind {
   return node.kind === "task" ? "task" : "service";
 }
 
-function nodeDependsOn(
-  node: LifecycleConfig["environment"][string],
-): string[] {
+function nodeDependsOn(node: LifecycleConfig["environment"][string]): string[] {
   return node.depends_on ?? [];
 }
 
@@ -58,10 +54,7 @@ function shouldRunOnRestart(runOn: "create" | "start" | undefined): boolean {
   return runOn === "start" || runOn === undefined;
 }
 
-function shouldRun(
-  runOn: "create" | "start" | undefined,
-  prepared: boolean,
-): boolean {
+function shouldRun(runOn: "create" | "start" | undefined, prepared: boolean): boolean {
   if (runOn === "start") return true;
   return !prepared;
 }
@@ -78,10 +71,7 @@ function collectTransitiveDeps(
 ): void {
   const node = environment[name];
   if (!node) {
-    throw new GraphError(
-      `node '${name}' is not declared in environment`,
-      name,
-    );
+    throw new GraphError(`node '${name}' is not declared in environment`, name);
   }
 
   if (nodeKind(node) === "service" && satisfied.has(name)) return;
@@ -116,12 +106,7 @@ export function lowerEnvironmentGraph(
       if (nodeKind(node) !== "service") {
         throw new GraphError(`'${name}' is not a service node`, name);
       }
-      collectTransitiveDeps(
-        config.environment,
-        name,
-        selectedNames,
-        satisfied,
-      );
+      collectTransitiveDeps(config.environment, name, selectedNames, satisfied);
     }
   }
 
@@ -148,9 +133,7 @@ export function lowerEnvironmentGraph(
 
     if (nodeConfig.kind === "task" && !shouldRun(nodeConfig.run_on, prepared)) continue;
 
-    const dependsOn = nodeDependsOn(nodeConfig).filter(
-      (dep) => !satisfiedNodes.has(dep),
-    );
+    const dependsOn = nodeDependsOn(nodeConfig).filter((dep) => !satisfiedNodes.has(dep));
 
     nodes.set(name, { name, kind, dependsOn });
   }
@@ -159,10 +142,7 @@ export function lowerEnvironmentGraph(
   for (const [name, node] of nodes) {
     for (const dep of node.dependsOn) {
       if (!nodes.has(dep)) {
-        throw new GraphError(
-          `node '${name}' depends on missing node '${dep}'`,
-          name,
-        );
+        throw new GraphError(`node '${name}' depends on missing node '${dep}'`, name);
       }
     }
   }
@@ -174,9 +154,7 @@ export function lowerEnvironmentGraph(
 // Topological sort (Kahn's algorithm)
 // ---------------------------------------------------------------------------
 
-export function topologicalSort(
-  nodes: Map<string, EnvironmentNode>,
-): EnvironmentNode[] {
+export function topologicalSort(nodes: Map<string, EnvironmentNode>): EnvironmentNode[] {
   const inDegree = new Map<string, number>();
   const dependents = new Map<string, string[]>();
 
@@ -187,10 +165,7 @@ export function topologicalSort(
   for (const [name, node] of nodes) {
     for (const dep of node.dependsOn) {
       if (!nodes.has(dep)) {
-        throw new GraphError(
-          `node '${name}' depends on missing node '${dep}'`,
-          name,
-        );
+        throw new GraphError(`node '${name}' depends on missing node '${dep}'`, name);
       }
       const list = dependents.get(dep);
       if (list) {
@@ -232,13 +207,8 @@ export function topologicalSort(
 
   if (result.length !== nodes.size) {
     const sorted = new Set(result.map((n) => n.name));
-    const unresolved = [...nodes.keys()]
-      .filter((n) => !sorted.has(n))
-      .sort();
-    throw new GraphError(
-      `dependency cycle detected: ${unresolved.join(", ")}`,
-      unresolved[0],
-    );
+    const unresolved = [...nodes.keys()].filter((n) => !sorted.has(n)).sort();
+    throw new GraphError(`dependency cycle detected: ${unresolved.join(", ")}`, unresolved[0]);
   }
 
   return result;

@@ -14,7 +14,14 @@ import { z } from "zod";
 const ProviderSchema = z.enum(["claude", "codex"]);
 const CodexSandboxModeSchema = z.enum(["read-only", "workspace-write", "danger-full-access"]);
 const CodexApprovalPolicySchema = z.enum(["untrusted", "on-request", "on-failure", "never"]);
-const CodexModelReasoningEffortSchema = z.enum(["none", "minimal", "low", "medium", "high", "xhigh"]);
+const CodexModelReasoningEffortSchema = z.enum([
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+]);
 const ClaudePermissionModeSchema = z.enum([
   "acceptEdits",
   "bypassPermissions",
@@ -54,7 +61,9 @@ function sessionLog(
 ): void {
   const timestamp = new Date().toISOString();
   const suffix = details ? ` ${JSON.stringify(details)}` : "";
-  console.error(`[agent-session][${timestamp}][${input.provider}][${input.sessionId}] ${message}${suffix}`);
+  console.error(
+    `[agent-session][${timestamp}][${input.provider}][${input.sessionId}] ${message}${suffix}`,
+  );
 }
 
 function parseWorkerEvent(line: string): AgentWorkerEvent {
@@ -83,13 +92,7 @@ function createLineReader(onLine: (line: string) => void) {
 }
 
 function buildWorkerArgs(input: SessionInput): string[] {
-  const args = [
-    "agent",
-    "worker",
-    input.provider,
-    "--workspace-path",
-    input.workspacePath,
-  ];
+  const args = ["agent", "worker", input.provider, "--workspace-path", input.workspacePath];
 
   if (input.model?.trim()) {
     args.push("--model", input.model.trim());
@@ -99,12 +102,7 @@ function buildWorkerArgs(input: SessionInput): string[] {
   }
 
   if (input.provider === "claude") {
-    args.push(
-      "--permission-mode",
-      input.permissionMode,
-      "--login-method",
-      input.loginMethod,
-    );
+    args.push("--permission-mode", input.permissionMode, "--login-method", input.loginMethod);
     if (input.dangerousSkipPermissions) {
       args.push("--dangerous-skip-permissions");
     }
@@ -114,12 +112,7 @@ function buildWorkerArgs(input: SessionInput): string[] {
     return args;
   }
 
-  args.push(
-    "--approval-policy",
-    input.approvalPolicy,
-    "--sandbox-mode",
-    input.sandboxMode,
-  );
+  args.push("--approval-policy", input.approvalPolicy, "--sandbox-mode", input.sandboxMode);
   if (input.dangerousBypass) {
     args.push("--dangerous-bypass");
   }
@@ -260,13 +253,22 @@ function persistRegistration(
     return Promise.resolve();
   }
   const registrationPath = input.registrationPath;
-  registrationWriteChain = registrationWriteChain.then(async () => {
-    const dir = dirname(registrationPath);
-    const tmp = join(dir, `.${input.sessionId}.json.tmp`);
-    await mkdir(dir, { recursive: true });
-    await writeFile(tmp, `${JSON.stringify(toRegistration(snapshot, input, port, token))}\n`, "utf8");
-    await rename(tmp, registrationPath);
-  }, () => {/* swallow prior errors so the chain stays live */});
+  registrationWriteChain = registrationWriteChain.then(
+    async () => {
+      const dir = dirname(registrationPath);
+      const tmp = join(dir, `.${input.sessionId}.json.tmp`);
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        tmp,
+        `${JSON.stringify(toRegistration(snapshot, input, port, token))}\n`,
+        "utf8",
+      );
+      await rename(tmp, registrationPath);
+    },
+    () => {
+      /* swallow prior errors so the chain stays live */
+    },
+  );
   return registrationWriteChain;
 }
 
@@ -322,12 +324,13 @@ export default defineCommand({
       },
       websocket: {
         message(_socket, message) {
-          const text = typeof message === "string" ? message : Buffer.from(message).toString("utf8");
+          const text =
+            typeof message === "string" ? message : Buffer.from(message).toString("utf8");
           const command = JSON.parse(text) as AgentWorkerCommand;
           sessionLog(input, "received desktop command", {
             activeTurnId: snapshot.activeTurnId,
             commandKind: command.kind,
-            turnId: "turnId" in command ? command.turnId ?? null : null,
+            turnId: "turnId" in command ? (command.turnId ?? null) : null,
             approvalId: "approvalId" in command ? command.approvalId : null,
           });
           snapshot = updateSnapshotFromCommand(snapshot, command);

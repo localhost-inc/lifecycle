@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type {
-  WorkspaceCheckoutType,
-  WorkspaceStatus,
-  WorkspaceHost,
-} from "./workspace";
+import type { WorkspaceCheckoutType, WorkspaceStatus, WorkspaceHost } from "./workspace";
 
 describe("workspace contracts", () => {
   test("keeps canonical workspace targets", () => {
@@ -25,5 +21,4 @@ describe("workspace contracts", () => {
     expect(activeStatus).toBe("active");
     expect(archivedStatus).toBe("archived");
   });
-
 });

@@ -1,4 +1,9 @@
-import type { GitFileChangeKind, GitFileStatus, GitStatusResult } from "@lifecycle/contracts";
+import type {
+  GitFileChangeKind,
+  GitFileStatus,
+  GitStatusResult,
+  WorkspaceHost,
+} from "@lifecycle/contracts";
 import { Button, EmptyState, Loading } from "@lifecycle/ui";
 import {
   File,
@@ -14,7 +19,7 @@ import {
 import { useMemo, useState } from "react";
 import type React from "react";
 import { stageGitFiles, unstageGitFiles } from "@/features/git/api";
-import { useClient } from "@/store";
+import { useWorkspaceHostClient } from "@lifecycle/workspace/client/react";
 
 interface ChangesTabProps {
   error: unknown;
@@ -23,6 +28,7 @@ interface ChangesTabProps {
   onOpenDiff: (filePath: string) => void;
   onOpenFile: (filePath: string) => void;
   onRefresh: () => Promise<void>;
+  workspaceHost: WorkspaceHost;
   workspaceId: string;
 }
 
@@ -361,9 +367,10 @@ export function ChangesTab({
   onOpenDiff,
   onOpenFile,
   onRefresh,
+  workspaceHost,
   workspaceId,
 }: ChangesTabProps) {
-  const client = useClient();
+  const client = useWorkspaceHostClient(workspaceHost);
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [pendingMutation, setPendingMutation] = useState<PendingMutation | null>(null);
   const files = gitStatus?.files ?? [];

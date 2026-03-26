@@ -1,3 +1,6 @@
+/** Maximum file size (in bytes) the editor will load into memory. */
+export const WORKSPACE_MAX_TEXT_FILE_BYTES = 1024 * 1024;
+
 export type WorkspaceHost = "local" | "docker" | "remote" | "cloud";
 
 export type WorkspaceCheckoutType = "root" | "worktree";
