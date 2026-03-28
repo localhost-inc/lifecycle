@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { codexProviderAuthStatusFromAccountRead } from "./providers/codex/auth";
+import { codexProviderAuthStatusFromAccountRead } from "./auth";
 
 describe("codex provider auth status mapping", () => {
   test("treats ChatGPT account auth as authenticated", () => {

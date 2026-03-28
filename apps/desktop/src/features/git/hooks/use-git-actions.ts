@@ -1,5 +1,5 @@
 import type { GitPullRequestSummary } from "@lifecycle/contracts";
-import { useWorkspaceClient } from "@lifecycle/workspace/client/react";
+import { useWorkspaceClient } from "@lifecycle/workspace/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCurrentGitPullRequest, useGitLog, useGitStatus } from "@/features/git/hooks";
 import { useWorkspace } from "@/store";

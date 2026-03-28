@@ -1,7 +1,5 @@
 import type { WorkspaceRecord } from "@lifecycle/contracts";
-import { shortWorkspaceId, slugifyWorkspaceName } from "./policy/workspace-names";
-
-const PREVIEW_HOST_SUFFIX = ["lifecycle", "localhost"] as const;
+import { shortWorkspaceId, slugifyWorkspaceName } from "./workspace-names";
 
 function slugifySourceRef(sourceRef: string): string {
   const trimmed = sourceRef.trim();
@@ -49,22 +47,3 @@ export function workspaceHostLabel(
 
   return base.endsWith(`-${shortId}`) ? base : `${base}-${shortId}`;
 }
-
-export function previewUrlForService(
-  workspace: Pick<WorkspaceRecord, "id" | "checkout_type" | "name" | "source_ref">,
-  serviceName: string,
-  previewProxyPort: number,
-): string {
-  const serviceLabel = slugifyWorkspaceName(serviceName);
-  const workspaceLabel = workspaceHostLabel(workspace);
-  return `http://${[serviceLabel, workspaceLabel, ...PREVIEW_HOST_SUFFIX].join(".")}:${previewProxyPort}`;
-}
-
-// Re-export environment runtime helpers for backward compatibility.
-export {
-  buildWorkspaceRuntimeEnv,
-  expandRuntimeTemplates,
-  injectAssignedPortsIntoManifest,
-  resolveServiceEnv,
-  uppercaseWorkspaceEnvKey,
-} from "./environment/runtime";

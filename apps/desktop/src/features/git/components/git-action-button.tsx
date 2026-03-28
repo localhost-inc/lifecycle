@@ -1,5 +1,5 @@
 import type { GitPullRequestSummary } from "@lifecycle/contracts";
-import { useWorkspaceClient } from "@lifecycle/workspace/client/react";
+import { useWorkspaceClient } from "@lifecycle/workspace/react";
 import {
   Button,
   OptionList,

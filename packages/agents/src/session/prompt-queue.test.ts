@@ -12,7 +12,7 @@ import {
   retryAgentPrompt,
   selectAgentPromptQueueState,
   selectQueuedAgentPromptCount,
-} from "./prompt-queue-store";
+} from "./prompt-queue";
 
 describe("agent prompt queue store", () => {
   test("builds prompt previews from text and attachments", () => {

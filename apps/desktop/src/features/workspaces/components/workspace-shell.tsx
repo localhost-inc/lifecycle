@@ -1,10 +1,9 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
-import {
-  getManifestFingerprint,
-  type GitPullRequestSummary,
-  type WorkspaceRecord,
-} from "@lifecycle/contracts";
+import { type GitPullRequestSummary, type WorkspaceRecord } from "@lifecycle/contracts";
+import { createStartEnvironmentInput } from "@lifecycle/environment";
+import { useEnvironmentClient } from "@lifecycle/environment/react";
 import type { ManifestStatus } from "@lifecycle/workspace";
+import { workspaceHostLabel } from "@lifecycle/workspace";
 import { EmptyState } from "@lifecycle/ui";
 import {
   useCallback,
@@ -46,7 +45,6 @@ import {
   createPreviewOpenInput,
   createPullRequestOpenInput,
 } from "@/features/workspaces/canvas/workspace-canvas-requests";
-import { useWorkspaceClient } from "@lifecycle/workspace/client/react";
 import { workspaceSupportsFilesystemInteraction } from "@/features/workspaces/lib/workspace-capabilities";
 import { useWorkspaceOpenRequests } from "@/features/workspaces/state/workspace-open-requests";
 import { useWorkspaceToolbar } from "@/features/workspaces/state/workspace-toolbar-context";
@@ -61,7 +59,7 @@ interface WorkspaceShellProps {
 }
 
 export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: WorkspaceShellProps) {
-  const client = useWorkspaceClient();
+  const environmentClient = useEnvironmentClient();
   const { collections } = useStoreContext();
   const workspaceLayoutRef = useRef<HTMLDivElement | null>(null);
   const [workspaceLayoutWidth, setWorkspaceLayoutWidth] = useState(0);
@@ -105,21 +103,22 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
     async (serviceNames?: string[]) => {
       if (!config || !services) return;
       try {
-        const manifestJson = JSON.stringify(config);
-        const result = await client.startServices({
-          serviceNames,
-          workspace,
-          services,
-          manifestJson,
-          manifestFingerprint: getManifestFingerprint(config),
-        });
+        const result = await environmentClient.start(
+          config,
+          createStartEnvironmentInput({
+            hostLabel: workspaceHostLabel(workspace),
+            serviceNames,
+            services,
+            workspace,
+          }),
+        );
         await persistPreparedAt(result.preparedAt);
       } catch (err) {
         console.error("Failed to start services:", err);
         throw err;
       }
     },
-    [config, client, persistPreparedAt, services, workspace],
+    [config, environmentClient, persistPreparedAt, services, workspace],
   );
 
   const handleRestart = useCallback(async () => {
@@ -128,29 +127,36 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
     }
 
     try {
-      const manifestJson = JSON.stringify(config);
-      await client.stopServices({ workspace, services });
-      const result = await client.startServices({
-        workspace,
-        services,
-        manifestJson,
-        manifestFingerprint: getManifestFingerprint(config),
-      });
+      await environmentClient.stop(
+        workspace.id,
+        services.map((service) => service.name),
+      );
+      const result = await environmentClient.start(
+        config,
+        createStartEnvironmentInput({
+          hostLabel: workspaceHostLabel(workspace),
+          services,
+          workspace,
+        }),
+      );
       await persistPreparedAt(result.preparedAt);
     } catch (err) {
       console.error("Failed to restart workspace:", err);
       throw err;
     }
-  }, [config, client, persistPreparedAt, services, workspace]);
+  }, [config, environmentClient, persistPreparedAt, services, workspace]);
 
   const handleStop = useCallback(async () => {
     try {
-      await client.stopServices({ workspace, services });
+      await environmentClient.stop(
+        workspace.id,
+        services.map((service) => service.name),
+      );
     } catch (err) {
       console.error("Failed to stop workspace:", err);
       throw err;
     }
-  }, [client, services, workspace]);
+  }, [environmentClient, services, workspace.id]);
 
   // ---------------------------------------------------------------------------
   // Toolbar slot — surfaces run + git actions in the workspace nav bar

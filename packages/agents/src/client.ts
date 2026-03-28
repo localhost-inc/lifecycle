@@ -16,7 +16,7 @@ import type { AgentEventObserver } from "./events";
 import type { AgentModelCatalogOptions, AgentWorker, AgentWorkerCallbacks } from "./worker";
 import type { AgentAuthStatus } from "./providers/auth";
 import type { AgentApprovalResolution, AgentTurnCancelRequest, AgentTurnRequest } from "./turn";
-import type { AgentRuntimeEvent, AgentRuntimeSnapshot } from "./runtime-protocol";
+import type { AgentWorkerEvent, AgentWorkerSnapshot } from "./worker/protocol";
 
 export interface AgentSessionContext {
   workspaceId: string;
@@ -476,7 +476,7 @@ class AgentClientImpl implements AgentClient {
   private async applyRuntimeStateSnapshot(
     sessionId: string,
     workspaceId: string,
-    snapshot: AgentRuntimeSnapshot,
+    snapshot: AgentWorkerSnapshot,
     events: AgentSessionEvents,
   ): Promise<AgentSessionRecord> {
     const session = await this.requireSession(sessionId);
@@ -507,7 +507,7 @@ class AgentClientImpl implements AgentClient {
     sessionId: string,
     workspaceId: string,
     provider: AgentSessionProviderId,
-    event: AgentRuntimeEvent,
+    event: AgentWorkerEvent,
     events: AgentSessionEvents,
   ): Promise<void> {
     switch (event.kind) {

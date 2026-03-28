@@ -5,13 +5,13 @@ import { resolveCodexCliPath } from "./cli-path";
 import type { AgentApprovalDecision, AgentApprovalKind } from "../../turn";
 import { LIFECYCLE_SYSTEM_PROMPT } from "../../system-prompt";
 import type {
-  AgentRuntimeApprovalRequestPayload as AgentWorkerApprovalRequestPayload,
-  AgentRuntimeCommand as AgentWorkerCommand,
-  AgentRuntimeEvent as AgentWorkerEvent,
-  AgentRuntimeInputPart as AgentWorkerInputPart,
-  AgentRuntimeItem as AgentWorkerItem,
-  AgentRuntimeItemStatus as AgentWorkerItemStatus,
-} from "../../runtime-protocol";
+  AgentWorkerApprovalRequestPayload as AgentWorkerApprovalRequestPayload,
+  AgentWorkerCommand as AgentWorkerCommand,
+  AgentWorkerEvent as AgentWorkerEvent,
+  AgentWorkerInputPart as AgentWorkerInputPart,
+  AgentWorkerItem as AgentWorkerItem,
+  AgentWorkerItemStatus as AgentWorkerItemStatus,
+} from "../../worker/protocol";
 
 // ---------------------------------------------------------------------------
 // Lightweight title generation — uses the already-running app-server so it

@@ -5,7 +5,7 @@ import { createWorkspaceClientRegistry } from "@lifecycle/workspace";
 import {
   WorkspaceClientProvider,
   WorkspaceClientRegistryProvider,
-} from "@lifecycle/workspace/client/react";
+} from "@lifecycle/workspace/react";
 import { ThemeProvider } from "@lifecycle/ui";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";

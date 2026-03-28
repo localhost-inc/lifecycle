@@ -10,38 +10,14 @@ import type {
   GitPullRequestSummary,
   GitPushResult,
   GitStatusResult,
-  ServiceRecord,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
 import type { ManifestStatus } from "./manifest";
-
-export interface StartServicesInput {
-  serviceNames?: string[];
-  workspace: WorkspaceRecord;
-  services: ServiceRecord[];
-  manifestJson: string;
-  manifestFingerprint: string;
-}
-
-export interface StopServicesInput {
-  workspace: WorkspaceRecord;
-  services: ServiceRecord[];
-}
 
 export interface GitDiffInput {
   workspace: WorkspaceRecord;
   filePath: string;
   scope: GitDiffScope;
-}
-
-export interface ServiceLogLine {
-  stream: "stdout" | "stderr";
-  text: string;
-}
-
-export interface ServiceLogSnapshot {
-  name: string;
-  lines: ServiceLogLine[];
 }
 
 export interface WorkspaceFileReadResult {
@@ -119,8 +95,6 @@ export interface WorkspaceClient {
   renameWorkspace(input: RenameWorkspaceInput): Promise<WorkspaceRecord>;
   inspectArchive(workspace: WorkspaceRecord): Promise<WorkspaceArchiveDisposition>;
   archiveWorkspace(input: ArchiveWorkspaceInput): Promise<void>;
-  startServices(input: StartServicesInput): Promise<{ preparedAt: string | null }>;
-  stopServices(input: StopServicesInput): Promise<void>;
   readFile(workspace: WorkspaceRecord, filePath: string): Promise<WorkspaceFileReadResult>;
   writeFile(
     workspace: WorkspaceRecord,

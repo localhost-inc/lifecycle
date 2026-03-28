@@ -6,7 +6,7 @@ import {
   type AgentSessionConnection,
 } from "../../worker";
 import { buildHarnessLaunchConfig, normalizeHarnessSettings } from "../../harness";
-import { connectLocalAgentRuntime, type LocalAgentInvoke } from "./runtime";
+import { connectLocalAgentWorker, type LocalAgentInvoke } from "./worker-connection";
 
 export interface LocalAgentWorkerDeps {
   commandRunner: AgentWorkerCommandRunner;
@@ -126,7 +126,7 @@ async function connectLocalSession(
     worktreePath,
   });
 
-  const connection: AgentSessionConnection = await connectLocalAgentRuntime(
+  const connection: AgentSessionConnection = await connectLocalAgentWorker(
     { invoke: deps.invoke },
     {
       cwd: worktreePath,

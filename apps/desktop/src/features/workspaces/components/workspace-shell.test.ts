@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { type ServiceRecord, type WorkspaceRecord } from "@lifecycle/contracts";
+import type { EnvironmentClient } from "@lifecycle/environment";
+import { EnvironmentClientProvider } from "@lifecycle/environment/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
@@ -11,13 +13,21 @@ import { WorkspaceToolbarProvider } from "@/features/workspaces/state/workspace-
 import { workspaceSupportsFilesystemInteraction } from "@/features/workspaces/lib/workspace-capabilities";
 
 function renderWorkspaceShell(element: ReturnType<typeof createElement>) {
+  const environmentClient: EnvironmentClient = {
+    start: async () => ({ preparedAt: null }),
+    stop: async () => {},
+  };
+
   return renderToStaticMarkup(
     createElement(MemoryRouter, {
       initialEntries: ["/projects/project_1/workspaces/workspace_1"],
       children: createElement(ReactQueryProvider, {
         children: createElement(WorkspaceOpenRequestsProvider, {
           children: createElement(WorkspaceToolbarProvider, {
-            children: element,
+            children: createElement(EnvironmentClientProvider, {
+              environmentClient,
+              children: element,
+            }),
           }),
         }),
       }),

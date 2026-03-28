@@ -22,7 +22,7 @@ import {
 import { resolveFileRendererDefinition } from "@/features/editor/renderers/registry";
 import { MarkdownFileRendererView } from "@/features/editor/renderers/markdown-file-renderer-view";
 import { summarizePencilDocument } from "@/features/editor/renderers/pencil-file-renderer";
-import type { WorkspaceFileReadResult } from "@lifecycle/workspace/client";
+import type { WorkspaceFileReadResult } from "@lifecycle/workspace";
 
 function readyQueryResult<T>(data: T) {
   return {

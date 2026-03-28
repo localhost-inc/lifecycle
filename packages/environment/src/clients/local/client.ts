@@ -5,11 +5,7 @@ import type {
   StartEnvironmentResult,
 } from "../../client";
 import { resolveStartOrder } from "../../graph";
-import {
-  buildRuntimeEnv,
-  injectAssignedPortsIntoManifest,
-  resolveServiceEnv,
-} from "../../runtime";
+import { buildRuntimeEnv, injectAssignedPortsIntoManifest, resolveServiceEnv } from "../../runtime";
 
 type InvokeFn = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
 
@@ -24,6 +20,10 @@ interface StepInput {
 
 function processId(environmentId: string, name: string): string {
   return `${environmentId}:${name}`;
+}
+
+function environmentLogDir(lifecycleRoot: string, environmentId: string): string {
+  return `${lifecycleRoot}/logs/environments/${environmentId}`;
 }
 
 function resolvePath(rootPath: string, relative: string): string {
@@ -94,6 +94,8 @@ export class LocalEnvironmentClient implements EnvironmentClient {
       ...s,
       assigned_port: assignedPorts[s.name] ?? s.assigned_port,
     }));
+    const lifecycleRoot = (await this.invoke("resolve_lifecycle_root_path")) as string;
+    const previewProxyPort = (await this.invoke("get_preview_proxy_port")) as number;
     const runtimeConfig = injectAssignedPortsIntoManifest(config, assignedPorts);
     const configByName = new Map(Object.entries(runtimeConfig.environment));
 
@@ -101,7 +103,7 @@ export class LocalEnvironmentClient implements EnvironmentClient {
       environmentId: input.environmentId,
       hostLabel: input.hostLabel,
       name: input.name,
-      previewProxyPort: input.previewProxyPort,
+      previewProxyPort,
       rootPath: input.rootPath,
       services: nextServices,
       sourceRef: input.sourceRef,
@@ -143,6 +145,7 @@ export class LocalEnvironmentClient implements EnvironmentClient {
       } else {
         await this.startService(
           input.environmentId,
+          lifecycleRoot,
           node.name,
           configByName,
           assignedPorts,
@@ -192,6 +195,7 @@ export class LocalEnvironmentClient implements EnvironmentClient {
 
   private async startService(
     environmentId: string,
+    lifecycleRoot: string,
     serviceName: string,
     configByName: Map<string, LifecycleConfig["environment"][string]>,
     assignedPorts: Record<string, number>,
@@ -206,9 +210,7 @@ export class LocalEnvironmentClient implements EnvironmentClient {
     const id = processId(environmentId, serviceName);
 
     if (serviceConfig.runtime === "process") {
-      const cwd = serviceConfig.cwd
-        ? `${input.rootPath}/${serviceConfig.cwd}`
-        : input.rootPath;
+      const cwd = serviceConfig.cwd ? `${input.rootPath}/${serviceConfig.cwd}` : input.rootPath;
       const env = resolveServiceEnv(
         serviceConfig.env,
         runtimeEnv,
@@ -221,11 +223,19 @@ export class LocalEnvironmentClient implements EnvironmentClient {
           args: ["-c", serviceConfig.command],
           cwd,
           env,
-          logDir: input.logDir,
+          logDir: environmentLogDir(lifecycleRoot, environmentId),
         },
       });
     } else if (serviceConfig.runtime === "image") {
-      await this.startImageService(id, environmentId, serviceName, serviceConfig, input, runtimeEnv, assignedPorts);
+      await this.startImageService(
+        id,
+        environmentId,
+        serviceName,
+        serviceConfig,
+        input,
+        runtimeEnv,
+        assignedPorts,
+      );
     }
 
     if (serviceConfig.health_check) {
@@ -241,7 +251,10 @@ export class LocalEnvironmentClient implements EnvironmentClient {
     id: string,
     environmentId: string,
     serviceName: string,
-    serviceConfig: Extract<LifecycleConfig["environment"][string], { kind: "service"; runtime: "image" }>,
+    serviceConfig: Extract<
+      LifecycleConfig["environment"][string],
+      { kind: "service"; runtime: "image" }
+    >,
     input: StartEnvironmentInput,
     runtimeEnv: Record<string, string>,
     assignedPorts: Record<string, number>,
@@ -254,7 +267,11 @@ export class LocalEnvironmentClient implements EnvironmentClient {
         ? resolvePath(input.rootPath, serviceConfig.build.dockerfile)
         : undefined;
       const tag = `lifecycle-${sanitize(environmentId)}-${sanitize(serviceName)}`;
-      await this.invoke("build_docker_image", { tag, contextPath, dockerfilePath: dockerfilePath ?? null });
+      await this.invoke("build_docker_image", {
+        tag,
+        contextPath,
+        dockerfilePath: dockerfilePath ?? null,
+      });
       imageRef = tag;
     } else if (imageRef) {
       await this.invoke("pull_docker_image", { image: imageRef });
@@ -262,7 +279,11 @@ export class LocalEnvironmentClient implements EnvironmentClient {
       throw new Error(`Image service "${serviceName}" requires either image or build.`);
     }
 
-    const envEntries = resolveServiceEnv(serviceConfig.env, runtimeEnv, `environment.${serviceName}.env`);
+    const envEntries = resolveServiceEnv(
+      serviceConfig.env,
+      runtimeEnv,
+      `environment.${serviceName}.env`,
+    );
     const env = Object.entries(envEntries).map(([key, value]) => `${key}=${value}`);
 
     const portBindings: Array<{ containerPort: number; hostPort: number }> = [];
@@ -273,7 +294,8 @@ export class LocalEnvironmentClient implements EnvironmentClient {
 
     const binds: string[] = [];
     for (const volume of serviceConfig.volumes ?? []) {
-      const hostPath = volume.type === "bind" ? resolvePath(input.rootPath, volume.source) : volume.source;
+      const hostPath =
+        volume.type === "bind" ? resolvePath(input.rootPath, volume.source) : volume.source;
       let bind = `${hostPath}:${volume.target}`;
       if (volume.read_only) {
         bind += ":ro";
@@ -302,19 +324,28 @@ export class LocalEnvironmentClient implements EnvironmentClient {
   }
 
   private buildHealthCheckInput(
-    hc: NonNullable<Extract<LifecycleConfig["environment"][string], { kind: "service" }>["health_check"]>,
+    hc: NonNullable<
+      Extract<LifecycleConfig["environment"][string], { kind: "service" }>["health_check"]
+    >,
     runtimeEnv: Record<string, string>,
   ): Record<string, unknown> {
     if (hc.kind === "tcp") {
       return {
         kind: "tcp",
         host: maybeExpandTemplate(hc.host, runtimeEnv),
-        port: typeof hc.port === "number" ? hc.port : Number(maybeExpandTemplate(String(hc.port), runtimeEnv)),
+        port:
+          typeof hc.port === "number"
+            ? hc.port
+            : Number(maybeExpandTemplate(String(hc.port), runtimeEnv)),
         timeoutSeconds: hc.timeout_seconds,
       };
     }
     if (hc.kind === "http") {
-      return { kind: "http", url: maybeExpandTemplate(hc.url, runtimeEnv), timeoutSeconds: hc.timeout_seconds };
+      return {
+        kind: "http",
+        url: maybeExpandTemplate(hc.url, runtimeEnv),
+        timeoutSeconds: hc.timeout_seconds,
+      };
     }
     return { kind: "container", timeoutSeconds: hc.timeout_seconds };
   }

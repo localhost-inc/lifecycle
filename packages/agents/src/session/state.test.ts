@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { AgentEvent } from "./events";
+import type { AgentEvent } from "../events";
 import {
   clearAgentSessionResponseReady,
   clearAgentWorkspaceResponseReady,
@@ -9,7 +9,7 @@ import {
   selectAgentSessionResponseReady,
   selectAgentSessionRunning,
   selectAgentWorkspaceStatus,
-} from "./agent-session-store";
+} from "./state";
 
 function applyEvents(events: AgentEvent[]) {
   return events.reduce(reduceAgentSessionEvent, createAgentSessionStore());

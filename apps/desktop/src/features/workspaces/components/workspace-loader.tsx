@@ -1,13 +1,15 @@
+import { useAgentClientRegistry } from "@lifecycle/agents/react";
+import type { AgentClient } from "@lifecycle/agents";
+import type { EnvironmentClient } from "@lifecycle/environment";
+import { useEnvironmentClientRegistry } from "@lifecycle/environment/react";
 import {
   getManifestFingerprint,
   type LifecycleConfig,
   type ProjectRecord,
   type WorkspaceRecord,
 } from "@lifecycle/contracts";
-import { useAgentClientRegistry } from "@lifecycle/agents/react";
-import type { AgentClient } from "@lifecycle/agents";
-import type { WorkspaceClient } from "@lifecycle/workspace/client";
-import { useWorkspaceClientRegistry } from "@lifecycle/workspace/client/react";
+import type { WorkspaceClient } from "@lifecycle/workspace";
+import { useWorkspaceClientRegistry } from "@lifecycle/workspace/react";
 import { Alert, AlertDescription, AlertTitle, Loading } from "@lifecycle/ui";
 import { useEffect, useRef, useState } from "react";
 import { selectServicesByWorkspace } from "@lifecycle/store";
@@ -91,12 +93,14 @@ interface WorkspaceLoaderProps {
 
 interface LoadedWorkspaceRouteProps extends WorkspaceLoaderProps {
   agentClient: AgentClient;
+  environmentClient: EnvironmentClient;
   workspace: WorkspaceRecord;
   workspaceClient: WorkspaceClient;
 }
 
 function LoadedWorkspaceRoute({
   agentClient,
+  environmentClient,
   onCloseTab,
   project,
   workspace,
@@ -230,7 +234,11 @@ function LoadedWorkspaceRoute({
   }
 
   return (
-    <WorkspaceScope agentClient={agentClient} workspaceClient={workspaceClient}>
+    <WorkspaceScope
+      agentClient={agentClient}
+      environmentClient={environmentClient}
+      workspaceClient={workspaceClient}
+    >
       <div className="flex h-full min-h-0 flex-1 flex-col" data-slot="workspace-shell">
         <WorkspaceNavBar activeWorkspaceId={workspaceId} projectName={project.name} />
         <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -248,6 +256,7 @@ function LoadedWorkspaceRoute({
 export function WorkspaceLoader({ onCloseTab, project, workspaceId }: WorkspaceLoaderProps) {
   const workspace = useWorkspace(workspaceId) ?? null;
   const workspaceClientRegistry = useWorkspaceClientRegistry();
+  const environmentClientRegistry = useEnvironmentClientRegistry();
   const agentClientRegistry = useAgentClientRegistry();
 
   if (!workspace) {
@@ -259,11 +268,13 @@ export function WorkspaceLoader({ onCloseTab, project, workspaceId }: WorkspaceL
   }
 
   const workspaceClient = workspaceClientRegistry.resolve(workspace.host);
+  const environmentClient = environmentClientRegistry.resolve(workspace.host);
   const agentClient = agentClientRegistry.resolve(workspace.host);
 
   return (
     <LoadedWorkspaceRoute
       agentClient={agentClient}
+      environmentClient={environmentClient}
       onCloseTab={onCloseTab}
       project={project}
       workspace={workspace}

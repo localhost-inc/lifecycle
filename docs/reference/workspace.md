@@ -1,10 +1,11 @@
 # Backend + Workspace
 
-Lifecycle uses three explicit seams:
+Lifecycle uses four explicit seams:
 
 1. `store` — the shared control-plane for persisted records (`project`, `workspace`, `service`, `agent_session`)
 2. `WorkspaceClient` — the only host-aware workspace boundary for provisioning and existing-workspace runtime behavior
-3. `AgentClient` — the host-aware agent boundary for first-party agent sessions, auth, model catalog, turns, approvals, attachments, and artifacts behind a Lifecycle-owned agent model
+3. `EnvironmentClient` — the host-aware environment boundary for service graph start/stop, runtime env construction, assigned port injection, and preview/log runtime wiring
+4. `AgentClient` — the host-aware agent boundary for first-party agent sessions, auth, model catalog, turns, approvals, attachments, and artifacts behind a Lifecycle-owned agent model
 
 Host-native concerns such as OS app launching and native terminal surface synchronization stay outside these seams. Workspace placement is selected **per-workspace** at creation time and stored as `workspace.host`.
 
@@ -16,7 +17,7 @@ Lifecycle separates catalog records from runtime-backed control-plane records:
 
 1. `organization` and `project` live fully inside the Lifecycle database as catalog data.
 2. `workspace` and `agent_session` are also persisted in the Lifecycle database, but those rows describe runtime instances that execute on a selected host or provider outside the database process.
-3. UI catalog flows mutate store state first; runtime capabilities resolve through `WorkspaceClient` and `AgentClient` only after a persisted workspace record exists.
+3. UI catalog flows mutate store state first; runtime capabilities resolve through `WorkspaceClient`, `EnvironmentClient`, and `AgentClient` only after a persisted workspace record exists.
 
 ## Workspace Boundary
 
@@ -71,8 +72,6 @@ interface WorkspaceClient {
   renameWorkspace(workspace + project_path + name) → workspace
   inspectArchive(workspace) → { hasUncommittedChanges }
   archiveWorkspace(workspace + project_path) → void
-  startServices(workspace + services + manifest_json + manifest_fingerprint + service_names?) → { preparedAt }
-  stopServices(workspace) → void
   readFile(workspace, file_path) → file
   writeFile(workspace, file_path, content) → file
   subscribeFileEvents(workspace_id, worktree_path?) → unsubscribe
@@ -97,24 +96,31 @@ interface WorkspaceClient {
 }
 ```
 
+```typescript
+interface EnvironmentClient {
+  start(config + environment_input) → { preparedAt }
+  stop(environment_id, service_names[]) → void
+}
+```
+
 ### Responsibility Split
 
-1. All host-aware workspace behavior goes through `WorkspaceClient`, including `ensureWorkspace`, rename, archive, files, git, and service lifecycle control.
+1. All host-aware workspace behavior goes through `WorkspaceClient`, including `ensureWorkspace`, rename, archive, files, open-in-app, and git.
 2. Source inspection that feeds workspace provisioning, such as manifest parsing and root-repository current-branch lookup, also goes through `WorkspaceClient`.
-3. `AgentClient` owns agent session lifecycle, auth, model catalog, and host-specific provider runtime execution for the selected workspace host.
-4. The agent transcript source of truth is `agent_event` plus its `agent_message` / `agent_message_part` projections; provider-local logs and terminal history are not query sources.
-5. Desktop file reads, writes, listings, open actions, and file-event subscriptions may route through the local host file client when the workspace has a local `worktree_path`, even if `workspace.host` is not `local`.
-6. `startServices(service_names?)` may target a single service chain; workspace execution must honor manifest `depends_on` edges.
-7. When `startServices(service_names?)` is called against an already-active workspace, `ready` dependency services should be treated as satisfied boundaries.
-8. Local create/start flows must carry the exact manifest content plus `manifest_fingerprint`.
+3. `EnvironmentClient` owns service graph start/stop, ready dependency satisfaction, assigned port injection, runtime env construction, and runtime process/container wiring for the selected workspace host.
+4. `AgentClient` owns agent session lifecycle, auth, model catalog, and host-specific provider runtime execution for the selected workspace host.
+5. The agent transcript source of truth is `agent_event` plus its `agent_message` / `agent_message_part` projections; provider-local logs and terminal history are not query sources.
+6. Desktop file reads, writes, listings, open actions, and file-event subscriptions may route through the local host file client when the workspace has a local `worktree_path`, even if `workspace.host` is not `local`.
+7. `EnvironmentClient.start(service_names?)` may target a single service chain; execution must honor manifest `depends_on` edges.
+8. When `EnvironmentClient.start(service_names?)` is called against an already-active workspace, `ready` dependency services should be treated as satisfied boundaries.
 9. Workspace creation first inserts a `workspace` row with `status=provisioning`; the workspace route then resolves `WorkspaceClient(workspace.host)` and calls `ensureWorkspace(...)`.
-10. The app root should expose `WorkspaceClient` and `AgentClient` registries only. Once the route has a real `workspace` record, it should bind a route-scoped workspace scope that resolves the concrete `WorkspaceClient` and `AgentClient` for `workspace.host`.
-11. Workspace-route children should consume bound `WorkspaceClient` / agent hooks from that scoped provider rather than re-resolving host-specific clients from partial state.
+10. The app root should expose `WorkspaceClient`, `EnvironmentClient`, and `AgentClient` registries only. Once the route has a real `workspace` record, it should bind a route-scoped workspace scope that resolves the concrete clients for `workspace.host`.
+11. Workspace-route children should consume bound `useWorkspaceClient()`, `useEnvironmentClient()`, and `useAgentClient()` hooks from that scoped provider rather than re-resolving host-specific clients from partial state.
 12. Desktop query reads and mutations must not bypass these seams with transport-local command calls.
-13. Frontend consumers should read concrete workspace-scoped facts through store/query surfaces (`workspace`, `services`, `activity`, `service_logs`, `agent_sessions`) instead of asking `WorkspaceClient` to read back runtime facts that already exist in the event/query layer.
+13. Frontend consumers should read concrete workspace-scoped facts through store/query surfaces (`workspace`, `services`, `activity`, `service_logs`, `agent_sessions`) instead of asking host clients to read back runtime facts that already exist in the event/query layer.
 14. Lifecycle event payloads are state facts, not invalidation hints. Desktop store collections should apply `workspace.*` and `service.*` events through store mutations instead of refreshing around native-owned DB writes.
 15. Frontend manifest watchers may invalidate workspace queries when `lifecycle.json` changes, but persisted workspace/service rows must still flow through the store/server path rather than direct native SQL.
-16. For `host=local`, native code is an execution substrate only. `WorkspaceClient` owns service-graph interpretation, runtime env construction, lifecycle policy, and dispatch; native receives explicit paths, commands, service configs, and env.
+16. For `host=local`, native code is an execution substrate only. `WorkspaceClient` owns workspace materialization, `EnvironmentClient` owns environment dispatch/runtime env construction, and native receives explicit paths, commands, service configs, and env.
 17. Local-native commands should converge toward capability-shaped operations (`process`, `container`, `filesystem`, `git`, `preview`, `sidecar`) rather than workspace-backend-specific policy verbs.
 
 ## Execution Model
@@ -123,9 +129,9 @@ interface WorkspaceClient {
 
 1. All workspaces are lifecycle-managed execution instances backed by `WorkspaceClient`.
 2. V1 ships a host-backed workspace implementation.
-3. The app root exposes `WorkspaceClientRegistryProvider` and `AgentClientRegistryProvider` only. Those providers carry host-keyed registries, not bound clients.
-4. Workspace scope binds one concrete `WorkspaceClient` and one concrete `AgentClient` for `workspace.host` through `WorkspaceClientProvider` and `AgentClientProvider`.
-5. Descendants inside a bound workspace scope must use `useWorkspaceClient()` and `useAgentClient()` directly. They must not resolve host-specific clients themselves.
+3. The app root exposes `WorkspaceClientRegistryProvider`, `EnvironmentClientRegistryProvider`, and `AgentClientRegistryProvider` only. Those providers carry host-keyed registries, not bound clients.
+4. Workspace scope binds one concrete `WorkspaceClient`, `EnvironmentClient`, and `AgentClient` for `workspace.host` through `WorkspaceClientProvider`, `EnvironmentClientProvider`, and `AgentClientProvider`.
+5. Descendants inside a bound workspace scope must use `useWorkspaceClient()`, `useEnvironmentClient()`, and `useAgentClient()` directly. They must not resolve host-specific clients themselves.
 6. `docker`, `remote`, and `cloud` are explicit workspace hosts. If a host is supported, the app must register a concrete client for it explicitly. `local` and `docker` may share the same underlying implementation for mounted local-worktree reads/writes, but that registration must still be explicit.
 7. Agent execution host follows `workspace.host`. `local` and `docker` may share the same underlying agent implementation until target-native providers exist, but each host still requires its own explicit bound `AgentClient`; `remote|cloud` still fail fast until explicit host implementations ship.
 

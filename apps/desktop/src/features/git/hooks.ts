@@ -5,7 +5,7 @@ import type {
   GitPullRequestListResult,
   GitStatusResult,
 } from "@lifecycle/contracts";
-import { useWorkspaceClient } from "@lifecycle/workspace/client/react";
+import { useWorkspaceClient } from "@lifecycle/workspace/react";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { gitKeys } from "@/features/git/state/git-query-keys";
 import { useWorkspace } from "@/store";

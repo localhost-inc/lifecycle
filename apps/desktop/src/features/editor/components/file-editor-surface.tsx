@@ -1,5 +1,5 @@
 import { Alert, AlertAction, AlertDescription, EmptyState, FloatingToggle } from "@lifecycle/ui";
-import { useWorkspaceClient } from "@lifecycle/workspace/client/react";
+import { useWorkspaceClient } from "@lifecycle/workspace/react";
 import { isTauri } from "@tauri-apps/api/core";
 import { watch } from "@tauri-apps/plugin-fs";
 import { FileText } from "lucide-react";

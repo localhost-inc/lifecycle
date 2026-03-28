@@ -1,5 +1,4 @@
 import {
-  parseManifest,
   type GitBranchPullRequestResult,
   type GitCommitDiffResult,
   type GitCommitResult,
@@ -20,8 +19,6 @@ import type {
   OpenInAppId,
   RenameWorkspaceInput,
   SubscribeWorkspaceFileEventsInput,
-  StartServicesInput,
-  StopServicesInput,
   WorkspaceFileEventListener,
   WorkspaceFileEventSubscription,
   WorkspaceArchiveDisposition,
@@ -33,10 +30,8 @@ import type {
 import { readManifestFromPath, type ManifestFileReader, type ManifestStatus } from "../../manifest";
 import { computeArchiveInput } from "../../policy/workspace-archive";
 import { computeRenameInput } from "../../policy/workspace-rename";
-import { LocalEnvironmentOrchestrator } from "./environment-client";
 
 export interface LocalClientDeps {
-  appDataDir?: string;
   invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
   fileReader?: ManifestFileReader;
   watchPath?: (
@@ -54,12 +49,10 @@ function requireWorktreePath(workspace: WorkspaceRecord): string {
 }
 
 export class LocalWorkspaceClient implements WorkspaceClient {
-  private appDataDir: string | undefined;
   private fileReader: ManifestFileReader | undefined;
   private invoke: LocalClientDeps["invoke"];
   private watchPath: LocalClientDeps["watchPath"];
   constructor(deps: LocalClientDeps) {
-    this.appDataDir = deps.appDataDir;
     this.fileReader = deps.fileReader;
     this.invoke = deps.invoke;
     this.watchPath = deps.watchPath;
@@ -211,47 +204,6 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     if (archiveInput.attachmentPath) {
       // Attachment cleanup is best-effort — TS handles this.
     }
-  }
-
-  async startServices(input: StartServicesInput): Promise<{ preparedAt: string | null }> {
-    const result = parseManifest(input.manifestJson);
-    if (!result.valid) {
-      throw new Error(`Invalid manifest: ${result.errors.map((e) => e.message).join(", ")}`);
-    }
-
-    const worktreePath = requireWorktreePath(input.workspace);
-
-    const logDir = this.appDataDir
-      ? `${this.appDataDir}/volumes/${input.workspace.id}/logs`
-      : `/tmp/lifecycle/logs/${input.workspace.id}`;
-
-    const environment = new LocalEnvironmentOrchestrator(this.invoke);
-    environment.primeStartContext({
-      config: result.config,
-      logDir,
-      services: input.services,
-      workspace: input.workspace,
-      worktreePath,
-    });
-    return environment.start(result.config, {
-      workspaceId: input.workspace.id,
-      manifestJson: input.manifestJson,
-      manifestFingerprint: input.manifestFingerprint,
-      prepared: input.workspace.prepared_at !== null,
-      readyServiceNames: input.services
-        .filter((service) => service.status === "ready")
-        .map((service) => service.name),
-      services: input.services,
-      ...(input.serviceNames ? { serviceNames: input.serviceNames } : {}),
-      workspace: input.workspace,
-      worktreePath,
-    });
-  }
-
-  async stopServices(input: StopServicesInput): Promise<void> {
-    const environment = new LocalEnvironmentOrchestrator(this.invoke);
-    environment.primeStopContext(input.services.map((service) => service.name));
-    await environment.stop(input.workspace.id);
   }
 
   async readFile(workspace: WorkspaceRecord, filePath: string): Promise<WorkspaceFileReadResult> {

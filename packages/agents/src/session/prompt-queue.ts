@@ -1,5 +1,5 @@
 import type { AgentSessionProviderId } from "@lifecycle/contracts";
-import type { AgentInputPart } from "./turn";
+import type { AgentInputPart } from "../turn";
 
 export interface AgentPromptPreview {
   attachmentSummary: string | null;

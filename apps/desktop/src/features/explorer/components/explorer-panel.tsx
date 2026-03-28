@@ -1,4 +1,4 @@
-import { useWorkspaceClient } from "@lifecycle/workspace/client/react";
+import { useWorkspaceClient } from "@lifecycle/workspace/react";
 import { EmptyState } from "@lifecycle/ui";
 import { FolderOpen } from "lucide-react";
 import { useEffect, useRef } from "react";

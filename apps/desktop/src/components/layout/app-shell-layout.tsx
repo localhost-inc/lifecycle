@@ -5,7 +5,7 @@ import {
   type WorkspaceHost,
   type WorkspaceRecord,
 } from "@lifecycle/contracts";
-import { useWorkspaceClientRegistry } from "@lifecycle/workspace/client/react";
+import { useWorkspaceClientRegistry } from "@lifecycle/workspace/react";
 import { Loading } from "@lifecycle/ui";
 import {
   useCallback,

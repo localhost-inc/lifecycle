@@ -8,9 +8,9 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
-    "./client": {
-      "types": "./src/client.ts",
-      "default": "./src/client.ts"
+    "./react": {
+      "types": "./src/react.ts",
+      "default": "./src/react.ts"
     }
   },
   "scripts": {
@@ -22,5 +22,12 @@
   },
   "dependencies": {
     "@lifecycle/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "react": "^19.1.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
   }
 }

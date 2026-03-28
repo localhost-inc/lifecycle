@@ -3,7 +3,7 @@ import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AuthSession } from "@lifecycle/auth";
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
-import { useWorkspaceClientRegistry } from "@lifecycle/workspace/client/react";
+import { useWorkspaceClientRegistry } from "@lifecycle/workspace/react";
 import { IconButton, Spinner, Wordmark } from "@lifecycle/ui";
 import { Archive, FolderGit2, GitBranch, Megaphone, Plus, Settings } from "lucide-react";
 import { NavigationControls } from "@/components/layout/navigation-controls";

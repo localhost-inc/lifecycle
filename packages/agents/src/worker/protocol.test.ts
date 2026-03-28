@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import type { AgentRuntimeRegistration, AgentRuntimeSnapshot } from "./runtime-protocol";
+import type { AgentWorkerRegistration, AgentWorkerSnapshot } from "./protocol";
 
-describe("agent runtime protocol", () => {
+describe("agent worker protocol", () => {
   test("defines a durable registration payload for reconnecting desktop sessions", () => {
-    const registration: AgentRuntimeRegistration = {
+    const registration: AgentWorkerRegistration = {
       provider: "codex",
       providerSessionId: "thread_1",
       sessionId: "agent_session_1",
@@ -21,7 +21,7 @@ describe("agent runtime protocol", () => {
   });
 
   test("defines a websocket snapshot payload for reconnect reconciliation", () => {
-    const snapshot: AgentRuntimeSnapshot = {
+    const snapshot: AgentWorkerSnapshot = {
       kind: "worker.state",
       provider: "claude",
       providerSessionId: "session_1",

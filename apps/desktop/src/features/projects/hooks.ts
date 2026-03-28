@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import type { ProjectRecord } from "@lifecycle/contracts";
 import type { ManifestStatus } from "@lifecycle/workspace";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
-import { useWorkspaceClientRegistry } from "@lifecycle/workspace/client/react";
+import { useWorkspaceClientRegistry } from "@lifecycle/workspace/react";
 import { useProjects } from "@/store";
 
 export interface ProjectCatalog {

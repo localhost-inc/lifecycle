@@ -2,7 +2,7 @@ import { Alert, AlertDescription } from "@lifecycle/ui";
 import { ChevronRight, Folder, FolderOpen } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { resolveExplorerTreeIcon } from "@/features/explorer/lib/explorer-tree-icons";
-import type { WorkspaceFileTreeEntry } from "@lifecycle/workspace/client";
+import type { WorkspaceFileTreeEntry } from "@lifecycle/workspace";
 
 interface ExplorerTreeProps {
   activeFilePath: string;

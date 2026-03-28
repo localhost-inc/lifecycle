@@ -5,6 +5,7 @@ export {
   slugifyWorkspaceName,
   workspaceBranchName,
 } from "./workspace-names";
+export { workspaceHostLabel } from "./workspace-host-label";
 export {
   computeWorkspaceCreatePolicy,
   type WorkspaceCreatePolicy,

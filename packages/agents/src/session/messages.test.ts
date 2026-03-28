@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { AgentEvent } from "./events";
-import { MessagePipeline } from "./message-pipeline";
+import type { AgentEvent } from "../events";
+import { AgentMessageProjection } from "./messages";
 
 // ---------------------------------------------------------------------------
 // Helpers — emit sequences of events into a fresh pipeline
@@ -18,9 +18,9 @@ function event<K extends AgentEvent["kind"]>(
 
 async function run(
   events: AgentEvent[],
-  options?: ConstructorParameters<typeof MessagePipeline>[0],
+  options?: ConstructorParameters<typeof AgentMessageProjection>[0],
 ) {
-  const pipeline = new MessagePipeline(options);
+  const pipeline = new AgentMessageProjection(options);
   for (const e of events) {
     await pipeline.processEvent(e);
   }
@@ -452,7 +452,7 @@ describe("multi-turn conversation", () => {
   });
 
   test("turn eviction only affects that turn's messages", async () => {
-    const pipeline = new MessagePipeline();
+    const pipeline = new AgentMessageProjection();
 
     // Turn 1 completes
     await pipeline.processEvent(event("agent.turn.started", { turnId: "t1" }));

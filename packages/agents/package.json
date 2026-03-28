@@ -17,12 +17,12 @@
       "default": "./src/clients/local/index.ts"
     },
     "./internal/worker": {
-      "types": "./src/worker.ts",
-      "default": "./src/worker.ts"
+      "types": "./src/worker/index.ts",
+      "default": "./src/worker/index.ts"
     },
-    "./internal/runtime-protocol": {
-      "types": "./src/runtime-protocol.ts",
-      "default": "./src/runtime-protocol.ts"
+    "./internal/worker-protocol": {
+      "types": "./src/worker/protocol.ts",
+      "default": "./src/worker/protocol.ts"
     },
     "./internal/providers/claude/auth": {
       "types": "./src/providers/claude/auth.ts",

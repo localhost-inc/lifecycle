@@ -5,13 +5,8 @@ export type {
   StartEnvironmentInput,
   StartEnvironmentResult,
 } from "./client";
-export { createEnvironmentClientRegistry } from "./client";
-export type {
-  EnvironmentNode,
-  EnvironmentNodeKind,
-  LoweredGraph,
-  LowerOptions,
-} from "./graph";
+export { createEnvironmentClientRegistry, createStartEnvironmentInput } from "./client";
+export type { EnvironmentNode, EnvironmentNodeKind, LoweredGraph, LowerOptions } from "./graph";
 export {
   declaredServiceNames,
   GraphError,
@@ -28,4 +23,6 @@ export {
   slugify,
   uppercaseEnvKey,
 } from "./runtime";
+export type { ServiceLogLine, ServiceLogSnapshot } from "./logs";
+export { recordWorkspaceServiceLogLine, selectWorkspaceServiceLogs } from "./logs";
 export { LocalEnvironmentClient, type LocalEnvironmentClientDeps } from "./clients/local";

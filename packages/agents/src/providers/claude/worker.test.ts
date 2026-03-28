@@ -23,7 +23,7 @@ mock.module("@anthropic-ai/claude-agent-sdk", () => ({
 }));
 
 const { buildClaudeAssistantContentEvents, buildClaudeToolUseEvents, createClaudeWorkerSession } =
-  await import("./providers/claude/worker");
+  await import("./worker");
 
 describe("claude worker session binding", () => {
   test("does not invent a provider session id for new workers", () => {

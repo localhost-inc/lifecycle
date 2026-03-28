@@ -21,7 +21,7 @@ import {
   selectAgentSessionState,
   selectAgentWorkspaceStatus,
   type AgentSessionState,
-} from "./agent-session-store";
+} from "./session/state";
 import {
   beginAgentPromptDispatch as beginSharedAgentPromptDispatch,
   clearAgentPromptQueue as clearSharedAgentPromptQueue,
@@ -35,7 +35,7 @@ import {
   selectAgentPromptQueueState,
   type AgentPromptQueueSessionState,
   type AgentQueuedPrompt,
-} from "./prompt-queue-store";
+} from "./session/prompt-queue";
 import type { AgentInputPart } from "./turn";
 import type { AgentClient } from "./client";
 import type { AgentClientRegistry } from "./client-registry";

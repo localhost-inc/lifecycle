@@ -1,8 +1,6 @@
 export type {
   ArchiveWorkspaceInput,
   EnsureWorkspaceInput,
-  StartServicesInput,
-  StopServicesInput,
   GitDiffInput,
   OpenInAppId,
   RenameWorkspaceInput,
@@ -10,8 +8,6 @@ export type {
   WorkspaceArchiveDisposition,
   WorkspaceOpenInAppInfo,
   SubscribeWorkspaceFileEventsInput,
-  ServiceLogLine,
-  ServiceLogSnapshot,
   WorkspaceFileEvent,
   WorkspaceFileEventListener,
   WorkspaceFileEventSubscription,

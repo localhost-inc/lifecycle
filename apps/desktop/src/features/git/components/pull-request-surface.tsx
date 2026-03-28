@@ -4,7 +4,7 @@ import type {
   GitPullRequestDetailResult,
   GitPullRequestSummary,
 } from "@lifecycle/contracts";
-import { useWorkspaceClient } from "@lifecycle/workspace/client/react";
+import { useWorkspaceClient } from "@lifecycle/workspace/react";
 import { Alert, AlertDescription, Badge } from "@lifecycle/ui";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ArrowRight, ArrowUpRight, Check, Circle, X } from "lucide-react";

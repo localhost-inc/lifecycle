@@ -2,7 +2,7 @@ import { useMemo, useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { File } from "lucide-react";
 import { useParams } from "react-router-dom";
-import { useWorkspaceClientRegistry } from "@lifecycle/workspace/client/react";
+import { useWorkspaceClientRegistry } from "@lifecycle/workspace/react";
 import {
   readWorkspaceExplorerUsage,
   readWorkspaceExplorerUsageVersion,

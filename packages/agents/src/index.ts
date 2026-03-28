@@ -9,7 +9,7 @@ export {
   selectAgentSessionResponseReady,
   selectAgentSessionRunning,
   selectAgentWorkspaceStatus,
-} from "./agent-session-store";
+} from "./session/state";
 export type {
   AgentSessionAuthStatus,
   AgentSessionDisplayStatus,
@@ -19,7 +19,7 @@ export type {
   AgentTurnActivity,
   AgentTurnPhase,
   AgentWorkspaceStatus,
-} from "./agent-session-store";
+} from "./session/state";
 export {
   beginAgentPromptDispatch,
   buildAgentPromptPreview,
@@ -34,14 +34,14 @@ export {
   retryAgentPrompt,
   selectAgentPromptQueueState,
   selectQueuedAgentPromptCount,
-} from "./prompt-queue-store";
+} from "./session/prompt-queue";
 export type {
   AgentPromptDispatchDecision,
   AgentPromptPreview,
   AgentPromptQueueSessionState,
   AgentPromptQueueStore,
   AgentQueuedPrompt,
-} from "./prompt-queue-store";
+} from "./session/prompt-queue";
 export type { AgentModelCatalog, AgentModelCatalogEntry } from "./catalog";
 export {
   buildClaudeHarnessLaunchConfig,
@@ -83,6 +83,8 @@ export { createAgentClientRegistry } from "./client-registry";
 export type { AgentClientRegistry, AgentClientRegistryClients } from "./client-registry";
 export { createAgentClient } from "./client";
 export type { AgentClient, AgentSessionContext, StartAgentSessionInput } from "./client";
+export { createAgentSessionHistoryObserver } from "./session/history";
+export { reattachActiveAgentSessions } from "./session/restore";
 export type {
   AgentApprovalDecision,
   AgentApprovalKind,
@@ -108,16 +110,3 @@ export type {
 } from "./providers/auth";
 export type { ClaudeLoginMethod } from "./providers/claude/env";
 export { retry, type RetryOptions } from "./retry";
-export {
-  MessagePipeline,
-  appendPart,
-  inferRole,
-  inferTurnId,
-  renderText,
-  toMessageWithParts,
-} from "./message-pipeline";
-export type {
-  AccumulatedMessage,
-  MessageFlushCallback,
-  MessagePipelineResult,
-} from "./message-pipeline";

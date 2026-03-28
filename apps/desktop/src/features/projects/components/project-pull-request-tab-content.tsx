@@ -1,7 +1,4 @@
-import {
-  WorkspaceClientProvider,
-  useWorkspaceClientRegistry,
-} from "@lifecycle/workspace/client/react";
+import { WorkspaceClientProvider, useWorkspaceClientRegistry } from "@lifecycle/workspace/react";
 import { EmptyState, Loading } from "@lifecycle/ui";
 import { useMemo } from "react";
 import { useOutletContext, useParams } from "react-router-dom";

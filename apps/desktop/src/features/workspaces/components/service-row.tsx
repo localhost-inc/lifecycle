@@ -1,4 +1,5 @@
 import type { ServiceRecord } from "@lifecycle/contracts";
+import type { ServiceLogLine } from "@lifecycle/environment";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { IconButton, Spinner } from "@lifecycle/ui";
 import { Globe, Layers, Play } from "lucide-react";
@@ -14,7 +15,6 @@ import {
   useState,
 } from "react";
 import { hasAnsiCodes, renderAnsiLine } from "@/lib/ansi";
-import type { ServiceLogLine } from "@lifecycle/workspace/client";
 
 type ServiceRuntime = "image" | "process";
 

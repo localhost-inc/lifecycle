@@ -3,11 +3,11 @@ import { mkdir, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type {
-  AgentRuntimeCommand as AgentWorkerCommand,
-  AgentRuntimeEvent as AgentWorkerEvent,
-  AgentRuntimeRegistration as AgentWorkerRegistration,
-  AgentRuntimeSnapshot as AgentWorkerSnapshot,
-} from "@lifecycle/agents/internal/runtime-protocol";
+  AgentWorkerCommand as AgentWorkerCommand,
+  AgentWorkerEvent as AgentWorkerEvent,
+  AgentWorkerRegistration as AgentWorkerRegistration,
+  AgentWorkerSnapshot as AgentWorkerSnapshot,
+} from "@lifecycle/agents/internal/worker-protocol";
 import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 

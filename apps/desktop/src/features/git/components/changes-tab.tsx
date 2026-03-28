@@ -1,5 +1,5 @@
 import type { GitFileChangeKind, GitFileStatus, GitStatusResult } from "@lifecycle/contracts";
-import { useWorkspaceClient } from "@lifecycle/workspace/client/react";
+import { useWorkspaceClient } from "@lifecycle/workspace/react";
 import { Button, EmptyState, Loading } from "@lifecycle/ui";
 import {
   File,

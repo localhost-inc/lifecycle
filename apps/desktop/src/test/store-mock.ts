@@ -32,7 +32,7 @@ export function mockStoreContext() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const storeProvider = require("@/store/provider");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const workspaceClientProvider = require("@lifecycle/workspace/client/react");
+  const workspaceClientProvider = require("@lifecycle/workspace/react");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const agentProvider = require("@lifecycle/agents/react");
 

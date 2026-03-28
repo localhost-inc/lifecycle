@@ -5,7 +5,7 @@ const {
   buildCodexApprovalResponse,
   codexThreadItemToWorkerItem,
   createCodexThreadBootstrapRequest,
-} = await import("./providers/codex/worker");
+} = await import("./worker");
 
 describe("codex worker session binding", () => {
   test("starts a new thread over app-server when there is no persisted provider session id", () => {

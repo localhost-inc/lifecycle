@@ -1,13 +1,21 @@
 import { createRoot, type Root } from "react-dom/client";
 import { exists, readTextFile, watch } from "@tauri-apps/plugin-fs";
 import { Command } from "@tauri-apps/plugin-shell";
-import { createAgentClientRegistry } from "@lifecycle/agents";
+import {
+  createAgentClient,
+  createAgentClientRegistry,
+  createAgentSessionHistoryObserver,
+  reattachActiveAgentSessions,
+} from "@lifecycle/agents";
 import type { AgentClientRegistry } from "@lifecycle/agents";
+import { recordAgentSessionEvent } from "@lifecycle/agents/react";
 import { createLocalAgentWorker } from "@lifecycle/agents/internal/local";
+import { createEnvironmentClientRegistry, LocalEnvironmentClient } from "@lifecycle/environment";
 import { createWorkspaceClientRegistry, LocalWorkspaceClient } from "@lifecycle/workspace";
-import type { WorkspaceClientRegistry } from "@lifecycle/workspace/client";
+import type { WorkspaceClientRegistry } from "@lifecycle/workspace";
 import { App } from "./app";
-import { createAgentClient as createDesktopAgentClient } from "@/features/agents/client";
+import { publishAgentLifecycleEvent } from "@/features/agents/agent-lifecycle-events";
+import { db } from "@/lib/db";
 import { readAppSettings } from "@/lib/config";
 import { invokeTauri } from "@/lib/tauri-error";
 import { markPerformance } from "@/lib/performance";
@@ -15,9 +23,9 @@ import "@/main.css";
 
 interface DesktopBootstrapHotData {
   agentClientRegistry?: AgentClientRegistry;
-  dockerAgentClient?: ReturnType<typeof createDesktopAgentClient>;
+  dockerAgentClient?: ReturnType<typeof createAgentClient>;
   localAgentWorker?: ReturnType<typeof createLocalAgentWorker>;
-  localAgentClient?: ReturnType<typeof createDesktopAgentClient>;
+  localAgentClient?: ReturnType<typeof createAgentClient>;
   localWorkspaceClient?: LocalWorkspaceClient;
   root?: Root;
   workspaceClientRegistry?: WorkspaceClientRegistry;
@@ -42,6 +50,13 @@ const workspaceClientRegistry =
     docker: dockerWorkspaceClient,
     local: localWorkspaceClient,
   });
+const localEnvironmentClient = new LocalEnvironmentClient({
+  invoke: (command, args) => invokeTauri(command, args),
+});
+const environmentClientRegistry = createEnvironmentClientRegistry({
+  docker: localEnvironmentClient,
+  local: localEnvironmentClient,
+});
 const localAgentWorker =
   hotData?.localAgentWorker ??
   createLocalAgentWorker({
@@ -82,15 +97,33 @@ const localAgentWorker =
   });
 const localAgentClient =
   hotData?.localAgentClient ??
-  createDesktopAgentClient({
+  createAgentClient({
     agentWorker: localAgentWorker,
+    driver: db,
+    observers: [
+      recordAgentSessionEvent,
+      createAgentSessionHistoryObserver({
+        driver: db,
+        stateKey: "local",
+      }),
+      publishAgentLifecycleEvent,
+    ],
     workspaceClient: localWorkspaceClient,
     workspaceHost: "local",
   });
 const dockerAgentClient =
   hotData?.dockerAgentClient ??
-  createDesktopAgentClient({
+  createAgentClient({
     agentWorker: localAgentWorker,
+    driver: db,
+    observers: [
+      recordAgentSessionEvent,
+      createAgentSessionHistoryObserver({
+        driver: db,
+        stateKey: "docker",
+      }),
+      publishAgentLifecycleEvent,
+    ],
     workspaceClient: dockerWorkspaceClient,
     workspaceHost: "docker",
   });
@@ -100,6 +133,17 @@ const agentClientRegistry =
     docker: dockerAgentClient,
     local: localAgentClient,
   });
+
+void reattachActiveAgentSessions({
+  agentClient: localAgentClient,
+  driver: db,
+  workspaceHost: "local",
+});
+void reattachActiveAgentSessions({
+  agentClient: dockerAgentClient,
+  driver: db,
+  workspaceHost: "docker",
+});
 
 const container = document.getElementById("root");
 if (!container) {
@@ -121,6 +165,7 @@ if (import.meta.hot) {
 root.render(
   <App
     agentClientRegistry={agentClientRegistry}
+    environmentClientRegistry={environmentClientRegistry}
     workspaceClientRegistry={workspaceClientRegistry}
   />,
 );

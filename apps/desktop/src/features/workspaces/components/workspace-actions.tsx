@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { OpenInAppId, WorkspaceOpenInAppInfo } from "@lifecycle/workspace";
-import { useWorkspaceClient } from "@lifecycle/workspace/client/react";
+import { useWorkspaceClient } from "@lifecycle/workspace/react";
 import {
   Button,
   Popover,

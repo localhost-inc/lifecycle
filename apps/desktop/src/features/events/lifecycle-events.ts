@@ -7,7 +7,12 @@ import type {
   LifecycleEventKind,
   LifecycleEventWire,
 } from "@lifecycle/contracts";
-import type { ServiceLogSnapshot } from "@lifecycle/workspace/client";
+import {
+  recordWorkspaceServiceLogLine,
+  selectWorkspaceServiceLogs,
+  type ServiceLogLine,
+  type ServiceLogSnapshot,
+} from "@lifecycle/environment";
 
 export const LIFECYCLE_EVENT_NAME = "lifecycle:event";
 
@@ -24,8 +29,6 @@ const WORKSPACE_ACTIVITY_EVENT_KINDS = new Set<LifecycleEventKind>([
 ]);
 
 type LifecycleListener = (event: LifecycleEvent) => void;
-type ServiceLogLine = ServiceLogSnapshot["lines"][number];
-
 const hotData = import.meta.hot?.data as
   | {
       activityEventsByWorkspace?: Map<string, LifecycleEvent[]>;
@@ -71,14 +74,12 @@ function appendWorkspaceServiceLogEvent(event: LifecycleEvent): void {
     return;
   }
 
-  const workspaceLogs = serviceLogLinesByWorkspace.get(event.workspaceId) ?? new Map();
-  const existing = workspaceLogs.get(event.name) ?? [];
-  const nextLines =
-    existing.length >= MAX_SERVICE_LOG_LINES_PER_SERVICE
-      ? [...existing.slice(1), { stream: event.stream, text: event.line }]
-      : [...existing, { stream: event.stream, text: event.line }];
-  workspaceLogs.set(event.name, nextLines);
-  serviceLogLinesByWorkspace.set(event.workspaceId, workspaceLogs);
+  recordWorkspaceServiceLogLine(serviceLogLinesByWorkspace, {
+    line: { stream: event.stream, text: event.line },
+    maxLinesPerService: MAX_SERVICE_LOG_LINES_PER_SERVICE,
+    serviceName: event.name,
+    workspaceId: event.workspaceId,
+  });
 }
 
 function recordLifecycleEvent(event: LifecycleEvent): void {
@@ -260,17 +261,7 @@ export function getWorkspaceActivityEvents(workspaceId: string): LifecycleEvent[
 }
 
 export function getWorkspaceServiceLogs(workspaceId: string): ServiceLogSnapshot[] {
-  const workspaceLogs = serviceLogLinesByWorkspace.get(workspaceId);
-  if (!workspaceLogs) {
-    return [];
-  }
-
-  return [...workspaceLogs.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([name, lines]) => ({
-      name,
-      lines: [...lines],
-    }));
+  return selectWorkspaceServiceLogs(serviceLogLinesByWorkspace, workspaceId);
 }
 
 export function resetLifecycleEventStoreForTests(): void {

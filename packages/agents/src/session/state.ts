@@ -1,5 +1,5 @@
-import type { AgentEvent } from "./events";
-import type { AgentApprovalRequest } from "./turn";
+import type { AgentEvent } from "../events";
+import type { AgentApprovalRequest } from "../turn";
 
 export interface AgentSessionAuthStatus {
   mode: "authenticating" | "error" | "ready";

@@ -2,31 +2,31 @@ import { retry } from "../../retry";
 import type { AgentApprovalResolution, AgentTurnCancelRequest, AgentTurnRequest } from "../../turn";
 import type { AgentSessionConnection } from "../../worker";
 import type {
-  AgentRuntimeCommand,
-  AgentRuntimeEvent,
-  AgentRuntimeInputPart,
-  AgentRuntimeRegistration,
-  AgentRuntimeSnapshot,
-} from "../../runtime-protocol";
+  AgentWorkerCommand,
+  AgentWorkerEvent,
+  AgentWorkerInputPart,
+  AgentWorkerRegistration,
+  AgentWorkerSnapshot,
+} from "../../worker/protocol";
 
 export interface LocalAgentInvoke {
   <T = unknown>(command: string, args?: Record<string, unknown>): Promise<T>;
 }
 
-export interface ConnectLocalAgentRuntimeInput {
+export interface ConnectLocalAgentWorkerInput {
   cwd: string;
   env?: Record<string, string>;
   launchArgs: string[];
-  onState: (snapshot: AgentRuntimeSnapshot) => void | Promise<void>;
-  onEvent: (event: AgentRuntimeEvent) => void | Promise<void>;
+  onState: (snapshot: AgentWorkerSnapshot) => void | Promise<void>;
+  onEvent: (event: AgentWorkerEvent) => void | Promise<void>;
   sessionId: string;
 }
 
-export interface ConnectLocalAgentRuntimeDeps {
+export interface ConnectLocalAgentWorkerDeps {
   invoke: LocalAgentInvoke;
 }
 
-interface StartAgentRuntimeInput {
+interface StartAgentWorkerInput {
   args: string[];
   cwd?: string;
   env?: Record<string, string>;
@@ -44,7 +44,7 @@ async function resolveLifecycleRoot(invoke: LocalAgentInvoke): Promise<string> {
   return cachedLifecycleRoot;
 }
 
-async function resolveAgentRuntimeDir(invoke: LocalAgentInvoke): Promise<string> {
+async function resolveAgentWorkerDir(invoke: LocalAgentInvoke): Promise<string> {
   const root = await resolveLifecycleRoot(invoke);
   return `${root}/agents/workers`;
 }
@@ -53,12 +53,12 @@ async function resolveRegistrationPath(
   invoke: LocalAgentInvoke,
   sessionId: string,
 ): Promise<string> {
-  const dir = await resolveAgentRuntimeDir(invoke);
+  const dir = await resolveAgentWorkerDir(invoke);
   return `${dir}/${sessionId}.json`;
 }
 
 async function resolveLogPath(invoke: LocalAgentInvoke, sessionId: string): Promise<string> {
-  const dir = await resolveAgentRuntimeDir(invoke);
+  const dir = await resolveAgentWorkerDir(invoke);
   return `${dir}/logs/${sessionId}.log`;
 }
 
@@ -78,7 +78,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object";
 }
 
-function isAgentRuntimeSnapshot(value: unknown): value is AgentRuntimeSnapshot {
+function isAgentWorkerSnapshot(value: unknown): value is AgentWorkerSnapshot {
   return (
     isRecord(value) &&
     value.kind === "worker.state" &&
@@ -88,17 +88,17 @@ function isAgentRuntimeSnapshot(value: unknown): value is AgentRuntimeSnapshot {
   );
 }
 
-function parseRuntimeMessage(raw: string): AgentRuntimeEvent | AgentRuntimeSnapshot {
+function parseRuntimeMessage(raw: string): AgentWorkerEvent | AgentWorkerSnapshot {
   const parsed = JSON.parse(raw) as unknown;
-  if (isAgentRuntimeSnapshot(parsed)) {
+  if (isAgentWorkerSnapshot(parsed)) {
     return parsed;
   }
-  return parsed as AgentRuntimeEvent;
+  return parsed as AgentWorkerEvent;
 }
 
-async function startAgentRuntime(
+async function startAgentWorker(
   invoke: LocalAgentInvoke,
-  input: StartAgentRuntimeInput,
+  input: StartAgentWorkerInput,
 ): Promise<void> {
   const registrationPath = await resolveRegistrationPath(invoke, input.sessionId);
   const logPath = await resolveLogPath(invoke, input.sessionId);
@@ -118,12 +118,12 @@ async function startAgentRuntime(
   });
 }
 
-export async function readAgentRuntimeRegistration(
+export async function readAgentWorkerRegistration(
   invoke: LocalAgentInvoke,
   sessionId: string,
-): Promise<AgentRuntimeRegistration | null> {
+): Promise<AgentWorkerRegistration | null> {
   const path = await resolveRegistrationPath(invoke, sessionId);
-  const registration = await invoke<AgentRuntimeRegistration | null>("read_json_file", { path });
+  const registration = await invoke<AgentWorkerRegistration | null>("read_json_file", { path });
 
   runtimeLog(sessionId, "read agent runtime registration", {
     found: registration !== null,
@@ -135,13 +135,13 @@ export async function readAgentRuntimeRegistration(
   return registration;
 }
 
-async function waitForAgentRuntimeRegistration(
+async function waitForAgentWorkerRegistration(
   invoke: LocalAgentInvoke,
   sessionId: string,
-): Promise<AgentRuntimeRegistration> {
+): Promise<AgentWorkerRegistration> {
   return retry(
     async () => {
-      const registration = await readAgentRuntimeRegistration(invoke, sessionId);
+      const registration = await readAgentWorkerRegistration(invoke, sessionId);
       if (!registration) {
         throw new Error(`Agent runtime ${sessionId} has not registered yet.`);
       }
@@ -156,14 +156,14 @@ async function waitForAgentRuntimeRegistration(
   );
 }
 
-class LocalAgentRuntimeConnection implements AgentSessionConnection {
+class LocalAgentWorkerConnection implements AgentSessionConnection {
   private connectPromise: Promise<WebSocket> | null = null;
   private initialSnapshotReceived = false;
   private socket: WebSocket | null = null;
 
   constructor(
-    private readonly deps: ConnectLocalAgentRuntimeDeps,
-    private readonly options: ConnectLocalAgentRuntimeInput,
+    private readonly deps: ConnectLocalAgentWorkerDeps,
+    private readonly options: ConnectLocalAgentWorkerInput,
   ) {}
 
   async connect(): Promise<void> {
@@ -182,7 +182,7 @@ class LocalAgentRuntimeConnection implements AgentSessionConnection {
   }
 
   async sendTurn(turn: AgentTurnRequest): Promise<void> {
-    const parts: AgentRuntimeInputPart[] = [];
+    const parts: AgentWorkerInputPart[] = [];
 
     for (const part of turn.input) {
       if (part.type === "text") {
@@ -222,7 +222,7 @@ class LocalAgentRuntimeConnection implements AgentSessionConnection {
     });
   }
 
-  private async sendCommand(command: AgentRuntimeCommand): Promise<void> {
+  private async sendCommand(command: AgentWorkerCommand): Promise<void> {
     runtimeLog(this.options.sessionId, "sending command", {
       commandKind: command.kind,
       turnId: "turnId" in command ? (command.turnId ?? null) : null,
@@ -275,7 +275,7 @@ class LocalAgentRuntimeConnection implements AgentSessionConnection {
   }
 
   private async openSocket(forceStart: boolean): Promise<WebSocket> {
-    const existing = await readAgentRuntimeRegistration(this.deps.invoke, this.options.sessionId);
+    const existing = await readAgentWorkerRegistration(this.deps.invoke, this.options.sessionId);
     if (existing) {
       try {
         runtimeLog(this.options.sessionId, "connecting to existing agent runtime", {
@@ -297,7 +297,7 @@ class LocalAgentRuntimeConnection implements AgentSessionConnection {
       throw new Error(`Agent runtime ${this.options.sessionId} is unavailable.`);
     }
 
-    await startAgentRuntime(this.deps.invoke, {
+    await startAgentWorker(this.deps.invoke, {
       args: this.options.launchArgs,
       sessionId: this.options.sessionId,
       ...(this.options.cwd ? { cwd: this.options.cwd } : {}),
@@ -305,11 +305,11 @@ class LocalAgentRuntimeConnection implements AgentSessionConnection {
     });
 
     return await this.connectToRegistration(
-      await waitForAgentRuntimeRegistration(this.deps.invoke, this.options.sessionId),
+      await waitForAgentWorkerRegistration(this.deps.invoke, this.options.sessionId),
     );
   }
 
-  private async connectToRegistration(registration: AgentRuntimeRegistration): Promise<WebSocket> {
+  private async connectToRegistration(registration: AgentWorkerRegistration): Promise<WebSocket> {
     return await new Promise<WebSocket>((resolve, reject) => {
       runtimeLog(this.options.sessionId, "opening websocket", {
         pid: registration.pid,
@@ -376,7 +376,7 @@ class LocalAgentRuntimeConnection implements AgentSessionConnection {
         }
 
         const parsed = parseRuntimeMessage(payload);
-        if (isAgentRuntimeSnapshot(parsed)) {
+        if (isAgentWorkerSnapshot(parsed)) {
           runtimeLog(this.options.sessionId, "received state snapshot", {
             provider: parsed.provider,
             providerSessionId: parsed.providerSessionId,
@@ -408,11 +408,11 @@ class LocalAgentRuntimeConnection implements AgentSessionConnection {
   }
 }
 
-export async function connectLocalAgentRuntime(
-  deps: ConnectLocalAgentRuntimeDeps,
-  options: ConnectLocalAgentRuntimeInput,
+export async function connectLocalAgentWorker(
+  deps: ConnectLocalAgentWorkerDeps,
+  options: ConnectLocalAgentWorkerInput,
 ): Promise<AgentSessionConnection> {
-  const connection = new LocalAgentRuntimeConnection(deps, options);
+  const connection = new LocalAgentWorkerConnection(deps, options);
   await connection.connect();
   await connection.waitForInitialSnapshot();
   return connection;

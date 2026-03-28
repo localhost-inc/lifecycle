@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as reactQuery from "@tanstack/react-query";
 import { mockStoreContext } from "@/test/store-mock";
-import type { WorkspaceFileTreeEntry } from "@lifecycle/workspace/client";
+import type { WorkspaceFileTreeEntry } from "@lifecycle/workspace";
 
 function readyQueryResult<T>(data: T) {
   return {

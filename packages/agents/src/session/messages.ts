@@ -1,6 +1,6 @@
 import type { AgentMessagePartRecord, AgentMessageWithParts } from "@lifecycle/contracts";
-import type { AgentEvent } from "./events";
-import type { AgentMessagePart, AgentMessageRole } from "./turn";
+import type { AgentEvent } from "../events";
+import type { AgentMessagePart, AgentMessageRole } from "../turn";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -20,7 +20,7 @@ export interface AccumulatedMessage {
   createdAt: string;
 }
 
-export interface MessagePipelineResult {
+export interface AgentMessageProjectionResult {
   messages: AgentMessageWithParts[];
   flushed: AgentMessageWithParts[];
 }
@@ -29,14 +29,14 @@ export interface MessagePipelineResult {
  * Optional callback invoked whenever a message is flushed (created or updated).
  * The test harness and desktop app both use this to observe persistence writes.
  */
-export type MessageFlushCallback = (message: AgentMessageWithParts) => void;
+export type AgentMessageFlushCallback = (message: AgentMessageWithParts) => void;
 
 /**
  * Optional callback invoked when the pipeline needs to check if an assistant
  * message was already persisted (e.g. from a previous app session).
  * Returns the part count for the given messageId.
  */
-export type HasPersistedPartsCallback = (messageId: string) => Promise<number> | number;
+export type HasPersistedAgentMessageParts = (messageId: string) => Promise<number> | number;
 
 // ---------------------------------------------------------------------------
 // Pure message accumulation pipeline.
@@ -50,19 +50,22 @@ export type HasPersistedPartsCallback = (messageId: string) => Promise<number> |
 //   - synthetic message parts (tool results, approvals, artifacts)
 // ---------------------------------------------------------------------------
 
-export class MessagePipeline {
+export class AgentMessageProjection {
   private messages = new Map<string, AccumulatedMessage>();
   private messageSeq = new Map<string, number>();
   private flushed: AgentMessageWithParts[] = [];
-  private onFlush: MessageFlushCallback | null;
-  private hasPersistedParts: HasPersistedPartsCallback | null;
+  private onFlush: AgentMessageFlushCallback | null;
+  private hasPersistedParts: HasPersistedAgentMessageParts | null;
+  private now: () => string;
 
   constructor(options?: {
-    onFlush?: MessageFlushCallback;
-    hasPersistedParts?: HasPersistedPartsCallback;
+    now?: () => string;
+    onFlush?: AgentMessageFlushCallback;
+    hasPersistedParts?: HasPersistedAgentMessageParts;
   }) {
     this.onFlush = options?.onFlush ?? null;
     this.hasPersistedParts = options?.hasPersistedParts ?? null;
+    this.now = options?.now ?? (() => "2026-01-01T00:00:00.000Z");
   }
 
   // ── Public API ────────────────────────────────────────────────────────
@@ -254,6 +257,14 @@ export class MessagePipeline {
     return [...map.values()];
   }
 
+  clearSession(sessionId: string): void {
+    for (const [messageId, message] of this.messages) {
+      if (message.sessionId === sessionId) {
+        this.messages.delete(messageId);
+      }
+    }
+  }
+
   // ── Internal ──────────────────────────────────────────────────────────
 
   private getOrCreate(
@@ -284,7 +295,8 @@ export class MessagePipeline {
   private nextTimestamp(sessionId: string): string {
     const seq = (this.messageSeq.get(sessionId) ?? 0) + 1;
     this.messageSeq.set(sessionId, seq);
-    return `2026-01-01T00:00:00.000${String(seq).padStart(6, "0")}Z`;
+    const base = this.now().replace("Z", "");
+    return `${base}${String(seq).padStart(6, "0")}Z`;
   }
 
   private flush(msg: AccumulatedMessage): AgentMessageWithParts {

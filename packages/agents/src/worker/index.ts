@@ -1,11 +1,11 @@
 import type { AgentSessionProviderId, AgentSessionRecord } from "@lifecycle/contracts";
 import type { WorkspaceClient } from "@lifecycle/workspace/client";
-import type { AgentModelCatalog } from "./catalog";
-import type { AgentSessionContext } from "./client";
-import type { AgentAuthEvent, AgentAuthStatus } from "./providers/auth";
-import type { ClaudeLoginMethod } from "./providers/claude/env";
-import type { AgentRuntimeEvent, AgentRuntimeSnapshot } from "./runtime-protocol";
-import type { AgentApprovalResolution, AgentTurnCancelRequest, AgentTurnRequest } from "./turn";
+import type { AgentModelCatalog } from "../catalog";
+import type { AgentSessionContext } from "../client";
+import type { AgentAuthEvent, AgentAuthStatus } from "../providers/auth";
+import type { ClaudeLoginMethod } from "../providers/claude/env";
+import type { AgentWorkerEvent, AgentWorkerSnapshot } from "./protocol";
+import type { AgentApprovalResolution, AgentTurnCancelRequest, AgentTurnRequest } from "../turn";
 
 export interface AgentModelCatalogOptions {
   enabled?: boolean;
@@ -31,8 +31,8 @@ export interface AgentWorkerCommandRunner {
 }
 
 export interface AgentWorkerCallbacks {
-  onState(snapshot: AgentRuntimeSnapshot): void | Promise<void>;
-  onEvent(event: AgentRuntimeEvent): void | Promise<void>;
+  onState(snapshot: AgentWorkerSnapshot): void | Promise<void>;
+  onEvent(event: AgentWorkerEvent): void | Promise<void>;
 }
 
 export interface AgentSessionConnection {

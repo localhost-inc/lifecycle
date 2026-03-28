@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { createAgentWorker, type AgentWorkerCommandRunner } from "./worker";
+import { createAgentWorker, type AgentWorkerCommandRunner } from ".";
 
 type ClosePayload = {
   code?: number | null;

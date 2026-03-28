@@ -1,5 +1,5 @@
 import type { GitLogEntry, GitStatusResult } from "@lifecycle/contracts";
-import { useWorkspaceClient } from "@lifecycle/workspace/client/react";
+import { useWorkspaceClient } from "@lifecycle/workspace/react";
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { formatRelativeTime } from "@/lib/format";
 import { measureAsyncPerformance } from "@/lib/performance";

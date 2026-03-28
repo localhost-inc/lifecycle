@@ -15,6 +15,7 @@ import type {
   WorkspaceRecord,
 } from "@lifecycle/contracts";
 import type { SqlDriver } from "@lifecycle/db";
+import { previewUrlForService } from "@lifecycle/environment";
 import {
   createProjectCollection,
   createServiceCollection,
@@ -23,7 +24,7 @@ import {
   selectServicesByWorkspace,
   type SqlCollection,
 } from "@lifecycle/store";
-import { previewUrlForService } from "@lifecycle/workspace";
+import { workspaceHostLabel } from "@lifecycle/workspace";
 import { subscribeToLifecycleEvents } from "@/features/events";
 import { invokeTauri } from "@/lib/tauri-error";
 
@@ -187,7 +188,7 @@ async function applyServiceStatusEvent(
   const previewProxyPort = nextAssignedPort !== null ? await getPreviewProxyPort() : null;
   const previewUrl =
     nextAssignedPort !== null && workspace && previewProxyPort !== null
-      ? previewUrlForService(workspace, event.name, previewProxyPort)
+      ? previewUrlForService(workspaceHostLabel(workspace), event.name, previewProxyPort)
       : null;
 
   if (current) {

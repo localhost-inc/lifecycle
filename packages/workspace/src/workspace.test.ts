@@ -51,8 +51,6 @@ describe("workspace contract", () => {
       "renameWorkspace",
       "inspectArchive",
       "archiveWorkspace",
-      "startServices",
-      "stopServices",
       "readFile",
       "writeFile",
       "subscribeFileEvents",
@@ -80,7 +78,7 @@ describe("workspace contract", () => {
       "mergeGitPullRequest",
     ];
 
-    expect(requiredMethods).toHaveLength(33);
+    expect(requiredMethods).toHaveLength(31);
   });
 
   test("host client exposes the full contract surface", () => {
@@ -93,8 +91,7 @@ describe("workspace contract", () => {
     expect(typeof client.renameWorkspace).toBe("function");
     expect(typeof client.inspectArchive).toBe("function");
     expect(typeof client.archiveWorkspace).toBe("function");
-    expect(typeof client.startServices).toBe("function");
-    expect(typeof client.stopServices).toBe("function");
+
     expect(typeof client.readFile).toBe("function");
     expect(typeof client.writeFile).toBe("function");
     expect(typeof client.subscribeFileEvents).toBe("function");
@@ -219,61 +216,6 @@ describe("workspace contract", () => {
     );
   });
 
-  test("startServices uses graph-driven orchestration through environment target", async () => {
-    const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
-    const invoke = async (cmd: string, args?: Record<string, unknown>) => {
-      calls.push(args ? { cmd, args } : { cmd });
-      if (cmd === "assign_ports") {
-        return { assignedPorts: { web: 43123 } };
-      }
-      if (cmd === "get_preview_proxy_port") {
-        return 52300;
-      }
-      return undefined;
-    };
-    const client = new LocalWorkspaceClient({ invoke });
-
-    await client.startServices({
-      workspace: workspace(),
-      services: [service()],
-      manifestJson:
-        '{"workspace":{"prepare":[]},"environment":{"web":{"kind":"service","runtime":"process","command":"bun run dev"}}}',
-      manifestFingerprint: "manifest_1",
-    });
-
-    const commandNames = calls.map((c) => c.cmd);
-    expect(commandNames).toContain("assign_ports");
-    expect(commandNames).toContain("spawn_managed_process");
-  });
-
-  test("startServices invokes spawn_managed_process for each service in dependency order", async () => {
-    const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
-    const invoke = async (cmd: string, args?: Record<string, unknown>) => {
-      calls.push(args ? { cmd, args } : { cmd });
-      if (cmd === "assign_ports") {
-        return { assignedPorts: { api: 43124, www: 43125 } };
-      }
-      if (cmd === "get_preview_proxy_port") {
-        return 52300;
-      }
-      return undefined;
-    };
-    const client = new LocalWorkspaceClient({ invoke });
-
-    await client.startServices({
-      workspace: workspace(),
-      services: [service({ id: "svc_api", name: "api" }), service({ id: "svc_www", name: "www" })],
-      manifestJson:
-        '{"workspace":{"prepare":[]},"environment":{"api":{"kind":"service","runtime":"process","command":"bun run api"},"www":{"kind":"service","runtime":"process","command":"bun run www","depends_on":["api"]}}}',
-      manifestFingerprint: "manifest_1",
-    });
-
-    const startCalls = calls
-      .filter((c) => c.cmd === "spawn_managed_process")
-      .map((c) => (c.args?.request as { id?: string } | undefined)?.id);
-    expect(startCalls).toEqual(["ws_1:api", "ws_1:www"]);
-  });
-
   test("host client forwards file operations with root path", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const fileResult = {
@@ -305,7 +247,6 @@ describe("workspace contract", () => {
     await client.writeFile(target, "README.md", "welcome");
     await client.listFiles(target);
     await client.openFile(target, "README.md");
-    await client.stopServices({ workspace: target, services: [service()] });
 
     expect(calls).toEqual([
       { cmd: "read_file", args: { rootPath: REPO_PATH, filePath: "README.md" } },
@@ -315,8 +256,6 @@ describe("workspace contract", () => {
       },
       { cmd: "list_files", args: { rootPath: REPO_PATH } },
       { cmd: "open_file", args: { rootPath: REPO_PATH, filePath: "README.md" } },
-      { cmd: "kill_managed_process", args: { id: "ws_1:web" } },
-      { cmd: "stop_managed_container", args: { id: "ws_1:web" } },
     ]);
   });
 

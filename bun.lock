@@ -37,6 +37,7 @@
         "@lifecycle/auth": "workspace:*",
         "@lifecycle/contracts": "workspace:*",
         "@lifecycle/db": "workspace:*",
+        "@lifecycle/environment": "workspace:*",
         "@lifecycle/store": "workspace:*",
         "@lifecycle/ui": "workspace:*",
         "@lifecycle/workspace": "workspace:*",
@@ -179,6 +180,13 @@
       "version": "0.0.0",
       "dependencies": {
         "@lifecycle/contracts": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/react": "^19.2.14",
+        "react": "^19.1.0",
+      },
+      "peerDependencies": {
+        "react": "^19.0.0",
       },
     },
     "packages/store": {
