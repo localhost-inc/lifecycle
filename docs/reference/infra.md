@@ -76,28 +76,29 @@ github.handleWebhook(payload, signature)
 
 # Database Migrations
 
-Desktop SQLite schema as a versioned contract.
+The shared control-plane database schema as a versioned contract.
 
 ## Rules
 
-1. Every schema change → numbered SQL migration in `apps/desktop/src-tauri/src/platform/migrations`
-2. `schema_migration` is the only migration source of truth
+1. Every schema change → numbered SQL migration in `packages/db/migrations`
+2. Desktop renderer/store access goes through `lifecycle db server`, which applies the shared migration set before serving requests
 3. No startup-time `ALTER TABLE` helpers or ad hoc schema mutations
 4. Before launch: prefer squashing baseline
 5. After launch: additive and forward-only
 
 ## Runtime Contract
 
-`run_migrations` in `apps/desktop/src-tauri/src/platform/db.rs`:
-1. Creates `schema_migration` if missing
-2. Applies numbered migrations in order
+1. `packages/db/migrations/*.sql` is the canonical migration set
+2. `packages/db/src/migrations.ts` applies that migration set inside `lifecycle db server`
+3. Renderer-visible record mutations (`workspace`, `service`, `agent_session`, `project`) flow through `db/server` and store collections
+4. Native runtime code does not own or mutate control-plane state; it emits events and executes commands issued through the workspace and agent layers
 
 ## Change Checklist
 
-1. Add next numbered SQL file under migrations
-2. Register in `MIGRATIONS` in `db.rs`
-3. Add/update migration tests in `db.rs`
-4. Run `cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml`
+1. Add next numbered SQL file under `packages/db/migrations`
+2. Add migration metadata in `packages/db/src/migrations.ts`
+3. Add/update migration tests in `packages/db`
+4. Run `bun test packages/db/src/index.test.ts`
 5. Update docs if persisted contract changed
 
 ---

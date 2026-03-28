@@ -64,7 +64,7 @@ describe("codex worker session binding", () => {
     ).toEqual({
       id: "item_1",
       inputJson: '{"q":"build logs"}',
-      status: "in_progress",
+      status: "running",
       toolCallId: "item_1",
       toolName: "search/query",
       type: "tool_call",
@@ -95,7 +95,7 @@ describe("codex worker session binding", () => {
       ],
       diff: "diff --git a/src/app.ts b/src/app.ts\n--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1 +1 @@\n-old\n+new\n",
       id: "item_2",
-      status: "in_progress",
+      status: "running",
       type: "file_change",
     });
   });
@@ -136,7 +136,7 @@ describe("codex worker session binding", () => {
       exitCode: 0,
       id: "item_cmd_1",
       output: "Preparing import\nProcessed 500000 rows\n",
-      status: "in_progress",
+      status: "running",
       type: "command_execution",
     });
   });

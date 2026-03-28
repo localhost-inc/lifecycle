@@ -1,6 +1,7 @@
 import type { ProjectRecord } from "@lifecycle/contracts";
+import { selectWorkspacesByProject } from "@lifecycle/store";
 import { useCallback } from "react";
-import { chooseProjectDirectory, cleanupProject } from "@/features/projects/api/projects";
+import { chooseProjectDirectory, cleanupProject } from "@/lib/projects";
 import { useStoreContext } from "@/store/provider";
 
 function nameFromPath(projectPath: string): string {
@@ -9,7 +10,7 @@ function nameFromPath(projectPath: string): string {
 }
 
 export function useProjectMutations() {
-  const { collections } = useStoreContext();
+  const { collections, driver } = useStoreContext();
 
   const createProjectFromDirectory = useCallback(async (): Promise<ProjectRecord | null> => {
     const projectPath = await chooseProjectDirectory();
@@ -35,11 +36,14 @@ export function useProjectMutations() {
 
   const removeProject = useCallback(
     async (projectId: string): Promise<void> => {
-      await cleanupProject(projectId);
+      const rootWorkspaceIds = (await selectWorkspacesByProject(driver, projectId))
+        .filter((workspace) => workspace.checkout_type === "root")
+        .map((workspace) => workspace.id);
+      await cleanupProject(rootWorkspaceIds);
       const transaction = collections.projects.delete(projectId);
       await transaction.isPersisted.promise;
     },
-    [collections.projects],
+    [collections.projects, driver],
   );
 
   const updateProjectManifestValid = useCallback(

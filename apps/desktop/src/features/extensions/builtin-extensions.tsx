@@ -133,7 +133,6 @@ export function getBuiltinExtensionSlots({
         <ExplorerPanel
           onOpenFile={launchActions.openFileEditor}
           workspaceId={workspace.id}
-          workspaceHost={workspace.host}
           worktreePath={workspace.worktree_path}
         />
       ),

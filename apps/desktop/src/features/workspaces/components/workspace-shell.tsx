@@ -4,6 +4,7 @@ import {
   type GitPullRequestSummary,
   type WorkspaceRecord,
 } from "@lifecycle/contracts";
+import type { ManifestStatus } from "@lifecycle/workspace";
 import { EmptyState } from "@lifecycle/ui";
 import {
   useCallback,
@@ -36,7 +37,6 @@ import { ExtensionBar } from "@/features/extensions/extension-bar";
 import { getBuiltinExtensionSlots } from "@/features/extensions/builtin-extensions";
 import { ExtensionPanel } from "@/features/extensions/extension-panel";
 import { useGitStatus } from "@/features/git/hooks";
-import type { ManifestStatus } from "@/features/projects/api/projects";
 import { WorkspaceCanvas } from "@/features/workspaces/canvas/workspace-canvas";
 import {
   createAgentOpenInput,
@@ -46,11 +46,11 @@ import {
   createPreviewOpenInput,
   createPullRequestOpenInput,
 } from "@/features/workspaces/canvas/workspace-canvas-requests";
-import { useWorkspaceServices } from "@/features/workspaces/hooks";
-import { useWorkspaceHostClient } from "@lifecycle/workspace/client/react";
+import { useWorkspaceClient } from "@lifecycle/workspace/client/react";
 import { workspaceSupportsFilesystemInteraction } from "@/features/workspaces/lib/workspace-capabilities";
 import { useWorkspaceOpenRequests } from "@/features/workspaces/state/workspace-open-requests";
 import { useWorkspaceToolbar } from "@/features/workspaces/state/workspace-toolbar-context";
+import { useStoreContext, useWorkspaceServices } from "@/store";
 
 const SIDEBAR_RESIZE_STEP = 16;
 
@@ -61,7 +61,8 @@ interface WorkspaceShellProps {
 }
 
 export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: WorkspaceShellProps) {
-  const client = useWorkspaceHostClient(workspace.host);
+  const client = useWorkspaceClient();
+  const { collections } = useStoreContext();
   const workspaceLayoutRef = useRef<HTMLDivElement | null>(null);
   const [workspaceLayoutWidth, setWorkspaceLayoutWidth] = useState(0);
   const [panelWidth, setPanelWidth] = useState(() =>
@@ -81,31 +82,44 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
   const config = hasManifest ? manifestStatus.result.config : null;
   const manifestState = manifestStatus?.state ?? "missing";
   const supportsTerminalInteraction = workspaceSupportsFilesystemInteraction(workspace);
-  const services = useWorkspaceServices(workspace.id, workspace.host);
-  const gitStatusQuery = useGitStatus(
-    supportsTerminalInteraction ? workspace.id : null,
-    supportsTerminalInteraction ? workspace.host : null,
-  );
+  const services = useWorkspaceServices(workspace.id);
+  const gitStatusQuery = useGitStatus(supportsTerminalInteraction ? workspace.id : null);
   const { registerToolbarSlot, unregisterToolbarSlot } = useWorkspaceToolbar();
+
+  const persistPreparedAt = useCallback(
+    async (preparedAt: string | null): Promise<void> => {
+      if (!preparedAt || workspace.prepared_at === preparedAt) {
+        return;
+      }
+
+      const transaction = collections.workspaces.update(workspace.id, (draft) => {
+        draft.prepared_at = preparedAt;
+        draft.updated_at = preparedAt;
+      });
+      await transaction.isPersisted.promise;
+    },
+    [collections.workspaces, workspace.id, workspace.prepared_at],
+  );
 
   const handleRun = useCallback(
     async (serviceNames?: string[]) => {
       if (!config || !services) return;
       try {
         const manifestJson = JSON.stringify(config);
-        await client.startServices({
+        const result = await client.startServices({
           serviceNames,
           workspace,
           services,
           manifestJson,
           manifestFingerprint: getManifestFingerprint(config),
         });
+        await persistPreparedAt(result.preparedAt);
       } catch (err) {
         console.error("Failed to start services:", err);
         throw err;
       }
     },
-    [config, client, services, workspace],
+    [config, client, persistPreparedAt, services, workspace],
   );
 
   const handleRestart = useCallback(async () => {
@@ -115,27 +129,28 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
 
     try {
       const manifestJson = JSON.stringify(config);
-      await client.stopServices(workspace.id);
-      await client.startServices({
+      await client.stopServices({ workspace, services });
+      const result = await client.startServices({
         workspace,
         services,
         manifestJson,
         manifestFingerprint: getManifestFingerprint(config),
       });
+      await persistPreparedAt(result.preparedAt);
     } catch (err) {
       console.error("Failed to restart workspace:", err);
       throw err;
     }
-  }, [config, client, services, workspace]);
+  }, [config, client, persistPreparedAt, services, workspace]);
 
   const handleStop = useCallback(async () => {
     try {
-      await client.stopServices(workspace.id);
+      await client.stopServices({ workspace, services });
     } catch (err) {
       console.error("Failed to stop workspace:", err);
       throw err;
     }
-  }, [client, workspace.id]);
+  }, [client, services, workspace]);
 
   // ---------------------------------------------------------------------------
   // Toolbar slot — surfaces run + git actions in the workspace nav bar

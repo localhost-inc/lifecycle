@@ -117,13 +117,13 @@ Lifecycle maps these into the worker protocol as an opaque `blockId: string`:
 - Agent message deltas: `blockId = "text:{itemId}"` (uses Codex's native item ID directly)
 - Reasoning deltas: `blockId = "thinking:{itemId}:{contentIndex}"`
 
-The orchestrator uses `blockId` as part of the `part_id` key (`{turnId}:assistant:{blockId}`) to route streaming deltas to the correct accumulated message part. This ensures interstitial text blocks between tool calls render as separate parts in the UI.
+The agent host uses `blockId` as part of the `part_id` key (`{turnId}:assistant:{blockId}`) to route streaming deltas to the correct accumulated message part. This ensures interstitial text blocks between tool calls render as separate parts in the UI.
 
 Rules:
 
-1. The `blockId` is opaque to the orchestrator — it must not parse or reinterpret the string.
+1. The `blockId` is opaque to the agent host — it must not parse or reinterpret the string.
 2. Codex's native `itemId` is the source of truth for block identity. Lifecycle must not synthesize numeric indices or maintain translation maps.
-3. The type prefix (`text:`, `thinking:`) is set by the worker, not the orchestrator.
+3. The type prefix (`text:`, `thinking:`) is set by the worker, not the agent host.
 
 ### General Event Rules
 

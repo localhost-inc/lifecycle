@@ -12,27 +12,39 @@
       "types": "./src/react.ts",
       "default": "./src/react.ts"
     },
-    "./providers/claude/auth": {
+    "./internal/local": {
+      "types": "./src/clients/local/index.ts",
+      "default": "./src/clients/local/index.ts"
+    },
+    "./internal/worker": {
+      "types": "./src/worker.ts",
+      "default": "./src/worker.ts"
+    },
+    "./internal/runtime-protocol": {
+      "types": "./src/runtime-protocol.ts",
+      "default": "./src/runtime-protocol.ts"
+    },
+    "./internal/providers/claude/auth": {
       "types": "./src/providers/claude/auth.ts",
       "default": "./src/providers/claude/auth.ts"
     },
-    "./providers/claude/catalog": {
+    "./internal/providers/claude/catalog": {
       "types": "./src/providers/claude/catalog.ts",
       "default": "./src/providers/claude/catalog.ts"
     },
-    "./providers/claude/worker": {
+    "./internal/providers/claude/worker": {
       "types": "./src/providers/claude/worker.ts",
       "default": "./src/providers/claude/worker.ts"
     },
-    "./providers/codex/auth": {
+    "./internal/providers/codex/auth": {
       "types": "./src/providers/codex/auth.ts",
       "default": "./src/providers/codex/auth.ts"
     },
-    "./providers/codex/catalog": {
+    "./internal/providers/codex/catalog": {
       "types": "./src/providers/codex/catalog.ts",
       "default": "./src/providers/codex/catalog.ts"
     },
-    "./providers/codex/worker": {
+    "./internal/providers/codex/worker": {
       "types": "./src/providers/codex/worker.ts",
       "default": "./src/providers/codex/worker.ts"
     }
@@ -47,6 +59,8 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.81",
     "@lifecycle/contracts": "workspace:*",
+    "@lifecycle/db": "workspace:*",
+    "@lifecycle/store": "workspace:*",
     "@lifecycle/workspace": "workspace:*",
     "@openai/codex-sdk": "^0.116.0"
   },

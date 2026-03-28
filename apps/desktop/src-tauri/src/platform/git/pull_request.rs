@@ -142,10 +142,6 @@ fn support_unavailable(
     }
 }
 
-pub fn mode_not_supported(message: impl Into<String>) -> GitPullRequestSupport {
-    support_unavailable(None, "mode_not_supported", message)
-}
-
 fn github_failure(operation: &str, stderr: &[u8]) -> LifecycleError {
     let reason = {
         let stderr = String::from_utf8_lossy(stderr).trim().to_string();
@@ -190,7 +186,7 @@ fn classify_support_error(stderr: &[u8]) -> GitPullRequestSupport {
             None,
             "unsupported_remote",
             if message.is_empty() {
-                "This workspace is not connected to a GitHub repository.".to_string()
+                "This repository is not connected to GitHub.".to_string()
             } else {
                 message
             },

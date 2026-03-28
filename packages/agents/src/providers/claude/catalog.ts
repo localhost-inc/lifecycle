@@ -3,7 +3,7 @@ import {
   type ModelInfo,
   type SDKSession,
 } from "@anthropic-ai/claude-agent-sdk";
-import type { ProviderModelCatalog, ProviderModelCatalogEntry } from "../../catalog";
+import type { AgentModelCatalog, AgentModelCatalogEntry } from "../../catalog";
 import { buildSessionEnv, type ClaudeLoginMethod } from "./env";
 
 interface ClaudeQuerySurface {
@@ -21,7 +21,7 @@ function cleanDisplayName(name: string): string {
     .replace(/\s*\(recommended\)/gi, "");
 }
 
-function mapClaudeModel(model: ModelInfo): ProviderModelCatalogEntry {
+function mapClaudeModel(model: ModelInfo): AgentModelCatalogEntry {
   return {
     defaultReasoningEffort: null,
     description: model.description ?? null,
@@ -62,7 +62,7 @@ async function readClaudeModels(
 
 export async function getClaudeModelCatalog(input?: {
   loginMethod?: ClaudeLoginMethod;
-}): Promise<ProviderModelCatalog> {
+}): Promise<AgentModelCatalog> {
   const session = unstable_v2_createSession({
     env: buildSessionEnv(input?.loginMethod ?? "claudeai"),
     model: "default",

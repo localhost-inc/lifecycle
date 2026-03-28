@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import * as reactQuery from "@tanstack/react-query";
 import { ThemeProvider } from "@lifecycle/ui";
 import { mockStoreContext } from "@/test/store-mock";
 import {
@@ -34,8 +35,7 @@ function readyQueryResult<T>(data: T) {
 }
 
 async function renderFileEditorSurface(filePath: string, file: WorkspaceFileReadResult) {
-  const hooksModule = await import("../../workspaces/hooks");
-  spyOn(hooksModule, "useWorkspaceFile").mockReturnValue(readyQueryResult(file) as never);
+  spyOn(reactQuery, "useQuery").mockReturnValue(readyQueryResult(file) as never);
 
   const { FileEditorSurface } = await import("./file-editor-surface");
 

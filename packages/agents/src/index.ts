@@ -42,24 +42,47 @@ export type {
   AgentPromptQueueStore,
   AgentQueuedPrompt,
 } from "./prompt-queue-store";
-export type { ProviderModelCatalog, ProviderModelCatalogEntry } from "./catalog";
-export { createAgentOrchestrator } from "./orchestrator";
-export type { ClaudeWorkerInput, ClaudeWorkerPermissionMode } from "./providers/claude/worker";
+export type { AgentModelCatalog, AgentModelCatalogEntry } from "./catalog";
+export {
+  buildClaudeHarnessLaunchConfig,
+  buildClaudeHarnessSettingsFromPreset,
+  buildCodexHarnessLaunchConfig,
+  buildCodexHarnessSettingsFromPreset,
+  buildDefaultHarnessSettings,
+  buildHarnessLaunchConfig,
+  claudeEffortOptions,
+  claudeHarnessSettingsUseCustomValues,
+  claudePermissionModeOptions,
+  codexApprovalPolicyOptions,
+  codexHarnessSettingsUseCustomValues,
+  codexReasoningEffortOptions,
+  codexSandboxModeOptions,
+  harnessPresetOptions,
+  normalizeClaudeHarnessSettings,
+  normalizeCodexHarnessSettings,
+  normalizeHarnessSettings,
+} from "./harness";
 export type {
+  ClaudeEffort,
+  ClaudeHarnessLaunchConfig,
+  ClaudeHarnessSettings,
+  ClaudeModel,
+  ClaudePermissionMode,
   CodexApprovalPolicy,
-  CodexReasoningEffort as CodexModelReasoningEffort,
+  CodexHarnessLaunchConfig,
+  CodexHarnessSettings,
+  CodexModel,
+  CodexReasoningEffort,
   CodexSandboxMode,
-  CodexWorkerInput,
-} from "./providers/codex/worker";
-export type {
-  AgentOrchestrator,
-  AgentWorker,
-  AgentSessionContext,
-  AgentSessionEvents,
-  AgentStore,
-  CreateAgentOrchestratorDependencies,
-  StartAgentSessionInput,
-} from "./orchestrator";
+  HarnessLaunchConfig,
+  HarnessPreset,
+  HarnessSettings,
+} from "./harness";
+export type { AgentModelCatalogOptions } from "./worker";
+export { createAgentClientRegistry } from "./client-registry";
+export type { AgentClientRegistry, AgentClientRegistryClients } from "./client-registry";
+export { createAgentClient } from "./client";
+export type { AgentClient, AgentSessionContext, StartAgentSessionInput } from "./client";
 export type {
   AgentApprovalDecision,
   AgentApprovalKind,
@@ -78,38 +101,10 @@ export type {
   AgentTurnRequest,
 } from "./turn";
 export type {
-  AgentWorkerApprovalRequestPayload,
-  AgentWorkerApprovalResolvedEvent,
-  AgentWorkerApprovalRequestedEvent,
-  AgentWorkerApprovalResolutionPayload,
-  AgentWorkerAuthStatusEvent,
-  AgentWorkerCommand,
-  AgentWorkerEvent,
-  AgentWorkerInputPart,
-  AgentWorkerItem,
-  AgentWorkerItemCompletedEvent,
-  AgentWorkerItemStartedEvent,
-  AgentWorkerItemStatus,
-  AgentWorkerItemUpdatedEvent,
-  AgentWorkerMessageDeltaEvent,
-  AgentWorkerReadyEvent,
-  AgentWorkerResolveApprovalCommand,
-  AgentWorkerSendTurnCommand,
-  AgentWorkerStatusEvent,
-  AgentWorkerToolProgressEvent,
-  AgentWorkerToolUseInputEvent,
-  AgentWorkerTurnCompletedEvent,
-  AgentWorkerTurnFailedEvent,
-  AgentWorkerPendingApproval,
-  AgentWorkerRegistration,
-  AgentWorkerSnapshot,
-  AgentWorkerStatus,
-} from "./worker-protocol";
-export type {
-  ProviderAuthEvent,
-  ProviderAuthResult,
-  ProviderAuthStatus,
-  ProviderAuthStatusEvent,
+  AgentAuthEvent,
+  AgentAuthResult,
+  AgentAuthStatus,
+  AgentAuthStatusEvent,
 } from "./providers/auth";
 export type { ClaudeLoginMethod } from "./providers/claude/env";
 export { retry, type RetryOptions } from "./retry";

@@ -1,4 +1,4 @@
-import type { CodexModelReasoningEffort } from "@lifecycle/agents";
+import type { CodexReasoningEffort as CodexModelReasoningEffort } from "@lifecycle/agents";
 import type { HarnessPreset } from "@/features/settings/state/harnesses/shared";
 import {
   isRecord,

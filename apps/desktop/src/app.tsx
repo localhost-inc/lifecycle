@@ -1,21 +1,24 @@
+import { AuthSessionProvider } from "@lifecycle/auth/react";
 import { isTauri } from "@tauri-apps/api/core";
 import { StrictMode, useEffect } from "react";
 import { RouterProvider } from "react-router-dom";
-import type { AgentOrchestrator } from "@lifecycle/agents";
-import type { WorkspaceHostClientRegistry } from "@lifecycle/workspace/client";
+import type { AgentClientRegistry } from "@lifecycle/agents";
+import { AgentClientRegistryProvider } from "@lifecycle/agents/react";
+import type { WorkspaceClientRegistry } from "@lifecycle/workspace/client";
+import { WorkspaceClientRegistryProvider } from "@lifecycle/workspace/client/react";
 import { RootErrorBoundary } from "@/app/root-error-boundary";
 import { router } from "@/app/router";
 import { ShortcutRouterProvider } from "@/app/shortcuts/shortcut-router";
-import { AuthSessionProvider } from "@/features/auth/state/auth-session-provider";
-import { AgentOrchestratorProvider } from "@/features/agents/provider";
+import { authClient } from "@/features/auth/client";
+import { ProcessEventBridge } from "@/features/events/process-event-bridge";
 import { AppNotifier } from "@/features/notifications/app-notifier";
 import { ProjectManifestWatcher } from "@/features/projects/components/project-manifest-watcher";
+import { getLifecycleErrorMessage } from "@/lib/tauri-error";
 import { SettingsProvider } from "@/features/settings/state/settings-provider";
 import { markPerformance, measurePerformance } from "@/lib/performance";
 import { ReactQueryProvider } from "@/store/react-query-provider";
 import { StoreProvider } from "@/store/provider";
-import { tauriSqlDriver } from "@/lib/sql-driver";
-import { WorkspaceHostClientProvider } from "@lifecycle/workspace/client/react";
+import { db } from "@/lib/db";
 
 function BootstrapPerfMarker() {
   useEffect(() => {
@@ -46,22 +49,27 @@ function ContextMenuBlocker() {
 }
 
 interface AppProps {
-  agentOrchestrator: AgentOrchestrator;
-  workspaceHostClientRegistry: WorkspaceHostClientRegistry;
+  agentClientRegistry: AgentClientRegistry;
+  workspaceClientRegistry: WorkspaceClientRegistry;
 }
 
-export function App({ agentOrchestrator, workspaceHostClientRegistry }: AppProps) {
+export function App({ agentClientRegistry, workspaceClientRegistry }: AppProps) {
   return (
     <StrictMode>
       <RootErrorBoundary>
         <SettingsProvider>
           <BootstrapPerfMarker />
           <ContextMenuBlocker />
-          <WorkspaceHostClientProvider workspaceHostClientRegistry={workspaceHostClientRegistry}>
-            <AgentOrchestratorProvider agentOrchestrator={agentOrchestrator}>
-              <StoreProvider driver={tauriSqlDriver}>
+          <WorkspaceClientRegistryProvider workspaceClientRegistry={workspaceClientRegistry}>
+            <AgentClientRegistryProvider agentClientRegistry={agentClientRegistry}>
+              <StoreProvider driver={db}>
                 <ReactQueryProvider>
-                  <AuthSessionProvider>
+                  <AuthSessionProvider
+                    client={authClient}
+                    getErrorMessage={getLifecycleErrorMessage}
+                    refreshIntervalMs={import.meta.env.DEV ? 5_000 : 60_000}
+                  >
+                    <ProcessEventBridge />
                     <ProjectManifestWatcher />
                     <AppNotifier />
                     <ShortcutRouterProvider>
@@ -70,8 +78,8 @@ export function App({ agentOrchestrator, workspaceHostClientRegistry }: AppProps
                   </AuthSessionProvider>
                 </ReactQueryProvider>
               </StoreProvider>
-            </AgentOrchestratorProvider>
-          </WorkspaceHostClientProvider>
+            </AgentClientRegistryProvider>
+          </WorkspaceClientRegistryProvider>
         </SettingsProvider>
       </RootErrorBoundary>
     </StrictMode>

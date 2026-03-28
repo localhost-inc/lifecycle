@@ -1,6 +1,6 @@
 import type { AgentSessionProviderId } from "@lifecycle/contracts";
 
-export type ProviderAuthStatus =
+export type AgentAuthStatus =
   | { state: "not_checked" }
   | { state: "checking" }
   | { state: "authenticating"; output: string[] }
@@ -8,16 +8,16 @@ export type ProviderAuthStatus =
   | { state: "unauthenticated" }
   | { state: "error"; message: string };
 
-export interface ProviderAuthResult {
+export interface AgentAuthResult {
   kind: "auth.result";
   provider: AgentSessionProviderId;
-  state: ProviderAuthStatus["state"];
+  state: AgentAuthStatus["state"];
   email?: string | null;
   organization?: string | null;
   message?: string | null;
 }
 
-export interface ProviderAuthStatusEvent {
+export interface AgentAuthStatusEvent {
   kind: "auth.status";
   provider: AgentSessionProviderId;
   isAuthenticating: boolean;
@@ -25,4 +25,4 @@ export interface ProviderAuthStatusEvent {
   error?: string;
 }
 
-export type ProviderAuthEvent = ProviderAuthResult | ProviderAuthStatusEvent;
+export type AgentAuthEvent = AgentAuthResult | AgentAuthStatusEvent;

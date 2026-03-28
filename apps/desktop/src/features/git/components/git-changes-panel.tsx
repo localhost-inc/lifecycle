@@ -33,8 +33,6 @@ export function GitChangesPanel({
     onCommitComplete,
     onOpenPullRequest,
     workspaceId,
-    workspaceHost,
-    worktreePath,
   });
 
   return (
@@ -51,7 +49,6 @@ export function GitChangesPanel({
               onRefresh={async () => {
                 await gitActions.gitStatusQuery.refetch();
               }}
-              workspaceHost={workspaceHost}
               workspaceId={workspaceId}
             />
           ) : (

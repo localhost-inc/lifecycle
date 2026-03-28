@@ -1,9 +1,15 @@
+import type { SqlDriver } from "@lifecycle/db";
 import type {
   AgentMessageRecord,
   AgentMessagePartRecord,
   AgentMessageWithParts,
 } from "@lifecycle/contracts";
-import type { SqlDriver } from "../driver";
+import { createSqlCollection, type SqlCollection } from "../collection";
+
+const agentMessageCollectionsByDriver = new WeakMap<
+  SqlDriver,
+  Map<string, SqlCollection<AgentMessageWithParts>>
+>();
 
 interface MessagePartRow {
   id: string;
@@ -151,4 +157,36 @@ export async function upsertAgentMessageWithParts(
      VALUES ${placeholders.join(", ")}`,
     params,
   );
+}
+
+export function getOrCreateAgentMessageCollection(
+  driver: SqlDriver,
+  sessionId: string,
+): SqlCollection<AgentMessageWithParts> {
+  let collectionsBySession = agentMessageCollectionsByDriver.get(driver);
+  if (!collectionsBySession) {
+    collectionsBySession = new Map<string, SqlCollection<AgentMessageWithParts>>();
+    agentMessageCollectionsByDriver.set(driver, collectionsBySession);
+  }
+
+  let collection = collectionsBySession.get(sessionId);
+  if (!collection) {
+    collection = createSqlCollection<AgentMessageWithParts>({
+      id: `agent-messages-${sessionId}`,
+      driver,
+      loadFn: (runtimeDriver) => selectAgentMessagesBySession(runtimeDriver, sessionId),
+      getKey: (message) => message.id,
+    });
+    collectionsBySession.set(sessionId, collection);
+  }
+
+  return collection;
+}
+
+export function upsertAgentMessageInCollection(
+  driver: SqlDriver,
+  sessionId: string,
+  message: AgentMessageWithParts,
+): void {
+  getOrCreateAgentMessageCollection(driver, sessionId).utils.upsert(message);
 }

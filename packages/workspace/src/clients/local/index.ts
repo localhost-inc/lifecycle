@@ -1,1 +1,1 @@
-export { LocalClient, type LocalClientDeps } from "./client";
+export { LocalWorkspaceClient, type LocalClientDeps } from "./client";

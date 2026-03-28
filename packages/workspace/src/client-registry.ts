@@ -1,39 +1,32 @@
 import type { WorkspaceHost } from "@lifecycle/contracts";
-import type { WorkspaceHostClient } from "./workspace";
+import type { WorkspaceClient } from "./workspace";
 
-export interface WorkspaceHostClientRegistry {
-  resolve(host: WorkspaceHost): WorkspaceHostClient;
+export interface WorkspaceClientRegistry {
+  resolve(host: WorkspaceHost): WorkspaceClient;
 }
 
-export interface WorkspaceHostClientRegistryProviders {
-  cloud?: WorkspaceHostClient;
-  docker?: WorkspaceHostClient;
-  local: WorkspaceHostClient;
-  remote?: WorkspaceHostClient;
+export interface WorkspaceClientRegistryClients {
+  cloud?: WorkspaceClient;
+  docker?: WorkspaceClient;
+  local: WorkspaceClient;
+  remote?: WorkspaceClient;
 }
 
-/**
- * Resolve workspace-scoped operations through explicit host providers.
- * `docker` currently defaults to the local host client because mounted-local
- * workspace flows still run through the desktop host path.
- */
-export function createWorkspaceHostClientRegistry(
-  providers: WorkspaceHostClientRegistryProviders,
-): WorkspaceHostClientRegistry {
-  const byHost: Partial<Record<WorkspaceHost, WorkspaceHostClient>> = {
-    docker: providers.docker ?? providers.local,
-    local: providers.local,
-    ...(providers.cloud ? { cloud: providers.cloud } : {}),
-    ...(providers.remote ? { remote: providers.remote } : {}),
+export function createWorkspaceClientRegistry(
+  clients: WorkspaceClientRegistryClients,
+): WorkspaceClientRegistry {
+  const byHost: Partial<Record<WorkspaceHost, WorkspaceClient>> = {
+    local: clients.local,
+    ...(clients.docker ? { docker: clients.docker } : {}),
+    ...(clients.cloud ? { cloud: clients.cloud } : {}),
+    ...(clients.remote ? { remote: clients.remote } : {}),
   };
 
   return {
-    resolve(host: WorkspaceHost): WorkspaceHostClient {
+    resolve(host: WorkspaceHost): WorkspaceClient {
       const client = byHost[host];
       if (!client) {
-        throw new Error(
-          `No WorkspaceHostClient provider is registered for workspace host "${host}".`,
-        );
+        throw new Error(`No WorkspaceClient is registered for workspace host "${host}".`);
       }
       return client;
     },

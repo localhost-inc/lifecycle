@@ -1,5 +1,6 @@
-import { isTauri } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
+import type { OpenInAppId, WorkspaceOpenInAppInfo } from "@lifecycle/workspace";
+import { useWorkspaceClient } from "@lifecycle/workspace/client/react";
 import {
   Button,
   Popover,
@@ -16,12 +17,6 @@ import {
 import { ChevronDown, Trash2 } from "lucide-react";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { isMacPlatform } from "@/app/app-hotkeys";
-import {
-  listWorkspaceOpenInApps,
-  openWorkspaceInApp,
-  type WorkspaceOpenInAppInfo,
-  type OpenInAppId,
-} from "@/features/workspaces/open-in-api";
 import { OpenInAppIcon } from "@/features/workspaces/components/open-in-app-icon";
 import { WorkspaceOpenInMenu } from "@/features/workspaces/components/workspace-open-in-menu";
 import {
@@ -58,6 +53,7 @@ function describeOpenInError(error: unknown): string {
 }
 
 export function WorkspaceActions({ workspace, onArchive }: WorkspaceActionsProps) {
+  const workspaceClient = useWorkspaceClient();
   const [baseAvailableTargets] = useState(() => listAvailableOpenInTargets(isMacPlatform()));
   const [availableTargets, setAvailableTargets] =
     useState<readonly OpenInTarget[]>(baseAvailableTargets);
@@ -83,7 +79,7 @@ export function WorkspaceActions({ workspace, onArchive }: WorkspaceActionsProps
 
       installedTargets.push({
         ...target,
-        iconDataUrl: installedApp.icon_data_url,
+        iconDataUrl: installedApp.iconDataUrl,
         label: installedApp.label,
       });
     }
@@ -96,18 +92,14 @@ export function WorkspaceActions({ workspace, onArchive }: WorkspaceActionsProps
   }
 
   async function syncInstalledTargets(): Promise<void> {
-    setAvailableTargets(mergeInstalledTargets(await listWorkspaceOpenInApps()));
+    setAvailableTargets(mergeInstalledTargets(await workspaceClient.listOpenInApps()));
   }
 
   useEffect(() => {
-    if (!isTauri()) {
-      setAvailableTargets(baseAvailableTargets);
-      return;
-    }
-
     let cancelled = false;
 
-    void listWorkspaceOpenInApps()
+    void workspaceClient
+      .listOpenInApps()
       .then((installedApps) => {
         if (cancelled) {
           return;
@@ -122,7 +114,7 @@ export function WorkspaceActions({ workspace, onArchive }: WorkspaceActionsProps
     return () => {
       cancelled = true;
     };
-  }, [baseAvailableTargets]);
+  }, [baseAvailableTargets, workspaceClient]);
 
   async function presentLaunchError(errorText: string): Promise<void> {
     setLaunchError(errorText);
@@ -134,11 +126,9 @@ export function WorkspaceActions({ workspace, onArchive }: WorkspaceActionsProps
     setLaunchingTarget(appId);
 
     try {
-      await openWorkspaceInApp(workspace.id, appId);
+      await workspaceClient.openInApp(workspace, appId);
       setOpenInOpen(false);
-      if (isTauri()) {
-        await syncInstalledTargets().catch(() => undefined);
-      }
+      await syncInstalledTargets().catch(() => undefined);
     } catch (error) {
       const nextError = describeOpenInError(error);
       console.error("Failed to open workspace in app:", error);

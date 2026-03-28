@@ -81,9 +81,34 @@ function pushArrayValues(target: string[], flag: string, values: string[]) {
   }
 }
 
+function isKnownFlagToken(token: string, aliasToFlag: Map<string, string>): boolean {
+  if (token === "--") {
+    return true;
+  }
+
+  if (token.startsWith("--no-")) {
+    return aliasToFlag.has(token.slice(5));
+  }
+
+  if (token.startsWith("--")) {
+    const raw = token.slice(2);
+    const [name = ""] = raw.split("=", 2);
+    return aliasToFlag.has(name);
+  }
+
+  if (token.startsWith("-") && token.length > 1) {
+    const raw = token.slice(1);
+    const [alias = ""] = raw.split("=", 2);
+    return aliasToFlag.has(alias);
+  }
+
+  return false;
+}
+
 function takeArrayValues(
   args: string[],
   startIndex: number,
+  aliasToFlag: Map<string, string>,
 ): { values: string[]; nextIndex: number } {
   const values: string[] = [];
   let index = startIndex;
@@ -96,7 +121,7 @@ function takeArrayValues(
       values.push(...rest);
       return { values, nextIndex: args.length };
     }
-    if (next.startsWith("-")) break;
+    if (isKnownFlagToken(next, aliasToFlag)) break;
     values.push(next);
     index += 1;
   }
@@ -197,7 +222,7 @@ export function parseFlags<Input extends z.ZodObject<z.ZodRawShape>>(
           normalizedArgs.push(`--${flag}=${inlineValue}`);
           continue;
         }
-        const { values, nextIndex } = takeArrayValues(args, index);
+        const { values, nextIndex } = takeArrayValues(args, index, aliasToFlag);
         if (values.length === 0) {
           throw new Error(`Flag --${name} expects one or more values.`);
         }
@@ -252,7 +277,7 @@ export function parseFlags<Input extends z.ZodObject<z.ZodRawShape>>(
           normalizedArgs.push(`--${flag}=${inlineValue}`);
           continue;
         }
-        const { values, nextIndex } = takeArrayValues(args, index);
+        const { values, nextIndex } = takeArrayValues(args, index, aliasToFlag);
         if (values.length === 0) {
           throw new Error(`Flag -${alias} expects one or more values.`);
         }

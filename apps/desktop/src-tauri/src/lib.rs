@@ -3,24 +3,14 @@ mod platform;
 mod shared;
 
 use crate::platform::app_config::AppConfigPath;
-use crate::platform::db::{cleanup_for_exit, reconcile_on_startup, DbPath};
-use crate::platform::runtime::supervisor::Supervisor;
+use crate::platform::process_manager::ProcessManagerHandle;
 #[cfg(target_os = "macos")]
 use serde::Serialize;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex as StdMutex};
 #[cfg(target_os = "macos")]
 use tauri::Emitter;
 use tauri::Manager;
-use tokio::sync::Mutex as AsyncMutex;
 
 pub use shared::errors::LifecycleError;
-
-pub(crate) type ManagedSupervisor = Arc<AsyncMutex<Supervisor>>;
-pub(crate) type WorkspaceControllerRegistryHandle =
-    Arc<capabilities::workspaces::controller::WorkspaceControllerRegistry>;
-pub(crate) type RootGitWatcherMap =
-    Arc<StdMutex<HashMap<String, capabilities::workspaces::git_watcher::RootGitWatcher>>>;
 
 #[cfg(target_os = "macos")]
 const APP_HOTKEY_EVENT_NAME: &str = "app:shortcut";
@@ -50,22 +40,12 @@ struct AppShortcutEvent {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let workspace_controllers: WorkspaceControllerRegistryHandle =
-        Arc::new(capabilities::workspaces::controller::WorkspaceControllerRegistry::new());
-    let root_git_watchers: RootGitWatcherMap = Arc::new(StdMutex::new(HashMap::new()));
-    let root_git_watchers_for_setup = root_git_watchers.clone();
-    let workspace_controllers_for_setup = workspace_controllers.clone();
 
     let run_result = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init())
-        .plugin(
-            tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:lifecycle.db", crate::platform::db::migrations())
-                .build(),
-        )
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_shell::init())
@@ -76,8 +56,6 @@ pub fn run() {
                 .expect("failed to resolve app data dir");
             std::fs::create_dir_all(&app_data_dir).ok();
             crate::platform::diagnostics::initialize(&app_data_dir);
-            let db_path = app_data_dir.join("lifecycle.db");
-            let db_path_str = db_path.to_string_lossy().to_string();
 
             #[cfg(target_os = "macos")]
             match crate::platform::user_shell_env::hydrate_process_environment() {
@@ -107,38 +85,8 @@ pub fn run() {
             };
             app.manage(lifecycle_cli);
 
-            // reconcile_on_startup may fail on first launch (fresh DB, no schema yet).
-            // tauri-plugin-sql runs migrations later in the plugin lifecycle.
-            let survivors = match reconcile_on_startup(&db_path_str) {
-                Ok(survivors) => survivors,
-                Err(error) => {
-                    crate::platform::diagnostics::append_diagnostic(
-                        "startup-reconcile",
-                        &format!("skipped: {error}"),
-                    );
-                    vec![]
-                }
-            };
-
-            // Re-adopt services whose processes survived an app restart (e.g. Rust
-            // dev recompile). This resumes log tailing and exit watching.
-            if !survivors.is_empty() {
-                let controllers_for_adopt = workspace_controllers_for_setup.clone();
-                let app_handle_for_adopt = app.handle().clone();
-                let db_for_adopt = db_path_str.clone();
-                tauri::async_runtime::spawn(async move {
-                    adopt_surviving_services(
-                        &app_handle_for_adopt,
-                        &controllers_for_adopt,
-                        &db_for_adopt,
-                        &survivors,
-                    )
-                    .await;
-                });
-            }
-            crate::platform::preview_proxy::start_preview_proxy(&app_data_dir, db_path_str.clone())
+            crate::platform::preview_proxy::start_preview_proxy(&app_data_dir)
                 .expect("failed to initialize local preview proxy");
-            app.manage(DbPath(db_path_str.clone()));
 
             let config_path =
                 crate::platform::app_config::resolve_config_path().expect("failed to resolve config path");
@@ -152,14 +100,6 @@ pub fn run() {
                 }
             };
             app.manage(bridge);
-
-            if let Err(error) = capabilities::workspaces::git_watcher::start_root_git_watchers(
-                &app.handle(),
-                &db_path_str,
-                &root_git_watchers_for_setup,
-            ) {
-                crate::platform::diagnostics::append_error("root-git-watchers", error);
-            }
 
             if let Err(error) = disable_main_webview_scroll_elasticity(&app.handle()) {
                 crate::platform::diagnostics::append_error("main-webview-scroll-elasticity", error);
@@ -255,13 +195,20 @@ pub fn run() {
                 });
             }
         })
-        .manage(workspace_controllers)
-        .manage(root_git_watchers)
+        .manage(ProcessManagerHandle::new())
         .invoke_handler(tauri::generate_handler![
             capabilities::app::commands::get_app_config,
             capabilities::app::commands::write_app_config,
             capabilities::app::commands::get_auth_session,
-            capabilities::app::commands::spawn_cli_process,
+            capabilities::process::commands::spawn_managed_process,
+            capabilities::process::commands::kill_managed_process,
+            capabilities::process::commands::kill_process_by_pid,
+            capabilities::process::commands::start_managed_container,
+            capabilities::process::commands::stop_managed_container,
+            capabilities::process::commands::pull_docker_image,
+            capabilities::process::commands::build_docker_image,
+            capabilities::process::commands::check_health,
+            capabilities::process::commands::wait_for_health,
             capabilities::app::commands::read_json_file,
             capabilities::app::commands::resolve_lifecycle_root_path,
             capabilities::bridge::bridge_create_agent_session,
@@ -270,149 +217,53 @@ pub fn run() {
             capabilities::app::commands::set_window_accepts_mouse_moved_events,
             capabilities::app::commands::set_window_pointing_cursor,
             capabilities::app::commands::get_window_mouse_position,
-            capabilities::projects::commands::cleanup_project,
-            capabilities::projects::commands::read_manifest_text,
-            capabilities::workspaces::commands::ensure_workspace,
-            capabilities::workspaces::commands::rename_workspace,
-            capabilities::workspaces::commands::start_workspace_services,
-            capabilities::workspaces::commands::stop_workspace_services,
-            capabilities::workspaces::commands::archive_workspace,
-            capabilities::workspaces::commands::get_workspace_activity,
-            capabilities::workspaces::commands::get_workspace_service_logs,
-            capabilities::workspaces::commands::get_workspace_services,
-            capabilities::workspaces::commands::get_current_branch,
-            capabilities::workspaces::commands::get_workspace_git_status,
-            capabilities::workspaces::commands::get_workspace_git_diff,
-            capabilities::workspaces::commands::get_workspace_git_scope_patch,
-            capabilities::workspaces::commands::get_workspace_git_changes_patch,
-            capabilities::workspaces::commands::list_workspace_git_log,
-            capabilities::workspaces::commands::list_workspace_git_pull_requests,
-            capabilities::workspaces::commands::get_workspace_current_git_pull_request,
-            capabilities::workspaces::commands::get_workspace_git_pull_request,
-            capabilities::workspaces::commands::get_workspace_git_base_ref,
-            capabilities::workspaces::commands::get_workspace_git_ref_diff_patch,
-            capabilities::workspaces::commands::get_workspace_git_pull_request_patch,
-            capabilities::workspaces::commands::get_workspace_git_commit_patch,
-            capabilities::workspaces::commands::read_workspace_file,
-            capabilities::workspaces::commands::write_workspace_file,
-            capabilities::workspaces::commands::list_workspace_files,
-            capabilities::workspaces::commands::open_workspace_file,
-            capabilities::workspaces::commands::open_workspace_in_app,
-            capabilities::workspaces::commands::list_workspace_open_in_apps,
-            capabilities::workspaces::commands::stage_workspace_git_files,
-            capabilities::workspaces::commands::unstage_workspace_git_files,
-            capabilities::workspaces::commands::commit_workspace_git,
-            capabilities::workspaces::commands::push_workspace_git,
-            capabilities::workspaces::commands::create_workspace_git_pull_request,
-            capabilities::workspaces::commands::merge_workspace_git_pull_request,
-            capabilities::workspaces::commands::git_branch_has_upstream,
-            capabilities::workspaces::commands::prepare_environment_start,
-            capabilities::workspaces::commands::run_environment_step,
-            capabilities::workspaces::commands::start_environment_service,
-            capabilities::workspaces::commands::stop_environment_service,
-            capabilities::workspaces::commands::mark_workspace_prepared,
-            capabilities::workspaces::commands::get_workspace_prepared,
-            capabilities::workspaces::commands::get_workspace_ready_services,
+            capabilities::process::commands::run_shell_step,
+            capabilities::process::commands::assign_ports,
+            capabilities::app::commands::get_preview_proxy_port,
+            capabilities::app::commands::register_proxy_target,
+            capabilities::app::commands::remove_proxy_target,
+            capabilities::git::commands::get_git_current_branch,
+            capabilities::git::commands::get_git_sha,
+            capabilities::git::commands::create_git_worktree,
+            capabilities::git::commands::remove_git_worktree,
+            capabilities::git::commands::rename_git_worktree_branch,
+            capabilities::git::commands::get_git_status,
+            capabilities::git::commands::get_git_diff,
+            capabilities::git::commands::get_git_scope_patch,
+            capabilities::git::commands::get_git_changes_patch,
+            capabilities::git::commands::list_git_log,
+            capabilities::git::commands::get_git_base_ref,
+            capabilities::git::commands::get_git_ref_diff_patch,
+            capabilities::git::commands::get_git_commit_patch,
+            capabilities::git::commands::stage_git_files,
+            capabilities::git::commands::unstage_git_files,
+            capabilities::git::commands::commit_git,
+            capabilities::git::commands::push_git,
+            capabilities::git::commands::list_git_pull_requests,
+            capabilities::git::commands::get_current_git_pull_request,
+            capabilities::git::commands::get_git_pull_request,
+            capabilities::git::commands::get_git_pull_request_patch,
+            capabilities::git::commands::create_git_pull_request,
+            capabilities::git::commands::merge_git_pull_request,
+            capabilities::git::commands::git_branch_has_upstream,
+            capabilities::files::commands::read_file,
+            capabilities::files::commands::write_file,
+            capabilities::files::commands::list_files,
+            capabilities::files::commands::open_file,
+            capabilities::files::commands::open_in_app,
+            capabilities::files::commands::list_open_in_apps,
             capabilities::app::commands::sync_project_menu,
-            capabilities::plan::commands::list_plans,
-            capabilities::plan::commands::create_plan,
-            capabilities::plan::commands::update_plan,
-            capabilities::plan::commands::delete_plan,
-            capabilities::plan::commands::list_tasks,
-            capabilities::plan::commands::create_task,
-            capabilities::plan::commands::update_task,
-            capabilities::plan::commands::delete_task,
-            capabilities::plan::commands::add_task_dependency,
-            capabilities::plan::commands::remove_task_dependency,
         ])
         .build(tauri::generate_context!());
 
     match run_result {
-        Ok(app) => {
-            app.run(|app_handle, event| {
-                if let tauri::RunEvent::ExitRequested { .. } = event {
-                    let db_path = app_handle.state::<DbPath>().0.clone();
-                    let _ = cleanup_for_exit(&db_path);
-                }
-            });
-        }
+        Ok(app) => app.run(|_app_handle, _event| {}),
         Err(error) => {
             crate::platform::diagnostics::append_error(
                 "tauri-run",
                 format!("error while running tauri application: {error}"),
             );
             panic!("error while running tauri application: {error}");
-        }
-    }
-}
-
-async fn adopt_surviving_services(
-    app: &tauri::AppHandle,
-    controllers: &WorkspaceControllerRegistryHandle,
-    db_path: &str,
-    survivors: &[crate::platform::db::SurvivingService],
-) {
-    use std::collections::HashMap;
-
-    // Group survivors by workspace.
-    let mut by_workspace: HashMap<&str, Vec<&crate::platform::db::SurvivingService>> =
-        HashMap::new();
-    for survivor in survivors {
-        by_workspace
-            .entry(&survivor.workspace_id)
-            .or_default()
-            .push(survivor);
-    }
-
-    for (workspace_id, services) in by_workspace {
-        let log_dir =
-            match crate::capabilities::workspaces::environment::runtime_env::workspace_log_dir(
-                db_path,
-                workspace_id,
-            ) {
-                Ok(dir) => dir,
-                Err(error) => {
-                    crate::platform::diagnostics::append_error(
-                        "adopt-services",
-                        format!("failed to resolve log dir for {workspace_id}: {error}"),
-                    );
-                    continue;
-                }
-            };
-
-        let controller = controllers.get_or_create(workspace_id).await;
-        let supervisor = controller.supervisor();
-        let mut managed = supervisor.lock().await;
-
-        for svc in &services {
-            if let Err(error) = managed.adopt_process(
-                &svc.service_name,
-                svc.pid as u32,
-                &log_dir,
-                app.clone(),
-                workspace_id,
-            ) {
-                crate::platform::diagnostics::append_diagnostic(
-                    "adopt-services",
-                    &format!(
-                        "could not adopt {} in {workspace_id}: {error}",
-                        svc.service_name,
-                    ),
-                );
-            }
-        }
-
-        // Emit status events so the frontend knows these services are running.
-        for svc in &services {
-            crate::shared::lifecycle_events::publish_lifecycle_event(
-                app,
-                crate::shared::lifecycle_events::LifecycleEvent::ServiceStatusChanged {
-                    workspace_id: workspace_id.to_string(),
-                    name: svc.service_name.clone(),
-                    status: "ready".to_string(),
-                    status_reason: None,
-                },
-            );
         }
     }
 }
@@ -424,38 +275,15 @@ async fn confirm_and_exit(app: tauri::AppHandle) {
         return;
     }
 
-    let db_path = app.state::<DbPath>().0.clone();
-    let controllers = app
-        .state::<WorkspaceControllerRegistryHandle>()
-        .inner()
-        .clone();
-
-    let has_active = tokio::task::spawn_blocking({
-        let db = db_path.clone();
-        move || -> bool {
-            let conn = match crate::platform::db::open_db(&db) {
-                Ok(c) => c,
-                Err(_) => return false,
-            };
-            let workspace_count: i64 = conn
-                .query_row(
-                    "SELECT COUNT(*) FROM workspace WHERE status IN ('starting', 'running', 'stopping')",
-                    [],
-                    |row| row.get(0),
-                )
-                .unwrap_or(0);
-            workspace_count > 0
-        }
-    })
-    .await
-    .unwrap_or(false);
+    let process_manager = app.state::<ProcessManagerHandle>();
+    let has_active = process_manager.0.lock().await.has_tracked();
 
     if has_active {
         use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
         let (tx, rx) = tokio::sync::oneshot::channel();
         app.dialog()
-            .message("Running workspaces will be stopped. Are you sure you want to quit?")
+            .message("Running processes will be stopped. Are you sure you want to quit?")
             .title("Quit Lifecycle")
             .kind(MessageDialogKind::Warning)
             .buttons(MessageDialogButtons::OkCancelCustom(
@@ -472,13 +300,7 @@ async fn confirm_and_exit(app: tauri::AppHandle) {
         }
     }
 
-    controllers.stop_all_runtimes().await;
-
-    let _ = tokio::task::spawn_blocking({
-        let db = db_path;
-        move || cleanup_for_exit(&db)
-    })
-    .await;
+    process_manager.0.lock().await.stop_all().await;
 
     app.exit(0);
 }

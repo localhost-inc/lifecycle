@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
-import type { ProviderAuthEvent, ProviderAuthStatus } from "../auth";
+import type { AgentAuthEvent, AgentAuthStatus } from "../auth";
 import { CodexAppServerClient, type CodexAccountReadResult, isRecord } from "./app-server";
 
-function emit(event: ProviderAuthEvent): void {
+function emit(event: AgentAuthEvent): void {
   process.stdout.write(`${JSON.stringify(event)}\n`);
 }
 
@@ -18,7 +18,7 @@ interface CodexLoginCompletedNotification {
   success: boolean;
 }
 
-function mapAccountReadResultToStatus(result: CodexAccountReadResult): ProviderAuthStatus {
+function mapAccountReadResultToStatus(result: CodexAccountReadResult): AgentAuthStatus {
   if (!result.requiresOpenaiAuth) {
     return {
       state: "authenticated",
@@ -48,11 +48,11 @@ function mapAccountReadResultToStatus(result: CodexAccountReadResult): ProviderA
 
 export function codexProviderAuthStatusFromAccountRead(
   result: CodexAccountReadResult,
-): ProviderAuthStatus {
+): AgentAuthStatus {
   return mapAccountReadResultToStatus(result);
 }
 
-function statusToResultEvent(status: ProviderAuthStatus): ProviderAuthEvent {
+function statusToResultEvent(status: AgentAuthStatus): AgentAuthEvent {
   switch (status.state) {
     case "authenticated":
       return {
@@ -119,7 +119,7 @@ function isCodexLoginCompletedNotification(
 async function readAccountStatus(
   client: CodexAppServerClient,
   refreshToken: boolean,
-): Promise<ProviderAuthStatus> {
+): Promise<AgentAuthStatus> {
   const result = (await client.request("account/read", {
     refreshToken,
   })) as CodexAccountReadResult;

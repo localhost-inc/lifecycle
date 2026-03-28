@@ -1,14 +1,19 @@
+import {
+  WorkspaceClientProvider,
+  useWorkspaceClientRegistry,
+} from "@lifecycle/workspace/client/react";
 import { EmptyState } from "@lifecycle/ui";
 import { useCallback } from "react";
 import { useNavigate, useOutletContext } from "react-router-dom";
-import { useCurrentGitPullRequest, useGitPullRequests } from "@/features/git/hooks";
 import { PullRequestsTab } from "@/features/git/components/pull-requests-tab";
+import { useCurrentGitPullRequest, useGitPullRequests } from "@/features/git/hooks";
 import type { ProjectRouteOutletContext } from "@/features/projects/routes/project-route";
 
 export function ProjectPullRequestsSurface() {
   const { project, repositoryWorkspace } = useOutletContext<ProjectRouteOutletContext>();
   const projectName = project.name;
   const navigate = useNavigate();
+  const workspaceClientRegistry = useWorkspaceClientRegistry();
 
   const onOpenPullRequest = useCallback(
     (pullRequestNumber: number) => {
@@ -16,14 +21,6 @@ export function ProjectPullRequestsSurface() {
     },
     [navigate, project.id],
   );
-  const workspaceId = repositoryWorkspace?.id ?? null;
-  const workspaceHost = repositoryWorkspace?.host ?? null;
-  const pullRequestsQuery = useGitPullRequests(workspaceId, workspaceHost, {
-    enabled: workspaceId !== null,
-  });
-  const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId, workspaceHost, {
-    enabled: workspaceId !== null,
-  });
 
   if (!repositoryWorkspace) {
     return (
@@ -35,6 +32,35 @@ export function ProjectPullRequestsSurface() {
       </div>
     );
   }
+
+  const workspaceClient = workspaceClientRegistry.resolve(repositoryWorkspace.host);
+
+  return (
+    <WorkspaceClientProvider workspaceClient={workspaceClient}>
+      <ProjectPullRequestsSurfaceContent
+        onOpenPullRequest={onOpenPullRequest}
+        projectName={projectName}
+        workspaceId={repositoryWorkspace.id}
+      />
+    </WorkspaceClientProvider>
+  );
+}
+
+function ProjectPullRequestsSurfaceContent({
+  onOpenPullRequest,
+  projectName,
+  workspaceId,
+}: {
+  onOpenPullRequest: (pullRequestNumber: number) => void;
+  projectName: string;
+  workspaceId: string;
+}) {
+  const pullRequestsQuery = useGitPullRequests(workspaceId, {
+    enabled: true,
+  });
+  const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId, {
+    enabled: true,
+  });
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col px-8 py-8">

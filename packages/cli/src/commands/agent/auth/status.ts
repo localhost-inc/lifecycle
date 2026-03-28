@@ -1,5 +1,5 @@
-import { checkClaudeAuth } from "@lifecycle/agents/providers/claude/auth";
-import { checkCodexAuth } from "@lifecycle/agents/providers/codex/auth";
+import { checkClaudeAuth } from "@lifecycle/agents/internal/providers/claude/auth";
+import { checkCodexAuth } from "@lifecycle/agents/internal/providers/codex/auth";
 import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 

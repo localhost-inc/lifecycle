@@ -1,9 +1,14 @@
 export type {
+  ArchiveWorkspaceInput,
   EnsureWorkspaceInput,
   StartServicesInput,
+  StopServicesInput,
   GitDiffInput,
-  WorkspaceHostClient,
+  OpenInAppId,
+  RenameWorkspaceInput,
+  WorkspaceClient,
   WorkspaceArchiveDisposition,
+  WorkspaceOpenInAppInfo,
   SubscribeWorkspaceFileEventsInput,
   ServiceLogLine,
   ServiceLogSnapshot,
@@ -12,11 +17,12 @@ export type {
   WorkspaceFileEventSubscription,
   WorkspaceFileReadResult,
   WorkspaceFileTreeEntry,
-  WorkspaceHealthResult,
-  WorkspaceHostClientRegistry,
-  WorkspaceHostClientRegistryProviders,
+  WorkspaceClientRegistry,
+  WorkspaceClientRegistryClients,
+  ManifestStatus,
+  ManifestFileReader,
 } from "./client";
-export { createWorkspaceHostClientRegistry } from "./client";
+export { createWorkspaceClientRegistry } from "./client";
 export type {
   EnvironmentNode,
   EnvironmentNodeKind,
@@ -37,4 +43,11 @@ export {
   type PrepareStartResult,
   type StepInput,
 } from "./environment/orchestrator";
-export { LocalClient, type LocalClientDeps } from "./clients/local";
+export { LocalWorkspaceClient, type LocalClientDeps } from "./clients/local";
+export {
+  buildWorkspaceRuntimeEnv,
+  expandRuntimeTemplates,
+  injectAssignedPortsIntoManifest,
+  resolveServiceEnv,
+} from "./environment/runtime";
+export { previewUrlForService, workspaceHostLabel } from "./runtime";

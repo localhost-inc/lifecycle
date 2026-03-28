@@ -228,8 +228,8 @@ Status (2026-03-13):
 1. The Rust workspace controller now owns service-log and activity selectors that can be fetched through `get_workspace_service_logs` and `get_workspace_activity`.
 2. Desktop service-log and activity hooks read those workspace-scoped selectors directly, and future lifecycle facts only invalidate/refetch the affected queries instead of being reduced into frontend-owned projections.
 3. Workspace create/rename/destroy, workspace catalog reads, project list/manifest reads, and project-level branch lookup now flow through the centralized `Backend`; live workspace service/file/terminal/git reads and mutations flow through `packages/workspace`.
-4. `features/workspaces/api.ts`, `features/workspaces/catalog-api.ts`, `features/projects/api/projects.ts`, `features/projects/api/current-branch.ts`, `features/terminals/api.ts`, `features/git/api.ts`, and the desktop query source no longer invoke transport-local Tauri command names directly for backend or workspace-backed reads.
-5. The remaining direct desktop calls are intentionally narrower and explicitly separated into non-workspace modules: project import/remove flows, host app-launch helpers, and native terminal surface synchronization.
+4. Desktop feature flows no longer route backend or workspace-backed reads through feature-local `api` shims; those reads now go through `packages/db`, `packages/store`, `packages/workspace`, or `packages/agents`.
+5. The remaining direct desktop-native calls are intentionally narrower and explicitly separated into non-control-plane sources such as the shared auth client, lifecycle event subscription, and native terminal surface synchronization.
 
 #### Phase 6: Workspace Surface Split And Tab Store Normalization
 

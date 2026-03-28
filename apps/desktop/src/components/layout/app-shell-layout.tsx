@@ -1,4 +1,11 @@
-import type { WorkspaceRecord } from "@lifecycle/contracts";
+import { useAuthSession } from "@lifecycle/auth/react";
+import {
+  getManifestFingerprint,
+  type WorkspaceCheckoutType,
+  type WorkspaceHost,
+  type WorkspaceRecord,
+} from "@lifecycle/contracts";
+import { useWorkspaceClientRegistry } from "@lifecycle/workspace/client/react";
 import { Loading } from "@lifecycle/ui";
 import {
   useCallback,
@@ -13,7 +20,6 @@ import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { AppHotkeyListener } from "@/app/app-hotkey-listener";
 import { isMacPlatform, shouldHandleDomAppHotkey } from "@/app/app-hotkeys";
-import { useAuthSession } from "@/features/auth/state/auth-session-provider";
 import { useAgentStatusIndex } from "@lifecycle/agents/react";
 import { CommandPaletteProvider } from "@/features/command-palette";
 import { useProjectCatalog } from "@/features/projects/hooks";
@@ -27,7 +33,6 @@ import {
 } from "@/features/projects/lib/shell-context";
 import { WelcomeScreen } from "@/features/welcome/components/welcome-screen";
 import type { WorkspaceCreateMode } from "@/features/workspaces/types";
-import { useWorkspacesByProject } from "@/features/workspaces/hooks";
 import { getWorkspaceDisplayName } from "@/features/workspaces/lib/workspace-display";
 import { formatWorkspaceError } from "@/features/workspaces/lib/workspace-errors";
 import {
@@ -46,7 +51,6 @@ import {
 import { BridgeListener } from "@/features/workspaces/state/bridge-listener";
 import { WorkspaceOpenRequestsProvider } from "@/features/workspaces/state/workspace-open-requests";
 import { WorkspaceToolbarProvider } from "@/features/workspaces/state/workspace-toolbar-context";
-import { useWorkspaceMutations } from "@/features/workspaces/mutations";
 import {
   APP_SIDEBAR_WIDTH_STORAGE_KEY,
   DEFAULT_APP_SIDEBAR_WIDTH,
@@ -64,12 +68,13 @@ import {
 } from "@/app/shortcuts/shortcut-router";
 import { type AppShellOutletContext } from "@/components/layout/app-shell-context";
 import { AppSidebar } from "@/components/layout/app-sidebar";
-import { NavigationControls } from "@/components/layout/navigation-controls";
 import {
   notifyShellResizeListeners,
   ShellResizeProvider,
 } from "@/components/layout/shell-resize-provider";
-import { WorkspaceNavBar } from "@/features/workspaces/navbar/workspace-nav-bar";
+import { computeWorkspaceCreatePolicy } from "@lifecycle/workspace/policy";
+import { selectProjectById, selectServicesByWorkspace } from "@lifecycle/store";
+import { useStoreContext, useWorkspacesByProject } from "@/store";
 
 const SIDEBAR_RESIZE_STEP = 16;
 
@@ -86,11 +91,12 @@ const LAST_PATH_STORAGE_KEY = "lifecycle.desktop.last-path";
 export function AppShellLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { projectId, workspaceId } = useParams();
+  const { projectId } = useParams();
+  const { collections, driver } = useStoreContext();
   const shellViewportRef = useRef<HTMLDivElement | null>(null);
   const projectCatalogQuery = useProjectCatalog();
   const { createProjectFromDirectory, removeProject } = useProjectMutations();
-  const { archiveWorkspace, createWorkspaceForProject, inspectArchive } = useWorkspaceMutations();
+  const workspaceClientRegistry = useWorkspaceClientRegistry();
   const workspacesByProject = useWorkspacesByProject();
   const { isLoading: authSessionLoading, session: authSession } = useAuthSession();
   const agentStatusIndex = useAgentStatusIndex();
@@ -179,6 +185,102 @@ export function AppShellLayout() {
         oppositeSidebarWidth: 0,
       }),
     [shellViewportWidth],
+  );
+
+  const createWorkspaceForProject = useCallback(
+    async (input: {
+      checkoutType: WorkspaceCheckoutType;
+      host: WorkspaceHost;
+      projectId: string;
+      workspaceName?: string;
+    }): Promise<string> => {
+      const project = await selectProjectById(driver, input.projectId);
+      if (!project) {
+        throw new Error(`Project "${input.projectId}" was not found.`);
+      }
+
+      const workspaceClient = workspaceClientRegistry.resolve(input.host);
+      const manifestStatus = await workspaceClient.readManifest(project.path);
+      const manifestJson =
+        manifestStatus.state === "valid" ? JSON.stringify(manifestStatus.result.config) : undefined;
+      const manifestFingerprint =
+        manifestStatus.state === "valid"
+          ? getManifestFingerprint(manifestStatus.result.config)
+          : null;
+      const currentBranch = await workspaceClient.getGitCurrentBranch(project.path);
+      const policy = computeWorkspaceCreatePolicy({
+        host: input.host,
+        checkoutType: input.checkoutType,
+        projectId: project.id,
+        projectPath: project.path,
+        workspaceName: input.workspaceName,
+        baseRef: currentBranch,
+        currentBranch,
+        manifestJson,
+        manifestFingerprint,
+      });
+
+      const now = new Date().toISOString();
+      const transaction = collections.workspaces.insert(
+        {
+          id: policy.workspaceId,
+          project_id: policy.projectId,
+          name: policy.name,
+          checkout_type: policy.checkoutType,
+          source_ref: policy.sourceRef,
+          git_sha: null,
+          worktree_path: null,
+          host: policy.host,
+          manifest_fingerprint: policy.manifestFingerprint ?? null,
+          created_at: now,
+          updated_at: now,
+          last_active_at: now,
+          prepared_at: null,
+          status: "provisioning",
+          failure_reason: null,
+          failed_at: null,
+        },
+        {
+          metadata: {
+            nameOrigin: policy.nameOrigin,
+            sourceRefOrigin: policy.sourceRefOrigin,
+          },
+        },
+      );
+      await transaction.isPersisted.promise;
+      return policy.workspaceId;
+    },
+    [collections.workspaces, driver, workspaceClientRegistry],
+  );
+
+  const inspectArchive = useCallback(
+    async (workspace: WorkspaceRecord) => {
+      return workspaceClientRegistry.resolve(workspace.host).inspectArchive(workspace);
+    },
+    [workspaceClientRegistry],
+  );
+
+  const archiveWorkspace = useCallback(
+    async (workspace: WorkspaceRecord): Promise<void> => {
+      const project = await selectProjectById(driver, workspace.project_id);
+      if (!project) {
+        throw new Error(`Project "${workspace.project_id}" was not found.`);
+      }
+
+      await workspaceClientRegistry.resolve(workspace.host).archiveWorkspace({
+        workspace,
+        projectPath: project.path,
+      });
+
+      const services = await selectServicesByWorkspace(driver, workspace.id);
+      for (const service of services) {
+        const serviceTx = collections.services.delete(service.id);
+        await serviceTx.isPersisted.promise;
+      }
+      const workspaceTx = collections.workspaces.delete(workspace.id);
+      await workspaceTx.isPersisted.promise;
+    },
+    [collections.services, collections.workspaces, driver, workspaceClientRegistry],
   );
 
   useEffect(() => {
@@ -558,71 +660,47 @@ export function AppShellLayout() {
       <WorkspaceToolbarProvider>
         <CommandPaletteProvider projects={projects} workspacesByProjectId={workspacesByProjectId}>
           <div
-            className="flex h-full w-full flex-col bg-[var(--background)] px-2 pb-2 text-[var(--foreground)]"
-            data-tauri-drag-region
+            ref={shellViewportRef}
+            className="flex h-full w-full flex-row bg-[var(--background)] pt-2 pr-2 pb-2 text-[var(--foreground)]"
           >
             <AppHotkeyListener onSelectProjectIndex={handleSelectProjectIndex} />
 
-            {/* Shell header — traffic lights + workspace nav, on shell background */}
-            <div className="flex h-10 shrink-0 items-stretch">
+            {/* App sidebar — directly on shell surface */}
+            <AppSidebar
+              activeContextName={activeShellContext.name}
+              authSession={authSession}
+              authSessionLoading={authSessionLoading}
+              hasWorkspaceResponseReady={hasWorkspaceResponseReady}
+              hasWorkspaceRunningTurn={hasWorkspaceRunningTurn}
+              onAddProject={handleAddProject}
+              onCreateWorkspace={handleCreateWorkspace}
+              onArchiveWorkspace={handleArchiveWorkspace}
+              onOpenSettings={handleOpenSettings}
+              onRemoveProject={handleRemoveProject}
+              projects={projects}
+              readyProjectIds={readyProjectIds}
+              workspacesByProjectId={workspacesByProjectId}
+              width={sidebarWidth}
+            />
+            <div className="relative shrink-0">
               <div
-                className="flex shrink-0 items-center justify-end"
-                style={{ width: `${sidebarWidth / 16}rem` }}
-              >
-                <NavigationControls />
-              </div>
-              {workspaceId && projectId ? (
-                <WorkspaceNavBar
-                  activeWorkspaceId={workspaceId}
-                  projectName={projects.find((p) => p.id === projectId)?.name ?? ""}
-                />
-              ) : (
-                <div className="flex-1" />
-              )}
+                aria-label="Resize sidebar"
+                aria-orientation="vertical"
+                className="absolute inset-y-0 -left-2 z-10 w-4 cursor-col-resize"
+                onKeyDown={handleSidebarResizeKeyDown}
+                onPointerDown={handleSidebarResizePointerDown}
+                role="separator"
+                tabIndex={0}
+              />
             </div>
 
-            {/* Shell card */}
-            <div
-              ref={shellViewportRef}
-              className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden rounded-[var(--project-shell-radius)] border border-[var(--border)] bg-[var(--surface)]"
-            >
-              {/* App sidebar */}
-              <AppSidebar
-                activeContextName={activeShellContext.name}
-                authSession={authSession}
-                authSessionLoading={authSessionLoading}
-                hasWorkspaceResponseReady={hasWorkspaceResponseReady}
-                hasWorkspaceRunningTurn={hasWorkspaceRunningTurn}
-                onAddProject={handleAddProject}
-                onCreateWorkspace={handleCreateWorkspace}
-                onArchiveWorkspace={handleArchiveWorkspace}
-                onOpenSettings={handleOpenSettings}
-                onRemoveProject={handleRemoveProject}
-                projects={projects}
-                readyProjectIds={readyProjectIds}
-                workspacesByProjectId={workspacesByProjectId}
-                width={sidebarWidth}
-              />
-              <div className="relative shrink-0">
-                <div
-                  aria-label="Resize sidebar"
-                  aria-orientation="vertical"
-                  className="absolute inset-y-0 -left-2 z-10 w-4 cursor-col-resize"
-                  onKeyDown={handleSidebarResizeKeyDown}
-                  onPointerDown={handleSidebarResizePointerDown}
-                  role="separator"
-                  tabIndex={0}
-                />
-              </div>
-
-              {/* Main area */}
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                <ShellResizeProvider resizing={activeSidebarResize}>
-                  <div className="flex min-h-0 flex-1 flex-col">
-                    <Outlet context={outletContext} />
-                  </div>
-                </ShellResizeProvider>
-              </div>
+            {/* Main card */}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[var(--project-shell-radius)] border border-[var(--border)] bg-[var(--surface)]">
+              <ShellResizeProvider resizing={activeSidebarResize}>
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <Outlet context={outletContext} />
+                </div>
+              </ShellResizeProvider>
             </div>
           </div>
         </CommandPaletteProvider>

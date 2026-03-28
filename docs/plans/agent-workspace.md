@@ -7,6 +7,7 @@
 This document is the canonical build plan for the Lifecycle-native agent workspace.
 
 Use this file for:
+
 1. the product shape we are actually building
 2. milestone sequencing for this execution stream
 3. task-level execution tracking
@@ -29,11 +30,12 @@ Use this file for:
 3. `agent provider` means the Claude or Codex integration behind that session.
 4. `workspace runtime` means the execution placement for the workspace.
 5. `terminal` remains a first-class shell surface in the product, but separate from harness state.
-6. Provider-native events must enter the desktop through a Lifecycle-owned `AgentOrchestrator` layer that emits normalized `agent.*` facts for the UI and persistence layers.
-7. The app owns one `AgentOrchestrator` initialized with the Lifecycle store.
-8. `AgentOrchestrator` creates `AgentSession` objects backed by persisted `agent_session` records.
-9. Each `AgentSession` interfaces with an `AgentWorker` deployed on the target `WorkspaceHostClient`.
-10. The harness UI should talk to `AgentSession`, not terminal APIs or provider-specific transport details.
+6. Provider-native events must enter the desktop through a Lifecycle-owned `AgentClient` layer that emits normalized `agent.*` facts for the UI and persistence layers.
+7. The app root owns an `AgentClientRegistry` only. It must not bind one global `AgentClient`.
+8. Each workspace scope binds one concrete `AgentClient` for the selected workspace host.
+9. Bound workspace descendants use `useAgentClient()` directly. They do not resolve host-specific clients themselves.
+10. `AgentClient` creates and attaches `agent_session` records through the store layer without exposing provider-runtime transport to the UI.
+11. The harness UI should talk to `AgentClient`, not terminal APIs or provider-specific transport details.
 
 ## Architectural Reset
 
@@ -41,47 +43,44 @@ The existing agent integration should be treated as legacy and replaced through 
 
 ```text
 Harness UI
-  -> AgentOrchestrator
-    -> AgentSession
-      -> AgentWorker
-        -> ClaudeAgentSessionProvider | CodexAgentSessionProvider
-          -> WorkspaceHostClient
-            -> local | docker | remote | cloud execution
+  -> AgentClient
+    -> ClaudeAgentRuntime | CodexAgentRuntime
+      -> WorkspaceClient
+        -> local | docker | remote | cloud execution
 ```
 
 Rules:
 
-1. `AgentOrchestrator` is the only UI-facing runtime contract for agent execution.
-2. `AgentOrchestrator.startSession(...)` creates an `AgentSession` backed by a persisted `agent_session` record through one shared API.
-3. `AgentSession` is the harness-facing live object for one persisted `agent_session`.
-4. `AgentWorker` is the deployed execution unit for an `AgentSession` on `local`, `docker`, `remote`, or `cloud`.
-5. `WorkspaceHostClient` is the deployment boundary for `AgentWorker`, not an app-level owner of agent state.
-6. On `local`, the first real worker path should be a Lifecycle-owned process launched as `lifecycle agent worker <provider>`, with stdin/stdout as the control stream and `provider_session_id` reported back by the worker.
-4. `terminal` becomes a dumb shell/filesystem surface and must not carry harness state, transcript state, or approval state.
-5. Existing harness-terminal glue should be deleted rather than migrated behind compatibility shims.
+1. `AgentClient` is the only UI-facing runtime contract for agent execution.
+2. `AgentClient.startSession(...)` creates a persisted `agent_session` record through one shared API.
+3. `AgentClient` is app-facing and store-backed; it resolves a private host-scoped `AgentWorker` for the target workspace host.
+4. `AgentWorker` manages live `agent_session` attachments within one workspace host; provider runtimes stay private beneath that worker on `local`, `docker`, `remote`, or `cloud`.
+5. `WorkspaceClient` is the execution dependency for `AgentClient`, not an app-level owner of agent state.
+6. On `local`, the concrete provider runtime may still be launched as `lifecycle agent worker <provider>`, but that stays behind `AgentClient` and is never a UI-facing seam.
+7. `terminal` becomes a dumb shell/filesystem surface and must not carry harness state, transcript state, or approval state.
+8. Existing harness-terminal glue should be deleted rather than migrated behind compatibility shims.
 
 ## Provider Overlay Contract
 
 Both Claude and Codex must be projected into one Lifecycle-owned contract rather than exposing SDK-native shapes to the app.
 
 ```text
-AgentOrchestrator.startSession({ provider, workspace_id })
-  -> AgentSession
-    -> AgentWorker
-      -> sendTurn(...)
-      -> cancelTurn(...)
-      -> resolveApproval(...)
+AgentClient.startSession({ provider, workspace_id })
+  -> provider runtime
+    -> sendTurn(...)
+    -> cancelTurn(...)
+    -> resolveApproval(...)
 ```
 
 Rules:
 
 1. Lifecycle owns `agent_session.id`; provider SDK ids live only in `agent_session.provider_session_id`.
 2. `agent_event` is the append-only lifecycle event log. `agent_message` and `agent_message_part` are durable query projections derived from that log for the harness UI.
-3. `AgentSession` is backed by a live `AgentWorker` bound to that persisted row.
+3. `agent_session` is backed by a live provider runtime bound to that persisted row.
 4. Providers must emit normalized `agent.*` events for message creation, message streaming, turn lifecycle, approvals, tools, and artifacts.
 5. The harness UI reads Lifecycle state only. It must not branch on Claude-specific or Codex-specific transcript semantics.
-6. `WorkspaceHostClient` is a per-session execution dependency used to deploy the `AgentWorker` in the correct workspace environment.
-7. `provider_session_id` is discovered by the worker and reported back during worker startup; it is not the transport address the desktop app uses to command the worker.
+6. `WorkspaceClient` is a per-session execution dependency used by `AgentClient` in the correct workspace environment.
+7. `provider_session_id` is discovered by the provider runtime and reported back during startup; it is not the transport address the desktop app uses to command the session.
 
 Required normalized provider outputs:
 
@@ -104,7 +103,7 @@ We should build to the stable documented SDK shapes and wrap them into the overl
 1. Use the Codex SDK thread model as the primary integration target.
 2. `provider_session_id` maps to the Codex `threadId`.
 3. `AgentSession.sendTurn(...)` maps to `thread.run(...)`.
-4. The Codex-backed `AgentWorker` must normalize streamed Codex items/events into Lifecycle `agent.*` events and persisted `agent_*` rows.
+4. The Codex-backed provider runtime must normalize streamed Codex items/events into Lifecycle `agent.*` events and persisted `agent_*` rows.
 5. App Server concepts are transport details, not app architecture.
 
 ### Claude
@@ -112,21 +111,21 @@ We should build to the stable documented SDK shapes and wrap them into the overl
 1. Use the Claude TypeScript V2 preview session surface as the primary integration target behind the Lifecycle contract.
 2. `provider_session_id` maps to the Claude `session_id`.
 3. `AgentSession.sendTurn(...)` wraps Claude session send/stream semantics into the Lifecycle session model.
-4. The Claude-backed `AgentWorker` must normalize Claude hooks, permission checks, and user-input callbacks into Lifecycle approvals, tools, and message parts.
+4. The Claude-backed provider runtime must normalize Claude hooks, permission checks, and user-input callbacks into Lifecycle approvals, tools, and message parts.
 5. Claude-specific session continuity must remain an implementation detail behind `AgentSession`.
 
 ## Execution Status
 
-| Milestone | Status | Outcome |
-| --- | --- | --- |
-| A0 | done | Shared agent contracts and initial desktop persistence exist |
-| A1 | in_progress | A real local agent session can bind to a local provider session and accept prompt input |
-| A2 | planned | Agent transcript becomes a real persisted center-panel surface |
-| A3 | planned | Attachments and image-first composer flows work end-to-end |
-| A4 | planned | Structured tools, approvals, and task state replace terminal inference |
-| A5 | planned | Claude runs through a first-party provider integration rather than terminal write-through |
-| A6 | planned | Codex runs through the same first-party contract |
-| A7 | planned | Local and cloud-ready portability boundaries are locked |
+| Milestone | Status      | Outcome                                                                                   |
+| --------- | ----------- | ----------------------------------------------------------------------------------------- |
+| A0        | done        | Shared agent contracts and initial desktop persistence exist                              |
+| A1        | in_progress | A real local agent session can bind to a local provider session and accept prompt input   |
+| A2        | planned     | Agent transcript becomes a real persisted center-panel surface                            |
+| A3        | planned     | Attachments and image-first composer flows work end-to-end                                |
+| A4        | planned     | Structured tools, approvals, and task state replace terminal inference                    |
+| A5        | planned     | Claude runs through a first-party provider integration rather than terminal write-through |
+| A6        | planned     | Codex runs through the same first-party contract                                          |
+| A7        | planned     | Local and cloud-ready portability boundaries are locked                                   |
 
 ## A0. Contracts and Session Foundation
 
@@ -165,22 +164,22 @@ In progress.
 **Tasks**
 
 - [x] Create `AgentTab` / `AgentSurface` naming across the workspace canvas.
-- [x] Define `AgentOrchestrator` as the first-class session factory and lifecycle coordinator.
-- [x] Move `AgentOrchestrator` ownership to the app/store layer instead of `WorkspaceHostClient`.
+- [x] Define `AgentClient` as the first-class session factory and lifecycle coordinator.
+- [x] Move `AgentClient` ownership to the app/store layer instead of `WorkspaceClient`.
 - [x] Implement `ClaudeAgentSessionProvider` and `CodexAgentSessionProvider` against the shared contract.
 - [x] Bind each `agent_session` to a provider-owned local runtime session.
 - [x] Persist the bound provider session identifier on `agent_session.provider_session_id`.
-- [x] Add first-party turn submission that routes prompts through `AgentSession` to the bound runtime worker.
+- [x] Add first-party turn submission that routes prompts through `AgentClient` to the bound provider runtime.
 - [x] Hydrate the center-panel transcript from Lifecycle-owned agent state rather than terminal UI state.
 - [x] Render a real agent transcript in the center panel from query data instead of fake local state.
 - [x] Restyle the center panel to a TUI-like transcript and prompt buffer.
-- [x] Route worker/provider activity through `AgentOrchestrator` so normalized `agent.*` facts drive the UI and persistence layers for the real local Claude worker path.
+- [x] Route provider activity through `AgentClient` so normalized `agent.*` facts drive the UI and persistence layers for the real local Claude runtime path.
 - [x] Delete the current terminal-coupled harness integration instead of preserving it behind fallback layers.
 - [x] Move local provider workers behind a detached host process so desktop rebuilds do not terminate active local agent sessions.
 - [ ] Update `agent_session.status` and `last_message_at` from normalized agent-provider events instead of leaving sessions mostly idle.
 - [ ] Add a focused end-to-end desktop test that creates an agent tab, sends a prompt, and verifies transcript hydration.
 - [x] Remove `AgentSurface` dependence on terminal lifecycle events and hidden native-terminal bootstrap state.
-- [ ] Finalize the local runtime activation boundary through app-level `AgentOrchestrator`, harness-facing `AgentSession`, runtime-deployed `AgentWorker`, and store-owned agent state.
+- [ ] Finalize the local runtime activation boundary through app-level `AgentClient`, store-owned `agent_session` state, and private provider runtimes.
 
 **Clarifications**
 
@@ -188,13 +187,13 @@ In progress.
 2. Claude should be modeled against Claude Agent SDK session continuity, hooks, and runtime approval controls.
 3. Codex should be modeled against the Codex SDK thread model and normalized into Lifecycle turns, approvals, and message parts.
 4. Nothing in the current terminal-coupled harness path is a compatibility constraint. The target architecture is the provider model above.
-5. `AgentOrchestrator` is app-level and store-backed; `AgentSession` is harness-facing; `AgentWorker` is runtime-bound per `agent_session`.
-6. Rust should not own agent-session orchestration or transcript querying. Local agent execution belongs to the desktop runtime and the TS-side orchestrator/session-provider path.
-7. The current local worker path is `AgentOrchestrator -> detached lifecycle agent host -> lifecycle agent worker <provider> -> provider runtime`, with the detached host keeping sessions alive across desktop restarts and re-exposing them over a reconnectable websocket transport.
+5. `AgentClient` is app-level and store-backed; provider runtimes are private and bound per `agent_session`.
+6. Rust should not own agent-session orchestration or transcript querying. Local agent execution belongs to the desktop runtime and the TS-side agent-client/agent-worker path.
+7. The current local path is `AgentClient -> detached lifecycle agent host -> lifecycle agent worker <provider> -> provider runtime`, with the detached host keeping sessions alive across desktop restarts and re-exposing them over a reconnectable websocket transport.
 
 **Exit gate**
 
-- A real Claude session can be opened from the workspace and accept typed prompts through the agent surface, with agent state owned by the first-party `AgentOrchestrator` and `AgentSession` boundaries rather than the terminal surface.
+- A real Claude session can be opened from the workspace and accept typed prompts through the agent surface, with agent state owned by the first-party `AgentClient` and `agent_session` boundaries rather than the terminal surface.
 
 ## A2. Persisted Center-Panel Transcript
 
@@ -318,15 +317,15 @@ The agent workspace is still local-first, but its contracts are ready to back on
 
 **Exit gate**
 
-- The same center-panel model can later consume remote-backed agent records without changing the `AgentOrchestrator` UI contract.
+- The same center-panel model can later consume remote-backed agent records without changing the `AgentClient` UI contract.
 
 ## Immediate Next Tasks
 
 These are the next high-value tasks on the current path.
 
-1. Implement concrete `ClaudeAgentSessionProvider` and `CodexAgentSessionProvider` bindings behind `AgentOrchestrator`.
-2. Move the remaining harness UI command/event flow onto `AgentOrchestrator` and remove direct terminal dependencies.
-3. Route local provider activity through `AgentOrchestrator` so `agent.*` events drive transcript, status, and approvals.
+1. Implement concrete Claude and Codex provider runtimes behind `AgentClient`.
+2. Move the remaining harness UI command/event flow onto `AgentClient` and remove direct terminal dependencies.
+3. Route local provider activity through `AgentClient` so `agent.*` events drive transcript, status, and approvals.
 4. Delete the current terminal-coupled harness path instead of preserving it.
 5. Add `agent_message` and `agent_message_part` persistence so transcript state stops depending on bridge log replay.
 6. Add one focused end-to-end Claude session test for create -> send prompt -> transcript appears.

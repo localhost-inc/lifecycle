@@ -41,14 +41,9 @@ export function GitHistoryPanel({
     };
   }, []);
 
-  const gitLogQuery = useGitLog(
-    supportsHistory ? workspaceId : null,
-    supportsHistory ? workspaceHost : null,
-    50,
-    {
-      polling: documentVisible,
-    },
-  );
+  const gitLogQuery = useGitLog(supportsHistory ? workspaceId : null, 50, {
+    polling: documentVisible,
+  });
 
   return (
     <section className="flex min-h-0 h-full flex-col">

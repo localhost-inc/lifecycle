@@ -5,13 +5,13 @@ import { resolveCodexCliPath } from "./cli-path";
 import type { AgentApprovalDecision, AgentApprovalKind } from "../../turn";
 import { LIFECYCLE_SYSTEM_PROMPT } from "../../system-prompt";
 import type {
-  AgentWorkerApprovalRequestPayload,
-  AgentWorkerCommand,
-  AgentWorkerEvent,
-  AgentWorkerInputPart,
-  AgentWorkerItem,
-  AgentWorkerItemStatus,
-} from "../../worker-protocol";
+  AgentRuntimeApprovalRequestPayload as AgentWorkerApprovalRequestPayload,
+  AgentRuntimeCommand as AgentWorkerCommand,
+  AgentRuntimeEvent as AgentWorkerEvent,
+  AgentRuntimeInputPart as AgentWorkerInputPart,
+  AgentRuntimeItem as AgentWorkerItem,
+  AgentRuntimeItemStatus as AgentWorkerItemStatus,
+} from "../../runtime-protocol";
 
 // ---------------------------------------------------------------------------
 // Lightweight title generation — uses the already-running app-server so it
@@ -166,7 +166,7 @@ function mapCodexStatus(status: string | undefined): AgentWorkerItemStatus {
       return "failed";
     case "inProgress":
     default:
-      return "in_progress";
+      return "running";
   }
 }
 

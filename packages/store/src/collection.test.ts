@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import type { SqlDriver } from "@lifecycle/db";
 import { createSqlCollection } from "./collection";
-import type { SqlDriver } from "./driver";
 
 interface TestRecord {
   id: string;
@@ -11,6 +11,7 @@ function createDriver(): SqlDriver {
   return {
     select: async () => [],
     execute: async () => ({ rowsAffected: 1 }),
+    transaction: async (statements) => ({ rowsAffected: statements.map(() => 1) }),
   };
 }
 

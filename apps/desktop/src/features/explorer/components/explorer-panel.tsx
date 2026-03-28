@@ -1,30 +1,29 @@
-import type { WorkspaceHost } from "@lifecycle/contracts";
+import { useWorkspaceClient } from "@lifecycle/workspace/client/react";
 import { EmptyState } from "@lifecycle/ui";
 import { FolderOpen } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ExplorerTree } from "@/features/explorer/components/explorer-tree";
-import { useWorkspaceFileTree } from "@/features/workspaces/hooks";
-import { useWorkspaceHostClient } from "@lifecycle/workspace/client/react";
+import { workspaceKeys } from "@/features/workspaces/state/workspace-query-keys";
+import { useWorkspace } from "@/store";
 
 interface ExplorerPanelProps {
   onOpenFile: (filePath: string) => void;
   workspaceId: string;
-  workspaceHost: WorkspaceHost;
   worktreePath: string | null;
 }
 
-export function ExplorerPanel({
-  onOpenFile,
-  workspaceId,
-  workspaceHost,
-  worktreePath,
-}: ExplorerPanelProps) {
-  const client = useWorkspaceHostClient(workspaceHost);
+export function ExplorerPanel({ onOpenFile, workspaceId, worktreePath }: ExplorerPanelProps) {
+  const client = useWorkspaceClient();
+  const workspace = useWorkspace(workspaceId);
   const supportsFiles = worktreePath !== null;
-  const explorerTreeQuery = useWorkspaceFileTree(
-    supportsFiles ? workspaceId : null,
-    supportsFiles ? workspaceHost : null,
-  );
+  const explorerTreeQuery = useQuery({
+    queryKey: supportsFiles
+      ? workspaceKeys.fileTree(workspaceId)
+      : ["workspace-file-tree", "disabled"],
+    queryFn: () => client.listFiles(workspace!),
+    enabled: supportsFiles && workspace !== undefined,
+  });
   const refreshExplorerTreeRef = useRef(explorerTreeQuery.refetch);
   refreshExplorerTreeRef.current = explorerTreeQuery.refetch;
 

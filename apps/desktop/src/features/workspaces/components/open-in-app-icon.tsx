@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
+import type { OpenInAppId } from "@lifecycle/workspace";
 import { cn } from "@lifecycle/ui";
-import type { OpenInAppId } from "@/features/workspaces/open-in-api";
 
 function AppIconTile({
   children,

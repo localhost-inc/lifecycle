@@ -1,38 +1,46 @@
 import { createContext, createElement, useContext, type PropsWithChildren } from "react";
-import type { WorkspaceHost } from "@lifecycle/contracts";
-import type { WorkspaceHostClient, WorkspaceHostClientRegistry } from "./index";
+import type { WorkspaceClient, WorkspaceClientRegistry } from "./index";
 
-const WorkspaceHostClientContext = createContext<WorkspaceHostClientRegistry | null>(null);
+const WorkspaceClientRegistryContext = createContext<WorkspaceClientRegistry | null>(null);
+const WorkspaceClientContext = createContext<WorkspaceClient | null>(null);
 
-export function WorkspaceHostClientProvider({
-  workspaceHostClientRegistry,
+export function WorkspaceClientRegistryProvider({
+  workspaceClientRegistry,
   children,
 }: PropsWithChildren<{
-  workspaceHostClientRegistry: WorkspaceHostClientRegistry;
+  workspaceClientRegistry: WorkspaceClientRegistry;
 }>) {
   return createElement(
-    WorkspaceHostClientContext.Provider,
-    { value: workspaceHostClientRegistry },
+    WorkspaceClientRegistryContext.Provider,
+    { value: workspaceClientRegistry },
     children,
   );
 }
 
-export function useWorkspaceHostClientRegistry(): WorkspaceHostClientRegistry {
-  const value = useContext(WorkspaceHostClientContext);
+export function useWorkspaceClientRegistry(): WorkspaceClientRegistry {
+  const value = useContext(WorkspaceClientRegistryContext);
   if (!value) {
-    throw new Error("WorkspaceHostClientProvider is required");
+    throw new Error("WorkspaceClientRegistryProvider is required");
   }
 
   return value;
 }
 
-export function useWorkspaceHostClient(workspaceHost: WorkspaceHost): WorkspaceHostClient {
-  return useWorkspaceHostClientRegistry().resolve(workspaceHost);
+export function WorkspaceClientProvider({
+  workspaceClient,
+  children,
+}: PropsWithChildren<{
+  workspaceClient: WorkspaceClient;
+}>) {
+  return createElement(WorkspaceClientContext.Provider, { value: workspaceClient }, children);
 }
 
-export function useOptionalWorkspaceHostClient(
-  workspaceHost: WorkspaceHost | null | undefined,
-): WorkspaceHostClient | null {
-  const registry = useWorkspaceHostClientRegistry();
-  return workspaceHost ? registry.resolve(workspaceHost) : null;
+export function useWorkspaceClient(): WorkspaceClient {
+  const workspaceClient = useContext(WorkspaceClientContext);
+
+  if (!workspaceClient) {
+    throw new Error("WorkspaceClientProvider is required");
+  }
+
+  return workspaceClient;
 }

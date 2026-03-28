@@ -6,14 +6,14 @@ use tokio::process::Command;
 pub async fn create_worktree(
     repo_path: &str,
     base_ref: &str,
-    source_ref: &str,
-    workspace_name: &str,
-    workspace_id: &str,
+    branch: &str,
+    name: &str,
+    id: &str,
     configured_worktree_root: Option<&str>,
 ) -> Result<String, LifecycleError> {
     let worktree_root = resolve_worktree_root(repo_path, configured_worktree_root)?;
     std::fs::create_dir_all(&worktree_root).map_err(|e| LifecycleError::Io(e.to_string()))?;
-    let worktree_path = worktree_root.join(worktree_directory_name(workspace_name, workspace_id));
+    let worktree_path = worktree_root.join(worktree_dir_name(name, id));
     let worktree_path_str = worktree_path.to_string_lossy().into_owned();
 
     let output = Command::new("git")
@@ -31,7 +31,7 @@ pub async fn create_worktree(
     }
 
     let checkout_output = Command::new("git")
-        .args(["-C", &worktree_path_str, "checkout", "-b", source_ref])
+        .args(["-C", &worktree_path_str, "checkout", "-b", branch])
         .output()
         .await
         .map_err(|e| LifecycleError::RepoCloneFailed(e.to_string()))?;
@@ -130,8 +130,8 @@ fn is_local_config_file(name: &str) -> bool {
 pub async fn move_worktree(
     repo_path: &str,
     current_worktree_path: &str,
-    workspace_name: &str,
-    workspace_id: &str,
+    name: &str,
+    id: &str,
 ) -> Result<String, LifecycleError> {
     let current_path = Path::new(current_worktree_path);
     let parent = current_path
@@ -140,7 +140,7 @@ pub async fn move_worktree(
             operation: "move worktree".to_string(),
             reason: "worktree path has no parent directory".to_string(),
         })?;
-    let next_path = parent.join(worktree_directory_name(workspace_name, workspace_id));
+    let next_path = parent.join(worktree_dir_name(name, id));
     let next_path_str = next_path.to_string_lossy().into_owned();
 
     if next_path_str == current_worktree_path {
@@ -175,12 +175,12 @@ pub async fn move_worktree(
     Ok(next_path_str)
 }
 
-pub async fn rename_workspace_branch(
+pub async fn rename_branch(
     worktree_path: &str,
-    current_source_ref: &str,
-    next_source_ref: &str,
+    current_branch: &str,
+    next_branch: &str,
 ) -> Result<(), LifecycleError> {
-    if current_source_ref == next_source_ref {
+    if current_branch == next_branch {
         return Ok(());
     }
 
@@ -190,8 +190,8 @@ pub async fn rename_workspace_branch(
             worktree_path,
             "branch",
             "-m",
-            current_source_ref,
-            next_source_ref,
+            current_branch,
+            next_branch,
         ])
         .output()
         .await
@@ -278,7 +278,7 @@ pub async fn get_current_branch(repo_path: &str) -> Result<String, LifecycleErro
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
-pub fn slugify_workspace_name(value: &str) -> String {
+pub fn slugify_name(value: &str) -> String {
     let mut slug = String::new();
     let mut previous_dash = false;
 
@@ -302,40 +302,40 @@ pub fn slugify_workspace_name(value: &str) -> String {
     }
 
     if slug.is_empty() {
-        "workspace".to_string()
+        "unnamed".to_string()
     } else {
         slug
     }
 }
 
-pub fn short_workspace_id(workspace_id: &str) -> String {
-    let short: String = workspace_id
+pub fn short_id(id: &str) -> String {
+    let short: String = id
         .chars()
         .filter(|ch| ch.is_ascii_alphanumeric())
         .take(8)
         .collect();
 
     if short.is_empty() {
-        "workspace".to_string()
+        "unnamed".to_string()
     } else {
         short
     }
 }
 
 #[allow(dead_code)] // Used by tests; policy logic moved to TypeScript.
-pub fn workspace_branch_name(workspace_name: &str, workspace_id: &str) -> String {
-    let name_slug = slugify_workspace_name(workspace_name);
-    let short_id = short_workspace_id(workspace_id);
+pub fn worktree_branch_name(name: &str, id: &str) -> String {
+    let name_slug = slugify_name(name);
+    let short_id = short_id(id);
     format!("lifecycle/{}-{}", name_slug, short_id)
 }
 
 #[allow(dead_code)] // Used by tests; policy logic moved to TypeScript.
-pub fn is_lifecycle_worktree_branch(source_ref: &str, workspace_id: &str) -> bool {
-    let Some(slug) = source_ref.strip_prefix("lifecycle/") else {
+pub fn is_managed_worktree_branch(branch: &str, id: &str) -> bool {
+    let Some(slug) = branch.strip_prefix("lifecycle/") else {
         return false;
     };
 
-    let short_id = short_workspace_id(workspace_id);
+    let short_id = short_id(id);
     let Some(name_slug) = slug.strip_suffix(&format!("-{short_id}")) else {
         return false;
     };
@@ -346,11 +346,11 @@ pub fn is_lifecycle_worktree_branch(source_ref: &str, workspace_id: &str) -> boo
             .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
 }
 
-fn worktree_directory_name(workspace_name: &str, workspace_id: &str) -> String {
+fn worktree_dir_name(name: &str, id: &str) -> String {
     format!(
         "{}--{}",
-        slugify_workspace_name(workspace_name),
-        short_workspace_id(workspace_id)
+        slugify_name(name),
+        short_id(id)
     )
 }
 
@@ -422,39 +422,39 @@ mod tests {
     }
 
     #[test]
-    fn slugify_workspace_name_normalizes_and_trims() {
-        assert_eq!(slugify_workspace_name("Sydney"), "sydney");
+    fn slugify_name_normalizes_and_trims() {
+        assert_eq!(slugify_name("Sydney"), "sydney");
         assert_eq!(
-            slugify_workspace_name("Sydney / Debug Build"),
+            slugify_name("Sydney / Debug Build"),
             "sydney-debug-build"
         );
-        assert_eq!(slugify_workspace_name("___"), "workspace");
+        assert_eq!(slugify_name("___"), "unnamed");
     }
 
     #[test]
     fn workspace_branch_and_worktree_names_use_kebab_case_derivatives() {
-        let workspace_id = "1234abcd-ffff-eeee-dddd-000000000000";
-        let workspace_name = "Fix Auth Callback / API";
+        let id = "1234abcd-ffff-eeee-dddd-000000000000";
+        let name = "Fix Auth Callback / API";
 
         assert_eq!(
-            workspace_branch_name(workspace_name, workspace_id),
+            worktree_branch_name(name, id),
             "lifecycle/fix-auth-callback-api-1234abcd"
         );
         assert_eq!(
-            worktree_directory_name(workspace_name, workspace_id),
+            worktree_dir_name(name, id),
             "fix-auth-callback-api--1234abcd"
         );
     }
 
     #[tokio::test]
-    async fn create_worktree_allows_checked_out_source_ref() {
+    async fn create_worktree_allows_checked_out_branch() {
         let repo_path = temp_repo_path();
         init_repo(&repo_path);
         let repo_path_str = repo_path.to_str().expect("repo path is utf8");
         let base_ref = get_current_branch(repo_path_str)
             .await
             .expect("get current branch");
-        let source_ref = "lifecycle/sydney-branch";
+        let branch = "lifecycle/sydney-branch";
         let configured_root =
             std::env::temp_dir().join(format!("lifecycle-worktree-root-{}", uuid::Uuid::new_v4()));
         let configured_root_str = configured_root
@@ -464,7 +464,7 @@ mod tests {
         let worktree_path = create_worktree(
             repo_path_str,
             &base_ref,
-            source_ref,
+            branch,
             "Sydney",
             "ws-checked-out-ref",
             Some(configured_root_str),
@@ -485,7 +485,7 @@ mod tests {
             Path::new(&worktree_path),
             &["rev-parse", "--abbrev-ref", "HEAD"],
         );
-        assert_eq!(checked_out_branch, source_ref);
+        assert_eq!(checked_out_branch, branch);
 
         remove_worktree(repo_path_str, &worktree_path)
             .await
@@ -597,23 +597,23 @@ mod tests {
     }
 
     #[test]
-    fn is_lifecycle_worktree_branch_requires_lifecycle_prefix_and_workspace_suffix() {
-        assert!(is_lifecycle_worktree_branch(
+    fn is_managed_worktree_branch_requires_lifecycle_prefix_and_workspace_suffix() {
+        assert!(is_managed_worktree_branch(
             "lifecycle/fix-auth-1234abcd",
             "1234abcd"
         ));
-        assert!(!is_lifecycle_worktree_branch(
+        assert!(!is_managed_worktree_branch(
             "feature/fix-auth",
             "1234abcd"
         ));
-        assert!(!is_lifecycle_worktree_branch(
+        assert!(!is_managed_worktree_branch(
             "lifecycle/fix-auth-9876ffff",
             "1234abcd"
         ));
     }
 
     #[tokio::test]
-    async fn rename_workspace_branch_renames_the_checked_out_branch() {
+    async fn rename_branch_renames_the_checked_out_branch() {
         let repo_path = temp_repo_path();
         init_repo(&repo_path);
         let repo_path_str = repo_path.to_str().expect("repo path is utf8");
@@ -625,22 +625,22 @@ mod tests {
         let configured_root_str = configured_root
             .to_str()
             .expect("configured root path is utf8");
-        let workspace_id = "ws-rename-branch";
-        let current_source_ref = workspace_branch_name("Initial Name", workspace_id);
-        let next_source_ref = workspace_branch_name("Next Name", workspace_id);
+        let id = "ws-rename-branch";
+        let current_branch = worktree_branch_name("Initial Name", id);
+        let next_branch = worktree_branch_name("Next Name", id);
 
         let worktree_path = create_worktree(
             repo_path_str,
             &base_ref,
-            &current_source_ref,
+            &current_branch,
             "Initial Name",
-            workspace_id,
+            id,
             Some(configured_root_str),
         )
         .await
         .expect("create worktree");
 
-        rename_workspace_branch(&worktree_path, &current_source_ref, &next_source_ref)
+        rename_branch(&worktree_path, &current_branch, &next_branch)
             .await
             .expect("rename branch");
 
@@ -648,7 +648,7 @@ mod tests {
             Path::new(&worktree_path),
             &["rev-parse", "--abbrev-ref", "HEAD"],
         );
-        assert_eq!(checked_out_branch, next_source_ref);
+        assert_eq!(checked_out_branch, next_branch);
 
         remove_worktree(repo_path_str, &worktree_path)
             .await

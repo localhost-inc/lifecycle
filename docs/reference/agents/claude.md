@@ -151,12 +151,12 @@ Lifecycle maps these into the worker protocol as an opaque `blockId: string`:
 
 When Claude only exposes a block in the completed `assistant.message.content` payload instead of a live partial event, Lifecycle backfills the same worker events from the final content array using the same block index mapping. Duplicate blocks that already streamed are suppressed.
 
-The orchestrator uses `blockId` as part of the `part_id` key (`{turnId}:assistant:{blockId}`) to route streaming deltas to the correct accumulated message part. This ensures interstitial text blocks between tool calls render as separate parts in the UI.
+The agent host uses `blockId` as part of the `part_id` key (`{turnId}:assistant:{blockId}`) to route streaming deltas to the correct accumulated message part. This ensures interstitial text blocks between tool calls render as separate parts in the UI.
 
 Rules:
 
-1. The `blockId` is opaque to the orchestrator — it must not parse or reinterpret the string.
-2. The type prefix (`text:`, `thinking:`) is set by the worker, not the orchestrator.
+1. The `blockId` is opaque to the agent host — it must not parse or reinterpret the string.
+2. The type prefix (`text:`, `thinking:`) is set by the worker, not the agent host.
 3. The Claude SDK's native `event.index` is the source of truth for block identity.
 
 ## Lifecycle Mapping

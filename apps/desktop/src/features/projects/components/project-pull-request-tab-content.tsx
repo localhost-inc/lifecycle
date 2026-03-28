@@ -1,8 +1,12 @@
+import {
+  WorkspaceClientProvider,
+  useWorkspaceClientRegistry,
+} from "@lifecycle/workspace/client/react";
 import { EmptyState, Loading } from "@lifecycle/ui";
 import { useMemo } from "react";
 import { useOutletContext, useParams } from "react-router-dom";
-import { useGitPullRequest, useGitPullRequests } from "@/features/git/hooks";
 import { PullRequestSurface } from "@/features/git/components/pull-request-surface";
+import { useGitPullRequest, useGitPullRequests } from "@/features/git/hooks";
 import type { ProjectRouteOutletContext } from "@/features/projects/routes/project-route";
 
 export function ProjectPullRequestTabContent() {
@@ -10,21 +14,7 @@ export function ProjectPullRequestTabContent() {
   const { prNumber: prNumberParam } = useParams();
   const pullRequestNumber = Number(prNumberParam);
   const projectName = project.name;
-  const workspaceId = repositoryWorkspace?.id ?? null;
-  const workspaceHost = repositoryWorkspace?.host ?? null;
-  const listQuery = useGitPullRequests(workspaceId, workspaceHost, {
-    enabled: workspaceId !== null,
-  });
-  const detailQuery = useGitPullRequest(workspaceId, workspaceHost, pullRequestNumber, {
-    enabled: workspaceId !== null && Number.isInteger(pullRequestNumber) && pullRequestNumber > 0,
-  });
-  const pullRequest = useMemo(
-    () =>
-      detailQuery.data?.pullRequest ??
-      listQuery.data?.pullRequests.find((candidate) => candidate.number === pullRequestNumber) ??
-      null,
-    [detailQuery.data?.pullRequest, listQuery.data?.pullRequests, pullRequestNumber],
-  );
+  const workspaceClientRegistry = useWorkspaceClientRegistry();
 
   if (!repositoryWorkspace) {
     return (
@@ -36,6 +26,39 @@ export function ProjectPullRequestTabContent() {
       </div>
     );
   }
+
+  const workspaceClient = workspaceClientRegistry.resolve(repositoryWorkspace.host);
+
+  return (
+    <WorkspaceClientProvider workspaceClient={workspaceClient}>
+      <ProjectPullRequestTabContentBody
+        pullRequestNumber={pullRequestNumber}
+        workspaceId={repositoryWorkspace.id}
+      />
+    </WorkspaceClientProvider>
+  );
+}
+
+function ProjectPullRequestTabContentBody({
+  pullRequestNumber,
+  workspaceId,
+}: {
+  pullRequestNumber: number;
+  workspaceId: string;
+}) {
+  const listQuery = useGitPullRequests(workspaceId, {
+    enabled: Number.isInteger(pullRequestNumber) && pullRequestNumber > 0,
+  });
+  const detailQuery = useGitPullRequest(workspaceId, pullRequestNumber, {
+    enabled: Number.isInteger(pullRequestNumber) && pullRequestNumber > 0,
+  });
+  const pullRequest = useMemo(
+    () =>
+      detailQuery.data?.pullRequest ??
+      listQuery.data?.pullRequests.find((candidate) => candidate.number === pullRequestNumber) ??
+      null,
+    [detailQuery.data?.pullRequest, listQuery.data?.pullRequests, pullRequestNumber],
+  );
 
   if (!pullRequest && (detailQuery.isLoading || listQuery.isLoading)) {
     return <Loading message={`Loading pull request #${pullRequestNumber}...`} />;
@@ -52,5 +75,5 @@ export function ProjectPullRequestTabContent() {
     );
   }
 
-  return <PullRequestSurface pullRequest={pullRequest} workspaceId={repositoryWorkspace.id} />;
+  return <PullRequestSurface pullRequest={pullRequest} workspaceId={workspaceId} />;
 }

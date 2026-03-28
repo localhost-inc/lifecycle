@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { parseManifest, type LifecycleConfig } from "@lifecycle/contracts";
+import {
+  parseManifest,
+  type LifecycleConfig,
+  type ServiceRecord,
+  type WorkspaceRecord,
+} from "@lifecycle/contracts";
 import {
   EnvironmentOrchestrator,
   type PrepareStartInput,
@@ -18,13 +23,8 @@ interface CallLog {
   args: unknown[];
 }
 
-function createMockOrchestrator(options?: { prepared?: boolean; readyServices?: string[] }): {
-  orchestrator: EnvironmentOrchestrator;
-  calls: CallLog[];
-} {
+function createMockOrchestrator(): { orchestrator: EnvironmentOrchestrator; calls: CallLog[] } {
   const calls: CallLog[] = [];
-  const prepared = options?.prepared ?? false;
-  const readyServices = new Set(options?.readyServices ?? []);
 
   class MockOrchestrator extends EnvironmentOrchestrator {
     async prepareStart(input: PrepareStartInput): Promise<PrepareStartResult> {
@@ -43,15 +43,6 @@ function createMockOrchestrator(options?: { prepared?: boolean; readyServices?: 
     async stopAll(workspaceId: string): Promise<void> {
       calls.push({ method: "stopAll", args: [workspaceId] });
     }
-    async markPrepared(workspaceId: string): Promise<void> {
-      calls.push({ method: "markPrepared", args: [workspaceId] });
-    }
-    async getReadyServices(): Promise<Set<string>> {
-      return readyServices;
-    }
-    async isPrepared(): Promise<boolean> {
-      return prepared;
-    }
   }
 
   return { orchestrator: new MockOrchestrator(), calls };
@@ -61,6 +52,40 @@ const BASE_INPUT = {
   workspaceId: "ws-1",
   manifestJson: "",
   manifestFingerprint: "fp-1",
+  prepared: false,
+  readyServiceNames: [],
+  services: [
+    {
+      id: "svc-web",
+      workspace_id: "ws-1",
+      name: "web",
+      status: "stopped",
+      status_reason: null,
+      assigned_port: null,
+      preview_url: null,
+      created_at: "2026-03-12T00:00:00.000Z",
+      updated_at: "2026-03-12T00:00:00.000Z",
+    } satisfies ServiceRecord,
+  ],
+  workspace: {
+    id: "ws-1",
+    project_id: "project-1",
+    name: "Workspace 1",
+    checkout_type: "worktree",
+    source_ref: "lifecycle/workspace-1",
+    git_sha: null,
+    worktree_path: "/tmp/workspace",
+    host: "local",
+    manifest_fingerprint: "fp-1",
+    created_at: "2026-03-12T00:00:00.000Z",
+    updated_at: "2026-03-12T00:00:00.000Z",
+    last_active_at: "2026-03-12T00:00:00.000Z",
+    prepared_at: null,
+    status: "active",
+    failure_reason: null,
+    failed_at: null,
+  } satisfies WorkspaceRecord,
+  worktreePath: "/tmp/workspace",
 };
 
 describe("EnvironmentOrchestrator", () => {
@@ -156,7 +181,7 @@ describe("EnvironmentOrchestrator", () => {
     expect(input.serviceNames.sort()).toEqual(["api", "www"]);
   });
 
-  test("marks prepared after first successful start with prepare steps", async () => {
+  test("returns preparedAt after first successful start with prepare steps", async () => {
     const config = parse(`{
       "workspace": {
         "prepare": [
@@ -168,14 +193,12 @@ describe("EnvironmentOrchestrator", () => {
       }
     }`);
 
-    const { orchestrator, calls } = createMockOrchestrator({ prepared: false });
-    await orchestrator.start(config, BASE_INPUT);
-
-    const markCalls = calls.filter((c) => c.method === "markPrepared");
-    expect(markCalls).toHaveLength(1);
+    const { orchestrator } = createMockOrchestrator();
+    const result = await orchestrator.start(config, BASE_INPUT);
+    expect(result.preparedAt).toBeString();
   });
 
-  test("does not mark prepared when already prepared", async () => {
+  test("does not return preparedAt when already prepared", async () => {
     const config = parse(`{
       "workspace": {
         "prepare": [
@@ -187,11 +210,12 @@ describe("EnvironmentOrchestrator", () => {
       }
     }`);
 
-    const { orchestrator, calls } = createMockOrchestrator({ prepared: true });
-    await orchestrator.start(config, BASE_INPUT);
-
-    const markCalls = calls.filter((c) => c.method === "markPrepared");
-    expect(markCalls).toHaveLength(0);
+    const { orchestrator } = createMockOrchestrator();
+    const result = await orchestrator.start(config, {
+      ...BASE_INPUT,
+      prepared: true,
+    });
+    expect(result.preparedAt).toBeNull();
   });
 
   test("skips already-running services in incremental start", async () => {
@@ -203,12 +227,11 @@ describe("EnvironmentOrchestrator", () => {
       }
     }`);
 
-    const { orchestrator, calls } = createMockOrchestrator({
-      prepared: true,
-      readyServices: ["api"],
-    });
+    const { orchestrator, calls } = createMockOrchestrator();
     await orchestrator.start(config, {
       ...BASE_INPUT,
+      prepared: true,
+      readyServiceNames: ["api"],
       serviceNames: ["www"],
     });
 

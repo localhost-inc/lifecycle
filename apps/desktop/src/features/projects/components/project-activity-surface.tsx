@@ -1,11 +1,13 @@
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { Card, EmptyState } from "@lifecycle/ui";
 import { useCallback, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useOutletContext } from "react-router-dom";
+import { getWorkspaceActivityEvents } from "@/features/events";
 import { formatRelativeTime } from "@/lib/format";
 import { WorkspaceActivityFeed } from "@/features/workspaces/components/workspace-activity-feed";
-import { useWorkspaceActivity } from "@/features/workspaces/hooks";
 import { getWorkspaceDisplayName } from "@/features/workspaces/lib/workspace-display";
+import { workspaceKeys } from "@/features/workspaces/state/workspace-query-keys";
 import { buildWorkspaceActivityItems } from "@/features/workspaces/state/workspace-activity";
 import type { ProjectRouteOutletContext } from "@/features/projects/routes/project-route";
 
@@ -16,7 +18,25 @@ function ProjectActivityWorkspaceSection({
   workspace: WorkspaceRecord;
   onOpenWorkspace: (workspace: WorkspaceRecord) => void;
 }) {
-  const activityQuery = useWorkspaceActivity(workspace.id, workspace.host);
+  return (
+    <ProjectActivityWorkspaceSectionContent
+      onOpenWorkspace={onOpenWorkspace}
+      workspace={workspace}
+    />
+  );
+}
+
+function ProjectActivityWorkspaceSectionContent({
+  workspace,
+  onOpenWorkspace,
+}: {
+  workspace: WorkspaceRecord;
+  onOpenWorkspace: (workspace: WorkspaceRecord) => void;
+}) {
+  const activityQuery = useQuery({
+    queryKey: workspaceKeys.activity(workspace.id),
+    queryFn: async () => getWorkspaceActivityEvents(workspace.id),
+  });
   const items = useMemo(
     () => buildWorkspaceActivityItems(activityQuery.data ?? []),
     [activityQuery.data],

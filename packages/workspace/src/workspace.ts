@@ -10,10 +10,10 @@ import type {
   GitPullRequestSummary,
   GitPushResult,
   GitStatusResult,
-  LifecycleEvent,
   ServiceRecord,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
+import type { ManifestStatus } from "./manifest";
 
 export interface StartServicesInput {
   serviceNames?: string[];
@@ -23,13 +23,13 @@ export interface StartServicesInput {
   manifestFingerprint: string;
 }
 
-export interface WorkspaceHealthResult {
-  healthy: boolean;
+export interface StopServicesInput {
+  workspace: WorkspaceRecord;
   services: ServiceRecord[];
 }
 
 export interface GitDiffInput {
-  workspaceId: string;
+  workspace: WorkspaceRecord;
   filePath: string;
   scope: GitDiffScope;
 }
@@ -77,28 +77,53 @@ export interface EnsureWorkspaceInput {
   projectPath: string;
   baseRef?: string | null;
   worktreeRoot?: string | null;
-  manifestJson?: string | null;
   manifestFingerprint?: string | null;
+}
+
+export interface RenameWorkspaceInput {
+  workspace: WorkspaceRecord;
+  projectPath: string;
+  name: string;
 }
 
 export interface WorkspaceArchiveDisposition {
   hasUncommittedChanges: boolean;
 }
 
-export interface WorkspaceHostClient {
+export interface ArchiveWorkspaceInput {
+  workspace: WorkspaceRecord;
+  projectPath: string;
+}
+
+export type OpenInAppId =
+  | "cursor"
+  | "finder"
+  | "ghostty"
+  | "iterm"
+  | "vscode"
+  | "warp"
+  | "windsurf"
+  | "xcode"
+  | "zed";
+
+export interface WorkspaceOpenInAppInfo {
+  iconDataUrl: string | null;
+  id: OpenInAppId;
+  label: string;
+}
+
+export interface WorkspaceClient {
+  readManifest(dirPath: string): Promise<ManifestStatus>;
+  getGitCurrentBranch(repoPath: string): Promise<string>;
   ensureWorkspace(input: EnsureWorkspaceInput): Promise<WorkspaceRecord>;
-  renameWorkspace(workspace: WorkspaceRecord, name: string): Promise<WorkspaceRecord>;
+  renameWorkspace(input: RenameWorkspaceInput): Promise<WorkspaceRecord>;
   inspectArchive(workspace: WorkspaceRecord): Promise<WorkspaceArchiveDisposition>;
-  archiveWorkspace(workspace: WorkspaceRecord): Promise<void>;
-  startServices(input: StartServicesInput): Promise<ServiceRecord[]>;
-  healthCheck(workspaceId: string): Promise<WorkspaceHealthResult>;
-  stopServices(workspaceId: string): Promise<void>;
-  getActivity(workspaceId: string): Promise<LifecycleEvent[]>;
-  getServiceLogs(workspaceId: string): Promise<ServiceLogSnapshot[]>;
-  getServices(workspaceId: string): Promise<ServiceRecord[]>;
-  readFile(workspaceId: string, filePath: string): Promise<WorkspaceFileReadResult>;
+  archiveWorkspace(input: ArchiveWorkspaceInput): Promise<void>;
+  startServices(input: StartServicesInput): Promise<{ preparedAt: string | null }>;
+  stopServices(input: StopServicesInput): Promise<void>;
+  readFile(workspace: WorkspaceRecord, filePath: string): Promise<WorkspaceFileReadResult>;
   writeFile(
-    workspaceId: string,
+    workspace: WorkspaceRecord,
     filePath: string,
     content: string,
   ): Promise<WorkspaceFileReadResult>;
@@ -106,30 +131,32 @@ export interface WorkspaceHostClient {
     input: SubscribeWorkspaceFileEventsInput,
     listener: WorkspaceFileEventListener,
   ): Promise<WorkspaceFileEventSubscription>;
-  listFiles(workspaceId: string): Promise<WorkspaceFileTreeEntry[]>;
-  openFile(workspaceId: string, filePath: string): Promise<void>;
-  getGitStatus(workspaceId: string): Promise<GitStatusResult>;
-  getGitScopePatch(workspaceId: string, scope: GitDiffScope): Promise<string>;
-  getGitChangesPatch(workspaceId: string): Promise<string>;
+  listFiles(workspace: WorkspaceRecord): Promise<WorkspaceFileTreeEntry[]>;
+  openFile(workspace: WorkspaceRecord, filePath: string): Promise<void>;
+  openInApp(workspace: WorkspaceRecord, appId: OpenInAppId): Promise<void>;
+  listOpenInApps(): Promise<WorkspaceOpenInAppInfo[]>;
+  getGitStatus(workspace: WorkspaceRecord): Promise<GitStatusResult>;
+  getGitScopePatch(workspace: WorkspaceRecord, scope: GitDiffScope): Promise<string>;
+  getGitChangesPatch(workspace: WorkspaceRecord): Promise<string>;
   getGitDiff(input: GitDiffInput): Promise<GitDiffResult>;
-  listGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]>;
-  listGitPullRequests(workspaceId: string): Promise<GitPullRequestListResult>;
+  listGitLog(workspace: WorkspaceRecord, limit: number): Promise<GitLogEntry[]>;
+  listGitPullRequests(workspace: WorkspaceRecord): Promise<GitPullRequestListResult>;
   getGitPullRequest(
-    workspaceId: string,
+    workspace: WorkspaceRecord,
     pullRequestNumber: number,
   ): Promise<GitPullRequestDetailResult>;
-  getCurrentGitPullRequest(workspaceId: string): Promise<GitBranchPullRequestResult>;
-  getGitBaseRef(workspaceId: string): Promise<string | null>;
-  getGitRefDiffPatch(workspaceId: string, baseRef: string, headRef: string): Promise<string>;
-  getGitPullRequestPatch(workspaceId: string, pullRequestNumber: number): Promise<string>;
-  getGitCommitPatch(workspaceId: string, sha: string): Promise<GitCommitDiffResult>;
-  stageGitFiles(workspaceId: string, filePaths: string[]): Promise<void>;
-  unstageGitFiles(workspaceId: string, filePaths: string[]): Promise<void>;
-  commitGit(workspaceId: string, message: string): Promise<GitCommitResult>;
-  pushGit(workspaceId: string): Promise<GitPushResult>;
-  createGitPullRequest(workspaceId: string): Promise<GitPullRequestSummary>;
+  getCurrentGitPullRequest(workspace: WorkspaceRecord): Promise<GitBranchPullRequestResult>;
+  getGitBaseRef(workspace: WorkspaceRecord): Promise<string | null>;
+  getGitRefDiffPatch(workspace: WorkspaceRecord, baseRef: string, headRef: string): Promise<string>;
+  getGitPullRequestPatch(workspace: WorkspaceRecord, pullRequestNumber: number): Promise<string>;
+  getGitCommitPatch(workspace: WorkspaceRecord, sha: string): Promise<GitCommitDiffResult>;
+  stageGitFiles(workspace: WorkspaceRecord, filePaths: string[]): Promise<void>;
+  unstageGitFiles(workspace: WorkspaceRecord, filePaths: string[]): Promise<void>;
+  commitGit(workspace: WorkspaceRecord, message: string): Promise<GitCommitResult>;
+  pushGit(workspace: WorkspaceRecord): Promise<GitPushResult>;
+  createGitPullRequest(workspace: WorkspaceRecord): Promise<GitPullRequestSummary>;
   mergeGitPullRequest(
-    workspaceId: string,
+    workspace: WorkspaceRecord,
     pullRequestNumber: number,
   ): Promise<GitPullRequestSummary>;
 }

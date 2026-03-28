@@ -1,6 +1,6 @@
 # Terminal Persistence
 
-Canonical contract for the legacy terminal record that still exists in the desktop SQLite schema.
+Canonical contract for the legacy terminal record that still exists in the shared control-plane database.
 
 ## Current Scope
 
@@ -37,17 +37,17 @@ Rules:
 
 ## Persistence
 
-Terminal persistence remains baseline-schema SQLite owned by the desktop app.
+Terminal persistence is part of the shared control-plane database owned by `lifecycle db server`.
 
 Rules:
 
-1. Schema changes must go through numbered SQL migrations in `apps/desktop/src-tauri/src/platform/migrations`.
+1. Schema changes must go through numbered SQL migrations in `packages/db/migrations`.
 2. The baseline schema must boot a fresh database without follow-on compatibility migrations.
 3. Consumers should treat terminal rows as inert persisted records, not as active runtime state.
 
 Key files:
 
-1. `apps/desktop/src-tauri/src/platform/migrations/0001_baseline.sql`
-2. `apps/desktop/src-tauri/src/platform/db.rs`
+1. `packages/db/migrations/0001_init.sql`
+2. `packages/db/src/migrations.ts`
 3. `packages/contracts/src/db.ts`
 4. `packages/contracts/src/terminal.ts`

@@ -30,8 +30,6 @@
     "notification:default",
     "shell:allow-stdin-write",
     "shell:allow-kill",
-    "sql:default",
-    "sql:allow-execute",
     "updater:default",
     "process:default",
     {

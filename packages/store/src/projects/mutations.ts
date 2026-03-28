@@ -1,5 +1,5 @@
+import type { SqlDriver } from "@lifecycle/db";
 import type { ProjectRecord } from "@lifecycle/contracts";
-import type { SqlDriver } from "../driver";
 
 export async function createProject(driver: SqlDriver, project: ProjectRecord): Promise<void> {
   await driver.execute(

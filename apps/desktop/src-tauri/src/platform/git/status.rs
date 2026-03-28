@@ -376,7 +376,7 @@ fn merge_stats(
     }
 }
 
-fn is_workspace_branch_ref(value: &str) -> bool {
+fn is_managed_branch_ref(value: &str) -> bool {
     value.starts_with("lifecycle/") || value.contains("/lifecycle/")
 }
 
@@ -449,7 +449,7 @@ async fn resolve_remote_branch_label(repo_path: &str) -> Result<Option<String>, 
     Ok(prefer_origin_refs(refs)
         .into_iter()
         .filter(|reference| !reference.ends_with("/HEAD"))
-        .find(|reference| !is_workspace_branch_ref(reference)))
+        .find(|reference| !is_managed_branch_ref(reference)))
 }
 
 async fn resolve_local_branch_label(repo_path: &str) -> Result<Option<String>, LifecycleError> {
@@ -471,7 +471,7 @@ async fn resolve_local_branch_label(repo_path: &str) -> Result<Option<String>, L
     .await?;
 
     Ok(refs.into_iter().find(|reference| {
-        Some(reference.as_str()) != current_branch.as_deref() && !is_workspace_branch_ref(reference)
+        Some(reference.as_str()) != current_branch.as_deref() && !is_managed_branch_ref(reference)
     }))
 }
 
@@ -1586,7 +1586,7 @@ mod tests {
             &[
                 "checkout",
                 "-b",
-                "workspace/current",
+                "feature/current",
                 "origin/ron/fix-airlift-stale-auth",
             ],
         );

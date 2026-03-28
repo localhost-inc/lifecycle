@@ -41,7 +41,7 @@ export type HasPersistedPartsCallback = (messageId: string) => Promise<number> |
 // ---------------------------------------------------------------------------
 // Pure message accumulation pipeline.
 //
-// This is the same logic that runs in the desktop orchestrator, extracted into
+// This is the same logic that runs in the desktop agent host, extracted into
 // a self-contained, testable unit.  It owns:
 //   - message creation / get-or-create
 //   - part accumulation (delta concatenation + completed replacement)
@@ -296,7 +296,7 @@ export class MessagePipeline {
 }
 
 // ---------------------------------------------------------------------------
-// Pure functions (shared with desktop orchestrator)
+// Pure functions (shared with desktop agent host)
 // ---------------------------------------------------------------------------
 
 export function inferRole(messageId: string): AgentMessageRole {

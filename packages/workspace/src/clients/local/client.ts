@@ -11,30 +11,34 @@ import {
   type GitPullRequestSummary,
   type GitPushResult,
   type GitStatusResult,
-  type LifecycleEvent,
-  type ServiceRecord,
   type WorkspaceRecord,
 } from "@lifecycle/contracts";
 import type {
+  ArchiveWorkspaceInput,
   EnsureWorkspaceInput,
-  StartServicesInput,
   GitDiffInput,
+  OpenInAppId,
+  RenameWorkspaceInput,
   SubscribeWorkspaceFileEventsInput,
-  WorkspaceHostClient,
-  WorkspaceArchiveDisposition,
-  ServiceLogSnapshot,
+  StartServicesInput,
+  StopServicesInput,
   WorkspaceFileEventListener,
   WorkspaceFileEventSubscription,
+  WorkspaceArchiveDisposition,
   WorkspaceFileReadResult,
   WorkspaceFileTreeEntry,
-  WorkspaceHealthResult,
+  WorkspaceClient,
+  WorkspaceOpenInAppInfo,
 } from "../../workspace";
+import { readManifestFromPath, type ManifestFileReader, type ManifestStatus } from "../../manifest";
 import { computeArchiveInput } from "../../policy/workspace-archive";
 import { computeRenameInput } from "../../policy/workspace-rename";
 import { LocalEnvironmentOrchestrator } from "./environment-client";
 
 export interface LocalClientDeps {
+  appDataDir?: string;
   invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
+  fileReader?: ManifestFileReader;
   watchPath?: (
     path: string,
     callback: () => void,
@@ -42,40 +46,103 @@ export interface LocalClientDeps {
   ) => Promise<() => void>;
 }
 
-export class LocalClient implements WorkspaceHostClient {
+function requireWorktreePath(workspace: WorkspaceRecord): string {
+  if (!workspace.worktree_path) {
+    throw new Error(`Workspace "${workspace.id}" has no worktree path.`);
+  }
+  return workspace.worktree_path;
+}
+
+export class LocalWorkspaceClient implements WorkspaceClient {
+  private appDataDir: string | undefined;
+  private fileReader: ManifestFileReader | undefined;
   private invoke: LocalClientDeps["invoke"];
   private watchPath: LocalClientDeps["watchPath"];
-  private environment: LocalEnvironmentOrchestrator;
-
   constructor(deps: LocalClientDeps) {
+    this.appDataDir = deps.appDataDir;
+    this.fileReader = deps.fileReader;
     this.invoke = deps.invoke;
     this.watchPath = deps.watchPath;
-    this.environment = new LocalEnvironmentOrchestrator(deps.invoke);
+  }
+
+  async readManifest(dirPath: string): Promise<ManifestStatus> {
+    if (!this.fileReader) {
+      return { state: "missing" };
+    }
+
+    return readManifestFromPath(dirPath, this.fileReader);
+  }
+
+  async getGitCurrentBranch(repoPath: string): Promise<string> {
+    return this.invoke("get_git_current_branch", { repoPath }) as Promise<string>;
   }
 
   async ensureWorkspace(input: EnsureWorkspaceInput): Promise<WorkspaceRecord> {
-    return this.invoke("ensure_workspace", {
-      input: {
-        workspaceId: input.workspace.id,
-        projectPath: input.projectPath,
-        name: input.workspace.name,
-        sourceRef: input.workspace.source_ref,
-        checkoutType: input.workspace.checkout_type,
-        baseRef: input.baseRef,
-        worktreeRoot: input.worktreeRoot,
-        manifestJson: input.manifestJson,
-        manifestFingerprint: input.manifestFingerprint,
-      },
-    }) as Promise<WorkspaceRecord>;
+    const workspace = input.workspace;
+    const isRoot = workspace.checkout_type === "root";
+
+    let worktreePath: string;
+    let gitSha: string | null = null;
+
+    if (isRoot) {
+      worktreePath = input.projectPath;
+      try {
+        gitSha = (await this.invoke("get_git_sha", {
+          repoPath: input.projectPath,
+          refName: workspace.source_ref,
+        })) as string;
+      } catch {
+        // SHA lookup is best-effort for root workspaces.
+      }
+    } else {
+      const baseRef =
+        input.baseRef ??
+        ((await this.invoke("get_git_current_branch", {
+          repoPath: input.projectPath,
+        })) as string);
+
+      worktreePath = (await this.invoke("create_git_worktree", {
+        repoPath: input.projectPath,
+        baseRef,
+        sourceRef: workspace.source_ref,
+        name: workspace.name,
+        id: workspace.id,
+        worktreeRoot: input.worktreeRoot ?? null,
+        copyConfigFiles: true,
+      })) as string;
+
+      try {
+        gitSha = (await this.invoke("get_git_sha", {
+          repoPath: input.projectPath,
+          refName: workspace.source_ref,
+        })) as string;
+      } catch {
+        // SHA lookup is best-effort.
+      }
+    }
+
+    const now = new Date().toISOString();
+    return {
+      ...workspace,
+      git_sha: gitSha,
+      manifest_fingerprint: input.manifestFingerprint ?? null,
+      worktree_path: worktreePath,
+      status: "active",
+      failure_reason: null,
+      failed_at: null,
+      updated_at: now,
+      last_active_at: now,
+    };
   }
 
-  async renameWorkspace(workspace: WorkspaceRecord, name: string): Promise<WorkspaceRecord> {
+  async renameWorkspace(input: RenameWorkspaceInput): Promise<WorkspaceRecord> {
+    const { workspace, projectPath, name } = input;
     let branchHasUpstream = false;
     let currentWorktreeBranch: string | null = null;
     if (workspace.worktree_path) {
       try {
         [currentWorktreeBranch, branchHasUpstream] = await Promise.all([
-          this.readCurrentBranch(workspace.worktree_path),
+          this.getGitCurrentBranch(workspace.worktree_path),
           this.invoke("git_branch_has_upstream", {
             worktreePath: workspace.worktree_path,
             branchName: workspace.source_ref,
@@ -86,8 +153,33 @@ export class LocalClient implements WorkspaceHostClient {
       }
     }
 
-    const input = computeRenameInput(workspace, name, branchHasUpstream, currentWorktreeBranch);
-    return this.invoke("rename_workspace", { input }) as Promise<WorkspaceRecord>;
+    const renameInput = computeRenameInput(
+      workspace,
+      name,
+      branchHasUpstream,
+      currentWorktreeBranch,
+    );
+
+    const result = (await this.invoke("rename_git_worktree_branch", {
+      worktreePath: workspace.worktree_path ?? "",
+      currentSourceRef: workspace.source_ref,
+      newSourceRef: renameInput.sourceRef,
+      renameBranch: renameInput.renameBranch,
+      moveWorktree: renameInput.moveWorktree,
+      repoPath: projectPath,
+      name: renameInput.name,
+      id: workspace.id,
+    })) as string | null;
+
+    const now = new Date().toISOString();
+    return {
+      ...workspace,
+      name: renameInput.name,
+      source_ref: renameInput.sourceRef,
+      worktree_path: result ?? workspace.worktree_path,
+      updated_at: now,
+      last_active_at: now,
+    };
   }
 
   async inspectArchive(workspace: WorkspaceRecord): Promise<WorkspaceArchiveDisposition> {
@@ -98,75 +190,84 @@ export class LocalClient implements WorkspaceHostClient {
       return { hasUncommittedChanges: false };
     }
 
-    const gitStatus = await this.getGitStatus(workspace.id);
+    const gitStatus = await this.getGitStatus(workspace);
     return {
       hasUncommittedChanges: gitStatus.files.length > 0,
     };
   }
 
-  async archiveWorkspace(workspace: WorkspaceRecord): Promise<void> {
+  async archiveWorkspace(input: ArchiveWorkspaceInput): Promise<void> {
+    const { workspace, projectPath } = input;
     const lifecycleRoot = (await this.invoke("resolve_lifecycle_root_path")) as string;
-    const input = computeArchiveInput(workspace, lifecycleRoot);
-    await this.invoke("archive_workspace", { input });
+    const archiveInput = computeArchiveInput(workspace, lifecycleRoot);
+
+    if (archiveInput.removeWorktree && workspace.worktree_path) {
+      await this.invoke("remove_git_worktree", {
+        repoPath: projectPath,
+        worktreePath: workspace.worktree_path,
+      });
+    }
+
+    if (archiveInput.attachmentPath) {
+      // Attachment cleanup is best-effort — TS handles this.
+    }
   }
 
-  async startServices(input: StartServicesInput): Promise<ServiceRecord[]> {
+  async startServices(input: StartServicesInput): Promise<{ preparedAt: string | null }> {
     const result = parseManifest(input.manifestJson);
     if (!result.valid) {
       throw new Error(`Invalid manifest: ${result.errors.map((e) => e.message).join(", ")}`);
     }
 
-    this.environment.activeManifestJson = input.manifestJson;
-    await this.environment.start(result.config, {
+    const worktreePath = requireWorktreePath(input.workspace);
+
+    const logDir = this.appDataDir
+      ? `${this.appDataDir}/volumes/${input.workspace.id}/logs`
+      : `/tmp/lifecycle/logs/${input.workspace.id}`;
+
+    const environment = new LocalEnvironmentOrchestrator(this.invoke);
+    environment.primeStartContext({
+      config: result.config,
+      logDir,
+      services: input.services,
+      workspace: input.workspace,
+      worktreePath,
+    });
+    return environment.start(result.config, {
       workspaceId: input.workspace.id,
       manifestJson: input.manifestJson,
       manifestFingerprint: input.manifestFingerprint,
+      prepared: input.workspace.prepared_at !== null,
+      readyServiceNames: input.services
+        .filter((service) => service.status === "ready")
+        .map((service) => service.name),
+      services: input.services,
       ...(input.serviceNames ? { serviceNames: input.serviceNames } : {}),
+      workspace: input.workspace,
+      worktreePath,
     });
-
-    return this.getServices(input.workspace.id);
   }
 
-  async healthCheck(workspaceId: string): Promise<WorkspaceHealthResult> {
-    const services = (await this.invoke("get_workspace_services", {
-      workspaceId,
-    })) as ServiceRecord[];
-    const healthy = services.every((s) => s.status === "ready");
-    return { healthy, services };
+  async stopServices(input: StopServicesInput): Promise<void> {
+    const environment = new LocalEnvironmentOrchestrator(this.invoke);
+    environment.primeStopContext(input.services.map((service) => service.name));
+    await environment.stop(input.workspace.id);
   }
 
-  async stopServices(workspaceId: string): Promise<void> {
-    await this.environment.stop(workspaceId);
-  }
-
-  async getActivity(workspaceId: string): Promise<LifecycleEvent[]> {
-    return this.invoke("get_workspace_activity", { workspaceId }) as Promise<LifecycleEvent[]>;
-  }
-
-  async getServiceLogs(workspaceId: string): Promise<ServiceLogSnapshot[]> {
-    return this.invoke("get_workspace_service_logs", {
-      workspaceId,
-    }) as Promise<ServiceLogSnapshot[]>;
-  }
-
-  async getServices(workspaceId: string): Promise<ServiceRecord[]> {
-    return this.invoke("get_workspace_services", { workspaceId }) as Promise<ServiceRecord[]>;
-  }
-
-  async readFile(workspaceId: string, filePath: string): Promise<WorkspaceFileReadResult> {
-    return this.invoke("read_workspace_file", {
-      workspaceId,
+  async readFile(workspace: WorkspaceRecord, filePath: string): Promise<WorkspaceFileReadResult> {
+    return this.invoke("read_file", {
+      rootPath: requireWorktreePath(workspace),
       filePath,
     }) as Promise<WorkspaceFileReadResult>;
   }
 
   async writeFile(
-    workspaceId: string,
+    workspace: WorkspaceRecord,
     filePath: string,
     content: string,
   ): Promise<WorkspaceFileReadResult> {
-    return this.invoke("write_workspace_file", {
-      workspaceId,
+    return this.invoke("write_file", {
+      rootPath: requireWorktreePath(workspace),
       filePath,
       content,
     }) as Promise<WorkspaceFileReadResult>;
@@ -213,133 +314,170 @@ export class LocalClient implements WorkspaceHostClient {
     };
   }
 
-  async listFiles(workspaceId: string): Promise<WorkspaceFileTreeEntry[]> {
-    return this.invoke("list_workspace_files", {
-      workspaceId,
+  async listFiles(workspace: WorkspaceRecord): Promise<WorkspaceFileTreeEntry[]> {
+    return this.invoke("list_files", {
+      rootPath: requireWorktreePath(workspace),
     }) as Promise<WorkspaceFileTreeEntry[]>;
   }
 
-  async openFile(workspaceId: string, filePath: string): Promise<void> {
-    await this.invoke("open_workspace_file", {
-      workspaceId,
+  async openFile(workspace: WorkspaceRecord, filePath: string): Promise<void> {
+    await this.invoke("open_file", {
+      rootPath: requireWorktreePath(workspace),
       filePath,
     });
   }
 
-  async getGitStatus(workspaceId: string): Promise<GitStatusResult> {
-    return this.invoke("get_workspace_git_status", { workspaceId }) as Promise<GitStatusResult>;
+  async openInApp(workspace: WorkspaceRecord, appId: OpenInAppId): Promise<void> {
+    await this.invoke("open_in_app", {
+      rootPath: requireWorktreePath(workspace),
+      appId,
+    });
   }
 
-  async getGitScopePatch(workspaceId: string, scope: GitDiffScope): Promise<string> {
-    return this.invoke("get_workspace_git_scope_patch", {
-      workspaceId,
+  async listOpenInApps(): Promise<WorkspaceOpenInAppInfo[]> {
+    const apps = (await this.invoke("list_open_in_apps")) as Array<{
+      icon_data_url: string | null;
+      id: OpenInAppId;
+      label: string;
+    }>;
+    return apps.map((app) => ({
+      iconDataUrl: app.icon_data_url,
+      id: app.id,
+      label: app.label,
+    }));
+  }
+
+  async getGitStatus(workspace: WorkspaceRecord): Promise<GitStatusResult> {
+    return this.invoke("get_git_status", {
+      repoPath: requireWorktreePath(workspace),
+    }) as Promise<GitStatusResult>;
+  }
+
+  async getGitScopePatch(workspace: WorkspaceRecord, scope: GitDiffScope): Promise<string> {
+    return this.invoke("get_git_scope_patch", {
+      repoPath: requireWorktreePath(workspace),
       scope,
     }) as Promise<string>;
   }
 
-  async getGitChangesPatch(workspaceId: string): Promise<string> {
-    return this.invoke("get_workspace_git_changes_patch", { workspaceId }) as Promise<string>;
+  async getGitChangesPatch(workspace: WorkspaceRecord): Promise<string> {
+    return this.invoke("get_git_changes_patch", {
+      repoPath: requireWorktreePath(workspace),
+    }) as Promise<string>;
   }
 
   async getGitDiff(input: GitDiffInput): Promise<GitDiffResult> {
-    return this.invoke("get_workspace_git_diff", {
-      workspaceId: input.workspaceId,
+    return this.invoke("get_git_diff", {
+      repoPath: requireWorktreePath(input.workspace),
       filePath: input.filePath,
       scope: input.scope,
     }) as Promise<GitDiffResult>;
   }
 
-  async listGitLog(workspaceId: string, limit: number): Promise<GitLogEntry[]> {
-    return this.invoke("list_workspace_git_log", {
-      workspaceId,
+  async listGitLog(workspace: WorkspaceRecord, limit: number): Promise<GitLogEntry[]> {
+    return this.invoke("list_git_log", {
+      repoPath: requireWorktreePath(workspace),
       limit,
     }) as Promise<GitLogEntry[]>;
   }
 
-  async listGitPullRequests(workspaceId: string): Promise<GitPullRequestListResult> {
-    return this.invoke("list_workspace_git_pull_requests", {
-      workspaceId,
+  async listGitPullRequests(workspace: WorkspaceRecord): Promise<GitPullRequestListResult> {
+    return this.invoke("list_git_pull_requests", {
+      repoPath: requireWorktreePath(workspace),
     }) as Promise<GitPullRequestListResult>;
   }
 
   async getGitPullRequest(
-    workspaceId: string,
+    workspace: WorkspaceRecord,
     pullRequestNumber: number,
   ): Promise<GitPullRequestDetailResult> {
-    return this.invoke("get_workspace_git_pull_request", {
-      workspaceId,
+    return this.invoke("get_git_pull_request", {
+      repoPath: requireWorktreePath(workspace),
       pullRequestNumber,
     }) as Promise<GitPullRequestDetailResult>;
   }
 
-  async getCurrentGitPullRequest(workspaceId: string): Promise<GitBranchPullRequestResult> {
-    return this.invoke("get_workspace_current_git_pull_request", {
-      workspaceId,
+  async getCurrentGitPullRequest(workspace: WorkspaceRecord): Promise<GitBranchPullRequestResult> {
+    return this.invoke("get_current_git_pull_request", {
+      repoPath: requireWorktreePath(workspace),
     }) as Promise<GitBranchPullRequestResult>;
   }
 
-  async getGitBaseRef(workspaceId: string): Promise<string | null> {
-    return this.invoke("get_workspace_git_base_ref", { workspaceId }) as Promise<string | null>;
+  async getGitBaseRef(workspace: WorkspaceRecord): Promise<string | null> {
+    return this.invoke("get_git_base_ref", {
+      repoPath: requireWorktreePath(workspace),
+    }) as Promise<string | null>;
   }
 
-  async getGitRefDiffPatch(workspaceId: string, baseRef: string, headRef: string): Promise<string> {
-    return this.invoke("get_workspace_git_ref_diff_patch", {
-      workspaceId,
+  async getGitRefDiffPatch(
+    workspace: WorkspaceRecord,
+    baseRef: string,
+    headRef: string,
+  ): Promise<string> {
+    return this.invoke("get_git_ref_diff_patch", {
+      repoPath: requireWorktreePath(workspace),
       baseRef,
       headRef,
     }) as Promise<string>;
   }
 
-  async getGitPullRequestPatch(workspaceId: string, pullRequestNumber: number): Promise<string> {
-    return this.invoke("get_workspace_git_pull_request_patch", {
-      workspaceId,
+  async getGitPullRequestPatch(
+    workspace: WorkspaceRecord,
+    pullRequestNumber: number,
+  ): Promise<string> {
+    return this.invoke("get_git_pull_request_patch", {
+      repoPath: requireWorktreePath(workspace),
       pullRequestNumber,
     }) as Promise<string>;
   }
 
-  async getGitCommitPatch(workspaceId: string, sha: string): Promise<GitCommitDiffResult> {
-    return this.invoke("get_workspace_git_commit_patch", {
-      workspaceId,
+  async getGitCommitPatch(workspace: WorkspaceRecord, sha: string): Promise<GitCommitDiffResult> {
+    return this.invoke("get_git_commit_patch", {
+      repoPath: requireWorktreePath(workspace),
       sha,
     }) as Promise<GitCommitDiffResult>;
   }
 
-  async stageGitFiles(workspaceId: string, filePaths: string[]): Promise<void> {
-    await this.invoke("stage_workspace_git_files", { workspaceId, filePaths });
+  async stageGitFiles(workspace: WorkspaceRecord, filePaths: string[]): Promise<void> {
+    await this.invoke("stage_git_files", {
+      repoPath: requireWorktreePath(workspace),
+      filePaths,
+    });
   }
 
-  async unstageGitFiles(workspaceId: string, filePaths: string[]): Promise<void> {
-    await this.invoke("unstage_workspace_git_files", { workspaceId, filePaths });
+  async unstageGitFiles(workspace: WorkspaceRecord, filePaths: string[]): Promise<void> {
+    await this.invoke("unstage_git_files", {
+      repoPath: requireWorktreePath(workspace),
+      filePaths,
+    });
   }
 
-  async commitGit(workspaceId: string, message: string): Promise<GitCommitResult> {
-    return this.invoke("commit_workspace_git", {
-      workspaceId,
+  async commitGit(workspace: WorkspaceRecord, message: string): Promise<GitCommitResult> {
+    return this.invoke("commit_git", {
+      repoPath: requireWorktreePath(workspace),
       message,
     }) as Promise<GitCommitResult>;
   }
 
-  async pushGit(workspaceId: string): Promise<GitPushResult> {
-    return this.invoke("push_workspace_git", { workspaceId }) as Promise<GitPushResult>;
+  async pushGit(workspace: WorkspaceRecord): Promise<GitPushResult> {
+    return this.invoke("push_git", {
+      repoPath: requireWorktreePath(workspace),
+    }) as Promise<GitPushResult>;
   }
 
-  async createGitPullRequest(workspaceId: string): Promise<GitPullRequestSummary> {
-    return this.invoke("create_workspace_git_pull_request", {
-      workspaceId,
+  async createGitPullRequest(workspace: WorkspaceRecord): Promise<GitPullRequestSummary> {
+    return this.invoke("create_git_pull_request", {
+      repoPath: requireWorktreePath(workspace),
     }) as Promise<GitPullRequestSummary>;
   }
 
   async mergeGitPullRequest(
-    workspaceId: string,
+    workspace: WorkspaceRecord,
     pullRequestNumber: number,
   ): Promise<GitPullRequestSummary> {
-    return this.invoke("merge_workspace_git_pull_request", {
-      workspaceId,
+    return this.invoke("merge_git_pull_request", {
+      repoPath: requireWorktreePath(workspace),
       pullRequestNumber,
     }) as Promise<GitPullRequestSummary>;
-  }
-
-  private async readCurrentBranch(projectPath: string): Promise<string> {
-    return this.invoke("get_current_branch", { projectPath }) as Promise<string>;
   }
 }

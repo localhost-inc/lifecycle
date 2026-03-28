@@ -1,13 +1,10 @@
 import { Button, Spinner } from "@lifecycle/ui";
 import type { AgentSessionProviderId } from "@lifecycle/contracts";
+import type { AgentAuthStatus } from "@lifecycle/agents";
+import { AgentClientProvider, useAgentAuth, useAgentClientRegistry } from "@lifecycle/agents/react";
 import { CheckCircle2, AlertCircle, LogIn } from "lucide-react";
 import { useEffect } from "react";
 import { ClaudeIcon, CodexIcon } from "@/features/workspaces/surfaces/surface-icons";
-import {
-  checkProviderAuth,
-  loginProvider,
-  useProviderAuthStatus,
-} from "@/features/agents/state/provider-auth-state";
 
 function ProviderIcon({ provider, size }: { provider: AgentSessionProviderId; size: number }) {
   switch (provider) {
@@ -24,13 +21,13 @@ const providerLabels: Record<AgentSessionProviderId, string> = {
 };
 
 function ProviderAccountCard({ provider }: { provider: AgentSessionProviderId }) {
-  const status = useProviderAuthStatus(provider);
+  const { check, login, status } = useAgentAuth(provider);
 
   useEffect(() => {
     if (status.state === "not_checked") {
-      void checkProviderAuth(provider);
+      void check();
     }
-  }, [provider, status.state]);
+  }, [check, status.state]);
 
   const label = providerLabels[provider];
 
@@ -43,12 +40,12 @@ function ProviderAccountCard({ provider }: { provider: AgentSessionProviderId })
           <ProviderStatusText status={status} />
         </div>
       </div>
-      <ProviderAction provider={provider} status={status} />
+      <ProviderAction login={login} status={status} />
     </div>
   );
 }
 
-function ProviderStatusText({ status }: { status: ReturnType<typeof useProviderAuthStatus> }) {
+function ProviderStatusText({ status }: { status: AgentAuthStatus }) {
   switch (status.state) {
     case "not_checked":
     case "checking":
@@ -81,11 +78,11 @@ function ProviderStatusText({ status }: { status: ReturnType<typeof useProviderA
 }
 
 function ProviderAction({
-  provider,
+  login,
   status,
 }: {
-  provider: AgentSessionProviderId;
-  status: ReturnType<typeof useProviderAuthStatus>;
+  login: () => Promise<AgentAuthStatus>;
+  status: AgentAuthStatus;
 }) {
   const isLoading = status.state === "checking" || status.state === "authenticating";
 
@@ -98,12 +95,7 @@ function ProviderAction({
   }
 
   return (
-    <Button
-      disabled={isLoading}
-      onClick={() => void loginProvider(provider)}
-      size="sm"
-      variant="outline"
-    >
+    <Button disabled={isLoading} onClick={() => void login()} size="sm" variant="outline">
       {isLoading ? (
         <Spinner className="size-3.5" />
       ) : (
@@ -117,10 +109,14 @@ function ProviderAction({
 }
 
 export function ProviderAccountsPanel() {
+  const localAgentClient = useAgentClientRegistry().resolve("local");
+
   return (
-    <div className="space-y-2">
-      <ProviderAccountCard provider="claude" />
-      <ProviderAccountCard provider="codex" />
-    </div>
+    <AgentClientProvider agentClient={localAgentClient}>
+      <div className="space-y-2">
+        <ProviderAccountCard provider="claude" />
+        <ProviderAccountCard provider="codex" />
+      </div>
+    </AgentClientProvider>
   );
 }

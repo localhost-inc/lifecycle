@@ -1,7 +1,7 @@
+import type { AuthSession } from "@lifecycle/auth";
 import { Spinner } from "@lifecycle/ui";
 import { CircleUserRound } from "lucide-react";
 import { useState } from "react";
-import type { AuthSession } from "@/features/auth/auth-session";
 
 function avatarHue(seed: string): number {
   let hash = 5381;

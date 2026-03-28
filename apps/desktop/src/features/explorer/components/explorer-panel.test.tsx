@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import * as reactQuery from "@tanstack/react-query";
 import { mockStoreContext } from "@/test/store-mock";
 import type { WorkspaceFileTreeEntry } from "@lifecycle/workspace/client";
 
@@ -16,15 +17,12 @@ function readyQueryResult<T>(data: T) {
 
 async function renderExplorerPanel({
   entries,
-  workspaceHost = "local",
   worktreePath = "/tmp/workspace",
 }: {
   entries?: WorkspaceFileTreeEntry[];
-  workspaceHost?: "cloud" | "docker" | "local" | "remote";
   worktreePath?: string | null;
 } = {}) {
-  const hooksModule = await import("../../workspaces/hooks");
-  const explorerTreeSpy = spyOn(hooksModule, "useWorkspaceFileTree").mockReturnValue(
+  const explorerTreeSpy = spyOn(reactQuery, "useQuery").mockReturnValue(
     readyQueryResult(entries ?? []) as never,
   );
   const { ExplorerPanel } = await import("./explorer-panel");
@@ -35,7 +33,6 @@ async function renderExplorerPanel({
       createElement(ExplorerPanel, {
         onOpenFile: () => {},
         workspaceId: "workspace_1",
-        workspaceHost,
         worktreePath,
       }),
     ),
@@ -54,7 +51,7 @@ describe("ExplorerPanel", () => {
       ],
     });
 
-    expect(explorerTreeSpy).toHaveBeenCalledWith("workspace_1", "local");
+    expect(explorerTreeSpy).toHaveBeenCalled();
     expect(markup).toContain("README.md");
     expect(markup).toContain(">src</span>");
     expect(markup).toContain('title="src"');
@@ -67,21 +64,19 @@ describe("ExplorerPanel", () => {
         { extension: "md", file_path: "README.md" },
         { extension: "tsx", file_path: "src/app.tsx" },
       ],
-      workspaceHost: "docker",
     });
 
-    expect(explorerTreeSpy).toHaveBeenCalledWith("workspace_1", "docker");
+    expect(explorerTreeSpy).toHaveBeenCalled();
     expect(markup).toContain("README.md");
     expect(markup).toContain(">src</span>");
   });
 
   test("shows an unavailable state when no local worktree is available", async () => {
     const { explorerTreeSpy, markup } = await renderExplorerPanel({
-      workspaceHost: "cloud",
       worktreePath: null,
     });
 
-    expect(explorerTreeSpy).toHaveBeenCalledWith(null, null);
+    expect(explorerTreeSpy).toHaveBeenCalled();
     expect(markup).toContain("Explorer unavailable");
     expect(markup).toContain("local worktree");
   });

@@ -1,0 +1,43 @@
+{
+  "name": "@lifecycle/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./server": {
+      "types": "./src/server.ts",
+      "default": "./src/server.ts"
+    },
+    "./migrations": {
+      "types": "./src/migrations.ts",
+      "default": "./src/migrations.ts"
+    },
+    "./local": {
+      "types": "./src/local.ts",
+      "default": "./src/local.ts"
+    },
+    "./turso": {
+      "types": "./src/turso.ts",
+      "default": "./src/turso.ts"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "default": "./src/types.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "format": "oxfmt src",
+    "lint": "oxlint src",
+    "test": "bun test src",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@tursodatabase/sync": "^0.5.1",
+    "@tursodatabase/sync-common": "^0.5.1"
+  }
+}

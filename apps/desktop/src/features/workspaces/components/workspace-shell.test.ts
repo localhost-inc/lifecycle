@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router-dom";
 import { mockStoreContext } from "@/test/store-mock";
+import * as storeHooks from "@/store";
 import { ReactQueryProvider } from "@/store/react-query-provider";
 import { WorkspaceOpenRequestsProvider } from "@/features/workspaces/state/workspace-open-requests";
 import { WorkspaceToolbarProvider } from "@/features/workspaces/state/workspace-toolbar-context";
@@ -94,10 +95,9 @@ describe("WorkspaceShell", () => {
       failed_at: null,
     };
 
-    const hooksModule = await import("../hooks");
     const surfaceModule = await import("../canvas/workspace-canvas");
 
-    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue([] as never);
+    spyOn(storeHooks, "useWorkspaceServices").mockReturnValue([] as never);
     spyOn(surfaceModule, "WorkspaceCanvas").mockImplementation((() =>
       createElement("div", null, "Workspace Surface")) as never);
     await mockWorkspaceLayoutGitQueries();
@@ -157,10 +157,9 @@ describe("WorkspaceShell", () => {
       failed_at: null,
     };
 
-    const hooksModule = await import("../hooks");
     const surfaceModule = await import("../canvas/workspace-canvas");
 
-    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue(services as never);
+    spyOn(storeHooks, "useWorkspaceServices").mockReturnValue(services as never);
     spyOn(surfaceModule, "WorkspaceCanvas").mockImplementation((() =>
       createElement("div", null, "Workspace Surface")) as never);
     await mockWorkspaceLayoutGitQueries();
@@ -221,10 +220,9 @@ describe("WorkspaceShell", () => {
       failed_at: null,
     };
 
-    const hooksModule = await import("../hooks");
     const surfaceModule = await import("../canvas/workspace-canvas");
 
-    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue([] as never);
+    spyOn(storeHooks, "useWorkspaceServices").mockReturnValue([] as never);
     spyOn(surfaceModule, "WorkspaceCanvas").mockImplementation((() =>
       createElement("div", null, "Workspace Surface")) as never);
     await mockWorkspaceLayoutGitQueries();
@@ -283,8 +281,7 @@ describe("WorkspaceShell", () => {
       failed_at: null,
     };
 
-    const hooksModule = await import("../hooks");
-    spyOn(hooksModule, "useWorkspaceServices").mockReturnValue([] as never);
+    spyOn(storeHooks, "useWorkspaceServices").mockReturnValue([] as never);
     await mockWorkspaceLayoutGitQueries();
 
     const { WorkspaceShell } = await import("./workspace-shell");

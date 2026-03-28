@@ -1,9 +1,5 @@
-import type {
-  GitFileChangeKind,
-  GitFileStatus,
-  GitStatusResult,
-  WorkspaceHost,
-} from "@lifecycle/contracts";
+import type { GitFileChangeKind, GitFileStatus, GitStatusResult } from "@lifecycle/contracts";
+import { useWorkspaceClient } from "@lifecycle/workspace/client/react";
 import { Button, EmptyState, Loading } from "@lifecycle/ui";
 import {
   File,
@@ -18,8 +14,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import type React from "react";
-import { stageGitFiles, unstageGitFiles } from "@/features/git/api";
-import { useWorkspaceHostClient } from "@lifecycle/workspace/client/react";
+import { useWorkspace } from "@/store";
 
 interface ChangesTabProps {
   error: unknown;
@@ -28,7 +23,6 @@ interface ChangesTabProps {
   onOpenDiff: (filePath: string) => void;
   onOpenFile: (filePath: string) => void;
   onRefresh: () => Promise<void>;
-  workspaceHost: WorkspaceHost;
   workspaceId: string;
 }
 
@@ -367,10 +361,10 @@ export function ChangesTab({
   onOpenDiff,
   onOpenFile,
   onRefresh,
-  workspaceHost,
   workspaceId,
 }: ChangesTabProps) {
-  const client = useWorkspaceHostClient(workspaceHost);
+  const workspace = useWorkspace(workspaceId);
+  const client = useWorkspaceClient();
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [pendingMutation, setPendingMutation] = useState<PendingMutation | null>(null);
   const files = gitStatus?.files ?? [];
@@ -387,10 +381,13 @@ export function ChangesTab({
     setPendingMutation({ filePaths, kind });
 
     try {
+      if (!client || !workspace) {
+        throw new Error("Workspace not found.");
+      }
       if (kind === "stage") {
-        await stageGitFiles(client, workspaceId, filePaths);
+        await client.stageGitFiles(workspace, filePaths);
       } else {
-        await unstageGitFiles(client, workspaceId, filePaths);
+        await client.unstageGitFiles(workspace, filePaths);
       }
       await onRefresh();
     } catch (nextError) {

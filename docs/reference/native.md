@@ -4,6 +4,57 @@ Canonical contracts for native platform integration in the Lifecycle desktop app
 
 ## Platform Adapter Boundary
 
+Native support is execution-only:
+
+1. Control-plane state lives behind `packages/db` and `lifecycle db server`.
+2. Native code does not own or query persisted `project`, `workspace`, `service`, or `agent_session` rows.
+3. Native capabilities execute commands, supervise processes, inspect local files and git state, and emit lifecycle events back to the app.
+4. `WorkspaceClient` must be able to treat the local native layer the same way it would treat `docker`, `remote`, or `cloud`: as a host substrate with explicit capabilities, not as a special control-plane backend.
+
+## Local Host Substrate
+
+For `workspace.host=local`, native code is the local execution substrate behind `WorkspaceClient`.
+
+The contract is intentionally generic:
+
+1. `WorkspaceClient` owns host semantics, policy, and service-graph orchestration.
+2. Native code owns only the local execution primitives needed to satisfy those decisions.
+3. The same high-level host semantics should remain possible for `local`, `docker`, `remote`, and `cloud`, even when the concrete transport differs.
+
+### Capability Domains
+
+Native code should expose capability-shaped operations, not control-plane behavior:
+
+1. **Process execution** — run commands with explicit `cwd`, `env`, timeout, stdout/stderr capture, exit status, and cancellation.
+2. **Process supervision** — start, monitor, stop, and inspect long-lived local processes keyed by explicit runtime ids.
+3. **Container execution** — start, monitor, stop, and inspect local containers from explicit image/runtime config.
+4. **Filesystem access** — read, write, list, watch, and open files rooted at explicit local paths.
+5. **Git access** — run git reads and writes against explicit repo/worktree paths with no record lookup.
+6. **Preview routing** — manage local preview proxy primitives and local port exposure from explicit runtime inputs.
+7. **Sidecar lifecycle** — spawn and reconnect long-lived Lifecycle-owned loopback services such as `db/server` and agent hosts.
+8. **Runtime event fanout** — emit normalized `workspace.*`, `service.*`, `terminal.*`, and related fact events derived from local runtime changes.
+9. **Native window and terminal integration** — own AppKit/webview/ghostty/platform integration that cannot live in shared TypeScript.
+
+### Native Non-Responsibilities
+
+Native code must not:
+
+1. Read or write control-plane SQL state.
+2. Resolve `workspace_id`, `project_id`, `service.name`, or `agent_session.id` back into canonical records.
+3. Decide workspace naming, branch naming, worktree naming, archive policy, or host placement.
+4. Parse catalog records to infer what should happen next.
+5. Own lifecycle manifest policy or service-graph policy; it should receive explicit steps, services, commands, and env from `WorkspaceClient`.
+6. Hide failures behind local-only fallback behavior.
+
+### Command Shape Rules
+
+Native commands should be expressed in terms of explicit runtime inputs:
+
+1. Prefer `path`, `cwd`, `env`, `command`, `service_config`, `runtime_id`, and `port` inputs.
+2. Avoid commands that need native to "look up the workspace" in order to know what to do.
+3. Keep workspace ids as correlation keys for events, controller guards, and logs, not as authority for policy or data lookup.
+4. Treat native controller registries as ephemeral runtime state only; they must not become a hidden control plane.
+
 The native terminal seam is explicit and boring:
 
 1. A **platform-neutral facade** owns the terminal sync and lifecycle API the app calls.

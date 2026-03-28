@@ -44,8 +44,6 @@ export interface RenameInput {
   workspaceId: string;
   name: string;
   sourceRef: string;
-  nameOrigin: "manual";
-  sourceRefOrigin: string;
   renameBranch: boolean;
   moveWorktree: boolean;
 }
@@ -77,14 +75,10 @@ export function computeRenameInput(
   }
 
   const sourceRef = renameBranch ? nextSourceRef : workspace.source_ref;
-  const sourceRefOrigin = "manual";
-
   return {
     workspaceId: workspace.id,
     name,
     sourceRef,
-    nameOrigin: "manual",
-    sourceRefOrigin,
     renameBranch,
     moveWorktree,
   };

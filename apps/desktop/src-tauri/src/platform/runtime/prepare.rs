@@ -1,89 +1,72 @@
-use crate::capabilities::workspaces::controller::WorkspaceControllerToken;
-use crate::capabilities::workspaces::manifest::{PrepareStep, PrepareWriteFile};
-use crate::platform::runtime::templates::expand_reserved_runtime_templates;
+use crate::platform::process_manager::{publish_process_event, ProcessEvent};
+use crate::platform::runtime::templates::expand_templates;
 use crate::shared::errors::LifecycleError;
-use crate::shared::lifecycle_events::{publish_lifecycle_event, LifecycleEvent};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 use tauri::AppHandle;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum StepRunOutcome {
-    Cancelled,
-    Completed,
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ShellStep {
+    pub name: String,
+    pub command: Option<String>,
+    pub write_files: Option<Vec<WriteFile>>,
+    pub timeout_seconds: u64,
+    pub cwd: Option<String>,
+    pub env: Option<HashMap<String, String>>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct WriteFile {
+    pub path: String,
+    pub content: Option<String>,
+    pub lines: Option<Vec<String>>,
 }
 
 pub async fn run_steps(
     app: &AppHandle,
-    workspace_id: &str,
-    worktree_path: &str,
-    steps: &[PrepareStep],
+    process_id: &str,
+    root_path: &str,
+    steps: &[ShellStep],
     runtime_env: &HashMap<String, String>,
     step_field_prefix: &str,
-    cancellation_token: Option<WorkspaceControllerToken>,
-) -> Result<StepRunOutcome, LifecycleError> {
+) -> Result<(), LifecycleError> {
     for step in steps {
-        if cancellation_token
-            .as_ref()
-            .map(WorkspaceControllerToken::is_cancelled)
-            .unwrap_or(false)
-        {
-            return Ok(StepRunOutcome::Cancelled);
-        }
-
-        let cwd = step_cwd(worktree_path, step.cwd.as_deref());
+        let cwd = step_cwd(root_path, step.cwd.as_deref());
         let step_field = format!("{step_field_prefix}.{}", step.name);
         let step_env = build_step_env(step, runtime_env, &step_field)?;
 
         match (step.command.as_deref(), step.write_files.as_deref()) {
             (Some(command), None) => {
-                run_command_step(
-                    app,
-                    workspace_id,
-                    step,
-                    &cwd,
-                    command,
-                    &step_env,
-                    cancellation_token.clone(),
-                )
-                .await?;
+                run_command_step(app, process_id, step, &cwd, command, &step_env).await?;
             }
             (None, Some(write_files)) => {
-                run_write_files_step(
-                    step,
-                    worktree_path,
-                    &cwd,
-                    write_files,
-                    &step_env,
-                    &step_field,
-                    cancellation_token.clone(),
-                )
-                .await?;
+                run_write_files_step(step, root_path, &cwd, write_files, &step_env, &step_field)
+                    .await?;
             }
             _ => {
                 return Err(LifecycleError::InvalidInput {
                     field: step_field,
-                    reason: "prepare step requires exactly one of command or write_files"
-                        .to_string(),
+                    reason: "step requires exactly one of command or write_files".to_string(),
                 });
             }
         }
     }
 
-    Ok(StepRunOutcome::Completed)
+    Ok(())
 }
 
 fn build_step_env(
-    step: &PrepareStep,
+    step: &ShellStep,
     runtime_env: &HashMap<String, String>,
     step_field: &str,
 ) -> Result<HashMap<String, String>, LifecycleError> {
     let mut env = runtime_env.clone();
     if let Some(step_env) = step.env.as_ref() {
         for (key, value) in step_env {
-            let expanded = expand_reserved_runtime_templates(
+            let expanded = expand_templates(
                 value,
                 runtime_env,
                 &format!("{step_field}.env.{key}"),
@@ -94,22 +77,21 @@ fn build_step_env(
     Ok(env)
 }
 
-fn step_cwd(worktree_path: &str, step_cwd: Option<&str>) -> PathBuf {
+fn step_cwd(root_path: &str, step_cwd: Option<&str>) -> PathBuf {
     match step_cwd {
-        Some(step_cwd) => Path::new(worktree_path).join(step_cwd),
-        None => PathBuf::from(worktree_path),
+        Some(step_cwd) => Path::new(root_path).join(step_cwd),
+        None => PathBuf::from(root_path),
     }
 }
 
 async fn run_command_step(
     app: &AppHandle,
-    workspace_id: &str,
-    step: &PrepareStep,
+    process_id: &str,
+    step: &ShellStep,
     cwd: &Path,
     command: &str,
     step_env: &HashMap<String, String>,
-    cancellation_token: Option<WorkspaceControllerToken>,
-) -> Result<StepRunOutcome, LifecycleError> {
+) -> Result<(), LifecycleError> {
     let mut cmd = Command::new("sh");
     cmd.args(["-c", command]).current_dir(cwd);
 
@@ -117,10 +99,8 @@ async fn run_command_step(
         cmd.env(key, value);
     }
 
-    // Force color output even though stdout/stderr are piped, not a TTY.
     cmd.env("FORCE_COLOR", "1");
     cmd.env("CLICOLOR_FORCE", "1");
-
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
 
@@ -129,20 +109,17 @@ async fn run_command_step(
         exit_code: -1,
     })?;
 
-    // Stream stdout as ServiceLogLine events
     if let Some(stdout) = child.stdout.take() {
         let app_clone = app.clone();
-        let ws_id = workspace_id.to_string();
-        let name = step.name.clone();
+        let pid = process_id.to_string();
         tokio::spawn(async move {
             let reader = BufReader::new(stdout);
             let mut lines = reader.lines();
             while let Ok(Some(line)) = lines.next_line().await {
-                publish_lifecycle_event(
+                publish_process_event(
                     &app_clone,
-                    LifecycleEvent::ServiceLogLine {
-                        workspace_id: ws_id.clone(),
-                        name: name.clone(),
+                    ProcessEvent::LogLine {
+                        process_id: pid.clone(),
                         stream: "stdout".to_string(),
                         line,
                     },
@@ -151,20 +128,17 @@ async fn run_command_step(
         });
     }
 
-    // Stream stderr as ServiceLogLine events
     if let Some(stderr) = child.stderr.take() {
         let app_clone = app.clone();
-        let ws_id = workspace_id.to_string();
-        let name = step.name.clone();
+        let pid = process_id.to_string();
         tokio::spawn(async move {
             let reader = BufReader::new(stderr);
             let mut lines = reader.lines();
             while let Ok(Some(line)) = lines.next_line().await {
-                publish_lifecycle_event(
+                publish_process_event(
                     &app_clone,
-                    LifecycleEvent::ServiceLogLine {
-                        workspace_id: ws_id.clone(),
-                        name: name.clone(),
+                    ProcessEvent::LogLine {
+                        process_id: pid.clone(),
                         stream: "stderr".to_string(),
                         line,
                     },
@@ -173,63 +147,56 @@ async fn run_command_step(
         });
     }
 
-    let result = wait_for_command_exit(
-        &mut child,
+    let result = tokio::time::timeout(
         std::time::Duration::from_secs(step.timeout_seconds),
-        cancellation_token,
+        child.wait(),
     )
     .await;
 
     match result {
-        CommandStepWaitResult::Exited(Ok(exit_status)) => {
+        Ok(Ok(exit_status)) => {
             if exit_status.success() {
-                Ok(StepRunOutcome::Completed)
+                Ok(())
             } else {
-                let exit_code = exit_status.code().unwrap_or(-1);
                 Err(LifecycleError::PrepareStepFailed {
                     step: step.name.clone(),
-                    exit_code,
+                    exit_code: exit_status.code().unwrap_or(-1),
                 })
             }
         }
-        CommandStepWaitResult::Exited(Err(_)) => Err(LifecycleError::PrepareStepFailed {
+        Ok(Err(_)) => Err(LifecycleError::PrepareStepFailed {
             step: step.name.clone(),
             exit_code: -1,
         }),
-        CommandStepWaitResult::Cancelled => Ok(StepRunOutcome::Cancelled),
-        CommandStepWaitResult::TimedOut => Err(LifecycleError::PrepareStepTimeout {
-            step: step.name.clone(),
-        }),
+        Err(_) => {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            Err(LifecycleError::PrepareStepTimeout {
+                step: step.name.clone(),
+            })
+        }
     }
 }
 
 async fn run_write_files_step(
-    step: &PrepareStep,
-    worktree_path: &str,
+    step: &ShellStep,
+    root_path: &str,
     cwd: &Path,
-    write_files: &[PrepareWriteFile],
+    write_files: &[WriteFile],
     step_env: &HashMap<String, String>,
     step_field: &str,
-    cancellation_token: Option<WorkspaceControllerToken>,
-) -> Result<StepRunOutcome, LifecycleError> {
+) -> Result<(), LifecycleError> {
     let write_future = async {
-        let normalized_worktree = normalize_path(Path::new(worktree_path));
+        let normalized_root = normalize_path(Path::new(root_path));
         for file in write_files {
-            if cancellation_token
-                .as_ref()
-                .map(WorkspaceControllerToken::is_cancelled)
-                .unwrap_or(false)
-            {
-                return Ok::<StepRunOutcome, LifecycleError>(StepRunOutcome::Cancelled);
-            }
             let target_path =
-                resolve_write_target_path(&normalized_worktree, cwd, &file.path, step_field)?;
+                resolve_write_target_path(&normalized_root, cwd, &file.path, step_field)?;
             let content = render_write_file_content(file, step_env, step_field)?;
 
             if let Some(parent) = target_path.parent() {
                 tokio::fs::create_dir_all(parent).await.map_err(|error| {
                     LifecycleError::Io(format!(
-                        "failed to create prepare file directory '{}': {error}",
+                        "failed to create directory '{}': {error}",
                         parent.display()
                     ))
                 })?;
@@ -238,13 +205,13 @@ async fn run_write_files_step(
                 .await
                 .map_err(|error| {
                     LifecycleError::Io(format!(
-                        "failed to write prepare file '{}': {error}",
+                        "failed to write file '{}': {error}",
                         target_path.display()
                     ))
                 })?;
         }
 
-        Ok::<StepRunOutcome, LifecycleError>(StepRunOutcome::Completed)
+        Ok::<(), LifecycleError>(())
     };
 
     match tokio::time::timeout(
@@ -260,59 +227,8 @@ async fn run_write_files_step(
     }
 }
 
-enum CommandStepWaitResult {
-    Cancelled,
-    Exited(Result<std::process::ExitStatus, std::io::Error>),
-    TimedOut,
-}
-
-async fn wait_for_command_exit(
-    child: &mut tokio::process::Child,
-    timeout_duration: std::time::Duration,
-    mut cancellation_token: Option<WorkspaceControllerToken>,
-) -> CommandStepWaitResult {
-    if cancellation_token
-        .as_ref()
-        .map(WorkspaceControllerToken::is_cancelled)
-        .unwrap_or(false)
-    {
-        let _ = child.kill().await;
-        let _ = child.wait().await;
-        return CommandStepWaitResult::Cancelled;
-    }
-
-    if let Some(cancellation_token) = cancellation_token.as_mut() {
-        tokio::select! {
-            result = tokio::time::timeout(timeout_duration, child.wait()) => {
-                match result {
-                    Ok(result) => CommandStepWaitResult::Exited(result),
-                    Err(_) => {
-                        let _ = child.kill().await;
-                        let _ = child.wait().await;
-                        CommandStepWaitResult::TimedOut
-                    }
-                }
-            }
-            _ = cancellation_token.cancelled() => {
-                let _ = child.kill().await;
-                let _ = child.wait().await;
-                CommandStepWaitResult::Cancelled
-            }
-        }
-    } else {
-        match tokio::time::timeout(timeout_duration, child.wait()).await {
-            Ok(result) => CommandStepWaitResult::Exited(result),
-            Err(_) => {
-                let _ = child.kill().await;
-                let _ = child.wait().await;
-                CommandStepWaitResult::TimedOut
-            }
-        }
-    }
-}
-
 fn resolve_write_target_path(
-    normalized_worktree: &Path,
+    normalized_root: &Path,
     cwd: &Path,
     raw_path: &str,
     step_field: &str,
@@ -325,11 +241,11 @@ fn resolve_write_target_path(
     };
     let normalized_target = normalize_path(&target_path);
 
-    if !normalized_target.starts_with(normalized_worktree) {
+    if !normalized_target.starts_with(normalized_root) {
         return Err(LifecycleError::InvalidInput {
             field: format!("{step_field}.write_files.path"),
             reason: format!(
-                "path must stay inside workspace worktree: {}",
+                "path must stay inside root directory: {}",
                 normalized_target.display()
             ),
         });
@@ -339,7 +255,7 @@ fn resolve_write_target_path(
 }
 
 fn render_write_file_content(
-    file: &PrepareWriteFile,
+    file: &WriteFile,
     env: &HashMap<String, String>,
     step_field: &str,
 ) -> Result<String, LifecycleError> {
@@ -414,11 +330,10 @@ fn normalize_path(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capabilities::workspaces::controller::WorkspaceController;
 
     #[test]
     fn build_step_env_expands_reserved_runtime_templates() {
-        let step = PrepareStep {
+        let step = ShellStep {
             name: "write-env".to_string(),
             command: Some("printenv".to_string()),
             write_files: None,
@@ -426,58 +341,52 @@ mod tests {
             cwd: None,
             env: Some(HashMap::from([(
                 "API_ORIGIN".to_string(),
-                "${LIFECYCLE_SERVICE_API_URL}".to_string(),
+                "${API_URL}".to_string(),
             )])),
-            depends_on: None,
-            run_on: None,
         };
         let runtime_env = HashMap::from([(
-            "LIFECYCLE_SERVICE_API_URL".to_string(),
-            "http://api.frost-beacon-57f59253.lifecycle.localhost:52300".to_string(),
+            "API_URL".to_string(),
+            "http://api.example.localhost:3000".to_string(),
         )]);
 
-        let env = build_step_env(&step, &runtime_env, "workspace.prepare.write-env")
-            .expect("step env builds");
+        let env =
+            build_step_env(&step, &runtime_env, "step.write-env").expect("step env builds");
 
         assert_eq!(
             env.get("API_ORIGIN").map(String::as_str),
-            Some("http://api.frost-beacon-57f59253.lifecycle.localhost:52300")
+            Some("http://api.example.localhost:3000")
         );
     }
 
     #[test]
     fn expand_setup_template_substitutes_env() {
         let env = HashMap::from([
-            (
-                "LIFECYCLE_WORKSPACE_SLUG".to_string(),
-                "kin-workspace".to_string(),
-            ),
-            ("LIFECYCLE_SERVICE_API_PORT".to_string(), "3001".to_string()),
+            ("APP_SLUG".to_string(), "my-app".to_string()),
+            ("API_PORT".to_string(), "3001".to_string()),
         ]);
 
         let rendered = expand_setup_template(
-            "NAMESPACE=${LIFECYCLE_WORKSPACE_SLUG}\nPORT=${LIFECYCLE_SERVICE_API_PORT}",
+            "NAMESPACE=${APP_SLUG}\nPORT=${API_PORT}",
             &env,
-            "workspace.prepare.write-env.write_files.lines",
+            "step.write-env.write_files.lines",
         )
         .expect("template expansion succeeds");
 
-        assert_eq!(rendered, "NAMESPACE=kin-workspace\nPORT=3001");
+        assert_eq!(rendered, "NAMESPACE=my-app\nPORT=3001");
     }
 
     #[test]
     fn expand_setup_template_rejects_unknown_vars() {
         let env = HashMap::new();
         let error = expand_setup_template(
-            "PORT=${LIFECYCLE_SERVICE_API_PORT}",
+            "PORT=${API_PORT}",
             &env,
-            "workspace.prepare.write-env.write_files.lines",
+            "step.write-env.write_files.lines",
         )
         .expect_err("missing vars should fail");
 
         match error {
-            LifecycleError::InvalidInput { field, reason } => {
-                assert_eq!(field, "workspace.prepare.write-env.write_files.lines");
+            LifecycleError::InvalidInput { reason, .. } => {
                 assert!(reason.contains("unknown template variable"));
             }
             other => panic!("unexpected error: {other}"),
@@ -487,54 +396,30 @@ mod tests {
     #[test]
     fn render_write_file_content_joins_lines_with_trailing_newline() {
         let env = HashMap::from([("NAME".to_string(), "kin".to_string())]);
-        let file = PrepareWriteFile {
+        let file = WriteFile {
             path: "apps/api/.env.local".to_string(),
             content: None,
             lines: Some(vec!["NAME=${NAME}".to_string()]),
         };
 
-        let rendered = render_write_file_content(&file, &env, "workspace.prepare.write-env")
-            .expect("line rendering succeeds");
+        let rendered =
+            render_write_file_content(&file, &env, "step.write-env").expect("line rendering");
 
         assert_eq!(rendered, "NAME=kin\n");
     }
 
     #[test]
-    fn resolve_write_target_path_rejects_paths_outside_worktree() {
-        let worktree = normalize_path(Path::new("/tmp/worktree"));
-        let cwd = worktree.join("apps/api");
-        let error = resolve_write_target_path(
-            &worktree,
-            &cwd,
-            "../../../outside.env",
-            "workspace.prepare.write-env",
-        )
-        .expect_err("outside path should fail");
+    fn resolve_write_target_path_rejects_paths_outside_root() {
+        let root = normalize_path(Path::new("/tmp/worktree"));
+        let cwd = root.join("apps/api");
+        let error = resolve_write_target_path(&root, &cwd, "../../../outside.env", "step.write-env")
+            .expect_err("outside path should fail");
 
         match error {
-            LifecycleError::InvalidInput { field, reason } => {
-                assert_eq!(field, "workspace.prepare.write-env.write_files.path");
-                assert!(reason.contains("path must stay inside workspace worktree"));
+            LifecycleError::InvalidInput { reason, .. } => {
+                assert!(reason.contains("path must stay inside root directory"));
             }
             other => panic!("unexpected error: {other}"),
         }
-    }
-
-    #[tokio::test]
-    async fn wait_for_command_exit_returns_cancelled_when_controller_requests_stop() {
-        let controller = WorkspaceController::new();
-        let token = controller.begin_start().await.expect("start token");
-        let mut child = Command::new("sh")
-            .args(["-c", "sleep 30"])
-            .spawn()
-            .expect("spawn command");
-
-        controller.request_stop().await;
-
-        let result =
-            wait_for_command_exit(&mut child, std::time::Duration::from_secs(30), Some(token))
-                .await;
-
-        assert!(matches!(result, CommandStepWaitResult::Cancelled));
     }
 }

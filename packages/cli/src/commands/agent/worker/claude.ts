@@ -3,7 +3,7 @@ import {
   type ClaudeWorkerInput,
   type ClaudeLoginMethod as ClaudeWorkerLoginMethod,
   type ClaudeWorkerPermissionMode,
-} from "@lifecycle/agents/providers/claude/worker";
+} from "@lifecycle/agents/internal/providers/claude/worker";
 import { LIFECYCLE_CLI_PATH_ENV } from "@lifecycle/contracts";
 import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";

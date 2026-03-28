@@ -1,4 +1,4 @@
-import type { LifecycleConfig } from "@lifecycle/contracts";
+import type { LifecycleConfig, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { resolveStartOrder } from "./graph";
 
 // ---------------------------------------------------------------------------
@@ -9,7 +9,16 @@ export interface StartEnvironmentInput {
   workspaceId: string;
   manifestJson: string;
   manifestFingerprint: string;
+  prepared: boolean;
+  readyServiceNames: string[];
+  services: ServiceRecord[];
   serviceNames?: string[];
+  workspace: WorkspaceRecord;
+  worktreePath: string;
+}
+
+export interface StartEnvironmentResult {
+  preparedAt: string | null;
 }
 
 export interface PrepareStartInput {
@@ -17,6 +26,9 @@ export interface PrepareStartInput {
   manifestJson: string;
   manifestFingerprint: string;
   serviceNames: string[];
+  services: ServiceRecord[];
+  workspace: WorkspaceRecord;
+  worktreePath: string;
 }
 
 export interface PrepareStartResult {
@@ -48,22 +60,24 @@ export interface StepInput {
 export abstract class EnvironmentOrchestrator {
   // -- Shared orchestration --------------------------------------------------
 
-  async start(config: LifecycleConfig, input: StartEnvironmentInput): Promise<void> {
+  async start(
+    config: LifecycleConfig,
+    input: StartEnvironmentInput,
+  ): Promise<StartEnvironmentResult> {
     const { workspaceId } = input;
 
-    const prepared = await this.isPrepared(workspaceId);
-    const satisfiedServices = await this.getReadyServices(workspaceId);
-
     const { prepareSteps, sorted } = resolveStartOrder(config, {
-      prepared,
+      prepared: input.prepared,
       ...(input.serviceNames ? { targetServices: input.serviceNames } : {}),
-      satisfiedServices,
+      satisfiedServices: new Set(input.readyServiceNames),
     });
 
     const serviceNames = sorted.filter((n) => n.kind === "service").map((n) => n.name);
 
     if (prepareSteps.length === 0 && serviceNames.length === 0) {
-      return;
+      return {
+        preparedAt: null,
+      };
     }
 
     await this.prepareStart({
@@ -71,6 +85,9 @@ export abstract class EnvironmentOrchestrator {
       manifestJson: input.manifestJson,
       manifestFingerprint: input.manifestFingerprint,
       serviceNames,
+      services: input.services,
+      workspace: input.workspace,
+      worktreePath: input.worktreePath,
     });
 
     for (const step of prepareSteps) {
@@ -85,9 +102,9 @@ export abstract class EnvironmentOrchestrator {
       }
     }
 
-    if (!prepared && prepareSteps.length > 0) {
-      await this.markPrepared(workspaceId);
-    }
+    return {
+      preparedAt: !input.prepared && prepareSteps.length > 0 ? new Date().toISOString() : null,
+    };
   }
 
   async stop(workspaceId: string): Promise<void> {
@@ -101,9 +118,6 @@ export abstract class EnvironmentOrchestrator {
   abstract startService(workspaceId: string, serviceName: string): Promise<void>;
   abstract stopService(workspaceId: string, serviceName: string): Promise<void>;
   abstract stopAll(workspaceId: string): Promise<void>;
-  abstract markPrepared(workspaceId: string): Promise<void>;
-  abstract getReadyServices(workspaceId: string): Promise<Set<string>>;
-  abstract isPrepared(workspaceId: string): Promise<boolean>;
 }
 
 // ---------------------------------------------------------------------------

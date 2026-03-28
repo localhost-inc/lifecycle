@@ -7,8 +7,21 @@
  */
 import { spyOn } from "bun:test";
 
-const noopClient = new Proxy({}, { get: (_target, _prop) => () => Promise.resolve(undefined) });
-const noopAgentOrchestrator = new Proxy(
+const noopClient = new Proxy(
+  {},
+  {
+    get: (_target, prop) => {
+      if (prop === "readManifest") {
+        return () => Promise.resolve({ state: "missing" });
+      }
+      if (prop === "getGitCurrentBranch") {
+        return () => Promise.resolve("main");
+      }
+      return () => Promise.resolve(undefined);
+    },
+  },
+);
+const noopAgentClient = new Proxy(
   {},
   { get: (_target, _prop) => () => Promise.resolve(undefined) },
 );
@@ -19,13 +32,12 @@ export function mockStoreContext() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const storeProvider = require("@/store/provider");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const workspaceHostClientProvider = require("@lifecycle/workspace/client/react");
+  const workspaceClientProvider = require("@lifecycle/workspace/client/react");
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const agentProvider = require("@/features/agents/provider");
+  const agentProvider = require("@lifecycle/agents/react");
 
-  spyOn(workspaceHostClientProvider, "useWorkspaceHostClient").mockReturnValue(noopClient);
-  spyOn(workspaceHostClientProvider, "useOptionalWorkspaceHostClient").mockReturnValue(noopClient);
-  spyOn(agentProvider, "useAgentOrchestrator").mockReturnValue(noopAgentOrchestrator);
+  spyOn(workspaceClientProvider, "useWorkspaceClient").mockReturnValue(noopClient);
+  spyOn(agentProvider, "useAgentClient").mockReturnValue(noopAgentClient);
 
   return spyOn(storeProvider, "useStoreContext").mockReturnValue({
     collections: {

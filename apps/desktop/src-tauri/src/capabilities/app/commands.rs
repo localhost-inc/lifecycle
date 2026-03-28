@@ -1,34 +1,14 @@
 use crate::platform::app_config::AppConfigPath;
-use crate::platform::lifecycle_cli::LifecycleCliState;
 use crate::platform::lifecycle_root::resolve_lifecycle_root;
 use crate::shared::errors::LifecycleError;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use serde::Serialize;
 use std::fs;
-use std::fs::OpenOptions;
-use std::process::Stdio;
 use tauri::{State, Webview};
 
 #[derive(Clone, Copy, Serialize)]
 pub struct WindowMousePosition {
     x: f64,
     y: f64,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SpawnCliProcessRequest {
-    args: Vec<String>,
-    cwd: Option<String>,
-    #[serde(default)]
-    env: HashMap<String, String>,
-    log_path: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SpawnCliProcessResult {
-    pid: u32,
 }
 
 #[tauri::command]
@@ -52,53 +32,6 @@ pub async fn get_auth_session() -> Result<crate::platform::auth::AuthSession, Li
 }
 
 #[tauri::command]
-pub fn spawn_cli_process(
-    lifecycle_cli: State<'_, LifecycleCliState>,
-    request: SpawnCliProcessRequest,
-) -> Result<SpawnCliProcessResult, LifecycleError> {
-    let binary_path = lifecycle_cli
-        .binary_path()
-        .ok_or_else(|| LifecycleError::AttachFailed("Lifecycle CLI is unavailable.".to_string()))?;
-
-    let mut command = std::process::Command::new(binary_path);
-    command.args(&request.args).stdin(Stdio::null());
-
-    if let Some(ref log_path_str) = request.log_path {
-        let log_path = std::path::Path::new(log_path_str);
-        if let Some(parent) = log_path.parent() {
-            fs::create_dir_all(parent).map_err(|error| LifecycleError::Io(error.to_string()))?;
-        }
-        let log_file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(log_path)
-            .map_err(|error| LifecycleError::Io(error.to_string()))?;
-        let log_file_stderr = log_file
-            .try_clone()
-            .map_err(|error| LifecycleError::Io(error.to_string()))?;
-        command
-            .stdout(Stdio::from(log_file))
-            .stderr(Stdio::from(log_file_stderr));
-    } else {
-        command.stdout(Stdio::null()).stderr(Stdio::null());
-    }
-
-    if !request.env.is_empty() {
-        command.envs(&request.env);
-    }
-
-    if let Some(cwd) = request.cwd {
-        command.current_dir(cwd);
-    }
-
-    let child = command
-        .spawn()
-        .map_err(|error| LifecycleError::AttachFailed(error.to_string()))?;
-
-    Ok(SpawnCliProcessResult { pid: child.id() })
-}
-
-#[tauri::command]
 pub fn read_json_file(path: String) -> Result<Option<serde_json::Value>, LifecycleError> {
     let file_path = std::path::Path::new(&path);
     if !file_path.exists() {
@@ -117,6 +50,21 @@ pub fn read_json_file(path: String) -> Result<Option<serde_json::Value>, Lifecyc
 #[tauri::command]
 pub fn resolve_lifecycle_root_path() -> Result<String, LifecycleError> {
     Ok(resolve_lifecycle_root()?.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn get_preview_proxy_port() -> Result<u16, LifecycleError> {
+    Ok(crate::platform::preview_proxy::current_preview_proxy_port())
+}
+
+#[tauri::command]
+pub fn register_proxy_target(id: String, target_port: u16) {
+    crate::platform::preview_proxy::register_proxy_target(&id, target_port);
+}
+
+#[tauri::command]
+pub fn remove_proxy_target(id: String) -> bool {
+    crate::platform::preview_proxy::remove_proxy_target(&id)
 }
 
 #[tauri::command]

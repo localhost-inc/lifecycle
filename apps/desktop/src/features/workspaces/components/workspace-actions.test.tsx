@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
+import type { WorkspaceClient } from "@lifecycle/workspace";
+import { createWorkspaceClientRegistry } from "@lifecycle/workspace";
+import {
+  WorkspaceClientProvider,
+  WorkspaceClientRegistryProvider,
+} from "@lifecycle/workspace/client/react";
 import { ThemeProvider } from "@lifecycle/ui";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -21,6 +27,31 @@ const interactiveWorkspace: WorkspaceRecord = {
   failure_reason: null,
   failed_at: null,
 };
+
+const workspaceClientRegistry = createWorkspaceClientRegistry({
+  local: {
+    listOpenInApps: async () => [],
+    openInApp: async () => {},
+  } as unknown as WorkspaceClient,
+});
+
+function renderWorkspaceActions(props: {
+  onArchive?: () => Promise<void> | void;
+  workspace: WorkspaceRecord;
+}) {
+  return renderToStaticMarkup(
+    createElement(ThemeProvider, {
+      children: createElement(WorkspaceClientRegistryProvider, {
+        workspaceClientRegistry,
+        children: createElement(WorkspaceClientProvider, {
+          workspaceClient: workspaceClientRegistry.resolve(props.workspace.host),
+          children: createElement(WorkspaceActions, props),
+        }),
+      }),
+      storageKey: "lifecycle.desktop.theme.test",
+    }),
+  );
+}
 
 describe("WorkspaceActions", () => {
   test("keeps the open button pinned to the default target instead of a stale stored app", () => {
@@ -46,14 +77,9 @@ describe("WorkspaceActions", () => {
     });
 
     try {
-      const markup = renderToStaticMarkup(
-        createElement(ThemeProvider, {
-          children: createElement(WorkspaceActions, {
-            workspace: interactiveWorkspace,
-          }),
-          storageKey: "lifecycle.desktop.theme.test",
-        }),
-      );
+      const markup = renderWorkspaceActions({
+        workspace: interactiveWorkspace,
+      });
 
       expect(markup).toContain('title="Open in VS Code"');
       expect(markup).not.toContain('title="Open in Cursor"');
@@ -66,15 +92,10 @@ describe("WorkspaceActions", () => {
   });
 
   test("renders a archive icon button with the standard workspace header treatment", () => {
-    const markup = renderToStaticMarkup(
-      createElement(ThemeProvider, {
-        children: createElement(WorkspaceActions, {
-          onArchive: () => {},
-          workspace: interactiveWorkspace,
-        }),
-        storageKey: "lifecycle.desktop.theme.test",
-      }),
-    );
+    const markup = renderWorkspaceActions({
+      onArchive: () => {},
+      workspace: interactiveWorkspace,
+    });
 
     expect(markup).toContain('aria-label="Archive workspace"');
     expect(markup).toContain("h-8 w-8 p-0");

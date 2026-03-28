@@ -1,65 +1,33 @@
-use crate::capabilities::workspaces::manifest::{HealthCheck, HealthCheckPort};
-use crate::platform::runtime::templates::expand_reserved_runtime_templates;
 use crate::shared::errors::LifecycleError;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum HealthCheckPort {
+    Number(u16),
+    Template(String),
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(tag = "kind")]
+pub enum HealthCheck {
+    #[serde(rename = "tcp")]
+    Tcp {
+        host: String,
+        port: HealthCheckPort,
+        timeout_seconds: u64,
+    },
+    #[serde(rename = "http")]
+    Http { url: String, timeout_seconds: u64 },
+    #[serde(rename = "container")]
+    Container { timeout_seconds: u64 },
+}
 use bollard::container::InspectContainerOptions;
 use bollard::models::HealthStatusEnum;
 use bollard::Docker;
-use std::collections::HashMap;
 use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
-
-pub fn resolve_health_check_templates(
-    health_check: &HealthCheck,
-    runtime_env: &HashMap<String, String>,
-    field: &str,
-) -> Result<HealthCheck, LifecycleError> {
-    match health_check {
-        HealthCheck::Tcp {
-            host,
-            port,
-            timeout_seconds,
-        } => Ok(HealthCheck::Tcp {
-            host: expand_reserved_runtime_templates(host, runtime_env, &format!("{field}.host"))?,
-            port: HealthCheckPort::Number(resolve_tcp_port(
-                port,
-                runtime_env,
-                &format!("{field}.port"),
-            )?),
-            timeout_seconds: *timeout_seconds,
-        }),
-        HealthCheck::Http {
-            url,
-            timeout_seconds,
-        } => Ok(HealthCheck::Http {
-            url: expand_reserved_runtime_templates(url, runtime_env, &format!("{field}.url"))?,
-            timeout_seconds: *timeout_seconds,
-        }),
-        HealthCheck::Container { timeout_seconds } => Ok(HealthCheck::Container {
-            timeout_seconds: *timeout_seconds,
-        }),
-    }
-}
-
-fn resolve_tcp_port(
-    port: &HealthCheckPort,
-    runtime_env: &HashMap<String, String>,
-    field: &str,
-) -> Result<u16, LifecycleError> {
-    let rendered = match port {
-        HealthCheckPort::Number(port) => return Ok(*port),
-        HealthCheckPort::Template(value) => {
-            expand_reserved_runtime_templates(value, runtime_env, field)?
-        }
-    };
-
-    rendered
-        .parse::<u16>()
-        .map_err(|_| LifecycleError::InvalidInput {
-            field: field.to_string(),
-            reason: format!("'{rendered}' is not a valid TCP port"),
-        })
-}
 
 pub async fn check_health(health_check: &HealthCheck, container_ref: Option<&str>) -> bool {
     match health_check {
@@ -152,8 +120,8 @@ pub async fn wait_for_health(
         }
 
         if tokio::time::Instant::now() >= deadline {
-            return Err(LifecycleError::ServiceHealthcheckFailed {
-                service: "unknown".to_string(),
+            return Err(LifecycleError::HealthcheckFailed {
+                name: "unknown".to_string(),
             });
         }
 
@@ -164,101 +132,6 @@ pub async fn wait_for_health(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn expands_http_health_check_url_templates() {
-        let runtime_env = HashMap::from([(
-            "LIFECYCLE_SERVICE_WEB_URL".to_string(),
-            "http://web.frost-beacon-57f59253.lifecycle.localhost:52300".to_string(),
-        )]);
-        let health_check = HealthCheck::Http {
-            url: "${LIFECYCLE_SERVICE_WEB_URL}/@vite/client".to_string(),
-            timeout_seconds: 5,
-        };
-
-        let resolved = resolve_health_check_templates(
-            &health_check,
-            &runtime_env,
-            "environment.web.health_check",
-        )
-        .expect("http health check templates should resolve");
-
-        match resolved {
-            HealthCheck::Http {
-                url,
-                timeout_seconds,
-            } => {
-                assert_eq!(
-                    url,
-                    "http://web.frost-beacon-57f59253.lifecycle.localhost:52300/@vite/client"
-                );
-                assert_eq!(timeout_seconds, 5);
-            }
-            other => panic!("unexpected health check: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn expands_tcp_health_check_port_templates() {
-        let runtime_env = HashMap::from([
-            (
-                "LIFECYCLE_SERVICE_REDIS_HOST".to_string(),
-                "127.0.0.1".to_string(),
-            ),
-            (
-                "LIFECYCLE_SERVICE_REDIS_PORT".to_string(),
-                "47070".to_string(),
-            ),
-        ]);
-        let health_check = HealthCheck::Tcp {
-            host: "${LIFECYCLE_SERVICE_REDIS_HOST}".to_string(),
-            port: HealthCheckPort::Template("${LIFECYCLE_SERVICE_REDIS_PORT}".to_string()),
-            timeout_seconds: 5,
-        };
-
-        let resolved = resolve_health_check_templates(
-            &health_check,
-            &runtime_env,
-            "environment.redis.health_check",
-        )
-        .expect("tcp health check templates should resolve");
-
-        match resolved {
-            HealthCheck::Tcp {
-                host,
-                port,
-                timeout_seconds,
-            } => {
-                assert_eq!(host, "127.0.0.1");
-                assert!(matches!(port, HealthCheckPort::Number(47070)));
-                assert_eq!(timeout_seconds, 5);
-            }
-            other => panic!("unexpected health check: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn rejects_unknown_health_check_templates() {
-        let health_check = HealthCheck::Http {
-            url: "${LIFECYCLE_SERVICE_WEB_URL}/@vite/client".to_string(),
-            timeout_seconds: 5,
-        };
-
-        let error = resolve_health_check_templates(
-            &health_check,
-            &HashMap::new(),
-            "environment.web.health_check",
-        )
-        .expect_err("unknown runtime variables should fail");
-
-        match error {
-            LifecycleError::InvalidInput { field, reason } => {
-                assert_eq!(field, "environment.web.health_check.url");
-                assert!(reason.contains("unknown runtime variable"));
-            }
-            other => panic!("unexpected error: {other:?}"),
-        }
-    }
 
     #[tokio::test]
     async fn tcp_health_check_fails_for_unreachable_port() {

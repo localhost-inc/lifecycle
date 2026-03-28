@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { useAgentStatusIndex } from "@lifecycle/agents/react";
+import { useAgentClient, useAgentStatusIndex } from "@lifecycle/agents/react";
 import type { FileEditorSessionState } from "@/features/editor/lib/file-editor-session";
 import { recordWorkspaceExplorerUsage } from "@/features/explorer/lib/workspace-explorer-usage";
 import { useFileEditorSessions } from "@/features/editor/state/file-editor-sessions";
@@ -58,7 +58,6 @@ import {
   type WorkspaceCanvasTabsByKey,
   type WorkspaceCanvasTabViewState,
 } from "@/features/workspaces/state/workspace-canvas-state";
-import { useAgentOrchestrator } from "@/features/agents/provider";
 import { useAgentSessions } from "@/store";
 
 export interface WorkspaceCanvasControllerInput {
@@ -105,7 +104,7 @@ export function useWorkspaceCanvasController({
   onOpenTabRequestHandled,
   workspaceId,
 }: WorkspaceCanvasControllerInput) {
-  const agentOrchestrator = useAgentOrchestrator();
+  const agentClient = useAgentClient();
   const agentSessions = useAgentSessions(workspaceId);
   const { defaultNewTabLaunch, dimInactivePanes, inactivePaneOpacity } = useSettings();
   const { clearAgentSessionResponseReady, isAgentSessionResponseReady, isAgentSessionRunning } =
@@ -356,7 +355,7 @@ export function useWorkspaceCanvasController({
     (paneId: string, request: SurfaceLaunchRequest) => {
       dispatch({ kind: "select-pane", paneId });
       void launchWorkspaceSurface(request, {
-        agentOrchestrator,
+        agentClient,
         openSurface: (input) => {
           dispatch({
             kind: "open-tab",
@@ -368,7 +367,7 @@ export function useWorkspaceCanvasController({
         workspaceId,
       });
     },
-    [agentOrchestrator, workspaceId],
+    [agentClient, workspaceId],
   );
 
   // --- Auto-create default tab ---

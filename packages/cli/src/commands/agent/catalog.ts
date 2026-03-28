@@ -1,5 +1,5 @@
-import { getClaudeModelCatalog } from "@lifecycle/agents/providers/claude/catalog";
-import { getCodexModelCatalog } from "@lifecycle/agents/providers/codex/catalog";
+import { getClaudeModelCatalog } from "@lifecycle/agents/internal/providers/claude/catalog";
+import { getCodexModelCatalog } from "@lifecycle/agents/internal/providers/codex/catalog";
 import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 import { failCommand } from "../_shared";

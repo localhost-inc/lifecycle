@@ -8,14 +8,6 @@ use tauri::{AppHandle, Manager};
 const DEV_CLI_ENTRY_RELATIVE_PATH: &str = "packages/cli/src/index.ts";
 const DEV_CLI_SHIM_FILE_NAME: &str = "lifecycle";
 const BUNDLED_CLI_RESOURCE_CANDIDATES: &[&str] = &["lifecycle", "resources/lifecycle"];
-const WIRED_COMMANDS: &[&str] = &[
-    "lifecycle context",
-    "lifecycle service list",
-    "lifecycle service info <service>",
-    "lifecycle service start [service...]",
-    "lifecycle tab open --surface preview --url <url>",
-];
-
 #[derive(Clone, Debug)]
 pub(crate) struct LifecycleCliState {
     binary_path: Option<String>,
@@ -47,10 +39,6 @@ impl LifecycleCliState {
     pub(crate) fn binary_path(&self) -> Option<&str> {
         self.binary_path.as_deref()
     }
-}
-
-pub(crate) fn wired_commands() -> &'static [&'static str] {
-    WIRED_COMMANDS
 }
 
 pub(crate) fn resolve_cli_binary_path(app: &AppHandle) -> Result<Option<String>, LifecycleError> {
@@ -188,7 +176,7 @@ fn map_filesystem_error(error: std::io::Error) -> LifecycleError {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_dev_cli_shim_script, prepend_path_value, wired_commands};
+    use super::{build_dev_cli_shim_script, prepend_path_value};
     use std::path::Path;
 
     #[test]
@@ -214,10 +202,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn wired_commands_expose_current_agent_surface() {
-        assert!(wired_commands().contains(&"lifecycle context"));
-        assert!(wired_commands().contains(&"lifecycle service list"));
-        assert!(wired_commands().contains(&"lifecycle tab open --surface preview --url <url>"));
-    }
 }

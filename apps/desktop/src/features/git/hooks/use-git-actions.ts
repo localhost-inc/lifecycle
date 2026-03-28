@@ -1,21 +1,13 @@
-import type { GitPullRequestSummary, WorkspaceHost } from "@lifecycle/contracts";
+import type { GitPullRequestSummary } from "@lifecycle/contracts";
+import { useWorkspaceClient } from "@lifecycle/workspace/client/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  commitGit,
-  createGitPullRequest,
-  mergeGitPullRequest,
-  pushGit,
-  stageGitFiles,
-} from "@/features/git/api";
 import { useCurrentGitPullRequest, useGitLog, useGitStatus } from "@/features/git/hooks";
-import { useOptionalWorkspaceHostClient } from "@lifecycle/workspace/client/react";
+import { useWorkspace } from "@/store";
 
 export interface UseGitActionsOptions {
   onCommitComplete: () => void;
   onOpenPullRequest: (pullRequest: GitPullRequestSummary) => void;
   workspaceId: string;
-  workspaceHost: WorkspaceHost | null;
-  worktreePath: string | null;
 }
 
 export interface UseGitActionsResult {
@@ -39,10 +31,9 @@ export function useGitActions({
   onCommitComplete,
   onOpenPullRequest,
   workspaceId,
-  workspaceHost,
-  worktreePath,
 }: UseGitActionsOptions): UseGitActionsResult {
-  const client = useOptionalWorkspaceHostClient(workspaceHost);
+  const workspace = useWorkspace(workspaceId);
+  const client = useWorkspaceClient();
   const [actionError, setActionError] = useState<string | null>(null);
   const [isCommitting, setIsCommitting] = useState(false);
   const [isCreatingPullRequest, setIsCreatingPullRequest] = useState(false);
@@ -53,8 +44,9 @@ export function useGitActions({
   );
   const supportsChanges =
     client !== null &&
-    (workspaceHost === "local" || workspaceHost === "docker") &&
-    worktreePath !== null;
+    workspace !== undefined &&
+    (workspace.host === "local" || workspace.host === "docker") &&
+    workspace.worktree_path !== null;
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -71,13 +63,13 @@ export function useGitActions({
     };
   }, []);
 
-  const gitStatusQuery = useGitStatus(supportsChanges ? workspaceId : null, workspaceHost, {
+  const gitStatusQuery = useGitStatus(supportsChanges ? workspaceId : null, {
     polling: documentVisible,
   });
-  const gitLogQuery = useGitLog(supportsChanges ? workspaceId : null, workspaceHost, 50, {
+  const gitLogQuery = useGitLog(supportsChanges ? workspaceId : null, 50, {
     polling: false,
   });
-  const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId, workspaceHost, {
+  const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId, {
     polling: documentVisible,
   });
   const gitStatus = gitStatusQuery.data;
@@ -94,17 +86,17 @@ export function useGitActions({
     setActionError(null);
     setIsPushingBranch(true);
     try {
-      if (!client) {
+      if (!client || !workspace) {
         throw new Error("Workspace host client is unavailable.");
       }
-      await pushGit(client, workspaceId);
+      await client.pushGit(workspace);
       await refreshPullRequestState();
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error));
     } finally {
       setIsPushingBranch(false);
     }
-  }, [refreshPullRequestState, client, workspaceId]);
+  }, [refreshPullRequestState, client, workspace]);
 
   const handleCommit = useCallback(
     async (message: string, pushAfterCommit: boolean): Promise<void> => {
@@ -113,16 +105,16 @@ export function useGitActions({
       setIsCommitting(true);
 
       try {
-        if (!client) {
-          throw new Error("Workspace host client is unavailable.");
+        if (!client || !workspace) {
+          throw new Error("Workspace client is unavailable.");
         }
-        await commitGit(client, workspaceId, message);
+        await client.commitGit(workspace, message);
         committed = true;
 
         if (pushAfterCommit) {
           setIsPushingBranch(true);
           try {
-            await pushGit(client, workspaceId);
+            await client.pushGit(workspace);
           } finally {
             setIsPushingBranch(false);
           }
@@ -139,17 +131,17 @@ export function useGitActions({
         setIsCommitting(false);
       }
     },
-    [onCommitComplete, refreshPullRequestState, client, workspaceId],
+    [onCommitComplete, refreshPullRequestState, client, workspace],
   );
 
   const handleCreatePullRequest = useCallback(async (): Promise<void> => {
     setActionError(null);
     setIsCreatingPullRequest(true);
     try {
-      if (!client) {
+      if (!client || !workspace) {
         throw new Error("Workspace host client is unavailable.");
       }
-      const pullRequest = await createGitPullRequest(client, workspaceId);
+      const pullRequest = await client.createGitPullRequest(workspace);
       await refreshPullRequestState();
       onOpenPullRequest(pullRequest);
     } catch (error) {
@@ -157,17 +149,17 @@ export function useGitActions({
     } finally {
       setIsCreatingPullRequest(false);
     }
-  }, [onOpenPullRequest, refreshPullRequestState, client, workspaceId]);
+  }, [onOpenPullRequest, refreshPullRequestState, client, workspace]);
 
   const handleMergePullRequest = useCallback(
     async (pullRequestNumber: number): Promise<void> => {
       setActionError(null);
       setIsMergingPullRequest(true);
       try {
-        if (!client) {
-          throw new Error("Workspace host client is unavailable.");
+        if (!client || !workspace) {
+          throw new Error("Workspace client is unavailable.");
         }
-        const pullRequest = await mergeGitPullRequest(client, workspaceId, pullRequestNumber);
+        const pullRequest = await client.mergeGitPullRequest(workspace, pullRequestNumber);
         await refreshPullRequestState();
         onOpenPullRequest(pullRequest);
       } catch (error) {
@@ -176,23 +168,22 @@ export function useGitActions({
         setIsMergingPullRequest(false);
       }
     },
-    [onOpenPullRequest, refreshPullRequestState, client, workspaceId],
+    [onOpenPullRequest, refreshPullRequestState, client, workspace],
   );
 
   const handleShowChanges = useCallback(async (): Promise<void> => {
-    if (!client) {
+    if (!client || !workspace) {
       return;
     }
     const unstaged = (gitStatus?.files ?? []).filter((f) => f.unstaged);
     if (unstaged.length > 0) {
-      await stageGitFiles(
-        client,
-        workspaceId,
+      await client.stageGitFiles(
+        workspace,
         unstaged.map((f) => f.path),
       );
       await refreshGitStatus();
     }
-  }, [gitStatus?.files, refreshGitStatus, client, workspaceId]);
+  }, [gitStatus?.files, refreshGitStatus, client, workspace]);
 
   return useMemo(
     () => ({

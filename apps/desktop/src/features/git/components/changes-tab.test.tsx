@@ -24,7 +24,6 @@ function renderChangesTab({
         onOpenDiff: () => {},
         onOpenFile: () => {},
         onRefresh: async () => {},
-        workspaceHost: "local",
         workspaceId: "workspace_1",
       }),
       storageKey: "test.theme",

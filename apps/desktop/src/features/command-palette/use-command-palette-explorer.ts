@@ -1,6 +1,8 @@
 import { useMemo, useSyncExternalStore } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { File } from "lucide-react";
 import { useParams } from "react-router-dom";
+import { useWorkspaceClientRegistry } from "@lifecycle/workspace/client/react";
 import {
   readWorkspaceExplorerUsage,
   readWorkspaceExplorerUsageVersion,
@@ -8,7 +10,7 @@ import {
   subscribeWorkspaceExplorerUsage,
   type WorkspaceExplorerUsageEntry,
 } from "@/features/explorer/lib/workspace-explorer-usage";
-import { useWorkspaceFileTree, useWorkspacesByProject } from "@/features/workspaces/hooks";
+import { workspaceKeys } from "@/features/workspaces/state/workspace-query-keys";
 import { workspaceSupportsFilesystemInteraction } from "@/features/workspaces/lib/workspace-capabilities";
 import {
   normalizeWorkspaceFilePath,
@@ -18,6 +20,7 @@ import {
 import { useWorkspaceOpenRequests } from "@/features/workspaces/state/workspace-open-requests";
 import { createFileEditorOpenInput } from "@/features/workspaces/canvas/workspace-canvas-requests";
 import type { CommandPaletteCommand } from "@/features/command-palette/types";
+import { useWorkspacesByProject } from "@/store";
 
 interface UseCommandPaletteExplorerResult {
   error: unknown;
@@ -41,10 +44,18 @@ export function useCommandPaletteExplorer(): UseCommandPaletteExplorerResult {
   );
   const isAvailable =
     currentWorkspace !== null && workspaceSupportsFilesystemInteraction(currentWorkspace);
-  const explorerTreeQuery = useWorkspaceFileTree(
-    isAvailable ? currentWorkspace.id : null,
-    isAvailable ? currentWorkspace.host : null,
-  );
+  const workspaceClientRegistry = useWorkspaceClientRegistry();
+  const workspaceClient = currentWorkspace
+    ? workspaceClientRegistry.resolve(currentWorkspace.host)
+    : workspaceClientRegistry.resolve("local");
+  const explorerTreeQuery = useQuery({
+    queryKey:
+      isAvailable && currentWorkspace
+        ? workspaceKeys.fileTree(currentWorkspace.id)
+        : ["workspace-file-tree", "disabled"],
+    queryFn: () => workspaceClient.listFiles(currentWorkspace!),
+    enabled: isAvailable && currentWorkspace !== null,
+  });
   const workspaceIdForFiles = currentWorkspace?.id ?? null;
   const usageVersion = useSyncExternalStore(
     subscribeWorkspaceExplorerUsage,

@@ -4,15 +4,11 @@ import { WorkspaceLoader } from "@/features/workspaces/components/workspace-load
 
 export function WorkspaceRoute() {
   const { workspaceId } = useParams();
-  useOutletContext<ProjectRouteOutletContext>();
+  const { project } = useOutletContext<ProjectRouteOutletContext>();
 
   if (!workspaceId) {
     return null;
   }
 
-  return (
-    <div className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden" data-slot="workspace-shell">
-      <WorkspaceLoader workspaceId={workspaceId} />
-    </div>
-  );
+  return <WorkspaceLoader project={project} workspaceId={workspaceId} />;
 }

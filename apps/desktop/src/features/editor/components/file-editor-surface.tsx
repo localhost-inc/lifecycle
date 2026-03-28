@@ -1,17 +1,18 @@
 import { Alert, AlertAction, AlertDescription, EmptyState, FloatingToggle } from "@lifecycle/ui";
+import { useWorkspaceClient } from "@lifecycle/workspace/client/react";
 import { isTauri } from "@tauri-apps/api/core";
 import { watch } from "@tauri-apps/plugin-fs";
 import { FileText } from "lucide-react";
 import { memo, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   SHORTCUT_HANDLER_PRIORITY,
   useShortcutRegistration,
 } from "@/app/shortcuts/shortcut-router";
 import { useWorkspacePaneRenderCount } from "@/features/workspaces/canvas/workspace-pane-performance";
 import { workspaceFileBasename } from "@/features/workspaces/lib/workspace-file-paths";
-import { useWorkspaceFile } from "@/features/workspaces/hooks";
+import { workspaceKeys } from "@/features/workspaces/state/workspace-query-keys";
 import { useWorkspace } from "@/store";
-import { useOptionalWorkspaceHostClient } from "@lifecycle/workspace/client/react";
 import { resolveFileEditorConfig } from "@/features/editor/lib/file-editor-config";
 import type { FileEditorMode } from "@/features/editor/lib/file-editor-mode";
 import {
@@ -50,7 +51,7 @@ export const FileEditorSurface = memo(function FileEditorSurface({
 }: FileEditorSurfaceProps) {
   useWorkspacePaneRenderCount("FileEditorSurface", filePath);
   const workspace = useWorkspace(workspaceId);
-  const client = useOptionalWorkspaceHostClient(workspace?.host);
+  const client = useWorkspaceClient();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [mode, setMode] = useState<FileEditorMode>(() =>
     resolveInitialFileEditorMode(filePath, initialMode),
@@ -59,7 +60,11 @@ export const FileEditorSurface = memo(function FileEditorSurface({
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const modeSeedRef = useRef(`${filePath}:${initialMode ?? ""}`);
 
-  const fileQuery = useWorkspaceFile(workspaceId, workspace?.host ?? null, filePath);
+  const fileQuery = useQuery({
+    queryKey: workspaceKeys.file(workspaceId, filePath),
+    queryFn: () => client!.readFile(workspace!, filePath),
+    enabled: client !== null && workspace !== undefined,
+  });
 
   const displayPath = fileQuery.data?.file_path ?? filePath;
   const renderer = resolveFileEditorRenderer(displayPath);
@@ -196,7 +201,7 @@ export const FileEditorSurface = memo(function FileEditorSurface({
   }, [displayPath, effectiveMode, fileQuery.isLoading, initialScrollTop, renderer]);
 
   const handleSave = useCallback(async () => {
-    if (textContent === null || !client) {
+    if (textContent === null || !client || !workspace) {
       return;
     }
 
@@ -212,7 +217,7 @@ export const FileEditorSurface = memo(function FileEditorSurface({
     setSaveError(null);
 
     try {
-      const result = await client.writeFile(workspaceId, displayPath, draftContent);
+      const result = await client.writeFile(workspace, displayPath, draftContent);
       const nextContent = result.content ?? draftContent;
       onSessionStateChange?.({
         conflictDiskContent: null,

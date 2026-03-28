@@ -3,8 +3,10 @@ import { Alert, AlertDescription } from "@lifecycle/ui";
 import { AlertTriangle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ServiceLogSnapshot } from "@lifecycle/workspace/client";
-import { useWorkspaceServiceLogs } from "@/features/workspaces/hooks";
+import { useQuery } from "@tanstack/react-query";
+import { getWorkspaceServiceLogs } from "@/features/events";
 import { formatWorkspaceError } from "@/features/workspaces/lib/workspace-errors";
+import { workspaceKeys } from "@/features/workspaces/state/workspace-query-keys";
 import { ServiceRow } from "@/features/workspaces/components/service-row";
 
 interface EnvironmentPanelProps {
@@ -132,7 +134,10 @@ export function EnvironmentPanel({
 }: EnvironmentPanelProps) {
   const [activeServiceStartName, setActiveServiceStartName] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const serviceLogsQuery = useWorkspaceServiceLogs(workspace.id, workspace.host);
+  const serviceLogsQuery = useQuery({
+    queryKey: workspaceKeys.serviceLogs(workspace.id),
+    queryFn: async () => getWorkspaceServiceLogs(workspace.id),
+  });
   const serviceLogs = serviceLogsQuery.data ?? [];
   const [expandedServiceName, setExpandedServiceName] = useState<string | null>(() =>
     getInitialExpandedServiceName(workspace, services, serviceLogs),

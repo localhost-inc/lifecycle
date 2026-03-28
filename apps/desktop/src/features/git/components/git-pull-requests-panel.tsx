@@ -37,20 +37,12 @@ export function GitPullRequestsPanel({
     };
   }, []);
 
-  const pullRequestsQuery = useGitPullRequests(
-    supportsGit ? workspaceId : null,
-    supportsGit ? workspaceHost : null,
-    {
-      polling: documentVisible,
-    },
-  );
-  const currentPullRequestQuery = useCurrentGitPullRequest(
-    supportsGit ? workspaceId : null,
-    supportsGit ? workspaceHost : null,
-    {
-      polling: documentVisible,
-    },
-  );
+  const pullRequestsQuery = useGitPullRequests(supportsGit ? workspaceId : null, {
+    polling: documentVisible,
+  });
+  const currentPullRequestQuery = useCurrentGitPullRequest(supportsGit ? workspaceId : null, {
+    polling: documentVisible,
+  });
 
   return (
     <section className="flex h-full min-h-0 flex-col">

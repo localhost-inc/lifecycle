@@ -1,3 +1,4 @@
+import { useAuthSession } from "@lifecycle/auth/react";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   Button,
@@ -25,7 +26,6 @@ import {
 } from "@/components/layout/window-controls";
 import { getInterfaceFontPresets, getMonospaceFontPresets } from "@/lib/typography";
 import { AuthSessionSettingsPanel } from "@/features/auth/components/auth-session-settings-panel";
-import { useAuthSession } from "@/features/auth/state/auth-session-provider";
 import {
   turnNotificationModeOptions,
   turnNotificationSoundOptions,

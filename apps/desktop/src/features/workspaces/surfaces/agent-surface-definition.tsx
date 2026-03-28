@@ -91,7 +91,7 @@ export const agentSurfaceDefinition: WorkspaceSurfaceDefinition<"agent"> = {
     context.setLaunchError(null);
 
     try {
-      const session = await context.agentOrchestrator.createDraftSession({
+      const session = await context.agentClient.createDraftSession({
         provider,
         workspaceId: context.workspaceId,
       });
@@ -104,7 +104,7 @@ export const agentSurfaceDefinition: WorkspaceSurfaceDefinition<"agent"> = {
         }),
       );
 
-      void context.agentOrchestrator.bootstrapSession(session.id).catch((bootstrapError) => {
+      void context.agentClient.bootstrapSession(session.id).catch((bootstrapError) => {
         console.error("[workspace] agent bootstrap failed:", bootstrapError);
       });
     } catch (error) {

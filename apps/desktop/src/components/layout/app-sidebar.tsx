@@ -1,11 +1,15 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { AuthSession } from "@lifecycle/auth";
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
+import { useWorkspaceClientRegistry } from "@lifecycle/workspace/client/react";
 import { IconButton, Spinner, Wordmark } from "@lifecycle/ui";
 import { Archive, FolderGit2, GitBranch, Megaphone, Plus, Settings } from "lucide-react";
+import { NavigationControls } from "@/components/layout/navigation-controls";
 import { type MouseEvent, useCallback, useMemo } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
+import { isMacPlatform } from "@/app/app-hotkeys";
 import { resolveProjectRepoWorkspace } from "@/features/projects/lib/project-repo-workspace";
 import {
   readProjectPaths,
@@ -13,7 +17,6 @@ import {
 } from "@/features/projects/state/project-content-tabs";
 import { UserAvatar } from "@/features/user/components/user-avatar";
 import { ResponseReadyDot } from "@/components/response-ready-dot";
-import type { AuthSession } from "@/features/auth/auth-session";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { bugs, version } from "../../../package.json";
 import type { WorkspaceCreateMode } from "@/features/workspaces/types";
@@ -21,6 +24,10 @@ import {
   getWorkspaceDisplayName,
   isRootWorkspace,
 } from "@/features/workspaces/lib/workspace-display";
+import {
+  listAvailableOpenInTargets,
+  resolveDefaultOpenTarget,
+} from "@/features/workspaces/lib/open-in-targets";
 import { getWorkspaceSessionStatusState } from "@/features/workspaces/surfaces/workspace-session-status";
 import {
   showCreateWorkspaceMenu,
@@ -85,6 +92,7 @@ export function AppSidebar({
 }: AppSidebarProps) {
   const { projectId, workspaceId } = useParams();
   const location = useLocation();
+  const workspaceClientRegistry = useWorkspaceClientRegistry();
   const projectPaths = useMemo(() => {
     const storedPaths = readProjectPaths();
     const paths: Record<string, string> = {};
@@ -142,19 +150,29 @@ export function AppSidebar({
       event.preventDefault();
       void showWorkspaceContextMenu(workspace, {
         onArchiveWorkspace: onArchiveWorkspace,
+        onOpenWorkspaceInApp: (targetWorkspace) => {
+          const workspaceClient = workspaceClientRegistry.resolve(targetWorkspace.host);
+          const target = resolveDefaultOpenTarget(listAvailableOpenInTargets(isMacPlatform()));
+          void workspaceClient.openInApp(targetWorkspace, target.id);
+        },
       });
     },
-    [onArchiveWorkspace],
+    [onArchiveWorkspace, workspaceClientRegistry],
   );
 
   return (
     <aside
-      className="flex h-full min-h-0 shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)] text-[var(--sidebar-foreground)]"
+      className="flex h-full min-h-0 shrink-0 flex-col bg-[var(--background)] text-[var(--sidebar-foreground)]"
       data-slot="app-sidebar"
       onMouseDown={handleMouseDown}
       style={{ width: `${width / 16}rem` }}
     >
-      <div className="flex min-h-0 flex-1 flex-col pt-2">
+      {/* Traffic light spacer + navigation */}
+      <div className="flex h-10 shrink-0 items-center justify-end">
+        <NavigationControls />
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col">
         {/* Organization / context switcher */}
         <button
           aria-label={`Open ${activeContextName} context`}

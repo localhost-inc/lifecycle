@@ -1,4 +1,4 @@
-import type { ProviderModelCatalog, ProviderModelCatalogEntry } from "../../catalog";
+import type { AgentModelCatalog, AgentModelCatalogEntry } from "../../catalog";
 import { CodexAppServerClient, type CodexAccountReadResult } from "./app-server";
 
 interface CodexReasoningEffortOption {
@@ -37,7 +37,7 @@ function buildSource(account: CodexAccountReadResult): string {
   return "codex_app_server+model/list";
 }
 
-function normalizeModel(entry: CodexModelListEntry): ProviderModelCatalogEntry | null {
+function normalizeModel(entry: CodexModelListEntry): AgentModelCatalogEntry | null {
   if (entry.hidden === true || typeof entry.model !== "string" || entry.model.trim().length === 0) {
     return null;
   }
@@ -83,7 +83,7 @@ async function listModels(client: CodexAppServerClient): Promise<CodexModelListE
   return models;
 }
 
-export async function getCodexModelCatalog(): Promise<ProviderModelCatalog> {
+export async function getCodexModelCatalog(): Promise<AgentModelCatalog> {
   const client = new CodexAppServerClient();
 
   try {
@@ -94,7 +94,7 @@ export async function getCodexModelCatalog(): Promise<ProviderModelCatalog> {
     ]);
     const models = discoveredModels
       .map(normalizeModel)
-      .filter((entry): entry is ProviderModelCatalogEntry => entry !== null);
+      .filter((entry): entry is AgentModelCatalogEntry => entry !== null);
     const defaultModel =
       discoveredModels.find((entry) => entry.isDefault === true && typeof entry.model === "string")
         ?.model ??

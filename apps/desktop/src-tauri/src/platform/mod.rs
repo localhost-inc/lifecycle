@@ -1,10 +1,11 @@
 pub mod app_config;
 pub mod auth;
-pub mod db;
 pub mod diagnostics;
 pub mod git;
 pub mod lifecycle_cli;
 pub mod lifecycle_root;
+pub mod ports;
 pub mod preview_proxy;
+pub mod process_manager;
 pub mod runtime;
 pub mod user_shell_env;

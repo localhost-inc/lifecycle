@@ -14,6 +14,10 @@ export type LifecycleEventWire =
       workspace_id: string;
       status: WorkspaceStatus;
       failure_reason: WorkspaceFailureReason | null;
+      worktree_path?: string | null;
+      git_sha?: string | null;
+      manifest_fingerprint?: string | null;
+      failed_at?: string | null;
     }
   | {
       id: string;
@@ -45,6 +49,7 @@ export type LifecycleEventWire =
       name: string;
       status: ServiceStatus;
       status_reason: ServiceStatusReason | null;
+      assigned_port?: number | null;
     }
   | {
       id: string;
@@ -122,6 +127,10 @@ export type LifecycleEvent =
       workspaceId: string;
       status: WorkspaceStatus;
       failureReason: WorkspaceFailureReason | null;
+      worktreePath?: string | null;
+      gitSha?: string | null;
+      manifestFingerprint?: string | null;
+      failedAt?: string | null;
     }
   | {
       id: string;
@@ -153,6 +162,7 @@ export type LifecycleEvent =
       name: string;
       status: ServiceStatus;
       statusReason: ServiceStatusReason | null;
+      assignedPort?: number | null;
     }
   | {
       id: string;

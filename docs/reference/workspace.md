@@ -3,10 +3,12 @@
 Lifecycle uses three explicit seams:
 
 1. `store` — the shared control-plane for persisted records (`project`, `workspace`, `service`, `agent_session`)
-2. `WorkspaceHostClient` — the only host-aware workspace boundary for provisioning and existing-workspace runtime behavior
-3. `AgentOrchestrator` + `AgentWorker` — first-party agent sessions, turns, approvals, attachments, and artifacts behind a Lifecycle-owned agent model
+2. `WorkspaceClient` — the only host-aware workspace boundary for provisioning and existing-workspace runtime behavior
+3. `AgentClient` — the host-aware agent boundary for first-party agent sessions, auth, model catalog, turns, approvals, attachments, and artifacts behind a Lifecycle-owned agent model
 
 Host-native concerns such as OS app launching and native terminal surface synchronization stay outside these seams. Workspace placement is selected **per-workspace** at creation time and stored as `workspace.host`.
+
+For `workspace.host=local`, `WorkspaceClient` talks to a generic native execution substrate. That local substrate should be shaped the same way a future `docker`, `remote`, or `cloud` provider would be shaped: explicit host capabilities underneath one host-aware workspace client, not a separate local control-plane backend.
 
 ## Catalog vs Runtime
 
@@ -14,7 +16,7 @@ Lifecycle separates catalog records from runtime-backed control-plane records:
 
 1. `organization` and `project` live fully inside the Lifecycle database as catalog data.
 2. `workspace` and `agent_session` are also persisted in the Lifecycle database, but those rows describe runtime instances that execute on a selected host or provider outside the database process.
-3. UI catalog flows mutate store state first; runtime capabilities resolve through `WorkspaceHostClient` and `AgentWorker` only after a persisted workspace record exists.
+3. UI catalog flows mutate store state first; runtime capabilities resolve through `WorkspaceClient` and `AgentClient` only after a persisted workspace record exists.
 
 ## Workspace Boundary
 
@@ -33,23 +35,23 @@ State contracts:
 
 ## Agent Execution Model
 
-Lifecycle agent execution is split into three layers:
+Lifecycle agent execution is split into two layers:
 
-1. `AgentOrchestrator` — desktop-side coordinator that creates and binds sessions, owns normalized event fanout, and persists Lifecycle agent state
-2. `AgentSession` — harness-facing live object for one persisted `agent_session` record
-3. `AgentWorker` — deployed execution unit running on the target runtime and wrapping the real Claude or Codex provider session
+1. `AgentClient` — app-facing agent surface for auth, model catalog, session lifecycle, turns, approvals, and persisted Lifecycle agent state
+2. `AgentWorker` — private host-scoped runtime manager owned by each concrete `AgentClient`
+3. provider runtime — private process/socket implementation details owned by each concrete `AgentWorker`
 
-The harness talks to `AgentSession`. `AgentSession` interfaces with `AgentWorker`. `AgentWorker` runs on the target `WorkspaceHostClient`.
+The app talks to `AgentClient`. `AgentClient` persists `agent_session` state through store, resolves the correct host-scoped `AgentWorker`, and never exposes runtime transport details to the UI.
 
-For local sessions, the desktop no longer owns the provider worker as a direct child process. It launches a detached Lifecycle-owned host process as `lifecycle agent host --provider <provider> --session-id <agent_session_id> ...`. That detached host owns the real `lifecycle agent worker <provider>` child process, persists a small registration file keyed by `agent_session.id`, and exposes a reconnectable loopback websocket transport back to `AgentOrchestrator`.
+For local sessions, the desktop no longer owns the provider runtime as a direct child process. `LocalAgentClient` launches a detached Lifecycle-owned host process as `lifecycle agent host --provider <provider> --session-id <agent_session_id> ...`. That detached host owns the real provider runtime child process, persists a small registration file keyed by `agent_session.id`, and exposes a reconnectable loopback websocket transport back to `AgentClient`.
 
 Rules:
 
 1. The detached host must survive desktop restarts and rebuilds so local agent sessions are not torn down with the app runtime.
-2. `provider_session_id` is still discovered by the real provider worker and reported back to `AgentOrchestrator`; it is never the transport address.
+2. `provider_session_id` is still discovered by the real provider runtime and reported back to `AgentClient`; it is never the transport address.
 3. The detached host registration is keyed by Lifecycle `agent_session.id`, not by terminal id or provider thread id.
-4. Reattachment is app-driven: on startup, `AgentOrchestrator` should reconnect persisted live sessions through the detached host registration before waiting for the next user turn.
-5. The detached host may publish an initial worker-state snapshot on reconnect so the desktop can reconcile session status even if the app was offline.
+4. Reattachment is app-driven: on startup, `AgentClient` should reconnect persisted live sessions through the detached host registration before waiting for the next user turn.
+5. The detached host may publish an initial runtime-state snapshot on reconnect so the desktop can reconcile session status even if the app was offline.
 
 ## Workspace Checkout Type (Local)
 
@@ -62,66 +64,79 @@ Rules:
 ## Interface
 
 ```typescript
-interface ProjectBackend {
-interface WorkspaceHostClient {
-  ensureWorkspace(workspace + project_path + base_ref? + worktree_root? + manifest_json? + manifest_fingerprint?) → workspace
-  renameWorkspace(workspace, name) → workspace
+interface WorkspaceClient {
+  readManifest(dir_path) → manifest_status
+  getGitCurrentBranch(repo_path) → branch
+  ensureWorkspace(workspace + project_path + base_ref? + worktree_root? + manifest_fingerprint?) → workspace
+  renameWorkspace(workspace + project_path + name) → workspace
   inspectArchive(workspace) → { hasUncommittedChanges }
-  archiveWorkspace(workspace) → void
-  startServices(workspace + manifest_json + manifest_fingerprint + service_names?) → service_statuses
-  healthCheck(manifest.environment[kind=service].health_check) → pass/fail per service
-  stopServices(workspace_id) → void
-  getActivity(workspace_id) → lifecycle_events[]
-  getServiceLogs(workspace_id) → service_logs[]
-  getServices(workspace_id) → services[]
-  readFile(workspace_id, file_path) → file
-  writeFile(workspace_id, file_path, content) → file
+  archiveWorkspace(workspace + project_path) → void
+  startServices(workspace + services + manifest_json + manifest_fingerprint + service_names?) → { preparedAt }
+  stopServices(workspace) → void
+  readFile(workspace, file_path) → file
+  writeFile(workspace, file_path, content) → file
   subscribeFileEvents(workspace_id, worktree_path?) → unsubscribe
-  listFiles(workspace_id) → file_entries[]
-  openFile(workspace_id, file_path) → void
-  getGitStatus(workspace_id) → git_status
-  getGitScopePatch(workspace_id, scope) → unified_diff
-  getGitChangesPatch(workspace_id) → unified_diff
-  getGitDiff(workspace_id, file_path, scope) → unified_diff
-  listGitLog(workspace_id, limit) → git_log_entries
-  listGitPullRequests(workspace_id) → pull_request_list
-  getGitPullRequest(workspace_id, pull_request_number) → pull_request_detail
-  getCurrentGitPullRequest(workspace_id) → branch_pull_request
-  getGitBaseRef(workspace_id) → base_ref | null
-  getGitRefDiffPatch(workspace_id, base_ref, head_ref) → unified_diff
-  getGitPullRequestPatch(workspace_id, pull_request_number) → unified_diff
-  getGitCommitPatch(workspace_id, sha) → commit_diff
-  stageGitFiles(workspace_id, file_paths[]) → void
-  unstageGitFiles(workspace_id, file_paths[]) → void
-  commitGit(workspace_id, message) → commit_result
-  pushGit(workspace_id) → push_result
+  listFiles(workspace) → file_entries[]
+  openFile(workspace, file_path) → void
+  getGitStatus(workspace) → git_status
+  getGitScopePatch(workspace, scope) → unified_diff
+  getGitChangesPatch(workspace) → unified_diff
+  getGitDiff(workspace, file_path, scope) → unified_diff
+  listGitLog(workspace, limit) → git_log_entries
+  listGitPullRequests(workspace) → pull_request_list
+  getGitPullRequest(workspace, pull_request_number) → pull_request_detail
+  getCurrentGitPullRequest(workspace) → branch_pull_request
+  getGitBaseRef(workspace) → base_ref | null
+  getGitRefDiffPatch(workspace, base_ref, head_ref) → unified_diff
+  getGitPullRequestPatch(workspace, pull_request_number) → unified_diff
+  getGitCommitPatch(workspace, sha) → commit_diff
+  stageGitFiles(workspace, file_paths[]) → void
+  unstageGitFiles(workspace, file_paths[]) → void
+  commitGit(workspace, message) → commit_result
+  pushGit(workspace) → push_result
 }
 ```
 
 ### Responsibility Split
 
-1. All host-aware workspace behavior goes through `WorkspaceHostClient`, including `ensureWorkspace`, rename, archive, files, git, services, activity, and service logs.
-2. Project-local reads such as manifest parsing, current-branch lookup, and project cleanup are app-local helpers. They are not a workspace package seam.
-3. `AgentOrchestrator` owns agent session lifecycle and app state; `AgentWorker` owns runtime execution for that session on the selected workspace host.
+1. All host-aware workspace behavior goes through `WorkspaceClient`, including `ensureWorkspace`, rename, archive, files, git, and service lifecycle control.
+2. Source inspection that feeds workspace provisioning, such as manifest parsing and root-repository current-branch lookup, also goes through `WorkspaceClient`.
+3. `AgentClient` owns agent session lifecycle, auth, model catalog, and host-specific provider runtime execution for the selected workspace host.
 4. The agent transcript source of truth is `agent_event` plus its `agent_message` / `agent_message_part` projections; provider-local logs and terminal history are not query sources.
 5. Desktop file reads, writes, listings, open actions, and file-event subscriptions may route through the local host file client when the workspace has a local `worktree_path`, even if `workspace.host` is not `local`.
 6. `startServices(service_names?)` may target a single service chain; workspace execution must honor manifest `depends_on` edges.
 7. When `startServices(service_names?)` is called against an already-active workspace, `ready` dependency services should be treated as satisfied boundaries.
 8. Local create/start flows must carry the exact manifest content plus `manifest_fingerprint`.
-9. Workspace creation first inserts a `workspace` row with `status=provisioning`; the workspace route then resolves `WorkspaceHostClient(workspace.host)` and calls `ensureWorkspace(...)`.
-10. Desktop query reads and mutations must not bypass these seams with transport-local command calls.
-11. Frontend consumers should read concrete workspace-scoped facts through separate queries (`workspace`, `services`, `activity`, `service_logs`, `agent_sessions`) instead of depending on a synthetic snapshot aggregate.
-12. Frontend manifest watchers may invalidate workspace queries when `lifecycle.json` changes, but reconciliation of persisted idle service state must remain backend-owned.
+9. Workspace creation first inserts a `workspace` row with `status=provisioning`; the workspace route then resolves `WorkspaceClient(workspace.host)` and calls `ensureWorkspace(...)`.
+10. The app root should expose `WorkspaceClient` and `AgentClient` registries only. Once the route has a real `workspace` record, it should bind a route-scoped workspace scope that resolves the concrete `WorkspaceClient` and `AgentClient` for `workspace.host`.
+11. Workspace-route children should consume bound `WorkspaceClient` / agent hooks from that scoped provider rather than re-resolving host-specific clients from partial state.
+12. Desktop query reads and mutations must not bypass these seams with transport-local command calls.
+13. Frontend consumers should read concrete workspace-scoped facts through store/query surfaces (`workspace`, `services`, `activity`, `service_logs`, `agent_sessions`) instead of asking `WorkspaceClient` to read back runtime facts that already exist in the event/query layer.
+14. Lifecycle event payloads are state facts, not invalidation hints. Desktop store collections should apply `workspace.*` and `service.*` events through store mutations instead of refreshing around native-owned DB writes.
+15. Frontend manifest watchers may invalidate workspace queries when `lifecycle.json` changes, but persisted workspace/service rows must still flow through the store/server path rather than direct native SQL.
+16. For `host=local`, native code is an execution substrate only. `WorkspaceClient` owns service-graph interpretation, runtime env construction, lifecycle policy, and dispatch; native receives explicit paths, commands, service configs, and env.
+17. Local-native commands should converge toward capability-shaped operations (`process`, `container`, `filesystem`, `git`, `preview`, `sidecar`) rather than workspace-backend-specific policy verbs.
 
 ## Execution Model
 
-`lifecycle.json` describes **WHAT** to run. `WorkspaceHostClient` owns the host-aware workspace behavior selected by `workspace.host`.
+`lifecycle.json` describes **WHAT** to run. `WorkspaceClient` owns the host-aware workspace behavior selected by `workspace.host`.
 
-1. All workspaces are lifecycle-managed execution instances backed by `WorkspaceHostClient`.
+1. All workspaces are lifecycle-managed execution instances backed by `WorkspaceClient`.
 2. V1 ships a host-backed workspace implementation.
-3. The desktop resolves `WorkspaceHostClient` through a provider registry keyed by `workspace.host`, exposed from `@lifecycle/workspace/client` and `@lifecycle/workspace/client/react`.
-4. `docker`, `remote`, and `cloud` are explicit workspace hosts. The desktop currently routes `docker` workspaces through the same host-client path as `local` for mounted local-worktree reads/writes; `remote` and `cloud` still require explicit non-local providers.
-5. Agent execution host follows `workspace.host`. `AgentWorker` is resolved through the same host-aware provider model; `local` and `docker` currently share the desktop-host worker provider, while `remote|cloud` fail fast until target-native workers exist.
+3. The app root exposes `WorkspaceClientRegistryProvider` and `AgentClientRegistryProvider` only. Those providers carry host-keyed registries, not bound clients.
+4. Workspace scope binds one concrete `WorkspaceClient` and one concrete `AgentClient` for `workspace.host` through `WorkspaceClientProvider` and `AgentClientProvider`.
+5. Descendants inside a bound workspace scope must use `useWorkspaceClient()` and `useAgentClient()` directly. They must not resolve host-specific clients themselves.
+6. `docker`, `remote`, and `cloud` are explicit workspace hosts. If a host is supported, the app must register a concrete client for it explicitly. `local` and `docker` may share the same underlying implementation for mounted local-worktree reads/writes, but that registration must still be explicit.
+7. Agent execution host follows `workspace.host`. `local` and `docker` may share the same underlying agent implementation until target-native providers exist, but each host still requires its own explicit bound `AgentClient`; `remote|cloud` still fail fast until explicit host implementations ship.
+
+### Local Provider Discipline
+
+The local provider should behave like one host implementation among several, not like a privileged backend:
+
+1. `WorkspaceClient` decides how to materialize and operate a local workspace from persisted records plus explicit local facts.
+2. The local native layer should only execute the resulting plan against explicit local paths and runtime configs.
+3. If a future `docker`, `remote`, or `cloud` host would need the same semantic operation, that semantic should live at the `WorkspaceClient` layer rather than inside native Rust.
+4. Native-local helpers that are inherently OS-specific, such as "open this path in the default app" or native terminal surface sync, stay below the workspace host boundary.
 
 ## Event Foundation Contract
 
@@ -129,7 +144,7 @@ interface WorkspaceHostClient {
 2. The desktop query cache, notifications, metrics, and future plugins are consumers of that foundation.
 3. Commands may expose `before|after|failed` hooks.
 4. High-frequency terminal rendering stays inside the native terminal host.
-5. `WorkspaceHostClient.writeFile(...)` publishes a `workspace.file_changed` fact event for cache invalidation; it is not a workspace activity entry.
+5. `WorkspaceClient.writeFile(...)` publishes a `workspace.file_changed` fact event for cache invalidation; it is not a workspace activity entry.
 
 ## Terminal Session Contract (M3+)
 
@@ -138,12 +153,12 @@ interface WorkspaceHostClient {
 3. Desktop-only geometry, visibility, focus, theme, and font synchronization stay outside the workspace host client interface.
 4. `detachTerminal(workspace_id, terminal_id)` hides the active surface without terminating the session.
 5. `killTerminal(workspace_id, terminal_id)` is the only action that intentionally ends a live session.
-6. Terminals are shell surfaces only. Agent sessions use `AgentOrchestrator`, `AgentWorker`, and `agent_*` state instead of terminal rows or terminal lifecycle events.
+6. Terminals are shell surfaces only. Agent sessions use `AgentClient` and `agent_*` state instead of terminal rows or terminal lifecycle events.
 
 ## Targets and Aggregation
 
 1. `workspace.host=local` means the desktop host client is authoritative.
-2. `workspace.host=docker` currently reuses the desktop host client path for mounted local-worktree flows.
+2. `workspace.host=docker` currently uses an explicitly registered desktop client backed by the same local implementation for mounted local-worktree flows.
 3. `workspace.host=remote|cloud` reserve explicit non-local placements in the shared contract.
 4. Mixed-target workspace lists must be aggregated from normalized domain records.
 5. Mutations from aggregated views must dispatch to the authoritative host client for that target.
@@ -161,7 +176,7 @@ interface WorkspaceHostClient {
 ## Host Workspace (V1)
 
 1. Local Git worktree on host filesystem.
-2. Tauri Rust backend handles process supervision, libghostty, Docker, local state persistence.
+2. The local native substrate handles process supervision, libghostty, Docker, preview routing, and other local execution primitives. Persisted control-plane state stays behind `packages/db` and `packages/store`.
 3. Lifecycle-managed loopback binds plus `*.lifecycle.localhost` routing.
 4. `workspace.checkout_type=root` uses `project.path` as `workspace.worktree_path`.
 5. `workspace.checkout_type=worktree` uses a Lifecycle-owned derived git worktree.

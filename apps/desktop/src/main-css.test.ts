@@ -9,8 +9,11 @@ describe("main.css", () => {
     expect(css).toContain('@source "../../../packages/ui/src";');
   });
 
-  test("trims trailing streamdown margins for nested list paragraphs", () => {
-    const css = readFileSync(new URL("./main.css", import.meta.url), "utf8");
+  test("streamdown styles trim trailing margins for nested list paragraphs", () => {
+    const css = readFileSync(
+      new URL("./features/agents/components/parts/streamdown.css", import.meta.url),
+      "utf8",
+    );
 
     expect(css).toContain(".agent-streamdown > *:last-child");
     expect(css).toContain(".agent-streamdown li > p:last-child");

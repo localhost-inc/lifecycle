@@ -1,4 +1,4 @@
-export interface ProviderModelCatalogEntry {
+export interface AgentModelCatalogEntry {
   defaultReasoningEffort: null | string;
   description: null | string;
   label: string;
@@ -6,10 +6,10 @@ export interface ProviderModelCatalogEntry {
   value: string;
 }
 
-export interface ProviderModelCatalog {
+export interface AgentModelCatalog {
   defaultModel: null | string;
   fetchedAt: string;
-  models: ProviderModelCatalogEntry[];
+  models: AgentModelCatalogEntry[];
   provider: "claude" | "codex";
   source: string;
   warnings: string[];

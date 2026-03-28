@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import type { OpenInAppId } from "@lifecycle/workspace";
 import { cn } from "@lifecycle/ui";
 import { useEffect, useRef, useState } from "react";
-import type { OpenInAppId } from "@/features/workspaces/open-in-api";
 import type { OpenInTarget } from "@/features/workspaces/lib/open-in-targets";
 import { OpenInAppIcon } from "@/features/workspaces/components/open-in-app-icon";
 

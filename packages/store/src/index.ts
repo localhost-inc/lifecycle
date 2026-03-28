@@ -1,4 +1,3 @@
-export type { SqlDriver } from "./driver";
 export { createSqlCollection, type SqlCollection, type SqlCollectionUtils } from "./collection";
 export type { Collection } from "@tanstack/db";
 
@@ -12,16 +11,27 @@ export {
   createWorkspaceCollection,
   selectAllWorkspaces,
   selectWorkspaceById,
+  selectWorkspacesByProject,
   groupWorkspacesByProject,
 } from "./collections/workspaces";
 
-export { selectServicesByWorkspace, selectAllServices } from "./collections/services";
+export {
+  createServiceCollection,
+  selectAllServices,
+  selectServiceByWorkspaceAndName,
+  selectServicesByWorkspace,
+} from "./collections/services";
 
 export {
+  createAgentSessionCollection,
   selectAgentSessionsByWorkspace,
   selectAgentSessionById,
   insertAgentSession,
   upsertAgentSession,
+  getOrCreateAgentSessionCollection,
+  refreshAgentSessionCollection,
+  upsertAgentSessionInCollection,
+  saveAgentSession,
 } from "./collections/agent-sessions";
 
 export {
@@ -34,6 +44,8 @@ export {
   selectAgentMessagesBySession,
   upsertAgentMessage,
   upsertAgentMessageWithParts,
+  getOrCreateAgentMessageCollection,
+  upsertAgentMessageInCollection,
 } from "./collections/agent-messages";
 
 export { selectPlansByProject, selectPlanById } from "./collections/plans";

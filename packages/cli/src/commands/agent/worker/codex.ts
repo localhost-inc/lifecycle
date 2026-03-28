@@ -1,4 +1,7 @@
-import { runCodexWorker, type CodexWorkerInput } from "@lifecycle/agents/providers/codex/worker";
+import {
+  runCodexWorker,
+  type CodexWorkerInput,
+} from "@lifecycle/agents/internal/providers/codex/worker";
 import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 

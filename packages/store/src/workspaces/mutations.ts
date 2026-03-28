@@ -1,5 +1,5 @@
+import type { SqlDriver } from "@lifecycle/db";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
-import type { SqlDriver } from "../driver";
 
 export async function createWorkspace(
   driver: SqlDriver,

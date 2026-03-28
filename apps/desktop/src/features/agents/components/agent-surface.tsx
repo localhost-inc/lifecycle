@@ -9,15 +9,18 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useSettings } from "@/features/settings/state/settings-context";
-import type { ClaudePermissionMode } from "@/features/settings/state/harnesses/claude";
-import { claudePermissionModeOptions } from "@/features/settings/state/harnesses/claude";
-import type { CodexSandboxMode } from "@/features/settings/state/harnesses/codex";
-import { codexSandboxModeOptions } from "@/features/settings/state/harnesses/codex";
+import {
+  claudePermissionModeOptions,
+  codexSandboxModeOptions,
+  type ClaudePermissionMode,
+  type CodexSandboxMode,
+} from "@/features/settings/state/harness-settings";
 import { DiffRenderProvider } from "@/features/git/components/diff-render-provider";
 import { useAgentSession, useAgentSessionMessages } from "@/features/agents/hooks";
-import { useProviderModelCatalog } from "@/features/agents/state/use-provider-model-catalog";
 import { deriveAgentDisplayStatus, resolveAgentPromptDispatchDecision } from "@lifecycle/agents";
 import {
+  useAgentModelCatalog,
+  useAgentClient,
   beginAgentPromptDispatch,
   completeAgentPromptDispatch,
   dismissAgentPrompt,
@@ -28,7 +31,6 @@ import {
   useAgentSessionState,
 } from "@lifecycle/agents/react";
 import { ClaudeIcon, CodexIcon } from "@/features/workspaces/surfaces/surface-icons";
-import { useAgentOrchestrator } from "@/features/agents/provider";
 import { useWorkspace } from "@/store/hooks";
 import {
   type ParsedMessage,
@@ -115,7 +117,7 @@ export const AgentSurface = memo(function AgentSurface({
   workspaceId,
 }: AgentSurfaceProps) {
   useWorkspacePaneRenderCount("AgentSurface", agentSessionId);
-  const agentOrchestrator = useAgentOrchestrator();
+  const agentClient = useAgentClient();
   const workspace = useWorkspace(workspaceId);
   const session = useAgentSession(workspaceId, agentSessionId);
   const dbMessages = useAgentSessionMessages(agentSessionId);
@@ -125,7 +127,7 @@ export const AgentSurface = memo(function AgentSurface({
     useSettings();
   const providerForCatalog = session?.provider === "codex" ? "codex" : "claude";
   const [catalogEnabled, setCatalogEnabled] = useState(false);
-  const modelCatalog = useProviderModelCatalog(providerForCatalog, {
+  const modelCatalog = useAgentModelCatalog(providerForCatalog, {
     enabled: catalogEnabled,
     loginMethod: harnesses.claude.loginMethod,
     preferredModel:
@@ -230,14 +232,14 @@ export const AgentSurface = memo(function AgentSurface({
         e.preventDefault();
         const activeTurnId = state.pendingTurnIds[0] ?? null;
         if (!session?.id) return;
-        void agentOrchestrator
+        void agentClient
           .cancelTurn(session.id, { turnId: activeTurnId })
           .catch((err) => console.error("[agent] cancel turn failed:", err));
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isRunning, paneFocused, state.pendingTurnIds, agentOrchestrator, session?.id]);
+  }, [isRunning, paneFocused, state.pendingTurnIds, agentClient, session?.id]);
 
   // Shift+Tab to toggle plan mode — store/restore the current permissions value
   useEffect(() => {
@@ -411,7 +413,7 @@ export const AgentSurface = memo(function AgentSurface({
       setSendError(null);
 
       try {
-        await agentOrchestrator.sendTurn(activeSession.id, {
+        await agentClient.sendTurn(activeSession.id, {
           turnId: createTurnId(),
           input: queuedPrompt.input,
         });
@@ -433,7 +435,7 @@ export const AgentSurface = memo(function AgentSurface({
   }, [
     agentSessionId,
     activeTurnId,
-    agentOrchestrator,
+    agentClient,
     promptQueue.dispatchingPromptId,
     promptQueue.prompts,
     session,
@@ -485,7 +487,7 @@ export const AgentSurface = memo(function AgentSurface({
     setSendError(null);
 
     try {
-      await agentOrchestrator.resolveApproval(session.id, {
+      await agentClient.resolveApproval(session.id, {
         approvalId,
         decision,
         response: response ?? null,

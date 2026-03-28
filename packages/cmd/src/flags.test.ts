@@ -44,6 +44,23 @@ describe("parseFlags", () => {
       tags: ["a", "b"],
     });
   });
+
+  test("treats unknown dashed tokens as array values until the next known flag", () => {
+    const input = z.object({
+      scriptArgs: z.array(z.string()),
+      env: z.string().optional(),
+    });
+
+    const { data } = parseFlags(
+      ["--script-args", "--year", "2026", "--month", "3", "--env", "stg"],
+      input,
+    );
+
+    expect(data).toEqual({
+      scriptArgs: ["--year", "2026", "--month", "3"],
+      env: "stg",
+    });
+  });
 });
 
 describe("defineFlag", () => {

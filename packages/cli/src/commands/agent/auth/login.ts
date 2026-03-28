@@ -1,5 +1,5 @@
-import { loginClaudeAuth } from "@lifecycle/agents/providers/claude/auth";
-import { loginCodexAuth } from "@lifecycle/agents/providers/codex/auth";
+import { loginClaudeAuth } from "@lifecycle/agents/internal/providers/claude/auth";
+import { loginCodexAuth } from "@lifecycle/agents/internal/providers/codex/auth";
 import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 

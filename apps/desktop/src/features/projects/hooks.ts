@@ -1,8 +1,8 @@
 import { useMemo } from "react";
 import type { ProjectRecord } from "@lifecycle/contracts";
+import type { ManifestStatus } from "@lifecycle/workspace";
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
-import type { ManifestStatus } from "@/features/projects/api/projects";
-import { readManifest } from "@/features/projects/api/projects";
+import { useWorkspaceClientRegistry } from "@lifecycle/workspace/client/react";
 import { useProjects } from "@/store";
 
 export interface ProjectCatalog {
@@ -25,12 +25,16 @@ export function useProjectCatalog(): {
   error: unknown;
 } {
   const projects = useProjects();
+  const localWorkspaceClient = useWorkspaceClientRegistry().resolve("local");
 
   const manifestsQuery = useQuery({
     queryKey: projectKeys.catalog(),
     queryFn: async () => {
       const manifestEntries = await Promise.all(
-        projects.map(async (project) => [project.id, await readManifest(project.path)] as const),
+        projects.map(
+          async (project) =>
+            [project.id, await localWorkspaceClient.readManifest(project.path)] as const,
+        ),
       );
       return Object.fromEntries(manifestEntries) as Record<string, ManifestStatus>;
     },
@@ -58,6 +62,7 @@ export function useProjectManifest(
 ): UseQueryResult<ManifestStatus | null> {
   const enabled = projectId !== null;
   const projects = useProjects();
+  const localWorkspaceClient = useWorkspaceClientRegistry().resolve("local");
 
   return useQuery({
     queryKey: projectId ? projectKeys.manifest(projectId) : ["project-manifest", "disabled"],
@@ -66,7 +71,7 @@ export function useProjectManifest(
       if (!project) {
         return null;
       }
-      return readManifest(project.path);
+      return localWorkspaceClient.readManifest(project.path);
     },
     enabled,
   });

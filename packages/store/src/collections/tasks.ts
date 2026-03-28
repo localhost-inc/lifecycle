@@ -1,5 +1,5 @@
+import type { SqlDriver } from "@lifecycle/db";
 import type { TaskDependencyRecord, TaskRecord } from "@lifecycle/contracts";
-import type { SqlDriver } from "../driver";
 
 export async function selectTasksByProject(
   driver: SqlDriver,

@@ -80,5 +80,5 @@ Rules:
 
 Key files:
 - `apps/desktop/src-tauri/src/platform/preview_proxy.rs` — Axum preview proxy
-- `apps/desktop/src-tauri/src/capabilities/workspaces/environment/port_assignment.rs` — port assignment logic
-- `apps/desktop/src-tauri/src/capabilities/workspaces/environment/execution.rs` — service execution
+- `apps/desktop/src-tauri/src/capabilities/runtime/environment/port_assignment.rs` — port assignment logic
+- `apps/desktop/src-tauri/src/platform/runtime/supervisor.rs` — service and container execution

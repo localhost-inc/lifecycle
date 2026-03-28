@@ -4,20 +4,19 @@ import type {
   GitPullRequestDetailResult,
   GitPullRequestSummary,
 } from "@lifecycle/contracts";
+import { useWorkspaceClient } from "@lifecycle/workspace/client/react";
 import { Alert, AlertDescription, Badge } from "@lifecycle/ui";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ArrowRight, ArrowUpRight, Check, Circle, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { formatRelativeTime } from "@/lib/format";
 import { measureAsyncPerformance } from "@/lib/performance";
-import { getGitPullRequestPatch } from "@/features/git/api";
 import {
   useCurrentGitPullRequest,
   useGitPullRequest,
   useGitPullRequests,
 } from "@/features/git/hooks";
 import { useWorkspace } from "@/store";
-import { useOptionalWorkspaceHostClient } from "@lifecycle/workspace/client/react";
 import { useParsedGitPatchFiles } from "@/features/git/lib/parsed-patch-files";
 import { GitPatchViewer } from "@/features/git/components/git-patch-viewer";
 import { GithubAvatar } from "@/features/git/components/github-avatar";
@@ -200,24 +199,19 @@ export function PullRequestSurface({
   workspaceId,
 }: PullRequestSurfaceProps) {
   const workspace = useWorkspace(workspaceId);
-  const client = useOptionalWorkspaceHostClient(workspace?.host);
+  const client = useWorkspaceClient();
   const [documentVisible, setDocumentVisible] = useState(() =>
     typeof document === "undefined" ? true : document.visibilityState === "visible",
   );
-  const pullRequestsQuery = useGitPullRequests(workspaceId, workspace?.host ?? null, {
+  const pullRequestsQuery = useGitPullRequests(workspaceId, {
     polling: documentVisible,
   });
-  const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId, workspace?.host ?? null, {
+  const currentPullRequestQuery = useCurrentGitPullRequest(workspaceId, {
     polling: documentVisible,
   });
-  const detailPullRequestQuery = useGitPullRequest(
-    workspaceId,
-    workspace?.host ?? null,
-    snapshot.number,
-    {
-      polling: documentVisible,
-    },
-  );
+  const detailPullRequestQuery = useGitPullRequest(workspaceId, snapshot.number, {
+    polling: documentVisible,
+  });
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -300,14 +294,14 @@ export function PullRequestSurface({
     setDiffError(null);
     setIsDiffLoading(true);
 
-    if (!client) {
+    if (!client || !workspace) {
       setIsDiffLoading(false);
       return;
     }
 
     void measureAsyncPerformance(
       `pull-request-surface.patch:${workspaceId}:${pullRequest.number}`,
-      () => getGitPullRequestPatch(client, workspaceId, pullRequest.number),
+      () => client.getGitPullRequestPatch(workspace, pullRequest.number),
     )
       .then((result) => {
         if (!cancelled) setPatch(result);
@@ -322,7 +316,7 @@ export function PullRequestSurface({
     return () => {
       cancelled = true;
     };
-  }, [diffReloadKey, pullRequest.number, client, workspaceId]);
+  }, [diffReloadKey, pullRequest.number, client, workspace, workspaceId]);
   const parsedFiles = useParsedGitPatchFiles(`pr-diff:${workspaceId}:${pullRequest.number}`, patch);
   const [checksExpanded, setChecksExpanded] = useState(false);
 

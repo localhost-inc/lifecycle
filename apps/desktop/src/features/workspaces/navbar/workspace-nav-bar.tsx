@@ -76,7 +76,7 @@ export function WorkspaceNavBar({ activeWorkspaceId, projectName }: WorkspaceNav
 
   return (
     <header
-      className="flex h-10 min-w-0 flex-1 items-stretch gap-0 px-0"
+      className="flex h-10 shrink-0 items-stretch gap-0 border-b border-[var(--border)] px-0"
       data-slot="workspace-nav-bar"
       data-tauri-drag-region
       onMouseDown={handleMouseDown}

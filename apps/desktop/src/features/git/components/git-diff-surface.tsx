@@ -1,12 +1,11 @@
 import type { GitLogEntry, GitStatusResult } from "@lifecycle/contracts";
+import { useWorkspaceClient } from "@lifecycle/workspace/client/react";
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { formatRelativeTime } from "@/lib/format";
 import { measureAsyncPerformance } from "@/lib/performance";
 import { GithubAvatar } from "@/features/git/components/github-avatar";
-import { getGitChangesPatch, getGitCommitPatch } from "@/features/git/api";
 import { useGitStatus } from "@/features/git/hooks";
 import { useWorkspace } from "@/store";
-import { useOptionalWorkspaceHostClient } from "@lifecycle/workspace/client/react";
 import { useParsedGitPatchFiles } from "@/features/git/lib/parsed-patch-files";
 import { GitPatchViewer } from "@/features/git/components/git-patch-viewer";
 
@@ -83,19 +82,15 @@ export function GitDiffSurface({
   workspaceId,
 }: GitDiffSurfaceProps) {
   const workspace = useWorkspace(workspaceId);
-  const client = useOptionalWorkspaceHostClient(workspace?.host);
+  const client = useWorkspaceClient();
   const [patch, setPatch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const commitSha = source.mode === "commit" ? source.commit.sha : null;
   const focusPath = source.mode === "changes" ? source.focusPath : null;
-  const changesStatusQuery = useGitStatus(
-    source.mode === "changes" ? workspaceId : null,
-    source.mode === "changes" ? (workspace?.host ?? null) : null,
-    {
-      polling: false,
-    },
-  );
+  const changesStatusQuery = useGitStatus(source.mode === "changes" ? workspaceId : null, {
+    polling: false,
+  });
   const changesPatchReloadKey = useMemo(
     () =>
       source.mode === "changes"
@@ -135,11 +130,11 @@ export function GitDiffSurface({
       const patchRequest = measureAsyncPerformance(
         `git-diff-surface.patch:${surfaceIdentity}`,
         () =>
-          source.mode === "changes"
-            ? getGitChangesPatch(client, workspaceId)
-            : getGitCommitPatch(client, workspaceId, commitSha ?? "").then(
-                (result) => result.patch,
-              ),
+          !workspace
+            ? Promise.resolve("")
+            : source.mode === "changes"
+              ? client.getGitChangesPatch(workspace)
+              : client.getGitCommitPatch(workspace, commitSha ?? "").then((result) => result.patch),
       );
 
       void patchRequest

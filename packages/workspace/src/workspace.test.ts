@@ -1,26 +1,65 @@
 import { describe, expect, test } from "bun:test";
-import type { ServiceRecord } from "@lifecycle/contracts";
-import { createWorkspaceHostClientRegistry, type WorkspaceHostClient } from "./client";
-import { LocalClient } from "./clients/local";
+import type { ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
+import { createWorkspaceClientRegistry, type WorkspaceClient } from "./client";
+import { LocalWorkspaceClient } from "./clients/local";
 
 describe("workspace contract", () => {
+  function workspace(overrides: Partial<WorkspaceRecord> = {}): WorkspaceRecord {
+    return {
+      id: "ws_1",
+      project_id: "project_1",
+      name: "Workspace 1",
+      checkout_type: "worktree",
+      source_ref: "lifecycle/workspace-1",
+      git_sha: null,
+      worktree_path: "/tmp/project_1/.worktrees/ws_1",
+      host: "local",
+      manifest_fingerprint: "manifest_1",
+      created_at: "2026-03-12T00:00:00.000Z",
+      updated_at: "2026-03-12T00:00:00.000Z",
+      last_active_at: "2026-03-12T00:00:00.000Z",
+      prepared_at: null,
+      status: "active",
+      failure_reason: null,
+      failed_at: null,
+      ...overrides,
+    };
+  }
+
+  function service(overrides: Partial<ServiceRecord> = {}): ServiceRecord {
+    return {
+      id: "svc_1",
+      workspace_id: "ws_1",
+      name: "web",
+      status: "stopped",
+      status_reason: null,
+      assigned_port: null,
+      preview_url: null,
+      created_at: "2026-03-12T00:00:00.000Z",
+      updated_at: "2026-03-12T00:00:00.000Z",
+      ...overrides,
+    };
+  }
+
+  const REPO_PATH = "/tmp/project_1/.worktrees/ws_1";
+
   test("defines the expected workspace method names", () => {
-    const requiredMethods: Array<keyof WorkspaceHostClient> = [
+    const requiredMethods: Array<keyof WorkspaceClient> = [
+      "readManifest",
+      "getGitCurrentBranch",
       "ensureWorkspace",
       "renameWorkspace",
       "inspectArchive",
       "archiveWorkspace",
       "startServices",
-      "healthCheck",
       "stopServices",
-      "getActivity",
-      "getServiceLogs",
-      "getServices",
       "readFile",
       "writeFile",
       "subscribeFileEvents",
       "listFiles",
       "openFile",
+      "openInApp",
+      "listOpenInApps",
       "getGitStatus",
       "getGitScopePatch",
       "getGitChangesPatch",
@@ -46,23 +85,23 @@ describe("workspace contract", () => {
 
   test("host client exposes the full contract surface", () => {
     const invoke = async () => "";
-    const client = new LocalClient({ invoke });
+    const client = new LocalWorkspaceClient({ invoke });
 
+    expect(typeof client.readManifest).toBe("function");
+    expect(typeof client.getGitCurrentBranch).toBe("function");
     expect(typeof client.ensureWorkspace).toBe("function");
     expect(typeof client.renameWorkspace).toBe("function");
     expect(typeof client.inspectArchive).toBe("function");
     expect(typeof client.archiveWorkspace).toBe("function");
     expect(typeof client.startServices).toBe("function");
-    expect(typeof client.healthCheck).toBe("function");
     expect(typeof client.stopServices).toBe("function");
-    expect(typeof client.getActivity).toBe("function");
-    expect(typeof client.getServiceLogs).toBe("function");
-    expect(typeof client.getServices).toBe("function");
     expect(typeof client.readFile).toBe("function");
     expect(typeof client.writeFile).toBe("function");
     expect(typeof client.subscribeFileEvents).toBe("function");
     expect(typeof client.listFiles).toBe("function");
     expect(typeof client.openFile).toBe("function");
+    expect(typeof client.openInApp).toBe("function");
+    expect(typeof client.listOpenInApps).toBe("function");
     expect(typeof client.getGitStatus).toBe("function");
     expect(typeof client.getGitScopePatch).toBe("function");
     expect(typeof client.getGitChangesPatch).toBe("function");
@@ -85,7 +124,7 @@ describe("workspace contract", () => {
 
   test("local runtime sets up file watching via watchPath", async () => {
     let watchedPath = "";
-    const client = new LocalClient({
+    const client = new LocalWorkspaceClient({
       invoke: async () => "",
       watchPath: async (path, _callback, _options) => {
         watchedPath = path;
@@ -105,19 +144,78 @@ describe("workspace contract", () => {
     expect(typeof cleanup).toBe("function");
   });
 
+  test("local host client reads lifecycle manifests through the injected file reader", async () => {
+    const client = new LocalWorkspaceClient({
+      invoke: async () => "",
+      fileReader: {
+        exists: async () => true,
+        readTextFile: async () =>
+          '{"workspace":{"setup":[]},"environment":{"web":{"kind":"service","runtime":"process","command":"bun run dev"}}}',
+      },
+    });
+
+    const result = await client.readManifest("/tmp/project_1");
+    expect(result.state).toBe("valid");
+  });
+
+  test("local host client routes root git branch lookup through the git capability", async () => {
+    const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
+    const client = new LocalWorkspaceClient({
+      invoke: async (cmd: string, args?: Record<string, unknown>) => {
+        calls.push(args ? { cmd, args } : { cmd });
+        return "feature/provider-boundary";
+      },
+    });
+
+    expect(await client.getGitCurrentBranch("/tmp/project_1")).toBe("feature/provider-boundary");
+    expect(calls).toEqual([
+      {
+        cmd: "get_git_current_branch",
+        args: { repoPath: "/tmp/project_1" },
+      },
+    ]);
+  });
+
+  test("local host client routes open-in actions through generic commands", async () => {
+    const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
+    const client = new LocalWorkspaceClient({
+      invoke: async (cmd: string, args?: Record<string, unknown>) => {
+        calls.push(args ? { cmd, args } : { cmd });
+        if (cmd === "list_open_in_apps") {
+          return [{ icon_data_url: null, id: "vscode", label: "VS Code" }];
+        }
+        return undefined;
+      },
+    });
+
+    await client.openInApp(workspace(), "vscode");
+    expect(await client.listOpenInApps()).toEqual([
+      { iconDataUrl: null, id: "vscode", label: "VS Code" },
+    ]);
+    expect(calls).toEqual([
+      {
+        cmd: "open_in_app",
+        args: { rootPath: REPO_PATH, appId: "vscode" },
+      },
+      { cmd: "list_open_in_apps" },
+    ]);
+  });
+
   test("resolves host clients by host", () => {
     const localClient = { name: "local" } as never;
+    const dockerClient = { name: "docker" } as never;
     const remoteClient = { name: "remote" } as never;
-    const registry = createWorkspaceHostClientRegistry({
+    const registry = createWorkspaceClientRegistry({
+      docker: dockerClient,
       local: localClient,
       remote: remoteClient,
     });
 
     expect(registry.resolve("local")).toBe(localClient);
-    expect(registry.resolve("docker")).toBe(localClient);
+    expect(registry.resolve("docker")).toBe(dockerClient);
     expect(registry.resolve("remote")).toBe(remoteClient);
     expect(() => registry.resolve("cloud")).toThrow(
-      'No WorkspaceHostClient provider is registered for workspace host "cloud".',
+      'No WorkspaceClient is registered for workspace host "cloud".',
     );
   });
 
@@ -125,100 +223,59 @@ describe("workspace contract", () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
       calls.push(args ? { cmd, args } : { cmd });
-      if (cmd === "get_workspace_prepared") return false;
-      if (cmd === "get_workspace_ready_services") return [];
-      if (cmd === "get_workspace_services") return [];
+      if (cmd === "assign_ports") {
+        return { assignedPorts: { web: 43123 } };
+      }
+      if (cmd === "get_preview_proxy_port") {
+        return 52300;
+      }
       return undefined;
     };
-    const client = new LocalClient({ invoke });
+    const client = new LocalWorkspaceClient({ invoke });
 
     await client.startServices({
-      workspace: {
-        id: "ws_1",
-        project_id: "project_1",
-        name: "Workspace 1",
-        checkout_type: "worktree",
-        source_ref: "lifecycle/workspace-1",
-        git_sha: null,
-        worktree_path: "/tmp/project_1/.worktrees/ws_1",
-        host: "local",
-        manifest_fingerprint: "manifest_1",
-        created_at: "2026-03-12T00:00:00.000Z",
-        updated_at: "2026-03-12T00:00:00.000Z",
-        last_active_at: "2026-03-12T00:00:00.000Z",
-        status: "active",
-        failure_reason: null,
-        failed_at: null,
-      },
-      services: [],
+      workspace: workspace(),
+      services: [service()],
       manifestJson:
         '{"workspace":{"prepare":[]},"environment":{"web":{"kind":"service","runtime":"process","command":"bun run dev"}}}',
       manifestFingerprint: "manifest_1",
     });
 
     const commandNames = calls.map((c) => c.cmd);
-    expect(commandNames).toContain("get_workspace_prepared");
-    expect(commandNames).toContain("get_workspace_ready_services");
-    expect(commandNames).toContain("prepare_environment_start");
-    expect(commandNames).toContain("start_environment_service");
+    expect(commandNames).toContain("assign_ports");
+    expect(commandNames).toContain("spawn_managed_process");
   });
 
-  test("startServices invokes start_environment_service for each service in dependency order", async () => {
+  test("startServices invokes spawn_managed_process for each service in dependency order", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
       calls.push(args ? { cmd, args } : { cmd });
-      if (cmd === "get_workspace_prepared") return false;
-      if (cmd === "get_workspace_ready_services") return [];
-      if (cmd === "get_workspace_services") return [];
+      if (cmd === "assign_ports") {
+        return { assignedPorts: { api: 43124, www: 43125 } };
+      }
+      if (cmd === "get_preview_proxy_port") {
+        return 52300;
+      }
       return undefined;
     };
-    const client = new LocalClient({ invoke });
+    const client = new LocalWorkspaceClient({ invoke });
 
     await client.startServices({
-      workspace: {
-        id: "ws_1",
-        project_id: "project_1",
-        name: "Workspace 1",
-        checkout_type: "worktree",
-        source_ref: "lifecycle/workspace-1",
-        git_sha: null,
-        worktree_path: "/tmp/project_1/.worktrees/ws_1",
-        host: "local",
-        manifest_fingerprint: "manifest_1",
-        created_at: "2026-03-12T00:00:00.000Z",
-        updated_at: "2026-03-12T00:00:00.000Z",
-        last_active_at: "2026-03-12T00:00:00.000Z",
-        status: "active",
-        failure_reason: null,
-        failed_at: null,
-      },
-      services: [],
+      workspace: workspace(),
+      services: [service({ id: "svc_api", name: "api" }), service({ id: "svc_www", name: "www" })],
       manifestJson:
         '{"workspace":{"prepare":[]},"environment":{"api":{"kind":"service","runtime":"process","command":"bun run api"},"www":{"kind":"service","runtime":"process","command":"bun run www","depends_on":["api"]}}}',
       manifestFingerprint: "manifest_1",
     });
 
     const startCalls = calls
-      .filter((c) => c.cmd === "start_environment_service")
-      .map((c) => c.args?.serviceName);
-    expect(startCalls).toEqual(["api", "www"]);
+      .filter((c) => c.cmd === "spawn_managed_process")
+      .map((c) => (c.args?.request as { id?: string } | undefined)?.id);
+    expect(startCalls).toEqual(["ws_1:api", "ws_1:www"]);
   });
 
-  test("host client forwards workspace reads, files, and health checks", async () => {
+  test("host client forwards file operations with root path", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
-    const services: ServiceRecord[] = [
-      {
-        id: "svc_1",
-        workspace_id: "ws_1",
-        name: "web",
-        status: "ready",
-        status_reason: null,
-        assigned_port: 1420,
-        preview_url: "http://127.0.0.1:1420",
-        created_at: "2026-03-12T00:00:00.000Z",
-        updated_at: "2026-03-12T00:00:00.000Z",
-      },
-    ];
     const fileResult = {
       absolute_path: "/tmp/project_1/.worktrees/ws_1/README.md",
       byte_len: 7,
@@ -232,190 +289,94 @@ describe("workspace contract", () => {
       calls.push(args ? { cmd, args } : { cmd });
 
       switch (cmd) {
-        case "get_workspace_activity":
-        case "get_workspace_service_logs":
-          return [];
-        case "get_workspace_services":
-          return services;
-        case "read_workspace_file":
-        case "write_workspace_file":
+        case "read_file":
+        case "write_file":
           return fileResult;
-        case "list_workspace_files":
+        case "list_files":
           return [{ extension: "md", file_path: "README.md" }];
         default:
           return undefined;
       }
     };
-    const client = new LocalClient({ invoke });
+    const client = new LocalWorkspaceClient({ invoke });
+    const target = workspace();
 
-    await client.healthCheck("ws_1");
-    await client.getActivity("ws_1");
-    await client.getServiceLogs("ws_1");
-    await client.getServices("ws_1");
-    await client.readFile("ws_1", "README.md");
-    await client.writeFile("ws_1", "README.md", "welcome");
-    await client.listFiles("ws_1");
-    await client.openFile("ws_1", "README.md");
-    await client.stopServices("ws_1");
+    await client.readFile(target, "README.md");
+    await client.writeFile(target, "README.md", "welcome");
+    await client.listFiles(target);
+    await client.openFile(target, "README.md");
+    await client.stopServices({ workspace: target, services: [service()] });
 
     expect(calls).toEqual([
+      { cmd: "read_file", args: { rootPath: REPO_PATH, filePath: "README.md" } },
       {
-        cmd: "get_workspace_services",
-        args: {
-          workspaceId: "ws_1",
-        },
+        cmd: "write_file",
+        args: { rootPath: REPO_PATH, filePath: "README.md", content: "welcome" },
       },
-      {
-        cmd: "get_workspace_activity",
-        args: {
-          workspaceId: "ws_1",
-        },
-      },
-      {
-        cmd: "get_workspace_service_logs",
-        args: {
-          workspaceId: "ws_1",
-        },
-      },
-      {
-        cmd: "get_workspace_services",
-        args: {
-          workspaceId: "ws_1",
-        },
-      },
-      {
-        cmd: "read_workspace_file",
-        args: {
-          workspaceId: "ws_1",
-          filePath: "README.md",
-        },
-      },
-      {
-        cmd: "write_workspace_file",
-        args: {
-          workspaceId: "ws_1",
-          filePath: "README.md",
-          content: "welcome",
-        },
-      },
-      {
-        cmd: "list_workspace_files",
-        args: {
-          workspaceId: "ws_1",
-        },
-      },
-      {
-        cmd: "open_workspace_file",
-        args: {
-          workspaceId: "ws_1",
-          filePath: "README.md",
-        },
-      },
-      {
-        cmd: "stop_workspace_services",
-        args: {
-          workspaceId: "ws_1",
-        },
-      },
+      { cmd: "list_files", args: { rootPath: REPO_PATH } },
+      { cmd: "open_file", args: { rootPath: REPO_PATH, filePath: "README.md" } },
+      { cmd: "kill_managed_process", args: { id: "ws_1:web" } },
+      { cmd: "stop_managed_container", args: { id: "ws_1:web" } },
     ]);
   });
 
-  test("host client forwards git operations by workspace id", async () => {
+  test("host client forwards git operations with repo path", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const invoke = async (cmd: string, args?: Record<string, unknown>) => {
-      if (args) {
-        calls.push({ cmd, args });
-      } else {
-        calls.push({ cmd });
-      }
+      calls.push(args ? { cmd, args } : { cmd });
 
       switch (cmd) {
-        case "get_workspace_git_status":
+        case "get_git_status":
           return {
-            branch: "feature/version-control",
-            headSha: "abcdef1234567890",
-            upstream: "origin/feature/version-control",
+            branch: "feature/vc",
+            headSha: "abc123",
+            upstream: "origin/feature/vc",
             ahead: 1,
             behind: 0,
             files: [],
           };
-        case "get_workspace_git_scope_patch":
+        case "get_git_scope_patch":
+        case "get_git_changes_patch":
+        case "get_git_ref_diff_patch":
+        case "get_git_pull_request_patch":
           return "";
-        case "get_workspace_git_diff":
-          return {
-            scope: String(args?.scope ?? "working"),
-            filePath: String(args?.filePath ?? "src/app.ts"),
-            patch: "",
-            isBinary: false,
-          };
-        case "get_workspace_git_changes_patch":
-          return "";
-        case "list_workspace_git_log":
+        case "get_git_diff":
+          return { scope: "working", filePath: "src/app.ts", patch: "", isBinary: false };
+        case "list_git_log":
           return [];
-        case "list_workspace_git_pull_requests":
+        case "list_git_pull_requests":
           return {
-            support: {
-              available: true,
-              message: null,
-              provider: "github",
-              reason: null,
-            },
+            support: { available: true, message: null, provider: "github", reason: null },
             pullRequests: [],
           };
-        case "get_workspace_git_pull_request":
+        case "get_git_pull_request":
           return {
-            support: {
-              available: true,
-              message: null,
-              provider: "github",
-              reason: null,
-            },
+            support: { available: true, message: null, provider: "github", reason: null },
             pullRequest: null,
           };
-        case "get_workspace_current_git_pull_request":
+        case "get_current_git_pull_request":
           return {
-            support: {
-              available: true,
-              message: null,
-              provider: "github",
-              reason: null,
-            },
-            branch: "feature/version-control",
+            support: { available: true, message: null, provider: "github", reason: null },
+            branch: "feature/vc",
             hasPullRequestChanges: true,
-            upstream: "origin/feature/version-control",
+            upstream: "origin/feature/vc",
             suggestedBaseRef: "main",
             pullRequest: null,
           };
-        case "get_workspace_git_base_ref":
+        case "get_git_base_ref":
           return "main";
-        case "get_workspace_git_ref_diff_patch":
-          return "";
-        case "get_workspace_git_pull_request_patch":
-          return "";
-        case "get_workspace_git_commit_patch":
-          return {
-            sha: String(args?.sha ?? ""),
-            patch: "",
-          };
-        case "commit_workspace_git":
-          return {
-            sha: "abcdef1234567890",
-            shortSha: "abcdef12",
-            message: String(args?.message ?? ""),
-          };
-        case "push_workspace_git":
-          return {
-            branch: "feature/version-control",
-            remote: "origin",
-            ahead: 0,
-            behind: 0,
-          };
-        case "create_workspace_git_pull_request":
+        case "get_git_commit_patch":
+          return { sha: String(args?.sha ?? ""), patch: "" };
+        case "commit_git":
+          return { sha: "abc123", shortSha: "abc123", message: String(args?.message ?? "") };
+        case "push_git":
+          return { branch: "feature/vc", remote: "origin", ahead: 0, behind: 0 };
+        case "create_git_pull_request":
           return {
             author: "kyle",
             baseRefName: "main",
-            createdAt: "2026-03-09T10:00:00.000Z",
-            headRefName: "feature/version-control",
+            createdAt: "",
+            headRefName: "feature/vc",
             isDraft: false,
             mergeStateStatus: "CLEAN",
             mergeable: "mergeable",
@@ -423,178 +384,78 @@ describe("workspace contract", () => {
             reviewDecision: "approved",
             checks: null,
             state: "open",
-            title: "feat: add version control",
-            updatedAt: "2026-03-09T11:00:00.000Z",
-            url: "https://github.com/example/repo/pull/42",
+            title: "feat",
+            updatedAt: "",
+            url: "",
           };
-        case "merge_workspace_git_pull_request":
+        case "merge_git_pull_request":
           return {
             author: "kyle",
             baseRefName: "main",
-            createdAt: "2026-03-09T10:00:00.000Z",
-            headRefName: "feature/version-control",
+            createdAt: "",
+            headRefName: "feature/vc",
             isDraft: false,
             mergeStateStatus: "CLEAN",
             mergeable: "mergeable",
-            number: Number(args?.pullRequestNumber ?? 42),
+            number: 42,
             reviewDecision: "approved",
             checks: null,
             state: "merged",
-            title: "feat: add version control",
-            updatedAt: "2026-03-09T11:30:00.000Z",
-            url: "https://github.com/example/repo/pull/42",
+            title: "feat",
+            updatedAt: "",
+            url: "",
           };
         default:
           return undefined;
       }
     };
-    const client = new LocalClient({ invoke });
+    const client = new LocalWorkspaceClient({ invoke });
+    const target = workspace();
 
-    await client.getGitStatus("ws_1");
-    await client.getGitScopePatch("ws_1", "working");
-    await client.getGitChangesPatch("ws_1");
-    await client.getGitDiff({
-      workspaceId: "ws_1",
-      filePath: "src/app.ts",
-      scope: "working",
-    });
-    await client.listGitLog("ws_1", 25);
-    await client.listGitPullRequests("ws_1");
-    await client.getGitPullRequest("ws_1", 42);
-    await client.getCurrentGitPullRequest("ws_1");
-    await client.getGitBaseRef("ws_1");
-    await client.getGitRefDiffPatch("ws_1", "main", "HEAD");
-    await client.getGitPullRequestPatch("ws_1", 42);
-    await client.getGitCommitPatch("ws_1", "abcdef1234567890");
-    await client.stageGitFiles("ws_1", ["src/app.ts"]);
-    await client.unstageGitFiles("ws_1", ["src/app.ts"]);
-    await client.commitGit("ws_1", "feat: add version control");
-    await client.pushGit("ws_1");
-    await client.createGitPullRequest("ws_1");
-    await client.mergeGitPullRequest("ws_1", 42);
+    await client.getGitStatus(target);
+    await client.getGitScopePatch(target, "working");
+    await client.getGitChangesPatch(target);
+    await client.getGitDiff({ workspace: target, filePath: "src/app.ts", scope: "working" });
+    await client.listGitLog(target, 25);
+    await client.listGitPullRequests(target);
+    await client.getGitPullRequest(target, 42);
+    await client.getCurrentGitPullRequest(target);
+    await client.getGitBaseRef(target);
+    await client.getGitRefDiffPatch(target, "main", "HEAD");
+    await client.getGitPullRequestPatch(target, 42);
+    await client.getGitCommitPatch(target, "abc123");
+    await client.stageGitFiles(target, ["src/app.ts"]);
+    await client.unstageGitFiles(target, ["src/app.ts"]);
+    await client.commitGit(target, "feat: add version control");
+    await client.pushGit(target);
+    await client.createGitPullRequest(target);
+    await client.mergeGitPullRequest(target, 42);
 
     expect(calls).toEqual([
+      { cmd: "get_git_status", args: { repoPath: REPO_PATH } },
+      { cmd: "get_git_scope_patch", args: { repoPath: REPO_PATH, scope: "working" } },
+      { cmd: "get_git_changes_patch", args: { repoPath: REPO_PATH } },
       {
-        cmd: "get_workspace_git_status",
-        args: {
-          workspaceId: "ws_1",
-        },
+        cmd: "get_git_diff",
+        args: { repoPath: REPO_PATH, filePath: "src/app.ts", scope: "working" },
       },
+      { cmd: "list_git_log", args: { repoPath: REPO_PATH, limit: 25 } },
+      { cmd: "list_git_pull_requests", args: { repoPath: REPO_PATH } },
+      { cmd: "get_git_pull_request", args: { repoPath: REPO_PATH, pullRequestNumber: 42 } },
+      { cmd: "get_current_git_pull_request", args: { repoPath: REPO_PATH } },
+      { cmd: "get_git_base_ref", args: { repoPath: REPO_PATH } },
       {
-        cmd: "get_workspace_git_scope_patch",
-        args: {
-          workspaceId: "ws_1",
-          scope: "working",
-        },
+        cmd: "get_git_ref_diff_patch",
+        args: { repoPath: REPO_PATH, baseRef: "main", headRef: "HEAD" },
       },
-      {
-        cmd: "get_workspace_git_changes_patch",
-        args: {
-          workspaceId: "ws_1",
-        },
-      },
-      {
-        cmd: "get_workspace_git_diff",
-        args: {
-          workspaceId: "ws_1",
-          filePath: "src/app.ts",
-          scope: "working",
-        },
-      },
-      {
-        cmd: "list_workspace_git_log",
-        args: {
-          workspaceId: "ws_1",
-          limit: 25,
-        },
-      },
-      {
-        cmd: "list_workspace_git_pull_requests",
-        args: {
-          workspaceId: "ws_1",
-        },
-      },
-      {
-        cmd: "get_workspace_git_pull_request",
-        args: {
-          workspaceId: "ws_1",
-          pullRequestNumber: 42,
-        },
-      },
-      {
-        cmd: "get_workspace_current_git_pull_request",
-        args: {
-          workspaceId: "ws_1",
-        },
-      },
-      {
-        cmd: "get_workspace_git_base_ref",
-        args: {
-          workspaceId: "ws_1",
-        },
-      },
-      {
-        cmd: "get_workspace_git_ref_diff_patch",
-        args: {
-          workspaceId: "ws_1",
-          baseRef: "main",
-          headRef: "HEAD",
-        },
-      },
-      {
-        cmd: "get_workspace_git_pull_request_patch",
-        args: {
-          workspaceId: "ws_1",
-          pullRequestNumber: 42,
-        },
-      },
-      {
-        cmd: "get_workspace_git_commit_patch",
-        args: {
-          workspaceId: "ws_1",
-          sha: "abcdef1234567890",
-        },
-      },
-      {
-        cmd: "stage_workspace_git_files",
-        args: {
-          workspaceId: "ws_1",
-          filePaths: ["src/app.ts"],
-        },
-      },
-      {
-        cmd: "unstage_workspace_git_files",
-        args: {
-          workspaceId: "ws_1",
-          filePaths: ["src/app.ts"],
-        },
-      },
-      {
-        cmd: "commit_workspace_git",
-        args: {
-          workspaceId: "ws_1",
-          message: "feat: add version control",
-        },
-      },
-      {
-        cmd: "push_workspace_git",
-        args: {
-          workspaceId: "ws_1",
-        },
-      },
-      {
-        cmd: "create_workspace_git_pull_request",
-        args: {
-          workspaceId: "ws_1",
-        },
-      },
-      {
-        cmd: "merge_workspace_git_pull_request",
-        args: {
-          workspaceId: "ws_1",
-          pullRequestNumber: 42,
-        },
-      },
+      { cmd: "get_git_pull_request_patch", args: { repoPath: REPO_PATH, pullRequestNumber: 42 } },
+      { cmd: "get_git_commit_patch", args: { repoPath: REPO_PATH, sha: "abc123" } },
+      { cmd: "stage_git_files", args: { repoPath: REPO_PATH, filePaths: ["src/app.ts"] } },
+      { cmd: "unstage_git_files", args: { repoPath: REPO_PATH, filePaths: ["src/app.ts"] } },
+      { cmd: "commit_git", args: { repoPath: REPO_PATH, message: "feat: add version control" } },
+      { cmd: "push_git", args: { repoPath: REPO_PATH } },
+      { cmd: "create_git_pull_request", args: { repoPath: REPO_PATH } },
+      { cmd: "merge_git_pull_request", args: { repoPath: REPO_PATH, pullRequestNumber: 42 } },
     ]);
   });
 });

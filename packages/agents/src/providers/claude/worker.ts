@@ -18,11 +18,11 @@ import {
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import type {
-  AgentWorkerApprovalRequestPayload,
-  AgentWorkerCommand,
-  AgentWorkerEvent,
-  AgentWorkerInputPart,
-} from "../../worker-protocol";
+  AgentRuntimeApprovalRequestPayload as AgentWorkerApprovalRequestPayload,
+  AgentRuntimeCommand as AgentWorkerCommand,
+  AgentRuntimeEvent as AgentWorkerEvent,
+  AgentRuntimeInputPart as AgentWorkerInputPart,
+} from "../../runtime-protocol";
 import { LIFECYCLE_SYSTEM_PROMPT } from "../../system-prompt";
 import { buildSessionEnv, type ClaudeLoginMethod } from "./env";
 

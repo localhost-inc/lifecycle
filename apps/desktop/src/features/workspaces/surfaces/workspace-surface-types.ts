@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { AgentOrchestrator } from "@lifecycle/agents";
+import type { AgentClient } from "@lifecycle/agents";
 import type {
   AgentSurfaceOptions,
   ChangesDiffSurfaceOptions,
@@ -126,7 +126,7 @@ export interface WorkspaceSurfaceLaunchActionsContext {
 }
 
 export interface WorkspaceSurfaceLaunchExecutionContext {
-  agentOrchestrator: AgentOrchestrator;
+  agentClient: AgentClient;
   openSurface: (input: OpenSurfaceInput) => void;
   setLaunchError: (message: string | null) => void;
   setPendingLaunchActionKey: (key: string | null) => void;

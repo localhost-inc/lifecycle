@@ -6,13 +6,14 @@ import type {
   ServiceRecord,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
-import { groupWorkspacesByProject, type Collection } from "@lifecycle/store";
-import { useLiveQuery } from "@tanstack/react-db";
 import {
+  getOrCreateAgentMessageCollection,
   getOrCreateAgentSessionCollection,
+  groupWorkspacesByProject,
   refreshAgentSessionCollection,
-} from "@/store/collections/agent-sessions";
-import { getOrCreateAgentMessageCollection } from "@/store/collections/agent-messages";
+  type Collection,
+} from "@lifecycle/store";
+import { useLiveQuery } from "@tanstack/react-db";
 import { useStoreContext } from "@/store/provider";
 
 /**
@@ -122,11 +123,13 @@ export function useAgentSessions(workspaceId: string): AgentSessionRecord[] {
 }
 
 export function useAgentSessionRefresh(workspaceId: string): () => void {
+  const { driver } = useStoreContext();
+
   return useMemo(() => {
     return () => {
-      refreshAgentSessionCollection(workspaceId);
+      refreshAgentSessionCollection(driver, workspaceId);
     };
-  }, [workspaceId]);
+  }, [driver, workspaceId]);
 }
 
 export function useAgentMessages(sessionId: string): {

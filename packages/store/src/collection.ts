@@ -4,7 +4,7 @@ import {
   type CollectionConfig,
   type PendingMutation,
 } from "@tanstack/db";
-import type { SqlDriver } from "./driver";
+import type { SqlDriver } from "@lifecycle/db";
 
 type ChangeMessage<T> =
   | { type: "insert"; value: T }

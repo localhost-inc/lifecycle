@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
-import type { ProviderAuthEvent } from "../auth";
+import type { AgentAuthEvent } from "../auth";
 
-function emit(event: ProviderAuthEvent): void {
+function emit(event: AgentAuthEvent): void {
   process.stdout.write(`${JSON.stringify(event)}\n`);
 }
 

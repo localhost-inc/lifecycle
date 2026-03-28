@@ -1,9 +1,14 @@
 export type {
+  ArchiveWorkspaceInput,
   EnsureWorkspaceInput,
   StartServicesInput,
+  StopServicesInput,
   GitDiffInput,
-  WorkspaceHostClient,
+  OpenInAppId,
+  RenameWorkspaceInput,
+  WorkspaceClient,
   WorkspaceArchiveDisposition,
+  WorkspaceOpenInAppInfo,
   SubscribeWorkspaceFileEventsInput,
   ServiceLogLine,
   ServiceLogSnapshot,
@@ -12,10 +17,7 @@ export type {
   WorkspaceFileEventSubscription,
   WorkspaceFileReadResult,
   WorkspaceFileTreeEntry,
-  WorkspaceHealthResult,
 } from "../workspace";
-export type {
-  WorkspaceHostClientRegistry,
-  WorkspaceHostClientRegistryProviders,
-} from "../client-registry";
-export { createWorkspaceHostClientRegistry } from "../client-registry";
+export type { ManifestStatus, ManifestFileReader } from "../manifest";
+export type { WorkspaceClientRegistry, WorkspaceClientRegistryClients } from "../client-registry";
+export { createWorkspaceClientRegistry } from "../client-registry";

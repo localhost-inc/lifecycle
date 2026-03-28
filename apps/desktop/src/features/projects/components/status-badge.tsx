@@ -1,5 +1,5 @@
 import { Badge } from "@lifecycle/ui";
-import type { ManifestStatus } from "@/features/projects/api/projects";
+import type { ManifestStatus } from "@lifecycle/workspace";
 
 const variants = {
   valid: "success",

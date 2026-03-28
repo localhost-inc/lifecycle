@@ -1,6 +1,8 @@
 import { execFile } from "node:child_process";
 import path from "node:path";
 import { promisify } from "node:util";
+import type { AuthSession } from "@lifecycle/auth";
+import { buildLoggedOutAuthSession } from "@lifecycle/auth";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig, type Plugin } from "vite";
@@ -26,26 +28,12 @@ interface GitHubViewerResponse {
   name?: string | null;
 }
 
-interface DevAuthSession {
-  identity: {
-    avatarUrl: string | null;
-    displayName: string;
-    handle: string | null;
-  } | null;
-  message: string | null;
-  provider: "github" | null;
-  source: "local_cli" | null;
-  state: "logged_in" | "logged_out";
-}
-
-function buildLoggedOutDevAuthSession(message: string | null = null): DevAuthSession {
-  return {
-    identity: null,
+function buildLoggedOutDevAuthSession(message: string | null = null): AuthSession {
+  return buildLoggedOutAuthSession({
     message,
     provider: "github",
     source: "local_cli",
-    state: "logged_out",
-  };
+  });
 }
 
 function trimMessage(value: string | null | undefined): string | null {
@@ -67,7 +55,7 @@ function readExecMessage(error: unknown): string | null {
   return null;
 }
 
-async function readLocalDevAuthSession(): Promise<DevAuthSession> {
+async function readLocalDevAuthSession(): Promise<AuthSession> {
   let authStatusRaw: string;
 
   try {

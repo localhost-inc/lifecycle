@@ -2,7 +2,9 @@ import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import type { LifecycleConfig, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import * as reactQuery from "@tanstack/react-query";
 import type { ServiceLogSnapshot } from "@lifecycle/workspace/client";
+import { workspaceKeys } from "@/features/workspaces/state/workspace-query-keys";
 
 const baseWorkspace: WorkspaceRecord = {
   id: "workspace_1",
@@ -56,8 +58,7 @@ interface RenderEnvironmentPanelOptions {
 }
 
 async function renderEnvironmentPanel(options: RenderEnvironmentPanelOptions = {}) {
-  const hooksModule = await import("../hooks");
-  const serviceLogsSpy = spyOn(hooksModule, "useWorkspaceServiceLogs").mockReturnValue({
+  const serviceLogsSpy = spyOn(reactQuery, "useQuery").mockReturnValue({
     data: options.serviceLogs,
   } as never);
   const { EnvironmentPanel } = await import("./environment-panel");
@@ -90,7 +91,11 @@ describe("EnvironmentPanel", () => {
 
     expect(markup).toContain("web");
     expect(markup).toContain("api");
-    expect(serviceLogsSpy).toHaveBeenCalledWith("workspace_1", "local");
+    expect(serviceLogsSpy.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        queryKey: workspaceKeys.serviceLogs("workspace_1"),
+      }),
+    );
   });
 
   test("renders service log-only rows when runtime logs exist before service records", async () => {

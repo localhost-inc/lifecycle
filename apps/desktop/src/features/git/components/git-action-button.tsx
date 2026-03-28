@@ -1,4 +1,5 @@
 import type { GitPullRequestSummary } from "@lifecycle/contracts";
+import { useWorkspaceClient } from "@lifecycle/workspace/client/react";
 import {
   Button,
   OptionList,
@@ -11,7 +12,6 @@ import {
 } from "@lifecycle/ui";
 import { ArrowUp, GitBranch, GitCommitHorizontal } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { stageGitFiles } from "@/features/git/api";
 import { useGitActions } from "@/features/git/hooks/use-git-actions";
 import {
   buildWorkspaceGitActionState,
@@ -19,7 +19,6 @@ import {
 } from "@/features/git/lib/workspace-git-action-state";
 import { useCurrentGitPullRequest, useGitStatus } from "@/features/git/hooks";
 import { useWorkspace } from "@/store";
-import { useOptionalWorkspaceHostClient } from "@lifecycle/workspace/client/react";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -68,17 +67,15 @@ interface GitActionPopoverProps {
   onOpenChange: (open: boolean) => void;
   onOpenPullRequest: (pullRequest: GitPullRequestSummary) => void;
   workspaceId: string;
-  worktreePath: string | null;
 }
 
 export function GitActionPopover({
   onOpenChange,
   onOpenPullRequest,
   workspaceId,
-  worktreePath,
 }: GitActionPopoverProps) {
   const workspace = useWorkspace(workspaceId);
-  const client = useOptionalWorkspaceHostClient(workspace?.host);
+  const client = useWorkspaceClient();
   const [commitMessage, setCommitMessage] = useState("");
   const [commitFlow, setCommitFlow] = useState<CommitFlow>("commit_and_push");
   const [includeUnstaged, setIncludeUnstaged] = useState(false);
@@ -93,8 +90,6 @@ export function GitActionPopover({
       onOpenPullRequest(pr);
     },
     workspaceId,
-    workspaceHost: workspace?.host ?? null,
-    worktreePath,
   });
 
   const actionState = useMemo(
@@ -124,7 +119,7 @@ export function GitActionPopover({
   }, [actionState.kind]);
 
   const handleStageAll = useCallback(async () => {
-    if (!client) {
+    if (!client || !workspace) {
       return;
     }
     const files = gitActions.gitStatusQuery.data?.files ?? [];
@@ -132,9 +127,8 @@ export function GitActionPopover({
     if (unstaged.length > 0) {
       setIsStaging(true);
       try {
-        await stageGitFiles(
-          client,
-          workspaceId,
+        await client.stageGitFiles(
+          workspace,
           unstaged.map((f) => f.path),
         );
         await gitActions.gitStatusQuery.refetch();
@@ -142,7 +136,7 @@ export function GitActionPopover({
         setIsStaging(false);
       }
     }
-  }, [gitActions.gitStatusQuery.data, gitActions.gitStatusQuery.refetch, client, workspaceId]);
+  }, [gitActions.gitStatusQuery.data, gitActions.gitStatusQuery.refetch, client, workspace]);
 
   const handleContinue = useCallback(async () => {
     switch (actionState.kind) {
@@ -353,13 +347,8 @@ export function GitActionButton({
   worktreePath,
 }: GitActionButtonProps) {
   const [open, setOpen] = useState(false);
-  const workspace = useWorkspace(workspaceId);
-  const workspaceHost = workspace?.host ?? null;
-  const gitStatusQuery = useGitStatus(worktreePath ? workspaceId : null, workspaceHost);
-  const branchPullRequestQuery = useCurrentGitPullRequest(
-    worktreePath ? workspaceId : null,
-    workspaceHost,
-  );
+  const gitStatusQuery = useGitStatus(worktreePath ? workspaceId : null);
+  const branchPullRequestQuery = useCurrentGitPullRequest(worktreePath ? workspaceId : null);
 
   const actionState = useMemo(
     () =>
@@ -394,7 +383,6 @@ export function GitActionButton({
         onOpenChange={setOpen}
         onOpenPullRequest={onOpenPullRequest}
         workspaceId={workspaceId}
-        worktreePath={worktreePath}
       />
     </Popover>
   );
