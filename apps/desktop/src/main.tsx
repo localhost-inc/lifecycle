@@ -1,17 +1,16 @@
 import { createRoot, type Root } from "react-dom/client";
 import { exists, readTextFile, watch } from "@tauri-apps/plugin-fs";
 import { Command } from "@tauri-apps/plugin-shell";
-import {
-  createAgentClient,
-  createAgentClientRegistry,
-  createAgentSessionHistoryObserver,
-  reattachActiveAgentSessions,
-} from "@lifecycle/agents";
+import { createAgentClient, createAgentClientRegistry } from "@lifecycle/agents";
 import type { AgentClientRegistry } from "@lifecycle/agents";
-import { recordAgentSessionEvent } from "@lifecycle/agents/react";
+import { createAgentSessionHistoryObserver } from "@lifecycle/agents/internal/session-history";
 import { createLocalAgentWorker } from "@lifecycle/agents/internal/local";
-import { createEnvironmentClientRegistry, LocalEnvironmentClient } from "@lifecycle/environment";
-import { createWorkspaceClientRegistry, LocalWorkspaceClient } from "@lifecycle/workspace";
+import { reattachActiveAgentSessions } from "@lifecycle/agents/internal/session-restore";
+import { recordAgentSessionEvent } from "@lifecycle/agents/internal/session-store";
+import { createEnvironmentClientRegistry } from "@lifecycle/environment";
+import { LocalEnvironmentClient } from "@lifecycle/environment/internal/local";
+import { createWorkspaceClientRegistry } from "@lifecycle/workspace";
+import { LocalWorkspaceClient } from "@lifecycle/workspace/internal/local";
 import type { WorkspaceClientRegistry } from "@lifecycle/workspace";
 import { App } from "./app";
 import { publishAgentLifecycleEvent } from "@/features/agents/agent-lifecycle-events";

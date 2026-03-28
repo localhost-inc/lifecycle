@@ -1,6 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { createInterface } from "node:readline";
 import * as ClaudeAgentSdk from "@anthropic-ai/claude-agent-sdk";
 import {
@@ -18,10 +16,10 @@ import {
   type SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import type {
-  AgentWorkerApprovalRequestPayload as AgentWorkerApprovalRequestPayload,
-  AgentWorkerCommand as AgentWorkerCommand,
-  AgentWorkerEvent as AgentWorkerEvent,
-  AgentWorkerInputPart as AgentWorkerInputPart,
+  AgentWorkerApprovalRequestPayload,
+  AgentWorkerCommand,
+  AgentWorkerEvent,
+  AgentWorkerInputPart,
 } from "../../worker/protocol";
 import { LIFECYCLE_SYSTEM_PROMPT } from "../../system-prompt";
 import { buildSessionEnv, type ClaudeLoginMethod } from "./env";
@@ -996,31 +994,6 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
     session.close();
   }
   return 0;
-}
-
-function ensureProjectMcpSettings(
-  workspacePath: string,
-  mcpServers: NonNullable<ClaudeWorkerInput["mcpServers"]>,
-): void {
-  const claudeDir = join(workspacePath, ".claude");
-  // Use settings.local.json — project MCP servers in settings.json require
-  // user trust approval which blocks automated setup.
-  const settingsPath = join(claudeDir, "settings.local.json");
-
-  let settings: Record<string, unknown> = {};
-  if (existsSync(settingsPath)) {
-    try {
-      settings = JSON.parse(readFileSync(settingsPath, "utf8")) as Record<string, unknown>;
-    } catch {
-      // Start fresh if settings are corrupt.
-    }
-  }
-
-  const existing = (settings.mcpServers ?? {}) as Record<string, unknown>;
-  settings.mcpServers = { ...existing, ...mcpServers };
-
-  mkdirSync(claudeDir, { recursive: true });
-  writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
 }
 
 export function createClaudeWorkerSession(

@@ -21,15 +21,17 @@ import { deriveAgentDisplayStatus, resolveAgentPromptDispatchDecision } from "@l
 import {
   useAgentModelCatalog,
   useAgentClient,
+  useAgentPromptQueueState,
+  useAgentSessionState,
+} from "@lifecycle/agents/react";
+import {
   beginAgentPromptDispatch,
   completeAgentPromptDispatch,
   dismissAgentPrompt,
   failAgentPromptDispatch,
   queueAgentPrompt,
   retryAgentPrompt,
-  useAgentPromptQueueState,
-  useAgentSessionState,
-} from "@lifecycle/agents/react";
+} from "@lifecycle/agents/session";
 import { ClaudeIcon, CodexIcon } from "@/features/workspaces/surfaces/surface-icons";
 import { useWorkspace } from "@/store/hooks";
 import {

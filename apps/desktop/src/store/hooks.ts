@@ -6,13 +6,12 @@ import type {
   ServiceRecord,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
+import { groupWorkspacesByProject, type Collection } from "@lifecycle/store";
+import { getOrCreateAgentMessageCollection } from "@lifecycle/store/internal/agent-messages";
 import {
-  getOrCreateAgentMessageCollection,
   getOrCreateAgentSessionCollection,
-  groupWorkspacesByProject,
   refreshAgentSessionCollection,
-  type Collection,
-} from "@lifecycle/store";
+} from "@lifecycle/store/internal/agent-sessions";
 import { useLiveQuery } from "@tanstack/react-db";
 import { useStoreContext } from "@/store/provider";
 

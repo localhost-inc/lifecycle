@@ -23,14 +23,8 @@ export {
 } from "./collections/services";
 
 export {
-  createAgentSessionCollection,
   selectAgentSessionsByWorkspace,
   selectAgentSessionById,
-  insertAgentSession,
-  upsertAgentSession,
-  getOrCreateAgentSessionCollection,
-  refreshAgentSessionCollection,
-  upsertAgentSessionInCollection,
   saveAgentSession,
 } from "./collections/agent-sessions";
 
@@ -42,10 +36,7 @@ export {
 
 export {
   selectAgentMessagesBySession,
-  upsertAgentMessage,
   upsertAgentMessageWithParts,
-  getOrCreateAgentMessageCollection,
-  upsertAgentMessageInCollection,
 } from "./collections/agent-messages";
 
 export { selectPlansByProject, selectPlanById } from "./collections/plans";
@@ -56,3 +47,5 @@ export {
   selectTaskDependencies,
   selectReadyTasks,
 } from "./collections/tasks";
+
+export { reconcileWorkspaceServices } from "./services/reconcile";

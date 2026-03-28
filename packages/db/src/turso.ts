@@ -22,10 +22,6 @@ export type TursoDb = TursoLocalDb | TursoSyncedDb;
 export type TursoDbConfig = DatabaseOpts;
 export type TursoSyncStats = DatabaseStats;
 
-function toSqlitePlaceholders(sql: string): string {
-  return sql.replace(/\$\d+\b/g, "?");
-}
-
 function normalizeStatementParams(
   sql: string,
   params: readonly unknown[] | undefined,

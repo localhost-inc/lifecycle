@@ -5,12 +5,12 @@ import { resolveCodexCliPath } from "./cli-path";
 import type { AgentApprovalDecision, AgentApprovalKind } from "../../turn";
 import { LIFECYCLE_SYSTEM_PROMPT } from "../../system-prompt";
 import type {
-  AgentWorkerApprovalRequestPayload as AgentWorkerApprovalRequestPayload,
-  AgentWorkerCommand as AgentWorkerCommand,
-  AgentWorkerEvent as AgentWorkerEvent,
-  AgentWorkerInputPart as AgentWorkerInputPart,
-  AgentWorkerItem as AgentWorkerItem,
-  AgentWorkerItemStatus as AgentWorkerItemStatus,
+  AgentWorkerApprovalRequestPayload,
+  AgentWorkerCommand,
+  AgentWorkerEvent,
+  AgentWorkerInputPart,
+  AgentWorkerItem,
+  AgentWorkerItemStatus,
 } from "../../worker/protocol";
 
 // ---------------------------------------------------------------------------

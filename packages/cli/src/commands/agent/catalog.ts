@@ -14,9 +14,7 @@ export default defineCommand({
     try {
       const catalog =
         input.provider === "claude"
-          ? await getClaudeModelCatalog({
-              ...(input.loginMethod ? { loginMethod: input.loginMethod } : {}),
-            })
+          ? await getClaudeModelCatalog(input.loginMethod ? { loginMethod: input.loginMethod } : {})
           : await getCodexModelCatalog();
 
       context.stdout(JSON.stringify(catalog, null, 2));

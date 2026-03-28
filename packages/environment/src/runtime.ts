@@ -71,7 +71,7 @@ export function injectAssignedPortsIntoManifest(
           {
             ...node,
             env: {
-              ...(node.env ?? {}),
+              ...node.env,
               PORT: String(assignedPort),
             },
           },

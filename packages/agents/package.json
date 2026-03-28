@@ -12,9 +12,25 @@
       "types": "./src/react.ts",
       "default": "./src/react.ts"
     },
+    "./session": {
+      "types": "./src/session/index.ts",
+      "default": "./src/session/index.ts"
+    },
     "./internal/local": {
       "types": "./src/clients/local/index.ts",
       "default": "./src/clients/local/index.ts"
+    },
+    "./internal/session-history": {
+      "types": "./src/session/history.ts",
+      "default": "./src/session/history.ts"
+    },
+    "./internal/session-restore": {
+      "types": "./src/session/restore.ts",
+      "default": "./src/session/restore.ts"
+    },
+    "./internal/session-store": {
+      "types": "./src/session/store.ts",
+      "default": "./src/session/store.ts"
     },
     "./internal/worker": {
       "types": "./src/worker/index.ts",

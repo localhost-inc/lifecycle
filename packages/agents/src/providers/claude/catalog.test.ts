@@ -6,6 +6,12 @@ let supportedModels: ModelInfo[] | null = [];
 let closeCalls = 0;
 
 mock.module("@anthropic-ai/claude-agent-sdk", () => ({
+  unstable_v2_prompt: async () => ({ result: "", subtype: "success" }),
+  unstable_v2_resumeSession: () => ({
+    close() {},
+    send: async () => {},
+    stream: async function* () {},
+  }),
   unstable_v2_createSession() {
     return {
       close() {

@@ -50,10 +50,6 @@ function nodeDependsOn(node: LifecycleConfig["environment"][string]): string[] {
   return node.depends_on ?? [];
 }
 
-function shouldRunOnRestart(runOn: "create" | "start" | undefined): boolean {
-  return runOn === "start" || runOn === undefined;
-}
-
 function shouldRun(runOn: "create" | "start" | undefined, prepared: boolean): boolean {
   if (runOn === "start") return true;
   return !prepared;

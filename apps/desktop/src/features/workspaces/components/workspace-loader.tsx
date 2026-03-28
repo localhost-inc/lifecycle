@@ -4,7 +4,6 @@ import type { EnvironmentClient } from "@lifecycle/environment";
 import { useEnvironmentClientRegistry } from "@lifecycle/environment/react";
 import {
   getManifestFingerprint,
-  type LifecycleConfig,
   type ProjectRecord,
   type WorkspaceRecord,
 } from "@lifecycle/contracts";
@@ -12,7 +11,7 @@ import type { WorkspaceClient } from "@lifecycle/workspace";
 import { useWorkspaceClientRegistry } from "@lifecycle/workspace/react";
 import { Alert, AlertDescription, AlertTitle, Loading } from "@lifecycle/ui";
 import { useEffect, useRef, useState } from "react";
-import { selectServicesByWorkspace } from "@lifecycle/store";
+import { reconcileWorkspaceServices } from "@lifecycle/store";
 import { useQuery } from "@tanstack/react-query";
 import { useSettings } from "@/features/settings/state/settings-context";
 import { markPerformance, measurePerformance } from "@/lib/performance";
@@ -22,68 +21,6 @@ import { useStoreContext, useWorkspace } from "@/store";
 import { WorkspaceNavBar } from "@/features/workspaces/navbar/workspace-nav-bar";
 import { WorkspaceScope } from "@/features/workspaces/workspace-provider";
 import { WorkspaceShell } from "./workspace-shell";
-
-function createId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-}
-
-async function reconcileWorkspaceServices(
-  collections: ReturnType<typeof useStoreContext>["collections"],
-  driver: ReturnType<typeof useStoreContext>["driver"],
-  workspaceId: string,
-  config: LifecycleConfig | null,
-  occurredAt: string,
-): Promise<void> {
-  const existing = await selectServicesByWorkspace(driver, workspaceId);
-  const existingByName = new Map(existing.map((service) => [service.name, service]));
-  const declaredServiceNames = config
-    ? Object.entries(config.environment)
-        .filter(([, node]) => node.kind === "service")
-        .map(([name]) => name)
-        .sort((left, right) => left.localeCompare(right))
-    : [];
-  const declaredServiceNameSet = new Set(declaredServiceNames);
-
-  for (const service of existing) {
-    if (declaredServiceNameSet.has(service.name)) {
-      continue;
-    }
-    const transaction = collections.services.delete(service.id);
-    await transaction.isPersisted.promise;
-  }
-
-  for (const serviceName of declaredServiceNames) {
-    const current = existingByName.get(serviceName);
-    if (current) {
-      const transaction = collections.services.update(current.id, (draft) => {
-        draft.status = "stopped";
-        draft.status_reason = null;
-        draft.assigned_port = null;
-        draft.preview_url = null;
-        draft.updated_at = occurredAt;
-      });
-      await transaction.isPersisted.promise;
-      continue;
-    }
-
-    const transaction = collections.services.insert({
-      id: createId(),
-      workspace_id: workspaceId,
-      name: serviceName,
-      status: "stopped",
-      status_reason: null,
-      assigned_port: null,
-      preview_url: null,
-      created_at: occurredAt,
-      updated_at: occurredAt,
-    });
-    await transaction.isPersisted.promise;
-  }
-}
 
 interface WorkspaceLoaderProps {
   onCloseTab?: () => void;
@@ -156,13 +93,13 @@ function LoadedWorkspaceRoute({
         Object.assign(draft, ensuredWorkspace);
       });
       await transaction.isPersisted.promise;
-      await reconcileWorkspaceServices(
-        collections,
+      await reconcileWorkspaceServices({
+        config: manifestStatus.state === "valid" ? manifestStatus.result.config : null,
         driver,
-        ensuredWorkspace.id,
-        manifestStatus.state === "valid" ? manifestStatus.result.config : null,
-        ensuredWorkspace.updated_at,
-      );
+        occurredAt: ensuredWorkspace.updated_at,
+        services: collections.services,
+        workspaceId: ensuredWorkspace.id,
+      });
     })()
       .catch((error) => {
         if (!cancelled) {

@@ -43,23 +43,20 @@ export function useCommandPaletteCommands(
         });
       },
     );
-    const actionCommands = workspaceId
-      ? [
-          ...(onOpenExplorer
-            ? [
-                {
-                  id: "action:open-explorer",
-                  category: "action",
-                  label: "Open Explorer...",
-                  keywords: ["file", "path", "picker", "search"],
-                  icon: File,
-                  shortcut: formatAppHotkeyLabel("open-explorer", mac),
-                  onExecute: onOpenExplorer,
-                } satisfies CommandPaletteCommand,
-              ]
-            : []),
-        ]
-      : [];
+    const actionCommands =
+      workspaceId && onOpenExplorer
+        ? [
+            {
+              id: "action:open-explorer",
+              category: "action",
+              label: "Open Explorer...",
+              keywords: ["file", "path", "picker", "search"],
+              icon: File,
+              shortcut: formatAppHotkeyLabel("open-explorer", mac),
+              onExecute: onOpenExplorer,
+            } satisfies CommandPaletteCommand,
+          ]
+        : [];
 
     return [
       {

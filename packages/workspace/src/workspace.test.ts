@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
+import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { createWorkspaceClientRegistry, type WorkspaceClient } from "./client";
 import { LocalWorkspaceClient } from "./clients/local";
 
@@ -22,21 +22,6 @@ describe("workspace contract", () => {
       status: "active",
       failure_reason: null,
       failed_at: null,
-      ...overrides,
-    };
-  }
-
-  function service(overrides: Partial<ServiceRecord> = {}): ServiceRecord {
-    return {
-      id: "svc_1",
-      workspace_id: "ws_1",
-      name: "web",
-      status: "stopped",
-      status_reason: null,
-      assigned_port: null,
-      preview_url: null,
-      created_at: "2026-03-12T00:00:00.000Z",
-      updated_at: "2026-03-12T00:00:00.000Z",
       ...overrides,
     };
   }

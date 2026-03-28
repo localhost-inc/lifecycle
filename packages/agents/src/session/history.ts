@@ -4,10 +4,10 @@ import {
   insertAgentEvent,
   selectAgentSessionById,
   selectNextAgentEventIndex,
-  upsertAgentMessageInCollection,
   upsertAgentMessageWithParts,
-  upsertAgentSessionInCollection,
 } from "@lifecycle/store";
+import { upsertAgentMessageInCollection } from "@lifecycle/store/internal/agent-messages";
+import { upsertAgentSessionInCollection } from "@lifecycle/store/internal/agent-sessions";
 import type { AgentEvent, AgentEventObserver } from "../events";
 import { AgentMessageProjection } from "./messages";
 

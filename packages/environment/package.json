@@ -11,6 +11,10 @@
     "./react": {
       "types": "./src/react.ts",
       "default": "./src/react.ts"
+    },
+    "./internal/local": {
+      "types": "./src/clients/local/index.ts",
+      "default": "./src/clients/local/index.ts"
     }
   },
   "scripts": {

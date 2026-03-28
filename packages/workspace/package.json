@@ -23,6 +23,10 @@
     "./policy": {
       "types": "./src/policy/index.ts",
       "default": "./src/policy/index.ts"
+    },
+    "./internal/local": {
+      "types": "./src/clients/local/index.ts",
+      "default": "./src/clients/local/index.ts"
     }
   },
   "scripts": {

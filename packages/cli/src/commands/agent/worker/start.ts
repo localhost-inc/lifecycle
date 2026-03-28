@@ -3,10 +3,10 @@ import { mkdir, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import type {
-  AgentWorkerCommand as AgentWorkerCommand,
-  AgentWorkerEvent as AgentWorkerEvent,
-  AgentWorkerRegistration as AgentWorkerRegistration,
-  AgentWorkerSnapshot as AgentWorkerSnapshot,
+  AgentWorkerCommand,
+  AgentWorkerEvent,
+  AgentWorkerRegistration,
+  AgentWorkerSnapshot,
 } from "@lifecycle/agents/internal/worker-protocol";
 import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";

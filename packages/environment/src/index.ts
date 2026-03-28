@@ -25,4 +25,3 @@ export {
 } from "./runtime";
 export type { ServiceLogLine, ServiceLogSnapshot } from "./logs";
 export { recordWorkspaceServiceLogLine, selectWorkspaceServiceLogs } from "./logs";
-export { LocalEnvironmentClient, type LocalEnvironmentClientDeps } from "./clients/local";

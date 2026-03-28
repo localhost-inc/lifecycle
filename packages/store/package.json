@@ -7,6 +7,14 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./internal/agent-messages": {
+      "types": "./src/collections/agent-messages.ts",
+      "default": "./src/collections/agent-messages.ts"
+    },
+    "./internal/agent-sessions": {
+      "types": "./src/collections/agent-sessions.ts",
+      "default": "./src/collections/agent-sessions.ts"
     }
   },
   "scripts": {
