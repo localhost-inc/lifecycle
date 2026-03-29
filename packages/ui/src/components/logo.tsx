@@ -1,7 +1,7 @@
 import * as React from "react";
 import { cn } from "../lib/cn";
 
-const LOGO_VIEW_BOX = "0 0 535 535";
+const LOGO_VIEW_BOX = "100 175 335 186";
 const DEFAULT_LOGO_SIZE = 128;
 const DEFAULT_DRAW_DURATION_MS = 1900;
 
@@ -91,10 +91,10 @@ function Logo({
     >
       <defs>
         <clipPath id={leftClipPathId}>
-          <rect height="535" width="267.5" x="0" y="0" />
+          <rect height="186" width="167.5" x="100" y="175" />
         </clipPath>
         <clipPath id={rightClipPathId}>
-          <rect height="535" width="267.5" x="267.5" y="0" />
+          <rect height="186" width="167.5" x="267.5" y="175" />
         </clipPath>
         <clipPath id={pixelClipPathId}>
           <path d={INFINITY_PIXEL_PATH} />

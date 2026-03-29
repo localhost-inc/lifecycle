@@ -5,7 +5,14 @@ import type {
   WorkspaceRecord,
 } from "@lifecycle/contracts";
 
+export interface StartEnvironmentCallbacks {
+  onServiceFailed?: (name: string) => void;
+  onServiceReady?: (service: StartedService) => void;
+  onServiceStarting?: (name: string) => void;
+}
+
 export interface StartEnvironmentInput {
+  callbacks?: StartEnvironmentCallbacks;
   environmentId: string;
   hostLabel: string;
   name: string;
@@ -17,14 +24,20 @@ export interface StartEnvironmentInput {
   sourceRef: string;
 }
 
+export interface StartedService {
+  assignedPort: number | null;
+  name: string;
+}
+
 export interface StartEnvironmentResult {
   preparedAt: string | null;
+  startedServices: StartedService[];
 }
 
 export interface EnvironmentClient {
   start(config: LifecycleConfig, input: StartEnvironmentInput): Promise<StartEnvironmentResult>;
 
-  stop(environmentId: string, names: string[]): Promise<void>;
+  stop(environmentId: string, names: string[], hostLabel?: string): Promise<void>;
 }
 
 export interface EnvironmentClientRegistry {

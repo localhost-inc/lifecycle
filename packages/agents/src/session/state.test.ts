@@ -40,6 +40,33 @@ describe("agent session store", () => {
     });
   });
 
+  test("clears stale pending turn ids when a turn completes", () => {
+    const state = applyEvents([
+      {
+        kind: "agent.turn.started",
+        sessionId: "session-1",
+        turnId: "turn-1",
+        workspaceId: "workspace-1",
+      },
+      {
+        kind: "agent.turn.started",
+        sessionId: "session-1",
+        turnId: "turn-2",
+        workspaceId: "workspace-1",
+      },
+      {
+        kind: "agent.turn.completed",
+        sessionId: "session-1",
+        turnId: "turn-2",
+        workspaceId: "workspace-1",
+      },
+    ]);
+
+    expect(selectAgentSessionState(state, "session-1").pendingTurnIds).toEqual([]);
+    expect(selectAgentSessionRunning(state, "session-1")).toBeFalse();
+    expect(selectAgentSessionResponseReady(state, "session-1")).toBeTrue();
+  });
+
   test("tracks turn activity phase through thinking, tool_use, and responding", () => {
     // Turn starts → thinking phase
     let state = applyEvents([

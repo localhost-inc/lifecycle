@@ -18,7 +18,7 @@ const splitButtonPrimaryVariants = cva(
         false: "",
       },
       size: {
-        default: "h-8 rounded-l-xl text-xs",
+        default: "h-7 rounded-l-lg text-xs",
         lg: "h-10 rounded-l-2xl text-sm",
       },
     },
@@ -48,7 +48,7 @@ const splitButtonSecondaryVariants = cva(
         glass: "bg-[var(--glass)] text-[var(--foreground)] hover:bg-[var(--glass-hover)]",
       },
       size: {
-        default: "h-8 w-8 rounded-r-xl",
+        default: "h-7 w-7 rounded-r-lg",
         lg: "h-10 w-10 rounded-r-2xl",
       },
     },

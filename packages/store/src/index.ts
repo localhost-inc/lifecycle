@@ -26,6 +26,8 @@ export {
   selectAgentSessionsByWorkspace,
   selectAgentSessionById,
   saveAgentSession,
+  createAgentSessionCollectionRegistry,
+  type AgentSessionCollectionRegistry,
 } from "./collections/agent-sessions";
 
 export {
@@ -37,6 +39,8 @@ export {
 export {
   selectAgentMessagesBySession,
   upsertAgentMessageWithParts,
+  createAgentMessageCollectionRegistry,
+  type AgentMessageCollectionRegistry,
 } from "./collections/agent-messages";
 
 export { selectPlansByProject, selectPlanById } from "./collections/plans";

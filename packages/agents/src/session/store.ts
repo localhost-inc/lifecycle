@@ -55,6 +55,17 @@ const agentPromptQueueListeners =
   hotData?.agentPromptQueueListeners ?? new Map<string, Set<() => void>>();
 const agentStoreListeners = hotData?.agentStoreListeners ?? new Set<() => void>();
 
+const agentStatusIndex = {
+  hasWorkspaceResponseReady: (workspaceId: string) =>
+    selectAgentWorkspaceStatus(agentSessionStoreState, workspaceId).responseReady,
+  hasWorkspaceRunningTurn: (workspaceId: string) =>
+    selectAgentWorkspaceStatus(agentSessionStoreState, workspaceId).running,
+  isAgentSessionResponseReady: (sessionId: string) =>
+    selectAgentSessionResponseReady(agentSessionStoreState, sessionId),
+  isAgentSessionRunning: (sessionId: string) =>
+    selectAgentSessionRunning(agentSessionStoreState, sessionId),
+};
+
 if (import.meta.hot) {
   import.meta.hot.accept();
   import.meta.hot.dispose((data) => {
@@ -288,17 +299,12 @@ export function getAgentPromptQueueStateSnapshot(sessionId: string): AgentPrompt
   return selectAgentPromptQueueState(agentPromptQueueStoreState, sessionId);
 }
 
+export function getAgentSessionStoreSnapshot() {
+  return agentSessionStoreState;
+}
+
 export function getAgentStatusIndex() {
-  return {
-    hasWorkspaceResponseReady: (workspaceId: string) =>
-      selectAgentWorkspaceStatus(agentSessionStoreState, workspaceId).responseReady,
-    hasWorkspaceRunningTurn: (workspaceId: string) =>
-      selectAgentWorkspaceStatus(agentSessionStoreState, workspaceId).running,
-    isAgentSessionResponseReady: (sessionId: string) =>
-      selectAgentSessionResponseReady(agentSessionStoreState, sessionId),
-    isAgentSessionRunning: (sessionId: string) =>
-      selectAgentSessionRunning(agentSessionStoreState, sessionId),
-  };
+  return agentStatusIndex;
 }
 
 export function getAgentAuthSnapshot(): AgentAuthState {

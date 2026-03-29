@@ -62,6 +62,8 @@ export function mockStoreContext() {
           subscribeChanges: () => ({ unsubscribe: () => {} }),
         },
       },
+      agentMessageRegistry: new Map(),
+      agentSessionRegistry: new Map(),
     },
     driver: {},
   } as never);

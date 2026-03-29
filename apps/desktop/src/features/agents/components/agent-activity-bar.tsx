@@ -1,11 +1,8 @@
+import { useEffect, useRef, useState } from "react";
 import { Shimmer } from "@lifecycle/ui";
 import type { AgentTurnActivity } from "@lifecycle/agents";
 
-function formatTurnActivity(
-  activity: AgentTurnActivity | null,
-  providerStatus: string | null,
-): string {
-  if (providerStatus) return providerStatus;
+function formatTurnActivity(activity: AgentTurnActivity | null): string {
   if (!activity) return "Working";
   switch (activity.phase) {
     case "thinking":
@@ -40,29 +37,62 @@ function formatTurnActivity(
   }
 }
 
+function useElapsedSeconds(running: boolean): number {
+  const startRef = useRef<number | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!running) {
+      startRef.current = null;
+      setElapsed(0);
+      return;
+    }
+
+    if (startRef.current === null) {
+      startRef.current = Date.now();
+    }
+    setElapsed(0);
+
+    const interval = setInterval(() => {
+      setElapsed(Math.round((Date.now() - (startRef.current ?? Date.now())) / 1000));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [running]);
+
+  return elapsed;
+}
+
 export interface AgentActivityBarProps {
   turnActivity: AgentTurnActivity | null;
-  providerStatus: string | null;
-  elapsedSeconds: number;
   queuedMessageCount?: number;
+  visible?: boolean;
 }
 
 export function AgentActivityBar({
   turnActivity,
-  providerStatus,
-  elapsedSeconds,
   queuedMessageCount = 0,
+  visible = true,
 }: AgentActivityBarProps) {
+  const elapsedSeconds = useElapsedSeconds(visible);
+
   return (
-    <div className="flex items-center gap-1.5 px-4 py-1.5 text-[12px] text-[var(--muted-foreground)]">
-      <span className="agent-cursor-blink">&#8226;</span>
-      <Shimmer as="span" duration={2} spread={2} className="text-[12px]">
-        {formatTurnActivity(turnActivity, providerStatus)}
-      </Shimmer>
-      <span className="text-[var(--muted-foreground)]/40">
-        {elapsedSeconds}s{queuedMessageCount > 0 ? ` · ${queuedMessageCount} queued` : ""}
-        {" · esc to interrupt"}
-      </span>
+    <div
+      className="grid transition-[grid-template-rows] duration-150 ease-out"
+      style={{ gridTemplateRows: visible ? "1fr" : "0fr" }}
+    >
+      <div className="overflow-hidden">
+        <div className="flex items-center gap-1.5 px-4 py-1.5 text-[12px] text-[var(--muted-foreground)]">
+          <span className="agent-cursor-blink">&#8226;</span>
+          <Shimmer as="span" duration={2} spread={2} className="text-[12px]">
+            {formatTurnActivity(turnActivity)}
+          </Shimmer>
+          <span className="text-[var(--muted-foreground)]/40">
+            {elapsedSeconds}s{queuedMessageCount > 0 ? ` · ${queuedMessageCount} queued` : ""}
+            {" · esc to interrupt"}
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

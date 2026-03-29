@@ -14,7 +14,7 @@ import { workspaceSupportsFilesystemInteraction } from "@/features/workspaces/li
 
 function renderWorkspaceShell(element: ReturnType<typeof createElement>) {
   const environmentClient: EnvironmentClient = {
-    start: async () => ({ preparedAt: null }),
+    start: async () => ({ preparedAt: null, startedServices: [] }),
     stop: async () => {},
   };
 

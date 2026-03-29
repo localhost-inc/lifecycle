@@ -16,7 +16,6 @@ export type {
   WorkspaceClientRegistry,
   WorkspaceClientRegistryClients,
   ManifestStatus,
-  ManifestFileReader,
 } from "./client";
 export { createWorkspaceClientRegistry } from "./client";
 export { workspaceHostLabel } from "./policy";

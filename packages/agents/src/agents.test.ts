@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { AgentSessionRecord, WorkspaceHost, WorkspaceRecord } from "@lifecycle/contracts";
 import type { SqlDriver, SqlStatement } from "@lifecycle/db";
+import { createAgentSessionCollectionRegistry } from "@lifecycle/store";
 import type { WorkspaceClient } from "@lifecycle/workspace/client";
 import type { AgentEvent, StartAgentSessionInput, AgentTurnRequest, AgentClient } from "./index";
 import { createAgentClient, createAgentClientRegistry } from "./index";
@@ -179,6 +180,7 @@ describe("agents package contracts", () => {
     const { driver } = createTestDriver();
     const observedEvents: AgentEvent[] = [];
     const client = createAgentClient({
+      agentSessionRegistry: createAgentSessionCollectionRegistry(),
       agentWorker: implementation,
       driver,
       workspaceClient: runtime,
@@ -220,6 +222,7 @@ describe("agents package contracts", () => {
     });
     const observedEvents: AgentEvent[] = [];
     const client = createAgentClient({
+      agentSessionRegistry: createAgentSessionCollectionRegistry(),
       agentWorker: implementation,
       driver,
       workspaceClient: runtime,
@@ -267,6 +270,7 @@ describe("agents package contracts", () => {
     });
     const runtime = {} as WorkspaceClient;
     const client = createAgentClient({
+      agentSessionRegistry: createAgentSessionCollectionRegistry(),
       agentWorker: implementation,
       driver,
       workspaceClient: runtime,
@@ -342,6 +346,7 @@ describe("agents package contracts", () => {
     });
     const observedEvents: AgentEvent[] = [];
     const client = createAgentClient({
+      agentSessionRegistry: createAgentSessionCollectionRegistry(),
       agentWorker: implementation,
       driver,
       workspaceClient: runtime,
@@ -388,6 +393,7 @@ describe("agents package contracts", () => {
     });
     const observedEvents: AgentEvent[] = [];
     const client = createAgentClient({
+      agentSessionRegistry: createAgentSessionCollectionRegistry(),
       agentWorker: implementation,
       driver,
       workspaceClient: runtime,
@@ -439,6 +445,7 @@ describe("agents package contracts", () => {
       },
     });
     const client = createAgentClient({
+      agentSessionRegistry: createAgentSessionCollectionRegistry(),
       agentWorker: implementation,
       driver,
       workspaceClient: runtime,
@@ -476,6 +483,7 @@ describe("agents package contracts", () => {
 
     const observedEvents: AgentEvent[] = [];
     const client = createAgentClient({
+      agentSessionRegistry: createAgentSessionCollectionRegistry(),
       agentWorker: implementation,
       driver,
       workspaceClient: runtime,

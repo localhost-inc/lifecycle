@@ -22,6 +22,8 @@ import {
   createWorkspaceCollection,
   selectServiceByWorkspaceAndName,
   selectServicesByWorkspace,
+  type AgentMessageCollectionRegistry,
+  type AgentSessionCollectionRegistry,
   type SqlCollection,
 } from "@lifecycle/store";
 import { workspaceHostLabel } from "@lifecycle/workspace";
@@ -42,6 +44,8 @@ interface StoreCollections {
   projects: SqlCollection<ProjectRecord>;
   workspaces: SqlCollection<WorkspaceRecord>;
   services: SqlCollection<ServiceRecord>;
+  agentMessageRegistry: AgentMessageCollectionRegistry;
+  agentSessionRegistry: AgentSessionCollectionRegistry;
 }
 
 interface StoreContextValue {
@@ -68,11 +72,17 @@ async function getPreviewProxyPort(): Promise<number> {
   return previewProxyPortPromise;
 }
 
-function createCollections(driver: SqlDriver): StoreCollections {
+function createCollections(
+  driver: SqlDriver,
+  agentMessageRegistry: AgentMessageCollectionRegistry,
+  agentSessionRegistry: AgentSessionCollectionRegistry,
+): StoreCollections {
   return {
     projects: createProjectCollection(driver),
     workspaces: createWorkspaceCollection(driver),
     services: createServiceCollection(driver),
+    agentMessageRegistry,
+    agentSessionRegistry,
   };
 }
 
@@ -260,13 +270,21 @@ async function applyEntityEvent(
 }
 
 export function StoreProvider({
+  agentMessageRegistry,
+  agentSessionRegistry,
   driver,
   children,
 }: PropsWithChildren<{
+  agentMessageRegistry: AgentMessageCollectionRegistry;
+  agentSessionRegistry: AgentSessionCollectionRegistry;
   driver: SqlDriver;
 }>) {
   const hotState = import.meta.hot?.data as StoreProviderHotState | undefined;
-  const [collections] = useState(() => hotState?.collections ?? createCollections(driver));
+  const [collections] = useState(
+    () =>
+      hotState?.collections ??
+      createCollections(driver, agentMessageRegistry, agentSessionRegistry),
+  );
 
   if (import.meta.hot) {
     import.meta.hot.data.collections = collections;

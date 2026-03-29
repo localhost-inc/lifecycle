@@ -1,5 +1,5 @@
 import { createRoot, type Root } from "react-dom/client";
-import { exists, readTextFile, watch } from "@tauri-apps/plugin-fs";
+import { watch } from "@tauri-apps/plugin-fs";
 import { Command } from "@tauri-apps/plugin-shell";
 import { createAgentClient, createAgentClientRegistry } from "@lifecycle/agents";
 import type { AgentClientRegistry } from "@lifecycle/agents";
@@ -9,19 +9,28 @@ import { reattachActiveAgentSessions } from "@lifecycle/agents/internal/session-
 import { recordAgentSessionEvent } from "@lifecycle/agents/internal/session-store";
 import { createEnvironmentClientRegistry } from "@lifecycle/environment";
 import { LocalEnvironmentClient } from "@lifecycle/environment/internal/local";
+import {
+  createAgentMessageCollectionRegistry,
+  createAgentSessionCollectionRegistry,
+  type AgentMessageCollectionRegistry,
+  type AgentSessionCollectionRegistry,
+} from "@lifecycle/store";
 import { createWorkspaceClientRegistry } from "@lifecycle/workspace";
 import { LocalWorkspaceClient } from "@lifecycle/workspace/internal/local";
 import type { WorkspaceClientRegistry } from "@lifecycle/workspace";
 import { App } from "./app";
 import { publishAgentLifecycleEvent } from "@/features/agents/agent-lifecycle-events";
-import { db } from "@/lib/db";
+import { db, waitForDbReady } from "@/lib/db";
 import { readAppSettings } from "@/lib/config";
+import { createNativeFileReader } from "@/lib/files/native-file-reader";
 import { invokeTauri } from "@/lib/tauri-error";
 import { markPerformance } from "@/lib/performance";
 import "@/main.css";
 
 interface DesktopBootstrapHotData {
   agentClientRegistry?: AgentClientRegistry;
+  agentMessageRegistry?: AgentMessageCollectionRegistry;
+  agentSessionRegistry?: AgentSessionCollectionRegistry;
   dockerAgentClient?: ReturnType<typeof createAgentClient>;
   localAgentWorker?: ReturnType<typeof createLocalAgentWorker>;
   localAgentClient?: ReturnType<typeof createAgentClient>;
@@ -38,7 +47,7 @@ const hotData = import.meta.hot?.data as DesktopBootstrapHotData | undefined;
 const localWorkspaceClient =
   hotData?.localWorkspaceClient ??
   new LocalWorkspaceClient({
-    fileReader: { exists, readTextFile },
+    fileReader: createNativeFileReader((command, args) => invokeTauri(command, args)),
     invoke: (command, args) => invokeTauri(command, args),
     watchPath: (path, callback, options) => watch(path, callback, options),
   });
@@ -49,6 +58,10 @@ const workspaceClientRegistry =
     docker: dockerWorkspaceClient,
     local: localWorkspaceClient,
   });
+const agentMessageRegistry =
+  hotData?.agentMessageRegistry ?? createAgentMessageCollectionRegistry();
+const agentSessionRegistry =
+  hotData?.agentSessionRegistry ?? createAgentSessionCollectionRegistry();
 const localEnvironmentClient = new LocalEnvironmentClient({
   invoke: (command, args) => invokeTauri(command, args),
 });
@@ -97,11 +110,14 @@ const localAgentWorker =
 const localAgentClient =
   hotData?.localAgentClient ??
   createAgentClient({
+    agentSessionRegistry,
     agentWorker: localAgentWorker,
     driver: db,
     observers: [
       recordAgentSessionEvent,
       createAgentSessionHistoryObserver({
+        agentMessageRegistry,
+        agentSessionRegistry,
         driver: db,
         stateKey: "local",
       }),
@@ -113,11 +129,14 @@ const localAgentClient =
 const dockerAgentClient =
   hotData?.dockerAgentClient ??
   createAgentClient({
+    agentSessionRegistry,
     agentWorker: localAgentWorker,
     driver: db,
     observers: [
       recordAgentSessionEvent,
       createAgentSessionHistoryObserver({
+        agentMessageRegistry,
+        agentSessionRegistry,
         driver: db,
         stateKey: "docker",
       }),
@@ -133,16 +152,24 @@ const agentClientRegistry =
     local: localAgentClient,
   });
 
-void reattachActiveAgentSessions({
-  agentClient: localAgentClient,
-  driver: db,
-  workspaceHost: "local",
-});
-void reattachActiveAgentSessions({
-  agentClient: dockerAgentClient,
-  driver: db,
-  workspaceHost: "docker",
-});
+void waitForDbReady()
+  .then(async () => {
+    await Promise.all([
+      reattachActiveAgentSessions({
+        agentClient: localAgentClient,
+        driver: db,
+        workspaceHost: "local",
+      }),
+      reattachActiveAgentSessions({
+        agentClient: dockerAgentClient,
+        driver: db,
+        workspaceHost: "docker",
+      }),
+    ]);
+  })
+  .catch((error) => {
+    console.error("[db] failed to initialize the local database:", error);
+  });
 
 const container = document.getElementById("root");
 if (!container) {
@@ -153,6 +180,8 @@ const root = hotData?.root ?? createRoot(container);
 
 if (import.meta.hot) {
   import.meta.hot.data.agentClientRegistry = agentClientRegistry;
+  import.meta.hot.data.agentMessageRegistry = agentMessageRegistry;
+  import.meta.hot.data.agentSessionRegistry = agentSessionRegistry;
   import.meta.hot.data.dockerAgentClient = dockerAgentClient;
   import.meta.hot.data.localWorkspaceClient = localWorkspaceClient;
   import.meta.hot.data.localAgentWorker = localAgentWorker;
@@ -164,6 +193,8 @@ if (import.meta.hot) {
 root.render(
   <App
     agentClientRegistry={agentClientRegistry}
+    agentMessageRegistry={agentMessageRegistry}
+    agentSessionRegistry={agentSessionRegistry}
     environmentClientRegistry={environmentClientRegistry}
     workspaceClientRegistry={workspaceClientRegistry}
   />,

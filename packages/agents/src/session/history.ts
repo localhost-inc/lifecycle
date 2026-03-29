@@ -6,8 +6,14 @@ import {
   selectNextAgentEventIndex,
   upsertAgentMessageWithParts,
 } from "@lifecycle/store";
-import { upsertAgentMessageInCollection } from "@lifecycle/store/internal/agent-messages";
-import { upsertAgentSessionInCollection } from "@lifecycle/store/internal/agent-sessions";
+import {
+  upsertAgentMessageInCollection,
+  type AgentMessageCollectionRegistry,
+} from "@lifecycle/store/internal/agent-messages";
+import {
+  upsertAgentSessionInCollection,
+  type AgentSessionCollectionRegistry,
+} from "@lifecycle/store/internal/agent-sessions";
 import type { AgentEvent, AgentEventObserver } from "../events";
 import { AgentMessageProjection } from "./messages";
 
@@ -197,6 +203,8 @@ function getOrCreateState(
 }
 
 export function createAgentSessionHistoryObserver(input: {
+  agentMessageRegistry: AgentMessageCollectionRegistry;
+  agentSessionRegistry: AgentSessionCollectionRegistry;
   driver: SqlDriver;
   now?: () => string;
   stateKey: string;
@@ -214,7 +222,7 @@ export function createAgentSessionHistoryObserver(input: {
           provider: event.session.provider,
           providerSessionId: event.session.provider_session_id,
         });
-        upsertAgentSessionInCollection(input.driver, event.workspaceId, event.session);
+        upsertAgentSessionInCollection(input.agentSessionRegistry, input.driver, event.workspaceId, event.session);
       }
 
       await persistObservedEvent(input.driver, state, event, now);
@@ -222,7 +230,7 @@ export function createAgentSessionHistoryObserver(input: {
       const message = await state.messageProjection.processEvent(event);
       if (message) {
         await upsertAgentMessageWithParts(input.driver, message);
-        upsertAgentMessageInCollection(input.driver, message.session_id, message);
+        upsertAgentMessageInCollection(input.agentMessageRegistry, input.driver, message.session_id, message);
       }
 
       if (event.kind === "agent.session.updated") {

@@ -9,6 +9,7 @@ import {
   selectAgentSessionById,
   selectAgentSessionsByWorkspace,
   selectWorkspaceById,
+  type AgentSessionCollectionRegistry,
 } from "@lifecycle/store";
 import type { WorkspaceClient } from "@lifecycle/workspace/client";
 import type { AgentModelCatalog } from "./catalog";
@@ -66,6 +67,7 @@ export interface AgentClient {
 }
 
 export interface CreateAgentClientDependencies {
+  agentSessionRegistry: AgentSessionCollectionRegistry;
   agentWorker: AgentWorker;
   driver: SqlDriver;
   workspaceClient: WorkspaceClient;
@@ -113,6 +115,7 @@ class AgentClientImpl implements AgentClient {
   private subscriberConnected = false;
   private readonly now: () => string;
   private readonly randomId: () => string;
+  private readonly agentSessionRegistry: AgentSessionCollectionRegistry;
   private readonly agentWorker: AgentWorker;
   private readonly driver: SqlDriver;
   private readonly workspaceClient: WorkspaceClient;
@@ -120,6 +123,7 @@ class AgentClientImpl implements AgentClient {
   constructor(dependencies: Omit<CreateAgentClientDependencies, "observers">) {
     this.now = dependencies.now ?? defaultNow;
     this.randomId = dependencies.randomId ?? fallbackRandomId;
+    this.agentSessionRegistry = dependencies.agentSessionRegistry;
     this.agentWorker = dependencies.agentWorker;
     this.driver = dependencies.driver;
     this.workspaceClient = dependencies.workspaceClient;
@@ -879,7 +883,7 @@ class AgentClientImpl implements AgentClient {
   }
 
   private async persistSession(session: AgentSessionRecord): Promise<AgentSessionRecord> {
-    await saveAgentSession(this.driver, session);
+    await saveAgentSession(this.agentSessionRegistry, this.driver, session);
     const persisted = await this.getPersistedSession(session.id);
     return persisted ?? session;
   }

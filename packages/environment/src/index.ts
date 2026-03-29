@@ -2,6 +2,8 @@ export type {
   EnvironmentClient,
   EnvironmentClientRegistry,
   EnvironmentClientRegistryClients,
+  StartedService,
+  StartEnvironmentCallbacks,
   StartEnvironmentInput,
   StartEnvironmentResult,
 } from "./client";

@@ -1,1 +1,1 @@
-export { db } from "./server";
+export { db, waitForDbReady } from "./server";

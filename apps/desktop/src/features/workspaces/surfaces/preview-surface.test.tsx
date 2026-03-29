@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { mockStoreContext } from "@/test/store-mock";
 
 describe("PreviewSurface", () => {
   afterEach(() => {
@@ -8,6 +9,7 @@ describe("PreviewSurface", () => {
   });
 
   test("renders an iframe-backed preview surface", async () => {
+    mockStoreContext();
     const { PreviewSurface } = await import("./preview-surface");
 
     const markup = renderToStaticMarkup(
@@ -15,6 +17,7 @@ describe("PreviewSurface", () => {
         tabKey: "preview:service:web",
         title: "web",
         url: "http://web.sydney.lifecycle.localhost",
+        workspaceId: "workspace_1",
       }),
     );
 

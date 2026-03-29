@@ -86,6 +86,7 @@ export type WorkspacePaneActiveSurfaceModel =
   | {
       kind: "preview";
       tab: PreviewTab;
+      workspaceId: string;
     }
   | {
       kind: "agent";

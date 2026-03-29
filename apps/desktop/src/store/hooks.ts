@@ -107,11 +107,11 @@ export function useWorkspaceServices(workspaceId: string): ServiceRecord[] {
 }
 
 export function useAgentSessions(workspaceId: string): AgentSessionRecord[] {
-  const { driver } = useStoreContext();
+  const { driver, collections } = useStoreContext();
 
   const sqlCollection = useMemo(() => {
-    return getOrCreateAgentSessionCollection(driver, workspaceId);
-  }, [driver, workspaceId]);
+    return getOrCreateAgentSessionCollection(collections.agentSessionRegistry, driver, workspaceId);
+  }, [collections.agentSessionRegistry, driver, workspaceId]);
 
   const { data } = useLiveQuery(
     (q) => q.from({ s: sqlCollection }).orderBy(({ s }) => s.created_at, "desc"),
@@ -122,37 +122,57 @@ export function useAgentSessions(workspaceId: string): AgentSessionRecord[] {
 }
 
 export function useAgentSessionRefresh(workspaceId: string): () => void {
-  const { driver } = useStoreContext();
+  const { collections } = useStoreContext();
 
   return useMemo(() => {
     return () => {
-      refreshAgentSessionCollection(driver, workspaceId);
+      refreshAgentSessionCollection(collections.agentSessionRegistry, workspaceId);
     };
-  }, [driver, workspaceId]);
+  }, [collections.agentSessionRegistry, workspaceId]);
 }
 
 export function useAgentMessages(sessionId: string): {
   data: AgentMessageWithParts[];
   error: Error | null;
 } {
-  const { driver } = useStoreContext();
+  const { driver, collections } = useStoreContext();
 
   const sqlCollection = useMemo(() => {
-    return getOrCreateAgentMessageCollection(driver, sessionId);
-  }, [driver, sessionId]);
+    return getOrCreateAgentMessageCollection(collections.agentMessageRegistry, driver, sessionId);
+  }, [collections.agentMessageRegistry, driver, sessionId]);
   const collectionError = useSyncExternalStore(
     sqlCollection.utils.subscribeState,
     sqlCollection.utils.getError,
     sqlCollection.utils.getError,
   );
 
-  const { data } = useLiveQuery(
+  const { data, status } = useLiveQuery(
     (q) => q.from({ msg: sqlCollection }).orderBy(({ msg }) => msg.created_at),
     [sqlCollection],
   );
 
+  // Keep a per-session cache so we never flash empty during collection
+  // recreation (HMR, reattach, navigation). Only update the cache when
+  // the collection is ready and has data, or when it's ready with genuinely
+  // zero messages (new session).
+  const cacheRef = useRef<{ sessionId: string; messages: AgentMessageWithParts[] }>({
+    sessionId,
+    messages: [],
+  });
+
+  const resolved = data ?? [];
+  const isReady = status === "ready";
+
+  if (isReady) {
+    cacheRef.current = { sessionId, messages: resolved };
+  }
+
+  // If session changed, don't serve stale data from a different session.
+  const cached =
+    cacheRef.current.sessionId === sessionId ? cacheRef.current.messages : [];
+
   return {
-    data: data ?? [],
+    data: isReady ? resolved : cached,
     error: collectionError,
   };
 }

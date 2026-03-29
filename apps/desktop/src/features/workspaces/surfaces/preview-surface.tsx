@@ -2,23 +2,39 @@ import { isTauri } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Button } from "@lifecycle/ui";
 import { ExternalLink, Globe, RefreshCw } from "lucide-react";
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspacePaneRenderCount } from "@/features/workspaces/canvas/workspace-pane-performance";
+import { useWorkspaceServices } from "@/store";
 
 interface PreviewSurfaceProps {
   tabKey: string;
   title: string;
   url: string;
+  workspaceId: string;
 }
 
 export const PreviewSurface = memo(function PreviewSurface({
   tabKey,
   title,
   url,
+  workspaceId,
 }: PreviewSurfaceProps) {
   useWorkspacePaneRenderCount("PreviewSurface", tabKey);
   const [reloadNonce, setReloadNonce] = useState(0);
   const iframeKey = useMemo(() => `${tabKey}:${reloadNonce}`, [reloadNonce, tabKey]);
+  const services = useWorkspaceServices(workspaceId);
+  const readyCount = services.filter((s) => s.status === "ready").length;
+  const prevReadyCountRef = useRef(readyCount);
+
+  // Auto-reload the iframe when a service transitions to ready (e.g. after
+  // Start completes and the proxy route is registered).
+  useEffect(() => {
+    const prev = prevReadyCountRef.current;
+    prevReadyCountRef.current = readyCount;
+    if (readyCount > prev && prev >= 0) {
+      setReloadNonce((n) => n + 1);
+    }
+  }, [readyCount]);
 
   const openExternal = useCallback(() => {
     if (isTauri()) {

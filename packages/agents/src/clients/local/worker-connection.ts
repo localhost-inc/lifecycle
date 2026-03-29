@@ -57,9 +57,9 @@ async function resolveRegistrationPath(
   return `${dir}/${sessionId}.json`;
 }
 
-async function resolveLogPath(invoke: LocalAgentInvoke, sessionId: string): Promise<string> {
+async function resolveLogDir(invoke: LocalAgentInvoke): Promise<string> {
   const dir = await resolveAgentWorkerDir(invoke);
-  return `${dir}/logs/${sessionId}.log`;
+  return `${dir}/logs`;
 }
 
 function runtimeLog(sessionId: string, message: string, details?: Record<string, unknown>): void {
@@ -101,19 +101,20 @@ async function startAgentWorker(
   input: StartAgentWorkerInput,
 ): Promise<void> {
   const registrationPath = await resolveRegistrationPath(invoke, input.sessionId);
-  const logPath = await resolveLogPath(invoke, input.sessionId);
+  const logDir = await resolveLogDir(invoke);
 
   runtimeLog(input.sessionId, "starting agent runtime", {
     cwd: input.cwd ?? null,
     argCount: input.args.length,
   });
 
-  await invoke("spawn_cli_process", {
+  await invoke("spawn_managed_process", {
     request: {
+      id: `agent-worker-${input.sessionId}`,
       args: ["agent", "worker", "start", ...input.args, "--registration-path", registrationPath],
       cwd: input.cwd ?? null,
       env: input.env ?? {},
-      logPath,
+      logDir,
     },
   });
 }

@@ -1,5 +1,5 @@
 import { ChevronRight } from "lucide-react";
-import { useState } from "react";
+import { memo, useState } from "react";
 import type { AgentApprovalDecision, AgentMessagePart } from "@lifecycle/agents";
 import type {
   ParsedMessage,
@@ -483,7 +483,7 @@ function AssistantMessage({
   );
 }
 
-export function TranscriptMessage({
+export const TranscriptMessage = memo(function TranscriptMessage({
   message,
   isStreaming,
   onResolveApproval,
@@ -512,4 +512,4 @@ export function TranscriptMessage({
       resolvingApprovalIds={resolvingApprovalIds}
     />
   );
-}
+});

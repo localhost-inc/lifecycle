@@ -33,6 +33,9 @@ describe("agent-surface transcript layout", () => {
 
     expect(surfaceSource).toContain("const showCenteredComposer =");
     expect(surfaceSource).toContain(
+      '(session.status === "idle" || session.status === "starting")',
+    );
+    expect(surfaceSource).toContain(
       'className="flex min-h-0 flex-1 items-center justify-center px-6 py-10"',
     );
     expect(surfaceSource).toContain("<AgentComposer\n                ref={promptComposerRef}");

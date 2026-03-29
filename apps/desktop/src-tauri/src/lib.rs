@@ -246,6 +246,7 @@ pub fn run() {
             capabilities::git::commands::create_git_pull_request,
             capabilities::git::commands::merge_git_pull_request,
             capabilities::git::commands::git_branch_has_upstream,
+            capabilities::files::commands::file_exists,
             capabilities::files::commands::read_file,
             capabilities::files::commands::write_file,
             capabilities::files::commands::list_files,

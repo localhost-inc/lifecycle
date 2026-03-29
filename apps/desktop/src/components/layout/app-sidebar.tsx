@@ -4,7 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AuthSession } from "@lifecycle/auth";
 import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { useWorkspaceClientRegistry } from "@lifecycle/workspace/react";
-import { IconButton, Spinner, Wordmark } from "@lifecycle/ui";
+import { IconButton, Logo, Spinner } from "@lifecycle/ui";
 import { Archive, FolderGit2, GitBranch, Megaphone, Plus, Settings } from "lucide-react";
 import { NavigationControls } from "@/components/layout/navigation-controls";
 import { type MouseEvent, useCallback, useMemo } from "react";
@@ -18,7 +18,7 @@ import {
 import { UserAvatar } from "@/features/user/components/user-avatar";
 import { ResponseReadyDot } from "@/components/response-ready-dot";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { bugs, version } from "../../../package.json";
+import { bugs } from "../../../package.json";
 import type { WorkspaceCreateMode } from "@/features/workspaces/types";
 import {
   getWorkspaceDisplayName,
@@ -297,15 +297,11 @@ export function AppSidebar({
 
         {/* Bottom actions + wordmark */}
         <div className="flex shrink-0 items-center gap-1 px-4 pb-3 pt-1">
-          <div className="flex flex-col">
-            <Wordmark
-              className="h-3 cursor-pointer text-[var(--sidebar-muted-foreground)]"
-              onClick={() => openUrl("https://lifecycle.dev")}
-            />
-            <span className="font-mono text-[10px] text-[var(--sidebar-muted-foreground)]">
-              v{version}
-            </span>
-          </div>
+          <Logo
+            className="cursor-pointer text-[var(--sidebar-muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+            onClick={() => openUrl("https://lifecycle.dev")}
+            size={20}
+          />
           <div className="ml-auto flex items-center gap-0.5">
             <IconButton
               aria-label="Feedback"

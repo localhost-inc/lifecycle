@@ -104,6 +104,40 @@ pub fn read_file(
     build_file_read_result(&resolved_path, normalized_path)
 }
 
+pub fn file_exists(
+    root_path: &str,
+    file_path: &str,
+) -> Result<bool, LifecycleError> {
+    let canonical_root = std::fs::canonicalize(root_path).map_err(|error| {
+        LifecycleError::InvalidInput {
+            field: "file exists".to_string(),
+            reason: format!("failed to resolve root path: {error}"),
+        }
+    })?;
+    let relative = normalize_relative_path(file_path, "file exists")?;
+    let candidate = canonical_root.join(&relative);
+
+    if !candidate.exists() {
+        return Ok(false);
+    }
+
+    let canonical_candidate = std::fs::canonicalize(&candidate).map_err(|error| {
+        LifecycleError::InvalidInput {
+            field: "file exists".to_string(),
+            reason: format!("failed to resolve file: {error}"),
+        }
+    })?;
+
+    if !canonical_candidate.starts_with(&canonical_root) {
+        return Err(LifecycleError::InvalidInput {
+            field: "file exists".to_string(),
+            reason: format!("path resolves outside root: {file_path}"),
+        });
+    }
+
+    Ok(true)
+}
+
 pub fn write_file(
     root_path: &str,
     file_path: &str,
@@ -259,6 +293,28 @@ mod tests {
 
         assert_eq!(result.content.as_deref(), Some("# Guide\n\nupdated\n"));
         assert_eq!(fs::read_to_string(&file_path).expect("disk"), "# Guide\n\nupdated\n");
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn file_exists_reports_presence_inside_root() {
+        let root = temp_fixture_root();
+        let file_path = root.join("docs").join("guide.md");
+
+        fs::create_dir_all(file_path.parent().expect("parent")).expect("create dir");
+        fs::write(&file_path, "# Guide\n").expect("write file");
+
+        assert!(file_exists(
+            root.to_str().expect("utf8"),
+            "docs/guide.md",
+        )
+        .expect("existing file"));
+        assert!(!file_exists(
+            root.to_str().expect("utf8"),
+            "docs/missing.md",
+        )
+        .expect("missing file"));
 
         let _ = fs::remove_dir_all(root);
     }

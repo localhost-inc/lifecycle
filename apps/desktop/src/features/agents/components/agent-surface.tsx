@@ -1,5 +1,5 @@
 import { EmptyState } from "@lifecycle/ui";
-import { ArrowDown, Bot } from "lucide-react";
+import { Bot } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStickToBottom } from "use-stick-to-bottom";
 import type { AgentApprovalDecision, AgentImageMediaType, AgentInputPart } from "@lifecycle/agents";
@@ -76,6 +76,39 @@ interface AgentSurfaceProps {
   paneFocused?: boolean;
   workspaceId: string;
 }
+
+const TranscriptMessageList = memo(function TranscriptMessageList({
+  messages,
+  isRunning,
+  onResolveApproval,
+  onOpenFile,
+  resolvingApprovalIds,
+}: {
+  messages: ParsedMessage[];
+  isRunning: boolean;
+  onResolveApproval: (
+    approvalId: string,
+    decision: AgentApprovalDecision,
+    response?: Record<string, unknown> | null,
+  ) => Promise<void>;
+  onOpenFile: (filePath: string) => void;
+  resolvingApprovalIds: ReadonlySet<string>;
+}) {
+  return (
+    <>
+      {messages.map((message, i) => (
+        <TranscriptMessage
+          key={message.id}
+          message={message}
+          isStreaming={isRunning && i === messages.length - 1 && message.role === "assistant"}
+          onResolveApproval={onResolveApproval}
+          onOpenFile={onOpenFile}
+          resolvingApprovalIds={resolvingApprovalIds}
+        />
+      ))}
+    </>
+  );
+});
 
 function buildParsedMessages(records: AgentMessageWithParts[] | undefined): ParsedMessage[] {
   const raw = (records ?? []).map((record) => ({
@@ -157,9 +190,9 @@ export const AgentSurface = memo(function AgentSurface({
   >([]);
   // Tabs stay mounted across switches so the DOM preserves scroll position.
   // useStickToBottom handles auto-scroll during streaming only.
-  const { scrollRef, contentRef, scrollToBottom, isAtBottom } = useStickToBottom({
+  const { scrollRef, contentRef, scrollToBottom } = useStickToBottom({
     initial: "instant",
-    resize: "smooth",
+    resize: "instant",
   });
   const promptComposerRef = useRef<AgentPromptInputHandle>(null);
 
@@ -202,29 +235,6 @@ export const AgentSurface = memo(function AgentSurface({
       }
     },
   });
-
-  // Track elapsed time while the agent is working
-  const thinkingStartRef = useRef<number | null>(null);
-  const [thinkingElapsed, setThinkingElapsed] = useState(0);
-
-  useEffect(() => {
-    if (isRunning && paneFocused) {
-      if (thinkingStartRef.current === null) {
-        thinkingStartRef.current = Date.now();
-      }
-      setThinkingElapsed(0);
-      const interval = setInterval(() => {
-        setThinkingElapsed(
-          Math.round((Date.now() - (thinkingStartRef.current ?? Date.now())) / 1000),
-        );
-      }, 1000);
-      return () => clearInterval(interval);
-    }
-    if (!isRunning) {
-      thinkingStartRef.current = null;
-      setThinkingElapsed(0);
-    }
-  }, [isRunning, paneFocused]);
 
   // Escape key to interrupt current turn (only in focused pane)
   useEffect(() => {
@@ -307,19 +317,45 @@ export const AgentSurface = memo(function AgentSurface({
   // Live query returns messages ordered by created_at via IVM.
   // Merge consecutive assistant messages that share a turn_id so tools + text
   // render as one visual block (the SDK often splits them into separate rows).
-  const messages = useMemo(() => buildParsedMessages(dbMessages.data), [dbMessages.data]);
+  //
+  // Queued prompts are appended as optimistic user messages so the user's text
+  // appears instantly — before the round-trip through worker → DB → collection.
+  const messages = useMemo(() => {
+    const persisted = buildParsedMessages(dbMessages.data);
 
-  function handleOpenFile(filePath: string): void {
-    // Agent tools report absolute paths — strip the worktree root so the
-    // backend receives a repo-relative path.
-    const root = workspace?.worktree_path;
-    if (!root || !filePath.startsWith(root)) {
-      // File is outside the workspace worktree — cannot open in the file editor.
-      return;
+    const optimistic: ParsedMessage[] = [];
+    for (const queued of promptQueue.prompts) {
+      const text = queued.input
+        .filter((p): p is Extract<typeof p, { type: "text" }> => p.type === "text")
+        .map((p) => p.text)
+        .join("\n");
+      if (text.length === 0) continue;
+      optimistic.push({
+        id: `optimistic:${queued.id}`,
+        role: "user",
+        turnId: null,
+        text,
+        parts: [{ id: `optimistic:${queued.id}:text`, part: { type: "text", text } }],
+      });
     }
-    const repoRelative = filePath.slice(root.length).replace(/^\//, "");
-    openTab(workspaceId, createFileEditorOpenInput(repoRelative));
-  }
+
+    return optimistic.length > 0 ? [...persisted, ...optimistic] : persisted;
+  }, [dbMessages.data, promptQueue.prompts]);
+
+  const handleOpenFile = useCallback(
+    (filePath: string): void => {
+      // Agent tools report absolute paths — strip the worktree root so the
+      // backend receives a repo-relative path.
+      const root = workspace?.worktree_path;
+      if (!root || !filePath.startsWith(root)) {
+        // File is outside the workspace worktree — cannot open in the file editor.
+        return;
+      }
+      const repoRelative = filePath.slice(root.length).replace(/^\//, "");
+      openTab(workspaceId, createFileEditorOpenInput(repoRelative));
+    },
+    [workspace?.worktree_path, workspaceId, openTab],
+  );
 
   function addImagesFromFiles(files: FileList | File[]): void {
     const validTypes = new Set<AgentImageMediaType>([
@@ -447,6 +483,7 @@ export const AgentSurface = memo(function AgentSurface({
   function queueMessage(): void {
     const prompt = draftPrompt.trim();
     if (prompt.length === 0 && pendingImages.length === 0) return;
+    if (!session) return;
     const input: AgentInputPart[] = [];
     if (prompt.length > 0) {
       input.push({ type: "text", text: prompt });
@@ -455,11 +492,44 @@ export const AgentSurface = memo(function AgentSurface({
       input.push({ type: "image", mediaType: img.mediaType, base64Data: img.base64Data });
     }
 
-    queueAgentPrompt(agentSessionId, input);
     setSendError(null);
     setDraftPrompt("");
     setPendingImages([]);
     scrollToBottom();
+
+    // If the session is idle, send directly — skip the queue entirely.
+    const decision = resolveAgentPromptDispatchDecision({
+      activeTurnId,
+      hasPendingApprovals: state.pendingApprovals.length > 0,
+      provider: session.provider,
+    });
+    if (
+      decision.type === "dispatch_turn" &&
+      promptQueue.dispatchingPromptId === null &&
+      promptQueue.prompts.length === 0
+    ) {
+      void (async () => {
+        try {
+          await agentClient.sendTurn(session.id, {
+            turnId: createTurnId(),
+            input,
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : typeof error === "string"
+                ? error
+                : "Failed to send prompt.";
+          console.error("[agent] direct send failed:", error);
+          setSendError(message);
+        }
+      })();
+      return;
+    }
+
+    // Otherwise, queue for later dispatch.
+    queueAgentPrompt(agentSessionId, input);
   }
 
   function handleRetryQueuedPrompt(promptId: string): void {
@@ -472,38 +542,42 @@ export const AgentSurface = memo(function AgentSurface({
     setSendError(null);
   }
 
-  async function handleResolveApproval(
-    approvalId: string,
-    decision: AgentApprovalDecision,
-    response?: Record<string, unknown> | null,
-  ): Promise<void> {
-    if (!session) {
-      return;
-    }
+  const sessionId = session?.id ?? null;
+  const handleResolveApproval = useCallback(
+    async (
+      approvalId: string,
+      decision: AgentApprovalDecision,
+      response?: Record<string, unknown> | null,
+    ): Promise<void> => {
+      if (!sessionId) {
+        return;
+      }
 
-    setResolvingApprovalIds((prev) => {
-      const next = new Set(prev);
-      next.add(approvalId);
-      return next;
-    });
-    setSendError(null);
-
-    try {
-      await agentClient.resolveApproval(session.id, {
-        approvalId,
-        decision,
-        response: response ?? null,
-      });
-    } catch (error) {
-      setSendError(error instanceof Error ? error.message : "Failed to resolve approval.");
-    } finally {
       setResolvingApprovalIds((prev) => {
         const next = new Set(prev);
-        next.delete(approvalId);
+        next.add(approvalId);
         return next;
       });
-    }
-  }
+      setSendError(null);
+
+      try {
+        await agentClient.resolveApproval(sessionId, {
+          approvalId,
+          decision,
+          response: response ?? null,
+        });
+      } catch (error) {
+        setSendError(error instanceof Error ? error.message : "Failed to resolve approval.");
+      } finally {
+        setResolvingApprovalIds((prev) => {
+          const next = new Set(prev);
+          next.delete(approvalId);
+          return next;
+        });
+      }
+    },
+    [sessionId, agentClient],
+  );
 
   if (!session) {
     return (
@@ -528,13 +602,14 @@ export const AgentSurface = memo(function AgentSurface({
   }
 
   const visibleError = sendError ?? state.lastError;
-  const showThinking = isRunning && state.pendingApprovals.length === 0;
+  const showThinking =
+    state.pendingTurnIds.length > 0 && state.pendingApprovals.length === 0;
   const queuedMessageCount = Math.max(
     0,
     promptQueue.prompts.length - (promptQueue.dispatchingPromptId !== null ? 1 : 0),
   );
   const showCenteredComposer =
-    session.status === "idle" &&
+    (session.status === "idle" || session.status === "starting") &&
     messages.length === 0 &&
     promptQueue.prompts.length === 0 &&
     state.pendingTurnIds.length === 0 &&
@@ -762,40 +837,22 @@ export const AgentSurface = memo(function AgentSurface({
                 ) : null}
 
                 {/* Messages — single source from DB collection */}
-                {messages.map((message, i) => (
-                  <TranscriptMessage
-                    key={message.id}
-                    message={message}
-                    isStreaming={
-                      isRunning && i === messages.length - 1 && message.role === "assistant"
-                    }
-                    onResolveApproval={handleResolveApproval}
-                    onOpenFile={handleOpenFile}
-                    resolvingApprovalIds={resolvingApprovalIds}
-                  />
-                ))}
+                <TranscriptMessageList
+                  messages={messages}
+                  isRunning={isRunning}
+                  onResolveApproval={handleResolveApproval}
+                  onOpenFile={handleOpenFile}
+                  resolvingApprovalIds={resolvingApprovalIds}
+                />
               </div>
 
-              {/* Scroll-to-bottom button */}
-              {!isAtBottom && (
-                <button
-                  className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-[var(--border)] bg-[var(--surface)] p-1.5 text-[var(--muted-foreground)] shadow-sm transition-colors hover:text-[var(--foreground)]"
-                  onClick={() => scrollToBottom()}
-                  type="button"
-                >
-                  <ArrowDown className="size-3.5" />
-                </button>
-              )}
             </div>
 
-            {showThinking ? (
-              <AgentActivityBar
-                turnActivity={state.turnActivity}
-                providerStatus={state.providerStatus}
-                elapsedSeconds={thinkingElapsed}
-                queuedMessageCount={queuedMessageCount}
-              />
-            ) : null}
+            <AgentActivityBar
+              turnActivity={state.turnActivity}
+              queuedMessageCount={queuedMessageCount}
+              visible={showThinking}
+            />
 
             <AgentComposer
               ref={promptComposerRef}

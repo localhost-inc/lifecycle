@@ -5,7 +5,7 @@ export type ManifestStatus =
   | { state: "invalid"; result: ManifestParseResult & { valid: false } }
   | { state: "missing" };
 
-export interface ManifestFileReader {
+export interface FileReader {
   exists: (path: string) => Promise<boolean>;
   readTextFile: (path: string) => Promise<string>;
 }
@@ -25,7 +25,7 @@ function manifestReadError(error: unknown): ManifestParseResult & { valid: false
 
 export async function readManifestFromPath(
   dirPath: string,
-  fileReader: ManifestFileReader,
+  fileReader: FileReader,
 ): Promise<ManifestStatus> {
   const manifestPath = `${dirPath}/lifecycle.json`;
 

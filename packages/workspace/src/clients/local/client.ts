@@ -27,13 +27,13 @@ import type {
   WorkspaceClient,
   WorkspaceOpenInAppInfo,
 } from "../../workspace";
-import { readManifestFromPath, type ManifestFileReader, type ManifestStatus } from "../../manifest";
+import { readManifestFromPath, type FileReader, type ManifestStatus } from "../../manifest";
 import { computeArchiveInput } from "../../policy/workspace-archive";
 import { computeRenameInput } from "../../policy/workspace-rename";
 
 export interface LocalClientDeps {
   invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
-  fileReader?: ManifestFileReader;
+  fileReader?: FileReader;
   watchPath?: (
     path: string,
     callback: () => void,
@@ -49,7 +49,7 @@ function requireWorktreePath(workspace: WorkspaceRecord): string {
 }
 
 export class LocalWorkspaceClient implements WorkspaceClient {
-  private fileReader: ManifestFileReader | undefined;
+  private fileReader: FileReader | undefined;
   private invoke: LocalClientDeps["invoke"];
   private watchPath: LocalClientDeps["watchPath"];
   constructor(deps: LocalClientDeps) {
@@ -97,7 +97,7 @@ export class LocalWorkspaceClient implements WorkspaceClient {
       worktreePath = (await this.invoke("create_git_worktree", {
         repoPath: input.projectPath,
         baseRef,
-        sourceRef: workspace.source_ref,
+        branch: workspace.source_ref,
         name: workspace.name,
         id: workspace.id,
         worktreeRoot: input.worktreeRoot ?? null,

@@ -56,6 +56,7 @@ describe("LocalEnvironmentClient", () => {
     });
 
     expect(result.preparedAt).toBeNull();
+    expect(result.startedServices).toEqual([{ assignedPort: 43123, name: "web" }]);
     expect(invoke).toHaveBeenCalledWith("assign_ports", {
       request: {
         seedId: "workspace_1",

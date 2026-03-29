@@ -2,10 +2,7 @@ import type { SqlDriver, SqlStatement } from "@lifecycle/db";
 import type { AgentSessionRecord } from "@lifecycle/contracts";
 import { createSqlCollection, type SqlCollection } from "../collection";
 
-const agentSessionCollectionsByDriver = new WeakMap<
-  SqlDriver,
-  Map<string, SqlCollection<AgentSessionRecord>>
->();
+export type AgentSessionCollectionRegistry = Map<string, SqlCollection<AgentSessionRecord>>;
 
 export async function selectAgentSessionsByWorkspace(
   driver: SqlDriver,
@@ -142,45 +139,49 @@ export function createAgentSessionCollection(
   });
 }
 
+export function createAgentSessionCollectionRegistry(): AgentSessionCollectionRegistry {
+  return new Map<string, SqlCollection<AgentSessionRecord>>();
+}
+
 export function getOrCreateAgentSessionCollection(
+  registry: AgentSessionCollectionRegistry,
   driver: SqlDriver,
   workspaceId: string,
 ): SqlCollection<AgentSessionRecord> {
-  let collectionsByWorkspace = agentSessionCollectionsByDriver.get(driver);
-  if (!collectionsByWorkspace) {
-    collectionsByWorkspace = new Map<string, SqlCollection<AgentSessionRecord>>();
-    agentSessionCollectionsByDriver.set(driver, collectionsByWorkspace);
-  }
-
-  let collection = collectionsByWorkspace.get(workspaceId);
+  let collection = registry.get(workspaceId);
   if (!collection) {
     collection = createAgentSessionCollection(driver, workspaceId);
-    collectionsByWorkspace.set(workspaceId, collection);
+    registry.set(workspaceId, collection);
   }
 
   return collection;
 }
 
-export function refreshAgentSessionCollection(driver: SqlDriver, workspaceId: string): void {
-  const collection = agentSessionCollectionsByDriver.get(driver)?.get(workspaceId);
+export function refreshAgentSessionCollection(
+  registry: AgentSessionCollectionRegistry,
+  workspaceId: string,
+): void {
+  const collection = registry.get(workspaceId);
   if (collection) {
     void collection.utils.refresh();
   }
 }
 
 export function upsertAgentSessionInCollection(
+  registry: AgentSessionCollectionRegistry,
   driver: SqlDriver,
   workspaceId: string,
   session: AgentSessionRecord,
 ): void {
-  getOrCreateAgentSessionCollection(driver, workspaceId).utils.upsert(session);
+  getOrCreateAgentSessionCollection(registry, driver, workspaceId).utils.upsert(session);
 }
 
 export async function saveAgentSession(
+  registry: AgentSessionCollectionRegistry,
   driver: SqlDriver,
   session: AgentSessionRecord,
 ): Promise<void> {
-  const collection = getOrCreateAgentSessionCollection(driver, session.workspace_id);
+  const collection = getOrCreateAgentSessionCollection(registry, driver, session.workspace_id);
   const transaction =
     collection.get(session.id) === undefined
       ? collection.insert(session)

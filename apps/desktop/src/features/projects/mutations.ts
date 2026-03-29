@@ -2,6 +2,7 @@ import type { ProjectRecord } from "@lifecycle/contracts";
 import { selectWorkspacesByProject } from "@lifecycle/store";
 import { useCallback } from "react";
 import { chooseProjectDirectory, cleanupProject } from "@/lib/projects";
+import { waitForDbReady } from "@/lib/db";
 import { useStoreContext } from "@/store/provider";
 
 function nameFromPath(projectPath: string): string {
@@ -17,6 +18,8 @@ export function useProjectMutations() {
     if (!projectPath) {
       return null;
     }
+
+    await waitForDbReady();
 
     const now = new Date().toISOString();
     const project: ProjectRecord = {

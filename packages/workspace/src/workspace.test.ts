@@ -158,6 +158,64 @@ describe("workspace contract", () => {
     ]);
   });
 
+  test("local host client creates worktrees with the native branch arg", async () => {
+    const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
+    const target = workspace({
+      checkout_type: "worktree",
+      source_ref: "lifecycle/blaze-beacon",
+      worktree_path: null,
+    });
+    const client = new LocalWorkspaceClient({
+      invoke: async (cmd: string, args?: Record<string, unknown>) => {
+        calls.push(args ? { cmd, args } : { cmd });
+
+        switch (cmd) {
+          case "create_git_worktree":
+            return "/tmp/project_1/.worktrees/ws_1";
+          case "get_git_sha":
+            return "abc123";
+          default:
+            return undefined;
+        }
+      },
+    });
+
+    const result = await client.ensureWorkspace({
+      workspace: target,
+      projectPath: "/tmp/project_1",
+      baseRef: "main",
+      worktreeRoot: "/tmp/project_1/.worktrees",
+      manifestFingerprint: "manifest_next",
+    });
+
+    expect(calls).toEqual([
+      {
+        cmd: "create_git_worktree",
+        args: {
+          repoPath: "/tmp/project_1",
+          baseRef: "main",
+          branch: "lifecycle/blaze-beacon",
+          name: "Workspace 1",
+          id: "ws_1",
+          worktreeRoot: "/tmp/project_1/.worktrees",
+          copyConfigFiles: true,
+        },
+      },
+      {
+        cmd: "get_git_sha",
+        args: {
+          repoPath: "/tmp/project_1",
+          refName: "lifecycle/blaze-beacon",
+        },
+      },
+    ]);
+
+    expect(result.worktree_path).toBe("/tmp/project_1/.worktrees/ws_1");
+    expect(result.git_sha).toBe("abc123");
+    expect(result.manifest_fingerprint).toBe("manifest_next");
+    expect(result.status).toBe("active");
+  });
+
   test("local host client routes open-in actions through generic commands", async () => {
     const calls: Array<{ cmd: string; args?: Record<string, unknown> }> = [];
     const client = new LocalWorkspaceClient({

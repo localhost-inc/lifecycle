@@ -1,6 +1,6 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { type GitPullRequestSummary, type WorkspaceRecord } from "@lifecycle/contracts";
-import { createStartEnvironmentInput } from "@lifecycle/environment";
+import { createStartEnvironmentInput, previewUrlForService } from "@lifecycle/environment";
 import { useEnvironmentClient } from "@lifecycle/environment/react";
 import type { ManifestStatus } from "@lifecycle/workspace";
 import { workspaceHostLabel } from "@lifecycle/workspace";
@@ -48,6 +48,7 @@ import {
 import { workspaceSupportsFilesystemInteraction } from "@/features/workspaces/lib/workspace-capabilities";
 import { useWorkspaceOpenRequests } from "@/features/workspaces/state/workspace-open-requests";
 import { useWorkspaceToolbar } from "@/features/workspaces/state/workspace-toolbar-context";
+import { invokeTauri } from "@/lib/tauri-error";
 import { useStoreContext, useWorkspaceServices } from "@/store";
 
 const SIDEBAR_RESIZE_STEP = 16;
@@ -84,6 +85,37 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
   const gitStatusQuery = useGitStatus(supportsTerminalInteraction ? workspace.id : null);
   const { registerToolbarSlot, unregisterToolbarSlot } = useWorkspaceToolbar();
 
+  // Reset stale service statuses on mount. After an app restart the process
+  // manager is empty, but service records may still show "ready"/"starting"
+  // from the previous session. Kill orphaned processes before resetting state
+  // so a subsequent Start doesn't conflict with the old instances.
+  const staleResetRef = useRef(false);
+  useEffect(() => {
+    if (staleResetRef.current) return;
+    staleResetRef.current = true;
+
+    const staleNames = services
+      .filter((s) => s.status === "ready" || s.status === "starting")
+      .map((s) => s.name);
+    if (staleNames.length === 0) return;
+
+    void environmentClient.stop(workspace.id, staleNames, workspaceHostLabel(workspace)).finally(() => {
+      const now = new Date().toISOString();
+      for (const service of services) {
+        if (service.status === "ready" || service.status === "starting") {
+          collections.services.update(service.id, (draft) => {
+            draft.status = "stopped";
+            draft.status_reason = null;
+            draft.assigned_port = null;
+            draft.preview_url = null;
+            draft.updated_at = now;
+          });
+        }
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const persistPreparedAt = useCallback(
     async (preparedAt: string | null): Promise<void> => {
       if (!preparedAt || workspace.prepared_at === preparedAt) {
@@ -102,23 +134,63 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
   const handleRun = useCallback(
     async (serviceNames?: string[]) => {
       if (!config || !services) return;
+
+      const serviceByName = new Map(services.map((s) => [s.name, s]));
+      const hostLabel = workspaceHostLabel(workspace);
+      let proxyPort: number | null = null;
+
+      const input = createStartEnvironmentInput({
+        hostLabel,
+        serviceNames,
+        services,
+        workspace,
+      });
+
+      input.callbacks = {
+        onServiceStarting: (name) => {
+          const service = serviceByName.get(name);
+          if (!service) return;
+          collections.services.update(service.id, (draft) => {
+            draft.status = "starting";
+            draft.updated_at = new Date().toISOString();
+          });
+        },
+        onServiceReady: (started) => {
+          const service = serviceByName.get(started.name);
+          if (!service) return;
+          const previewUrl =
+            started.assignedPort !== null && proxyPort !== null
+              ? previewUrlForService(hostLabel, started.name, proxyPort)
+              : null;
+          collections.services.update(service.id, (draft) => {
+            draft.status = "ready";
+            draft.status_reason = null;
+            draft.assigned_port = started.assignedPort;
+            draft.preview_url = previewUrl;
+            draft.updated_at = new Date().toISOString();
+          });
+        },
+        onServiceFailed: (name) => {
+          const service = serviceByName.get(name);
+          if (!service) return;
+          collections.services.update(service.id, (draft) => {
+            draft.status = "failed";
+            draft.status_reason = "service_start_failed";
+            draft.updated_at = new Date().toISOString();
+          });
+        },
+      };
+
       try {
-        const result = await environmentClient.start(
-          config,
-          createStartEnvironmentInput({
-            hostLabel: workspaceHostLabel(workspace),
-            serviceNames,
-            services,
-            workspace,
-          }),
-        );
+        proxyPort = await invokeTauri<number>("get_preview_proxy_port");
+        const result = await environmentClient.start(config, input);
         await persistPreparedAt(result.preparedAt);
       } catch (err) {
         console.error("Failed to start services:", err);
         throw err;
       }
     },
-    [config, environmentClient, persistPreparedAt, services, workspace],
+    [collections.services, config, environmentClient, persistPreparedAt, services, workspace],
   );
 
   const handleRestart = useCallback(async () => {
@@ -130,6 +202,7 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
       await environmentClient.stop(
         workspace.id,
         services.map((service) => service.name),
+        workspaceHostLabel(workspace),
       );
       const result = await environmentClient.start(
         config,
@@ -151,12 +224,26 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
       await environmentClient.stop(
         workspace.id,
         services.map((service) => service.name),
+        workspaceHostLabel(workspace),
       );
+
+      const now = new Date().toISOString();
+      for (const service of services) {
+        if (service.status === "ready" || service.status === "starting") {
+          collections.services.update(service.id, (draft) => {
+            draft.status = "stopped";
+            draft.status_reason = null;
+            draft.assigned_port = null;
+            draft.preview_url = null;
+            draft.updated_at = now;
+          });
+        }
+      }
     } catch (err) {
       console.error("Failed to stop workspace:", err);
       throw err;
     }
-  }, [environmentClient, services, workspace.id]);
+  }, [collections.services, environmentClient, services, workspace.id]);
 
   // ---------------------------------------------------------------------------
   // Toolbar slot — surfaces run + git actions in the workspace nav bar

@@ -6,10 +6,7 @@ import type {
 } from "@lifecycle/contracts";
 import { createSqlCollection, type SqlCollection } from "../collection";
 
-const agentMessageCollectionsByDriver = new WeakMap<
-  SqlDriver,
-  Map<string, SqlCollection<AgentMessageWithParts>>
->();
+export type AgentMessageCollectionRegistry = Map<string, SqlCollection<AgentMessageWithParts>>;
 
 interface MessagePartRow {
   id: string;
@@ -159,17 +156,16 @@ export async function upsertAgentMessageWithParts(
   );
 }
 
+export function createAgentMessageCollectionRegistry(): AgentMessageCollectionRegistry {
+  return new Map<string, SqlCollection<AgentMessageWithParts>>();
+}
+
 export function getOrCreateAgentMessageCollection(
+  registry: AgentMessageCollectionRegistry,
   driver: SqlDriver,
   sessionId: string,
 ): SqlCollection<AgentMessageWithParts> {
-  let collectionsBySession = agentMessageCollectionsByDriver.get(driver);
-  if (!collectionsBySession) {
-    collectionsBySession = new Map<string, SqlCollection<AgentMessageWithParts>>();
-    agentMessageCollectionsByDriver.set(driver, collectionsBySession);
-  }
-
-  let collection = collectionsBySession.get(sessionId);
+  let collection = registry.get(sessionId);
   if (!collection) {
     collection = createSqlCollection<AgentMessageWithParts>({
       id: `agent-messages-${sessionId}`,
@@ -177,16 +173,17 @@ export function getOrCreateAgentMessageCollection(
       loadFn: (runtimeDriver) => selectAgentMessagesBySession(runtimeDriver, sessionId),
       getKey: (message) => message.id,
     });
-    collectionsBySession.set(sessionId, collection);
+    registry.set(sessionId, collection);
   }
 
   return collection;
 }
 
 export function upsertAgentMessageInCollection(
+  registry: AgentMessageCollectionRegistry,
   driver: SqlDriver,
   sessionId: string,
   message: AgentMessageWithParts,
 ): void {
-  getOrCreateAgentMessageCollection(driver, sessionId).utils.upsert(message);
+  getOrCreateAgentMessageCollection(registry, driver, sessionId).utils.upsert(message);
 }

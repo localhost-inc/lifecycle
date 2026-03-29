@@ -3,6 +3,10 @@ import { isTauri } from "@tauri-apps/api/core";
 import { StrictMode, useEffect } from "react";
 import { RouterProvider } from "react-router-dom";
 import type { AgentClientRegistry } from "@lifecycle/agents";
+import type {
+  AgentMessageCollectionRegistry,
+  AgentSessionCollectionRegistry,
+} from "@lifecycle/store";
 import { AgentClientRegistryProvider } from "@lifecycle/agents/react";
 import type { EnvironmentClientRegistry } from "@lifecycle/environment";
 import { EnvironmentClientRegistryProvider } from "@lifecycle/environment/react";
@@ -52,12 +56,16 @@ function ContextMenuBlocker() {
 
 interface AppProps {
   agentClientRegistry: AgentClientRegistry;
+  agentMessageRegistry: AgentMessageCollectionRegistry;
+  agentSessionRegistry: AgentSessionCollectionRegistry;
   environmentClientRegistry: EnvironmentClientRegistry;
   workspaceClientRegistry: WorkspaceClientRegistry;
 }
 
 export function App({
   agentClientRegistry,
+  agentMessageRegistry,
+  agentSessionRegistry,
   environmentClientRegistry,
   workspaceClientRegistry,
 }: AppProps) {
@@ -72,7 +80,11 @@ export function App({
               environmentClientRegistry={environmentClientRegistry}
             >
               <AgentClientRegistryProvider agentClientRegistry={agentClientRegistry}>
-                <StoreProvider driver={db}>
+                <StoreProvider
+                  agentMessageRegistry={agentMessageRegistry}
+                  agentSessionRegistry={agentSessionRegistry}
+                  driver={db}
+                >
                   <ReactQueryProvider>
                     <AuthSessionProvider
                       client={authClient}

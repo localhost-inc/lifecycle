@@ -8,7 +8,6 @@ describe("AgentActivityBar", () => {
     const markup = renderToStaticMarkup(
       createElement(AgentActivityBar, {
         elapsedSeconds: 12,
-        providerStatus: null,
         queuedMessageCount: 2,
         turnActivity: { phase: "tool_use", toolCallCount: 1, toolName: "command_execution" },
       }),

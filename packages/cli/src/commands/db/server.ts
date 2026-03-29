@@ -14,6 +14,7 @@ import {
 import { applyDbMigrations } from "@lifecycle/db/migrations";
 import { createTursoDb } from "@lifecycle/db/turso";
 import { z } from "zod";
+import { jsonResponse, optionsResponse } from "./server-http";
 
 const DbServerInputSchema = z.object({
   authToken: z.string().optional(),
@@ -40,14 +41,6 @@ async function persistRegistration(
   await mkdir(dir, { recursive: true });
   await writeFile(tempPath, `${JSON.stringify(registration)}\n`, "utf8");
   await rename(tempPath, registrationPath);
-}
-
-function jsonResponse(response: DbServerResponse): Response {
-  return new Response(JSON.stringify(response), {
-    headers: {
-      "content-type": "application/json",
-    },
-  });
 }
 
 function unauthorizedResponse(requestId: string): Response {
@@ -187,6 +180,10 @@ export default defineCommand({
       idleTimeout: 0,
       port: 0,
       async fetch(request) {
+        if (request.method === "OPTIONS") {
+          return optionsResponse();
+        }
+
         const requestId = randomUUID();
         if (request.headers.get(DB_SERVER_TOKEN_HEADER) !== token) {
           return unauthorizedResponse(requestId);

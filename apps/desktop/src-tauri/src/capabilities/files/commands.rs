@@ -11,6 +11,14 @@ pub fn read_file(
 }
 
 #[tauri::command]
+pub fn file_exists(
+    root_path: String,
+    file_path: String,
+) -> Result<bool, LifecycleError> {
+    super::file::file_exists(&root_path, &file_path)
+}
+
+#[tauri::command]
 pub fn write_file(
     app: AppHandle,
     root_path: String,

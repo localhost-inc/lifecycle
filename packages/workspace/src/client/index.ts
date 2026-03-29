@@ -14,6 +14,6 @@ export type {
   WorkspaceFileReadResult,
   WorkspaceFileTreeEntry,
 } from "../workspace";
-export type { ManifestStatus, ManifestFileReader } from "../manifest";
+export type { ManifestStatus } from "../manifest";
 export type { WorkspaceClientRegistry, WorkspaceClientRegistryClients } from "../client-registry";
 export { createWorkspaceClientRegistry } from "../client-registry";

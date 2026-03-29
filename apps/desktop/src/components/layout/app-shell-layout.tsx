@@ -74,6 +74,7 @@ import {
 } from "@/components/layout/shell-resize-provider";
 import { computeWorkspaceCreatePolicy } from "@lifecycle/workspace/policy";
 import { selectProjectById, selectServicesByWorkspace } from "@lifecycle/store";
+import { waitForDbReady } from "@/lib/db";
 import { useStoreContext, useWorkspacesByProject } from "@/store";
 
 const SIDEBAR_RESIZE_STEP = 16;
@@ -194,6 +195,8 @@ export function AppShellLayout() {
       projectId: string;
       workspaceName?: string;
     }): Promise<string> => {
+      await waitForDbReady();
+
       const project = await selectProjectById(driver, input.projectId);
       if (!project) {
         throw new Error(`Project "${input.projectId}" was not found.`);

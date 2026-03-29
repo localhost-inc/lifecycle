@@ -16,6 +16,7 @@ import {
   clearAgentSessionResponseReady,
   clearWorkspaceAgentResponseReady,
   getAgentPromptQueueStateSnapshot,
+  getAgentSessionStoreSnapshot,
   getAgentSessionStateSnapshot,
   getAgentStatusIndex,
   readAgentAuthStatus,
@@ -226,8 +227,8 @@ export function useAgentStatusIndex(): {
 } {
   useSyncExternalStore(
     subscribeAgentStore,
-    () => getAgentStatusIndex(),
-    () => getAgentStatusIndex(),
+    getAgentSessionStoreSnapshot,
+    getAgentSessionStoreSnapshot,
   );
 
   const index = getAgentStatusIndex();

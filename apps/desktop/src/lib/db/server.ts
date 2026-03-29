@@ -24,6 +24,9 @@ let cachedDbPath: string | null = null;
 let cachedRegistration: DbServerRegistration | null = null;
 let pendingConnection: Promise<DbServerRegistration> | null = null;
 
+const DB_SERVER_STARTUP_ATTEMPTS = 150;
+const DB_SERVER_STARTUP_WAIT_MS = 100;
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -109,21 +112,45 @@ async function readDbServerRegistration(): Promise<DbServerRegistration | null> 
   return invokeTauri<DbServerRegistration | null>("read_json_file", { path });
 }
 
+async function fetchDbServer(
+  registration: DbServerRegistration,
+  request: DbServerClientRequest,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    return await fetch(createDbServerUrl(registration.port), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        [DB_SERVER_TOKEN_HEADER]: registration.token,
+      },
+      body: JSON.stringify({
+        ...request,
+        requestId: crypto.randomUUID(),
+      }),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`Lifecycle DB server timed out after ${timeoutMs}ms.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function requestDbServer<TResult>(
   registration: DbServerRegistration,
   request: DbServerClientRequest,
+  timeoutMs = 30_000,
 ): Promise<TResult> {
-  const response = await fetch(createDbServerUrl(registration.port), {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      [DB_SERVER_TOKEN_HEADER]: registration.token,
-    },
-    body: JSON.stringify({
-      ...request,
-      requestId: crypto.randomUUID(),
-    }),
-  });
+  const response = await fetchDbServer(registration, request, timeoutMs);
 
   const payload = (await response.json()) as DbServerResponse<TResult>;
   if (!payload.ok) {
@@ -136,7 +163,7 @@ async function isHealthy(registration: DbServerRegistration): Promise<boolean> {
   try {
     const result = await requestDbServer<DbServerHealthResult>(registration, {
       kind: "health",
-    });
+    }, 1_500);
     return result.ok && result.dbPath === registration.dbPath;
   } catch {
     return false;
@@ -167,8 +194,8 @@ async function connectToDbServer(forceStart: boolean): Promise<DbServerRegistrat
       }
       return next;
     },
-    40,
-    100,
+    DB_SERVER_STARTUP_ATTEMPTS,
+    DB_SERVER_STARTUP_WAIT_MS,
   );
 
   cachedRegistration = registration;
@@ -182,6 +209,10 @@ async function ensureDbServer(): Promise<DbServerRegistration> {
     });
   }
   return pendingConnection;
+}
+
+export async function waitForDbReady(): Promise<void> {
+  await ensureDbServer();
 }
 
 async function withDbServer<TResult>(request: DbServerClientRequest): Promise<TResult> {

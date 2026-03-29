@@ -35,11 +35,13 @@ export const previewSurfaceDefinition: WorkspaceSurfaceDefinition<"preview"> = {
       tabKey={activeSurface.tab.key}
       title={activeSurface.tab.label}
       url={activeSurface.tab.url}
+      workspaceId={activeSurface.workspaceId}
     />
   ),
-  resolveActiveSurface: (tab) => ({
+  resolveActiveSurface: (tab, context) => ({
     kind: "preview",
     tab,
+    workspaceId: context.workspaceId,
   }),
   serializeTab: serializePreviewTab,
 };

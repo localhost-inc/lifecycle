@@ -5,7 +5,7 @@ import { getAsChildRenderElement } from "../lib/as-child";
 import { cn } from "../lib/cn";
 
 const buttonVariants = cva(
-  "inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-xl text-xs font-semibold transition-[background-color,border-color,color,opacity,transform] duration-150 ease-in-out outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] active:scale-[0.97] disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg text-xs font-semibold transition-[background-color,border-color,color,opacity,transform] duration-150 ease-in-out outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)] active:scale-[0.97] disabled:cursor-not-allowed disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
@@ -22,11 +22,11 @@ const buttonVariants = cva(
           "border border-[var(--destructive)]/35 bg-transparent text-[var(--destructive)] hover:border-[var(--destructive)]/45 hover:bg-[var(--destructive)]/10",
         white: "bg-white text-black hover:bg-white/90",
         glass:
-          "rounded-xl bg-[var(--glass)] text-[var(--foreground)] hover:bg-[var(--glass-hover)]",
+          "rounded-lg bg-[var(--glass)] text-[var(--foreground)] hover:bg-[var(--glass-hover)]",
       },
       size: {
         default: "h-8 px-3",
-        sm: "h-8 px-3",
+        sm: "h-7 px-2.5",
         lg: "h-10 px-4 text-sm",
         icon: "h-8 w-8 p-0",
       },

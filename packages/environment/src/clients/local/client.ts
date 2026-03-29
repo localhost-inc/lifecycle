@@ -5,7 +5,7 @@ import type {
   StartEnvironmentResult,
 } from "../../client";
 import { resolveStartOrder } from "../../graph";
-import { buildRuntimeEnv, injectAssignedPortsIntoManifest, resolveServiceEnv } from "../../runtime";
+import { buildRuntimeEnv, injectAssignedPortsIntoManifest, resolveServiceEnv, slugify } from "../../runtime";
 
 type InvokeFn = (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
 
@@ -20,6 +20,10 @@ interface StepInput {
 
 function processId(environmentId: string, name: string): string {
   return `${environmentId}:${name}`;
+}
+
+function proxyRouteId(hostLabel: string, serviceName: string): string {
+  return `${slugify(serviceName)}.${hostLabel}`;
 }
 
 function environmentLogDir(lifecycleRoot: string, environmentId: string): string {
@@ -41,12 +45,8 @@ function sanitize(value: string): string {
     .replace(/^-|-$/g, "");
 }
 
-function maybeExpandTemplate(value: string, env: Record<string, string>): string {
-  const match = /^\$\{(LIFECYCLE_[^}]+)\}$/.exec(value);
-  if (!match?.[1]) {
-    return value;
-  }
-  return env[match[1]] ?? value;
+function expandTemplates(value: string, env: Record<string, string>): string {
+  return value.replace(/\$\{(LIFECYCLE_[^}]+)\}/g, (_, key: string) => env[key] ?? `\${${key}}`);
 }
 
 export interface LocalEnvironmentClientDeps {
@@ -73,7 +73,7 @@ export class LocalEnvironmentClient implements EnvironmentClient {
     const serviceNames = sorted.filter((n) => n.kind === "service").map((n) => n.name);
 
     if (prepareSteps.length === 0 && serviceNames.length === 0) {
-      return { preparedAt: null };
+      return { preparedAt: null, startedServices: [] };
     }
 
     // Assign ports.
@@ -118,6 +118,7 @@ export class LocalEnvironmentClient implements EnvironmentClient {
     }
 
     // Walk the dependency graph.
+    const startedServiceNames: string[] = [];
     for (const node of sorted) {
       if (node.kind === "task") {
         const taskConfig = config.environment[node.name];
@@ -143,28 +144,46 @@ export class LocalEnvironmentClient implements EnvironmentClient {
 
         await this.runStep(input.environmentId, input.rootPath, runtimeEnv, step);
       } else {
-        await this.startService(
-          input.environmentId,
-          lifecycleRoot,
-          node.name,
-          configByName,
-          assignedPorts,
-          input,
-          runtimeEnv,
-        );
+        input.callbacks?.onServiceStarting?.(node.name);
+        try {
+          await this.startService(
+            input.environmentId,
+            lifecycleRoot,
+            node.name,
+            configByName,
+            assignedPorts,
+            input,
+            runtimeEnv,
+          );
+          const started = { assignedPort: assignedPorts[node.name] ?? null, name: node.name };
+          startedServiceNames.push(node.name);
+          input.callbacks?.onServiceReady?.(started);
+        } catch (err) {
+          input.callbacks?.onServiceFailed?.(node.name);
+          throw err;
+        }
       }
     }
 
     return {
       preparedAt: !input.prepared && prepareSteps.length > 0 ? new Date().toISOString() : null,
+      startedServices: startedServiceNames.map((name) => ({
+        assignedPort: assignedPorts[name] ?? null,
+        name,
+      })),
     };
   }
 
-  async stop(environmentId: string, names: string[]): Promise<void> {
+  async stop(environmentId: string, names: string[], hostLabel?: string): Promise<void> {
     for (const name of names) {
       const id = processId(environmentId, name);
       await this.invoke("kill_managed_process", { id });
       await this.invoke("stop_managed_container", { id });
+      if (hostLabel) {
+        await this.invoke("remove_proxy_target", {
+          id: proxyRouteId(hostLabel, name),
+        });
+      }
     }
   }
 
@@ -243,6 +262,14 @@ export class LocalEnvironmentClient implements EnvironmentClient {
         input: this.buildHealthCheckInput(serviceConfig.health_check, runtimeEnv),
         startupTimeoutSeconds: serviceConfig.startup_timeout_seconds ?? 60,
         containerRef: null,
+      });
+    }
+
+    const assignedPort = assignedPorts[serviceName];
+    if (assignedPort !== undefined) {
+      await this.invoke("register_proxy_target", {
+        id: proxyRouteId(input.hostLabel, serviceName),
+        targetPort: assignedPort,
       });
     }
   }
@@ -332,21 +359,21 @@ export class LocalEnvironmentClient implements EnvironmentClient {
     if (hc.kind === "tcp") {
       return {
         kind: "tcp",
-        host: maybeExpandTemplate(hc.host, runtimeEnv),
+        host: expandTemplates(hc.host, runtimeEnv),
         port:
           typeof hc.port === "number"
             ? hc.port
-            : Number(maybeExpandTemplate(String(hc.port), runtimeEnv)),
-        timeoutSeconds: hc.timeout_seconds,
+            : Number(expandTemplates(String(hc.port), runtimeEnv)),
+        timeout_seconds: hc.timeout_seconds,
       };
     }
     if (hc.kind === "http") {
       return {
         kind: "http",
-        url: maybeExpandTemplate(hc.url, runtimeEnv),
-        timeoutSeconds: hc.timeout_seconds,
+        url: expandTemplates(hc.url, runtimeEnv),
+        timeout_seconds: hc.timeout_seconds,
       };
     }
-    return { kind: "container", timeoutSeconds: hc.timeout_seconds };
+    return { kind: "container", timeout_seconds: hc.timeout_seconds };
   }
 }

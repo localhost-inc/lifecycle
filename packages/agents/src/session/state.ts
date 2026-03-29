@@ -153,7 +153,10 @@ export function reduceAgentSessionEvent(
       return {
         ...nextSessionState,
         pendingApprovals: [],
-        pendingTurnIds: nextSessionState.pendingTurnIds.filter((id) => id !== event.turnId),
+        // Sessions only support one active turn at a time. Clear the full pending
+        // set here so a stale duplicate turn id cannot leave the UI spinning after
+        // the response is already ready.
+        pendingTurnIds: [],
         providerStatus: null,
         responseReady: true,
         turnActivity: null,
@@ -173,7 +176,7 @@ export function reduceAgentSessionEvent(
         ...nextSessionState,
         lastError: event.error,
         pendingApprovals: [],
-        pendingTurnIds: nextSessionState.pendingTurnIds.filter((id) => id !== event.turnId),
+        pendingTurnIds: [],
         providerStatus: null,
         responseReady: false,
         turnActivity: null,
