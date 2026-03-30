@@ -39,11 +39,12 @@ async function createBridgeEnv(
       LIFECYCLE_WORKSPACE_PATH: worktreePath,
     };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     console.error("[agent-worker] failed to create bridge session", {
-      error: error instanceof Error ? error.message : String(error),
+      error: message,
       workspaceId,
     });
-    return {};
+    throw new Error(`Failed to create bridge session for workspace ${workspaceId}: ${message}`);
   }
 }
 

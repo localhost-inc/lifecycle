@@ -249,7 +249,7 @@ function ApprovalElicitationCard({
   async function handleSubmit(): Promise<void> {
     if (!requestedSchema) {
       setLocalError(null);
-      await onResolve("approve_once");
+      await onResolve("approve_once", url ? { url } : undefined);
       return;
     }
 
@@ -259,7 +259,10 @@ function ApprovalElicitationCard({
         throw new Error("Response must be a JSON object.");
       }
       setLocalError(null);
-      await onResolve("approve_once", parsed);
+      await onResolve(
+        "approve_once",
+        url && typeof parsed.url !== "string" ? { ...parsed, url } : parsed,
+      );
     } catch (error) {
       setLocalError(error instanceof Error ? error.message : "Invalid JSON response.");
     }

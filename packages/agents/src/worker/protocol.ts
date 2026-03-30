@@ -116,6 +116,13 @@ export interface AgentWorkerStatusEvent {
   turnId: string;
 }
 
+export interface AgentWorkerRawProviderEvent {
+  kind: "provider.raw_event";
+  eventType: string;
+  payload: unknown;
+  turnId?: string | null;
+}
+
 export interface AgentWorkerApprovalRequestedEvent {
   approval: AgentWorkerApprovalRequestPayload;
   kind: "agent.approval.requested";
@@ -166,6 +173,7 @@ export type AgentWorkerEvent =
   | AgentWorkerApprovalRequestedEvent
   | AgentWorkerApprovalResolvedEvent
   | AgentWorkerStatusEvent
+  | AgentWorkerRawProviderEvent
   | AgentWorkerTurnCompletedEvent
   | AgentWorkerTurnFailedEvent
   | AgentWorkerTitleGeneratedEvent;

@@ -1,6 +1,19 @@
-import type { AgentMessagePartRecord, AgentMessageWithParts } from "@lifecycle/contracts";
+import {
+  parseAgentMessagePartData,
+  type AgentMessagePartRecord,
+  type AgentMessageWithParts,
+} from "@lifecycle/contracts";
 import type { AgentEvent } from "../events";
-import type { AgentMessagePart, AgentMessageRole } from "../turn";
+import type {
+  AgentApprovalDecision,
+  AgentApprovalKind,
+  AgentApprovalStatus,
+  AgentArtifactType,
+  AgentImageMediaType,
+  AgentMessagePart,
+  AgentMessageRole,
+  AgentToolCallStatus,
+} from "../turn";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,6 +50,9 @@ export type AgentMessageFlushCallback = (message: AgentMessageWithParts) => void
  * Returns the part count for the given messageId.
  */
 export type HasPersistedAgentMessageParts = (messageId: string) => Promise<number> | number;
+export type LoadPersistedAgentMessage = (
+  messageId: string,
+) => Promise<AgentMessageWithParts | null> | AgentMessageWithParts | null;
 
 // ---------------------------------------------------------------------------
 // Pure message accumulation pipeline.
@@ -56,15 +72,18 @@ export class AgentMessageProjection {
   private flushed: AgentMessageWithParts[] = [];
   private onFlush: AgentMessageFlushCallback | null;
   private hasPersistedParts: HasPersistedAgentMessageParts | null;
+  private loadPersistedMessage: LoadPersistedAgentMessage | null;
   private now: () => string;
 
   constructor(options?: {
     now?: () => string;
     onFlush?: AgentMessageFlushCallback;
     hasPersistedParts?: HasPersistedAgentMessageParts;
+    loadPersistedMessage?: LoadPersistedAgentMessage;
   }) {
     this.onFlush = options?.onFlush ?? null;
     this.hasPersistedParts = options?.hasPersistedParts ?? null;
+    this.loadPersistedMessage = options?.loadPersistedMessage ?? null;
     this.now = options?.now ?? (() => "2026-01-01T00:00:00.000Z");
   }
 
@@ -77,13 +96,18 @@ export class AgentMessageProjection {
   async processEvent(event: AgentEvent): Promise<AgentMessageWithParts | null> {
     switch (event.kind) {
       case "agent.message.created": {
-        const msg = this.getOrCreate(event.messageId, event.sessionId, event.role, event.turnId);
+        const msg = await this.getOrCreate(
+          event.messageId,
+          event.sessionId,
+          event.role,
+          event.turnId,
+        );
         return this.flush(msg);
       }
 
       case "agent.message.part.delta":
       case "agent.message.part.completed": {
-        const msg = this.getOrCreate(
+        const msg = await this.getOrCreate(
           event.messageId,
           event.sessionId,
           inferRole(event.messageId),
@@ -95,7 +119,7 @@ export class AgentMessageProjection {
 
       case "agent.tool_call.updated": {
         const msgId = `tool:${event.toolCall.id}`;
-        const msg = this.getOrCreate(msgId, event.sessionId, "tool", null);
+        const msg = await this.getOrCreate(msgId, event.sessionId, "tool", null);
         appendPart(
           msg,
           `tool:${event.toolCall.id}:call`,
@@ -132,7 +156,7 @@ export class AgentMessageProjection {
 
       case "agent.approval.requested": {
         const msgId = `approval:${event.approval.id}`;
-        const msg = this.getOrCreate(msgId, event.sessionId, "system", null);
+        const msg = await this.getOrCreate(msgId, event.sessionId, "system", null);
         appendPart(
           msg,
           `approval:${event.approval.id}:ref`,
@@ -151,7 +175,7 @@ export class AgentMessageProjection {
 
       case "agent.approval.resolved": {
         const msgId = `approval:${event.resolution.approvalId}`;
-        const msg = this.getOrCreate(msgId, event.sessionId, "system", null);
+        const msg = await this.getOrCreate(msgId, event.sessionId, "system", null);
         appendPart(
           msg,
           `approval:${event.resolution.approvalId}:ref`,
@@ -173,7 +197,7 @@ export class AgentMessageProjection {
 
       case "agent.artifact.published": {
         const msgId = `artifact:${event.artifact.id}`;
-        const msg = this.getOrCreate(msgId, event.sessionId, "system", null);
+        const msg = await this.getOrCreate(msgId, event.sessionId, "system", null);
         appendPart(
           msg,
           `artifact:${event.artifact.id}:ref`,
@@ -196,7 +220,12 @@ export class AgentMessageProjection {
           hasContent = (await this.hasPersistedParts(assistantMsgId)) > 0;
         }
         if (!hasContent) {
-          const msg = this.getOrCreate(assistantMsgId, event.sessionId, "assistant", event.turnId);
+          const msg = await this.getOrCreate(
+            assistantMsgId,
+            event.sessionId,
+            "assistant",
+            event.turnId,
+          );
           appendPart(
             msg,
             `${assistantMsgId}:empty`,
@@ -267,15 +296,15 @@ export class AgentMessageProjection {
 
   // ── Internal ──────────────────────────────────────────────────────────
 
-  private getOrCreate(
+  private async getOrCreate(
     messageId: string,
     sessionId: string,
     role: AgentMessageRole,
     turnId: string | null,
-  ): AccumulatedMessage {
+  ): Promise<AccumulatedMessage> {
     let msg = this.messages.get(messageId);
     if (!msg) {
-      msg = {
+      msg = (await this.hydratePersistedMessage(messageId)) ?? {
         id: messageId,
         sessionId,
         role,
@@ -284,12 +313,37 @@ export class AgentMessageProjection {
         createdAt: this.nextTimestamp(sessionId),
       };
       this.messages.set(messageId, msg);
-    } else {
-      msg.role = role;
-      msg.sessionId = sessionId;
-      msg.turnId = msg.turnId ?? turnId;
     }
+    msg.role = role;
+    msg.sessionId = sessionId;
+    msg.turnId = msg.turnId ?? turnId;
     return msg;
+  }
+
+  private async hydratePersistedMessage(messageId: string): Promise<AccumulatedMessage | null> {
+    if (!this.loadPersistedMessage) {
+      return null;
+    }
+
+    const persisted = await this.loadPersistedMessage(messageId);
+    if (!persisted) {
+      return null;
+    }
+
+    return {
+      id: persisted.id,
+      sessionId: persisted.session_id,
+      role: persisted.role,
+      turnId: persisted.turn_id,
+      parts: persisted.parts
+        .slice()
+        .sort((left, right) => left.part_index - right.part_index)
+        .map((part) => ({
+          id: part.id,
+          part: partRecordToMessagePart(part),
+        })),
+      createdAt: persisted.created_at,
+    };
   }
 
   private nextTimestamp(sessionId: string): string {
@@ -304,6 +358,69 @@ export class AgentMessageProjection {
     this.flushed.push(record);
     this.onFlush?.(record);
     return record;
+  }
+}
+
+function partRecordToMessagePart(record: AgentMessagePartRecord): AgentMessagePart {
+  const data = parseAgentMessagePartData(record.part_type, record.data) as Record<
+    string,
+    unknown
+  > | null;
+  const readString = (key: string): string | undefined => {
+    const value = data?.[key];
+    return typeof value === "string" ? value : undefined;
+  };
+
+  switch (record.part_type) {
+    case "text":
+      return { type: "text", text: record.text ?? "" };
+    case "thinking":
+      return { type: "thinking", text: record.text ?? "" };
+    case "status":
+      return { type: "status", text: record.text ?? "" };
+    case "tool_call":
+      return {
+        type: "tool_call",
+        toolCallId: readString("tool_call_id") ?? "",
+        toolName: readString("tool_name") ?? "",
+        inputJson: readString("input_json"),
+        outputJson: readString("output_json"),
+        status: readString("status") as AgentToolCallStatus | undefined,
+        errorText: readString("error_text"),
+      };
+    case "tool_result":
+      return {
+        type: "tool_result",
+        toolCallId: readString("tool_call_id") ?? "",
+        outputJson: readString("output_json"),
+        errorText: readString("error_text"),
+      };
+    case "image":
+      return {
+        type: "image",
+        mediaType: (readString("media_type") ?? "image/png") as AgentImageMediaType,
+        base64Data: readString("base64_data") ?? "",
+      };
+    case "attachment_ref":
+      return { type: "attachment_ref", attachmentId: readString("attachment_id") ?? "" };
+    case "approval_ref":
+      return {
+        type: "approval_ref",
+        approvalId: readString("approval_id") ?? "",
+        decision: readString("decision") as AgentApprovalDecision | undefined,
+        kind: readString("kind") as AgentApprovalKind | undefined,
+        message: readString("message"),
+        metadata: (data?.metadata as Record<string, unknown> | undefined) ?? undefined,
+        status: readString("status") as AgentApprovalStatus | undefined,
+      };
+    case "artifact_ref":
+      return {
+        type: "artifact_ref",
+        artifactId: readString("artifact_id") ?? "",
+        artifactType: readString("artifact_type") as AgentArtifactType | undefined,
+        title: readString("title"),
+        uri: readString("uri"),
+      };
   }
 }
 

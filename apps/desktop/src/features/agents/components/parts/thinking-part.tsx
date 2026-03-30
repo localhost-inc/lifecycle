@@ -19,13 +19,13 @@ export function ThinkingPart({ text, isStreaming }: { text: string; isStreaming?
   }, [isStreaming]);
 
   const label = isStreaming
-    ? `thinking${elapsed > 0 ? ` ${elapsed}s` : ""}`
-    : `thought for ${Math.max(elapsed, 1)}s`;
+    ? `Thinking${elapsed > 0 ? ` ${elapsed}s` : ""}`
+    : `Thought for ${Math.max(elapsed, 1)}s`;
 
   return (
-    <div className="my-1">
+    <div>
       <button
-        className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
+        className="flex items-center gap-1.5 text-[12px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
         onClick={() => setOpen(!open)}
         type="button"
       >
@@ -33,7 +33,7 @@ export function ThinkingPart({ text, isStreaming }: { text: string; isStreaming?
           className={["size-3 transition-transform", open ? "rotate-90" : ""].join(" ")}
         />
         {isStreaming ? (
-          <Shimmer as="span" className="text-[11px] uppercase tracking-[0.08em]" duration={1.5}>
+          <Shimmer as="span" className="text-[12px]" duration={1.5}>
             {label}
           </Shimmer>
         ) : (

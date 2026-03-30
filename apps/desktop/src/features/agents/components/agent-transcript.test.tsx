@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ParsedMessage } from "@/features/agents/components/agent-message-parsing";
 import { TranscriptMessage } from "@/features/agents/components/agent-transcript";
+import { buildToolPatch } from "@/features/agents/components/parts/tool-call-part";
 
 function renderTranscriptMessage(message: ParsedMessage): string {
   return renderToStaticMarkup(createElement(TranscriptMessage, { message }));
@@ -102,5 +103,58 @@ describe("TranscriptMessage", () => {
     expect(markup).toContain("Output");
     expect(markup).toContain("Processed 500000 rows");
     expect(markup).toContain("exit 0");
+  });
+
+  test("renders file changes as standalone diff cards alongside other tool calls", () => {
+    const fileChangeInput = JSON.stringify({
+      changes: [
+        {
+          diff: [
+            "diff --git a/src/app.ts b/src/app.ts",
+            "--- a/src/app.ts",
+            "+++ b/src/app.ts",
+            "@@ -1 +1 @@",
+            "-old",
+            "+new",
+          ].join("\n"),
+          kind: "update",
+          path: "/tmp/project/src/app.ts",
+        },
+      ],
+    });
+    const markup = renderTranscriptMessage({
+      id: "message_3",
+      role: "assistant",
+      text: "",
+      turnId: "turn_3",
+      parts: [
+        {
+          id: "turn_3:assistant:tool:tool_1",
+          part: {
+            type: "tool_call",
+            toolCallId: "tool_1",
+            toolName: "Read",
+            inputJson: JSON.stringify({ file_path: "/tmp/config.json" }),
+          },
+        },
+        {
+          id: "turn_3:assistant:tool:file_change_1",
+          part: {
+            type: "tool_call",
+            toolCallId: "file_change_1",
+            toolName: "file_change",
+            inputJson: fileChangeInput,
+            status: "running",
+          },
+        },
+      ],
+    });
+
+    expect(markup).toContain("config.json");
+    expect(markup).toContain("File change");
+    expect(markup).toContain("update app.ts");
+    expect(markup).toContain("diffs-container");
+    expect(buildToolPatch(fileChangeInput)).toContain("-old");
+    expect(buildToolPatch(fileChangeInput)).toContain("+new");
   });
 });

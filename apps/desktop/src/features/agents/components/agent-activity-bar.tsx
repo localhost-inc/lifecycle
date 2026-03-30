@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Shimmer } from "@lifecycle/ui";
+import { Logo, Shimmer } from "@lifecycle/ui";
 import type { AgentTurnActivity } from "@lifecycle/agents";
 
 function formatTurnActivity(activity: AgentTurnActivity | null): string {
@@ -83,7 +83,11 @@ export function AgentActivityBar({
     >
       <div className="overflow-hidden">
         <div className="flex items-center gap-1.5 px-4 py-1.5 text-[12px] text-[var(--muted-foreground)]">
-          <span className="agent-cursor-blink">&#8226;</span>
+          <Logo
+            aria-hidden
+            className="lifecycle-motion-soft-pulse shrink-0 text-[var(--foreground)]/70"
+            size={10}
+          />
           <Shimmer as="span" duration={2} spread={2} className="text-[12px]">
             {formatTurnActivity(turnActivity)}
           </Shimmer>

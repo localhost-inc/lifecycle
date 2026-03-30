@@ -154,6 +154,64 @@ describe("agents package contracts", () => {
     expect(event.session.provider).toBe("codex");
   });
 
+  test("maps worker raw provider events onto agent provider events", async () => {
+    const runtime = {} as WorkspaceClient;
+    const { driver } = createTestDriver();
+    const observedEvents: AgentEvent[] = [];
+    const implementation = createHostClient({
+      async sendTurn(_session, _workspace, _boundRuntime, callbacks, input) {
+        await callbacks.onEvent({
+          kind: "provider.raw_event",
+          eventType: "codex.notification.turn/started",
+          payload: {
+            jsonrpc: "2.0",
+            method: "turn/started",
+            params: { turn: { id: "provider_turn_1" } },
+          },
+          turnId: input.turnId,
+        });
+        await callbacks.onEvent({
+          kind: "agent.turn.completed",
+          turnId: input.turnId,
+        });
+      },
+    });
+    const client = createAgentClient({
+      agentSessionRegistry: createAgentSessionCollectionRegistry(),
+      agentWorker: implementation,
+      driver,
+      workspaceClient: runtime,
+      workspaceHost: "local",
+      now: () => "2026-03-21T00:00:00.000Z",
+      randomId: () => "agent_session_1",
+    });
+    client.subscribe((event) => {
+      observedEvents.push(event);
+    });
+
+    const session = await client.startSession({
+      provider: "codex",
+      workspaceId: "workspace_1",
+    });
+    await client.sendTurn(session.id, {
+      turnId: "turn_1",
+      input: [{ type: "text", text: "Hello" }],
+    });
+
+    expect(observedEvents).toContainEqual({
+      kind: "agent.provider.event",
+      workspaceId: "workspace_1",
+      sessionId: "agent_session_1",
+      turnId: "turn_1",
+      eventType: "codex.notification.turn/started",
+      payload: {
+        jsonrpc: "2.0",
+        method: "turn/started",
+        params: { turn: { id: "provider_turn_1" } },
+      },
+    });
+  });
+
   test("defines provider-backed sessions behind a single provider seam without UI coupling", async () => {
     const runtime = {} as WorkspaceClient;
     const input: StartAgentSessionInput = {

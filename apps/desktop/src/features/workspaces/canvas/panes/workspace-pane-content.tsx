@@ -91,10 +91,11 @@ const WorkspaceMountedSurface = memo(function WorkspaceMountedSurface({
       onLaunchSurface,
       onOpenFile,
       onTabViewStateChange,
-      paneFocused,
+      paneFocused: paneFocused && isActive,
       surfaceOpacity,
     }),
     [
+      isActive,
       launchActions,
       onFileEditorSessionStateChange,
       onLaunchSurface,

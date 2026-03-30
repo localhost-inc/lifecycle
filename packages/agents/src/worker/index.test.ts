@@ -170,6 +170,39 @@ describe("agent worker", () => {
     ]);
   });
 
+  test("passes Claude login method through the auth login command", async () => {
+    const client = createTestAgentWorker();
+
+    queuedScenarios.push((command) => {
+      emitAuthEvent(command, {
+        kind: "auth.result",
+        provider: "claude",
+        state: "authenticated",
+        organization: "console",
+      });
+      command.emitClose({ code: 0, signal: null });
+    });
+
+    const status = await client.login("claude", undefined, {
+      loginMethod: "console",
+    });
+
+    expect(createdCommands[0]?.args).toEqual([
+      "agent",
+      "auth",
+      "login",
+      "--provider",
+      "claude",
+      "--login-method",
+      "console",
+    ]);
+    expect(status).toEqual({
+      state: "authenticated",
+      email: null,
+      organization: "console",
+    });
+  });
+
   test("fetches the provider model catalog through lifecycle cli", async () => {
     const client = createTestAgentWorker();
 

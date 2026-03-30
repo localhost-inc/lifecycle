@@ -135,6 +135,7 @@ Rules:
 4. `fileChange.changes` already carries `{ path, kind, diff }`; Lifecycle should preserve that diff text and render it directly instead of synthesizing fake edit patches.
 5. `turn/diff/updated` is the turn-level aggregate patch stream, while `item/fileChange/outputDelta` is the item-level diff delta stream. Lifecycle should prefer those provider diffs over filesystem guesswork whenever it needs live patch rendering.
 6. `item/commandExecution/outputDelta` streams command stdout/stderr incrementally. Lifecycle should append those deltas in order and keep the corresponding `commandExecution.aggregatedOutput` projection live in the UI instead of waiting for the final `item.completed`.
+7. When a turn has multiple `fileChange` items, Lifecycle must not attach `turn/diff/updated` to one arbitrary item; it should keep that aggregate diff separate from per-item patches.
 
 ## Configuration Surface
 
@@ -179,6 +180,7 @@ Rules:
    `mcpServer/elicitation/request`
 3. Lifecycle must answer those server requests with the protocol-defined response payloads rather than by injecting synthetic chat text.
 4. Approval policy still matters even with host callbacks; it determines when Codex asks in the first place.
+5. MCP elicitation requests must preserve the provider-native `elicitationId` through approval identity, metadata, and raw event storage.
 
 ## Lifecycle Mapping
 
@@ -194,6 +196,7 @@ Rules:
 1. Preserve provider-native thread and item IDs.
 2. Keep Lifecycle storage provider-faithful; do not coerce Codex into a terminal-harness model.
 3. Reprojection must remain possible as OpenAI expands the SDK event surface.
+4. Lifecycle persists raw app-server requests and notifications into `agent_event` using the provider-native event type in `event_kind`; transcript rows remain a derived projection.
 
 ## Sources
 

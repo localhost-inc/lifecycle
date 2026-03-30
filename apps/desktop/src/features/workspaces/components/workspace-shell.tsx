@@ -89,9 +89,18 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
   // manager is empty, but service records may still show "ready"/"starting"
   // from the previous session. Kill orphaned processes before resetting state
   // so a subsequent Start doesn't conflict with the old instances.
+  //
+  // We include `services` in the dep array so the effect re-runs once the
+  // collection hydrates from SQLite (the first render often has an empty array).
+  // `staleResetRef` ensures we only act once.
   const staleResetRef = useRef(false);
   useEffect(() => {
     if (staleResetRef.current) return;
+
+    // Wait until the collection has hydrated — don't commit to "nothing stale"
+    // when services simply haven't loaded yet.
+    if (services.length === 0) return;
+
     staleResetRef.current = true;
 
     const staleNames = services
@@ -114,7 +123,7 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [services]);
 
   const persistPreparedAt = useCallback(
     async (preparedAt: string | null): Promise<void> => {

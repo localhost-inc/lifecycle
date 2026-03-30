@@ -105,8 +105,28 @@ interface PendingClaudeApproval {
   turnId: string;
 }
 
+interface ClaudeTurnStreamState {
+  activeToolBlocks: Map<string, { toolName: string; toolUseId: string; inputChunks: string[] }>;
+  assistantRound: number;
+  emittedAssistantBlockIds: Set<string>;
+  emittedToolUseIds: Set<string>;
+}
+
 function emitWorkerEvent(event: AgentWorkerEvent): void {
   process.stdout.write(`${JSON.stringify(event)}\n`);
+}
+
+function emitRawProviderEvent(
+  eventType: string,
+  payload: unknown,
+  turnId?: string | null,
+): void {
+  emitWorkerEvent({
+    kind: "provider.raw_event",
+    eventType,
+    payload,
+    ...(turnId === undefined ? {} : { turnId }),
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -165,6 +185,19 @@ function serializeToolInput(input: Record<string, unknown>): string | null {
 
 function getClaudeAssistantBlockKey(turnId: string, blockId: string): string {
   return `${turnId}:${blockId}`;
+}
+
+function getClaudeToolBlockKey(round: number, blockIndex: number): string {
+  return `${round}:${blockIndex}`;
+}
+
+function createClaudeTurnStreamState(): ClaudeTurnStreamState {
+  return {
+    activeToolBlocks: new Map(),
+    assistantRound: 0,
+    emittedAssistantBlockIds: new Set(),
+    emittedToolUseIds: new Set(),
+  };
 }
 
 function buildClaudeTextDeltaEvent(input: {
@@ -407,26 +440,20 @@ function createPendingApprovalPromise(
   });
 }
 
-// Track active tool blocks so we can emit their accumulated input on block stop.
-const activeToolBlocks = new Map<
-  number,
-  { toolName: string; toolUseId: string; inputChunks: string[] }
->();
-
-// Track tool_use IDs that have already been emitted to avoid duplicates.
-// Events can come from both streaming (content_block_start/stop) and assistant message.
-const emittedToolUseIds = new Set<string>();
-const emittedAssistantBlockIds = new Set<string>();
-// Track which API round we're in within a turn. The SDK reuses block indices
-// (0, 1, ...) for each round, so without a round counter the dedup set
-// silently drops text/thinking blocks from rounds after the first.
-let assistantRound = 0;
-
 function handleStreamMessage(
   message: SDKMessage,
   turnId: string,
+  streamState: ClaudeTurnStreamState,
   signal?: AbortSignal,
 ): "result" | "continue" {
+  emitRawProviderEvent(
+    message.type === "stream_event"
+      ? `claude.stream_event.${String((message.event as Record<string, unknown>)?.type ?? "unknown")}`
+      : `claude.message.${message.type}`,
+    message,
+    turnId,
+  );
+
   // Skip emitting streaming events after abort — the turn is already cancelled.
   // Still process "result" messages so the stream loop can terminate cleanly.
   if (signal?.aborted && message.type !== "result") {
@@ -448,10 +475,11 @@ function handleStreamMessage(
 
     if (event.type === "content_block_start") {
       const blockIndex = (event.index as number) ?? 0;
+      const toolBlockKey = getClaudeToolBlockKey(streamState.assistantRound, blockIndex);
       const block = event.content_block as Record<string, unknown> | undefined;
       if (block?.type === "tool_use" && typeof block.name === "string") {
         const toolUseId = (block.id as string) ?? "";
-        activeToolBlocks.set(blockIndex, {
+        streamState.activeToolBlocks.set(toolBlockKey, {
           toolName: block.name,
           toolUseId,
           inputChunks: [],
@@ -465,12 +493,13 @@ function handleStreamMessage(
       }
     } else if (event.type === "content_block_delta") {
       const blockIndex = (event.index as number) ?? 0;
+      const toolBlockKey = getClaudeToolBlockKey(streamState.assistantRound, blockIndex);
       const delta = event.delta as Record<string, unknown> | undefined;
       if (delta?.type === "text_delta" && typeof delta.text === "string") {
         // Mark this block as emitted so the assistant-message catchup path
         // (`buildClaudeAssistantContentEvents`) won't re-emit the full text.
-        const blockId = `text:${assistantRound}:${blockIndex}`;
-        emittedAssistantBlockIds.add(getClaudeAssistantBlockKey(turnId, blockId));
+        const blockId = `text:${streamState.assistantRound}:${blockIndex}`;
+        streamState.emittedAssistantBlockIds.add(getClaudeAssistantBlockKey(turnId, blockId));
         emitWorkerEvent({
           kind: "agent.message.delta",
           text: delta.text,
@@ -478,8 +507,8 @@ function handleStreamMessage(
           blockId,
         });
       } else if (delta?.type === "thinking_delta" && typeof delta.thinking === "string") {
-        const blockId = `thinking:${assistantRound}:${blockIndex}`;
-        emittedAssistantBlockIds.add(getClaudeAssistantBlockKey(turnId, blockId));
+        const blockId = `thinking:${streamState.assistantRound}:${blockIndex}`;
+        streamState.emittedAssistantBlockIds.add(getClaudeAssistantBlockKey(turnId, blockId));
         emitWorkerEvent({
           kind: "agent.thinking.delta",
           text: delta.thinking,
@@ -487,14 +516,15 @@ function handleStreamMessage(
           blockId,
         });
       } else if (delta?.type === "input_json_delta" && typeof delta.partial_json === "string") {
-        const toolBlock = activeToolBlocks.get(blockIndex);
+        const toolBlock = streamState.activeToolBlocks.get(toolBlockKey);
         if (toolBlock) {
           toolBlock.inputChunks.push(delta.partial_json);
         }
       }
     } else if (event.type === "content_block_stop") {
       const blockIndex = (event.index as number) ?? 0;
-      const toolBlock = activeToolBlocks.get(blockIndex);
+      const toolBlockKey = getClaudeToolBlockKey(streamState.assistantRound, blockIndex);
+      const toolBlock = streamState.activeToolBlocks.get(toolBlockKey);
       if (toolBlock) {
         const inputJson = toolBlock.inputChunks.join("");
         if (inputJson.length > 0) {
@@ -506,8 +536,8 @@ function handleStreamMessage(
             turnId,
           });
         }
-        emittedToolUseIds.add(toolBlock.toolUseId);
-        activeToolBlocks.delete(blockIndex);
+        streamState.emittedToolUseIds.add(toolBlock.toolUseId);
+        streamState.activeToolBlocks.delete(toolBlockKey);
       }
     }
 
@@ -578,16 +608,16 @@ function handleStreamMessage(
       : [];
     for (const event of buildClaudeAssistantContentEvents({
       content,
-      emittedBlockIds: emittedAssistantBlockIds,
-      emittedToolUseIds,
-      round: assistantRound,
+      emittedBlockIds: streamState.emittedAssistantBlockIds,
+      emittedToolUseIds: streamState.emittedToolUseIds,
+      round: streamState.assistantRound,
       turnId,
     })) {
       emitWorkerEvent(event);
     }
     // Bump the round so the next API response (after tool execution)
     // gets unique block IDs and isn't silently deduped.
-    assistantRound++;
+    streamState.assistantRound++;
     return "continue";
   }
 
@@ -606,6 +636,7 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
   // eslint-disable-next-line prefer-const -- assigned asynchronously inside processTurn
   let currentTurnAbort = null as AbortController | null;
   let cancelledTurnId: string | null = null;
+  let currentTurnStreamState: ClaudeTurnStreamState | null = null;
   let turnQueue = Promise.resolve();
 
   // The claude-agent-sdk can throw unhandled rejections for internal tool
@@ -638,8 +669,25 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
       const inputRecord = isRecord(rawInput) ? rawInput : { value: rawInput };
       const approvalId = options.toolUseID?.trim() || randomUUID();
       const turnId = currentTurnId ?? approvalId;
+      emitRawProviderEvent(
+        "claude.callback.canUseTool",
+        {
+          input: inputRecord,
+          options: {
+            blockedPath: options.blockedPath ?? null,
+            decisionReason: options.decisionReason ?? null,
+            description: options.description ?? null,
+            displayName: options.displayName ?? null,
+            suggestions: options.suggestions ?? null,
+            title: options.title ?? null,
+            toolUseID: options.toolUseID ?? null,
+          },
+          toolName,
+        },
+        turnId,
+      );
 
-      emittedToolUseIds.add(approvalId);
+      currentTurnStreamState?.emittedToolUseIds.add(approvalId);
       for (const event of buildClaudeToolUseEvents({
         toolInput: inputRecord,
         toolName,
@@ -706,12 +754,14 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
     onElicitation: async (request: ElicitationRequest): Promise<ElicitationResult> => {
       const approvalId = request.elicitationId?.trim() || randomUUID();
       const turnId = currentTurnId ?? approvalId;
+      emitRawProviderEvent("claude.callback.onElicitation", request, turnId);
       const resolution = await createPendingApprovalPromise(
         {
           id: approvalId,
           kind: "question",
           message: request.message,
           metadata: {
+            elicitationId: request.elicitationId ?? null,
             mode: request.mode ?? null,
             requestedSchema: request.requestedSchema ?? null,
             serverName: request.serverName,
@@ -793,7 +843,7 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
     }
 
     currentTurnId = command.turnId;
-    assistantRound = 0;
+    currentTurnStreamState = createClaudeTurnStreamState();
     const abort = new AbortController();
     currentTurnAbort = abort;
 
@@ -850,7 +900,12 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
           break;
         }
         await emitReadyIfNeeded(message);
-        const action = handleStreamMessage(message, command.turnId, abort.signal);
+        const action = handleStreamMessage(
+          message,
+          command.turnId,
+          currentTurnStreamState,
+          abort.signal,
+        );
 
         if (action !== "result") {
           continue;
@@ -919,6 +974,7 @@ export async function runClaudeWorker(input: ClaudeWorkerInput): Promise<number>
     } finally {
       currentTurnId = null;
       currentTurnAbort = null;
+      currentTurnStreamState = null;
       if (cancelledTurnId === command.turnId) {
         cancelledTurnId = null;
       }

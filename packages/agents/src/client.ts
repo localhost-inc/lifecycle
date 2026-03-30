@@ -14,7 +14,12 @@ import {
 import type { WorkspaceClient } from "@lifecycle/workspace/client";
 import type { AgentModelCatalog } from "./catalog";
 import type { AgentEventObserver } from "./events";
-import type { AgentModelCatalogOptions, AgentWorker, AgentWorkerCallbacks } from "./worker";
+import type {
+  AgentAuthOptions,
+  AgentModelCatalogOptions,
+  AgentWorker,
+  AgentWorkerCallbacks,
+} from "./worker";
 import type { AgentAuthStatus } from "./providers/auth";
 import type { AgentApprovalResolution, AgentTurnCancelRequest, AgentTurnRequest } from "./turn";
 import type { AgentWorkerEvent, AgentWorkerSnapshot } from "./worker/protocol";
@@ -44,6 +49,7 @@ export interface AgentClient {
   login(
     provider: AgentSessionProviderId,
     onStatus?: (status: AgentAuthStatus) => void,
+    options?: AgentAuthOptions,
   ): Promise<AgentAuthStatus>;
   createDraftSession(input: StartAgentSessionInput): Promise<AgentSessionRecord>;
   bootstrapSession(agentSessionId: string): Promise<AgentSessionRecord>;
@@ -144,8 +150,9 @@ class AgentClientImpl implements AgentClient {
   login(
     provider: AgentSessionProviderId,
     onStatus?: (status: AgentAuthStatus) => void,
+    options?: AgentAuthOptions,
   ): Promise<AgentAuthStatus> {
-    return this.agentWorker.login(provider, onStatus);
+    return this.agentWorker.login(provider, onStatus, options);
   }
 
   startSession(input: StartAgentSessionInput): Promise<AgentSessionRecord> {
@@ -621,49 +628,23 @@ class AgentClientImpl implements AgentClient {
             });
             return;
           case "file_change":
-            if (event.item.changes.length === 0) {
-              await events.emit({
-                kind: "agent.message.part.completed",
-                messageId: `${event.turnId}:assistant`,
-                part: {
-                  type: "tool_call",
-                  toolCallId: event.item.id,
-                  toolName: "file_change",
-                  inputJson: JSON.stringify({
-                    changes: event.item.changes,
-                    diff: event.item.diff ?? null,
-                  }),
-                  status: event.item.status,
-                },
-                partId: `${event.turnId}:assistant:tool:${event.item.id}`,
-                sessionId,
-                workspaceId,
-              });
-              return;
-            }
-
-            for (const [index, change] of event.item.changes.entries()) {
-              const toolName =
-                change.kind === "delete" ? "Delete" : change.kind === "add" ? "Write" : "Edit";
-              await events.emit({
-                kind: "agent.message.part.completed",
-                messageId: `${event.turnId}:assistant`,
-                part: {
-                  type: "tool_call",
-                  toolCallId: `${event.item.id}:${index}`,
-                  toolName,
-                  inputJson: JSON.stringify({
-                    changeKind: change.kind,
-                    diff: change.diff ?? null,
-                    filePath: change.path,
-                  }),
-                  status: event.item.status,
-                },
-                partId: `${event.turnId}:assistant:tool:${event.item.id}:${index}`,
-                sessionId,
-                workspaceId,
-              });
-            }
+            await events.emit({
+              kind: "agent.message.part.completed",
+              messageId: `${event.turnId}:assistant`,
+              part: {
+                type: "tool_call",
+                toolCallId: event.item.id,
+                toolName: "file_change",
+                inputJson: JSON.stringify({
+                  changes: event.item.changes,
+                  diff: event.item.diff ?? null,
+                }),
+                status: event.item.status,
+              },
+              partId: `${event.turnId}:assistant:tool:${event.item.id}`,
+              sessionId,
+              workspaceId,
+            });
             return;
           case "error":
             await events.emit({
@@ -712,6 +693,16 @@ class AgentClientImpl implements AgentClient {
           workspaceId,
           status: event.status,
           detail: event.detail ?? null,
+        });
+        return;
+      case "provider.raw_event":
+        await events.emit({
+          kind: "agent.provider.event",
+          sessionId,
+          workspaceId,
+          turnId: event.turnId ?? null,
+          eventType: event.eventType,
+          payload: event.payload,
         });
         return;
       case "agent.turn.completed":

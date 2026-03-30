@@ -31,6 +31,7 @@ interface DesktopBootstrapHotData {
   agentClientRegistry?: AgentClientRegistry;
   agentMessageRegistry?: AgentMessageCollectionRegistry;
   agentSessionRegistry?: AgentSessionCollectionRegistry;
+  didReattachAgentSessions?: boolean;
   dockerAgentClient?: ReturnType<typeof createAgentClient>;
   localAgentWorker?: ReturnType<typeof createLocalAgentWorker>;
   localAgentClient?: ReturnType<typeof createAgentClient>;
@@ -152,24 +153,26 @@ const agentClientRegistry =
     local: localAgentClient,
   });
 
-void waitForDbReady()
-  .then(async () => {
-    await Promise.all([
-      reattachActiveAgentSessions({
-        agentClient: localAgentClient,
-        driver: db,
-        workspaceHost: "local",
-      }),
-      reattachActiveAgentSessions({
-        agentClient: dockerAgentClient,
-        driver: db,
-        workspaceHost: "docker",
-      }),
-    ]);
-  })
-  .catch((error) => {
-    console.error("[db] failed to initialize the local database:", error);
-  });
+if (!hotData?.didReattachAgentSessions) {
+  void waitForDbReady()
+    .then(async () => {
+      await Promise.all([
+        reattachActiveAgentSessions({
+          agentClient: localAgentClient,
+          driver: db,
+          workspaceHost: "local",
+        }),
+        reattachActiveAgentSessions({
+          agentClient: dockerAgentClient,
+          driver: db,
+          workspaceHost: "docker",
+        }),
+      ]);
+    })
+    .catch((error) => {
+      console.error("[db] failed to initialize the local database:", error);
+    });
+}
 
 const container = document.getElementById("root");
 if (!container) {
@@ -182,6 +185,7 @@ if (import.meta.hot) {
   import.meta.hot.data.agentClientRegistry = agentClientRegistry;
   import.meta.hot.data.agentMessageRegistry = agentMessageRegistry;
   import.meta.hot.data.agentSessionRegistry = agentSessionRegistry;
+  import.meta.hot.data.didReattachAgentSessions = true;
   import.meta.hot.data.dockerAgentClient = dockerAgentClient;
   import.meta.hot.data.localWorkspaceClient = localWorkspaceClient;
   import.meta.hot.data.localAgentWorker = localAgentWorker;

@@ -1,7 +1,7 @@
 import { EmptyState } from "@lifecycle/ui";
 import { Bot } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useStickToBottom } from "use-stick-to-bottom";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { AgentApprovalDecision, AgentImageMediaType, AgentInputPart } from "@lifecycle/agents";
 import { diffTheme } from "@lifecycle/ui";
 import { isTauri } from "@tauri-apps/api/core";
@@ -77,13 +77,7 @@ interface AgentSurfaceProps {
   workspaceId: string;
 }
 
-const TranscriptMessageList = memo(function TranscriptMessageList({
-  messages,
-  isRunning,
-  onResolveApproval,
-  onOpenFile,
-  resolvingApprovalIds,
-}: {
+interface TranscriptItemContext {
   messages: ParsedMessage[];
   isRunning: boolean;
   onResolveApproval: (
@@ -93,22 +87,26 @@ const TranscriptMessageList = memo(function TranscriptMessageList({
   ) => Promise<void>;
   onOpenFile: (filePath: string) => void;
   resolvingApprovalIds: ReadonlySet<string>;
-}) {
+}
+
+function TranscriptItemContent(index: number, _data: unknown, context: TranscriptItemContext) {
+  const message = context.messages[index];
+  if (!message) return null;
   return (
-    <>
-      {messages.map((message, i) => (
-        <TranscriptMessage
-          key={message.id}
-          message={message}
-          isStreaming={isRunning && i === messages.length - 1 && message.role === "assistant"}
-          onResolveApproval={onResolveApproval}
-          onOpenFile={onOpenFile}
-          resolvingApprovalIds={resolvingApprovalIds}
-        />
-      ))}
-    </>
+    <TranscriptMessage
+      key={message.id}
+      message={message}
+      isStreaming={
+        context.isRunning &&
+        index === context.messages.length - 1 &&
+        message.role === "assistant"
+      }
+      onResolveApproval={context.onResolveApproval}
+      onOpenFile={context.onOpenFile}
+      resolvingApprovalIds={context.resolvingApprovalIds}
+    />
   );
-});
+}
 
 function buildParsedMessages(records: AgentMessageWithParts[] | undefined): ParsedMessage[] {
   const raw = (records ?? []).map((record) => ({
@@ -160,7 +158,8 @@ export const AgentSurface = memo(function AgentSurface({
   const promptQueue = useAgentPromptQueueState(agentSessionId);
   const { harnesses, resolvedTheme, setClaudeHarnessSettings, setCodexHarnessSettings } =
     useSettings();
-  const providerForCatalog = session?.provider === "codex" ? "codex" : "claude";
+  const sessionProvider = session?.provider ?? "claude";
+  const providerForCatalog = sessionProvider === "codex" ? "codex" : "claude";
   const [catalogEnabled, setCatalogEnabled] = useState(false);
   const modelCatalog = useAgentModelCatalog(providerForCatalog, {
     enabled: catalogEnabled,
@@ -188,15 +187,14 @@ export const AgentSurface = memo(function AgentSurface({
   const [pendingImages, setPendingImages] = useState<
     Array<{ mediaType: AgentImageMediaType; base64Data: string }>
   >([]);
-  // Tabs stay mounted across switches so the DOM preserves scroll position.
-  // useStickToBottom handles auto-scroll during streaming only.
-  const { scrollRef, contentRef, scrollToBottom } = useStickToBottom({
-    initial: "instant",
-    resize: "instant",
-  });
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const hasScrolledToBottomRef = useRef(false);
+  const scrollToBottom = useCallback(() => {
+    virtuosoRef.current?.scrollToIndex({ index: "LAST", behavior: "smooth" });
+  }, []);
   const promptComposerRef = useRef<AgentPromptInputHandle>(null);
 
-  const isClaude = session?.provider === "claude";
+  const isClaude = sessionProvider === "claude";
   const planMode = isClaude
     ? harnesses.claude.permissionMode === "plan"
     : harnesses.codex.sandboxMode === "read-only";
@@ -325,6 +323,10 @@ export const AgentSurface = memo(function AgentSurface({
 
     const optimistic: ParsedMessage[] = [];
     for (const queued of promptQueue.prompts) {
+      // Skip the prompt currently being dispatched — it will appear (or already
+      // has appeared) in the persisted messages from the DB, so including it
+      // here would cause a duplicate.
+      if (queued.id === promptQueue.dispatchingPromptId) continue;
       const text = queued.input
         .filter((p): p is Extract<typeof p, { type: "text" }> => p.type === "text")
         .map((p) => p.text)
@@ -340,7 +342,18 @@ export const AgentSurface = memo(function AgentSurface({
     }
 
     return optimistic.length > 0 ? [...persisted, ...optimistic] : persisted;
-  }, [dbMessages.data, promptQueue.prompts]);
+  }, [dbMessages.data, promptQueue.dispatchingPromptId, promptQueue.prompts]);
+
+  // Scroll to bottom once when messages first load (e.g. after HMR or reattach).
+  // Use rAF to ensure Virtuoso has actually rendered before scrolling.
+  useEffect(() => {
+    if (messages.length > 0 && !hasScrolledToBottomRef.current) {
+      hasScrolledToBottomRef.current = true;
+      requestAnimationFrame(() => {
+        virtuosoRef.current?.scrollToIndex({ index: "LAST", behavior: "auto" });
+      });
+    }
+  }, [messages.length]);
 
   const handleOpenFile = useCallback(
     (filePath: string): void => {
@@ -357,7 +370,7 @@ export const AgentSurface = memo(function AgentSurface({
     [workspace?.worktree_path, workspaceId, openTab],
   );
 
-  function addImagesFromFiles(files: FileList | File[]): void {
+  const addImagesFromFiles = useCallback((files: FileList | File[]): void => {
     const validTypes = new Set<AgentImageMediaType>([
       "image/png",
       "image/jpeg",
@@ -379,7 +392,7 @@ export const AgentSurface = memo(function AgentSurface({
       };
       reader.readAsDataURL(file);
     }
-  }
+  }, []);
 
   const addImagesFromPaths = useCallback(async (paths: string[]) => {
     for (const filePath of paths) {
@@ -480,7 +493,7 @@ export const AgentSurface = memo(function AgentSurface({
     state.pendingApprovals.length,
   ]);
 
-  function queueMessage(): void {
+  const queueMessage = useCallback((): void => {
     const prompt = draftPrompt.trim();
     if (prompt.length === 0 && pendingImages.length === 0) return;
     if (!session) return;
@@ -530,17 +543,34 @@ export const AgentSurface = memo(function AgentSurface({
 
     // Otherwise, queue for later dispatch.
     queueAgentPrompt(agentSessionId, input);
-  }
+  }, [
+    agentSessionId,
+    activeTurnId,
+    agentClient,
+    draftPrompt,
+    pendingImages,
+    promptQueue.dispatchingPromptId,
+    promptQueue.prompts.length,
+    scrollToBottom,
+    session,
+    state.pendingApprovals.length,
+  ]);
 
-  function handleRetryQueuedPrompt(promptId: string): void {
-    retryAgentPrompt(agentSessionId, promptId);
-    setSendError(null);
-  }
+  const handleRetryQueuedPrompt = useCallback(
+    (promptId: string): void => {
+      retryAgentPrompt(agentSessionId, promptId);
+      setSendError(null);
+    },
+    [agentSessionId],
+  );
 
-  function handleDismissQueuedPrompt(promptId: string): void {
-    dismissAgentPrompt(agentSessionId, promptId);
-    setSendError(null);
-  }
+  const handleDismissQueuedPrompt = useCallback(
+    (promptId: string): void => {
+      dismissAgentPrompt(agentSessionId, promptId);
+      setSendError(null);
+    },
+    [agentSessionId],
+  );
 
   const sessionId = session?.id ?? null;
   const handleResolveApproval = useCallback(
@@ -579,27 +609,27 @@ export const AgentSurface = memo(function AgentSurface({
     [sessionId, agentClient],
   );
 
-  if (!session) {
-    return (
-      <EmptyState
-        description="Lifecycle could not find this agent session."
-        icon={<Bot />}
-        title="Agent unavailable"
-      />
-    );
-  }
+  const onDraftPromptChange = useCallback(
+    (value: string) => setDraftPrompt(value),
+    [],
+  );
+  const onRemovePendingImage = useCallback(
+    (i: number) => setPendingImages((prev) => prev.filter((_, j) => j !== i)),
+    [],
+  );
 
-  if (dbMessages.error) {
-    return (
-      <DiffRenderProvider theme={theme}>
-        <EmptyState
-          description={dbMessages.error.message}
-          icon={<Bot />}
-          title="Agent transcript unavailable"
-        />
-      </DiffRenderProvider>
-    );
-  }
+  const displayStatus = useMemo(() => deriveAgentDisplayStatus(state), [state]);
+
+  const transcriptContext = useMemo<TranscriptItemContext>(
+    () => ({
+      messages,
+      isRunning,
+      onResolveApproval: handleResolveApproval,
+      onOpenFile: handleOpenFile,
+      resolvingApprovalIds,
+    }),
+    [messages, isRunning, handleResolveApproval, handleOpenFile, resolvingApprovalIds],
+  );
 
   const visibleError = sendError ?? state.lastError;
   const showThinking =
@@ -609,7 +639,7 @@ export const AgentSurface = memo(function AgentSurface({
     promptQueue.prompts.length - (promptQueue.dispatchingPromptId !== null ? 1 : 0),
   );
   const showCenteredComposer =
-    (session.status === "idle" || session.status === "starting") &&
+    (session?.status === "idle" || session?.status === "starting") &&
     messages.length === 0 &&
     promptQueue.prompts.length === 0 &&
     state.pendingTurnIds.length === 0 &&
@@ -663,7 +693,7 @@ export const AgentSurface = memo(function AgentSurface({
         },
         reasoning: {
           options: buildReasoningOptions(
-            session.provider,
+            sessionProvider,
             catalogModel?.reasoningEfforts ?? [],
             s.effort,
           ),
@@ -710,7 +740,7 @@ export const AgentSurface = memo(function AgentSurface({
       },
       reasoning: {
         options: buildReasoningOptions(
-          session.provider,
+          sessionProvider,
           catalogModel?.reasoningEfforts ?? [],
           s.reasoningEffort,
         ),
@@ -721,46 +751,99 @@ export const AgentSurface = memo(function AgentSurface({
       },
     };
   })();
-  const composerQueuedPrompts = promptQueue.prompts.map((entry) => ({
-    attachmentSummary: entry.preview.attachmentSummary,
-    error: entry.error,
-    id: entry.id,
-    text: entry.preview.text,
-  }));
-  const composerPromptProps = {
-    agentSessionId,
-    commandItems: agentCommands,
-    draftPrompt,
-    error: visibleError ?? null,
-    fileItems: explorer.items,
-    isRunning,
-    onAddImagesFromFiles: addImagesFromFiles,
-    onDismissQueuedPrompt: handleDismissQueuedPrompt,
-    onDraftPromptChange: (value: string) => setDraftPrompt(value),
-    onRemovePendingImage: (i: number) => setPendingImages((prev) => prev.filter((_, j) => j !== i)),
-    onRetryQueuedPrompt: handleRetryQueuedPrompt,
-    onSend: queueMessage,
-    pendingImages,
-    planMode,
-    queuedPrompts: composerQueuedPrompts,
-  };
-  const composerToolbarProps = {
-    catalogError: modelCatalog.error,
-    catalogLoading: modelCatalog.isLoading,
-    debug: {
-      messages: dbMessages.data ?? [],
-      session,
-      sessionState: state,
-    },
-    displayStatus: deriveAgentDisplayStatus(state),
-    model: provider.model,
-    permissions: provider.permissions,
-    providerName: provider.name,
-    ProviderIcon: provider.Icon,
-    reasoning: provider.reasoning,
-    responseReady: state.responseReady,
-    usage: state.usage,
-  };
+  const composerQueuedPrompts = useMemo(
+    () =>
+      promptQueue.prompts.map((entry) => ({
+        attachmentSummary: entry.preview.attachmentSummary,
+        error: entry.error,
+        id: entry.id,
+        text: entry.preview.text,
+      })),
+    [promptQueue.prompts],
+  );
+  const composerPromptProps = useMemo(
+    () => ({
+      agentSessionId,
+      commandItems: agentCommands,
+      draftPrompt,
+      error: visibleError ?? null,
+      fileItems: explorer.items,
+      isRunning,
+      onAddImagesFromFiles: addImagesFromFiles,
+      onDismissQueuedPrompt: handleDismissQueuedPrompt,
+      onDraftPromptChange,
+      onRemovePendingImage,
+      onRetryQueuedPrompt: handleRetryQueuedPrompt,
+      onSend: queueMessage,
+      pendingImages,
+      planMode,
+      queuedPrompts: composerQueuedPrompts,
+    }),
+    [
+      agentSessionId,
+      agentCommands,
+      draftPrompt,
+      visibleError,
+      explorer.items,
+      isRunning,
+      addImagesFromFiles,
+      handleDismissQueuedPrompt,
+      onDraftPromptChange,
+      onRemovePendingImage,
+      handleRetryQueuedPrompt,
+      queueMessage,
+      pendingImages,
+      planMode,
+      composerQueuedPrompts,
+    ],
+  );
+  const debugRef = useRef({ messages: dbMessages.data ?? [], session, sessionState: state });
+  debugRef.current = { messages: dbMessages.data ?? [], session, sessionState: state };
+  const composerToolbarProps = useMemo(
+    () => ({
+      catalogError: modelCatalog.error,
+      catalogLoading: modelCatalog.isLoading,
+      debugRef,
+      displayStatus,
+      model: provider.model,
+      permissions: provider.permissions,
+      providerName: provider.name,
+      ProviderIcon: provider.Icon,
+      reasoning: provider.reasoning,
+      responseReady: state.responseReady,
+      usage: state.usage,
+    }),
+    [
+      modelCatalog.error,
+      modelCatalog.isLoading,
+      displayStatus,
+      provider,
+      state.responseReady,
+      state.usage,
+    ],
+  );
+
+  if (!session) {
+    return (
+      <EmptyState
+        description="Lifecycle could not find this agent session."
+        icon={<Bot />}
+        title="Agent unavailable"
+      />
+    );
+  }
+
+  if (dbMessages.error) {
+    return (
+      <DiffRenderProvider theme={theme}>
+        <EmptyState
+          description={dbMessages.error.message}
+          icon={<Bot />}
+          title="Agent transcript unavailable"
+        />
+      </DiffRenderProvider>
+    );
+  }
 
   return (
     <DiffRenderProvider theme={theme}>
@@ -787,71 +870,55 @@ export const AgentSurface = memo(function AgentSurface({
           </div>
         ) : (
           <>
-            {/* Transcript */}
-            <div
-              ref={scrollRef}
-              className="agent-message-list relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
-              onClick={(e) => {
-                const anchor = (e.target as HTMLElement).closest("a[href]");
-                if (anchor) {
-                  const href = anchor.getAttribute("href");
-                  if (href && /^https?:\/\//.test(href)) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    void openUrl(href);
-                    return;
-                  }
-                }
-                const selection = window.getSelection();
-                if (!selection || selection.isCollapsed) {
-                  promptComposerRef.current?.focus();
-                }
+            {/* Virtualized transcript */}
+            <Virtuoso
+              ref={virtuosoRef}
+              className="agent-message-list relative min-h-0 flex-1"
+              context={transcriptContext}
+              computeItemKey={(index) => messages[index]?.id ?? index}
+              totalCount={messages.length}
+              itemContent={TranscriptItemContent}
+              initialTopMostItemIndex={messages.length > 0 ? messages.length - 1 : 0}
+              followOutput="smooth"
+              increaseViewportBy={{ top: 400, bottom: 200 }}
+              alignToBottom
+              atBottomThreshold={40}
+              components={{
+                Header: () => (
+                  <div className="pt-4">
+                    {session.status === "starting" ? (
+                      <div className="px-4 py-3 text-[13px] leading-6 text-[var(--muted-foreground)]">
+                        <span className="text-[var(--accent)]">[~]</span> starting {provider.name}...
+                      </div>
+                    ) : null}
+                    {state.authStatus?.mode === "authenticating" ? (
+                      <div className="px-4 py-3 text-[13px] leading-6 text-[var(--muted-foreground)]">
+                        <span className="text-[var(--accent)]">[~]</span> signing in to{" "}
+                        {provider.name}...
+                      </div>
+                    ) : null}
+                    {state.authStatus?.mode === "error" ? (
+                      <div className="px-4 py-3 text-[13px] leading-6 text-[var(--destructive)]">
+                        <span>[!]</span> authentication failed
+                      </div>
+                    ) : null}
+                    {session.status === "failed" &&
+                    state.authStatus?.mode !== "error" &&
+                    !visibleError ? (
+                      <div className="px-4 py-3 text-[13px] leading-6 text-[var(--destructive)]">
+                        <span>[!]</span> failed to start {provider.name}
+                      </div>
+                    ) : null}
+                  </div>
+                ),
+                Footer: () => (
+                  <AgentActivityBar
+                    turnActivity={state.turnActivity}
+                    queuedMessageCount={queuedMessageCount}
+                    visible={showThinking}
+                  />
+                ),
               }}
-            >
-              <div ref={contentRef} className="flex min-h-full flex-col">
-                <div className="flex-1 pt-4" />
-
-                {/* Auth status */}
-                {session.status === "starting" ? (
-                  <div className="px-4 py-3 text-[13px] leading-6 text-[var(--muted-foreground)]">
-                    <span className="text-[var(--accent)]">[~]</span> starting {provider.name}...
-                  </div>
-                ) : null}
-                {state.authStatus?.mode === "authenticating" ? (
-                  <div className="px-4 py-3 text-[13px] leading-6 text-[var(--muted-foreground)]">
-                    <span className="text-[var(--accent)]">[~]</span> signing in to {provider.name}
-                    ...
-                  </div>
-                ) : null}
-                {state.authStatus?.mode === "error" ? (
-                  <div className="px-4 py-3 text-[13px] leading-6 text-[var(--destructive)]">
-                    <span>[!]</span> authentication failed
-                  </div>
-                ) : null}
-                {session.status === "failed" &&
-                state.authStatus?.mode !== "error" &&
-                !visibleError ? (
-                  <div className="px-4 py-3 text-[13px] leading-6 text-[var(--destructive)]">
-                    <span>[!]</span> failed to start {provider.name}
-                  </div>
-                ) : null}
-
-                {/* Messages — single source from DB collection */}
-                <TranscriptMessageList
-                  messages={messages}
-                  isRunning={isRunning}
-                  onResolveApproval={handleResolveApproval}
-                  onOpenFile={handleOpenFile}
-                  resolvingApprovalIds={resolvingApprovalIds}
-                />
-              </div>
-
-            </div>
-
-            <AgentActivityBar
-              turnActivity={state.turnActivity}
-              queuedMessageCount={queuedMessageCount}
-              visible={showThinking}
             />
 
             <AgentComposer

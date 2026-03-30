@@ -47,5 +47,8 @@
   "workspaces": [
     "apps/*",
     "packages/*"
-  ]
+  ],
+  "dependencies": {
+    "react-virtuoso": "^4.18.3"
+  }
 }

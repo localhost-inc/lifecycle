@@ -23,31 +23,7 @@ interface MessagePartRow {
   part_created_at: string | null;
 }
 
-export async function selectAgentMessagesBySession(
-  driver: SqlDriver,
-  sessionId: string,
-): Promise<AgentMessageWithParts[]> {
-  const rows = await driver.select<MessagePartRow>(
-    `SELECT
-       m.id,
-       m.session_id,
-       m.role,
-       m.text,
-       m.turn_id,
-       m.created_at,
-       p.id AS part_id,
-       p.part_index,
-       p.part_type,
-       p.text AS part_text,
-       p.data AS part_data,
-       p.created_at AS part_created_at
-     FROM agent_message m
-     LEFT JOIN agent_message_part p ON p.message_id = m.id
-     WHERE m.session_id = $1
-     ORDER BY m.created_at ASC, m.id ASC, p.part_index ASC`,
-    [sessionId],
-  );
-
+function rowsToAgentMessages(rows: MessagePartRow[]): AgentMessageWithParts[] {
   const messagesMap = new Map<string, AgentMessageWithParts>();
 
   for (const row of rows) {
@@ -82,6 +58,62 @@ export async function selectAgentMessagesBySession(
   }
 
   return [...messagesMap.values()];
+}
+
+export async function selectAgentMessagesBySession(
+  driver: SqlDriver,
+  sessionId: string,
+): Promise<AgentMessageWithParts[]> {
+  const rows = await driver.select<MessagePartRow>(
+    `SELECT
+       m.id,
+       m.session_id,
+       m.role,
+       m.text,
+       m.turn_id,
+       m.created_at,
+       p.id AS part_id,
+       p.part_index,
+       p.part_type,
+       p.text AS part_text,
+       p.data AS part_data,
+       p.created_at AS part_created_at
+     FROM agent_message m
+     LEFT JOIN agent_message_part p ON p.message_id = m.id
+     WHERE m.session_id = $1
+     ORDER BY m.created_at ASC, m.id ASC, p.part_index ASC`,
+    [sessionId],
+  );
+
+  return rowsToAgentMessages(rows);
+}
+
+export async function selectAgentMessageById(
+  driver: SqlDriver,
+  messageId: string,
+): Promise<AgentMessageWithParts | null> {
+  const rows = await driver.select<MessagePartRow>(
+    `SELECT
+       m.id,
+       m.session_id,
+       m.role,
+       m.text,
+       m.turn_id,
+       m.created_at,
+       p.id AS part_id,
+       p.part_index,
+       p.part_type,
+       p.text AS part_text,
+       p.data AS part_data,
+       p.created_at AS part_created_at
+     FROM agent_message m
+     LEFT JOIN agent_message_part p ON p.message_id = m.id
+     WHERE m.id = $1
+     ORDER BY m.created_at ASC, m.id ASC, p.part_index ASC`,
+    [messageId],
+  );
+
+  return rowsToAgentMessages(rows)[0] ?? null;
 }
 
 export async function upsertAgentMessage(

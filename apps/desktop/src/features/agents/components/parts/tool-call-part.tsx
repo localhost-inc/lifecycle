@@ -5,14 +5,66 @@ import { PatchDiff } from "@pierre/diffs/react";
 import type { AgentToolCallStatus } from "@lifecycle/agents";
 import { withCopyableGitDiffOptions } from "@/features/git/components/git-diff-rendering";
 
+interface ParsedFileChange {
+  diff?: string;
+  kind: "add" | "delete" | "update";
+  path: string;
+}
+
+function parseFileChanges(input: Record<string, unknown>): ParsedFileChange[] {
+  const changes = input.changes;
+  if (!Array.isArray(changes)) {
+    return [];
+  }
+
+  return changes.flatMap((change): ParsedFileChange[] => {
+    if (!change || typeof change !== "object" || Array.isArray(change)) {
+      return [];
+    }
+
+    const record = change as Record<string, unknown>;
+    const path = typeof record.path === "string" ? record.path : null;
+    const kind = typeof record.kind === "string" ? record.kind : null;
+    if (!path || (kind !== "add" && kind !== "delete" && kind !== "update")) {
+      return [];
+    }
+
+    const diff = typeof record.diff === "string" ? record.diff : undefined;
+    return [{ ...(diff ? { diff } : {}), kind, path }];
+  });
+}
+
+function summarizeFileChanges(changes: ParsedFileChange[]): string | null {
+  if (changes.length === 0) {
+    return null;
+  }
+
+  if (changes.length === 1) {
+    const change = changes[0]!;
+    return `${change.kind} ${change.path.replace(/.*\//, "")}`;
+  }
+
+  return `${changes.length} files`;
+}
+
 export function buildToolPatch(inputJson: string): string | null {
   try {
     const input = JSON.parse(inputJson) as Record<string, unknown>;
     const diff = typeof input.diff === "string" ? input.diff : null;
     const unifiedDiff = typeof input.unified_diff === "string" ? input.unified_diff : null;
+    const fileChangeDiff = parseFileChanges(input)
+      .map((change) => change.diff)
+      .filter((value): value is string => typeof value === "string" && value.length > 0)
+      .join("\n");
     if (diff) return diff;
     if (unifiedDiff) return unifiedDiff;
-    const filePath = typeof input.file_path === "string" ? input.file_path : "file";
+    if (fileChangeDiff) return fileChangeDiff;
+    const filePath =
+      typeof input.file_path === "string"
+        ? input.file_path
+        : typeof input.filePath === "string"
+          ? input.filePath
+          : "file";
     const oldStr = typeof input.old_string === "string" ? input.old_string : "";
     const newStr = typeof input.new_string === "string" ? input.new_string : "";
     if (!oldStr && !newStr) return null;
@@ -37,85 +89,6 @@ function ToolDiffView({ inputJson }: { inputJson: string }) {
       />
     </div>
   );
-}
-
-function extractToolMeta(toolName: string, inputJson?: string): string | null {
-  if (!inputJson) return null;
-  try {
-    const input = JSON.parse(inputJson) as Record<string, unknown>;
-    const fileChangeSummary = (() => {
-      const changes = input.changes;
-      if (!Array.isArray(changes) || changes.length === 0) {
-        return null;
-      }
-
-      const normalized = changes.flatMap((change) => {
-        if (!change || typeof change !== "object" || Array.isArray(change)) {
-          return [];
-        }
-        const record = change as Record<string, unknown>;
-        const path = typeof record.path === "string" ? record.path : null;
-        const kind = typeof record.kind === "string" ? record.kind : null;
-        if (!path || !kind) {
-          return [];
-        }
-        return [{ kind, path }] as const;
-      });
-
-      if (normalized.length === 0) {
-        return null;
-      }
-
-      if (normalized.length === 1) {
-        const change = normalized[0]!;
-        return `${change.kind} ${change.path.replace(/.*\//, "")}`;
-      }
-
-      return `${normalized.length} files`;
-    })();
-
-    switch (toolName) {
-      case "Read":
-      case "Write":
-      case "Edit":
-      case "Delete":
-      case "DeleteFile":
-        return typeof input.file_path === "string" ? input.file_path.replace(/.*\//, "") : null;
-      case "Glob":
-      case "Grep":
-        return typeof input.pattern === "string" ? input.pattern : null;
-      case "ToolSearch":
-      case "WebSearch":
-        return typeof input.query === "string"
-          ? input.query.length > 60
-            ? `${input.query.slice(0, 57)}...`
-            : input.query
-          : null;
-      case "WebFetch":
-        return typeof input.url === "string"
-          ? input.url.replace(/^https?:\/\//, "").slice(0, 60)
-          : null;
-      case "Bash":
-      case "command_execution":
-        return typeof input.command === "string"
-          ? input.command.length > 60
-            ? `${input.command.slice(0, 57)}...`
-            : input.command
-          : null;
-      case "file_change":
-        return fileChangeSummary;
-      case "Agent":
-        return typeof input.subagent_type === "string"
-          ? input.subagent_type
-          : typeof input.description === "string"
-            ? input.description
-            : null;
-      default:
-        return null;
-    }
-  } catch {
-    return null;
-  }
 }
 
 function formatToolName(toolName: string): string {
@@ -163,7 +136,12 @@ function buildToolCallHeader(
     /* ignore */
   }
 
-  const filePath = typeof input?.file_path === "string" ? input.file_path : null;
+  const filePath =
+    typeof input?.file_path === "string"
+      ? input.file_path
+      : typeof input?.filePath === "string"
+        ? input.filePath
+        : null;
   const shortPath = filePath?.replace(/.*\//, "") ?? null;
 
   switch (toolName) {
@@ -230,8 +208,14 @@ function buildToolCallHeader(
         summary: null,
       };
     case "file_change": {
-      const meta = extractToolMeta(toolName, inputJson);
-      return { verb: "File change", subject: meta, filePath: null, summary: null };
+      const changes = input ? parseFileChanges(input) : [];
+      const primaryChange = changes.length === 1 ? changes[0]! : null;
+      return {
+        verb: "File change",
+        subject: summarizeFileChanges(changes),
+        filePath: primaryChange?.path ?? null,
+        summary: null,
+      };
     }
     default:
       return { verb: formatToolName(toolName), subject: null, filePath: null, summary: null };
@@ -306,7 +290,11 @@ export function ToolCallPart({
   const { verb, subject, filePath, summary } = buildToolCallHeader(toolName, inputJson);
   const diffInputJson = typeof inputJson === "string" ? inputJson : null;
   const hasToolDiff =
-    (toolName === "Edit" || toolName === "Write" || toolName === "Delete") &&
+    (toolName === "Edit" ||
+      toolName === "Write" ||
+      toolName === "Delete" ||
+      toolName === "DeleteFile" ||
+      toolName === "file_change") &&
     diffInputJson !== null &&
     buildToolPatch(diffInputJson) !== null;
   const agentPrompt = toolName === "Agent" ? extractAgentPrompt(inputJson) : null;
@@ -329,7 +317,7 @@ export function ToolCallPart({
   const isCompleted = status === "completed" || status === "failed" || status === "cancelled";
 
   return (
-    <div className={["my-0.5 transition-opacity", isCompleted ? "opacity-50" : ""].join(" ")}>
+    <div className={["transition-opacity", isCompleted ? "opacity-50" : ""].join(" ")}>
       <div className="flex items-center gap-1.5 text-[12px] text-[var(--muted-foreground)]">
         {hasFailed(status, errorText) ? (
           <span className="flex size-3 shrink-0 items-center justify-center">

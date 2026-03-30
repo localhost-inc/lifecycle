@@ -1,4 +1,4 @@
-import { useState, type ComponentType } from "react";
+import { memo, useState, type MutableRefObject, type ComponentType } from "react";
 import {
   Dialog,
   DialogClose,
@@ -227,20 +227,25 @@ function SessionStatusIndicator({ status }: { status: AgentSessionDisplayStatus 
   );
 }
 
+export interface DebugRef {
+  messages: AgentMessageWithParts[];
+  session: AgentSessionRecord | undefined;
+  sessionState: AgentSessionState;
+}
+
 export interface AgentStatusProps {
   displayStatus: AgentSessionDisplayStatus;
   usage: AgentSessionUsage;
-  debug?: {
-    session: AgentSessionRecord | undefined;
-    sessionState: AgentSessionState;
-    messages: AgentMessageWithParts[];
-  };
+  debugRef?: MutableRefObject<DebugRef>;
 }
 
-function AgentStatus({ displayStatus, usage, debug }: AgentStatusProps) {
+function AgentStatus({ displayStatus, usage, debugRef }: AgentStatusProps) {
   const [debugOpen, setDebugOpen] = useState(false);
   const contextTokens = usage.inputTokens + usage.cacheReadTokens;
   const hasUsage = contextTokens > 0 || usage.costUsd > 0;
+
+  // Only read the ref when the dialog is actually open — avoids re-renders
+  const debug = debugRef?.current;
 
   return (
     <>
@@ -256,7 +261,7 @@ function AgentStatus({ displayStatus, usage, debug }: AgentStatusProps) {
       <span className={hasUsage ? "" : "ml-auto"}>
         <SessionStatusIndicator status={displayStatus} />
       </span>
-      {debug ? (
+      {debugRef ? (
         <>
           <button
             className="flex items-center gap-1 text-[11px] transition-colors text-[var(--muted-foreground)]/40 hover:text-[var(--foreground)]"
@@ -266,13 +271,15 @@ function AgentStatus({ displayStatus, usage, debug }: AgentStatusProps) {
           >
             <Bug className="size-3" />
           </button>
-          <DebugDialog
-            open={debugOpen}
-            onOpenChange={setDebugOpen}
-            session={debug.session}
-            sessionState={debug.sessionState}
-            messages={debug.messages}
-          />
+          {debugOpen && debug ? (
+            <DebugDialog
+              open={debugOpen}
+              onOpenChange={setDebugOpen}
+              session={debug.session}
+              sessionState={debug.sessionState}
+              messages={debug.messages}
+            />
+          ) : null}
         </>
       ) : null}
     </>
@@ -287,7 +294,7 @@ export interface AgentToolbarProps extends AgentConfigProps, AgentStatusProps {
   className?: string;
 }
 
-export function AgentToolbar(props: AgentToolbarProps) {
+export const AgentToolbar = memo(function AgentToolbar(props: AgentToolbarProps) {
   return (
     <div
       className={["shrink-0 flex items-center gap-3 px-4 py-1.5", props.className ?? ""].join(" ")}
@@ -302,10 +309,10 @@ export function AgentToolbar(props: AgentToolbarProps) {
         catalogLoading={props.catalogLoading}
         catalogError={props.catalogError}
       />
-      <AgentStatus displayStatus={props.displayStatus} usage={props.usage} debug={props.debug} />
+      <AgentStatus displayStatus={props.displayStatus} usage={props.usage} debugRef={props.debugRef} />
     </div>
   );
-}
+});
 
 // ---------------------------------------------------------------------------
 // Debug dialog (internal)

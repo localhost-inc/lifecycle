@@ -13,6 +13,8 @@ export interface AgentTurnActivity {
   phase: AgentTurnPhase;
   /** Name of the tool currently being invoked, when phase is "tool_use". */
   toolName: string | null;
+  /** Provider-stable tool call id for the current tool_use phase. */
+  toolCallId?: string | null;
   /** Number of tool calls started so far in this turn. */
   toolCallCount: number;
 }
@@ -102,25 +104,26 @@ export function reduceAgentSessionEvent(
   const sessionId = event.kind === "agent.session.created" ? event.session.id : event.sessionId;
 
   return withSessionState(state, sessionId, (sessionState) => {
-    const nextSessionState: AgentSessionState = {
-      ...sessionState,
-      workspaceId: event.workspaceId,
-    };
+    // Only spread a new object when we actually have fields to change.
+    // This avoids allocating on high-frequency no-op events (e.g. consecutive
+    // text deltas that don't change turnActivity).
 
     if (event.kind === "agent.auth.updated") {
       if (event.mode === "authenticating") {
         return {
-          ...nextSessionState,
+          ...sessionState,
+          workspaceId: event.workspaceId,
           authStatus: { mode: "authenticating", provider: event.provider },
         };
       }
       if (event.mode === "error") {
         return {
-          ...nextSessionState,
+          ...sessionState,
+          workspaceId: event.workspaceId,
           authStatus: { mode: "error", provider: event.provider },
         };
       }
-      return { ...nextSessionState, authStatus: null };
+      return { ...sessionState, workspaceId: event.workspaceId, authStatus: null };
     }
 
     if (event.kind === "agent.status.updated") {
@@ -130,17 +133,25 @@ export function reduceAgentSessionEvent(
             ? event.detail
             : event.status
           : null;
+      if (
+        sessionState.providerStatus === nextProviderStatus &&
+        sessionState.workspaceId === event.workspaceId
+      ) {
+        return sessionState;
+      }
       return {
-        ...nextSessionState,
+        ...sessionState,
+        workspaceId: event.workspaceId,
         providerStatus: nextProviderStatus,
       };
     }
 
     if (event.kind === "agent.turn.started") {
       return {
-        ...nextSessionState,
+        ...sessionState,
+        workspaceId: event.workspaceId,
         lastError: null,
-        pendingTurnIds: [...new Set([...nextSessionState.pendingTurnIds, event.turnId])],
+        pendingTurnIds: [...new Set([...sessionState.pendingTurnIds, event.turnId])],
         providerStatus: null,
         responseReady: false,
         turnActivity: { phase: "thinking", toolName: null, toolCallCount: 0 },
@@ -148,10 +159,11 @@ export function reduceAgentSessionEvent(
     }
 
     if (event.kind === "agent.turn.completed") {
-      const prev = nextSessionState.usage;
+      const prev = sessionState.usage;
       const turnUsage = event.usage;
       return {
-        ...nextSessionState,
+        ...sessionState,
+        workspaceId: event.workspaceId,
         pendingApprovals: [],
         // Sessions only support one active turn at a time. Clear the full pending
         // set here so a stale duplicate turn id cannot leave the UI spinning after
@@ -173,7 +185,8 @@ export function reduceAgentSessionEvent(
 
     if (event.kind === "agent.turn.failed") {
       return {
-        ...nextSessionState,
+        ...sessionState,
+        workspaceId: event.workspaceId,
         lastError: event.error,
         pendingApprovals: [],
         pendingTurnIds: [],
@@ -187,42 +200,69 @@ export function reduceAgentSessionEvent(
       event.kind === "agent.message.part.delta" ||
       event.kind === "agent.message.part.completed"
     ) {
-      const activity = nextSessionState.turnActivity;
+      const activity = sessionState.turnActivity;
       if (activity) {
         if (event.part.type === "thinking") {
           if (activity.phase !== "thinking") {
+            const { toolCallId: _toolCallId, ...restActivity } = activity;
             return {
-              ...nextSessionState,
-              turnActivity: { ...activity, phase: "thinking", toolName: null },
+              ...sessionState,
+              workspaceId: event.workspaceId,
+              turnActivity: { ...restActivity, phase: "thinking", toolName: null },
             };
           }
-        } else if (event.part.type === "text") {
+          // Phase already "thinking" — no state change needed.
+          return sessionState.workspaceId === event.workspaceId ? sessionState : { ...sessionState, workspaceId: event.workspaceId };
+        }
+        if (event.part.type === "text") {
           if (activity.phase !== "responding") {
+            const { toolCallId: _toolCallId, ...restActivity } = activity;
             return {
-              ...nextSessionState,
-              turnActivity: { ...activity, phase: "responding", toolName: null },
+              ...sessionState,
+              workspaceId: event.workspaceId,
+              turnActivity: { ...restActivity, phase: "responding", toolName: null },
             };
           }
-        } else if (event.part.type === "tool_call") {
+          // Phase already "responding" — no state change needed.
+          return sessionState.workspaceId === event.workspaceId ? sessionState : { ...sessionState, workspaceId: event.workspaceId };
+        }
+        if (event.part.type === "tool_call") {
+          const toolCallId = event.part.toolCallId;
           const toolName = event.part.toolName ?? activity.toolName;
-          const isNewTool = activity.phase !== "tool_use" || activity.toolName !== toolName;
+          const isDuplicateToolCall =
+            activity.phase === "tool_use" &&
+            toolCallId !== undefined &&
+            activity.toolCallId === toolCallId;
+          if (isDuplicateToolCall) {
+            // Same tool still running — no state change needed.
+            return sessionState.workspaceId === event.workspaceId ? sessionState : { ...sessionState, workspaceId: event.workspaceId };
+          }
+          const isNewTool = activity.phase !== "tool_use" || activity.toolCallId !== toolCallId;
+          if (!isNewTool) {
+            return sessionState.workspaceId === event.workspaceId ? sessionState : { ...sessionState, workspaceId: event.workspaceId };
+          }
           return {
-            ...nextSessionState,
+            ...sessionState,
+            workspaceId: event.workspaceId,
             turnActivity: {
               phase: "tool_use",
               toolName,
-              toolCallCount: isNewTool ? activity.toolCallCount + 1 : activity.toolCallCount,
+              ...(toolCallId ? { toolCallId } : {}),
+              toolCallCount: activity.toolCallCount + 1,
             },
           };
         }
       }
+      // No activity or unrecognized part type — no change.
+      return sessionState.workspaceId === event.workspaceId ? sessionState : { ...sessionState, workspaceId: event.workspaceId };
     }
 
     if (event.kind === "agent.approval.requested") {
       return {
-        ...nextSessionState,
+        ...sessionState,
+        workspaceId: event.workspaceId,
         pendingApprovals: [
-          ...nextSessionState.pendingApprovals.filter(
+          ...sessionState.pendingApprovals.filter(
             (approval) => approval.id !== event.approval.id,
           ),
           event.approval,
@@ -233,15 +273,19 @@ export function reduceAgentSessionEvent(
 
     if (event.kind === "agent.approval.resolved") {
       return {
-        ...nextSessionState,
-        pendingApprovals: nextSessionState.pendingApprovals.filter(
+        ...sessionState,
+        workspaceId: event.workspaceId,
+        pendingApprovals: sessionState.pendingApprovals.filter(
           (approval) => approval.id !== event.resolution.approvalId,
         ),
         providerStatus: null,
       };
     }
 
-    return nextSessionState;
+    // Unknown event — only update workspaceId if needed.
+    return sessionState.workspaceId === event.workspaceId
+      ? sessionState
+      : { ...sessionState, workspaceId: event.workspaceId };
   });
 }
 

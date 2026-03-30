@@ -80,6 +80,49 @@ describe("simple text response", () => {
     expect(msg.parts).toHaveLength(1);
     expect(msg.parts[0]!.text).toBe("Hello world!");
   });
+
+  test("resumes an in-progress persisted message before appending new deltas", async () => {
+    const persistedMessage = {
+      id: "t1:assistant",
+      session_id: S,
+      role: "assistant" as const,
+      text: "Hello ",
+      turn_id: "t1",
+      created_at: "2026-03-21T00:00:00.000000001Z",
+      parts: [
+        {
+          id: "t1:assistant:text:0",
+          message_id: "t1:assistant",
+          session_id: S,
+          part_index: 0,
+          part_type: "text" as const,
+          text: "Hello ",
+          data: null,
+          created_at: "2026-03-21T00:00:00.000000001Z",
+        },
+      ],
+    };
+
+    const p = await run(
+      [
+        event("agent.message.part.delta", {
+          messageId: "t1:assistant",
+          partId: "t1:assistant:text:0",
+          part: { type: "text", text: "world" },
+        }),
+      ],
+      {
+        loadPersistedMessage: (messageId) =>
+          messageId === persistedMessage.id ? persistedMessage : null,
+      },
+    );
+
+    const msg = p.getFlushed("t1:assistant")!;
+    expect(msg.created_at).toBe("2026-03-21T00:00:00.000000001Z");
+    expect(msg.text).toBe("Hello world");
+    expect(msg.parts).toHaveLength(1);
+    expect(msg.parts[0]!.text).toBe("Hello world");
+  });
 });
 
 // ---------------------------------------------------------------------------

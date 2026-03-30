@@ -15,6 +15,8 @@ import {
 import { useLiveQuery } from "@tanstack/react-db";
 import { useStoreContext } from "@/store/provider";
 
+const EMPTY_ARRAY: never[] = [];
+
 /**
  * Subscribe to a TanStack DB collection and return its current values as an array.
  * Re-renders only when the collection emits changes.
@@ -55,8 +57,12 @@ function useCollectionItem<T extends object>(
   const subscribe = useMemo(
     () => (onStoreChange: () => void) => {
       const sub = collection.subscribeChanges(() => {
-        cachedRef.current = key ? collection.get(key) : undefined;
-        onStoreChange();
+        const next = key ? collection.get(key) : undefined;
+        // Only notify React if the item actually changed.
+        if (next !== cachedRef.current) {
+          cachedRef.current = next;
+          onStoreChange();
+        }
       });
       // Hydrate on first subscribe
       cachedRef.current = key ? collection.get(key) : undefined;
@@ -118,7 +124,7 @@ export function useAgentSessions(workspaceId: string): AgentSessionRecord[] {
     [sqlCollection],
   );
 
-  return data ?? [];
+  return data ?? EMPTY_ARRAY;
 }
 
 export function useAgentSessionRefresh(workspaceId: string): () => void {

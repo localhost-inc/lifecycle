@@ -163,9 +163,15 @@ function buildAssistantSegments(parts: ParsedMessagePartEntry[]): AssistantSegme
 
     if (part.part.type === "tool_call") {
       flushContent();
-      // Diff-producing tools (Edit/Write/Delete) render individually — don't collapse them
+      // Diff-producing tools render individually so their patches stay visible while streaming.
       const name = part.part.toolName;
-      if (name === "Edit" || name === "Write" || name === "Delete" || name === "DeleteFile") {
+      if (
+        name === "Edit" ||
+        name === "Write" ||
+        name === "Delete" ||
+        name === "DeleteFile" ||
+        name === "file_change"
+      ) {
         flushTools();
         segments.push({ kind: "tool_call", parts: [part] });
       } else {
@@ -288,14 +294,12 @@ function buildToolSummary(tally: ToolTally, isStreaming?: boolean): string {
 function ToolCallGroup({
   toolParts,
   isStreaming,
-  spacedFromPrevious,
   onResolveApproval,
   onOpenFile,
   resolvingApprovalIds,
 }: {
   toolParts: ParsedMessagePartEntry[];
   isStreaming?: boolean;
-  spacedFromPrevious: boolean;
   onResolveApproval?: (
     approvalId: string,
     decision: AgentApprovalDecision,
@@ -311,7 +315,7 @@ function ToolCallGroup({
   // For a single tool call, just render it directly (no summary needed)
   if (toolParts.length === 1) {
     return (
-      <div className={spacedFromPrevious ? "mt-2" : ""}>
+      <div>
         {toolParts.map(({ id, part }) => (
           <MessagePartRenderer
             key={id}
@@ -327,7 +331,7 @@ function ToolCallGroup({
   }
 
   return (
-    <div className={spacedFromPrevious ? "mt-2" : ""}>
+    <div>
       <button
         className="flex items-center gap-1.5 text-[12px] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors"
         onClick={() => setOpen(!open)}
@@ -454,7 +458,13 @@ function AssistantMessage({
   const isToolOnly = isToolOnlyAssistantMessage(message);
 
   return (
-    <div className={isToolOnly ? "px-4 py-1.5" : "px-4 py-3"}>
+    <div
+      className={[
+        isToolOnly ? "px-4 py-1.5" : "px-4 py-3",
+        "flex flex-col",
+        isToolOnly ? "gap-1" : "gap-2.5",
+      ].join(" ")}
+    >
       {segments.map((segment, index) => {
         const isLastSegment = isStreaming && index === segments.length - 1;
         return segment.kind === "tool_call" ? (
@@ -462,7 +472,6 @@ function AssistantMessage({
             key={getAssistantSegmentKey(segment)}
             toolParts={segment.parts}
             isStreaming={isLastSegment}
-            spacedFromPrevious={!isToolOnly && index > 0}
             onResolveApproval={onResolveApproval}
             onOpenFile={onOpenFile}
             resolvingApprovalIds={resolvingApprovalIds}

@@ -102,6 +102,14 @@ export type AgentEvent =
       detail?: string | null;
     }
   | {
+      kind: "agent.provider.event";
+      workspaceId: string;
+      sessionId: string;
+      turnId: string | null;
+      eventType: string;
+      payload: unknown;
+    }
+  | {
       kind: "agent.auth.updated";
       workspaceId: string;
       sessionId: string;

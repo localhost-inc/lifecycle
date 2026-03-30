@@ -30,7 +30,7 @@ import type { AgentClient } from "./client";
 import type { AgentClientRegistry } from "./client-registry";
 import type { AgentModelCatalog } from "./catalog";
 import type { AgentAuthStatus } from "./providers/auth";
-import type { AgentModelCatalogOptions } from "./worker";
+import type { AgentAuthOptions, AgentModelCatalogOptions } from "./worker";
 
 const AgentClientRegistryContext = createContext<AgentClientRegistry | null>(null);
 const AgentClientContext = createContext<AgentClient | null>(null);
@@ -87,7 +87,10 @@ export function useAgentAuthStatus(provider: AgentSessionProviderId): AgentAuthS
   );
 }
 
-export function useAgentAuth(provider: AgentSessionProviderId): {
+export function useAgentAuth(
+  provider: AgentSessionProviderId,
+  options?: AgentAuthOptions,
+): {
   check: () => Promise<AgentAuthStatus>;
   ensureAuthenticated: () => Promise<AgentAuthStatus>;
   login: () => Promise<AgentAuthStatus>;
@@ -109,12 +112,16 @@ export function useAgentAuth(provider: AgentSessionProviderId): {
       state: "authenticating",
       output: [],
     });
-    const nextStatus = await agentClient.login(provider, (statusUpdate) => {
-      setAgentAuthStatus(workspaceHost, provider, statusUpdate);
-    });
+    const nextStatus = await agentClient.login(
+      provider,
+      (statusUpdate) => {
+        setAgentAuthStatus(workspaceHost, provider, statusUpdate);
+      },
+      options,
+    );
     setAgentAuthStatus(workspaceHost, provider, nextStatus);
     return nextStatus;
-  }, [agentClient, provider, workspaceHost]);
+  }, [agentClient, options, provider, workspaceHost]);
 
   const ensureAuthenticated = useCallback(async () => {
     let currentStatus = readAgentAuthStatus(workspaceHost, provider);
@@ -224,8 +231,10 @@ export function useAgentStatusIndex(): {
   hasWorkspaceRunningTurn: (workspaceId: string) => boolean;
   isAgentSessionResponseReady: (sessionId: string) => boolean;
   isAgentSessionRunning: (sessionId: string) => boolean;
+  /** The store snapshot — include in useMemo deps to invalidate when any session state changes. */
+  storeVersion: unknown;
 } {
-  useSyncExternalStore(
+  const storeVersion = useSyncExternalStore(
     subscribeAgentStore,
     getAgentSessionStoreSnapshot,
     getAgentSessionStoreSnapshot,
@@ -240,6 +249,7 @@ export function useAgentStatusIndex(): {
     hasWorkspaceRunningTurn: index.hasWorkspaceRunningTurn,
     isAgentSessionResponseReady: index.isAgentSessionResponseReady,
     isAgentSessionRunning: index.isAgentSessionRunning,
+    storeVersion,
   };
 }
 

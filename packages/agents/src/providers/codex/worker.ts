@@ -111,6 +111,19 @@ function emitWorkerEvent(event: AgentWorkerEvent): void {
   process.stdout.write(`${JSON.stringify(event)}\n`);
 }
 
+function emitRawProviderEvent(
+  eventType: string,
+  payload: unknown,
+  turnId?: string | null,
+): void {
+  emitWorkerEvent({
+    kind: "provider.raw_event",
+    eventType,
+    payload,
+    ...(turnId === undefined ? {} : { turnId }),
+  });
+}
+
 function normalizeCommand(raw: string): AgentWorkerCommand {
   return JSON.parse(raw) as AgentWorkerCommand;
 }
@@ -223,16 +236,15 @@ function mapCodexThreadItemToWorkerItem(item: Record<string, unknown>): AgentWor
             return [{ ...(diff ? { diff } : {}), kind, path }] as const;
           })
         : [];
+      const diff =
+        readString(item, "diff") ??
+        changes
+          .map((change) => change.diff)
+          .filter((value): value is string => typeof value === "string" && value.length > 0)
+          .join("\n");
       return {
         changes,
-        ...(changes.some((change) => typeof change.diff === "string" && change.diff.length > 0)
-          ? {
-              diff: changes
-                .map((change) => change.diff)
-                .filter((diff): diff is string => typeof diff === "string" && diff.length > 0)
-                .join("\n"),
-            }
-          : {}),
+        ...(diff ? { diff } : {}),
         id: readString(item, "id") ?? "",
         status: mapCodexStatus(readString(item, "status")),
         type: "file_change",
@@ -318,6 +330,83 @@ export function appendCodexCommandExecutionOutputDelta(
   };
 }
 
+export function appendCodexFileChangeOutputDelta(
+  item: Record<string, unknown>,
+  delta: string,
+): Record<string, unknown> {
+  return {
+    ...item,
+    diff: `${readOptionalString(item, "diff") ?? ""}${delta}`,
+  };
+}
+
+export function mergeCodexItemSnapshot(
+  previous: Record<string, unknown> | undefined,
+  next: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!previous) {
+    return next;
+  }
+
+  const itemType = readString(next, "type");
+  if (!itemType || readString(previous, "type") !== itemType) {
+    return next;
+  }
+
+  switch (itemType) {
+    case "commandExecution": {
+      const merged = { ...previous, ...next };
+      const previousOutput = readOptionalString(previous, "aggregatedOutput");
+      const nextOutput = readOptionalString(next, "aggregatedOutput");
+      if (
+        typeof previousOutput === "string" &&
+        previousOutput.length > 0 &&
+        !(typeof nextOutput === "string" && nextOutput.length > 0)
+      ) {
+        merged.aggregatedOutput = previousOutput;
+      }
+      return merged;
+    }
+    case "fileChange": {
+      const merged = { ...previous, ...next };
+      const previousDiff = readOptionalString(previous, "diff");
+      const nextDiff = readOptionalString(next, "diff");
+      if (
+        typeof previousDiff === "string" &&
+        previousDiff.length > 0 &&
+        !(typeof nextDiff === "string" && nextDiff.length > 0)
+      ) {
+        merged.diff = previousDiff;
+      }
+      return merged;
+    }
+    default:
+      return next;
+  }
+}
+
+export function buildCodexTurnDiffItem(
+  lifecycleTurnId: string,
+  diff: string,
+  fileChangeItems: Record<string, unknown>[],
+): Record<string, unknown> {
+  const changes = fileChangeItems.flatMap((item) => {
+    if (!Array.isArray(item.changes)) {
+      return [];
+    }
+
+    return item.changes.filter((change): change is Record<string, unknown> => isRecord(change));
+  });
+
+  return {
+    changes,
+    diff,
+    id: `${lifecycleTurnId}:turn-diff`,
+    status: "inProgress",
+    type: "fileChange",
+  };
+}
+
 function buildCodexConfig(input: CodexWorkerInput): Record<string, unknown> | null {
   if (!input.modelReasoningEffort) {
     return null;
@@ -372,7 +461,7 @@ function buildUserInput(parts: Array<Record<string, unknown>>): Array<Record<str
       typeof part.mediaType === "string"
     ) {
       return {
-        type: "input_image",
+        type: "image",
         image_url: `data:${part.mediaType};base64,${part.base64Data}`,
       };
     }
@@ -425,7 +514,7 @@ function resolveLifecycleTurnId(
   return currentLifecycleTurnId;
 }
 
-function createApprovalId(
+export function createApprovalId(
   method: string,
   requestId: number | string,
   params: Record<string, unknown>,
@@ -434,6 +523,13 @@ function createApprovalId(
     const approvalId = readString(params, "approvalId");
     if (approvalId) {
       return approvalId;
+    }
+  }
+
+  if (method === "mcpServer/elicitation/request") {
+    const elicitationId = readString(params, "elicitationId");
+    if (elicitationId) {
+      return elicitationId;
     }
   }
 
@@ -584,9 +680,10 @@ function buildToolUserInputMetadata(params: Record<string, unknown>): Record<str
   };
 }
 
-function buildMcpElicitationMetadata(params: Record<string, unknown>): Record<string, unknown> {
+export function buildMcpElicitationMetadata(params: Record<string, unknown>): Record<string, unknown> {
   return {
     _meta: params._meta ?? null,
+    elicitationId: readString(params, "elicitationId") ?? null,
     method: "mcpServer/elicitation/request",
     mode: readString(params, "mode") ?? "form",
     requestedSchema: params.requestedSchema ?? null,
@@ -756,6 +853,7 @@ function buildToolUserInputResponse(
 
 function buildMcpElicitationResponse(
   decision: AgentApprovalDecision,
+  params: Record<string, unknown>,
   response: Record<string, unknown> | null | undefined,
 ): Record<string, unknown> {
   if (decision === "reject") {
@@ -766,10 +864,23 @@ function buildMcpElicitationResponse(
     };
   }
 
+  const responseRecord = response && isRecord(response) ? response : null;
+  const { _meta, ...contentRecord } = responseRecord ?? {};
+
+  if (readString(params, "mode") === "url") {
+    const url =
+      typeof contentRecord.url === "string" ? contentRecord.url : readString(params, "url");
+    return {
+      _meta: _meta ?? null,
+      action: "accept",
+      content: url ? { ...contentRecord, url } : contentRecord,
+    };
+  }
+
   return {
-    _meta: response?._meta ?? null,
+    _meta: _meta ?? null,
     action: "accept",
-    content: response ?? null,
+    content: responseRecord ? contentRecord : null,
   };
 }
 
@@ -788,7 +899,7 @@ export function buildCodexApprovalResponse(
     case "item/tool/requestUserInput":
       return buildToolUserInputResponse(response);
     case "mcpServer/elicitation/request":
-      return buildMcpElicitationResponse(decision, response);
+      return buildMcpElicitationResponse(decision, pending.params, response);
     default:
       return {};
   }
@@ -937,8 +1048,12 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
 
   const pendingApprovals = new Map<string, PendingCodexApproval>();
   const providerTurnToLifecycleTurnId = new Map<string, string>();
+  const lifecycleTurnToProviderTurnId = new Map<string, string>();
   const itemById = new Map<string, Record<string, unknown>>();
   const itemStartedAt = new Map<string, number>();
+  const itemIdsByLifecycleTurnId = new Map<string, Set<string>>();
+  const fileChangeItemIdsByTurnId = new Map<string, Set<string>>();
+  const turnDiffItemIdByTurnId = new Map<string, string>();
   const turnUsage = new Map<
     string,
     { cacheReadTokens?: number; inputTokens: number; outputTokens: number }
@@ -973,9 +1088,46 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
 
     currentProviderTurnId = providerTurnId;
     providerTurnToLifecycleTurnId.set(providerTurnId, lifecycleTurnId);
+    lifecycleTurnToProviderTurnId.set(lifecycleTurnId, providerTurnId);
+  }
+
+  function trackTurnItem(lifecycleTurnId: string, itemId: string, isFileChange = false): void {
+    const turnItemIds = itemIdsByLifecycleTurnId.get(lifecycleTurnId) ?? new Set<string>();
+    turnItemIds.add(itemId);
+    itemIdsByLifecycleTurnId.set(lifecycleTurnId, turnItemIds);
+
+    if (!isFileChange) {
+      return;
+    }
+
+    const fileChangeItemIds = fileChangeItemIdsByTurnId.get(lifecycleTurnId) ?? new Set<string>();
+    fileChangeItemIds.add(itemId);
+    fileChangeItemIdsByTurnId.set(lifecycleTurnId, fileChangeItemIds);
+  }
+
+  function clearTurnState(lifecycleTurnId: string): void {
+    const providerTurnId = lifecycleTurnToProviderTurnId.get(lifecycleTurnId);
+    if (providerTurnId) {
+      lifecycleTurnToProviderTurnId.delete(lifecycleTurnId);
+      providerTurnToLifecycleTurnId.delete(providerTurnId);
+      turnUsage.delete(providerTurnId);
+    }
+
+    const itemIds = itemIdsByLifecycleTurnId.get(lifecycleTurnId);
+    if (itemIds) {
+      for (const itemId of itemIds) {
+        itemById.delete(itemId);
+        itemStartedAt.delete(itemId);
+      }
+      itemIdsByLifecycleTurnId.delete(lifecycleTurnId);
+    }
+
+    fileChangeItemIdsByTurnId.delete(lifecycleTurnId);
+    turnDiffItemIdByTurnId.delete(lifecycleTurnId);
   }
 
   function completeLifecycleTurn(lifecycleTurnId: string): void {
+    clearTurnState(lifecycleTurnId);
     const resolve = pendingTurnCompletions.get(lifecycleTurnId);
     pendingTurnCompletions.delete(lifecycleTurnId);
     if (resolve) {
@@ -1053,23 +1205,25 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
     kind: "agent.item.completed" | "agent.item.started",
     params: Record<string, unknown>,
   ): void {
-    const item = isRecord(params.item) ? params.item : null;
+    const rawItem = isRecord(params.item) ? params.item : null;
     const providerTurnId = readString(params, "turnId");
     const lifecycleTurnId = resolveLifecycleTurnId(
       providerTurnId ?? null,
       currentLifecycleTurnId,
       providerTurnToLifecycleTurnId,
     );
-    if (!item || !lifecycleTurnId) {
+    if (!rawItem || !lifecycleTurnId) {
       return;
     }
 
-    const itemId = readString(item, "id");
+    const itemId = readString(rawItem, "id");
+    const item = itemId ? mergeCodexItemSnapshot(itemById.get(itemId), rawItem) : rawItem;
     if (itemId) {
       itemById.set(itemId, item);
       if (kind === "agent.item.started") {
         itemStartedAt.set(itemId, Date.now());
       }
+      trackTurnItem(lifecycleTurnId, itemId, readString(item, "type") === "fileChange");
     }
 
     const itemType = readString(item, "type");
@@ -1112,6 +1266,101 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
 
     const workerItem = mapCodexThreadItemToWorkerItem(nextItem);
     if (!workerItem || workerItem.type !== "command_execution") {
+      return;
+    }
+
+    emitWorkerEvent({
+      item: workerItem,
+      kind: "agent.item.updated",
+      turnId: lifecycleTurnId,
+    });
+  }
+
+  function handleFileChangeOutputDelta(params: Record<string, unknown>): void {
+    const providerTurnId = readString(params, "turnId");
+    const itemId = readString(params, "itemId");
+    const lifecycleTurnId = resolveLifecycleTurnId(
+      providerTurnId ?? null,
+      currentLifecycleTurnId,
+      providerTurnToLifecycleTurnId,
+    );
+    const delta = readString(params, "delta");
+    if (!lifecycleTurnId || !itemId || !delta) {
+      return;
+    }
+
+    const item = itemById.get(itemId);
+    if (!item || readString(item, "type") !== "fileChange") {
+      return;
+    }
+
+    trackTurnItem(lifecycleTurnId, itemId, true);
+    const nextItem = appendCodexFileChangeOutputDelta(item, delta);
+    itemById.set(itemId, nextItem);
+
+    const workerItem = mapCodexThreadItemToWorkerItem(nextItem);
+    if (!workerItem || workerItem.type !== "file_change") {
+      return;
+    }
+
+    emitWorkerEvent({
+      item: workerItem,
+      kind: "agent.item.updated",
+      turnId: lifecycleTurnId,
+    });
+  }
+
+  function buildAggregateTurnDiffItem(
+    lifecycleTurnId: string,
+    diff: string,
+  ): Record<string, unknown> {
+    const fileChangeItems = [...(fileChangeItemIdsByTurnId.get(lifecycleTurnId) ?? new Set())]
+      .map((itemId) => itemById.get(itemId))
+      .filter((item): item is Record<string, unknown> => item !== undefined);
+    const aggregateItemId =
+      turnDiffItemIdByTurnId.get(lifecycleTurnId) ?? `${lifecycleTurnId}:turn-diff`;
+    const nextItem = mergeCodexItemSnapshot(
+      itemById.get(aggregateItemId),
+      buildCodexTurnDiffItem(lifecycleTurnId, diff, fileChangeItems),
+    );
+    turnDiffItemIdByTurnId.set(lifecycleTurnId, aggregateItemId);
+    itemById.set(aggregateItemId, nextItem);
+    trackTurnItem(lifecycleTurnId, aggregateItemId, true);
+    return nextItem;
+  }
+
+  function handleTurnDiffUpdated(params: Record<string, unknown>): void {
+    const providerTurnId = readString(params, "turnId");
+    const lifecycleTurnId = resolveLifecycleTurnId(
+      providerTurnId ?? null,
+      currentLifecycleTurnId,
+      providerTurnToLifecycleTurnId,
+    );
+    const diff = readString(params, "diff");
+    if (!lifecycleTurnId || !diff) {
+      return;
+    }
+
+    const fileChangeItemIds = [...(fileChangeItemIdsByTurnId.get(lifecycleTurnId) ?? new Set())];
+    const nextItem =
+      fileChangeItemIds.length === 1
+        ? (() => {
+            const itemId = fileChangeItemIds[0]!;
+            const item = itemById.get(itemId);
+            if (!item || readString(item, "type") !== "fileChange") {
+              return null;
+            }
+            const updatedItem = { ...item, diff };
+            itemById.set(itemId, updatedItem);
+            return updatedItem;
+          })()
+        : buildAggregateTurnDiffItem(lifecycleTurnId, diff);
+    if (!nextItem) {
+      return;
+    }
+
+    const workerItem = mapCodexThreadItemToWorkerItem(nextItem);
+    if (!workerItem || workerItem.type !== "file_change") {
       return;
     }
 
@@ -1214,6 +1463,13 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
 
   function handleAppServerMessage(message: unknown): void {
     if (isJsonRpcRequest(message)) {
+      const params = isRecord(message.params) ? message.params : {};
+      const lifecycleTurnId = resolveLifecycleTurnId(
+        readString(params, "turnId") ?? null,
+        currentLifecycleTurnId,
+        providerTurnToLifecycleTurnId,
+      );
+      emitRawProviderEvent(`codex.request.${message.method}`, message, lifecycleTurnId);
       handleServerRequest(message);
       return;
     }
@@ -1223,6 +1479,12 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
     }
 
     const params = isRecord(message.params) ? message.params : {};
+    const lifecycleTurnId = resolveLifecycleTurnId(
+      readString(params, "turnId") ?? null,
+      currentLifecycleTurnId,
+      providerTurnToLifecycleTurnId,
+    );
+    emitRawProviderEvent(`codex.notification.${message.method}`, message, lifecycleTurnId);
     switch (message.method) {
       case "thread/started":
       case "thread/tokenUsage/updated":
@@ -1253,6 +1515,12 @@ export async function runCodexWorker(input: CodexWorkerInput): Promise<number> {
         return;
       case "item/commandExecution/outputDelta":
         handleCommandExecutionOutputDelta(params);
+        return;
+      case "item/fileChange/outputDelta":
+        handleFileChangeOutputDelta(params);
+        return;
+      case "turn/diff/updated":
+        handleTurnDiffUpdated(params);
         return;
       case "item/agentMessage/delta": {
         const itemId = readString(params, "itemId") ?? "";

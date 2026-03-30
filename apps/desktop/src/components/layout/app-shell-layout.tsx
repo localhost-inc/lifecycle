@@ -664,7 +664,7 @@ export function AppShellLayout() {
         <CommandPaletteProvider projects={projects} workspacesByProjectId={workspacesByProjectId}>
           <div
             ref={shellViewportRef}
-            className="flex h-full w-full flex-row bg-[var(--background)] pt-2 pr-2 pb-2 text-[var(--foreground)]"
+            className="flex h-full w-full flex-row bg-[var(--background)] text-[var(--foreground)]"
           >
             <AppHotkeyListener onSelectProjectIndex={handleSelectProjectIndex} />
 
@@ -698,7 +698,7 @@ export function AppShellLayout() {
             </div>
 
             {/* Main card */}
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[var(--project-shell-radius)] border border-[var(--border)] bg-[var(--surface)]">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-tl-[var(--project-shell-radius)] rounded-bl-[var(--project-shell-radius)] border border-[var(--border)] bg-[var(--surface)]">
               <ShellResizeProvider resizing={activeSidebarResize}>
                 <div className="flex min-h-0 flex-1 flex-col">
                   <Outlet context={outletContext} />

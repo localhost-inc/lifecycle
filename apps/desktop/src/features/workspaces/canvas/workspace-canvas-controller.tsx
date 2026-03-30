@@ -107,8 +107,12 @@ export function useWorkspaceCanvasController({
   const agentClient = useAgentClient();
   const agentSessions = useAgentSessions(workspaceId);
   const { defaultNewTabLaunch, dimInactivePanes, inactivePaneOpacity } = useSettings();
-  const { clearAgentSessionResponseReady, isAgentSessionResponseReady, isAgentSessionRunning } =
-    useAgentStatusIndex();
+  const {
+    clearAgentSessionResponseReady,
+    isAgentSessionResponseReady,
+    isAgentSessionRunning,
+    storeVersion: agentStoreVersion,
+  } = useAgentStatusIndex();
   const [pendingLaunchActionKey, setPendingLaunchActionKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pageVisible, setPageVisible] = useState(() =>
@@ -249,6 +253,7 @@ export function useWorkspaceCanvasController({
         ),
       ),
     [
+      agentStoreVersion,
       fileEditorSessionsByTabKey,
       isAgentSessionResponseReady,
       isAgentSessionRunning,
@@ -292,21 +297,20 @@ export function useWorkspaceCanvasController({
     return () => document.removeEventListener("visibilitychange", syncPageVisibility);
   }, []);
 
-  useEffect(() => {
-    if (!activeAgentSessionId || !pageVisible) {
-      return;
-    }
+  const activeSessionResponseReady =
+    activeAgentSessionId !== null && isAgentSessionResponseReady(activeAgentSessionId);
 
-    if (!isAgentSessionResponseReady(activeAgentSessionId)) {
+  useEffect(() => {
+    if (!activeAgentSessionId || !pageVisible || !activeSessionResponseReady) {
       return;
     }
 
     clearAgentSessionResponseReady(activeAgentSessionId);
   }, [
     activeAgentSessionId,
+    activeSessionResponseReady,
     clearAgentSessionResponseReady,
     pageVisible,
-    isAgentSessionResponseReady,
   ]);
 
   // --- Core action handlers ---

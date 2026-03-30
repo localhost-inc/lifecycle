@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import type { AgentAuthEvent } from "../auth";
+import type { ClaudeLoginMethod } from "./env";
 
 function emit(event: AgentAuthEvent): void {
   process.stdout.write(`${JSON.stringify(event)}\n`);
@@ -75,16 +76,23 @@ export async function checkClaudeAuth(): Promise<void> {
  * Trigger the Claude OAuth login flow by running `claude auth login`.
  * The CLI opens the browser for OAuth and blocks until complete.
  */
-export async function loginClaudeAuth(): Promise<void> {
+export async function loginClaudeAuth(
+  loginMethod: ClaudeLoginMethod = "claudeai",
+): Promise<void> {
   emit({
     kind: "auth.status",
     provider: "claude",
     isAuthenticating: true,
-    output: ["Opening browser for Claude authentication..."],
+    output: [
+      loginMethod === "console"
+        ? "Opening browser for Anthropic Console authentication..."
+        : "Opening browser for Claude authentication...",
+    ],
   });
 
   try {
-    const { stdout, stderr, code } = await run("claude", ["auth", "login", "--claudeai"]);
+    const authFlag = loginMethod === "console" ? "--console" : "--claudeai";
+    const { stdout, stderr, code } = await run("claude", ["auth", "login", authFlag]);
 
     if (code !== 0) {
       emit({

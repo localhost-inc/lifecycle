@@ -36,6 +36,7 @@ Rules:
 2. Lifecycle should block session launch until the CLI OAuth flow completes or fails.
 3. Lifecycle should treat the CLI auth state as a prerequisite for the TypeScript Agent SDK session, not as a separate provider model.
 4. Claude auth failures should surface as explicit provider errors in the UI; do not start a session optimistically and hope the SDK repairs auth later.
+5. Claude login must honor the configured login method: `--claudeai` for subscription auth and `--console` for Anthropic Console auth.
 
 Relevant upstream surfaces:
 
@@ -174,6 +175,7 @@ Rules:
 1. Preserve provider-native IDs and typed payloads in raw events.
 2. Do not narrow Claude permission or elicitation payloads into lossy string-only records.
 3. Reprojection must be possible if Anthropic expands the preview event surface.
+4. Lifecycle persists raw Claude SDK stream messages and callback requests into `agent_event`; transcript rows remain a derived projection.
 
 ## Sources
 

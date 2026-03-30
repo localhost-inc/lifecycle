@@ -12,6 +12,7 @@ export type {
 export { resolveAgentPromptDispatchDecision } from "./session/prompt-queue";
 export type { AgentPromptDispatchDecision } from "./session/prompt-queue";
 export type { AgentModelCatalog, AgentModelCatalogEntry } from "./catalog";
+export type { AgentAuthOptions, AgentModelCatalogOptions } from "./worker";
 export {
   buildClaudeHarnessLaunchConfig,
   buildClaudeHarnessSettingsFromPreset,

@@ -2,9 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 const {
   appendCodexCommandExecutionOutputDelta,
+  appendCodexFileChangeOutputDelta,
+  buildMcpElicitationMetadata,
+  buildCodexTurnDiffItem,
   buildCodexApprovalResponse,
   codexThreadItemToWorkerItem,
+  createApprovalId,
   createCodexThreadBootstrapRequest,
+  mergeCodexItemSnapshot,
 } = await import("./worker");
 
 describe("codex worker session binding", () => {
@@ -121,6 +126,94 @@ describe("codex worker session binding", () => {
     });
   });
 
+  test("appends file change deltas into aggregated diffs", () => {
+    expect(
+      appendCodexFileChangeOutputDelta(
+        {
+          diff: "diff --git a/src/app.ts b/src/app.ts\n",
+          id: "item_file_1",
+          status: "inProgress",
+          type: "fileChange",
+        },
+        "@@ -1 +1 @@\n-old\n+new\n",
+      ),
+    ).toEqual({
+      diff: "diff --git a/src/app.ts b/src/app.ts\n@@ -1 +1 @@\n-old\n+new\n",
+      id: "item_file_1",
+      status: "inProgress",
+      type: "fileChange",
+    });
+  });
+
+  test("preserves streamed file diffs when a later snapshot omits them", () => {
+    expect(
+      mergeCodexItemSnapshot(
+        {
+          changes: [
+            {
+              kind: "update",
+              path: "/tmp/project/src/app.ts",
+            },
+          ],
+          diff: "diff --git a/src/app.ts b/src/app.ts\n@@ -1 +1 @@\n-old\n+new\n",
+          id: "item_file_2",
+          status: "inProgress",
+          type: "fileChange",
+        },
+        {
+          changes: [
+            {
+              kind: "update",
+              path: "/tmp/project/src/app.ts",
+            },
+          ],
+          id: "item_file_2",
+          status: "completed",
+          type: "fileChange",
+        },
+      ),
+    ).toEqual({
+      changes: [
+        {
+          kind: "update",
+          path: "/tmp/project/src/app.ts",
+        },
+      ],
+      diff: "diff --git a/src/app.ts b/src/app.ts\n@@ -1 +1 @@\n-old\n+new\n",
+      id: "item_file_2",
+      status: "completed",
+      type: "fileChange",
+    });
+  });
+
+  test("preserves streamed command output when a later snapshot omits it", () => {
+    expect(
+      mergeCodexItemSnapshot(
+        {
+          aggregatedOutput: "Preparing import\nProcessed 500000 rows\n",
+          command: "bun run sync",
+          id: "item_cmd_2",
+          status: "inProgress",
+          type: "commandExecution",
+        },
+        {
+          command: "bun run sync",
+          exitCode: 0,
+          id: "item_cmd_2",
+          status: "completed",
+          type: "commandExecution",
+        },
+      ),
+    ).toEqual({
+      aggregatedOutput: "Preparing import\nProcessed 500000 rows\n",
+      command: "bun run sync",
+      exitCode: 0,
+      id: "item_cmd_2",
+      status: "completed",
+      type: "commandExecution",
+    });
+  });
+
   test("maps command execution items onto the normalized worker item shape", () => {
     expect(
       codexThreadItemToWorkerItem({
@@ -138,6 +231,78 @@ describe("codex worker session binding", () => {
       output: "Preparing import\nProcessed 500000 rows\n",
       status: "running",
       type: "command_execution",
+    });
+  });
+
+  test("maps top-level file change diff snapshots onto the normalized worker item shape", () => {
+    expect(
+      codexThreadItemToWorkerItem({
+        changes: [
+          {
+            kind: "update",
+            path: "/tmp/project/src/app.ts",
+          },
+        ],
+        diff: "diff --git a/src/app.ts b/src/app.ts\n--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1 +1 @@\n-old\n+new\n",
+        id: "item_3",
+        status: "inProgress",
+        type: "fileChange",
+      }),
+    ).toEqual({
+      changes: [
+        {
+          kind: "update",
+          path: "/tmp/project/src/app.ts",
+        },
+      ],
+      diff: "diff --git a/src/app.ts b/src/app.ts\n--- a/src/app.ts\n+++ b/src/app.ts\n@@ -1 +1 @@\n-old\n+new\n",
+      id: "item_3",
+      status: "running",
+      type: "file_change",
+    });
+  });
+
+  test("builds a separate aggregate turn diff item for multi-file turns", () => {
+    expect(
+      buildCodexTurnDiffItem("turn_1", "diff --git a/src/app.ts b/src/app.ts\n", [
+        {
+          changes: [
+            {
+              kind: "update",
+              path: "/tmp/project/src/app.ts",
+            },
+          ],
+          id: "item_file_1",
+          status: "inProgress",
+          type: "fileChange",
+        },
+        {
+          changes: [
+            {
+              kind: "update",
+              path: "/tmp/project/src/lib.ts",
+            },
+          ],
+          id: "item_file_2",
+          status: "inProgress",
+          type: "fileChange",
+        },
+      ]),
+    ).toEqual({
+      changes: [
+        {
+          kind: "update",
+          path: "/tmp/project/src/app.ts",
+        },
+        {
+          kind: "update",
+          path: "/tmp/project/src/lib.ts",
+        },
+      ],
+      diff: "diff --git a/src/app.ts b/src/app.ts\n",
+      id: "turn_1:turn-diff",
+      status: "inProgress",
+      type: "fileChange",
     });
   });
 
@@ -183,6 +348,57 @@ describe("codex worker session binding", () => {
         q_color: { answers: ["blue"] },
         q_tags: { answers: ["ui", "desktop"] },
       },
+    });
+  });
+
+  test("fills url elicitation responses from the request when the UI submits no payload", () => {
+    expect(
+      buildCodexApprovalResponse(
+        {
+          method: "mcpServer/elicitation/request",
+          params: {
+            elicitationId: "elicitation_1",
+            message: "Open the URL to continue.",
+            mode: "url",
+            url: "https://example.com/auth",
+          },
+        },
+        "approve_once",
+      ),
+    ).toEqual({
+      _meta: null,
+      action: "accept",
+      content: {
+        url: "https://example.com/auth",
+      },
+    });
+  });
+
+  test("preserves MCP elicitation ids in approval ids", () => {
+    expect(
+      createApprovalId("mcpServer/elicitation/request", 42, {
+        elicitationId: "elicitation_1",
+        serverName: "github",
+      }),
+    ).toBe("elicitation_1");
+  });
+
+  test("preserves MCP elicitation ids in approval metadata", () => {
+    expect(
+      buildMcpElicitationMetadata({
+        elicitationId: "elicitation_1",
+        mode: "url",
+        serverName: "github",
+        url: "https://example.com/auth",
+      }),
+    ).toEqual({
+      _meta: null,
+      elicitationId: "elicitation_1",
+      method: "mcpServer/elicitation/request",
+      mode: "url",
+      requestedSchema: null,
+      serverName: "github",
+      url: "https://example.com/auth",
     });
   });
 });

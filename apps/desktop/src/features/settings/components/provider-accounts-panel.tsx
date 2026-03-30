@@ -4,6 +4,7 @@ import type { AgentAuthStatus } from "@lifecycle/agents";
 import { AgentClientProvider, useAgentAuth, useAgentClientRegistry } from "@lifecycle/agents/react";
 import { CheckCircle2, AlertCircle, LogIn } from "lucide-react";
 import { useEffect } from "react";
+import { useSettings } from "@/features/settings/state/settings-context";
 import { ClaudeIcon, CodexIcon } from "@/features/workspaces/surfaces/surface-icons";
 
 function ProviderIcon({ provider, size }: { provider: AgentSessionProviderId; size: number }) {
@@ -21,7 +22,11 @@ const providerLabels: Record<AgentSessionProviderId, string> = {
 };
 
 function ProviderAccountCard({ provider }: { provider: AgentSessionProviderId }) {
-  const { check, login, status } = useAgentAuth(provider);
+  const { harnesses } = useSettings();
+  const { check, login, status } = useAgentAuth(
+    provider,
+    provider === "claude" ? { loginMethod: harnesses.claude.loginMethod } : undefined,
+  );
 
   useEffect(() => {
     if (status.state === "not_checked") {

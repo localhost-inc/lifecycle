@@ -13,6 +13,10 @@ export interface AgentModelCatalogOptions {
   preferredModel?: string;
 }
 
+export interface AgentAuthOptions {
+  loginMethod?: ClaudeLoginMethod;
+}
+
 export interface AgentWorkerCommandClosePayload {
   code?: number | null;
   signal?: string | null;
@@ -52,6 +56,7 @@ export interface AgentWorker {
   login(
     provider: AgentSessionProviderId,
     onStatus?: (status: AgentAuthStatus) => void,
+    options?: AgentAuthOptions,
   ): Promise<AgentAuthStatus>;
   startSession(
     session: AgentSessionRecord,
@@ -167,9 +172,13 @@ async function runAuthCommand(
   subcommand: "status" | "login",
   provider: AgentSessionProviderId,
   onStatus?: (status: AgentAuthStatus) => void,
+  options?: AgentAuthOptions,
 ): Promise<AgentAuthStatus> {
   return await new Promise((resolve) => {
     const args = ["agent", "auth", subcommand, "--provider", provider];
+    if (provider === "claude" && options?.loginMethod) {
+      args.push("--login-method", options.loginMethod);
+    }
     const command = runner.createCommand(args);
     let settled = false;
 
@@ -324,8 +333,8 @@ export function createAgentWorker(input: CreateAgentWorkerInput): AgentWorker {
     getModelCatalog(provider, options) {
       return runCatalogCommand(input.commandRunner, provider, options);
     },
-    login(provider, onStatus) {
-      return runAuthCommand(input.commandRunner, "login", provider, onStatus);
+    login(provider, onStatus, options) {
+      return runAuthCommand(input.commandRunner, "login", provider, onStatus, options);
     },
     async startSession(session, context, client, callbacks) {
       const existing = sessionConnections.get(session.id);

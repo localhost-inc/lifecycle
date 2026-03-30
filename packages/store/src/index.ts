@@ -37,6 +37,7 @@ export {
 } from "./collections/agent-events";
 
 export {
+  selectAgentMessageById,
   selectAgentMessagesBySession,
   upsertAgentMessageWithParts,
   createAgentMessageCollectionRegistry,

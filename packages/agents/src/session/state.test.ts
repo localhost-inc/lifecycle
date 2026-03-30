@@ -109,6 +109,7 @@ describe("agent session store", () => {
     });
     expect(selectAgentSessionState(state, "session-1").turnActivity).toEqual({
       phase: "tool_use",
+      toolCallId: "tc-1",
       toolName: "Read",
       toolCallCount: 1,
     });
@@ -124,6 +125,7 @@ describe("agent session store", () => {
     });
     expect(selectAgentSessionState(state, "session-1").turnActivity).toEqual({
       phase: "tool_use",
+      toolCallId: "tc-2",
       toolName: "Grep",
       toolCallCount: 2,
     });
@@ -170,6 +172,68 @@ describe("agent session store", () => {
       },
     ]);
     expect(selectAgentSessionState(state, "session-1").turnActivity).toBeNull();
+  });
+
+  test("counts repeated same-named tool calls by toolCallId", () => {
+    let state = applyEvents([
+      {
+        kind: "agent.turn.started",
+        sessionId: "session-1",
+        turnId: "turn-1",
+        workspaceId: "workspace-1",
+      },
+    ]);
+
+    state = reduceAgentSessionEvent(state, {
+      kind: "agent.message.part.completed",
+      sessionId: "session-1",
+      workspaceId: "workspace-1",
+      messageId: "turn-1:assistant",
+      partId: "turn-1:assistant:tool:read-1",
+      part: { type: "tool_call", toolCallId: "read-1", toolName: "Read", inputJson: "{}" },
+    });
+    expect(selectAgentSessionState(state, "session-1").turnActivity).toEqual({
+      phase: "tool_use",
+      toolCallId: "read-1",
+      toolName: "Read",
+      toolCallCount: 1,
+    });
+
+    state = reduceAgentSessionEvent(state, {
+      kind: "agent.message.part.completed",
+      sessionId: "session-1",
+      workspaceId: "workspace-1",
+      messageId: "turn-1:assistant",
+      partId: "turn-1:assistant:tool:read-2",
+      part: { type: "tool_call", toolCallId: "read-2", toolName: "Read", inputJson: "{}" },
+    });
+    expect(selectAgentSessionState(state, "session-1").turnActivity).toEqual({
+      phase: "tool_use",
+      toolCallId: "read-2",
+      toolName: "Read",
+      toolCallCount: 2,
+    });
+
+    state = reduceAgentSessionEvent(state, {
+      kind: "agent.message.part.completed",
+      sessionId: "session-1",
+      workspaceId: "workspace-1",
+      messageId: "turn-1:assistant",
+      partId: "turn-1:assistant:tool:read-2",
+      part: {
+        type: "tool_call",
+        toolCallId: "read-2",
+        toolName: "Read",
+        inputJson: "{}",
+        status: "completed",
+      },
+    });
+    expect(selectAgentSessionState(state, "session-1").turnActivity).toEqual({
+      phase: "tool_use",
+      toolCallId: "read-2",
+      toolName: "Read",
+      toolCallCount: 2,
+    });
   });
 
   test("tracks approval and error state on the normalized session model", () => {

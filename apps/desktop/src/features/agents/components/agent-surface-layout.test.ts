@@ -12,7 +12,7 @@ describe("agent-surface transcript layout", () => {
     expect(transcriptSource).toContain('className="bg-[var(--surface-hover)]/50 px-4 py-3"');
     expect(surfaceSource).toContain('className="px-4 py-3 text-[13px]');
     expect(surfaceSource).toContain(
-      'className="agent-message-list relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden"',
+      'className="agent-message-list relative min-h-0 flex-1"',
     );
     expect(surfaceSource).not.toContain(
       'className="agent-message-list flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden px-4 pb-6 pt-3"',
@@ -32,9 +32,8 @@ describe("agent-surface transcript layout", () => {
     const composerSource = readFileSync(new URL("./agent-composer.tsx", import.meta.url), "utf8");
 
     expect(surfaceSource).toContain("const showCenteredComposer =");
-    expect(surfaceSource).toContain(
-      '(session.status === "idle" || session.status === "starting")',
-    );
+    expect(surfaceSource).toContain('session?.status === "idle"');
+    expect(surfaceSource).toContain('session?.status === "starting"');
     expect(surfaceSource).toContain(
       'className="flex min-h-0 flex-1 items-center justify-center px-6 py-10"',
     );
@@ -62,9 +61,10 @@ describe("agent-surface transcript layout", () => {
     const partSource = readFileSync(new URL("./parts/tool-call-part.tsx", import.meta.url), "utf8");
 
     expect(transcriptSource).toContain("function isToolOnlyAssistantMessage");
-    expect(transcriptSource).toContain('className={isToolOnly ? "px-4 py-1.5" : "px-4 py-3"}');
+    expect(transcriptSource).toContain('isToolOnly ? "px-4 py-1.5" : "px-4 py-3"');
+    expect(transcriptSource).toContain('isToolOnly ? "gap-1" : "gap-2.5"');
     expect(partSource).toContain(
-      'className={["my-0.5 transition-opacity", isCompleted ? "opacity-50" : ""].join(" ")}',
+      'className={["transition-opacity", isCompleted ? "opacity-50" : ""].join(" ")}',
     );
   });
 });

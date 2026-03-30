@@ -2,6 +2,7 @@ import type { AgentSessionRecord } from "@lifecycle/contracts";
 import type { SqlDriver } from "@lifecycle/db";
 import {
   insertAgentEvent,
+  selectAgentMessageById,
   selectAgentSessionById,
   selectNextAgentEventIndex,
   upsertAgentMessageWithParts,
@@ -50,6 +51,14 @@ const SKIP_PERSIST_EVENT_KINDS = new Set([
   "agent.status.updated",
 ]);
 
+function eventKindForPersistence(event: AgentEvent): string {
+  if (event.kind === "agent.provider.event") {
+    return event.eventType;
+  }
+
+  return event.kind;
+}
+
 function eventSessionId(event: AgentEvent): string | null {
   if (event.kind === "agent.session.created" || event.kind === "agent.session.updated") {
     return event.session.id;
@@ -67,6 +76,7 @@ function eventTurnId(event: AgentEvent): string | null {
     case "agent.turn.started":
     case "agent.turn.completed":
     case "agent.turn.failed":
+    case "agent.provider.event":
       return event.turnId;
     case "agent.message.created":
       return event.turnId;
@@ -149,7 +159,7 @@ async function persistObservedEvent(
     provider_session_id: metadata.providerSessionId,
     turn_id: eventTurnId(event),
     event_index: eventIndex,
-    event_kind: event.kind,
+    event_kind: eventKindForPersistence(event),
     payload: JSON.stringify(event),
     created_at: now(),
   });
@@ -193,6 +203,7 @@ function getOrCreateState(
           );
           return row?.cnt ?? 0;
         },
+        loadPersistedMessage: (messageId) => selectAgentMessageById(driver, messageId),
       }),
       queuesBySessionId: new Map<string, Promise<void>>(),
     };
