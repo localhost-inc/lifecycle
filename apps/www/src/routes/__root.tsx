@@ -11,7 +11,7 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "Native desktop app for running, sharing, and collaborating on development environments. One manifest in your repo. Local-first — no accounts required.",
+          "CLI-first workspace runtime for running, sharing, and collaborating on development environments. One manifest in your repo. Local-first — no accounts required.",
       },
     ],
     links: [{ rel: "stylesheet", href: appCss }],
@@ -48,7 +48,7 @@ function RootLayout() {
 
         <nav className="flex items-center gap-5">
           <a
-            href="https://github.com/localhost-inc/lifecycle/tree/main/docs/reference/lifecycle-json.md"
+            href="https://github.com/localhost-inc/lifecycle/tree/main/docs/reference/workspace.md"
             className="font-mono text-xs uppercase tracking-[0.14em] text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
           >
             Docs
@@ -67,13 +67,13 @@ function RootLayout() {
       <footer className="border-t border-[var(--border)] py-8 text-sm text-[var(--muted-foreground)]">
         <div className="flex flex-wrap gap-5 font-mono text-xs uppercase tracking-[0.14em]">
           <a
-            href="https://github.com/localhost-inc/lifecycle/tree/main/docs/reference/lifecycle-json.md"
+            href="https://github.com/localhost-inc/lifecycle/tree/main/docs/reference/workspace.md"
             className="transition-colors hover:text-[var(--foreground)]"
           >
             Manifest spec
           </a>
           <a
-            href="https://github.com/localhost-inc/lifecycle/tree/main/docs/vision.md"
+            href="https://github.com/localhost-inc/lifecycle/tree/main/docs/reference/vision.md"
             className="transition-colors hover:text-[var(--foreground)]"
           >
             Vision

@@ -4,6 +4,7 @@ node_modules/
 # Local environment files
 .env
 .env.*
+.dev.vars
 !.env.example
 !.env*.example
 

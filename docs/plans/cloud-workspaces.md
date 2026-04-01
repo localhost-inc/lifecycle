@@ -3,6 +3,7 @@
 > Status: planned execution plan
 > Depends on: [Local CLI](./local-cli.md)
 > Plan index: [docs/plans/README.md](./README.md). This document is the target contract for the first cloud delivery stream.
+> Related: [Kin Cloud V1](./kin-cloud-v1.md)
 
 ## Goal
 
@@ -26,7 +27,7 @@ User signs in, installs GitHub App, links project to repo, forks a local workspa
 14. Preview auth with Lifecycle-issued short-lived tokens.
 15. PR creation via GitHub App.
 16. Shared terminal sessions: Durable Object multiplexer, native desktop attach bridge, invite flow, role-based input control, presence.
-17. Cloud CLI commands: `auth login`, `org select`, `repo add`, `pr create`, `workspace fork --mode cloud`.
+17. Cloud CLI commands: `auth login`, `org create`, `org switch`, `repo link`, `workspace create --host cloud`, `agent`, `pr create`, `pr merge`.
 
 ## Entity Contracts
 
@@ -104,6 +105,7 @@ M6 needs one org-scoped auth contract across desktop, CLI, preview, and cloud ac
 4. Cloud API calls and reactive queries must carry a validated user identity plus `organization_id`.
 5. Preview access must use Lifecycle-issued short-lived tokens instead of public unauthenticated URLs.
 6. Org switching changes the active `organization_id` used by desktop views, CLI commands, and cloud mutations.
+7. `lifecycle auth login` should use the v1 GitHub-backed sign-in path and activate a default `Personal` organization when the user has not yet selected a shared org.
 
 #### RBAC
 
@@ -383,10 +385,11 @@ The share experience must feel effortless — one click to share, one click to j
 ### PR Creation
 
 - PR is created via GitHub App permissions through backend (Convex action)
+- PR merge is also performed through backend after an explicit mergeability check
 - Control plane validates head/base refs and commit diff
 - Returns PR URL, number, and status context
 - No-diff and permission failures return typed errors with suggested next action
-- `lifecycle pr create` always targets the backend; `gh` CLI is optional and not required
+- `lifecycle pr create` and `lifecycle pr merge` always target the backend; `gh` CLI is optional and not required
 
 ### Event Ingress
 
@@ -404,20 +407,39 @@ The share experience must feel effortless — one click to share, one click to j
 2. Workspace git permissions are fetch/push only using short-lived credentials minted by backend.
 3. Workspace git credentials are repo-scoped and branch-scoped to lifecycle workspace branches.
 4. Pull request creation is performed by backend via GitHub App permissions, not by workspace user tokens.
-5. `lifecycle pr create` always targets the backend (Convex action); `gh` CLI is optional and not required.
-6. Git credentials are rotated and revoked on workspace sleep/destroy.
-7. Token mint, token redemption, push, and PR actions are all audit logged.
+5. Pull request merge is performed by backend and must honor GitHub mergeability and branch protection.
+6. `lifecycle pr create` and `lifecycle pr merge` always target the backend (Convex actions); `gh` CLI is optional and not required.
+7. Git credentials are rotated and revoked on workspace sleep/destroy.
+8. Token mint, token redemption, push, PR create, and PR merge actions are all audit logged.
 
 ### Cloud CLI Commands
 
 Commands added to the CLI in this milestone (extending M5's local CLI):
 
 1. `lifecycle auth login`
-2. `lifecycle org select [--create]`
-3. `lifecycle repo add [--search <query>]`
-4. `lifecycle pr create [--workspace <id>]`
-5. `lifecycle workspace create --project <id> --ref <branch> --mode cloud`
-6. `lifecycle workspace fork --mode cloud|local [--destroy-source] [--include-uncommitted]`
+2. `lifecycle org create <name>`
+3. `lifecycle org switch <name|id>`
+4. `lifecycle org cloud connect cloudflare`
+5. `lifecycle project init [--org-id <id>]`
+6. `lifecycle repo link [--project-id <id>]`
+7. `lifecycle workspace create <name> --host cloud`
+8. `lifecycle workspace fork --host cloud|local [--destroy-source] [--include-uncommitted]`
+9. `lifecycle workspace shell <workspace>`
+10. `lifecycle agent --workspace-id <id> --provider <claude|codex>`
+11. `lifecycle pr create --workspace-id <id>`
+12. `lifecycle pr merge --workspace-id <id>`
+
+Command semantics:
+
+1. `auth login` establishes the user session and activates a default personal org when needed.
+2. `org create` creates a shared organization.
+3. `org switch` selects the active organization for subsequent cloud commands.
+4. `org cloud connect cloudflare` stores and verifies the organization-scoped Cloudflare credential.
+5. `project init --org-id` still creates `lifecycle.json`; when signed in, it may also bind the current project to the target org record.
+6. `repo link` links the current project to its GitHub repository, auto-detecting from git remote when possible.
+7. `workspace create <name> --host cloud` uses the active project, linked repo, and active organization cloud account.
+8. `agent --workspace-id --provider` is a thin launcher into the workspace shell for the selected provider CLI, not a Lifecycle-owned cloud agent session model.
+9. `pr create` and `pr merge` operate on repository authority, not on the workspace shell identity.
 
 ### Relationship Cardinality
 
@@ -457,6 +479,7 @@ Index rationale:
 
 - **Sign-in button**: triggers the chosen browser-confirmed auth flow in the system browser
 - **Org switcher**: top-left, Linear-style compact control (org mark, org name, chevron)
+- **Org create/switch parity**: desktop and CLI expose the same auth and org selection model
 - **GitHub App install**: in-app flow to install and connect repos
 - **Project -> repo linking**: auto-detect from git remote with manual override
 - **Cloud workspace list**: org-scoped, shows only cloud workspaces
@@ -475,10 +498,18 @@ Index rationale:
 - Cloud workspace visible in org workspace list (local workspaces are NOT listed here)
 - Toggle "Share" on a cloud workspace service -> preview URL generated -> copy -> teammate opens -> sees running app
 - Click "Create PR" -> PR created on GitHub -> link shown in app
+- Click "Merge PR" -> PR merged when GitHub reports mergeable and branch protection allows it
 - Cloud workspace -> click "Share" -> invite link copied -> teammate joins as viewer -> both see same terminal output
 - Host grants teammate editor role -> teammate can type into shared terminal
-- `lifecycle auth login` -> authenticated -> `lifecycle org select` -> org set
-- `lifecycle pr create` -> PR created from CLI
+- `lifecycle auth login` -> default personal org active
+- `lifecycle org create kin` -> shared org created
+- `lifecycle org switch kin` -> active org set
+- `lifecycle project init --org-id <org>` -> project contract created and org-bound
+- `lifecycle repo link --project-id <project>` -> repository linked
+- `lifecycle workspace create feature-branch --host cloud` -> cloud workspace created
+- `lifecycle agent --workspace-id <workspace> --provider claude` -> attached provider session starts in the workspace shell
+- `lifecycle pr create --workspace-id <workspace>` -> PR created from CLI
+- `lifecycle pr merge --workspace-id <workspace>` -> PR merged from CLI when allowed
 
 ## Test Scenarios
 
@@ -493,8 +524,15 @@ cloud workspace ready -> share service -> preview URL generated -> opens in brow
 teammate opens preview URL -> sees running app (org-scoped auth)
 service restarts -> same preview URL still works
 create PR -> PR appears on GitHub with correct branch and title
-lifecycle auth login -> lifecycle org select -> lifecycle repo add -> lifecycle pr create
-lifecycle workspace fork --mode cloud -> cloud workspace created
+lifecycle auth login -> default personal org active
+lifecycle org create kin -> lifecycle org switch kin
+lifecycle project init --org-id <org> -> lifecycle.json created and project bound to org
+lifecycle repo link --project-id <project> -> repository link succeeds
+lifecycle workspace create feature-branch --host cloud -> cloud workspace created
+lifecycle agent --workspace-id <workspace> --provider claude -> provider CLI launched in workspace shell
+lifecycle pr create --workspace-id <workspace> -> PR created
+lifecycle pr merge --workspace-id <workspace> -> merge succeeds when allowed
+lifecycle workspace fork --host cloud -> cloud workspace created
 cloud workspace -> share -> teammate joins as viewer -> sees terminal output -> host grants editor -> teammate types -> both see result
 shared workspace -> workspace sleeps -> all participants disconnected -> wake -> reconnect -> session resumes
 shared workspace -> host revokes guest -> guest disconnected immediately

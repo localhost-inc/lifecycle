@@ -199,6 +199,99 @@ Legacy/current term for the old combined right-side rail.
 
 Avoid this term in new target-state docs; use `workspace extension strip` or `workspace extension panel` instead.
 
+## Runtime
+
+### Environment
+
+The declarative execution graph defined in `lifecycle.json`.
+
+It describes:
+
+1. `workspace.prepare`
+2. task nodes
+3. service nodes
+4. dependency edges
+5. health checks
+
+Use `environment` for the checked-in contract, not for the live CLI namespace.
+
+### Stack
+
+The live runnable graph inside a workspace.
+
+This is the canonical CLI noun for whole-runtime operations.
+
+Examples:
+
+1. `lifecycle stack status`
+2. `lifecycle stack run`
+3. `lifecycle stack logs`
+
+Use `stack` for operational runtime control.
+
+Do not use `environment` as the CLI noun when the meaning is "the live thing currently running."
+
+### Service
+
+One named runtime node inside a workspace stack.
+
+Services are derived from service nodes in the declared environment graph.
+
+Use `service` for node-scoped runtime operations such as:
+
+1. `lifecycle service info api`
+2. `lifecycle service logs api`
+3. `lifecycle service start api`
+
+### Context
+
+The aggregate CLI read across project, workspace, stack, service, git, and desktop-shell facts.
+
+This is the canonical CLI noun for one-shot orientation and machine-readable discovery.
+
+Examples:
+
+1. `lifecycle context`
+2. `lifecycle context --json`
+
+Use `context` when the caller needs a composed view of the current workspace state instead of a single project, workspace, stack, or service read.
+
+## Collaboration
+
+### Organization
+
+The authenticated cloud tenancy boundary for shared projects, repositories, and cloud workspaces.
+
+Examples: `Personal`, `Kin`
+
+Use `organization` for cloud ownership and policy. Do not use it as a synonym for `project`.
+
+### Personal organization
+
+The default organization activated for a user after cloud sign-in when they have not yet switched to a shared organization.
+
+Use `Personal` as the user-facing label for this scope.
+
+### Repository
+
+The linked VCS identity for a project.
+
+Repository records own provider linkage for clone, push, pull request create, and pull request merge. They do not define the runtime contract; that still lives in `lifecycle.json`.
+
+### Remote collaboration
+
+Access to a workspace from another person or device through previews, snapshots, attach flows, or other shared surfaces.
+
+Remote collaboration widens access around a workspace but does not, by itself, move authority from local to cloud.
+
+Do not use `remote collaboration` as shorthand for `workspace.host=remote`.
+
+### Cloud workspace
+
+An organization-visible workspace whose authoritative host and control plane are cloud-side.
+
+Use `cloud workspace` when the workspace itself runs under cloud authority, not when a local workspace merely exposes a remote collaboration surface.
+
 ## Agent
 
 ### Agent session

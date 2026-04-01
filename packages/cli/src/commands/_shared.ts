@@ -1,7 +1,7 @@
 import { defineCommand, defineFlag } from "@lifecycle/cmd";
 import { z } from "zod";
 
-import { BridgeClientError } from "../bridge";
+import { BridgeClientError } from "../errors";
 
 export const jsonFlag = defineFlag(
   z.boolean().default(false).describe("Emit structured JSON output."),

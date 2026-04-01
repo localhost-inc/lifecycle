@@ -1,7 +1,5 @@
 import { randomUUID, createHash } from "node:crypto";
-import { access, readFile } from "node:fs/promises";
 import { createConnection } from "node:net";
-import path from "node:path";
 import {
   type AgentSessionInspectRequest,
   type BridgeError,
@@ -33,40 +31,15 @@ import {
   type TaskDeleteRequest,
   type TaskDependencyAddRequest,
   type TaskDependencyRemoveRequest,
-  getManifestFingerprint,
   LIFECYCLE_AGENT_SESSION_ID_ENV,
   LIFECYCLE_BRIDGE_ENV,
   LIFECYCLE_BRIDGE_SESSION_TOKEN_ENV,
   LIFECYCLE_WORKSPACE_PATH_ENV,
   LIFECYCLE_WORKSPACE_ID_ENV,
-  parseManifest,
 } from "@lifecycle/contracts";
 
-export class BridgeClientError extends Error {
-  readonly code: string;
-  readonly details?: Record<string, unknown>;
-  readonly retryable: boolean;
-  readonly suggestedAction?: string;
-
-  constructor(input: {
-    code: string;
-    details?: Record<string, unknown> | undefined;
-    message: string;
-    retryable?: boolean;
-    suggestedAction?: string | undefined;
-  }) {
-    super(input.message);
-    this.name = "BridgeClientError";
-    this.code = input.code;
-    this.retryable = input.retryable ?? false;
-    if (input.details !== undefined) {
-      this.details = input.details;
-    }
-    if (input.suggestedAction !== undefined) {
-      this.suggestedAction = input.suggestedAction;
-    }
-  }
-}
+import { BridgeClientError } from "./errors";
+import { loadManifest } from "./manifest";
 
 type BridgeSuccessResponse<Method extends BridgeResponse["method"]> = Extract<
   BridgeResponse,
@@ -113,68 +86,17 @@ export function resolveWorkspaceId(explicitWorkspaceId?: string): string {
   return workspaceId;
 }
 
-async function pathExists(candidatePath: string): Promise<boolean> {
-  try {
-    await access(candidatePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function findManifestPath(): Promise<string> {
-  const injectedWorkspacePath = process.env[LIFECYCLE_WORKSPACE_PATH_ENV];
-  if (injectedWorkspacePath) {
-    const injectedManifestPath = path.join(injectedWorkspacePath, "lifecycle.json");
-    if (await pathExists(injectedManifestPath)) {
-      return injectedManifestPath;
-    }
-  }
-
-  let currentDirectory = process.cwd();
-
-  while (true) {
-    const manifestPath = path.join(currentDirectory, "lifecycle.json");
-    if (await pathExists(manifestPath)) {
-      return manifestPath;
-    }
-
-    const parentDirectory = path.dirname(currentDirectory);
-    if (parentDirectory === currentDirectory) {
-      break;
-    }
-    currentDirectory = parentDirectory;
-  }
-
-  throw new BridgeClientError({
-    code: "manifest_not_found",
-    message: "Lifecycle could not find lifecycle.json for this workspace command.",
-    suggestedAction:
-      "Set LIFECYCLE_WORKSPACE_PATH or run the command from inside a workspace checkout.",
-  });
-}
-
 export async function loadManifestForServiceStart() {
-  const manifestPath = await findManifestPath();
-  const manifestText = await readFile(manifestPath, "utf8");
-  const parsed = parseManifest(manifestText);
-
-  if (!parsed.valid) {
-    throw new BridgeClientError({
-      code: "manifest_invalid",
-      details: {
-        errors: parsed.errors,
-        manifestPath,
-      },
-      message: `Lifecycle manifest validation failed for ${manifestPath}.`,
-      suggestedAction: "Fix lifecycle.json validation errors, then retry the service start.",
-    });
-  }
+  const workspacePath = process.env[LIFECYCLE_WORKSPACE_PATH_ENV];
+  const manifest = await loadManifest({
+    searchFrom: process.cwd(),
+    ...(workspacePath ? { workspacePath } : {}),
+  });
 
   return {
-    manifestFingerprint: getManifestFingerprint(parsed.config),
-    manifestJson: JSON.stringify(parsed.config),
-    manifestPath,
+    manifestFingerprint: manifest.manifestFingerprint,
+    manifestJson: manifest.manifestJson,
+    manifestPath: manifest.manifestPath,
   };
 }
 

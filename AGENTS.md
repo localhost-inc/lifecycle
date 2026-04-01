@@ -33,6 +33,7 @@ Canonical contract documents for each domain. Read the relevant doc before start
 | `docs/reference/design.md` | Component rules, surfaces, buttons, forms, motion |
 | `docs/reference/vocabulary.md` | Canonical product terminology |
 | `docs/reference/vision.md` | Product vision and strategy |
+| `docs/reference/journey.md` | Canonical narrative from local development to remote collaboration and cloud handoff |
 | `docs/reference/testing.md` | Test job orchestration spec |
 | `docs/reference/workspace.md` | Workspace provider, canvas, surface, environment, files contracts |
 | `docs/reference/shell.md` | App shell v2 layout contract |

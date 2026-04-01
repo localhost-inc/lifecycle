@@ -2,7 +2,9 @@
   "extends": "../../packages/config/tsconfig.app.json",
   "compilerOptions": {
     "rootDir": "src",
-    "outDir": "dist"
+    "outDir": "dist",
+    "types": ["@cloudflare/workers-types"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/index.ts", "src/**/*.test.ts", "src/dev.ts"]
 }

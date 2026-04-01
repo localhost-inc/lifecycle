@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { parseManifest } from "@lifecycle/contracts";
 
 import { main } from "./index";
 
@@ -753,6 +754,168 @@ describe("lifecycle cli", () => {
     expect(sink.stderr).toEqual([
       "lifecycle service info requires exactly one <service> argument.",
     ]);
+  });
+
+  test("initializes lifecycle.json from repo dev scripts", async () => {
+    const sink = createIo();
+    const repoPath = await mkdtemp(join(tmpdir(), "lifecycle-cli-init-"));
+
+    try {
+      await mkdir(join(repoPath, "apps", "api"), { recursive: true });
+      await mkdir(join(repoPath, "apps", "web"), { recursive: true });
+      await writeFile(
+        join(repoPath, "package.json"),
+        JSON.stringify({
+          name: "example-repo",
+          packageManager: "bun@1.3.10",
+          workspaces: ["apps/*"],
+        }),
+      );
+      await writeFile(
+        join(repoPath, "apps", "api", "package.json"),
+        JSON.stringify({
+          name: "@example/api",
+          scripts: {
+            dev: "bun run dev",
+          },
+        }),
+      );
+      await writeFile(
+        join(repoPath, "apps", "web", "package.json"),
+        JSON.stringify({
+          name: "@example/web",
+          scripts: {
+            dev: "vite",
+          },
+        }),
+      );
+
+      const code = await main(["repo", "init", "--path", repoPath, "--json"], sink.io);
+
+      expect(code).toBe(0);
+      const manifestText = await readFile(join(repoPath, "lifecycle.json"), "utf8");
+      const parsed = parseManifest(manifestText);
+      expect(parsed.valid).toBe(true);
+
+      if (!parsed.valid) {
+        throw new Error("expected generated lifecycle.json to be valid");
+      }
+
+      expect(parsed.config.workspace.prepare).toMatchObject([
+        {
+          command: "bun install --frozen-lockfile",
+          name: "install",
+          timeout_seconds: 300,
+        },
+      ]);
+      expect(parsed.config.environment).toMatchObject({
+        api: {
+          command: "bun run dev",
+          cwd: "apps/api",
+          kind: "service",
+          runtime: "process",
+        },
+        web: {
+          command: "bun run dev",
+          cwd: "apps/web",
+          kind: "service",
+          runtime: "process",
+        },
+      });
+
+      expect(JSON.parse(sink.stdout[0] ?? "null")).toMatchObject({
+        manifestPath: join(repoPath, "lifecycle.json"),
+        packageManager: "bun",
+        services: [
+          { cwd: "apps/api", name: "api" },
+          { cwd: "apps/web", name: "web" },
+        ],
+      });
+      expect(sink.stderr).toEqual([]);
+    } finally {
+      await rm(repoPath, { force: true, recursive: true });
+    }
+  });
+
+  test("refuses to overwrite an existing lifecycle.json without force", async () => {
+    const sink = createIo();
+    const repoPath = await mkdtemp(join(tmpdir(), "lifecycle-cli-init-existing-"));
+
+    try {
+      await writeFile(join(repoPath, "lifecycle.json"), "{}\n");
+
+      const code = await main(["repo", "init", "--path", repoPath], sink.io);
+
+      expect(code).toBe(1);
+      expect(sink.stdout).toEqual([]);
+      expect(sink.stderr).toEqual([
+        `Lifecycle found an existing manifest at ${join(repoPath, "lifecycle.json")}.`,
+        "Suggested action: Re-run with --force to overwrite it, or edit the file manually.",
+      ]);
+    } finally {
+      await rm(repoPath, { force: true, recursive: true });
+    }
+  });
+
+  test("runs workspace.prepare steps locally", async () => {
+    const sink = createIo();
+    const repoPath = await mkdtemp(join(tmpdir(), "lifecycle-cli-prepare-"));
+
+    try {
+      await writeFile(
+        join(repoPath, "lifecycle.json"),
+        JSON.stringify({
+          workspace: {
+            prepare: [
+              {
+                name: "seed",
+                command: "mkdir -p .generated && printf 'ok' > .generated/seed.txt",
+                timeout_seconds: 30,
+              },
+              {
+                name: "env",
+                timeout_seconds: 30,
+                write_files: [
+                  {
+                    lines: ["API_URL=http://localhost:3000", "MODE=dev"],
+                    path: ".env.local",
+                  },
+                ],
+              },
+            ],
+          },
+          environment: {},
+        }),
+      );
+
+      const code = await main(["prepare", "--path", repoPath, "--json"], sink.io);
+
+      expect(code).toBe(0);
+      expect(await readFile(join(repoPath, ".generated", "seed.txt"), "utf8")).toBe("ok");
+      expect(await readFile(join(repoPath, ".env.local"), "utf8")).toBe(
+        "API_URL=http://localhost:3000\nMODE=dev\n",
+      );
+      expect(JSON.parse(sink.stdout[0] ?? "null")).toMatchObject({
+        manifestPath: join(repoPath, "lifecycle.json"),
+        stepCount: 2,
+        steps: [
+          {
+            command: "mkdir -p .generated && printf 'ok' > .generated/seed.txt",
+            kind: "command",
+            name: "seed",
+          },
+          {
+            kind: "write_files",
+            name: "env",
+            writtenFiles: [join(repoPath, ".env.local")],
+          },
+        ],
+        workspacePath: repoPath,
+      });
+      expect(sink.stderr).toEqual([]);
+    } finally {
+      await rm(repoPath, { force: true, recursive: true });
+    }
   });
 
   test("returns an error for unknown commands", async () => {

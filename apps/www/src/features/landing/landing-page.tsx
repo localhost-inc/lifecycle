@@ -7,67 +7,66 @@ const btnSecondary = `${btnBase} border border-[var(--border)] bg-[var(--card)] 
 
 const manifestSnippet = `{
   "workspace": {
-    "setup": [
-      { "name": "install", "command": "bun install --frozen-lockfile" }
+    "prepare": [
+      {
+        "name": "install",
+        "command": "bun install --frozen-lockfile",
+        "timeout_seconds": 300
+      }
     ]
   },
   "environment": {
-    "postgres": {
+    "api": {
       "kind": "service",
-      "runtime": "image",
-      "image": "postgres:16-alpine",
-      "health_check": { "kind": "container", "timeout_seconds": 45 }
-    },
-    "migrate": {
-      "kind": "task",
-      "depends_on": ["postgres"],
-      "command": "bun run db:migrate"
+      "runtime": "process",
+      "command": "bun run dev",
+      "cwd": "apps/api",
+      "startup_timeout_seconds": 30,
+      "health_check": {
+        "kind": "http",
+        "url": "http://\${LIFECYCLE_SERVICE_API_ADDRESS}/health",
+        "timeout_seconds": 5
+      }
     },
     "web": {
       "kind": "service",
       "runtime": "process",
-      "depends_on": ["migrate"],
       "command": "bun run dev",
-      "port": 3000,
-      "health_check": { "kind": "http", "timeout_seconds": 30 }
+      "cwd": "apps/web",
+      "depends_on": ["api"]
     }
   }
 }`;
 
 const features = [
   {
-    name: "Native terminal",
+    name: "Small distributable",
     description:
-      "Built on libghostty. GPU-accelerated rendering with full keyboard and mouse support.",
+      "One CLI on PATH. It works from the repo root or inside the checkout you already have.",
   },
   {
-    name: "Split panes",
+    name: "Manifest contract",
     description:
-      "Horizontal and vertical splits. Terminals, files, logs, and previews side by side.",
+      "lifecycle.json keeps prepare steps, services, tasks, and health checks in one durable repo contract.",
   },
   {
-    name: "Service dependency graph",
+    name: "Repo scaffolding",
     description:
-      "Services and tasks boot in dependency order with health checks. Postgres before migrations before your dev server.",
+      "Generate a valid starter from the repo's existing dev scripts with lifecycle repo init.",
   },
   {
-    name: "Live service logs",
-    description:
-      "Stream stdout and stderr from every service in your environment. Filter, search, and pin.",
+    name: "Bootstrap command",
+    description: "Run filesystem-level setup straight from lifecycle.json with lifecycle prepare.",
   },
   {
-    name: "Git surface",
+    name: "Machine-readable output",
     description:
-      "Branches, diffs, and pull requests without leaving the app. Stage, commit, and push from the sidebar.",
+      "Humans get quiet defaults. Agents and scripts get stable JSON from the same command surface.",
   },
   {
-    name: "Preview URLs",
-    description: "Every service with a port gets a shareable preview URL. Hot-reloading included.",
-  },
-  {
-    name: "Agent sessions",
+    name: "Agent-ready",
     description:
-      "Any coding agent gets the same environment your team uses. Claude, Codex, or your own toolchain.",
+      "The same CLI contract works for humans in a shell and agents in an automated loop.",
   },
   {
     name: "Local-first",
@@ -75,13 +74,9 @@ const features = [
       "No sign-in required. Your machine, your state, your speed. Cloud is an upgrade, not a prerequisite.",
   },
   {
-    name: "Cloud fork",
+    name: "Optional desktop surfaces",
     description:
-      "Fork any local environment to cloud. Shared terminals, shareable URLs, and team visibility.",
-  },
-  {
-    name: "Open source",
-    description: "MIT licensed. Read the code, fork it, contribute.",
+      "Desktop previews and richer UI can layer on top, but the repo contract starts with the CLI.",
   },
 ];
 
@@ -91,20 +86,23 @@ export function LandingPage() {
       {/* Hero */}
       <section>
         <h1 className="text-4xl font-semibold leading-[1.1] tracking-[-0.04em] text-[var(--foreground)] sm:text-5xl">
-          From idea to prod
+          Meet developers
           <br />
-          <span className="text-[var(--muted-foreground)]">and back.</span>
+          <span className="text-[var(--muted-foreground)]">where they already work.</span>
         </h1>
 
         <p className="mt-6 max-w-md text-base leading-relaxed text-[var(--muted-foreground)]">
-          Lifecycle is a native desktop app for running, sharing, and collaborating on development
-          environments. One manifest in your repo. Deterministic dependency graph. Local-first — no
-          accounts required.
+          One manifest in your repo. Lifecycle starts with a small CLI distributable and a{" "}
+          <code className="rounded-md bg-[var(--muted)] px-1.5 py-0.5 font-mono text-[0.9em] text-[var(--foreground)]">
+            lifecycle.json
+          </code>{" "}
+          contract in the repo. Deterministic setup, typed service orchestration, agent-friendly
+          JSON, and optional desktop surfaces layered on top.
         </p>
 
         <div className="mt-8 flex flex-wrap gap-3">
           <a href="https://github.com/localhost-inc/lifecycle/releases" className={btnPrimary}>
-            Download for Mac
+            Install CLI
           </a>
           <a href="https://github.com/localhost-inc/lifecycle" className={btnSecondary}>
             View source
@@ -140,7 +138,8 @@ export function LandingPage() {
           <code className="rounded-md bg-[var(--muted)] px-1.5 py-0.5 font-mono text-[0.9em] text-[var(--foreground)]">
             lifecycle.json
           </code>{" "}
-          to your repo. Lifecycle reads the dependency graph and boots your stack in order.
+          to your repo. Lifecycle reads the repo contract directly: prepare steps, services, and
+          dependency edges live in source control instead of shell glue.
         </p>
 
         <pre className="mt-5">
@@ -148,19 +147,19 @@ export function LandingPage() {
         </pre>
 
         <p className="mt-4 max-w-md text-sm leading-relaxed text-[var(--muted-foreground)]">
-          Services, tasks, health checks, dependency ordering. Process or container runtime. No
-          Docker Compose. No shell scripts.
+          One file for setup and service topology. The CLI uses it directly, and any richer surface
+          can build on the same contract.
         </p>
       </section>
 
       {/* CTA */}
       <section className="mt-24 border-t border-[var(--border)] pt-8">
         <h2 className="text-xl font-semibold tracking-[-0.02em] text-[var(--foreground)]">
-          Start quickly. Recover predictably. Share confidently.
+          One manifest. One CLI. Optional surfaces on top.
         </h2>
         <div className="mt-5 flex flex-wrap gap-3">
           <a href="https://github.com/localhost-inc/lifecycle/releases" className={btnPrimary}>
-            Download for Mac
+            Install CLI
           </a>
           <a href="https://github.com/localhost-inc/lifecycle" className={btnSecondary}>
             View source
