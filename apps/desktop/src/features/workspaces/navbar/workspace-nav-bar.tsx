@@ -14,10 +14,10 @@ import { useWorkspace } from "@/store/hooks";
 
 interface WorkspaceNavBarProps {
   activeWorkspaceId: string;
-  projectName: string;
+  repositoryName: string;
 }
 
-export function WorkspaceNavBar({ activeWorkspaceId, projectName }: WorkspaceNavBarProps) {
+export function WorkspaceNavBar({ activeWorkspaceId, repositoryName }: WorkspaceNavBarProps) {
   const workspace = useWorkspace(activeWorkspaceId) ?? null;
   const toolbarSlot = useWorkspaceToolbarSlot(activeWorkspaceId);
 
@@ -25,16 +25,16 @@ export function WorkspaceNavBar({ activeWorkspaceId, projectName }: WorkspaceNav
     handler: () => {
       window.history.back();
     },
-    id: "project.go-back",
-    priority: SHORTCUT_HANDLER_PRIORITY.project,
+    id: "repository.go-back",
+    priority: SHORTCUT_HANDLER_PRIORITY.repository,
   });
 
   useShortcutRegistration({
     handler: () => {
       window.history.forward();
     },
-    id: "project.go-forward",
-    priority: SHORTCUT_HANDLER_PRIORITY.project,
+    id: "repository.go-forward",
+    priority: SHORTCUT_HANDLER_PRIORITY.repository,
   });
 
   const [extensionPanelCollapsed, setExtensionPanelCollapsed] = useState(false);
@@ -81,10 +81,10 @@ export function WorkspaceNavBar({ activeWorkspaceId, projectName }: WorkspaceNav
       data-tauri-drag-region
       onMouseDown={handleMouseDown}
     >
-      {/* Breadcrumb: Project > Workspace */}
+      {/* Breadcrumb: Repository > Workspace */}
       <div className="flex min-w-0 flex-1 items-center gap-1.5 px-2">
         <span className="truncate text-[13px] font-medium text-[var(--muted-foreground)]">
-          {projectName}
+          {repositoryName}
         </span>
         {workspace ? (
           <>

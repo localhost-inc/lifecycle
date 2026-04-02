@@ -20,6 +20,24 @@ export const user = sqliteTable("user", {
   ...timestamps,
 });
 
+// ── User environments ──
+// Stores the user's synced local environment profile for cloud workspaces.
+
+export const userEnvironment = sqliteTable("user_environment", {
+  userId: text("user_id")
+    .primaryKey()
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  gitName: text("git_name"),
+  gitEmail: text("git_email"),
+  gitConfigBase64: text("git_config_base64"),
+  claudeAccessToken: text("claude_access_token"),
+  claudeRefreshToken: text("claude_refresh_token"),
+  claudeSettingsBase64: text("claude_settings_base64"),
+  codexAuthBase64: text("codex_auth_base64"),
+  ...timestamps,
+});
+
 // ── Organizations ──
 
 export const organization = sqliteTable("organization", {
@@ -95,6 +113,7 @@ export const workspace = sqliteTable("workspace", {
     .notNull()
     .references(() => repository.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
+  slug: text("slug").notNull(),
   host: text("host").notNull().default("cloud"),
   sourceRef: text("source_ref").notNull(),
   status: text("status").notNull().default("provisioning"),

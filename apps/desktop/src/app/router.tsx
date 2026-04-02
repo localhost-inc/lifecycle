@@ -4,27 +4,27 @@ import { Loading } from "@lifecycle/ui";
 import { AppShellLayout } from "@/components/layout/app-shell-layout";
 import { RouteErrorPage } from "@/app/route-error-page";
 const HomeRoute = lazy(async () => {
-  const module = await import("../features/projects/routes/home-route");
+  const module = await import("../features/repositories/routes/home-route");
   return {
     default: module.HomeRoute,
   };
 });
-const ProjectSettingsRoute = lazy(async () => {
-  const module = await import("../features/projects/routes/project-settings-route");
+const RepositorySettingsRoute = lazy(async () => {
+  const module = await import("../features/repositories/routes/repository-settings-route");
   return {
-    default: module.ProjectSettingsRoute,
+    default: module.RepositorySettingsRoute,
   };
 });
-const ProjectRoute = lazy(async () => {
-  const module = await import("../features/projects/routes/project-route");
+const RepositoryRoute = lazy(async () => {
+  const module = await import("../features/repositories/routes/repository-route");
   return {
-    default: module.ProjectRoute,
+    default: module.RepositoryRoute,
   };
 });
-const ProjectIndexRedirect = lazy(async () => {
-  const module = await import("../features/projects/routes/project-index-redirect");
+const RepositoryIndexRedirect = lazy(async () => {
+  const module = await import("../features/repositories/routes/repository-index-redirect");
   return {
-    default: module.ProjectIndexRedirect,
+    default: module.RepositoryIndexRedirect,
   };
 });
 const WorkspaceRoute = lazy(async () => {
@@ -66,10 +66,10 @@ function createRouter() {
               ),
             },
             {
-              path: "projects/:projectId",
+              path: "repositories/:repositoryId",
               element: (
                 <LazyRoute>
-                  <ProjectRoute />
+                  <RepositoryRoute />
                 </LazyRoute>
               ),
               children: [
@@ -77,7 +77,7 @@ function createRouter() {
                   index: true,
                   element: (
                     <LazyRoute>
-                      <ProjectIndexRedirect />
+                      <RepositoryIndexRedirect />
                     </LazyRoute>
                   ),
                 },
@@ -93,7 +93,7 @@ function createRouter() {
                   path: "settings",
                   element: (
                     <LazyRoute>
-                      <ProjectSettingsRoute />
+                      <RepositorySettingsRoute />
                     </LazyRoute>
                   ),
                 },

@@ -7,7 +7,7 @@ describe("workspace contract", () => {
   function workspace(overrides: Partial<WorkspaceRecord> = {}): WorkspaceRecord {
     return {
       id: "ws_1",
-      project_id: "project_1",
+      repository_id: "project_1",
       name: "Workspace 1",
       checkout_type: "worktree",
       source_ref: "lifecycle/workspace-1",

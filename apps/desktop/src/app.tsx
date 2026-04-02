@@ -18,7 +18,7 @@ import { ShortcutRouterProvider } from "@/app/shortcuts/shortcut-router";
 import { authClient } from "@/features/auth/client";
 import { ProcessEventBridge } from "@/features/events/process-event-bridge";
 import { AppNotifier } from "@/features/notifications/app-notifier";
-import { ProjectManifestWatcher } from "@/features/projects/components/project-manifest-watcher";
+import { RepositoryManifestWatcher } from "@/features/repositories/components/repository-manifest-watcher";
 import { getLifecycleErrorMessage } from "@/lib/tauri-error";
 import { SettingsProvider } from "@/features/settings/state/settings-provider";
 import { markPerformance, measurePerformance } from "@/lib/performance";
@@ -92,7 +92,7 @@ export function App({
                       refreshIntervalMs={import.meta.env.DEV ? 5_000 : 60_000}
                     >
                       <ProcessEventBridge />
-                      <ProjectManifestWatcher />
+                      <RepositoryManifestWatcher />
                       <AppNotifier />
                       <ShortcutRouterProvider>
                         <RouterProvider router={router} />

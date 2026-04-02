@@ -19,7 +19,7 @@ describe("createTurnCompletionNotificationCopy", () => {
   test("formats project:workspace in the body", () => {
     expect(
       createTurnCompletionNotificationCopy(createCompletedTurnEvent(), {
-        projectName: "lifecycle",
+        repositoryName: "lifecycle",
         providerName: "Codex",
         sessionTitle: "Fix auth callback",
         workspaceName: "auth-callback",
@@ -46,7 +46,7 @@ describe("createTurnCompletionNotificationCopy", () => {
   test("uses project name alone when workspace name is unavailable", () => {
     expect(
       createTurnCompletionNotificationCopy(createCompletedTurnEvent(), {
-        projectName: "lifecycle",
+        repositoryName: "lifecycle",
         providerName: "Codex",
       }),
     ).toEqual({
@@ -67,7 +67,7 @@ describe("createTurnCompletionNotificationCopy", () => {
   test("uses provider label for claude", () => {
     expect(
       createTurnCompletionNotificationCopy(createCompletedTurnEvent(), {
-        projectName: "lifecycle",
+        repositoryName: "lifecycle",
         providerName: "Claude",
         sessionTitle: "Notification improvements",
         workspaceName: "main",

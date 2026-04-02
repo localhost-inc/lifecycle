@@ -16,7 +16,7 @@ export type WorkspaceTabHotkeyAction =
   | { id: "canvas.pane.tab.select.previous" }
   | { id: "canvas.tab.reopen" };
 
-export type WorkspaceCloseShortcutTarget = "close-pane" | "close-project-tab" | null;
+export type WorkspaceCloseShortcutTarget = "close-pane" | "close-repository-tab" | null;
 
 export function releaseWebviewFocus(): void {
   if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
@@ -125,5 +125,5 @@ export function resolveWorkspaceCloseShortcutTarget(
     return null;
   }
 
-  return paneCount > 1 ? "close-pane" : "close-project-tab";
+  return paneCount > 1 ? "close-pane" : "close-repository-tab";
 }

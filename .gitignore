@@ -15,6 +15,10 @@ coverage/
 # Tool caches
 .bun/
 .turbo/
+.wrangler/
+
+# Rust
+target/
 
 # OS artifacts
 .DS_Store

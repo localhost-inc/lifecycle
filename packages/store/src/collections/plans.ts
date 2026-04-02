@@ -1,15 +1,15 @@
 import type { SqlDriver } from "@lifecycle/db";
 import type { PlanRecord } from "@lifecycle/contracts";
 
-export async function selectPlansByProject(
+export async function selectPlansByRepository(
   driver: SqlDriver,
-  projectId: string,
+  repositoryId: string,
 ): Promise<PlanRecord[]> {
   return driver.select<PlanRecord>(
-    `SELECT id, project_id, workspace_id, name, description, body, status, position,
+    `SELECT id, repository_id, workspace_id, name, description, body, status, position,
             created_at, updated_at
-     FROM plan WHERE project_id = $1 ORDER BY position`,
-    [projectId],
+     FROM plan WHERE repository_id = $1 ORDER BY position`,
+    [repositoryId],
   );
 }
 
@@ -18,7 +18,7 @@ export async function selectPlanById(
   planId: string,
 ): Promise<PlanRecord | undefined> {
   const rows = await driver.select<PlanRecord>(
-    `SELECT id, project_id, workspace_id, name, description, body, status, position,
+    `SELECT id, repository_id, workspace_id, name, description, body, status, position,
             created_at, updated_at
      FROM plan WHERE id = $1`,
     [planId],

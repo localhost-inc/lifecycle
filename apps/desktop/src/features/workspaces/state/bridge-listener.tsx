@@ -10,7 +10,7 @@ const BRIDGE_SHELL_REQUEST_EVENT = "bridge:shell-request";
 
 function buildPreviewResult(request: Extract<BridgeShellRequest, { kind: "tab.open.preview" }>) {
   return {
-    projectId: request.projectId,
+    repositoryId: request.repositoryId,
     surface: "preview",
     tabKey: `preview:${request.previewKey}`,
     url: request.url,
@@ -52,7 +52,7 @@ export function BridgeListener() {
               url: request.url,
             }),
           );
-          void navigate(`/projects/${request.projectId}/workspaces/${request.workspaceId}`);
+          void navigate(`/repositories/${request.repositoryId}/workspaces/${request.workspaceId}`);
           await invoke("bridge_complete_shell_request", {
             requestId: request.requestId,
             result: buildPreviewResult(request),

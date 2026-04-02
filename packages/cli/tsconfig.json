@@ -1,9 +1,9 @@
 {
   "extends": "../config/tsconfig.package.json",
   "compilerOptions": {
-    "rootDir": "src",
+    "rootDir": "../..",
     "outDir": "dist",
     "types": ["node", "bun"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "../../apps/api/routed.d.ts"]
 }

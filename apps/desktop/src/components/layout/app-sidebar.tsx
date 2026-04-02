@@ -2,7 +2,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { Menu, MenuItem } from "@tauri-apps/api/menu";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { AuthSession } from "@lifecycle/auth";
-import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
+import type { RepositoryRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { useWorkspaceClientRegistry } from "@lifecycle/workspace/react";
 import { IconButton, Logo, Spinner } from "@lifecycle/ui";
 import { Archive, FolderGit2, GitBranch, Megaphone, Plus, Settings } from "lucide-react";
@@ -10,11 +10,11 @@ import { NavigationControls } from "@/components/layout/navigation-controls";
 import { type MouseEvent, useCallback, useMemo } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { isMacPlatform } from "@/app/app-hotkeys";
-import { resolveProjectRepoWorkspace } from "@/features/projects/lib/project-repo-workspace";
+import { resolveRepositoryRootWorkspace } from "@/features/repositories/lib/repository-root-workspace";
 import {
-  readProjectPaths,
-  resolveProjectNavigationTarget,
-} from "@/features/projects/state/project-content-tabs";
+  readRepositoryPaths,
+  resolveRepositoryNavigationTarget,
+} from "@/features/repositories/state/repository-content-tabs";
 import { UserAvatar } from "@/features/user/components/user-avatar";
 import { ResponseReadyDot } from "@/components/response-ready-dot";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -40,14 +40,14 @@ interface AppSidebarProps {
   authSessionLoading: boolean;
   hasWorkspaceResponseReady: (workspaceId: string) => boolean;
   hasWorkspaceRunningTurn: (workspaceId: string) => boolean;
-  onAddProject: () => void;
-  onCreateWorkspace: (projectId: string, mode: WorkspaceCreateMode) => Promise<void>;
+  onAddRepository: () => void;
+  onCreateWorkspace: (repositoryId: string, mode: WorkspaceCreateMode) => Promise<void>;
   onArchiveWorkspace: (workspace: WorkspaceRecord) => Promise<void>;
   onOpenSettings: () => void;
-  onRemoveProject: (projectId: string) => void;
-  projects: ProjectRecord[];
-  readyProjectIds: ReadonlySet<string>;
-  workspacesByProjectId: Record<string, WorkspaceRecord[]>;
+  onRemoveRepository: (repositoryId: string) => void;
+  repositories: RepositoryRecord[];
+  readyRepositoryIds: ReadonlySet<string>;
+  workspacesByRepositoryId: Record<string, WorkspaceRecord[]>;
   width: number;
 }
 
@@ -80,36 +80,36 @@ export function AppSidebar({
   authSessionLoading,
   hasWorkspaceResponseReady,
   hasWorkspaceRunningTurn,
-  onAddProject,
+  onAddRepository,
   onCreateWorkspace,
   onArchiveWorkspace,
   onOpenSettings,
-  onRemoveProject,
-  projects,
-  readyProjectIds,
-  workspacesByProjectId,
+  onRemoveRepository,
+  repositories,
+  readyRepositoryIds,
+  workspacesByRepositoryId,
   width,
 }: AppSidebarProps) {
-  const { projectId, workspaceId } = useParams();
+  const { repositoryId, workspaceId } = useParams();
   const location = useLocation();
   const workspaceClientRegistry = useWorkspaceClientRegistry();
-  const projectPaths = useMemo(() => {
-    const storedPaths = readProjectPaths();
+  const repositoryPaths = useMemo(() => {
+    const storedPaths = readRepositoryPaths();
     const paths: Record<string, string> = {};
 
-    for (const project of projects) {
+    for (const repository of repositories) {
       const repositoryWorkspaceId =
-        resolveProjectRepoWorkspace(workspacesByProjectId[project.id] ?? [])?.id ?? null;
-      paths[project.id] = resolveProjectNavigationTarget({
+        resolveRepositoryRootWorkspace(workspacesByRepositoryId[repository.id] ?? [])?.id ?? null;
+      paths[repository.id] = resolveRepositoryNavigationTarget({
         currentPathname: location.pathname,
-        projectId: project.id,
+        repositoryId: repository.id,
         repositoryWorkspaceId,
-        storedSubPath: storedPaths[project.id],
+        storedSubPath: storedPaths[repository.id],
       });
     }
 
     return paths;
-  }, [location.pathname, projects, workspacesByProjectId]);
+  }, [location.pathname, repositories, workspacesByRepositoryId]);
 
   const handleMouseDown = useCallback((event: MouseEvent<HTMLElement>) => {
     if (event.button !== 0 || !isTauri()) {
@@ -129,20 +129,20 @@ export function AppSidebar({
     }
   }, []);
 
-  const handleProjectContextMenu = useCallback(
-    async (event: MouseEvent<HTMLElement>, project: ProjectRecord) => {
+  const handleRepositoryContextMenu = useCallback(
+    async (event: MouseEvent<HTMLElement>, repository: RepositoryRecord) => {
       event.preventDefault();
 
       const removeItem = await MenuItem.new({
-        id: "remove-project",
-        text: "Remove Project",
-        action: () => onRemoveProject(project.id),
+        id: "remove-repository",
+        text: "Remove Repository",
+        action: () => onRemoveRepository(repository.id),
       });
 
       const menu = await Menu.new({ items: [removeItem] });
       await menu.popup();
     },
-    [onRemoveProject],
+    [onRemoveRepository],
   );
 
   const handleWorkspaceContextMenu = useCallback(
@@ -187,38 +187,38 @@ export function AppSidebar({
           </span>
         </button>
 
-        {/* Project + workspace list */}
+        {/* Repository + workspace list */}
         <div className="flex min-h-0 flex-1 flex-col pt-2">
           <div className="flex items-center justify-between pl-4 pr-2 pb-1">
-            <p className="text-xs font-medium text-[var(--muted-foreground)]">Projects</p>
-            <IconButton aria-label="Add project" onClick={onAddProject}>
+            <p className="text-xs font-medium text-[var(--muted-foreground)]">Repositories</p>
+            <IconButton aria-label="Add repository" onClick={onAddRepository}>
               <Plus className="size-3.5" />
             </IconButton>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-2">
             <div className="flex flex-col">
-              {projects.map((project) => {
-                const selected = project.id === projectId;
-                const responseReady = readyProjectIds.has(project.id);
-                const workspaces = workspacesByProjectId[project.id] ?? [];
+              {repositories.map((repository) => {
+                const selected = repository.id === repositoryId;
+                const responseReady = readyRepositoryIds.has(repository.id);
+                const workspaces = workspacesByRepositoryId[repository.id] ?? [];
 
                 return (
-                  <div key={project.id} className="flex flex-col">
-                    {/* Project row */}
+                  <div key={repository.id} className="flex flex-col">
+                    {/* Repository row */}
                     <div className="group/project flex items-center gap-1 pr-1">
                       <Link
-                        aria-label={`Open project ${project.name}`}
+                        aria-label={`Open repository ${repository.name}`}
                         className={[
                           "flex min-w-0 flex-1 items-center gap-1.5 rounded-lg px-2 py-1 text-[13px] font-medium transition-colors",
                           selected
                             ? "text-[var(--sidebar-foreground)]"
                             : "text-[var(--sidebar-muted-foreground)] hover:text-[var(--sidebar-foreground)]",
                         ].join(" ")}
-                        onContextMenu={(e) => handleProjectContextMenu(e, project)}
-                        to={projectPaths[project.id] ?? `/projects/${project.id}`}
-                        title={project.name}
+                        onContextMenu={(e) => handleRepositoryContextMenu(e, repository)}
+                        to={repositoryPaths[repository.id] ?? `/repositories/${repository.id}`}
+                        title={repository.name}
                       >
-                        <span className="min-w-0 flex-1 truncate">{project.name}</span>
+                        <span className="min-w-0 flex-1 truncate">{repository.name}</span>
                         {responseReady ? (
                           <ResponseReadyDot className="shrink-0 scale-[0.85]" />
                         ) : null}
@@ -230,7 +230,7 @@ export function AppSidebar({
                           onClick={(e) => {
                             e.preventDefault();
                             void showCreateWorkspaceMenu(
-                              (mode) => void onCreateWorkspace(project.id, mode),
+                              (mode) => void onCreateWorkspace(repository.id, mode),
                             );
                           }}
                           type="button"
@@ -240,7 +240,7 @@ export function AppSidebar({
                       ) : null}
                     </div>
 
-                    {/* Workspaces — shown under the selected project */}
+                    {/* Workspaces — shown under the selected repository */}
                     {selected && workspaces.length > 0 ? (
                       <div className="flex flex-col gap-0.5 pb-1">
                         {workspaces.map((workspace) => {
@@ -259,7 +259,7 @@ export function AppSidebar({
                               ].join(" ")}
                               onContextMenu={(e) => handleWorkspaceContextMenu(e, workspace)}
                               title={getWorkspaceDisplayName(workspace)}
-                              to={`/projects/${project.id}/workspaces/${workspace.id}`}
+                              to={`/repositories/${repository.id}/workspaces/${workspace.id}`}
                             >
                               <WorkspaceIcon
                                 checkoutType={workspace.checkout_type}

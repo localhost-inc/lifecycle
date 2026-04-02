@@ -6,7 +6,7 @@ import type { RegisteredShortcutId } from "@/app/shortcuts/shortcut-registry";
 
 export const SHORTCUT_HANDLER_PRIORITY = {
   app: 0,
-  project: 10,
+  repository: 10,
   workspace: 20,
   file: 30,
 } as const;
@@ -48,7 +48,7 @@ export type ShortcutRouterKeyEvent = Pick<
 
 const ShortcutRouterContext = createContext<ShortcutRegistrar | null>(null);
 
-function readProjectRouteShortcutMatch(
+function readRepositoryRouteShortcutMatch(
   shortcutId: RegisteredShortcutId,
   event: ShortcutRouterKeyEvent,
   macPlatform: boolean,
@@ -59,11 +59,11 @@ function readProjectRouteShortcutMatch(
 
   // Cmd+[ / Cmd+] (no shift) — history navigation
   if (!event.altKey && !event.shiftKey && hasMod) {
-    if (shortcutId === "project.go-back" && isBracketLeft) {
+    if (shortcutId === "repository.go-back" && isBracketLeft) {
       return { id: shortcutId };
     }
 
-    if (shortcutId === "project.go-forward" && isBracketRight) {
+    if (shortcutId === "repository.go-forward" && isBracketRight) {
       return { id: shortcutId };
     }
   }
@@ -82,7 +82,7 @@ function readProjectRouteShortcutMatch(
   return null;
 }
 
-function readProjectSelectIndexMatch(
+function readRepositorySelectIndexMatch(
   event: ShortcutRouterKeyEvent,
   macPlatform: boolean,
 ): ShortcutMatch | null {
@@ -97,7 +97,7 @@ function readProjectSelectIndexMatch(
 
   const lowerKey = event.key.toLowerCase();
   if (lowerKey >= "1" && lowerKey <= "9") {
-    return { id: "project.select-index", index: Number.parseInt(lowerKey, 10) };
+    return { id: "repository.select-index", index: Number.parseInt(lowerKey, 10) };
   }
 
   return null;
@@ -171,13 +171,13 @@ export function readRegisteredShortcutMatch(
       return readAppHotkeyAction(event, macPlatform) === "open-explorer"
         ? { id: shortcutId }
         : null;
-    case "project.go-back":
-    case "project.go-forward":
+    case "repository.go-back":
+    case "repository.go-forward":
     case "workspace.previous-workspace":
     case "workspace.next-workspace":
-      return readProjectRouteShortcutMatch(shortcutId, event, macPlatform);
-    case "project.select-index":
-      return readProjectSelectIndexMatch(event, macPlatform);
+      return readRepositoryRouteShortcutMatch(shortcutId, event, macPlatform);
+    case "repository.select-index":
+      return readRepositorySelectIndexMatch(event, macPlatform);
     case "canvas.pane.tab.open":
       return readWorkspaceTabHotkeyAction(event, macPlatform)?.id === "canvas.pane.tab.open"
         ? { id: shortcutId }

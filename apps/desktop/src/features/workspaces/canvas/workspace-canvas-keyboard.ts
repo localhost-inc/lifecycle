@@ -60,7 +60,7 @@ export function useWorkspaceCanvasKeyboard(input: WorkspaceCanvasKeyboardInput):
             return true;
           }
 
-          if (closeTarget === "close-project-tab" && input.onCloseTab) {
+          if (closeTarget === "close-repository-tab" && input.onCloseTab) {
             closeShortcutHandledAtRef.current = Date.now();
             input.onCloseTab();
             return true;

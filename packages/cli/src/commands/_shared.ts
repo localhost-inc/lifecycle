@@ -13,10 +13,10 @@ export const workspaceIdFlag = z
   .optional()
   .describe("Workspace id. If omitted, resolve from the current working directory when supported.");
 
-export const projectIdFlag = z
+export const repositoryIdFlag = z
   .string()
   .optional()
-  .describe("Project id. If omitted, resolve from local context when supported.");
+  .describe("Repository id. If omitted, resolve from local context when supported.");
 
 export function createStubCommand<Input extends z.ZodObject<z.ZodRawShape>>(options: {
   commandName: string;

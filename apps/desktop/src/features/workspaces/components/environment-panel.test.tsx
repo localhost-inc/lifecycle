@@ -8,7 +8,7 @@ import { workspaceKeys } from "@/features/workspaces/state/workspace-query-keys"
 
 const baseWorkspace: WorkspaceRecord = {
   id: "workspace_1",
-  project_id: "project_1",
+  repository_id: "project_1",
   name: "Environment Panel",
   checkout_type: "worktree",
   source_ref: "lifecycle/environment-panel",

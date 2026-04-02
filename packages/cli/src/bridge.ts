@@ -405,7 +405,7 @@ export function createServiceLogsRequest(input: {
 
 export function createWorkspaceCreateRequest(input: {
   local?: boolean;
-  projectId?: string;
+  repositoryId?: string;
   ref?: string;
 }): WorkspaceCreateRequest {
   return {
@@ -413,7 +413,7 @@ export function createWorkspaceCreateRequest(input: {
     method: "workspace.create",
     params: {
       local: input.local ?? true,
-      ...(input.projectId ? { projectId: input.projectId } : {}),
+      ...(input.repositoryId ? { repositoryId: input.repositoryId } : {}),
       ...(input.ref ? { ref: input.ref } : {}),
     },
     session: buildBridgeSession(),
@@ -556,18 +556,18 @@ export function formatTabOpenResult(result: BridgeShellResult): string {
 
 // ── Plan + Task request creators ──
 
-export function createPlanListRequest(input: { projectId: string }): PlanListRequest {
+export function createPlanListRequest(input: { repositoryId: string }): PlanListRequest {
   return {
     id: randomUUID(),
     method: "plan.list",
-    params: { projectId: input.projectId },
+    params: { repositoryId: input.repositoryId },
     session: buildBridgeSession(),
     version: 1,
   };
 }
 
 export function createPlanCreateRequest(input: {
-  projectId: string;
+  repositoryId: string;
   workspaceId?: string;
   name: string;
   description?: string;
@@ -578,7 +578,7 @@ export function createPlanCreateRequest(input: {
     id: randomUUID(),
     method: "plan.create",
     params: {
-      projectId: input.projectId,
+      repositoryId: input.repositoryId,
       name: input.name,
       ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
       ...(input.description ? { description: input.description } : {}),
@@ -614,22 +614,22 @@ export function createPlanUpdateRequest(input: {
 
 export function createPlanDeleteRequest(input: {
   planId: string;
-  projectId: string;
+  repositoryId: string;
 }): PlanDeleteRequest {
   return {
     id: randomUUID(),
     method: "plan.delete",
-    params: { planId: input.planId, projectId: input.projectId },
+    params: { planId: input.planId, repositoryId: input.repositoryId },
     session: buildBridgeSession(),
     version: 1,
   };
 }
 
-export function createTaskListRequest(input: { projectId: string }): TaskListRequest {
+export function createTaskListRequest(input: { repositoryId: string }): TaskListRequest {
   return {
     id: randomUUID(),
     method: "task.list",
-    params: { projectId: input.projectId },
+    params: { repositoryId: input.repositoryId },
     session: buildBridgeSession(),
     version: 1,
   };
@@ -637,7 +637,7 @@ export function createTaskListRequest(input: { projectId: string }): TaskListReq
 
 export function createTaskCreateRequest(input: {
   planId: string;
-  projectId: string;
+  repositoryId: string;
   workspaceId?: string;
   agentSessionId?: string;
   name: string;
@@ -650,7 +650,7 @@ export function createTaskCreateRequest(input: {
     method: "task.create",
     params: {
       planId: input.planId,
-      projectId: input.projectId,
+      repositoryId: input.repositoryId,
       name: input.name,
       ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
       ...(input.agentSessionId ? { agentSessionId: input.agentSessionId } : {}),
@@ -687,12 +687,12 @@ export function createTaskUpdateRequest(input: {
 
 export function createTaskDeleteRequest(input: {
   taskId: string;
-  projectId: string;
+  repositoryId: string;
 }): TaskDeleteRequest {
   return {
     id: randomUUID(),
     method: "task.delete",
-    params: { taskId: input.taskId, projectId: input.projectId },
+    params: { taskId: input.taskId, repositoryId: input.repositoryId },
     session: buildBridgeSession(),
     version: 1,
   };
@@ -701,7 +701,7 @@ export function createTaskDeleteRequest(input: {
 export function createTaskDependencyAddRequest(input: {
   taskId: string;
   dependsOnTaskId: string;
-  projectId: string;
+  repositoryId: string;
 }): TaskDependencyAddRequest {
   return {
     id: randomUUID(),
@@ -709,7 +709,7 @@ export function createTaskDependencyAddRequest(input: {
     params: {
       taskId: input.taskId,
       dependsOnTaskId: input.dependsOnTaskId,
-      projectId: input.projectId,
+      repositoryId: input.repositoryId,
     },
     session: buildBridgeSession(),
     version: 1,
@@ -719,7 +719,7 @@ export function createTaskDependencyAddRequest(input: {
 export function createTaskDependencyRemoveRequest(input: {
   taskId: string;
   dependsOnTaskId: string;
-  projectId: string;
+  repositoryId: string;
 }): TaskDependencyRemoveRequest {
   return {
     id: randomUUID(),
@@ -727,7 +727,7 @@ export function createTaskDependencyRemoveRequest(input: {
     params: {
       taskId: input.taskId,
       dependsOnTaskId: input.dependsOnTaskId,
-      projectId: input.projectId,
+      repositoryId: input.repositoryId,
     },
     session: buildBridgeSession(),
     version: 1,

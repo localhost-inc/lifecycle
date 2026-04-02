@@ -173,7 +173,7 @@ describe("lifecycle cli", () => {
           method: "tab.open",
           ok: true,
           result: {
-            projectId: "project_123",
+            repositoryId: "project_123",
             surface: "preview",
             tabKey: "preview:url:1234",
             url: "http://localhost:3000",
@@ -236,7 +236,7 @@ describe("lifecycle cli", () => {
           method: "tab.open",
           ok: true,
           result: {
-            projectId: "project_123",
+            repositoryId: "project_123",
             surface: "preview",
             tabKey: "preview:url:5678",
             url: "http://127.0.0.1:45558",
@@ -607,7 +607,7 @@ describe("lifecycle cli", () => {
               manifest_fingerprint: "manifest_123",
               name: "Feature Workspace",
               prepared_at: "2026-03-21T00:00:00.000Z",
-              project_id: "project_123",
+              repository_id: "project_123",
               source_ref: "feat/cli",
               status: "active",
               host: "local",
@@ -657,7 +657,7 @@ describe("lifecycle cli", () => {
       },
       workspace: {
         id: "ws_123",
-        project_id: "project_123",
+        repository_id: "project_123",
       },
     });
     expect(sink.stderr).toEqual([]);
@@ -706,7 +706,7 @@ describe("lifecycle cli", () => {
               manifest_fingerprint: "manifest_123",
               name: "Feature Workspace",
               prepared_at: "2026-03-21T00:00:00.000Z",
-              project_id: "project_123",
+              repository_id: "project_123",
               source_ref: "feat/cli",
               status: "idle",
               host: "local",
@@ -941,7 +941,7 @@ describe("lifecycle cli", () => {
           result: {
             plan: {
               id: "plan_001",
-              project_id: "project_123",
+              repository_id: "project_123",
               workspace_id: null,
               name: "Auth Overhaul",
               description: "",
@@ -962,7 +962,7 @@ describe("lifecycle cli", () => {
           },
           async () =>
             await main(
-              ["plan", "create", "--name", "Auth Overhaul", "--project-id", "project_123"],
+              ["plan", "create", "--name", "Auth Overhaul", "--repository-id", "project_123"],
               sink.io,
             ),
         );
@@ -975,7 +975,7 @@ describe("lifecycle cli", () => {
       method: "plan.create",
       params: {
         name: "Auth Overhaul",
-        projectId: "project_123",
+        repositoryId: "project_123",
       },
     });
     expect(sink.stdout).toEqual(['Plan "Auth Overhaul" created (plan_001).']);
@@ -994,7 +994,7 @@ describe("lifecycle cli", () => {
           result: {
             plan: {
               id: "plan_002",
-              project_id: "project_123",
+              repository_id: "project_123",
               workspace_id: null,
               name: "Data Pipeline",
               description: "Rebuild the pipeline",
@@ -1019,7 +1019,7 @@ describe("lifecycle cli", () => {
                 "create",
                 "--name",
                 "Data Pipeline",
-                "--project-id",
+                "--repository-id",
                 "project_123",
                 "--description",
                 "Rebuild the pipeline",
@@ -1054,7 +1054,7 @@ describe("lifecycle cli", () => {
             task: {
               id: "task_001",
               plan_id: "plan_001",
-              project_id: "project_123",
+              repository_id: "project_123",
               workspace_id: null,
               agent_session_id: null,
               name: "Write migration",
@@ -1081,7 +1081,7 @@ describe("lifecycle cli", () => {
                 "create",
                 "--plan-id",
                 "plan_001",
-                "--project-id",
+                "--repository-id",
                 "project_123",
                 "--name",
                 "Write migration",
@@ -1100,7 +1100,7 @@ describe("lifecycle cli", () => {
       method: "task.create",
       params: {
         planId: "plan_001",
-        projectId: "project_123",
+        repositoryId: "project_123",
         name: "Write migration",
         priority: 3,
       },
@@ -1138,7 +1138,7 @@ describe("lifecycle cli", () => {
                 "task_002",
                 "--depends-on",
                 "task_001",
-                "--project-id",
+                "--repository-id",
                 "project_123",
               ],
               sink.io,
@@ -1154,7 +1154,7 @@ describe("lifecycle cli", () => {
       params: {
         taskId: "task_002",
         dependsOnTaskId: "task_001",
-        projectId: "project_123",
+        repositoryId: "project_123",
       },
     });
     expect(sink.stdout).toEqual(["Dependency added: task_002 depends on task_001."]);

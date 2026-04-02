@@ -2,7 +2,7 @@ import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 
 import { createTaskDependencyAddRequest, requestBridge } from "../../../bridge";
-import { failCommand, jsonFlag, projectIdFlag } from "../../_shared";
+import { failCommand, jsonFlag, repositoryIdFlag } from "../../_shared";
 
 export default defineCommand({
   description: "Add a dependency between tasks.",
@@ -10,7 +10,7 @@ export default defineCommand({
     json: jsonFlag,
     taskId: z.string().describe("Task that depends on another"),
     dependsOn: z.string().describe("Task that must complete first"),
-    projectId: projectIdFlag,
+    repositoryId: repositoryIdFlag,
   }),
   run: async (input, context) => {
     try {
@@ -18,7 +18,7 @@ export default defineCommand({
         createTaskDependencyAddRequest({
           taskId: input.taskId,
           dependsOnTaskId: input.dependsOn,
-          projectId: input.projectId ?? "",
+          repositoryId: input.repositoryId ?? "",
         }),
       );
 

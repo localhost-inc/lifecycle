@@ -10,16 +10,16 @@ export type RegisteredShortcutId =
   | "app.open-explorer"
   | "app.open-settings"
   | "file.save"
-  | "project.go-back"
-  | "project.go-forward"
-  | "project.select-index"
+  | "repository.go-back"
+  | "repository.go-forward"
+  | "repository.select-index"
   | "workspace.next-workspace"
   | "workspace.previous-workspace";
 
 export type RegisteredShortcutScope =
   | "app"
   | "file-editor-surface"
-  | "project-route"
+  | "repository-route"
   | "workspace-canvas";
 
 export interface RegisteredShortcut {
@@ -54,17 +54,17 @@ export const REGISTERED_SHORTCUTS: readonly RegisteredShortcut[] = [
     windowsLinux: "Ctrl+P",
   },
   {
-    description: "Go back in project tab history",
-    id: "project.go-back",
+    description: "Go back in repository tab history",
+    id: "repository.go-back",
     mac: "Cmd+[",
-    scope: "project-route",
+    scope: "repository-route",
     windowsLinux: "Ctrl+[",
   },
   {
-    description: "Go forward in project tab history",
-    id: "project.go-forward",
+    description: "Go forward in repository tab history",
+    id: "repository.go-forward",
     mac: "Cmd+]",
-    scope: "project-route",
+    scope: "repository-route",
     windowsLinux: "Ctrl+]",
   },
   {
@@ -83,8 +83,8 @@ export const REGISTERED_SHORTCUTS: readonly RegisteredShortcut[] = [
     windowsLinux: "Ctrl+W",
   },
   {
-    description: "Select project by sidebar index",
-    id: "project.select-index",
+    description: "Select repository by sidebar index",
+    id: "repository.select-index",
     mac: "Cmd+1..9",
     scope: "app",
     windowsLinux: "Ctrl+1..9",
@@ -93,14 +93,14 @@ export const REGISTERED_SHORTCUTS: readonly RegisteredShortcut[] = [
     description: "Switch to the previous workspace",
     id: "workspace.previous-workspace",
     mac: "Cmd+Shift+[",
-    scope: "project-route",
+    scope: "repository-route",
     windowsLinux: "Ctrl+Shift+[",
   },
   {
     description: "Switch to the next workspace",
     id: "workspace.next-workspace",
     mac: "Cmd+Shift+]",
-    scope: "project-route",
+    scope: "repository-route",
     windowsLinux: "Ctrl+Shift+]",
   },
   {

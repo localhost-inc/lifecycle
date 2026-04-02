@@ -1,6 +1,7 @@
 export type {
   ArchiveWorkspaceInput,
   EnsureWorkspaceInput,
+  ExecCommandResult,
   GitDiffInput,
   OpenInAppId,
   RenameWorkspaceInput,

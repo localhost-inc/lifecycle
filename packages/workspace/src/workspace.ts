@@ -88,7 +88,14 @@ export interface WorkspaceOpenInAppInfo {
   label: string;
 }
 
+export interface ExecCommandResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}
+
 export interface WorkspaceClient {
+  execCommand(workspace: WorkspaceRecord, command: string[]): Promise<ExecCommandResult>;
   readManifest(dirPath: string): Promise<ManifestStatus>;
   getGitCurrentBranch(repoPath: string): Promise<string>;
   ensureWorkspace(input: EnsureWorkspaceInput): Promise<WorkspaceRecord>;

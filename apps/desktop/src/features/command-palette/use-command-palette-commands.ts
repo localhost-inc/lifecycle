@@ -1,31 +1,33 @@
 import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Circle, File, Home, Settings } from "lucide-react";
-import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
+import type { RepositoryRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import { getWorkspaceDisplayName } from "@/features/workspaces/lib/workspace-display";
 import { formatAppHotkeyLabel, isMacPlatform } from "@/app/app-hotkeys";
 import type { CommandPaletteCommand } from "@/features/command-palette/types";
 
 interface UseCommandPaletteCommandsOptions {
   onOpenExplorer?: () => void;
-  projects: ProjectRecord[];
-  workspacesByProjectId: Record<string, WorkspaceRecord[]>;
+  repositories: RepositoryRecord[];
+  workspacesByRepositoryId: Record<string, WorkspaceRecord[]>;
 }
 
 export function useCommandPaletteCommands(
   options: UseCommandPaletteCommandsOptions,
 ): CommandPaletteCommand[] {
-  const { onOpenExplorer, projects, workspacesByProjectId } = options;
+  const { onOpenExplorer, repositories, workspacesByRepositoryId } = options;
   const navigate = useNavigate();
   const { workspaceId } = useParams();
   const mac = isMacPlatform();
 
   return useMemo(() => {
-    const projectsById = new Map(projects.map((project) => [project.id, project]));
-    const workspaceCommands = Object.entries(workspacesByProjectId).flatMap(
-      ([projectId, workspaces]) => {
-        const project = projectsById.get(projectId);
-        if (!project) {
+    const repositoriesById = new Map(
+      repositories.map((repository) => [repository.id, repository]),
+    );
+    const workspaceCommands = Object.entries(workspacesByRepositoryId).flatMap(
+      ([repositoryId, workspaces]) => {
+        const repository = repositoriesById.get(repositoryId);
+        if (!repository) {
           return [];
         }
 
@@ -34,11 +36,11 @@ export function useCommandPaletteCommands(
           return {
             id: `ws:${workspace.id}`,
             category: "workspace",
-            label: `${project.name} / ${displayName}`,
-            keywords: ["workspace", project.name, displayName, workspace.source_ref],
+            label: `${repository.name} / ${displayName}`,
+            keywords: ["workspace", repository.name, displayName, workspace.source_ref],
             icon: Circle,
             onExecute: () =>
-              void navigate(`/projects/${workspace.project_id}/workspaces/${workspace.id}`),
+              void navigate(`/repositories/${workspace.repository_id}/workspaces/${workspace.id}`),
           } satisfies CommandPaletteCommand;
         });
       },
@@ -79,5 +81,5 @@ export function useCommandPaletteCommands(
       ...workspaceCommands,
       ...actionCommands,
     ];
-  }, [mac, navigate, onOpenExplorer, projects, workspaceId, workspacesByProjectId]);
+  }, [mac, navigate, onOpenExplorer, repositories, workspaceId, workspacesByRepositoryId]);
 }

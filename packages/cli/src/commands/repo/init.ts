@@ -1,9 +1,12 @@
 import { access, readFile, stat, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
 import path from "node:path";
 import { defineCommand, defineFlag } from "@lifecycle/cmd";
 import { z } from "zod";
 
 import { BridgeClientError } from "../../errors";
+import { getLifecycleDb } from "@lifecycle/db";
+import { getRepositoryByPath, insertRepository } from "@lifecycle/db/queries";
 import { MANIFEST_FILE_NAME } from "../../manifest";
 import { failCommand, jsonFlag } from "../_shared";
 
@@ -362,26 +365,38 @@ export default defineCommand({
   run: async (input, context) => {
     try {
       const target = await resolveRepoTarget(input.path);
-      const alreadyExists = await pathExists(target.manifestPath);
-      if (alreadyExists && !input.force) {
-        throw new BridgeClientError({
-          code: "manifest_exists",
-          details: {
-            manifestPath: target.manifestPath,
-          },
-          message: `Lifecycle found an existing manifest at ${target.manifestPath}.`,
-          suggestedAction: "Re-run with --force to overwrite it, or edit the file manually.",
+
+      // Initialize git if the folder isn't already a git repo
+      const isGitRepo = await pathExists(path.join(target.repoPath, ".git"));
+      if (!isGitRepo) {
+        await new Promise<void>((resolve, reject) => {
+          execFile("git", ["init"], { cwd: target.repoPath }, (err) => {
+            if (err) reject(err);
+            else resolve();
+          });
         });
       }
 
-      const packageManager = await detectPackageManager(target.repoPath);
-      const services = await inferServiceSuggestions(target.repoPath, packageManager);
-      const manifestText = buildManifestText({
-        packageManager,
-        services,
-      });
+      const alreadyExists = await pathExists(target.manifestPath);
 
-      await writeFile(target.manifestPath, manifestText, "utf8");
+      let packageManager: PackageManagerConfig | null = null;
+      let services: ServiceSuggestion[] = [];
+
+      if (!alreadyExists || input.force) {
+        packageManager = await detectPackageManager(target.repoPath);
+        services = await inferServiceSuggestions(target.repoPath, packageManager);
+        const manifestText = buildManifestText({ packageManager, services });
+        await writeFile(target.manifestPath, manifestText, "utf8");
+      } else {
+        packageManager = await detectPackageManager(target.repoPath);
+      }
+
+      // Always ensure repo is registered in the db
+      const db = await getLifecycleDb();
+      const existing = await getRepositoryByPath(db, path.resolve(target.repoPath));
+      if (!existing) {
+        await insertRepository(db, { path: path.resolve(target.repoPath), name: path.basename(target.repoPath) });
+      }
 
       const result = {
         manifestPath: target.manifestPath,

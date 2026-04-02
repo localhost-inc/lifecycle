@@ -11,7 +11,7 @@ export type AppHotkeyAction =
   | "open-settings"
   | "open-command-palette"
   | "open-explorer"
-  | "select-project-index";
+  | "select-repository-index";
 
 export interface AppHotkeyEvent {
   action: AppHotkeyAction;
@@ -32,14 +32,14 @@ const APP_HOTKEY_SHORTCUT_ID_BY_ACTION: Record<AppHotkeyAction, RegisteredShortc
   "open-command-palette": "app.open-command-palette",
   "open-explorer": "app.open-explorer",
   "open-settings": "app.open-settings",
-  "select-project-index": "project.select-index",
+  "select-repository-index": "repository.select-index",
 };
 
 const TAURI_MAC_MENU_APP_HOTKEYS = new Set<AppHotkeyAction>([
   "open-command-palette",
   "open-explorer",
   "open-settings",
-  "select-project-index",
+  "select-repository-index",
 ]);
 
 export function isMacPlatform(): boolean {

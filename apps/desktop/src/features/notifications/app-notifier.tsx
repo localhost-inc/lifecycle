@@ -2,7 +2,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { useEffect, useRef } from "react";
 import { selectAgentSessionById } from "@lifecycle/store";
 import { useStoreContext } from "@/store/provider";
-import { useProjects } from "@/store";
+import { useRepositories } from "@/store";
 import { router } from "@/app/router";
 import { useLifecycleEvent } from "@/features/events";
 import { useSettings } from "@/features/settings/state/settings-context";
@@ -39,8 +39,8 @@ async function focusAppWindow(): Promise<void> {
 }
 
 function handleNotificationNavigation(navigation: NotificationNavigationData): void {
-  const { projectId, workspaceId } = navigation;
-  const targetPath = `/projects/${projectId}/workspaces/${workspaceId}`;
+  const { repositoryId, workspaceId } = navigation;
+  const targetPath = `/repositories/${repositoryId}/workspaces/${workspaceId}`;
 
   void router.navigate(targetPath);
   void focusAppWindow().catch((error) => {
@@ -54,7 +54,7 @@ export function AppNotifier() {
   const { turnNotificationSound, turnNotificationsMode } = useSettings();
   const attentionStateRef = useRef(readTurnNotificationAttentionState());
   const { collections, driver } = useStoreContext();
-  const projects = useProjects();
+  const repositories = useRepositories();
 
   useEffect(() => {
     if (typeof document === "undefined") {
@@ -111,12 +111,14 @@ export function AppNotifier() {
 
     void (async () => {
       const workspace = collections.workspaces.get(event.workspaceId);
-      const projectId = workspace?.project_id;
-      const project = projectId ? projects.find((p) => p.id === projectId) : undefined;
+      const repositoryId = workspace?.repository_id;
+      const repository = repositoryId
+        ? repositories.find((candidate) => candidate.id === repositoryId)
+        : undefined;
       const session = await selectAgentSessionById(driver, event.sessionId);
       const context = {
-        projectId: projectId ?? null,
-        projectName: project?.name,
+        repositoryId: repositoryId ?? null,
+        repositoryName: repository?.name,
         providerName:
           session?.provider === "claude"
             ? "Claude"

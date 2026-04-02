@@ -41,7 +41,7 @@ export function mockStoreContext() {
 
   return spyOn(storeProvider, "useStoreContext").mockReturnValue({
     collections: {
-      projects: {
+      repositories: {
         collection: {
           toArray: [],
           get: () => undefined,

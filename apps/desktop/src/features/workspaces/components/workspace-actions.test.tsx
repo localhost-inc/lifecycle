@@ -13,7 +13,7 @@ import { WorkspaceActions } from "@/features/workspaces/components/workspace-act
 
 const interactiveWorkspace: WorkspaceRecord = {
   id: "workspace_1",
-  project_id: "project_1",
+  repository_id: "project_1",
   name: "Fix Landing Hero",
   checkout_type: "worktree",
   source_ref: "lifecycle/fix-landing-hero",

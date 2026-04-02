@@ -1,11 +1,11 @@
-# App Shell v2 — Project Shell, Workspace Canvas
+# App Shell v2 — Repository Shell, Workspace Canvas
 
-This document defines the **target desktop shell model** as Lifecycle completes the move from a workspace-first app toward a project-first shell that can later grow into an organization-first shell.
+This document defines the desktop shell model as Lifecycle composes a repository-first shell that can later grow into an organization-first shell.
 
 ## Status
 
 1. This is the **destination shell model**, not a statement of the current implementation.
-2. The outer shell spine is already live in the desktop app: project switcher strip, project sidebar, page tabs, workspace tabs, and a workspace header now render under the project shell route.
+2. The outer shell spine is already live in the desktop app: repository switcher strip, repository sidebar, page tabs, workspace tabs, and a workspace header now render under the repository shell route.
 3. The remaining gap is the inner workspace canvas cutover; the center workspace area still follows the mixed-tab workspace-surface contract until that migration lands.
 
 ## Relationship to Other Contracts
@@ -13,15 +13,15 @@ This document defines the **target desktop shell model** as Lifecycle completes 
 1. `backend` and `runtime` remain authoritative for backend boundaries, runtime authority, Git authority, file authority, and terminal authority.
 2. `workspace-surface` remains the current center-pane contract inside the workspace layout until `workspace-canvas` replaces it.
 3. `workspace-canvas` owns the target split-only center workspace interior.
-4. This document owns only the **outer shell model** and the high-level contract for what belongs at the project level versus inside a workspace tab.
+4. This document owns only the **outer shell model** and the high-level contract for what belongs at the repository level versus inside a workspace tab.
 
 ## Core Model
 
 Lifecycle should be understood as these layered regions:
 
-1. **Project shell** — durable container for shared repo/project artifacts; later becomes compatible with organization-level grouping
-2. **Project layout** — owns the project main region for the active project; includes the top tab rail plus the active body
-3. **Top-level page tabs** — the project's open destinations (Overview, Inbox, Pull Request, Workspace)
+1. **Repository shell** — durable container for shared repository artifacts; later becomes compatible with organization-level grouping
+2. **Repository layout** — owns the main region for the active repository; includes the top tab rail plus the active body
+3. **Top-level page tabs** — the repository's open destinations (Overview, Inbox, Pull Request, Workspace)
 4. **Workspace** — only exists inside a workspace tab; owns workspace identity, workspace actions, and attached workspace extensions
 5. **Workspace canvas** — the center live execution and local-state surface; split-only, pane-based
 
@@ -30,26 +30,26 @@ The key idea: the outer shell is for **durable shared context**, the workspace i
 ## Decision Rules
 
 1. If destroying a workspace should remove it, it is **workspace-scoped**.
-2. If two workspaces in the same project should see the same thing, it is **project-scoped**.
+2. If two workspaces in the same repository should see the same thing, it is **repository-scoped**.
 3. If it depends on a live environment, worktree, session, preview, or local branch state, it is **workspace-scoped**.
-4. If it is a durable shared artifact for the repo/project, it is **project-scoped**.
+4. If it is a durable shared artifact for the repository, it is **repository-scoped**.
 5. A surface's visual size does **not** determine its scope.
 
 ## Shell Structure
 
 ```text
-Project shell
+Repository shell
 ├─ Shell plane (`--background`)
-│  └─ Project switcher strip
-└─ Project layout
-   ├─ Project sidebar
-   └─ Project main
+│  └─ Repository switcher strip
+└─ Repository layout
+   ├─ Repository sidebar
+   └─ Repository main
       ├─ Page tabs rail (`--surface`)
-      │  ├─ Project view tab
+      │  ├─ Repository view tab
       │  ├─ Pull request tab
       │  └─ Workspace tab
       └─ Active content (`--surface`)
-         ├─ Project view
+         ├─ Repository view
          │  ├─ Overview
          │  ├─ Inbox
          │  ├─ Memory
@@ -69,45 +69,45 @@ Project shell
 
 ## Visual Layering
 
-1. The **shell plane** uses `--background` and carries durable chrome: project switcher strip
-2. The **project layout** owns the full project main region below the shell strip.
-3. The **project sidebar** sits on the left edge of the project layout.
-4. The **project main** sits to the right of the project sidebar.
-5. The **page tabs rail** uses `--surface` inside project main.
-6. The **active body** uses `--surface` and carries project-context content.
-7. A workspace tab does not create another shell layer. It replaces the active content inside project main.
-8. A workspace may add a workspace-scoped header rail below the page tabs, but that header belongs to the workspace, not the project shell.
+1. The **shell plane** uses `--background` and carries durable chrome: repository switcher strip
+2. The **repository layout** owns the full main region below the shell strip.
+3. The **repository sidebar** sits on the left edge of the repository layout.
+4. The **repository main** sits to the right of the repository sidebar.
+5. The **page tabs rail** uses `--surface` inside repository main.
+6. The **active body** uses `--surface` and carries repository-context content.
+7. A workspace tab does not create another shell layer. It replaces the active content inside repository main.
+8. A workspace may add a workspace-scoped header rail below the page tabs, but that header belongs to the workspace, not the repository shell.
 9. The rest of the workspace area contains the center canvas plus any workspace extension surfaces.
 
 ## Navigation Layers
 
-### Project Switcher Strip
+### Repository Switcher Strip
 
-The strip anchors the active shell context and switches projects inside that context.
+The strip anchors the active shell context and switches repositories inside that context.
 
 In the current local-first shell, the leading control may read as `Personal` even before shared organizations ship.
 
-Projects without an `organization_id` should still resolve into that implicit `Personal` shell context so local-first mode and signed-in personal mode converge on the same hierarchy.
+Repositories without an `organization_id` should still resolve into that implicit `Personal` shell context so local-first mode and signed-in personal mode converge on the same hierarchy.
 
 It is not a tab strip and it is not a workspace launcher. It changes the active shell context.
 
-### Project Sidebar
+### Repository Sidebar
 
-The sidebar is project-scoped and should contain:
+The sidebar is repository-scoped and should contain:
 
-1. project-level views and actions
-2. the workspace list for the active project
+1. repository-level views and actions
+2. the workspace list for the active repository
 
-Clicking a project-level item opens or focuses a **top-level page tab**.
+Clicking a repository-level item opens or focuses a **top-level page tab**.
 Clicking a workspace opens or focuses a **workspace tab**.
 
 ### Page Tabs
 
-Page tabs are the only top-level tab strip in the project layout.
+Page tabs are the only top-level tab strip in the repository layout.
 
-They represent durable open destinations for the active project:
+They represent durable open destinations for the active repository:
 
-1. **Project view tabs** such as Overview, Inbox, Memory, Plans, or Activity
+1. **Repository view tabs** such as Overview, Inbox, Memory, Plans, or Activity
 2. **Pull request tabs** for PR detail and review
 3. **Workspace tabs** such as `Workspace: setup`
 
@@ -134,7 +134,7 @@ Workspace extension panels and the workspace extension strip live alongside the 
 
 ## Scope Ownership
 
-### Project-Scoped
+### Repository-Scoped
 
 1. Overview
 2. Inbox
@@ -142,7 +142,7 @@ Workspace extension panels and the workspace extension strip live alongside the 
 4. Plans
 5. Pull request list
 6. Pull request detail
-7. Project activity
+7. Repository activity
 8. Shared repo history and other durable shared artifacts
 
 ### Workspace-Scoped
@@ -167,7 +167,7 @@ The rule is:
 
 Example: shared patch viewer
 
-- Project entry points (pull request detail, repo-level commit detail) → opens as a **project page tab**
+- Repository entry points (pull request detail, repo-level commit detail) → opens as a **repository page tab**
 - Workspace entry points (local changes diff, workspace-local commit detail) → opens inside the **workspace canvas**
 
 ## Workspace Canvas Rules
@@ -182,16 +182,16 @@ Example: shared patch viewer
 
 ## Route and Restore Contract
 
-The canonical shell route should identify the project context:
+The canonical shell route should identify the repository context:
 
 ```text
-/projects/:projectId
+/repositories/:repositoryId
 /settings
 ```
 
 Local restore rules:
 
-1. project tab sets may restore per project
+1. page tab sets may restore per repository
 2. workspace canvas layout may restore per workspace
 3. restore should never override provider/runtime authority
 
@@ -199,12 +199,12 @@ Local restore rules:
 
 Use these terms consistently:
 
-1. **Project switcher strip**: shell-plane strip for project or future organization switching
+1. **Repository switcher strip**: shell-plane strip for repository or future organization switching
 2. **Shell plane**: the outer `--background` layer that holds only the switcher strip
-3. **Project layout**: the full raised project container for the active project
-4. **Page tabs**: top-level project tabs rendered in the page tabs rail inside project main
-5. **Project sidebar**: left project-scoped navigation panel inside the project layout
-6. **Project view tab**: a page tab for durable project/org surfaces
+3. **Repository layout**: the full raised repository container for the active repository
+4. **Page tabs**: top-level repository tabs rendered in the page tabs rail inside repository main
+5. **Repository sidebar**: left repository-scoped navigation panel inside the repository layout
+6. **Repository view tab**: a page tab for durable repository/org surfaces
 7. **Pull request tab**: a page tab for pull request detail and review surfaces
 8. **Workspace tab**: a page tab whose active content is a workspace
 9. **Workspace**: the workspace-scoped area inside a workspace tab

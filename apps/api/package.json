@@ -6,6 +6,10 @@
   "exports": {
     "./src/worker": {
       "types": "./src/worker.ts"
+    },
+    "./routed.client": {
+      "bun": "./routed.client.ts",
+      "types": "./routed.client.ts"
     }
   },
   "scripts": {
@@ -22,9 +26,11 @@
   "dependencies": {
     "@daytonaio/sdk": "^0.158.1",
     "@hono/zod-validator": "^0.7.6",
+    "@standard-schema/spec": "^1.1.0",
     "@workos-inc/node": "^8.10.0",
     "drizzle-orm": "^0.44.0",
     "hono": "^4.7.0",
+    "routedjs": "0.1.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

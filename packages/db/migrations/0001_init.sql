@@ -2,9 +2,9 @@
 -- Lifecycle - single-file schema
 -- ============================================================================
 
--- Projects -----------------------------------------------------------------
+-- Repositories --------------------------------------------------------------
 
-CREATE TABLE IF NOT EXISTS project (
+CREATE TABLE IF NOT EXISTS repository (
     id            TEXT PRIMARY KEY NOT NULL,
     path          TEXT NOT NULL UNIQUE,
     name          TEXT NOT NULL,
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS project (
 
 CREATE TABLE IF NOT EXISTS workspace (
     id                   TEXT PRIMARY KEY NOT NULL,
-    project_id           TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    repository_id        TEXT NOT NULL REFERENCES repository(id) ON DELETE CASCADE,
     name                 TEXT NOT NULL DEFAULT '',
     name_origin          TEXT NOT NULL DEFAULT 'manual' CHECK (name_origin IN ('manual', 'default')),
     source_ref           TEXT NOT NULL,
@@ -38,10 +38,10 @@ CREATE TABLE IF NOT EXISTS workspace (
     last_active_at       TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_workspace_project ON workspace(project_id, checkout_type);
+CREATE INDEX IF NOT EXISTS idx_workspace_repository ON workspace(repository_id, checkout_type);
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_project_root_unique
-ON workspace(project_id) WHERE checkout_type = 'root';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_workspace_repository_root_unique
+ON workspace(repository_id) WHERE checkout_type = 'root';
 
 -- Services -----------------------------------------------------------------
 
@@ -133,7 +133,7 @@ ON agent_event(session_id, event_index ASC);
 
 CREATE TABLE IF NOT EXISTS plan (
     id           TEXT PRIMARY KEY NOT NULL,
-    project_id   TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    repository_id TEXT NOT NULL REFERENCES repository(id) ON DELETE CASCADE,
     workspace_id TEXT REFERENCES workspace(id) ON DELETE SET NULL,
     name         TEXT NOT NULL,
     description  TEXT NOT NULL DEFAULT '',
@@ -145,14 +145,14 @@ CREATE TABLE IF NOT EXISTS plan (
     updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_plan_project ON plan(project_id, position);
+CREATE INDEX IF NOT EXISTS idx_plan_repository ON plan(repository_id, position);
 
 -- Tasks --------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS task (
     id               TEXT PRIMARY KEY NOT NULL,
     plan_id          TEXT NOT NULL REFERENCES plan(id) ON DELETE CASCADE,
-    project_id       TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+    repository_id    TEXT NOT NULL REFERENCES repository(id) ON DELETE CASCADE,
     workspace_id     TEXT REFERENCES workspace(id) ON DELETE SET NULL,
     agent_session_id TEXT REFERENCES agent_session(id) ON DELETE SET NULL,
     name             TEXT NOT NULL,
@@ -167,7 +167,7 @@ CREATE TABLE IF NOT EXISTS task (
 );
 
 CREATE INDEX IF NOT EXISTS idx_task_plan ON task(plan_id, position);
-CREATE INDEX IF NOT EXISTS idx_task_project ON task(project_id);
+CREATE INDEX IF NOT EXISTS idx_task_repository ON task(repository_id);
 
 -- Task dependencies --------------------------------------------------------
 

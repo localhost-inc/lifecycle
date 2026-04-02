@@ -11,7 +11,7 @@ import type {
 
 export interface WorkspaceRecord {
   id: string;
-  project_id: string;
+  repository_id: string;
   name: string;
   checkout_type: WorkspaceCheckoutType;
   source_ref: string;
@@ -44,7 +44,7 @@ export type { AgentSessionRecord };
 
 export interface PlanRecord {
   id: string;
-  project_id: string;
+  repository_id: string;
   workspace_id: string | null;
   name: string;
   description: string;
@@ -58,7 +58,7 @@ export interface PlanRecord {
 export interface TaskRecord {
   id: string;
   plan_id: string;
-  project_id: string;
+  repository_id: string;
   workspace_id: string | null;
   agent_session_id: string | null;
   name: string;

@@ -2,14 +2,14 @@ import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 
 import { createPlanCreateRequest, requestBridge } from "../../bridge";
-import { failCommand, jsonFlag, projectIdFlag } from "../_shared";
+import { failCommand, jsonFlag, repositoryIdFlag } from "../_shared";
 
 export default defineCommand({
   description: "Create a new plan.",
   input: z.object({
     json: jsonFlag,
     name: z.string().describe("Plan name"),
-    projectId: projectIdFlag,
+    repositoryId: repositoryIdFlag,
     description: z.string().optional().describe("Plan description"),
     status: z.string().optional().describe("Initial status (draft, active)"),
   }),
@@ -17,7 +17,7 @@ export default defineCommand({
     try {
       const response = await requestBridge(
         createPlanCreateRequest({
-          projectId: input.projectId ?? "",
+          repositoryId: input.repositoryId ?? "",
           name: input.name,
           ...(input.description ? { description: input.description } : {}),
           ...(input.status ? { status: input.status } : {}),

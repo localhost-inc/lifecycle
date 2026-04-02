@@ -10,6 +10,7 @@ This directory contains tracked execution plans that are real enough to keep on 
 4. [Kin Cloud V1](./kin-cloud-v1.md) — the one tactical build plan for auth, orgs, customer Cloudflare, cloud workspaces, native shell/agent flow, and PR merge
 5. [Cloud Hardening](./cloud-hardening.md) — sleep/wake restore, TTL enforcement, quotas, and cloud lifecycle SLOs
 6. [Pane Tree Performance](./pane-tree-performance.md) — workspace pane/tab render locality, tab-switch latency, and drag-path performance
+7. [TUI tmux host binding](./tui-tmux-host-binding.md) — persistent tmux-backed TUI shell sessions with explicit `local|docker|cloud` workspace binding across the middle and right columns
 
 ## Promotion Rule
 

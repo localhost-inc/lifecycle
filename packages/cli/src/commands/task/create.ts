@@ -3,14 +3,14 @@ import { parseTaskPriority } from "@lifecycle/contracts";
 import { z } from "zod";
 
 import { createTaskCreateRequest, requestBridge } from "../../bridge";
-import { failCommand, jsonFlag, projectIdFlag } from "../_shared";
+import { failCommand, jsonFlag, repositoryIdFlag } from "../_shared";
 
 export default defineCommand({
   description: "Create a new task within a plan.",
   input: z.object({
     json: jsonFlag,
     planId: z.string().describe("Parent plan id"),
-    projectId: projectIdFlag,
+    repositoryId: repositoryIdFlag,
     name: z.string().describe("Task name"),
     description: z.string().optional().describe("Task description"),
     priority: z.string().optional().describe("Priority (low, normal, high, urgent)"),
@@ -20,7 +20,7 @@ export default defineCommand({
       const response = await requestBridge(
         createTaskCreateRequest({
           planId: input.planId,
-          projectId: input.projectId ?? "",
+          repositoryId: input.repositoryId ?? "",
           name: input.name,
           ...(input.description ? { description: input.description } : {}),
           ...(input.priority ? { priority: parseTaskPriority(input.priority) } : {}),

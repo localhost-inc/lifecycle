@@ -35,7 +35,7 @@ export default defineCommand({
 
       // Match by slug, name, or id
       const match = organizations.find(
-        (org) =>
+        (org: { id: string; name: string; slug: string }) =>
           org.slug === target ||
           org.name.toLowerCase() === target.toLowerCase() ||
           org.id === target,

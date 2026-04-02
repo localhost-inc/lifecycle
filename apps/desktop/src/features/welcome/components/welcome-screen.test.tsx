@@ -8,7 +8,7 @@ describe("WelcomeScreen", () => {
   test("renders the logo animation with the standard foreground color on first paint", () => {
     const markup = renderToStaticMarkup(
       createElement(ThemeProvider, {
-        children: createElement(WelcomeScreen, { onAddProject: () => {} }),
+        children: createElement(WelcomeScreen, { onAddRepository: () => {} }),
         storageKey: "test.theme",
       }),
     );

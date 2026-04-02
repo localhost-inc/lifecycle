@@ -2,11 +2,11 @@ import { useMemo, useRef, useSyncExternalStore } from "react";
 import type {
   AgentMessageWithParts,
   AgentSessionRecord,
-  ProjectRecord,
+  RepositoryRecord,
   ServiceRecord,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
-import { groupWorkspacesByProject, type Collection } from "@lifecycle/store";
+import { groupWorkspacesByRepository, type Collection } from "@lifecycle/store";
 import { getOrCreateAgentMessageCollection } from "@lifecycle/store/internal/agent-messages";
 import {
   getOrCreateAgentSessionCollection,
@@ -78,14 +78,14 @@ function useCollectionItem<T extends object>(
 
 // ── Entity hooks ──
 
-export function useProjects(): ProjectRecord[] {
+export function useRepositories(): RepositoryRecord[] {
   const { collections } = useStoreContext();
-  return useCollectionArray(collections.projects);
+  return useCollectionArray(collections.repositories);
 }
 
-export function useProject(projectId: string | null): ProjectRecord | undefined {
+export function useRepository(repositoryId: string | null): RepositoryRecord | undefined {
   const { collections } = useStoreContext();
-  return useCollectionItem(collections.projects, projectId);
+  return useCollectionItem(collections.repositories, repositoryId);
 }
 
 export function useWorkspaces(): WorkspaceRecord[] {
@@ -98,9 +98,9 @@ export function useWorkspace(workspaceId: string | null): WorkspaceRecord | unde
   return useCollectionItem(collections.workspaces, workspaceId);
 }
 
-export function useWorkspacesByProject(): Record<string, WorkspaceRecord[]> {
+export function useWorkspacesByRepository(): Record<string, WorkspaceRecord[]> {
   const workspaces = useWorkspaces();
-  return useMemo(() => groupWorkspacesByProject(workspaces), [workspaces]);
+  return useMemo(() => groupWorkspacesByRepository(workspaces), [workspaces]);
 }
 
 export function useWorkspaceServices(workspaceId: string): ServiceRecord[] {

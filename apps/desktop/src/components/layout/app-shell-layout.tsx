@@ -22,26 +22,26 @@ import { AppHotkeyListener } from "@/app/app-hotkey-listener";
 import { isMacPlatform, shouldHandleDomAppHotkey } from "@/app/app-hotkeys";
 import { useAgentStatusIndex } from "@lifecycle/agents/react";
 import { CommandPaletteProvider } from "@/features/command-palette";
-import { useProjectCatalog } from "@/features/projects/hooks";
-import { useProjectMutations } from "@/features/projects/mutations";
+import { useRepositoryCatalog } from "@/features/repositories/hooks";
+import { useRepositoryMutations } from "@/features/repositories/mutations";
 import {
   buildShellContexts,
-  filterProjectsForShellContext,
+  filterRepositoriesForShellContext,
   readPersistedShellContextId,
   resolveActiveShellContext,
   writePersistedShellContextId,
-} from "@/features/projects/lib/shell-context";
+} from "@/features/repositories/lib/shell-context";
 import { WelcomeScreen } from "@/features/welcome/components/welcome-screen";
 import type { WorkspaceCreateMode } from "@/features/workspaces/types";
 import { getWorkspaceDisplayName } from "@/features/workspaces/lib/workspace-display";
 import { formatWorkspaceError } from "@/features/workspaces/lib/workspace-errors";
 import {
-  clearLastProjectId,
-  clearLastProjectSubPath,
-  readLastProjectId,
-  readLastProjectSubPath,
-  writeLastProjectId,
-} from "@/features/projects/state/project-content-tabs";
+  clearLastRepositoryId,
+  clearLastRepositorySubPath,
+  readLastRepositoryId,
+  readLastRepositorySubPath,
+  writeLastRepositoryId,
+} from "@/features/repositories/state/repository-content-tabs";
 import {
   clearLastWorkspaceId,
   clearWorkspaceCanvasState,
@@ -73,9 +73,9 @@ import {
   ShellResizeProvider,
 } from "@/components/layout/shell-resize-provider";
 import { computeWorkspaceCreatePolicy } from "@lifecycle/workspace/policy";
-import { selectProjectById, selectServicesByWorkspace } from "@lifecycle/store";
+import { selectRepositoryById, selectServicesByWorkspace } from "@lifecycle/store";
 import { waitForDbReady } from "@/lib/db";
-import { useStoreContext, useWorkspacesByProject } from "@/store";
+import { useStoreContext, useWorkspacesByRepository } from "@/store";
 
 const SIDEBAR_RESIZE_STEP = 16;
 
@@ -92,13 +92,13 @@ const LAST_PATH_STORAGE_KEY = "lifecycle.desktop.last-path";
 export function AppShellLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { projectId } = useParams();
+  const { repositoryId } = useParams();
   const { collections, driver } = useStoreContext();
   const shellViewportRef = useRef<HTMLDivElement | null>(null);
-  const projectCatalogQuery = useProjectCatalog();
-  const { createProjectFromDirectory, removeProject } = useProjectMutations();
+  const repositoryCatalogQuery = useRepositoryCatalog();
+  const { createRepositoryFromDirectory, removeRepository } = useRepositoryMutations();
   const workspaceClientRegistry = useWorkspaceClientRegistry();
-  const workspacesByProject = useWorkspacesByProject();
+  const workspacesByRepository = useWorkspacesByRepository();
   const { isLoading: authSessionLoading, session: authSession } = useAuthSession();
   const agentStatusIndex = useAgentStatusIndex();
   const hasWorkspaceResponseReady = useCallback(
@@ -117,65 +117,65 @@ export function AppShellLayout() {
     readPersistedPanelValue(APP_SIDEBAR_WIDTH_STORAGE_KEY, DEFAULT_APP_SIDEBAR_WIDTH),
   );
   const [activeSidebarResize, setActiveSidebarResize] = useState(false);
-  const allProjects = projectCatalogQuery.data?.projects ?? [];
+  const allRepositories = repositoryCatalogQuery.data?.repositories ?? [];
   const shellContexts = useMemo(
     () =>
-      buildShellContexts(allProjects, {
+      buildShellContexts(allRepositories, {
         personalContextPersisted: authSession.state === "logged_in",
         personalDisplayName: authSession.identity?.displayName,
       }),
-    [allProjects, authSession.state, authSession.identity?.displayName],
+    [allRepositories, authSession.state, authSession.identity?.displayName],
   );
   const activeShellContext = useMemo(
     () =>
       resolveActiveShellContext({
         contexts: shellContexts,
-        projects: allProjects,
+        repositories: allRepositories,
         requestedContextId: requestedShellContextId,
-        routeProjectId: projectId,
+        routeRepositoryId: repositoryId,
       }),
-    [allProjects, projectId, requestedShellContextId, shellContexts],
+    [allRepositories, repositoryId, requestedShellContextId, shellContexts],
   );
-  const projects = useMemo(
-    () => filterProjectsForShellContext(allProjects, activeShellContext),
-    [activeShellContext, allProjects],
+  const repositories = useMemo(
+    () => filterRepositoriesForShellContext(allRepositories, activeShellContext),
+    [activeShellContext, allRepositories],
   );
-  const rawWorkspacesByProjectId: Record<string, WorkspaceRecord[]> = workspacesByProject;
-  const workspacesByProjectId = useMemo((): Record<string, WorkspaceRecord[]> => {
-    const visibleProjectIds = new Set(projects.map((project) => project.id));
+  const rawWorkspacesByRepositoryId: Record<string, WorkspaceRecord[]> = workspacesByRepository;
+  const workspacesByRepositoryId = useMemo((): Record<string, WorkspaceRecord[]> => {
+    const visibleRepositoryIds = new Set(repositories.map((repository) => repository.id));
     return Object.fromEntries(
-      Object.entries(rawWorkspacesByProjectId).filter(([candidateProjectId]) =>
-        visibleProjectIds.has(candidateProjectId),
+      Object.entries(rawWorkspacesByRepositoryId).filter(([candidateRepositoryId]) =>
+        visibleRepositoryIds.has(candidateRepositoryId),
       ),
     );
-  }, [projects, rawWorkspacesByProjectId]);
-  const visibleProjectCatalog = useMemo(() => {
-    if (!projectCatalogQuery.data) {
+  }, [repositories, rawWorkspacesByRepositoryId]);
+  const visibleRepositoryCatalog = useMemo(() => {
+    if (!repositoryCatalogQuery.data) {
       return undefined;
     }
 
-    const visibleProjectIds = new Set(projects.map((project) => project.id));
+    const visibleRepositoryIds = new Set(repositories.map((repository) => repository.id));
     return {
-      manifestsByProjectId: Object.fromEntries(
-        Object.entries(projectCatalogQuery.data.manifestsByProjectId).filter(
-          ([candidateProjectId]) => visibleProjectIds.has(candidateProjectId),
+      manifestsByRepositoryId: Object.fromEntries(
+        Object.entries(repositoryCatalogQuery.data.manifestsByRepositoryId).filter(
+          ([candidateRepositoryId]) => visibleRepositoryIds.has(candidateRepositoryId),
         ),
       ),
-      projects,
+      repositories,
     };
-  }, [projectCatalogQuery.data, projects]);
-  const readyProjectIds = useMemo(
+  }, [repositoryCatalogQuery.data, repositories]);
+  const readyRepositoryIds = useMemo(
     () =>
       new Set(
-        projects.flatMap((project) =>
-          (workspacesByProjectId[project.id] ?? []).some((workspace) =>
+        repositories.flatMap((repository) =>
+          (workspacesByRepositoryId[repository.id] ?? []).some((workspace) =>
             hasWorkspaceResponseReady(workspace.id),
           )
-            ? [project.id]
+            ? [repository.id]
             : [],
         ),
       ),
-    [hasWorkspaceResponseReady, projects, workspacesByProjectId],
+    [hasWorkspaceResponseReady, repositories, workspacesByRepositoryId],
   );
   const sidebarBounds = useMemo(
     () =>
@@ -188,34 +188,34 @@ export function AppShellLayout() {
     [shellViewportWidth],
   );
 
-  const createWorkspaceForProject = useCallback(
+  const createWorkspaceForRepository = useCallback(
     async (input: {
       checkoutType: WorkspaceCheckoutType;
       host: WorkspaceHost;
-      projectId: string;
+      repositoryId: string;
       workspaceName?: string;
     }): Promise<string> => {
       await waitForDbReady();
 
-      const project = await selectProjectById(driver, input.projectId);
-      if (!project) {
-        throw new Error(`Project "${input.projectId}" was not found.`);
+      const repository = await selectRepositoryById(driver, input.repositoryId);
+      if (!repository) {
+        throw new Error(`Repository "${input.repositoryId}" was not found.`);
       }
 
       const workspaceClient = workspaceClientRegistry.resolve(input.host);
-      const manifestStatus = await workspaceClient.readManifest(project.path);
+      const manifestStatus = await workspaceClient.readManifest(repository.path);
       const manifestJson =
         manifestStatus.state === "valid" ? JSON.stringify(manifestStatus.result.config) : undefined;
       const manifestFingerprint =
         manifestStatus.state === "valid"
           ? getManifestFingerprint(manifestStatus.result.config)
           : null;
-      const currentBranch = await workspaceClient.getGitCurrentBranch(project.path);
+      const currentBranch = await workspaceClient.getGitCurrentBranch(repository.path);
       const policy = computeWorkspaceCreatePolicy({
         host: input.host,
         checkoutType: input.checkoutType,
-        projectId: project.id,
-        projectPath: project.path,
+        repositoryId: repository.id,
+        repositoryPath: repository.path,
         workspaceName: input.workspaceName,
         baseRef: currentBranch,
         currentBranch,
@@ -227,7 +227,7 @@ export function AppShellLayout() {
       const transaction = collections.workspaces.insert(
         {
           id: policy.workspaceId,
-          project_id: policy.projectId,
+          repository_id: policy.repositoryId,
           name: policy.name,
           checkout_type: policy.checkoutType,
           source_ref: policy.sourceRef,
@@ -265,14 +265,14 @@ export function AppShellLayout() {
 
   const archiveWorkspace = useCallback(
     async (workspace: WorkspaceRecord): Promise<void> => {
-      const project = await selectProjectById(driver, workspace.project_id);
-      if (!project) {
-        throw new Error(`Project "${workspace.project_id}" was not found.`);
+      const repository = await selectRepositoryById(driver, workspace.repository_id);
+      if (!repository) {
+        throw new Error(`Repository "${workspace.repository_id}" was not found.`);
       }
 
       await workspaceClientRegistry.resolve(workspace.host).archiveWorkspace({
         workspace,
-        projectPath: project.path,
+        projectPath: repository.path,
       });
 
       const services = await selectServicesByWorkspace(driver, workspace.id);
@@ -332,12 +332,12 @@ export function AppShellLayout() {
   }, [activeShellContext.id]);
 
   useEffect(() => {
-    if (!projectId || !projects.some((project) => project.id === projectId)) {
+    if (!repositoryId || !repositories.some((repository) => repository.id === repositoryId)) {
       return;
     }
 
-    writeLastProjectId(projectId);
-  }, [projectId, projects]);
+    writeLastRepositoryId(repositoryId);
+  }, [repositoryId, repositories]);
 
   useEffect(() => {
     if (location.pathname !== "/") {
@@ -401,69 +401,71 @@ export function AppShellLayout() {
   const handleOpenWorkspace = useCallback(
     (workspace: WorkspaceRecord) => {
       writeLastWorkspaceId(workspace.id);
-      void navigate(`/projects/${workspace.project_id}/workspaces/${workspace.id}`);
+      void navigate(`/repositories/${workspace.repository_id}/workspaces/${workspace.id}`);
     },
     [navigate],
   );
 
-  const handleAddProject = useCallback(async () => {
-    let importedProjectId: string | null = null;
+  const handleAddRepository = useCallback(async () => {
+    let importedRepositoryId: string | null = null;
 
     try {
-      const project = await createProjectFromDirectory();
-      if (!project) {
+      const repository = await createRepositoryFromDirectory();
+      if (!repository) {
         return;
       }
 
-      importedProjectId = project.id;
-      const workspaceId = await createWorkspaceForProject({
+      importedRepositoryId = repository.id;
+      const workspaceId = await createWorkspaceForRepository({
         checkoutType: "root",
         host: "local",
-        projectId: project.id,
+        repositoryId: repository.id,
       });
 
       writeLastWorkspaceId(workspaceId);
-      void navigate(`/projects/${project.id}/workspaces/${workspaceId}`);
+      void navigate(`/repositories/${repository.id}/workspaces/${workspaceId}`);
     } catch (error) {
-      console.error("Failed to add project:", error);
-      if (importedProjectId) {
-        void navigate(`/projects/${importedProjectId}`);
-        alert(`Project was added, but the root workspace could not be created: ${error}`);
+      console.error("Failed to add repository:", error);
+      if (importedRepositoryId) {
+        void navigate(`/repositories/${importedRepositoryId}`);
+        alert(`Repository was added, but the root workspace could not be created: ${error}`);
         return;
       }
 
-      alert(`Failed to add project: ${error}`);
+      alert(`Failed to add repository: ${error}`);
     }
-  }, [createProjectFromDirectory, createWorkspaceForProject, navigate]);
+  }, [createRepositoryFromDirectory, createWorkspaceForRepository, navigate]);
 
   const handleCreateWorkspace = useCallback(
-    async (nextProjectId: string, host: WorkspaceCreateMode) => {
-      const project = allProjects.find((item) => item.id === nextProjectId);
-      if (!project) {
+    async (nextRepositoryId: string, host: WorkspaceCreateMode) => {
+      const repository = allRepositories.find(
+        (item: (typeof allRepositories)[number]) => item.id === nextRepositoryId,
+      );
+      if (!repository) {
         return;
       }
 
-      const existingWorkspaces = workspacesByProjectId[project.id] ?? [];
+      const existingWorkspaces = workspacesByRepositoryId[repository.id] ?? [];
       const checkoutType = existingWorkspaces.some(
         (workspace) => workspace.checkout_type === "root",
       )
         ? "worktree"
         : "root";
       try {
-        const workspaceId = await createWorkspaceForProject({
+        const workspaceId = await createWorkspaceForRepository({
           checkoutType,
           host,
-          projectId: project.id,
+          repositoryId: repository.id,
         });
 
         writeLastWorkspaceId(workspaceId);
-        void navigate(`/projects/${project.id}/workspaces/${workspaceId}`);
+        void navigate(`/repositories/${repository.id}/workspaces/${workspaceId}`);
       } catch (error) {
         console.error("Failed to create workspace:", error);
         alert(`Failed to create workspace: ${error}`);
       }
     },
-    [allProjects, createWorkspaceForProject, navigate, workspacesByProjectId],
+    [allRepositories, createWorkspaceForRepository, navigate, workspacesByRepositoryId],
   );
 
   const handleArchiveWorkspace = useCallback(
@@ -493,13 +495,13 @@ export function AppShellLayout() {
         }
 
         // Clear stored sub-path if it pointed to the archived workspace
-        const storedSubPath = readLastProjectSubPath(workspace.project_id);
+        const storedSubPath = readLastRepositorySubPath(workspace.repository_id);
         if (storedSubPath?.includes(workspace.id)) {
-          clearLastProjectSubPath(workspace.project_id);
+          clearLastRepositorySubPath(workspace.repository_id);
         }
 
         // Navigate away from archived workspace
-        void navigate(`/projects/${workspace.project_id}`);
+        void navigate(`/repositories/${workspace.repository_id}`);
       } catch (error) {
         console.error("Failed to archive workspace:", error);
         alert(formatWorkspaceError(error, "Failed to archive workspace."));
@@ -508,32 +510,34 @@ export function AppShellLayout() {
     [archiveWorkspace, inspectArchive, navigate],
   );
 
-  const handleRemoveProject = useCallback(
-    async (nextProjectId: string) => {
+  const handleRemoveRepository = useCallback(
+    async (nextRepositoryId: string) => {
       try {
-        await removeProject(nextProjectId);
+        await removeRepository(nextRepositoryId);
 
-        if (readLastProjectId() === nextProjectId) {
-          clearLastProjectId();
+        if (readLastRepositoryId() === nextRepositoryId) {
+          clearLastRepositoryId();
         }
 
-        clearLastProjectSubPath(nextProjectId);
+        clearLastRepositorySubPath(nextRepositoryId);
 
-        if (projectId === nextProjectId) {
-          const nextProject = projects.find((project) => project.id !== nextProjectId);
-          if (nextProject) {
-            void navigate(`/projects/${nextProject.id}`);
+        if (repositoryId === nextRepositoryId) {
+          const nextRepository = repositories.find(
+            (repository) => repository.id !== nextRepositoryId,
+          );
+          if (nextRepository) {
+            void navigate(`/repositories/${nextRepository.id}`);
             return;
           }
 
           void navigate("/");
         }
       } catch (error) {
-        console.error("Failed to remove project:", error);
-        alert(`Failed to remove project: ${error}`);
+        console.error("Failed to remove repository:", error);
+        alert(`Failed to remove repository: ${error}`);
       }
     },
-    [navigate, projectId, projects, removeProject],
+    [navigate, repositoryId, repositories, removeRepository],
   );
 
   const handleOpenSettings = useCallback(() => {
@@ -581,36 +585,39 @@ export function AppShellLayout() {
     [sidebarBounds],
   );
 
-  const handleSelectProjectIndex = useCallback(
+  const handleSelectRepositoryIndex = useCallback(
     (index: number) => {
-      const target = index <= projects.length ? projects[index - 1] : projects[projects.length - 1];
-      if (target && target.id !== projectId) {
-        void navigate(`/projects/${target.id}`);
+      const target =
+        index <= repositories.length
+          ? repositories[index - 1]
+          : repositories[repositories.length - 1];
+      if (target && target.id !== repositoryId) {
+        void navigate(`/repositories/${target.id}`);
       }
     },
-    [navigate, projectId, projects],
+    [navigate, repositoryId, repositories],
   );
 
-  // Sync the native Project menu with the current project list (macOS).
+  // Sync the native Repository menu with the current repository list (macOS).
   useEffect(() => {
     if (isTauri()) {
-      void invoke("sync_project_menu", { names: projects.map((p) => p.name) });
+      void invoke("sync_project_menu", { names: repositories.map((repository) => repository.name) });
     }
-  }, [projects]);
+  }, [repositories]);
 
   useShortcutRegistration({
-    enabled: shouldHandleDomAppHotkey("select-project-index", {
+    enabled: shouldHandleDomAppHotkey("select-repository-index", {
       isTauriApp: isTauri(),
       macPlatform: isMacPlatform(),
     }),
     handler: useCallback(
       (match) => {
-        handleSelectProjectIndex(match.index ?? 1);
+        handleSelectRepositoryIndex(match.index ?? 1);
         return true;
       },
-      [handleSelectProjectIndex],
+      [handleSelectRepositoryIndex],
     ),
-    id: "project.select-index",
+    id: "repository.select-index",
     priority: SHORTCUT_HANDLER_PRIORITY.app,
   });
 
@@ -621,10 +628,10 @@ export function AppShellLayout() {
       onArchiveWorkspace: handleArchiveWorkspace,
       onOpenSettings: handleOpenSettings,
       onOpenWorkspace: handleOpenWorkspace,
-      onRemoveProject: handleRemoveProject,
-      projectCatalog: visibleProjectCatalog,
-      projects,
-      workspacesByProjectId,
+      onRemoveRepository: handleRemoveRepository,
+      repositoryCatalog: visibleRepositoryCatalog,
+      repositories,
+      workspacesByRepositoryId,
     }),
     [
       activeShellContext,
@@ -632,27 +639,27 @@ export function AppShellLayout() {
       handleArchiveWorkspace,
       handleOpenSettings,
       handleOpenWorkspace,
-      handleRemoveProject,
-      visibleProjectCatalog,
-      projects,
-      workspacesByProjectId,
+      handleRemoveRepository,
+      visibleRepositoryCatalog,
+      repositories,
+      workspacesByRepositoryId,
     ],
   );
 
-  if (projectCatalogQuery.isLoading && !projectCatalogQuery.data) {
+  if (repositoryCatalogQuery.isLoading && !repositoryCatalogQuery.data) {
     return (
       <div className="flex h-full w-full bg-[var(--background)]">
-        <AppHotkeyListener onSelectProjectIndex={handleSelectProjectIndex} />
+        <AppHotkeyListener onSelectRepositoryIndex={handleSelectRepositoryIndex} />
         <Loading />
       </div>
     );
   }
 
-  if (allProjects.length === 0) {
+  if (allRepositories.length === 0) {
     return (
       <div className="flex h-full w-full bg-[var(--background)] text-[var(--foreground)]">
-        <AppHotkeyListener onSelectProjectIndex={handleSelectProjectIndex} />
-        <WelcomeScreen onAddProject={handleAddProject} />
+        <AppHotkeyListener onSelectRepositoryIndex={handleSelectRepositoryIndex} />
+        <WelcomeScreen onAddRepository={handleAddRepository} />
       </div>
     );
   }
@@ -661,12 +668,15 @@ export function AppShellLayout() {
     <WorkspaceOpenRequestsProvider>
       <BridgeListener />
       <WorkspaceToolbarProvider>
-        <CommandPaletteProvider projects={projects} workspacesByProjectId={workspacesByProjectId}>
+        <CommandPaletteProvider
+          repositories={repositories}
+          workspacesByRepositoryId={workspacesByRepositoryId}
+        >
           <div
             ref={shellViewportRef}
             className="flex h-full w-full flex-row bg-[var(--background)] text-[var(--foreground)]"
           >
-            <AppHotkeyListener onSelectProjectIndex={handleSelectProjectIndex} />
+            <AppHotkeyListener onSelectRepositoryIndex={handleSelectRepositoryIndex} />
 
             {/* App sidebar — directly on shell surface */}
             <AppSidebar
@@ -675,14 +685,14 @@ export function AppShellLayout() {
               authSessionLoading={authSessionLoading}
               hasWorkspaceResponseReady={hasWorkspaceResponseReady}
               hasWorkspaceRunningTurn={hasWorkspaceRunningTurn}
-              onAddProject={handleAddProject}
+              onAddRepository={handleAddRepository}
               onCreateWorkspace={handleCreateWorkspace}
               onArchiveWorkspace={handleArchiveWorkspace}
               onOpenSettings={handleOpenSettings}
-              onRemoveProject={handleRemoveProject}
-              projects={projects}
-              readyProjectIds={readyProjectIds}
-              workspacesByProjectId={workspacesByProjectId}
+              onRemoveRepository={handleRemoveRepository}
+              repositories={repositories}
+              readyRepositoryIds={readyRepositoryIds}
+              workspacesByRepositoryId={workspacesByRepositoryId}
               width={sidebarWidth}
             />
             <div className="relative shrink-0">

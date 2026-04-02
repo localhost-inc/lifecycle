@@ -2,21 +2,21 @@ import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 
 import { createTaskDeleteRequest, requestBridge } from "../../bridge";
-import { failCommand, jsonFlag, projectIdFlag } from "../_shared";
+import { failCommand, jsonFlag, repositoryIdFlag } from "../_shared";
 
 export default defineCommand({
   description: "Delete a task.",
   input: z.object({
     json: jsonFlag,
     id: z.string().describe("Task id"),
-    projectId: projectIdFlag,
+    repositoryId: repositoryIdFlag,
   }),
   run: async (input, context) => {
     try {
       await requestBridge(
         createTaskDeleteRequest({
           taskId: input.id,
-          projectId: input.projectId ?? "",
+          repositoryId: input.repositoryId ?? "",
         }),
       );
 

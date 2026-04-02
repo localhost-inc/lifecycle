@@ -12,9 +12,11 @@ import {
   type GitStatusResult,
   type WorkspaceRecord,
 } from "@lifecycle/contracts";
+import { execSync } from "node:child_process";
 import type {
   ArchiveWorkspaceInput,
   EnsureWorkspaceInput,
+  ExecCommandResult,
   GitDiffInput,
   OpenInAppId,
   RenameWorkspaceInput,
@@ -56,6 +58,25 @@ export class LocalWorkspaceClient implements WorkspaceClient {
     this.fileReader = deps.fileReader;
     this.invoke = deps.invoke;
     this.watchPath = deps.watchPath;
+  }
+
+  async execCommand(workspace: WorkspaceRecord, command: string[]): Promise<ExecCommandResult> {
+    const cwd = requireWorktreePath(workspace);
+    try {
+      const stdout = execSync(command.map((s) => JSON.stringify(s)).join(" "), {
+        cwd,
+        encoding: "utf8",
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      return { stdout, stderr: "", exitCode: 0 };
+    } catch (error: unknown) {
+      const e = error as { stdout?: string; stderr?: string; status?: number };
+      return {
+        stdout: String(e.stdout ?? ""),
+        stderr: String(e.stderr ?? ""),
+        exitCode: e.status ?? 1,
+      };
+    }
   }
 
   async readManifest(dirPath: string): Promise<ManifestStatus> {

@@ -40,10 +40,10 @@ function createRegistration(
 }
 
 describe("shortcut router matching", () => {
-  test("reads project select-index shortcuts from the central router matcher", () => {
+  test("reads repository select-index shortcuts from the central router matcher", () => {
     expect(
       readRegisteredShortcutMatch(
-        "project.select-index",
+        "repository.select-index",
         createShortcutEvent({
           code: "Digit3",
           key: "3",
@@ -52,13 +52,13 @@ describe("shortcut router matching", () => {
         true,
       ),
     ).toEqual({
-      id: "project.select-index",
+      id: "repository.select-index",
       index: 3,
     });
 
     expect(
       readRegisteredShortcutMatch(
-        "project.select-index",
+        "repository.select-index",
         createShortcutEvent({
           code: "Digit1",
           ctrlKey: true,
@@ -67,7 +67,7 @@ describe("shortcut router matching", () => {
         false,
       ),
     ).toEqual({
-      id: "project.select-index",
+      id: "repository.select-index",
       index: 1,
     });
   });
@@ -136,10 +136,10 @@ describe("shortcut router matching", () => {
     });
   });
 
-  test("reads project history shortcuts from the central router matcher", () => {
+  test("reads repository history shortcuts from the central router matcher", () => {
     expect(
       readRegisteredShortcutMatch(
-        "project.go-back",
+        "repository.go-back",
         createShortcutEvent({
           code: "BracketLeft",
           ctrlKey: true,
@@ -148,14 +148,14 @@ describe("shortcut router matching", () => {
         false,
       ),
     ).toEqual({
-      id: "project.go-back",
+      id: "repository.go-back",
     });
   });
 });
 
 describe("shortcut router dispatch", () => {
   test("prefers the highest-priority matching registration", () => {
-    const projectClose = mock(() => true);
+    const repositoryClose = mock(() => true);
     const workspaceClose = mock(() => true);
     const event = createShortcutEvent({
       code: "KeyW",
@@ -169,10 +169,10 @@ describe("shortcut router dispatch", () => {
         macPlatform: true,
         registrations: [
           createRegistration({
-            handler: projectClose,
+            handler: repositoryClose,
             id: "canvas.pane.tab.close",
             order: 0,
-            priority: SHORTCUT_HANDLER_PRIORITY.project,
+            priority: SHORTCUT_HANDLER_PRIORITY.repository,
           }),
           createRegistration({
             handler: workspaceClose,
@@ -187,12 +187,12 @@ describe("shortcut router dispatch", () => {
     });
 
     expect(workspaceClose).toHaveBeenCalledTimes(1);
-    expect(projectClose).not.toHaveBeenCalled();
+    expect(repositoryClose).not.toHaveBeenCalled();
     expect(event.defaultPrevented).toBe(true);
   });
 
   test("falls through when a higher-priority handler declines the shortcut", () => {
-    const projectClose = mock(() => true);
+    const repositoryClose = mock(() => true);
     const workspaceClose = mock(() => false);
     const event = createShortcutEvent({
       code: "KeyW",
@@ -206,10 +206,10 @@ describe("shortcut router dispatch", () => {
         macPlatform: true,
         registrations: [
           createRegistration({
-            handler: projectClose,
+            handler: repositoryClose,
             id: "canvas.pane.tab.close",
             order: 0,
-            priority: SHORTCUT_HANDLER_PRIORITY.project,
+            priority: SHORTCUT_HANDLER_PRIORITY.repository,
           }),
           createRegistration({
             handler: workspaceClose,
@@ -224,7 +224,7 @@ describe("shortcut router dispatch", () => {
     });
 
     expect(workspaceClose).toHaveBeenCalledTimes(1);
-    expect(projectClose).toHaveBeenCalledTimes(1);
+    expect(repositoryClose).toHaveBeenCalledTimes(1);
     expect(event.defaultPrevented).toBe(true);
   });
 

@@ -14,10 +14,10 @@ import {
 } from "@/app/shortcuts/shortcut-router";
 
 interface AppHotkeyListenerProps {
-  onSelectProjectIndex?: (index: number) => void;
+  onSelectRepositoryIndex?: (index: number) => void;
 }
 
-export function AppHotkeyListener({ onSelectProjectIndex }: AppHotkeyListenerProps = {}) {
+export function AppHotkeyListener({ onSelectRepositoryIndex }: AppHotkeyListenerProps = {}) {
   const location = useLocation();
   const navigate = useNavigate();
   const tauriApp = isTauri();
@@ -40,14 +40,14 @@ export function AppHotkeyListener({ onSelectProjectIndex }: AppHotkeyListenerPro
             commandPalette.toggle("explorer");
           }
           return;
-        case "select-project-index":
+        case "select-repository-index":
           if (event.index != null) {
-            onSelectProjectIndex?.(event.index);
+            onSelectRepositoryIndex?.(event.index);
           }
           return;
       }
     },
-    [commandPalette, location.pathname, navigate, onSelectProjectIndex],
+    [commandPalette, location.pathname, navigate, onSelectRepositoryIndex],
   );
 
   useShortcutRegistration({

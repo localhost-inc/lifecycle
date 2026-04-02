@@ -7,8 +7,8 @@ import { autoWorkspaceName, workspaceBranchName } from "./workspace-names";
 
 export interface WorkspaceCreatePolicy {
   workspaceId: string;
-  projectId: string;
-  projectPath: string;
+  repositoryId: string;
+  repositoryPath: string;
   name: string;
   nameOrigin: "manual" | "default";
   sourceRef: string;
@@ -24,8 +24,8 @@ export interface WorkspaceCreatePolicy {
 export interface WorkspaceCreatePolicyInput {
   host: WorkspaceHost;
   checkoutType?: WorkspaceCheckoutType | undefined;
-  projectId: string;
-  projectPath: string;
+  repositoryId: string;
+  repositoryPath: string;
   workspaceName?: string | null | undefined;
   baseRef?: string | null | undefined;
   worktreeRoot?: string | null | undefined;
@@ -59,8 +59,8 @@ export function computeWorkspaceCreatePolicy(
 
   return {
     workspaceId,
-    projectId: input.projectId,
-    projectPath: input.projectPath,
+    repositoryId: input.repositoryId,
+    repositoryPath: input.repositoryPath,
     name,
     nameOrigin,
     sourceRef,

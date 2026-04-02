@@ -28,7 +28,7 @@ const WorkspaceRecordSchema = z.object({
   manifest_fingerprint: z.string().nullable(),
   name: z.string(),
   prepared_at: z.string().nullable(),
-  project_id: z.string(),
+  repository_id: z.string(),
   source_ref: z.string(),
   status: z.string(),
   host: z.string(),
@@ -190,7 +190,7 @@ export const WorkspaceCreateRequestSchema = z.object({
   method: z.literal("workspace.create"),
   params: z.object({
     local: z.boolean().default(true),
-    projectId: z.string().optional(),
+    repositoryId: z.string().optional(),
     ref: z.string().optional(),
   }),
   session: BridgeSessionSchema,
@@ -311,7 +311,7 @@ export const AgentSessionInspectRequestSchema = z.object({
 
 const PlanRecordSchema = z.object({
   id: z.string(),
-  project_id: z.string(),
+  repository_id: z.string(),
   workspace_id: z.string().nullable(),
   name: z.string(),
   description: z.string(),
@@ -325,7 +325,7 @@ const PlanRecordSchema = z.object({
 const TaskRecordSchema = z.object({
   id: z.string(),
   plan_id: z.string(),
-  project_id: z.string(),
+  repository_id: z.string(),
   workspace_id: z.string().nullable(),
   agent_session_id: z.string().nullable(),
   name: z.string(),
@@ -341,7 +341,7 @@ const TaskRecordSchema = z.object({
 export const PlanListRequestSchema = z.object({
   id: z.string(),
   method: z.literal("plan.list"),
-  params: z.object({ projectId: z.string() }),
+  params: z.object({ repositoryId: z.string() }),
   session: BridgeSessionSchema,
   version: z.literal(BRIDGE_VERSION),
 });
@@ -350,7 +350,7 @@ export const PlanCreateRequestSchema = z.object({
   id: z.string(),
   method: z.literal("plan.create"),
   params: z.object({
-    projectId: z.string(),
+    repositoryId: z.string(),
     workspaceId: z.string().optional(),
     name: z.string(),
     description: z.string().optional(),
@@ -380,7 +380,7 @@ export const PlanDeleteRequestSchema = z.object({
   method: z.literal("plan.delete"),
   params: z.object({
     planId: z.string(),
-    projectId: z.string(),
+    repositoryId: z.string(),
   }),
   session: BridgeSessionSchema,
   version: z.literal(BRIDGE_VERSION),
@@ -389,7 +389,7 @@ export const PlanDeleteRequestSchema = z.object({
 export const TaskListRequestSchema = z.object({
   id: z.string(),
   method: z.literal("task.list"),
-  params: z.object({ projectId: z.string() }),
+  params: z.object({ repositoryId: z.string() }),
   session: BridgeSessionSchema,
   version: z.literal(BRIDGE_VERSION),
 });
@@ -399,7 +399,7 @@ export const TaskCreateRequestSchema = z.object({
   method: z.literal("task.create"),
   params: z.object({
     planId: z.string(),
-    projectId: z.string(),
+    repositoryId: z.string(),
     workspaceId: z.string().optional(),
     agentSessionId: z.string().optional(),
     name: z.string(),
@@ -430,7 +430,7 @@ export const TaskDeleteRequestSchema = z.object({
   method: z.literal("task.delete"),
   params: z.object({
     taskId: z.string(),
-    projectId: z.string(),
+    repositoryId: z.string(),
   }),
   session: BridgeSessionSchema,
   version: z.literal(BRIDGE_VERSION),
@@ -442,7 +442,7 @@ export const TaskDependencyAddRequestSchema = z.object({
   params: z.object({
     taskId: z.string(),
     dependsOnTaskId: z.string(),
-    projectId: z.string(),
+    repositoryId: z.string(),
   }),
   session: BridgeSessionSchema,
   version: z.literal(BRIDGE_VERSION),
@@ -454,7 +454,7 @@ export const TaskDependencyRemoveRequestSchema = z.object({
   params: z.object({
     taskId: z.string(),
     dependsOnTaskId: z.string(),
-    projectId: z.string(),
+    repositoryId: z.string(),
   }),
   session: BridgeSessionSchema,
   version: z.literal(BRIDGE_VERSION),
@@ -556,7 +556,7 @@ const ContextResultSchema = z.object({
 });
 
 const TabOpenResultSchema = z.object({
-  projectId: z.string(),
+  repositoryId: z.string(),
   surface: z.literal("preview"),
   tabKey: z.string(),
   url: z.string(),
@@ -1001,7 +1001,7 @@ export const BridgeShellRequestSchema = z.discriminatedUnion("kind", [
     kind: z.literal("tab.open.preview"),
     label: z.string(),
     previewKey: z.string(),
-    projectId: z.string(),
+    repositoryId: z.string(),
     requestId: z.string(),
     url: z.string(),
     workspaceId: z.string(),
@@ -1009,7 +1009,7 @@ export const BridgeShellRequestSchema = z.discriminatedUnion("kind", [
 ]);
 
 export const BridgeShellResultSchema = z.object({
-  projectId: z.string(),
+  repositoryId: z.string(),
   surface: z.literal("preview"),
   tabKey: z.string(),
   url: z.string(),

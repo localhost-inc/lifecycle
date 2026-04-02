@@ -20,7 +20,7 @@ function renderWorkspaceShell(element: ReturnType<typeof createElement>) {
 
   return renderToStaticMarkup(
     createElement(MemoryRouter, {
-      initialEntries: ["/projects/project_1/workspaces/workspace_1"],
+      initialEntries: ["/repositories/project_1/workspaces/workspace_1"],
       children: createElement(ReactQueryProvider, {
         children: createElement(WorkspaceOpenRequestsProvider, {
           children: createElement(WorkspaceToolbarProvider, {
@@ -89,7 +89,7 @@ describe("WorkspaceShell", () => {
   test("renders the layout with an empty services array when no services exist", async () => {
     const workspace: WorkspaceRecord = {
       id: "workspace_1",
-      project_id: "project_1",
+      repository_id: "project_1",
       name: "frost-beacon",
       checkout_type: "worktree",
       source_ref: "lifecycle/frost-beacon",
@@ -151,7 +151,7 @@ describe("WorkspaceShell", () => {
 
     const workspace: WorkspaceRecord = {
       id: "workspace_1",
-      project_id: "project_1",
+      repository_id: "project_1",
       name: "frost-beacon",
       checkout_type: "worktree",
       source_ref: "lifecycle/frost-beacon",
@@ -214,7 +214,7 @@ describe("WorkspaceShell", () => {
   test("keeps environment preparation details out of the workspace layout", async () => {
     const workspace: WorkspaceRecord = {
       id: "workspace_1",
-      project_id: "project_1",
+      repository_id: "project_1",
       name: "frost-beacon",
       checkout_type: "worktree",
       source_ref: "lifecycle/frost-beacon",
@@ -275,7 +275,7 @@ describe("WorkspaceShell", () => {
   test("keeps missing lifecycle manifest guidance out of the workspace layout", async () => {
     const workspace: WorkspaceRecord = {
       id: "workspace_1",
-      project_id: "project_1",
+      repository_id: "project_1",
       name: "frost-beacon",
       checkout_type: "worktree",
       source_ref: "lifecycle/frost-beacon",

@@ -25,10 +25,10 @@ const TYPING_DONE_PAUSE_MS = 600;
 type AnimationPhase = "logo" | "pause" | "swell" | "settle" | "typing" | "reveal" | "complete";
 
 interface WelcomeScreenProps {
-  onAddProject: () => void;
+  onAddRepository: () => void;
 }
 
-export function WelcomeScreen({ onAddProject }: WelcomeScreenProps) {
+export function WelcomeScreen({ onAddRepository }: WelcomeScreenProps) {
   const prefersReducedMotion = usePrefersReducedMotion();
   const [animKey, setAnimKey] = useState(0);
   const [phase, setPhase] = useState<AnimationPhase>(() =>
@@ -97,8 +97,8 @@ export function WelcomeScreen({ onAddProject }: WelcomeScreenProps) {
   }, [phase, prefersReducedMotion, typedCount]);
 
   const handleClick = useCallback(() => {
-    onAddProject();
-  }, [onAddProject]);
+    onAddRepository();
+  }, [onAddRepository]);
 
   const handleRestart = useCallback(() => {
     setPhase("logo");
@@ -168,7 +168,7 @@ export function WelcomeScreen({ onAddProject }: WelcomeScreenProps) {
           <div className={prefersReducedMotion ? undefined : "welcome-button-enter"}>
             <Button data-no-drag onClick={handleClick}>
               <FolderOpen size={16} />
-              Open project folder
+              Open repository folder
             </Button>
           </div>
         )}

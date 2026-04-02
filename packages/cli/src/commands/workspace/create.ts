@@ -1,9 +1,14 @@
+import { basename, join, resolve } from "node:path";
+import { homedir } from "node:os";
+import { mkdirSync } from "node:fs";
 import { defineCommand, defineFlag } from "@lifecycle/cmd";
 import { z } from "zod";
 
+import { getLifecycleDb } from "@lifecycle/db";
+import { getRepositoryByPath, insertRepository, insertWorkspace } from "@lifecycle/db/queries";
 import { createClient } from "../../rpc-client";
-import { createWorkspaceCreateRequest, requestBridge } from "../../bridge";
-import { failCommand, jsonFlag, printWorkspaceSummary, projectIdFlag } from "../_shared";
+import { createWorktree } from "../../git-worktree";
+import { failCommand, jsonFlag } from "../_shared";
 
 export default defineCommand({
   description: "Create a workspace for a project.",
@@ -14,11 +19,8 @@ export default defineCommand({
       .enum(["local", "cloud"])
       .default("local")
       .describe("Workspace host. Use 'cloud' for a cloud workspace."),
-    local: defineFlag(z.boolean().default(true).describe("Create a local workspace."), {
-      aliases: "l",
-    }),
-    projectId: projectIdFlag,
     repoId: z.string().optional().describe("Repository id for cloud workspaces."),
+    repoPath: z.string().optional().describe("Local repo path. Defaults to current directory."),
     ref: z.string().optional().describe("Git ref or branch to base the workspace on."),
   }),
   run: async (input, context) => {
@@ -80,38 +82,57 @@ export default defineCommand({
           return 1;
         }
 
+        const slug = result.slug ?? workspaceId;
+
         if (status === "provisioning") {
           const elapsed = Math.round((Date.now() - start) / 1000);
           context.stdout(`Still provisioning after ${elapsed}s. The container may still be starting.`);
-          context.stdout(`Check status: lifecycle workspace get ${workspaceId}`);
-          context.stdout(`Attach when ready: lifecycle workspace shell ${workspaceId}`);
+          context.stdout(`Attach when ready: lifecycle workspace shell ${slug}`);
           return 0;
         }
 
-        context.stdout(`Workspace ready. id: ${workspaceId}`);
+        context.stdout(`Workspace ready: ${slug}`);
         context.stdout("");
-        context.stdout(`Next: lifecycle workspace shell ${workspaceId}`);
+        context.stdout(`Next: lifecycle workspace shell ${slug}`);
         return 0;
       }
 
-      // Local workspace path (existing behavior)
-      const response = await requestBridge(
-        createWorkspaceCreateRequest({
-          local: input.local,
-          ...(input.projectId ? { projectId: input.projectId } : {}),
-          ...(input.ref ? { ref: input.ref } : {}),
-        }),
-      );
+      // Local workspace — create git worktree + write to config
+      const name = input.args?.[0];
+      if (!name) {
+        context.stderr("Usage: lifecycle workspace create <name> --host local [--repo-path <path>] [--ref <branch>]");
+        return 1;
+      }
+
+      const repoPath = resolve(input.repoPath ?? process.cwd());
+      const repoSlug = basename(repoPath).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      const wsSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      const worktreePath = join(homedir(), ".lifecycle", "worktrees", repoSlug, wsSlug);
+      const ref = input.ref ?? name;
+
+      mkdirSync(join(homedir(), ".lifecycle", "worktrees", repoSlug), { recursive: true });
+
+      try {
+        createWorktree(repoPath, worktreePath, ref);
+      } catch (err) {
+        context.stderr(`Failed to create worktree: ${err instanceof Error ? err.message : err}`);
+        return 1;
+      }
+
+      const db = await getLifecycleDb();
+      let repo = await getRepositoryByPath(db, repoPath);
+      if (!repo) {
+        const repoId = await insertRepository(db, { path: repoPath, name: basename(repoPath) });
+        repo = { id: repoId, path: repoPath, name: basename(repoPath), manifest_path: "lifecycle.json", manifest_valid: 0, created_at: "", updated_at: "" };
+      }
+      await insertWorkspace(db, { repositoryId: repo.id, name, sourceRef: ref, worktreePath });
 
       if (input.json) {
-        context.stdout(JSON.stringify(response.result, null, 2));
+        context.stdout(JSON.stringify({ name, host: "local", repoPath, worktreePath, ref }, null, 2));
         return 0;
       }
 
-      context.stdout("Workspace created.");
-      context.stdout("");
-      printWorkspaceSummary(response.result.workspace, context.stdout);
-
+      context.stdout(`Workspace "${name}" created at ${worktreePath}`);
       return 0;
     } catch (error) {
       return failCommand(error, {

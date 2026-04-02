@@ -32,7 +32,8 @@
       "Bash(find /Users/kyle/dev/lifecycle -path */streamdown* -name *.css -not -path */src/*)",
       "Bash(find /Users/kyle/dev/lifecycle -path */@streamdown/code* -name *.js -not -path */.bun/*)",
       "Bash(find /Users/kyle/dev/lifecycle/node_modules/.bun -path *@streamdown/code* -name *.js)",
-      "Bash(find /Users/kyle/dev/lifecycle/node_modules/.bun -path *streamdown@2* -name *.js)"
+      "Bash(find /Users/kyle/dev/lifecycle/node_modules/.bun -path *streamdown@2* -name *.js)",
+      "WebFetch(domain:mitchellh.com)"
     ]
   }
 }

@@ -127,8 +127,42 @@ export -f lifecycle_sync_codex_home
 export -f lifecycle_run_codex
 export -f codex
 
-export PS1='[cloud] \u@\h:\w\$ '
-export PROMPT_COMMAND=''
+# Source synced environment (Claude OAuth tokens, etc.)
+if [ -f "$HOME/.lifecycle-env" ]; then
+  . "$HOME/.lifecycle-env"
+fi
+
+# Personalized prompt: kyle@my-project:/workspace$
+_lc_user="${LIFECYCLE_USER_NAME:-dev}"
+_lc_project="${LIFECYCLE_REPO_NAME:-cloud}"
+export PS1="\[\033[1;32m\]${_lc_user}\[\033[0m\]@\[\033[1;34m\]${_lc_project}\[\033[0m\]:\w\$ "
+
+# ── OSC 133 shell integration ──
+# Emits semantic escape sequences so the TUI can detect command start/end.
+# These flow transparently through tmux and SSH.
+#   A = prompt start (idle)
+#   B = command start (user hit enter)
+#   C = command output start
+#   D = command finished
+_lc_osc133_prompt() {
+  printf '\033]133;D\a\033]133;A\a'
+}
+_lc_osc133_preexec() {
+  printf '\033]133;B\a'
+}
+# PROMPT_COMMAND fires after each command — marks prompt returned.
+export PROMPT_COMMAND='_lc_osc133_prompt'
+# DEBUG trap fires before each command — marks command started.
+# Guard: only fire when a real command is about to run, not PROMPT_COMMAND itself.
+_lc_osc133_debug_guard=0
+trap '
+  if [ "$_lc_osc133_debug_guard" -eq 0 ]; then
+    _lc_osc133_debug_guard=1
+    _lc_osc133_preexec
+  fi
+' DEBUG
+# Reset the guard in PROMPT_COMMAND so the next command triggers preexec again.
+export PROMPT_COMMAND='_lc_osc133_debug_guard=0; _lc_osc133_prompt'
 
 if [ -n "${LIFECYCLE_WORKSPACE_ID:-}" ] && [ -d /workspace ]; then
   cd /workspace || true

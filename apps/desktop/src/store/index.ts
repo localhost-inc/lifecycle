@@ -1,11 +1,11 @@
 export { StoreProvider, useStoreContext } from "@/store/provider";
 export { ReactQueryProvider } from "@/store/react-query-provider";
 export {
-  useProjects,
-  useProject,
+  useRepositories,
+  useRepository,
   useWorkspaces,
   useWorkspace,
-  useWorkspacesByProject,
+  useWorkspacesByRepository,
   useWorkspaceServices,
   useAgentSessions,
   useAgentMessages,

@@ -10,14 +10,14 @@ import { isTauri } from "@tauri-apps/api/core";
 import type {
   LifecycleEvent,
   LifecycleEventKind,
-  ProjectRecord,
+  RepositoryRecord,
   ServiceRecord,
   WorkspaceRecord,
 } from "@lifecycle/contracts";
 import type { SqlDriver } from "@lifecycle/db";
 import { previewUrlForService } from "@lifecycle/environment";
 import {
-  createProjectCollection,
+  createRepositoryCollection,
   createServiceCollection,
   createWorkspaceCollection,
   selectServiceByWorkspaceAndName,
@@ -41,7 +41,7 @@ const ENTITY_EVENT_KINDS: LifecycleEventKind[] = [
 ];
 
 interface StoreCollections {
-  projects: SqlCollection<ProjectRecord>;
+  repositories: SqlCollection<RepositoryRecord>;
   workspaces: SqlCollection<WorkspaceRecord>;
   services: SqlCollection<ServiceRecord>;
   agentMessageRegistry: AgentMessageCollectionRegistry;
@@ -78,7 +78,7 @@ function createCollections(
   agentSessionRegistry: AgentSessionCollectionRegistry,
 ): StoreCollections {
   return {
-    projects: createProjectCollection(driver),
+    repositories: createRepositoryCollection(driver),
     workspaces: createWorkspaceCollection(driver),
     services: createServiceCollection(driver),
     agentMessageRegistry,

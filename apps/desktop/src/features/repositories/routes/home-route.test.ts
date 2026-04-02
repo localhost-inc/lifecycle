@@ -1,0 +1,154 @@
+import { describe, expect, test } from "bun:test";
+import { resolveHomeRouteTarget } from "@/features/repositories/routes/home-route";
+
+function createRepositoryRecord(id: string, name: string, path: string) {
+  return {
+    createdAt: "2026-03-14T00:00:00.000Z",
+    id,
+    manifestPath: `${path}/lifecycle.json`,
+    manifestValid: true,
+    name,
+    path,
+    updatedAt: "2026-03-14T00:00:00.000Z",
+  };
+}
+
+function createWorkspaceRecord(id: string, repositoryId: string) {
+  return {
+    created_at: "2026-03-14T00:00:00.000Z",
+    failure_reason: null,
+    failed_at: null,
+    git_sha: null,
+    id,
+    checkout_type: "root" as const,
+    last_active_at: "2026-03-14T12:00:00.000Z",
+    host: "local" as const,
+    name: "main",
+    repository_id: repositoryId,
+    source_ref: "main",
+    status: "active" as const,
+    updated_at: "2026-03-14T12:00:00.000Z",
+    worktree_path: "/tmp/lifecycle",
+  };
+}
+
+describe("resolveHomeRouteTarget", () => {
+  test("restores the stored full path when the project still exists", () => {
+    expect(
+      resolveHomeRouteTarget(
+        [createRepositoryRecord("project_1", "Lifecycle", "/tmp/lifecycle")],
+        {
+          project_1: [createWorkspaceRecord("workspace_1", "project_1")],
+        },
+        null,
+        null,
+        "/repositories/project_1/workspaces/workspace_1",
+      ),
+    ).toBe("/repositories/project_1/workspaces/workspace_1");
+  });
+
+  test("ignores a stored path whose project no longer exists", () => {
+    expect(
+      resolveHomeRouteTarget(
+        [createRepositoryRecord("project_1", "Lifecycle", "/tmp/lifecycle")],
+        {},
+        null,
+        null,
+        "/repositories/project_99/workspaces/workspace_99",
+      ),
+    ).toBe("/repositories/project_1");
+  });
+
+  test("prefers the last opened workspace when there is no stored path", () => {
+    expect(
+      resolveHomeRouteTarget(
+        [createRepositoryRecord("project_1", "Lifecycle", "/tmp/lifecycle")],
+        {
+          project_1: [createWorkspaceRecord("workspace_1", "project_1")],
+        },
+        "workspace_1",
+        null,
+        null,
+      ),
+    ).toBe("/repositories/project_1/workspaces/workspace_1");
+  });
+
+  test("falls back to the last opened project when there is no remembered workspace", () => {
+    expect(
+      resolveHomeRouteTarget(
+        [
+          createRepositoryRecord("project_1", "Lifecycle", "/tmp/lifecycle"),
+          createRepositoryRecord("project_2", "Docs", "/tmp/docs"),
+        ],
+        {},
+        null,
+        "project_2",
+        null,
+      ),
+    ).toBe("/repositories/project_2");
+  });
+
+  test("prefers the last opened project over an older remembered workspace", () => {
+    expect(
+      resolveHomeRouteTarget(
+        [
+          createRepositoryRecord("project_1", "Lifecycle", "/tmp/lifecycle"),
+          createRepositoryRecord("project_2", "Docs", "/tmp/docs"),
+        ],
+        {
+          project_1: [createWorkspaceRecord("workspace_1", "project_1")],
+        },
+        "workspace_1",
+        "project_2",
+        null,
+      ),
+    ).toBe("/repositories/project_2");
+  });
+
+  test("falls back to the first project when there is no remembered workspace", () => {
+    expect(
+      resolveHomeRouteTarget(
+        [
+          createRepositoryRecord("project_1", "Lifecycle", "/tmp/lifecycle"),
+          createRepositoryRecord("project_2", "Docs", "/tmp/docs"),
+        ],
+        {},
+        null,
+        null,
+        null,
+      ),
+    ).toBe("/repositories/project_1");
+  });
+
+  test("ignores a stale remembered project id", () => {
+    expect(
+      resolveHomeRouteTarget(
+        [
+          createRepositoryRecord("project_1", "Lifecycle", "/tmp/lifecycle"),
+          createRepositoryRecord("project_2", "Docs", "/tmp/docs"),
+        ],
+        {},
+        null,
+        "project_99",
+        null,
+      ),
+    ).toBe("/repositories/project_1");
+  });
+
+  test("stored path takes priority over last project and workspace ids", () => {
+    expect(
+      resolveHomeRouteTarget(
+        [
+          createRepositoryRecord("project_1", "Lifecycle", "/tmp/lifecycle"),
+          createRepositoryRecord("project_2", "Docs", "/tmp/docs"),
+        ],
+        {
+          project_1: [createWorkspaceRecord("workspace_1", "project_1")],
+        },
+        "workspace_1",
+        "project_2",
+        "/repositories/project_1/workspaces/workspace_1",
+      ),
+    ).toBe("/repositories/project_1/workspaces/workspace_1");
+  });
+});

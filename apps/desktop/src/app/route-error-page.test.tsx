@@ -22,7 +22,7 @@ describe("RouteErrorSurface", () => {
         children: createElement(RouteErrorSurface, {
           homeHref: "/",
           onReload: () => {},
-          pathLabel: "/projects/demo/workspaces/workspace_1",
+          pathLabel: "/repositories/demo/workspaces/workspace_1",
           summary: summarizeRouteError(new Error("Render pipeline stalled.")),
         }),
         storageKey: "test.theme",

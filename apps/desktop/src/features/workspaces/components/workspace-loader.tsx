@@ -4,7 +4,7 @@ import type { EnvironmentClient } from "@lifecycle/environment";
 import { useEnvironmentClientRegistry } from "@lifecycle/environment/react";
 import {
   getManifestFingerprint,
-  type ProjectRecord,
+  type RepositoryRecord,
   type WorkspaceRecord,
 } from "@lifecycle/contracts";
 import type { WorkspaceClient } from "@lifecycle/workspace";
@@ -24,7 +24,7 @@ import { WorkspaceShell } from "./workspace-shell";
 
 interface WorkspaceLoaderProps {
   onCloseTab?: () => void;
-  project: ProjectRecord;
+  repository: RepositoryRecord;
   workspaceId: string;
 }
 
@@ -39,7 +39,7 @@ function LoadedWorkspaceRoute({
   agentClient,
   environmentClient,
   onCloseTab,
-  project,
+  repository,
   workspace,
   workspaceClient,
   workspaceId,
@@ -72,15 +72,15 @@ function LoadedWorkspaceRoute({
     setEnsuringWorkspace(true);
 
     void (async () => {
-      const manifestStatus = await workspaceClient.readManifest(project.path);
+      const manifestStatus = await workspaceClient.readManifest(repository.path);
       const manifestFingerprint =
         manifestStatus.state === "valid"
           ? getManifestFingerprint(manifestStatus.result.config)
           : null;
-      const baseRef = await workspaceClient.getGitCurrentBranch(project.path);
+      const baseRef = await workspaceClient.getGitCurrentBranch(repository.path);
       const ensuredWorkspace = await workspaceClient.ensureWorkspace({
         workspace,
-        projectPath: project.path,
+        projectPath: repository.path,
         baseRef,
         worktreeRoot,
         manifestFingerprint,
@@ -115,7 +115,7 @@ function LoadedWorkspaceRoute({
     return () => {
       cancelled = true;
     };
-  }, [collections, driver, project, workspace, workspaceClient, worktreeRoot]);
+  }, [collections, driver, repository, workspace, workspaceClient, worktreeRoot]);
 
   useEffect(() => {
     if (readyMeasuredRef.current || !workspace || manifestQuery.status !== "success") {
@@ -177,7 +177,7 @@ function LoadedWorkspaceRoute({
       workspaceClient={workspaceClient}
     >
       <div className="flex h-full min-h-0 flex-1 flex-col" data-slot="workspace-shell">
-        <WorkspaceNavBar activeWorkspaceId={workspaceId} projectName={project.name} />
+        <WorkspaceNavBar activeWorkspaceId={workspaceId} repositoryName={repository.name} />
         <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
           <WorkspaceShell
             manifestStatus={manifestQuery.data ?? null}
@@ -190,7 +190,7 @@ function LoadedWorkspaceRoute({
   );
 }
 
-export function WorkspaceLoader({ onCloseTab, project, workspaceId }: WorkspaceLoaderProps) {
+export function WorkspaceLoader({ onCloseTab, repository, workspaceId }: WorkspaceLoaderProps) {
   const workspace = useWorkspace(workspaceId) ?? null;
   const workspaceClientRegistry = useWorkspaceClientRegistry();
   const environmentClientRegistry = useEnvironmentClientRegistry();
@@ -213,7 +213,7 @@ export function WorkspaceLoader({ onCloseTab, project, workspaceId }: WorkspaceL
       agentClient={agentClient}
       environmentClient={environmentClient}
       onCloseTab={onCloseTab}
-      project={project}
+      repository={repository}
       workspace={workspace}
       workspaceClient={workspaceClient}
       workspaceId={workspaceId}

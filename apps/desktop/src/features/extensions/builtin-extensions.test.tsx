@@ -8,7 +8,7 @@ import {
 
 const baseWorkspace: WorkspaceRecord = {
   id: "workspace_1",
-  project_id: "project_1",
+  repository_id: "project_1",
   name: "Workspace",
   checkout_type: "worktree",
   source_ref: "lifecycle/workspace",

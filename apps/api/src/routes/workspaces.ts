@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or } from "drizzle-orm";
 import { z } from "zod";
 import type { Env } from "../types";
 import {
@@ -7,6 +7,8 @@ import {
   repository,
   organizationMembership,
   organizationCloudAccount,
+  user,
+  userEnvironment,
 } from "../db/schema";
 import { badRequest, notFound, forbidden } from "../errors";
 import { zValidator } from "@hono/zod-validator";
@@ -20,11 +22,27 @@ import {
   CLOUD_WORKTREE_PATH,
 } from "../workspace-runtime";
 
-async function requireWorkspaceAccess(db: Db, userId: string, workspaceId: string) {
-  const rows = await db.select().from(workspace).where(eq(workspace.id, workspaceId)).limit(1);
+/**
+ * Generate a URL-safe slug from a git ref or workspace name.
+ * e.g. "feat/auth-flow" → "feat-auth-flow", "My Feature" → "my-feature"
+ */
+export function toSlug(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+async function requireWorkspaceAccess(db: Db, userId: string, idOrSlug: string) {
+  // Resolve by UUID or slug.
+  const rows = await db
+    .select()
+    .from(workspace)
+    .where(or(eq(workspace.id, idOrSlug), eq(workspace.slug, idOrSlug)))
+    .limit(1);
   const ws = rows[0];
   if (!ws) {
-    throw notFound("workspace_not_found", `Workspace ${workspaceId} not found.`);
+    throw notFound("workspace_not_found", `Workspace "${idOrSlug}" not found.`);
   }
 
   const memberships = await db
@@ -205,12 +223,14 @@ export const workspaces = new Hono<Env>()
 
       const sourceRef = body.sourceRef ?? repo.defaultBranch;
       const id = crypto.randomUUID();
+      const slug = toSlug(body.sourceRef ?? body.name);
 
       await db.insert(workspace).values({
         id,
         organizationId: orgId,
         repositoryId: repo.id,
         name: body.name,
+        slug,
         host: "cloud",
         sourceRef,
         status: "provisioning",
@@ -245,6 +265,10 @@ export const workspaces = new Hono<Env>()
               volume = await daytona.volume.get(volumeName, true);
             }
 
+            // Look up the user's display name for shell personalization.
+            const userRows = await db.select().from(user).where(eq(user.id, userId)).limit(1);
+            const userName = userRows[0]?.displayName?.split(" ")[0]?.toLowerCase() ?? "dev";
+
             console.log(`[workspace:${id}] creating daytona sandbox (volume: ${volumeName})`);
             const sandbox = await daytona.create({
               ...(env.DAYTONA_SNAPSHOT ? { snapshot: env.DAYTONA_SNAPSHOT } : {}),
@@ -252,6 +276,7 @@ export const workspaces = new Hono<Env>()
                 LIFECYCLE_WORKSPACE_ID: id,
                 LIFECYCLE_REPO_OWNER: repo.owner,
                 LIFECYCLE_REPO_NAME: repo.name,
+                LIFECYCLE_USER_NAME: userName,
                 HOME: CLOUD_HOME_PATH,
               },
               volumes: [{ volumeId: volume.id, mountPath: CLOUD_HOME_PATH }],
@@ -300,6 +325,7 @@ export const workspaces = new Hono<Env>()
       return c.json(
         {
           id,
+          slug,
           organizationId: orgId,
           repositoryId: repo.id,
           name: body.name,

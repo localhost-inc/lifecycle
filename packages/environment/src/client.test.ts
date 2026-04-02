@@ -6,7 +6,7 @@ describe("createStartEnvironmentInput", () => {
   test("derives environment start input from a workspace record and services", () => {
     const workspace: WorkspaceRecord = {
       id: "workspace_1",
-      project_id: "project_1",
+      repository_id: "project_1",
       name: "frost-beacon",
       checkout_type: "worktree",
       source_ref: "lifecycle/frost-beacon",

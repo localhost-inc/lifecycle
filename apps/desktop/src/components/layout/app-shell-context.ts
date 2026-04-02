@@ -1,16 +1,16 @@
-import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
-import type { ProjectCatalog } from "@/features/projects/hooks";
-import type { ShellContext } from "@/features/projects/lib/shell-context";
+import type { RepositoryRecord, WorkspaceRecord } from "@lifecycle/contracts";
+import type { RepositoryCatalog } from "@/features/repositories/hooks";
+import type { ShellContext } from "@/features/repositories/lib/shell-context";
 import type { WorkspaceCreateMode } from "@/features/workspaces/types";
 
 export interface AppShellOutletContext {
   activeShellContext: ShellContext;
-  projectCatalog: ProjectCatalog | undefined;
-  projects: ProjectRecord[];
-  workspacesByProjectId: Record<string, WorkspaceRecord[]>;
-  onCreateWorkspace: (projectId: string, mode: WorkspaceCreateMode) => Promise<void>;
+  repositoryCatalog: RepositoryCatalog | undefined;
+  repositories: RepositoryRecord[];
+  workspacesByRepositoryId: Record<string, WorkspaceRecord[]>;
+  onCreateWorkspace: (repositoryId: string, mode: WorkspaceCreateMode) => Promise<void>;
   onArchiveWorkspace: (workspace: WorkspaceRecord) => Promise<void>;
   onOpenSettings: () => void;
   onOpenWorkspace: (workspace: WorkspaceRecord) => void;
-  onRemoveProject: (projectId: string) => Promise<void>;
+  onRemoveRepository: (repositoryId: string) => Promise<void>;
 }

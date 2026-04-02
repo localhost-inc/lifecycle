@@ -27,6 +27,10 @@
     "./types": {
       "types": "./src/types.ts",
       "default": "./src/types.ts"
+    },
+    "./queries": {
+      "types": "./src/queries/index.ts",
+      "default": "./src/queries/index.ts"
     }
   },
   "scripts": {

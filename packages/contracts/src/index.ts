@@ -146,7 +146,7 @@ export type {
 } from "./git";
 export type { FieldError, LifecycleConfig, ManifestParseResult } from "./manifest";
 export { getManifestFingerprint, LifecycleConfigSchema, parseManifest } from "./manifest";
-export type { ProjectRecord } from "./project";
+export type { RepositoryRecord } from "./repository";
 export { WORKSPACE_MAX_TEXT_FILE_BYTES } from "./workspace";
 export type {
   ServiceStatus,

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, type ReactNode } from "react";
-import type { ProjectRecord, WorkspaceRecord } from "@lifecycle/contracts";
+import type { RepositoryRecord, WorkspaceRecord } from "@lifecycle/contracts";
 import {
   CommandPaletteContext,
   type CommandPaletteContextValue,
@@ -11,14 +11,14 @@ import type { CommandPaletteMode } from "@/features/command-palette/types";
 
 interface CommandPaletteProviderProps {
   children: ReactNode;
-  projects: ProjectRecord[];
-  workspacesByProjectId: Record<string, WorkspaceRecord[]>;
+  repositories: RepositoryRecord[];
+  workspacesByRepositoryId: Record<string, WorkspaceRecord[]>;
 }
 
 export function CommandPaletteProvider({
   children,
-  projects,
-  workspacesByProjectId,
+  repositories,
+  workspacesByRepositoryId,
 }: CommandPaletteProviderProps) {
   const [state, setState] = useState<{ isOpen: boolean; mode: CommandPaletteMode }>({
     isOpen: false,
@@ -54,8 +54,8 @@ export function CommandPaletteProvider({
   );
   const commands = useCommandPaletteCommands({
     onOpenExplorer: explorer.isAvailable ? () => open("explorer") : undefined,
-    projects,
-    workspacesByProjectId,
+    repositories,
+    workspacesByRepositoryId,
   });
 
   const value = useMemo<CommandPaletteContextValue>(

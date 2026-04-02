@@ -2,7 +2,7 @@ import { defineCommand } from "@lifecycle/cmd";
 import { z } from "zod";
 
 import { createTaskDependencyRemoveRequest, requestBridge } from "../../../bridge";
-import { failCommand, jsonFlag, projectIdFlag } from "../../_shared";
+import { failCommand, jsonFlag, repositoryIdFlag } from "../../_shared";
 
 export default defineCommand({
   description: "Remove a dependency between tasks.",
@@ -10,7 +10,7 @@ export default defineCommand({
     json: jsonFlag,
     taskId: z.string().describe("Task to remove the dependency from"),
     dependsOn: z.string().describe("Dependency to remove"),
-    projectId: projectIdFlag,
+    repositoryId: repositoryIdFlag,
   }),
   run: async (input, context) => {
     try {
@@ -18,7 +18,7 @@ export default defineCommand({
         createTaskDependencyRemoveRequest({
           taskId: input.taskId,
           dependsOnTaskId: input.dependsOn,
-          projectId: input.projectId ?? "",
+          repositoryId: input.repositoryId ?? "",
         }),
       );
 

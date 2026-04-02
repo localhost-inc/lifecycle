@@ -20,7 +20,7 @@ import {
 import { useWorkspaceOpenRequests } from "@/features/workspaces/state/workspace-open-requests";
 import { createFileEditorOpenInput } from "@/features/workspaces/canvas/workspace-canvas-requests";
 import type { CommandPaletteCommand } from "@/features/command-palette/types";
-import { useWorkspacesByProject } from "@/store";
+import { useWorkspacesByRepository } from "@/store";
 
 interface UseCommandPaletteExplorerResult {
   error: unknown;
@@ -32,7 +32,7 @@ interface UseCommandPaletteExplorerResult {
 export function useCommandPaletteExplorer(): UseCommandPaletteExplorerResult {
   const { workspaceId } = useParams();
   const { openTab } = useWorkspaceOpenRequests();
-  const workspacesByProject = useWorkspacesByProject();
+  const workspacesByProject = useWorkspacesByRepository();
   const currentWorkspace = useMemo(
     () =>
       workspaceId

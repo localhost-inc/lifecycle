@@ -2,17 +2,17 @@ export { createSqlCollection, type SqlCollection, type SqlCollectionUtils } from
 export type { Collection } from "@tanstack/db";
 
 export {
-  createProjectCollection,
-  selectAllProjects,
-  selectProjectById,
-} from "./collections/projects";
+  createRepositoryCollection,
+  selectAllRepositories,
+  selectRepositoryById,
+} from "./collections/repositories";
 
 export {
   createWorkspaceCollection,
   selectAllWorkspaces,
   selectWorkspaceById,
-  selectWorkspacesByProject,
-  groupWorkspacesByProject,
+  selectWorkspacesByRepository,
+  groupWorkspacesByRepository,
 } from "./collections/workspaces";
 
 export {
@@ -44,10 +44,10 @@ export {
   type AgentMessageCollectionRegistry,
 } from "./collections/agent-messages";
 
-export { selectPlansByProject, selectPlanById } from "./collections/plans";
+export { selectPlansByRepository, selectPlanById } from "./collections/plans";
 
 export {
-  selectTasksByProject,
+  selectTasksByRepository,
   selectTasksByPlan,
   selectTaskDependencies,
   selectReadyTasks,

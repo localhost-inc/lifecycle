@@ -5,7 +5,7 @@ import { workspaceHostLabel } from "./workspace-host-label";
 function workspace(overrides: Partial<WorkspaceRecord> = {}): WorkspaceRecord {
   return {
     id: "ws_12345678",
-    project_id: "project_1",
+    repository_id: "project_1",
     name: "Workspace 1",
     checkout_type: "worktree",
     source_ref: "lifecycle/workspace-1-ws123456",
