@@ -1,27 +1,25 @@
 # Milestones
 
-This directory contains the active milestone contracts for Lifecycle.
+This directory contains active milestone contracts for Lifecycle.
+
+Current execution focus: CLI + TUI reliability, control plane (CF Workers + DO + D1), sandbox provider infrastructure, and OpenCode integration.
 
 ## Active Milestones
 
-1. [M4: Workspace Environments](./4-workspace-environments.md) — local workspace environment lifecycle, preview routing, mutation locking, and terminal/service separation
+None currently active. The next milestone will be cut from the active plans when a workstream reaches delivery readiness.
 
 ## Planned Workstreams
 
-Future delivery streams that are specified but not yet active live in [docs/plans](../plans):
+Future delivery streams live in [docs/plans](../plans):
 
-1. local CLI
-2. cloud workspaces
-3. cloud hardening
-4. first-party harness
+1. Local CLI — command contract and workspace operations
+2. Kin Cloud V1 — auth, orgs, cloud workspaces, shell attach, PR workflow
+3. Cloud hardening — sleep/wake, TTL, quotas
 
-## Archive Boundary
+## Architectural Direction
 
-Historical milestone specs have been moved to [docs/archive/milestones](../archive/milestones):
+See [docs/reference/architecture.md](../reference/architecture.md).
 
-1. M0 monorepo bootstrap
-2. M1 desktop shell
-3. M2 local workspaces
-4. M3 terminal runtime
+## Archive
 
-Use the archive for historical context only. Durable contracts should live in `docs/reference/*`, and future work that is not active yet should live in `docs/plans/*`.
+Historical milestone specs and superseded docs live in [docs/archive/](../archive/).

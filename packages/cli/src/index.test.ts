@@ -808,7 +808,7 @@ describe("lifecycle cli", () => {
           timeout_seconds: 300,
         },
       ]);
-      expect(parsed.config.environment).toMatchObject({
+      expect(parsed.config.stack).toMatchObject({
         api: {
           command: "bun run dev",
           cwd: "apps/api",

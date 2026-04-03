@@ -1,8 +1,9 @@
-import { spawnSync } from "node:child_process";
 import { basename } from "node:path";
+import type { WorkspaceRecord } from "@lifecycle/contracts";
 
 import { createWorkspaceStatusRequest, requestBridge } from "./bridge";
 import { createClient } from "./rpc-client";
+import { getWorkspaceClientRegistry } from "./workspace-registry";
 
 const BRIDGE_ENV = "LIFECYCLE_BRIDGE_SOCKET";
 const WORKSPACE_ID_ENV = "LIFECYCLE_WORKSPACE_ID";
@@ -18,7 +19,7 @@ type ServiceSummary = {
   status: string;
 };
 
-type WorkspaceScope = {
+export type WorkspaceScope = {
   binding: WorkspaceBinding;
   workspace_id: string | null;
   workspace_name: string;
@@ -45,6 +46,7 @@ type ShellRuntime = {
   launch_error: string | null;
   persistent: boolean;
   session_name: string | null;
+  prepare?: ShellLaunchSpec | null;
   spec: ShellLaunchSpec | null;
 };
 
@@ -73,7 +75,7 @@ export async function resolveTuiSession(input: {
     : resolveAdHocWorkspace(cwdHint);
 
   return {
-    shell: buildShellRuntime(workspace),
+    shell: await buildShellRuntime(workspace),
     workspace,
   };
 }
@@ -185,107 +187,57 @@ function resolveAdHocWorkspace(cwd: string): WorkspaceScope {
   };
 }
 
-function buildShellRuntime(workspace: WorkspaceScope): ShellRuntime {
+async function buildShellRuntime(workspace: WorkspaceScope): Promise<ShellRuntime> {
   if (workspace.resolution_error) {
     return {
       backend_label: "unavailable",
       launch_error: workspace.resolution_error,
       persistent: false,
       session_name: null,
+      prepare: null,
       spec: null,
     };
   }
 
-  const sessionName = buildTmuxSessionName(workspace);
+  const record = toWorkspaceRecord(workspace);
+  if (!record) {
+    return {
+      backend_label: "unknown shell",
+      launch_error:
+        "Lifecycle could not resolve a supported shell launch path for this workspace host.",
+      persistent: false,
+      session_name: null,
+      prepare: null,
+      spec: null,
+    };
+  }
 
-  switch (workspace.host) {
-    case "local":
-      if (!commandAvailable("tmux")) {
-        return {
-          backend_label: "local tmux",
-          launch_error:
-            "tmux is required for the Lifecycle TUI local shell. Install tmux or launch from an environment where tmux is available.",
-          persistent: false,
-          session_name: null,
-          spec: null,
-        };
-      }
-      if (!workspace.cwd) {
-        return {
-          backend_label: "local tmux",
-          launch_error: "Lifecycle could not resolve a local working directory for this TUI session.",
-          persistent: false,
-          session_name: null,
-          spec: null,
-        };
-      }
-      return {
-        backend_label: "local tmux",
-        launch_error: null,
-        persistent: true,
-        session_name: sessionName,
-        spec: {
-          program: "tmux",
-          args: ["new-session", "-A", "-s", sessionName, "-c", workspace.cwd],
-          cwd: workspace.cwd,
-          env: [["TERM", "xterm-256color"]],
-        },
-      };
-    case "cloud":
-      if (!workspace.workspace_id) {
-        return {
-          backend_label: "cloud tmux",
-          launch_error: "Cloud TUI sessions require a bound workspace id.",
-          persistent: false,
-          session_name: null,
-          spec: null,
-        };
-      }
-      return {
-        backend_label: "cloud tmux",
-        launch_error: null,
-        persistent: true,
-        session_name: sessionName,
-        spec: {
-          program: "lifecycle",
-          args: [
-            "workspace",
-            "shell",
-            workspace.workspace_id,
-            "--tmux-session",
-            sessionName,
-          ],
-          cwd: null,
-          env: [],
-        },
-      };
-    case "docker":
-      return {
-        backend_label: "docker shell",
-        launch_error:
-          "Docker workspace shells are not wired into an authoritative TUI attach path yet.",
-        persistent: false,
-        session_name: null,
-        spec: null,
-      };
-    case "remote":
-      return {
-        backend_label: "remote shell",
-        launch_error:
-          "Remote workspace shells are reserved in the contract but not implemented in the TUI yet.",
-        persistent: false,
-        session_name: null,
-        spec: null,
-      };
-    default:
-      return {
-        backend_label: "unknown shell",
-        launch_error:
-          "Lifecycle could not resolve a supported shell launch path for this workspace host.",
-        persistent: false,
-        session_name: null,
-        spec: null,
-      };
+  try {
+    const runtime = await getWorkspaceClientRegistry().resolve(record.host).resolveShellRuntime(
+      record,
+      {
+        cwd: workspace.cwd ?? workspace.worktree_path,
+        sessionName: buildTmuxSessionName(workspace),
+      },
+    );
+
+    return {
+      backend_label: runtime.backendLabel,
+      launch_error: runtime.launchError,
+      persistent: runtime.persistent,
+      session_name: runtime.sessionName,
+      prepare: runtime.prepare,
+      spec: runtime.spec,
+    };
+  } catch (error) {
+    return {
+      backend_label: `${workspace.host} shell`,
+      launch_error: error instanceof Error ? error.message : String(error),
+      persistent: false,
+      session_name: null,
+      prepare: null,
+      spec: null,
+    };
   }
 }
 
@@ -305,19 +257,90 @@ async function readCloudShell(workspaceId: string): Promise<{ cwd?: string | nul
   }
 }
 
-function buildTmuxSessionName(workspace: WorkspaceScope): string {
-  const wsSlug =
-    slugify(
-      nonEmpty(workspace.workspace_name) ??
-        nonEmpty(workspace.cwd ? basename(workspace.cwd) : null) ??
-        "workspace",
-    ).slice(0, 30) || "workspace";
+export function buildTmuxSessionName(workspace: WorkspaceScope): string {
+  const hostSlug = truncateSlug(slugify(workspace.host), 12);
 
-  const repoSlug = nonEmpty(workspace.repo_name)
-    ? slugify(workspace.repo_name!).slice(0, 30)
-    : null;
+  const identitySlug =
+    nonEmpty(workspace.workspace_id)
+      ? slugify(workspace.workspace_id!)
+      : slugify(
+          nonEmpty(workspace.workspace_name) ??
+            nonEmpty(workspace.cwd ? basename(workspace.cwd) : null) ??
+            "workspace",
+        );
 
-  return repoSlug ? `${repoSlug}-${wsSlug}` : wsSlug;
+  const readableSlug = nonEmpty(workspace.repo_name)
+    ? (() => {
+        const repo = slugify(workspace.repo_name!);
+        const workspaceName = truncateSlug(slugify(workspace.workspace_name), 18);
+        return workspaceName
+          ? truncateSlug(`${repo}-${workspaceName}`, 28)
+          : truncateSlug(repo, 18);
+      })()
+    : (() => {
+        const workspaceName = truncateSlug(slugify(workspace.workspace_name), 28);
+        return workspaceName || null;
+      })();
+
+  if (readableSlug) {
+    return `lc-${hostSlug}-${truncateSlug(identitySlug, 24)}-${readableSlug}`;
+  }
+
+  return `lc-${hostSlug}-${truncateSlug(identitySlug, 40)}`;
+}
+
+function toWorkspaceRecord(workspace: WorkspaceScope): WorkspaceRecord | null {
+  const cwd = workspace.cwd ?? workspace.worktree_path ?? null;
+
+  switch (workspace.host) {
+    case "cloud":
+      return workspace.workspace_id
+        ? stubWorkspaceRecord("cloud", workspace.workspace_id, workspace.workspace_name, cwd)
+        : null;
+    case "docker":
+      return workspace.workspace_id
+        ? stubWorkspaceRecord("docker", workspace.workspace_id, workspace.workspace_name, cwd)
+        : null;
+    case "local":
+      return stubWorkspaceRecord(
+        "local",
+        workspace.workspace_id ?? "adhoc-local",
+        workspace.workspace_name,
+        cwd,
+      );
+    case "remote":
+      return workspace.workspace_id
+        ? stubWorkspaceRecord("remote", workspace.workspace_id, workspace.workspace_name, cwd)
+        : null;
+    default:
+      return null;
+  }
+}
+
+function stubWorkspaceRecord(
+  host: "cloud" | "docker" | "local" | "remote",
+  id: string,
+  name: string,
+  worktreePath: string | null,
+): WorkspaceRecord {
+  return {
+    id,
+    repository_id: "tui",
+    name,
+    checkout_type: "worktree",
+    source_ref: "tui",
+    git_sha: null,
+    worktree_path: worktreePath,
+    host,
+    manifest_fingerprint: null,
+    created_at: "",
+    updated_at: "",
+    last_active_at: "",
+    prepared_at: null,
+    status: "active",
+    failure_reason: null,
+    failed_at: null,
+  };
 }
 
 function normalizeHost(host: string): WorkspaceHost {
@@ -348,7 +371,6 @@ function slugify(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-function commandAvailable(program: string): boolean {
-  const result = spawnSync(program, ["-V"], { stdio: "ignore" });
-  return result.status === 0;
+function truncateSlug(value: string, maxLength: number): string {
+  return value.slice(0, maxLength);
 }

@@ -15,7 +15,7 @@ import type {
   WorkspaceRecord,
 } from "@lifecycle/contracts";
 import type { SqlDriver } from "@lifecycle/db";
-import { previewUrlForService } from "@lifecycle/environment";
+import { previewUrlForService } from "@lifecycle/stack";
 import {
   createRepositoryCollection,
   createServiceCollection,

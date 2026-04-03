@@ -45,6 +45,9 @@ function normalizeStatementParams(
 export async function createTursoDb(config: TursoDbConfig): Promise<TursoDb> {
   const database = await connect(config);
 
+  // Enable WAL mode so concurrent readers don't block each other.
+  await database.exec("PRAGMA journal_mode=WAL");
+
   async function executeStatement(statement: SqlStatement): Promise<{ rowsAffected: number }> {
     const normalized = normalizeStatementParams(statement.sql, statement.params);
     if (normalized.params.length === 0) {

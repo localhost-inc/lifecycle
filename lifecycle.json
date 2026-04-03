@@ -10,9 +10,9 @@
     ]
   },
 
-  // Explicit long-lived app services. Lifecycle assigns the effective port at
-  // runtime, and the app entrypoints read it from PORT/LIFECYCLE_SERVICE_* env.
-  "environment": {
+  // Service graph. Lifecycle assigns the effective port at runtime, and the
+  // app entrypoints read it from PORT/LIFECYCLE_SERVICE_* env.
+  "stack": {
     "api": {
       "kind": "service",
       "runtime": "process",

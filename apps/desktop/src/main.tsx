@@ -7,8 +7,8 @@ import { createAgentSessionHistoryObserver } from "@lifecycle/agents/internal/se
 import { createLocalAgentWorker } from "@lifecycle/agents/internal/local";
 import { reattachActiveAgentSessions } from "@lifecycle/agents/internal/session-restore";
 import { recordAgentSessionEvent } from "@lifecycle/agents/internal/session-store";
-import { createEnvironmentClientRegistry } from "@lifecycle/environment";
-import { LocalEnvironmentClient } from "@lifecycle/environment/internal/local";
+import { createStackClientRegistry } from "@lifecycle/stack";
+import { LocalStackClient } from "@lifecycle/stack/internal/local";
 import {
   createAgentMessageCollectionRegistry,
   createAgentSessionCollectionRegistry,
@@ -63,12 +63,10 @@ const agentMessageRegistry =
   hotData?.agentMessageRegistry ?? createAgentMessageCollectionRegistry();
 const agentSessionRegistry =
   hotData?.agentSessionRegistry ?? createAgentSessionCollectionRegistry();
-const localEnvironmentClient = new LocalEnvironmentClient({
-  invoke: (command, args) => invokeTauri(command, args),
-});
-const environmentClientRegistry = createEnvironmentClientRegistry({
-  docker: localEnvironmentClient,
-  local: localEnvironmentClient,
+const localStackClient = new LocalStackClient();
+const stackClientRegistry = createStackClientRegistry({
+  docker: localStackClient,
+  local: localStackClient,
 });
 const localAgentWorker =
   hotData?.localAgentWorker ??
@@ -199,7 +197,7 @@ root.render(
     agentClientRegistry={agentClientRegistry}
     agentMessageRegistry={agentMessageRegistry}
     agentSessionRegistry={agentSessionRegistry}
-    environmentClientRegistry={environmentClientRegistry}
+    stackClientRegistry={stackClientRegistry}
     workspaceClientRegistry={workspaceClientRegistry}
   />,
 );

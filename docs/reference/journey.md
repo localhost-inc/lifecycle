@@ -1,86 +1,95 @@
-# Lifecycle Journey: Local to Remote to Cloud
+# Lifecycle Journey
 
 This document tells the canonical product story for Lifecycle.
 
-It explains how Lifecycle should feel as a developer moves from solo local work, to remote collaboration, to an organization-visible cloud workspace. For exact command contracts and delivery scope, see [Local CLI](../plans/local-cli.md) and [Cloud Workspaces](../plans/cloud-workspaces.md).
+It explains how Lifecycle should feel as a developer moves from solo local work, to interactive agent-assisted development, to autonomous background agents and team-visible cloud workspaces. For system design see [Architecture](./architecture.md). For exact command contracts see [Local CLI](../plans/local-cli.md) and [Kin Cloud V1](../plans/kin-cloud-v1.md).
 
-Status note: the checked-in CLI is still converging on the canonical noun model used in this document. Today `lifecycle repo init` and `lifecycle prepare` are the shipped precursors to `lifecycle project init` and `lifecycle workspace prepare`.
+## One System, Two Modes
 
-## One Story, Three Modes
+Lifecycle is one system with two access patterns over the same workspace contract:
 
-Lifecycle should feel like one system with three progressively richer modes:
+1. **Interactive** — a human in a terminal, optionally running an agent
+2. **Background** — an agent working autonomously, triggered by an API call or integration
 
-1. local development
-2. remote collaboration
-3. cloud workspaces
-
-The key rule is continuity.
-
-`lifecycle.json` still describes the project environment. The CLI noun model stays `project -> workspace -> stack -> service`, with `context` as the aggregate read. Desktop surfaces remain additive. The product should feel like it grows with the team instead of forcing a workflow reset at each step.
+The key rule is continuity. `lifecycle.json` describes the project. The CLI noun model stays `project → workspace → stack → service`. The workspace environment is identical. The difference is who is driving — a person or a prompt.
 
 ## Act I: Local Development
 
-Lifecycle should first meet developers where they already work: in a checkout, in a terminal, and without asking for sign-in before it has earned the right to exist.
+Lifecycle meets developers where they already work: in a checkout, in a terminal, without asking for sign-in.
 
-A developer clones a project, installs the small `lifecycle` binary, adds or generates `lifecycle.json`, and starts working from the checkout they already have open. `lifecycle project init` gives the project a contract. `lifecycle workspace create` and `lifecycle workspace prepare` materialize a working instance. `lifecycle stack run`, `lifecycle stack status`, and `lifecycle service ...` make the stack boring to operate.
+A developer clones a project, installs the `lifecycle` CLI, adds or generates `lifecycle.json`, and starts working. `lifecycle workspace create` materializes a working instance. `lifecycle workspace prepare` bootstraps the environment. `lifecycle stack run` starts the services.
 
-Nothing about this loop should require cloud provisioning, account setup, or a running desktop app. The workspace is private to the machine. The desktop app can attach later for richer terminal, browser, or workspace surfaces, but the CLI is the first encounter and the default control surface.
+Nothing about this requires cloud provisioning, account setup, or a running desktop app. The workspace is private to the machine. The CLI is the first encounter and the default control surface.
 
-This is the fastest, most local, least ceremonial version of Lifecycle. It is the foundation the rest of the product builds on.
+This is the fastest, most local, least ceremonial version of Lifecycle.
 
-## Act II: Remote Collaboration
+## Act II: Interactive Agent Work
 
-At some point the work stops being purely personal. Another person or another device needs to see what is happening. A teammate wants to inspect a preview. An agent needs a browser snapshot. Someone wants to attach to a running terminal. This is the remote phase.
+The developer opens the TUI or a terminal session inside a workspace and runs an agent. `opencode`, `claude`, `codex` — whatever tool they prefer. The agent runs inside the same workspace, uses the same filesystem, sees the same running services.
 
-Remote collaboration is about reach, not authority.
+The agent gains workspace awareness through `lifecycle` CLI tools: `lifecycle context` for orientation, `lifecycle stack status` for service health, `lifecycle service info` for ports and previews. These are custom tools in OpenCode or system prompts in other agents. The integration surface is the CLI, not a custom SDK.
 
-The important change is that the workspace can now be seen, inspected, or joined from somewhere else. The important non-change is that the product should not pretend the workspace has become cloud-native just because someone else is looking at it. The local workspace may still be authoritative. The project contract is still the same. The CLI still resolves the same workspace and stack.
+The TUI center panel is a tmux-backed terminal session. Lifecycle manages the workspace and stays invisible. The developer and agent share a shell.
 
-In this phase, Lifecycle layers collaboration surfaces on top of an existing workspace: previews, browser surfaces, snapshots, attach flows, and future remote bridges or tunnels. The developer should not have to remodel the project or migrate their workflow just to let someone else look. Remote is the widening of access around a workspace, not the automatic relocation of the workspace itself.
+This is where Lifecycle starts to feel like infrastructure rather than a tool.
 
-This is where Lifecycle starts to feel collaborative while still respecting local-first authority.
+## Act III: Background Agents
 
-## Act III: Cloud Workspaces
+At some point the work becomes autonomous. A Slack message describes a bug. A Linear issue needs a fix. A cron job runs nightly maintenance. A teammate fires off an agent session through the web UI and walks away.
 
-Eventually the work needs more than remote access. It needs durable team ownership, organization visibility, policy, shareable URLs that survive one developer's machine, and a runtime that does not depend on a laptop staying awake. This is where cloud workspaces begin.
+The control plane receives the prompt, provisions a cloud sandbox, starts `opencode serve` headlessly, and routes the prompt. The agent works inside a full workspace — same `lifecycle.json`, same services, same CLI tools. Events stream back to clients in real time. When the agent finishes, it pushes code and opens a PR.
 
-The transition to cloud should be explicit.
+No human needs to be in the loop. The workspace is a durable cloud runtime. The session state lives in the control plane. Multiple clients can watch or interact with the same session.
 
-The developer signs in, links the project to a repository, and either creates a cloud workspace directly or forks an existing local workspace to cloud. That cloud workspace is a new authoritative runtime at a ref. It is not a magic conversion of every local workspace into cloud authority, and signing in must not silently change where existing local work runs.
+This is where Lifecycle becomes an orchestration platform.
 
-Once in cloud, the product story changes in a useful way. The workspace is visible to the organization. Preview URLs become durable team surfaces. Shared terminals become first-class collaboration. PR creation, activity, and policy all operate against an org-scoped control plane. Local workflow still matters, but cloud becomes the mode for handoff, review, pairing, and durable team execution.
+## Act IV: Cloud Collaboration
+
+Eventually the work needs team ownership. Organization visibility. Durable workspaces that survive a laptop closing. Policy. Automation.
+
+The developer signs in, links the project to a repository, and creates a cloud workspace. That workspace is visible to the organization. Background agents can target it. PRs flow through the control plane. Activity is tracked. Automation triggers fire on events.
+
+The transition to cloud is explicit. Signing in unlocks cloud capabilities but does not change how local workspaces work. Fork-to-cloud is the intentional handoff from private iteration to team-visible work.
 
 ## What Stays Constant
 
 1. The project contract stays in `lifecycle.json`.
-2. The CLI noun model stays `project -> workspace -> stack -> service`, with `context` as the aggregate read.
-3. Desktop surfaces stay optional accelerators over the same contract.
-4. Humans and agents operate on the same underlying workspace facts: stack state, service health, logs, previews, files, and browser surfaces.
+2. The CLI noun model stays `project → workspace → stack → service`, with `context` as the aggregate read.
+3. The workspace environment is identical across hosts.
+4. Agents gain workspace awareness through the `lifecycle` CLI — same tools, interactive or background.
+5. Provider auth (Anthropic key, OpenAI key, etc.) lives inside the workspace, not in the control plane.
+6. The TUI is a tmux-backed shell. It does not wrap or replace the agent experience.
 
 ## What Changes
 
-| Dimension | Local Development | Remote Collaboration | Cloud Workspaces |
-| --- | --- | --- | --- |
-| Authority | local machine | same authoritative workspace as the source mode | cloud control plane plus cloud host |
-| Auth | none required | scoped access may be required depending on the surface | required, org-scoped |
-| Visibility | private to one machine | explicit invite, preview, attach, or shared surface | organization-visible by policy |
-| Primary value | fastest iteration | bring another person or device into the loop | durable team runtime and handoff |
-| Operational dependency | your machine | the authoritative workspace's host | cloud runtime and org services |
+| Dimension | Local Interactive | Background Agent | Cloud Collaboration |
+|---|---|---|---|
+| Who drives | Human in terminal | Prompt via API/integration | Human or agent, org-visible |
+| Authority | Local machine | Control plane + sandbox | Control plane + cloud host |
+| Auth | None required | API key or integration token | WorkOS org-scoped |
+| Visibility | Private to one machine | Session visible to clients | Organization-visible |
+| Agent runtime | `opencode` / `claude` / `codex` in shell | `opencode serve` headless | Either mode |
+| Primary value | Fastest iteration | Autonomous work at scale | Durable team runtime |
 
-## Terminology Note
+## Canonical Examples
 
-In this narrative, `remote collaboration` means access from another person or device.
+### Solo developer, local
 
-It does not automatically mean `workspace.host=remote`, and it does not automatically mean `cloud`. The low-level host contract may still reserve `remote` and `cloud` as distinct placements. This document is about the product story across those phases, not the exact host enum design.
+Clone repo. `lifecycle project init`. `lifecycle workspace create`. `lifecycle stack run`. Open TUI, run `opencode` in the shell. Edit code, test, commit. Done.
 
-## Canonical Example
+### Background agent from Slack
 
-A developer clones a repo on a laptop and gets the stack healthy from the terminal. Later, they need feedback, so they expose a preview and share a remote surface with a teammate or an agent. Nothing about the project contract changes. Later still, the work needs to survive handoff, team review, and PR creation, so they fork the workspace to cloud. The same project contract now backs an org-visible cloud workspace, and the team can collaborate without depending on the original laptop.
+Teammate posts "fix the flaky auth test in lifecycle-api" in Slack. Bot classifies the repo, creates a session. Control plane provisions a cloud sandbox, starts `opencode serve`, sends the prompt. Agent investigates, fixes the test, pushes a branch, opens a PR. Teammate reviews.
+
+### Team cloud workspace
+
+`lifecycle auth login`. `lifecycle workspace create feature --host cloud`. Multiple developers and agents work in the same cloud workspace. PRs flow through the control plane. Automation triggers run nightly. The workspace survives anyone's laptop closing.
 
 ## Relationship to Other Docs
 
-1. [Vision](./vision.md) explains the product direction and V1 boundaries.
-2. [Vocabulary](./vocabulary.md) defines the canonical terms used across the story.
-3. [Workspace](./workspace.md) defines the low-level host and provider contracts.
-4. [Local CLI](../plans/local-cli.md) defines the CLI command model for the local-first path.
-5. [Cloud Workspaces](../plans/cloud-workspaces.md) defines the cloud delivery contract.
+1. [Vision](./vision.md) — product direction and V1 boundaries
+2. [Architecture](./architecture.md) — system design, three tiers, sandbox providers
+3. [Vocabulary](./vocabulary.md) — canonical terms
+4. [TUI](./tui.md) — terminal UI contract, shell attach, tmux model
+5. [Local CLI](../plans/local-cli.md) — CLI command contract
+6. [Kin Cloud V1](../plans/kin-cloud-v1.md) — cloud delivery plan

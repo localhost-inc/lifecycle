@@ -1,12 +1,17 @@
 import { access, readFile, stat, writeFile } from "node:fs/promises";
-import { execFile } from "node:child_process";
+import { execFile, execSync } from "node:child_process";
 import path from "node:path";
 import { defineCommand, defineFlag } from "@lifecycle/cmd";
 import { z } from "zod";
 
 import { BridgeClientError } from "../../errors";
 import { getLifecycleDb } from "@lifecycle/db";
-import { getRepositoryByPath, insertRepository } from "@lifecycle/db/queries";
+import {
+  getRepositoryByPath,
+  insertRepository,
+  insertWorkspace,
+  listWorkspacesByRepository,
+} from "@lifecycle/db/queries";
 import { MANIFEST_FILE_NAME } from "../../manifest";
 import { failCommand, jsonFlag } from "../_shared";
 
@@ -34,6 +39,18 @@ interface ServiceSuggestion {
   command: string;
   cwd?: string;
   name: string;
+}
+
+function detectCurrentBranch(repoPath: string): string {
+  try {
+    return execSync("git symbolic-ref --short HEAD", {
+      cwd: repoPath,
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+  } catch {
+    return "main";
+  }
 }
 
 function createPackageJsonError(filePath: string, error: unknown): BridgeClientError {
@@ -391,11 +408,25 @@ export default defineCommand({
         packageManager = await detectPackageManager(target.repoPath);
       }
 
-      // Always ensure repo is registered in the db
+      // Always ensure repo is registered in the db with a root workspace
       const db = await getLifecycleDb();
-      const existing = await getRepositoryByPath(db, path.resolve(target.repoPath));
-      if (!existing) {
-        await insertRepository(db, { path: path.resolve(target.repoPath), name: path.basename(target.repoPath) });
+      const resolvedRepoPath = path.resolve(target.repoPath);
+      const existing = await getRepositoryByPath(db, resolvedRepoPath);
+      const repositoryId = existing?.id
+        ?? await insertRepository(db, { path: resolvedRepoPath, name: path.basename(target.repoPath) });
+
+      const existingWorkspaces = await listWorkspacesByRepository(db, repositoryId);
+      const hasRoot = existingWorkspaces.some((ws) => ws.checkout_type === "root");
+      if (!hasRoot) {
+        const currentBranch = detectCurrentBranch(resolvedRepoPath);
+        await insertWorkspace(db, {
+          repositoryId,
+          name: currentBranch,
+          sourceRef: currentBranch,
+          worktreePath: resolvedRepoPath,
+          host: "local",
+          checkoutType: "root",
+        });
       }
 
       const result = {

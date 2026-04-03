@@ -12,7 +12,7 @@ import {
   selectWorkspaceServiceLogs,
   type ServiceLogLine,
   type ServiceLogSnapshot,
-} from "@lifecycle/environment";
+} from "@lifecycle/stack";
 
 export const LIFECYCLE_EVENT_NAME = "lifecycle:event";
 

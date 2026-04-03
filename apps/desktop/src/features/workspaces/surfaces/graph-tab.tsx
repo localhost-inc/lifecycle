@@ -126,8 +126,8 @@ function statusDotFill(status: ServiceRecord["status"] | undefined): string {
 
 export function GraphTab({ config, services }: GraphTabProps) {
   const layout = useMemo(() => {
-    if (!config || Object.keys(config.environment).length === 0) return null;
-    return computeLayout(config.environment);
+    if (!config || Object.keys(config.stack).length === 0) return null;
+    return computeLayout(config.stack);
   }, [config]);
 
   if (!layout) {

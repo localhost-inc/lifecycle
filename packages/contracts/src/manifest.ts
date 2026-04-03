@@ -217,7 +217,7 @@ const ServiceNodeSchema = z.union([
 
 export const LifecycleConfigSchema = z.object({
   workspace: WorkspaceSchema,
-  environment: z.record(z.string(), ServiceNodeSchema),
+  stack: z.record(z.string(), ServiceNodeSchema),
 });
 
 export type LifecycleConfig = z.infer<typeof LifecycleConfigSchema>;

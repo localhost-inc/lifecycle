@@ -12,13 +12,14 @@ import {
   type GitStatusResult,
   type WorkspaceRecord,
 } from "@lifecycle/contracts";
-import { execSync } from "node:child_process";
+import { spawnSync as nodeSpawnSync } from "node:child_process";
 import type {
   ArchiveWorkspaceInput,
   EnsureWorkspaceInput,
   ExecCommandResult,
   GitDiffInput,
   OpenInAppId,
+  ResolveWorkspaceShellInput,
   RenameWorkspaceInput,
   SubscribeWorkspaceFileEventsInput,
   WorkspaceFileEventListener,
@@ -27,6 +28,7 @@ import type {
   WorkspaceFileReadResult,
   WorkspaceFileTreeEntry,
   WorkspaceClient,
+  WorkspaceShellRuntime,
   WorkspaceOpenInAppInfo,
 } from "../../workspace";
 import { readManifestFromPath, type FileReader, type ManifestStatus } from "../../manifest";
@@ -36,6 +38,7 @@ import { computeRenameInput } from "../../policy/workspace-rename";
 export interface LocalClientDeps {
   invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
   fileReader?: FileReader;
+  spawnSync?: typeof nodeSpawnSync;
   watchPath?: (
     path: string,
     callback: () => void,
@@ -50,33 +53,116 @@ function requireWorktreePath(workspace: WorkspaceRecord): string {
   return workspace.worktree_path;
 }
 
+function commandAvailable(program: string): boolean {
+  const result = nodeSpawnSync("sh", ["-lc", `command -v ${program} >/dev/null 2>&1`], {
+    stdio: "ignore",
+  });
+  return result.status === 0;
+}
+
 export class LocalWorkspaceClient implements WorkspaceClient {
   private fileReader: FileReader | undefined;
   private invoke: LocalClientDeps["invoke"];
+  private spawnSync: typeof nodeSpawnSync;
   private watchPath: LocalClientDeps["watchPath"];
   constructor(deps: LocalClientDeps) {
     this.fileReader = deps.fileReader;
     this.invoke = deps.invoke;
+    this.spawnSync = deps.spawnSync ?? nodeSpawnSync;
     this.watchPath = deps.watchPath;
   }
 
   async execCommand(workspace: WorkspaceRecord, command: string[]): Promise<ExecCommandResult> {
     const cwd = requireWorktreePath(workspace);
-    try {
-      const stdout = execSync(command.map((s) => JSON.stringify(s)).join(" "), {
-        cwd,
-        encoding: "utf8",
-        stdio: ["pipe", "pipe", "pipe"],
-      });
-      return { stdout, stderr: "", exitCode: 0 };
-    } catch (error: unknown) {
-      const e = error as { stdout?: string; stderr?: string; status?: number };
+    const [program, ...args] = command;
+    if (!program) {
       return {
-        stdout: String(e.stdout ?? ""),
-        stderr: String(e.stderr ?? ""),
-        exitCode: e.status ?? 1,
+        stdout: "",
+        stderr: "Command must include a program.",
+        exitCode: 1,
       };
     }
+
+    const result = this.spawnSync(program, args, {
+      cwd,
+      encoding: "utf8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    if (result.error) {
+      return {
+        stdout: String(result.stdout ?? ""),
+        stderr: result.error.message,
+        exitCode: 1,
+      };
+    }
+
+    return {
+      stdout: String(result.stdout ?? ""),
+      stderr: String(result.stderr ?? ""),
+      exitCode: result.status ?? 1,
+    };
+  }
+
+  async resolveShellRuntime(
+    workspace: WorkspaceRecord,
+    input: ResolveWorkspaceShellInput = {},
+  ): Promise<WorkspaceShellRuntime> {
+    const cwd = input.cwd ?? workspace.worktree_path ?? null;
+    const sessionName = input.sessionName?.trim() || null;
+
+    if (!cwd) {
+      return {
+        backendLabel: sessionName ? "local tmux" : "local shell",
+        launchError: "Lifecycle could not resolve a local working directory for this shell session.",
+        persistent: false,
+        sessionName: null,
+        prepare: null,
+        spec: null,
+      };
+    }
+
+    if (!sessionName) {
+      return {
+        backendLabel: "local shell",
+        launchError: null,
+        persistent: false,
+        sessionName: null,
+        prepare: null,
+        spec: {
+          program: process.env.SHELL || "/bin/bash",
+          args: [],
+          cwd,
+          env: [["TERM", "xterm-256color"]],
+        },
+      };
+    }
+
+    if (!commandAvailable("tmux")) {
+      return {
+        backendLabel: "local tmux",
+        launchError:
+          "tmux is required for the Lifecycle TUI local shell. Install tmux or launch from an environment where tmux is available.",
+        persistent: false,
+        sessionName: null,
+        prepare: null,
+        spec: null,
+      };
+    }
+
+    return {
+      backendLabel: "local tmux",
+      launchError: null,
+      persistent: true,
+      sessionName,
+      prepare: null,
+      spec: {
+        program: "tmux",
+        args: ["new-session", "-A", "-s", sessionName, "-c", cwd],
+        cwd,
+        env: [["TERM", "xterm-256color"]],
+      },
+    };
   }
 
   async readManifest(dirPath: string): Promise<ManifestStatus> {

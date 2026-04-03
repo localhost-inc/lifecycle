@@ -94,8 +94,34 @@ export interface ExecCommandResult {
   exitCode: number;
 }
 
+export interface WorkspaceShellLaunchSpec {
+  program: string;
+  args: string[];
+  cwd: string | null;
+  env: Array<[string, string]>;
+}
+
+export interface ResolveWorkspaceShellInput {
+  cwd?: string | null;
+  sessionName?: string | null;
+  syncEnvironment?: string[];
+}
+
+export interface WorkspaceShellRuntime {
+  backendLabel: string;
+  launchError: string | null;
+  persistent: boolean;
+  sessionName: string | null;
+  prepare: WorkspaceShellLaunchSpec | null;
+  spec: WorkspaceShellLaunchSpec | null;
+}
+
 export interface WorkspaceClient {
   execCommand(workspace: WorkspaceRecord, command: string[]): Promise<ExecCommandResult>;
+  resolveShellRuntime(
+    workspace: WorkspaceRecord,
+    input?: ResolveWorkspaceShellInput,
+  ): Promise<WorkspaceShellRuntime>;
   readManifest(dirPath: string): Promise<ManifestStatus>;
   getGitCurrentBranch(repoPath: string): Promise<string>;
   ensureWorkspace(input: EnsureWorkspaceInput): Promise<WorkspaceRecord>;

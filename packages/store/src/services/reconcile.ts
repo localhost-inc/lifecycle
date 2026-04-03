@@ -16,7 +16,7 @@ function declaredServiceNames(config: LifecycleConfig | null): string[] {
     return [];
   }
 
-  return Object.entries(config.environment)
+  return Object.entries(config.stack)
     .filter(([, node]) => node.kind === "service")
     .map(([name]) => name)
     .sort((left, right) => left.localeCompare(right));

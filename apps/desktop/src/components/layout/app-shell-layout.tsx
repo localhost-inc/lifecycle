@@ -72,7 +72,7 @@ import {
   notifyShellResizeListeners,
   ShellResizeProvider,
 } from "@/components/layout/shell-resize-provider";
-import { computeWorkspaceCreatePolicy } from "@lifecycle/workspace/policy";
+import { autoWorkspaceName, workspaceBranchName } from "@lifecycle/workspace";
 import { selectRepositoryById, selectServicesByWorkspace } from "@lifecycle/store";
 import { waitForDbReady } from "@/lib/db";
 import { useStoreContext, useWorkspacesByRepository } from "@/store";
@@ -211,30 +211,26 @@ export function AppShellLayout() {
           ? getManifestFingerprint(manifestStatus.result.config)
           : null;
       const currentBranch = await workspaceClient.getGitCurrentBranch(repository.path);
-      const policy = computeWorkspaceCreatePolicy({
-        host: input.host,
-        checkoutType: input.checkoutType,
-        repositoryId: repository.id,
-        repositoryPath: repository.path,
-        workspaceName: input.workspaceName,
-        baseRef: currentBranch,
-        currentBranch,
-        manifestJson,
-        manifestFingerprint,
-      });
+
+      const workspaceId = crypto.randomUUID();
+      const checkoutType = input.checkoutType;
+      const isRoot = checkoutType === "root";
+      const branch = currentBranch ?? "main";
+      const name = input.workspaceName?.trim() || (isRoot ? branch : autoWorkspaceName(workspaceId));
+      const sourceRef = isRoot ? branch : workspaceBranchName(name, workspaceId);
 
       const now = new Date().toISOString();
       const transaction = collections.workspaces.insert(
         {
-          id: policy.workspaceId,
-          repository_id: policy.repositoryId,
-          name: policy.name,
-          checkout_type: policy.checkoutType,
-          source_ref: policy.sourceRef,
+          id: workspaceId,
+          repository_id: repository.id,
+          name,
+          checkout_type: checkoutType,
+          source_ref: sourceRef,
           git_sha: null,
           worktree_path: null,
-          host: policy.host,
-          manifest_fingerprint: policy.manifestFingerprint ?? null,
+          host: input.host,
+          manifest_fingerprint: manifestFingerprint,
           created_at: now,
           updated_at: now,
           last_active_at: now,
@@ -245,13 +241,13 @@ export function AppShellLayout() {
         },
         {
           metadata: {
-            nameOrigin: policy.nameOrigin,
-            sourceRefOrigin: policy.sourceRefOrigin,
+            nameOrigin: isRoot || input.workspaceName ? "manual" : "default",
+            sourceRefOrigin: isRoot ? "manual" : "default",
           },
         },
       );
       await transaction.isPersisted.promise;
-      return policy.workspaceId;
+      return workspaceId;
     },
     [collections.workspaces, driver, workspaceClientRegistry],
   );

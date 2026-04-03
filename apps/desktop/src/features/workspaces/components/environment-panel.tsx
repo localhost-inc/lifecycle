@@ -1,5 +1,5 @@
 import type { LifecycleConfig, ServiceRecord, WorkspaceRecord } from "@lifecycle/contracts";
-import type { ServiceLogSnapshot } from "@lifecycle/environment";
+import type { ServiceLogSnapshot } from "@lifecycle/stack";
 import { Alert, AlertDescription } from "@lifecycle/ui";
 import { AlertTriangle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -27,7 +27,7 @@ function getServiceRuntimeByName(
   }
 
   return Object.fromEntries(
-    Object.entries(config.environment)
+    Object.entries(config.stack)
       .filter(
         (
           entry,

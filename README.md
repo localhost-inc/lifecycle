@@ -1,57 +1,106 @@
 # Lifecycle
 
-hi
+Lifecycle is a workspace runtime and agent orchestration platform. It manages development workspaces across local machines, containers, remote servers, and cloud sandboxes — and provides the infrastructure for both interactive development and autonomous background agent work.
 
-Lifecycle is a CLI-first workspace runtime for local-first software work. `lifecycle.json` is the project contract, the `lifecycle` CLI is the primary control surface, and desktop or cloud surfaces can layer on top when they add value. This repository is a Bun + Turborepo monorepo containing the Tauri desktop app, the CLI packages, a local API scaffold, the in-flight landing-page app, and shared runtime/contracts/UI packages.
+`lifecycle.json` is the project contract. The `lifecycle` CLI is the primary control surface. The control plane on Cloudflare Workers orchestrates background agents and cloud workspaces. Sandbox providers (`local`, `docker`, `remote`, `cloud`) run the same workspace contract everywhere.
 
 ## Status
 
-Lifecycle is under active development. The current active milestone contract is M4: local workspace environment controls and preview/service lifecycle work. The repo now also ships an initial CLI-first slice around `lifecycle.json`, including standalone `lifecycle repo init` and `lifecycle prepare` flows. The canonical CLI taxonomy is `project -> workspace -> stack -> service`, with the current shipped commands treated as transitional precursors to that interface. Broader CLI control, cloud, and first-party harness work remains tracked in [docs/plans](./docs/plans). See [docs/milestones/README.md](./docs/milestones/README.md) for the active milestone set, [docs/reference/vision.md](./docs/reference/vision.md) for the product direction, and [docs/plans/local-cli.md](./docs/plans/local-cli.md) for the command contract.
+Under active development. The current execution focus is:
 
-This repository is public and source-available for evaluation, discussion, and limited contribution. It is not released under an OSI-approved open source license. Read [LICENSE](./LICENSE), [CONTRIBUTING.md](./CONTRIBUTING.md), and [SECURITY.md](./SECURITY.md) before reusing or contributing to the code.
+1. **CLI and TUI** — workspace lifecycle, shell attach, tmux persistence, service graph operation
+2. **Control plane** — Cloudflare Workers + Durable Objects + D1 for session management and workspace orchestration
+3. **Sandbox providers** — local (native), Docker, Daytona (remote/SSH), Modal (cloud)
+4. **OpenCode integration** — custom tools and plugins for workspace-aware agent operation
 
-## What Exists Today
+Desktop and web surfaces are secondary unless they directly unblock the above.
 
-1. A Tauri desktop app (`apps/desktop`) for local-first workspace operations
-2. A Bun CLI (`packages/cli`) plus command framework (`packages/cmd`) centered on `lifecycle.json`
-3. A Bun API scaffold (`apps/api`)
-4. A landing-page surface (`apps/www`) under active development
-5. Shared packages for contracts, runtime abstractions, storage, workspace policy, and UI primitives
+## How It Works
 
-The desktop app currently renders a project shell with project-scoped page tabs and workspace-scoped interiors. Cross-milestone workspace, shell, runtime, preview, and vocabulary contracts live in the matching reference docs under [docs/reference/](./docs/reference/).
+### Interactive Mode
 
-## CLI Interface
-
-The documented CLI noun model is:
-
-1. `project` - checked-in project contract and `lifecycle.json` scaffold/read
-2. `workspace` - concrete working instance of a project
-3. `stack` - live runnable graph inside a workspace
-4. `service` - one named node inside the stack
-5. `context` - aggregate machine-readable read
-
-The target command tree starts from:
+Shell into a workspace. Run `opencode`, `claude`, `codex`, or any tool in a tmux-backed terminal. Lifecycle manages the workspace and stays out of the way.
 
 ```bash
 lifecycle project init
 lifecycle workspace create
-lifecycle workspace prepare
-lifecycle workspace status
 lifecycle stack run
-lifecycle stack status
-lifecycle service list
-lifecycle context
+lifecycle tui                    # tmux-backed shell — run opencode, claude, whatever
 ```
 
-The checked-in CLI is still converging on that taxonomy. Today `lifecycle repo init` and `lifecycle prepare` are the shipped precursors to `lifecycle project init` and `lifecycle workspace prepare`.
+### Background Mode
+
+Agents run headlessly in cloud sandboxes. Prompts arrive from Slack, Linear, GitHub, the web, or the API. The control plane manages sessions and streams results.
+
+```bash
+# API / integration triggers a session
+# Control plane provisions sandbox, starts opencode serve, routes prompt
+# Agent works autonomously, pushes code, opens PR
+# Human reviews
+```
+
+Both modes share the same `lifecycle.json`, the same workspace environment, and the same CLI tools.
+
+## What Exists Today
+
+1. **CLI** (`packages/cli`) — workspace lifecycle, stack/service commands, agent launcher, TUI session resolution, context dump
+2. **TUI** (`apps/tui`) — Rust terminal UI with tmux-backed shell attach, workspace sidebar, host-aware activity
+3. **Workspace package** (`packages/workspace`) — host-aware workspace client with `local`, `cloud`, `docker`, `remote` implementations
+4. **Stack package** (`packages/stack`) — process supervisor, health checks, port management
+5. **Contracts package** (`packages/contracts`) — shared domain types, manifest parsing, Zod validation
+6. **DB package** (`packages/db`) — control-plane persistence (Turso/SQLite)
+7. **API scaffold** (`apps/api`) — Hono-based backend
+8. **Desktop app** (`apps/desktop`) — Tauri app, maintenance-only
+9. **Landing page** (`apps/www`)
+
+## CLI Interface
+
+The CLI noun model:
+
+```
+project   → project contract and lifecycle.json scaffold
+workspace → concrete working instance of a project
+stack     → live runnable graph inside a workspace
+service   → one named node inside the stack
+context   → aggregate machine-readable view (designed for agents)
+```
+
+Key commands:
+
+```bash
+lifecycle project init                    # scaffold lifecycle.json
+lifecycle workspace create                # materialize a workspace
+lifecycle workspace prepare               # bootstrap the environment
+lifecycle workspace shell <workspace>     # attach a shell
+lifecycle stack run                       # start the service graph
+lifecycle stack status                    # service health dashboard
+lifecycle service logs <service>          # stream service logs
+lifecycle context --json                  # structured workspace dump for agents
+lifecycle tui                             # launch the TUI
+lifecycle workspace agent <ws> <provider> # launch agent in cloud workspace
+lifecycle pr create                       # create PR through control plane
+```
+
+## Architecture
+
+Three tiers: clients, control plane, sandbox providers.
+
+```
+Clients (CLI, TUI, Web, Slack, API)
+  → Control Plane (CF Workers + Durable Objects + D1)
+    → Sandbox Providers (local, docker, remote, cloud)
+      → OpenCode server + lifecycle CLI + full dev environment
+```
+
+See [docs/reference/architecture.md](./docs/reference/architecture.md) for the full system design.
 
 ## Prerequisites
 
 1. Bun `>=1.3.10`
-2. A Node-compatible development environment for TypeScript tooling
-3. Rust toolchain (`cargo`) for desktop Rust tests and Tauri backend builds
-4. Tauri system prerequisites for your OS
-5. Optional: GitHub CLI (`gh`) if you want local desktop dev auth/session resolution
+2. Rust toolchain (`cargo`) for TUI builds
+3. Optional: Docker for container-hosted workspaces
+4. Optional: Daytona for remote workspaces
+5. Optional: Modal for cloud sandboxes
 
 ## Quick Start
 
@@ -63,90 +112,57 @@ bun run qa
 bun run dev
 ```
 
-Desktop development uses the calmer Tauri loop by default: frontend edits hot reload in place, while Rust and other Tauri-native changes require restarting the desktop dev command. Use `bun --filter @lifecycle/desktop run dev:watch` when you explicitly want the older auto-relaunch behavior.
-
-Optional pre-commit hook setup:
-
-```bash
-git config core.hooksPath .githooks
-```
-
 ## Common Commands
 
 From repo root:
 
-1. `bun run format` - apply formatting across app and package sources
-2. `bun run format:check` - verify formatting without rewriting files
-3. `bun run lint` - run workspace lint checks
-4. `bun run typecheck` - run workspace type checks
-5. `bun run test` - run JS/TS tests across workspaces
-6. `bun run test:rust` - run desktop Rust tests
-7. `bun run qa` - run the default quality gate (`qa:js` + Rust tests)
-8. `bun run build` - run workspace builds
-9. `bun run dev` - run the checked-in app dev loops (desktop + api + www)
-
-Desktop-specific dev loops:
-
-1. `bun --filter @lifecycle/desktop run dev` - launch the desktop shell once with Vite HMR; restart manually after Rust or Tauri-native changes
-2. `bun --filter @lifecycle/desktop run dev:watch` - opt into the older Tauri auto-restart loop for native changes
-3. `bun --filter @lifecycle/api run dev` - run the API scaffold on `http://localhost:8787`
-4. `bun --filter @lifecycle/www run dev` - run the landing page on `http://localhost:3000`
+1. `bun run format` — apply formatting
+2. `bun run lint` — lint checks
+3. `bun run typecheck` — type checks
+4. `bun run test` — JS/TS tests
+5. `bun run test:rust` — TUI Rust tests
+6. `bun run qa` — full quality gate
+7. `bun run build` — workspace builds
+8. `bun run dev` — development loops
 
 ## Repository Layout
 
 ```text
 apps/
-  api/          Bun API scaffold
-  desktop/      Tauri app (Rust backend + React webview)
-  www/          Landing page app
+  api/          Hono API scaffold
+  desktop/      Tauri desktop app (maintenance-only)
+  tui/          Rust TUI — tmux-backed workspace shell
+  www/          Landing page
 packages/
-  agents/       First-party agent orchestration contracts and adapter interfaces
-  auth/         Shared auth helpers and contracts
-  cli/          `lifecycle` CLI package
-  cmd/          Filesystem-based command framework used by the CLI
-  config/       Shared TypeScript config presets
-  contracts/    Shared domain contracts and manifest parsing/validation
-  db/           Shared database server and persistence helpers
-  environment/  Environment client contracts and runtime types
-  store/        Shared control-plane query/mutation layer
-  ui/           Shared UI primitives and theme tokens
-  workspace/    Workspace policy and host-aware workspace client contracts
+  agents/       Agent orchestration contracts and adapter interfaces
+  auth/         Auth helpers and contracts
+  cli/          lifecycle CLI
+  cmd/          Filesystem-based command framework
+  config/       Shared TypeScript config
+  contracts/    Domain contracts, manifest parsing, validation
+  db/           Control-plane persistence
+  stack/        Stack client, process supervisor, health, ports
+  store/        Control-plane query/mutation layer
+  ui/           Shared UI primitives
+  workspace/    Host-aware workspace client contracts
 docs/
-  milestones/   Active milestone implementation contracts
-  archive/      Historical milestone specs and retired docs
-  reference/    Canonical product, runtime, UI, and infra contracts
-  plans/        Execution plans outside the main milestone board
-  expansion/    Deferred product surfaces beyond the active milestones
-AGENTS.md       Engineering workflow, quality bar, and review rules
-vendor/
-  ghostty.lock  Pinned upstream Ghostty revision used for native desktop embedding
+  reference/    Canonical contracts (architecture, vision, journey, TUI, shell, etc.)
+  plans/        Execution plans (local CLI, cloud V1, sandbox providers)
+  milestones/   Active milestone contracts
+  archive/      Historical specs
+AGENTS.md       Engineering playbook
 ```
 
-## Documentation Map
+## Documentation
 
-Start here:
-
-1. [Vision](./docs/reference/vision.md) for product direction and V1 boundaries
-2. [Journey](./docs/reference/journey.md) for the narrative from local CLI use to remote collaboration and cloud handoff
-3. [Vocabulary](./docs/reference/vocabulary.md) for canonical shell, project, and workspace terms
-4. [Brand](./docs/reference/brand.md) for voice and visual identity
-5. [Milestones](./docs/milestones/README.md) for the active milestone set and archive boundary
-6. [Milestones](./docs/milestones) for detailed implementation contracts and acceptance scenarios
-7. [Reference Docs](./docs/reference/) for cross-milestone contracts
-8. [AGENTS.md](./AGENTS.md) for engineering workflow and review expectations
-9. [Plans](./docs/plans/README.md) and [Expansion](./docs/expansion) for tracked future work outside the active milestone set
-
-## Desktop App Icon
-
-The desktop app icon source of truth lives at `apps/desktop/src-tauri/app-icon.svg`.
-
-Regenerate the checked-in Tauri icon bundle with:
-
-```bash
-cd apps/desktop && bun run icon:generate
-```
-
-This refreshes the generated files under `apps/desktop/src-tauri/icons`, which `apps/desktop/src-tauri/tauri.conf.json` uses for desktop bundling.
+1. [Architecture](./docs/reference/architecture.md) — system design, three tiers, sandbox providers
+2. [Vision](./docs/reference/vision.md) — product direction and V1 boundaries
+3. [Journey](./docs/reference/journey.md) — narrative from local dev to background agents
+4. [TUI](./docs/reference/tui.md) — terminal UI contract, shell attach, tmux model
+5. [Local CLI](./docs/plans/local-cli.md) — CLI command contract
+6. [Kin Cloud V1](./docs/plans/kin-cloud-v1.md) — cloud delivery plan
+7. [Vocabulary](./docs/reference/vocabulary.md) — canonical terms
+8. [AGENTS.md](./AGENTS.md) — engineering workflow and quality bar
 
 ## Contributing
 

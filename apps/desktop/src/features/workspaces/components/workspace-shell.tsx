@@ -1,7 +1,7 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { type GitPullRequestSummary, type WorkspaceRecord } from "@lifecycle/contracts";
-import { createStartEnvironmentInput, previewUrlForService } from "@lifecycle/environment";
-import { useEnvironmentClient } from "@lifecycle/environment/react";
+import { createStartStackInput, previewUrlForService } from "@lifecycle/stack";
+import { useStackClient } from "@lifecycle/stack/react";
 import type { ManifestStatus } from "@lifecycle/workspace";
 import { workspaceHostLabel } from "@lifecycle/workspace";
 import { EmptyState } from "@lifecycle/ui";
@@ -60,7 +60,7 @@ interface WorkspaceShellProps {
 }
 
 export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: WorkspaceShellProps) {
-  const environmentClient = useEnvironmentClient();
+  const environmentClient = useStackClient();
   const { collections } = useStoreContext();
   const workspaceLayoutRef = useRef<HTMLDivElement | null>(null);
   const [workspaceLayoutWidth, setWorkspaceLayoutWidth] = useState(0);
@@ -148,7 +148,7 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
       const hostLabel = workspaceHostLabel(workspace);
       let proxyPort: number | null = null;
 
-      const input = createStartEnvironmentInput({
+      const input = createStartStackInput({
         hostLabel,
         serviceNames,
         services,
@@ -215,7 +215,7 @@ export function WorkspaceShell({ workspace, manifestStatus, onCloseTab }: Worksp
       );
       const result = await environmentClient.start(
         config,
-        createStartEnvironmentInput({
+        createStartStackInput({
           hostLabel: workspaceHostLabel(workspace),
           services,
           workspace,

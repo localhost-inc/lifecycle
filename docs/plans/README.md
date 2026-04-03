@@ -2,15 +2,22 @@
 
 This directory contains tracked execution plans that are real enough to keep on paper, but not active enough to count as milestones yet.
 
+Current plan priority: local CLI, control plane, sandbox providers, and OpenCode integration. Desktop-specific plans are not the main execution lane unless they directly unblock CLI/TUI/control-plane work.
+
 ## Current Plans
 
-1. [Agent Workspace](./agent-workspace.md) — first-party harness and `agent_session` work
-2. [Local CLI](./local-cli.md) — local CLI control, observability, and desktop-shell bridge boundaries
-3. [Cloud Workspaces](./cloud-workspaces.md) — auth, org/repository/activity records, fork-to-cloud, previews, PRs, and shared cloud terminals
-4. [Kin Cloud V1](./kin-cloud-v1.md) — the one tactical build plan for auth, orgs, customer Cloudflare, cloud workspaces, native shell/agent flow, and PR merge
-5. [Cloud Hardening](./cloud-hardening.md) — sleep/wake restore, TTL enforcement, quotas, and cloud lifecycle SLOs
-6. [Pane Tree Performance](./pane-tree-performance.md) — workspace pane/tab render locality, tab-switch latency, and drag-path performance
-7. [TUI tmux host binding](./tui-tmux-host-binding.md) — persistent tmux-backed TUI shell sessions with explicit `local|docker|cloud` workspace binding across the middle and right columns
+1. [Supervisor](./supervisor.md) — per-workspace background supervisor, process management, file watching, socket protocol
+2. [Local CLI](./local-cli.md) — CLI command contract, workspace/stack/service operations, context dump
+3. [Kin Cloud V1](./kin-cloud-v1.md) — auth, orgs, cloud workspace provisioning, shell attach, PR workflow
+4. [Cloud Hardening](./cloud-hardening.md) — sleep/wake restore, TTL enforcement, quotas, cloud lifecycle SLOs
+
+## Archived Plans
+
+These plans are superseded by the current architecture direction. Retained for historical context.
+
+1. [Agent Workspace](./agent-workspace.md) — **archived**: custom agent harness and first-party provider integrations. Superseded by OpenCode as the agent runtime. See [architecture](../reference/architecture.md).
+2. [Cloud Workspaces](./cloud-workspaces.md) — **archived**: merged into Kin Cloud V1
+3. [Pane Tree Performance](./pane-tree-performance.md) — desktop-specific, deferred
 
 ## Promotion Rule
 

@@ -8,18 +8,26 @@ This file defines engineering execution standards for agents working in this rep
 2. Keep changes small, testable, and contract-aligned.
 3. Treat this repo as a production codebase, not a sandbox.
 
+## Current Product Focus
+
+1. The active product focus is the `lifecycle` CLI, TUI (`apps/tui`), control plane (CF Workers + Durable Objects + D1), and sandbox provider infrastructure.
+2. Prefer work that makes workspace lifecycle, shell attach, tmux persistence, host-aware execution, sandbox provisioning, and background agent orchestration more reliable.
+3. OpenCode is the agent runtime inside workspaces. Lifecycle provides workspace awareness through custom tools and plugins, not through custom agent provider integrations.
+4. Treat desktop, web, and other auxiliary surfaces as maintenance-only unless the user explicitly asks for them or they directly unblock CLI/TUI/control-plane work.
+
 ## Operating Context
 
-You are likely being invoked from within the Lifecycle desktop app itself — the product this repo builds. When the user reports behavioral errors, visual glitches, broken interactions, or "this didn't work", assume they are describing the running Lifecycle app unless they explicitly say otherwise. Investigate the app's own code first before considering external tooling or environment issues.
+Lifecycle is a workspace runtime and agent orchestration platform. The working priority is CLI + TUI + control plane + sandbox providers. When the user reports behavioral errors, broken interactions, or "this didn't work", assume they are describing the `lifecycle` CLI, `lifecycle-tui`, control plane, or workspace/environment packages unless they explicitly say desktop, web, or another surface. Investigate CLI/TUI/control-plane codepaths first.
+
+The system has two modes: **interactive** (human in a tmux-backed shell, optionally running an agent) and **background** (headless agent in a sandbox, orchestrated by the control plane). Both share the same workspace contract. See `docs/reference/architecture.md` for the full system design.
 
 ## Core References
 
 1. `README.md`
-2. `docs/milestones/README.md` — active milestone index and archive boundary
-3. `docs/milestones/*.md` — active milestone specs (scope, contracts, test scenarios)
-4. `docs/plans/*.md` — tracked execution plans outside the active milestone set
-5. `docs/reference/*.md` — canonical cross-milestone contracts (see Reference Docs below)
-6. `docs/reference/agents/*.md` — provider-specific agent contracts rooted in the current official SDK surfaces
+2. `docs/reference/*.md` — canonical contracts (see Reference Docs below)
+3. `docs/plans/*.md` — tracked execution plans
+4. `docs/milestones/README.md` — milestone index
+5. `docs/archive/` — historical docs, superseded specs, desktop-specific contracts
 
 When behavior changes and docs are now wrong, update the corresponding reference doc in the same change.
 
@@ -29,20 +37,12 @@ Canonical contract documents for each domain. Read the relevant doc before start
 
 | Doc | Context |
 |---|---|
-| `docs/reference/brand.md` | Brand voice, visual identity, color, typography |
-| `docs/reference/design.md` | Component rules, surfaces, buttons, forms, motion |
-| `docs/reference/vocabulary.md` | Canonical product terminology |
+| `docs/reference/architecture.md` | System architecture: three tiers, sandbox providers, two modes |
 | `docs/reference/vision.md` | Product vision and strategy |
-| `docs/reference/journey.md` | Canonical narrative from local development to remote collaboration and cloud handoff |
-| `docs/reference/testing.md` | Test job orchestration spec |
-| `docs/reference/workspace.md` | Workspace provider, canvas, surface, environment, files contracts |
-| `docs/reference/shell.md` | App shell v2 layout contract |
-| `docs/reference/native.md` | Native platform interop, compositor layering, overlay strategy |
-| `docs/reference/terminal.md` | Terminal harness, session lifecycle, log streaming, native surface sync |
-| `docs/reference/preview.md` | Local preview proxy, service routing, port assignment, URL contract |
-| `docs/reference/infra.md` | Convex API, migrations, errors, SLOs, tunnel, cloud terminal |
-| `docs/reference/agents/claude.md` | Anthropic Claude Agent SDK TypeScript v2 provider contract |
-| `docs/reference/agents/codex.md` | OpenAI Codex SDK provider contract |
+| `docs/reference/journey.md` | Narrative from local dev to background agents to cloud collaboration |
+| `docs/reference/tui.md` | Lifecycle TUI contract, shell attach model, and host-aware activity rules |
+| `docs/reference/vocabulary.md` | Canonical product terminology |
+| `docs/reference/brand.md` | Brand voice, visual identity, color, typography |
 
 ## Triage Router
 
@@ -54,14 +54,14 @@ Use this section to route work before implementation.
 
 ### Destination-to-Contract Mapping
 
-1. Center terminal workspace (tabbed sessions, shell flows, attach/detach) -> `docs/reference/terminal.md`.
-2. Workspace lifecycle controls, service runtime states, local preview exposure, sleep/wake/destroy UX -> M4.
-3. CLI-centric workspace control and observability flows -> `docs/plans/local-cli.md`.
-4. Org/workspace hierarchy, auth, cloud surfaces, activity, previews, and PR actions -> `docs/plans/cloud-workspaces.md`.
-5. Cloud lifecycle hardening (sleep/wake restore, TTL, quotas) -> `docs/plans/cloud-hardening.md`.
-6. First-party harness and `agent_session` work -> `docs/plans/agent-workspace.md`.
-7. Provider-specific Claude integration work -> `docs/reference/agents/claude.md`.
-8. Provider-specific Codex integration work -> `docs/reference/agents/codex.md`.
+1. System architecture, sandbox providers, control plane design, background agent orchestration -> `docs/reference/architecture.md`.
+2. TUI shell attach, tmux persistence, mouse/keyboard routing, and workspace activity -> `docs/reference/tui.md`.
+3. CLI workspace control, shell/runtime commands, and observability flows -> `docs/plans/local-cli.md`.
+4. Terminal data-model and legacy terminal persistence questions -> `docs/reference/terminal.md`.
+5. Workspace lifecycle controls, service runtime states, local preview exposure, sleep/wake/destroy UX -> M4.
+6. Cloud auth, orgs, workspace provisioning, shell attach, PR create/merge -> `docs/plans/kin-cloud-v1.md`.
+7. Cloud lifecycle hardening (sleep/wake restore, TTL, quotas) -> `docs/plans/cloud-hardening.md`.
+8. OpenCode integration, custom tools, and plugins -> `docs/reference/architecture.md` (OpenCode section).
 
 ### Frontend Organization Rules
 

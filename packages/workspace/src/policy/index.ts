@@ -7,11 +7,6 @@ export {
 } from "./workspace-names";
 export { workspaceHostLabel } from "./workspace-host-label";
 export {
-  computeWorkspaceCreatePolicy,
-  type WorkspaceCreatePolicy,
-  type WorkspaceCreatePolicyInput,
-} from "./workspace-create";
-export {
   computeRenameDispositionSync,
   computeRenameInput,
   normalizeWorkspaceName,

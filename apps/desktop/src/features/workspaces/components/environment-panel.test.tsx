@@ -3,7 +3,7 @@ import type { LifecycleConfig, ServiceRecord, WorkspaceRecord } from "@lifecycle
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as reactQuery from "@tanstack/react-query";
-import type { ServiceLogSnapshot } from "@lifecycle/environment";
+import type { ServiceLogSnapshot } from "@lifecycle/stack";
 import { workspaceKeys } from "@/features/workspaces/state/workspace-query-keys";
 
 const baseWorkspace: WorkspaceRecord = {

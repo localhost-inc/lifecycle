@@ -3,10 +3,11 @@
 > Status: planned execution plan
 > Depends on: [M4 workspace environments](../milestones/4-workspace-environments.md)
 > Plan index: [docs/plans/README.md](./README.md). This document is the target contract for the local CLI workstream.
+> Current execution focus: this plan and [TUI](../reference/tui.md) define the main build lane right now. Desktop-shell bridge ideas remain secondary unless they directly unblock CLI/TUI work.
 
 ## Goal
 
-A developer (or agent) working inside a project root or workspace checkout can use the Lifecycle CLI through a stable singular noun model: `project` scaffolds the checked-in contract, `workspace` materializes a concrete working instance, `stack` operates the live runnable graph inside that workspace, `service` targets one node inside the stack, and `context` emits the aggregate machine-readable view. When the CLI is invoked from a Lifecycle-launched session, it can also drive existing workspace surfaces like tabs and browser previews through a local bridge. No cloud, no auth, no network.
+A developer (or agent) working inside a project root or workspace checkout can use the Lifecycle CLI through a stable singular noun model: `project` scaffolds the checked-in contract, `workspace` materializes a concrete working instance, `stack` operates the live runnable graph inside that workspace, `service` targets one node inside the stack, and `context` emits the aggregate machine-readable view. The current surface priority is shell/runtime control and TUI-oriented workflows. Desktop-app bridge commands are explicitly secondary. No cloud, no auth, no network.
 
 ## Canonical Noun Model
 

@@ -1,0 +1,1 @@
+export { LocalStackClient } from "./client";

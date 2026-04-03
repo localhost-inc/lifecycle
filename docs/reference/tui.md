@@ -2,6 +2,8 @@
 
 Canonical contract for the Lifecycle terminal UI in `apps/tui`.
 
+Current repo focus: the CLI and TUI are the primary product surfaces being hardened right now. Changes that affect shell attach, tmux persistence, workspace activity, and host-aware execution should prefer this document plus the CLI/workspace contracts before any desktop-specific guidance.
+
 The TUI is a thin client over Lifecycle primitives. It owns terminal rendering, focus, mouse/keyboard routing, and outer column layout. It does **not** own workspace-host resolution or shell lifecycle policy.
 
 ## Core model
@@ -40,15 +42,17 @@ The middle and right columns must never silently drift across hosts.
 
 ### `local`
 
-1. The CLI resolves a local tmux-backed shell launch for the bound or ad hoc local path.
-2. Closing the TUI detaches the client; the tmux session survives.
-3. The right column reflects the same local workspace scope when Lifecycle can resolve it.
+1. The CLI resolves a local shell runtime through the host-aware workspace client boundary.
+2. TUI sessions request a tmux-backed launch by passing a persistent session name for the bound or ad hoc local path.
+3. Closing the TUI detaches the client; the tmux session survives.
+4. The right column reflects the same local workspace scope when Lifecycle can resolve it.
 
 ### `cloud`
 
-1. The CLI resolves a cloud shell attach path through `lifecycle workspace shell`.
-2. Persistent TUI sessions use remote tmux via `--tmux-session`.
+1. The CLI resolves a cloud shell runtime through the host-aware workspace client boundary.
+2. Persistent TUI sessions use remote tmux by asking the cloud runtime for a prepare step plus an interactive attach step.
 3. The shell session lives in the cloud workspace runtime, not on the local machine.
+4. `lifecycle workspace shell` and the TUI center column use the same host-owned shell runtime contract.
 
 ### `docker`
 
@@ -72,7 +76,8 @@ The envelope contains:
    - backend label
    - persistence flag
    - tmux session name when present
-   - launch spec (`program`, `args`, `cwd`, `env`) or launch error
+   - optional prepare launch spec (`program`, `args`, `cwd`, `env`) for hosts that need setup before attach
+   - interactive launch spec (`program`, `args`, `cwd`, `env`) or launch error
 
 This envelope is the current primitive that lets other Lifecycle clients reuse the same host-aware session decision without copying Rust UI code.
 
@@ -85,7 +90,11 @@ The TUI owns:
 3. outer-column resize via mouse drag
 4. key passthrough into the center shell when the canvas is focused
 
-The TUI does not currently provide terminal mouse passthrough into tmux. Keyboard tmux flows are first-class; tmux mouse mode is a follow-up.
+The TUI forwards mouse-wheel events into the center shell when the pointer is over the canvas and the attached shell is tmux-backed. Sidebar and right-column scrolling remain TUI-owned, and full terminal mouse passthrough beyond wheel events is still incomplete.
+
+## Activity
+
+Sidebar activity is derived from the host-aware `lifecycle tui activity` CLI path, not from Rust-side host-specific tmux inspection. That CLI command is responsible for querying the authoritative host runtime and tmux session for each workspace. A workspace is considered busy when any pane in its tracked tmux session has a foreground command that represents real background work. Plain shells are always non-busy foregrounds. Interactive agent CLIs such as `claude` and `codex` are activity-gated foregrounds: they count as busy only while recent pane output indicates an active turn, and they return to non-busy once that output goes quiet. Shells without a tmux session may still fall back to active-PTY shell integration for the currently attached workspace only.
 
 ## Module map
 

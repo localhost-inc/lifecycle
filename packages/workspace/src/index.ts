@@ -4,9 +4,12 @@ export type {
   ExecCommandResult,
   GitDiffInput,
   OpenInAppId,
+  ResolveWorkspaceShellInput,
   RenameWorkspaceInput,
   WorkspaceClient,
   WorkspaceArchiveDisposition,
+  WorkspaceShellLaunchSpec,
+  WorkspaceShellRuntime,
   WorkspaceOpenInAppInfo,
   SubscribeWorkspaceFileEventsInput,
   WorkspaceFileEvent,
@@ -20,3 +23,4 @@ export type {
 } from "./client";
 export { createWorkspaceClientRegistry } from "./client";
 export { workspaceHostLabel } from "./policy";
+export { autoWorkspaceName, workspaceBranchName } from "./policy";

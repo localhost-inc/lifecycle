@@ -21,7 +21,7 @@ describe("workspace display", () => {
       getWorkspaceDisplayName(
         {
           checkout_type: "root",
-          name: "Root",
+          name: "main",
           source_ref: "main",
         },
         "feature/live-branch",

@@ -163,6 +163,7 @@ export async function insertWorkspace(
     sourceRef: string;
     worktreePath?: string | null;
     host?: string;
+    checkoutType?: "root" | "worktree";
   },
 ): Promise<string> {
   const id = crypto.randomUUID();
@@ -171,7 +172,7 @@ export async function insertWorkspace(
     id,
     repository_id: input.repositoryId,
     name: input.name,
-    checkout_type: "worktree",
+    checkout_type: input.checkoutType ?? "worktree",
     source_ref: input.sourceRef,
     git_sha: null,
     worktree_path: input.worktreePath ?? null,
@@ -209,14 +210,7 @@ export interface RepositoryWithWorkspaces {
   id: string;
   path: string;
   name: string;
-  workspaces: Array<{
-    id: string;
-    name: string;
-    host: string;
-    status: string;
-    source_ref: string;
-    worktree_path: string | null;
-  }>;
+  workspaces: WorkspaceRow[];
 }
 
 export async function listRepositoriesWithWorkspaces(
@@ -228,15 +222,8 @@ export async function listRepositoriesWithWorkspaces(
 
   const result: RepositoryWithWorkspaces[] = [];
   for (const repo of repos) {
-    const workspaces = await db.select<{
-      id: string;
-      name: string;
-      host: string;
-      status: string;
-      source_ref: string;
-      worktree_path: string | null;
-    }>(
-      "SELECT id, name, host, status, source_ref, worktree_path FROM workspace WHERE repository_id = $1 AND status != 'archived' ORDER BY name",
+    const workspaces = await db.select<WorkspaceRow>(
+      `SELECT ${WORKSPACE_COLUMNS} FROM workspace WHERE repository_id = $1 AND status != 'archived' ORDER BY name`,
       [repo.id],
     );
 

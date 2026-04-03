@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
 import { defineCommand } from "@lifecycle/cmd";
+import { buildCloudShellSshArgs } from "@lifecycle/workspace/internal/cloud";
 import { z } from "zod";
 
-import { buildCloudShellSshArgs } from "../../cloud-shell";
 import { gatherEnvironment } from "../../env-sync";
 import { createClient } from "../../rpc-client";
 import { failCommand, jsonFlag } from "../_shared";

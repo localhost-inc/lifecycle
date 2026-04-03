@@ -188,4 +188,70 @@ describe("cloud CLI commands", () => {
     expect(sink.stdout).toEqual(["out"]);
     expect(sink.stderr).toEqual(["err"]);
   });
+
+  test("resolves workspace shell through the cloud workspace client runtime", async () => {
+    const sink = createIo();
+    const requestUrls: string[] = [];
+
+    await withTempHome(async () =>
+      await withEnvironment({ LIFECYCLE_API_URL: "https://api.lifecycle.test" }, async () =>
+        await withMockFetch(async (input) => {
+          requestUrls.push(String(input));
+
+          return new Response(
+            JSON.stringify({
+              cwd: "/workspace/repo",
+              home: "/home/lifecycle",
+              host: "ssh.app.lifecycle.test",
+              token: "tok_123",
+            }),
+            {
+              headers: { "content-type": "application/json" },
+              status: 200,
+            },
+          );
+        }, async () => {
+          const code = await main(
+            ["workspace", "shell", "ws_cloud_123", "--json"],
+            sink.io,
+          );
+
+          expect(code).toBe(0);
+        }),
+      ),
+    );
+
+    expect(requestUrls).toEqual([
+      "https://api.lifecycle.test/workspaces/ws_cloud_123/shell",
+    ]);
+    expect(JSON.parse(sink.stdout.join("\n"))).toEqual({
+      workspace: {
+        host: "cloud",
+        id: "ws_cloud_123",
+        worktreePath: null,
+      },
+      shell: {
+        backendLabel: "cloud shell",
+        launchError: null,
+        persistent: false,
+        sessionName: null,
+        prepare: expect.any(Object),
+        spec: {
+          program: "ssh",
+          args: [
+            "-tt",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "LogLevel=ERROR",
+            "tok_123@ssh.app.lifecycle.test",
+          ],
+          cwd: null,
+          env: [],
+        },
+      },
+    });
+  });
 });

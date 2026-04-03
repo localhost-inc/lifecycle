@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { WorkspaceRecord } from "@lifecycle/contracts";
 import { createWorkspaceClientRegistry, type WorkspaceClient } from "./client";
-import { LocalWorkspaceClient } from "./clients/local";
+import { CloudWorkspaceClient } from "./clients/cloud";
+import { type LocalClientDeps, LocalWorkspaceClient } from "./clients/local";
 
 describe("workspace contract", () => {
   function workspace(overrides: Partial<WorkspaceRecord> = {}): WorkspaceRecord {
@@ -30,6 +31,8 @@ describe("workspace contract", () => {
 
   test("defines the expected workspace method names", () => {
     const requiredMethods: Array<keyof WorkspaceClient> = [
+      "execCommand",
+      "resolveShellRuntime",
       "readManifest",
       "getGitCurrentBranch",
       "ensureWorkspace",
@@ -63,13 +66,15 @@ describe("workspace contract", () => {
       "mergeGitPullRequest",
     ];
 
-    expect(requiredMethods).toHaveLength(31);
+    expect(requiredMethods).toHaveLength(33);
   });
 
   test("host client exposes the full contract surface", () => {
     const invoke = async () => "";
     const client = new LocalWorkspaceClient({ invoke });
 
+    expect(typeof client.execCommand).toBe("function");
+    expect(typeof client.resolveShellRuntime).toBe("function");
     expect(typeof client.readManifest).toBe("function");
     expect(typeof client.getGitCurrentBranch).toBe("function");
     expect(typeof client.ensureWorkspace).toBe("function");
@@ -124,6 +129,177 @@ describe("workspace contract", () => {
 
     expect(watchedPath).toBe("/tmp/project_1/.worktrees/ws_1");
     expect(typeof cleanup).toBe("function");
+  });
+
+  test("cloud host client forwards exec through the injected workspace executor", async () => {
+    const calls: Array<{ workspaceId: string; command: string[] }> = [];
+    const client = new CloudWorkspaceClient({
+      execWorkspaceCommand: async (workspaceId, command) => {
+        calls.push({ workspaceId, command });
+        return {
+          exitCode: 0,
+          stderr: "",
+          stdout: "ok\n",
+        };
+      },
+      getShellConnection: async () => ({
+        cwd: "/workspace",
+        home: "/home/lifecycle",
+        host: "ssh.app.lifecycle.test",
+        token: "tok_123",
+      }),
+    });
+
+    const result = await client.execCommand(workspace({ host: "cloud" }), [
+      "tmux",
+      "list-panes",
+      "-F",
+      "#{pane_current_command}",
+    ]);
+
+    expect(result).toEqual({
+      exitCode: 0,
+      stderr: "",
+      stdout: "ok\n",
+    });
+    expect(calls).toEqual([
+      {
+        workspaceId: "ws_1",
+        command: ["tmux", "list-panes", "-F", "#{pane_current_command}"],
+      },
+    ]);
+  });
+
+  test("local host client preserves argv exactly for exec commands", async () => {
+    const calls: Array<{ program: string; args: string[]; cwd: string | URL | undefined }> = [];
+    const spawnSyncMock = ((
+      program: string,
+      args?: readonly string[],
+      options?: { cwd?: string | URL },
+    ) => {
+      calls.push({
+        program,
+        args: [...(args ?? [])],
+        cwd: options?.cwd,
+      });
+      const finalArg = args?.at(-1);
+      return {
+        error: undefined,
+        status: 0,
+        stderr: "",
+        stdout: typeof finalArg === "string" ? finalArg : "",
+      };
+    }) as unknown as NonNullable<LocalClientDeps["spawnSync"]>;
+    const client = new LocalWorkspaceClient({
+      invoke: async () => "",
+      spawnSync: spawnSyncMock,
+    });
+
+    const result = await client.execCommand(workspace(), [
+      "tmux",
+      "list-panes",
+      "-F",
+      "pane\tactivity",
+    ]);
+
+    expect(result).toEqual({
+      exitCode: 0,
+      stderr: "",
+      stdout: "pane\tactivity",
+    });
+    expect(calls).toEqual([
+      {
+        program: "tmux",
+        args: ["list-panes", "-F", "pane\tactivity"],
+        cwd: REPO_PATH,
+      },
+    ]);
+  });
+
+  test("cloud host client requires a workspace id for exec", async () => {
+    const client = new CloudWorkspaceClient({
+      execWorkspaceCommand: async () => ({
+        exitCode: 0,
+        stderr: "",
+        stdout: "",
+      }),
+      getShellConnection: async () => ({
+        cwd: "/workspace",
+        home: "/home/lifecycle",
+        host: "ssh.app.lifecycle.test",
+        token: "tok_123",
+      }),
+    });
+
+    await expect(client.execCommand(workspace({ host: "cloud", id: "" }), ["pwd"])).rejects.toThrow(
+      "Cloud workspace commands require a workspace id.",
+    );
+  });
+
+  test("local host client resolves a direct shell runtime without tmux", async () => {
+    const client = new LocalWorkspaceClient({ invoke: async () => "" });
+
+    const runtime = await client.resolveShellRuntime(workspace(), {});
+
+    expect(runtime).toEqual({
+      backendLabel: "local shell",
+      launchError: null,
+      persistent: false,
+      sessionName: null,
+      prepare: null,
+      spec: {
+        program: process.env.SHELL || "/bin/bash",
+        args: [],
+        cwd: REPO_PATH,
+        env: [["TERM", "xterm-256color"]],
+      },
+    });
+  });
+
+  test("cloud host client resolves a tmux-backed shell runtime with prepare and attach steps", async () => {
+    const client = new CloudWorkspaceClient({
+      execWorkspaceCommand: async () => ({
+        exitCode: 0,
+        stderr: "",
+        stdout: "",
+      }),
+      getShellConnection: async () => ({
+        cwd: "/workspace/repo",
+        home: "/home/lifecycle",
+        host: "ssh.app.lifecycle.test",
+        token: "tok_123",
+      }),
+    });
+
+    const runtime = await client.resolveShellRuntime(workspace({ host: "cloud" }), {
+      sessionName: "lc-cloud-session",
+      syncEnvironment: ["export FOO=bar"],
+    });
+
+    expect(runtime.backendLabel).toBe("cloud tmux");
+    expect(runtime.launchError).toBeNull();
+    expect(runtime.persistent).toBe(true);
+    expect(runtime.sessionName).toBe("lc-cloud-session");
+    expect(runtime.prepare).not.toBeNull();
+    expect(runtime.prepare?.program).toBe("ssh");
+    expect(runtime.prepare?.args.at(-1)).toContain("tmux has-session -t");
+    expect(runtime.prepare?.args.at(-1)).toContain("lc-cloud-session");
+    expect(runtime.prepare?.args.at(-1)).toContain("export FOO=bar");
+    expect(runtime.spec).toEqual({
+      program: "ssh",
+      args: [
+        "-tt",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+        "-o",
+        "LogLevel=ERROR",
+        "tok_123@ssh.app.lifecycle.test",
+      ],
+      cwd: null,
+      env: [],
+    });
   });
 
   test("local host client reads lifecycle manifests through the injected file reader", async () => {
@@ -243,18 +419,21 @@ describe("workspace contract", () => {
 
   test("resolves host clients by host", () => {
     const localClient = { name: "local" } as never;
+    const cloudClient = { name: "cloud" } as never;
     const dockerClient = { name: "docker" } as never;
     const remoteClient = { name: "remote" } as never;
     const registry = createWorkspaceClientRegistry({
+      cloud: cloudClient,
       docker: dockerClient,
       local: localClient,
       remote: remoteClient,
     });
 
     expect(registry.resolve("local")).toBe(localClient);
+    expect(registry.resolve("cloud")).toBe(cloudClient);
     expect(registry.resolve("docker")).toBe(dockerClient);
     expect(registry.resolve("remote")).toBe(remoteClient);
-    expect(() => registry.resolve("cloud")).toThrow(
+    expect(() => createWorkspaceClientRegistry({ local: localClient }).resolve("cloud")).toThrow(
       'No WorkspaceClient is registered for workspace host "cloud".',
     );
   });

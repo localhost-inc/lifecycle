@@ -31,5 +31,5 @@ export function getWorkspaceDisplayName(
   }
 
   const normalizedName = workspace.name.trim();
-  return normalizedName || "Root";
+  return normalizedName || "root";
 }

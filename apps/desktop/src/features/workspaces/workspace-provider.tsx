@@ -1,28 +1,28 @@
 import type { PropsWithChildren } from "react";
 import type { AgentClient } from "@lifecycle/agents";
-import type { EnvironmentClient } from "@lifecycle/environment";
+import type { StackClient } from "@lifecycle/stack";
 import type { WorkspaceClient } from "@lifecycle/workspace";
 import { AgentClientProvider } from "@lifecycle/agents/react";
-import { EnvironmentClientProvider } from "@lifecycle/environment/react";
+import { StackClientProvider } from "@lifecycle/stack/react";
 import { WorkspaceClientProvider } from "@lifecycle/workspace/react";
 
 interface WorkspaceScopeProps extends PropsWithChildren {
   agentClient: AgentClient;
-  environmentClient: EnvironmentClient;
+  stackClient: StackClient;
   workspaceClient: WorkspaceClient;
 }
 
 export function WorkspaceScope({
   agentClient,
-  environmentClient,
+  stackClient,
   workspaceClient,
   children,
 }: WorkspaceScopeProps) {
   return (
     <WorkspaceClientProvider workspaceClient={workspaceClient}>
-      <EnvironmentClientProvider environmentClient={environmentClient}>
+      <StackClientProvider stackClient={stackClient}>
         <AgentClientProvider agentClient={agentClient}>{children}</AgentClientProvider>
-      </EnvironmentClientProvider>
+      </StackClientProvider>
     </WorkspaceClientProvider>
   );
 }

@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "lifecycle": {
+      "command": "/Users/kyle/.bun/bin/lifecycle",
+      "args": [
+        "mcp"
+      ]
+    }
+  }
+}

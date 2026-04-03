@@ -1,5 +1,5 @@
 import type { ServiceRecord } from "@lifecycle/contracts";
-import type { ServiceLogLine } from "@lifecycle/environment";
+import type { ServiceLogLine } from "@lifecycle/stack";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { IconButton, Spinner } from "@lifecycle/ui";
 import { Globe, Layers, Play } from "lucide-react";

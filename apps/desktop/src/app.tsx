@@ -8,8 +8,8 @@ import type {
   AgentSessionCollectionRegistry,
 } from "@lifecycle/store";
 import { AgentClientRegistryProvider } from "@lifecycle/agents/react";
-import type { EnvironmentClientRegistry } from "@lifecycle/environment";
-import { EnvironmentClientRegistryProvider } from "@lifecycle/environment/react";
+import type { StackClientRegistry } from "@lifecycle/stack";
+import { StackClientRegistryProvider } from "@lifecycle/stack/react";
 import type { WorkspaceClientRegistry } from "@lifecycle/workspace";
 import { WorkspaceClientRegistryProvider } from "@lifecycle/workspace/react";
 import { RootErrorBoundary } from "@/app/root-error-boundary";
@@ -58,7 +58,7 @@ interface AppProps {
   agentClientRegistry: AgentClientRegistry;
   agentMessageRegistry: AgentMessageCollectionRegistry;
   agentSessionRegistry: AgentSessionCollectionRegistry;
-  environmentClientRegistry: EnvironmentClientRegistry;
+  stackClientRegistry: StackClientRegistry;
   workspaceClientRegistry: WorkspaceClientRegistry;
 }
 
@@ -66,7 +66,7 @@ export function App({
   agentClientRegistry,
   agentMessageRegistry,
   agentSessionRegistry,
-  environmentClientRegistry,
+  stackClientRegistry,
   workspaceClientRegistry,
 }: AppProps) {
   return (
@@ -76,8 +76,8 @@ export function App({
           <BootstrapPerfMarker />
           <ContextMenuBlocker />
           <WorkspaceClientRegistryProvider workspaceClientRegistry={workspaceClientRegistry}>
-            <EnvironmentClientRegistryProvider
-              environmentClientRegistry={environmentClientRegistry}
+            <StackClientRegistryProvider
+              stackClientRegistry={stackClientRegistry}
             >
               <AgentClientRegistryProvider agentClientRegistry={agentClientRegistry}>
                 <StoreProvider
@@ -101,7 +101,7 @@ export function App({
                   </ReactQueryProvider>
                 </StoreProvider>
               </AgentClientRegistryProvider>
-            </EnvironmentClientRegistryProvider>
+            </StackClientRegistryProvider>
           </WorkspaceClientRegistryProvider>
         </SettingsProvider>
       </RootErrorBoundary>
